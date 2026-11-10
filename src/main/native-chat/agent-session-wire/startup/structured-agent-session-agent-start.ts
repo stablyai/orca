@@ -66,7 +66,8 @@ export type StructuredAgentSessionStartClaim = {
 export async function claimStructuredAgentSessionAgent(
   context: StructuredAgentSessionAttachContext,
   sessionId: string,
-  startedFor?: string
+  startedFor?: string,
+  telemetryCallerKey?: string
 ): Promise<StructuredAgentSessionStartClaim> {
   try {
     context.deps.store.requireWritableRecord(sessionId)
@@ -93,7 +94,8 @@ export async function claimStructuredAgentSessionAgent(
       context,
       sessionId,
       startedFor,
-      (lock, attemptId) => runStart(context, sessionId, startedFor, lock, attemptId)
+      (lock, attemptId) =>
+        runStart(context, sessionId, startedFor, lock, attemptId, telemetryCallerKey)
     )
   }
 }
@@ -120,9 +122,15 @@ export function startStructuredAgentSessionAgentForOperation(
 
 export async function claimOperationStart(
   context: StructuredAgentSessionAttachContext,
-  sessionId: string
+  sessionId: string,
+  telemetryCallerKey?: string
 ): Promise<StructuredAgentSessionStartClaim> {
-  const claim = await claimStructuredAgentSessionAgent(context, sessionId)
+  const claim = await claimStructuredAgentSessionAgent(
+    context,
+    sessionId,
+    undefined,
+    telemetryCallerKey
+  )
   return {
     outcome: claim.outcome.catch((error: unknown) => {
       context.deps.logger.warn('starting the agent for an operation failed', {
@@ -140,7 +148,8 @@ async function runStart(
   sessionId: string,
   startedFor: string | undefined,
   lock: StructuredAgentSessionAttachLock,
-  attemptId: string
+  attemptId: string,
+  telemetryCallerKey?: string
 ): Promise<StructuredAgentSessionResumeOutcome> {
   // Never start beside a closing child; unverifiable exit refuses the restart.
   const closed = await joinClosingStructuredAgentSessionChild(context, sessionId, lock)
@@ -172,6 +181,7 @@ async function runStart(
     attached = await attachStructuredAgentSessionForStart(context, callerKey, params, {
       lock,
       startupAttemptId: attemptId,
+      ...(telemetryCallerKey ? { telemetryCallerKey } : {}),
       ...(startedFor === undefined ? {} : { startedFor }),
       ...(startupOptions ? { startupOptions } : {}),
       onAcquisitionFailed: (error) => {

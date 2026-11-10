@@ -4,7 +4,7 @@ import type {
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionLatestTurn } from '../../../shared/agent-session/agent-session-wire'
-import type { NativeChatUsageLimitCut } from '../../../shared/native-chat/native-chat-usage-limit-cut'
+import type { HostUsageLimitCut } from '../agent-session-wire/recovery/structured-agent-session-usage-limit-chain'
 import type { NativeChatOrcaStopCut } from '../../../shared/native-chat/native-chat-orca-stop-cut'
 import type { StructuredAgentSessionWorkEvidence } from '../agent-session-wire/observations/structured-agent-session-work-evidence'
 import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
@@ -47,7 +47,7 @@ export type JournalObserverResult = {
   authority: JournalWorkAuthority
   state: JournalStatusState
   indicators: JournalStatusIndicators
-  usageLimitCut: NativeChatUsageLimitCut | null
+  usageLimitCut: HostUsageLimitCut | null
   orcaStopCut: NativeChatOrcaStopCut | null
   work: {
     liveFence: number | null

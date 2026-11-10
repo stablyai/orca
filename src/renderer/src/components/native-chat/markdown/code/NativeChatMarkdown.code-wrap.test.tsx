@@ -20,9 +20,9 @@ import { NativeChatMarkdown } from '../NativeChatMarkdown'
 import {
   NativeChatDisclosureContext,
   useNativeChatDisclosures
-} from '../../native-chat-disclosure-store'
+} from '../../messages/disclosure/native-chat-disclosure-store'
 
-import { NativeChatReasoningRow } from '../../NativeChatReasoningRow'
+import { NativeChatReasoningRow } from '../../messages/reasoning/NativeChatReasoningRow'
 
 vi.mock('@/lib/syntax-highlighting/oniguruma', async () => ({
   loadOniguruma: (await import('@/lib/syntax-highlighting/oniguruma-test-harness'))

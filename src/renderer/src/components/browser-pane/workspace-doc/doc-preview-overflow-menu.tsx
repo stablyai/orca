@@ -1,4 +1,4 @@
-import { Copy, FileCode2, MoreHorizontal, RefreshCw, RotateCcw } from 'lucide-react'
+import { Copy, ExternalLink, FileCode2, MoreHorizontal, RefreshCw, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -7,17 +7,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
-import {
-  BrowserChromeFoldedMenuItems,
-  type BrowserChromeOverflowMenuProps
-} from '../assemble-chrome/browser-chrome-folded-tools'
+import { useTranslate } from '@/i18n/use-translate'
+import type { BrowserChromeOverflowMenuProps } from '../assemble-chrome/browser-chrome-toolbar'
 
 /** Preview grants have no browsing session or device emulation; expose document actions instead. */
 export function DocPreviewOverflowMenu({
   onReload,
   onHardReload,
   onOpenSource,
+  onOpenExternally,
   onCopyPath,
   onCopyRelativePath,
   overflow
@@ -25,11 +23,13 @@ export function DocPreviewOverflowMenu({
   onReload: () => void
   onHardReload: () => void
   onOpenSource: () => void
+  onOpenExternally: () => void
   onCopyPath: () => void
   /** Why it lives here: the preview hides the editor's path header, which was the only way to copy it. */
   onCopyRelativePath: () => void
   overflow: BrowserChromeOverflowMenuProps
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -38,7 +38,7 @@ export function DocPreviewOverflowMenu({
           size="icon"
           variant="ghost"
           className="h-7 w-7"
-          aria-label={translate(
+          aria-label={t(
             'auto.components.editor.HtmlDocPreview.previewMenuControl',
             'Preview options'
           )}
@@ -47,33 +47,33 @@ export function DocPreviewOverflowMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" onCloseAutoFocus={overflow.onMenuCloseAutoFocus}>
-        <BrowserChromeFoldedMenuItems
-          tools={overflow.tools}
-          deferUntilClose={overflow.deferUntilClose}
-        />
         <DropdownMenuItem onSelect={onReload}>
           <RefreshCw className="size-3.5" />
-          {translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
+          {t('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onHardReload}>
           <RotateCcw className="size-3.5" />
-          {translate('auto.components.browser.pane.BrowserPane.a1f3c2e4b5', 'Hard Reload')}
+          {t('auto.components.browser.pane.BrowserPane.a1f3c2e4b5', 'Hard Reload')}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onOpenSource}>
           <FileCode2 className="size-3.5" />
-          {translate('auto.components.editor.HtmlDocPreview.openSourceControl', 'Open source file')}
+          {t('auto.components.editor.HtmlDocPreview.openSourceControl', 'Open source file')}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onOpenExternally}>
+          <ExternalLink className="size-3.5" />
+          {t(
+            'auto.components.editor.HtmlDocPreview.openExternallyControl',
+            'Open with default app'
+          )}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onCopyPath}>
           <Copy className="size-3.5" />
-          {translate(
-            'auto.components.editor.HtmlDocPreview.copyDocumentPathControl',
-            'Copy file path'
-          )}
+          {t('auto.components.editor.HtmlDocPreview.copyDocumentPathControl', 'Copy file path')}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onCopyRelativePath}>
           <Copy className="size-3.5" />
-          {translate(
+          {t(
             'auto.components.editor.HtmlDocPreview.copyDocumentRelativePathControl',
             'Copy relative path'
           )}

@@ -1,3 +1,5 @@
+import { JOURNAL_EPOCH_TABLES } from './journal-domain-maintenance'
+import { journalForkStageHeld } from './journal-fork-stages'
 import type Database from '../../sqlite/sync-database'
 
 export type JournalDomainImportDiscard = { more: boolean; epoch: string | null }
@@ -10,36 +12,38 @@ export function discardJournalDomainImportPage(
   if (!db.isTransaction) {
     throw new Error('journal import discard requires its writer transaction')
   }
+  if (journalForkStageHeld(db, sessionId)) {
+    return { more: false, epoch: null }
+  }
   const ready = db.prepare('SELECT epoch FROM journal_chat_state WHERE session_id=?').get(sessionId)
   if (ready?.epoch !== null && ready?.epoch !== undefined) {
     return { more: false, epoch: String(ready.epoch) }
   }
-  let remaining = 512
-  for (const [table, key] of [
-    ['journal_outline_cache', 'epoch'],
-    ['journal_item_subagent_names', 'epoch,subagent_id,item_id'],
-    ['journal_items', 'epoch,item_id'],
-    ['journal_item_tombstones', 'epoch,item_id'],
-    ['journal_removed_turns', 'epoch,turn_id'],
-    ['journal_item_aliases', 'epoch,provider_item_id'],
-    ['journal_submission_attempts', 'epoch,message_id,attempt_sequence,attempt_index'],
-    ['journal_send_receipts', 'epoch,message_id'],
-    ['journal_settlements', 'epoch,settlement_id'],
-    ['journal_input_end_observations', 'epoch,source_item_key'],
-    ['journal_queue_cards', 'epoch,message_id'],
-    ['journal_queue_clear_members', 'epoch,message_id'],
-    ['journal_edit_leases', 'epoch,owner_id,caller_key,edit_id'],
-    ['journal_provider_activity', 'epoch,fence'],
-    ['journal_events', 'epoch,sequence']
-  ]) {
-    const result = db
-      .prepare(`DELETE FROM ${table} WHERE session_id=? AND (${key}) IN (
-        SELECT ${key} FROM ${table} WHERE session_id=? ORDER BY ${key} LIMIT ?
-      )`)
-      .run(sessionId, sessionId, remaining)
-    remaining -= Number(result.changes)
-    if (remaining === 0) {
-      return { more: true, epoch: null }
+  const start = performance.now()
+  let deleted = 0
+  let bytes = 0
+  for (const { name, key, payload } of JOURNAL_EPOCH_TABLES) {
+    const columns = ['session_id', 'epoch', ...(key ? key.split(',') : [])]
+    const sizes = [...columns, ...(payload ?? [])]
+      .map((column) => `COALESCE(octet_length(${column}),0)`)
+      .join('+')
+    const remove = db.prepare(
+      `DELETE FROM ${name} WHERE ${columns.map((column) => `${column}=?`).join(' AND ')}`
+    )
+    const rows = db
+      .prepare(`SELECT ${columns.join(',')},${sizes} AS work_bytes FROM ${name}
+      WHERE session_id=? ORDER BY ${columns.slice(1).join(',')} LIMIT ?`)
+      .all(sessionId, 64 - deleted)
+    for (const row of rows) {
+      const size = Number(row.work_bytes)
+      if (deleted && bytes + size > 1024 * 1024) {
+        return { more: true, epoch: null }
+      }
+      deleted += Number(remove.run(...columns.map((column) => row[column])).changes)
+      bytes += size
+      if (deleted === 64 || bytes >= 1024 * 1024 || performance.now() - start >= 8) {
+        return { more: true, epoch: null }
+      }
     }
   }
   return { more: false, epoch: null }

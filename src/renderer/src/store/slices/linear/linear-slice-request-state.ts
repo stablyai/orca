@@ -3,8 +3,8 @@ import {
   invalidateLinearIssueReads,
   type LinearIssueRequest
 } from './linear-issue-publication'
-import { rowLessSourceTarget } from '@/lib/default-creation-host'
-import { taskSourceCacheScopeHostId } from '../../../../../shared/task-source-context'
+import { rowLessSourceTarget } from '@/runtime/hosts/selection/default-creation-host'
+import { taskSourceCacheScopeHostId } from '../../../../../shared/work-items/task-source-context'
 import type { LinearSlice } from './linear-slice-contract'
 import type { LinearReadScope } from './linear-slice-scope'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'

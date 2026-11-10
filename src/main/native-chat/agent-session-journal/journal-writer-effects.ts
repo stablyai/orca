@@ -1,5 +1,11 @@
+import { journalForkAttachmentHeld } from './journal-fork-stages'
 import { agentSessionAttachmentStoreRoot } from '../agent-session-attachments/agent-session-attachment-references'
 import type Database from '../../sqlite/sync-database'
+import {
+  applyPRWatchStorage,
+  type PRWatchEffect,
+  type PRWatchEffectValues
+} from '../../github/pr-watch/pr-watch-storage'
 import type { AgentSessionStoreRowWrites } from './journal-writer-store-row-changes'
 import type { AgentSessionStoreMutation } from '../../runtime/agent-session/records/agent-session-store-mutation'
 import type { AgentSessionRuntimeFacts } from '../../runtime/agent-session/agent-session-runtime-attribution'
@@ -31,6 +37,7 @@ export type JournalWriterCoordinate = {
 }
 
 export type JournalWriterEffect =
+  | { kind: 'pr-watch'; operation: PRWatchEffect }
   | {
       kind: 'store'
       mutation: {
@@ -65,6 +72,7 @@ export type JournalReceiptRowBinding = {
 }
 
 export type JournalWriterEffectResult =
+  | { prWatch: PRWatchEffectValues[PRWatchEffect['kind']] }
   | { referenced: Set<string>; inserted: string[] }
   | { receipt: CommandReceipt; row: JournalRow['kind'] | null }
   | boolean
@@ -87,6 +95,8 @@ export function applyJournalWriterEffect(
   rows: readonly (JournalRow | JournalWriterCoordinate)[] = []
 ): JournalWriterEffectResult {
   switch (effect.kind) {
+    case 'pr-watch':
+      return { prWatch: applyPRWatchStorage(db, effect.operation) }
     case 'store':
       return applyJournalWriterStoreEffect(db, effect, rows)
     case 'receipt': {
@@ -119,7 +129,10 @@ export function applyJournalWriterEffect(
       const held = db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?')
       return pruneAgentSessionAttachmentClaims(db, {
         root: agentSessionAttachmentStoreRoot(stateDirectory),
-        recordedSessionIds: { has: (sessionId) => Boolean(held.get(sessionId)) },
+        recordedSessionIds: {
+          has: (sessionId) =>
+            journalForkAttachmentHeld(db, sessionId) || Boolean(held.get(sessionId))
+        },
         pairs: operation.pairs
       })
     }

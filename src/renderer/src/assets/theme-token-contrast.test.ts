@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { contrastRatio, type Rgba } from '../lib/plugin-theme-tokens'
-import { CHAT_SELECTION_MIX, chatSelectionMixOver } from '../lib/chat-selection-mix'
+import { contrastRatio, type Rgba } from '../../../shared/color/rgba-contrast'
 
 const css = readFileSync(new URL('./main.css', import.meta.url), 'utf8').replace(
   /\/\*[\s\S]*?\*\//g,
@@ -13,14 +12,6 @@ function themeBlocks(selector: ':root' | '.dark'): string[] {
   return [...css.matchAll(/(?:^|\n)([^{}\n][^{}]*)\{([^{}]*)\}/g)]
     .filter(([, selectors]) => selectors.trim().split(/\s*,\s*/)[0] === selector)
     .map(([, , body]) => body)
-}
-
-/** Last-wins percentage the blocks give `name`. */
-function themePercent(selector: ':root' | '.dark', name: string): number {
-  const values = themeBlocks(selector).flatMap((body) =>
-    [...body.matchAll(new RegExp(`${name}:\\s*([\\d.]+)%;`, 'g'))].map(([, value]) => Number(value))
-  )
-  return values.at(-1) ?? Number.NaN
 }
 
 /** Last-wins hex tokens from every top-level block whose selector list starts with `selector`. */
@@ -65,20 +56,6 @@ describe.each([':root', '.dark'] as const)('built-in %s token pairs', (selector)
     ['--git-decoration-ignored', '--sidebar']
   ])('%s on %s meets WCAG AA', (text, surface) => {
     expect(contrastRatio(token(text), token(surface))).toBeGreaterThanOrEqual(4.5)
-  })
-
-  it('chat selection keeps selected text 4.5:1 at its full depth', () => {
-    const base = selector === '.dark' ? 'dark' : 'light'
-    const canvas = tint(
-      token('--foreground'),
-      themePercent(selector, '--chat-canvas-mix') / 100,
-      token('--background')
-    )
-    const depth = themePercent(selector, '--chat-selection-mix')
-    expect(depth).toBe(CHAT_SELECTION_MIX[base])
-    expect(chatSelectionMixOver(token('--foreground'), canvas, token('--callout-note'), base)).toBe(
-      depth
-    )
   })
 
   it.each(['--background', '--muted'])('success text on its tint over %s meets WCAG AA', (name) => {

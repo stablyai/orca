@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({ call: vi.fn() }))
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: mocks.call
 }))
 
@@ -25,7 +25,7 @@ vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-options', ()
 import type { SessionOptionDescriptor } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
 import type { StructuredAgentSessionMutate } from '../../structured/writes/use-structured-agent-session-mutate'
 import { useStructuredAgentSessionOptions } from '../structured/use-structured-agent-session-options'
-import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
+import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 
 const PAIRED_TARGET = { kind: 'environment', environmentId: 'server-1' } as const
 const UNKNOWN = { origin: 'unknown' }

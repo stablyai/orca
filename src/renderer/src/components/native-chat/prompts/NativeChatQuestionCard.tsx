@@ -1,9 +1,10 @@
-import { ImeTextarea } from '@/lib/ime-text-field'
+import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import { Textarea } from '@/components/ui/textarea'
 import { useRef, useState, type RefObject } from 'react'
 import { Check, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatQuestionText } from './NativeChatQuestionText'
 import { NativeChatQuestionOption } from './NativeChatQuestionOption'
 import type { AskAnswerSelection } from '../../../../../shared/native-chat/input/native-chat-ask-answer'
@@ -12,11 +13,12 @@ import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
 import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focus'
 import { useNativeChatQuestionAutoAdvance } from './use-native-chat-question-auto-advance'
 import { useNativeChatQuestionKeys } from './use-native-chat-question-keys'
-import { isEditableTarget } from '@/lib/editable-target'
+import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 import type { AgentJournalFreeTextInput } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   askAcceptsEmptyAnswer,
   askConfirmAction,
+  askQuestionShowsPreviews,
   askConfirmLabel,
   askTypedText,
   toggleAskOption
@@ -64,6 +66,7 @@ export function NativeChatQuestionCard({
   shouldFocus = false,
   answerInputRef
 }: NativeChatQuestionCardProps): React.JSX.Element {
+  const t = useTranslate()
   const cardRef = useRef<HTMLDivElement>(null)
   const autoAdvance = useNativeChatQuestionAutoAdvance(isSubmitting || isCancelling)
   const [index, setIndex] = useState(0)
@@ -80,9 +83,10 @@ export function NativeChatQuestionCard({
   const questionAllowsOther = Array.isArray(allowOther) ? (allowOther[index] ?? false) : allowOther
   const freeTextInput = freeTextInputs?.[index]
   const fieldTakesFocus = q.options.length === 0 || undefined
+  const showsPreviews = askQuestionShowsPreviews(q)
   const answerPlaceholder =
     freeTextInput?.placeholder ??
-    translate('components.native-chat.question.otherPlaceholder', 'Type your answer')
+    t('components.native-chat.question.otherPlaceholder', 'Type your answer')
   const acceptsEmpty = (qi: number): boolean =>
     askAcceptsEmptyAnswer(prompt.questions[qi], freeTextInputs?.[qi])
   const typedText = (qi: number, oth = otherText): string =>
@@ -154,15 +158,31 @@ export function NativeChatQuestionCard({
     }
   }
 
-  // Briefly show a single-select pick before advancing; picking again retracts it.
-  const pickOption = (optionIndex: number): void => {
+  // Briefly show a single-select pick before advancing; picking again retracts it. With previews,
+  // a pick stays put: a digit focuses its row, and Enter on the chosen row confirms.
+  const pickOption = (
+    optionIndex: number,
+    via: 'pointer' | 'digit' | 'enter' = 'pointer'
+  ): void => {
     const cur = selections[index] ?? []
+    // Focus first, so Enter after any digit acts on the row that digit named.
+    if (showsPreviews && via === 'digit') {
+      cardRef.current
+        ?.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')
+        [optionIndex]?.focus()
+    }
+    if (showsPreviews && cur.includes(optionIndex)) {
+      if (via === 'enter') {
+        confirm(true)
+      }
+      return
+    }
     const picked = !cur.includes(optionIndex)
     const chosen = toggleAskOption(cur, optionIndex, q.multiSelect)
     const next = selections.map((s, i) => (i === index ? chosen : s))
     setSelections(next)
     autoAdvance.cancel()
-    if (picked && !q.multiSelect) {
+    if (picked && !q.multiSelect && !showsPreviews) {
       autoAdvance.schedule(() => advanceOrSubmit(next, otherText))
     }
   }
@@ -251,7 +271,7 @@ export function NativeChatQuestionCard({
               >
                 <span className="max-w-[10rem] truncate">
                   {qq.header ||
-                    translate('components.native-chat.question.step', 'Step {{value0}}', {
+                    t('components.native-chat.question.step', 'Step {{value0}}', {
                       value0: i + 1
                     })}
                 </span>
@@ -281,7 +301,7 @@ export function NativeChatQuestionCard({
               type="button"
               onClick={cancel}
               disabled={isCancelling}
-              aria-label={translate('components.native-chat.question.cancel', 'Cancel')}
+              aria-label={t('components.native-chat.question.cancel', 'Cancel')}
               className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <X className="size-4" />
@@ -296,6 +316,7 @@ export function NativeChatQuestionCard({
                 initialFocus={i === 0}
                 label={opt.label}
                 description={opt.description}
+                preview={opt.preview}
                 selected={(selections[index] ?? []).includes(i)}
                 disabled={isSubmitting}
                 onSelect={() => pickOption(i)}
@@ -386,7 +407,7 @@ export function NativeChatQuestionCard({
                 )}
               >
                 {isSubmitting
-                  ? translate('components.native-chat.question.sending', 'Sending…')
+                  ? t('components.native-chat.question.sending', 'Sending…')
                   : CONFIRM_LABEL[askConfirmLabel(currentAnswered, isLast)]()}
               </button>
             </div>

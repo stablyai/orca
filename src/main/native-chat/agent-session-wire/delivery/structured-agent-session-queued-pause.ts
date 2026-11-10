@@ -122,3 +122,11 @@ export async function holdRestartedStructuredAgentSessionSends(
     await markStructuredQueueReopen(sessionId, journal, fence, logger, settled + 1)
   }
 }
+
+/** Release only the restart pause still present at the writer position. */
+export async function liftStructuredQueueRestartHold(
+  journal: Pick<AgentSessionJournal, 'write'>,
+  fence: number
+): Promise<void> {
+  await journal.write({ kind: 'queue-resume', fence, onlyRestarted: true })
+}

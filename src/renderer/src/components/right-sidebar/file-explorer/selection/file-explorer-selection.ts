@@ -1,5 +1,5 @@
 import type { TreeNode } from '../tree/file-explorer-types'
-import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
+import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
 import type { LocalPathOpenOwner } from '@/lib/local-path-open-guard'
 
 export type FileExplorerSelectionState = {

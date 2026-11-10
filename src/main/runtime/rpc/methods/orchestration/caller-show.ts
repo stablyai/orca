@@ -2,12 +2,12 @@ import type {
   OrchestrationCallerShowResult,
   OrchestrationPartyLocationResult,
   OrchestrationSessionAddressResult
-} from '../../../../../shared/orchestration-caller-status'
+} from '../../../../../shared/orchestration/orchestration-caller-status'
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
 } from '../../../../../shared/orca-session-address'
-import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../shared/orchestration-session-caller-codes'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../shared/orchestration/orchestration-session-caller-codes'
 import {
   PartyLocationParams,
   SessionAddressParams
@@ -69,10 +69,19 @@ export const ORCHESTRATION_CALLER_METHODS = [
     permission: 'workspace',
     params: null,
     // Dispatch already admitted the environment's session; do not resolve another caller from params.
-    handler: (_params, { orchestrationCaller }): OrchestrationCallerShowResult => ({
+    handler: (
+      _params,
+      { orchestrationCaller, orchestrationCompatibilityEvidence, runtime }
+    ): OrchestrationCallerShowResult => ({
       caller: orchestrationCaller
         ? { orcaSessionId: formatOrcaSessionAddress(orchestrationCaller.orcaSessionId), live: true }
-        : null
+        : null,
+      // An Orca-launched agent's own pane and launch secret prove it is one; no hook needs to have fired.
+      terminal:
+        !orchestrationCaller &&
+        runtime.verifyOrchestrationCompatibilityCaller(orchestrationCompatibilityEvidence, {
+          currentRuntimeLaunchSufficient: true
+        }) !== null
     })
   }),
   defineMethod({

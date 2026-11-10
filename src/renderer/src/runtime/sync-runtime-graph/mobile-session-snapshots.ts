@@ -1,9 +1,7 @@
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import type { AppState } from '@/store/types'
-import type {
-  RuntimeMobileSessionSnapshotTab,
-  RuntimeMobileSessionTabsSnapshot
-} from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionSnapshotTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   collectAmbiguousTerminalTabIds,

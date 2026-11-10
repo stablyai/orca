@@ -4,7 +4,7 @@ import type {
   BrowserTabListResult,
   BrowserTabShowResult,
   BrowserTabSwitchResult
-} from '../../../../shared/runtime-browser-contracts'
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { publishSwitchedBrowserSessionTab } from '../tabs/browser-tab-create-publication'
 import type { RuntimeBrowserClientPage } from './runtime-browser-page-registry'
 import type { RuntimeBrowserCommandHost } from '../commands/browser-command-contracts'

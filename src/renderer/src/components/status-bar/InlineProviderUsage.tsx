@@ -10,10 +10,14 @@ import {
 } from '../../../../shared/usage-percentage-display'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 import { barColor, clampUsedPercent } from './tooltip'
-import { formatRateLimitWindowChipLabel } from '../../../../shared/rate-limit-window-label'
+import { formatWindowLabel } from '../../../../shared/rate-limit-window-label'
+import { formatResetDuration } from '../../../../shared/rate-limit-reset-format'
+import { formatUsageLimitResetClock } from '../../../../shared/agent-session/failures/agent-session-usage-limit'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
 import { getUsageRosterRowState } from './usage-roster-row-state'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+
+type InlineUsageWindow = { key: string; used: number; label: string; resetsAt: number | null }
 
 export function InlineUsageBars({
   limits,
@@ -22,32 +26,41 @@ export function InlineUsageBars({
   limits: ProviderRateLimits
   isFetching: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const display = normalizeUsagePercentageDisplay(
     useAppStore((state) => state.usagePercentageDisplay)
   )
-  // Why: tick the session countdown live via one boundary-scheduled clock, not just the usage poll (#5399).
-  const now = useResetCountdownClock([limits.session?.resetsAt, limits.monthly?.resetsAt])
+  // Why: tick every reset countdown live via one boundary-scheduled clock, not just the usage poll (#5399).
+  const now = useResetCountdownClock([
+    limits.session?.resetsAt,
+    limits.weekly?.resetsAt,
+    limits.fableWeekly?.resetsAt,
+    limits.monthly?.resetsAt
+  ])
   const usageWindows = [
     limits.session
       ? {
           key: 'session',
           used: clampUsedPercent(limits.session.usedPercent),
-          // Why: live reset countdown (matches popover); '5h' window length only when resetsAt is unknown (#5399).
-          label: formatRateLimitWindowChipLabel(limits.session, now)
+          label: formatWindowLabel(limits.session.windowMinutes),
+          resetsAt: limits.session.resetsAt
         }
       : null,
     limits.weekly
       ? {
           key: 'weekly',
           used: clampUsedPercent(limits.weekly.usedPercent),
-          label: translate('auto.components.status.bar.StatusBar.5c938d39ac', 'wk')
+          label: t('auto.components.status.bar.StatusBar.5c938d39ac', 'wk'),
+          resetsAt: limits.weekly.resetsAt
         }
       : null,
     limits.fableWeekly
       ? {
           key: 'fableWeekly',
           used: clampUsedPercent(limits.fableWeekly.usedPercent),
-          label: translate('auto.components.status.bar.StatusBar.54e8d6bb2d', 'Fable')
+          label: t('auto.components.status.bar.StatusBar.54e8d6bb2d', 'Fable'),
+          resetsAt: limits.fableWeekly.resetsAt
         }
       : null,
     // Why: matches the status bar chip; monthly is the only limit when there is no 5h/7d window.
@@ -55,38 +68,58 @@ export function InlineUsageBars({
       ? {
           key: 'monthly',
           used: clampUsedPercent(limits.monthly.usedPercent),
-          label: formatRateLimitWindowChipLabel(limits.monthly, now)
+          label: formatWindowLabel(limits.monthly.windowMinutes),
+          resetsAt: limits.monthly.resetsAt
         }
       : null
-  ].filter((window): window is { key: string; used: number; label: string } => window !== null)
+  ].filter((window): window is InlineUsageWindow => window !== null)
   // Why: a lapsed token or failed refresh is not a sign-out; ask for a sign-in only when one is confirmed.
   const emptyState =
     usageWindows.length === 0 && limits.status === 'error'
-      ? getUsageRosterRowState(limits, false)
+      ? getUsageRosterRowState(limits, false, t)
       : null
 
   return (
     <div
       className={`grid w-full items-center gap-1.5 ${isFetching ? 'animate-pulse motion-reduce:animate-none' : ''}`}
     >
-      {usageWindows.map((window) => (
-        <div key={window.key} className="flex min-w-0 items-center gap-1">
-          <div className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
-            {/* Why: fill follows the selected percentage; color still signals consumption urgency. */}
-            <div
-              className={`h-full rounded-full ${barColor(window.used)}`}
-              style={{ width: `${getDisplayedUsagePercentage(window.used, display)}%` }}
-            />
+      {usageWindows.map((window) => {
+        const resetsAt =
+          window.resetsAt != null && Number.isFinite(new Date(window.resetsAt).getTime())
+            ? window.resetsAt
+            : null
+        return (
+          <div key={window.key} className="grid min-w-0 gap-0.5">
+            <div className="flex min-w-0 items-center gap-1">
+              <div className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
+                {/* Why: fill follows the selected percentage; color still signals consumption urgency. */}
+                <div
+                  className={`h-full rounded-full ${barColor(window.used)}`}
+                  style={{ width: `${getDisplayedUsagePercentage(window.used, display)}%` }}
+                />
+              </div>
+              <span className="min-w-[4.5rem] shrink-0 text-right text-3xs tabular-nums text-muted-foreground">
+                {formatUsagePercentageLabel(window.used, display, t)} {window.label}
+              </span>
+              {/* Why: fixed width keeps the reset countdowns in one column across account rows. */}
+              <span className="w-11 shrink-0 text-right text-3xs tabular-nums text-muted-foreground">
+                {resetsAt != null ? formatResetDuration(resetsAt - now) : null}
+              </span>
+            </div>
+            {resetsAt != null ? (
+              <span className="text-right text-3xs tabular-nums text-muted-foreground">
+                {t('auto.components.status.bar.InlineUsageBars.resetsAt', 'Resets {{when}}', {
+                  when: formatUsageLimitResetClock(resetsAt, now, intlLocale)
+                })}
+              </span>
+            ) : null}
           </div>
-          <span className="min-w-[5.5rem] shrink-0 text-right text-3xs tabular-nums text-muted-foreground">
-            {formatUsagePercentageLabel(window.used, display)} {window.label}
-          </span>
-        </div>
-      ))}
+        )
+      })}
       {emptyState ? (
         <span className="text-3xs text-muted-foreground">
           {emptyState.kind === 'sign-in'
-            ? translate('auto.components.status.bar.StatusBar.f19a63e7cd', 'Sign in to see usage')
+            ? t('auto.components.status.bar.StatusBar.f19a63e7cd', 'Sign in to see usage')
             : emptyState.statusLabel}
         </span>
       ) : null}
@@ -115,6 +148,7 @@ export function InlineUsageSignInAction({
   accountLabel: string
   onSignIn: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <DropdownMenuItem
       asChild
@@ -129,12 +163,12 @@ export function InlineUsageSignInAction({
         variant="outline"
         size="xs"
         disabled={disabled}
-        aria-label={`${translate('auto.components.status.bar.StatusBar.c35af53b73', 'Sign in')}: ${accountLabel}`}
+        aria-label={`${t('auto.components.status.bar.StatusBar.c35af53b73', 'Sign in')}: ${accountLabel}`}
       >
         {isSigningIn ? (
           <Loader2 className="size-3 animate-spin motion-reduce:animate-none" />
         ) : null}
-        {translate('auto.components.status.bar.StatusBar.c35af53b73', 'Sign in')}
+        {t('auto.components.status.bar.StatusBar.c35af53b73', 'Sign in')}
       </Button>
     </DropdownMenuItem>
   )

@@ -1,4 +1,4 @@
-import { useNativeChatOlderHistory } from '../../../use-native-chat-older-history'
+import { useNativeChatOlderHistory } from '../../../viewport/history/use-native-chat-older-history'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   NATIVE_CHAT_SOURCE_PRIORITY,
@@ -14,7 +14,7 @@ import { mergeNativeChatLiveSession } from '../../../../../../../shared/native-c
 import {
   hasMoreNativeChatHistory,
   NATIVE_CHAT_INITIAL_LIMIT
-} from '../../../native-chat-pagination'
+} from '../../../viewport/history/native-chat-pagination'
 import type {
   NativeChatLiveSession,
   ReadState,
@@ -26,7 +26,7 @@ import { useNativeChatHookStatus } from '../../status/use-native-chat-hook-statu
 import { useNativeChatAssembledMessages } from '../assembly/use-native-chat-assembled-messages'
 import { createNativeChatReadRetryTimer } from './native-chat-read-retry-timer'
 import { openNativeChatTranscriptStream } from './native-chat-stream-teardown'
-import { takeNativeChatOpenWake } from '../../../native-chat-open-wake'
+import { takeNativeChatOpenWake } from '../../../pane/routing/native-chat-open-wake'
 
 // Keep the base axis stable through non-ready reads.
 const EMPTY_MESSAGES: readonly NativeChatMessage[] = []

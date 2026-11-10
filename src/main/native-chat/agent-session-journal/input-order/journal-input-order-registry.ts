@@ -3,6 +3,9 @@ import { JournalInputOrder } from './journal-input-order'
 import type { JournalIndexStorageFactory } from '../journal-index-storage'
 import { memoryJournalIndexStorage } from '../journal-memory-index-storage'
 
+/** Injected so the order's own indexes resolve it without importing its module. */
+export type JournalInputOrderResolver = (state: JournalReducerState) => JournalInputOrder
+
 const owners = new WeakMap<JournalReducerState, JournalInputOrder>()
 export function getJournalInputOrder(state: JournalReducerState): JournalInputOrder | undefined {
   return owners.get(state)

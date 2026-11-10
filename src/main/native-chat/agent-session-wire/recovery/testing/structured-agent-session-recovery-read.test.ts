@@ -1,3 +1,4 @@
+import { hostUsageLimitCut } from '../structured-agent-session-usage-limit-chain'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -27,7 +28,10 @@ it('does no discovery on ordinary reads and drops preparation superseded by a se
       reads: {
         cursor: async () => snapshot.cursor,
         usageLimitCut: async () =>
-          latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions)
+          hostUsageLimitCut(
+            snapshot,
+            latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions)
+          )
       }
     }
   }
@@ -127,7 +131,10 @@ it('recovers an unpinned OMP native file using the owning host directory and flo
         reads: {
           cursor: async () => snapshot.cursor,
           usageLimitCut: async () =>
-            latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions)
+            hostUsageLimitCut(
+              snapshot,
+              latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions)
+            )
         }
       }
     }

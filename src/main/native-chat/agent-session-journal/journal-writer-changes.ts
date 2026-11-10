@@ -11,7 +11,15 @@ import type {
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import type { JournalSqlAcceptedInputs } from './journal-sql-accepted-inputs'
 
+export type JournalPromptDispatch = {
+  clientMessageId: string
+  queuedMessageId?: string
+  state: 'pending' | 'accepted' | 'rejected' | 'unknown'
+}
+
 export type JournalWriterPublication = {
+  resetPrompts?: true
+  promptDispatches?: JournalPromptDispatch[]
   items: AgentJournalRenderItem[]
   insertedItemIds?: string[]
   cards: QueuedMessageRow[]
@@ -26,6 +34,7 @@ export type JournalWriterPublication = {
 }
 
 export type JournalWriterCommit = {
+  forkInstalled?: { epoch: string; boundary: { kind: 'start' } | { kind: 'item'; itemId: string } }
   openRecovery?: JournalOpenRecoveryResult
   requestEvents?: JournalRequestEvent[]
   publication?: JournalWriterPublication

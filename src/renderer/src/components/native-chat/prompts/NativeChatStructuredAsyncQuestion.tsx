@@ -1,6 +1,6 @@
 import { asyncQuestionSourceScope } from '../../../../../shared/native-chat/input/native-chat-ask'
 import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
-import { structuredAgentSessionHostKey } from '../../../runtime/structured-agent-session-host-capability'
+import { structuredAgentSessionHostKey } from '../../../runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import type { NativeChatStructuredViewProps } from '../native-chat-view-types'
 import type { useStructuredAgentSession } from '../session/structured/use-structured-agent-session'
 import { nativeChatAskDismissKey } from '../../../../../shared/native-chat/input/native-chat-ask-dismiss-key'
@@ -14,7 +14,7 @@ import {
   formatAskAnswer
 } from '../../../../../shared/native-chat/input/native-chat-ask-answer'
 import { nativeChatAnswerSendIntent } from '../../../../../shared/native-chat/input/native-chat-follow-up-behavior'
-import type { NativeChatStructuredComposerTransport } from '../native-chat-composer-types'
+import type { NativeChatStructuredComposerTransport } from '../composer/submit/native-chat-structured-composer-transport'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import type { NativeChatLiveSession } from '../session/terminal/read/native-chat-live-session-contract'
 import { useNativeChatAsyncQuestions } from './use-native-chat-async-questions'

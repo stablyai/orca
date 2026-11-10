@@ -9,7 +9,7 @@ import {
 import {
   LAUNCH_FOLDER_ID,
   type WindowLaunchCase
-} from '../../../shared/launch-parity-window-request.test-fixture'
+} from '../../../shared/agent-launch/fixtures/launch-parity-window-request.test-fixture'
 
 type WorkspaceStartProducer = Extract<
   WindowLaunchCase['producer'],

@@ -1,19 +1,13 @@
+import type { JournalSqlForkReader, JournalSqlConversionReader } from './journal-sql-reader-slot'
+import { ReaderSlot } from './journal-sql-reader-slot'
+import type { JournalForkPreparationInput } from './journal-fork-preparation'
+import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
 import type { JournalOutlineCache } from './journal-domain-outline'
-import type { Worker } from 'node:worker_threads'
-import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
 import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath
 } from '../../worker-threads/worker-thread-entry-path'
 import type { AgentSessionHistoryResult } from '../../../shared/agent-session/agent-session-wire'
-import { restoreJournalSqlFailure } from './journal-sql-failure'
-import type {
-  JournalSqlReaderOperation,
-  JournalSqlReaderReply,
-  JournalSqlReaderRequest,
-  JournalSqlReaderResult
-} from './journal-sql-reader-protocol'
-import type { JournalDomainImportHeader, JournalDomainImportPage } from './journal-domain-import'
 import type {
   JournalSqlDatabaseRead,
   JournalSqlDatabaseReadResult
@@ -28,6 +22,8 @@ export class JournalSqlReaderPool {
   private closed = false
   private closing?: Promise<void>
   private conversionSlot?: ReaderSlot
+  private forkSlot?: ReaderSlot
+  private forkRelease?: PromiseWithResolvers<void>
 
   constructor(
     private readonly filename: string,
@@ -38,6 +34,60 @@ export class JournalSqlReaderPool {
     ),
     private readonly cacheOutline?: (cache: JournalOutlineCache) => void
   ) {}
+
+  async prepareFork(
+    input: JournalForkPreparationInput,
+    signal?: AbortSignal
+  ): Promise<JournalSqlForkReader> {
+    while (this.forkRelease) {
+      if (this.closed) {
+        throw new Error('journal reader pool is closed')
+      }
+      throwIfSignalAborted(signal)
+      const current = this.forkRelease.promise
+      await (!signal
+        ? current
+        : new Promise<void>((resolve, reject) => {
+            const aborted = () => {
+              cleanup()
+              reject(signal.reason)
+            }
+            const cleanup = () => signal.removeEventListener('abort', aborted)
+            signal.addEventListener('abort', aborted, { once: true })
+            void current.then(
+              () => {
+                cleanup()
+                resolve()
+              },
+              (error: unknown) => {
+                cleanup()
+                reject(error)
+              }
+            )
+            if (signal.aborted) {
+              aborted()
+            }
+          }))
+    }
+    throwIfSignalAborted(signal)
+    const slot = this.slot(true)
+    this.forkSlot = slot
+    const gate = Promise.withResolvers<void>()
+    this.forkRelease = gate
+    const release = () => {
+      if (this.forkRelease === gate) {
+        this.forkSlot = undefined
+        this.forkRelease = undefined
+        gate.resolve()
+      }
+    }
+    try {
+      return await slot.prepareFork(input, release)
+    } catch (error) {
+      release()
+      throw error
+    }
+  }
 
   async domainHistory(request: JournalDomainHistoryRequest): Promise<AgentSessionHistoryResult> {
     const response = await this.slot().request({ kind: 'domain-history', request })
@@ -83,7 +133,7 @@ export class JournalSqlReaderPool {
     return response.result
   }
 
-  private slot(): ReaderSlot {
+  private slot(forFork = false): ReaderSlot {
     if (this.closed) {
       throw new Error('journal SQL reader pool is closed')
     }
@@ -94,7 +144,9 @@ export class JournalSqlReaderPool {
         this.retiring.add(closed)
       }
     }
-    let slot = this.slots.toSorted((a, b) => a.pendingCount - b.pendingCount)[0]
+    let slot = this.slots
+      .filter((slot) => slot !== this.forkSlot && (!forFork || slot !== this.conversionSlot))
+      .toSorted((a, b) => a.pendingCount - b.pendingCount)[0]
     if ((!slot || slot.pendingCount > 0) && this.slots.length < 4) {
       slot = new ReaderSlot(this.filename, this.originalFilename, this.workerPath)
       this.slots.push(slot)
@@ -104,6 +156,7 @@ export class JournalSqlReaderPool {
 
   close(): Promise<void> {
     this.closed = true
+    this.forkRelease?.resolve()
     return (this.closing ??= Promise.all([
       ...this.retiring,
       ...this.slots.map((slot) => slot.close())
@@ -111,163 +164,5 @@ export class JournalSqlReaderPool {
   }
 }
 
-/** The reservation keeps pages on the worker holding this chat's restored rows. */
-export class JournalSqlConversionReader {
-  private closing?: Promise<void>
-
-  constructor(
-    readonly header: JournalDomainImportHeader,
-    private readonly slot: ReaderSlot,
-    private readonly conversionId: number,
-    private readonly release: () => void
-  ) {}
-
-  async next(): Promise<JournalDomainImportPage | null> {
-    const response = await this.slot.request({
-      kind: 'conversion-page',
-      conversionId: this.conversionId
-    })
-    if (response.type !== 'rows') {
-      throw new Error('journal reader returned no conversion page')
-    }
-    return response.page
-  }
-
-  close(): Promise<void> {
-    return (this.closing ??= this.slot
-      .request({ kind: 'conversion-release', conversionId: this.conversionId })
-      .then(() => {})
-      .finally(this.release))
-  }
-}
-
-class ReaderSlot {
-  private readonly worker: Worker
-  private nextId = 0
-  private readonly pending = new Map<
-    number,
-    {
-      resolve: (response: JournalSqlReaderResult) => void
-      reject: (error: Error) => void
-    }
-  >()
-  failed = false
-  private failure?: Error
-  private conversions = 0
-  private readonly ready = Promise.withResolvers<void>()
-  private readonly exited = Promise.withResolvers<void>()
-  private closing?: Promise<void>
-
-  get pendingCount(): number {
-    return this.pending.size + this.conversions
-  }
-
-  constructor(filename: string, originalFilename: string, workerPath: string) {
-    this.worker = spawnWorkerThread(workerPath, {
-      workerData: { filename, originalFilename },
-      execArgv: []
-    })
-    const startup = setTimeout(() => {
-      this.fail(new Error('journal SQL reader did not open within 10000 ms'))
-      void this.close()
-    }, 10000)
-    void this.ready.promise.finally(() => clearTimeout(startup)).catch(() => {})
-    this.worker.on('message', (reply: JournalSqlReaderReply) => {
-      if (reply.type === 'ready') {
-        this.ready.resolve()
-        if (this.pending.size === 0) {
-          this.worker.unref()
-        }
-        return
-      }
-      const pending = reply.id === undefined ? undefined : this.pending.get(reply.id)
-      if (reply.id !== undefined) {
-        this.pending.delete(reply.id)
-      }
-      if (this.pending.size === 0) {
-        this.worker.unref()
-      }
-      if (reply.type === 'failed') {
-        const error = restoreJournalSqlFailure(reply.error)
-        pending?.reject(error)
-        if (reply.id === undefined) {
-          this.fail(error)
-        }
-      } else {
-        pending?.resolve(reply)
-      }
-    })
-    this.worker.on('error', (error) => this.fail(error))
-    this.worker.once('exit', (code) => {
-      this.fail(new Error(`journal SQL reader exited (${code})`))
-      this.exited.resolve()
-    })
-    // Startup can fail before a caller awaits readiness.
-    void this.ready.promise.catch(() => {})
-  }
-
-  async prepareConversion(sessionId: string): Promise<JournalSqlConversionReader | null> {
-    this.conversions++
-    const request = this.send({ kind: 'conversion-prepare', sessionId })
-    try {
-      const response = await request.result
-      if (response.type !== 'prepared') {
-        throw new Error('journal reader returned no prepared conversion')
-      }
-      if (!response.conversion) {
-        this.conversions--
-        return null
-      }
-      return new JournalSqlConversionReader(response.conversion, this, request.id, () => {
-        this.conversions--
-      })
-    } catch (error) {
-      this.conversions--
-      throw error
-    }
-  }
-
-  request(operation: JournalSqlReaderOperation): Promise<JournalSqlReaderResult> {
-    return this.send(operation).result
-  }
-
-  private send(operation: JournalSqlReaderOperation): {
-    id: number
-    result: Promise<JournalSqlReaderResult>
-  } {
-    const id = ++this.nextId
-    if (this.failed) {
-      return { id, result: Promise.reject(this.failure ?? new Error('journal SQL reader failed')) }
-    }
-    this.worker.ref()
-    const result = new Promise<JournalSqlReaderResult>((resolve, reject) => {
-      this.pending.set(id, { resolve, reject })
-      void this.ready.promise
-        .then(() => {
-          this.worker.postMessage({ id, operation } satisfies JournalSqlReaderRequest)
-        })
-        .catch((error: unknown) => {
-          this.pending.delete(id)
-          if (this.pending.size === 0) {
-            this.worker.unref()
-          }
-          reject(error)
-        })
-    })
-    return { id, result }
-  }
-
-  close(): Promise<void> {
-    return (this.closing ??= this.worker.terminate().then(() => this.exited.promise))
-  }
-
-  private fail(error: Error): void {
-    this.failed = true
-    this.failure ??= error
-    this.ready.reject(error)
-    for (const pending of this.pending.values()) {
-      pending.reject(error)
-    }
-    this.pending.clear()
-  }
-}
+/** The source transaction is released before this reader emits any child page. */
+export { JournalSqlForkReader, JournalSqlConversionReader } from './journal-sql-reader-slot'

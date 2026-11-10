@@ -5,6 +5,7 @@ import type { JournalRow } from '../durable-rows/journal-row-schema'
 import type { QueuedMessageRow } from '../queued-messages/queued-message-table'
 import type { InputPlaceQuery } from './journal-input-place-index'
 import { LegacyQueueCardIndex } from './legacy-queue-card-index'
+import type { JournalInputOrderResolver } from './journal-input-order-registry'
 import { JournalInputLineageOwner } from './journal-input-lineage'
 import {
   currentJournalInputIdentity,
@@ -19,9 +20,12 @@ export class LegacyQueueOrderReader {
   private reconstructing = false
   readonly lineage: JournalInputLineageOwner
   readonly cards: LegacyQueueCardIndex
-  constructor(private readonly state: JournalReducerState) {
+  constructor(
+    private readonly state: JournalReducerState,
+    journalInputOrder: JournalInputOrderResolver
+  ) {
     this.lineage = new JournalInputLineageOwner(state.inputCards)
-    this.cards = new LegacyQueueCardIndex(this.lineage)
+    this.cards = new LegacyQueueCardIndex(this.lineage, journalInputOrder)
   }
   beforeRow(state: JournalReducerState, row: JournalRow): void {
     if (row.kind === 'dispatch' && row.keptAsQueuedMessageId) {

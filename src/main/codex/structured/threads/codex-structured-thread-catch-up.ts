@@ -167,6 +167,9 @@ export async function catchUpCodexThread(input: {
         let next = 0
         let groupId: unknown
         const offer = async (turn: Record<string, unknown>) => {
+          if (!selectCodexHistoryTurn(turn, view)) {
+            return
+          }
           if (groupId !== turn.id) {
             staging.completeTurn()
           }

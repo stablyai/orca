@@ -66,10 +66,10 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
   const streamClosed = new Promise<void>((resolve) => {
     resolveStream = resolve
   })
-  registration.setTeardown(() => {
-    // Dispose credit first so the final flush cannot start a recovery on a closing stream.
-    outputCredit?.dispose()
+  registration.setTeardown((release) => {
+    outputCredit?.close(release)
     outputBatcher?.flush()
+    outputCredit?.dispose()
     outputBatcher?.dispose()
     streamToken?.release()
     closed = true

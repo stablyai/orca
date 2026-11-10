@@ -66,6 +66,10 @@ export function runJournalSqlSteps(
         }
         result.coordinates.push(...commit.coordinates)
         result.inputChanged ||= commit.inputChanged
+        if (commit.promptDispatches?.length) {
+          result.promptDispatches ??= []
+          result.promptDispatches.push(...commit.promptDispatches)
+        }
         result.invalidatedItemIds!.push(
           ...(commit.invalidatedItemIds ?? [
             ...commit.items.map((item) => item.itemId),

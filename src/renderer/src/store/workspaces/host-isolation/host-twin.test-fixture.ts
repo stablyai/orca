@@ -12,7 +12,7 @@ import { makeTab } from '../../terminals/terminal-tab.test-fixture'
 import { makeTabGroup, makeUnifiedTab } from '../../slices/tabs/tab-group.test-fixture'
 import { makeWorktree } from '../../slices/worktrees/worktree.test-fixture'
 import { makeFolderWorkspace } from '../../folder-workspaces/folder-workspace.test-fixture'
-import { updateNativeChatComposerDraft } from '@/components/native-chat/native-chat-composer-draft-store'
+import { updateNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-store'
 import { markWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import {
   beginHugeRepoWarningProbe,

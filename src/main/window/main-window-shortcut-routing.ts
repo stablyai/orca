@@ -21,6 +21,7 @@ import type { CreateMainWindowOptions } from './main-window-contracts'
 import type { MainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import { sendResolvedWindowShortcutAction } from './main-window-shortcut-actions'
 import { isMacAppPasteInput } from './mac-app-paste-input'
+import { dictationShortcutMode } from '../../shared/dictation-shortcut-mode'
 import {
   nativeChatPromptClaimsShortcut,
   textInputOwnsComposition,
@@ -80,15 +81,19 @@ export function installMainWindowShortcutRouting(args: {
         ? getWindowShortcutActionId(action)
         : null
 
-    // Hold dictation needs renderer keyup; consume only single-keydown toggles in main.
+    // Hold and Auto need renderer keyup; consume only single-keydown toggles in main.
     if (action.type === 'dictationKeyDown') {
       const voiceSettings = store?.getSettings().voice
       // No model still forwards: the renderer's startDictation shows the setup toast.
-      if (!voiceSettings?.enabled) {
+      if (!voiceSettings?.enabled || textInputOwnsComposition(options.input)) {
         return false
       }
-      const dictationMode = voiceSettings.dictationMode ?? 'toggle'
-      if (dictationMode === 'hold') {
+      const dictationMode = dictationShortcutMode(voiceSettings)
+      // A double tap has no release to hold, so Auto toggles on it.
+      const toggles =
+        dictationMode === 'toggle' ||
+        (dictationMode === 'auto' && options.input.doubleTapModifier !== undefined)
+      if (!toggles) {
         return false
       }
       if (isAutoRepeat) {

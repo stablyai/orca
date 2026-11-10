@@ -25,10 +25,7 @@ import {
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 import type { StructuredAgentSessionHistoryJournal } from './structured-agent-session-journal-views'
 
-import {
-  StructuredAgentSessionExitObservation,
-  StructuredAgentSessionRootExitReceipt
-} from '../termination/structured-agent-session-exit-observation'
+import * as exits from '../termination/structured-agent-session-exit-observation'
 
 export type StructuredAgentSessionSinkAdmission =
   | { accepted: true }
@@ -73,10 +70,10 @@ export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSi
     flush(): void
   }): () => void
   publishLiveText?(): StructuredAgentSessionSinkAdmission
-  observeExit?: StructuredAgentSessionExitObservation['record']
+  observeExit?: exits.StructuredAgentSessionExitObservation['record']
   /** Adapters report only their acquisition's own spontaneous root exit, never a requested close. */
-  observeRootExit?: StructuredAgentSessionRootExitReceipt['observe']
-  onRootExit?: StructuredAgentSessionRootExitReceipt['listen']
+  observeRootExit?: exits.StructuredAgentSessionRootExitReceipt['observe']
+  onRootExit?: exits.StructuredAgentSessionRootExitReceipt['listen']
   appendItem(
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
@@ -132,9 +129,10 @@ export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSi
   journalEpoch?(): string | null
   /** Notices of turns settled by any writer while this sink is bound. */
   observeSettledTurns?(listener: (turnItemIds: readonly string[]) => void): () => void
-  /** Saved facts the acquisition read before translating, replaced whole per epoch. */
+  /** Saved facts read before translating, replaced whole per epoch. */
   journalSnapshot?(): ClaudeJournalSnapshot | null
   snapshotCurrent?(): Promise<void>
+  onJournalBound?(listener: () => void): () => void
   journalHistory?(): StructuredAgentSessionHistoryJournal | null
   appendLifecycleBatch?(
     settlementId: string,
@@ -162,7 +160,7 @@ export type StructuredAgentSessionEventTarget = {
 
 export type DeferredStructuredAgentSessionEventSink = {
   sink: StructuredAgentSessionEventSink
-  exitObservation(): Omit<StructuredAgentSessionExitObservation, 'record'>
+  exitObservation(): Omit<exits.StructuredAgentSessionExitObservation, 'record'>
   bind(target: StructuredAgentSessionEventTarget): void
   unbind(): void
   followSnapshots(source: StructuredAgentSessionSnapshotSource): Promise<void>
@@ -201,8 +199,8 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
   readingControl?: StructuredAgentSessionReadingControl
   onBackpressureChange?: (backpressured: boolean, state: StructuredAgentSessionSinkState) => void
 }): DeferredStructuredAgentSessionEventSink {
-  const exit = new StructuredAgentSessionExitObservation()
-  const rootExit = new StructuredAgentSessionRootExitReceipt()
+  const exit = new exits.StructuredAgentSessionExitObservation()
+  const rootExit = new exits.StructuredAgentSessionRootExitReceipt()
   const watermarks = { ...DEFAULT_WATERMARKS, ...deps.watermarks }
   const failed = (error: unknown): void => {
     deps.logger.error('writing provider events to the chat journal failed', {
@@ -290,8 +288,9 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
       ...createStructuredAgentSessionTransitionMembers(queue),
       journalEpoch: queue.journalEpoch,
       observeSettledTurns: queue.observeSettledTurns,
-      journalSnapshot: queue.snapshots.current,
+      journalSnapshot: queue.journalSnapshot,
       snapshotCurrent: queue.snapshots.settled,
+      onJournalBound: queue.onJournalBound,
       journalHistory: queue.journalHistory,
       appendLifecycleBatch: (settlementId, mutations) => {
         const admission = appendLifecycleBatch(settlementId, mutations)

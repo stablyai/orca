@@ -19,7 +19,7 @@ import {
   closeLegacyRelayPane,
   isLegacyRelayBridgedPty,
   stopLegacyRelayPaneAndWait
-} from '../../../ssh/legacy-relay/legacy-relay-bridge-registry'
+} from '../../../ssh/legacy-relay/bridge/legacy-relay-bridge-registry'
 
 // Bounds the wait for an observed exit to reach the runtime record when the caller set no deadline.
 const OBSERVED_EXIT_RECORD_WAIT_MS = 10_000

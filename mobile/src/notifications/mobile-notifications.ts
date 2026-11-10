@@ -1,10 +1,10 @@
 import { requestNotificationCatchup } from './push-dismissal-reconciliation'
 import { dismissHostPushNotification } from './push-socket-dismissal'
 import type { DismissNotificationEvent } from './desktop-notification-events'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { waitForPushFallback } from './push-fallback'
 import { getHostPushSupported, getHostPushSupportCompletion } from './push-registration'
-import { loadHostCatalog } from '../transport/host-store'
+import { loadHostCatalog } from '../transport/hosts/host-store'
 import { deriveHostFingerprint } from './push-host-fingerprint'
 import { presentForegroundPush } from './android-foreground-push'
 import {

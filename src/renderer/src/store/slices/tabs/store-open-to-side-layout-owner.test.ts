@@ -1,13 +1,13 @@
 // With main layout ownership, each split and tab must reach main together; drawn frames must preserve group parity.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 import { createTestStore, seedStore } from '../../testing/app-store-test-fixture'
 import { makeWorktree } from '../worktrees/worktree.test-fixture'
 import { createStoreCascadesMockApi } from '../../testing/app-store-cascade-api.test-fixture'
-import '@/runtime/layout-owner-new-group-split'
-import { openContentTabThroughLayoutOwner } from '@/runtime/layout-owner-content-tab-open'
+import '@/runtime/workspace-layout/commands/layout-owner-new-group-split'
+import { openContentTabThroughLayoutOwner } from '@/runtime/workspace-layout/intents/layout-owner-content-tab-open'
 import { contentTabOpenPlacement } from './content-tab-open-placement'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import type { TabGroupLayoutNode } from '../../../../../shared/tab-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import type { LayoutCommand } from '../../../../../shared/workspace-layout/workspace-layout-command-types'
@@ -15,18 +15,18 @@ import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })

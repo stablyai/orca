@@ -3,10 +3,10 @@
 Orca learns what each agent is doing through two channels. Both write into the hook server's
 status store.
 
-| Channel                                                                                                    | How                                                                                                                                                                                       | What it carries                                                                                                     |
-| ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| **Managed integrations** (this folder)                                                                     | Per-agent hooks, plugins and extensions that POST to the loopback hook server. Installers are listed in `managed-agent-hook-registry.ts`; each agent's code lives in `src/main/<agent>/`. | State, prompt, tool name and input, assistant reply, provider session id (resume and native chat), model, subagents |
-| **OSC 7501** (Program Status Protocol, [spec](https://www.superlogical.com/rex/docs/build/program-status)) | The agent writes its own status into the terminal stream. Orca reads it from PTY output and answers the protocol's `?` probe.                                                             | State, blocked `kind`, one free-text line (`msg`), child records                                                    |
+| Channel                                                                                                    | How                                                                                                                                                                                                    | What it carries                                                                                                     |
+| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| **Managed integrations** (this folder)                                                                     | Per-agent hooks, plugins and extensions that POST to the loopback hook server. Installers are listed in `installation/managed-agent-hook-registry.ts`; each agent's code lives in `src/main/<agent>/`. | State, prompt, tool name and input, assistant reply, provider session id (resume and native chat), model, subagents |
+| **OSC 7501** (Program Status Protocol, [spec](https://www.superlogical.com/rex/docs/build/program-status)) | The agent writes its own status into the terminal stream. Orca reads it from PTY output and answers the protocol's `?` probe.                                                                          | State, blocked `kind`, one free-text line (`msg`), child records                                                    |
 
 **Precedence:** hooks win, and OSC 7501 fills in wherever they don't speak. That covers:
 
@@ -90,7 +90,7 @@ When an agent ships OSC 7501 support, or changes what it reports:
 ## Plugin tool hooks (`agent.tool.before` / `.after`)
 
 The hook server runs plugins' `agent.tool.before` and `.after` on each tool event it receives, after
-it records status (`agent-tool-plugin-hooks.ts`). Only Claude Code's POSIX script waits for the
+it records status (`tool-events/agent-tool-plugin-hooks.ts`). Only Claude Code's POSIX script waits for the
 answer: it sends `X-Orca-Hook-Decision: claude-pre-tool-use-v1` on PreToolUse, waits at most 8 s
 (Orca answers within 6 s), and prints Orca's `hookSpecificOutput` (a `deny`, or `updatedInput`
 without an approval) or `{}`. A timeout, an error or Orca being down prints `{}`, so the call

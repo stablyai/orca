@@ -1,6 +1,5 @@
 import { readTestHostJournal } from '../../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { EVERY_AGENT_CHAT } from '../../../../../shared/native-chat/every-agent-chat.test-fixture'
-import '../../../rpc/unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
 import * as sessionCreate from '../../../rpc/methods/structured-sessions/creation/structured-agent-session-create'
 import { attachParams, providerFaults } from './structured-chat-coordinator-fake-codex-fixture'

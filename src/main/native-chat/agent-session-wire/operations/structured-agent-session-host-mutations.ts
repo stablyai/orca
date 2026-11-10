@@ -1,6 +1,10 @@
 // Share mutation admission/planning/publication. Conversation writes need no child lease;
 // provider-only effects start their child before admission, sends start through delivery.
 
+import {
+  forgetNativeChatPrompt,
+  rememberNativeChatPrompt
+} from '../../../telemetry/native-chat-prompt-submissions'
 import type {
   AgentSessionCancelResult,
   AgentSessionMutationEnvelope,
@@ -85,7 +89,30 @@ export function sendStructuredAgentSessionTurn(
             return blocked
           }
           await params.beforeRun?.()
-          return admitStructuredAgentSessionSend(context, ctx, params)
+          if (params.userSend && !params.body.command) {
+            rememberNativeChatPrompt(
+              ctx.journal,
+              params.envelope.clientOperationId,
+              ctx.agent,
+              caller.userClient,
+              caller.telemetryOwnerKey
+            )
+          }
+          try {
+            const sent = await admitStructuredAgentSessionSend(context, ctx, params)
+            if (!sent.ok) {
+              forgetNativeChatPrompt(ctx.journal, params.envelope.clientOperationId)
+            }
+            return sent
+          } catch (error) {
+            const id = params.envelope.clientOperationId
+            const submission = await ctx.journal.reads.submission(id)
+            const queued = await ctx.journal.queuedMessages.get(id)
+            if (!submission && !queued) {
+              forgetNativeChatPrompt(ctx.journal, id)
+            }
+            throw error
+          }
         }
       },
       sendPreparation(context, params.envelope, arrival, selection)

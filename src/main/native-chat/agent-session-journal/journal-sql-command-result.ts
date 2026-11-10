@@ -47,6 +47,7 @@ export function finishJournalSqlCommand(
     : []
   const publication = {
     ...result,
+    ...(command.operation.kind === 'epoch-replace' ? { resetPrompts: true as const } : {}),
     cursor,
     receipts: result.receipts.map((receipt) => ({
       ...receipt,

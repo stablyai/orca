@@ -4,11 +4,8 @@ import type { AgentJournalSubmission } from '../../../shared/agent-session/journ
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import { compareQueuedRows } from './input-order/journal-queued-row-index'
-import {
-  deriveQueuePauses,
-  journalUserStopInForce,
-  type DerivedQueuePause
-} from './queued-messages/queued-message-pause'
+import { deriveQueuePauses, type DerivedQueuePause } from './queued-messages/queued-message-pause'
+import { journalUserStopInForce } from './queued-messages/queued-message-pause-marks'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import {
   readJournalDomainQueueRow,

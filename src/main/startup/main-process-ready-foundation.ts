@@ -7,8 +7,11 @@ import { setNodeDistMirrorSettingReader } from '../node-runtime/node-dist-mirror
 import { handleBrowserGuestLogin } from '../browser/guest-lifecycle/prompts/browser-http-auth-prompt'
 import { installMainThreadHangWatchdog } from '../hang-watchdog/main-thread-hang-watchdog'
 import { preservePreviousHangDetection } from '../hang-watchdog/previous-hang-detection'
-import { browserCertificateTrustController, browserManager } from '../browser/browser-manager'
-import { browserSiteDisplayController } from '../browser/site-settings/browser-site-display-controller'
+import {
+  browserCertificateTrustController,
+  browserManager
+} from '../browser/guest-lifecycle/manager/browser-manager'
+import { browserSiteDisplayController } from '../browser/site-settings/display/browser-site-display-controller'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { getAppEnvironment } from '../../shared/app-environment'
@@ -21,15 +24,15 @@ import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { initializeBrowserClientHostId } from '../browser/client-hosts/lifecycle/browser-client-host-id'
 import { scheduleSecretProtectionGapReport } from '../host/deferred-secret-protection-report'
 import { withholdUnreachableKeychainForServe } from '../host/serve-keychain-guard'
-import { initSshHostKeyStoreFile } from '../ssh/ssh-host-key-store'
-import { initOrcadHeldFenceTokenFile } from '../ssh/orcad-held-fence-tokens'
+import { initSshHostKeyStoreFile } from '../ssh/host-keys/ssh-host-key-store'
+import { initOrcadHeldFenceTokenFile } from '../managed-server/activation/orcad-held-fence-tokens'
 import { neutralizeLegacyTerminalShimDir } from '../pty/shell-startup/legacy-terminal-shim-dir'
 import { createWindowsShellPathHydration } from './windows-shell-path-hydration'
 import {
   configureWindowsHostGitEnvironmentReadiness,
   setDefaultWslDistroOverride
 } from '../git/runner'
-import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
+import { wslHookRelayManager } from '../agent-hooks/wsl-relay/wsl-hook-relay-manager'
 import { applyAppIcon } from '../window/desktop-integration/app-icon'
 import {
   shouldSuppressDevEducation,
@@ -38,7 +41,7 @@ import {
 import {
   awaitBrowserSessionProxies,
   setBrowserNetworkProxySettingsResolver
-} from '../browser/sessions/browser-session-proxy'
+} from '../browser/sessions/proxy/browser-session-proxy'
 import { installDocPreviewProtocolHandler } from '../browser/document-preview/doc-preview-protocol'
 import { installMediaPreviewProtocolHandler } from '../media/media-preview-protocol'
 import { installJiraImageProtocolHandler } from '../jira/attachments/image-protocol'
@@ -49,7 +52,7 @@ import {
   switchBrowserExtensionSupport
 } from '../browser/extensions/browser-extension-startup'
 import { whenBrowserExtensionSessionsLoaded } from '../browser/extensions/profile-sessions/browser-extension-session-loader'
-import { browserSessionRegistry } from '../browser/sessions/browser-session-registry'
+import { browserSessionRegistry } from '../browser/sessions/profiles/browser-session-registry'
 import { logStartupMilestone } from './startup-diagnostics'
 import { writeHttp1CompatibilityMarker } from './http1-compatibility-marker'
 import { mainProcessState as state } from './main-process-state'
@@ -60,11 +63,11 @@ import {
   reconcileManagedWslCliRegistrations
 } from '../cli/wsl-cli-registration-reconciliation'
 import { createWslCliReconciliationStartupBarrier } from './wsl-cli-reconciliation-startup-barrier'
-import { agentHookServer } from '../agent-hooks/server'
+import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { reportProfileStateWriteFailure } from './profile-state-write-failure'
 import { reportProfileStateSaveDelay } from './profile-state-save-delay'
-import { preloadSsh2 } from '../ssh/ssh2-module-load'
+import { preloadSsh2 } from '../ssh/authentication/ssh2-module-load'
 
 export async function initializeReadyFoundation(): Promise<void> {
   logStartupMilestone('app-ready')

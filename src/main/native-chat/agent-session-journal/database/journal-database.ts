@@ -9,6 +9,7 @@ import {
   JOURNAL_DB_OLDEST_RELEASED_VERSION,
   JOURNAL_DB_SCHEMA_VERSION
 } from './journal-database-schema'
+import { ensurePRWatchTables } from '../../../github/pr-watch/pr-watch-tables'
 import { JournalUnreleasedSchemaError } from '../replay/journal-open-failure'
 import { ensureQueuedMessagesTable } from '../queued-messages/queued-message-schema'
 import { ensureCommandReceiptsTable } from '../writing/command-receipt-schema'
@@ -79,6 +80,7 @@ export function openJournalDatabase(dbPath: string): OpenJournalDatabase {
       ON agent_session_records (CASE WHEN json_valid(record_json)
         THEN json_extract(record_json, '$.conversationCommand.replacementSessionId') END)`)
     ensureAgentSessionAttachmentClaimTables(probe)
+    ensurePRWatchTables(probe)
     hardenSqliteDatabaseFiles(dbPath)
     transferred = true
     return { db: probe, readOnly: false }

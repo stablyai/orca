@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { acpNotificationEnvelopeSchema } from '../acp-context-usage'
+import { acpNotificationEnvelopeSchema } from '../protocol/acp-session-events'
 import type { AcpDialect, AcpDialectNotification, AcpHookBlock } from './acp-dialect'
 import type { AvailableCommand } from '../generated/acp-protocol.generated'
 import { grokRequest, grokSettleRequest } from './grok-requests'

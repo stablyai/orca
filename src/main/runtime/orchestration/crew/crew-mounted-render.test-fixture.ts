@@ -5,7 +5,7 @@ import { agentSessionRecordFixture } from '../../../native-chat/agent-session-re
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
 import { formatOrcaSessionAddress } from '../../../../shared/orca-session-address'
-import type { MountedCrewProducerModule } from '../../../../shared/orchestration-crew-mounted.test-fixture'
+import type { MountedCrewProducerModule } from '../../../../shared/orchestration/orchestration-crew-mounted.test-fixture'
 
 export const createMountedCrewProducer: MountedCrewProducerModule['createMountedCrewProducer'] =
   () => {

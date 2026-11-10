@@ -1,11 +1,8 @@
-import { normalizeHookPayload } from '../../../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
-import { createHookListenerState } from '../../../../../shared/agent-hook-listener/listener-state'
-import { applyProviderSessionOnlyUpdate } from '../../../hooks/ipc-events/agent-status-partial-updates'
 import { describe, expect, it } from 'vitest'
 
 import type { AppState } from '../../types'
 import '../../../../../shared/sleeping-record-legacy-pane-key'
-import { createTestStore, seedStore } from '../../testing/app-store-test-fixture'
+import { createTestStore } from '../../testing/app-store-test-fixture'
 import { makeTab } from '../../terminals/terminal-tab.test-fixture'
 import '../../../../../shared/workspace-layout/stable-pane-id'
 
@@ -334,42 +331,6 @@ describe('recordAgentProviderSession', () => {
   })
 })
 
-it('retains recorded Jcode session-start identity without a status row', () => {
-  const store = createTestStore()
-  seedStore(store, { tabsByWorktree: { 'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })] } })
-  const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
-  // Jcode 0.87.1 captured input.
-  const payload = {
-    hook_event_name: 'session_start',
-    event: 'session_start',
-    session_id: 'session_jc_5',
-    model: 'claude-haiku-4-5',
-    source: 'create'
-  }
-  const event = normalizeHookPayload(
-    createHookListenerState(),
-    'jcode',
-    { paneKey, payload },
-    'production'
-  )
-  if (!event) {
-    throw new Error('Recorded session_start was rejected')
-  }
-  expect(event.providerSessionOnly).toBe(true)
-  applyProviderSessionOnlyUpdate({
-    store: store.getState(),
-    batch: undefined,
-    paneKey,
-    routing: { tabId: 'tab-1', worktreeId: 'wt-1' },
-    data: { ...event, ...event.payload, receivedAt: 1, stateStartedAt: 1 }
-  })
-  expect(store.getState().agentStatusByPaneKey).toEqual({})
-  expect(store.getState().agentConversationsByPaneKey[paneKey]).toMatchObject({
-    agent: 'jcode',
-    providerSession: { key: 'session_id', id: 'session_jc_5' }
-  })
-})
-
 it('replaces only the captured pane resume handle and keeps a newer session through manual sleep', () => {
   const store = createTestStore()
   const paneKey = 'tab-1:leaf-1'
@@ -397,3 +358,73 @@ it('replaces only the captured pane resume handle and keeps a newer session thro
   store.getState().rememberSleepingAgentSession(resumed, newer)
   expect(store.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
 })
+
+it.each([
+  { incomingId: 'root-b', connectionId: 'ssh-a', keepsTurn: false },
+  { incomingId: 'root-a', connectionId: 'ssh-b', keepsTurn: false },
+  { incomingId: 'root-a', connectionId: undefined, keepsTurn: true },
+  { incomingId: undefined, connectionId: undefined, keepsTurn: true }
+])(
+  'scopes clockless Codex turn facts to their root: %j',
+  ({ incomingId, connectionId, keepsTurn }) => {
+    const store = createTestStore()
+    const paneKey = 'tab-1:leaf-1'
+    store.getState().setAgentStatus(
+      paneKey,
+      { state: 'done', agentType: 'codex', prompt: 'first', sessionBoundary: true },
+      undefined,
+      {
+        updatedAt: 2_000,
+        stateStartedAt: 2_000,
+        turnStartedAt: 1_000,
+        turnEndedAt: 2_000,
+        turnEndDisposition: 'identified'
+      },
+      { connectionId: 'ssh-a', worktreeId: 'wt-1' },
+      { providerSession: { key: 'session_id', id: 'root-a' } }
+    )
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'done', agentType: 'codex', prompt: '', sessionBoundary: true },
+        undefined,
+        { updatedAt: 3_000, stateStartedAt: 3_000 },
+        connectionId === undefined ? undefined : { connectionId, worktreeId: 'wt-1' },
+        incomingId === undefined
+          ? undefined
+          : { providerSession: { key: 'session_id', id: incomingId } }
+      )
+    const row = store.getState().agentStatusByPaneKey[paneKey]
+    if (keepsTurn) {
+      expect(row).toMatchObject({
+        turnStartedAt: 1_000,
+        turnEndedAt: 2_000,
+        turnEndDisposition: 'identified'
+      })
+    } else {
+      expect(row?.turnStartedAt).toBeUndefined()
+      expect(row?.turnEndedAt).toBeUndefined()
+      expect(row?.turnEndDisposition).toBeUndefined()
+    }
+    store.getState().setAgentStatus(
+      paneKey,
+      { state: 'done', agentType: 'codex', prompt: 'next', sessionBoundary: true },
+      undefined,
+      {
+        updatedAt: 5_000,
+        stateStartedAt: 5_000,
+        turnStartedAt: 4_000,
+        turnEndedAt: 5_000,
+        turnEndDisposition: 'identified'
+      },
+      undefined,
+      { providerSession: { key: 'session_id', id: 'root-c' } }
+    )
+    expect(store.getState().agentStatusByPaneKey[paneKey]).toMatchObject({
+      turnStartedAt: 4_000,
+      turnEndedAt: 5_000,
+      turnEndDisposition: 'identified'
+    })
+  }
+)

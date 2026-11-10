@@ -5,7 +5,7 @@ import {
   dispatchReportMailbox,
   isDispatchReportType
 } from '../../../../orchestration/workers/reports/dispatch-report-mailbox'
-import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration-rpc-contract'
+import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
 import { SendParams } from './send-params'
 import { isDispatchMutationMessageType } from '../../../../../../shared/rpc-contract/orchestration-params'
 import { isWorkerReportOutcome, parseRemoteWorkerPayload } from './message-payload'
@@ -38,6 +38,7 @@ import {
   settledDispatchId
 } from './settled-worker-follow-through'
 
+// `send --on <server>` is carried by withPeerMailSend (peer-mail-send.ts) before this handler runs.
 export const ORCHESTRATION_SEND_METHODS = [
   defineMethod({
     name: 'orchestration.send',

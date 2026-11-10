@@ -3,6 +3,7 @@
 import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
 import { setBoundedScopeCacheEntry } from '../../../../../../../shared/native-chat/native-chat-scope-cache'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 /** Local slash-command feedback replaces user-turn echoes for commands dispatched into the TUI. */
 export type NativeChatCommandMarker = {
@@ -89,7 +90,8 @@ export function applyCommandMarkerBoundaries(
 
 /** Use system asides without harness-noise prefixes; host-answered commands show their answer instead of Ran. */
 export function commandMarkersAsMessages(
-  markers: readonly NativeChatCommandMarker[]
+  markers: readonly NativeChatCommandMarker[],
+  t: Translate = translate
 ): NativeChatMessage[] {
   return markers.map((marker) => ({
     id: `command:${marker.id}`,
@@ -100,7 +102,7 @@ export function commandMarkersAsMessages(
         type: 'text' as const,
         text:
           marker.output ??
-          translate('components.native-chat.commandMarker.ran', 'Ran {{command}}', {
+          t('components.native-chat.commandMarker.ran', 'Ran {{command}}', {
             command: marker.command
           })
       }

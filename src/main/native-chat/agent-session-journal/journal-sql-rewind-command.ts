@@ -23,7 +23,10 @@ import { queueClearRestatement, writeJournalDomainQueueClear } from './journal-d
 import { appendJournalSqlEvent } from './journal-sql-event-tail'
 import { finishJournalSqlCommand } from './journal-sql-command-result'
 import type { JournalDomainContextCommit } from './journal-domain-context-command'
-import { sameJournalConversation } from './context-epochs/journal-history-origin'
+import {
+  sameJournalConversation,
+  usableJournalHistoryOrigin
+} from './context-epochs/journal-history-origin'
 
 /** The cut, remapped boundary and completion receipt share this writer transaction. */
 export function applyJournalSqlRewindCommand(
@@ -107,6 +110,30 @@ export function applyJournalSqlRewindCommand(
     ) {
       throw new Error('agent_session_rewind:stale-context')
     }
+    const providerHandle = agentSessionJournalProviderHandle({
+      agent: record.provider,
+      providerHandle: rewind.providerFork
+        ? claudeProviderHandle(
+            rewind.providerFork.sessionId,
+            rewind.providerFork.resumeCursor ?? null
+          )
+        : (handle ?? null)
+    })
+    const nativeOrigin =
+      rewind.providerFork?.coverage !== undefined &&
+      usableJournalHistoryOrigin(head.historyOrigin)?.kind === 'native_copy'
+        ? {
+            providerHandle,
+            raw: {
+              version: 1 as const,
+              kind: 'native_copy' as const,
+              agent: 'claude',
+              unit: 'claude-entry' as const,
+              providerHandle,
+              ids: rewind.providerFork.coverage
+            }
+          }
+        : undefined
     const floor = local ? plan.cut.floor : 0
     const restatement = head.cleared ? queueClearRestatement(db, target) : null
     let sequence = head.lastSequence + 1
@@ -134,14 +161,20 @@ export function applyJournalSqlRewindCommand(
           : (handle ?? null)
       })
       const origin =
-        head.historyOrigin &&
+        nativeOrigin ??
+        (head.historyOrigin &&
         sameJournalConversation(head.historyOrigin.providerHandle, providerHandle)
           ? { ...head.historyOrigin, providerHandle }
-          : null
+          : null)
       db.prepare(
         `UPDATE journal_chat_state SET context_boundary=?,history_origin_json=? WHERE session_id=? AND epoch=?`
       ).run(sequence, origin ? JSON.stringify(origin) : null, ...prefix)
       commit.contextBoundary = sequence
+    }
+    if (local && nativeOrigin) {
+      db.prepare(
+        'UPDATE journal_chat_state SET history_origin_json=? WHERE session_id=? AND epoch=?'
+      ).run(JSON.stringify(nativeOrigin), ...prefix)
     }
     const span = db
       .prepare(`SELECT item_id,context_clear FROM journal_items INDEXED BY journal_items_root_position

@@ -1,6 +1,6 @@
 // The execution host owns chat attachments; paired clients upload bytes, local pastes write in place, and agents receive only host paths.
 
-import type { ImportSkipReason } from '../filesystem-import-result-types'
+import type { ImportSkipReason } from '../file-import/filesystem-import-result'
 
 /** Host userData store name; clients recognize stored paths without a round trip. */
 export const AGENT_SESSION_ATTACHMENTS_DIR_NAME = 'agent-session-attachments'

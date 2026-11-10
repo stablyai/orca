@@ -1,3 +1,4 @@
+import type { JournalForkInstall } from './journal-fork-stages'
 import type { JournalSendAdmission } from './journal-send-admission'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
@@ -55,7 +56,7 @@ export type JournalWriterCoreOperation =
     }
   | { kind: 'dispatch'; input: ResolveDispatchInput; onlyIfUnsettled?: true }
   | { kind: 'stop'; event: Omit<JournalStopEvent, 'at'>; fence: number }
-  | { kind: 'queue-resume'; fence: number }
+  | { kind: 'queue-resume'; fence: number; onlyRestarted?: true }
   | { kind: 'queue-reopen'; fence: number; since?: number }
 
 export type JournalWriterOperation =
@@ -69,6 +70,7 @@ export type JournalWriterOperation =
 
 /** No callbacks, pre-folded outcomes, assigned revisions or host-chosen durability cross this port. */
 export type JournalWriterCommand = {
+  forkInstall?: JournalForkInstall
   target: JournalWriterTarget
   operation: JournalWriterOperation
   effects?: readonly JournalWriterEffect[]
@@ -144,6 +146,7 @@ export type JournalWriterInputOperation =
   | JournalWriterSettlementOperation
 
 export type JournalWriterContextOperation =
+  | { kind: 'fork-install' }
   | {
       kind: 'rewind-cut'
       rewind: AgentSessionRewindRecord
@@ -159,6 +162,7 @@ export type JournalWriterContextOperation =
     }
   | {
       kind: 'epoch-replace'
+      historyOrigin?: JournalEpochRow['historyOrigin']
       reason: AgentJournalEpochReason
       fence: number
       items: readonly JournalReplacementItem[]

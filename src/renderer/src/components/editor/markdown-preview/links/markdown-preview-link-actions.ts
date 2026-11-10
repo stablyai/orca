@@ -1,6 +1,6 @@
-import { afterPendingEntityTabs } from '@/runtime/layout-owner-pending-tabs'
+import { afterPendingEntityTabs } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { toast } from 'sonner'
-import { getConnectionIdForFile } from '@/lib/connection-context'
+import { getConnectionIdForFile } from '@/lib/workspace/ownership/connection-context'
 import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { getLinkSourceLocalOpenOwner } from '@/lib/link-source-local-open-owner'

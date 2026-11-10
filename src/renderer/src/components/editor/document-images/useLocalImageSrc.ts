@@ -2,7 +2,7 @@ import { useEffect, useEffectEvent, useState } from 'react'
 import { resolveImageAbsolutePath } from '../markdown/link-routing/markdown-preview-links'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { readLocalImagePreview } from './local-image-src-reader'
-import type { LocalFileAccess } from '../../../../../shared/local-file-access'
+import type { LocalFileAccess } from '../../../../../shared/file-access/local-file-access'
 import {
   blobUrlCache,
   cacheLocalImageBlob,

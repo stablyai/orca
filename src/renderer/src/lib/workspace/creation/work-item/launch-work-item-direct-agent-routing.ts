@@ -1,4 +1,4 @@
-import type { ActivateAndRevealResult } from '@/lib/worktree-activation-outcome'
+import type { ActivateAndRevealResult } from '@/lib/workspace/activation/worktree-activation-outcome'
 import { readAgentLaunchPreferencesForWorkspace } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { agentLaunchCommandErrorMessage } from '@/lib/workspace/creation/work-item/launch-work-item-direct-messages'
@@ -17,20 +17,20 @@ import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui
 import type { AppState } from '@/store/types'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { isTuiAgentEnabled } from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
-import { resolveDefaultAgentForWorkspace } from '../../../agent-tab-shortcuts'
+import { resolveDefaultAgentForWorkspace } from '../../../agent-session/launch/shortcuts/agent-tab-shortcuts'
 import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { agentChoiceMayOpenAsChat } from '@/lib/host-chat-program'
 import type { AgentSessionLaunchPlan } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import {
   resolveExecutionHostAgentStartupShell,
   type KnownExecutionHostPlatform
-} from '@/lib/execution-host-facts'
+} from '@/runtime/hosts/platform/execution-host-facts'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import type { DeclinedStructuredLaunchTerminalOptions } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
 import {
   ensureDetectedAgentsForNewWorktree,
   type RepoHostFields
-} from '@/lib/agent-detection-target-inventory'
+} from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 
 export function buildDirectWorkItemStartup(args: {
   agent: TuiAgent | null

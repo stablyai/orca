@@ -28,7 +28,10 @@ import { applyJournalDomainInputRecovery } from './journal-domain-input-recovery
 import { applyJournalDomainItem } from './journal-domain-item'
 import { observeJournalDomainInputStop } from './journal-domain-input-ends'
 import { writeJournalDomainQueueReopenMark } from './journal-domain-queue-pauses'
-import { journalDomainQueueAwaitsReopen } from './journal-domain-queue-reads'
+import {
+  journalDomainQueueAwaitsReopen,
+  readJournalDomainQueuePauses
+} from './journal-domain-queue-reads'
 import { appendJournalSqlEvent } from './journal-sql-event-tail'
 import { restoreJournalSqlFailure } from './journal-sql-failure'
 import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
@@ -72,7 +75,7 @@ export function applyJournalDomainControlCommand(
   db: Database.Database,
   target: Target,
   operation: JournalDomainControlOperation,
-  facts: { stopSettle?: JournalStopSettleFact },
+  facts: { stopSettle?: JournalStopSettleFact; reopenFloor?: AgentJournalCursor | null },
   savedAt: number
 ): JournalDomainControlCommit {
   if (!db.isTransaction) {
@@ -115,6 +118,12 @@ export function applyJournalDomainControlCommand(
     case 'stop-accept':
       return acceptStop(db, target, operation, savedAt, result)
     case 'queue-resume':
+      if (operation.onlyRestarted) {
+        const pauses = readJournalDomainQueuePauses(db, target, facts.reopenFloor ?? null)
+        if (pauses.length === 0 || pauses.some((pause) => pause.reason !== 'restarted')) {
+          return result
+        }
+      }
       result.value = writeMark(db, target, operation.fence, savedAt, result, (sequence) => {
         db.prepare(`UPDATE journal_chat_state SET queue_resumed_sequence=?
           WHERE session_id=? AND epoch=?`).run(sequence, target.sessionId, target.epoch)

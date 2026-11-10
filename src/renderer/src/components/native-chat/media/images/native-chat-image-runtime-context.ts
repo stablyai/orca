@@ -6,7 +6,7 @@ import type { RuntimeClientTarget } from '../../../../../../shared/runtime-clien
 import {
   resolveWorktreeOperationRouteResult,
   type WorktreeOperationRouteResolution
-} from '@/lib/worktree-operation-route'
+} from '@/lib/workspace/ownership/worktree-operation-route'
 import {
   createNativeChatTabOwnerSelector,
   findNativeChatTabOwnerWorktreeId
@@ -17,8 +17,8 @@ import {
   toRuntimeExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { isFloatingWorkspaceId } from '../../../../../../shared/floating-workspace-worktree'
-import { resolveNativeChatTabDirectory } from '../../native-chat-tab-directory'
-import { resolveOwner } from '@/lib/resolve-owner'
+import { resolveNativeChatTabDirectory } from '../../pane/routing/native-chat-tab-directory'
+import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
 import { useMemo } from 'react'
 import { shallow } from 'zustand/shallow'
 import { firstRegisteredStructuredChatTab } from '@/lib/structured-chat-tab-index'

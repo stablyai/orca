@@ -20,7 +20,7 @@ import {
 } from './installed-agent-skills-change-event'
 import { useActiveProjectSkillRuntime } from './useActiveProjectSkillRuntime'
 import { useAppStore } from '@/store'
-import { getManagedOrcadSshTargetId } from '../../../shared/managed-orcad-execution-host'
+import { getManagedOrcadSshTargetId } from '../../../shared/execution-host/managed-orcad-execution-host'
 
 /** `unknown`: the owning host's check failed. */
 export type BundledSkillInstallActionState =

@@ -6,7 +6,7 @@ import {
 import type { AgentTrustPreset } from './agent-trust-presets'
 import { resolveLocalClaudeTrustConfig } from '../../claude/claude-folder-trust-file'
 import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
-import type { AgentWorkspaceTrustSpawnRequest } from '../../../shared/agent-workspace-trust-spawn-request'
+import type { AgentWorkspaceTrustSpawnRequest } from '../../../shared/agent-launch/permissions/agent-workspace-trust-spawn-request'
 import { parseWslUncPath, toLinuxPath } from '../../../shared/wsl-paths'
 import { applyWorkspaceTrustOnThisHost, launchedAgentHome } from './execution-host-workspace-trust'
 import { getLocalCodexTrustConfigFiles } from '../../codex/configuration/homes/codex-home-paths'

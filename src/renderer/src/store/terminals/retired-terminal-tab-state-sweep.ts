@@ -2,7 +2,7 @@ import { removePaneKeys } from '../slices/agent-status/agent-status-pane-keyed-r
 import type { AppState } from '../types'
 import { forgetAgentHibernationTabOutput } from '@/lib/agent-session/hibernation/agent-hibernation-output-activity'
 import { forgetForegroundTerminalTabs } from '@/lib/foreground-terminal-tabs'
-import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-startup-delivery-guards'
+import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-session/launch/startup/agent-startup-delivery-guards'
 // Use store-free registry to avoid a slice-evaluation cycle through terminal-parked-tab-watchers.
 import { retireParkedTerminalTab } from '@/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
 import { forgetNativeChatPromptDismissalsForTab } from '@/components/native-chat/prompts/native-chat-prompt-dismissals'

@@ -1,5 +1,5 @@
 import type { GitStatusEntry } from './git-status-types'
-import { compareFileNames } from '../../file-name-sort'
+import { compareFileNames } from '../../file-listing/file-name-sort'
 
 export function compareGitStatusEntries(a: GitStatusEntry, b: GitStatusEntry): number {
   // Use compareFileNames to break numeric ties (2/02) consistently with File Explorer.

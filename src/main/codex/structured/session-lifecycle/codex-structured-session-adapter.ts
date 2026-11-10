@@ -20,10 +20,7 @@ import {
   applyCodexStructuredSessionOption,
   readLiveCodexSessionOptions
 } from '../catalog/codex-structured-session-options'
-import {
-  prepareCodexMessageDispatch,
-  readCodexMessageSteeringInputs
-} from '../turns/codex-structured-message-options'
+import * as messageOptions from '../turns/codex-structured-message-options'
 import {
   CodexAcquisitionRegistry,
   requireLiveCodexSession,
@@ -244,7 +241,7 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
     try {
       const outcome = await dispatchCodexTurn(
         session,
-        await prepareCodexMessageDispatch(
+        await messageOptions.prepareCodexMessageDispatch(
           session,
           input,
           () => this.sessions.get(input.sessionId) === session
@@ -281,6 +278,9 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
     this.sessions.get(sessionId)?.historyMode === 'legacy'
       ? { supported: false, reason: 'history-not-paginated' }
       : { supported: true }
+
+  prepareRewind: NonNullable<SessionAdapter['prepareRewind']> = (input) =>
+    codexRewind.prepareCodexRewind(this.session(input.sessionId), input, this.deps.requestTimeoutMs)
 
   rewind: NonNullable<SessionAdapter['rewind']> = (input) =>
     codexRewind.rewindCodexSession(this.session(input.sessionId), input, this.deps.requestTimeoutMs)
@@ -323,13 +323,13 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
 
   captureMessageSteeringInputs: NonNullable<SessionAdapter['captureMessageSteeringInputs']> = (
     input
-  ) => readCodexMessageSteeringInputs(this.sessions.get(input.sessionId), input)
+  ) => messageOptions.readCodexMessageSteeringInputs(this.sessions.get(input.sessionId), input)
 
   projectOptions = (sessionId: string, options: Readonly<Record<string, string>>) =>
     projectCodexSessionOptions(this.sessions.get(sessionId), options)
 
-  closeSession: NonNullable<SessionAdapter['closeSession']> = (...args) =>
-    this.teardown.close(...args)
+  closeSession: NonNullable<SessionAdapter['closeSession']> = (sessionId, observeClose) =>
+    this.teardown.close(sessionId, observeClose)
   forceCloseSession = (sessionId: string): Promise<boolean> => this.teardown.forceClose(sessionId)
   disposeSession: NonNullable<SessionAdapter['disposeSession']> = this.closeSession
   closeAll = (): Promise<void> => this.teardown.closeAll()

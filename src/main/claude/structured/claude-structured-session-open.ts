@@ -1,4 +1,5 @@
 import { withStructuredHistoryInvocation } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-invocation'
+import { usableJournalHistoryOrigin } from '../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import type {
   StructuredAgentSessionProviderOpenInput,
   StructuredAgentSessionProviderOpenResult
@@ -88,7 +89,10 @@ async function openStartingClaudeSession(
   const history = session.initialization.history
   const leafUuid = history.leafUuid
   const events = session.events
-  if (resumesTranscript && leafUuid && events) {
+  const origin = usableJournalHistoryOrigin(
+    (await events?.journalHistory?.()?.reads.historyOrigin()) ?? null
+  )
+  if (resumesTranscript && (leafUuid || origin?.kind === 'native_copy') && events) {
     const catchUp = withStructuredHistoryInvocation(
       session,
       request.signal,
@@ -98,7 +102,7 @@ async function openStartingClaudeSession(
           return await catchUpClaudeTranscript({
             sessionId: request.sessionId,
             providerSessionId: session.providerSessionId,
-            leafUuid,
+            leafUuid: leafUuid ?? '',
             claudeConfigDir: session.initialization.claudeConfigDir,
             cwd: session.initialization.cwd,
             sink: events,

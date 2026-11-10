@@ -1,4 +1,3 @@
-import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it } from 'vitest'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { defineStreamingMethod, type RpcResponse } from './core'

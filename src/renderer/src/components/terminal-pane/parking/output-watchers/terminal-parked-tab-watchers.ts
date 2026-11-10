@@ -1,9 +1,10 @@
 /** Parking removes pane byte parsers; run pane-less watchers until reveal, exit or teardown. */
 import { isTerminalLeafId } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '@/store/index'
-import { isRemoteExecutionHostPtyId } from '../../../../../../shared/remote-execution-host-pty-id'
+import { isRemoteExecutionHostPtyId } from '../../../../../../shared/execution-host/remote-execution-host-pty-id'
 import { discardPreHandlerPtyState } from '../../pty-transport/delivery/pty-pre-handler-buffer'
-import { terminalProviderHasAuthoritativeSnapshot } from '../../../terminal/terminal-provider-snapshot-capability'
+import { terminalProviderAllowsParking } from '../../../terminal/terminal-provider-snapshot-capability'
+import { terminalProviderSessionIsGone } from '../../../terminal/terminal-provider-gone-sessions'
 import {
   isParkRestorableTerminalPty,
   type TerminalParkRestorePolicy
@@ -15,6 +16,7 @@ import {
   resolveParkedTerminalPaneCandidates,
   type ParkableTerminalTabModel
 } from './terminal-parked-watcher-reconciliation'
+import { launchAgentTabIds, sleepingRecordTabIds } from './parked-tab-agent-owner-index'
 import { collapseParkedExitedLeaf, startParkedPtyWatcher } from './terminal-parked-pty-watcher'
 import {
   capturedPanesByTabId,
@@ -27,7 +29,7 @@ import {
 export type ParkedTerminalPtyEligibility = (ptyId: string) => boolean
 
 const allowOrdinaryParkRestore = (ptyId: string): boolean =>
-  isRemoteExecutionHostPtyId(ptyId) || terminalProviderHasAuthoritativeSnapshot(ptyId)
+  isRemoteExecutionHostPtyId(ptyId) || terminalProviderAllowsParking(ptyId)
 
 // SSH fact watchers use local main too; coverage follows restore policy, not daemon-only snapshots.
 function parkRestorePolicyFromState(state: {
@@ -63,7 +65,28 @@ export function canWatcherCoverParkedTerminalTab(
         isTerminalLeafId(pane.leafId) &&
         isParkRestorableTerminalPty(pane.ptyId, worktreeId, restorePolicy) &&
         isPtyEligible(pane.ptyId)
-    )
+    ) &&
+    !goneSessionsKeepTabMounted(worktreeId, tab, panes, state)
+  )
+}
+
+/** A live sibling's exit would close a parked tab whose gone panes carry no watcher; an agent tab keeps its mounted restore path. */
+function goneSessionsKeepTabMounted(
+  worktreeId: string,
+  tab: ParkableTerminalTabModel,
+  panes: readonly ParkedTerminalPaneCapture[],
+  state: ReturnType<typeof useAppStore.getState>
+): boolean {
+  const goneCount = panes.filter(
+    (pane) => pane.ptyId !== null && terminalProviderSessionIsGone(pane.ptyId)
+  ).length
+  if (goneCount === 0) {
+    return false
+  }
+  return (
+    goneCount < panes.length ||
+    launchAgentTabIds(state.tabsByWorktree[worktreeId]).has(tab.id) ||
+    sleepingRecordTabIds(state.sleepingAgentSessionsByPaneKey).has(tab.id)
   )
 }
 

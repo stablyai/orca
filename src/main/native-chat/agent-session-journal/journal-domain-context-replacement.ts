@@ -16,7 +16,7 @@ import {
   isRootAgentJournalItem
 } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalEpochReason } from './durable-rows/journal-row-schema'
+import type { JournalEpochRow, AgentJournalEpochReason } from './durable-rows/journal-row-schema'
 import { journalContextEpoch } from './context-epochs/journal-context-cursor'
 import type { JournalReplacementItem } from './context-epochs/journal-epoch-replacement'
 import { writeJournalDomainCurrentItem } from './journal-domain-current-item'
@@ -44,6 +44,7 @@ export type JournalDomainContextReplacement =
     }
   | {
       kind: 'epoch-replace'
+      historyOrigin?: JournalEpochRow['historyOrigin']
       reason: AgentJournalEpochReason
       providerHandle?: AgentSessionJournalProviderHandle
       fence: number
@@ -161,9 +162,11 @@ export function replaceJournalDomainContext(
           ? 'session_created'
           : operation.reason,
       providerHandle,
-      ...(previous && sameJournalConversation(previous.providerHandle, providerHandle)
-        ? { historyOrigin: previous.raw }
-        : {})
+      ...(operation.historyOrigin !== undefined
+        ? { historyOrigin: operation.historyOrigin }
+        : previous && sameJournalConversation(previous.providerHandle, providerHandle)
+          ? { historyOrigin: previous.raw }
+          : {})
     })
     // A new context in the same physical epoch: its public identity changes, its rows do not move.
     db.prepare(`UPDATE journal_chat_state SET context_boundary=?, derived_turn_item_id=NULL, history_origin_json=?

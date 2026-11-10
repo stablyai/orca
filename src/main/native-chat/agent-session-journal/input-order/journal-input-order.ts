@@ -1,3 +1,4 @@
+import { journalInputOrder } from './journal-input-order-registry'
 import { memoryJournalMap } from '../journal-memory-collections'
 import type { JournalInputOrderFacts } from '../journal-input-facts-storage'
 import type { JournalSubmissionStorage, JournalIndexStorageFactory } from '../journal-index-storage'
@@ -41,7 +42,7 @@ export class JournalInputOrder extends JournalInputEvidence {
     this.newestTurn = newestTurn ?? new JournalNewestTurn(state, indexes.newestTurn())
     this.unsettled = indexes.submissions('unsettled')
     this.sending = indexes.submissions('sending')
-    this.cards = new JournalInputCardIndex(indexes)
+    this.cards = new JournalInputCardIndex(journalInputOrder, indexes)
   }
 
   beforeRow(state: JournalReducerState, row: JournalRow): void {
@@ -50,7 +51,7 @@ export class JournalInputOrder extends JournalInputEvidence {
     this.legacy?.beforeRow(state, row)
   }
   beginReconstruction(): void {
-    this.legacy ??= new LegacyQueueOrderReader(this.state)
+    this.legacy ??= new LegacyQueueOrderReader(this.state, journalInputOrder)
     this.legacy.beginReconstruction()
   }
   finishReconstruction(state: JournalReducerState): void {

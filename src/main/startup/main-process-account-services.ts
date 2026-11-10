@@ -11,9 +11,9 @@ import {
   readOpenCodeGoApiKey,
   saveOpenCodeGoApiKey
 } from '../opencode/opencode-go-api-key-store'
-import { agentHookServer } from '../agent-hooks/server'
+import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { resolveHostCodexSessionSourceHome } from '../codex/history/rollouts/codex-session-source-home'
-import { browserManager } from '../browser/browser-manager'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import { prewarmStructuredAgentModelCatalogs } from '../runtime/agent-session/model-catalog/structured-agent-model-catalog-wiring'
 import { mainProcessState as state } from './main-process-state'
 
@@ -79,7 +79,10 @@ export function initializeMainProcessAccountServices(): void {
     homePath: app.getPath('home'),
     getLegacyOverrides: () => store.getSettings().keybindings,
     legacyTabSwitchDefaults: store.getSettings().tabSwitchKeybindingSeed === 'legacy',
-    legacySearchDefaults: store.getSettings().searchKeybindingSeed === 'legacy'
+    legacySearchDefaults:
+      (process.platform === 'darwin'
+        ? store.getSettings().searchKeybindingSeed
+        : store.getSettings().nonMacSearchKeybindingSeed) === 'legacy'
   })
   browserManager.setSettingsResolver(() => ({ keybindings: state.keybindings?.getOverrides() }))
 }

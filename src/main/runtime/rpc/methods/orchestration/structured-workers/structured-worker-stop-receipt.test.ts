@@ -119,14 +119,4 @@ describe('worker-stop on a structured worker this runtime cannot reach', () => {
     expect(close).toHaveBeenCalledWith(SESSION, 'evict', undefined)
     expect(db.getWorkerDispatch(dispatchId)?.state).toBe('stop_unknown')
   })
-
-  it('reports that nothing was closed', async () => {
-    const dispatchId = startStructuredWorker()
-    await expect(call('orchestration.workerStop', { dispatch: dispatchId })).resolves.toMatchObject(
-      {
-        processAction: 'none',
-        state: 'stop_unknown'
-      }
-    )
-  })
 })

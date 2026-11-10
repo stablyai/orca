@@ -2,7 +2,7 @@ import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import { folderLineageEdgeOf } from '../../../shared/worktree/folder-lineage-parents'
 import type { WorkspaceLineage } from '../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import type { RuntimeStore } from '../../runtime/runtime-store-contract'
+import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 
 /** Each listed row with its own folder workspace parent, so a client merging hosts by raw id still
  * tells same-id rows on two machines apart. Rows without one carry null. */

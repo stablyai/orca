@@ -6,7 +6,7 @@ import { nativeChatAppearanceStyle } from '../appearance/native-chat-appearance-
 import { useState } from 'react'
 import { NativeChatFileLinkExistenceContext } from '../links/actions/native-chat-file-link-existence'
 import { NativeChatStructuredAsyncQuestion } from './NativeChatStructuredAsyncQuestion'
-import { projectStructuredAgentSessionMessages } from '../structured-agent-session-message-projection'
+import { projectStructuredAgentSessionMessages } from '../conversation/projection/structured-agent-session-message-projection'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -230,4 +230,45 @@ export const historyLinks = defineFixture({
     </NativeChatFileLinkExistenceContext.Provider>
   ),
   interact: (frame) => frame.querySelector<HTMLButtonElement>('button[aria-expanded]')?.click()
+})
+
+export const previews = defineFixture({
+  width: 560,
+  render: () => (
+    <div
+      className="native-chat-appearance bg-chat-canvas p-4"
+      style={nativeChatAppearanceStyle({})}
+    >
+      <NativeChatQuestionCard
+        prompt={{
+          questions: [
+            {
+              question: 'Which layout should the settings page use?',
+              multiSelect: false,
+              options: [
+                {
+                  label: 'Sidebar',
+                  description: 'Sections listed on the left.',
+                  preview:
+                    '┌──────────┬───────────────────────────┐\n│ General  │ Theme      [ Dark     ▾ ] │\n│ Editor   │ Font size  [ 13         ] │\n│ Terminal │                           │\n└──────────┴───────────────────────────┘'
+                },
+                {
+                  label: 'Tabs',
+                  description: 'Sections as tabs across the top.',
+                  preview:
+                    '┌─────────┬────────┬──────────┐\n│ General │ Editor │ Terminal │\n├─────────┴────────┴──────────┤\n│ Theme  [ Dark ▾ ]           │\n└─────────────────────────────┘'
+                }
+              ]
+            }
+          ]
+        }}
+        onAnswer={() => {}}
+        onCancel={() => {}}
+      />
+    </div>
+  ),
+  interact: async (frame) => {
+    frame.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[0]?.click()
+    await new Promise(requestAnimationFrame)
+  }
 })

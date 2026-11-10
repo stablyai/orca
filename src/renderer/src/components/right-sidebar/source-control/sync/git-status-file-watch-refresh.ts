@@ -7,7 +7,7 @@ import {
   normalizeRuntimePathForComparison,
   relativePathInsideRoot
 } from '../../../../../../shared/cross-platform-path'
-import type { FsChangedPayload } from '../../../../../../shared/filesystem-entry-types'
+import type { FsChangedPayload } from '../../../../../../shared/file-watch/filesystem-change-event'
 import type {
   ActiveRightSidebarTab,
   RightSidebarExplorerView

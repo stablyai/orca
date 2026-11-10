@@ -89,6 +89,44 @@ it('snapshots saved Claude aliases, attempts and roster from indexed columns', a
       ['agent-b', 1]
     ]),
     subagents: ['agent-a'],
+    parents: [
+      [
+        'agent-a',
+        [
+          [
+            'toolu_1',
+            expect.objectContaining({
+              agentId: 'agent-a',
+              providerParentRef: 'toolu_1',
+              producerKind: 'agent'
+            })
+          ],
+          [
+            'agent-a',
+            expect.objectContaining({
+              agentId: 'agent-a',
+              providerParentRef: 'agent-a',
+              producerKind: 'agent',
+              attempt: 3
+            })
+          ]
+        ]
+      ],
+      [
+        'agent-b',
+        [
+          [
+            'toolu_1',
+            expect.objectContaining({
+              agentId: 'agent-b',
+              providerParentRef: 'toolu_1',
+              producerKind: 'agent'
+            })
+          ]
+        ]
+      ]
+    ],
+    backgrounds: [],
     threadGoal: { goal: null, row: null }
   })
 })

@@ -1,7 +1,7 @@
 import { afterEach, expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { createLegacyProviderTimelineIdentityScheme } from '../agent-session-timeline/provider-timeline-identity'
-import { acpSessionNotRestoredItem } from '../../acp/acp-session-reopen-failure'
+import { acpSessionNotRestoredItem } from '../../acp/session/start/acp-session-reopen-failure'
 import {
   domainLifecycleFixture,
   lifecycleOptions as options

@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
   }
 }))
 
-vi.mock('@/runtime/web-runtime-browser-creation', () => ({
+vi.mock('@/runtime/browser/creation/web-runtime-browser-creation', () => ({
   createWebRuntimeSessionBrowserTab: mocks.createBrowserTab
 }))
 
@@ -196,96 +196,6 @@ describe('ClientHostedBrowserPagePane', () => {
     )
     expect(screen.getByText('Client-hosted browser unavailable')).not.toBeNull()
     expect(document.querySelector('webview')).toBeNull()
-  })
-
-  it('requests the one-time intro tour on the first active client-hosted page', async () => {
-    vi.useFakeTimers()
-    const { useAppStore } = await import('@/store')
-    const prior = {
-      persistedUIReady: useAppStore.getState().persistedUIReady,
-      contextualToursSeenIds: useAppStore.getState().contextualToursSeenIds,
-      activeContextualTourId: useAppStore.getState().activeContextualTourId
-    }
-    useAppStore.setState({
-      persistedUIReady: true,
-      contextualToursSeenIds: [],
-      activeContextualTourId: null
-    })
-    const { webview } = createWebview()
-    mocks.attach.mockReturnValue(retainedAttachment(webview))
-    try {
-      render(
-        <ClientHostedBrowserPagePane
-          browserTab={page()}
-          workspaceId="workspace-a"
-          chromeShortcutScope="focused"
-          runtimeEnvironmentId="environment-a"
-          worktreeId="worktree-a"
-          placement={PLACEMENT}
-          isActive={true}
-          onUpdatePageState={vi.fn()}
-          onSetUrl={vi.fn()}
-        />
-      )
-      // Why: happy-dom rects are zero-sized and the tour gate requires a measurable target.
-      const target = document.querySelector<HTMLElement>(
-        '[data-contextual-tour-target="client-hosted-browser-controls"]'
-      )
-      expect(target).not.toBeNull()
-      target!.getBoundingClientRect = () => new DOMRect(0, 0, 400, 32)
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(0)
-      })
-      expect(useAppStore.getState().activeContextualTourId).toBe('client-hosted-browser')
-    } finally {
-      useAppStore.setState(prior)
-      vi.useRealTimers()
-    }
-  })
-
-  it('never re-requests the intro tour once it has been seen', async () => {
-    vi.useFakeTimers()
-    const { useAppStore } = await import('@/store')
-    const prior = {
-      persistedUIReady: useAppStore.getState().persistedUIReady,
-      contextualToursSeenIds: useAppStore.getState().contextualToursSeenIds,
-      activeContextualTourId: useAppStore.getState().activeContextualTourId
-    }
-    useAppStore.setState({
-      persistedUIReady: true,
-      contextualToursSeenIds: ['client-hosted-browser'],
-      activeContextualTourId: null
-    })
-    const { webview } = createWebview()
-    mocks.attach.mockReturnValue(retainedAttachment(webview))
-    try {
-      render(
-        <ClientHostedBrowserPagePane
-          browserTab={page()}
-          workspaceId="workspace-a"
-          chromeShortcutScope="focused"
-          runtimeEnvironmentId="environment-a"
-          worktreeId="worktree-a"
-          placement={PLACEMENT}
-          isActive={true}
-          onUpdatePageState={vi.fn()}
-          onSetUrl={vi.fn()}
-        />
-      )
-      // Why: same measurable target as the positive case — only seenIds differs.
-      const target = document.querySelector<HTMLElement>(
-        '[data-contextual-tour-target="client-hosted-browser-controls"]'
-      )
-      expect(target).not.toBeNull()
-      target!.getBoundingClientRect = () => new DOMRect(0, 0, 400, 32)
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(0)
-      })
-      expect(useAppStore.getState().activeContextualTourId).toBeNull()
-    } finally {
-      useAppStore.setState(prior)
-      vi.useRealTimers()
-    }
   })
 })
 

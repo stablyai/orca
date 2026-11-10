@@ -128,27 +128,31 @@ async function resolveAndCommitStructuredAgentSessionCreate(
   if ('refusal' in prepared) {
     return { ok: false, refusal: prepared.refusal }
   }
-  // Nothing is created yet, so a close that came first refuses the create outright.
-  if (
-    ORCA_LAYOUT_OWNER_IS_MAIN &&
-    structuredAgentSessionClosedBeforeCreate(params.envelope.sessionId)
-  ) {
-    return { ok: false, refusal: structuredAgentSessionClosedBeforeCreateRefusal() }
+  try {
+    // Nothing is created yet, so a close that came first refuses the create outright.
+    if (
+      ORCA_LAYOUT_OWNER_IS_MAIN &&
+      structuredAgentSessionClosedBeforeCreate(params.envelope.sessionId)
+    ) {
+      return { ok: false, refusal: structuredAgentSessionClosedBeforeCreateRefusal() }
+    }
+    return projectReceiptDeviceAttach(
+      await commitStructuredAgentSessionCreate({
+        runtime: ctx.runtime,
+        caller: callerFor(ctx),
+        prepared,
+        activate: true,
+        placedByWindow: ctx.caller?.kind === 'desktop',
+        ...(capture ? { capture } : {}),
+        ...('tabPlacement' in params && params.tabPlacement
+          ? { tabPlacement: params.tabPlacement }
+          : {})
+      }),
+      ctx
+    )
+  } finally {
+    await prepared.attachParams.fork?.prepared.close()
   }
-  return projectReceiptDeviceAttach(
-    await commitStructuredAgentSessionCreate({
-      runtime: ctx.runtime,
-      caller: callerFor(ctx),
-      prepared,
-      activate: true,
-      placedByWindow: ctx.caller?.kind === 'desktop',
-      ...(capture ? { capture } : {}),
-      ...('tabPlacement' in params && params.tabPlacement
-        ? { tabPlacement: params.tabPlacement }
-        : {})
-    }),
-    ctx
-  )
 }
 
 export async function handleStructuredAgentSessionCreateSupport(

@@ -1,3 +1,6 @@
+import { receiptRow } from './journal-sql-receipt-row'
+import type { JournalForkStageBegin, JournalForkInstall } from './journal-fork-stages'
+import type { JournalSqlForkCopy } from './journal-sql-fork-copy'
 import type { AgentSessionJournalOptions } from './journal-store-contracts'
 import { writeJournalAutomaticSubmission } from './journal-sql-automatic-submission'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
@@ -35,6 +38,7 @@ import type { JournalDomainEditLeaseOutcome } from './journal-domain-edit-leases
 export type JournalSqlStoreOperation = Exclude<JournalWriterOperation, { kind: 'open' }>
 
 export type JournalSqlStorePreparation = {
+  forkInstall?: JournalForkInstall
   facts?: Omit<JournalWriterHostFacts, 'identity'>
   receipt?: JournalOperationReceipt
   custody?: (source: AgentMessageSource) => QueuedMessageOwed
@@ -177,7 +181,8 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
           operation,
           facts,
           savedAt,
-          ...(staged ? { effects: staged.effects } : {})
+          ...(staged ? { effects: staged.effects } : {}),
+          ...(preparation.forkInstall ? { forkInstall: preparation.forkInstall } : {})
         }
         commit =
           operation.kind === 'automatic-submission' || operation.kind === 'send-admission'
@@ -190,7 +195,10 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
       }
       preparation.settle?.(commit)
       staged?.settle(commit.receiptWritten ? commit.effects : undefined)
-      if (operation.kind === 'epoch-replace') {
+      if (commit.forkInstalled) {
+        this.epochReplacements.notify(Promise.resolve(commit))
+      }
+      if (operation.kind === 'epoch-replace' || commit.forkInstalled) {
         // Public context identities need not equal the physical epoch a command targets.
         const epoch = await this.database.sessionEpoch(this.identity.sessionId)
         if (epoch === null) {
@@ -214,6 +222,25 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
       return commit
     })
     return this.epochReplacements.notifyFor(operation.kind, written)
+  }
+
+  stageFork(
+    copy: JournalSqlForkCopy,
+    input: Omit<JournalForkStageBegin, 'target' | 'identity' | 'source'>
+  ): Promise<JournalForkInstall> {
+    return this.admit((writer) =>
+      copy.stage(writer, {
+        ...input,
+        target: this.target,
+        identity: this.identity,
+        source: copy.input.source
+      })
+    )
+  }
+
+  async abortFork(installation: JournalForkInstall): Promise<void> {
+    await this.admit((writer) => writer.maintain({ kind: 'fork-abort', token: installation.token }))
+    await this.database.requestSweep()
   }
 
   keepGoalAttachments(identity: AgentJournalItemIdentity): Promise<void> {
@@ -273,7 +300,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
   }
 
   private admit<T>(
-    run: (writer: Pick<JournalSqlOwner, 'write' | 'effects'>) => T | Promise<T>
+    run: (writer: Pick<JournalSqlOwner, 'write' | 'effects' | 'maintain'>) => T | Promise<T>
   ): Promise<T> {
     if (this.closed) {
       return Promise.reject(
@@ -289,35 +316,4 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
 
 function settled(stopSettle: JournalWriterHostFacts['stopSettle']) {
   return stopSettle ? { stopSettle } : {}
-}
-
-function receiptRow(operation: JournalSqlStoreOperation): JournalReceiptStage['row'] {
-  switch (operation.kind) {
-    case 'item':
-    case 'item-claiming':
-    case 'prompt-mutate':
-      return 'item'
-    case 'tombstone':
-    case 'goal-withdraw':
-    case 'stop':
-    case 'stop-accept':
-    case 'queue-resume':
-    case 'queue-reopen':
-    case 'queue-reopen-mark':
-      return 'tombstone'
-    case 'queue-insert':
-    case 'queue-update':
-    case 'queue-hold':
-    case 'queue-withdraw':
-    case 'queue-move':
-      return 'queue'
-    case 'dispatch':
-      return 'dispatch'
-    case 'submission':
-    case 'automatic-submission':
-    case 'send-admission':
-      return 'submission'
-    default:
-      return undefined
-  }
 }

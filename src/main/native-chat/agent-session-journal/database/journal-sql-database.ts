@@ -1,3 +1,5 @@
+import { JournalSqlForkCopy } from '../journal-sql-fork-copy'
+import type { JournalForkPreparationInput } from '../journal-fork-preparation'
 import { randomUUID } from 'node:crypto'
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { AgentSessionTabTable } from '../../../runtime/agent-session/agent-session-tab-table'
@@ -103,6 +105,30 @@ export class JournalSqlDatabase {
   requestSweep(): Promise<void> {
     this.assertOpen()
     return this.readOnly ? Promise.resolve() : this.maintenance.requestSweep()
+  }
+
+  /** Source attachment custody starts before the WAL snapshot and ends with disposable preparation. */
+  async prepareForkCopy(
+    input: JournalForkPreparationInput,
+    signal?: AbortSignal
+  ): Promise<JournalSqlForkCopy> {
+    this.assertOpen()
+    const held = await this.writer.maintain({
+      kind: 'fork-source-hold',
+      sessionId: input.source.sessionId
+    })
+    if (!held || typeof held !== 'object' || !('token' in held)) {
+      throw new Error('fork source has no attachment custody')
+    }
+    return JournalSqlForkCopy.capture(
+      this.readers,
+      input,
+      async () => {
+        await this.writer.maintain({ kind: 'fork-source-release', token: held.token })
+        await this.requestSweep()
+      },
+      signal
+    )
   }
 
   async loadRecords(): Promise<AgentSessionStoreState> {
@@ -241,7 +267,7 @@ export class JournalSqlDatabase {
   /** Planning and ordered reads share the chat's lane; ordinary readers see the last COMMIT. */
   serialize<T>(
     sessionId: string,
-    run: (writer: Pick<JournalSqlOwner, 'write' | 'effects'>) => T | Promise<T>
+    run: (writer: Pick<JournalSqlOwner, 'write' | 'effects' | 'maintain'>) => T | Promise<T>
   ): Promise<T> {
     this.assertOpen()
     const release = this.activity.hold()

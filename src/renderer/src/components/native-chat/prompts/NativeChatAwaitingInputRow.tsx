@@ -1,13 +1,13 @@
 import { NativeChatQuestionText } from './NativeChatQuestionText'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   NATIVE_CHAT_ASK_ROW_COPY,
   type NativeChatAskRowSubject
 } from '../../../../../shared/native-chat/input/native-chat-ask-row'
-import { useNativeChatDisclosure } from '../native-chat-disclosure-store'
-import { NativeChatToolRunIcon } from '../NativeChatToolIcon'
+import { useNativeChatDisclosure } from '../messages/disclosure/native-chat-disclosure-store'
+import { NativeChatToolRunIcon } from '../tools/lines/NativeChatToolIcon'
 
 const ROW_CLASS_NAME =
   'flex min-h-6 w-full items-center gap-1.5 py-0.5 text-left text-sm leading-relaxed text-chat-foreground-faint'
@@ -28,6 +28,7 @@ export function NativeChatAwaitingInputRow({
   /** False when the caller already shows each question of a grouped prompt in full. */
   listsQuestions?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   // Separate group and question keys because a pending Codex group becomes individual rows when answered.
   const { open, setOpen } = useNativeChatDisclosure(
     disclosureKey !== undefined && subject?.kind === 'questions'
@@ -40,19 +41,16 @@ export function NativeChatAwaitingInputRow({
   const toggles = questions !== null || question !== null
   // With nothing to name, the label must read as a whole phrase, not end on a colon.
   const label = !pending
-    ? translate('components.native-chat.ask.asked', NATIVE_CHAT_ASK_ROW_COPY.asked)
+    ? t('components.native-chat.ask.asked', NATIVE_CHAT_ASK_ROW_COPY.asked)
     : subject === null
-      ? translate(
-          'components.native-chat.ask.awaitingUnnamed',
-          NATIVE_CHAT_ASK_ROW_COPY.awaitingUnnamed
-        )
-      : translate('components.native-chat.ask.awaiting', NATIVE_CHAT_ASK_ROW_COPY.awaiting)
+      ? t('components.native-chat.ask.awaitingUnnamed', NATIVE_CHAT_ASK_ROW_COPY.awaitingUnnamed)
+      : t('components.native-chat.ask.awaiting', NATIVE_CHAT_ASK_ROW_COPY.awaiting)
   const text =
     subject === null
       ? null
       : subject.kind === 'question'
         ? subject.text
-        : translate('components.native-chat.ask.questionCount', '{{count}} questions', {
+        : t('components.native-chat.ask.questionCount', '{{count}} questions', {
             count: subject.questions.length,
             defaultValue_one: '{{count}} question'
           })

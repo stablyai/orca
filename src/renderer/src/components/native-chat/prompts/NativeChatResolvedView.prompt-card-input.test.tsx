@@ -15,7 +15,7 @@ const ptyInput = vi.hoisted(() => ({ verified: vi.fn<() => Promise<boolean>>() }
 vi.mock('../session/terminal/read/use-native-chat-retained-session', () => ({
   useNativeChatRetainedSession: () => retained.session
 }))
-vi.mock('../NativeChatComposer', async () => {
+vi.mock('../composer/NativeChatComposer', async () => {
   const { useEffect } = await import('react')
   return {
     NativeChatComposer: () => {
@@ -35,7 +35,7 @@ const { TooltipProvider } = await import('@/components/ui/tooltip')
 const { nativeChatPromptDismissals } = await import('./native-chat-prompt-dismissals')
 const { useAppStore } = await import('../../../store/index')
 const { installNativeChatMessageListTestViewport } =
-  await import('../native-chat-message-list-test-viewport')
+  await import('../viewport/virtualization/native-chat-message-list-test-viewport')
 
 const paneKey = 'tab-card:leaf-card'
 let restoreViewport = (): void => {}

@@ -71,6 +71,13 @@ const requestRow = {
 }
 const firstRequest = agentJournalItemKey(requestRow)
 
+async function appendOutcomes(
+  sql: SqlAgentSessionJournal,
+  steps: Parameters<SqlAgentSessionJournal['appendSteps']>[0]
+) {
+  return { outcomes: (await sql.appendSteps(steps)).outcomes }
+}
+
 it('chooses request incarnations and settles the session from its unsettled rows on the writer', async () => {
   const sql = await journal()
   await sql.appendItem(
@@ -95,16 +102,18 @@ it('chooses request incarnations and settles the session from its unsettled rows
     reservedBytes: 8192
   }
   // A duplicate open while the first incarnation is pending writes nothing.
-  expect(await sql.appendSteps([open, open])).toEqual({
+  expect(await appendOutcomes(sql, [open, open])).toEqual({
     outcomes: [{ kind: 'committed', wrote: true }, { kind: 'dropped' }]
   })
   const held = await sql.reads.item(firstRequest)
   expect(held?.body).toEqual(pending)
   // Another writer records the user's answer; the reused request ID opens a second incarnation.
   await sql.appendItem(requestRow, answered, { fence: 1, turnScope: inTurn })
-  expect(await sql.appendSteps([open])).toEqual({ outcomes: [{ kind: 'committed', wrote: true }] })
+  expect(await appendOutcomes(sql, [open])).toEqual({
+    outcomes: [{ kind: 'committed', wrote: true }]
+  })
   expect(
-    await sql.appendSteps([
+    await appendOutcomes(sql, [
       {
         kind: 'settlement',
         settlementId: 'session-end',
@@ -163,15 +172,17 @@ it("follows a thread's newest saved goal row when choosing a goal identity", asy
   })
   const first = 'b'.repeat(64)
   const second = 'c'.repeat(64)
-  expect(await sql.appendSteps([step(first, goal(0)), step(first, goal(0))])).toEqual({
+  expect(await appendOutcomes(sql, [step(first, goal(0)), step(first, goal(0))])).toEqual({
     outcomes: [{ kind: 'committed', wrote: true }, { kind: 'dropped' }]
   })
-  expect(await sql.appendSteps([step(first, goal(60)), step(second, goal(0, 'Next'))])).toEqual({
-    outcomes: [
-      { kind: 'committed', wrote: true },
-      { kind: 'committed', wrote: true }
-    ]
-  })
+  expect(await appendOutcomes(sql, [step(first, goal(60)), step(second, goal(0, 'Next'))])).toEqual(
+    {
+      outcomes: [
+        { kind: 'committed', wrote: true },
+        { kind: 'committed', wrote: true }
+      ]
+    }
+  )
   const occurrence = codexGoalJournalDigest(JSON.stringify([thread, first]))
   const firstRow = agentJournalItemKey(codexGoalJournalIdentity(thread, first, occurrence))
   const secondRow = agentJournalItemKey(
@@ -217,7 +228,7 @@ it("chooses a background task's generation from its saved incarnations on the wr
     options: { fence: 1, turnScope: { kind: 'thread' as const } },
     reservedBytes: 8192
   })
-  await sql.appendSteps([
+  await appendOutcomes(sql, [
     task('working', 'tool-1'),
     task('done', 'tool-1'),
     task('working', 'tool-2')

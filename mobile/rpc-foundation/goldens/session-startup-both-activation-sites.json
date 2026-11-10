@@ -4,173 +4,9 @@
   "family": "session.startup",
   "namedDeltas": [],
   "values": {
-    "04cec5da2df1": {
-      "name": "clear-delayed-action-timers",
-      "ordinal": 22,
-      "value": {}
-    },
-    "04f9f79493f1": {
-      "name": "fetch-terminals",
-      "ordinal": 13,
-      "value": {
-        "allowEmptyLoaded": true
-      }
-    },
-    "1c425a4c02bb": {
-      "name": "toast",
-      "ordinal": 18,
-      "value": {
-        "durationMs": 3000,
-        "message": "Open Orca on the host to wake sleeping agents."
-      }
-    },
-    "30f5e556f9c1": {
-      "name": "ensure-session-tabs",
-      "ordinal": 15,
-      "value": {}
-    },
-    "343bb26c2588": {
-      "name": "toast",
-      "ordinal": 11,
-      "value": {
-        "durationMs": 3000,
-        "message": "Open Orca on the host to wake sleeping agents."
-      }
-    },
-    "38b377793c34": {
-      "name": "ensure-session-tabs",
-      "ordinal": 5,
-      "value": {}
-    },
-    "39ed117c65f2": {
-      "name": "fetch-terminals",
-      "ordinal": 17,
-      "value": {
-        "allowEmptyLoaded": false
-      }
-    },
-    "4669e4d646e8": {
-      "name": "fetch-terminals",
-      "ordinal": 6,
-      "value": {
-        "allowEmptyLoaded": false
-      }
-    },
-    "4e82c0d6a331": {
-      "name": "worktree.activate#2",
-      "ordinal": 14,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.activate"
-        },
-        {
-          "name": "params",
-          "value": {
-            "navigation": "caller",
-            "notifyClients": false,
-            "worktree": "id:wt-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 2550,
-        "settledAt": 2550,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "sleepingAgentWake": "unsupported-headless"
-          }
-        }
-      }
-    },
-    "51ae204eb34b": {
-      "status": "fulfilled",
-      "startedAt": 2550,
-      "settledAt": 2550,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "629aee3fec6c": {
-      "name": "worktree.activate#2",
-      "ordinal": 16,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.activate\",\"params\":{\"worktree\":\"id:wt-1\",\"notifyClients\":false,\"navigation\":\"caller\"}}"
-    },
-    "6419a011f13b": {
-      "name": "clear-terminal-cache",
-      "ordinal": 1,
-      "value": {}
-    },
-    "7953dfb08a13": {
-      "name": "fetch-terminals",
-      "ordinal": 8,
-      "value": {
-        "allowEmptyLoaded": true
-      }
-    },
-    "84c0839eccca": {
-      "name": "fetch-terminals",
-      "ordinal": 20,
-      "value": {
-        "allowEmptyLoaded": true
-      }
-    },
-    "854cb236952a": {
-      "actionSheetRequestSeq": 1,
-      "activeHandle": {
-        "$rpc": "null"
-      },
-      "appliedSnapshotMarker": {
-        "epoch": {
-          "$rpc": "null"
-        },
-        "version": -1
-      },
-      "closedTabTombstones": 0,
-      "initializedHandles": [],
-      "sessionTabs": [],
-      "terminalsLoaded": false
-    },
-    "8ac1a3109c04": {
-      "name": "worktree.activate#2",
-      "ordinal": 14,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.activate"
-        },
-        {
-          "name": "params",
-          "value": {
-            "navigation": "caller",
-            "notifyClients": false,
-            "worktree": "id:wt-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 2550
-      }
-    },
-    "9440e16e975c": {
+    "19efe7a6058c": {
       "name": "worktree.activate#1",
-      "ordinal": 9,
+      "ordinal": 7,
       "args": [
         {
           "name": "method",
@@ -196,38 +32,70 @@
         "startedAt": 1800
       }
     },
-    "95c8385db422": {
-      "name": "clear-delayed-action-timers",
-      "ordinal": 4,
+    "1dca7912e0fe": {
+      "name": "worktree.activate#2",
+      "ordinal": 15,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.activate\",\"params\":{\"worktree\":\"id:wt-1\",\"notifyClients\":false,\"navigation\":\"caller\"}}"
+    },
+    "1e40b8324af4": {
+      "name": "worktree.activate#2",
+      "ordinal": 12,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "navigation": "caller",
+            "notifyClients": false,
+            "worktree": "id:wt-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 2550
+      }
+    },
+    "38b377793c34": {
+      "name": "ensure-session-tabs",
+      "ordinal": 5,
       "value": {}
     },
-    "a193ad4304cb": {
+    "4319ba45c158": {
+      "name": "toast",
+      "ordinal": 9,
+      "value": {
+        "durationMs": 3000,
+        "message": "Open Orca on the host to wake sleeping agents."
+      }
+    },
+    "4669e4d646e8": {
       "name": "fetch-terminals",
-      "ordinal": 7,
+      "ordinal": 6,
       "value": {
         "allowEmptyLoaded": false
       }
     },
-    "aab012c297bd": {
-      "name": "diagnostics-reset-route",
-      "ordinal": 2,
-      "value": {}
-    },
-    "c59295cf1c69": {
-      "name": "worktree.activate#1",
-      "ordinal": 10,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.activate\",\"params\":{\"worktree\":\"id:wt-1\",\"notifyClients\":false,\"navigation\":\"caller\"}}"
-    },
-    "da6deb44ce71": {
-      "name": "fetch-terminals",
-      "ordinal": 12,
+    "51ae204eb34b": {
+      "status": "fulfilled",
+      "startedAt": 2550,
+      "settledAt": 2550,
       "value": {
-        "allowEmptyLoaded": true
+        "$rpc": "undefined"
       }
     },
-    "defd9bef9981": {
+    "5ea84cbe70fc": {
       "name": "worktree.activate#1",
-      "ordinal": 9,
+      "ordinal": 7,
       "args": [
         {
           "name": "method",
@@ -261,6 +129,122 @@
         }
       }
     },
+    "63abf3b998b3": {
+      "name": "fetch-terminals",
+      "ordinal": 14,
+      "value": {
+        "allowEmptyLoaded": false
+      }
+    },
+    "6419a011f13b": {
+      "name": "clear-terminal-cache",
+      "ordinal": 1,
+      "value": {}
+    },
+    "650e3aedd38c": {
+      "name": "clear-pending-live-input-commit",
+      "ordinal": 17,
+      "value": {}
+    },
+    "6c4561ecc9ee": {
+      "name": "ensure-session-tabs",
+      "ordinal": 13,
+      "value": {}
+    },
+    "854cb236952a": {
+      "actionSheetRequestSeq": 1,
+      "activeHandle": {
+        "$rpc": "null"
+      },
+      "appliedSnapshotMarker": {
+        "epoch": {
+          "$rpc": "null"
+        },
+        "version": -1
+      },
+      "closedTabTombstones": 0,
+      "initializedHandles": [],
+      "sessionTabs": [],
+      "terminalsLoaded": false
+    },
+    "95c8385db422": {
+      "name": "clear-delayed-action-timers",
+      "ordinal": 4,
+      "value": {}
+    },
+    "9a856559977e": {
+      "name": "toast",
+      "ordinal": 16,
+      "value": {
+        "durationMs": 3000,
+        "message": "Open Orca on the host to wake sleeping agents."
+      }
+    },
+    "a509dd4610b2": {
+      "name": "fetch-terminals",
+      "ordinal": 11,
+      "value": {
+        "allowEmptyLoaded": true
+      }
+    },
+    "aab012c297bd": {
+      "name": "diagnostics-reset-route",
+      "ordinal": 2,
+      "value": {}
+    },
+    "b86ad4df402e": {
+      "name": "clear-delayed-action-timers",
+      "ordinal": 18,
+      "value": {}
+    },
+    "ba45b883b259": {
+      "name": "fetch-terminals",
+      "ordinal": 10,
+      "value": {
+        "allowEmptyLoaded": true
+      }
+    },
+    "d2c3cccdd0b2": {
+      "name": "worktree.activate#2",
+      "ordinal": 12,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "navigation": "caller",
+            "notifyClients": false,
+            "worktree": "id:wt-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 2550,
+        "settledAt": 2550,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "sleepingAgentWake": "unsupported-headless"
+          }
+        }
+      }
+    },
+    "e8b978dbecff": {
+      "name": "worktree.activate#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.activate\",\"params\":{\"worktree\":\"id:wt-1\",\"notifyClients\":false,\"navigation\":\"caller\"}}"
+    },
     "e927128e41fc": {
       "name": "clear-pending-live-input-commit",
       "ordinal": 3,
@@ -273,18 +257,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "f7e803082fc4": {
-      "name": "fetch-terminals",
-      "ordinal": 19,
-      "value": {
-        "allowEmptyLoaded": false
-      }
-    },
-    "f97fb55d23d2": {
-      "name": "clear-pending-live-input-commit",
-      "ordinal": 21,
-      "value": {}
     }
   },
   "recording": {
@@ -312,8 +284,8 @@
       {
         "id": "reactivating",
         "observation": {
-          "sender": ["9440e16e975c"],
-          "payloads": ["c59295cf1c69"],
+          "sender": ["19efe7a6058c"],
+          "payloads": ["e8b978dbecff"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -324,17 +296,15 @@
             "e927128e41fc",
             "95c8385db422",
             "38b377793c34",
-            "4669e4d646e8",
-            "a193ad4304cb",
-            "7953dfb08a13"
+            "4669e4d646e8"
           ]
         }
       },
       {
         "id": "reactivated",
         "observation": {
-          "sender": ["defd9bef9981"],
-          "payloads": ["c59295cf1c69"],
+          "sender": ["5ea84cbe70fc"],
+          "payloads": ["e8b978dbecff"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -346,18 +316,16 @@
             "95c8385db422",
             "38b377793c34",
             "4669e4d646e8",
-            "a193ad4304cb",
-            "7953dfb08a13",
-            "343bb26c2588",
-            "da6deb44ce71"
+            "4319ba45c158",
+            "ba45b883b259"
           ]
         }
       },
       {
         "id": "refreshed",
         "observation": {
-          "sender": ["defd9bef9981"],
-          "payloads": ["c59295cf1c69"],
+          "sender": ["5ea84cbe70fc"],
+          "payloads": ["e8b978dbecff"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -369,19 +337,17 @@
             "95c8385db422",
             "38b377793c34",
             "4669e4d646e8",
-            "a193ad4304cb",
-            "7953dfb08a13",
-            "343bb26c2588",
-            "da6deb44ce71",
-            "04f9f79493f1"
+            "4319ba45c158",
+            "ba45b883b259",
+            "a509dd4610b2"
           ]
         }
       },
       {
         "id": "activating",
         "observation": {
-          "sender": ["defd9bef9981", "8ac1a3109c04"],
-          "payloads": ["c59295cf1c69", "629aee3fec6c"],
+          "sender": ["5ea84cbe70fc", "1e40b8324af4"],
+          "payloads": ["e8b978dbecff", "1dca7912e0fe"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "consume-route": "51ae204eb34b"
@@ -394,21 +360,19 @@
             "95c8385db422",
             "38b377793c34",
             "4669e4d646e8",
-            "a193ad4304cb",
-            "7953dfb08a13",
-            "343bb26c2588",
-            "da6deb44ce71",
-            "04f9f79493f1",
-            "30f5e556f9c1",
-            "39ed117c65f2"
+            "4319ba45c158",
+            "ba45b883b259",
+            "a509dd4610b2",
+            "6c4561ecc9ee",
+            "63abf3b998b3"
           ]
         }
       },
       {
         "id": "activated",
         "observation": {
-          "sender": ["defd9bef9981", "4e82c0d6a331"],
-          "payloads": ["c59295cf1c69", "629aee3fec6c"],
+          "sender": ["5ea84cbe70fc", "d2c3cccdd0b2"],
+          "payloads": ["e8b978dbecff", "1dca7912e0fe"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "consume-route": "51ae204eb34b"
@@ -421,22 +385,20 @@
             "95c8385db422",
             "38b377793c34",
             "4669e4d646e8",
-            "a193ad4304cb",
-            "7953dfb08a13",
-            "343bb26c2588",
-            "da6deb44ce71",
-            "04f9f79493f1",
-            "30f5e556f9c1",
-            "39ed117c65f2",
-            "1c425a4c02bb"
+            "4319ba45c158",
+            "ba45b883b259",
+            "a509dd4610b2",
+            "6c4561ecc9ee",
+            "63abf3b998b3",
+            "9a856559977e"
           ]
         }
       },
       {
         "id": "reloaded",
         "observation": {
-          "sender": ["defd9bef9981", "4e82c0d6a331"],
-          "payloads": ["c59295cf1c69", "629aee3fec6c"],
+          "sender": ["5ea84cbe70fc", "d2c3cccdd0b2"],
+          "payloads": ["e8b978dbecff", "1dca7912e0fe"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "consume-route": "51ae204eb34b"
@@ -449,24 +411,20 @@
             "95c8385db422",
             "38b377793c34",
             "4669e4d646e8",
-            "a193ad4304cb",
-            "7953dfb08a13",
-            "343bb26c2588",
-            "da6deb44ce71",
-            "04f9f79493f1",
-            "30f5e556f9c1",
-            "39ed117c65f2",
-            "1c425a4c02bb",
-            "f7e803082fc4",
-            "84c0839eccca"
+            "4319ba45c158",
+            "ba45b883b259",
+            "a509dd4610b2",
+            "6c4561ecc9ee",
+            "63abf3b998b3",
+            "9a856559977e"
           ]
         }
       },
       {
         "id": "cleanup",
         "observation": {
-          "sender": ["defd9bef9981", "4e82c0d6a331"],
-          "payloads": ["c59295cf1c69", "629aee3fec6c"],
+          "sender": ["5ea84cbe70fc", "d2c3cccdd0b2"],
+          "payloads": ["e8b978dbecff", "1dca7912e0fe"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "consume-route": "51ae204eb34b"
@@ -479,18 +437,14 @@
             "95c8385db422",
             "38b377793c34",
             "4669e4d646e8",
-            "a193ad4304cb",
-            "7953dfb08a13",
-            "343bb26c2588",
-            "da6deb44ce71",
-            "04f9f79493f1",
-            "30f5e556f9c1",
-            "39ed117c65f2",
-            "1c425a4c02bb",
-            "f7e803082fc4",
-            "84c0839eccca",
-            "f97fb55d23d2",
-            "04cec5da2df1"
+            "4319ba45c158",
+            "ba45b883b259",
+            "a509dd4610b2",
+            "6c4561ecc9ee",
+            "63abf3b998b3",
+            "9a856559977e",
+            "650e3aedd38c",
+            "b86ad4df402e"
           ]
         }
       }

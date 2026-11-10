@@ -1,3 +1,5 @@
+import { openCode2ForkStore } from './transcript-opencode2-fork.test-fixture'
+import { handleOpenCodeSqliteRequest } from '../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-dispatch'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -28,7 +30,7 @@ function fixture() {
   let sequence = 0
   const insert = (id: string, type: string, data: unknown, time = 1) =>
     insertMessage.run(id, 'session', type, ++sequence, JSON.stringify(data), time, time)
-  return { path, insert }
+  return { path, insert, db }
 }
 
 it.each([true, false])(
@@ -52,3 +54,30 @@ it.each([true, false])(
     })
   }
 )
+
+it('captures the M1 copied roots without events, excludes a racing CLI root, and honors before', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-native-opencode2-fork-'))
+  const path = join(root, 'opencode.db')
+  const db = openCode2ForkStore(path)
+  fixtures.push({ db, root })
+  const request = {
+    id: 1,
+    kind: 'fork-coverage' as const,
+    dbPath: path,
+    sessionId: 'ses_e4d797526ffee7BYM6ri3gpmbg',
+    sourceSessionId: 'ses_e4d7a0c31ffejclsdjiiDszHMB'
+  }
+  expect(await handleOpenCodeSqliteRequest(request)).toEqual({
+    id: 1,
+    ok: true,
+    value: ['msg_1b2868ada001HhsJYcY0OtPOjp_4']
+  })
+  expect(
+    await handleOpenCodeSqliteRequest({ ...request, sourceSessionId: 'wrong-source' })
+  ).toMatchObject({ ok: false })
+  db.exec(`UPDATE session_v2 SET fork_boundary =
+    '{"type":"before","messageID":"msg_1b285f9e10016X0Hu1rKOHAACe"}'
+    WHERE id = 'ses_e4d797526ffee7BYM6ri3gpmbg';
+    DELETE FROM session_message WHERE session_id = 'ses_e4d797526ffee7BYM6ri3gpmbg' AND seq < 90;`)
+  expect(await handleOpenCodeSqliteRequest(request)).toEqual({ id: 1, ok: true, value: [] })
+})

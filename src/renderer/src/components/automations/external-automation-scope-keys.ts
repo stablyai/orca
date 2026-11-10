@@ -1,11 +1,11 @@
 /** Qualify external row/job/action keys by kind, captured owner and provider; manager IDs alone collide across hosts. */
 
-import { ownerKey } from '../../../../shared/automation-owner-key'
-import type { AutomationOwnerRef } from '../../../../shared/automation-owner-ref'
+import { ownerKey } from '../../../../shared/automations/ownership/automation-owner-key'
+import type { AutomationOwnerRef } from '../../../../shared/automations/ownership/automation-owner-ref'
 import type {
   ExternalAutomationAction,
   ExternalAutomationProvider
-} from '../../../../shared/automations-types'
+} from '../../../../shared/automations/external/external-automation'
 
 const SEPARATOR = '|'
 

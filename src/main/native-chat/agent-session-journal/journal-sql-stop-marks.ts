@@ -3,7 +3,10 @@ import {
   personStopDecidesTurn,
   type JournalLatestStop
 } from './context-epochs/journal-stop-turn-end'
-import type { JournalStopFailedOn, JournalStopSettle } from './queued-messages/queued-message-pause'
+import type {
+  JournalStopFailedOn,
+  JournalStopSettle
+} from './queued-messages/queued-message-pause-marks'
 import type { JournalStopSettleFact } from './journal-writer-host-facts'
 
 export type JournalSqlStopReads = {

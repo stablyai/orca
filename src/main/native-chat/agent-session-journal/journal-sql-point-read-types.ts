@@ -26,7 +26,7 @@ import type { AgentJournalCursor } from '../../../shared/agent-session/journal/a
 import type { JournalReducerState } from './projection/journal-reducer'
 import type { JournalItemEcho } from './projection/journal-item-echo'
 import type { JournalInputRead, JournalInputReadResult } from './journal-input-reads'
-import type { NativeChatUsageLimitCut } from '../../../shared/native-chat/native-chat-usage-limit-cut'
+import type { HostUsageLimitCut } from '../agent-session-wire/recovery/structured-agent-session-usage-limit-chain'
 import type { JournalStatusState } from './journal-status-state'
 import type { NativeChatOrcaStopCut } from '../../../shared/native-chat/native-chat-orca-stop-cut'
 import type {
@@ -102,7 +102,7 @@ export type JournalSqlPointReadResult =
   | { kind: 'work'; answer: JournalSqlWorkResult }
   | { kind: 'status-indicators'; indicators: JournalStatusIndicators }
   | { kind: 'status-state'; status: JournalStatusState }
-  | { kind: 'usage-limit-cut'; cut: NativeChatUsageLimitCut | null }
+  | { kind: 'usage-limit-cut'; cut: HostUsageLimitCut | null }
   | { kind: 'orca-stop-cut'; cut: NativeChatOrcaStopCut | null }
   | { kind: 'input-read'; result: JournalInputReadResult }
   | {

@@ -1,4 +1,4 @@
-import type { BrowserScreencastResult } from '../../../../shared/runtime-browser-contracts'
+import type { BrowserScreencastResult } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../../../browser/browser-error'
 import { randomUUID } from 'node:crypto'
 import { startBrowserScreencast } from '../../../browser/cdp/screencast/browser-screencast-stream'

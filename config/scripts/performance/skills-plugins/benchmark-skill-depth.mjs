@@ -11,7 +11,7 @@ import { build } from 'esbuild'
 const baselinePath = process.argv[2]
 const brokenLinks = process.argv.includes('--broken')
 assert.ok(baselinePath, 'Pass a pre-change skill-root-file-walk.ts snapshot.')
-const entry = 'src/main/skills/skill-root-file-walk.ts'
+const entry = 'src/main/skills/discovery/skill-root-file-walk.ts'
 const baseline = readFileSync(baselinePath, 'utf8')
 assert.notEqual(baseline, readFileSync(entry, 'utf8'), 'Do not compare the source to itself.')
 let statCalls = 0

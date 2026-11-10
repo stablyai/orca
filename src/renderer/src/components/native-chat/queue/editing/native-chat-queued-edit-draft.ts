@@ -11,40 +11,40 @@ import {
 } from '../../../../../../shared/queued-message-edit'
 import { pickedSkillsInText } from '../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { createNonSecureContextUuid as createUuidV4 } from '../../../../../../shared/non-secure-context-uuid'
-import { promptSkillRefs } from '../../native-chat-prompt-document'
+import { promptSkillRefs } from '../../composer/editor/native-chat-prompt-document'
 import {
   promptTextContent,
   seedPromptSkillReferences,
   withoutImageReferenceNodes
-} from '../../native-chat-prompt-document-text'
+} from '../../composer/editor/native-chat-prompt-document-text'
 import {
   appendToNativeChatComposerDraft,
   openNativeChatEditDraft,
   readNativeChatComposerDraft
-} from '../../native-chat-composer-draft-store'
+} from '../../drafts/native-chat-composer-draft-store'
 import {
   redirectNativeChatEditDraft,
   closeNativeChatEditDraft
-} from '../../native-chat-composer-draft-memory'
+} from '../../drafts/native-chat-composer-draft-memory'
 import {
   clearNativeChatPendingAttachments,
   moveNativeChatPendingAttachments,
   nativeChatPendingAttachmentSnapshot
-} from '../../native-chat-pending-attachment-cache'
+} from '../../attachments/chips/native-chat-pending-attachment-cache'
 import {
   nativeChatPastedTextOperations,
   NATIVE_CHAT_PASTED_TEXT_TOKEN,
   nativeChatPastedTextId
-} from '../../native-chat-pasted-text-reference'
+} from '../../paste/native-chat-pasted-text-reference'
 import {
   nativeChatPastedTextAdmission,
   resolveNativeChatPastedText
-} from '../../native-chat-composer-pasted-text-references'
+} from '../../paste/native-chat-composer-pasted-text-references'
 import { nativeChatQueuedEditValueKey, sameQueuedEditImage } from './native-chat-queued-edit-value'
 import type {
   NativeChatComposerDraft,
   NativeChatComposerDraftImage
-} from '../../native-chat-composer-draft-storage'
+} from '../../drafts/native-chat-composer-draft-storage'
 
 export type NativeChatQueuedEditDraft = {
   scopeKey: string

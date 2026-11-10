@@ -1,7 +1,7 @@
-import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
-import { layoutFramesFlowing } from '@/runtime/layout-frame-position'
+import { sendLayoutCommandToOwner } from '@/runtime/workspace-layout/commands/layout-owner-command'
+import { layoutFramesFlowing } from '@/runtime/workspace-layout/frames/layout-frame-position'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { expectPaneToClose } from '@/runtime/layout-owner-pane-intents'
+import { expectPaneToClose } from '@/runtime/workspace-layout/intents/layout-owner-pane-intents'
 import { closeAfterLastPaneRefusal } from './layout-owner-last-pane-refusal'
 
 /** Main closes first and its frame removes the pane; false delegates paired-server ownership to the caller. */

@@ -3,7 +3,7 @@ import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
 import { nativeChatAppearanceStyle } from '../appearance/native-chat-appearance-style'
 import { NativeChatFileLinkExistenceContext } from '../links/actions/native-chat-file-link-existence'
 import { NativeChatLinkClickContext } from '../links/actions/native-chat-link-click-context'
-import type { NativeChatInteractiveSend } from '../use-native-chat-interactive-send'
+import type { NativeChatInteractiveSend } from '../session/terminal/send/use-native-chat-interactive-send'
 
 const send: NativeChatInteractiveSend = {
   sendAnswer: () => ({ settleAfterMs: 0 }),

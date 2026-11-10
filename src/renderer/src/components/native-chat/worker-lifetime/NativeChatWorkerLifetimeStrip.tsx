@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button'
-import { NativeChatComposerTabStrip } from '../NativeChatComposerTabStrip'
+import { NativeChatComposerTabStrip } from '../composer/controls/NativeChatComposerTabStrip'
 
 /** The strip a temporary orchestration chat worker shows until it is kept open. */
 export function NativeChatWorkerLifetimeStrip({

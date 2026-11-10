@@ -1,7 +1,7 @@
 import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
 import { ProviderFrameRow } from '../../../messages/diagnostics/NativeChatProviderDetails'
 import { defineFixture } from '../../../../../component-fixtures/component-fixture'
-import { MessageRow } from '../../../NativeChatMessageRow'
+import { MessageRow } from '../../../messages/rows/NativeChatMessageRow'
 import { projectStructuredItemToNativeChat } from '../../../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 const head = JSON.stringify({

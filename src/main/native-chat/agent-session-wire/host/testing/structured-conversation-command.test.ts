@@ -175,6 +175,9 @@ describe('same-conversation clear', () => {
     ).toBe('pending')
     await withTestAgentSessionDatabase(generationRoot(), (db) => db.exec('DROP TRIGGER fail_clear'))
     await clearCommits(params)
+    expect(adapter.closeSession).toHaveBeenCalledWith(HOST_TEST_SESSION, undefined, {
+      grace: 'brief'
+    })
     expect(await clearRows()).toHaveLength(1)
     expect(
       store.getOperationRow(caller.callerKey, params.envelope.clientOperationId)?.outcome.status

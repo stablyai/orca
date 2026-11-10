@@ -1,6 +1,11 @@
+import type { JournalForkInstall } from '../../agent-session-journal/journal-fork-stages'
 // Admission already passed; journal before adapter effects so a crash leaves recoverable unknown work.
 // Calling the adapter first could lose a turn it accepted.
 
+import {
+  forgetNativeChatPrompt,
+  rememberNativeChatPrompt
+} from '../../../telemetry/native-chat-prompt-submissions'
 import { captureStructuredExecutionOptions } from '../options/structured-agent-session-execution-options'
 import type { AgentSessionFailureWordsContext } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import type {
@@ -36,6 +41,7 @@ import './structured-agent-session-turns-prompt'
 import './structured-agent-session-turns-cancel'
 
 export type AgentSessionTurnContext = {
+  forkInstall?: JournalForkInstall
   sessionId: string
   journal: AgentSessionJournal
   fence: number
@@ -130,7 +136,9 @@ export async function performSend(
     source?: AgentSessionMessageSource
     options?: Readonly<Record<string, string>>
     selection?: Readonly<Record<string, string>>
-  }
+  },
+  userClient?: 'desktop' | 'mobile',
+  telemetryOwnerKey?: string
 ): Promise<TurnOutcome<AgentSessionSendResult>> {
   const existing = await ctx.journal.reads.submission(input.clientMessageId)
   if (existing && existing.payloadFingerprint !== input.payloadFingerprint) {
@@ -150,12 +158,29 @@ export async function performSend(
     return { ok: false, refusal: captured.refusal }
   }
   try {
-    await ctx.journal.appendSubmission(
-      { ...input, options: captured.options, fence: ctx.fence, handoverRecorded: true },
-      undefined,
-      ctx.operationReceipt
-    )
+    if (!input.body.command) {
+      rememberNativeChatPrompt(
+        ctx.journal,
+        input.clientMessageId,
+        ctx.agent,
+        userClient,
+        telemetryOwnerKey
+      )
+    }
+    const submission = {
+      ...input,
+      options: captured.options,
+      fence: ctx.fence,
+      handoverRecorded: true as const
+    }
+    await (ctx.forkInstall
+      ? ctx.journal.write({ kind: 'submission', input: submission }, () => ({
+          receipt: ctx.operationReceipt,
+          forkInstall: ctx.forkInstall
+        }))
+      : ctx.journal.appendSubmission(submission, undefined, ctx.operationReceipt))
   } catch (error) {
+    forgetNativeChatPrompt(ctx.journal, input.clientMessageId)
     return agentSessionAdmissionWriteRefusal(ctx, error)
   }
   return {

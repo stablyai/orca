@@ -1,4 +1,4 @@
-import { readBrowserScreencastFrameSeq } from '../../../../shared/browser-screencast-protocol'
+import { readBrowserScreencastFrameSeq } from '../../../../shared/browser/screencast/browser-screencast-protocol'
 import type { ActiveBrowserScreencastSubscriber } from './browser-screencast-contracts'
 import { recordScreencastSubscriberSend } from './browser-screencast-ghost-subscriber-eviction'
 import {
@@ -20,12 +20,13 @@ export function deliverScreencastSubscriberFrame(
     return
   }
   const outcome = sendSubscriberFrame(subscriber, bytes)
-  subscriber.pendingFrame = outcome === 'handled' ? null : bytes
-  // Backlog proves an active socket, not a ghost.
-  if (outcome !== 'backlogged') {
+  const retry = outcome === 'backlogged' || outcome === 'refused'
+  subscriber.pendingFrame = retry ? bytes : null
+  // Backlog proves an active socket, not a ghost; an oversize drop says nothing about the socket.
+  if (outcome === 'handled' || outcome === 'refused') {
     subscriber.delivery = recordScreencastSubscriberSend(subscriber.delivery, outcome === 'handled')
   }
-  if (outcome !== 'handled') {
+  if (retry) {
     schedulePendingFrameRetry(subscriber)
   }
 }
@@ -69,12 +70,15 @@ function retryPendingFrame(subscriber: ActiveBrowserScreencastSubscriber): void 
   if (!bytes || (subscriber.frameCredit && !subscriber.frameCredit.credit.canSend())) {
     return
   }
-  // Count ghost refusals only on produced frames, never retries.
-  if (sendSubscriberFrame(subscriber, bytes) === 'handled') {
-    subscriber.pendingFrame = null
-    subscriber.delivery = recordScreencastSubscriberSend(subscriber.delivery, true)
-  } else {
+  const outcome = sendSubscriberFrame(subscriber, bytes)
+  if (outcome === 'backlogged' || outcome === 'refused') {
     schedulePendingFrameRetry(subscriber)
+    return
+  }
+  subscriber.pendingFrame = null
+  // Count ghost refusals only on produced frames, never retries.
+  if (outcome === 'handled') {
+    subscriber.delivery = recordScreencastSubscriberSend(subscriber.delivery, true)
   }
 }
 

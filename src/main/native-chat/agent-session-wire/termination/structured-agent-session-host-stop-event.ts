@@ -6,7 +6,7 @@ import type { StructuredAgentSessionStopCause } from './structured-agent-session
 import type { StructuredAgentSessionLifetimeContext } from './structured-agent-session-host-lifetime'
 import type { StructuredAgentSessionHostSession } from '../host/structured-agent-session-host-types'
 import { structuredAgentSessionConversationFence } from '../host/structured-agent-session-provider-child'
-import type { JournalStopSettle } from '../../agent-session-journal/queued-messages/queued-message-pause'
+import type { JournalStopSettle } from '../../agent-session-journal/queued-messages/queued-message-pause-marks'
 import { sentSinceStop } from '../delivery/structured-agent-session-queued-stop'
 import type { AgentSessionResumeTrigger } from '../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import type { SubmissionRejectionFact } from '../../../../shared/agent-session/failures/agent-session-failure'

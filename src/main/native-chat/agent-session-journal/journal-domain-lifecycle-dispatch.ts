@@ -111,6 +111,10 @@ export function applyJournalDomainLifecycleDispatches(
     result.cards.push(...commit.cards)
     result.removedItemIds.push(...commit.removedItemIds)
     result.inputChanged ||= commit.inputChanged
+    if (commit.promptDispatches?.length) {
+      result.promptDispatches ??= []
+      result.promptDispatches.push(...commit.promptDispatches)
+    }
     result.acceptedInputs = commit.acceptedInputs ?? result.acceptedInputs
     result.coordinates.push(
       ...commit.coordinates.map((position) => ({

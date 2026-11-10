@@ -2,7 +2,7 @@ import type { ActivityTerminalPortalTarget } from './activity/activity-terminal-
 import TerminalPaneOverlayLayer from './terminal-pane/mounting/TerminalPaneOverlayLayer'
 import { RetainedBrowserPaneOverlayLayer } from './browser-pane/assemble-chrome/BrowserPaneOverlayLayer'
 import EmulatorPaneOverlayLayer from './emulator-pane/EmulatorPaneOverlayLayer'
-import StructuredAgentSessionPaneOverlayLayer from './native-chat/StructuredAgentSessionPaneOverlayLayer'
+import StructuredAgentSessionPaneOverlayLayer from './native-chat/pane/routing/StructuredAgentSessionPaneOverlayLayer'
 import AiVaultSessionDropLayer from './tab-group/AiVaultSessionDropLayer'
 import type { HiddenTerminalPrewarm } from './terminal-pane/controller/terminal-pane-types'
 

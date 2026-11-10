@@ -36,7 +36,8 @@ export class JournalSqlBatch {
   /** Commands may await only microtasks: the worker owns the connection while one is open. */
   async run<Command, Value>(
     commands: readonly Command[],
-    apply: (command: Command) => Value | Promise<Value>
+    apply: (command: Command) => Value | Promise<Value>,
+    durability: 'normal' | 'full' = 'normal'
   ): Promise<JournalSqlBatchResult<Value>> {
     if (this.failure) {
       throw new JournalSqlBatchError('not-dispatched', this.failure)
@@ -51,6 +52,9 @@ export class JournalSqlBatch {
     let failed: JournalSqlBatchError | undefined
     try {
       await this.checkpoint?.beforeWrite()
+      if (durability === 'full') {
+        this.db.pragma('synchronous=FULL')
+      }
       this.db.exec('BEGIN IMMEDIATE')
       began = true
       for (const command of drain) {
@@ -85,6 +89,14 @@ export class JournalSqlBatch {
         this.failure = failed
       }
     } finally {
+      if (durability === 'full' && !this.db.isTransaction) {
+        try {
+          this.db.pragma('synchronous=NORMAL')
+        } catch (cause) {
+          failed ??= new JournalSqlBatchError('indeterminate', cause)
+          this.failure = failed
+        }
+      }
       this.checkpoint?.afterCommit()
     }
     if (failed) {

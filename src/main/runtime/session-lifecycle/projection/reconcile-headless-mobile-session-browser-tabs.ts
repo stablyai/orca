@@ -9,17 +9,17 @@ import { OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession } f
 import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionSnapshotTab,
-  RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTerminalTab
-} from '../../../../shared/runtime-types'
-import { headlessBrowserTabsUnchanged } from '../../mobile-session-browser-equality'
-import { withReconciledBrowserTabs } from '../../mobile-session-browser-group-projection'
+} from '../../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-session-contracts'
+import { headlessBrowserTabsUnchanged } from './mobile-session-browser-equality'
+import { withReconciledBrowserTabs } from './mobile-session-browser-group-projection'
 import { parseAppSshPtyId, toComparableRelaySshPtyId } from '../../../../shared/ssh-pty-id'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { sshRemotePtyLeaseAllowsReattach } from '../../../../shared/ssh-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { SSH_PANE_RECOVERY_GRACE_MS } from '../../terminal/recovery/ssh-pane-recovery-window'
 import { findTerminalTabIdForLeaf } from '../../../persistence/terminal-topology/terminal-topology-membership'
 import { isServeMintedPtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'

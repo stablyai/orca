@@ -9,12 +9,10 @@ import type { AgentSessionSubscribeInput } from '../publication/subscribers/agen
 import { createStartupRecovery } from '../recovery/structured-agent-session-restart-reconcile'
 import { StructuredAgentSessionTaskQueue } from './structured-agent-session-task-queue'
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
-import { structuredAgentSessionEntryDelegates } from '../acquisition/structured-agent-session-create'
-import type { StructuredAgentSessionLifetimeContext } from '../termination/structured-agent-session-host-lifetime'
+import { structuredAgentSessionEntryDelegates } from '../acquisition/structured-agent-session-entry-delegates'
 import { claimStructuredAgentSessionAgent as claimAgent } from '../startup/structured-agent-session-agent-start'
 import * as mutationWiring from './structured-agent-session-host-mutation-wiring'
 import * as lifetime from '../termination/structured-agent-session-conversation-lifetime'
-import type { StructuredAgentSessionAttachContext } from '../acquisition/structured-agent-session-attach-context'
 import { createStructuredAgentSessionTabSurface as createTabs } from './structured-agent-session-host-tabs'
 import { flushStructuredAgentSessionHost } from '../termination/structured-agent-session-host-teardown'
 import type * as HostTypes from './structured-agent-session-host-types'
@@ -37,7 +35,8 @@ export class StructuredAgentSessionHost {
     delivery: () => this.conversationDelivery,
     opened: (id) => usageLimit.opened(this.usageLimitContinue, this.queued, id),
     logger: () => this.deps.logger,
-    now: () => this.now()
+    now: () => this.now(),
+    observeRows: () => this.deps.observeCommittedRows
   })
   private readonly queued = wireQueuedMessages(this.sessions, () => this.mutationContext())
   // Journal publication renews idle activity.
@@ -160,8 +159,8 @@ export class StructuredAgentSessionHost {
   handleAdapterEvent = (e: Parameters<EventRecovery['handle']>[0]) => this.eventRecovery.handle(e)
 
   // Keep inference so publishStatus stays required in the attach-context spread.
-  private lifetimeContext() {
-    return {
+  private lifetimeContext = () =>
+    ({
       deps: this.deps,
       runtimeState: this.runtimeState,
       sessions: this.sessions,
@@ -170,10 +169,9 @@ export class StructuredAgentSessionHost {
       generationEnded: this.clientDelivery.publishGenerationEnded,
       wakeDelivery: (sessionId: string) => this.conversationDelivery.loop.wake(sessionId),
       endExitedChild: this.eventRecovery.endExitedChildUnderSerialize
-    } satisfies StructuredAgentSessionLifetimeContext
-  }
+    }) satisfies HostTypes.StructuredAgentSessionLifetimeContext
 
-  private attachContext = (): StructuredAgentSessionAttachContext => ({
+  private attachContext = (): HostTypes.StructuredAgentSessionAttachContext => ({
     ...this.lifetimeContext(),
     subscribers: this.clientDelivery.subscribers,
     tasks: this.tasks,
@@ -219,9 +217,12 @@ export class StructuredAgentSessionHost {
 
   seedSessionTabs = this.tabs.seedSessionTabs
 
-  drainStatusWrites = (): Promise<void> => this.clientDelivery.drainStatusWrites()
+  drainStatusWrites = this.clientDelivery.drainStatusWrites
 
   revealSession = this.reads.revealSession
+
+  withForkSourceAdmission = <T>(sessionId: string, run: () => Promise<T>): Promise<T> =>
+    this.serialize(sessionId, run)
 
   private serialize = this.tasks.serialize.bind(this.tasks)
 
@@ -291,10 +292,8 @@ export class StructuredAgentSessionHost {
   rewind = this.mutations.rewind
 
   conversationCommand = this.conversationCommands.run
-  /** Undefined means unavailable; an empty array is an authoritative catalog. */
   readCommands = this.reads.readCommands
 
-  /** Read the store; idle-released chats have no session-map entry. */
   handoffStatus = (sessionId: string) => this.backgroundTasks.handoffStatus(sessionId)
 
   history: BackgroundTasks['history'] = (...args) => this.backgroundTasks.history(...args)
@@ -329,7 +328,6 @@ export class StructuredAgentSessionHost {
   subscribe = (input: AgentSessionSubscribeInput) => this.backgroundTasks.subscribe(input)
 
   settleLateDispatch = this.mutations.settleLateDispatch
-  /** Republish row-free changes to held work. */
   publishWorkChanged: (sessionId: string) => void = this.clientDelivery.publishGenerationEnded
 
   publishChildWorkEvidence = this.clientDelivery.publishChildWork
@@ -342,7 +340,6 @@ export class StructuredAgentSessionHost {
   setUserConversationName: HostTypes.SetUserConversationName = (...args) =>
     this.deps.conversationNaming?.setUserName(...args) ?? Promise.resolve(null)
 
-  /** Live-only completion/prompt events; missed events are never replayed. */
   subscribeTurnCompletions = this.clientDelivery.subscribeTurnCompletions
   readStatusSummary = this.clientDelivery.readStatusSummary
 

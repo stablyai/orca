@@ -1,5 +1,5 @@
-import type { OrchestrationCompatibilityEvidence } from '../../../../../../shared/orchestration-compatibility-evidence'
-import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration-rpc-contract'
+import type { OrchestrationCompatibilityEvidence } from '../../../../../../shared/orchestration/orchestration-compatibility-evidence'
+import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { RunRow } from '../../../../orchestration/db/orchestration-records'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
@@ -10,7 +10,7 @@ import {
   runCoordinatorKey,
   type OrchestrationSessionCaller
 } from '../../../../orchestration/addressing/orchestration-caller-identity'
-import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration-party-identity'
+import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import { resolveDeclaredCallerParty } from '../../../../orchestration/addressing/orchestration-party'
 import {
   findCallerWorkerDispatches,

@@ -3,7 +3,7 @@ import type { AgentJournalCursor } from '../../../../shared/agent-session/journa
 import type { JournalSubmissionRow } from '../durable-rows/journal-row-schema'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalReducerState } from '../projection/journal-reducer'
-import { journalInputOrder } from './journal-input-order'
+import type { JournalInputOrderResolver } from './journal-input-order-registry'
 import type { QueuedMessageRow } from '../queued-messages/queued-message-table'
 import {
   failedQueueTurnSequence,
@@ -99,7 +99,10 @@ export class LegacyQueueCardIndex {
     this.facts.unintroduced.clear()
   }
   // A failure holds every waiting card alike, so it gates reads instead of the cached flags.
-  constructor(private readonly lineage: JournalInputLineageOwner) {}
+  constructor(
+    private readonly lineage: JournalInputLineageOwner,
+    private readonly journalInputOrder: JournalInputOrderResolver
+  ) {}
   hasOverlay(id: string): boolean {
     return this.facts.overlays.has(id)
   }
@@ -180,7 +183,7 @@ export class LegacyQueueCardIndex {
   private pauseInputs(state: JournalReducerState): ReturnType<typeof journalInputCardPauseInputs> {
     this.facts.failed =
       failedQueueTurnSequence(
-        journalInputOrder(state).newestTurn.failure(),
+        this.journalInputOrder(state).newestTurn.failure(),
         state.queuePauseMarks.resumedSequence
       ) > 0
     return journalInputCardPauseInputs(

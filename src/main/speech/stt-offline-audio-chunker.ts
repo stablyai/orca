@@ -1,4 +1,4 @@
-// Bound ONNX allocations: Chromium kills the app on a single allocation >=2GiB (#7925).
+// Parakeet has no long-form mode, and bounded chunks keep the decode left for stop short.
 export const OFFLINE_DECODE_CHUNK_SECONDS = 30
 
 // Split near quiet tail pauses to avoid mid-word cuts; ~100ms windows exclude short intra-word closures.
@@ -16,6 +16,11 @@ export class OfflineAudioChunker {
     this.chunkSampleLimit = Math.max(1, Math.round(OFFLINE_DECODE_CHUNK_SECONDS * sampleRate))
     this.splitSearchSamples = Math.round(SPLIT_SEARCH_SECONDS * sampleRate)
     this.energyWindowSamples = Math.max(1, Math.round(SPLIT_ENERGY_WINDOW_SECONDS * sampleRate))
+  }
+
+  /** Samples pushed but not yet returned. */
+  get heldSamples(): number {
+    return this.bufferedSamples
   }
 
   /** Return complete bounded chunks as samples arrive. */

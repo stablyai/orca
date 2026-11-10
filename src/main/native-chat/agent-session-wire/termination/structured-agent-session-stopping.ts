@@ -12,7 +12,7 @@ import type { StructuredAgentSessionWorkScope } from '../../../../shared/agent-s
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import { stopIsAPersons } from '../../agent-session-journal/context-epochs/journal-stop-turn-end'
 import type { JournalLatestStop } from '../../agent-session-journal/context-epochs/journal-stop-turn-end'
-import type { JournalStopFailedOn } from '../../agent-session-journal/queued-messages/queued-message-pause'
+import type { JournalStopFailedOn } from '../../agent-session-journal/queued-messages/queued-message-pause-marks'
 
 export async function structuredAgentSessionStopping(
   journal: Pick<AgentSessionJournal, 'stopMarks'>,

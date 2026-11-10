@@ -2,7 +2,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { InteractivePromptCard } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
 
 /** A prompt card's one collapse affordance; folding or unfolding writes nothing to the agent. */
@@ -15,9 +15,10 @@ export function NativeChatPromptCollapseToggle({
   disabled?: boolean
   onToggle: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const label = expanded
-    ? translate('components.native-chat.prompt.collapse', 'Collapse')
-    : translate('components.native-chat.prompt.expand', 'Expand')
+    ? t('components.native-chat.prompt.collapse', 'Collapse')
+    : t('components.native-chat.prompt.expand', 'Expand')
   return (
     <Tooltip>
       <TooltipTrigger asChild>
