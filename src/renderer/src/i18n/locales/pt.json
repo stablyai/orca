@@ -3614,8 +3614,15 @@
             "readAgo": "Lido {{time}}",
             "notRead": "Uso desconhecido: ainda não consultado"
           },
+          "AccountSwitchList": {
+            "used": "Usado",
+            "left": "Restante",
+            "reset": "Redefinição"
+          },
           "InlineUsageBars": {
-            "resetsAt": "Redefinição em {{when}}"
+            "now": "agora",
+            "resetsNow": "redefinição agora",
+            "resetsIn": "redefinição em {{duration}}"
           }
         }
       },

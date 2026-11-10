@@ -5235,8 +5235,15 @@
             "readAgo": "Считано {{time}}",
             "notRead": "Использование неизвестно: данные ещё не считаны"
           },
+          "AccountSwitchList": {
+            "used": "Использовано",
+            "left": "Осталось",
+            "reset": "Сброс"
+          },
           "InlineUsageBars": {
-            "resetsAt": "Сброс: {{when}}"
+            "now": "сейчас",
+            "resetsNow": "сброс сейчас",
+            "resetsIn": "сброс через {{duration}}"
           }
         }
       },
