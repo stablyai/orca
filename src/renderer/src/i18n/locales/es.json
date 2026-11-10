@@ -4595,8 +4595,15 @@
             "readAgo": "Consultado {{time}}",
             "notRead": "Uso desconocido: aún no consultado"
           },
+          "AccountSwitchList": {
+            "used": "Usado",
+            "left": "Restante",
+            "reset": "Restablecimiento"
+          },
           "InlineUsageBars": {
-            "resetsAt": "Se restablece a las {{when}}"
+            "now": "ahora",
+            "resetsNow": "se restablece ahora",
+            "resetsIn": "se restablece en {{duration}}"
           }
         }
       },
@@ -10832,7 +10839,10 @@
               "a5fb30e4da": "Habilitar dictado de voz",
               "ffaa3efe7c": "Transcripción OpenAI",
               "c7a7eaa0da": "Quitar muletillas",
-              "d0c230c061": "Modo de dictado"
+              "d0c230c061": "Modo de dictado",
+              "silenceStopTitle": "Detener tras silencio",
+              "silenceStopDescription": "Elige cuánto sigue escuchando el dictado cuando dejas de hablar.",
+              "silenceStopKeyword": "silencio"
             }
           }
         },
@@ -16653,7 +16663,6 @@
           "micFallback": "Micrófono seleccionado no disponible. Se usará el predeterminado del sistema.",
           "micDisconnected": "Micrófono desconectado. Dictado detenido.",
           "cloudLimitReached": "Dictado detenido al llegar al límite de 10 minutos en la nube.",
-          "stoppedAfterSilence": "Se detuvo tras un minuto de silencio",
           "retryUnmatched": "Al reintentar no se pudo saber qué palabras ya estaban escritas, así que se insertaron todas."
         },
         "dictation-transcript-delivery": {
@@ -20527,6 +20536,27 @@
           "repoNameHint": "Usar el nombre del repo como pista",
           "repoNameHintDescription": "Ayuda a reconocer el nombre del repo.",
           "repoSaveFailed": "No se pudieron guardar los términos del repo. Puede que el host de este repo necesite actualizar Orca."
+        },
+        "micTest": {
+          "test": "Probar",
+          "recording": "Grabando {{elapsed}} de {{limit}}",
+          "stop": "Detener",
+          "hint": "Di una frase como cuando dictas normalmente.",
+          "playing": "Reproduciendo {{elapsed}}",
+          "skip": "Omitir",
+          "levelGood": "El nivel es bueno",
+          "levelQuiet": "Muy bajo. Revisa el micrófono o acércate.",
+          "playAgain": "Reproducir de nuevo",
+          "testAgain": "Probar de nuevo",
+          "listening": "{{model}} también está escuchando…",
+          "heardLabel": "{{model}} entendió",
+          "heardNothing": "Ninguna palabra. Prueba a hablar más alto.",
+          "heardFailed": "{{model}} no pudo transcribir la grabación."
+        },
+        "silenceStop": {
+          "title": "Detener tras silencio",
+          "description": "Deja de escuchar cuando llevas este tiempo en silencio. Nunca mientras mantienes pulsado el atajo.",
+          "off": "Desactivado"
         }
       },
       "repositoryHooks": {
@@ -20776,6 +20806,9 @@
           "action": "Dividir panel"
         }
       }
+    },
+    "dictation": {
+      "stoppedAfterSilenceSeconds": "Detenido tras {{seconds}} segundos de silencio"
     }
   },
   "dashboardPopout": {

@@ -96,7 +96,7 @@ function brotliHost() {
 }
 
 describe('fetchMobileWebBundle from a host that ships brotli copies', () => {
-  it('reads the copy where the manifest lists one, inflates it, and reports progress in asset bytes', async () => {
+  it('reads the copy where the manifest lists one, inflates it, and reports progress in the bytes it moves', async () => {
     const host = brotliHost()
     const progress: MobileWebBundleFetchProgress[] = []
 
@@ -111,6 +111,7 @@ describe('fetchMobileWebBundle from a host that ships brotli copies', () => {
       3
     )
     expect(host.methods.filter((method) => method === 'mobileWeb.bundle.range')).toHaveLength(1)
-    expect(progress.at(-1)).toMatchObject({ receivedBytes: 1332, totalBytes: 1332 })
+    // The 46-byte copy plus the 12-byte mark, not the 1,332 bytes they inflate to.
+    expect(progress.at(-1)).toMatchObject({ receivedBytes: 58, totalBytes: 58 })
   })
 })

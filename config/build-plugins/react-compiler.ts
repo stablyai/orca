@@ -1,25 +1,5 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import type { Options } from '@vitejs/plugin-react'
-
-// Hand-kept list plus every file still in a hazard ratchet; compiled, these would run differently.
-const UNCOMPILED_FILE_LISTS = [
-  'config/react-compiler-uncompiled-files.txt',
-  'config/render-path-translate-baseline.txt',
-  'config/react-compiler-hazard-baseline.txt'
-]
-
-function listedFiles(list: string): string[] {
-  return readFileSync(resolve(list), 'utf8')
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith('#'))
-    .map((line) => line.replace(/^\d+\s+/, '').split('#')[0])
-}
-
-export function reactCompilerExcludedFiles(): string[] {
-  return [...new Set(UNCOMPILED_FILE_LISTS.flatMap(listedFiles))]
-}
+import { reactCompilerExcludedFiles } from './react-compiler-uncompiled-files.mjs'
 
 export function isReactCompilerEnabled(): boolean {
   return process.env.ORCA_REACT_COMPILER !== '0'

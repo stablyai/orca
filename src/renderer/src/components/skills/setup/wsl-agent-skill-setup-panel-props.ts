@@ -1,7 +1,7 @@
 // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
 import type { ComponentProps, ReactNode } from 'react'
 import type { Button } from '../../ui/button'
-import type { LocalAgentRuntime } from '../../../lib/skill-runtime-command'
+import type { LocalAgentRuntime } from '../../../lib/skills/runtime/skill-runtime-command'
 
 type AgentSkillSetupPanelVariant = 'card' | 'inline' | 'row'
 type SkillPrerequisiteStatus = Awaited<ReturnType<typeof window.api.cli.getInstallStatus>>

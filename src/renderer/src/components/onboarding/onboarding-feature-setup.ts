@@ -16,7 +16,7 @@ import {
   notifyOrchestrationSetupStateChanged
 } from '@/lib/orchestration-setup-state'
 import type { EventProps } from '../../../../shared/telemetry-event-classification'
-import type { BundledSkillInstallState } from '@/hooks/use-bundled-skill-install'
+import type { BundledSkillInstallState } from '@/hooks/skills/installation/use-bundled-skill-install'
 
 export type OnboardingFeatureSetupId =
   | 'browserUse'

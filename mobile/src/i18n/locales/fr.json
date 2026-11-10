@@ -2638,8 +2638,8 @@
       "insertFailed": "Impossible d'insérer la dictée",
       "insertFailedCopied": "Impossible d'insérer la dictée ; elle a été copiée dans le presse-papiers",
       "inserted": "Dictée insérée",
-      "stoppedAfterSilence": "Arrêt après une minute de silence",
-      "stoppedAtCloudLimit": "Dictée arrêtée à la limite cloud de 10 minutes."
+      "stoppedAtCloudLimit": "Dictée arrêtée à la limite cloud de 10 minutes.",
+      "stoppedAfterSilenceSeconds": "Arrêté après {{seconds}} secondes de silence"
     },
     "useNativeChatStop": {
       "stopNotSent": "Commande d'arrêt non envoyée",

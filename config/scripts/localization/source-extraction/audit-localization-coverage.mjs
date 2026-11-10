@@ -6,10 +6,11 @@ import process from 'node:process'
 // TypeScript 7 is a native CLI; AST consumers still need the legacy JavaScript API.
 import ts from 'typescript-api'
 import { isTestOnlySourcePath } from '../../static-analysis/process-boundaries/test-only-source-path.mjs'
+import { isVisibleObjectKey } from './localization-visible-object-keys.mjs'
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts'])
 const SKIP_PATH_PARTS = new Set(['.git', 'dist', 'node_modules', 'out', '__snapshots__', 'assets'])
-const LOCALIZATION_CALL_NAMES = new Set(['t', 'translate'])
+const LOCALIZATION_CALL_NAMES = new Set(['t', 'translate', 'translateMain'])
 const CLASS_PROPERTY_NAMES = new Set(['className', 'classNames'])
 // Why: the children of these elements are CSS or code, never copy a translator should see.
 const NON_COPY_JSX_ELEMENTS = new Set(['style', 'script'])
@@ -31,25 +32,6 @@ const USER_VISIBLE_JSX_ATTRIBUTES = new Set([
   'placeholder',
   'subtitle',
   'text',
-  'title',
-  'toggleDescription',
-  'tooltip'
-])
-const USER_VISIBLE_OBJECT_KEYS = new Set([
-  'accessibilityHint',
-  'accessibilityLabel',
-  'ariaLabel',
-  'badge',
-  'description',
-  'emptyText',
-  'error',
-  'headerTitle',
-  'helperText',
-  'keywords',
-  'label',
-  'message',
-  'placeholder',
-  'subtitle',
   'title',
   'toggleDescription',
   'tooltip'
@@ -331,7 +313,7 @@ function isInsideNonCopyJsxElement(node) {
   return Boolean(element && NON_COPY_JSX_ELEMENTS.has(element.openingElement.tagName.getText()))
 }
 
-function classifyStringNode(node) {
+function classifyStringNode(node, includeNativeDialogFields = false) {
   if (
     hasAncestorObjectPropertyName(node, CLASS_PROPERTY_NAMES) ||
     isInsideNonCopyJsxElement(node)
@@ -369,12 +351,15 @@ function classifyStringNode(node) {
   }
 
   const objectPropertyName = nearestObjectPropertyName(node)
-  if (objectPropertyName && !USER_VISIBLE_OBJECT_KEYS.has(objectPropertyName)) {
+  if (objectPropertyName && !isVisibleObjectKey(objectPropertyName, includeNativeDialogFields)) {
     return undefined
   }
 
   const ancestorObjectPropertyName = nearestAncestorObjectPropertyName(node)
-  if (ancestorObjectPropertyName && !USER_VISIBLE_OBJECT_KEYS.has(ancestorObjectPropertyName)) {
+  if (
+    ancestorObjectPropertyName &&
+    !isVisibleObjectKey(ancestorObjectPropertyName, includeNativeDialogFields)
+  ) {
     return undefined
   }
 
@@ -407,7 +392,12 @@ function areaForFile(relativePath) {
   return `renderer/${parts[0] ?? 'root'}`
 }
 
-export function collectLocalizationCandidates(filePath, sourceText, root = process.cwd()) {
+export function collectLocalizationCandidates(
+  filePath,
+  sourceText,
+  root = process.cwd(),
+  options = {}
+) {
   const sourceKind =
     filePath.endsWith('.tsx') || filePath.endsWith('.jsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS
   const sourceFile = ts.createSourceFile(
@@ -450,7 +440,7 @@ export function collectLocalizationCandidates(filePath, sourceText, root = proce
       ts.isNoSubstitutionTemplateLiteral(node) ||
       ts.isTemplateExpression(node)
     ) {
-      const kind = classifyStringNode(node)
+      const kind = classifyStringNode(node, options.includeNativeDialogFields)
       if (kind) {
         for (const part of stringParts(node)) {
           pushReport(node, kind, part.text, part.dynamic)
@@ -521,6 +511,7 @@ function parseArgs(argv) {
     allowlistPath: path.join('config', 'localization-coverage-allowlist.json'),
     check: false,
     format: 'summary',
+    includeNativeDialogFields: false,
     outputPath: null,
     sourceRoots: []
   }
@@ -531,6 +522,8 @@ function parseArgs(argv) {
       options.format = 'json'
     } else if (arg === '--markdown') {
       options.format = 'markdown'
+    } else if (arg === '--native-dialog-fields') {
+      options.includeNativeDialogFields = true
     } else if (arg === '--check') {
       options.check = true
     } else if (arg === '--allowlist') {
@@ -616,7 +609,7 @@ export async function main(root = process.cwd(), argv = process.argv.slice(2)) {
 
   for (const filePath of files) {
     const sourceText = await fs.readFile(filePath, 'utf8')
-    reports.push(...collectLocalizationCandidates(filePath, sourceText, root))
+    reports.push(...collectLocalizationCandidates(filePath, sourceText, root, options))
   }
 
   if (options.check) {
