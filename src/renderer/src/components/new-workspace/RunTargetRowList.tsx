@@ -10,6 +10,7 @@ import { RunTargetOrcaCloudRow } from './RunTargetOrcaCloudRow'
 import { needsSetupRowHint } from './run-target-row-hints'
 import { useTranslate } from '@/i18n/use-translate'
 import type { OrcaCloudRunTargetAccess } from './orca-cloud-run-target-access'
+import { ORCA_CLOUD_RECIPE_ID } from '../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
 import type { EphemeralVmRecipeOption, RunTargetRowModel } from './run-target-options'
 
 /** The scrolling rows of the run-target picker; "Add host" is pinned outside this list. */
@@ -34,6 +35,7 @@ export default function RunTargetRowList({
   onSelectRecipe,
   onSelectOrcaCloud,
   onOrcaCloudBlockedAction,
+  orcaCloudSetupAfterStart = false,
   onConnectHost,
   onSetLocation
 }: {
@@ -61,6 +63,8 @@ export default function RunTargetRowList({
   onSelectOrcaCloud: (recipe: EphemeralVmRecipeOption | null) => void
   /** Plans or billing, for an account that cannot start a sandbox. */
   onOrcaCloudBlockedAction: () => void
+  /** Picking Orca Cloud just picks it; setup comes after Start, so the row offers no fixes. */
+  orcaCloudSetupAfterStart?: boolean
   onConnectHost: (option: NeedsSetupProjectHostOption) => void
   onSetLocation: (option: NeedsSetupProjectHostOption) => void
 }): React.JSX.Element {
@@ -96,11 +100,16 @@ export default function RunTargetRowList({
               access={orcaCloudAccess}
               pending={orcaCloudPending}
               armed={isArmed}
-              current={row.recipe !== null && row.recipe.id === selectedRecipeId}
+              current={
+                row.recipe !== null
+                  ? row.recipe.id === selectedRecipeId
+                  : selectedRecipeId === ORCA_CLOUD_RECIPE_ID
+              }
               optionId={optionId}
               onArm={() => onArm(row.key, null)}
               onSelect={() => onSelectOrcaCloud(row.recipe)}
               onBlockedAction={onOrcaCloudBlockedAction}
+              setupAfterStart={orcaCloudSetupAfterStart}
             />
           )
         }

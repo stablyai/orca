@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { translate } from '@/i18n/i18n'
-import { sessionDetailCopy } from './OrcaCloudSetupPanel'
+import { sessionDetailCopy } from './cloud-setup-session-copy'
 
 describe('sessionDetailCopy', () => {
   // np4-e2e: the plan row read the session's raw "subscription".

@@ -40,6 +40,9 @@ import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { useComposerCloudStart } from './new-workspace/run-on/use-composer-cloud-start'
 
+/** How long a hidden Orca Cloud auto-start may take before the dialog shows instead. */
+const CLOUD_AUTO_START_REVEAL_MS = 8_000
+
 // Keep Add Project’s clone/SSH machinery outside the composer entry render, matching App loading.
 const HostedAddRepoDialog = lazyWithRetry(
   () => import('@/components/sidebar/project-admission/dialog/AddRepoDialog'),
@@ -80,6 +83,34 @@ function ComposerModalBody({
     onClose()
   }, [onClose])
   const isSubmissionCancelled = useCallback(() => submitCancelledRef.current, [])
+  // Orca Cloud setup finished on its page: submit with the dialog unseen. If the start can't run
+  // by itself (a form error, a revoked grant), the dialog appears with everything kept.
+  const [autoStartRevealed, setAutoStartRevealed] = useState(false)
+  useEffect(() => {
+    if (!modalData.cloudAutoStart) {
+      return
+    }
+    const timer = window.setTimeout(() => setAutoStartRevealed(true), CLOUD_AUTO_START_REVEAL_MS)
+    return () => window.clearTimeout(timer)
+  }, [modalData.cloudAutoStart])
+  if (modalData.cloudAutoStart && !autoStartRevealed) {
+    return (
+      // A closed Root still provides the title's context; nothing is portaled or shown.
+      <Dialog open={false}>
+        <div className="hidden" aria-hidden>
+          <QuickTabBody
+            modalData={modalData}
+            onClose={onClose}
+            isSubmissionCancelled={isSubmissionCancelled}
+            active
+          />
+        </div>
+      </Dialog>
+    )
+  }
+  const visibleModalData = modalData.cloudAutoStart
+    ? { ...modalData, cloudAutoStart: false }
+    : modalData
 
   return (
     <Dialog open onOpenChange={(open) => !open && handleDismiss()}>
@@ -99,7 +130,7 @@ function ComposerModalBody({
         }}
       >
         <QuickTabBody
-          modalData={modalData}
+          modalData={visibleModalData}
           onClose={onClose}
           isSubmissionCancelled={isSubmissionCancelled}
           active
@@ -259,6 +290,18 @@ function QuickTabBody({
     modalData,
     cardProps
   ])
+  // The composer as it is now, for Orca Cloud's setup page (Back, and the start when it's done).
+  const composerSnapshot = useCallback(
+    (): ComposerModalData => ({
+      ...modalData,
+      prefilledName: cardProps.name,
+      initialRepoId: cardProps.repoId,
+      initialBaseBranch: cardProps.baseBranch,
+      linkedWorkItem: cardProps.linkedWorkItem,
+      recovery: { ...quickAgentPick, agent: quickAgent, note: cardProps.note }
+    }),
+    [cardProps, modalData, quickAgent, quickAgentPick]
+  )
   const { cloudStart, primaryCreateDisabled, onPrimary } = useComposerCloudStart({
     active,
     modalData,
@@ -266,6 +309,7 @@ function QuickTabBody({
     quickAgent,
     handleCreate,
     createDisabled,
+    composerSnapshot,
     recordCreatedRef,
     onClose
   })
@@ -304,14 +348,12 @@ function QuickTabBody({
   const isFolderWorkspaceTarget =
     cardProps.projectOptions.find((option) => option.id === cardProps.selectedProjectId)?.kind ===
     'project-group'
-  // An Orca Cloud sandbox is a whole workspace, not a local worktree.
-  const primaryActionLabel =
-    cloudStart.primaryActionLabel ??
-    (isFolderWorkspaceTarget
-      ? getFolderWorkspacePrimaryActionLabel(t)
-      : cardProps.selectedRepoIsGit && !orcaCloud
-        ? t('auto.components.NewWorkspaceComposerModal.createWorktree', 'Create worktree')
-        : t('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace'))
+  // Run on never changes the button: Orca Cloud reads exactly like this computer.
+  const primaryActionLabel = isFolderWorkspaceTarget
+    ? getFolderWorkspacePrimaryActionLabel(t)
+    : cardProps.selectedRepoIsGit
+      ? t('auto.components.NewWorkspaceComposerModal.createWorktree', 'Create worktree')
+      : t('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace')
 
   // Let Radix own Escape for the topmost layer. This dialog auto-focuses input, so page-style blur-first handling swallowed its first Escape.
   const nestedDialogOpen = agentSettingsOpen || addProjectOpen || setLocationOpen

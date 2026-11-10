@@ -270,6 +270,22 @@ function OrcaCloudMeta({
   }
 }
 
+/** Hours left, the loading skeleton, and "Ask an owner or admin" still say something useful. */
+function showsMetaAfterStart(access: OrcaCloudRunTargetAccess): boolean {
+  switch (access.state) {
+    case 'loading':
+    case 'entitled':
+      return true
+    case 'no-plan':
+    case 'out-of-hours':
+    case 'payment-issue':
+      return !access.canManageBilling
+    case 'signed-out':
+    case 'unknown':
+      return false
+  }
+}
+
 /** Orca Cloud as a first-class Run-on target, with its hours or the fix for what blocks it. */
 export function RunTargetOrcaCloudRow({
   recipe,
@@ -280,7 +296,8 @@ export function RunTargetOrcaCloudRow({
   optionId,
   onArm,
   onSelect,
-  onBlockedAction
+  onBlockedAction,
+  setupAfterStart = false
 }: {
   recipe: EphemeralVmRecipeOption | null
   access: OrcaCloudRunTargetAccess
@@ -292,6 +309,8 @@ export function RunTargetOrcaCloudRow({
   onArm: () => void
   onSelect: () => void
   onBlockedAction: () => void
+  /** The composer walks setup on a page after Start: no inline Sign in / Upgrade here. */
+  setupAfterStart?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   return (
@@ -320,7 +339,11 @@ export function RunTargetOrcaCloudRow({
       onArm={onArm}
       onCommit={onSelect}
       description={orcaCloudRowHint(access, t)}
-      trailing={<OrcaCloudMeta access={access} onAction={onBlockedAction} />}
+      trailing={
+        setupAfterStart && !showsMetaAfterStart(access) ? undefined : (
+          <OrcaCloudMeta access={access} onAction={onBlockedAction} />
+        )
+      }
     />
   )
 }

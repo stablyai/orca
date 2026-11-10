@@ -1,0 +1,200 @@
+// The setup page's state and actions (composer-redo). It reuses the composer's setup plumbing: the
+// rows from billing, the GitHub repository check and the agent accounts (useCloudStartSteps), the
+// one-trip setup session (#255) with its deep-link return (#257), B2's team switch, and the
+// tracker's error parsing (#260). Only the UI moved: from a card in the dialog to this page.
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { claimOrcaCloudTrial } from '@/components/billing/claim-trial'
+import {
+  invalidateOrcaCloudBilling,
+  prefetchOrcaCloudBilling,
+  useOrcaCloudRunTargetAccess
+} from '@/components/new-workspace/orca-cloud-billing-cache'
+import { setupActionFor } from '@/components/new-workspace/run-on/cloud-start-actions'
+import type { CloudSetupStep } from '@/components/new-workspace/run-on/cloud-start-model'
+import { useCloudStartSteps } from '@/components/new-workspace/run-on/use-cloud-start-steps'
+import { useSwitchTeamSteps } from '@/components/new-workspace/cloud-setup/use-cloud-setup-tracker'
+import { parseCloudSetupError } from '@/components/new-workspace/cloud-setup/cloud-setup-errors'
+import {
+  canCopyCloudSetupLink,
+  copyCloudSetupLink,
+  reopenCloudSetup
+} from '@/components/new-workspace/cloud-setup/cloud-setup-tracker-actions'
+import { getCloudSetupStarter } from '@/lib/orca-cloud/cloud-setup-session-seam'
+import {
+  isCloudSetupAgentSkipped,
+  rememberCloudSetupAgentSkipped,
+  type CloudSetupPageRequest
+} from '@/lib/orca-cloud/cloud-setup-page-store'
+import { reportCloudSetupProgress } from '@/lib/orca-cloud/cloud-setup-telemetry'
+import type { OrcaCloudAvailability } from '../../../../shared/orca-yaml-hook-types'
+import type { OrcaCloudRunTargetAccess } from '@/components/new-workspace/orca-cloud-run-target-access'
+import { cloudSetupPageModel, sessionNeedsFrom, type CloudSetupPageModel } from './cloud-setup-page-model'
+
+/** Billing rows re-read this often while the page waits on a browser step (focus also re-reads). */
+const BILLING_POLL_MS = 4_000
+
+/** Main's availability is a snapshot from Start; once billing answers for a signed-in account, it wins. */
+export function effectiveAvailability(
+  requested: OrcaCloudAvailability,
+  access: OrcaCloudRunTargetAccess
+): OrcaCloudAvailability {
+  if (requested === 'needs-sign-in' && access.state !== 'signed-out' && access.state !== 'loading') {
+    return 'offered'
+  }
+  return requested
+}
+
+export type CloudSetupFlow = CloudSetupPageModel & {
+  /** True from the click until the browser opens or the trial answers. */
+  busy: boolean
+  /** The browser trip is open: the current step reads "Waiting for your browser". */
+  inBrowser: boolean
+  error: ReturnType<typeof parseCloudSetupError>
+  canManageBilling: boolean
+  teamAction: React.ReactNode | null
+  continueInBrowser: () => void
+  startTrial: () => void
+  fixBilling: () => void
+  installGitHub: () => void
+  skipAgent: () => void
+  checkAgain: () => void
+  copyLink: (() => void) | null
+  reopenBrowser: () => void
+}
+
+export function useCloudSetupFlow(
+  request: CloudSetupPageRequest,
+  /** Fixtures pin the account; the app reads billing. */
+  accessOverride?: OrcaCloudRunTargetAccess
+): CloudSetupFlow {
+  const fetched = useOrcaCloudRunTargetAccess(!accessOverride)
+  const access = accessOverride ?? fetched
+  const availability = effectiveAvailability(request.availability, access)
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [inBrowser, setInBrowser] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [agentSkipped, setAgentSkipped] = useState(() => isCloudSetupAgentSkipped(request.agent))
+  const githubOverride = useMemo<CloudSetupStep | null>(
+    () => (request.cloudOnlyRepo ? { id: 'github', state: 'done' } : null),
+    [request.cloudOnlyRepo]
+  )
+  const { steps: rowSteps, session, openInstall } = useCloudStartSteps({
+    availability,
+    access,
+    repoId: request.repoId,
+    agent: request.agent,
+    cloudSelected: true,
+    setupSessionId: sessionId,
+    githubOverride
+  })
+  const { steps, held: switchTeam } = useSwitchTeamSteps(rowSteps, !session)
+  const model = cloudSetupPageModel(steps, { agentSkipped, teamSwitch: switchTeam !== null })
+  const error = useMemo(() => {
+    const parsed = parseCloudSetupError(session?.error)
+    return parsed && session?.teamName ? { ...parsed, teamName: session.teamName } : parsed
+  }, [session?.error, session?.teamName])
+
+  // Rows derived from billing tick on their own: re-read while a step is waiting elsewhere.
+  const waiting = model.action !== 'done' && model.action !== 'agent'
+  useEffect(() => {
+    if (!waiting || accessOverride) {
+      return
+    }
+    const timer = window.setInterval(() => void prefetchOrcaCloudBilling(true), BILLING_POLL_MS)
+    return () => window.clearInterval(timer)
+  }, [accessOverride, waiting])
+
+  useEffect(() => {
+    if (sessionId) {
+      reportCloudSetupProgress(sessionId, steps, error?.kind ?? null, { afterTrial: false })
+    }
+  }, [error?.kind, sessionId, steps])
+
+  const stepsRef = useRef(steps)
+  useEffect(() => {
+    stepsRef.current = steps
+  }, [steps])
+
+  const fallback = useCallback(
+    () => setupActionFor(stepsRef.current, access, availability)?.(),
+    [access, availability]
+  )
+
+  // One browser trip for everything still open from here (sign-in, team, trial or Checkout, GitHub).
+  const continueInBrowser = useCallback(() => {
+    const needs = sessionNeedsFrom(stepsRef.current)
+    if (needs.length > 0 && needs.every((need) => need === 'github')) {
+      setInBrowser(true)
+      void openInstall()
+      return
+    }
+    const start = getCloudSetupStarter()
+    if (!start) {
+      setInBrowser(true)
+      fallback()
+      return
+    }
+    setBusy(true)
+    void start({ repoId: request.repoId, needs })
+      .then((opened) => {
+        setInBrowser(true)
+        if (opened) {
+          setSessionId(opened.sessionId)
+        } else {
+          fallback()
+        }
+      })
+      .catch(() => fallback())
+      .finally(() => setBusy(false))
+  }, [fallback, openInstall, request.repoId])
+
+  const startTrial = useCallback(() => {
+    setBusy(true)
+    void claimOrcaCloudTrial()
+      .then((result) => {
+        if (result.status !== 'ok') {
+          // A personal account needs a team first, or the trial is gone: the browser covers it.
+          continueInBrowser()
+        }
+      })
+      .finally(() => setBusy(false))
+  }, [continueInBrowser])
+
+  const fixBilling = useCallback(() => {
+    setInBrowser(true)
+    invalidateOrcaCloudBilling({ refetchNow: false })
+    fallback()
+  }, [fallback])
+
+  const installGitHub = useCallback(() => {
+    setInBrowser(true)
+    void openInstall()
+  }, [openInstall])
+
+  const skipAgent = useCallback(() => {
+    rememberCloudSetupAgentSkipped(request.agent)
+    setAgentSkipped(true)
+  }, [request.agent])
+
+  const checkAgain = useCallback(() => void prefetchOrcaCloudBilling(true), [])
+
+  return {
+    ...model,
+    busy,
+    inBrowser,
+    error,
+    canManageBilling: access.state === 'no-plan' ? access.canManageBilling : true,
+    teamAction: switchTeam?.action ?? null,
+    continueInBrowser,
+    startTrial,
+    fixBilling,
+    installGitHub,
+    skipAgent,
+    checkAgain,
+    copyLink:
+      sessionId && canCopyCloudSetupLink(sessionId)
+        ? () => void copyCloudSetupLink(sessionId)
+        : null,
+    reopenBrowser: () => void reopenCloudSetup(sessionId, continueInBrowser)
+  }
+}

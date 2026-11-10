@@ -21,7 +21,7 @@ function linkUnavailable(): void {
   toast.error(
     translate(
       'components.newWorkspace.cloudSetup.linkUnavailable',
-      'Couldn’t get a setup link. Try Set up and start again.'
+      'Couldn’t get a setup link. Try Continue in browser again.'
     )
   )
 }
