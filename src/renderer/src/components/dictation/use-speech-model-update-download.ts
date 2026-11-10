@@ -26,6 +26,8 @@ export function useSpeechModelUpdateDownload(
   const state = useAppStore((s) => s.modelStates.find((m) => m.id === model.id))
   const refreshModelStates = useAppStore((s) => s.refreshModelStates)
   const [failed, setFailed] = useState(false)
+  // Set from the click, so ✕ cancels a download whose first progress hasn't arrived yet.
+  const [inFlight, setInFlight] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
   useEffect(
@@ -35,7 +37,10 @@ export function useSpeechModelUpdateDownload(
 
   const totalMb = Math.round((model.sizeBytes ?? 0) / 1_000_000)
   const progress = state?.progress ?? 0
-  const downloading = state?.status === 'downloading' || state?.status === 'extracting'
+  const downloading =
+    state?.status === 'downloading' ||
+    state?.status === 'extracting' ||
+    (inFlight && state?.status !== 'ready')
   const phase: SpeechModelUpdatePhase = downloading
     ? 'downloading'
     : state?.status === 'ready'
@@ -46,10 +51,14 @@ export function useSpeechModelUpdateDownload(
 
   const start = (): void => {
     setFailed(false)
+    setInFlight(true)
     void window.api.speech
       .downloadModel(model.id)
       .catch(() => setFailed(true))
-      .finally(() => void refreshModelStates())
+      .finally(() => {
+        setInFlight(false)
+        void refreshModelStates()
+      })
   }
 
   const cancel = (): void => {
