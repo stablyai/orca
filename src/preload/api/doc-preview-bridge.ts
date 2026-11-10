@@ -7,7 +7,7 @@ import {
   DOC_PREVIEW_REVOKE_GRANT_CHANNEL,
   type DocPreviewFailure,
   type DocPreviewExternalLink
-} from '../../shared/doc-preview-scheme'
+} from '../../shared/document-preview/doc-preview-scheme'
 import type { DocPreviewGrantRequest } from '../api/doc-preview-api'
 import type { PreloadApi } from '../api-types'
 

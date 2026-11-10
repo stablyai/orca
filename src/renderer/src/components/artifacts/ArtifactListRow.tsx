@@ -1,7 +1,7 @@
 import { Fragment } from 'react'
 import { Copy, ExternalLink, MoreHorizontal, Trash2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import type { ArtifactListItem } from '../../../../shared/artifacts'
+import type { ArtifactListItem } from '../../../../shared/artifacts/artifacts'
 import { Button } from '@/components/ui/button'
 import {
   ContextMenu,
@@ -19,8 +19,11 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
-import { isPortaledRowMenuClick, isRowActivationKey } from '@/lib/list-row-interaction'
+import { cn } from '@/lib/class-names'
+import {
+  isPortaledRowMenuClick,
+  isRowActivationKey
+} from '@/lib/list-interaction/list-row-interaction'
 import {
   artifactName,
   artifactTypeLabel,
@@ -34,7 +37,7 @@ import {
   LIST_TABLE_ROW_CLASS,
   LIST_TABLE_ROW_DIVIDER_CLASS,
   LIST_TABLE_ROW_SELECTED_CLASS
-} from '@/lib/list-table-layout'
+} from '@/lib/list-interaction/list-table-layout'
 
 type ArtifactRowAction = {
   key: string

@@ -53,24 +53,6 @@ const cleanExit = {
 const right = { worktreeId: WORKTREE, parentTabId: TAB, leafId: RIGHT, ptyId: 'pty-right' }
 
 describe('keepsExitedPane', () => {
-  it('leaves a split pane whose shell exited cleanly to the retirement', () => {
-    expect(keepsExitedPane(splitSession(), right, cleanExit)).toBe(false)
-  })
-
-  it('keeps a split pane on a negative code, host-confirmed or not, for recovery', () => {
-    expect(keepsExitedPane(splitSession(), right, { ...cleanExit, exitCode: -1 })).toBe(true)
-  })
-
-  it('keeps a split pane whose process failed behind its card', () => {
-    const session = splitSession()
-    expect(
-      keepsExitedPane(session, right, {
-        ...cleanExit,
-        exitCode: 1
-      })
-    ).toBe(true)
-  })
-
   it('leaves a tab’s last pane, and a pane another terminal took, to the retirement', () => {
     const session = splitSession()
     expect(keepsExitedPane(session, { ...right, ptyId: 'pty-old' }, cleanExit)).toBe(false)

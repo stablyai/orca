@@ -162,6 +162,28 @@ describe('a request to a recipe VM environment', () => {
     })
   })
 
+  // A resume that kept its saved pairing leaves the revision as it was; it is still a new wake.
+  it('reports a wake that kept the pairing an earlier wake made', async () => {
+    recordVm('suspended')
+    forgetRecipeVmWakePairingsForTests()
+    noteRecipeVmWakePairing(VM_ENVIRONMENT.id, 7)
+    holdOpen.mockImplementationOnce(async () => {
+      noteRecipeVmWakePairing(VM_ENVIRONMENT.id, 7, true)
+      return 'up'
+    })
+    await expect(prepareRecipeVm(userDataPath, VM_ENVIRONMENT, 'wake')).resolves.toEqual({
+      wokenPairingRevision: 7
+    })
+    // Without a server restart, a wake that kept the pairing reads as no wake, as before.
+    holdOpen.mockImplementationOnce(async () => {
+      noteRecipeVmWakePairing(VM_ENVIRONMENT.id, 7)
+      return 'up'
+    })
+    await expect(prepareRecipeVm(userDataPath, VM_ENVIRONMENT, 'wake')).resolves.toEqual({
+      wokenPairingRevision: null
+    })
+  })
+
   it('cancels an open the user disconnected while it waited, without stopping the wake', async () => {
     recordVm('suspended')
     holdOpen.mockImplementationOnce(async () => {

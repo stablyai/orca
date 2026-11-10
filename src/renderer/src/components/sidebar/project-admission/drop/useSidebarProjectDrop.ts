@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { hasNativeFileDragTypes } from '../../../../../../shared/native-file-drop'
+import { hasNativeFileDragTypes } from '../../../../../../shared/file-import/native-file-drop'
 import { createOsFileDropSequence, useOsFileDropOwner } from '@/hooks/use-os-file-drop-owner'
-import { getNativeFileDropRejectionMessage } from '@/lib/native-file-drop-rejection-message'
+import { getNativeFileDropRejectionMessage } from '@/lib/files/drop/native-file-drop-rejection-message'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store/index'
 import {
@@ -15,9 +15,9 @@ import {
 } from './sidebar-project-drop'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { userNamedFileAccess } from '@/lib/local-file-access'
-import { listWslHostWindowsPathAccess } from '@/lib/windows-path-access'
-import { addOnThisComputerLabel } from '@/lib/wsl-host-windows-drive-refusal-toast'
+import { userNamedFileAccess } from '@/lib/files/access/local-file-access'
+import { listWslHostWindowsPathAccess } from '@/lib/files/os-open/windows-path-access'
+import { addOnThisComputerLabel } from '@/lib/workspace/creation/wsl-host-windows-drive-refusal-toast'
 import type { AppState } from '@/store/types'
 
 function getWslDropHosts(state: Pick<AppState, 'runtimeEnvironments' | 'settings'>) {

@@ -1,5 +1,5 @@
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { getSetupRunnerCommandPlatformForPath } from '../../../../shared/setup-runner-command'
+import { getSetupRunnerCommandPlatformForPath } from '../../../../shared/agent-launch/startup/setup-runner-command'
 import type { RunApprovedWorktreeSetupResult } from '../../../../shared/worktree/create-types'
 import {
   getDefaultTabsLaunch,

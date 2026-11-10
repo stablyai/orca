@@ -97,6 +97,8 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
         stream.ackPendingOutput = []
         stream.ackPendingOutputBytes = 0
         stream.ackPendingOutputOverflowed = false
+        // Resumed output starts a new backlog; a stale label would seed slow rate samples.
+        stream.ackOutputWaited = false
         releaseAckPendingHoldbackIfDrained(state, stream)
         answerUndeliveredYieldedQueries(runtime, stream)
         if (discardsQueuedOutput) {

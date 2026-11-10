@@ -3,7 +3,7 @@ import { Globe } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
-import { DOC_PREVIEW_PARTITION } from '../../../../../shared/doc-preview-scheme'
+import { DOC_PREVIEW_PARTITION } from '../../../../../shared/document-preview/doc-preview-scheme'
 import { destroyPersistentWebview, webviewRegistry } from '../host-guest/webview-registry'
 import {
   useSshWorkspaceBrowserRoute,

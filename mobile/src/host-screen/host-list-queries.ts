@@ -1,10 +1,15 @@
 import * as z from 'zod'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../src/shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../src/shared/execution-host'
+import { MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY } from '../../../src/shared/mobile-desktop-relay-contract'
 import type { MobileRelayHost } from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import type { Query, QueryClient } from '@tanstack/react-query'
 import { defineHostQuery } from '../query/host-query'
 import { hostQueryKey, type HostQueryTarget } from '../query/host-query-key'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   applyServerWorkspaces,
   fetchServerWorkspaces,
@@ -17,9 +22,13 @@ import {
   type WorktreeCatalogSnapshot
 } from '../worktree/worktree-catalog-snapshot-client'
 import type { Worktree } from '../worktree/workspace-list-types'
-import { getCachedWorktrees } from '../cache/worktree-cache'
-import { hostRepoCatalogRepos, type HostRepoCatalogRow } from './host-screen-reply-schema'
+import {
+  hostRepoCatalogRepos,
+  hostSshTargetSummarySchema,
+  type HostRepoCatalogRow
+} from './host-screen-reply-schema'
 import { hostPlatformRead, hostRepoCatalogSnapshotRead } from './host-screen-operations'
+import { NODE_PLATFORM_NAMES } from '../transport/connection/mobile-runtime-host-platform'
 import {
   acceptedMetadata,
   readHostSshTargetLabels,
@@ -30,8 +39,10 @@ import {
 export const HOST_LIST_TARGET: HostQueryTarget = { exec: 'local' }
 export const NO_HOST_LIST_INPUT = {}
 
-// Agent rows change with no event of their own, so a visible list also polls (host-worktree-catalog).
+// A visible list polls rows the host sends no notice for: all of them on older hosts (host-worktree-catalog).
 export const HOST_LIST_POLL_MS = 3000
+// With worktreeRowsChanged, the poll only catches what agent row notices miss (terminal counts, unread, PR badge).
+export const HOST_LIST_BACKSTOP_POLL_MS = 10_000
 
 // The fields every row the list draws carries; the rest are checked where they are read.
 const storedWorktreeRowSchema = z.looseObject({
@@ -84,7 +95,10 @@ export const hostWorktreeCatalogQuery = defineHostQuery<
   // A hidden page reads nothing on change events; coming back reads what it missed.
   refetchOnWindowFocus: true,
   // Folder workspace changes publish reposChanged, and worktree.ps carries their rows.
-  signal: { events: ['worktreesChanged', 'reposChanged'], floorMs: HOST_LIST_POLL_MS },
+  signal: {
+    events: ['worktreesChanged', 'reposChanged', 'worktreeRowsChanged'],
+    floorMs: HOST_LIST_POLL_MS
+  },
   persist: {
     version: 1,
     dataSchema: z.object({ snapshotId: z.null(), worktrees: z.array(storedWorktreeRow) }),
@@ -92,6 +106,11 @@ export const hostWorktreeCatalogQuery = defineHostQuery<
     strip: (data) => ({ snapshotId: null, worktrees: data.worktrees.map(withoutAgentState) })
   }
 })
+
+// Native Home's per-desktop counts (home-host-worktree-fetch.ts); keyed here so the page never loads Home's module.
+export const HOME_WORKTREE_COUNTS_FAMILY = 'worktree.homeCounts'
+export const homeWorktreeCountsKey = (hostId: string) =>
+  hostQueryKey(hostId, HOME_WORKTREE_COUNTS_FAMILY, HOST_LIST_TARGET, NO_HOST_LIST_INPUT)
 
 export const hostWorktreeCatalogKey = (hostId: string) =>
   hostQueryKey(hostId, hostWorktreeCatalogQuery.family, HOST_LIST_TARGET, NO_HOST_LIST_INPUT)
@@ -104,14 +123,29 @@ export function cachedHostWorktrees(
   if (!hostId) {
     return null
   }
-  const cached = queryClient.getQueryData<WorktreeCatalogSnapshot>(hostWorktreeCatalogKey(hostId))
-  // Native Home's own catalog read until Home moves onto this query; shown only, never a delta base.
-  return cached ? [...cached.worktrees] : (getCachedWorktrees(hostId) as Worktree[] | null)
+  const cached =
+    queryClient.getQueryData<WorktreeCatalogSnapshot>(hostWorktreeCatalogKey(hostId)) ??
+    // Native Home's last read, for the wide layout's host list beside it; shown only, never a delta base.
+    queryClient.getQueryData<{ catalog?: WorktreeCatalogSnapshot }>(homeWorktreeCountsKey(hostId))
+      ?.catalog
+  return cached ? [...cached.worktrees] : null
 }
 
 const serverRowSnapshots = {
   deltas: new ServerRowSnapshots(true),
   full: new ServerRowSnapshots(false)
+}
+
+/**
+ * The server rows' input. Before the host's status is read it names the key a current desktop stores them
+ * under, so they paint from the store: the page came from that desktop, which sends the deltas capability.
+ */
+export function hostServerWorkspacesInput(hostCapabilities: readonly string[] | null): {
+  deltas: boolean
+} {
+  return {
+    deltas: hostCapabilities?.includes(MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY) ?? true
+  }
 }
 
 // Workspaces on the servers this desktop relays to; a server whose read fails keeps its rows.
@@ -182,9 +216,17 @@ export function catalogNeedsHostLabels(catalog: readonly HostRepoCatalogRow[]): 
   return hostIds.size > 1 || [...hostIds].some((id) => parseExecutionHostId(id)?.kind === 'ssh')
 }
 
-export type HostRepoLabels = Awaited<ReturnType<typeof readHostSshTargetLabels>> & {
+export type HostRepoLabels = {
+  sshTargetSummaries: z.output<typeof hostSshTargetSummarySchema>[]
+  // Entries rather than a Map, so the record can be stored.
+  hostLabels: [ExecutionHostId, string][]
   platform: NodeJS.Platform | null
 }
+
+const storedHostLabelSchema = z.tuple([
+  z.custom<ExecutionHostId>((id) => typeof id === 'string' && parseExecutionHostId(id) !== null),
+  z.string()
+])
 
 export const hostRepoLabelsQuery = defineHostQuery<typeof NO_HOST_LIST_INPUT, HostRepoLabels>({
   family: 'repo.hostLabels',
@@ -193,13 +235,25 @@ export const hostRepoLabelsQuery = defineHostQuery<typeof NO_HOST_LIST_INPUT, Ho
       readHostSshTargetLabels(client),
       settledMetadataReply(() => hostPlatformRead.request(client))
     ])
-    return { ...labels, platform: acceptedMetadata(platform, hostPlatformRead.interpret) ?? null }
+    return {
+      sshTargetSummaries: labels.sshTargetSummaries,
+      hostLabels: [...labels.hostLabelById],
+      platform: acceptedMetadata(platform, hostPlatformRead.interpret) ?? null
+    }
   },
   staleTime: 60_000,
   gcTime: 30 * 60_000,
   refetchOnWindowFocus: true,
   // SSH health and the host's own label overrides.
-  signal: { events: ['reposChanged', 'sshStateChanged'] }
+  signal: { events: ['reposChanged', 'sshStateChanged'] },
+  persist: {
+    version: 1,
+    dataSchema: z.object({
+      sshTargetSummaries: z.array(hostSshTargetSummarySchema),
+      hostLabels: z.array(storedHostLabelSchema),
+      platform: z.enum(NODE_PLATFORM_NAMES).nullable()
+    })
+  }
 })
 
 // The host list's own reads, which pull to refresh repeats; project.sections lives with its hook.

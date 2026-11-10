@@ -2,7 +2,7 @@ import React, { useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import * as VisuallyHidden from 'radix-ui/visually-hidden'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
-import { hasBoundedCommentBodyText } from '@/lib/comment-body-submit-state'
+import { hasBoundedCommentBodyText } from '@/lib/source-control/review/comments/comment-body-submit-state'
 import { useAppStore } from '@/store'
 import {
   jiraGetIssueForTarget,
@@ -12,16 +12,16 @@ import type { JiraIssue, JiraMutationResult } from '../../../shared/jira/jira-ty
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext
-} from '../../../shared/task-source-context'
+} from '../../../shared/work-items/task-source-context'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { JiraIssueMetadataBar, JiraIssueWorkspaceHeader } from './jira-issue-workspace-chrome'
 import { JiraIssueCommentComposer, JiraIssueWorkspaceContent } from './jira-issue-workspace-content'
 import { useJiraIssueWorkspaceActions } from './jira-issue-workspace-actions'
 import { getJiraReadIdentity } from '@/store/slices/jira/jira-read-coordination'
-import { defaultScopeHost } from '@/lib/default-creation-host'
-import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
-import { getEnvironmentRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
+import { taskSourceRuntimeTarget } from '@/lib/work-items/task-source-runtime-target'
+import { getEnvironmentRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { editedJiraIssueFields } from './jira-issue-workspace-hydration'
 import { enqueueJiraIssueMutation, jiraIssueRequestScope } from './jira-issue-mutation-queue'

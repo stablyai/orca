@@ -11,12 +11,12 @@ import {
   useForgetHostClient,
   useForceReconnect,
   useHostClient
-} from '../transport/host-client-hooks'
+} from '../transport/connection/host-client-hooks'
 import {
   useLastConnectedAt,
   useReconnectAttempt,
   useRelayRecoveryStatus
-} from '../transport/client-context-connection-metrics'
+} from '../transport/connection/client-context-connection-metrics'
 import { useHostDisplayWorktrees, useResolvedHostPlatform } from './use-host-display-worktrees'
 import { useHostListSections } from './use-host-list-sections'
 import { useSwitchedHostSidebarFeed } from './use-host-sidebar-feed'
@@ -28,8 +28,8 @@ import { useHostViewSettings } from './use-host-view-settings'
 import { countActiveWorkspaceFilters } from '../../../src/shared/workspace-view/workspace-row-filters'
 import { useHostWorktreeActions } from './use-host-worktree-actions'
 import { useHostWorktreeCatalog } from './use-host-worktree-catalog'
-import { useHostDisplay } from '../transport/use-host-display'
-import { classifyConnection } from '../transport/connection-health'
+import { useHostDisplay } from '../host-descriptors/use-host-display'
+import { classifyConnection } from '../transport/connection/connection-health'
 
 export type HostScreenProps = {
   embedded?: boolean
@@ -60,7 +60,8 @@ export function useHostScreenController({
   const relayRecovery = useRelayRecoveryStatus(hostId)
   const forgetHostClient = useForgetHostClient()
   const forceReconnectHost = useForceReconnect()
-  const { hostCapabilities, floatingWorkspaceEnabled, hostInstallationId } = useHostProtocolGates()
+  const { hostCapabilities, statusReadable, floatingWorkspaceEnabled, hostInstallationId } =
+    useHostProtocolGates()
   const state = useHostScreenState(hostId, peekStoredHost(hostId))
   const settings = useHostViewSettings({ client, connState, state })
   const connectionVerdict = classifyConnection({
@@ -83,6 +84,7 @@ export function useHostScreenController({
     connState,
     embedded,
     hostCapabilities,
+    hostStatusReadable: statusReadable,
     hostId,
     sidebarFeed: sidebarFeed?.triggers ?? null,
     state,

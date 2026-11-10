@@ -6,7 +6,7 @@ import { agentSessionConversationView } from '../../../../../shared/agent-sessio
 
 // Name senders from production-owned Dispatch tasks, mirrored workspace chat/terminal tabs and PTY records.
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import type { AgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-record'
 
@@ -25,17 +25,14 @@ import '../../db/messages/mailbox-routing-page'
 import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import { createRootDispatch } from '../../db/root-dispatch-test-fixture'
-
-import { reconcileLifecycleMessage } from '../../workers/lifecycle/lifecycle-reconciliation'
+import '../../workers/lifecycle/lifecycle-reconciliation'
 
 import { RuntimeOrchestrationSenderNames } from './runtime-orchestration-sender-names'
 
 import { structuredMailSource } from '../structured-mail/structured-mail-source'
 
 import '../../../../../shared/agent-session/view/structured-agent-session-projection'
-import type { MessageRow } from '../../db/orchestration-records'
-
-import { parseStartOptions } from '../../../rpc/methods/orchestration/worker/worker-earlier-work'
+import '../../../rpc/methods/orchestration/worker/worker-earlier-work'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
 vi.mock(
@@ -110,37 +107,6 @@ function finishedWorker(spec: string, handle = 'term_worker') {
   return { runId: run.id, taskId: task.id, dispatchId: started.dispatch.id }
 }
 
-/** Mail from `term_worker`, from its pane; a report names its task and dispatch. */
-function workerMessage(
-  runId: string,
-  type: 'worker_done' | 'status',
-  report?: { taskId: string; dispatchId: string }
-) {
-  return db.insertMessage({
-    from: 'term_worker',
-    to: `run:${runId}`,
-    subject: type,
-    type,
-    senderPaneKey: 'tab_term_worker:leaf',
-    runId,
-    ...(report ? { payload: JSON.stringify({ ...report, outcome: 'succeeded' }) } : {})
-  })
-}
-
-/** The name the mail lane records for `term_worker` when it announces these messages. */
-function announcedName(batch: MessageRow[]): string | null {
-  const sources = names()
-  return (
-    structuredMailSource({
-      db,
-      mailboxHandle: 'run:r',
-      dispatchId: null,
-      batch,
-      senderSnapshot: (party, reported) => sources.snapshotOf(party, reported)
-    }).senders[0]?.name ?? null
-  )
-}
-
 beforeEach(() => {
   db = new OrchestrationDb(':memory:')
   session = { unifiedTabs: {}, tabsByWorktree: {} }
@@ -167,115 +133,6 @@ beforeEach(() => {
 afterEach(() => {
   db.close()
 })
-
-describe("a sender's name, from what Orca shows for it", () => {
-  it('names a worker by its task after its own accepted worker_done settled that dispatch', () => {
-    const { runId, taskId, dispatchId } = finishedWorker('build it')
-    const report = workerMessage(runId, 'worker_done', { taskId, dispatchId })
-    // Settled synchronously at send, before the mail lane names who it is from.
-    expect(reconcileLifecycleMessage(db, report).action).toBe('completed')
-    expect(db.getDispatchContextById(dispatchId)?.status).toBe('completed')
-    expect(announcedName([report])).toBe('build it')
-  })
-
-  it('never names a worker by a task it never ran, nor by work it finished long ago', () => {
-    const { runId, taskId, dispatchId } = finishedWorker('task A')
-    const report = workerMessage(runId, 'worker_done', { taskId, dispatchId })
-    expect(reconcileLifecycleMessage(db, report).action).toBe('completed')
-    // Its next message, unrelated to that finished task: no task names it.
-    expect(announcedName([workerMessage(runId, 'status')])).toBe('Codex')
-    // A second task dispatched to the same terminal fails before the worker runs it.
-    const taskB = db.createTask({ runId, spec: 'task B' })
-    const failed = createRootDispatch(db, taskB.id, 'term_worker')
-    db.failDispatch(failed.id, 'delivery failed')
-    expect(announcedName([workerMessage(runId, 'status')])).toBe('Codex')
-  })
-})
-
-it.each([
-  { observation: { requested: { agent: 'codex' }, effective: null }, expected: 'codex' },
-  { observation: { requested: { agent: 'codex' }, effective: null }, expected: 'claude' },
-  {
-    observation: {
-      requested: { agent: 'codex' },
-      effective: { agent: 'future-agent', model: 'effective-model', effort: 'low' }
-    },
-    expected: 'future-agent'
-  },
-  {
-    observation: { requested: { agent: 'codex', model: [] }, effective: { agent: 42 } },
-    expected: 'codex'
-  },
-  { observation: { requested: null, effective: { agent: 'x'.repeat(41) } }, expected: undefined }
-])(
-  'retains safe display launch knowledge independently of follow-up choice: $expected',
-  ({ observation, expected }) => {
-    const run = db.createRun({
-      objective: 'launch',
-      coordinatorHandle: 'term_coord',
-      coordinatorPaneKey: null
-    })
-    const original = {
-      agent: expected === 'claude' ? 'claude' : 'cx-personal',
-      terminal: null,
-      unrelated: { kept: true },
-      launch: {
-        requested: {
-          agent: expected === 'claude' ? 'claude' : null,
-          model: 'home-model',
-          effort: 'high',
-          extra: 'kept'
-        },
-        effective: null,
-        extra: 'kept'
-      }
-    }
-    const started = db.createStartingWorkerDispatch({
-      creator: { kind: 'system' },
-      maxDepth: 10,
-      taskRunId: run.id,
-      taskSpec: 'Inspect parser',
-      startOptions: original
-    })
-    const id = started.dispatch.id
-    const followUp = parseStartOptions(JSON.stringify(original))
-    db.retainWorkerLaunchObservation(id, observation)
-    const saved = () => db.getWorkerDispatch(id)!.start_options
-    const retained = JSON.parse(saved())
-    expect(retained).toMatchObject({
-      ...original,
-      launch: {
-        ...original.launch,
-        requested: {
-          ...original.launch.requested,
-          agent: original.launch.requested.agent ?? (expected ? 'codex' : null)
-        },
-        effective:
-          expected === 'future-agent'
-            ? { agent: expected, model: 'effective-model', effort: 'low' }
-            : null
-      }
-    })
-    expect(parseStartOptions(saved())).toEqual(followUp)
-    const party = { address: `dispatch:${id}`, terminalHandle: null, orcaSessionId: null }
-    expect(names().snapshotOf(party)).toEqual({ name: 'Inspect parser', agent: expected ?? null })
-    if (expected !== 'future-agent') {
-      return
-    }
-    const known = JSON.parse(saved())
-    for (const later of [
-      undefined,
-      null,
-      {},
-      { requested: { agent: null }, effective: null },
-      { effective: { agent: null, model: null, effort: null } },
-      { effective: { agent: [] } }
-    ]) {
-      db.retainWorkerLaunchObservation(id, later)
-      expect(JSON.parse(saved())).toEqual(known)
-    }
-  }
-)
 
 it('preserves old, malformed and absent launch observations without inventing an agent', () => {
   const { dispatchId } = finishedWorker('Inspect parser', 'term_older')

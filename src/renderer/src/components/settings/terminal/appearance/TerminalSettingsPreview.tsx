@@ -5,7 +5,7 @@ import { Moon, Sun } from 'lucide-react'
 import '@xterm/xterm/css/xterm.css'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
-import { buildFontFamily } from '@/lib/monospace-font-family'
+import { buildFontFamily } from '../../../../../../shared/monospace-font-family'
 import {
   pluginFontFamilyWhenLoaded,
   usePluginFontReady
@@ -17,7 +17,7 @@ import { resolveTerminalFontWeights } from '../../../../../../shared/terminal/ap
 import { resolveTerminalLigaturesEnabled } from '../../../../../../shared/terminal/appearance/terminal-ligatures'
 import { normalizeTerminalLineHeight } from '../../../../../../shared/terminal/appearance/terminal-line-height-settings'
 import { PREVIEW_BUFFER } from './terminal-preview-content'
-import { SettingsSwitch } from '../../form-controls/SettingsFormControls'
+import { Switch } from '@/components/ui/switch'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -267,10 +267,10 @@ export function TerminalSettingsPreview({
               <span className="text-xs font-medium text-muted-foreground">
                 {t('auto.components.settings.TerminalSettingsPreview.50419052fe', 'Pane divider')}
               </span>
-              <SettingsSwitch
+              <Switch
                 checked={previewPaneDividerVisible}
-                onChange={() => setPreviewPaneDividerVisible((visible) => !visible)}
-                ariaLabel={t(
+                onCheckedChange={() => setPreviewPaneDividerVisible((visible) => !visible)}
+                aria-label={t(
                   'auto.components.settings.TerminalSettingsPreview.f8931d407d',
                   'Show pane divider in preview'
                 )}

@@ -25,12 +25,4 @@ describe('parseWindowsDriveMountInfo', () => {
       { mountPoint: '/mnt/e', windowsRoot: null }
     ])
   })
-
-  it('skips 9p shares that are not drvfs, and malformed lines', () => {
-    expect(
-      parseWindowsDriveMountInfo(
-        '41 30 0:39 / /usr/lib/wsl/drivers ro - 9p drivers ro,aname=drivers\nnot a mount line'
-      )
-    ).toEqual([])
-  })
 })

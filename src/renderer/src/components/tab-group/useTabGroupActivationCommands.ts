@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import type { Tab } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
-import { focusTerminalTabSurface } from '../../lib/focus-terminal-tab-surface'
+import { focusTerminalTabSurface } from '../terminal-pane/input/focus/focus-terminal-tab-surface'
 import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import { activateWebRuntimeSessionTab } from '../../runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle'
 import { isWebRuntimeSessionActive } from '../../runtime/web-session-tabs-sync/identity/web-runtime-session-environment'

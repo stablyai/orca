@@ -3,7 +3,7 @@
 import type { BrowserLoadError } from './browser-workspace-types'
 import { classifyRemotePairingHostname } from './remote-runtime/pairing/remote-pairing-address'
 import { isWildcardBindHost } from './browser-url'
-import { isChromiumCertificateErrorCode } from './browser-certificate-errors'
+import { isChromiumCertificateErrorCode } from './browser/certificate-trust/browser-certificate-errors'
 
 export type BrowserLoadFailureKind =
   | 'not-running'

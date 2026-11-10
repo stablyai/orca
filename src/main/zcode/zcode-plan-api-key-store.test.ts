@@ -31,7 +31,7 @@ vi.mock('node:path', () => ({
   join: (...parts: string[]) => parts.join('/')
 }))
 
-vi.mock('../../shared/secure-file', () => ({
+vi.mock('../../shared/secure-storage/secure-file', () => ({
   hardenExistingSecureFile: hardenExistingSecureFileMock,
   writeSecureFile: writeSecureFileMock
 }))

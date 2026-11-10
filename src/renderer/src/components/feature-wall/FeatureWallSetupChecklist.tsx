@@ -5,8 +5,8 @@ import type {
   FeatureWallSetupStepId
 } from '../../../../shared/feature-wall-setup-steps'
 import { getFeatureWallSetupStepsForSection } from '../../../../shared/feature-wall-setup-steps'
-import { cn } from '@/lib/utils'
-import { useScrollEdgeFades } from '@/lib/use-scroll-edge-fades'
+import { cn } from '@/lib/class-names'
+import { useScrollEdgeFades } from '@/lib/list-interaction/use-scroll-edge-fades'
 import type { FeatureWallSetupProgress } from './feature-wall-setup-progress'
 import { FullDiskAccessSetupPrompt } from './FullDiskAccessSetupPrompt'
 import { AgentCapabilitiesSetupAction } from './AgentCapabilitiesSetupAction'
@@ -30,9 +30,9 @@ import { onboardingChatPermissionSetting } from '../onboarding/use-onboarding-fl
 import { savedYoloPermissions } from '../onboarding/use-onboarding-yolo-permissions'
 import { applyAllAgentsPermission } from '../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import { NotificationStep } from '../onboarding/NotificationStep'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { useTranslate } from '@/i18n/use-translate'
 
 import { getLocalizedFeatureWallSetupChecklistCopy } from './feature-wall-setup-checklist-localized-copy'

@@ -8,7 +8,7 @@ import {
   type SyntheticEvent
 } from 'react'
 import { useSonner } from 'sonner'
-import { track } from '@/lib/telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
 
 // Mirrored by installBodyOverlayAttributes; only Dialog/Sheet overlays set it, not menus.
 const MODAL_OPEN_ATTRIBUTE = 'data-modal-overlay-open'

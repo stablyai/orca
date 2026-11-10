@@ -1,13 +1,16 @@
 import { resolve as resolvePath } from 'node:path'
-import type { ComputerAppQuery, RuntimeWorktreeListResult } from '../shared/runtime-types'
+import type { ComputerAppQuery } from '../shared/runtime-types'
 import { resolveFolderWorkspaceSelector } from './folder-workspace-selector'
 import { resolveCallerDistroPathSelector } from './wsl-caller-path-selector'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime/types'
+import { assertLocalCwdWorktreeSelector } from './local-environment-selector'
 import { isLaunchedByAnotherRuntime } from './runtime/runtime-source-fence'
 import { getOptionalStringFlag, getPresentStringFlag, getRequiredStringFlag } from './flags'
+import { readEnclosingWorkspaceCatalog } from './enclosing-workspace-catalog'
 import {
   getCallerExecutionHostId,
+  getCallerWorkspaceIds,
   resolveCallerPaneWorktreeSelector,
   selectWorktreeCreateCwdContext,
   selectEnclosingWorktreeSelectionOnHost,
@@ -49,17 +52,6 @@ export async function normalizeWorktreeSelectorForCaller(
   return purpose === 'parent' ? normalized : resolveFolderWorkspaceSelector(normalized, client)
 }
 
-export function assertLocalCwdWorktreeSelector(selector: string, client: RuntimeClient): void {
-  if (!client.isRemote) {
-    return
-  }
-  // A paired CLI's cwd belongs to the client filesystem, so it cannot identify server worktrees.
-  throw new RuntimeClientError(
-    'invalid_argument',
-    `${selector} is a local cwd shortcut and cannot be resolved against a remote runtime. Pass an explicit server-side worktree selector such as identity:<identity>, id:<repo-id>::<path>, name:<displayName>, branch:<branch>, issue:<number>, or path:<absolute-server-path>.`
-  )
-}
-
 export async function resolveCurrentWorktreeSelector(
   cwd: string,
   client: RuntimeClient,
@@ -75,19 +67,18 @@ export async function resolveCurrentWorktreeSelection(
 ): Promise<HostScopedWorktreeSelection> {
   assertLocalCwdWorktreeSelector('current', client)
 
-  const worktrees = await client.call<RuntimeWorktreeListResult>('worktree.list', { limit: 10_000 })
   // Preserve the repo id: duplicate registrations can make a bare path selector ambiguous.
   const selection = selectEnclosingWorktreeSelectionOnHost(
-    worktrees.result.worktrees,
+    await readEnclosingWorkspaceCatalog(client, cwd),
     cwd,
     getCallerExecutionHostId(),
-    process.env.ORCA_WORKTREE_ID,
+    getCallerWorkspaceIds(),
     purpose
   )
   if (!selection) {
     throw new RuntimeClientError(
       'selector_not_found',
-      `No Orca-managed worktree contains the current directory: ${resolvePath(cwd)}`
+      `No Orca workspace contains the current directory: ${resolvePath(cwd)}`
     )
   }
   return selection
@@ -100,8 +91,8 @@ export async function resolveWorktreeCreateCwdContext(
   inferParent = true
 ): Promise<ReturnType<typeof selectWorktreeCreateCwdContext>> {
   assertLocalCwdWorktreeSelector('current', client)
-  const worktrees = await client.call<RuntimeWorktreeListResult>('worktree.list', { limit: 10_000 })
-  return selectWorktreeCreateCwdContext(worktrees.result.worktrees, cwd, inferRepo, inferParent)
+  const catalog = await readEnclosingWorkspaceCatalog(client, cwd)
+  return selectWorktreeCreateCwdContext(catalog, cwd, inferRepo, inferParent)
 }
 
 export async function getOptionalWorktreeSelector(
@@ -171,20 +162,14 @@ export async function getBrowserWorktreeSelector(
   if (client.isRemote) {
     return undefined
   }
-  const catalog = await client
-    .call<RuntimeWorktreeListResult>('worktree.list', { limit: 10_000 })
-    .then((response) => response.result.worktrees)
-    .catch(() => undefined)
-  // Without the catalog neither cwd nor the terminal id can be checked; keep the runtime default.
-  if (!catalog) {
-    return undefined
-  }
+  // The folder reads fall back on their own; a worktree-list failure surfaces rather than retargeting.
+  const catalog = await readEnclosingWorkspaceCatalog(client, cwd)
   const hostId = getCallerExecutionHostId()
   const enclosing = selectEnclosingWorktreeSelectionOnHost(
     catalog,
     cwd,
     hostId,
-    process.env.ORCA_WORKTREE_ID,
+    getCallerWorkspaceIds(),
     purpose
   )
   if (enclosing || isLaunchedByAnotherRuntime(process.env, client.userDataPath)) {

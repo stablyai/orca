@@ -25,16 +25,16 @@ import {
 } from '@/components/ui/context-menu'
 import { useAppStore } from '@/store/index'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
-import { detectLanguage } from '@/lib/language-detect'
-import { openFileInBrowserTab } from '@/lib/file-preview'
+import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
+import { openFileInBrowserTab } from '@/lib/browser/documents/file-preview'
 import { useTranslate } from '@/i18n/use-translate'
 import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
 import {
   getRevealInFileManagerLabel,
   getWorkspaceFileRevealOwner,
   revealInFileManager
-} from '@/lib/reveal-in-file-manager'
-import { isRevealOrEditorOpenBlocked } from '@/lib/local-path-open-guard'
+} from '@/lib/files/os-open/reveal-in-file-manager'
+import { isRevealOrEditorOpenBlocked } from '@/lib/files/os-open/local-path-open-guard'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { OpenInContextSubmenu } from '../../../file-actions/OpenInContextSubmenu'
 import type { FileExplorerRowProps } from './FileExplorerRow'

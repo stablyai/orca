@@ -1,17 +1,17 @@
 import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
 import { getGitHubMutationTarget } from '@/components/github/github-work-item-mutation-target'
-import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
+import { taskSourceRuntimeTarget } from '@/lib/work-items/task-source-runtime-target'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useRepoAssignees } from '@/hooks/useGitHubRepoMetadata'
 import {
   canUseGitHubRepoContext,
   getGitHubRepoRoutingTarget
-} from '@/lib/github-source-runtime-context'
-import { usePRBotAuthorOverrides } from '@/lib/pr-bot-author-overrides'
+} from '@/lib/work-items/github/github-source-runtime-context'
+import { usePRBotAuthorOverrides } from '@/lib/source-control/review/pr-bot-author-overrides'
 import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
@@ -28,7 +28,7 @@ import {
   resolveGitHubBodyDraft,
   shouldSyncGitHubBodyDraft
 } from '@/components/github-body-draft-state'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type {
   GitHubAssignableUser,
   GitHubPRFile
@@ -39,7 +39,7 @@ import type {
 } from '../../../../../shared/github/work-item-types'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import type { PRComment } from '../../../../../shared/github/comment-types'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import type { PullRequestPageProjectOrigin } from '../page-types'
@@ -59,6 +59,7 @@ export function ConversationTab({
   repoId,
   sourceContext,
   body,
+  bodyImageUrls,
   comments,
   files,
   headSha,
@@ -81,6 +82,7 @@ export function ConversationTab({
   repoId: string | null
   sourceContext?: TaskSourceContext | null
   body: string
+  bodyImageUrls?: Record<string, string>
   comments: PRComment[]
   files: GitHubPRFile[]
   headSha: string | undefined
@@ -94,7 +96,7 @@ export function ConversationTab({
   projectOrigin: PullRequestPageProjectOrigin | undefined
   onMutated: () => void
   onChecksUpdated: (checks: PRCheckDetail[]) => void
-  onBodyUpdated: (body: string) => void
+  onBodyUpdated: (body: string, representation?: { bodyImageUrls?: Record<string, string> }) => void
   onCommentAdded: (comment: PRComment) => void
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
 }): React.JSX.Element {
@@ -187,7 +189,7 @@ export function ConversationTab({
     }
     setBodySaving(true)
     try {
-      await runWorkItemBodyUpdate({
+      const representation = await runWorkItemBodyUpdate({
         item,
         repoPath,
         sourceContext,
@@ -195,7 +197,7 @@ export function ConversationTab({
         body: resolvedBodyDraft,
         parsedSlug: bodySlug
       })
-      onBodyUpdated(resolvedBodyDraft)
+      onBodyUpdated(resolvedBodyDraft, representation)
       setBodyEditing(false)
       toast.success(translate('auto.components.PullRequestPage.9b4190dc98', 'Description updated.'))
     } catch (err) {
@@ -316,6 +318,7 @@ export function ConversationTab({
           bodySaving={bodySaving}
           bodyChanged={bodyChanged}
           body={body}
+          bodyImageUrls={bodyImageUrls}
           resolvedBodyDraft={resolvedBodyDraft}
           bodyTextareaRef={bodyTextareaRef}
           mentionOptions={mentionOptions}

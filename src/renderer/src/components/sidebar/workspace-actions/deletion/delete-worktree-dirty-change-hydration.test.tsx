@@ -33,7 +33,7 @@ vi.mock('@/store', () => ({
 vi.mock('@/runtime/source-control/git/runtime-git-status-client', () => ({
   getRuntimeGitStatus: vi.fn()
 }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => null }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({ getConnectionId: () => null }))
 
 const repoMap = new Map<string, Repo>()
 
@@ -113,7 +113,7 @@ describe('loaded deletion disclosure and existing hydration', () => {
     })
     const view = render(<Preview worktree={target('feature')} />)
     const trigger = await screen.findByRole('button', {
-      name: '3 uncommitted or untracked changes: Show loaded paths'
+      name: '3 uncommitted changes will be lost: Show loaded paths'
     })
     expect(getRuntimeGitStatus).toHaveBeenCalledOnce()
     fireEvent.click(trigger)
@@ -154,7 +154,7 @@ describe('loaded deletion disclosure and existing hydration', () => {
       })
     })
     await waitFor(() => expect(getRuntimeGitStatus).toHaveBeenCalledTimes(2))
-    expect(screen.getByText('Uncommitted or untracked changes')).toBeVisible()
+    expect(screen.getByText('Uncommitted changes will be lost')).toBeVisible()
     expect(screen.getByText('· Details unavailable')).toBeVisible()
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
     expect(screen.queryByText('old-host.ts')).not.toBeInTheDocument()

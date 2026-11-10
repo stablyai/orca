@@ -1,11 +1,11 @@
-import { defineMethod } from '../../../core'
+import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { clampOrchestrationAskTimeoutMs } from '../../../../../../shared/orchestration-ask-timeout'
+import { clampOrchestrationAskTimeoutMs } from '../../../../../../shared/orchestration/mailbox/orchestration-ask-timeout'
 import { isGroupAddress } from '../../../../orchestration/addressing/groups/group-addressing'
 import { dispatchReportMailbox } from '../../../../orchestration/workers/reports/dispatch-report-mailbox'
 import { AskParams } from '../../../../../../shared/rpc-contract/orchestration-params'
 import { rejectFederatedExplicitTarget } from '../routing'
-import { askRemoteRunHome } from './ask-remote'
+import { askRemoteRunHome } from '../../../../orchestration/legacy-remote/legacy-remote'
 import {
   mailboxAddressOf,
   runCoordinatorKey
@@ -21,8 +21,13 @@ import {
 } from '../../../../orchestration/mailbox/questions/question-answer-delivery'
 
 export const ORCHESTRATION_ASK_METHODS = [
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.ask',
+    access: {
+      kind: 'writes',
+      caller: 'from',
+      targets: { to: 'party', resume: 'message', run: 'run' }
+    },
     permission: 'workspace',
     params: AskParams,
     handler: async (

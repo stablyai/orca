@@ -1,8 +1,8 @@
-import { resolveAgentWorkspaceTrustOwner } from '../../../../../../shared/agent-workspace-trust-decision'
+import { resolveAgentWorkspaceTrustOwner } from '../../../../../../shared/agent-launch/permissions/agent-workspace-trust-decision'
 import { terminalLaunchFacts } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { readTerminalSpawnDeferral } from '../../../../../../shared/host-spawn-admission'
+import { readTerminalSpawnDeferral } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { isRuntimeOwnedSshTargetId } from '../../../../../../shared/execution-host'
-import { readIpcErrorDetail } from '@/lib/ipc-error'
+import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
 import { ensurePtyDispatcher } from '../delivery/pty-dispatcher'
 import {
   clearConsumedPreHandlerPtyExit,

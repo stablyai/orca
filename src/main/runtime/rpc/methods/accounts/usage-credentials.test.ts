@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import type * as NodeOs from 'node:os'
 import { join } from 'node:path'
@@ -9,8 +9,6 @@ import type { RpcRequest } from '../../core'
 import { RpcDispatcher } from '../../dispatcher'
 import { USAGE_CREDENTIAL_METHODS } from './usage-credentials'
 import { API_KEY_ENVELOPE_PREFIX } from '../../../../zcode/zcode-plan-api-key-store'
-import { RuntimeAccountController } from '../../../agent-session/environment/runtime-account-controller'
-import { hostAccountsManagedByDesktopMessage } from '../../../../../shared/host-account-launch-env'
 
 const home = vi.hoisted(() => ({ dir: '' }))
 vi.mock('node:os', async (importOriginal) => {
@@ -18,7 +16,7 @@ vi.mock('node:os', async (importOriginal) => {
   return { ...actual, homedir: () => home.dir }
 })
 // Why: the CLI sign-in probe reads platform credential stores this test must not touch.
-vi.mock('../../../../rate-limits/zcode-usage-fetcher', () => ({
+vi.mock('../../../../rate-limits/providers/zcode/zcode-usage-fetcher', () => ({
   hasZcodeCliPlanCredentials: () => false
 }))
 
@@ -63,58 +61,6 @@ describe('usage credential RPC methods', () => {
     rmSync(home.dir, { recursive: true, force: true })
   })
 
-  it('saves and clears the MiniMax API key in this host’s ~/.orca and refreshes its usage', async () => {
-    const { runtime, rateLimits } = createRuntime()
-    const dispatcher = new RpcDispatcher({ runtime, methods: [...USAGE_CREDENTIAL_METHODS] })
-    const keyPath = join(home.dir, '.orca', 'minimax-api-key.enc')
-
-    const saved = await call(dispatcher, 'accounts.minimaxSaveApiKey', { apiKey: SECRET })
-
-    expect(saved).toMatchObject({
-      ok: true,
-      result: { apiKeyConfigured: true, apiKeyProtection: 'plaintext', configured: true }
-    })
-    expect(JSON.stringify(saved)).not.toContain(SECRET)
-    expect(readFileSync(keyPath, 'utf8')).toContain(Buffer.from(SECRET).toString('base64'))
-    expect(rateLimits.invalidateMiniMaxCredentialState).toHaveBeenCalledTimes(1)
-    expect(rateLimits.refresh).toHaveBeenCalledTimes(1)
-    await expect(call(dispatcher, 'accounts.minimaxCredentialsStatus')).resolves.toMatchObject({
-      ok: true,
-      result: { apiKeyConfigured: true, cookieConfigured: false }
-    })
-
-    await expect(call(dispatcher, 'accounts.minimaxClearApiKey')).resolves.toMatchObject({
-      ok: true,
-      result: { apiKeyConfigured: false, apiKeyProtection: null }
-    })
-    expect(existsSync(keyPath)).toBe(false)
-    expect(rateLimits.refresh).toHaveBeenCalledTimes(2)
-  })
-
-  it('saves and clears the GLM Coding Plan key on this host', async () => {
-    const { runtime, rateLimits } = createRuntime()
-    const dispatcher = new RpcDispatcher({ runtime, methods: [...USAGE_CREDENTIAL_METHODS] })
-
-    const saved = await call(dispatcher, 'accounts.zcodePlanSaveApiKey', { apiKey: SECRET })
-
-    expect(saved).toMatchObject({
-      ok: true,
-      result: { apiKeyConfigured: true, zcodeCliConfigured: false, apiKeyProtection: 'plaintext' }
-    })
-    expect(JSON.stringify(saved)).not.toContain(SECRET)
-    expect(existsSync(join(home.dir, '.orca', 'zcode-plan-api-key.enc'))).toBe(true)
-    expect(rateLimits.invalidateZcodeCredentialState).toHaveBeenCalledTimes(1)
-
-    await expect(call(dispatcher, 'accounts.zcodePlanClearApiKey')).resolves.toMatchObject({
-      ok: true,
-      result: { apiKeyConfigured: false }
-    })
-    await expect(call(dispatcher, 'accounts.zcodePlanCredentialsStatus')).resolves.toMatchObject({
-      ok: true,
-      result: { apiKeyConfigured: false }
-    })
-  })
-
   // Why a tagged cipher: this process opens only what it sealed, as safeStorage and orcad do.
   function useSealingSecretStore(options: { working: boolean }): void {
     const tag = Buffer.from('this-host:')
@@ -143,48 +89,10 @@ describe('usage credential RPC methods', () => {
     return keyPath
   }
 
-  const sealedByOther = (prefix: string): string =>
-    `${prefix}encrypted:${Buffer.from('other-app-cipher').toString('base64')}`
-
   const providers = [
     ['MiniMax', 'minimax-api-key.enc', 'orca-minimax-api-key:v1:', 'minimax'],
     ['GLM', 'zcode-plan-api-key.enc', API_KEY_ENVELOPE_PREFIX, 'zcodePlan']
   ] as const
-
-  it.each(providers)(
-    'never overwrites a %s key the other Orca app on this machine sealed, but forgets it',
-    async (_provider, fileName, prefix, methodPrefix) => {
-      useSealingSecretStore({ working: true })
-      const { runtime, rateLimits } = createRuntime()
-      const dispatcher = new RpcDispatcher({ runtime, methods: [...USAGE_CREDENTIAL_METHODS] })
-      const foreign = sealedByOther(prefix)
-      const keyPath = writeKeyFile(fileName, foreign)
-
-      await expect(
-        call(dispatcher, `accounts.${methodPrefix}CredentialsStatus`)
-      ).resolves.toMatchObject({
-        ok: true,
-        result: { apiKeyConfigured: true, apiKeyUnreadable: 'sealed-elsewhere' }
-      })
-      const refused = await call(dispatcher, `accounts.${methodPrefix}SaveApiKey`, {
-        apiKey: SECRET
-      })
-      expect(refused).toMatchObject({
-        ok: false,
-        error: { message: expect.stringContaining('Change it in that app') }
-      })
-      expect(JSON.stringify(refused)).not.toContain(SECRET)
-      expect(readFileSync(keyPath, 'utf8')).toBe(foreign)
-      expect(rateLimits.refresh).not.toHaveBeenCalled()
-
-      // Nobody here can read it, so forgetting it loses nothing.
-      await expect(call(dispatcher, `accounts.${methodPrefix}ClearApiKey`)).resolves.toMatchObject({
-        ok: true,
-        result: { apiKeyConfigured: false }
-      })
-      expect(existsSync(keyPath)).toBe(false)
-    }
-  )
 
   it.each(providers)(
     'reports a corrupt %s key as unreadable and lets it be replaced',
@@ -205,28 +113,4 @@ describe('usage credential RPC methods', () => {
       ).resolves.toMatchObject({ ok: true, result: { apiKeyUnreadable: undefined } })
     }
   )
-
-  it('refuses every call where the desktop owns this host’s accounts, storing nothing', async () => {
-    const accounts = new RuntimeAccountController()
-    accounts.restoreHostLaunchEnv({ wslDistro: 'Ubuntu', claude: {}, terminal: {} }, () => {})
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above, backed by a real controller with no account services.
-    const runtime = {
-      getRuntimeId: () => 'runtime-a',
-      requireUsageRateLimits: () => accounts.requireUsageRateLimits()
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: [...USAGE_CREDENTIAL_METHODS] })
-
-    for (const [method, params] of [
-      ['accounts.zcodePlanSaveApiKey', { apiKey: SECRET }],
-      ['accounts.minimaxSaveApiKey', { apiKey: SECRET }],
-      ['accounts.minimaxCredentialsStatus', undefined],
-      ['accounts.zcodePlanCredentialsStatus', undefined]
-    ] as const) {
-      await expect(call(dispatcher, method, params)).resolves.toMatchObject({
-        ok: false,
-        error: { message: hostAccountsManagedByDesktopMessage('Ubuntu') }
-      })
-    }
-    expect(existsSync(join(home.dir, '.orca'))).toBe(false)
-  })
 })

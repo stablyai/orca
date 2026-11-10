@@ -1,13 +1,13 @@
 import type {
   RuntimeFileOpenPosition,
   RuntimeFileOpenResult
-} from '../../../shared/runtime-file-contracts'
+} from '../../../shared/file-access/runtime-editor-file-open'
 import { listFilesystemMarkdownDocuments } from '../../providers/filesystem-markdown-listing'
-import type { MarkdownDocument } from '../../../shared/filesystem-entry-types'
+import type { MarkdownDocument } from '../../../shared/file-listing/file-document'
 import {
   validatePathExistenceBatch,
   type PathExistenceResult
-} from '../../../shared/path-existence-batch'
+} from '../../../shared/file-access/path-existence-batch'
 import { readRuntimeFilePathExistence } from './file-path-existence'
 import {
   isMobileBinaryPath,

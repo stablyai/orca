@@ -2,7 +2,7 @@ import type {
   RemovedWorkEntry,
   ResetRemovedWork,
   RunRemovedWork
-} from '../../../shared/orchestration-removed-work'
+} from '../../../shared/orchestration/orchestration-removed-work'
 
 const count = (n: number, noun: string, plural = `${noun}s`): string =>
   `${n} ${n === 1 ? noun : plural}`

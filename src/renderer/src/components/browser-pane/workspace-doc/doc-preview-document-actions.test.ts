@@ -22,13 +22,13 @@ vi.mock('@/i18n/i18n', () => ({
     fallback.replace('{{value0}}', params?.value0 ?? '')
 }))
 
-vi.mock('@/lib/connection-owner-resolution', () => ({
+vi.mock('@/lib/workspace/ownership/connection-owner-resolution', () => ({
   getConnectionIdForFileFromState: () => mocks.connectionIdForFile
 }))
 vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   runtimeEnvironmentIdOrLocalUnlessTwin: () => mocks.worktreeRuntimeOwnerId
 }))
-vi.mock('@/lib/file-owner-runtime-target', () => {
+vi.mock('@/lib/files/access/file-owner-runtime-target', () => {
   const getRuntimeTargetForFileOwner = (
     _state: unknown,
     _worktreeId: string | null | undefined,
@@ -48,7 +48,7 @@ vi.mock('@/lib/file-owner-runtime-target', () => {
       getRuntimeTargetForFileOwner(state, worktreeId, undefined)
   }
 })
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: () => mocks.connectionIdForWorkspace,
   getConnectionIdForFile: () => mocks.connectionIdForFile
 }))

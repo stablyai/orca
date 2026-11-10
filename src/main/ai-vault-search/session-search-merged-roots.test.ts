@@ -1,3 +1,4 @@
+import './session-search-worker.test-fixture'
 import { chmod, rm } from 'node:fs/promises'
 import { delimiter, join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
@@ -29,7 +30,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  indexer.close()
+  await indexer.close()
   resetTranscriptConsumersForTests()
   resetSessionParseCacheForTests()
   await harness.cleanup()

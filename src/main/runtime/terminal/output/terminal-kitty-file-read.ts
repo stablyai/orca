@@ -8,7 +8,7 @@ import {
   toWindowsWslPath,
   toWindowsWslUncPath
 } from '../../../../shared/wsl-paths'
-import { readNodeFileHandleWithinLimit } from '../../../../shared/node-bounded-file-reader'
+import { readNodeFileHandleWithinLimit } from '../../../../shared/file-content/node-bounded-file-reader'
 import {
   TERMINAL_KITTY_FILE_MAX_BYTES,
   type TerminalKittyFileRequest,

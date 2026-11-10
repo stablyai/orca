@@ -11,11 +11,11 @@ import {
   getTaskSourceCacheScope,
   getTaskSourceRuntimeSettings,
   type TaskSourceContext
-} from '../../../../../shared/task-source-context'
-import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+} from '../../../../../shared/work-items/task-source-context'
+import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { parseJiraStatusError } from '../../../../../shared/jira/jira-status-error'
-import { defaultScopeSource } from '@/lib/default-creation-host'
-import type { RowLessSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
+import type { RowLessSource } from '@/runtime/hosts/selection/default-creation-host'
 
 const CACHE_TTL = 60_000
 const MAX_CACHE_ENTRIES = 500

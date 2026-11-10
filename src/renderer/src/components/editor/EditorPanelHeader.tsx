@@ -21,7 +21,7 @@ import { EditorPanelHeaderPath } from './EditorPanelHeaderPath'
 import { useDiffNavigation } from './diff/review/diff-navigation-context'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
-import type { ArtifactWriteRequest } from '../../../../shared/artifacts'
+import type { ArtifactWriteRequest } from '../../../../shared/artifacts/artifacts'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
 import { editorArtifactSourceKey } from './editor-artifact-upload'
 
@@ -149,7 +149,7 @@ export function EditorPanelHeader({
         onOpenMarkdownPreview={onOpenMarkdownPreview}
       />
       {canOpenPreview && (
-        <TooltipProvider delayDuration={300}>
+        <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -168,7 +168,7 @@ export function EditorPanelHeader({
         </TooltipProvider>
       )}
       {isSingleDiff && (
-        <TooltipProvider delayDuration={300}>
+        <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -212,7 +212,7 @@ export function EditorPanelHeader({
         />
       )}
       {isDiffSurface && (
-        <TooltipProvider delayDuration={300}>
+        <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -293,7 +293,7 @@ export function EditorPanelHeader({
           editorViewToggle
         ))}
       {canShowMarkdownTableOfContents && (
-        <TooltipProvider delayDuration={300}>
+        <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
               <button

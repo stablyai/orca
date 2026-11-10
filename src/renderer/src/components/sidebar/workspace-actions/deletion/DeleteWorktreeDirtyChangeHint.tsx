@@ -1,8 +1,9 @@
+// @protected-copy
 import type { JSX } from 'react'
 import { AlertTriangle, ChevronRight } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useTranslate } from '@/i18n/use-translate'
-import { STATUS_COLORS } from '../../../../lib/git-path-decoration'
+import { STATUS_COLORS } from '../../../../lib/source-control/paths/git-path-decoration'
 import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
 import type {
   DeleteWorktreeChangeCheckState,
@@ -25,7 +26,7 @@ export function DeleteWorktreeDirtyChangeHint({
     }
     const statusLabel =
       checkState === 'complete'
-        ? t('components.workspace.delete.changes.clean', 'No uncommitted or untracked changes')
+        ? t('components.workspace.delete.changes.none', 'No uncommitted changes')
         : checkState === 'unavailable'
           ? t('components.workspace.delete.changes.unavailable', 'Changes could not be checked')
           : t('components.workspace.delete.changes.checking', 'Checking for changes…')
@@ -39,13 +40,13 @@ export function DeleteWorktreeDirtyChangeHint({
   const label =
     changeCount > 0
       ? t(
-          'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.changeCount',
-          '{{count}} uncommitted or untracked changes',
-          { count: changeCount, defaultValue_one: '{{count}} uncommitted or untracked change' }
+          'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.changesLost',
+          '{{count}} uncommitted changes will be lost',
+          { count: changeCount, defaultValue_one: '{{count}} uncommitted change will be lost' }
         )
       : t(
-          'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.changes',
-          'Uncommitted or untracked changes'
+          'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.uncountedChangesLost',
+          'Uncommitted changes will be lost'
         )
 
   const warningLabel = (

@@ -2,7 +2,7 @@ import { lstat, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { StagedRuntimeUploadFileIdentity } from '../../shared/runtime-upload-staging-contract'
+import type { StagedRuntimeUploadFileIdentity } from '../../shared/file-import/runtime-upload-staging-contract'
 import type * as RuntimeImportLimits from './runtime-import-limits'
 
 type RuntimeImportLimitsModule = typeof RuntimeImportLimits

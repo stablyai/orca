@@ -1,5 +1,5 @@
 import { watchMovedWorkerResumeSessions } from '../rpc/methods/orchestration/worker/worker-resume-session-capture'
-import { AgentTransitionDetector } from '../../agent-hooks/agent-transition-detector'
+import { AgentTransitionDetector } from '../../agent-hooks/observations/agent-transition-detector'
 import type { ConnectorCloud } from '../../connector-cloud/connector-cloud'
 import type { ExternalConversationSeam } from '../../external-conversations/external-conversation-seam'
 import { installExternalConversations } from '../../external-conversations/external-conversations-install'
@@ -19,6 +19,8 @@ import {
   terminalPhaseInTurn
 } from '../orchestration/terminal-authority/release/worker-auto-release-activity'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
+import { WorktreeRowsChanges } from '../client/events/worktree-rows-change-events'
 import {
   TerminalAgentPhonePush,
   type TerminalAgentWorkspaceLabels
@@ -67,6 +69,15 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
   })
 
   private readonly externalConversations = installExternalConversations(this.store, this)
+
+  // The sidebar feed's activity facts already announce row changes when it is on.
+  private readonly worktreeRowsChanges = ORCA_SIDEBAR_INPUTS_IS_MAIN
+    ? null
+    : new WorktreeRowsChanges((event) => this.emitClientEvent(event))
+
+  protected onTitleAgentStatusChanged(): void {
+    this.worktreeRowsChanges?.changed()
+  }
 
   /** The connector seam while `experimentalConnectors` is on; null refuses every connector call. */
   getExternalConversationSeam(): ExternalConversationSeam | null {
@@ -130,12 +141,14 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
       this.crewChanges.notify(new Set(['status', 'names']))
     )
     this.crewChanges.notify(new Set(['status', 'names']))
+    const detachRows = store.subscribeStatusRowMutations(() => this.worktreeRowsChanges?.changed())
     const subscribe = store.subscribeEnrichedStatus?.bind(store)
     const detachTitles = subscribe
       ? subscribeHookStatusTitles({ subscribeEnrichedStatus: subscribe }, this)
       : () => {}
     return () => {
       detachCrew()
+      detachRows()
       this.crewChanges.notify(new Set(['status', 'names']))
       detachTitles()
       detachTransitions()

@@ -6,7 +6,7 @@ import {
   hardenExistingSecureFile,
   isUnreadableError,
   writeSecureJsonFile
-} from '../../../../../shared/secure-file'
+} from '../../../../../shared/secure-storage/secure-file'
 import {
   E2EE_KEYPAIR_FILENAME as KEYPAIR_FILENAME,
   MAX_E2EE_KEYPAIR_FILE_BYTES as MAX_KEYPAIR_FILE_BYTES
@@ -67,12 +67,20 @@ export function loadOrCreateE2EEKeypair(userDataPath: string): E2EEKeypair {
     }
   }
 
+  return writeNewE2EEKeypair(userDataPath)
+}
+
+/** Atomically replaces any stored keypair with a fresh one. */
+export function writeNewE2EEKeypair(
+  userDataPath: string,
+  write: (path: string, value: unknown) => boolean = writeSecureJsonFile
+): E2EEKeypair {
   const keypair = nacl.box.keyPair()
   const publicKeyB64 = Buffer.from(keypair.publicKey).toString('base64')
   const secretKeyB64 = Buffer.from(keypair.secretKey).toString('base64')
 
   const data: KeypairFile = { v: KEYPAIR_VERSION, publicKeyB64, secretKeyB64 }
-  writeSecureJsonFile(filePath, data)
+  write(join(userDataPath, KEYPAIR_FILENAME), data)
 
   return { publicKey: keypair.publicKey, secretKey: keypair.secretKey, publicKeyB64 }
 }

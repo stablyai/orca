@@ -2,13 +2,13 @@ import {
   decodeLegacyQuickOpenInventory,
   pruneLegacyInventoryCache
 } from './runtime-legacy-inventory-budget'
-import { quickOpenRecentCandidateSet } from '../../../../../shared/quick-open-recent-candidates'
-import type { RuntimeFileListResult } from '../../../../../shared/runtime-file-contracts'
+import { quickOpenRecentCandidateSet } from '../../../../../shared/quick-open/quick-open-recent-candidates'
+import type { RuntimeFileListResult } from '../../../../../shared/file-listing/runtime-file-list'
 import {
   buildExcludePathPrefixes,
   shouldExcludeQuickOpenRelPath
-} from '../../../../../shared/quick-open-filter'
-import { QuickOpenPathRanker } from '../../../../../shared/quick-open-path-search'
+} from '../../../../../shared/quick-open/quick-open-filter'
+import { QuickOpenPathRanker } from '../../../../../shared/quick-open/quick-open-path-search'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { createRuntimeRpcAbortError } from '../../rpc/calls/abortable-runtime-environment-call'

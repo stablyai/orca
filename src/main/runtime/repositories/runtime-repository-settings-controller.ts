@@ -41,6 +41,7 @@ type RepositoryUpdates = Partial<
     | 'worktreeBasePath'
     | 'kind'
     | 'symlinkPaths'
+    | 'dictationTerms'
     | 'issueSourcePreference'
     | 'defaultJiraProject'
     | 'externalWorktreeVisibility'
@@ -51,9 +52,9 @@ type RepositoryUpdates = Partial<
     | 'customWorktreeVisibilitySources'
     | 'worktreeVisibilitySourcePreferences'
     | 'projectGroupId'
-    | 'projectGroupOrder'
   >
 > & {
+  projectGroupOrder?: number | null
   sourceControlAi?: Repo['sourceControlAi'] | null
   externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
   /** Only `null` clears; `omitUndefined` drops a stripped (undefined) field so it never unbinds. */

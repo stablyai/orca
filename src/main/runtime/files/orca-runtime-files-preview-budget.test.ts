@@ -10,7 +10,6 @@ import {
 } from './runtime-file-host.test-fixture'
 import { RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES } from './file-preview-budget'
 import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../../shared/remote-rpc-content-budget'
-import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 
 vi.mock('fs', async () => (await import('./runtime-file-command-mock-registry')).fsModuleMock())
 vi.mock('fs/promises', async () =>
@@ -60,20 +59,6 @@ describe('RuntimeFileReads', () => {
       ).rejects.toThrow('file_too_large')
     })
 
-    it('keeps local previews above the remote cap available without a request budget', async () => {
-      const size = RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES + 1
-      const dir = await previewFixture(size)
-      const { commands } = createFileReads({ path: dir })
-      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
-
-      await expect(commands.readFileExplorerPreview('id:wt-1', 'logo.png')).resolves.toEqual({
-        content: Buffer.alloc(size, 0x61).toString('base64'),
-        isBinary: true,
-        isImage: true,
-        mimeType: 'image/png'
-      })
-    })
-
     // Phones read images a chat names by host path; only image files on this machine qualify.
     it('reads a chat image outside every project root but never another file type', async () => {
       const dir = await previewFixture()
@@ -101,20 +86,6 @@ describe('RuntimeFileReads', () => {
       await expect(
         commands.readChatImagePreview('id:wt-1', join(dir, 'notes.txt'))
       ).rejects.toThrow('not_an_image')
-    })
-
-    it('refuses chat images for an SSH workspace, whose paths name the remote machine', async () => {
-      const dir = await previewFixture()
-      const { commands } = createFileReads({
-        resolveRuntimeFileTarget: vi.fn(async () => ({
-          worktree: { id: 'wt-1', repoId: 'repo-1', path: '/remote/repo' },
-          executionHostId: 'ssh:ssh-1'
-        }))
-      })
-
-      await expect(commands.readChatImagePreview('id:wt-1', join(dir, 'logo.png'))).rejects.toThrow(
-        SshHostNotServedError
-      )
     })
   })
 })

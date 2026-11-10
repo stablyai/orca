@@ -1,8 +1,6 @@
 import { notificationSourceForOwner } from '../../../shared/notification-source'
-import {
-  buildExecutionHostRegistry,
-  type ExecutionHostRegistryEntry
-} from '../../../shared/execution-host-registry'
+import { buildExecutionHostRegistry } from '../../../shared/execution-host/execution-host-registry'
+import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host/execution-host-registry-entry'
 import { getHostDisplayLabelOverrides } from '../../../shared/host-setting-overrides'
 import type { AppState } from '@/store/types'
 

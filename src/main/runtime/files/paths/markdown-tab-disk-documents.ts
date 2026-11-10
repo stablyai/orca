@@ -13,8 +13,8 @@ import type { RuntimeMobileSessionMarkdownTab } from '../../../../shared/runtime
 import type {
   FileWriteDiskPrecondition,
   FileWriteResult
-} from '../../../../shared/file-write-disk-precondition'
-import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
+} from '../../../../shared/file-write/file-write-disk-precondition'
+import { getDiskBaselineSignature } from '../../../../shared/file-write/disk-baseline-signature'
 import type {
   PersistedOpenFile,
   WorkspaceSessionState

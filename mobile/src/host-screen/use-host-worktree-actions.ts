@@ -1,19 +1,20 @@
 import { useCallback } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
 import type { useRouter } from 'expo-router'
 import { floatingWorkspaceSessionPath } from '../session/floating-workspace'
 import { holdSessionLeave } from '../session/session-leave-guard'
 import { savePinnedIds } from '../storage/preferences'
-import type { useForgetHostClient } from '../transport/host-client-hooks'
-import { removeHostAndCloseClient } from '../transport/host-removal-lifecycle'
-import { isPageHostRemovalUnavailable } from '../transport/page-host-removal-refusal'
-import type { RpcClient } from '../transport/rpc-client'
+import type { useForgetHostClient } from '../transport/connection/host-client-hooks'
+import { removeHostAndCloseClient } from '../host-catalog/host-removal-lifecycle'
+import { isPageHostRemovalUnavailable } from '../host-catalog/page-host-removal-refusal'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   rpcClientForExecutionHost,
   workspaceRouteExecutionHost
-} from '../transport/execution-host-scoped-rpc-client'
+} from '../worktree/execution-host-scoped-rpc-client'
 import { serverUpdateNeededNotice } from '../host-route-notice'
-import type { ConnectionState } from '../transport/types'
+import type { ConnectionState } from '../transport/connection/connection-state'
 import { leaveHostRoute } from '../host-route-exit'
 import { getWorktreeRowIdentity, isSameWorktreeRow } from '../worktree/worktree-host-row-identity'
 import { noteLastVisitedWorktree } from '../worktree/last-visited-worktree-by-host'
@@ -71,6 +72,7 @@ export function useHostWorktreeActions(args: {
     router,
     state
   } = args
+  const queryClient = useQueryClient()
   const {
     pinnedIds,
     setActionError,
@@ -216,7 +218,7 @@ export function useHostWorktreeActions(args: {
       return
     }
     try {
-      await removeHostAndCloseClient(hostId, forgetHostClient)
+      await removeHostAndCloseClient(hostId, forgetHostClient, queryClient)
       leaveHostRoute(router)
     } catch (error) {
       if (isPageHostRemovalUnavailable(error)) {
@@ -229,7 +231,7 @@ export function useHostWorktreeActions(args: {
       // React Native Web Alert is a no-op; show a dismissible action error while keeping the list, header and confirm usable.
       setActionError('Could not remove host. Please try again.')
     }
-  }, [hostId, router, forgetHostClient, setActionError, setConfirmRemoveHost])
+  }, [hostId, router, forgetHostClient, queryClient, setActionError, setConfirmRemoveHost])
 
   // beforeNavigate runs unless the open session holds the leave, so a held tap leaves the target untouched.
   const navigateFromHostList = useCallback(

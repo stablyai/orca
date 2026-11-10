@@ -1,9 +1,9 @@
-import { hasWorkspaceFileDragType } from '@/lib/workspace-file-drag'
-import { hasNativeFileDragTypes } from '../../../../../../shared/native-file-drop'
+import { hasWorkspaceFileDragType } from '@/lib/files/drop/workspace-file-drag'
+import { hasNativeFileDragTypes } from '../../../../../../shared/file-import/native-file-drop'
 import {
   type DroppedPathConsumer,
   OS_FILE_DROP_OWNER_ATTRIBUTE
-} from '../../../../../../shared/native-file-drop-preparation'
+} from '../../../../../../shared/file-import/native-file-drop-preparation'
 import type { NativeChatResolvedPathSink } from './use-native-chat-workspace-file-drop'
 
 /** Workspace files use composer handlers; OS files use the pane’s native file owner. */

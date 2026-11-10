@@ -1,6 +1,6 @@
 import React from 'react'
 import { FolderKanban, MessageSquare } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   getPRCommentAudienceEmptyLabel,
   getPrCommentAudienceFilters
@@ -10,7 +10,7 @@ import type { PRCommentGroup } from '../../../../../shared/source-control/review
 import type { PRComment } from '../../../../../shared/github/comment-types'
 import type { GitHubOwnerRepo, GitHubPRFile } from '../../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { useTranslate } from '@/i18n/use-translate'
 import type { IssueConversationEntry } from './issue-conversation-entries'
 import { ConversationTabCommentCard } from './conversation-tab-comment-card'
