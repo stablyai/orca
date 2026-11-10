@@ -100,7 +100,9 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     )
   }
 
-  protected async computeResolvedWorktrees(): Promise<ResolvedWorktreeSnapshot> {
+  protected async computeResolvedWorktrees(
+    readOnlyAdmission = false
+  ): Promise<ResolvedWorktreeSnapshot> {
     if (!this.store) {
       return { worktrees: [], platformByRepoId: new Map() }
     }
@@ -108,7 +110,7 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     const repos = this.store.getRepos()
     const projectRuntimeByRepoId = resolveLocalProjectRuntimesForRepos(this.requireStore(), repos)
     const platformByRepoId = platformsByRepoId(repos, projectRuntimeByRepoId)
-    const deps = this.repoWorktreeRowDeps()
+    const deps = this.repoWorktreeRowDeps(readOnlyAdmission)
     const perRepoWorktrees = await Promise.all(
       repos.map(
         async (repo) => await resolveRepoWorktreeRows(deps, repo, metaById, projectRuntimeByRepoId)
@@ -155,10 +157,11 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     )
   }
 
-  protected repoWorktreeRowDeps(): RepoWorktreeRowDeps {
+  protected repoWorktreeRowDeps(readOnlyAdmission = false): RepoWorktreeRowDeps {
     const store = this.requireStore()
     return {
       store,
+      readOnlyAdmission,
       scanRepo: (repo, projectRuntimeByRepoId) =>
         this.listRepoWorktreesForListing(repo, projectRuntimeByRepoId),
       getCachedSuccessfulScan: (repo) => {
@@ -174,7 +177,9 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
         return undefined
       },
       listFolderWorkspaces: (repo, repoOwnerCount) =>
-        listRuntimeFolderWorkspaces(store, repo, repoOwnerCount)
+        readOnlyAdmission
+          ? projectRuntimeFolderWorkspaces(store, repo, repoOwnerCount)
+          : listRuntimeFolderWorkspaces(store, repo, repoOwnerCount)
     }
   }
 

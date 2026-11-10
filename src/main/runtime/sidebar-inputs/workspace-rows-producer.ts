@@ -21,6 +21,7 @@ import type { WorkspaceLifecycleQueue } from '../workspaces/lifecycle/workspace-
 
 // The settings the visibility filter reads: the defaults, and the layouts that classify a checkout.
 const VISIBILITY_SETTINGS = [
+  'workspaceLineagePolicy',
   'worktreeVisibilityDefaults',
   'workspaceDir',
   'nestWorkspaces',

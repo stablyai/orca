@@ -1,3 +1,4 @@
+import { admitPersistedLineageWrite } from '../../../shared/workspace-lineage-policy'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
@@ -28,6 +29,9 @@ export class FolderParentLineagePersistence {
   ): WorkspaceLineage | undefined {
     const { state } = this[folderParentLineageContext].runtime
     if (!ownsRawIdBucket(state, target)) {
+      return undefined
+    }
+    if (!admitPersistedLineageWrite(state, lineage, target.hostId)) {
       return undefined
     }
     delete state.worktreeLineageById[target.id]

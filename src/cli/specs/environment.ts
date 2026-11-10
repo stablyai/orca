@@ -3,6 +3,20 @@ import { GLOBAL_FLAGS, LOCAL_COMMAND_FLAGS } from '../args'
 
 export const ENVIRONMENT_COMMAND_SPECS: CommandSpec[] = [
   {
+    path: ['host', 'lineage-policy'],
+    summary: 'Read or set the serving host workspace project boundary',
+    usage: 'orca host lineage-policy [--policy any-project|same-project] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'policy'],
+    notes: [
+      'The answering host owns this policy for all its projects. Use --environment to select a paired runtime; unsupported hosts refuse the change. Existing links are preserved when hidden.'
+    ],
+    examples: [
+      'orca host lineage-policy --json',
+      'orca host lineage-policy --policy same-project --json',
+      'orca host lineage-policy --policy any-project --json'
+    ]
+  },
+  {
     path: ['host', 'name'],
     summary: 'Show or set the name this Orca runtime reports to connected clients',
     usage: 'orca host name [--name <name>] [--json]',

@@ -1,3 +1,4 @@
+import { WORKSPACE_LINEAGE_POLICY_RUNTIME_CAPABILITY } from '../../shared/worktree-runtime-capabilities'
 import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
 import { runtimeHostConnectionState } from '../../shared/remote-runtime/host-status/runtime-host-connection-state'
 import { findTransport, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
@@ -17,6 +18,16 @@ import { isProcessRunning } from './runtime-pid-liveness'
 import { runtimeAccessDeniedError } from './runtime-access-denied'
 
 export { projectRemoteAppStatus, resolveDesktopWindowStatus }
+
+export function projectWorkspaceLineagePolicy(
+  status: RuntimeStatus
+): Pick<CliStatusResult['runtime'], 'workspaceLineagePolicy'> {
+  return status.capabilities?.includes(WORKSPACE_LINEAGE_POLICY_RUNTIME_CAPABILITY) &&
+    (status.workspaceLineagePolicy === 'any-project' ||
+      status.workspaceLineagePolicy === 'same-project')
+    ? { workspaceLineagePolicy: status.workspaceLineagePolicy }
+    : {}
+}
 
 export async function getCliStatus(
   userDataPath: string
@@ -107,21 +118,7 @@ function projectConnectedStatus(
       pid: metadata.pid,
       ...(desktopWindowStatus ? { desktopWindowStatus } : {})
     },
-    runtime: {
-      state: graphState === 'ready' ? 'ready' : 'graph_not_ready',
-      reachable: true,
-      connectionState: runtimeHostConnectionState({
-        hasStatusEntry: true,
-        status: response.result
-      }),
-      runtimeId: response.result.runtimeId,
-      ...(response.result.appVersion ? { appVersion: response.result.appVersion } : {}),
-      ...(response.result.remoteUpdateSupport
-        ? { remoteUpdateSupport: response.result.remoteUpdateSupport }
-        : {}),
-      ...(response.result.capabilities ? { capabilities: response.result.capabilities } : {}),
-      ...(response.result.degradations ? { degradations: response.result.degradations } : {})
-    },
+    runtime: projectConnectedRuntimeStatus(response.result),
     graph: {
       state: graphState
     }
@@ -136,5 +133,22 @@ function buildCliStatusResponse(result: CliStatusResult): RuntimeRpcSuccess<CliS
     _meta: {
       runtimeId: result.runtime.runtimeId ?? 'none'
     }
+  }
+}
+
+export function projectConnectedRuntimeStatus(status: RuntimeStatus): CliStatusResult['runtime'] {
+  return {
+    state: status.graphStatus === 'ready' ? 'ready' : 'graph_not_ready',
+    reachable: true,
+    connectionState: runtimeHostConnectionState({
+      hasStatusEntry: true,
+      status
+    }),
+    runtimeId: status.runtimeId,
+    ...projectWorkspaceLineagePolicy(status),
+    ...(status.appVersion ? { appVersion: status.appVersion } : {}),
+    ...(status.remoteUpdateSupport ? { remoteUpdateSupport: status.remoteUpdateSupport } : {}),
+    ...(status.capabilities ? { capabilities: status.capabilities } : {}),
+    ...(status.degradations ? { degradations: status.degradations } : {})
   }
 }

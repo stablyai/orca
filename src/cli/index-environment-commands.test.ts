@@ -80,4 +80,47 @@ describe('orca cli worktree awareness', () => {
     expect(logSpy.mock.calls[0]?.[0]).not.toContain('token')
     expect(logSpy.mock.calls[0]?.[0]).not.toContain('publicKeyB64')
   })
+
+  it('changes only a capable serving host policy and reads it back', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    let policy = 'any-project'
+    callMock.mockImplementation(
+      async (method: string, params?: { workspaceLineagePolicy?: string }) => {
+        if (method === 'settings.update') {
+          policy = params?.workspaceLineagePolicy ?? policy
+          return { ok: true, result: { settings: { workspaceLineagePolicy: policy } } }
+        }
+        return {
+          ok: true,
+          result: {
+            runtimeId: 'host-a',
+            capabilities: ['workspace.lineage-policy.v1'],
+            workspaceLineagePolicy: policy
+          }
+        }
+      }
+    )
+    await main(['host', 'lineage-policy', '--policy', 'same-project', '--json'], '/tmp/repo')
+    expect(callMock.mock.calls.map(([method]) => method)).toEqual([
+      'status.get',
+      'settings.update',
+      'status.get'
+    ])
+    expect(callMock.mock.calls[1]?.[1]).toEqual({ workspaceLineagePolicy: 'same-project' })
+    expect(JSON.parse(String(log.mock.calls.at(-1)?.[0]))).toMatchObject({
+      ok: true,
+      result: { workspaceLineagePolicy: 'same-project' }
+    })
+  })
+
+  it('refuses an unsupported host before attempting a policy update', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    callMock.mockResolvedValue({ ok: true, result: { runtimeId: 'old-host', capabilities: [] } })
+    await main(['host', 'lineage-policy', '--policy', 'same-project', '--json'], '/tmp/repo')
+    expect(callMock.mock.calls.map(([method]) => method)).toEqual(['status.get'])
+    expect(JSON.parse(String(log.mock.calls.at(-1)?.[0]))).toMatchObject({
+      ok: false,
+      error: { code: 'incompatible_runtime' }
+    })
+  })
 })

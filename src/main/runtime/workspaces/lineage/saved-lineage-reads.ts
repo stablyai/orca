@@ -1,3 +1,5 @@
+import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
+import { RuntimeLineageError } from './runtime-lineage-error'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { readAllWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'
@@ -26,5 +28,49 @@ export function savedInstanceIdReader(
     return repo
       ? getRepoOwnedWorktreeMeta(repo, id, metaById, ownerCounts.get(repo.id) ?? 0)?.instanceId
       : undefined
+  }
+}
+
+export function validateSavedLineageParentCycle(
+  store: RuntimeStore | null,
+  child: ResolvedWorktree,
+  parent: ResolvedWorktree
+): void {
+  let readSavedInstanceId: ((id: string) => string | undefined) | undefined
+  // Reparent invalidates the resolved cache; saved metadata must cover intermediate nodes or longer loops escape detection.
+  const instanceIdOf = (id: string): string | undefined => {
+    if (id === child.id || id === parent.id) {
+      return id === child.id ? child.instanceId : parent.instanceId
+    }
+    readSavedInstanceId ??= store
+      ? savedInstanceIdReader(store, child.hostId ?? parent.hostId)
+      : () => undefined
+    return readSavedInstanceId(id)
+  }
+  let cursor: string | undefined = parent.id
+  const visited = new Set<string>()
+  while (cursor) {
+    if (cursor === child.id) {
+      throw new RuntimeLineageError(
+        'LINEAGE_PARENT_CYCLE',
+        'Parent selector would create a lineage cycle.'
+      )
+    }
+    // An unrelated saved loop must not block this parent.
+    if (visited.has(cursor)) {
+      break
+    }
+    visited.add(cursor)
+    const lineage = store?.getWorktreeLineage?.(cursor)
+    if (!lineage) {
+      break
+    }
+    if (
+      instanceIdOf(cursor) !== lineage.worktreeInstanceId ||
+      instanceIdOf(lineage.parentWorktreeId) !== lineage.parentWorktreeInstanceId
+    ) {
+      break
+    }
+    cursor = lineage.parentWorktreeId
   }
 }

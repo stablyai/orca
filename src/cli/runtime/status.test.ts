@@ -1,3 +1,5 @@
+import { RUNTIME_PROTOCOL_VERSION } from '../../shared/protocol-version'
+import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { createServer, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -29,60 +31,74 @@ afterEach(async () => {
 
 // This legacy fixture uses Unix sockets; Windows runtimes use named pipes.
 describe.skipIf(process.platform === 'win32')('CLI runtime status', () => {
-  it('uses the legacy singular runtime transport when reporting status', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-status-'))
-    const endpoint = join(userDataPath, 'runtime.sock')
-    const server = createServer((socket) => {
-      sockets.add(socket)
-      socket.once('close', () => sockets.delete(socket))
-      socket.once('data', (data) => {
-        const request = JSON.parse(String(data).trim()) as { id: string }
-        socket.write(
-          `${JSON.stringify({
-            id: request.id,
-            ok: true,
-            result: {
-              runtimeId: 'runtime-legacy',
-              rendererGraphEpoch: 1,
-              graphStatus: 'ready',
-              authoritativeWindowId: null,
-              liveTabCount: 0,
-              degradations: [
-                {
-                  code: 'browser_unavailable',
-                  capability: 'browser.headless.v1',
-                  message: 'Browser automation is unavailable.'
-                }
-              ]
-            },
-            _meta: { runtimeId: 'runtime-legacy' }
-          })}\n`
-        )
+  it.each([
+    [undefined, false, undefined],
+    ['same-project', true, 'same-project'],
+    ['any-project', true, 'any-project'],
+    ['same-project', false, undefined]
+  ] as const)(
+    'projects local policy %s only with capability %s',
+    async (policy, capable, expected) => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-status-'))
+      const endpoint = join(userDataPath, 'runtime.sock')
+      const server = createServer((socket) => {
+        sockets.add(socket)
+        socket.once('close', () => sockets.delete(socket))
+        socket.once('data', (data) => {
+          const request = JSON.parse(String(data).trim()) as { id: string }
+          socket.write(
+            `${JSON.stringify({
+              id: request.id,
+              ok: true,
+              result: {
+                runtimeId: 'runtime-legacy',
+                workspaceLineagePolicy: policy,
+                capabilities: capable ? ['workspace.lineage-policy.v1'] : [],
+                rendererGraphEpoch: 1,
+                graphStatus: 'ready',
+                authoritativeWindowId: null,
+                liveTabCount: 0,
+                degradations: [
+                  {
+                    code: 'browser_unavailable',
+                    capability: 'browser.headless.v1',
+                    message: 'Browser automation is unavailable.'
+                  }
+                ]
+              },
+              _meta: { runtimeId: 'runtime-legacy' }
+            })}\n`
+          )
+        })
       })
-    })
-    servers.add(server)
-    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
-    writeFileSync(
-      getRuntimeMetadataPath(userDataPath),
-      JSON.stringify({
+      servers.add(server)
+      await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+      writeFileSync(
+        getRuntimeMetadataPath(userDataPath),
+        JSON.stringify({
+          runtimeId: 'runtime-legacy',
+          pid: 424242,
+          transport: { kind: 'unix', endpoint },
+          authToken: 'token',
+          startedAt: 1
+        })
+      )
+
+      const status = await new RuntimeClient(userDataPath).getCliStatus()
+
+      expect(status.result.runtime.workspaceLineagePolicy).toBe(expected)
+      expect(Object.hasOwn(status.result.runtime, 'workspaceLineagePolicy')).toBe(
+        expected !== undefined
+      )
+      expect(status.result.runtime).toMatchObject({
+        reachable: true,
+        connectionState: 'connected',
         runtimeId: 'runtime-legacy',
-        pid: 424242,
-        transport: { kind: 'unix', endpoint },
-        authToken: 'token',
-        startedAt: 1
+        state: 'ready',
+        degradations: [expect.objectContaining({ code: 'browser_unavailable' })]
       })
-    )
-
-    const status = await new RuntimeClient(userDataPath).getCliStatus()
-
-    expect(status.result.runtime).toMatchObject({
-      reachable: true,
-      connectionState: 'connected',
-      runtimeId: 'runtime-legacy',
-      state: 'ready',
-      degradations: [expect.objectContaining({ code: 'browser_unavailable' })]
-    })
-  })
+    }
+  )
 })
 
 // A persisted host PID cannot establish liveness in the caller's namespace.
@@ -185,4 +201,48 @@ describe('projectRemoteAppStatus', () => {
       desktopWindowStatus: 'available'
     })
   })
+})
+
+describe('environment CLI lineage policy status', () => {
+  it.each([
+    ['same-project', true, 'same-project'],
+    ['any-project', true, 'any-project'],
+    ['same-project', false, undefined]
+  ] as const)(
+    'projects remote policy %s only with capability %s',
+    async (policy, capable, expected) => {
+      const profile = mkdtempSync(join(tmpdir(), 'orca-remote-policy-status-'))
+      const pairing = encodePairingOffer({
+        v: 2,
+        endpoint: 'ws://127.0.0.1:6768',
+        deviceToken: 'fixture-token',
+        publicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64'),
+        scope: 'runtime'
+      })
+      const client = new RuntimeClient(profile, 1000, pairing)
+      const call = vi.spyOn(client, 'call').mockResolvedValue({
+        id: 'status',
+        ok: true,
+        result: {
+          runtimeId: 'remote',
+          runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+          minCompatibleRuntimeClientVersion: RUNTIME_PROTOCOL_VERSION,
+          graphStatus: 'ready',
+          workspaceLineagePolicy: policy,
+          capabilities: capable ? ['workspace.lineage-policy.v1'] : []
+        },
+        _meta: { runtimeId: 'remote' }
+      })
+      try {
+        const status = await client.getCliStatus()
+        expect(status.result.target?.kind).toBe('environment')
+        expect(status.result.runtime.workspaceLineagePolicy).toBe(expected)
+        expect(Object.hasOwn(status.result.runtime, 'workspaceLineagePolicy')).toBe(
+          expected !== undefined
+        )
+      } finally {
+        call.mockRestore()
+      }
+    }
+  )
 })

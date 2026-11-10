@@ -1,3 +1,4 @@
+import { appendLineageDiagnosticComment } from '../../shared/workspace-lineage-policy'
 import { readableWslDistroHoldText } from '../../shared/wsl-distro-stopped-hold'
 import { canCheckoutExistingLocalBranch } from '../runtime/workspaces/creation/runtime-worktree-create-git'
 /* eslint-disable max-lines */
@@ -251,6 +252,7 @@ type CreatedWorktreeLineageRecords = {
   lineage: CreateWorktreeResult['lineage']
   workspaceLineage: CreateWorktreeResult['workspaceLineage']
   crossStoreLineage?: CreateWorktreeResult['crossStoreLineage']
+  warnings?: CreateWorktreeResult['warnings']
 }
 
 const NO_CREATED_WORKTREE_LINEAGE: CreatedWorktreeLineageRecords = {
@@ -258,7 +260,7 @@ const NO_CREATED_WORKTREE_LINEAGE: CreatedWorktreeLineageRecords = {
   workspaceLineage: null
 }
 
-/** `noteLineage`: the common create resolver's answer for a task id in the note, absent an explicit parent. */
+/** `noteLineage`: admission's captured parent, including explicit parents in restricted mode. */
 export function recordWorkspaceLineageForCreatedWorktree(
   store: Store,
   args: CreateWorktreeArgs,
@@ -266,6 +268,21 @@ export function recordWorkspaceLineageForCreatedWorktree(
   createdAt: number,
   noteLineage?: WorktreeLineageResolution
 ): CreatedWorktreeLineageRecords {
+  const restricted = store.getSettings?.().workspaceLineagePolicy === 'same-project'
+  if (restricted && args.parentWorkspace && !noteLineage) {
+    // Policy may change while checkout creation awaits; no earlier admission proves this parent.
+    noteLineage = {
+      kind: 'none',
+      warnings: [
+        {
+          code: 'LINEAGE_PARENT_CONTEXT_CONFLICT',
+          message:
+            'Workspace kept as a root because parent project admission changed during creation.',
+          details: { parentWorkspaceKey: args.parentWorkspace }
+        }
+      ]
+    }
+  }
   if (args.crossStoreParent) {
     const { crossStoreLineage, warnings } = recordCreatedWorktreeLineage(
       store,
@@ -275,9 +292,13 @@ export function recordWorkspaceLineageForCreatedWorktree(
     for (const warning of warnings) {
       console.warn(`[worktree-create] ${warning.message}`)
     }
-    return { ...NO_CREATED_WORKTREE_LINEAGE, crossStoreLineage: crossStoreLineage ?? null }
+    return {
+      ...NO_CREATED_WORKTREE_LINEAGE,
+      crossStoreLineage: crossStoreLineage ?? null,
+      ...(warnings.length ? { warnings } : {})
+    }
   }
-  if (!args.parentWorkspace && noteLineage) {
+  if (noteLineage && (restricted || !args.parentWorkspace)) {
     const { lineage, workspaceLineage, warnings } = recordCreatedWorktreeLineage(
       store,
       worktree,
@@ -286,7 +307,7 @@ export function recordWorkspaceLineageForCreatedWorktree(
     for (const warning of warnings) {
       console.warn(`[worktree-create] ${warning.message}`)
     }
-    return { lineage, workspaceLineage }
+    return { lineage, workspaceLineage, ...(warnings.length ? { warnings } : {}) }
   }
   if (!args.parentWorkspace || !worktree.instanceId) {
     return NO_CREATED_WORKTREE_LINEAGE
@@ -1033,17 +1054,33 @@ async function performLocalWorktreeCreate(
   pathClaim: WorktreeCreatePathClaim,
   onWorkspaceCreated?: (worktreeId: string) => void
 ): Promise<CreateWorktreeResult> {
+  const restricted = store.getSettings().workspaceLineagePolicy === 'same-project'
+  const policyLineage = restricted
+    ? await runtime.resolveLineageForWorktreeCreate(
+        {
+          parentWorkspace: args.parentWorkspace,
+          parentWorkspaceOrigin: 'manual',
+          crossStoreParent: args.crossStoreParent,
+          comment: args.comment
+        },
+        repo
+      )
+    : undefined
+  if (policyLineage) {
+    args = { ...args, comment: appendLineageDiagnosticComment(args.comment, policyLineage) }
+  }
   // Why: no await without a ref, so the common create keeps its synchronous probe start.
   if (args.crossStoreParent !== undefined) {
     await assertCreatableCrossStoreParent(runtime, args.crossStoreParent)
   }
   // A task id in the note names the parent here, as it does for every other create path.
   const noteLineage =
-    args.comment && !args.parentWorkspace && !args.crossStoreParent
+    policyLineage ??
+    (args.comment && !args.parentWorkspace && !args.crossStoreParent
       ? await runtime
           .resolveLineageForWorktreeCreate({ comment: args.comment }, repo)
           .catch(() => undefined)
-      : undefined
+      : undefined)
   const settings = store.getSettings()
   const worktreePathSettings = getWorktreePathSettings(
     repo,
@@ -1736,7 +1773,8 @@ async function performLocalWorktreeCreate(
   const {
     lineage: worktreeLineage,
     workspaceLineage,
-    crossStoreLineage
+    crossStoreLineage,
+    warnings: lineageWarnings
   } = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now, noteLineage)
   // Reuse complete listing roots for authorization; incomplete recovery must not replace the repo's full root set.
   if (listingComplete) {
@@ -1891,6 +1929,7 @@ async function performLocalWorktreeCreate(
         ? { lineage: worktreeLineage, parentWorktreeId: worktreeLineage.parentWorktreeId }
         : {})
     },
+    ...(lineageWarnings?.length ? { warnings: lineageWarnings } : {}),
     ...(worktreeLineage ? { lineage: worktreeLineage } : {}),
     ...(workspaceLineage ? { workspaceLineage } : {}),
     ...(crossStoreLineage ? { crossStoreLineage } : {}),

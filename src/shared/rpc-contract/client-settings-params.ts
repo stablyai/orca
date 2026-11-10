@@ -86,6 +86,7 @@ export const GitHubProjectSettings = z
 
 export const SettingsUpdate = z
   .object({
+    workspaceLineagePolicy: z.enum(['any-project', 'same-project']).optional(),
     machineName: z.string().trim().max(MACHINE_NAME_MAX_LENGTH).optional(),
     worktreeVisibilityDefaults: WorktreeVisibilityDefaultsUpdate.optional(),
     defaultTuiAgent: z

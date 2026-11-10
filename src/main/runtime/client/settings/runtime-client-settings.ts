@@ -1,3 +1,4 @@
+import { getWorkspaceLineagePolicy } from '../../../../shared/workspace-lineage-policy'
 import { publishedLegacyChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { getClaudeAgentViewService } from '../../../claude/agent-view/agent-view-service'
 import { getAppEnvironment } from '../../../../shared/app-environment'
@@ -110,6 +111,7 @@ export class RuntimeClientSettingsController {
         : { agentSkillSharingEnabled: isAgentSkillSharingEnabled(settings) }),
       nativeChatAutoContinueAfterUsageLimit:
         settings.nativeChatAutoContinueAfterUsageLimit === true,
+      workspaceLineagePolicy: getWorkspaceLineagePolicy(settings),
       machineName: settings.machineName ?? '',
       // A paired browser dictates through this host, which refuses unless these allow it.
       voice: {
@@ -157,7 +159,10 @@ export class RuntimeClientSettingsController {
     )
     const settings = this.store.getSettings()
     await getClaudeAgentViewService().reconcile(settings)
-    if (updates.worktreeVisibilityDefaults !== undefined) {
+    if (
+      updates.worktreeVisibilityDefaults !== undefined ||
+      updates.workspaceLineagePolicy !== undefined
+    ) {
       this.notifyReposChanged?.()
     }
     if (

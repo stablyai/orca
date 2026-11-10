@@ -59,6 +59,13 @@ export function updateSettings(
   updates: Partial<GlobalSettings>,
   options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
 ): GlobalSettings {
+  if (
+    updates.workspaceLineagePolicy !== undefined &&
+    updates.workspaceLineagePolicy !== 'any-project' &&
+    updates.workspaceLineagePolicy !== 'same-project'
+  ) {
+    throw new Error('Invalid workspace lineage policy.')
+  }
   const sanitizedUpdates = normalizeWorkspaceDirSetting(stripRetiredGlobalSettings(updates))
   const linkBehavior = updates.terminalLinkClickBehavior
   if (linkBehavior === 'actions' || linkBehavior === 'open' || linkBehavior === 'none') {

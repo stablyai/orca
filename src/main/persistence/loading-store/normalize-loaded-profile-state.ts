@@ -1,3 +1,4 @@
+import { getWorkspaceLineagePolicy } from '../../../shared/workspace-lineage-policy'
 import { normalizePersistedMobileClientTabSelections } from '../../runtime/client/navigation/client-session-tab-selection-persistence'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
 import { normalizeFeatureInteractionTelemetryBuckets } from '../../../shared/feature-interactions'
@@ -48,7 +49,10 @@ export function normalizeLoadedProfileState(
     parsed.workspaceLineageByChildKey
   )
   const worktreeLineageById = { ...parsed.worktreeLineageById }
-  dropInferredParentsOverFolderParents(worktreeLineageById, workspaceLineageByChildKey)
+  // Restricted projections hide legacy parents; loading must retain their original evidence.
+  if (getWorkspaceLineagePolicy(parsed.settings) !== 'same-project') {
+    dropInferredParentsOverFolderParents(worktreeLineageById, workspaceLineageByChildKey)
+  }
 
   return {
     ...defaults,

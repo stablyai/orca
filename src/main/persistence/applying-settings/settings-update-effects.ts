@@ -19,6 +19,7 @@ export function publishSettingsUpdate(
     operations.removeRetainedBlob(PROTECTED_SECRET_SLOT.httpProxyUrl)
   }
   if (
+    previousSettings.workspaceLineagePolicy !== operations.state.settings.workspaceLineagePolicy ||
     !Object.is(
       previousSettings.localWindowsRuntimeDefault,
       operations.state.settings.localWindowsRuntimeDefault

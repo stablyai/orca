@@ -5,6 +5,8 @@ import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { Repo } from '../../../../shared/repo-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
+import type { ResolvedWorktree } from './runtime-worktree-path-identity'
+import { partialRuntimeStore } from '../../orca-runtime-tests/runtime-store-partial-fixture'
 
 function folder(
   overrides: Partial<FolderWorkspace> & Pick<FolderWorkspace, 'id'>
@@ -69,6 +71,62 @@ const show = (runtime: OrcaRuntimeService, selector: string) =>
   runtime.showManagedWorktree(selector, undefined, { matchFolders: true })
 
 describe('path: and name: selectors on folder workspaces', () => {
+  it('resolves a cached checkout under same-project when the fleet refresh is unavailable', async () => {
+    const checkout: ResolvedWorktree = {
+      id: 'repo-cached::/work/cached',
+      repoId: 'repo-cached',
+      path: '/work/cached',
+      hostId: 'local',
+      head: 'abc123',
+      branch: 'cached-branch',
+      isBare: false,
+      isMainWorktree: true,
+      displayName: 'Cached checkout',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      parentWorktreeId: null,
+      childWorktreeIds: [],
+      lineage: null,
+      git: {
+        path: '/work/cached',
+        head: 'abc123',
+        branch: 'cached-branch',
+        isBare: false,
+        isMainWorktree: true
+      }
+    }
+    class CachedRuntime extends OrcaRuntimeService {
+      override resolveWorkspaceSelector(selector: string) {
+        return super.resolveWorkspaceSelector(selector)
+      }
+      protected override hasFreshResolvedWorktreeCache(): boolean {
+        return true
+      }
+      protected override async listResolvedWorktrees(): Promise<ResolvedWorktree[]> {
+        return [checkout]
+      }
+      protected override async computeResolvedWorktrees(): Promise<never> {
+        throw new Error('fleet refresh unavailable')
+      }
+    }
+    const runtime = new CachedRuntime(
+      partialRuntimeStore({ getSettings: () => ({ workspaceLineagePolicy: 'same-project' }) })
+    )
+    await expect(
+      runtime.resolveWorkspaceSelector('id:repo-cached::/work/cached')
+    ).resolves.toMatchObject({
+      id: 'repo-cached::/work/cached',
+      branch: 'cached-branch'
+    })
+  })
+
   it('match a folder workspace only when the request opts in', async () => {
     const runtime = createRuntime([folder({ id: 'hub-a' })])
 

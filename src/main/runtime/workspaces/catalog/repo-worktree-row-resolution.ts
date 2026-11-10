@@ -59,6 +59,7 @@ export type RepoWorktreeRow = Worktree & {
 }
 
 export type RepoWorktreeRowDeps = {
+  readOnlyAdmission?: boolean
   store: RepoWorktreeRowStore
   /** The cache-aware per-repo scan. Injected so this module never owns scan-cache state. */
   scanRepo: (
@@ -110,7 +111,10 @@ export type RepoWorktreeRowsScan = { ok: boolean; worktrees: GitWorktreeInfo[] }
 
 /** The scan half of `resolveRepoWorktreeRows`: slow, and the only part that awaits. */
 export async function scanRepoWorktreeRows(
-  deps: Pick<RepoWorktreeRowDeps, 'store' | 'scanRepo' | 'getCachedSuccessfulScan'>,
+  deps: Pick<
+    RepoWorktreeRowDeps,
+    'store' | 'scanRepo' | 'getCachedSuccessfulScan' | 'readOnlyAdmission'
+  >,
   repo: Repo,
   projectRuntimeByRepoId: ReadonlyMap<string, ProjectExecutionRuntimeResolution>,
   repoOwnerCount = deps.store.getRepos().filter((candidate) => candidate.id === repo.id).length
@@ -130,7 +134,7 @@ export async function scanRepoWorktreeRows(
       listStoredWorktreeRowsForRepo(store, repo, repoOwnerCount)
   }
   const gitWorktrees = preserveFolderUpgradeWorktreePath(repo, scan.worktrees)
-  if (scan.ok) {
+  if (scan.ok && !deps.readOnlyAdmission) {
     pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
   }
   return { ok: scan.ok, worktrees: gitWorktrees }
@@ -138,7 +142,7 @@ export async function scanRepoWorktreeRows(
 
 /** The join half: a repo's rows from a scan and the metadata as it is now. Synchronous. */
 export function projectRepoWorktreeRows(
-  deps: Pick<RepoWorktreeRowDeps, 'store' | 'listFolderWorkspaces'>,
+  deps: Pick<RepoWorktreeRowDeps, 'store' | 'listFolderWorkspaces' | 'readOnlyAdmission'>,
   repo: Repo,
   scan: RepoWorktreeRowsScan | null,
   metaById: Record<string, WorktreeMeta>,
@@ -164,10 +168,15 @@ export function projectRepoWorktreeRows(
     }))
   }
   const expectedHostId = getRepoExecutionHostId(repo)
+  const snapshot = deps.readOnlyAdmission
+    ? readAllWorktreeMetaForHost(store, expectedHostId)
+    : undefined
   return (scan?.worktrees ?? []).map((gitWorktree) => {
     const worktreeId = `${repo.id}::${gitWorktree.path}`
     const meta =
-      readWorktreeMetaForHost(store, worktreeId, expectedHostId) ??
+      (snapshot
+        ? snapshot[worktreeId]
+        : readWorktreeMetaForHost(store, worktreeId, expectedHostId)) ??
       getRepoOwnedWorktreeMeta(repo, worktreeId, metaById, repoOwnerCount)
     const merged = {
       ...mergeWorktree(repo.id, gitWorktree, meta, repo.displayName),
@@ -193,12 +202,15 @@ export function projectRepoWorktreeRows(
 
 /** Resolution owns durable identity stamping; memory projection never calls this wrapper. */
 export function joinRepoWorktreeRows(
-  deps: Pick<RepoWorktreeRowDeps, 'store' | 'listFolderWorkspaces'>,
+  deps: Pick<RepoWorktreeRowDeps, 'store' | 'listFolderWorkspaces' | 'readOnlyAdmission'>,
   repo: Repo,
   scan: RepoWorktreeRowsScan | null,
   metaById: Record<string, WorktreeMeta>,
   repoOwnerCount = deps.store.getRepos().filter((candidate) => candidate.id === repo.id).length
 ): RepoWorktreeRow[] {
+  if (deps.readOnlyAdmission) {
+    return projectRepoWorktreeRows(deps, repo, scan, metaById, repoOwnerCount)
+  }
   let projectedMeta: Record<string, WorktreeMeta> | undefined
   if (!isFolderRepo(repo)) {
     const hostId = getRepoExecutionHostId(repo)

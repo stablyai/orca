@@ -53,6 +53,16 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
       ) {
         return null
       }
+      if (
+        store.getSettings().workspaceLineagePolicy === 'same-project' &&
+        ['projectId', 'hostId', 'projectHostSetupId', 'instanceId', 'identity'].some((key) =>
+          Object.hasOwn(args.updates, key)
+        )
+      ) {
+        throw new Error(
+          'Workspace ownership is assigned by the host project setup, not metadata updates.'
+        )
+      }
       const validatedUpdates = normalizeLinkedWorkItemFields(args.updates)
       const updates =
         validatedUpdates.displayName !== undefined

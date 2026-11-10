@@ -281,3 +281,22 @@ export function enforceCreateLineageHostBoundary(
     ]
   }
 }
+
+export function rootOnlyFolderLineage(
+  resolution: WorktreeLineageResolution
+): WorktreeLineageResolution {
+  if (resolution.kind === 'none') {
+    return resolution
+  }
+  return {
+    kind: 'none',
+    warnings: [
+      {
+        code: 'LINEAGE_PARENT_CONTEXT_MISSING',
+        message:
+          'Folder creation creates a root workspace. Use a supported reparent action after creation to set a parent.',
+        details: { parentWorkspaceKey: resolution.parent.workspaceKey }
+      }
+    ]
+  }
+}
