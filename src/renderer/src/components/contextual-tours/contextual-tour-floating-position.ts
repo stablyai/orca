@@ -9,8 +9,8 @@ import {
   type Placement
 } from '@floating-ui/dom'
 import type { CSSProperties } from 'react'
-import type { ContextualTourStepPlacement } from '../../../../shared/contextual-tours'
 import { isWindowVisible } from '@/lib/window-activity/window-visibility-interval'
+import type { ContextualTourStepPlacement } from '../../../../shared/contextual-tours'
 
 export type ContextualTourPanelPlacement = 'top' | 'right' | 'bottom' | 'left'
 
@@ -94,61 +94,52 @@ export function watchContextualTourFloatingPosition(args: {
   let disposed = false
   let updateSequence = 0
   let lastDelivered: ContextualTourFloatingPosition | null = null
-  let stopVisibleTracking: (() => void) | null = null
-  const startVisibleTracking = (): (() => void) => {
-    let active = true
-    const update = (): void => {
-      if (!active || disposed) {
-        return
-      }
-      const sequence = ++updateSequence
-      void getContextualTourFloatingPosition(args)
-        .then((position) => {
-          // A hidden generation stays obsolete even after the window becomes visible again.
-          if (!active || disposed || sequence !== updateSequence) {
-            return
-          }
-          if (arePositionsEqual(lastDelivered, position)) {
-            return
-          }
-          lastDelivered = position
-          args.onPosition(position)
-        })
-        .catch(() => undefined)
-    }
-    const tracker = createTargetMotionTracker(args.targetElement, update)
-    const stopAutoUpdate = autoUpdate(args.targetElement, args.floatingElement, () => {
-      update()
-      if (active) {
-        tracker.wake()
-      }
-    })
-    return () => {
-      active = false
-      updateSequence += 1
-      tracker.stop()
-      stopAutoUpdate()
-    }
+  const update = (): void => {
+    const sequence = ++updateSequence
+    void getContextualTourFloatingPosition(args)
+      .then((position) => {
+        // Ignore async positions from disposed trackers or superseded frames.
+        if (disposed || sequence !== updateSequence) {
+          return
+        }
+        // Suppress unchanged positions; ancestor scroll recomputes must not trigger React commits.
+        if (arePositionsEqual(lastDelivered, position)) {
+          return
+        }
+        lastDelivered = position
+        args.onPosition(position)
+      })
+      .catch(() => undefined)
   }
+
+  const tracker = createTargetMotionTracker(args.targetElement, update)
+  // Observers wake frame tracking only during motion; animationFrame:true would poll throughout the tour’s life.
+  const stopAutoUpdate = autoUpdate(args.targetElement, args.floatingElement, () => {
+    update()
+    tracker.wake()
+  })
   const reconcileVisibility = (): void => {
-    if (!isWindowVisible()) {
-      stopVisibleTracking?.()
-      stopVisibleTracking = null
-    } else if (!disposed) {
-      stopVisibleTracking ??= startVisibleTracking()
+    if (isWindowVisible()) {
+      update()
+      tracker.wake()
+    } else {
+      tracker.pause()
     }
   }
   document.addEventListener('visibilitychange', reconcileVisibility)
-  reconcileVisibility()
+  // Event-driven placement must work even when Chromium's hidden state is stale after sleep.
+  if (!isWindowVisible()) {
+    tracker.pause()
+  }
   return () => {
     disposed = true
     document.removeEventListener('visibilitychange', reconcileVisibility)
-    stopVisibleTracking?.()
-    stopVisibleTracking = null
+    tracker.stop()
+    stopAutoUpdate()
   }
 }
 
-type TargetMotionTracker = { wake: () => void; stop: () => void }
+type TargetMotionTracker = { wake: () => void; pause: () => void; stop: () => void }
 
 // Why: parked between movements, per-frame only while the target is moving.
 function createTargetMotionTracker(target: Element, onMove: () => void): TargetMotionTracker {
@@ -159,7 +150,7 @@ function createTargetMotionTracker(target: Element, onMove: () => void): TargetM
   let lastRect = target.getBoundingClientRect()
 
   const park = (): void => {
-    if (stopped || probeTimer !== null) {
+    if (stopped || probeTimer !== null || !isWindowVisible()) {
       return
     }
     probeTimer = window.setTimeout(() => {
@@ -210,19 +201,23 @@ function createTargetMotionTracker(target: Element, onMove: () => void): TargetM
     frameId = requestAnimationFrame(trackFrame)
   }
 
+  const pause = (): void => {
+    if (frameId !== null) {
+      cancelAnimationFrame(frameId)
+      frameId = null
+    }
+    if (probeTimer !== null) {
+      window.clearTimeout(probeTimer)
+      probeTimer = null
+    }
+  }
   startTracking()
   return {
     wake: startTracking,
+    pause,
     stop: () => {
       stopped = true
-      if (frameId !== null) {
-        cancelAnimationFrame(frameId)
-        frameId = null
-      }
-      if (probeTimer !== null) {
-        window.clearTimeout(probeTimer)
-        probeTimer = null
-      }
+      pause()
     }
   }
 }
