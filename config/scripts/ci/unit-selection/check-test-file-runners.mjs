@@ -65,6 +65,12 @@ const NON_UNIT_TEST_RUNNERS = [
     mirrors: ["include: ['test/**/*.test.ts', 'image/**/*.test.ts']"]
   },
   {
+    name: 'cloud acceptance',
+    include: ['cloud/apps/acceptance/test/**/*.test.ts'],
+    sources: ['cloud/apps/acceptance/vitest.config.ts'],
+    mirrors: ["include: ['test/**/*.test.ts']"]
+  },
+  {
     name: 'cloud billing',
     include: ['cloud/apps/billing/test/**/*.test.ts'],
     sources: ['cloud/apps/billing/vitest.config.ts'],

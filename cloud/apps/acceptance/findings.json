@@ -1,0 +1,18 @@
+{
+  "findings": [
+    "<b>W1-1 (bug, w1-env-builds, open 2026-11-09):</b> an environment build only advances while a client streams <code>GET …/builds/:id/events</code>. Polling <code>GET …/builds/:id</code> every 10 s (documented as also advancing the build) left the build in <code>running</code> with 0 log bytes for 25 min, and again for 4 min in a minimal repro. The same build finished in 15–19 s once the events stream was opened. API, CLI and MCP clients that poll, or a desktop that closes Settings mid-build, stall builds. The harness now follows the events stream the way the desktop does.",
+    "<b>D-1 (bug, core desktop, high):</b> starting an Orca Cloud create before signing in, then signing in from the card, created a sandbox owned by the fallback dev user (<code>desktop-dogfood</code>), not the signed-in user. Keep-alive, Copy SSH Command and Delete then got <code>not_found</code>. Likely cause: <code>getHostedSandboxConfig()</code> caches the token for the app process and does not reset it on sign-in (<code>src/main/hosted-sandbox/hosted-sandbox-config.ts</code>).",
+    "<b>D-2 (bug, core desktop, high):</b> Delete Workspace hides the row and reports success when the control plane answers <code>not_found</code>, while the VM keeps running (a billing leak).",
+    "<b>D-3 (bug, core desktop):</b> after a cloud create, the checkout at <code>/vercel/sandbox/project</code> is added as a new project named \"project\" instead of being grouped under orca-sandbox-push-test.",
+    "<b>D-4 (minor, desktop):</b> the \"Sign in to use Orca Cloud\" card stays after sign-in; the Ports panel says \"Port scan unavailable on unknown\" while waking; \"Move to this computer\" has no confirmation and copies rather than moves (the VM keeps running); the agent picker is disabled for Orca Cloud.",
+    "<b>W6-1 (resolved):</b> provider keys are now egress placeholders in orcad's env (swap on by default on dev), so <code>sec.precedence</code> reads <code>AWS_REGION</code>. W6 confirmed the swap resolves keys with the same precedence as injection (team &gt; repo &gt; personal for agent keys) and added a test at the egress proxy (cloud/w6-precedence-test). Real Claude Code and Codex PRs: nwparker/orca-sandbox-push-test#5, #6.",
+    "<b>Fixed since the last report:</b> F1 resume on a running sandbox now returns in 0.5 s (was a 60 s 502); F3 ai-gateway.vercel.sh is allowlisted (real Claude Code task passes); F4 the image now has orca, rg, tmux, vim, git-lfs and Chrome; F5 disk is 64 GB.",
+    "<b>Note:</b> kill-switch drain mode is not exercised on the shared dev Worker (it would suspend other workstreams' sandboxes); refusal of creates and wakes is verified."
+  ],
+  "gaps": [
+    "Real Anthropic-model Claude run is pending an AI Gateway credit top-up (no anthropic/* models on free credits); agent.real-task uses moonshotai/kimi-k2 through Claude Code.",
+    "Payment-grace expiry (96 h) is not waited on: dunning verifies past_due, blocked starts, grace window, and pay leading to resume.",
+    "Team create/invite need the Orca Cloud auth endpoints on staging (team-billing-ux is standing them up).",
+    "The 15-min idle auto-sleep is not waited out in the routine run (config value checked); the mobile app UI is covered by W8's own runs (device-session API verified here)."
+  ]
+}
