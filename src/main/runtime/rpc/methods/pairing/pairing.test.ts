@@ -2,11 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { RpcDispatcher } from '../../dispatcher'
 import { PAIRING_METHODS } from './pairing'
+import type { PairingRpcContext } from '../core'
 
 function dispatchPairing(
   method: string,
   params: unknown,
-  pairing: NonNullable<Parameters<RpcDispatcher['dispatchStreaming']>[2]>['pairing']
+  pairing: PairingRpcContext | undefined
 ): Promise<Record<string, unknown>> {
   return new Promise((resolve) => {
     const runtime = { getRuntimeId: () => 'test-runtime' }
@@ -24,6 +25,10 @@ function dispatchPairing(
 }
 
 describe('pairing RPC methods', () => {
+  it('registers pairing.createOffer', () => {
+    expect(PAIRING_METHODS.map((method) => method.name)).toContain('pairing.createOffer')
+  })
+
   it('rejects caller-selected identity and authorization metadata', async () => {
     const pairing = { getEndpoints: vi.fn(), provisionRelay: vi.fn() }
 
@@ -50,5 +55,77 @@ describe('pairing RPC methods', () => {
     ).resolves.toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
     expect(pairing.provisionRelay).not.toHaveBeenCalled()
     expect(pairing.getEndpoints).not.toHaveBeenCalled()
+  })
+
+  it('mints a pairing offer through pairing.createOffer', async () => {
+    const createOffer = vi.fn().mockReturnValue({
+      available: true,
+      pairingUrl: 'orca://pair?code=test',
+      endpoint: 'ws://100.64.1.20:6768',
+      deviceId: 'device-1',
+      webClientUrl: 'http://100.64.1.20:6768/web-index.html#pairing=orca%3A%2F%2Fpair%3Fcode%3Dtest'
+    })
+
+    await expect(
+      dispatchPairing(
+        'pairing.createOffer',
+        {
+          address: '100.64.1.20',
+          rotate: true,
+          scope: 'runtime'
+        },
+        { createOffer }
+      )
+    ).resolves.toMatchObject({
+      ok: true,
+      result: {
+        available: true,
+        pairingUrl: 'orca://pair?code=test',
+        endpoint: 'ws://100.64.1.20:6768',
+        deviceId: 'device-1',
+        webClientUrl:
+          'http://100.64.1.20:6768/web-index.html#pairing=orca%3A%2F%2Fpair%3Fcode%3Dtest'
+      }
+    })
+    expect(createOffer).toHaveBeenCalledWith({
+      address: '100.64.1.20',
+      rotate: true,
+      scope: 'runtime'
+    })
+  })
+
+  it('rejects pairing.createOffer without host minting context', async () => {
+    await expect(
+      dispatchPairing('pairing.createOffer', { scope: 'runtime' }, undefined)
+    ).resolves.toMatchObject({
+      ok: false,
+      error: { message: 'pairing_context_unavailable' }
+    })
+    await expect(
+      dispatchPairing('pairing.createOffer', { scope: 'runtime' }, { getEndpoints: vi.fn() })
+    ).resolves.toMatchObject({
+      ok: false,
+      error: { message: 'pairing_context_unavailable' }
+    })
+  })
+
+  it('rejects injected fields on pairing.createOffer params', async () => {
+    const createOffer = vi.fn()
+    await expect(
+      dispatchPairing(
+        'pairing.createOffer',
+        { address: '100.64.1.20', deviceToken: 'injected' },
+        { createOffer }
+      )
+    ).resolves.toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(createOffer).not.toHaveBeenCalled()
+  })
+
+  it('rejects oversized address on pairing.createOffer', async () => {
+    const createOffer = vi.fn()
+    await expect(
+      dispatchPairing('pairing.createOffer', { address: 'a'.repeat(2049) }, { createOffer })
+    ).resolves.toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(createOffer).not.toHaveBeenCalled()
   })
 })

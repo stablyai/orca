@@ -245,6 +245,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   ...HOST_HANDLER_GROUPS,
   {
+    name: 'pairing',
+    keys: ['pairing create'],
+    load: async () => (await import('./handlers/pairing.js')).PAIRING_HANDLERS
+  },
+  {
     name: 'skill-sharing',
     keys: ['skills installed', 'skills share'],
     load: async () => (await import('./handlers/skill-sharing.js')).SKILL_SHARING_HANDLERS

@@ -29,10 +29,14 @@ export const PAIRING_METHODS = [
     permission: 'pairing-admin',
     params: PairingCreateOfferParamsSchema,
     handler: async (params, ctx) => {
-      if (!ctx.pairingOffers) {
+      // Owner transports mint through pairingOffers. A headless Unix socket also passes createOffer.
+      if (ctx.pairingOffers) {
+        return await ctx.pairingOffers.create(params)
+      }
+      if (!ctx.pairing?.createOffer) {
         throw new Error('pairing_context_unavailable')
       }
-      return await ctx.pairingOffers.create(params)
+      return ctx.pairing.createOffer(params)
     }
   }),
   defineMethod({
@@ -40,7 +44,7 @@ export const PAIRING_METHODS = [
     permission: 'pairing-admin',
     params: PairingGetEndpointsParamsSchema,
     handler: async (params, ctx) => {
-      if (!ctx.pairing) {
+      if (!ctx.pairing?.getEndpoints) {
         throw new Error('pairing_context_unavailable')
       }
       return await ctx.pairing.getEndpoints(params)
@@ -51,7 +55,7 @@ export const PAIRING_METHODS = [
     permission: 'pairing-admin',
     params: PairingProvisionRelayParamsSchema,
     handler: async (params, ctx) => {
-      if (!ctx.pairing) {
+      if (!ctx.pairing?.provisionRelay) {
         throw new Error('pairing_context_unavailable')
       }
       return await ctx.pairing.provisionRelay(params)

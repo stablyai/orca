@@ -36,7 +36,7 @@ import type {
 } from '../../../shared/remote-runtime/pairing/device-key-registration-contract'
 import type {
   PairingCreateOfferParams,
-  PairingCreateOfferResult
+  PairingCreateOfferResult as OwnerPairingCreateOfferResult
 } from '../../../shared/remote-runtime/pairing/pairing-create-offer-contract'
 import type {
   ExchangePairingTicketParams,
@@ -49,14 +49,30 @@ export type DeviceSelfRpcContext = {
   exchangePairingTicket(params: ExchangePairingTicketParams): ExchangePairingTicketResult
 }
 
+// Why: createOffer is host-local minting; getEndpoints/provisionRelay are post-pair mobile relay helpers.
+export type PairingCreateOfferResult =
+  | {
+      available: false
+      reason: string
+      guidance: string
+    }
+  | {
+      available: true
+      pairingUrl: string
+      endpoint: string
+      deviceId: string
+      webClientUrl: string | null
+    }
+
 export type PairingRpcContext = {
-  getEndpoints(params: PairingGetEndpointsParams): Promise<PairingGetEndpointsResult>
-  provisionRelay(params: PairingProvisionRelayParams): Promise<DeviceCredentialInstalled>
+  getEndpoints?(params: PairingGetEndpointsParams): Promise<PairingGetEndpointsResult>
+  provisionRelay?(params: PairingProvisionRelayParams): Promise<DeviceCredentialInstalled>
+  createOffer?(params: PairingCreateOfferParams): PairingCreateOfferResult
 }
 
 // Mints new pairing credentials, so only the host owner's local transport provides it.
 export type PairingOffersRpcContext = {
-  create(params: PairingCreateOfferParams): Promise<PairingCreateOfferResult>
+  create(params: PairingCreateOfferParams): Promise<OwnerPairingCreateOfferResult>
 }
 
 export type RpcEnvelopeMeta = {
