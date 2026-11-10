@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
 import { expect, it, vi } from 'vitest'
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import { createElement } from 'react'
 import { useAgentModelMenu } from '@/components/agent/launch-settings/use-agent-model-menu'
 import { AgentChoiceControls } from '@/components/agent/launch-settings/AgentChoiceControls'
 import type { AppState } from '@/store/types'
+import type { AgentSessionModelCatalogResult } from '../../../../../shared/agent-session/agent-session-wire'
 const store = vi.hoisted(() => ({
   subscribe: vi.fn().mockReturnValue(() => {}),
   getState: vi.fn()
@@ -80,7 +81,7 @@ it('switching PowerShell to WSL invalidates a fresh native list and its in-fligh
   cleanup()
 })
 
-it('keeps closed Settings labels through a full settings fetch and a saved model choice', () => {
+it('keeps closed Settings labels through a full settings fetch and a saved model choice', async () => {
   resetHostModelCatalogSnapshotsForTests()
   store.subscribe.mockClear()
   const initial = {
@@ -112,11 +113,50 @@ it('keeps closed Settings labels through a full settings fetch and a saved model
       onChange: () => {}
     })
   }
+  const coldReply = Promise.withResolvers<AgentSessionModelCatalogResult>()
+  const coldRequest = vi.fn(() => coldReply.promise)
+  const coldSource = {
+    scope: {
+      target: { kind: 'environment' as const, environmentId: 'without-preload' },
+      agent: 'codex',
+      request: coldRequest
+    },
+    coherentCatalog: true
+  }
+  function Unpreloaded({ open }: { open: boolean }) {
+    const value = { model: 'saved-unlisted' }
+    const modelMenu = useAgentModelMenu('codex', value, coldSource, open)
+    return createElement(AgentChoiceControls, {
+      agent: 'codex',
+      value,
+      modelMenu,
+      layout: 'rows',
+      onChange: () => {}
+    })
+  }
+  const cold = render(createElement(Unpreloaded, { open: false }))
+  try {
+    expect(
+      screen.getByRole('button', { name: 'Model: saved-unlisted' }).getAttribute('aria-busy')
+    ).toBe('false')
+    expect(coldRequest).not.toHaveBeenCalled()
+    cold.rerender(createElement(Unpreloaded, { open: true }))
+    expect(
+      screen.getByRole('button', { name: 'Model: saved-unlisted' }).getAttribute('aria-busy')
+    ).toBe('true')
+    await waitFor(() => expect(coldRequest).toHaveBeenCalledTimes(1))
+  } finally {
+    cold.unmount()
+    await act(async () => {
+      coldReply.resolve({ origin: 'unknown' })
+      await coldReply.promise
+    })
+  }
   const view = render(createElement(Editor))
   try {
-    expect(screen.getByRole('button', { name: 'Model: Model' }).getAttribute('aria-busy')).toBe(
-      'true'
-    )
+    expect(
+      screen.getByRole('button', { name: 'Model: Agent default' }).getAttribute('aria-busy')
+    ).toBe('false')
     act(() =>
       recordHostModelCatalogSnapshot(source.scope.target, 'codex', null, { origin: 'unknown' })
     )

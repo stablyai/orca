@@ -210,7 +210,7 @@ it('shows fallback only after an eligible settled read fails, never before deman
   expect(screen.queryByRole('note')).toBeNull()
   expect(mocks.call).not.toHaveBeenCalled()
   view.rerender(<Editor applicable />)
-  expect(screen.getByRole('combobox', { name: 'Model' }).getAttribute('aria-busy')).toBe('true')
+  expect(screen.getByRole('combobox', { name: 'Model' }).getAttribute('aria-busy')).toBe('false')
   expect(screen.queryByRole('note')).toBeNull()
   expect(mocks.call).not.toHaveBeenCalled()
   fireEvent.focus(screen.getByRole('combobox', { name: 'Model' }))

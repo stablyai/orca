@@ -49,7 +49,8 @@ export function useAgentModelMenu(
     surface: 'terminal',
     seed: getAgentSessionOptionLaunchCatalog(agent) ?? { models: [], modelApply: {} },
     pending:
-      !!source && (snapshot.pending || (!snapshot.attempted && snapshot.answer === undefined)),
+      !!source &&
+      (snapshot.pending || (open && !snapshot.attempted && snapshot.answer === undefined)),
     coherentCatalog: source?.coherentCatalog,
     saved: { ...(saved?.model ? { model: saved.model } : {}), ...saved?.options },
     newLaunch: true,
