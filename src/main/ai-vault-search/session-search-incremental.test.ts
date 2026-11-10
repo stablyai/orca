@@ -9,7 +9,6 @@ import {
   CODEX_FIXTURE_SESSION_ID
 } from '../ai-vault/scanners/codex/session-scanner-codex-fixtures'
 import { subagentTranscriptsDirFor } from '../ai-vault/scanners/claude/session-scanner-subagent-transcripts'
-import { SessionFileInventory } from '../ai-vault/session-file-inventory'
 import { SessionSearchIndexer } from './session-search-indexer'
 import {
   FakeSessionSearchClock,
@@ -98,7 +97,7 @@ it('resumes partially observed directories and retains a create behind the consu
   for (let index = 0; index < 40; index++) {
     await writeFile(join(root, `${index}.jsonl`), '{}\n')
   }
-  const inventory = new SessionFileInventory(root)
+  const inventory = harness.inventory(root)
   const observations: string[] = []
   const stat = vi.spyOn(filesystem, 'wslGatedStat')
   try {
@@ -114,7 +113,7 @@ it('resumes partially observed directories and retains a create behind the consu
     expect(inventory.pending).toBe(true)
     const created = join(root, 'created.jsonl')
     await writeFile(created, '{}\n')
-    inventory.invalidate(created)
+    await inventory.invalidate(created)
     while (inventory.pending) {
       const next = await inventory.drain(args, () => true, 12)
       observations.push(...next.changes.map((change) => change.file.path))

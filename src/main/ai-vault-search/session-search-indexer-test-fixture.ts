@@ -1,3 +1,5 @@
+import { SessionSearchCatalog } from './session-search-catalog'
+import { SessionFileInventory } from '../ai-vault/session-file-inventory'
 import './session-search-worker.test-fixture'
 import { notifySessionSearchFileChange } from './session-search-watcher.test-fixture'
 import { mkdir, mkdtemp, rename, rm, stat, utimes, writeFile } from 'node:fs/promises'
@@ -61,6 +63,7 @@ export type SessionSearchIndexerHarness = {
   claudeProjectDir: string
   read: <T>(query: (db: SyncDatabase) => T) => T
   write: <T>(query: (db: SyncDatabase) => T) => T
+  inventory: (root: string) => SessionFileInventory
   cleanup: () => Promise<void>
 }
 
@@ -70,6 +73,8 @@ export async function openSessionSearchIndexerHarness(
   const root = await mkdtemp(join(tmpdir(), `${name}-`))
   const roots = isolatedScanRoots(root)
   const databasePath = join(root, 'index', 'index.sqlite')
+  let scratch: SyncDatabase | undefined
+  let catalog: SessionSearchCatalog | undefined
   return {
     root,
     databasePath,
@@ -77,7 +82,19 @@ export async function openSessionSearchIndexerHarness(
     claudeProjectDir: join(roots.claudeProjectsDir, 'project'),
     read: (query) => withConnection(databasePath, true, query),
     write: (query) => withConnection(databasePath, false, query),
-    cleanup: () => rm(root, { recursive: true, force: true })
+    inventory: (path) => {
+      scratch ??= new SyncDatabase('')
+      catalog ??= new SessionSearchCatalog(scratch)
+      return new SessionFileInventory(
+        path,
+        async (command) => catalog!.execute(command),
+        `fixture:${path}`
+      )
+    },
+    cleanup: async () => {
+      scratch?.close()
+      await rm(root, { recursive: true, force: true })
+    }
   }
 }
 

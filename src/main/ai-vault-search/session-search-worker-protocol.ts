@@ -1,3 +1,12 @@
+import type {
+  SessionSearchCandidateCommand,
+  SessionSearchCandidateResult
+} from './session-search-catalog-candidates'
+import type { SessionSearchReadEvent } from './session-search-foreground-write'
+import type {
+  SessionSearchCatalogCommand,
+  SessionSearchCatalogResult
+} from './session-search-catalog'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import type {
   TranscriptMessage,
@@ -30,6 +39,7 @@ export type SearchWorkerCommand =
       candidate: SessionFileCandidate
       mode: 'append' | 'replace'
       offset: number
+      unprepared?: { allowCovered: boolean; canProvePrefix: boolean }
     }
   | {
       op: 'batch'
@@ -38,12 +48,22 @@ export type SearchWorkerCommand =
       hash: SessionContentHash
       identity: TranscriptSessionIdentity | null
     }
+  | {
+      op: 'read-batch'
+      handle: number
+      events: SessionSearchReadEvent[]
+      identity: TranscriptSessionIdentity | null
+    }
   | { op: 'finish'; handle: number; outcome: TranscriptReadOutcome; hash: SessionContentHash }
   | { op: 'discard'; handle: number }
   | { op: 'state'; path: string; state: SessionSearchFileState; mtime?: number }
   | { op: 'remove'; path: string }
   | { op: 'purge'; cutoff: number | null }
+  | { op: 'coverage'; paths: string[] }
+  | { op: 'file-page'; after?: string }
   | { op: 'sync' }
+  | { op: 'candidates'; command: SessionSearchCandidateCommand }
+  | { op: 'catalog'; command: SessionSearchCatalogCommand }
   | { op: 'query'; request: AiVaultSearchRequest; scope?: SessionSearchHostScope }
 export type SearchWorkerRequest = { id: number; command: SearchWorkerCommand }
 export type SearchWorkerResponse = {
@@ -51,10 +71,16 @@ export type SearchWorkerResponse = {
   trace?: unknown
   failure?: 'write'
   error?: string
+  catalogPending?: boolean
   accepted?: boolean
-  snapshot?: SessionSearchSnapshotRow[]
+  prefixTarget?: number | null
+  reset?: boolean
+  coverage?: SessionSearchSnapshotRow[]
+  filePage?: SessionSearchSnapshotRow[]
   deltas?: { path: string; row: SessionSearchSnapshotRow | null }[]
   counts?: SessionSearchStateCounts
   generation?: number
+  candidates?: SessionSearchCandidateResult
+  catalog?: SessionSearchCatalogResult
   result?: AiVaultSearchResponse
 }

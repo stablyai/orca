@@ -1,4 +1,4 @@
-import { SessionInputFrontier } from '../ai-vault/session-input-frontier'
+import { SessionSearchCatalogClient } from './session-search-catalog-client'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import { fileIdentity } from './session-search-file-cursor'
 import { sessionSearchReadDecision } from './session-search-read-decision'
@@ -10,29 +10,37 @@ export type SessionSearchWork = {
   version: number
   metadata: boolean
 }
+type Queued = { work: SessionSearchWork; lane: string; order: number; due: boolean }
 
-/** A unique path owns its debt even when it leaves the next recent list. */
+/** A unique path's obligation lives in the writer even after it leaves the recent list. */
 export class SessionSearchWorkQueue {
-  private readonly backlog = new SessionInputFrontier<SessionSearchWork>()
-  private readonly changed = new SessionInputFrontier<SessionSearchWork>()
+  private catalog: SessionSearchCatalogClient<Queued> | undefined
   private version = 0
+  private order = 0
   private chooseChanged = true
-  private due = new Set<string>()
+  private count = 0
+  private due = 0
 
+  attach(store: SessionSearchIndexStore): void {
+    this.catalog ??= new SessionSearchCatalogClient('read-work', (command) =>
+      store.catalog(command)
+    )
+  }
   get size(): number {
-    return this.backlog.size + this.changed.size
+    return this.count
   }
   get left(): number {
-    return this.size - this.due.size
+    return this.count - this.due
   }
 
-  enqueue(
+  async enqueue(
     candidate: SessionFileCandidate,
     store: SessionSearchIndexStore,
     force = false,
     recent = true,
     metadata = false
-  ): void {
+  ): Promise<void> {
+    this.attach(store)
     const path = candidate.file.path
     const row = store.fileRow(path)
     const decision = sessionSearchReadDecision({
@@ -44,63 +52,79 @@ export class SessionSearchWorkQueue {
     if (!force && decision === 'skip') {
       return
     }
-    const existing = this.changed.get(path) ?? this.backlog.get(path)
-    const entry = {
-      candidate,
-      force: force || (existing?.force ?? false),
-      version: ++this.version,
-      metadata: metadata || (existing?.metadata ?? false)
+    const existing = await this.catalog!.get(path)
+    const value: Queued = {
+      work: {
+        candidate,
+        force: force || (existing?.work.force ?? false),
+        version: ++this.version,
+        metadata: metadata || (existing?.work.metadata ?? false)
+      },
+      lane: existing?.lane ?? (recent ? 'changed' : 'backlog'),
+      order: existing?.order ?? ++this.order,
+      due: row?.state === 'due'
     }
-    const queue = this.changed.has(path)
-      ? this.changed
-      : this.backlog.has(path)
-        ? this.backlog
-        : recent
-          ? this.changed
-          : this.backlog
-    queue.set(path, entry)
-    this.rowChanged(path, row)
+    await this.put(path, value)
+    this.count += existing ? 0 : 1
+    this.due += Number(value.due) - Number(existing?.due ?? false)
   }
 
-  hasPublicationDebt(path: string): boolean {
-    const work = this.changed.get(path) ?? this.backlog.get(path)
+  async hasPublicationDebt(path: string): Promise<boolean> {
+    const work = await this.get(path)
     return !!work && (work.force || work.metadata)
   }
 
-  next(): SessionSearchWork | undefined {
-    const preferred = this.chooseChanged ? this.changed : this.backlog
+  async next(): Promise<SessionSearchWork | undefined> {
+    const preferred = this.chooseChanged ? 'changed' : 'backlog'
     this.chooseChanged = !this.chooseChanged
-    return preferred.first ?? (preferred === this.changed ? this.backlog : this.changed).first
+    for (const lane of [preferred, preferred === 'changed' ? 'backlog' : 'changed']) {
+      const page = await this.catalog!.page({ group: lane, orderRank: true, limit: 1 })
+      if (page.rows.length) {
+        return page.rows[0].value.work
+      }
+    }
+    return undefined
   }
 
-  get(path: string): SessionSearchWork | undefined {
-    return this.changed.get(path) ?? this.backlog.get(path)
+  async get(path: string): Promise<SessionSearchWork | undefined> {
+    return (await this.catalog?.get(path))?.work
   }
 
-  acknowledge(work: SessionSearchWork, retry: boolean): void {
+  async acknowledge(work: SessionSearchWork, retry: boolean): Promise<void> {
     const path = work.candidate.file.path
-    const queue = this.changed.has(path) ? this.changed : this.backlog
-    if (queue.get(path)?.version !== work.version) {
+    const entry = await this.catalog!.get(path)
+    if (entry?.work.version !== work.version) {
       return
     }
-    queue.delete(path)
-    this.due.delete(path)
     if (retry) {
-      this.backlog.set(path, work)
-    }
-  }
-
-  remove(path: string): void {
-    this.backlog.delete(path)
-    this.changed.delete(path)
-    this.due.delete(path)
-  }
-
-  rowChanged(path: string, row: SessionSearchFileRow | undefined): void {
-    if (row?.state === 'due' && (this.changed.has(path) || this.backlog.has(path))) {
-      this.due.add(path)
+      await this.put(path, { ...entry, work, lane: 'backlog', order: ++this.order, due: false })
+      this.due -= Number(entry.due)
     } else {
-      this.due.delete(path)
+      await this.remove(path)
     }
+  }
+
+  async remove(path: string): Promise<void> {
+    const entry = await this.catalog?.get(path)
+    if (!entry) {
+      return
+    }
+    await this.catalog!.delete(path)
+    this.count--
+    this.due -= Number(entry.due)
+  }
+
+  async rowChanged(path: string, row: SessionSearchFileRow | undefined): Promise<void> {
+    const entry = await this.catalog?.get(path)
+    if (!entry || entry.due === (row?.state === 'due')) {
+      return
+    }
+    const due = row?.state === 'due'
+    await this.put(path, { ...entry, due })
+    this.due += Number(due) - Number(entry.due)
+  }
+
+  private put(path: string, value: Queued): Promise<void> {
+    return this.catalog!.put(path, value, { group: value.lane, rank: value.order })
   }
 }

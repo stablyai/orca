@@ -1,3 +1,11 @@
+import type {
+  SessionSearchCandidateCommand,
+  SessionSearchCandidateResult
+} from './session-search-catalog-candidates'
+import type {
+  SessionSearchCatalogCommand,
+  SessionSearchCatalogResult
+} from './session-search-catalog'
 import {
   createAiVaultScanCancelledError,
   abandonRemoteSessionScanOnCancel
@@ -10,6 +18,7 @@ import { reportSessionSearchBackgroundError } from './session-search-trace'
 import { SessionSearchCursorSnapshot } from './session-search-cursor-snapshot'
 import type { SessionSearchFileState, SessionSearchStateCounts } from './session-search-store'
 import type { SearchWorkerCommand, SearchWorkerResponse } from './session-search-worker-protocol'
+import type { SessionSearchSnapshotRow } from './session-search-worker-protocol'
 
 /** Scanner-side cursor facts only; SQLite and durable staging belong to the writer thread. */
 export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
@@ -22,6 +31,7 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
   protected snapshotEpoch = 0
   protected nextHandle = 0
   protected bytes = 0
+  private coverageBytes = 0
   protected closed = false
   protected counts: SessionSearchStateCounts = {
     current: 0,
@@ -30,6 +40,7 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
     messages: 0,
     sessionsByAgent: {}
   }
+  catalogPending = false
   generation = 0
   protected cutoff: number | null = null
 
@@ -45,6 +56,9 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
       undefined,
       true
     )
+  }
+  get catalogEpoch(): number {
+    return this.client.epoch
   }
   get acceptingReads(): boolean {
     return !this.closed && this.initializedEpoch === this.client.epoch
@@ -79,7 +93,10 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
     await this.initialization
   }
   protected update(response: SearchWorkerResponse): void {
-    if (response.snapshot) {
+    if (response.catalogPending !== undefined) {
+      this.catalogPending = response.catalogPending
+    }
+    if (response.reset) {
       if (this.invalidations.size) {
         this.onInvalidated()
       }
@@ -88,19 +105,17 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
       }
       this.invalidations.clear()
       this.snapshotEpoch++
-      this.committed.clear()
+      this.coverage.clear()
+      this.coverageBytes = 0
       this.speculative.clear()
-      for (const row of response.snapshot) {
-        this.committed.set(row.path, row)
-      }
+      this.knownCoverage.clear()
     }
     for (const { path, row } of response.deltas ?? []) {
-      if (row) {
-        this.committed.set(path, row)
-      } else {
-        this.committed.delete(path)
-      }
+      this.projectCoverage(path, row ?? undefined)
       this.onFileChanged(path)
+    }
+    if (response.deltas?.length) {
+      this.trimCoverage()
     }
     if (response.generation !== undefined) {
       this.generation = response.generation
@@ -128,6 +143,83 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
       })
       .finally(() => this.transfers.delete(promise))
     return promise
+  }
+  async prepareCoverage(paths: readonly string[]): Promise<void> {
+    if (paths.length > 256) {
+      throw new Error('Session search coverage exceeds page budget')
+    }
+    await this.prepare()
+    const response = await this.send({ op: 'coverage', paths: [...paths] })
+    const rows = new Map(response.coverage?.map((row) => [row.path, row]))
+    for (const path of paths) {
+      this.projectCoverage(path, rows.get(path))
+    }
+    this.trimCoverage()
+  }
+  private trimCoverage(): void {
+    if (this.knownCoverage.size <= 256 && this.coverageBytes <= 256 * 1024) {
+      return
+    }
+    const active = new Set(this.invalidations.values())
+    for (const path of this.knownCoverage) {
+      if (
+        this.knownCoverage.size <= 256 &&
+        (this.coverageBytes <= 256 * 1024 || this.knownCoverage.size === 1)
+      ) {
+        break
+      }
+      if (active.has(path)) {
+        continue
+      }
+      const row = this.coverage.get(path)
+      if (row) {
+        this.coverageBytes -= JSON.stringify(row).length * 2
+      }
+      this.coverage.delete(path)
+      this.knownCoverage.delete(path)
+    }
+  }
+  private projectCoverage(path: string, row: SessionSearchSnapshotRow | undefined): void {
+    const old = this.coverage.get(path)
+    this.coverageBytes -= old ? JSON.stringify(old).length * 2 : 0
+    this.coverage.delete(path)
+    this.knownCoverage.delete(path)
+    this.knownCoverage.add(path)
+    if (row) {
+      this.coverage.set(path, row)
+      this.coverageBytes += JSON.stringify(row).length * 2
+    }
+  }
+  async *fileRows() {
+    let after: string | undefined
+    do {
+      const response = await this.send({ op: 'file-page', after })
+      const rows = response.filePage ?? []
+      for (const row of rows) {
+        yield row
+      }
+      after = rows.at(-1)?.path
+    } while (after !== undefined)
+  }
+  async candidates(command: SessionSearchCandidateCommand): Promise<SessionSearchCandidateResult> {
+    if (!this.acceptingReads) {
+      await this.prepare()
+    }
+    const response = await this.send({ op: 'candidates', command })
+    if (!response.candidates) {
+      throw new Error('Session search candidate catalog unavailable')
+    }
+    return response.candidates
+  }
+  async catalog(command: SessionSearchCatalogCommand): Promise<SessionSearchCatalogResult> {
+    if (!this.acceptingReads) {
+      await this.prepare()
+    }
+    const response = await this.send({ op: 'catalog', command })
+    if (!response.catalog) {
+      throw new Error('Session search catalog unavailable')
+    }
+    return response.catalog
   }
   async flush(): Promise<void> {
     while (this.transfers.size) {
@@ -160,7 +252,7 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
         snapshotEpoch === this.snapshotEpoch &&
         response.accepted === true &&
         !response.failure &&
-        !this.committed.has(path)
+        !this.coverage.has(path)
       )
     } catch {
       return false
@@ -177,7 +269,7 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
     }
     this.invalidations.clear()
     this.client.stop()
-    this.committed.clear()
+    this.coverage.clear()
     this.speculative.clear()
   }
   retired(): Promise<void> {

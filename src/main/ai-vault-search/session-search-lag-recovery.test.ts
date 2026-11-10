@@ -28,7 +28,7 @@ it('recovers a declined append through its proven prefix while the transcript ke
     const pass = async () => {
       const candidate = await sessionCandidate('claude', path)
       const queue = new SessionSearchWorkQueue()
-      queue.enqueue(candidate, store)
+      await queue.enqueue(candidate, store)
       await runSessionSearchIndexPass(store, queue, {})
       return candidate
     }

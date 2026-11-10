@@ -1,0 +1,192 @@
+import {
+  SessionSearchCatalogClient,
+  type SessionSearchCatalogRequest
+} from './session-search-catalog-client'
+import type { SessionSearchDependencyInventory } from './session-search-dependency-inventory'
+import { SessionSearchRootWatchers } from './session-search-root-watchers'
+import { SessionSearchContainerInventory } from './session-search-container-inventory'
+import type { SessionFileInventory } from '../ai-vault/session-file-inventory'
+import type { DiscoverSessionFilesArgs } from '../ai-vault/session-scanner-discovery'
+import type { SessionFileCandidate, SessionFileDiscovery } from '../ai-vault/session-scanner-types'
+import { sessionSearchPhysicalRoot, type SessionSearchScanRoots } from './session-search-scan-roots'
+
+type Root = {
+  inventory: SessionFileInventory
+  args: DiscoverSessionFilesArgs
+  identity?: string
+  fallback: boolean
+  dependencies: Map<string, SessionSearchDependencyInventory>
+}
+
+/** Search owns its notifications and raw membership; ordinary History discovery stays stateless. */
+export class SessionSearchDiscoverySources {
+  protected readonly roots = new Map<string, Root>()
+  protected readonly artifactMaps = new Map<string, Map<string, string>>()
+  readonly containers = new SessionSearchContainerInventory()
+  protected readonly owner = new AbortController()
+  protected readonly watchers: SessionSearchRootWatchers
+  protected request: SessionSearchCatalogRequest | undefined
+  protected metadataDebt: SessionSearchCatalogClient<true> | undefined
+  protected acceptRemoved: ((paths: readonly string[]) => Promise<void>) | undefined
+  onRemoved(accept: (paths: readonly string[]) => Promise<void>): void {
+    this.acceptRemoved = accept
+  }
+  protected accept: ((discovery: SessionFileDiscovery) => Promise<void>) | undefined
+  onDiscovery(accept: (discovery: SessionFileDiscovery) => Promise<void>): void {
+    this.accept = accept
+  }
+  attach(request: SessionSearchCatalogRequest): void {
+    this.request ??= request
+    this.metadataDebt ??= new SessionSearchCatalogClient('discovery-metadata', request)
+    this.containers.attach(request)
+  }
+  protected force = false
+  protected maintenance = false
+  protected overdue = () => false
+  protected recentLimit = 12
+  protected seen = new Set<string>()
+  readonly forced = new Set<string>()
+  readonly metadata = new Set<string>()
+  readonly removed = new Set<string>()
+  readonly removedCandidates = this.containers.removed
+  readonly enumeratedContainers = this.containers.proofs
+
+  constructor(entryPath?: string) {
+    this.watchers = new SessionSearchRootWatchers(entryPath)
+  }
+
+  begin(options: {
+    full: boolean
+    maintenance?: boolean
+    overdue: () => boolean
+    recentLimit: number
+  }): void {
+    this.force = options.full
+    this.maintenance = options.maintenance === true
+    this.overdue = options.overdue
+    this.recentLimit = options.recentLimit
+    this.watchers.begin()
+    this.seen = new Set()
+    this.containers.begin(options.full || this.maintenance, this.recentLimit)
+    this.forced.clear()
+    this.metadata.clear()
+    this.removed.clear()
+  }
+
+  get walking(): boolean {
+    return [...this.roots.values()].some((root) => root.inventory.walking)
+  }
+
+  get pending(): boolean {
+    if (this.containers.pending) {
+      return true
+    }
+    for (const root of this.roots.values()) {
+      if (
+        root.inventory.pending ||
+        [...root.dependencies.values()].some((dependency) => dependency.pending)
+      ) {
+        return true
+      }
+    }
+    return false
+  }
+
+  listings(): { root: string; files: number }[] {
+    return [...this.roots.values()].map((root) => ({
+      root: root.inventory.root,
+      files: root.inventory.fileCount
+    }))
+  }
+
+  artifacts(root: string): Map<string, string> {
+    let map = this.artifactMaps.get(root)
+    if (!map) {
+      map = new Map()
+      this.artifactMaps.set(root, map)
+    }
+    return map
+  }
+
+  private async fileOwner(
+    candidate: SessionFileCandidate,
+    root: string,
+    roots: SessionSearchScanRoots
+  ) {
+    const {
+      agent,
+      file: { path }
+    } = candidate
+    const rootDir = sessionSearchPhysicalRoot(roots, { agent, rootDir: root }, path)
+    if (rootDir === null) {
+      return null
+    }
+    const owner = rootDir === undefined ? undefined : this.roots.get(`${agent}:${rootDir}`)
+    if (!(await owner?.inventory.has(path))) {
+      throw new Error('Session search read has no physical inventory owner')
+    }
+    return owner
+  }
+
+  async hasPublicationDebt(
+    candidate: SessionFileCandidate,
+    logicalRoot: string,
+    roots: SessionSearchScanRoots
+  ): Promise<boolean> {
+    return (
+      (await this.fileOwner(candidate, logicalRoot, roots))?.inventory.hasPublicationDebt(
+        candidate.file.path
+      ) ?? false
+    )
+  }
+
+  async observeForRead(
+    candidate: SessionFileCandidate,
+    logicalRoot: string,
+    roots: SessionSearchScanRoots
+  ) {
+    const root = await this.fileOwner(candidate, logicalRoot, roots)
+    if (!root) {
+      return null
+    }
+    const path = candidate.file.path
+    const change = await root.inventory.observeForRead(path, root.args, this.recentLimit)
+    if (change) {
+      for (const observer of root.dependencies.values()) {
+        await observer.addFile(path)
+      }
+    }
+    return change
+  }
+
+  async end(): Promise<void> {
+    await this.watchers.end()
+    await this.containers.end()
+    for (const key of this.roots.keys()) {
+      if (!this.seen.has(key)) {
+        const root = this.roots.get(key)!
+        for await (const path of root.inventory.paths()) {
+          if (this.acceptRemoved) {
+            await this.acceptRemoved([path])
+          } else {
+            this.removed.add(path)
+          }
+        }
+        await root.inventory.release()
+        for (const dependency of root.dependencies.values()) {
+          await dependency.release()
+        }
+        this.artifactMaps.delete(root.inventory.root)
+        this.roots.delete(key)
+      }
+    }
+  }
+
+  close(): Promise<void> {
+    this.owner.abort()
+    this.roots.clear()
+    this.containers.clear()
+    this.artifactMaps.clear()
+    return this.watchers.close()
+  }
+}

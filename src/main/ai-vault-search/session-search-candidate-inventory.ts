@@ -1,24 +1,21 @@
-import {
-  SessionSearchCandidatePublications,
-  rows,
-  type Row
-} from './session-search-candidate-publication'
+import type { SessionSearchIndexStore } from './session-search-store'
+import { SessionSearchCandidatePublications } from './session-search-candidate-publication'
 import { splitOpenCodeSqliteCandidate } from '../../shared/opencode-sqlite-session-path'
 import { basename, dirname, extname } from 'node:path'
 import { sessionFileExecutionNamespace } from '../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
+import { discoveryFileCandidates } from '../ai-vault/session-scanner-candidates'
+import { readCodexRolloutSessionMetaId } from '../codex/history/rollouts/codex-rollout-session-meta'
 import {
-  discoveryFileCandidates,
-  sessionCandidatesFromDiscoveries
-} from '../ai-vault/session-scanner-candidates'
+  codexRolloutHardlinkIdentity,
+  codexSessionRootRank
+} from '../ai-vault/scanners/codex/codex-session-root-dedup'
+import type { SessionSearchCandidateRow } from './session-search-catalog-candidates'
 import type {
   AiVaultScanOptions,
   SessionFileCandidate,
   SessionFileDiscovery
 } from '../ai-vault/session-scanner-types'
 
-function rowId(row: Row): string {
-  return `${row.candidate.agent}:${row.candidate.file.path}`
-}
 function groupKey(candidate: SessionFileCandidate, root: string): string {
   const path = candidate.file.path
   return candidate.agent === 'codex'
@@ -32,32 +29,34 @@ function groupKey(candidate: SessionFileCandidate, root: string): string {
         : path
 }
 
-/** Ordinary paths own one record; only competing aliases allocate a group and selected set. */
+/** Bounded projections of the raw candidates; the archive never lives in this isolate. */
 export class SessionSearchCandidateInventory extends SessionSearchCandidatePublications {
-  private readonly sourceOrders = new Map<string, ReadonlyMap<string, number>>()
-  rootFor(candidate: SessionFileCandidate): string | undefined {
-    const owner = this.byPath.get(candidate.file.path)
-    for (const key of typeof owner === 'string' ? [owner] : (owner ?? [])) {
-      const row = rows(this.groups.get(key)).find(
-        (row) =>
-          row.candidate.agent === candidate.agent && row.candidate.file.path === candidate.file.path
-      )
-      if (row) {
-        return row.root
-      }
+  constructor(store?: SessionSearchIndexStore) {
+    super()
+    if (store) {
+      this.attach(store)
     }
-    return undefined
   }
-  has(path: string, agent?: string | null): boolean {
-    const owner = this.byPath.get(path)
-    if (!agent) {
-      return owner !== undefined
+  private readonly sourceOrders = new Map<string, ReadonlyMap<string, number>>()
+  private active: SessionSearchCandidateRow[] = []
+  override reset(): void {
+    super.reset()
+    this.sourceOrders.clear()
+    this.active = []
+  }
+  async rootFor(candidate: SessionFileCandidate): Promise<string | undefined> {
+    return (
+      await this.request!({ kind: 'path', path: candidate.file.path, agent: candidate.agent })
+    ).rows[0]?.root
+  }
+  async has(path: string, agent?: string | null): Promise<boolean> {
+    return (await this.request!({ kind: 'path', path, agent })).rows.length > 0
+  }
+  async acknowledgeChanges(): Promise<void> {
+    for (const row of this.active) {
+      await this.request!({ kind: 'consumed', key: row.key, revision: row.revision })
     }
-    return (typeof owner === 'string' ? [owner] : [...(owner ?? [])]).some((key) =>
-      rows(this.groups.get(key)).some(
-        (row) => row.candidate.file.path === path && row.candidate.agent === agent
-      )
-    )
+    this.active = []
   }
   async update(
     discoveries: readonly SessionFileDiscovery[],
@@ -65,8 +64,17 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
     options: AiVaultScanOptions,
     invalidated: ReadonlySet<string> = new Set(),
     removedCandidates: ReadonlyMap<string, ReadonlySet<string>> = new Map(),
-    partial = false
-  ): Promise<{ candidates: SessionFileCandidate[]; suppressed: Set<string>; forced: Set<string> }> {
+    partial = false,
+    metadata: ReadonlySet<string> = new Set()
+  ): Promise<{
+    candidates: SessionFileCandidate[]
+    suppressed: Set<string>
+    forced: Set<string>
+    metadata: Set<string>
+  }> {
+    if (!this.request) {
+      throw new Error('Session candidate catalog is not attached')
+    }
     const scopes = new Set(
       discoveries.map((discovery) => `${discovery.agent}:${discovery.rootDir}`)
     )
@@ -75,185 +83,156 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
         this.sourceOrders.delete(scope)
       }
     }
-    const previous = new Map<string, Set<string>>()
-    const affectedPaths = new Set<string>()
-    const forced = new Set<string>()
-    const touch = (key: string) => {
-      if (previous.has(key)) {
-        return
-      }
-      const group = this.groups.get(key)
-      for (const { candidate } of rows(group)) {
-        affectedPaths.add(candidate.file.path)
-      }
-      previous.set(
-        key,
-        this.selected.get(key) ??
-          new Set(group && !(group instanceof Map) ? [group.candidate.file.path] : [])
-      )
-    }
     for (const path of new Set([...removed, ...removedCandidates.keys()])) {
-      const owner = this.byPath.get(path)
-      for (const key of typeof owner === 'string' ? [owner] : (owner ?? [])) {
-        touch(key)
-        const remaining = rows(this.groups.get(key)).filter(
-          (row) =>
-            row.candidate.file.path !== path ||
-            (!removed.has(path) && !removedCandidates.get(path)?.has(row.candidate.agent))
-        )
-        if (remaining.length === 0) {
-          this.groups.delete(key)
-        } else if (remaining.length === 1) {
-          this.groups.set(key, remaining[0])
-        } else {
-          this.groups.set(key, new Map(remaining.map((row) => [rowId(row), row])))
-        }
-      }
-      const retained = new Set(
-        (typeof owner === 'string' ? [owner] : [...(owner ?? [])]).filter((key) =>
-          rows(this.groups.get(key)).some((row) => row.candidate.file.path === path)
-        )
-      )
-      if (retained.size === 0) {
-        this.byPath.delete(path)
-      } else {
-        this.byPath.set(path, retained.size === 1 ? retained.values().next().value! : retained)
-      }
+      this.invalidate(path)
+      await this.request({
+        kind: 'remove',
+        path,
+        agents: removed.has(path) ? undefined : [...removedCandidates.get(path)!]
+      })
     }
     for (const discovery of discoveries) {
       const scope = `${discovery.agent}:${discovery.rootDir}`
       if (discovery.sourceOrder && this.sourceOrders.get(scope) !== discovery.sourceOrder) {
         this.sourceOrders.set(scope, discovery.sourceOrder)
-        for (const key of this.selected.keys()) {
-          if (
-            rows(this.groups.get(key)).some((row) => `${row.candidate.agent}:${row.root}` === scope)
-          ) {
-            touch(key)
-          }
-        }
+        let after: string | undefined
+        do {
+          after = (
+            await this.request({
+              kind: 'rerank',
+              root: discovery.rootDir,
+              agent: discovery.agent,
+              order: [...discovery.sourceOrder],
+              after
+            })
+          ).after
+        } while (after !== undefined)
       }
       for (const candidate of discoveryFileCandidates(discovery, discovery.files, options)) {
-        const path = candidate.file.path,
-          key = groupKey(candidate, discovery.rootDir)
-        touch(key)
-        const group = this.groups.get(key)
-        if (candidate.agent === 'codex' && candidate.file.nlink && candidate.file.nlink > 1) {
-          for (const row of rows(group)) {
-            const file = row.candidate.file
-            if (file.dev === candidate.file.dev && file.ino === candidate.file.ino) {
-              row.candidate = { ...row.candidate, file: { ...candidate.file, path: file.path } }
-              if (invalidated.has(path)) {
-                forced.add(file.path)
+        this.invalidate(candidate.file.path)
+        const group = groupKey(candidate, discovery.rootDir)
+        const source = splitOpenCodeSqliteCandidate(
+          candidate.file.path,
+          candidate.agent === 'zcode' ? 'zcode' : 'opencode'
+        )
+        let alias = `${candidate.agent}:${candidate.file.path}`
+        if (candidate.agent === 'pi' || candidate.agent === 'omp') {
+          alias = candidate.file.path
+        }
+        const codex =
+          candidate.agent === 'codex' && /^rollout-.+\.jsonl$/.test(basename(candidate.file.path))
+        if (codex) {
+          alias = codexRolloutHardlinkIdentity(candidate.file) ?? alias
+          const first = await this.request({ kind: 'group', group })
+          const contested = first.rows.some(
+            (row) => row.candidate.file.path !== candidate.file.path
+          )
+          if (contested) {
+            let page = first
+            do {
+              for (const row of page.rows) {
+                if (row.candidate.file.path === candidate.file.path) {
+                  continue
+                }
+                const hardlink = codexRolloutHardlinkIdentity(candidate.file)
+                const shared =
+                  hardlink && codexRolloutHardlinkIdentity(row.candidate.file) === hardlink
+                const sibling = shared
+                  ? { ...row.candidate, file: { ...candidate.file, path: row.candidate.file.path } }
+                  : row.candidate
+                const id = await readCodexRolloutSessionMetaId(
+                  sibling.file.path,
+                  options.signal,
+                  'scan'
+                )
+                await this.request({
+                  kind: 'put',
+                  row: {
+                    ...row,
+                    candidate: sibling,
+                    alias: id
+                      ? `copy:${id}`
+                      : (codexRolloutHardlinkIdentity(sibling.file) ??
+                        `${sibling.agent}:${sibling.file.path}`)
+                  }
+                })
+                if (shared && invalidated.has(candidate.file.path)) {
+                  await this.requirePublication(sibling.file.path, 'force')
+                }
               }
+              const after = page.rows.at(-1)?.key
+              page = after
+                ? await this.request({ kind: 'group', group, after })
+                : { ...page, rows: [] }
+            } while (page.rows.length)
+            const id = await readCodexRolloutSessionMetaId(
+              candidate.file.path,
+              options.signal,
+              'scan'
+            )
+            if (id) {
+              alias = `copy:${id}`
             }
           }
         }
-        const row = { candidate, root: discovery.rootDir }
-        if (!group) {
-          this.groups.set(key, row)
-        } else if (group instanceof Map) {
-          group.set(rowId(row), row)
-        } else if (rowId(group) === rowId(row)) {
-          this.groups.set(key, row)
-        } else {
-          this.groups.set(
-            key,
-            new Map([
-              [rowId(group), group],
-              [rowId(row), row]
-            ])
-          )
-        }
-        const owner = this.byPath.get(path)
-        if (!owner) {
-          this.byPath.set(path, key)
-        } else if (typeof owner === 'string') {
-          if (owner !== key) {
-            this.byPath.set(path, new Set([owner, key]))
+        await this.request({
+          kind: 'put',
+          row: {
+            candidate,
+            root: discovery.rootDir,
+            group,
+            alias,
+            sqlite: source !== null,
+            sourcePath: source?.dbPath,
+            preference:
+              candidate.agent === 'codex'
+                ? codexSessionRootRank(candidate.codexHome)
+                : candidate.agent === 'omp'
+                  ? 1
+                  : 0,
+            sourceOrder: source
+              ? (this.sourceOrders.get(scope)?.get(source.dbPath) ?? Number.MAX_SAFE_INTEGER)
+              : 0
           }
-        } else {
-          owner.add(key)
-        }
-      }
-    }
-    const candidates: SessionFileCandidate[] = [],
-      suppressed = new Set<string>()
-    for (const [key, oldPaths] of previous) {
-      const group = this.groups.get(key)
-      const members = rows(group)
-      const eligible = members.some((row) =>
-        splitOpenCodeSqliteCandidate(
-          row.candidate.file.path,
-          row.candidate.agent === 'zcode' ? 'zcode' : 'opencode'
-        )
-      )
-        ? members.filter((row) =>
-            splitOpenCodeSqliteCandidate(
-              row.candidate.file.path,
-              row.candidate.agent === 'zcode' ? 'zcode' : 'opencode'
-            )
-          )
-        : members
-      eligible.sort((left, right) => {
-        const rank = (row: Row) => {
-          const source = splitOpenCodeSqliteCandidate(
-            row.candidate.file.path,
-            row.candidate.agent === 'zcode' ? 'zcode' : 'opencode'
-          )
-          return source
-            ? (this.sourceOrders.get(`${row.candidate.agent}:${row.root}`)?.get(source.dbPath) ??
-                Infinity)
-            : Infinity
-        }
-        return (
-          right.candidate.file.mtimeMs - left.candidate.file.mtimeMs || rank(left) - rank(right)
-        )
-      })
-      const ranked = await sessionCandidatesFromDiscoveries(
-        eligible.map(({ candidate, root }) => ({
-          agent: candidate.agent,
-          rootDir: root,
-          files: [candidate.file]
-        })),
-        options
-      )
-      // Each database source originally chose greatest mtime, with source order breaking ties.
-      const selected = eligible.some((row) =>
-        splitOpenCodeSqliteCandidate(
-          row.candidate.file.path,
-          row.candidate.agent === 'zcode' ? 'zcode' : 'opencode'
-        )
-      )
-        ? ranked.slice(0, 1)
-        : ranked
-      const paths = new Set(selected.map((candidate) => candidate.file.path))
-      for (const path of oldPaths) {
-        if (!paths.has(path)) {
-          suppressed.add(path)
-        }
-      }
-      if (group instanceof Map) {
-        this.selected.set(key, paths)
-      } else {
-        this.selected.delete(key)
-      }
-      candidates.push(...selected)
-    }
-    this.updatePublications(previous, affectedPaths)
-    for (const path of suppressed) {
-      const owner = this.byPath.get(path)
-      if (
-        (typeof owner === 'string' ? [owner] : [...(owner ?? [])]).some((key) => {
-          const group = this.groups.get(key)
-          return group instanceof Map
-            ? this.selected.get(key)?.has(path)
-            : group?.candidate.file.path === path
         })
-      ) {
-        suppressed.delete(path)
+        if (invalidated.has(candidate.file.path)) {
+          await this.requirePublication(candidate.file.path, 'force')
+        }
+        if (metadata.has(candidate.file.path)) {
+          await this.requirePublication(candidate.file.path, 'metadata')
+        }
       }
     }
-    candidates.sort((left, right) => right.file.mtimeMs - left.file.mtimeMs)
-    return { candidates, suppressed, forced }
+    this.active = (await this.request({ kind: 'changes' })).rows
+    const suppressed = new Set<string>()
+    for (const row of this.active) {
+      if (
+        !row.selected &&
+        !(await this.request({ kind: 'path', path: row.candidate.file.path })).rows.some(
+          (member) => member.selected
+        )
+      ) {
+        suppressed.add(row.candidate.file.path)
+      }
+    }
+    return {
+      candidates: this.active
+        .filter((row) => row.selected)
+        .map((row) => row.candidate)
+        .sort(
+          (left, right) =>
+            (right.file.aliasMtimeMs ?? right.file.mtimeMs) -
+              (left.file.aliasMtimeMs ?? left.file.mtimeMs) ||
+            Number(right.file.path.endsWith('transcript_full.jsonl')) -
+              Number(left.file.path.endsWith('transcript_full.jsonl'))
+        ),
+      suppressed,
+      forced: new Set(
+        this.active.filter((row) => row.forced).map((row) => row.candidate.file.path)
+      ),
+      metadata: new Set(
+        this.active.filter((row) => row.metadata).map((row) => row.candidate.file.path)
+      )
+    }
   }
 }

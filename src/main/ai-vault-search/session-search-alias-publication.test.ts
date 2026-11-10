@@ -50,7 +50,7 @@ function finish(input: SessionFileCandidate, text: string, empty = false, owner 
   })
 }
 async function settle(wake = false) {
-  inventory.beginPublications(wake)
+  await inventory.beginPublications(wake)
   await inventory.reconcilePublications(store, () => false)
 }
 function hits(text: string) {
@@ -60,7 +60,7 @@ function hits(text: string) {
 beforeEach(async () => {
   index = await openSessionSearchIndexFile('ss-alias-publication')
   store = new SessionSearchStore(index.path)
-  inventory = new SessionSearchCandidateInventory()
+  inventory = new SessionSearchCandidateInventory(store)
   engine = new SessionSearchEngine(index.db)
 })
 afterEach(async () => {
@@ -96,7 +96,7 @@ it('keeps the published predecessor through deferred, incomplete and held-out re
 
 it('reconstructs cleanup from committed rows after restart and retries acknowledged withdrawal', async () => {
   // These committed rows model a crash after replacement publication but before predecessor cleanup.
-  const detached = new SessionSearchCandidateInventory()
+  const detached = new SessionSearchCandidateInventory(store)
   finish(previous, 'predecessorneedle', false, detached)
   finish(first, 'replacementneedle', false, detached)
   await inventory.update([discover([first, previous])], new Set(), {})
@@ -174,14 +174,14 @@ it('transfers a deferred singleton forced read into later competitive publicatio
   await inventory.update([discover([first])], new Set(), {})
   finish(first, 'oldwinnerneedle')
   // Foreground reads of an alias not yet discovered are supported input.
-  finish(previous, 'predecessorneedle', false, new SessionSearchCandidateInventory())
+  finish(previous, 'predecessorneedle', false, new SessionSearchCandidateInventory(store))
   const queue = new SessionSearchWorkQueue()
-  queue.enqueue(first, store, true)
-  inventory.requirePublication(first.file.path)
+  await queue.enqueue(first, store, true)
+  await inventory.requirePublication(first.file.path)
   // Its equal-stat forced read remains deferred when a new raw alias arrives next cycle.
   await inventory.update([discover([previous])], new Set(), {})
-  queue.enqueue(first, store)
-  inventory.beginPublications(false)
+  await queue.enqueue(first, store)
+  await inventory.beginPublications(false)
   await inventory.reconcilePublications(
     store,
     () => true,
@@ -190,7 +190,7 @@ it('transfers a deferred singleton forced read into later competitive publicatio
   )
   expect(hits('predecessorneedle')).toBe(1)
   finish(first, 'acceptedwinnerneedle')
-  queue.acknowledge(queue.next()!, false)
+  await queue.acknowledge((await queue.next())!, false)
   await settle()
   expect(hits('predecessorneedle')).toBe(0)
   expect(hits('acceptedwinnerneedle')).toBe(1)

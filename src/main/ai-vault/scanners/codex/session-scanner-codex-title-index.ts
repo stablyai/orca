@@ -195,10 +195,11 @@ export const codexSearchDependencies: (root: string) => readonly SessionDiscover
     eventKey: (path) => (basename(path) === 'session_index.jsonl' ? 'titles' : null),
     fileKey: (path) =>
       /([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})\.jsonl$/i.exec(path)?.[1] ?? '*',
-    observe: () =>
+    observe: (catalog) =>
       createSessionJsonlDependency(
         join(dirname(root), CODEX_SESSION_INDEX_FILE),
-        parseCodexTitleIndexRecord
+        parseCodexTitleIndexRecord,
+        catalog
       ),
     metadata: true
   }

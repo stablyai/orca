@@ -1,4 +1,9 @@
-import { SessionObservationRetries } from './session-observation-retries'
+import { dirname } from 'node:path'
+import {
+  SessionSearchCatalogClient,
+  type SessionSearchCatalogRequest
+} from '../ai-vault-search/session-search-catalog-client'
+import { SessionSearchCatalogRetries } from '../ai-vault-search/session-search-catalog-retries'
 import type { FileWithMtime } from './session-scanner-types'
 import { observeSessionFile, type DiscoverSessionFilesArgs } from './session-scanner-discovery'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
@@ -11,18 +16,27 @@ export type SessionFileChange = { file: FileWithMtime; force: boolean }
 
 /** Accepted file facts and retry debt survive both directory epochs and delivered events. */
 export class SessionInventoryFiles {
-  readonly files = new Map<string, FileWithMtime>()
-  readonly dependencies = new Map<string, Set<string>>()
-  readonly failures = new SessionObservationRetries()
+  readonly files: SessionSearchCatalogClient<{
+    file: Omit<FileWithMtime, 'modifiedAt'>
+    dependency?: string
+  }>
+  readonly failures: SessionSearchCatalogRetries
+  count = 0
   readonly changes = new Map<string, SessionFileChange>()
   readonly removed = new Set<string>()
   readonly recent = new Map<string, FileWithMtime>()
-  private readonly dependencyByFile = new Map<string, string>()
   constructor(
-    private readonly addFile: (path: string) => void,
-    private readonly scheduleParent: (path: string) => void,
-    private readonly forgetDirty: (path: string) => void
-  ) {}
+    scope: string,
+    request: SessionSearchCatalogRequest,
+    private readonly addFile: (path: string) => Promise<void>,
+    private readonly scheduleParent: (path: string) => Promise<void>,
+    private readonly forgetDirty: (path: string) => Promise<void>
+  ) {
+    this.files = new SessionSearchCatalogClient(`${scope}:files`, request)
+    this.failures = new SessionSearchCatalogRetries(
+      new SessionSearchCatalogClient(`${scope}:file-refusals`, request)
+    )
+  }
   async observe(
     path: string,
     args: DiscoverSessionFilesArgs,
@@ -30,37 +44,40 @@ export class SessionInventoryFiles {
     limit: number,
     readOwed = false
   ) {
-    if (!this.failures.mayAttempt(path)) {
+    if (!(await this.failures.mayAttempt(path))) {
       if (force || readOwed) {
-        this.failures.requireRead(path)
+        await this.failures.requireRead(path)
       }
       return
     }
-    force ||= this.failures.force(path)
-    const previous = this.files.get(path)
+    force ||= await this.failures.force(path)
+    const accepted = await this.files.get(path)
+    const previous = accepted
+      ? { ...accepted.file, modifiedAt: new Date(accepted.file.mtimeMs).toISOString() }
+      : undefined
     const observation = await observeSessionFile(
       path,
       args.contentDependencyPath,
       args.signal,
-      !force && previous ? { file: previous, path: this.dependencyByFile.get(path) } : undefined
+      !force && previous ? { file: previous, path: accepted?.dependency } : undefined
     )
     throwIfAiVaultScanCancelled(args.signal)
     if ('issue' in observation) {
-      if (observation.missing && !this.files.has(path)) {
-        this.failures.delete(path)
+      if (observation.missing && !accepted) {
+        await this.failures.delete(path)
         return
       }
       if (!observation.missing) {
         recordSessionScanIssue(args.issues, { agent: args.agent, ...observation.issue })
       }
-      this.failures.fail(
+      await this.failures.fail(
         path,
         force || readOwed,
         observation.missing ? undefined : { agent: args.agent, ...observation.issue }
       )
       // Only apparent absence needs a parent membership proof.
       if (observation.missing) {
-        this.scheduleParent(path)
+        await this.scheduleParent(path)
       }
       return
     }
@@ -74,35 +91,27 @@ export class SessionInventoryFiles {
       codexHome: null
     })
     if (!metadataOnly && observation.file.sidecar === 'unknown') {
-      this.failures.fail(path, force || readOwed)
+      await this.failures.fail(path, force || readOwed)
       file.sidecar = previous?.sidecar ?? 'unknown'
     } else {
-      this.failures.delete(path)
+      await this.failures.delete(path)
     }
-    const old = this.files.get(path)
+    const old = previous
     const dependency = metadataOnly ? undefined : observation.sidecarPath
-    const previousDependency = this.dependencyByFile.get(path)
-    if (previousDependency !== dependency) {
-      if (previousDependency) {
-        this.removeDependency(previousDependency, path)
-      }
-      if (dependency) {
-        const owners = this.dependencies.get(dependency) ?? new Set<string>()
-        owners.add(path)
-        this.dependencies.set(dependency, owners)
-        this.dependencyByFile.set(path, dependency)
-      } else {
-        this.dependencyByFile.delete(path)
-      }
-    }
     const dependencyChanged =
       !metadataOnly &&
       !!old &&
       file.sidecar !== 'unknown' &&
       !sidecarUnchanged(old.sidecar ?? 'none', file.sidecar ?? 'none')
-    this.files.set(path, file)
+    const { modifiedAt: _modifiedAt, ...facts } = file
+    await this.files.put(
+      path,
+      { file: facts, dependency },
+      { parent: dirname(path), group: dependency }
+    )
     if (!old) {
-      this.addFile(path)
+      this.count++
+      await this.addFile(path)
     }
     if (
       force ||
@@ -129,25 +138,26 @@ export class SessionInventoryFiles {
     return !metadataOnly && observation.file.sidecar === 'unknown' ? undefined : file
   }
 
-  forget(path: string): void {
-    this.files.delete(path)
-    this.failures.delete(path)
-    this.forgetDirty(path)
-    this.recent.delete(path)
-    const dependency = this.dependencyByFile.get(path)
-    if (dependency) {
-      this.removeDependency(dependency, path)
+  async forget(path: string): Promise<void> {
+    if (await this.files.get(path)) {
+      await this.files.delete(path)
+      this.count--
     }
-    this.dependencyByFile.delete(path)
+    await this.failures.delete(path)
+    await this.forgetDirty(path)
+    this.recent.delete(path)
     this.changes.delete(path)
     this.removed.add(path)
   }
 
-  private removeDependency(dependency: string, path: string): void {
-    const owners = this.dependencies.get(dependency)
-    owners?.delete(path)
-    if (!owners?.size) {
-      this.dependencies.delete(dependency)
-    }
+  async *owners(dependency: string): AsyncGenerator<string> {
+    let after: string | undefined
+    do {
+      const page = await this.files.page({ after, group: dependency })
+      for (const { key } of page.rows) {
+        yield key
+      }
+      after = page.after
+    } while (after !== undefined)
   }
 }

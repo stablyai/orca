@@ -64,15 +64,17 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
     if (this.store.acceptingReads === false) {
       return null
     }
+    const unprepared = this.store.coverageKnown?.(candidate.file.path) === false
     // A fully covered self-contained transcript has nothing new to publish, even under another agent’s fold.
     if (
+      !unprepared &&
       SELF_CONTAINED_TRANSCRIPT_AGENTS[candidate.agent] &&
       (candidate.file.sidecar === undefined || candidate.file.sidecar === 'none') &&
       this.store.coversTranscript(candidate)
     ) {
       return null
     }
-    if (start.mode === 'append') {
+    if (!unprepared && start.mode === 'append') {
       const cursor = this.store.indexedFile(candidate.file.path, fileIdentity(candidate.file))
       if (!cursor || cursor.byteOffset !== start.previousByteOffset) {
         const recoverable = this.store.resumableCursor(candidate)
@@ -91,7 +93,7 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
       }
     }
     // A restart dropped the parser's resume point; append past our cursor once the reread proves the prefix.
-    const resume = start.mode === 'replace' ? this.provableCursor(start) : null
+    const resume = !unprepared && start.mode === 'replace' ? this.provableCursor(start) : null
     const publication = this.publications?.beginPublication(candidate)
     if (this.publications && !publication) {
       return null
@@ -101,23 +103,25 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
         ? AbortSignal.any([start.signal, publication.signal])
         : publication.signal
       : start.signal
-    const write = resume
-      ? this.store.beginWrite(
-          candidate,
-          'append',
-          resume.byteOffset,
-          start.identity,
-          start.indexing,
-          signal
-        )
-      : this.store.beginWrite(
-          candidate,
-          start.mode,
-          start.previousByteOffset,
-          start.identity,
-          start.indexing,
-          signal
-        )
+    const write = unprepared
+      ? (this.store.beginUnpreparedWrite?.({ ...start, signal }) ?? null)
+      : resume
+        ? this.store.beginWrite(
+            candidate,
+            'append',
+            resume.byteOffset,
+            start.identity,
+            start.indexing,
+            signal
+          )
+        : this.store.beginWrite(
+            candidate,
+            start.mode,
+            start.previousByteOffset,
+            start.identity,
+            start.indexing,
+            signal
+          )
     if (!write) {
       publication?.release()
       return null
@@ -161,7 +165,12 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
     await this.write.drain?.()
   }
 
+  needsPrefix(offset: number): boolean {
+    return this.write.needsPrefix?.(offset) ?? false
+  }
+
   prefixReached(offset: number, digest: string): void {
+    this.write.prefixReached?.(offset, digest)
     if (this.resume?.byteOffset === offset) {
       this.prefixProven = digest === this.resume.prefixHash
     }

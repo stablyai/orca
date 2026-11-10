@@ -41,6 +41,10 @@ export class TranscriptMessageChannel implements TranscriptMessageSink {
     }
   }
 
+  needsPrefix(offset: number): boolean {
+    return this.readers.some((reader) => reader.needsPrefix?.(offset))
+  }
+
   prefixReached(offset: number, digest: string): void {
     for (const reader of this.readers) {
       try {

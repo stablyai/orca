@@ -37,7 +37,7 @@ export async function runSessionSearchIndexPass(
       outOfTime = true
       break
     }
-    let work = queue.next()
+    let work = await queue.next()
     if (!work) {
       break
     }
@@ -50,6 +50,7 @@ export async function runSessionSearchIndexPass(
     }
     const { candidate } = work
     const path = candidate.file.path
+    await store.prepareCoverage?.([path])
     let row = store.fileRow(path)
     const cursor = row ? store.indexedFile(path, fileIdentity(candidate.file)) : null
     const entry = work.metadata
@@ -105,7 +106,7 @@ export async function runSessionSearchIndexPass(
           !published.cancelled?.() &&
           store.fileRow(path)?.state === 'current'
         ) {
-          queue.acknowledge(work, false)
+          await queue.acknowledge(work, false)
           consumed++
           continue
         }
@@ -125,7 +126,7 @@ export async function runSessionSearchIndexPass(
     })
     consumed++
     if (decision === 'skip') {
-      queue.acknowledge(work, false)
+      await queue.acknowledge(work, false)
       continue
     }
     const failuresBeforeRead = row?.failCount ?? 0
@@ -164,8 +165,8 @@ export async function runSessionSearchIndexPass(
       cutoffMs: store.retentionCutoff
     })
     work.force = false
-    queue.acknowledge(work, remaining !== 'skip')
-    queue.rowChanged(path, committed)
+    await queue.acknowledge(work, remaining !== 'skip')
+    await queue.rowChanged(path, committed)
   }
   return { stats, outOfTime, left: queue.left }
 }

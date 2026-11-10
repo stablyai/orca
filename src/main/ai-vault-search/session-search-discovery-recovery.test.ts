@@ -10,7 +10,6 @@ import * as filesystem from '../native-chat/wsl-transcript-fs-access'
 import * as parser from '../ai-vault/parse-cache/session-scanner-parse-cache'
 import * as policy from './session-search-filesystem'
 import { SessionSearchIndexer } from './session-search-indexer'
-import { SessionFileInventory } from '../ai-vault/session-file-inventory'
 import {
   CODEX_ROLLOUT_FILE,
   codexRolloutLines,
@@ -517,7 +516,7 @@ it.each([40, 400])(
     for (let index = 0; index < population; index++) {
       await mkdir(join(removed, `child-${index}`), { recursive: true })
     }
-    const inventory = new SessionFileInventory(root)
+    const inventory = harness.inventory(root)
     const args = {
       rootDir: root,
       agent: 'claude' as const,
@@ -531,7 +530,7 @@ it.each([40, 400])(
       let quanta = 0
       await inventory.drain(args, () => ++quanta >= Math.ceil(population / 16), 12)
       await rm(removed, { recursive: true })
-      inventory.invalidate(removed)
+      await inventory.invalidate(removed)
       listings.mockClear()
       const found: string[] = []
       for (let cycle = 0; cycle < population && inventory.pending; cycle++) {
@@ -557,7 +556,7 @@ it.each([40, 400])(
     for (let index = 0; index < population; index++) {
       await mkdir(join(root, `child-${index}`), { recursive: true })
     }
-    const inventory = new SessionFileInventory(root)
+    const inventory = harness.inventory(root)
     const args = {
       rootDir: root,
       agent: 'claude' as const,
@@ -578,13 +577,13 @@ it.each([40, 400])(
       return actual(path, ...rest)
     })
     try {
-      inventory.begin(false, args)
+      await inventory.begin(false, args)
       await inventory.drain(args, () => true, 12)
       // An expired slice admits one attempted input, including a failed observation.
       expect(reads.mock.calls).toHaveLength(1)
       expect(inventory.pending).toBe(true)
       for (let cycle = 0; cycle < population * 3 && inventory.pending; cycle++) {
-        inventory.begin(false, args)
+        await inventory.begin(false, args)
         inventory.retryFailures()
         await inventory.drain(args, () => true, 12)
       }
@@ -592,8 +591,8 @@ it.each([40, 400])(
       refused = false
       const recovered = join(root, 'child-0', 'recovered.jsonl')
       await writeFile(recovered, '{}\n')
-      inventory.invalidate(join(root, 'child-0'))
-      inventory.begin(false, args)
+      await inventory.invalidate(join(root, 'child-0'))
+      await inventory.begin(false, args)
       const result = await inventory.drain(args, () => false, 12)
       expect(result.changes.map((change) => change.file.path)).toContain(recovered)
     } finally {

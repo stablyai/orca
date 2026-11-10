@@ -45,6 +45,8 @@ export type SessionSearchFileWrite = {
   add(message: TranscriptMessage): void
   /** Resolves only after the writer acknowledges final publication. */
   settled?(): Promise<boolean>
+  needsPrefix?(offset: number): boolean
+  prefixReached?(offset: number, digest: string): void
   failed?(): boolean
   cancelled?(): boolean
   drain?(): Promise<void>

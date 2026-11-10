@@ -104,7 +104,6 @@ export class SessionSearchIndexer {
       },
       (path) => {
         const row = this.store.fileRow(path)
-        this.work.queue.rowChanged(path, row)
         this.work.candidates.rowChanged(path, row)
       }
     )

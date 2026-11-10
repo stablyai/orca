@@ -102,10 +102,13 @@ export async function readResumableTranscript(
       path: file.path,
       start: startOffset,
       prefixHash,
-      prefixCheckpoints: prefixOffsets && {
-        offsets: prefixOffsets,
-        reached: (offset, digest) => channel.prefixReached(offset, digest)
-      },
+      prefixCheckpoints: prefixHash
+        ? {
+            offsets: prefixOffsets,
+            needed: (offset) => channel.needsPrefix(offset),
+            reached: (offset, digest) => channel.prefixReached(offset, digest)
+          }
+        : undefined,
       onLine: (line) => state.consumeLine(line),
       drain: () => channel.drain(),
       // Preserve `this` for parsers that implement these hooks as methods.

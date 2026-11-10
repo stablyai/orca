@@ -70,6 +70,7 @@ export type TranscriptReadConsumer = {
   finish(outcome: TranscriptReadOutcome): void
   /** The read has consumed exactly [0, offset), whose bytes hash to digest. */
   prefixReached?(offset: number, digest: string): void
+  needsPrefix?(offset: number): boolean
 }
 
 export type TranscriptConsumer = {

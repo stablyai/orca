@@ -130,10 +130,11 @@ export const kimiSearchDependencies: (root: string) => readonly SessionDiscovery
     mode: 'shallow',
     fileKey: (path) => basename(dirname(path)),
     eventKey: (path) => (basename(path) === 'session_index.jsonl' ? 'index' : null),
-    observe: () =>
+    observe: (catalog) =>
       createSessionJsonlDependency(
         join(dirname(root), 'session_index.jsonl'),
-        parseKimiWorkDirRecord
+        parseKimiWorkDirRecord,
+        catalog
       )
   }
 ]

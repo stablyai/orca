@@ -3,23 +3,21 @@ import type { SessionSearchFileIdentity } from './session-search-file-cursor'
 import type { SessionSearchSnapshotRow } from './session-search-worker-protocol'
 
 export abstract class SessionSearchCursorSnapshot {
-  protected readonly committed = new Map<string, SessionSearchSnapshotRow>()
+  protected readonly coverage = new Map<string, SessionSearchSnapshotRow>()
+  protected readonly knownCoverage = new Set<string>()
   protected readonly speculative = new Map<string, SessionSearchSnapshotRow>()
   abstract get acceptingReads(): boolean
   fileRow(path: string) {
-    return this.committed.get(path)
+    return this.coverage.get(path)
   }
-  fileRows(): IterableIterator<SessionSearchSnapshotRow> {
-    return this.committed.values()
-  }
-  files() {
-    return [...this.committed.values()]
+  coverageKnown(path: string): boolean {
+    return this.knownCoverage.has(path)
   }
   protected row(path: string, identity: SessionSearchFileIdentity, speculative = true) {
     if (!this.acceptingReads) {
       return null
     }
-    const row = (speculative && this.speculative.get(path)) || this.committed.get(path)
+    const row = (speculative && this.speculative.get(path)) || this.coverage.get(path)
     return row &&
       (!identity ||
         !row.identity ||
@@ -35,7 +33,7 @@ export abstract class SessionSearchCursorSnapshot {
   }
   coversTranscript(candidate: SessionFileCandidate): boolean {
     const { file } = candidate
-    const row = this.committed.get(file.path)
+    const row = this.coverage.get(file.path)
     return (
       this.acceptingReads &&
       !!row &&

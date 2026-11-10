@@ -16,7 +16,7 @@ export type SessionIndexJsonlRead = {
   firstRecord: { length: number; hash: string } | null
 }
 
-async function firstRecordSignature(path: string, end: number) {
+export async function firstRecordSignature(path: string, end: number) {
   const hash = createHash('sha256')
   let length = 0
   for await (const chunk of openTranscriptReadStream(path, { end: end - 1 }, 'scan')) {
@@ -32,12 +32,13 @@ async function firstRecordSignature(path: string, end: number) {
   return null
 }
 
-export async function readSessionIndexJsonl(
+export type SessionIndexJsonlCursor = Omit<SessionIndexJsonlRead, 'values' | 'changedKeys'>
+
+export async function canAppendSessionIndexJsonl(
   path: string,
   stat: Stats,
-  previous: SessionIndexJsonlRead | undefined,
-  parse: (line: string) => readonly [string, string] | null
-): Promise<SessionIndexJsonlRead> {
+  previous: SessionIndexJsonlCursor | undefined
+): Promise<boolean> {
   let append = false
   if (
     previous?.firstRecord &&
@@ -59,6 +60,16 @@ export async function readSessionIndexJsonl(
       // A failed continuity check requires a complete reread.
     }
   }
+  return append
+}
+
+export async function readSessionIndexJsonl(
+  path: string,
+  stat: Stats,
+  previous: SessionIndexJsonlRead | undefined,
+  parse: (line: string) => readonly [string, string] | null
+): Promise<SessionIndexJsonlRead> {
+  const append = await canAppendSessionIndexJsonl(path, stat, previous)
   const updates = new Map<string, string>()
   const applyLine = (line: string) => {
     const entry = parse(line)

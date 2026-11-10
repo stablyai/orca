@@ -1,222 +1,132 @@
-import {
-  SessionInventoryDirectories,
-  type SessionInventoryDirectory as Directory
-} from './session-file-inventory-directories'
-import type { Dirent } from 'node:fs'
-import { SessionInputFrontier } from './session-input-frontier'
-import { SessionObservationRetries } from './session-observation-retries'
-import { dirname, join, relative } from 'node:path'
-import { wslGatedReaddir, wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
+import { SessionInventoryDirectoryWalks } from './session-file-inventory-walk'
+import { dirname } from 'node:path'
+import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import {
   isMissingTranscriptPathError,
   type DiscoverSessionFilesArgs
 } from './session-scanner-discovery'
-import { isDiscoverableSessionFile, isInsideSessionRoot } from './session-file-discovery'
-import { recordSessionScanIssue, scanIssueTextFromError } from './session-scan-issues'
-import { SessionInventoryFiles, type SessionFileChange } from './session-file-inventory-files'
-
+import { isInsideSessionRoot } from './session-file-discovery'
+import type { SessionFileChange } from './session-file-inventory-files'
 export type { SessionFileChange } from './session-file-inventory-files'
-type Walk = {
-  path: string
-  depth: number
-  entries?: Dirent[]
-  offset: number
-  reconcile: boolean
-  previous?: Directory
-}
 
-/** Retains discovery position independently of the read queue and of watcher delivery. */
-export class SessionFileInventory {
-  private readonly observations: SessionInventoryFiles
-  get files() {
-    return this.observations.files
-  }
-  get dependencies() {
-    return this.observations.dependencies
-  }
-  private readonly directories: SessionInventoryDirectories
-  private readonly dirty = new SessionInputFrontier<boolean>()
-  private readonly walks = new SessionInputFrontier<Walk>()
-  private readonly trailing = new Set<string>()
-  private readonly failures = new SessionObservationRetries()
+/** The writer retains queued directories, observations and membership across bounded passes. */
+export class SessionFileInventory extends SessionInventoryDirectoryWalks {
   private reconcileAgain = false
   private reconciling = false
+  private initialized = false
   private chooseDirty = true
-  private readonly removedDirectories = new Set<string>()
 
-  constructor(readonly root: string) {
-    this.directories = new SessionInventoryDirectories(root)
-    this.observations = new SessionInventoryFiles(
-      (path) => this.directories.addFile(path),
-      (path) => this.schedule(dirname(path)),
-      (path) => this.dirty.delete(path)
-    )
-    this.reconcile()
+  get fileCount(): number {
+    return this.observations.count
   }
-
+  async has(path: string): Promise<boolean> {
+    return (await this.observations.files.get(path)) !== undefined
+  }
+  async release(): Promise<void> {
+    await this.request({ kind: 'release-scopes', scope: this.scope })
+  }
+  async *paths(): AsyncGenerator<string> {
+    let after: string | undefined
+    do {
+      const page = await this.observations.files.page({ after })
+      for (const { key } of page.rows) {
+        yield key
+      }
+      after = page.after
+    } while (after !== undefined)
+  }
   get pending(): boolean {
     return (
-      this.walks.size > 0 ||
+      this.walking ||
       this.dirty.size > 0 ||
-      this.reconcileAgain ||
       this.failures.pending ||
       this.observations.failures.pending
     )
   }
-
-  begin(wake: boolean, args: DiscoverSessionFilesArgs): void {
-    this.failures.begin(wake)
-    this.observations.failures.begin(wake)
-    this.failures.report(args.issues)
-    this.observations.failures.report(args.issues)
+  async begin(wake: boolean, args: DiscoverSessionFilesArgs): Promise<void> {
+    await this.failures.begin(wake)
+    await this.observations.failures.begin(wake)
+    await this.failures.report(args.issues)
+    await this.observations.failures.report(args.issues)
+    if (!this.initialized) {
+      this.initialized = true
+      await this.reconcile()
+    }
   }
-
-  wakeFailures(): void {
-    this.failures.wake()
-    this.observations.failures.wake()
+  async wakeFailures(): Promise<void> {
+    await this.failures.wake()
+    await this.observations.failures.wake()
   }
-
   get refused(): boolean {
     return this.failures.size > 0 || this.observations.failures.size > 0
   }
-
   get walking(): boolean {
     return this.walks.size > 0 || this.reconcileAgain
   }
-
-  reconcile(): void {
-    // A burst during a crawl leaves one trailing obligation, never restarts its prefix.
+  async reconcile(): Promise<void> {
     if (this.reconciling) {
       this.reconcileAgain = true
       return
     }
     this.reconciling = true
-    this.schedule(this.root, true)
+    await this.schedule(this.root, true)
   }
-
-  invalidate(path: string, force = true, wake = true): void {
+  async invalidate(path: string, force = true, wake = true): Promise<void> {
     if (wake) {
-      this.failures.wake(path)
-      this.observations.failures.wake(path)
+      await this.failures.wake(path)
+      await this.observations.failures.wake(path)
     }
-    if (this.dirty.size >= 16_384) {
-      this.reconcile()
-      this.reconcileAgain = true
-      return
-    }
-    this.dirty.set(path, (this.dirty.get(path) ?? false) || force)
+    await this.dirty.set(path, ((await this.dirty.get(path)) ?? false) || force)
   }
-
-  private schedule(path: string, reconcile = false): void {
-    if (!isInsideSessionRoot(this.root, path) || this.walks.has(path)) {
-      return
-    }
-    this.directories.addDirectory(path)
-    const rel = relative(this.root, path)
-    this.walks.set(path, { path, depth: rel ? rel.split(/[\\/]/).length : 0, offset: 0, reconcile })
-  }
-
   async pollRecent(args: DiscoverSessionFilesArgs, limit: number): Promise<void> {
-    // This set is bounded on admission; never project/sort the archive to find recent paths.
-    const paths = [...this.observations.recent.keys()]
-    for (const path of paths) {
-      if (!this.dirty.has(path)) {
+    // eslint-disable-next-line unicorn/no-useless-spread -- Observing a file refreshes this bounded map's iteration order.
+    for (const path of [...this.observations.recent.keys()]) {
+      if (!(await this.dirty.has(path))) {
         await this.observations.observe(path, args, false, limit)
       }
     }
   }
-
-  hasPublicationDebt(path: string): boolean {
+  hasPublicationDebt(path: string): Promise<boolean> {
     return this.observations.failures.force(path)
   }
-
   async observeForRead(path: string, args: DiscoverSessionFilesArgs, limit: number) {
     const file = await this.observations.observe(path, args, false, limit, true)
     const change = this.observations.changes.get(path)
     this.observations.changes.delete(path)
     return file ? { file, force: change?.force ?? false, changed: change !== undefined } : undefined
   }
-
   async drain(
     args: DiscoverSessionFilesArgs,
     overdue: () => boolean,
     recentLimit: number
-  ): Promise<{ changes: SessionFileChange[]; removed: string[]; removedDirectories: string[] }> {
+  ): Promise<{
+    changes: SessionFileChange[]
+    removed: string[]
+    removedDirectories: string[]
+  }> {
+    if (!this.initialized) {
+      await this.begin(false, args)
+    }
     let consumed = 0
-    while ((this.dirty.size || this.walks.size) && (consumed === 0 || !overdue())) {
+    while (
+      (this.dirty.size || this.walks.size) &&
+      (consumed === 0 || !overdue()) &&
+      this.observations.changes.size +
+        this.observations.removed.size +
+        this.removedDirectories.size <
+        256
+    ) {
       consumed++
+      throwIfAiVaultScanCancelled(args.signal)
       if (this.dirty.size && (!this.walks.size || this.chooseDirty)) {
         this.chooseDirty = false
         await this.drainDirty(args, recentLimit)
-        continue
-      }
-      this.chooseDirty = true
-      throwIfAiVaultScanCancelled(args.signal)
-      const walk = this.walks.first!
-      if (!this.failures.mayAttempt(walk.path)) {
-        this.walks.delete(walk.path)
-        continue
-      }
-      if (!walk.entries) {
-        try {
-          walk.entries = await wslGatedReaddir(walk.path, 'scan', args.signal)
-          args.onDirectoryEntries?.(walk.path, walk.entries)
-          const entries = new Map(walk.entries.map((entry) => [entry.name, entry]))
-          const old = this.directories.get(walk.path)
-          walk.previous = old
-          if (old) {
-            for (const path of old.files) {
-              if (!entries.get(relative(walk.path, path))?.isFile()) {
-                this.observations.forget(path)
-                old.files.delete(path)
-              }
-            }
-            for (const child of old.children) {
-              if (!entries.get(relative(walk.path, child))?.isDirectory()) {
-                this.removeDirectory(child)
-              }
-            }
-          }
-          this.directories.set(walk.path, old ?? { files: new Set(), children: new Set() })
-          this.failures.delete(walk.path)
-        } catch (error) {
-          throwIfAiVaultScanCancelled(args.signal)
-          if (isMissingTranscriptPathError(error)) {
-            this.failures.delete(walk.path)
-            this.removeDirectory(walk.path)
-          } else {
-            this.issue(walk.path, error, args)
-          }
-          this.walks.delete(walk.path)
-          continue
-        }
-      }
-      let batch = 0
-      const node = this.directories.get(walk.path)!
-      while (walk.offset < walk.entries.length && batch++ < 16) {
-        const entry = walk.entries[walk.offset]
-        const path = join(walk.path, entry.name)
-        if (entry.isDirectory() && (args.directoryPredicate?.(entry.name, walk.depth) ?? true)) {
-          const known = walk.previous?.children.has(path)
-          node.children.add(path)
-          if (walk.reconcile || !known) {
-            this.schedule(path, walk.reconcile)
-          }
-        } else if (entry.isFile() && this.accepts(path, args)) {
-          const known = walk.previous?.files.has(path)
-          node.files.add(path)
-          // Do not advance past an aborted observation.
-          if (walk.reconcile || !known) {
-            await this.observations.observe(path, args, false, recentLimit)
-          }
-        }
-        walk.offset++
-      }
-      if (walk.offset === walk.entries.length) {
-        this.walks.delete(walk.path)
-        if (this.trailing.delete(walk.path)) {
-          this.schedule(walk.path)
+      } else {
+        this.chooseDirty = true
+        const entry = await this.walks.firstEntry()
+        if (entry) {
+          await this.drainWalk(entry[1], args, recentLimit)
         }
       }
     }
@@ -224,89 +134,57 @@ export class SessionFileInventory {
       this.reconciling = false
       if (this.reconcileAgain) {
         this.reconcileAgain = false
-        this.reconcile()
+        await this.reconcile()
       }
     }
-    const changes = [...this.observations.changes.values()]
-    const removed = [...this.observations.removed]
+    const result = {
+      changes: [...this.observations.changes.values()],
+      removed: [...this.observations.removed],
+      removedDirectories: [...this.removedDirectories]
+    }
     this.observations.changes.clear()
     this.observations.removed.clear()
-    const removedDirectories = [...this.removedDirectories]
     this.removedDirectories.clear()
-    return { changes, removed, removedDirectories }
+    return result
   }
-
-  private async drainDirty(args: DiscoverSessionFilesArgs, recentLimit: number): Promise<void> {
-    const first = this.dirty.firstEntry()
+  private async drainDirty(args: DiscoverSessionFilesArgs, limit: number): Promise<void> {
+    const first = await this.dirty.firstEntry()
     if (!first) {
       return
     }
     const [path, force] = first
-    this.dirty.delete(path)
-    const owners = this.dependencies.get(path)
-    if (owners) {
-      for (const owner of owners) {
-        this.invalidate(owner, force)
-      }
+    await this.dirty.delete(path)
+    for await (const owner of this.observations.owners(path)) {
+      await this.invalidate(owner, force)
     }
     if (this.accepts(path, args)) {
-      await this.observations.observe(path, args, force, recentLimit)
+      await this.observations.observe(path, args, force, limit)
     } else if (isInsideSessionRoot(this.root, path)) {
       try {
         const stat = await wslGatedStat(path, 'scan', args.signal)
-        this.failures.delete(path)
+        await this.failures.delete(path)
         if (stat.isDirectory()) {
-          if (!isInsideSessionRoot(this.root, path) || this.walks.has(path)) {
-            this.trailing.add(path)
-          } else {
-            this.schedule(path)
-          }
-        } else if (this.directories.has(path)) {
-          this.schedule(dirname(path))
+          await ((await this.walks.has(path)) ? this.trailing.put(path, true) : this.schedule(path))
+        } else if (await this.directories.get(path)) {
+          await this.schedule(dirname(path))
         }
       } catch (error) {
         throwIfAiVaultScanCancelled(args.signal)
         if (isMissingTranscriptPathError(error)) {
-          this.removeDirectory(path)
-          this.schedule(dirname(path))
+          await this.schedule(path, false, true)
+          await this.schedule(dirname(path))
         } else {
-          this.issue(path, error, args)
+          await this.issue(path, error, args)
         }
       }
     }
   }
-
-  private removeDirectory(path: string): void {
-    this.directories.get(dirname(path))?.children.delete(path)
-    this.directories.removeTree(
-      path,
-      (file) => this.observations.forget(file),
-      (directory) => {
-        this.walks.delete(directory)
-        this.trailing.delete(directory)
-        this.failures.delete(directory)
-        this.removedDirectories.add(directory)
-      }
-    )
-  }
-
-  retryFailures(): void {
-    for (const [path] of this.failures.runnable()) {
-      this.schedule(path, true)
+  async retryFailures(): Promise<void> {
+    for await (const [path] of this.failures.runnable()) {
+      await this.schedule(path, true)
     }
-    for (const [path, force] of this.observations.failures.runnable()) {
-      this.invalidate(path, force, false)
+    for await (const [path, force] of this.observations.failures.runnable()) {
+      await this.invalidate(path, force, false)
     }
-  }
-
-  private accepts(path: string, args: DiscoverSessionFilesArgs): boolean {
-    return isInsideSessionRoot(this.root, path) && isDiscoverableSessionFile(args, this.root, path)
-  }
-
-  private issue(path: string, error: unknown, args: DiscoverSessionFilesArgs) {
-    const issue = { agent: args.agent, path, ...scanIssueTextFromError(error) }
-    this.directories.addDirectory(path)
-    this.failures.fail(path, false, issue)
-    recordSessionScanIssue(args.issues, issue)
   }
 }

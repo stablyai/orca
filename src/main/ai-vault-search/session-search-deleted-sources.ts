@@ -20,6 +20,12 @@ export type SessionSearchRetirement = {
   degradedRoots: SessionSearchDegradedRoot[]
 }
 
+export type SessionSearchContainerProof = (
+  container: string,
+  id: string,
+  agent?: string | null
+) => Promise<boolean | null>
+
 export type SessionSearchRetirementArgs = {
   store: SessionSearchIndexStore
   /** Indexed paths absent from this pass’s discovery. */
@@ -29,7 +35,7 @@ export type SessionSearchRetirementArgs = {
   /** Roots that listed transcripts on the previous pass and none on this one. */
   emptiedRoots?: ReadonlySet<string>
   /** Complete successful container enumerations; see session-search-synthetic-sources.ts. */
-  enumeratedContainers?: ReadonlyMap<string, ReadonlySet<string>>
+  enumeratedContainers?: ReadonlyMap<string, ReadonlySet<string>> | SessionSearchContainerProof
   listings: SessionSearchDirectoryReader
   /** Bound directory work rather than rows so one unreadable directory cannot starve later rows. */
   directoryLimit?: number
@@ -78,8 +84,9 @@ export async function retireDeletedSessionSearchSources(
       emptiedRoots,
       signal
     })
+    await store.prepareCoverage?.([path])
     const proof = synthetic
-      ? proveSyntheticSource(
+      ? await proveSyntheticSource(
           synthetic,
           containerProof,
           args.enumeratedContainers,
@@ -87,7 +94,10 @@ export async function retireDeletedSessionSearchSources(
         )
       : containerProof
     if (proof.verdict === 'gone') {
-      store.removeFile(path)
+      if (!(await store.removeFile(path))) {
+        retirement.unchecked.push(path)
+        continue
+      }
       retirement.retired.push(path)
       if (retirement.retired.length % REMOVALS_PER_FLUSH === 0) {
         await store.flush?.()
@@ -148,14 +158,23 @@ async function proveSource(
 }
 
 /** Prove container availability first; only a full enumeration can establish an entry’s absence. */
-function proveSyntheticSource(
+async function proveSyntheticSource(
   synthetic: { container: string; id: string },
   containerProof: SessionSearchSourceVerdict,
-  enumerated?: ReadonlyMap<string, ReadonlySet<string>>,
+  enumerated?: ReadonlyMap<string, ReadonlySet<string>> | SessionSearchContainerProof,
   agent?: string | null
-): SessionSearchSourceVerdict {
+): Promise<SessionSearchSourceVerdict> {
   if (containerProof.verdict !== 'present') {
     return containerProof
+  }
+  if (typeof enumerated === 'function') {
+    const present = await enumerated(synthetic.container, synthetic.id, agent)
+    return present === null
+      ? {
+          verdict: 'unverifiable',
+          reason: `${synthetic.container} was not enumerated in full this pass.`
+        }
+      : { verdict: present ? 'present' : 'gone' }
   }
   const ids =
     enumerated?.get(`${agent}:${synthetic.container}`) ?? enumerated?.get(synthetic.container)

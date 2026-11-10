@@ -3,6 +3,11 @@ import type { DiscoverSessionFilesArgs } from './session-scanner-discovery'
 import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 import type { SessionFileDiscovery } from './session-scanner-types'
 
+import type { SessionSearchCatalogRequest } from '../ai-vault-search/session-search-catalog-client'
+
+export type SessionDiscoveryDependencyObserver = ((
+  force: boolean
+) => Promise<Iterable<string> | AsyncIterable<string>>) & { readonly pending?: boolean }
 export type SessionDiscoveryDependency = {
   path: string
   mode?: 'shallow' | 'recursive'
@@ -10,7 +15,10 @@ export type SessionDiscoveryDependency = {
   fileKey?: (path: string) => string | null
   eventKey?: (path: string) => string | null
   metadata?: boolean
-  observe?: () => (force: boolean) => Promise<ReadonlySet<string>>
+  observe?: (catalog?: {
+    request: SessionSearchCatalogRequest
+    scope: string
+  }) => SessionDiscoveryDependencyObserver
 }
 
 export type SessionDiscoveryContext = {

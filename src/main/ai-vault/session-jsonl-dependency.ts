@@ -1,3 +1,6 @@
+import { createSessionSearchJsonlDependency } from '../ai-vault-search/session-search-jsonl-dependency'
+import type { SessionSearchCatalogRequest } from '../ai-vault-search/session-search-catalog-client'
+import type { SessionDiscoveryDependencyObserver } from './session-discovery-context'
 import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import { isMissingTranscriptPathError } from './session-file-observation'
 import { readSessionIndexJsonl, type SessionIndexJsonlRead } from './session-index-jsonl-read'
@@ -5,8 +8,12 @@ import { readSessionIndexJsonl, type SessionIndexJsonlRead } from './session-ind
 /** Each owner keeps its own accepted cursor, independent of foreground History cache reads. */
 export function createSessionJsonlDependency(
   path: string,
-  parse: (line: string) => readonly [string, string] | null
-): (force: boolean) => Promise<ReadonlySet<string>> {
+  parse: (line: string) => readonly [string, string] | null,
+  catalog?: { request: SessionSearchCatalogRequest; scope: string }
+): SessionDiscoveryDependencyObserver {
+  if (catalog) {
+    return createSessionSearchJsonlDependency(path, parse, catalog)
+  }
   let accepted: SessionIndexJsonlRead | undefined
   let signature: string | undefined
   return async (force) => {
