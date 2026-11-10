@@ -77,19 +77,25 @@ const DONE_ICON = <CircleCheck aria-hidden className="size-3.5 shrink-0 text-mut
 export function VmBuildCloudAgentStepView({
   model,
   actions,
+  handedOff = false,
   initialMode = OFFER
 }: {
   model: VmBuildCloudAgentStepModel
   actions: VmBuildCloudAgentStepActions
+  /** The sandbox reported in and the checklist's own sign-in row took over. */
+  handedOff?: boolean
   /** Fixtures only. */
   initialMode?: VmBuildCloudAgentStepMode
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const t = useTranslate()
   const [mode, setMode] = useState<VmBuildCloudAgentStepMode>(initialMode)
   const ready = isCloudAgentReady(model.readiness)
+  // The button that opened the key form: "Use a key", or "Change" when agents were already ready.
   const offerRef = useRef<HTMLButtonElement>(null)
   const signInRef = useRef<HTMLButtonElement>(null)
   const rowRef = useRef<HTMLLIElement>(null)
+  // A handed-off row stays while it holds focus, so focus is never dropped on <body> under the user.
+  const [focusInside, setFocusInside] = useState(false)
   // Every swap unmounts the button that had focus; move focus to the new row (or its action) and
   // announce the change, so keyboard and screen-reader users are not dropped on <body>.
   const [announcement, setAnnouncement] = useState('')
@@ -105,75 +111,63 @@ export function VmBuildCloudAgentStepView({
         focus === 'row'
           ? rowRef.current
           : focus === 'offer'
-            ? offerRef.current
+            ? (offerRef.current ?? rowRef.current)
             : focus === 'signIn'
-              ? signInRef.current
+              ? (signInRef.current ?? rowRef.current)
               : null
       target?.focus({ preventScroll: true })
     })
   }
-  const status = (
-    <span role="status" className="sr-only">
-      {announcement}
-    </span>
-  )
 
+  if (handedOff && !focusInside) {
+    return null
+  }
+
+  const signIn = (): void => {
+    actions.onSignIn()
+    actions.onDone()
+    go(
+      { kind: 'signIn' },
+      'row',
+      t('cloudAgentSetup.signInQueued', 'Agent sign-in will open when the sandbox is ready')
+    )
+  }
+
+  let body: React.ReactNode
   if (mode.kind === 'skipped') {
-    return (
-      <li
-        ref={rowRef}
-        tabIndex={-1}
-        className="py-1.5 outline-none"
-        data-vm-build-cloud-agent="skipped"
-      >
-        {status}
-        <Row
-          icon={KEY_ICON}
-          title={t('cloudAgentSetup.skippedTitle', 'Agent setup skipped')}
-          detail={t(
-            'cloudAgentSetup.skippedDetail',
-            'Set it up any time from Settings › Orca Account › Cloud secrets.'
-          )}
-        />
-      </li>
+    body = (
+      <Row
+        icon={KEY_ICON}
+        title={t('cloudAgentSetup.skippedTitle', 'Agent setup skipped')}
+        detail={t(
+          'cloudAgentSetup.skippedDetail',
+          'Set it up any time from Settings › Orca Account › Cloud secrets.'
+        )}
+      />
     )
-  }
-
-  if (mode.kind === 'saved') {
-    return (
-      <li
-        ref={rowRef}
-        tabIndex={-1}
-        className="py-1.5 outline-none"
-        data-vm-build-cloud-agent="saved"
-      >
-        {status}
-        <Row
-          icon={DONE_ICON}
-          title={cloudAgentSavedSummary(mode.saved, t)}
-          detail={t('cloudAgentSetup.saved.short', 'Hidden from now on')}
-        />
-      </li>
+  } else if (mode.kind === 'saved') {
+    body = (
+      <Row
+        icon={DONE_ICON}
+        title={cloudAgentSavedSummary(mode.saved, t)}
+        detail={t('cloudAgentSetup.saved.short', 'Hidden from now on')}
+      />
     )
-  }
-
-  if (mode.kind === 'signIn') {
-    return (
-      <li
-        ref={rowRef}
-        tabIndex={-1}
-        className="py-1.5 outline-none"
-        data-vm-build-cloud-agent="sign-in"
-      >
-        {status}
-        <Row
-          icon={KEY_ICON}
-          title={t('cloudAgentSetup.signInPending', 'Agent sign-in')}
-          detail={t(
-            'cloudAgentSetup.signInPendingDetail',
-            'Opens when the sandbox is ready. Keep Orca open until then.'
-          )}
-          actions={
+  } else if (mode.kind === 'signIn') {
+    body = (
+      <Row
+        icon={KEY_ICON}
+        title={t('cloudAgentSetup.signInPending', 'Agent sign-in')}
+        detail={
+          handedOff
+            ? t('cloudAgentSetup.signInHandedOff', 'Continues in the Agent sign-in row below.')
+            : t(
+                'cloudAgentSetup.signInPendingDetail',
+                'Opens when the sandbox is ready. Keep Orca open until then.'
+              )
+        }
+        actions={
+          handedOff ? null : (
             <Button
               type="button"
               variant="ghost"
@@ -185,121 +179,129 @@ export function VmBuildCloudAgentStepView({
             >
               {t('cloudAgentSetup.skipSignIn', 'Don’t sign in')}
             </Button>
-          }
-        />
-      </li>
-    )
-  }
-
-  if (ready && mode.kind === 'offer') {
-    return (
-      <li ref={rowRef} className="py-1.5" data-vm-build-cloud-agent="ready">
-        {status}
-        <Row
-          icon={DONE_ICON}
-          title={
-            model.readiness.claude && model.readiness.codex
-              ? t('cloudAgentSetup.readyTitle', 'Agents ready')
-              : t('cloudAgentSetup.readyOne', '{{agent}} ready', {
-                  agent: model.readiness.claude ? 'Claude' : 'Codex'
-                })
-          }
-          detail={cloudAgentReadinessSummary(model.readiness, t)}
-          actions={
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => go({ kind: 'keys' }, 'none')}
-            >
-              {t('cloudAgentSetup.change', 'Change')}
-            </Button>
-          }
-        />
-      </li>
-    )
-  }
-
-  const title = (
-    <>
-      {t('cloudAgentSetup.title', 'Add an agent')}
-      <span className="text-xs text-muted-foreground">
-        {' · '}
-        {t('vmBuildAgentSignIn.optional', 'optional')}
-      </span>
-    </>
-  )
-  const signIn = (): void => {
-    actions.onSignIn()
-    actions.onDone()
-    go(
-      { kind: 'signIn' },
-      'row',
-      t('cloudAgentSetup.signInQueued', 'Agent sign-in will open when the sandbox is ready')
-    )
-  }
-
-  return (
-    <li ref={rowRef} className="flex flex-col gap-2 py-1.5" data-vm-build-cloud-agent={mode.kind}>
-      {status}
-      <Row
-        icon={KEY_ICON}
-        title={title}
-        detail={t(
-          'cloudAgentSetup.subtitleBuild',
-          'Give Claude Code or Codex access in Orca Cloud.'
-        )}
-        actions={
-          mode.kind === 'offer' ? (
-            <>
-              <Button ref={signInRef} type="button" variant="outline" size="sm" onClick={signIn}>
-                {t('cloudAgentSetup.signIn.action', 'Sign in when ready')}
-              </Button>
-              <Button
-                ref={offerRef}
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => go({ kind: 'keys' }, 'none')}
-              >
-                {t('cloudAgentSetup.useKey', 'Use a key')}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  actions.onLater()
-                  go(
-                    { kind: 'skipped' },
-                    'row',
-                    t('cloudAgentSetup.skippedTitle', 'Agent setup skipped')
-                  )
-                }}
-              >
-                {t('cloudAgentSetup.later', 'Later')}
-              </Button>
-            </>
-          ) : null
+          )
         }
       />
-      {mode.kind === 'keys' ? (
-        <div className="pl-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-150">
-          <CloudAgentSetupView
-            readiness={null}
-            canShare={model.canShare}
-            focusOnOpen
-            initialOption="api-key"
-            onSave={actions.onSave}
-            onSaved={(saved) => {
-              actions.onDone()
-              go({ kind: 'saved', saved }, 'row', cloudAgentSavedSummary(saved, t))
-            }}
-            onCancel={() => go(OFFER, 'offer')}
-            onSignIn={signIn}
-          />
-        </div>
-      ) : null}
+    )
+  } else if (ready && mode.kind === 'offer') {
+    body = (
+      <Row
+        icon={DONE_ICON}
+        title={
+          model.readiness.claude && model.readiness.codex
+            ? t('cloudAgentSetup.readyTitle', 'Agents ready')
+            : t('cloudAgentSetup.readyOne', '{{agent}} ready', {
+                agent: model.readiness.claude ? 'Claude' : 'Codex'
+              })
+        }
+        detail={cloudAgentReadinessSummary(model.readiness, t)}
+        actions={
+          <Button
+            ref={offerRef}
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => go({ kind: 'keys' }, 'none')}
+          >
+            {t('cloudAgentSetup.change', 'Change')}
+          </Button>
+        }
+      />
+    )
+  } else {
+    body = (
+      <>
+        <Row
+          icon={KEY_ICON}
+          title={
+            <>
+              {t('cloudAgentSetup.title', 'Add an agent')}
+              <span className="text-xs text-muted-foreground">
+                {' · '}
+                {t('vmBuildAgentSignIn.optional', 'optional')}
+              </span>
+            </>
+          }
+          detail={t(
+            'cloudAgentSetup.subtitleBuild',
+            'Give Claude Code or Codex access in Orca Cloud.'
+          )}
+          actions={
+            mode.kind === 'offer' ? (
+              <>
+                <Button ref={signInRef} type="button" variant="outline" size="sm" onClick={signIn}>
+                  {t('cloudAgentSetup.signIn.action', 'Sign in when ready')}
+                </Button>
+                <Button
+                  ref={offerRef}
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => go({ kind: 'keys' }, 'none')}
+                >
+                  {t('cloudAgentSetup.useKey', 'Use a key')}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    actions.onLater()
+                    go(
+                      { kind: 'skipped' },
+                      'row',
+                      t('cloudAgentSetup.skippedTitle', 'Agent setup skipped')
+                    )
+                  }}
+                >
+                  {t('cloudAgentSetup.later', 'Later')}
+                </Button>
+              </>
+            ) : null
+          }
+        />
+        {mode.kind === 'keys' ? (
+          <div className="pl-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-150">
+            <CloudAgentSetupView
+              readiness={null}
+              canShare={model.canShare}
+              focusOnOpen
+              initialOption="api-key"
+              onSave={actions.onSave}
+              onSaved={(saved) => {
+                actions.onDone()
+                go({ kind: 'saved', saved }, 'row', cloudAgentSavedSummary(saved, t))
+              }}
+              onCancel={() => go(OFFER, 'offer')}
+              onSignIn={signIn}
+            />
+          </div>
+        ) : null}
+      </>
+    )
+  }
+
+  const state =
+    ready && mode.kind === 'offer' ? 'ready' : mode.kind === 'signIn' ? 'sign-in' : mode.kind
+  return (
+    <li
+      ref={rowRef}
+      tabIndex={-1}
+      className="flex flex-col gap-2 py-1.5 outline-none"
+      data-vm-build-cloud-agent={state}
+      onFocus={() => setFocusInside(true)}
+      onBlur={(event) => {
+        // Switching to another app blurs too; focus comes back here, so the row must stay.
+        if (document.hasFocus() && !event.currentTarget.contains(event.relatedTarget)) {
+          setFocusInside(false)
+        }
+      }}
+    >
+      {/* One status region for every state, so a swap never takes the announcement with it. */}
+      <span role="status" className="sr-only">
+        {announcement}
+      </span>
+      {body}
     </li>
   )
 }
@@ -378,17 +380,13 @@ export function VmBuildCloudAgentStep({
     }
   }, [alreadyReady, markDone])
 
-  if (
-    !isCloud ||
-    !eligible ||
-    handedToSignInRow ||
-    model.status === 'loading' ||
-    entry.status === 'error'
-  ) {
+  if (!isCloud || !eligible || model.status === 'loading' || entry.status === 'error') {
     return null
   }
   return (
     <VmBuildCloudAgentStepView
+      // Stays mounted through the hand-off so it can keep a focused row until focus moves on.
+      handedOff={handedToSignInRow}
       model={{ readiness: model.readiness, canShare: model.canShare }}
       actions={{
         onSave: save,

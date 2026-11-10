@@ -1476,7 +1476,9 @@
       "duplicates_other": "{{count}} duplicates ignored",
       "save": "Save {{count}} secrets",
       "save_one": "Save {{count}} secret",
-      "save_other": "Save {{count}} secrets"
+      "save_other": "Save {{count}} secrets",
+      "unreadable_one": "{{count}} unreadable line skipped",
+      "unreadable_other": "{{count}} unreadable lines skipped"
     },
     "value": {
       "lines": "Multi-line value · {{count}} lines",
