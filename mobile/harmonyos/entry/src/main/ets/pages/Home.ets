@@ -1695,7 +1695,7 @@ struct Home {
             .fontFamily('Geist').fontSize(12).fontColor(this.pal().textMuted).maxLines(1)
         }
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        .enabled(this.online[host.id] === true)
+        .accessibilityRole(AccessibilityRoleType.BUTTON)
         .onClick(() => this.openHostRoute(host.id, '/automations'))
       Toggle({ type: ToggleType.Switch, isOn: this.automationRequested[`${host.id}:${row.id}`] ?? row.enabled })
         .enabled(this.online[host.id] === true && !this.automationBusy.includes(`${host.id}:${row.id}`))
@@ -1712,17 +1712,24 @@ struct Home {
   automationRunRow(host: HostMeta, run: HomeAutomationRun, separated: boolean) {
     if (separated) { this.hairline(16) }
     Row({ space: 10 }) {
-      Circle().width(7).height(7).fill(run.status === 'completed' ? this.pal().statusGreen
-        : run.status === 'dispatch_failed' ? this.pal().statusRed : this.pal().textMuted)
+      Stack() {
+        if (['pending', 'dispatching', 'dispatched'].includes(run.status)) {
+          LoadingProgress().width(12).height(12).color(this.pal().statusAmber)
+        } else {
+          Circle().width(7).height(7).fill(run.status === 'completed' ? this.pal().statusGreen
+            : run.status === 'dispatch_failed' ? this.pal().statusRed : this.pal().textMuted)
+        }
+      }.width(12).height(12).accessibilityLevel('no')
       Column({ space: 3 }) {
         Text(run.title).fontFamily('Geist').fontSize(16).fontColor(this.pal().textPrimary).maxLines(1)
         Text(this.automationStatus(run.status) + (run.error ? ` · ${run.error}` : '')).fontFamily('Geist')
           .fontSize(14).fontColor(this.pal().textSecondary).maxLines(2)
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-      Text(this.formatAgentTime(this.homeNow - run.createdAt)).fontFamily('Geist').fontSize(12).fontColor(this.pal().textMuted)
+      Text(agentTimeAgo(run.createdAt, this.homeNow, this.uiLocale)).fontFamily('Geist').fontSize(15)
+        .fontColor(this.pal().textMuted)
       Image($r('app.media.lucide_chevron_right')).supportSvg2(true).width(16).height(16)
         .colorFilter(lucideColorFilter(this.pal().textMuted))
-    }.width('100%').padding(16).enabled(this.online[host.id] === true)
+    }.width('100%').padding(16).accessibilityRole(AccessibilityRoleType.BUTTON)
       .onClick(() => this.openHostRoute(host.id, '/automations'))
   }
 
