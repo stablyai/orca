@@ -52,7 +52,8 @@ function darkThemeVariables(colors: MermaidThemeColors): Record<string, string |
       'taskBkgColor',
       'tagLabelBackground'
     ]),
-    ...tinted(colors.tertiary, ['clusterBkg']),
+    ...tinted(colors.secondary, ['secondBkg']),
+    ...tinted(colors.tertiary, ['clusterBkg', 'labelBackground']),
     primaryTextColor: colors.foreground,
     secondaryTextColor: colors.foreground,
     tertiaryTextColor: colors.foreground,
