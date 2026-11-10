@@ -22,6 +22,13 @@ let predictiveHoverId: string | null = null
 // The row under a press. Its wake waits for the release: a press held still and then dragged is a
 // move, and a debounce alone can't tell the two apart.
 let pressedId: string | null = null
+let pressX = 0
+let pressY = 0
+// Set while a row drag is under way, by whichever drag code noticed it first.
+let rowDragActive = false
+/** Pointer travel with the button held that makes a press a drag (the sidebar's own drags start
+ *  within a few pixels; every drag implementation moves at least this far). */
+export const ROW_DRAG_SLOP_PX = 4
 
 function clearDwell(): void {
   if (dwellTimer !== null) {
@@ -74,12 +81,33 @@ function installWindowListeners(): void {
   window.addEventListener('dragstart', () => noteWorktreeRowDragStart(), { capture: true })
   window.addEventListener('dragend', () => noteWorktreeRowDragEnd(), { capture: true })
   window.addEventListener('drop', () => noteWorktreeRowDragEnd(), { capture: true })
+  // Any drag code (native, the sidebar's pointer drag, the board's) moves the pointer with the
+  // button held: past the slop, the press is a drag whatever implementation runs it.
+  window.addEventListener(
+    'pointermove',
+    (event) => {
+      if (rowDragActive && event.buttons === 0) {
+        // A drag whose end never reached the window (its source unmounted mid-drag).
+        noteWorktreeRowDragEnd()
+        return
+      }
+      if (
+        pressedId !== null &&
+        Math.hypot(event.clientX - pressX, event.clientY - pressY) > ROW_DRAG_SLOP_PX
+      ) {
+        noteWorktreeRowDragStart()
+      }
+    },
+    { capture: true, passive: true }
+  )
   window.addEventListener(
     'pointerup',
     () => {
       const released = pressedId
       pressedId = null
-      if (released !== null) {
+      if (rowDragActive) {
+        noteWorktreeRowDragEnd()
+      } else if (released !== null) {
         notePredictiveWakeSelect(released)
       }
     },
@@ -98,11 +126,17 @@ function installWindowListeners(): void {
 export function noteWorktreeRowDragStart(): void {
   predictiveHoverId = null
   pressedId = null
-  notePredictiveWakeDragStart()
+  if (!rowDragActive) {
+    rowDragActive = true
+    notePredictiveWakeDragStart()
+  }
 }
 
 export function noteWorktreeRowDragEnd(): void {
-  notePredictiveWakeDragEnd()
+  if (rowDragActive) {
+    rowDragActive = false
+    notePredictiveWakeDragEnd()
+  }
 }
 
 export function noteWorktreeRowHoverStart(worktreeId: string): void {
@@ -119,11 +153,13 @@ export function noteWorktreeRowHoverStart(worktreeId: string): void {
 }
 
 /** A press is intent enough to skip the hover dwell; the mount still waits a task so it can't delay the press's focus move or drag start. */
-export function noteWorktreeRowPress(worktreeId: string): void {
+export function noteWorktreeRowPress(worktreeId: string, x = 0, y = 0): void {
   installWindowListeners()
   // The press may become a drag: hold the wake (and stop the hover dwell's) until the release.
   notePredictiveWakeHoverEnd(worktreeId)
   pressedId = worktreeId
+  pressX = x
+  pressY = y
   if (prewarmedWorktreeId !== worktreeId) {
     armDwell(worktreeId, 0)
   }
