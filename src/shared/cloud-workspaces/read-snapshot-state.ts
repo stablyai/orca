@@ -8,6 +8,11 @@ export type CloudReadSnapshotState =
   | { state: 'no_snapshot' }
   /** A snapshot exists but predates this device's key (or the key was pruned). Wake once to fix. */
   | { state: 'not_sealed_for_key' }
+  /**
+   * The control plane returned a snapshot older than one this device already opened for the
+   * workspace (a rollback). Refused rather than shown as current.
+   */
+  | { state: 'stale' }
   /** No such workspace, or this account may not open it (removed, private, archived). */
   | { state: 'not_found' }
   /** This device cannot hold a reader key (no OS keychain); the feature is off here. */

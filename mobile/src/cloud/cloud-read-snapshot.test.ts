@@ -33,7 +33,8 @@ import type { CloudControlPlane } from './cloud-control-plane-request'
 import {
   CLOUD_READER_KEY_REFRESH_MS,
   ensureCloudReaderKey,
-  readCloudWorkspaceSnapshot
+  readCloudWorkspaceSnapshot,
+  resetCloudReadSnapshotPins
 } from './cloud-read-snapshot'
 import { loadCloudReaderKey } from './cloud-reader-key'
 
@@ -150,7 +151,10 @@ const registered = (id = 'rk_aaaaaaaaaaaaaaaaaaaaaaaa') => ({
   }
 })
 
-beforeEach(() => store.clear())
+beforeEach(() => {
+  store.clear()
+  resetCloudReadSnapshotPins()
+})
 
 describe('ensureCloudReaderKey', () => {
   it('registers once as a mobile key, then only again after 6 h or when forced', async () => {
@@ -252,12 +256,42 @@ describe('readCloudWorkspaceSnapshot', () => {
     }
   )
 
-  it('renews the key after not_sealed_for_key so the next sleep seals to it', async () => {
+  it('does not renew the key on not_sealed_for_key', async () => {
     const { plane, calls } = fakePlane((call) =>
       call.method === 'PUT' ? registered() : { status: 404, body: { error: 'not_sealed_for_key' } }
     )
     await readCloudWorkspaceSnapshot(plane, 'sbx_1')
-    await vi.waitFor(() => expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(2))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(calls.map((c) => c.method)).toEqual(['PUT', 'GET'])
+  })
+
+  it('refuses a snapshot older than one already shown for the workspace (rollback pin)', async () => {
+    const key = await loadCloudReaderKey('ds_1')
+    const keyId = 'rk_' + 'c'.repeat(24)
+    const seal = (snapshotId: string, capturedAt: number) =>
+      sealLikeVm({
+        readerPublicKeyB64: key.publicKeyB64,
+        keyId,
+        workspaceId: 'sbx_pin',
+        snapshotId,
+        payload: { ...PAYLOAD, workspaceId: 'sbx_pin', snapshotId, capturedAt }
+      })
+    let next = seal('snap_new', 2_000)
+    const { plane } = fakePlane((call) =>
+      call.method === 'PUT' ? registered(keyId) : { status: 200, body: { snapshot: next } }
+    )
+    expect((await readCloudWorkspaceSnapshot(plane, 'sbx_pin')).state).toBe('ready')
+    next = seal('snap_old', 1_000)
+    expect(await readCloudWorkspaceSnapshot(plane, 'sbx_pin')).toMatchObject({
+      state: 'error',
+      error: { name: 'CloudReadSnapshotRollbackError', capturedAt: 1_000, newestShownAt: 2_000 }
+    })
+    next = seal('snap_same', 2_000)
+    expect((await readCloudWorkspaceSnapshot(plane, 'sbx_pin')).state).toBe('ready')
+    next = seal('snap_newer', 3_000)
+    expect((await readCloudWorkspaceSnapshot(plane, 'sbx_pin')).state).toBe('ready')
+    next = seal('snap_same', 2_000)
+    expect((await readCloudWorkspaceSnapshot(plane, 'sbx_pin')).state).toBe('error')
   })
 
   it('re-registers once on invalid_request and asks again', async () => {

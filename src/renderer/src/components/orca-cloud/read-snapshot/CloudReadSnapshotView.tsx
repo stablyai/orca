@@ -17,6 +17,8 @@ export type CloudReadViewState =
   | { kind: 'no_snapshot' }
   | { kind: 'not_sealed_for_key' }
   | { kind: 'not_found' }
+  /** Older than a copy already shown here (a rollback); refused. */
+  | { kind: 'stale' }
   /** This computer cannot hold a reader key (no OS keychain). */
   | { kind: 'unavailable'; message: string }
   | { kind: 'error'; message: string }
@@ -166,6 +168,15 @@ export function CloudReadSnapshotView(props: CloudReadSnapshotViewProps): React.
           title={t(
             'components.orcaCloud.read.notSealedForKey',
             'This device was added after the workspace went to sleep. Wake it once to read it here.'
+          )}
+        />
+      ) : null}
+      {state.kind === 'stale' ? (
+        <InlineError
+          tone="neutral"
+          title={t(
+            'components.orcaCloud.read.stale',
+            'Orca Cloud returned an older copy than the one already shown here, so it is hidden. Wake the workspace to see it as it is now.'
           )}
         />
       ) : null}

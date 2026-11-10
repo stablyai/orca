@@ -169,8 +169,7 @@ export const keychainUnavailable = defineFixture({
 
 export const error = defineFixture({
   width: WIDTH,
-  render: () =>
-    view({ kind: 'error', message: "Couldn't reach Orca Cloud. Your files are safe. Try again." })
+  render: () => view({ kind: 'error', message: "Couldn't reach Orca Cloud. Your files are safe." })
 })
 
 export const waking = defineFixture({

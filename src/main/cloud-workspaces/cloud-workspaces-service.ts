@@ -141,6 +141,8 @@ export function createCloudWorkspacesService(deps: {
         void reader?.register()
         return workspaces
       }),
+    /** Sign-out: revoke this device's reader key server-side (callers bound the wait). */
+    revokeReaderKey: (timeoutMs: number) => reader?.revoke(timeoutMs) ?? Promise.resolve(),
     /** A sleeping workspace's sealed snapshot, opened on this device; never wakes it. */
     readSnapshot: (id: string) =>
       wrap(async () => {

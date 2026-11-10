@@ -198,6 +198,16 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
     }) {
       return (await call('PUT', '/v1/reader-keys', CloudReaderKeyResponseSchema, body)).readerKey
     },
+    /** Server-side revoke: wrapped keys for it are pruned and it is never resurrected. */
+    async deleteReaderKey(keyId: string, timeoutMs = CONTROL_TIMEOUT_MS): Promise<void> {
+      await call(
+        'DELETE',
+        `/v1/reader-keys/${encodeURIComponent(keyId)}`,
+        NoteSentSchema.passthrough(),
+        undefined,
+        timeoutMs
+      )
+    },
     async getReadSnapshot(id: string, keyId: string): Promise<ReadSnapshotFetch> {
       try {
         const { snapshot } = await call(

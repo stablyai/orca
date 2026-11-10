@@ -57,7 +57,8 @@ function setup(options: { identity?: string | null; keychain?: boolean } = {}) {
     load: () =>
       options.keychain === false
         ? { ok: false, reason: 'keychain_unavailable', message: 'no keychain' }
-        : { ok: true, key }
+        : { ok: true, key },
+    peek: () => (options.keychain === false ? null : key)
   }
   let now = 10_000
   const ids = [KEY_A]
@@ -68,10 +69,11 @@ function setup(options: { identity?: string | null; keychain?: boolean } = {}) {
     createdAt: 1,
     lastSeenAt: 1
   }))
+  let capturedAt = payload.capturedAt
   const getReadSnapshot = vi.fn(async (_id: string, keyId: string): Promise<ReadSnapshotFetch> => ({
     kind: 'sealed',
     sealed: sealReadSnapshotForTest({
-      payload,
+      payload: { ...payload, capturedAt },
       workspaceId: SBX,
       snapshotId: 'snap_1',
       readerPublicKeyB64: key.publicKeyB64,
@@ -79,8 +81,9 @@ function setup(options: { identity?: string | null; keychain?: boolean } = {}) {
       storedAt: 5
     })
   }))
+  const deleteReaderKey = vi.fn(async (_keyId: string, _timeoutMs?: number) => {})
   const reader = createReadSnapshotReader({
-    client: { registerReaderKey, getReadSnapshot },
+    client: { registerReaderKey, getReadSnapshot, deleteReaderKey },
     readerKey,
     deviceLabel: () => 'test-mac',
     now: () => now
@@ -91,6 +94,10 @@ function setup(options: { identity?: string | null; keychain?: boolean } = {}) {
     ids,
     registerReaderKey,
     getReadSnapshot,
+    deleteReaderKey,
+    setCapturedAt: (at: number) => {
+      capturedAt = at
+    },
     tick: (ms: number) => {
       now += ms
     },
@@ -158,22 +165,63 @@ describe('createReadSnapshotReader', () => {
     expect(t.registerReaderKey).toHaveBeenCalledTimes(1)
   })
 
-  it('re-registers a remembered key the server dropped and retries with the new id', async () => {
+  it('never re-registers on not_sealed_for_key (the snapshot just predates the key)', async () => {
     const t = setup()
     await t.reader.register()
     t.ids[0] = KEY_B
     t.getReadSnapshot.mockResolvedValueOnce({ kind: 'not_sealed_for_key' })
-    const result = await t.reader.read(SBX)
-    expect(result.state).toBe('ready')
-    expect(t.getReadSnapshot).toHaveBeenLastCalledWith(SBX, KEY_B)
+    expect(await t.reader.read(SBX)).toEqual({ state: 'not_sealed_for_key' })
+    expect(t.registerReaderKey).toHaveBeenCalledTimes(1)
+    expect(t.getReadSnapshot).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps not_sealed_for_key when re-registering returns the same id', async () => {
+  it('re-registers at most once on invalid_request', async () => {
     const t = setup()
     await t.reader.register()
-    t.getReadSnapshot.mockResolvedValueOnce({ kind: 'not_sealed_for_key' })
-    expect(await t.reader.read(SBX)).toEqual({ state: 'not_sealed_for_key' })
-    expect(t.getReadSnapshot).toHaveBeenCalledTimes(1)
+    t.getReadSnapshot
+      .mockRejectedValueOnce(new CloudWorkspacesError(400, 'invalid_request'))
+      .mockRejectedValueOnce(new CloudWorkspacesError(400, 'invalid_request'))
+    await expect(t.reader.read(SBX)).rejects.toMatchObject({ code: 'invalid_request' })
+    expect(t.registerReaderKey).toHaveBeenCalledTimes(2)
+    expect(t.getReadSnapshot).toHaveBeenCalledTimes(2)
+  })
+
+  it('refuses a snapshot older than one already shown (rollback pin), per workspace and account', async () => {
+    const t = setup()
+    t.setCapturedAt(2_000)
+    expect((await t.reader.read(SBX)).state).toBe('ready')
+    // The same snapshot again is fine; a newer one moves the pin.
+    expect((await t.reader.read(SBX)).state).toBe('ready')
+    t.setCapturedAt(3_000)
+    expect((await t.reader.read(SBX)).state).toBe('ready')
+    t.setCapturedAt(2_500)
+    expect(await t.reader.read(SBX)).toEqual({ state: 'stale' })
+    // Another account on this computer has its own pin.
+    t.setIdentity('someone-else')
+    expect((await t.reader.read(SBX)).state).toBe('ready')
+  })
+
+  it('revokes the registered key server-side on sign-out', async () => {
+    const t = setup()
+    await t.reader.register()
+    await t.reader.revoke(1_000)
+    expect(t.deleteReaderKey).toHaveBeenCalledWith(KEY_A, 1_000)
+    expect(t.registerReaderKey).toHaveBeenCalledTimes(1)
+  })
+
+  it('learns the key id before revoking when this run never registered', async () => {
+    const t = setup()
+    await t.reader.revoke(1_000)
+    expect(t.registerReaderKey).toHaveBeenCalledTimes(1)
+    expect(t.deleteReaderKey).toHaveBeenCalledWith(KEY_A, 1_000)
+  })
+
+  it('revokes nothing without a key or when signed out', async () => {
+    await setup({ keychain: false }).reader.revoke(1_000)
+    const signedOut = setup({ identity: null })
+    await signedOut.reader.revoke(1_000)
+    expect(signedOut.deleteReaderKey).not.toHaveBeenCalled()
+    expect(signedOut.registerReaderKey).not.toHaveBeenCalled()
   })
 
   it('re-registers on invalid_request for a remembered key id', async () => {

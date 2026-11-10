@@ -90,6 +90,20 @@ export function createCloudReaderKeyStore(deps: {
   }
 
   return {
+    /** The profile's existing key, if any; never creates one. */
+    peek(profileId: string): CloudReaderKey | null {
+      const codec = deps.codec()
+      const path = deps.pathFor(profileId)
+      const cached = cache.get(path)
+      if (cached || !codec || !existsSync(path)) {
+        return cached ?? null
+      }
+      const existing = decode(path, codec)
+      if (existing) {
+        cache.set(path, existing)
+      }
+      return existing
+    },
     /** The profile's key, created on first use. A key the keychain can no longer open is replaced. */
     load(profileId: string): ReaderKeyLoad {
       const codec = deps.codec()
@@ -154,6 +168,39 @@ export function getCloudReaderKeyStore(userDataPath: string): CloudReaderKeyStor
     }
   }
   return defaultStore.store
+}
+
+// Sign-out revokes the key server-side through the cloud workspaces service (it owns the client
+// and the registration id). A seam so profile code never loads that service.
+let revoker: ((timeoutMs: number) => Promise<void>) | null = null
+
+export function setCloudReaderKeyRevoker(next: typeof revoker): void {
+  revoker = next
+}
+
+export const READER_KEY_REVOKE_TIMEOUT_MS = 2_500
+
+/** Best effort and bounded: resolves within `timeoutMs` whatever the network does. */
+export async function revokeCloudReaderKeyBestEffort(
+  timeoutMs = READER_KEY_REVOKE_TIMEOUT_MS
+): Promise<void> {
+  const run = revoker
+  if (!run) {
+    return
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    await Promise.race([
+      Promise.resolve()
+        .then(() => run(timeoutMs))
+        .catch(() => undefined),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, timeoutMs)
+      })
+    ])
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 /** Sign-out / profile reset hook: drop the profile's reader key (memory and disk). */

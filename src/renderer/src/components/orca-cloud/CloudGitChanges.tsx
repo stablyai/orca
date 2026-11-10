@@ -102,7 +102,10 @@ export function CloudGitChanges({
         ) : null}
         {stat ? (
           <span className="tabular-nums text-muted-foreground">
-            {t('orcaCloudWorkspace.archived.files', '{{count}} files', { count: stat.files })}{' '}
+            {t('orcaCloudWorkspace.archived.files', '{{count}} files', {
+              count: stat.files,
+              defaultValue_one: '{{count}} file'
+            })}{' '}
             <span className="text-[var(--git-decoration-added)]">+{stat.insertions}</span>{' '}
             <span className="text-[var(--git-decoration-deleted)]">−{stat.deletions}</span>
           </span>

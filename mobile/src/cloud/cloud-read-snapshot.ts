@@ -105,6 +105,26 @@ async function fetchSealed(
   return reply.snapshot
 }
 
+/** A snapshot older than one this phone already showed for the workspace: a rollback, refused. */
+export class CloudReadSnapshotRollbackError extends Error {
+  constructor(
+    readonly capturedAt: number,
+    readonly newestShownAt: number
+  ) {
+    super('read_snapshot_rollback')
+    this.name = 'CloudReadSnapshotRollbackError'
+  }
+}
+
+// Per workspace, the newest capturedAt opened this app session. The control plane relays the
+// ciphertext, so it could replay an older (validly sealed) snapshot; this pins it forward.
+const newestShown = new Map<string, number>()
+
+/** Test seam: forget the per-workspace rollback pins. */
+export function resetCloudReadSnapshotPins(): void {
+  newestShown.clear()
+}
+
 const NOT_FOUND_STATES = new Set(['no_snapshot', 'not_sealed_for_key', 'not_found'])
 type MissingState = 'no_snapshot' | 'not_sealed_for_key' | 'not_found'
 
@@ -153,13 +173,18 @@ export async function readCloudWorkspaceSnapshot(
       reader.secretKey,
       CLOUD_SEALED_PRIMITIVES
     )
+    const pinned = newestShown.get(sandboxId)
+    if (pinned !== undefined && snapshot.capturedAt < pinned) {
+      return {
+        state: 'error',
+        error: new CloudReadSnapshotRollbackError(snapshot.capturedAt, pinned)
+      }
+    }
+    newestShown.set(sandboxId, snapshot.capturedAt)
     return { state: 'ready', snapshot }
   } catch (error) {
+    // not_sealed_for_key only means the snapshot predates this key: nothing to renew here.
     const missing = missingState(error)
-    if (missing === 'not_sealed_for_key') {
-      // The key may have been revoked or pruned: renewing it now gets it into the next sleep.
-      void ensureCloudReaderKey(plane, { force: true, now }).catch(() => undefined)
-    }
     return missing ? { state: missing } : { state: 'error', error }
   }
 }

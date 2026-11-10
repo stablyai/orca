@@ -16,14 +16,16 @@ export type ReaderKeyAccess = {
   identity: () => string | null
   /** This profile's key (created on first use), or why there can be none. */
   load: () => ReaderKeyLoad
+  /** The key only if one already exists (sign-out must not create one just to delete it). */
+  peek?: () => CloudReaderKey | null
 }
 
 type Registration = { identity: string; publicKeyB64: string; keyId: string; at: number }
-type Ready = { key: CloudReaderKey; keyId: string; fresh: boolean }
+type Ready = { key: CloudReaderKey; keyId: string; fresh: boolean; identity: string }
 type Unavailable = { unavailable: Extract<ReaderKeyLoad, { ok: false }> }
 
 export function createReadSnapshotReader(deps: {
-  client: Pick<CloudWorkspacesClient, 'registerReaderKey' | 'getReadSnapshot'>
+  client: Pick<CloudWorkspacesClient, 'registerReaderKey' | 'getReadSnapshot' | 'deleteReaderKey'>
   readerKey: ReaderKeyAccess
   deviceLabel?: () => string
   now?: () => number
@@ -31,6 +33,9 @@ export function createReadSnapshotReader(deps: {
   const now = deps.now ?? Date.now
   let registration: Registration | null = null
   let inflight: { tag: string; promise: Promise<Registration> } | null = null
+  // Highest payload capturedAt opened per (profile/user/account, workspace). Memory only: a
+  // restart forgets it, but within a run a replayed older snapshot is refused.
+  const newestShown = new Map<string, number>()
 
   async function ensure(force = false): Promise<Ready | Unavailable> {
     const identity = deps.readerKey.identity()
@@ -50,7 +55,7 @@ export function createReadSnapshotReader(deps: {
       known.publicKeyB64 === key.publicKeyB64 &&
       now() - known.at < READER_KEY_REFRESH_MS
     ) {
-      return { key, keyId: known.keyId, fresh: false }
+      return { key, keyId: known.keyId, fresh: false, identity }
     }
     // Concurrent reads (and the start-up registration) share one PUT per identity and key.
     const tag = `${identity}\0${key.publicKeyB64}`
@@ -87,7 +92,7 @@ export function createReadSnapshotReader(deps: {
         })
     }
     const done = await shared.promise
-    return { key, keyId: done.keyId, fresh: true }
+    return { key, keyId: done.keyId, fresh: true, identity }
   }
 
   async function fetchWith(sandboxId: string, ready: Ready) {
@@ -117,6 +122,31 @@ export function createReadSnapshotReader(deps: {
       await ensure().catch(() => undefined)
     },
 
+    /**
+     * Sign-out: revoke this device's key server-side so no later sleep seals to it. Learns the id
+     * (idempotent PUT) when this run never registered. Throws on failure; callers bound and ignore.
+     */
+    async revoke(timeoutMs: number): Promise<void> {
+      const identity = deps.readerKey.identity()
+      const key = deps.readerKey.peek?.() ?? null
+      if (!identity || !key) {
+        return
+      }
+      const known = registration
+      const keyId =
+        known && known.identity === identity && known.publicKeyB64 === key.publicKeyB64
+          ? known.keyId
+          : (
+              await deps.client.registerReaderKey({
+                publicKeyB64: key.publicKeyB64,
+                deviceLabel: (deps.deviceLabel?.() ?? hostname()).slice(0, 80) || 'Desktop',
+                deviceKind: 'desktop'
+              })
+            ).id
+      registration = null
+      await deps.client.deleteReaderKey(keyId, timeoutMs)
+    },
+
     async read(sandboxId: string): Promise<CloudReadSnapshotState> {
       const first = await ensure()
       if ('unavailable' in first) {
@@ -128,18 +158,11 @@ export function createReadSnapshotReader(deps: {
       }
       let ready = first
       const answer = await fetchWith(sandboxId, ready)
-      let fetched = 'ready' in answer ? answer.fetched : answer
+      const fetched = 'ready' in answer ? answer.fetched : answer
       if ('ready' in answer) {
         ready = answer.ready
       }
-      // The id we remembered may have been revoked server-side; re-registering hands out a new one.
-      if (fetched.kind === 'not_sealed_for_key' && !ready.fresh) {
-        const again = await ensure(true)
-        if (!('unavailable' in again) && again.keyId !== ready.keyId) {
-          ready = again
-          fetched = await deps.client.getReadSnapshot(sandboxId, again.keyId)
-        }
-      }
+      // not_sealed_for_key only means the snapshot predates this key: report it, never re-register.
       if (fetched.kind !== 'sealed') {
         return { state: fetched.kind }
       }
@@ -150,6 +173,13 @@ export function createReadSnapshotReader(deps: {
           ready.key.secretKey,
           nodeSealedGrantPrimitives
         )
+        // Rollback pin: never show a copy older than one already shown for this workspace here.
+        const pinKey = `${first.identity}\0${sandboxId}`
+        const pinned = newestShown.get(pinKey)
+        if (pinned !== undefined && snapshot.capturedAt < pinned) {
+          return { state: 'stale' }
+        }
+        newestShown.set(pinKey, snapshot.capturedAt)
         return { state: 'ready', snapshot, storedAt: fetched.sealed.storedAt }
       } catch (error) {
         if (error instanceof ReadSnapshotError) {

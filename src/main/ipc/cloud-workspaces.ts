@@ -11,7 +11,10 @@ import {
   createCloudWorkspacesService,
   type CloudWorkspacesService
 } from '../cloud-workspaces/cloud-workspaces-service'
-import { getCloudReaderKeyStore } from '../cloud-workspaces/cloud-reader-key-store'
+import {
+  getCloudReaderKeyStore,
+  setCloudReaderKeyRevoker
+} from '../cloud-workspaces/cloud-reader-key-store'
 import type { ReaderKeyAccess } from '../cloud-workspaces/cloud-read-snapshot-reader'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import type { CloudReadSnapshotState } from '../../shared/cloud-workspaces/read-snapshot-state'
@@ -67,6 +70,8 @@ function getService(): Promise<CloudWorkspacesService | null> {
       clientId: await clientIdFor(userDataPath),
       readerKey: profileReaderKey(userDataPath)
     })
+    const started = service
+    setCloudReaderKeyRevoker((timeoutMs) => started.revokeReaderKey(timeoutMs))
     return service
   })()
   servicePromise = starting
@@ -90,7 +95,9 @@ function profileReaderKey(userDataPath: string): ReaderKeyAccess {
         : null
     },
     load: () =>
-      getCloudReaderKeyStore(userDataPath).load(ensureActiveOrcaProfile(userDataPath).profile.id)
+      getCloudReaderKeyStore(userDataPath).load(ensureActiveOrcaProfile(userDataPath).profile.id),
+    peek: () =>
+      getCloudReaderKeyStore(userDataPath).peek(ensureActiveOrcaProfile(userDataPath).profile.id)
   }
 }
 

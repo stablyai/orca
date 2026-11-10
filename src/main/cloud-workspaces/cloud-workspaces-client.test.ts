@@ -54,6 +54,14 @@ describe('cloud workspaces client: read snapshots', () => {
     })
   })
 
+  it('DELETEs a reader key by id', async () => {
+    const { client, fetch } = clientAnswering(200, { ok: true })
+    await client.deleteReaderKey(KEY, 2_000)
+    const [url, init] = fetch.mock.calls[0]!
+    expect(String(url)).toBe(`https://cp.example.test/v1/reader-keys/${KEY}`)
+    expect(init?.method).toBe('DELETE')
+  })
+
   it('GETs the sealed snapshot for this key', async () => {
     const { client, fetch } = clientAnswering(200, { snapshot: sealed })
     expect(await client.getReadSnapshot(SBX, KEY)).toEqual({ kind: 'sealed', sealed })

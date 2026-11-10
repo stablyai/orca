@@ -2242,6 +2242,11 @@
     }
   },
   "orcaCloudWorkspace": {
+    "archived": {
+      "files": "{{count}} files",
+      "files_one": "{{count}} file",
+      "files_other": "{{count}} files"
+    },
     "idleSleptMinutes_one": "{{name}} slept after {{count}} minute idle",
     "idleSleptMinutes_other": "{{name}} slept after {{count}} minutes idle",
     "overlay": {

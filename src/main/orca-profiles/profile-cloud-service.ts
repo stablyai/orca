@@ -1,5 +1,8 @@
 import { resetCloudOfflineData } from '../hosted-sandbox/cloud-offline-reset'
-import { clearCloudReaderKey } from '../cloud-workspaces/cloud-reader-key-store'
+import {
+  clearCloudReaderKey,
+  revokeCloudReaderKeyBestEffort
+} from '../cloud-workspaces/cloud-reader-key-store'
 import type {
   ConnectCurrentOrcaProfileResult,
   CreateCloudLinkedOrcaProfileArgs,
@@ -158,6 +161,11 @@ export async function signOutCurrentOrcaProfile(
   const active = ensureActiveOrcaProfile(userDataPath)
   const configState = getOrcaCloudAuthConfig()
   const session = readCloudSession(active.profile.id, userDataPath)
+  if (session.status === 'found') {
+    // While the session still mints tokens: revoke this device's reader key server-side so no
+    // later sleep seals to it. Bounded (a couple of seconds) and never fails the sign-out.
+    await revokeCloudReaderKeyBestEffort()
+  }
   // Fence before network I/O so in-flight refreshes cannot save after sign-out.
   invalidateCloudSessionChanges(active.profile.id, userDataPath)
   if (!isOrcaCloudDevAuthEnabled() && configState.configured && session.status === 'found') {

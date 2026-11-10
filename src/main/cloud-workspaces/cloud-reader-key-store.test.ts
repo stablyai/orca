@@ -12,7 +12,12 @@ vi.mock('electron', () => ({
   }
 }))
 
-import { createCloudReaderKeyStore, type ReaderKeyCodec } from './cloud-reader-key-store'
+import {
+  createCloudReaderKeyStore,
+  revokeCloudReaderKeyBestEffort,
+  setCloudReaderKeyRevoker,
+  type ReaderKeyCodec
+} from './cloud-reader-key-store'
 import { nodeSealedGrantPrimitives } from './sealed-grant-node'
 import { base64ToBytes, bytesToBase64 } from '../../shared/cloud-workspaces/sealed-grant'
 
@@ -97,5 +102,40 @@ describe('createCloudReaderKeyStore', () => {
     expect(existsSync(join(dir, 'p1', 'key.enc'))).toBe(false)
     const next = store.load('p1')
     expect(first.ok && next.ok && next.key.publicKeyB64 !== first.key.publicKeyB64).toBe(true)
+  })
+})
+
+describe('revokeCloudReaderKeyBestEffort', () => {
+  afterEach(() => setCloudReaderKeyRevoker(null))
+
+  it('runs the registered revoker with the timeout', async () => {
+    const revoke = vi.fn(async (_timeoutMs: number) => {})
+    setCloudReaderKeyRevoker(revoke)
+    await revokeCloudReaderKeyBestEffort(500)
+    expect(revoke).toHaveBeenCalledWith(500)
+  })
+
+  it('never blocks sign-out: a hung or failing revoke resolves within the timeout', async () => {
+    setCloudReaderKeyRevoker(() => new Promise(() => {}))
+    const started = Date.now()
+    await revokeCloudReaderKeyBestEffort(30)
+    expect(Date.now() - started).toBeLessThan(1_000)
+    setCloudReaderKeyRevoker(async () => {
+      throw new Error('offline')
+    })
+    await expect(revokeCloudReaderKeyBestEffort(30)).resolves.toBeUndefined()
+    setCloudReaderKeyRevoker(null)
+    await expect(revokeCloudReaderKeyBestEffort(30)).resolves.toBeUndefined()
+  })
+})
+
+describe('peek', () => {
+  it('returns the existing key and never creates one', () => {
+    const store = storeWith()
+    expect(store.peek('p1')).toBeNull()
+    expect(existsSync(join(dir, 'p1', 'key.enc'))).toBe(false)
+    const loaded = store.load('p1')
+    const fresh = storeWith().peek('p1')
+    expect(loaded.ok && fresh?.publicKeyB64 === loaded.key.publicKeyB64).toBe(true)
   })
 })
