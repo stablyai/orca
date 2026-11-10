@@ -1,7 +1,7 @@
 import React from 'react'
 import { ChevronDown, ChevronRight, Globe, Trash2, X } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
@@ -202,7 +202,7 @@ export function WorktreeRow({
             </span>
             {showWorktreeActions && (
               <div className="absolute inset-0 flex items-center justify-end gap-0.5 can-hover:opacity-0 can-hover:pointer-events-none transition-opacity group-hover/wtrow:opacity-100 group-hover/wtrow:pointer-events-auto group-focus-within/wtrow:opacity-100 group-focus-within/wtrow:pointer-events-auto">
-                <Tooltip delayDuration={300}>
+                <Tooltip>
                   <TooltipTrigger asChild>
                     <button
                       type="button"

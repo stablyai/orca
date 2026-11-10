@@ -5,9 +5,8 @@ import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provide
 import { ptyOwnership } from '../provider/ownership-state'
 import { isRendererViewShowingPty, ptySizes } from '../delivery/visibility-state'
 import { isHiddenRendererPty } from '../delivery/pty-hidden-delivery-gate'
-import { seedTerminalRestoreRecordsFromSpawnResult } from '../pane/agent-session-owners'
-import { seedHeadlessTerminalFromSpawnResult } from '../pane/terminal-spawn-restore'
 import { hideRuntimeOwnedRendererDelivery } from './spawn-hidden-delivery'
+import { seedAttachedRuntimeTerminal } from './seed-attached-runtime-terminal'
 import { rendererSerializerReadiness } from '../pane/serializer-state'
 import { getProviderForPty, localProvider, resolvePtyExecutionHost } from '../provider/registry'
 import { inspectPtyProviderProcess } from '../../../providers/pty-process-inspection'
@@ -138,6 +137,7 @@ export async function attachPtyFromRuntimeController(
   }
   try {
     const sequenceBeforeProviderAttach = deps.runtime?.getPtyOutputSequence?.(ptyId) ?? 0
+    const sizeBeforeAttach = ptySizes.get(ptyId)
     const attachResult = await provider.attach(ptyId)
     if (attachResult?.providerSequence) {
       deps.runtime?.synchronizePtyOutputSequenceFromProvider?.(
@@ -147,9 +147,7 @@ export async function attachPtyFromRuntimeController(
       )
     }
     if (attachResult) {
-      // A restarted runtime has never seen this screen; an idle agent may print nothing after attach.
-      seedHeadlessTerminalFromSpawnResult(deps.runtime, attachResult, null)
-      seedTerminalRestoreRecordsFromSpawnResult(deps.runtime, attachResult)
+      seedAttachedRuntimeTerminal(deps.runtime, attachResult, sizeBeforeAttach)
     }
     deps.syncPtyBackgroundedDelivery?.(ptyId, 'main-attach')
     return true

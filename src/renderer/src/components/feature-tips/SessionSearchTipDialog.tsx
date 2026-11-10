@@ -4,7 +4,7 @@ import type { FeatureTip } from '../../../../shared/feature-tips'
 import {
   sessionSearchStatusDetails,
   sessionSearchStatusMessage
-} from '@/components/settings/session-history/session-history-status-copy'
+} from '@/components/session-search/session-search-status'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'

@@ -259,11 +259,20 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
           ? mergedActiveTab.parentTabId
           : mergedActiveTab.id
         : null
-      const rebuiltTabGroups: RuntimeMobileSessionTabGroup[] = navigationGroups
+      // Saved groups without a saved active group record no selection; keep the restored tab selected.
+      const restoredGroups =
+        hasCurrentNavigation || navigationActiveGroupId || !activeTopLevelId
+          ? navigationGroups
+          : navigationGroups?.map((group) =>
+              group.activeTabId === null && group.tabOrder.includes(activeTopLevelId)
+                ? { ...group, activeTabId: activeTopLevelId }
+                : group
+            )
+      const rebuiltTabGroups: RuntimeMobileSessionTabGroup[] = restoredGroups
         ? appendBrowserTabOrder(
             mergeMobileSessionTabGroups(
               entryWorktreeId,
-              navigationGroups,
+              restoredGroups,
               mergedTabs,
               mergedActiveTab?.type === 'terminal' ? mergedActiveTab : null,
               session.tabGroups?.[entryWorktreeId]

@@ -1,6 +1,6 @@
-// HostRelay control frames once a host is past the handshake: liveness, pongs, auth refresh and
+// HostRelay control frames once a host is past the handshake: liveness, pongs, keepalives, auth refresh and
 // the host's credential commands.
-import { AuthRefreshSchema, DeviceRevokeSchema, InviteCreateSchema } from '../../../packages/relay-contract/src/control-messages'
+import { AuthRefreshSchema, DeviceRevokeSchema, InviteCreateSchema, RELAY_CLIENT_KEEPALIVE_ACK_FRAME } from '../../../packages/relay-contract/src/control-messages'
 import { DeviceCredentialInstallSchema, DeviceCredentialInstallStatusSchema, DeviceResumeConfirmSchema } from '../../../packages/relay-contract/src/credential-messages'
 import { RELAY_CLOSE_CODE } from '../../../packages/relay-contract/src/close-codes'
 import { RELAY_PROTOCOL_LIMITS } from '../../../packages/relay-contract/src/protocol-limits'
@@ -12,6 +12,45 @@ import { HostRelayHandshake } from './host-relay-handshake'
 import type { ControlAttachment } from './host-relay-base'
 
 export abstract class HostRelayControl extends HostRelayHandshake {
+  // ---------------- silent keepalive controls ----------------
+
+  // Active controls silent past the timeout. No liveness field (attachments older than it): the
+  // alarm judges those, as before.
+  protected silentControls(now: number): { ws: WebSocket; a: ControlAttachment; seen: number }[] {
+    return this.ctx.getWebSockets('control').flatMap((ws) => {
+      const a = this.attachment(ws)
+      if (a?.k !== 'control' || a.phase !== 'active' || a.lastPongAt === undefined) { return [] }
+      const seen = this.lastSeen(ws, a)
+      return now - seen > this.config.silenceTimeoutMs ? [{ ws, a, seen }] : []
+    })
+  }
+
+  // Where the host is going away anyway (export, erase, drain, a new control of the same host): a
+  // silent control is closed now. Its orphan time is the latest the ping alarm would have found it,
+  // so rebind and the orphan grace are never shorter than before.
+  protected async closeSilentControls(now = Date.now()): Promise<void> {
+    for (const { ws, seen } of this.silentControls(now)) {
+      this.close(ws, RELAY_CLOSE_CODE.PEER_DROPPED, 'control silence timeout')
+      await this.onSocketGone(ws, RELAY_CLOSE_CODE.PEER_DROPPED, '', Math.min(now, seen + this.config.silenceTimeoutMs + this.config.pingIntervalMs))
+    }
+  }
+
+  // Where a phone needs the host: a silent keepalive control may be alive with its own timer held
+  // back (a sleeping app), so it is sent one relay ping, answered from socket I/O, and closed only if
+  // nothing arrives within KEEPALIVE_PROBE_MS (alarm). Meanwhile it counts as live, as a control
+  // inside the silence timeout always did.
+  protected async probeSilentControls(now = Date.now()): Promise<void> {
+    let probed = false
+    for (const { ws, a, seen } of this.silentControls(now)) {
+      if (!this.keepalive(a) || (a.probeAt !== undefined && a.probeAt >= seen)) { continue }
+      this.send(ws, { type: 'ping', t: now })
+      a.probeAt = now
+      this.attach(ws, a)
+      probed = true
+    }
+    if (probed) { await this.reschedule() }
+  }
+
   // ---------------- control ----------------
 
   protected async onControl(ws: WebSocket, a: ControlAttachment, message: string | ArrayBuffer): Promise<void> {
@@ -45,6 +84,12 @@ export abstract class HostRelayControl extends HostRelayHandshake {
     if (a.phase === 'proof') { return this.onHostProof(ws, a, type, body) }
     if (type === 'pong') {
       if (typeof body.t === 'number') { metric(this.env, 'pong_rtt_ms', now - body.t, '', [], '', a.place) }
+      return
+    }
+    // Normally answered by the runtime (host-relay-base.ts); a frame that differs only in spacing
+    // still gets its answer here.
+    if (type === 'keepalive') {
+      ws.send(RELAY_CLIENT_KEEPALIVE_ACK_FRAME)
       return
     }
     if (type === 'auth-refresh') { return this.onAuthRefresh(ws, body) }

@@ -27,7 +27,8 @@ export function createFakeGenerationFileSystem(): FakeGenerationFileSystem {
   const parentOf = (target: string): string => target.slice(0, target.lastIndexOf('/'))
 
   const makeDirectory = (target: string): void => {
-    for (let at = target; at.startsWith(ROOT); at = parentOf(at)) {
+    // Any file:// tree, so a store can also be handed an older root on the same disk.
+    for (let at = target; at.startsWith('file:///'); at = parentOf(at)) {
       nodes.set(at, { kind: 'directory' })
     }
   }
@@ -45,7 +46,7 @@ export function createFakeGenerationFileSystem(): FakeGenerationFileSystem {
     writes,
     paths: () =>
       [...nodes.keys()]
-        .filter((key) => key !== ROOT)
+        .filter((key) => key.startsWith(`${ROOT}/`))
         .map((key) => key.slice(ROOT.length + 1))
         .sort(),
     seed: (path, node) => {

@@ -1,4 +1,5 @@
 import { createLocalWorkerStartDispatch } from './local-worker-start-dispatch'
+import { refuseClaimedWorkerTerminal } from '../../../../orchestration/db/worker-dispatch/worker-terminal-claim'
 import { probeWorkerOpenCodeModelLaunchSupport } from './worker-opencode-model-preflight'
 import { resolveWorkerConfiguredAgentParams } from './worker-configured-agent-preflight'
 import { waitForWorkerAgentReady } from '../../../../terminal/wait/launched-agent-composer-readiness'
@@ -138,6 +139,8 @@ export async function startLocalWorker(args: {
   const hostMode = resolveWorkerStartModeOnHost(runtime, args.mode, resolvedWorktree?.id, agent)
   let mode = chatWorkerMode(await hostMode, chat)
 
+  // Synchronous through the Dispatch insert, so nothing else claims the terminal in between.
+  refuseClaimedWorkerTerminal(db, params.terminal, runtime, args.followUp?.of)
   const run = args.bindRun()
   const started = createLocalWorkerStartDispatch(args, {
     params,

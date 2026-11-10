@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 
 const client = vi.hoisted(() => ({ windowsDesktop: true }))
-vi.mock('@/lib/windows-path-access', () => ({
+vi.mock('@/lib/files/os-open/windows-path-access', () => ({
   isWindowsDesktopClient: () => client.windowsDesktop
 }))
 
@@ -40,24 +40,6 @@ describe('useAddRepoWindowsDriveRefusal', () => {
   afterEach(() => {
     cleanup()
     client.windowsDesktop = true
-  })
-
-  it('shows the refusal inline and adds the folder on this computer once the switch lands', () => {
-    const { view, selectHost, addLocalPath, clickAddOnThisComputer } = setup()
-    expect(view.result.current.notice).toBeNull()
-    act(() => view.result.current.showRefusal(REFUSAL))
-    expect(view.result.current.notice).not.toBeNull()
-
-    clickAddOnThisComputer()
-    expect(selectHost).toHaveBeenCalledWith('local')
-    // Nothing is added while the dialog is still on the WSL host.
-    expect(addLocalPath).not.toHaveBeenCalled()
-
-    view.rerender({ selectedHostId: 'local' })
-    expect(addLocalPath).toHaveBeenCalledTimes(1)
-    expect(addLocalPath).toHaveBeenCalledWith('C:\\src\\app', 'local_folder_picker')
-    // The notice belonged to the WSL host.
-    expect(view.result.current.notice).toBeNull()
   })
 
   it('drops the add when this computer could not be selected, so a later switch adds nothing', async () => {

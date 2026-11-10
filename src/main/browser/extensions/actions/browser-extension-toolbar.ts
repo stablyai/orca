@@ -1,5 +1,5 @@
 import { webContents } from 'electron'
-import { noteBrowserExtensionUserGesture } from '../api/permissions'
+import { noteBrowserExtensionUserGesture } from '../permissions/browser-extension-user-gesture'
 import type { BrowserExtensionActionResult } from '../../../../shared/browser/extensions/browser-extension-types'
 import {
   BROWSER_EXTENSION_POPUP_REQUEST_CHANNEL,
@@ -9,7 +9,7 @@ import {
   type BrowserExtensionToolbarAction,
   type BrowserExtensionToolbarState
 } from '../../../../shared/browser/extensions/browser-extension-toolbar-types'
-import { browserManager } from '../../browser-manager'
+import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import {
   emitBrowserExtensionEvent,
   getBrowserExtensionProfileIdForSession

@@ -1,0 +1,211 @@
+import {
+  automationHostReselectionMessage,
+  type AutomationCapturedOwner
+} from './automation-captured-owner'
+import type { Automation } from '../../../../../shared/automations/automation-definition'
+import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  setupHostMatchesRunContext,
+  repoHostMatchesRunContext
+} from './automation-run-context-host-match'
+import { evaluateRuntimeCompat } from '../../../../../shared/protocol-compat'
+import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
+import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
+import {
+  MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
+  RUNTIME_PROTOCOL_VERSION
+} from '../../../../../shared/protocol-version'
+import type { AutomationHostTarget } from './automation-host-client'
+import type { SshConnectionState } from '../../../../../shared/ssh-types'
+import type { ProjectHostSetup } from '../../../../../shared/project-types'
+import type { Repo } from '../../../../../shared/repo-types'
+import type { RuntimeEnvironmentStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
+import type { Worktree } from '../../../../../shared/worktree/types'
+import type { RuntimeEnvironmentSshBucket } from '../../../store/slices/ssh/runtime-environment-ssh'
+
+import type { AutomationTargetAvailability } from './automation-target-availability-types'
+
+type AutomationTargetAvailabilityArgs = {
+  automation: Automation
+  capturedOwner?: AutomationCapturedOwner
+  repo: Repo | null | undefined
+  workspace: Worktree | null | undefined
+  projectHostSetups: readonly ProjectHostSetup[]
+  sshConnectionStates: ReadonlyMap<string, Pick<SshConnectionState, 'status'>>
+  sshStateByEnvironment?: ReadonlyMap<string, RuntimeEnvironmentSshBucket>
+  runtimeStatusByEnvironmentId?: ReadonlyMap<string, RuntimeEnvironmentStatus>
+  automationHostTarget?: AutomationHostTarget | null
+}
+
+export function getAutomationTargetAvailability(
+  {
+    automation,
+    capturedOwner,
+    repo,
+    workspace,
+    projectHostSetups,
+    sshConnectionStates,
+    sshStateByEnvironment,
+    runtimeStatusByEnvironmentId,
+    automationHostTarget
+  }: AutomationTargetAvailabilityArgs,
+  t: Translate = translate
+): AutomationTargetAvailability {
+  const reselection = automationHostReselectionMessage(capturedOwner, t)
+  if (reselection) {
+    return unavailable('host-reselection', reselection)
+  }
+  if (!repo) {
+    return unavailable('missing-project', 'The target project is no longer available.')
+  }
+
+  if (automation.runContext) {
+    const parsedHost = parseExecutionHostId(automation.runContext.hostId)
+    if (parsedHost?.kind === 'runtime') {
+      const runtimeAvailability = getRuntimeAutomationAvailability(
+        parsedHost.environmentId,
+        runtimeStatusByEnvironmentId,
+        t
+      )
+      if (!runtimeAvailability.canRunNow) {
+        return runtimeAvailability
+      }
+    }
+    const runContext = automation.runContext
+    const setups = projectHostSetups.filter(
+      (candidate) =>
+        candidate.id === runContext.projectHostSetupId &&
+        candidate.repoId === runContext.repoId &&
+        candidate.path === runContext.path &&
+        setupHostMatchesRunContext(candidate, runContext.hostId, automationHostTarget)
+    )
+    const setup = setups.length === 1 ? setups[0] : undefined
+    if (!setup) {
+      if (projectHostSetups.some((candidate) => candidate.id === runContext.projectHostSetupId)) {
+        return unavailable(
+          'host-mismatch',
+          t(
+            'auto.components.automations.automationTargetAvailability.hostMismatch',
+            'The saved run host no longer matches this project setup.'
+          )
+        )
+      }
+      return unavailable(
+        'missing-project-host-setup',
+        'Project is not set up on the selected automation host anymore.'
+      )
+    }
+    if (setup.setupState !== 'ready') {
+      return unavailable(
+        'project-host-setup-not-ready',
+        `Project setup on the selected automation host is ${setup.setupState}.`
+      )
+    }
+    // Derived project IDs upgrade repo→git→github; preserve saved targets by stable repoId/path/host instead.
+    const setupMatchesContext =
+      setup.repoId === automation.runContext.repoId &&
+      setup.path === automation.runContext.path &&
+      setupHostMatchesRunContext(setup, automation.runContext.hostId, automationHostTarget)
+    const repoMatchesContext =
+      automation.runContext.repoId === repo.id &&
+      automation.runContext.path === repo.path &&
+      repoHostMatchesRunContext(repo, automation.runContext.hostId, automationHostTarget)
+    if (!setupMatchesContext || !repoMatchesContext) {
+      return unavailable(
+        'host-mismatch',
+        t(
+          'auto.components.automations.automationTargetAvailability.hostMismatch',
+          'The saved run host no longer matches this project setup.'
+        )
+      )
+    }
+  }
+  if (automation.workspaceMode === 'existing' && !workspace) {
+    return unavailable('missing-workspace', 'The target workspace is no longer available.')
+  }
+
+  const sshTargetId = getAutomationSshTargetId(automation, repo)
+  if (!sshTargetId) {
+    return { canRunNow: true, reason: 'available', message: null }
+  }
+
+  const bucket =
+    automationHostTarget?.kind === 'environment'
+      ? sshStateByEnvironment?.get(automationHostTarget.environmentId)
+      : null
+  const status =
+    automationHostTarget?.kind === 'environment'
+      ? ((bucket?.targetsHydrated ? bucket.connectionStates.get(sshTargetId)?.status : null) ??
+        'disconnected')
+      : (sshConnectionStates.get(sshTargetId)?.status ?? 'disconnected')
+  switch (status) {
+    case 'connected':
+      return { canRunNow: true, reason: 'available', message: null }
+    case 'auth-failed':
+    case 'reconnection-failed':
+      return unavailable('ssh-auth-needed', 'Connect this SSH host before running manually.')
+    case 'connecting':
+    case 'deploying-relay':
+    case 'reconnecting':
+      return unavailable('ssh-connecting', 'This SSH host is still connecting.')
+    case 'disconnected':
+    case 'error':
+      return unavailable('ssh-unavailable', 'Connect this SSH host before running manually.')
+  }
+}
+
+export function getRuntimeAutomationAvailability(
+  environmentId: string,
+  runtimeStatusByEnvironmentId: ReadonlyMap<string, RuntimeEnvironmentStatus> | undefined,
+  t?: Translate
+): AutomationTargetAvailability {
+  const entry = runtimeStatusByEnvironmentId?.get(environmentId)
+  if (!entry) {
+    return unavailable(
+      'runtime-checking',
+      'Checking the selected remote server before running manually.'
+    )
+  }
+  if (!entry.status) {
+    return unavailable(
+      'runtime-unavailable',
+      'Reconnect this remote server before running manually.'
+    )
+  }
+  if (entry.status.graphStatus !== 'ready') {
+    return unavailable(
+      'runtime-unavailable',
+      'The selected remote server is not ready to run automations yet.'
+    )
+  }
+  const compat = evaluateRuntimeCompat({
+    clientProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+    minCompatibleServerProtocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
+    serverProtocolVersion: entry.status.runtimeProtocolVersion ?? entry.status.protocolVersion,
+    serverMinCompatibleClientProtocolVersion:
+      entry.status.minCompatibleRuntimeClientVersion ?? entry.status.minCompatibleMobileVersion
+  })
+  if (compat.kind === 'blocked') {
+    return unavailable('runtime-update-required', describeRuntimeCompatBlock(compat, t))
+  }
+  return { canRunNow: true, reason: 'available', message: null }
+}
+
+function getAutomationSshTargetId(automation: Automation, repo: Repo): string | null {
+  const parsedHost = parseExecutionHostId(automation.runContext?.hostId)
+  if (parsedHost?.kind === 'ssh') {
+    return parsedHost.targetId
+  }
+  if (automation.executionTargetType === 'ssh' && automation.executionTargetId.trim()) {
+    return automation.executionTargetId
+  }
+  return repo.connectionId?.trim() || null
+}
+
+function unavailable(
+  reason: Exclude<AutomationTargetAvailability['reason'], 'available'>,
+  message: string
+): AutomationTargetAvailability {
+  return { canRunNow: false, reason, message }
+}

@@ -38,7 +38,7 @@ vi.mock('sonner', () => ({
 
 vi.mock('./use-mobile-install-qr', () => ({ useMobileInstallQr: () => null }))
 vi.mock('./use-mobile-page-escape', () => ({ useMobilePageEscape: vi.fn() }))
-vi.mock('../settings/mobile/pairing/mobile-pairing-device-polling', () => ({
+vi.mock('./pairing/mobile-pairing-device-polling', () => ({
   useMobilePairingDevicePolling: vi.fn()
 }))
 

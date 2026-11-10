@@ -21,9 +21,9 @@ import {
   getTerminalWarpImportSearchEntries,
   getTerminalYamlImportSearchEntries
 } from '../themes/terminal-theme-search'
-import { getTerminalConfigImportSearchEntries } from '../platform/terminal-advanced-platform-search'
+import { getTerminalConfigImportSearchEntries } from '../configuration/terminal-config-import-search'
 import { getTerminalPaneAppearanceSearchEntries } from './terminal-pane-appearance-search'
-import { getTerminalWindowSearchEntries } from '../terminal-window-setup-search'
+import { getTerminalWindowSearchEntries } from './terminal-window-search'
 import { Button } from '../../../ui/button'
 import { SettingsRow, SettingsSubsectionHeader } from '../../form-controls/SettingsFormControls'
 import { FontAutocomplete } from '../../appearance/fonts/FontAutocomplete'
@@ -32,7 +32,7 @@ import { TerminalFontSizeSetting } from './TerminalFontSizeSetting'
 import { TerminalAdvancedTypographyControls } from './TerminalAdvancedTypographyControls'
 import { TerminalThemeCatalogSection } from '../themes/TerminalThemeSections'
 import { ClaudeCodeThemeSyncSetting } from '../themes/ClaudeCodeThemeSyncSetting'
-import { TerminalWindowSection } from '../TerminalWindowSection'
+import { TerminalWindowSection } from './TerminalWindowSection'
 import { TerminalCursorAppearanceSection } from './TerminalCursorAppearanceSection'
 import { TerminalPaneAppearanceSection } from './TerminalPaneAppearanceSection'
 import { AppearanceAdvancedDisclosure } from '../../appearance/AppearanceAdvancedDisclosure'
@@ -40,7 +40,7 @@ import { TerminalConfigImportModal } from '../configuration/TerminalConfigImport
 import type { UseTerminalConfigImportReturn } from '../configuration/useTerminalConfigImport'
 import { WarpThemeImportModal } from '../themes/WarpThemeImportModal'
 import type { UseWarpThemeImportReturn } from '../themes/useWarpThemeImport'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import ghosttyIcon from '../../../../../../../resources/ghostty.svg'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -192,8 +192,8 @@ export function TerminalAppearanceSection({
           <SettingsSubsectionHeader
             className="items-center"
             title={t(
-              'auto.components.settings.TerminalAppearanceSection.048aac8a64',
-              'Terminal Typography'
+              'auto.components.settings.TerminalAppearanceSection.5ae74b7796',
+              'Terminal typography'
             )}
             action={
               showConfigImports ? (
@@ -236,8 +236,8 @@ export function TerminalAppearanceSection({
 
             <SearchableSetting
               title={t(
-                'auto.components.settings.TerminalAppearanceSection.a408266e67',
-                'Font Family'
+                'auto.components.settings.TerminalAppearanceSection.a157b95a08',
+                'Font family'
               )}
               description={terminalTypographyEntries[1]?.description}
               keywords={
@@ -247,8 +247,8 @@ export function TerminalAppearanceSection({
             >
               <SettingsRow
                 label={t(
-                  'auto.components.settings.TerminalAppearanceSection.a408266e67',
-                  'Font Family'
+                  'auto.components.settings.TerminalAppearanceSection.a157b95a08',
+                  'Font family'
                 )}
                 control={
                   <FontAutocomplete

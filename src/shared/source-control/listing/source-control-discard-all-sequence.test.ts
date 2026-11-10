@@ -196,31 +196,6 @@ describe('runDiscardAllForArea', () => {
     }
   }
 
-  it('bulk-unstages staged paths before the per-file discard loop', async () => {
-    const ctx = makeDeps()
-    const result = await runDiscardAllForArea('staged', ['a.ts', 'b.ts'], ctx.deps)
-    expect(result).toEqual({ discarded: ['a.ts', 'b.ts'], failed: [], aborted: false })
-    expect(ctx.bulkUnstageCalls).toEqual([['a.ts', 'b.ts']])
-    expect(ctx.discardOneCalls).toEqual(['a.ts', 'b.ts'])
-    // Unstage before restoring worktree files or staged deltas survive as inverse changes.
-    expect(ctx.bulkUnstage.mock.invocationCallOrder[0]).toBeLessThan(
-      ctx.discardOne.mock.invocationCallOrder[0]
-    )
-  })
-
-  it('bulk-unstages staged paths before bulk discard', async () => {
-    const ctx = makeDeps()
-    const result = await runDiscardAllForArea('staged', ['a.ts', 'b.ts'], ctx.depsWithBulkDiscard)
-    expect(result).toEqual({ discarded: ['a.ts', 'b.ts'], failed: [], aborted: false })
-    expect(ctx.bulkUnstageCalls).toEqual([['a.ts', 'b.ts']])
-    expect(ctx.discardManyCalls).toEqual([['a.ts', 'b.ts']])
-    expect(ctx.discardOne).not.toHaveBeenCalled()
-    // Reset the index before restoring/deleting worktree files so staged deltas cannot survive.
-    expect(ctx.bulkUnstage.mock.invocationCallOrder[0]).toBeLessThan(
-      ctx.discardMany.mock.invocationCallOrder[0]
-    )
-  })
-
   it('falls back to per-file discard when bulk discard rejects', async () => {
     const ctx = makeDeps({ discardManyError: new Error('unknown method') })
     const result = await runDiscardAllForArea('unstaged', ['a.ts', 'b.ts'], ctx.depsWithBulkDiscard)

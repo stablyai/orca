@@ -6,13 +6,12 @@ import { statusDotColor } from '../components/StatusDot'
 import type { ConnectionVerdict } from '../transport/connection/connection-health'
 import { verdictDisplayLabel } from '../transport/connection/connection-health'
 import { mobileConnectionPathAccessibilityLabel } from '../transport/connection/mobile-connection-path-label'
-import { useHostDisplay } from '../transport/hosts/use-host-display'
+import { useHostDisplay } from '../host-descriptors/use-host-display'
 import type { MobileConnectionPath } from '../transport/connection/stable-logical-rpc-client'
 import type { ConnectionState } from '../transport/connection/connection-state'
-import type { HostCatalogEntry, HostProfile } from '../transport/hosts/host-profile'
+import type { HostCatalogEntry, HostProfile } from '../host-catalog/host-profile'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { homeAgentNeedsYou } from '../worktree/home-jump-back-in'
 import { homeHostWorktreeSummary, type HostWorktreeInfo } from '../worktree/home-worktree-info'
 import { homeListStyles as styles } from './home-list-styles'
 
@@ -52,6 +51,8 @@ export function MobileHomeDesktopRow(props: {
   path: MobileConnectionPath
   // The row owns fresh/stale/unavailable wording so callers cannot hide retained counts again (STA-3123).
   worktreeInfo?: HostWorktreeInfo
+  /** Agents on this desktop waiting on the user. */
+  needsYou: number
   onPress: () => void
   onLongPress: () => void
 }) {
@@ -95,12 +96,7 @@ export function MobileHomeDesktopRow(props: {
     Boolean(line)
   )
   const statusLine = connected && worktreeSummary.visual ? worktreeSummary.visual : statusLabel
-  const attention = props.worktreeInfo?.catalogUnavailable
-    ? undefined
-    : props.worktreeInfo?.attention
-  const needsYou = connected
-    ? (attention?.filter((worktree) => homeAgentNeedsYou(worktree.dotStatus)).length ?? 0)
-    : 0
+  const needsYou = connected ? props.needsYou : 0
   const needsYouLabel =
     needsYou > 0
       ? needsYou === 1

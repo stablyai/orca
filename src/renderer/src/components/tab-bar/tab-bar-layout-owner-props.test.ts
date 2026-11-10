@@ -20,7 +20,7 @@ vi.mock('@/store', () => ({
     })
   }
 }))
-vi.mock('@/lib/resolve-owner', () => ({
+vi.mock('@/lib/workspace/ownership/resolve-owner', () => ({
   runtimeEnvironmentIdUnlessTwin: () => mocks.ownerEnvironmentId
 }))
 

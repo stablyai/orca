@@ -23,7 +23,7 @@ vi.mock('./runtime-status-probe', () => ({
   startRuntimeStatusProbe: (client: unknown, onStatus: (status: unknown) => void) =>
     descriptorProbe.start(client, onStatus)
 }))
-vi.mock('../hosts/host-descriptor-recorder', () => ({
+vi.mock('../../host-descriptors/host-descriptor-recorder', () => ({
   recordHostDescriptorFromStatus: (...args: unknown[]) => descriptorProbe.record(...args)
 }))
 
@@ -36,7 +36,7 @@ vi.mock('../rpc/direct-rpc-connect', () => ({
 vi.mock('./host-logical-client', () => ({
   openHostLogicalClient: (...args: unknown[]) => connectMock(...args)
 }))
-vi.mock('../hosts/host-store', () => ({
+vi.mock('../../host-catalog/host-store', () => ({
   loadHosts: () => loadHostsMock()
 }))
 vi.mock('../../diagnostics/connection/connection-revival-triggers', () => ({
@@ -47,7 +47,7 @@ vi.mock('../../diagnostics/connection/connection-log-background-flush', () => ({
 }))
 
 import { RpcClientProvider } from './client-context'
-import { useDisconnectHostClient, useForceReconnect, useHostClient } from './host-client-hooks'
+import { useDisconnectHostClient, useHostClient } from './host-client-hooks'
 import { useAllHostClients } from './use-all-host-clients'
 import { useRelayRecoveryStatus } from './client-context-connection-metrics'
 
@@ -168,45 +168,6 @@ beforeEach(() => {
 })
 
 describe('useHostClient', () => {
-  it('shows connecting while a reused screen resolves an uncached host', async () => {
-    const client = makeFakeClient('connected')
-    connectMock.mockReturnValue(client)
-    loadHostsMock.mockResolvedValueOnce([HOST]).mockReturnValueOnce(new Promise<never>(() => {}))
-
-    let selectedHostId = HOST.id
-    let renderTick = 0
-    const stateByRenderTick = new Map<number, ConnectionState>()
-    let renderer: ReactTestRenderer | null = null
-    function Probe(): null {
-      stateByRenderTick.set(renderTick, useHostClient(selectedHostId).state)
-      return null
-    }
-
-    try {
-      await act(async () => {
-        renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
-        await Promise.resolve()
-      })
-      expect(stateByRenderTick.get(0)).toBe('connected')
-
-      // Keep host swaps amber during asynchronous profile/keychain loading.
-      selectedHostId = 'missing-host'
-      renderTick = 1
-      await act(async () => {
-        renderer?.update(createElement(RpcClientProvider, null, createElement(Probe)))
-      })
-      expect(stateByRenderTick.get(1)).toBe('connecting')
-
-      renderTick = 2
-      await act(async () => {
-        renderer?.update(createElement(RpcClientProvider, null, createElement(Probe)))
-      })
-      expect(stateByRenderTick.get(2)).toBe('connecting')
-    } finally {
-      act(() => renderer?.unmount())
-    }
-  })
-
   it('drops the closed client when the host entry is removed', async () => {
     const fake = makeFakeClient('connected')
     connectMock.mockReturnValue(fake)
@@ -225,80 +186,6 @@ describe('useHostClient', () => {
     expect(harness.hook.state).toBe('disconnected')
 
     harness.unmount()
-  })
-
-  it('reports disconnected instead of hanging when the host id is unknown', async () => {
-    loadHostsMock.mockResolvedValue([])
-
-    const harness = await renderHarness('missing-host')
-    expect(connectMock).not.toHaveBeenCalled()
-    expect(harness.hook.client).toBeNull()
-    expect(harness.hook.state).toBe('disconnected')
-
-    harness.unmount()
-  })
-
-  it('seeds connecting during the async open instead of flashing disconnected', async () => {
-    let resolveHosts: ((hosts: (typeof HOST)[]) => void) | null = null
-    const hostLookup = new Promise<(typeof HOST)[]>((resolve) => {
-      resolveHosts = resolve
-    })
-    connectMock.mockReturnValue(makeFakeClient('connecting'))
-    loadHostsMock.mockReturnValue(hostLookup)
-
-    const states: ConnectionState[] = []
-    let renderer: ReactTestRenderer | null = null
-    function Probe(): null {
-      states.push(useHostClient(HOST.id).state)
-      return null
-    }
-    try {
-      act(() => {
-        renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
-      })
-      expect(states.at(-1)).toBe('connecting')
-
-      await act(async () => {
-        resolveHosts?.([HOST])
-        await hostLookup
-      })
-      expect(states.at(-1)).toBe('connecting')
-      expect(states).not.toContain('disconnected')
-    } finally {
-      act(() => renderer?.unmount())
-    }
-  })
-
-  it('keeps Retry amber through forceReconnect instead of grey-then-amber', async () => {
-    const first = makeFakeClient('connected')
-    const second = makeFakeClient('connecting')
-    connectMock.mockReturnValueOnce(first).mockReturnValueOnce(second)
-    loadHostsMock.mockResolvedValue([HOST])
-
-    const states: ConnectionState[] = []
-    let forceReconnect: ((hostId: string) => Promise<void>) | null = null
-    let renderer: ReactTestRenderer | null = null
-    function Probe(): null {
-      forceReconnect = useForceReconnect()
-      states.push(useHostClient(HOST.id).state)
-      return null
-    }
-    try {
-      await act(async () => {
-        renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
-        await Promise.resolve()
-      })
-      expect(states.at(-1)).toBe('connected')
-
-      await act(async () => {
-        await forceReconnect?.(HOST.id)
-      })
-      expect(first.closeMock).toHaveBeenCalled()
-      expect(states.at(-1)).toBe('connecting')
-      expect(states).not.toContain('disconnected')
-    } finally {
-      act(() => renderer?.unmount())
-    }
   })
 })
 

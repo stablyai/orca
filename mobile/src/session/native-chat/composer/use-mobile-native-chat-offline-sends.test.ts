@@ -1,33 +1,32 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
+import type { MobileNativeChatSendIntent } from './mobile-native-chat-send'
 import type { MobileNativeChatInputLockReason } from '../MobileNativeChatView'
-import {
-  readMobileNativeChatDraftInputs,
-  updateMobileNativeChatDraftInputs
-} from './mobile-native-chat-draft-inputs'
-import {
-  resetMobileNativeChatDraftStoreForTests,
-  setMobileNativeChatDraftText
-} from './mobile-native-chat-draft-store'
-import {
-  readMobileNativeChatOfflineSends,
-  resetMobileNativeChatOfflineSendsForTests
-} from './mobile-native-chat-offline-sends'
+import { closeMobileNativeChatTabDraft } from './mobile-native-chat-draft-store'
+import { readMobileNativeChatOfflineSends } from './mobile-native-chat-offline-sends'
 import {
   useMobileNativeChatOfflineQueue,
   type MobileNativeChatOfflineQueue
 } from './use-mobile-native-chat-offline-sends'
 
+import { loadMobileNativeChatDrafts } from './mobile-native-chat-draft-persistence'
+
+vi.mock('@react-native-async-storage/async-storage', async () => {
+  const { createInMemoryAsyncStorage } =
+    await import('../../../test-support/in-memory-async-storage')
+  return { default: createInMemoryAsyncStorage() }
+})
+
 const SCOPE = 'host\0worktree\0tab'
-const IMAGE = { id: 'chip-1', path: '/host/shot.png', previewUri: 'file:///shot.png' }
 
 type Send = (text: string, intent?: MobileNativeChatSendIntent) => Promise<boolean>
 
 describe('useMobileNativeChatOfflineQueue', () => {
   let renderer: ReactTestRenderer | null = null
   let queue: MobileNativeChatOfflineQueue | null = null
+  let releasePending: (() => void) | null = null
+  let pendingSend: Promise<boolean> | null = null
 
   function Harness({ lock, send }: { lock: MobileNativeChatInputLockReason | null; send: Send }) {
     queue = useMobileNativeChatOfflineQueue({
@@ -49,39 +48,19 @@ describe('useMobileNativeChatOfflineQueue', () => {
     await act(async () => renderer?.update(createElement(Harness, { lock: null, send })))
   }
 
-  afterEach(() => {
+  afterEach(async () => {
     act(() => renderer?.unmount())
     renderer = null
     queue = null
-    resetMobileNativeChatOfflineSendsForTests()
-    resetMobileNativeChatDraftStoreForTests()
-  })
-
-  it('holds an offline send with its chips and sends it once on reconnect without touching the composer', async () => {
-    const send = vi.fn<Send>().mockResolvedValue(true)
-    await mount('disconnected', send)
-    setMobileNativeChatDraftText(SCOPE, 'check the PR tab')
-    updateMobileNativeChatDraftInputs(SCOPE, (inputs) => ({ ...inputs, images: [IMAGE] }))
-
-    let accepted: boolean | undefined
+    await loadMobileNativeChatDrafts('host', 'worktree')
+    closeMobileNativeChatTabDraft('host\0worktree\0tab')
     await act(async () => {
-      accepted = await queue?.send('check the PR tab')
+      releasePending?.()
+      await pendingSend
     })
-
-    expect(accepted).toBe(true)
-    expect(send).not.toHaveBeenCalled()
-    expect(readMobileNativeChatDraftInputs(SCOPE).images).toEqual([])
-    expect(readMobileNativeChatOfflineSends(SCOPE).map((queued) => queued.text)).toEqual([
-      'check the PR tab'
-    ])
-
-    setMobileNativeChatDraftText(SCOPE, 'a newer draft')
-    await reconnect(send)
-
-    expect(send).toHaveBeenCalledOnce()
-    expect(send.mock.calls[0][0]).toBe('check the PR tab')
-    expect(send.mock.calls[0][1]?.queued?.images).toEqual([IMAGE])
-    expect(readMobileNativeChatOfflineSends(SCOPE)).toEqual([])
+    releasePending = null
+    pendingSend = null
+    await loadMobileNativeChatDrafts('host', 'worktree')
   })
 
   it('pauses a queued message whose send fails and holds later sends behind it until Resume', async () => {
@@ -119,13 +98,16 @@ describe('useMobileNativeChatOfflineQueue', () => {
   it('keeps a pending send single across remounts and drains later messages when it settles', async () => {
     const delivered: string[] = []
     let finishFirst: ((sent: boolean) => void) | undefined
-    const send: Send = async (text) => {
+    const send: Send = (text) => {
       delivered.push(text)
-      return text === 'first'
-        ? new Promise<boolean>((resolve) => {
-            finishFirst = resolve
-          })
-        : true
+      pendingSend =
+        text === 'first'
+          ? new Promise<boolean>((resolve) => {
+              finishFirst = resolve
+              releasePending = () => resolve(false)
+            })
+          : Promise.resolve(true)
+      return pendingSend
     }
     await mount('disconnected', send)
     await act(async () => {

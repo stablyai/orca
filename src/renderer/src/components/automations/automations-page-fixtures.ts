@@ -7,15 +7,18 @@ import type {
 } from '../../../../shared/automations/history/automation-run'
 import type { ExternalAutomationManager } from '../../../../shared/automations/external/external-automation'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
-import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
+import type { AutomationHostCatalogEntry } from './hosts/automation-host-catalog-types'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type {
   ExternalAutomationScope,
   ScopedExternalAutomationManager
-} from './external-automation-scope-client'
-import { automationListRowKey, type AutomationListRow } from './automation-list-row-identity'
+} from './external/external-automation-scope-client'
+import {
+  automationListRowKey,
+  type AutomationListRow
+} from './listing/automation-list-row-identity'
 import { ALL_AUTOMATION_HOSTS_FILTER } from '../../../../shared/automations/ownership/automation-host-filter'
 import { getDefaultSettings } from '../../../../shared/constants'
 

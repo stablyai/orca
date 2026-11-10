@@ -1,5 +1,6 @@
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
-import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-publication'
+import '@/store/slices/linear/linear-issue-read'
+import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-read-lifecycle'
 import { useLinearIssuePublication } from '@/hooks/useLinearIssuePublication'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -20,7 +21,7 @@ import {
 } from '@/components/linear-item-drawer-types'
 import { renderLinearItemDrawerSheet } from '@/components/linear-item-drawer-sheet'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 
 export { LinearIssueEditSection } from '@/components/linear-item-drawer-edit-section'
 export { LinearIssueCommentFooter } from '@/components/linear-item-drawer-comment-footer'

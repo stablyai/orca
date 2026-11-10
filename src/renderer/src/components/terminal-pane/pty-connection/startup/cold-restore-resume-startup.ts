@@ -1,7 +1,7 @@
 import {
   getConnectionIdForWorktreeCopy,
   getConnectionIdFromState
-} from '@/lib/connection-owner-resolution'
+} from '@/lib/workspace/ownership/connection-owner-resolution'
 import { normalizeExecutionHostId } from '../../../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { useAppStore } from '@/store/index'
@@ -12,12 +12,12 @@ import {
   resolveRuntimeHostTerminalWindowsShell,
   resolveSshHostReportedPlatform,
   resolveAgentResumeLaunchTarget
-} from '@/lib/agent-resume-launch-target'
+} from '@/lib/agent-session/resume/agent-resume-launch-target'
 import {
   agentResumeOriginNamesAnotherExecutionHost,
   sleepingRecordNamesAnotherExecutionHost
 } from '@/lib/agent-session/resume/sleeping-record-execution-host-scope'
-import { resolveResumeLaunchRecipe } from '../../../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import { resolveResumeLaunchRecipe } from '../../../../../../shared/agent-launch/choices/resume-launch-recipe'
 import {
   agentProviderSessionsEqual,
   isResumableTuiAgent,
@@ -78,9 +78,10 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       agentProviderSessionsEqual(agent, sleepingRecord.providerSession, providerSession)
         ? sleepingRecord
         : undefined
-    const launchConfig =
-      (useLiveEntry && entry ? state.getAgentLaunchConfigForStatusEntry(entry) : undefined) ??
-      matchingSleepingRecord?.launchConfig
+    // A live invocation takes the decision's answer, none included; only otherwise the saved record.
+    const launchConfig = entry
+      ? state.getAgentLaunchConfigForStatusEntry(entry)
+      : matchingSleepingRecord?.launchConfig
     // Quote resume for the live pane’s effective Windows shell rather than the platform’s PowerShell default.
     // Why: a nested-SSH pane on a server runs on its SSH target; the pane's host names a worktree
     // copy, while a folder's own record carries its connection.
@@ -113,7 +114,7 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       agent,
       providerSession,
       cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-      ...resolveResumeLaunchRecipe(launchConfig),
+      ...resolveResumeLaunchRecipe(launchConfig, agent, providerSession),
       platform: resumeTarget.platform,
       agentHostPlatform: resumeTarget.agentHostPlatform,
       shell: resumeTarget.shell,

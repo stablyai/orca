@@ -5,7 +5,7 @@ import {
   EXCHANGE_PAIRING_TICKET_METHOD,
   PAIRING_TICKET_EXCHANGE_RUNTIME_CAPABILITY
 } from './ticket-exchange-capability'
-import { sendRemoteRuntimeRequest } from '../remote-runtime-client'
+import { sendRemoteRuntimeRequestOnSocket } from '../requests/remote-runtime-request-socket'
 
 const EXCHANGE_TIMEOUT_MS = 10_000
 
@@ -24,20 +24,26 @@ export async function exchangeRemotePairingTicket(args: {
   pairingCode: string
   offer: PairingOffer
   hostCapabilities: readonly string[] | undefined
-  send?: typeof sendRemoteRuntimeRequest
+  send?: typeof sendRemoteRuntimeRequestOnSocket
   timeoutMs?: number
 }): Promise<string> {
   if (!args.hostCapabilities?.includes(PAIRING_TICKET_EXCHANGE_RUNTIME_CAPABILITY)) {
     return args.pairingCode
   }
   const deviceToken = randomHexToken()
-  const send = args.send ?? sendRemoteRuntimeRequest
+  const send = args.send ?? sendRemoteRuntimeRequestOnSocket
   try {
     const response = await send(
       pairedRuntimeConnectionFromOffer(args.offer),
       EXCHANGE_PAIRING_TICKET_METHOD,
       { deviceToken },
-      args.timeoutMs ?? EXCHANGE_TIMEOUT_MS
+      args.timeoutMs ?? EXCHANGE_TIMEOUT_MS,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined
     )
     if (!response.ok) {
       return args.pairingCode
@@ -50,7 +56,13 @@ export async function exchangeRemotePairingTicket(args: {
       pairedRuntimeConnectionFromOffer(exchanged),
       'status.get',
       undefined,
-      args.timeoutMs ?? EXCHANGE_TIMEOUT_MS
+      args.timeoutMs ?? EXCHANGE_TIMEOUT_MS,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined
     ).catch(() => undefined)
     return encodePairingOffer(exchanged)
   } catch {

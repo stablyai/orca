@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
-import { track } from '@/lib/telemetry'
+import { useAppStore } from '@/store/index'
+import { track } from '@/diagnostics/telemetry/telemetry'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   buildImportedHookSettings,
@@ -10,7 +10,7 @@ import {
   getDetectedSetupPreviewContent,
   isSetupScriptPromptDismissed,
   isSilentSetupScriptPromptState
-} from '@/lib/setup-script-prompt'
+} from '@/runtime/repo-hooks/setup-script-prompt'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { SetupScriptImportCandidate } from '../../../../shared/workspace-setup/setup-script-imports'
 import { buildSetupScriptPromptActionTelemetry } from '../../../../shared/workspace-setup/setup-script-telemetry'
@@ -238,24 +238,13 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
         }
         if (mountedRef.current) {
           setPromptState((current) => markSetupScriptPromptSaved(current, importedRepoHostIdentity))
-          const skippedCount = candidate.unsupportedFields?.length ?? 0
+          // Skipped fields were listed in the review dialog before saving; the toast only confirms.
           showSavedInProjectSettingsToast({
             onOpenSettings: () => openLocalCommandSettings(importedRepoId, importedHostId),
-            description:
-              skippedCount > 0
-                ? translate(
-                    'auto.components.sidebar.SetupScriptPromptCard.savedWithSkippedFields',
-                    '{{count}} unsupported fields skipped. Saved the setup command.',
-                    {
-                      count: skippedCount,
-                      defaultValue_one:
-                        '{{count}} unsupported field skipped. Saved the setup command.'
-                    }
-                  )
-                : translate(
-                    'auto.components.sidebar.SetupScriptPromptCard.savedSetupCommand',
-                    'Saved the setup command.'
-                  )
+            description: translate(
+              'auto.components.sidebar.SetupScriptPromptCard.savedSetupCommand',
+              'Saved the setup command.'
+            )
           })
         }
       } catch (error) {

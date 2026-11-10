@@ -13,7 +13,10 @@ import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-
 import { notifyReposChanged } from './repos-changed-notification'
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from '../worktrees/creation/worktree-base-directory-watcher'
 import { ProjectUpdateIpcArgs, parseProjectGroupIpcArgs } from './repo-ipc-arg-schemas'
-import { visibleProjectHostSetups, visibleRepos } from '../../ssh/orcad-retained-source'
+import {
+  visibleProjectHostSetups,
+  visibleRepos
+} from '../../persistence/migrating-orcad-catalog/orcad-source-visibility'
 import {
   assertWslMoveProjectWritable,
   assertWslMoveReposWritable,

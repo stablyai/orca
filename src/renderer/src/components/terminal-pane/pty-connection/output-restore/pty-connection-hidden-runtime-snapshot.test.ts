@@ -75,7 +75,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } =
     await import('../test-fixtures/pty-connection-test-environment')
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
@@ -157,7 +157,9 @@ describe('connectPanePty', () => {
 
   it('restores overflowed hidden remote runtime output from its serialized snapshot', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks = await vi.importMock<AgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks = await vi.importMock<AgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const transport = createMockTransport('remote:env-1@@terminal-1')
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -217,7 +219,9 @@ describe('connectPanePty', () => {
 
   it('preserves the painted normal buffer when a successful hidden restore has no image', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks2 = await vi.importMock<AgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks2 = await vi.importMock<AgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const transport = createMockTransport('remote:env-1@@terminal-1')
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null

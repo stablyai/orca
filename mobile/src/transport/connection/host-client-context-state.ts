@@ -4,7 +4,7 @@ import type { HostClientStoreEntry } from './host-entry-opener'
 import type { RelayHostReachability } from '../relay/relay-host-reachability'
 import type { MobileConnectionPath, StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ConnectionState } from './connection-state'
-import type { HostProfile } from '../hosts/host-profile'
+import type { HostProfile } from '../../host-catalog/host-profile'
 
 export type CloseEntryOptions = {
   forgetPrimedHost: boolean

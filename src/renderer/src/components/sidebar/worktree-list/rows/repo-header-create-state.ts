@@ -1,7 +1,7 @@
 import type { SshConnectionStatus } from '../../../../../../shared/ssh-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
-import { getSelectedRepoSshGate } from '../../../../lib/new-workspace-ssh-gate'
+import { getSelectedRepoSshGate } from '../../../../lib/workspace/creation/new-workspace-ssh-gate'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 

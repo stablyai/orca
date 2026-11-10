@@ -33,6 +33,8 @@ export type LiveWorktreeName = {
   /** Where the worktree lives on its host; null until the host's record arrives. */
   path: string | null
   hostId: string | null
+  /** The checked-out branch without refs/heads/; null for folders, detached heads and until the record arrives. */
+  branch: string | null
   resolution: WorktreeShowResolution
 }
 
@@ -53,6 +55,7 @@ export function useLiveWorktreeName({
     projectName?: string | null
     path?: string | null
     hostId?: string | null
+    branch?: string | null
   }>(() => ({ client, worktreeId, name: routeNameHint }))
   // Key verdicts by route so a previous workspace’s deletion cannot escape into the new one.
   const [resolved, setResolved] = useState<{
@@ -147,12 +150,15 @@ export function useLiveWorktreeName({
           if (liveName) {
             const path = worktree?.path || null
             const hostId = worktree?.hostId ?? null
+            // Match desktop formatBranchName by hiding the refs/heads/ prefix.
+            const branch = worktree?.branch?.replace(/^refs\/heads\//, '') || null
             setWorktreeName((current) =>
               current.client === client &&
               current.worktreeId === worktreeId &&
               current.name === liveName &&
               current.path === path &&
-              current.hostId === hostId
+              current.hostId === hostId &&
+              current.branch === branch
                 ? current
                 : {
                     ...(current.client === client && current.worktreeId === worktreeId
@@ -162,7 +168,8 @@ export function useLiveWorktreeName({
                     worktreeId,
                     name: liveName,
                     path,
-                    hostId
+                    hostId,
+                    branch
                   }
             )
             const projectHost = parseRoutableExecutionHostId(hostId)
@@ -285,6 +292,7 @@ export function useLiveWorktreeName({
       projectName: null,
       path: null,
       hostId: 'local',
+      branch: null,
       resolution: 'unknown'
     }
   }
@@ -294,6 +302,7 @@ export function useLiveWorktreeName({
     projectName: current ? (worktreeName.projectName ?? null) : null,
     path: current ? (worktreeName.path ?? null) : null,
     hostId: current ? (worktreeName.hostId ?? null) : null,
+    branch: current ? (worktreeName.branch ?? null) : null,
     resolution:
       resolved.client === client && resolved.worktreeId === worktreeId
         ? resolved.resolution

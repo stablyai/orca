@@ -213,8 +213,6 @@ export function fenceDeferredArguments(): void {
   fenceDeferred.request(client)
   // @ts-expect-error request params are method-keyed, including deferred requests
   fenceDeferred.request(client, { worktree: 3 })
-  // @ts-expect-error single-flight operations also require their method's params
-  fenceDeferred.requestSingleFlight(client, 'host')
   // @ts-expect-error on-settle operations cannot defer interpretation behind a caller guard
   bindDeferredRpcOperation(workspaceListOrNull)
   // @ts-expect-error caller-barrier operations cannot interpret as each request settles

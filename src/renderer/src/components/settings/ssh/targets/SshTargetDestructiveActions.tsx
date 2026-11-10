@@ -155,8 +155,8 @@ export function SshTargetDestructiveActions({
       <SshDestructiveActionDialog
         open={!!pendingRemove}
         title={t(
-          'auto.components.settings.SshTargetDestructiveActions.4808966c41',
-          'Remove SSH Target'
+          'auto.components.settings.SshTargetDestructiveActions.916f480036',
+          'Remove SSH target'
         )}
         description={t(
           'auto.components.settings.SshTargetDestructiveActions.3bb0cf0ee4',
