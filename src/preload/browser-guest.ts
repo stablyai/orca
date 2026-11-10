@@ -6,6 +6,7 @@ import {
 } from './browser-window-close-installation'
 import { installBrowserWindowPrompt } from './browser-window-prompt-installation'
 import { installNativeChatVisualGuestTheme } from './native-chat-visual-guest-theme'
+import { installBrowserGuestEditProtection } from './browser-guest-edit-protection'
 
 // Raw require keeps the sandboxed preload standalone in the CJS build.
 const electron: {
@@ -18,6 +19,11 @@ installNativeChatVisualGuestTheme(ipcRenderer, electron.webFrame)
 
 // Subframe window.close() is already inert; preserve the frame's own implementation.
 if (process.isMainFrame) {
+  installBrowserGuestEditProtection({
+    send: (channel, payload) => ipcRenderer.send(channel, payload),
+    on: (channel, listener) =>
+      ipcRenderer.on(channel, (_event, payload: unknown) => listener(payload))
+  })
   contextBridge.executeInMainWorld({
     func: installBrowserWindowCloseGuard,
     args: [() => ipcRenderer.sendToHost(PRELOAD_BROWSER_GUEST_WINDOW_CLOSE_CHANNEL)]

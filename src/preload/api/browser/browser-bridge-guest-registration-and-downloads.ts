@@ -20,6 +20,16 @@ import { browserClientPageRendererRequests } from '../../preload-runtime-support
 import type { PreloadApi } from '../../api-types'
 
 export const browserGuestRegistrationAndDownloadsApi = {
+  getGuestDiscardProtection: (args) =>
+    ipcRenderer.invoke('browser:getGuestDiscardProtection', args),
+  onGuestDiscardProtectionChanged: (callback): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: Parameters<typeof callback>[0]
+    ): void => callback(data)
+    ipcRenderer.on('browser:guest-discard-protection-changed', listener)
+    return () => ipcRenderer.removeListener('browser:guest-discard-protection-changed', listener)
+  },
   onClientPageRendererRequest: browserClientPageRendererRequests.subscribe,
   readClientHostId: (): string | null => readBrowserClientHostIdArgument(process.argv),
   registerGuest: (args: {

@@ -1,4 +1,5 @@
 import type { BrowserSessionCookieApi } from './browser-session-cookie-api'
+import type { BrowserGuestDiscardApi } from '../../../shared/browser/guest-lifecycle/browser-guest-discard-protection'
 import type { BrowserDevToolsDockBounds } from '../../../shared/browser/devtools/browser-devtools-dock'
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
 import type { BrowserAgentPresenceApi } from './browser-agent-presence-api'
@@ -294,7 +295,8 @@ export type BrowserApi = {
   }) => Promise<BrowserExtensionActionResult>
   /** Installs, updates, removals, load errors or held updates changed; refetch the list. */
   onExtensionsChanged: (callback: () => void) => () => void
-} & BrowserExtensionToolbarApi &
+} & BrowserGuestDiscardApi &
+  BrowserExtensionToolbarApi &
   BrowserExtensionWebStoreApi &
   BrowserExtensionContextMenuApi &
   BrowserSessionCookieApi &

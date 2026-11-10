@@ -83,6 +83,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     this.siteDisplayController?.onGuestRegistered(guest, sessionProfileId ?? null)
     // Earlier audio events had no page; this report also cues the renderer to re-apply a tab's mute.
     this.notifyAudioStateChanged(browserTabId, guest.isCurrentlyAudible())
+    this.notifyGuestDiscardProtection(browserTabId, guest)
 
     this.setupContextMenu(browserTabId, guest)
     this.setupGrabShortcut(browserTabId, guest)

@@ -1,3 +1,5 @@
+import { setBrowserGuestVisible } from './browser-guest-activity'
+
 // Keep guests in stable overlay-slot parents across chrome unmounts; Electron destroys them on DOM removal/reparenting.
 
 const slotViewportRoots = new Map<string, HTMLDivElement>()
@@ -267,6 +269,7 @@ export function applyBrowserPageViewportLayout(
   browserPageId: string,
   layout: BrowserPageViewportLayout
 ): void {
+  setBrowserGuestVisible(browserPageId, layout.paintable && layout.active)
   const viewport = browserPageViewports.get(browserPageId)
   if (!viewport) {
     return
@@ -307,6 +310,7 @@ export function syncBrowserPageChromeInset(browserPageId: string, heightPx: numb
 }
 
 export function parkBrowserPageViewport(browserPageId: string): void {
+  setBrowserGuestVisible(browserPageId, false)
   const viewport = browserPageViewports.get(browserPageId)
   if (viewport) {
     viewport.shell.style.display = 'none'

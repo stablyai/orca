@@ -47,22 +47,6 @@ export function collectBrowserWebviewIds(
   return ids
 }
 
-// Evict hidden guests without removing tabs/pages so revisit rebuilds from saved state.
-export function destroyWorktreeBrowserGuests(
-  browserTabsByWorktree: Record<string, BrowserWorkspace[]>,
-  browserPagesByWorkspace: Record<string, BrowserPage[]>,
-  worktreeId: string
-): void {
-  for (const tab of browserTabsByWorktree[worktreeId] ?? []) {
-    const pages = browserPagesByWorkspace[tab.id] ?? []
-    // Legacy pre-page sessions key guests by workspace tab ID, like collectBrowserWebviewIds.
-    const guestIds = pages.length === 0 ? [tab.id] : pages.map((page) => page.id)
-    for (const guestId of guestIds) {
-      destroyRemovedBrowserWebview(guestId)
-    }
-  }
-}
-
 export function destroyWorkspaceWebviews(
   browserPagesByWorkspace: Record<string, BrowserPage[]>,
   workspaceId: string

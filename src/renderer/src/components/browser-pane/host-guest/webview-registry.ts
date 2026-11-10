@@ -1,5 +1,10 @@
 import { clearLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
 import {
+  registerBrowserGuestActivity,
+  unregisterBrowserGuestActivity,
+  invalidateBrowserGuestActivity
+} from './browser-guest-activity'
+import {
   clearBrowserPageViewportPresetSize,
   removeBrowserPageViewport
 } from './browser-page-viewport'
@@ -162,14 +167,17 @@ export function registerPersistentWebview(
   }
   const onRendererGone = (): void => {
     rendererRecoveryPendingPageIds.add(browserTabId)
+    invalidateBrowserGuestActivity(browserTabId)
   }
   const onRendererReady = (): void => {
     rendererRecoveryPendingPageIds.delete(browserTabId)
+    invalidateBrowserGuestActivity(browserTabId)
   }
   const onGuestDestroyed = (): void => {
     // Intentional removal also emits destroyed; only attached guests need recovery.
     if (webview.isConnected) {
       rendererRecoveryPendingPageIds.add(browserTabId)
+      invalidateBrowserGuestActivity(browserTabId)
     }
   }
   webview.addEventListener('render-process-gone', onRendererGone)
@@ -182,6 +190,7 @@ export function registerPersistentWebview(
     onGuestDestroyed
   })
   webviewRegistry.set(browserTabId, webview)
+  registerBrowserGuestActivity(browserTabId, webview)
   applyCurrentDragPassthroughToWebview(webview)
   ensureDragListeners()
 }
@@ -203,6 +212,7 @@ export function unregisterPersistentWebview(browserTabId: string): void {
     dragPassthroughPreviousPointerEvents.delete(webview)
   }
   webviewRegistry.delete(browserTabId)
+  unregisterBrowserGuestActivity(browserTabId)
   if (webviewRegistry.size === 0) {
     removeDragListeners()
   }
