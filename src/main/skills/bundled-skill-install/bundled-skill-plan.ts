@@ -81,6 +81,7 @@ const ORCA_COPY_CLASSES = new Set<PlannedFolderClass>([
   'other-build'
 ])
 
+/** Classifies one root's copy of the skill and decides its op, including another build's copy. */
 async function planTarget(
   context: SkillContext,
   root: BundledSkillTargetRoot,
@@ -231,6 +232,7 @@ async function planTarget(
   }
 }
 
+/** Plans the shared root first, then agent roots, which may link to the shared copy. */
 async function planSkill(
   input: BundledSkillPlanInput,
   roots: readonly BundledSkillTargetRoot[],

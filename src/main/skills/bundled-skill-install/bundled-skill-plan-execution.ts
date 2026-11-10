@@ -178,6 +178,7 @@ async function applyOp(run: SkillRun, op: BundledSkillOp): Promise<string | unde
   return backup
 }
 
+/** Applies one skill's ops in order, then records its marker if this build's bytes are on disk. */
 async function runSkill(run: SkillRun): Promise<BundledSkillOutcome> {
   const statuses = new Map<string, BundledSkillOpOutcome['status']>()
   const ops: BundledSkillOpOutcome[] = []

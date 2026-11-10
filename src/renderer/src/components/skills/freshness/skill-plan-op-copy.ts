@@ -37,6 +37,7 @@ export function updatedSkillsLabel(
     : updated
 }
 
+/** Translated reason Orca left a location alone; unknown reasons from newer hosts fall back. */
 export function leaveReasonText(
   reason: string | null | undefined,
   t: Translate = translate

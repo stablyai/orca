@@ -58,6 +58,7 @@ export const BUNDLED_SKILL_PLAN_OP_TEXT: Readonly<
   restore: 'Repair'
 }
 
+/** One location's summary state; other owners' and other builds' copies read as current. */
 function opPlanState(
   op: Pick<BundledSkillOp, 'kind' | 'reason' | 'previous'>
 ): BundledSkillPlanState {
