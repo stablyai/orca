@@ -14,6 +14,7 @@ import { workflowRunActions } from '../workflow-run-actions'
 import { useWorkflowClock } from '../use-workflow-clock'
 import { InspectorNote, InspectorSection } from './workflow-inspector-fields'
 import { WorkflowPromptSections } from './AgentPromptSection'
+import { WorkflowAnswerSection } from './WorkflowAnswerSection'
 import { translate } from '@/i18n/i18n'
 import { isWorkflowAgentNode } from '../../../../../shared/workflow/workflow-definition-schema'
 
@@ -278,39 +279,7 @@ export function NodeExecutionInspector({
           ) : null}
         </div>
       </InspectorSection>
-      {answer ? (
-        <InspectorSection
-          title={translate(
-            'auto.components.workflows.inspector.NodeExecutionInspector.answerTitle',
-            'Answer'
-          )}
-        >
-          <p
-            className={cn(
-              'max-h-96 overflow-auto whitespace-pre-wrap text-xs leading-5 scrollbar-sleek',
-              answer.source === 'terminal' && 'font-mono text-2xs'
-            )}
-          >
-            {answer.text}
-          </p>
-          {answer.source === 'terminal' ? (
-            <InspectorNote>
-              {translate(
-                'auto.components.workflows.inspector.NodeExecutionInspector.answerFromTerminal',
-                'Captured from the terminal screen because the agent’s session log could not be read.'
-              )}
-            </InspectorNote>
-          ) : null}
-          {answer.truncated ? (
-            <InspectorNote>
-              {translate(
-                'auto.components.workflows.inspector.NodeExecutionInspector.answerTruncated',
-                'Earlier output was left out; open the terminal for the full history.'
-              )}
-            </InspectorNote>
-          ) : null}
-        </InspectorSection>
-      ) : null}
+      {answer ? <WorkflowAnswerSection answer={answer} /> : null}
       {task?.report ? (
         <InspectorSection
           title={translate(

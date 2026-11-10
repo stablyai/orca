@@ -19375,7 +19375,6 @@
         "WorkflowRunDialog": {
           "ed282070ff": "Start run",
           "f4c667feb5": "Cancel",
-          "82f5021c7c": "This is a folder workspace, so isolated worktrees will fail to start.",
           "81554cce16": "Agents set to the shared workspace work here; isolated agents get their own worktrees beside it.",
           "7ea393f34c": "No workspaces",
           "494287c71a": "Workspace",
@@ -19385,7 +19384,8 @@
           "e40b033de5": "Could not start the run",
           "05e98d142b": "The workflow has validation errors",
           "8735ec6aca": "Orca could not tell which host owns that workspace.",
-          "a28bc6ce92": "{{value0}} (folder)"
+          "a28bc6ce92": "{{value0}} (folder)",
+          "3f1c9a7e52": "Folder projects cannot create worktrees. Pick a workspace from a Git project, or set every agent to the shared workspace."
         },
         "WorkflowToolbar": {
           "2219181459": "Redo (Ctrl+Y)",
@@ -19666,7 +19666,10 @@
             "stopRetryTitle": "Stop this worker and retry?",
             "stopRetryBody": "Orca stops the worker, then starts a new attempt only if the stop is proven.",
             "stopRetryConfirm": "Stop and retry",
-            "stopRetry": "Stop and retry"
+            "stopRetry": "Stop and retry",
+            "answerTitle": "Answer",
+            "answerFromTerminal": "Captured from the terminal screen because the agent’s session log could not be read.",
+            "answerTruncated": "Earlier output was left out; open the terminal for the full history."
           },
           "WorkflowInspector": {
             "befe7b1022": "nodes selected. Copy, duplicate, or delete them together."
@@ -19678,7 +19681,6 @@
             "46079242a1": "Payload bytes per run",
             "949fe9f012": "Messages per run",
             "8b0fea9fe9": "Communication budget",
-            "369b8f336a": "Recorded as a warning when exceeded; Orca does not stop workers on this limit.",
             "bf2bfd3ff9": "Maximum run duration",
             "b9bb56d96d": "Let other branches finish, then fail",
             "2b7ee58144": "Stop the run",
@@ -19692,7 +19694,10 @@
             "02af629cac": "Default objective",
             "440c9e7cd0": "Description",
             "9b240e7ba3": "Name",
-            "457d07e767": "Workflow"
+            "457d07e767": "Workflow",
+            "6d2e81c4f7": "Recorded as a warning when exceeded. Use Hard stop to end the run.",
+            "a83f0d2b61": "Hard stop",
+            "4c9b7e15d0": "After this long, Orca cancels the run and stops every agent still working."
           },
           "workflow": {
             "inspector": {
@@ -19700,6 +19705,10 @@
                 "0243e40fc4": "One per line."
               }
             }
+          },
+          "WorkflowAnswerSection": {
+            "text": "Plain text",
+            "markdown": "Markdown"
           }
         },
         "execution": {
