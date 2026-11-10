@@ -24,6 +24,8 @@
 // cannot enroll devices, manage secrets or connect GitHub.
 //   /v1/team/workspaces[/:id[/presence|wake|lease|grants[/:grantId]]], /v1/team/links/resolve, /v1/team/prompts
 //          team workspace registry, presence, per-device grants (src/workspaces.ts, src/grants.ts)
+//          POST /v1/team/workspaces/:id/wake?wait=30s: any member who can open it wakes it (single-flight,
+//          billed to the account, counted on the owner's seat like every wake) -> {state, endpoint: null, …}
 // /v1/sandboxes/* is the owner's lifecycle API: only the workspace's owner (and, for suspend and
 // destroy, an org admin) can reach a row there, because resume hands back an orcad pairing offer.
 // Browser (GitHub redirects): GET /v1/github/setup, GET /v1/github/callback
@@ -1305,6 +1307,13 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
     case 'POST wake': {
       if (!canOpen(caller, row)) {
         throw new WorkspaceError('not_found')
+      }
+      if (url.searchParams.has('wait')) {
+        // The same single-flight long-poll wake as the owner's POST /v1/sandboxes/:id/wake (phones),
+        // billed and capped exactly like it. The endpoint stays out: a teammate gets in only through
+        // their own grant, never by learning where the VM listens.
+        const answer = await wakeSandbox(life, row, { waitMs: parseWakeWait(url, null), ...workspaceConfig(env, deps) })
+        return json({ ...answer, endpoint: null })
       }
       // Never returns the owner's pairing offer; teammates get in through their own grant.
       const ready = await resumeSandbox(life, row)

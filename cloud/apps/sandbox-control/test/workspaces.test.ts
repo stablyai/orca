@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { generateGrantRecipientKey, nodeSealedGrantPrimitives } from '../../../../src/main/cloud-workspaces/sealed-grant-node'
 import { openSealedGrant } from '../../../../src/shared/cloud-workspaces/sealed-grant'
+import { HostedWakeResponseSchema } from '../../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
 import { REVOKE_COMMAND } from '../src/grant-revokes'
 import { GRANT_COMMAND } from '../src/grants'
 import { createHarness } from './harness'
@@ -233,6 +234,55 @@ describe('workspace grants (E2EE pairing through the control plane)', () => {
     await t.req(t.bob, 'POST', `/v1/team/workspaces/${t.id}/grants`, { recipientPublicKeyB64: generateGrantRecipientKey().publicKeyB64, deviceLabel: 'b', deviceKind: 'desktop' })
     const res = await t.h.call('POST', '/v1/internal/org-members/removed', { bearer: 'o'.repeat(40), body: { accountId: 'org:acme', userId: 'bob' } })
     expect(res.body).toEqual({ revoked: 1, queued: 0, keysRevoked: 0, devicesRevoked: 0, grantsRevoked: 1, grantsQueued: 0, routinesDisabled: 0 })
+  })
+})
+
+describe('team wake (phones)', () => {
+  it('a teammate wakes a team workspace with the single-flight wake, never learns the endpoint, billed to the team', async () => {
+    const t = await team()
+    await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })
+    await t.req(t.alice, 'POST', `/v1/sandboxes/${t.id}/suspend`)
+    const checksBefore = t.h.billing.checks.length
+    const woke = await t.req(t.bob, 'POST', `/v1/team/workspaces/${t.id}/wake?wait=30s`)
+    expect(woke.status).toBe(200)
+    expect(HostedWakeResponseSchema.parse(woke.body)).toMatchObject({ state: 'ready', endpoint: null, sandboxId: t.id })
+    // The same start check as the owner's own wake: the team's account pays.
+    expect(t.h.billing.checks.slice(checksBefore)).toEqual([expect.objectContaining({ accountId: 'org:acme' })])
+    // Racing wakes from teammate and owner start the VM once.
+    await t.req(t.alice, 'POST', `/v1/sandboxes/${t.id}/suspend`)
+    const answers = await Promise.all([
+      t.req(t.bob, 'POST', `/v1/team/workspaces/${t.id}/wake?wait=30s`),
+      t.req(t.alice, 'POST', `/v1/sandboxes/${t.id}/wake?wait=30s`)
+    ])
+    expect(answers.map((a) => a.body.state)).toEqual(['ready', 'ready'])
+  })
+
+  it('is not found for a non-member, for a private workspace, and for an archived one', async () => {
+    const t = await team()
+    await t.req(t.alice, 'POST', `/v1/sandboxes/${t.id}/suspend`)
+    // Private (the default): teammates cannot wake it.
+    expect((await t.req(t.bob, 'POST', `/v1/team/workspaces/${t.id}/wake?wait=1s`)).status).toBe(404)
+    await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })
+    const outsider = await t.as('mallory', 'member', 'globex')
+    expect((await t.req(outsider, 'POST', `/v1/team/workspaces/${t.id}/wake?wait=1s`)).status).toBe(404)
+    await t.req(t.alice, 'POST', `/v1/sandboxes/${t.id}/archive`, {})
+    expect((await t.req(t.bob, 'POST', `/v1/team/workspaces/${t.id}/wake?wait=1s`)).status).toBe(404)
+  })
+
+  it('an org admin cannot wake a private workspace, and a running one never hands a teammate its endpoint', async () => {
+    const t = await team()
+    expect((await t.req(t.admin, 'POST', `/v1/team/workspaces/${t.id}/wake?wait=1s`)).status).toBe(404)
+    await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })
+    const running = await t.req(t.bob, 'POST', `/v1/team/workspaces/${t.id}/wake?wait=1s`)
+    expect(running.body).toMatchObject({ state: 'ready', endpoint: null })
+  })
+
+  it('keeps the desktop blocking wake (no wait) answering {workspace}', async () => {
+    const t = await team()
+    await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })
+    await t.req(t.alice, 'POST', `/v1/sandboxes/${t.id}/suspend`)
+    const woke = await t.req(t.bob, 'POST', `/v1/team/workspaces/${t.id}/wake`)
+    expect(woke.body.workspace).toMatchObject({ id: t.id, status: 'running' })
   })
 })
 

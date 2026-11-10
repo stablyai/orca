@@ -155,19 +155,32 @@ export async function listCloudWorkspaces(
 
 export type CloudWakeState = HostedWakeResponse['state']
 
-/** One long-poll wake (the server holds it up to 30 s); idempotent and single-flight server side. */
+/**
+ * One long-poll wake (the server holds it up to 30 s); idempotent and single-flight server side.
+ * The team route lets any member who can open the workspace wake it (a teammate's too); the
+ * owner-only route stays the fallback for a server without it, or a row the registry can't serve.
+ */
 export async function wakeCloudWorkspace(
   plane: CloudControlPlane,
   sandboxId: string,
   signal?: AbortSignal
 ): Promise<{ state: CloudWakeState; endpoint: string | null }> {
-  const body = await request(
-    plane,
-    'POST',
-    `/v1/sandboxes/${encodeURIComponent(sandboxId)}/wake?wait=30s`,
-    HostedWakeResponseSchema,
-    { body: {}, timeoutMs: 45_000, signal }
-  )
+  const id = encodeURIComponent(sandboxId)
+  const wake = (path: string) =>
+    request(plane, 'POST', `${path}/wake?wait=30s`, HostedWakeResponseSchema, {
+      body: {},
+      timeoutMs: 45_000,
+      signal
+    })
+  let body: HostedWakeResponse
+  try {
+    body = await wake(`/v1/team/workspaces/${id}`)
+  } catch (error) {
+    if (!(error instanceof CloudRequestError) || error.status !== 404) {
+      throw error
+    }
+    body = await wake(`/v1/sandboxes/${id}`)
+  }
   return { state: body.state, endpoint: body.endpoint }
 }
 
