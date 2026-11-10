@@ -1,5 +1,16 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { parseShellForegroundRows } from '../../../shared/process-table-snapshot'
+
+const { terminalRowsMock } = vi.hoisted(() => ({ terminalRowsMock: vi.fn() }))
+vi.mock('./terminal-process-rows', () => ({
+  normalizePtyTty: (tty: string | null | undefined) => tty,
+  readTerminalTty: async () => 'pts/0',
+  readPtyTerminalRows: terminalRowsMock,
+  readTerminalPs: async () => null
+}))
+vi.mock('./node-pty-pts-name', () => ({ readPtsName: () => 'pts/0' }))
+
+import { observePtyForeground } from './pty-master-foreground-observation'
 
 describe('observePtyForeground with a Docker container sharing the pts (#39488)', () => {
   it('parses a sid column so rows can be grouped by session', () => {
@@ -21,7 +32,7 @@ describe('observePtyForeground with a Docker container sharing the pts (#39488)'
     // The container (PID 334240, SID 334240, TPGID 334240) shares pts/0 with the
     // agent (PID 58826, SID 58824, TPGID 58826). The old code required every row
     // on the pts to agree on TPGID; the container's row made that impossible (#39488).
-    const rows = [
+    terminalRowsMock.mockResolvedValue([
       {
         pid: 334240,
         ppid: 334217,
@@ -49,14 +60,22 @@ describe('observePtyForeground with a Docker container sharing the pts (#39488)'
         stat: 'S+',
         command: 'claude --version'
       }
-    ]
-    // observePtyForeground reads the ps output through readPtyTerminalRows, which we
-    // cannot mock here without a process; instead verify the session filter directly.
-    const root = rows.find((row) => row.pid === 58824)!
-    const sessionRows = root.sid !== undefined ? rows.filter((row) => row.sid === root.sid) : rows
-    expect(sessionRows).toHaveLength(2)
-    expect(sessionRows.every((row) => row.tpgid === 58826)).toBe(true)
-    // The container's row would have failed the old all-rows check.
-    expect(rows.some((row) => row.tpgid !== 58826)).toBe(true)
+    ])
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+    try {
+      // ptsName comes from the readPtsName mock; only pid and the group reader are read off proc.
+      const proc = { pid: 58824, getForegroundProcessGroup: () => 58826 }
+      const sample = await observePtyForeground(proc, () => true, Date.now() + 1_000)
+
+      // With every pts row checked, the container's TPGID fails both coherence attempts.
+      expect(sample).toMatchObject({
+        verdict: 'observed',
+        foregroundKind: 'non-shell',
+        foregroundPgid: 58826
+      })
+    } finally {
+      Object.defineProperty(process, 'platform', platform)
+    }
   })
 })

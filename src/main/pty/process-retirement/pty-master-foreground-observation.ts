@@ -48,6 +48,7 @@ export function ptyForegroundGroupReader(proc: unknown): PtyForegroundGroupReade
   return process.platform === 'win32' ? undefined : () => readPtyForegroundGroup(proc)
 }
 
+/** Pick the foreground members of `group` from rows already scoped to this terminal's own session. */
 export function resolvePtyForegroundMembers(
   rows: readonly ProcessTableRow[],
   group: number

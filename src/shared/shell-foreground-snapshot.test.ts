@@ -78,7 +78,11 @@ it('requires a new capture after an earlier shell proof has started', async () =
 
 // With no `tty=` column to absorb them, the shared parser read `python`/`3` as tty/start.
 it('keeps an argv whose second token is numeric', () => {
-  expect(parseShellForegroundRows('101 100 101 101 101 S+ /usr/bin/python 3 app.py')).toEqual([
+  // The input must match the platform's column set: macOS ps has no sid, Linux adds one before stat.
+  const capture = shellHasSid
+    ? '101 100 101 101 101 S+ /usr/bin/python 3 app.py'
+    : '101 100 101 101 S+ /usr/bin/python 3 app.py'
+  expect(parseShellForegroundRows(capture)).toEqual([
     shellHasSid
       ? {
           pid: 101,

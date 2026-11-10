@@ -83,6 +83,7 @@ export async function readTerminalTty(
   return output === null ? null : normalizePtyTty(output)
 }
 
+/** Rows the host ps reports for the pts, carrying sid where the platform offers it so callers can scope to one session. */
 export async function readPtyTerminalRows(
   tty: string,
   timeoutMs = PS_TIMEOUT_MS
