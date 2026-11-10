@@ -13,12 +13,15 @@ import { partialRuntimeStore } from '../orca-runtime-tests/runtime-store-partial
 import type { RpcRequest } from './core'
 import { repoDispatcher } from './methods/projects/repo-rpc.test-fixture'
 import { UnixSocketTransport } from './unix-socket-transport'
+import { acquire, release } from '../../github/gh-utils'
+import { RuntimeRepositoryForkBackfill } from '../repositories/runtime-repository-fork-backfill'
 
-vi.mock('../../repository-icons/repo-icon-autodetect', () => ({
-  detectRepoIconAndUpstream: vi.fn().mockResolvedValue({})
-}))
 vi.mock('../../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: vi.fn().mockResolvedValue(undefined)
+}))
+
+vi.mock('../../git/command-runner/gh-exec-file', () => ({
+  ghExecFileAsync: vi.fn(async () => ({ stdout: '{"isFork":false}' }))
 }))
 
 const cliPath = '../../../cli/index'
@@ -43,9 +46,19 @@ it('opens a repo-tool root through the CLI folder route and keeps subproject Git
     invalidateWorktreeScan: () => {},
     notifyReposChanged: () => {}
   })
+  const metadata = new RuntimeRepositoryForkBackfill(
+    () => store,
+    () => {}
+  )
+  let background = Promise.resolve()
+  let heldSlots = 0
   const dispatcher = repoDispatcher({
     getRuntimeId: () => 'repo-cli-test',
-    addRepo: (...args) => controller.add(...args),
+    addRepo: async (...args) => {
+      const repo = await controller.add(...args)
+      background = metadata.enqueue([repo])
+      return repo
+    },
     listVisibleRepos: () => repos,
     requireStore: () => store
   })
@@ -79,6 +92,11 @@ it('opens a repo-tool root through the CLI folder route and keeps subproject Git
       const git = runProcessSync({ program: 'git', args: ['init', '-q', path] })
       expect(git.code, git.stderr).toBe(0)
     }
+    const remote = runProcessSync({
+      program: 'git',
+      args: ['-C', project, 'remote', 'add', 'origin', 'https://github.com/me/widget.git']
+    })
+    expect(remote.code, remote.stderr).toBe(0)
     await socket.start()
     await writeFile(
       getRuntimeMetadataPath(root),
@@ -114,6 +132,10 @@ it('opens a repo-tool root through the CLI folder route and keeps subproject Git
     expect(repos).toHaveLength(1)
     expect(await cli(['repo', 'list'])).toMatchObject({ result: { repos: [first] } })
 
+    for (let slot = 0; slot < 4; slot++) {
+      await acquire()
+      heldSlots++
+    }
     const subproject = repoReply.parse(
       await cli(['repo', 'add', '--path', project, '--kind', 'git'])
     ).result.repo
@@ -122,6 +144,19 @@ it('opens a repo-tool root through the CLI folder route and keeps subproject Git
       normalizeRuntimePathForComparison(project)
     )
     expect(subproject.kind).toBe('git')
+    expect(await cli(['repo', 'list'])).toMatchObject({
+      result: {
+        repos: [
+          expect.objectContaining({ id: first.id }),
+          expect.objectContaining({ id: subproject.id })
+        ]
+      }
+    })
+    while (heldSlots > 0) {
+      release()
+      heldSlots--
+    }
+    await background
     expect(repos).toHaveLength(2)
 
     const beforeInvalid = requests.length
@@ -132,6 +167,11 @@ it('opens a repo-tool root through the CLI folder route and keeps subproject Git
     expect(requests).toHaveLength(beforeInvalid)
     expect(repos).toHaveLength(2)
   } finally {
+    while (heldSlots > 0) {
+      release()
+      heldSlots--
+    }
+    await background
     await socket.stop()
     vi.unstubAllEnvs()
     process.exitCode = previousExitCode

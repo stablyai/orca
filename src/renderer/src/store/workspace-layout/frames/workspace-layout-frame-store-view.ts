@@ -128,7 +128,8 @@ export function layoutViewAndFactsOfStore(
     localOnlyScrollbackByTabId: terminals.localOnlyScrollbackByTabId,
     browserPagesByWorkspace: buildPersistedBrowserPagesByWorkspace(
       pickKeys(state.browserPagesByWorkspace, browserTabIds),
-      state.remoteBrowserPageHandlesByPageId
+      state.remoteBrowserPageHandlesByPageId,
+      {}
     ),
     tabLabels: {},
     terminalRows: {},

@@ -5,7 +5,7 @@ import type {
   BrowserAnnotationIntent,
   BrowserPageAnnotation
 } from '../../../../../shared/browser/element-grab/browser-grab-types'
-import { formatBrowserAnnotationsAsMarkdown } from './browser-annotation-output'
+import { formatBrowserAnnotationsAsMarkdown } from '../../../../../shared/browser/annotations/browser-annotation-output'
 import { EMPTY_BROWSER_ANNOTATIONS } from '../describe-page/browser-annotation-geometry'
 import {
   holdNotesForSend,

@@ -1,3 +1,4 @@
+import type { BrowserPageAnnotation } from '../element-grab/browser-grab-types'
 import type {
   BrowserCertificateFailure,
   BrowserCookieImportResult,
@@ -122,6 +123,11 @@ export type BrowserTabSetProfileResult = {
 }
 
 export type BrowserTabShowResult = { tab: BrowserTabInfo }
+/** The notes the user left on a tab's page and has not sent yet. */
+export type BrowserTabAnnotationsResult = {
+  tab: BrowserTabInfo
+  annotations: BrowserPageAnnotation[]
+}
 export type BrowserTabCurrentResult = { tab: BrowserTabInfo }
 
 export type BrowserTabProfileShowResult = {

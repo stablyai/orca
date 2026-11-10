@@ -107,6 +107,7 @@ export async function useIpcEventsForCloseRouting({
         activeBrowserTabIdByWorktree: { 'wt-1': 'workspace-1' },
         browserTabsByWorktree: { 'wt-1': [{ id: 'workspace-1' }] },
         browserPagesByWorkspace: {},
+        browserAnnotationsByPageId: {},
         openFiles: [],
         unifiedTabsByWorktree: {},
         closeBrowserTab: vi.fn(),
