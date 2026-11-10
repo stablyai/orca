@@ -10,6 +10,7 @@ type Entry =
   | { status: 'failed'; at: number }
 
 const FAILED_RETRY_MS = 5 * 60_000
+const MAX_CACHED_ICONS = 500
 
 const entries = new Map<string, Entry>()
 const listeners = new Set<() => void>()
@@ -29,7 +30,19 @@ function notify(): void {
 
 function settle(name: string, entry: Entry): void {
   entries.set(name, entry)
+  pruneEntries()
   notify()
+}
+
+function pruneEntries(): void {
+  for (const name of entries.keys()) {
+    if (entries.size <= MAX_CACHED_ICONS) {
+      break
+    }
+    if (!consumers.has(name)) {
+      entries.delete(name)
+    }
+  }
 }
 
 /** Picking the AI style again is the user asking to retry, so forget failures and speak up again. */
@@ -50,12 +63,7 @@ export function retryFailedWorktreeAiIcons(): void {
 export async function regenerateWorktreeAiIcons(): Promise<void> {
   await window.api.worktreeIcons.clearCache()
   failureToastShown = false
-  for (const [name, entry] of entries) {
-    // A running batch settles into the new recipe's cache anyway; respawning it would double the cost.
-    if (entry.status !== 'pending') {
-      entries.delete(name)
-    }
-  }
+  entries.clear()
   for (const name of consumers.keys()) {
     request(name)
   }
@@ -66,6 +74,8 @@ function request(name: string): void {
   const entry = entries.get(name)
   // Failures retry after a while; cards remount on scroll, so an immediate retry would respawn agents.
   if (entry && !(entry.status === 'failed' && Date.now() - entry.at > FAILED_RETRY_MS)) {
+    entries.delete(name)
+    entries.set(name, entry)
     return
   }
   const pending: Entry = { status: 'pending', requestId: createNonSecureContextUuid() }
@@ -127,6 +137,7 @@ export function useWorktreeAiIcon(name: string, enabled: boolean): string | null
         void window.api.worktreeIcons.cancel({ requestId: entry.requestId }).catch(() => {})
         notify()
       }
+      pruneEntries()
     }
   }, [enabled, normalized])
   return useSyncExternalStore(subscribe, () => {

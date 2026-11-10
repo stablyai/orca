@@ -1,10 +1,15 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import type { InternalTextGenerationResult } from './source-control-text-generation-types'
 
-const mocks = vi.hoisted(() => ({ prepare: vi.fn(), generate: vi.fn(), cancel: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  prepare: vi.fn(),
+  generate: vi.fn(),
+  cancel: vi.fn(),
+  resolve: vi.fn()
+}))
 vi.mock('./commit-message-agent-environment', () => ({
   prepareLocalCommitMessageAgentEnv: mocks.prepare
 }))
@@ -12,7 +17,7 @@ vi.mock('./agent-generation-request', () => ({ runGenerationRequest: mocks.gener
 vi.mock('./source-control-generation-lanes', () => ({ cancelLocalGeneration: mocks.cancel }))
 vi.mock('./source-control-agent-launch', () => ({ spawnSourceControlAgent: vi.fn() }))
 vi.mock('./commit-message-text-generation', () => ({
-  resolveTextGenerationParams: () => ({ ok: true, params: { agentId: 'claude', model: 'haiku' } })
+  resolveTextGenerationParams: mocks.resolve
 }))
 
 let directory: string
@@ -21,9 +26,16 @@ beforeEach(() => {
   mocks.prepare.mockReset().mockResolvedValue({ ok: true })
   mocks.generate.mockReset()
   mocks.cancel.mockReset()
+  mocks.resolve.mockReset().mockReturnValue({
+    ok: true,
+    params: { agentId: 'claude', model: 'haiku' }
+  })
   directory = mkdtempSync(path.join(os.tmpdir(), 'orca-icon-'))
 })
-afterEach(() => rmSync(directory, { recursive: true, force: true }))
+afterEach(() => {
+  vi.useRealTimers()
+  rmSync(directory, { recursive: true, force: true })
+})
 
 async function setup() {
   const { generateWorktreeIconRequest } = await import('./worktree-icon-requests')
@@ -102,4 +114,51 @@ it('draws icons requested together in one agent run, matched by icon number', as
   expect(mocks.generate).toHaveBeenCalledTimes(1)
   expect(alpha).toMatchObject({ success: true, svg: expect.stringContaining('M1 1h1') })
   expect(beta).toMatchObject({ success: true, svg: expect.stringContaining('M2 2h2') })
+})
+
+it('clears queued requests and prevents a partially completed old recipe from restoring the disk cache', async () => {
+  vi.useFakeTimers()
+  const { clearWorktreeIconCache, generateWorktreeIconRequest } =
+    await import('./worktree-icon-requests')
+  const host = {
+    getSettings: () => ({}),
+    getAgentEnvironment: () => undefined,
+    cacheFile: path.join(directory, 'icons.json')
+  }
+  mocks.resolve.mockImplementation((_settings, _host, operation) => ({
+    ok: true,
+    params: { agentId: operation === 'workspaceIcon' ? 'claude' : 'codex', model: 'haiku' }
+  }))
+  const fallback = Promise.withResolvers<InternalTextGenerationResult>()
+  const fresh = Promise.withResolvers<InternalTextGenerationResult>()
+  mocks.generate
+    .mockResolvedValueOnce({
+      success: true,
+      rawOutput: '<svg id="icon-1"><path d="M1 1h1"/></svg>'
+    })
+    .mockReturnValueOnce(fallback.promise)
+    .mockReturnValueOnce(fresh.promise)
+  const request = (name: string) =>
+    generateWorktreeIconRequest(host, name, new AbortController().signal)
+  const first = request('alpha')
+  const second = request('beta')
+  await vi.advanceTimersByTimeAsync(100)
+  const queued = request('queued')
+  clearWorktreeIconCache(host)
+  fallback.resolve(success)
+  await vi.advanceTimersByTimeAsync(0)
+  expect(await first).toMatchObject({ success: false, canceled: true })
+  expect(await second).toMatchObject({ success: false, canceled: true })
+  expect(await queued).toMatchObject({ success: false, canceled: true })
+  expect(existsSync(host.cacheFile)).toBe(false)
+  const regenerated = request('alpha')
+  await vi.advanceTimersByTimeAsync(100)
+  fresh.resolve({ success: true, rawOutput: '<svg><path d="M9 9h9"/></svg>' })
+  expect(await regenerated).toEqual({
+    success: true,
+    svg: '<svg xmlns="http://www.w3.org/2000/svg"><path d="M9 9h9"/></svg>'
+  })
+  expect(JSON.parse(readFileSync(host.cacheFile, 'utf8'))).toEqual({
+    alpha: '<svg xmlns="http://www.w3.org/2000/svg"><path d="M9 9h9"/></svg>'
+  })
 })

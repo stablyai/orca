@@ -15,7 +15,7 @@ import {
 } from './commit-message-agent-environment'
 import { resolveTextGenerationParams } from './commit-message-text-generation'
 import { spawnSourceControlAgent } from './source-control-agent-launch'
-import { remember } from './worktree-icon-cache'
+import { loadCache, remember } from './worktree-icon-cache'
 
 export type WorktreeIconGenerationHost = {
   getSettings: () => Parameters<typeof resolveTextGenerationParams>[0]
@@ -112,6 +112,7 @@ export async function generateWorktreeIconBatch(
   names: string[],
   signal: AbortSignal
 ): Promise<WorktreeIconGenerationResult[]> {
+  const cache = loadCache(host.cacheFile)
   const attempts = resolveAttempts(host)
   if (typeof attempts === 'string') {
     return names.map(() => ({ success: false, error: attempts }))
@@ -138,6 +139,10 @@ export async function generateWorktreeIconBatch(
     if (outcome.error) {
       errors.push(outcome.error)
     }
+  }
+  // Clearing replaces the cache; an older recipe must never repopulate its replacement.
+  if (loadCache(host.cacheFile) !== cache) {
+    return names.map(() => canceledIconResult())
   }
   const generated = new Map(
     names.flatMap((name, index) => {

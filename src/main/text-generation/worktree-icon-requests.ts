@@ -33,6 +33,14 @@ let collectTimer: ReturnType<typeof setTimeout> | undefined
 /** Drops every cached icon so the next render regenerates with the current recipe. */
 export function clearWorktreeIconCache(host: WorktreeIconGenerationHost): void {
   clearCacheFile(host.cacheFile)
+  for (const request of inFlight.values()) {
+    queued.delete(request)
+    settle(request, canceledResult())
+  }
+  if (active) {
+    active.controller.abort()
+    cancelLocalGeneration('worktree-icon', os.homedir())
+  }
 }
 
 function forget(request: IconRequest): void {
