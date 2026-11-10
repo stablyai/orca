@@ -1,6 +1,6 @@
-import type { WorkerTerminalReleaseRuntime } from '../terminal-authority/release/worker-terminal-release-runtime'
-import { OrchestrationError } from '../orchestration-error'
-import type { FederatedDispatchRow } from '../db/orchestration-records'
+import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
+import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+import type { FederatedDispatchRow } from '../../../../orchestration/db/orchestration-records'
 
 export function resolvePinnedFederatedServer(
   runtime: WorkerTerminalReleaseRuntime,

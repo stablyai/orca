@@ -14,7 +14,7 @@ import { createSessionWorkerLivenessReader } from '../../../../orchestration/wor
 import {
   applyFederatedFleetObservations,
   readFederatedFleetSnapshots
-} from '../../../../orchestration/legacy-remote-home/legacy-remote-home'
+} from '../../../../orchestration/legacy-remote-home/federated-fleet-snapshot'
 import { ensureSessionWorkerRecords } from './session-worker-observation'
 
 export type WorkerListPageParams = {

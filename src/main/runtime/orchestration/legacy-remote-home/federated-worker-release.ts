@@ -11,7 +11,7 @@ import type { FederatedDispatchRow } from '../db/orchestration-records'
 import type { WorkerTerminalReleaseRuntime } from '../terminal-authority/release/worker-terminal-release-runtime'
 import type { WorkerReleaseReceipt } from '../../rpc/methods/orchestration/worker/worker-release-completion'
 import { releaseUnknownRecovery } from '../../rpc/methods/orchestration/worker/worker-release-unknown-recovery'
-import type { resolvePinnedFederatedServer } from './pinned-federated-server'
+import type { resolvePinnedFederatedServer } from '../../rpc/methods/orchestration/worker/pinned-federated-server'
 
 type RemoteReleaseReceipt = Omit<WorkerReleaseReceipt, 'archive'> & {
   archive?: WorkerReleaseReceipt['archive']

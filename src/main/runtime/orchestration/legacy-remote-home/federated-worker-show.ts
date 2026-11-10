@@ -11,7 +11,7 @@ import {
   exposeWorker,
   projectFleetWorkerPage
 } from '../../rpc/methods/orchestration/worker/worker-observation'
-import { resolvePinnedFederatedServer } from './pinned-federated-server'
+import { resolvePinnedFederatedServer } from '../../rpc/methods/orchestration/worker/pinned-federated-server'
 import { applyFederatedFleetObservations } from './federated-fleet-snapshot'
 import { applyConfirmedFederatedReleaseHomeProjection } from './federated-worker-release'
 

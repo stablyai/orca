@@ -13,7 +13,7 @@ import type {
 } from '../../../../orchestration/db/orchestration-records'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import { exposeDispatchContext } from './dispatch-context-exposure'
-import { resolvePinnedFederatedServer } from '../../../../orchestration/legacy-remote-home/legacy-remote-home'
+import { resolvePinnedFederatedServer } from './pinned-federated-server'
 
 /** Recover live handles by recorded process incarnation so stale durable handles cannot hide and leak running workers. */
 export async function inspectWorkerTerminal(

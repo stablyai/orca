@@ -16,6 +16,10 @@ const LEGACY_ENTRIES_BY_FOLDER = {
     dbEntry: 'main/runtime/orchestration/legacy-remote-home/legacy-remote-home-db-methods.ts'
   }
 }
+// Legacy starts load the worker list, so it bypasses the entry module to stay out of an import cycle.
+const DIRECT_IMPORTS = new Set([
+  'main/runtime/rpc/methods/orchestration/worker/worker-list-projection.ts -> main/runtime/orchestration/legacy-remote-home/federated-fleet-snapshot.ts'
+])
 const IMPORT_SPECIFIER =
   /(?:from\s+|import\s*\(\s*|import\s+|require\(\s*)['"](\.{1,2}\/[^'"]+)['"]/g
 
@@ -66,7 +70,7 @@ describe('legacy remote-attachment folders', () => {
           ) {
             if (to === entry || (to === dbEntry && from.startsWith(DB_LAYER))) {
               entryImporters.add(`${from} -> ${to}`)
-            } else {
+            } else if (!DIRECT_IMPORTS.has(`${from} -> ${to}`)) {
               violations.push(`${from} -> ${to}`)
             }
           }
