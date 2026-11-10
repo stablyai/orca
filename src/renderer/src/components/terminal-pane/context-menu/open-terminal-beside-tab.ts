@@ -16,7 +16,9 @@ export function openTerminalBesideTab(terminalTabId: string): boolean {
     return false
   }
   if (tab.worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
-    revealFloatingWorkspacePanel(state)
+    if (!revealFloatingWorkspacePanel(state)) {
+      return false
+    }
     void createFloatingWorkspaceTerminalTab(state)
     return true
   }

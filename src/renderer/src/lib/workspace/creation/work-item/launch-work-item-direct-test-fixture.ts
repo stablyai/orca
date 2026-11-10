@@ -86,7 +86,7 @@ vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.activateAndRevealWorktree
 }))
 
-vi.mock('@/lib/ensure-hooks-confirmed', () => ({
+vi.mock('@/runtime/repo-hooks/ensure-hooks-confirmed', () => ({
   ensureHooksConfirmed: vi.fn().mockResolvedValue('run'),
   ensureHooksApproved: vi.fn().mockResolvedValue({ decision: 'run' })
 }))
@@ -121,7 +121,7 @@ vi.mock('@/runtime/rpc/subscriptions/runtime-rpc-subscribe', () => ({
   subscribeRuntimeRpc: hostMocks.subscribe
 }))
 
-vi.mock('@/lib/new-workspace', () => ({
+vi.mock('@/lib/workspace/creation/new-workspace', () => ({
   CLIENT_PLATFORM: 'win32',
   getWorkspaceSeedName: ({ explicitName }: { explicitName?: string }) => explicitName ?? ''
 }))

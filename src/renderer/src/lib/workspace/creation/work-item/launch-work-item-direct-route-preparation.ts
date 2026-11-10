@@ -9,7 +9,7 @@ import {
   resolveRepoExecutionHostPlatform,
   type KnownExecutionHostPlatform
 } from '@/runtime/hosts/platform/execution-host-facts'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../../../shared/local-windows-terminal-runtime'
 import { isWslUncPath } from '../../../../../../shared/wsl-paths'

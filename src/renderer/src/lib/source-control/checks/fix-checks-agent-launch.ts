@@ -9,7 +9,7 @@ import {
 import {
   AgentLaunchChoiceCancelled,
   acquireAgentLaunchChoices
-} from '../../host-chat-program-acquisition'
+} from '../../agent-session/launch/inventory/host-chat-program-acquisition'
 import { toast } from 'sonner'
 import {
   ensureDetectedAgentsForRepo,
