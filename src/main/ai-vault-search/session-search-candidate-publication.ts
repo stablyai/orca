@@ -125,7 +125,8 @@ export abstract class SessionSearchCandidatePublications {
   async reconcilePublications(
     store: SessionSearchIndexStore,
     overdue: () => boolean,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    owed: (path: string) => boolean = () => false
   ): Promise<void> {
     const available = this.dirtyPublications.size
     let consumed = 0
@@ -144,6 +145,11 @@ export abstract class SessionSearchCandidatePublications {
       }
       const members = rows(this.groups.get(key))
       const selected = this.selected.get(key)
+      for (const path of selected ?? []) {
+        if (owed(path)) {
+          publication.required.add(path)
+        }
+      }
       if (
         !selected?.size ||
         !members
@@ -164,15 +170,16 @@ export abstract class SessionSearchCandidatePublications {
           }
         }
       }
+      const withdrawals = publication.withdrawals
       let attempted = 0
-      while (publication.withdrawals.size && (attempted === 0 || !overdue())) {
+      while (withdrawals.size && (attempted === 0 || !overdue())) {
         if (signal?.aborted || this.publications.get(key) !== publication) {
           return
         }
-        const path = publication.withdrawals.first!
+        const path = withdrawals.first!
         // Another source can still select this physical path.
         if (this.isSelected(path)) {
-          publication.withdrawals.delete(path)
+          withdrawals.delete(path)
           continue
         }
         attempted++
@@ -180,6 +187,7 @@ export abstract class SessionSearchCandidatePublications {
         if (
           signal?.aborted ||
           this.publications.get(key) !== publication ||
+          publication.withdrawals !== withdrawals ||
           this.isSelected(path)
         ) {
           return
@@ -188,11 +196,11 @@ export abstract class SessionSearchCandidatePublications {
           this.withdrawalRetries.fail(key)
           break
         }
-        publication.withdrawals.delete(path)
+        withdrawals.delete(path)
         this.withdrawalRetries.delete(key)
       }
       this.dirtyPublications.delete(key)
-      if (publication.withdrawals.size && !this.withdrawalRetries.heldOut(key)) {
+      if (withdrawals.size && !this.withdrawalRetries.heldOut(key)) {
         this.dirtyPublications.set(key, publication)
       }
     }

@@ -62,6 +62,11 @@ export class SessionSearchWorkQueue {
     this.rowChanged(path, row)
   }
 
+  hasPublicationDebt(path: string): boolean {
+    const work = this.changed.get(path) ?? this.backlog.get(path)
+    return !!work && (work.force || work.metadata)
+  }
+
   next(): SessionSearchWork | undefined {
     const preferred = this.chooseChanged ? this.changed : this.backlog
     this.chooseChanged = !this.chooseChanged

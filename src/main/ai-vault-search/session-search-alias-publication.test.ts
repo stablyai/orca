@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { SessionSearchCandidateInventory } from './session-search-candidate-inventory'
 import { SessionSearchIndexConsumer } from './session-search-index-consumer'
+import { SessionSearchWorkQueue } from './session-search-work-queue'
 import { SessionSearchEngine } from './session-search-engine'
 import { SessionSearchStore } from './session-search-store'
 import {
@@ -129,7 +130,7 @@ it('fences stale search publication without blocking the foreground parser or re
   expect(hits('currentwinnerneedle')).toBe(1)
 })
 
-it('treats successful empty publication as authoritative while protecting a path selected by another group', async () => {
+it('treats successful empty publication as authoritative', async () => {
   await inventory.update([discover([previous])], new Set(), {})
   finish(previous, 'predecessorneedle')
   await inventory.update([discover([first])], new Set(), {})
@@ -137,9 +138,60 @@ it('treats successful empty publication as authoritative while protecting a path
   await settle()
   expect(hits('predecessorneedle')).toBe(0)
   expect(hits('excludedneedle')).toBe(0)
+})
 
-  await inventory.update([discover([previous], '/another/storage')], new Set(), {})
+it('settles cleanup when the selected transcript publishes again during removal acknowledgement', async () => {
+  await inventory.update([discover([previous])], new Set(), {})
+  finish(previous, 'predecessorneedle')
+  await inventory.update([discover([first])], new Set(), {})
+  finish(first, 'replacementneedle')
+  const remove = store.removeFile.bind(store)
+  vi.spyOn(store, 'removeFile').mockImplementationOnce((path) => {
+    finish(first, 'refreshedwinnerneedle')
+    return remove(path)
+  })
+  await settle()
+  await settle()
+  expect(hits('predecessorneedle')).toBe(0)
+  expect(hits('refreshedwinnerneedle')).toBe(1)
+})
+
+it('protects a still-selected physical path before its other group attempts withdrawal', async () => {
+  await inventory.update([discover([previous])], new Set(), {})
   finish(previous, 'sharedpathneedle')
+  await inventory.update(
+    [discover([first]), discover([previous], '/another/storage')],
+    new Set(),
+    {}
+  )
+  finish(first, 'replacementneedle')
   await settle()
   expect(hits('sharedpathneedle')).toBe(1)
+  expect(hits('replacementneedle')).toBe(1)
+})
+
+it('transfers a deferred singleton forced read into later competitive publication ownership', async () => {
+  await inventory.update([discover([first])], new Set(), {})
+  finish(first, 'oldwinnerneedle')
+  // Foreground reads of an alias not yet discovered are supported input.
+  finish(previous, 'predecessorneedle', false, new SessionSearchCandidateInventory())
+  const queue = new SessionSearchWorkQueue()
+  queue.enqueue(first, store, true)
+  inventory.requirePublication(first.file.path)
+  // Its equal-stat forced read remains deferred when a new raw alias arrives next cycle.
+  await inventory.update([discover([previous])], new Set(), {})
+  queue.enqueue(first, store)
+  inventory.beginPublications(false)
+  await inventory.reconcilePublications(
+    store,
+    () => true,
+    undefined,
+    (path) => queue.hasPublicationDebt(path)
+  )
+  expect(hits('predecessorneedle')).toBe(1)
+  finish(first, 'acceptedwinnerneedle')
+  queue.acknowledge(queue.next()!, false)
+  await settle()
+  expect(hits('predecessorneedle')).toBe(0)
+  expect(hits('acceptedwinnerneedle')).toBe(1)
 })
