@@ -12,7 +12,7 @@ import {
 } from './github-pr-mutations'
 import { fetchMarkPRDraft, fetchMarkPRReadyForReview } from './github-pr-draft-mutations'
 import type { GitHubPrRepoSlug } from './github-pr-repo-slug'
-import type { RpcOperationSender } from '../../transport/rpc/rpc-operation-sender'
+import type { UnvalidatedRpcRequestPort } from '../../transport/rpc/unvalidated-rpc-request-port'
 import { PrActionsEngine, type PrActionBusyKey } from './pr-actions-engine'
 import './pr-action-mutation-contract'
 import type { PrActionMutations } from './pr-action-mutation-contract'
@@ -28,7 +28,7 @@ export type PrActionsInput = {
   mutations?: PrActionMutations
 }
 
-function realMutations(client: RpcOperationSender, worktreeId: string): PrActionMutations {
+function realMutations(client: UnvalidatedRpcRequestPort, worktreeId: string): PrActionMutations {
   return {
     mergePR: (args) => fetchMergePR(client, worktreeId, args),
     setPRAutoMerge: (args) => fetchSetPRAutoMerge(client, worktreeId, args),

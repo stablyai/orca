@@ -18,7 +18,7 @@ import type {
   MobilePushRegisterInput
 } from '../../../src/shared/mobile-push-contract'
 import { NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
-import type { RpcOperationSender as PushClient } from '../transport/rpc/rpc-operation-sender'
+import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 import { startRuntimeCapabilityProbe } from '../transport/connection/runtime-capability-probe'
 import { pushRouteRegister, pushRouteUnregister } from './mobile-push-registration-operations'
 import {
@@ -44,7 +44,7 @@ export function getHostPushSupported(hostId: string): boolean | null {
 }
 export function getHostPushSupportCompletion(
   hostId: string,
-  client: PushClient
+  client: UnvalidatedRpcRequestPort
 ): HostPushSupportCompletion | null {
   const connection = hostsById.get(hostId)?.connection
   return connection?.client === client ? connection.support : null
@@ -99,7 +99,7 @@ async function currentToken(): Promise<MobilePushToken | null> {
 }
 
 async function sendRegister(
-  client: PushClient,
+  client: UnvalidatedRpcRequestPort,
   token: MobilePushToken,
   filter: MobilePushFilter
 ): Promise<boolean> {
@@ -119,7 +119,10 @@ async function sendRegister(
   return registration.value?.registered === true
 }
 
-async function sendUnregister(client: PushClient, timeoutMs: number): Promise<boolean> {
+async function sendUnregister(
+  client: UnvalidatedRpcRequestPort,
+  timeoutMs: number
+): Promise<boolean> {
   const reply = await pushRouteUnregister
     .request(client, null, { timeoutMs, failWhenDisconnected: true })
     .catch(() => null)
@@ -222,7 +225,10 @@ async function reconcileAllHosts(): Promise<void> {
 }
 
 // Keep tracked host intent across disconnects; this disposer detaches only its current connected client.
-export function attachPushRegistration(hostId: string, client: PushClient): () => void {
+export function attachPushRegistration(
+  hostId: string,
+  client: UnvalidatedRpcRequestPort
+): () => void {
   const state = hostState(hostId)
   if (state.connection.client !== client) {
     state.capabilityProbeStop?.()
