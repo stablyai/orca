@@ -188,13 +188,22 @@ sudo chown -R root:root "$ORCA_HOME"
 
 log 'smoke: orcad reaches ready on loopback (and warms the V8 compile cache: ~1.5 s off every boot)'
 sudo install -d -o "$(id -u)" -g "$(id -g)" "$ORCA_HOME/compile-cache"
+# The runtime is root-owned, so its startup-qualified marker lives here. The smoke run leaves one,
+# so every boot from the image skips orcad's disposable startup preflight (~0.6 s of wake).
+sudo install -d -o "$(id -u)" -g "$(id -g)" "$ORCA_HOME/startup-qualification"
 smoke_data="$(mktemp -d)"
-NODE_COMPILE_CACHE="$ORCA_HOME/compile-cache" ORCA_USER_DATA="$smoke_data" timeout 60 "$node" "$ORCA_HOME/runtime/orcad/orcad-server.js" \
+NODE_COMPILE_CACHE="$ORCA_HOME/compile-cache" ORCA_ORCAD_STARTUP_QUALIFICATION_DIR="$ORCA_HOME/startup-qualification" \
+  ORCA_USER_DATA="$smoke_data" timeout 60 "$node" "$ORCA_HOME/runtime/orcad/orcad-server.js" \
   --port 6799 --json >/tmp/orcad-smoke.out 2>/tmp/orcad-smoke.err &
 smoke_pid=$!
 ready=0
 for _ in $(seq 1 600); do
   if grep -q '"orca_server_ready"' /tmp/orcad-smoke.out 2>/dev/null; then ready=1; break; fi
+  sleep 0.1
+done
+# orcad writes the marker just after readiness; best effort, a boot without one only re-qualifies.
+for _ in $(seq 1 30); do
+  [ "$ready" = 1 ] && [ ! -s "$ORCA_HOME/startup-qualification/.orcad-startup-qualified" ] || break
   sleep 0.1
 done
 kill "$smoke_pid" 2>/dev/null || true

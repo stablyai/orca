@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { HostedSandboxReadyResponseSchema } from '../../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
 import { KEPT_BUILDS } from '../src/environment-builds'
 import { GOLDEN, createHarness } from './harness'
+import { lifecycleDeps, refreshEnvironmentsOnGolden } from '../src/index'
+import { GOLDEN_REFRESH_USER } from '../src/environment-golden-refresh'
 
 const REPO = 'https://github.com/acme/web.git'
 const RESULT = JSON.stringify({
@@ -259,6 +261,77 @@ describe('org environments', () => {
     // Destroying a workspace never deletes the shared build image it booted from.
     expect((await adminCall('DELETE', `/v1/sandboxes/${ws1.body.sandbox.id}`)).status).toBe(200)
     expect(h.vercel.snapshots.get(snapshotOne)?.status).toBe('created')
+  })
+
+  it('rebuilds an environment on the new golden after a swap; old build serves until then, failures keep it', async () => {
+    const { h, adminCall, envId, build } = await setup()
+    const old = await build(0)
+    const activeBuild = () => h.raw.prepare('SELECT b.id, b.base_snapshot_id AS base, b.created_by AS by FROM environments e JOIN environment_builds b ON b.id = e.active_build_id WHERE e.id = ?').get(envId) as { id: string; base: string; by: string }
+    expect(activeBuild()).toMatchObject({ id: old.id, base: GOLDEN })
+    const refresh = async () => refreshEnvironmentsOnGolden(h.env, (await lifecycleDeps(h.env, h.deps))!, h.deps)
+    // Same golden: nothing to do.
+    expect(await refresh()).toEqual({ stale: 0, started: 0, skipped: 0 })
+
+    // The golden rotates (the cron activates a new image).
+    h.raw.prepare(`INSERT INTO golden_images (id, source, status, snapshot_id, created_at, updated_at, activated_at) VALUES ('g2', 'test', 'active', 'snap_golden_2', ?, ?, ?)`).run(h.now(), h.now(), h.now())
+    expect(await refresh()).toEqual({ stale: 1, started: 1, skipped: 0 })
+    // The old build keeps serving new workspaces while the rebuild runs.
+    expect(activeBuild().id).toBe(old.id)
+    const during = await adminCall('POST', '/v1/sandboxes', { workspaceId: 'during', machineSize: 'standard', repo: { url: REPO } })
+    expect(during.body.sandbox.environmentBuildId).toBe(old.id)
+    // In flight: no second start.
+    expect((await refresh()).started).toBe(0)
+    const command = [...h.vercel.buildCommands.values()].at(-1)!
+    expect(command.sessionId).toBeDefined()
+    command.logs = log('::orca-step:: install\nok\n')
+    command.exitCode = 0
+    h.advance(1000)
+    const rebuilt = (await adminCall('GET', `/v1/environments/${envId}/builds`)).body.builds[0]
+    await adminCall('GET', `/v1/environments/${envId}/builds/${rebuilt.id}`)
+    // Swapped in atomically, built from the new golden, attributed to the system; the old one is kept.
+    expect(activeBuild()).toMatchObject({ base: 'snap_golden_2', by: GOLDEN_REFRESH_USER })
+    expect(activeBuild().id).not.toBe(old.id)
+    const builds = (await adminCall('GET', `/v1/environments/${envId}/builds`)).body.builds
+    expect(builds.find((b: { id: string }) => b.id === old.id)).toMatchObject({ status: 'succeeded', activatable: true })
+    const after = await adminCall('POST', '/v1/sandboxes', { workspaceId: 'after', machineSize: 'standard', repo: { url: REPO } })
+    expect(after.body.sandbox.environmentBuildId).toBe(activeBuild().id)
+    // Up to date now.
+    expect(await refresh()).toEqual({ stale: 0, started: 0, skipped: 0 })
+
+    // Next rotation, and this time the rebuild fails: the previous build keeps serving, no retry loop.
+    const servingBefore = activeBuild().id
+    h.raw.prepare(`UPDATE golden_images SET status = 'retired' WHERE id = 'g2'`).run()
+    h.raw.prepare(`INSERT INTO golden_images (id, source, status, snapshot_id, created_at, updated_at, activated_at) VALUES ('g3', 'test', 'active', 'snap_golden_3', ?, ?, ?)`).run(h.now() + 1, h.now() + 1, h.now() + 1)
+    expect((await refresh()).started).toBe(1)
+    const failing = [...h.vercel.buildCommands.values()].at(-1)!
+    failing.logs = log('::orca-step:: install\n::orca-error:: The install script exited with status 1.\n')
+    failing.exitCode = 20
+    h.advance(1000)
+    const failedBuild = (await adminCall('GET', `/v1/environments/${envId}/builds`)).body.builds[0]
+    expect((await adminCall('GET', `/v1/environments/${envId}/builds/${failedBuild.id}`)).body.build.status).toBe('failed')
+    expect(activeBuild().id).toBe(servingBefore)
+    expect(await refresh()).toEqual({ stale: 0, started: 0, skipped: 0 })
+  })
+
+  it('rate-limits golden refresh starts across environments', async () => {
+    const { h, adminCall, build } = await setup()
+    await build(0)
+    for (const name of ['Two', 'Three', 'Four']) {
+      const created = await adminCall('POST', '/v1/environments', { name, repos: [{ url: 'acme/web', defaultBranch: 'main' }], installScript: 'true', envVarNames: [] })
+      const id = created.body.environment.id
+      await adminCall('POST', `/v1/environments/${id}/builds`)
+      const command = [...h.vercel.buildCommands.values()].at(-1)!
+      command.logs = log('ok\n')
+      command.exitCode = 0
+      h.advance(1000)
+      const b = (await adminCall('GET', `/v1/environments/${id}/builds`)).body.builds[0]
+      await adminCall('GET', `/v1/environments/${id}/builds/${b.id}`)
+    }
+    h.raw.prepare(`INSERT INTO golden_images (id, source, status, snapshot_id, created_at, updated_at, activated_at) VALUES ('g2', 'test', 'active', 'snap_golden_2', ?, ?, ?)`).run(h.now(), h.now(), h.now())
+    const refresh = async () => refreshEnvironmentsOnGolden(h.env, (await lifecycleDeps(h.env, h.deps))!, h.deps)
+    expect(await refresh()).toMatchObject({ stale: 4, started: 2 })
+    // Two in flight + cap 3: one more this tick at most.
+    expect(await refresh()).toMatchObject({ started: 1 })
   })
 
   it('keeps the newest builds and the active one, pruning older snapshots', async () => {

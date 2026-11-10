@@ -83,6 +83,7 @@ export async function createHarness(overrides: Partial<Env> = {}, extraDeps: Par
 
   return {
     env,
+    deps,
     raw,
     vercel,
     billing,

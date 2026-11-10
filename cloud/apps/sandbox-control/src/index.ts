@@ -30,6 +30,7 @@
 // Operator (OPERATOR_TOKEN): /v1/internal/* (see operator.ts)
 // Public share links (src/share-gateway.ts): /s/<token>/*, plus the root-path cookie fallback
 // Vercel network-policy forwardURL target (Vercel sandbox OIDC):  /v1/egress/proxy
+import { refreshStaleEnvironments } from './environment-golden-refresh'
 import { ORCA_CLOUD_IDLE_SLEEP_MINUTES } from '../../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
 import { z } from 'zod'
 import { maintainPool, poolConfigFromEnv } from './pool'
@@ -473,7 +474,7 @@ async function apiContext(env: Env, deps: Deps, request: Request, life?: Promise
 }
 
 /** Lifecycle routes refuse to run half-configured rather than guess at Orca's provider account. */
-async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps | null> {
+export async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps | null> {
   if (!deps.provider && (!env.VERCEL_TOKEN || !env.VERCEL_TEAM_ID || !env.VERCEL_PROJECT_ID)) {
     return null
   }
@@ -1470,11 +1471,23 @@ export default {
         if (fresh) {
           const pool = await maintainPool(fresh).catch((error: unknown) => ({ error: String(error).slice(0, 200) }))
           console.log(JSON.stringify({ event: 'pool', ...pool }))
+          const refresh = await refreshEnvironmentsOnGolden(env, fresh)
+          if (refresh.stale > 0) {
+            console.log(JSON.stringify({ event: 'environment_golden_refresh', ...refresh }))
+          }
         }
       })
     )
   }
 } satisfies ExportedHandler<Env>
+
+/** Org environments built on an older golden rebuild on the current one (environment-golden-refresh.ts). */
+export async function refreshEnvironmentsOnGolden(env: Env, life: LifecycleDeps, deps: Deps = {}) {
+  return refreshStaleEnvironments(buildDeps(life, deps, env)).catch((error: unknown) => {
+    console.log(JSON.stringify({ event: 'environment_golden_refresh_failed', error: String(error).slice(0, 200) }))
+    return { stale: 0, started: 0, skipped: 0 }
+  })
+}
 
 /**
  * One per environment build: wakes on an alarm, advances the build one step (finalize, snapshot,
