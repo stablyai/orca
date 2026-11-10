@@ -79,12 +79,11 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
     async withdraw(sessionId, operationId) {
       const host = getStructuredAgentSessionHost()
       if (!host) {
-        return false
+        return { kind: 'unreadable' }
       }
       const fence = host.deps.store.getConversation(sessionId)?.currentFence
       if (fence === undefined) {
-        // No conversation is left to hand the card over.
-        return true
+        return { kind: 'unreadable' }
       }
       const fields = { messageId: operationId }
       const result = await host
@@ -105,8 +104,11 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
           }
         )
         .catch(() => null)
-      // Already handed over, or never a card (sent at once), counts as done: nothing is left to hand over twice.
-      return result?.ok === true
+      if (!result?.ok) {
+        return { kind: 'unreadable' }
+      }
+      // A no-op may have lost to handoff; only the host's send answer can settle that attempt.
+      return result.value.deleted ? { kind: 'withdrawn' } : observeMailSend(sessionId, operationId)
     },
 
     watchJournal(sessionId, onActivity) {

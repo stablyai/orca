@@ -14,6 +14,8 @@ import { captureHostStructuredAgentSessionWork } from '../../../../native-chat/a
 import { nextStructuredQueuedMessage } from '../../../../native-chat/agent-session-wire/delivery/structured-agent-session-queued-gate'
 import { idOf } from '../../../rpc/orchestration-session-caller-test-fixture'
 import { operationId } from './structured-chat-coordinator-fake-codex-fixture'
+import { withTestAgentSessionDatabase } from '../../../agent-session/records/agent-session-record-store-test-harness'
+import { createStructuredMailboxPointerHost } from '../../mailbox/structured-pointer/structured-mailbox-pointer-host'
 import {
   COORDINATOR,
   PEER_CHAT,
@@ -26,6 +28,7 @@ import {
   isWholeMail,
   openChat,
   queuedCardTexts,
+  root,
   runtime,
   sendUserMessage,
   settleTurn,
@@ -176,6 +179,106 @@ describe('a queued mail card runs only while its chat still owes it', () => {
     )
     expect(await queuedCardTexts()).toEqual([])
     expect(chat.turns).toHaveLength(1)
+  })
+
+  it('answers a dispatched Delete from the actual send, never as a withdrawal', async () => {
+    const chat = await busyChat(COORDINATOR)
+    const { taskId } = await coordinatorRunAndTask()
+    await finishWorker(taskId)
+    await vi.waitFor(async () => expect(await queuedCardTexts()).toHaveLength(1), WAIT)
+    const [card] = await journalOf(COORDINATOR).queuedMessages.list()
+    const fields = { messageId: card!.messageId }
+    expect(
+      await host.queuedMessageSend(
+        { callerKey: 'test-surface' },
+        {
+          envelope: {
+            sessionId: COORDINATOR,
+            clientOperationId: operationId(),
+            expectedRuntimeFence: host.deps.store.getConversation(COORDINATOR)!.currentFence,
+            payloadFingerprint: computeAgentSessionPayloadFingerprint({
+              method: 'agentSession.queuedMessageSend',
+              sessionId: COORDINATOR,
+              fields
+            })
+          },
+          ...fields
+        }
+      )
+    ).toMatchObject({ ok: true })
+    await vi.waitFor(() => expect(chat.steers).toHaveLength(1), WAIT)
+    const pointerHost = createStructuredMailboxPointerHost()
+    expect(await pointerHost.withdraw(COORDINATOR, fields.messageId)).toEqual({ kind: 'waiting' })
+    expect(await journalOf(COORDINATOR).queuedMessages.get(fields.messageId)).toMatchObject({
+      state: 'dispatched'
+    })
+    chat.handlers.onNotification?.('item/completed', {
+      item: {
+        type: 'userMessage',
+        id: 'echo-claimed-mail',
+        clientId: chat.steers[0]!.clientUserMessageId,
+        content: [{ type: 'text', text: chat.steers[0]!.text }]
+      }
+    })
+    await host.flushStreamedEvents(COORDINATOR)
+    expect(await pointerHost.withdraw(COORDINATOR, fields.messageId)).toEqual({ kind: 'accepted' })
+  })
+
+  it('retains stale mail custody when the writer refuses its withdrawal', async () => {
+    const chat = await busyChat(COORDINATOR)
+    const { runId, taskId } = await coordinatorRunAndTask()
+    await finishWorker(taskId)
+    await vi.waitFor(async () => expect(await queuedCardTexts()).toHaveLength(1), WAIT)
+    const mailbox = `run:${runId}`
+    const [reserved] = db.getStructuredMailSends(mailbox)
+    expect(reserved).toBeDefined()
+    const [card] = await journalOf(COORDINATOR).queuedMessages.list()
+    const fields = { messageId: card!.messageId }
+    db.bindRun({
+      runId,
+      coordinatorHandle: 'term_taker',
+      coordinatorPaneKey: 'tab_taker:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+    })
+    await withTestAgentSessionDatabase(root, (database) =>
+      database.exec(`CREATE TRIGGER refuse_mail_withdrawal BEFORE UPDATE ON journal_queue_cards
+        WHEN NEW.state = 'withdrawn'
+        BEGIN SELECT RAISE(ABORT, 'withdrawal unavailable'); END`)
+    )
+    try {
+      const sending = host.queuedMessageSend(
+        { callerKey: 'test-surface' },
+        {
+          envelope: {
+            sessionId: COORDINATOR,
+            clientOperationId: operationId(),
+            expectedRuntimeFence: host.deps.store.getConversation(COORDINATOR)!.currentFence,
+            payloadFingerprint: computeAgentSessionPayloadFingerprint({
+              method: 'agentSession.queuedMessageSend',
+              sessionId: COORDINATOR,
+              fields
+            })
+          },
+          ...fields
+        }
+      )
+      await expect(sending).rejects.toThrow('withdrawal unavailable')
+      expect(db.getStructuredMailSends(mailbox)).toEqual([reserved])
+      expect(await journalOf(COORDINATOR).queuedMessages.get(fields.messageId)).toMatchObject({
+        state: 'waiting'
+      })
+      expect(db.getUnreadMessages(mailbox)).toMatchObject([
+        { read: 0, delivered_at: expect.any(String) }
+      ])
+      expect(chat.turns).toHaveLength(1)
+    } finally {
+      await withTestAgentSessionDatabase(root, (database) =>
+        database.exec('DROP TRIGGER refuse_mail_withdrawal')
+      )
+    }
+    runtime.withdrawStaleChatMail([mailbox])
+    await vi.waitFor(() => expect(db.getStructuredMailSends(mailbox)).toEqual([]), WAIT)
+    expect(await queuedCardTexts()).toEqual([])
+    expect(db.getUnreadMessages(mailbox)).toMatchObject([{ read: 0, delivered_at: null }])
   })
 
   it("lets the person's cards pass mail it cannot decide on now, then hands the mail over first once it can", async () => {

@@ -101,8 +101,7 @@ export async function admitStructuredAgentSessionSend(
             )
           )
         },
-        custody: (sender) =>
-          context.deps.queuedAgentMessageOwed?.(ctx.sessionId, sender, true) ?? 'owed',
+        custody: (sender) => context.deps.queuedAgentMessageOwed?.(ctx.sessionId, sender) ?? 'owed',
         ...(ctx.operationReceipt ? { receipt: ctx.operationReceipt } : {})
       })
     )

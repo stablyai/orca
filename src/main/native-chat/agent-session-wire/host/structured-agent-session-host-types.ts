@@ -199,13 +199,8 @@ export type StructuredAgentSessionHostDeps = {
   ) => boolean
   /** Explicit switch admission also includes direct chat assignments, even at rest. */
   hasOwedSwitchWork?: (record: AgentSessionRecord) => boolean
-  /** Whether an agent's queued message is still owed to this session at handover; absent: always. */
-  queuedAgentMessageOwed?: (
-    sessionId: string,
-    from: AgentMessageSource,
-    /** Only read, as the queue does choosing its next card; a handover also settles a stale send. */
-    peek?: boolean
-  ) => QueuedMessageOwed
+  /** Read-only custody for an agent's queued mail; absent: always owed. */
+  queuedAgentMessageOwed?: (sessionId: string, from: AgentMessageSource) => QueuedMessageOwed
   /** Advisory tab-hidden notice; failures are logged. */
   onSessionTabHidden?: (sessionId: string, tabId?: string) => void
   /** Throws while a terminal may still write the record's head conversation; run before a spawn. */

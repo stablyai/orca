@@ -163,9 +163,9 @@ function harness(options: { busy?: boolean; senderNames?: RuntimeOrchestrationSe
       async (_sessionId, operationId) => chat.get(operationId) ?? { kind: 'absent' as const }
     ),
     wakeQueue: vi.fn(),
-    withdraw: vi.fn(async (_sessionId, operationId) => {
+    withdraw: vi.fn<StructuredMailboxPointerHost['withdraw']>(async (_sessionId, operationId) => {
       chat.set(operationId, { kind: 'withdrawn' })
-      return true
+      return { kind: 'withdrawn' }
     })
   }
   const start = () =>
@@ -196,8 +196,8 @@ function harness(options: { busy?: boolean; senderNames?: RuntimeOrchestrationSe
     },
     host,
     /** The queue's question at handover, for a card carrying message `id`. */
-    handover: (sessionId: string, id: string) =>
-      delivery.owedAtHandover(
+    owed: (sessionId: string, id: string) =>
+      delivery.owedNow(
         sessionId,
         {
           kind: 'agent',
@@ -397,11 +397,31 @@ describe('structured mailbox delivery: each message whole', () => {
     await h.deliver()
     const first = h.operation('m1')
     h.setOwner('session-2')
-    expect(h.handover('session-1', 'm1')).toBe('stale')
+    expect(h.owed('session-1', 'm1')).toBe('stale')
+    expect(h.records.get('m1')?.operation_id).toBe(first)
     h.chat.set(first, { kind: 'withdrawn' })
-    await flush()
+    await h.journal('session-1')
     expect(h.sent.map((send) => send.sessionId)).toEqual(['session-1', 'session-2'])
     expect(h.mail.get('m1')?.read).toBe(0)
+  })
+
+  it('settles a handoff that wins stale-card withdrawal without sending it to the new owner', async () => {
+    const h = harness({ busy: true })
+    h.receive('m1')
+    await h.deliver()
+    const first = h.operation('m1')
+    h.setOwner('session-2')
+    vi.mocked(h.host.withdraw).mockImplementationOnce(async (_sessionId, operationId) => {
+      h.chat.set(operationId, { kind: 'accepted' })
+      return { kind: 'accepted' }
+    })
+    h.delivery.withdrawStale()
+    await vi.waitFor(() => expect(h.mail.get('m1')?.read).toBe(1))
+    expect(h.records.size).toBe(0)
+    expect(h.sent.map(({ sessionId, operationId }) => [sessionId, operationId])).toEqual([
+      ['session-1', first]
+    ])
+    expect(h.mail.get('m1')?.delivered_at).toBe('now')
   })
 
   it('withdraws waiting cards of a Dispatch that ended, keeping the mail unread', async () => {
@@ -417,7 +437,7 @@ describe('structured mailbox delivery: each message whole', () => {
     expect(h.host.send).toHaveBeenCalledTimes(1)
     expect(h.mail.get('m1')).toMatchObject({ read: 0, delivered_at: null })
     // The queue asks the same question at handover, should the card still be there.
-    expect(h.handover('session-1', 'm1')).toBe('stale')
+    expect(h.owed('session-1', 'm1')).toBe('stale')
   })
 
   it('points a message too large for one chat message at check, and withdraws it when check takes it', async () => {
@@ -528,7 +548,7 @@ describe('structured mailbox delivery across a real database close and reopen', 
           watchJournal: () => () => {},
           observe: async () => state,
           wakeQueue: () => {},
-          withdraw: async () => true,
+          withdraw: async () => ({ kind: 'withdrawn' }),
           send
         }
       })

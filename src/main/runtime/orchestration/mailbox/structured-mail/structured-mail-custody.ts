@@ -160,7 +160,10 @@ export async function settleStructuredMailSends(input: {
   let released = false
   for (const row of db.getStructuredMailSends(mailboxHandle)) {
     const owed = input.owed(row.session_id, [row.message_id])
-    const state = await host.observe(row.session_id, row.operation_id)
+    let state = await host.observe(row.session_id, row.operation_id)
+    if (owed === 'stale' && state.kind === 'waiting') {
+      state = await host.withdraw(row.session_id, row.operation_id)
+    }
     const message = db.getMessageById(row.message_id)
     const unread = message !== undefined && !message.read ? message : undefined
     const retire = (consumed: boolean) => db.retireStructuredMailSend(row, consumed)
@@ -216,12 +219,7 @@ export async function settleStructuredMailSends(input: {
         continue
       case 'waiting':
       case 'unreadable':
-        if (owed === 'stale' && state.kind === 'waiting') {
-          if (await host.withdraw(row.session_id, row.operation_id)) {
-            release()
-            continue
-          }
-        } else if (unread && !unread.delivered_at) {
+        if (unread && !unread.delivered_at) {
           // A record saved before reservations: the chat holds it, so selection must skip it.
           db.markAsDelivered([row.message_id], mailboxHandle)
         }

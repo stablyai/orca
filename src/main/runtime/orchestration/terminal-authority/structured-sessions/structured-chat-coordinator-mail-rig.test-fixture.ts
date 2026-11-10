@@ -265,8 +265,7 @@ beforeEach(async () => {
       runtime.onStructuredSessionStatusForMail(summary)
     },
     onSessionTabHidden: (sessionId) => runtime.onStructuredSessionTabHidden(sessionId),
-    queuedAgentMessageOwed: (sessionId, from, peek) =>
-      runtime.structuredChatMailOwed(sessionId, from, peek)
+    queuedAgentMessageOwed: (sessionId, from) => runtime.structuredChatMailOwed(sessionId, from)
   })
   dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
 })

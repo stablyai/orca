@@ -95,7 +95,7 @@ export function wireStructuredAgentSessionQueuedMessages(
       if (journal) {
         // Installed before anything reads the next card, so every reader applies the one mail rule.
         journal.queuedMessages.mailOwed = (source) =>
-          context().deps.queuedAgentMessageOwed?.(sessionId, source, true) ?? 'owed'
+          context().deps.queuedAgentMessageOwed?.(sessionId, source) ?? 'owed'
       }
       journal?.queuedMessages.editLeases.onDeadline(() => {
         void context()

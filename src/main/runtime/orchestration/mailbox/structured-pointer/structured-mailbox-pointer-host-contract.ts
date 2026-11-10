@@ -33,8 +33,8 @@ export type StructuredMailboxPointerHost = {
   observe: (sessionId: string, operationId: string) => Promise<StructuredMailSendState>
   /** Have the chat's queue look again: a card it passed over may be decidable now. */
   wakeQueue: (sessionId: string) => void
-  /** Delete a card still waiting in the queue; false when it could not be deleted now. */
-  withdraw: (sessionId: string, operationId: string) => Promise<boolean>
+  /** Delete a waiting card and report its actual withdrawal or handoff outcome. */
+  withdraw: (sessionId: string, operationId: string) => Promise<StructuredMailSendState>
   /** Current lease fence; `null` when no record backs the session any more. */
   currentFence: (sessionId: string) => number | null
   /** Coalesced journal publications of a session; returns the unsubscribe. */
