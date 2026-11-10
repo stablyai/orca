@@ -20853,7 +20853,6 @@
         "emptyArchivedTitle": "No archived workspaces",
         "emptyFilteredBody": "Try another owner or repository.",
         "emptyFilteredTitle": "Nothing matches these filters",
-        "emptyMineBody": "Create one with Orca Cloud from New workspace. It keeps running while your laptop sleeps.",
         "emptyMineTitle": "No cloud workspaces yet",
         "emptyTeamBody": "Share a cloud workspace from its menu and everyone on your team can open it here.",
         "emptyTeamTitle": "No team workspaces yet",
@@ -22986,6 +22985,17 @@
       },
       "repositoryHooks": {
         "availableEnvVars": "Available environment variables"
+      },
+      "repository": {
+        "runOn": {
+          "title": "Default run on",
+          "description": "Where new workspaces in this project start. Orca Cloud is used only when it can start.",
+          "keywordRunOn": "run on",
+          "keywordCloud": "orca cloud",
+          "keywordThisComputer": "this computer",
+          "keywordDefault": "default",
+          "last": "Last used"
+        }
       }
     },
     "agentChildRow": {
@@ -23037,6 +23047,88 @@
         "yamlSource": "orca.yaml",
         "bothSources": "orca.yaml + local",
         "localSource": "local settings"
+      },
+      "cloudStart": {
+        "useThisComputer": "Use this computer instead",
+        "start": "Start in Orca Cloud",
+        "setUpAndStart": "Set up and start",
+        "choosePlanAndStart": "Choose plan and start",
+        "renewAndStart": "Renew and start",
+        "giveAccessAndStart": "Give access and start",
+        "checking": "Checking Orca Cloud…",
+        "githubGranted": "GitHub access granted for {{repo}}"
+      },
+      "cloudSetup": {
+        "account": "Orca account",
+        "team": "Team",
+        "plan": "Team plan",
+        "github": "GitHub access",
+        "githubNeeded": "Orca Cloud clones your code from GitHub. Give access to this repository once.",
+        "agent": "Agent",
+        "planAfterSignIn": "Checked after you sign in",
+        "askOwner": "Ask an owner or admin to fix it.",
+        "planEnded": "Your Team plan ended.",
+        "outOfHours": "Out of sandbox hours.",
+        "spendCap": "Spend cap reached.",
+        "paymentFailed": "Payment failed.",
+        "planMember": "Orca Cloud needs a Team plan. Only owners and admins can choose one.",
+        "planNeeded": "Orca Cloud needs a Team plan.",
+        "stateDone": "Done",
+        "stateOptional": "Optional",
+        "stateNext": "Next",
+        "stateInBrowser": "In browser",
+        "stateFailed": "Didn't finish",
+        "stateChecking": "Checking",
+        "stateNeeded": "Needed",
+        "allSet": "All set",
+        "title": "Set up Orca Cloud",
+        "starting": "Starting your cloud workspace…",
+        "agentSetUpAfterSignIn": "{{agent}}: set up once in Settings → Agent accounts after you sign in",
+        "agentSetUpOnce": "{{agent}}: set up once in Settings → Agent accounts",
+        "accountNeededTeam": "Sign in or create one. We’ll make a team for you.",
+        "trial": "Trial",
+        "trialNoCard": "No card needed. Nothing is charged until you choose a plan.",
+        "stateIncluded": "Included",
+        "trialUsedUp": "Your trial is used up.",
+        "trialUsedUpMember": "Only owners and admins can choose a plan.",
+        "trialUsedUpOwner": "Choose a plan to keep using Orca Cloud. Your prompt is still here.",
+        "subtitleNoCard": "One visit to your browser, no card. Your prompt stays here and starts when you’re done.",
+        "trialUsedUpTitle": "Your trial is used up",
+        "choosePlan": "Choose plan",
+        "askChoosePlan": "Ask an owner or admin to choose a plan.",
+        "trialUsedUpChoose": "Choose a plan to keep using Orca Cloud.",
+        "trialOffer_one": "{{hours}} sandbox hour to try Orca Cloud",
+        "trialOffer_other": "{{hours}} sandbox hours to try Orca Cloud",
+        "subtitleChoosePlan": "One visit to your browser to choose a plan. Your prompt stays here and starts when you’re done."
+      },
+      "runOn": {
+        "thisComputer": "This computer",
+        "orcaCloud": "Orca Cloud",
+        "moreWithTarget": "More places to run: {{name}}",
+        "more": "More places to run",
+        "cloudUnreachableReason": "Orca Cloud: can't reach it right now. Check your connection.",
+        "thisComputerUnusable": "This computer, {{reason}}",
+        "locationNotSet": "Project location not set",
+        "cloudUnreachableName": "Orca Cloud, can't reach it right now",
+        "cloudHosted": "Hosted sandbox"
+      },
+      "cloudHours": {
+        "trialChip_one": "Trial · {{hours}} sandbox hour left",
+        "trialChip_other": "Trial · {{hours}} sandbox hours left",
+        "planChip_one": "{{hours}} sandbox hour left",
+        "planChip_other": "{{hours}} sandbox hours left",
+        "trialToast_one": "Using sandbox hours · {{hours}} sandbox hour left in your trial",
+        "trialToast_other": "Using sandbox hours · {{hours}} sandbox hours left in your trial",
+        "planToast_one": "Using sandbox hours · {{hours}} sandbox hour left",
+        "planToast_other": "Using sandbox hours · {{hours}} sandbox hours left",
+        "trialOffered_one": "Trial · {{hours}} sandbox hour left · No card needed",
+        "trialOffered_other": "Trial · {{hours}} sandbox hours left · No card needed"
+      },
+      "trialUsedUp": {
+        "running": "Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe.",
+        "memberTitle": "{{team}}’s trial is used up",
+        "memberTitleNoTeam": "Your team’s trial is used up",
+        "askForPlan": "Ask for a Team plan"
       }
     },
     "JiraIssueWorkspace": {
@@ -23389,6 +23481,20 @@
         "showMore_one": "Show {{count}} more",
         "showMore_other": "Show {{count}} more"
       }
+    },
+    "landing": {
+      "cloudCard": {
+        "title": "Run agents in Orca Cloud",
+        "notNow": "Not now",
+        "tryTitle": "Try Orca Cloud",
+        "planBody": "Agents keep running while your laptop sleeps.",
+        "trialBody": "Agents keep running while your laptop sleeps. No card needed.",
+        "try": "Try Orca Cloud"
+      }
+    },
+    "cloudWorkspaces": {
+      "emptyMineStartBody": "Start one and it keeps running while your laptop sleeps.",
+      "newCloudWorkspace": "New cloud workspace"
     }
   },
   "dashboardPopout": {
