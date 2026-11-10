@@ -1,15 +1,17 @@
 import { useSyncExternalStore } from 'react'
 import type { CloudApiAvailability } from '../../../shared/cloud-api/cloud-api-types'
+import { availabilityRetryDelay } from '@/lib/availability-retry'
 
 // One probe per renderer: whether this build has an Orca Cloud control plane (private/hosted builds).
 // Settings navigation and the panes share it, so the sections never flicker in and out.
 let availability: CloudApiAvailability | null = null
 let probing = false
-const RETRY_MS = 5_000
+let failedAttempts = 0
+let retryTimer: ReturnType<typeof setTimeout> | null = null
 const listeners = new Set<() => void>()
 
 function probe(): void {
-  if (probing || availability) {
+  if (probing || availability || retryTimer) {
     return
   }
   const bridge = typeof window === 'undefined' ? undefined : window.api?.cloudApi
@@ -22,14 +24,22 @@ function probe(): void {
     (next) => {
       availability = next
       probing = false
+      failedAttempts = 0
       for (const listener of listeners) {
         listener()
       }
     },
     () => {
-      // A failed probe is not "unconfigured": retry shortly instead of hiding the pages for good.
+      // A failed probe is not "unconfigured": retry with capped backoff, and only while something
+      // is subscribed (a new subscriber probes again on its own).
       probing = false
-      setTimeout(probe, RETRY_MS)
+      const delay = availabilityRetryDelay(failedAttempts++)
+      retryTimer = setTimeout(() => {
+        retryTimer = null
+        if (listeners.size > 0) {
+          probe()
+        }
+      }, delay)
     }
   )
 }

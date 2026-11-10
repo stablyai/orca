@@ -71,7 +71,7 @@ export function cloudApiErrorCopy(
     case 'network':
       return t(
         'auto.components.settings.cloudApi.error.network',
-        'Couldn’t reach Orca Cloud, so nothing was changed. Check your connection and try again.'
+        'Couldn’t reach Orca Cloud. Check your connection and try again.'
       )
     case 'invalid-response':
       return t(
@@ -176,42 +176,67 @@ export function routineRunTriggerLabel(
  * colon ("workspace_lost:suspended"); codes and detail never reach the screen.
  */
 export function routineRunErrorCopy(error: string, t: Translate = translate): string {
+  return describeRoutineRunError(error, t).text
+}
+
+/**
+ * Copy plus tone: things that went wrong (couldn't start, couldn't post, interrupted, unknown) are
+ * errors; outcomes that are expected bookkeeping (skipped, superseded, workspace gone) are neutral.
+ */
+export function describeRoutineRunError(
+  error: string,
+  t: Translate = translate
+): { text: string; tone: 'error' | 'neutral' } {
+  const neutral = (text: string) => ({ text, tone: 'neutral' as const })
+  const failure = (text: string) => ({ text, tone: 'error' as const })
   const code = error.split(':', 1)[0]?.trim() ?? ''
   if (code === 'start_failed') {
-    return t(
-      'auto.components.settings.cloudRoutines.runError.startFailed',
-      'The workspace couldn’t start. Nothing was charged.'
+    return failure(
+      t(
+        'auto.components.settings.cloudRoutines.runError.startFailed',
+        'The workspace couldn’t start, so nothing was charged.'
+      )
     )
   }
   if (code === 'workspace_lost') {
-    return t(
-      'auto.components.settings.cloudRoutines.runError.workspaceLost',
-      'The workspace went to sleep or was deleted before the run finished.'
+    return neutral(
+      t(
+        'auto.components.settings.cloudRoutines.runError.workspaceLost',
+        'The workspace went to sleep or was deleted before the run finished.'
+      )
     )
   }
   if (code === 'post_failed') {
-    return t(
-      'auto.components.settings.cloudRoutines.runError.postFailed',
-      'The run finished, but Orca couldn’t post the results.'
+    return failure(
+      t(
+        'auto.components.settings.cloudRoutines.runError.postFailed',
+        'The run finished, but Orca couldn’t post the results.'
+      )
     )
   }
   if (code === 'queue_expired') {
-    return t(
-      'auto.components.settings.cloudRoutines.runError.queueExpired',
-      'The run waited too long to start and was skipped.'
+    return neutral(
+      t(
+        'auto.components.settings.cloudRoutines.runError.queueExpired',
+        'The run waited too long to start and was skipped.'
+      )
     )
   }
   if (code.endsWith('_interrupted')) {
-    return t(
-      'auto.components.settings.cloudRoutines.runError.interrupted',
-      'Orca Cloud restarted during the run.'
+    return failure(
+      t(
+        'auto.components.settings.cloudRoutines.runError.interrupted',
+        'Orca Cloud restarted during the run.'
+      )
     )
   }
   if (code === 'routine_changed') {
-    return t(
-      'auto.components.settings.cloudRoutines.runError.routineChanged',
-      'The routine changed while this run was queued.'
+    return neutral(
+      t(
+        'auto.components.settings.cloudRoutines.runError.routineChanged',
+        'The routine changed while this run was queued.'
+      )
     )
   }
-  return t('auto.components.settings.cloudRoutines.runError.generic', 'The run failed.')
+  return failure(t('auto.components.settings.cloudRoutines.runError.generic', 'The run failed.'))
 }
