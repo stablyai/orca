@@ -392,11 +392,12 @@ async function boot(
   }
   await deps.hooks?.afterBoot?.(running, state.session.id).catch(() => undefined)
   // Secrets saved while this VM booted missed prep's env; re-check once it is running (env-refresh.ts).
-  const catchUp = import('./env-refresh')
-    .then(({ refreshIfEnvChanged }) => refreshIfEnvChanged(deps, running, prep.secrets.env))
-    .catch(() => undefined)
-  if (deps.background) {
-    deps.background(catchUp)
+  const refresh = await import('./env-refresh')
+  if (await refresh.envChangedSinceBoot(deps, running, prep.secrets.env).catch(() => false)) {
+    const work = refresh.refreshSandboxEnv(deps, running).catch(() => false)
+    if (deps.background) {
+      deps.background(work)
+    }
   }
   return { row: running, connection, timings: options.timer.timings }
 }
