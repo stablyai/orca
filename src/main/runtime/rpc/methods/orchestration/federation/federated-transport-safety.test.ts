@@ -7,10 +7,10 @@ import { OrcaRuntimeService } from '../../../../orca-runtime'
 
 import type { FederatedDispatchRow } from '../../../../orchestration/db/orchestration-records'
 
-import './federated-worker-read'
-import { releaseFederatedWorker } from './federated-worker-release'
+import '../../../../orchestration/legacy-remote-home/federated-worker-read'
+import { releaseFederatedWorker } from '../../../../orchestration/legacy-remote-home/federated-worker-release'
 import '../worker/worker-observation'
-import '../../../../orchestration/federation/synchronization/federation-sync'
+import '../../../../orchestration/legacy-remote-home/federation-sync'
 import { ORCHESTRATION_WORKER_STOP_METHODS } from '../worker/worker-stop'
 
 const server = {
