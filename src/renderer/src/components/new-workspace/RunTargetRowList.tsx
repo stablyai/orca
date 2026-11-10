@@ -7,6 +7,8 @@ import { HostRowIcon, RunTargetRow } from './RunTargetComboboxRow'
 import { ConnectHostButton, NeedsSetupHostIcon, SetLocationButton } from './RunTargetRowActions'
 import { RecipesSubmenuRow, type RunTargetSubmenuArm } from './RunTargetSubmenus'
 import { RunTargetOrcaCloudRow } from './RunTargetOrcaCloudRow'
+import { needsSetupRowHint } from './run-target-row-hints'
+import { useTranslate } from '@/i18n/use-translate'
 import type { OrcaCloudRunTargetAccess } from './orca-cloud-run-target-access'
 import type { EphemeralVmRecipeOption, RunTargetRowModel } from './run-target-options'
 
@@ -62,6 +64,7 @@ export default function RunTargetRowList({
   onConnectHost: (option: NeedsSetupProjectHostOption) => void
   onSetLocation: (option: NeedsSetupProjectHostOption) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <>
       {rows.map((row) => {
@@ -124,6 +127,11 @@ export default function RunTargetRowList({
               optionId={optionId}
               onArm={() => onArm(row.key, null)}
               onCommit={() => onSetLocation(row.option)}
+              description={needsSetupRowHint(
+                row.option,
+                { connect: canConnect, setLocation: canSetLocation, connecting },
+                t
+              )}
               trailing={
                 hasConnect ? (
                   <ConnectHostButton

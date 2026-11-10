@@ -25,7 +25,8 @@ export function RunTargetRow({
   busy = false,
   onArm,
   onCommit,
-  trailing
+  trailing,
+  description
 }: {
   icon: React.ReactNode
   label: string
@@ -53,6 +54,8 @@ export function RunTargetRow({
   busy?: boolean
   /** Keyboard focus moved into this row's submenu: keep a lighter fill so the path stays visible. */
   armedInSubmenu?: boolean
+  /** What Enter does when the row's inline action isn't a Tab stop of its own. */
+  description?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const hasDetail = Boolean(detailNode ?? detail)
@@ -65,6 +68,7 @@ export function RunTargetRow({
       aria-busy={busy || undefined}
       // option supports aria-haspopup but not aria-expanded; submenus are listboxes.
       aria-haspopup={submenu ? 'listbox' : undefined}
+      aria-describedby={description ? `${optionId}-hint` : undefined}
       data-armed={armed || undefined}
       data-current={current ? 'true' : undefined}
       onMouseDown={(event) => event.preventDefault()}
@@ -123,6 +127,11 @@ export function RunTargetRow({
         </>
       )}
       {trailing}
+      {description ? (
+        <span id={`${optionId}-hint`} className="sr-only">
+          {description}
+        </span>
+      ) : null}
       {/* The committed row gets a check, not a second fill, so only the armed row is shaded. */}
       {current ? (
         <span className={cn('flex shrink-0 items-center pl-1.5', stacked ? 'self-center' : 'h-8')}>

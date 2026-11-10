@@ -247,7 +247,12 @@ export default function RunTargetCombobox({
         return
       }
       if (row.kind === 'needs-setup') {
-        setLocation(row.option)
+        // Enter does what the row's inline action does: Connect is not a Tab stop of its own.
+        if (row.option.connectAction && onConnectHost) {
+          void connectHost(row.option)
+        } else {
+          setLocation(row.option)
+        }
         return
       }
       if (row.kind === 'orca-cloud') {
@@ -257,7 +262,7 @@ export default function RunTargetCombobox({
       // Keyboard opening moves the arm into the submenu so arrows and Enter reach its rows.
       openSubmenu(row.kind === 'recipes' ? 'recipes' : 'add-host', true)
     },
-    [openSubmenu, rows, selectHost, selectOrcaCloud, setLocation]
+    [connectHost, onConnectHost, openSubmenu, rows, selectHost, selectOrcaCloud, setLocation]
   )
 
   const inSubmenu = submenu !== null && armedItemKey !== null

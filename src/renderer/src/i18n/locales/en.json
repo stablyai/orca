@@ -16710,7 +16710,15 @@
             "orcaCloudIdleSleep_other": "Sleeps after {{count}} minutes idle",
             "orcaCloudAskAddHoursOnly": "Ask an owner or admin to add hours.",
             "orcaCloudAskChoosePlan": "Ask an owner or admin to choose one.",
-            "orcaCloudAskRaiseSpendCap": "Ask an owner or admin to raise the spend cap."
+            "orcaCloudAskRaiseSpendCap": "Ask an owner or admin to raise the spend cap.",
+            "hintConnect": "{{host}}, not connected. Press Enter to connect.",
+            "hintSetLocation": "{{host}}, project location not set. Press Enter to set it.",
+            "hintSignIn": "Orca Cloud, signed out. Press Enter to sign in.",
+            "hintRenew": "Orca Cloud, your Team plan ended. Press Enter to renew it.",
+            "hintChoosePlan": "Orca Cloud needs a Team plan. Press Enter to choose one.",
+            "hintRaiseCap": "Orca Cloud, spend cap reached. Press Enter to raise it.",
+            "hintTurnOnOverage": "Orca Cloud, sandbox hours used up. Press Enter to turn on overage.",
+            "hintUpdatePayment": "Orca Cloud, payment failed. Press Enter to update your payment method."
           },
           "projectCombobox": {
             "recentHeading": "Recent",
