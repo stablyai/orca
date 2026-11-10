@@ -11,7 +11,7 @@ import {
   settleGitHubChecksTabDetails,
   type CheckDetailsLoadState
 } from '@/components/github-checks-tab-state'
-import { getGitHubRuntimeRepoId } from '@/lib/github-source-runtime-context'
+import { getGitHubRuntimeRepoId } from '@/lib/work-items/github/github-source-runtime-context'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import { translate } from '@/i18n/i18n'
 import type { ChecksTabActionContext } from './checks-tab-actions'

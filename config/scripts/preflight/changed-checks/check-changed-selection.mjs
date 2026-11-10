@@ -48,6 +48,7 @@ const RATCHET_INPUTS = {
   'check-repo-host-read-ratchet.mjs': ['src/cli/', 'src/main/', 'src/shared/'],
   'check-runtime-electron-ratchet.mjs': ['src/main/', 'src/cli/', 'src/shared/'],
   'check-tab-map-seam-ratchet.mjs': ['src/renderer/src/'],
+  'check-terminal-parking-ownership-ratchet.mjs': ['src/renderer/src/'],
   'check-unproven-pty-retirement-ratchet.mjs': ['src/main/'],
   'check-workspace-record-read-ratchet.mjs': ['src/renderer/src/'],
   'check-worktree-id-composer-ratchet.mjs': ['src/', 'mobile/src/']
@@ -102,7 +103,33 @@ export const VERIFY_CHECKS = [
       'config/scripts/localization/source-extraction/audit-localization-coverage.mjs',
       '--check'
     ],
-    inputs: ['src/renderer/src/', LOCALES]
+    inputs: [
+      'src/renderer/src/',
+      LOCALES,
+      'config/scripts/localization/source-extraction/audit-localization-coverage',
+      'config/scripts/localization/source-extraction/localization-visible-object-keys'
+    ]
+  },
+  {
+    name: 'startup and worktree localization coverage',
+    args: [
+      'config/scripts/localization/source-extraction/audit-localization-coverage.mjs',
+      '--check',
+      '--native-dialog-fields',
+      '--source-root',
+      'src/main/startup',
+      '--source-root',
+      'src/shared/worktree',
+      '--allowlist',
+      'config/startup-worktree-localization-allowlist.json'
+    ],
+    inputs: [
+      'src/main/startup/',
+      'src/shared/worktree/',
+      'config/scripts/localization/source-extraction/audit-localization-coverage',
+      'config/scripts/localization/source-extraction/localization-visible-object-keys',
+      'config/startup-worktree-localization-allowlist.json'
+    ]
   },
   {
     name: 'mobile localization',
@@ -145,7 +172,8 @@ export const VERIFY_CHECKS = [
       'mobile/web-entry/',
       'config/mobile-localization-coverage-allowlist.json',
       'config/scripts/audit-localization-coverage',
-      'config/scripts/localization/source-extraction/audit-localization-coverage'
+      'config/scripts/localization/source-extraction/audit-localization-coverage',
+      'config/scripts/localization/source-extraction/localization-visible-object-keys'
     ]
   },
   {

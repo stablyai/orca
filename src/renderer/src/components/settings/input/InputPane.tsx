@@ -2,7 +2,7 @@ import type { GlobalSettings } from '../../../../../shared/global-settings-types
 import { Label } from '../../ui/label'
 import { Switch } from '../../ui/switch'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
-import { isDefaultPrimarySelectionMiddleClickPasteUserAgent } from '@/hooks/usePrimarySelectionPaste'
+import { isDefaultPrimarySelectionMiddleClickPasteUserAgent } from '@/hooks/clipboard/primary-selection/usePrimarySelectionPaste'
 import { useTranslate } from '@/i18n/use-translate'
 
 type InputPaneProps = {

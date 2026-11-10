@@ -3,7 +3,7 @@ import type { TaskSourceContext } from '../../../../../shared/work-items/task-so
 import { getSettingsFocusedExecutionHostId } from '../../../../../shared/execution-host'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import { taskSourceRuntimeTarget } from '../../../lib/task-source-runtime-target'
+import { taskSourceRuntimeTarget } from '../../../lib/work-items/task-source-runtime-target'
 
 type DefaultHostSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 

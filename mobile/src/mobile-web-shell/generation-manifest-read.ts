@@ -1,5 +1,6 @@
 import {
   MobileWebBundleManifestReadSchema,
+  shellDownloadedAssets,
   type MobileWebBundleManifestRead
 } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import { MANIFEST_FILE_NAME } from './generation-asset-path'
@@ -33,12 +34,13 @@ export async function readWaitingStage(
   }
   // Deletes are not atomic, so a kill mid-delete can leave the manifest without its assets; only every byte counts as whole.
   const sizes = new Map<string, number>()
-  for (const folder of new Set(manifest.assets.map((asset) => parentOf(asset.path)))) {
+  const assets = shellDownloadedAssets(manifest)
+  for (const folder of new Set(assets.map((asset) => parentOf(asset.path)))) {
     for (const file of await fs.listFiles(folder === '' ? directory : joinUri(directory, folder))) {
       sizes.set(folder === '' ? file.name : `${folder}/${file.name}`, file.size)
     }
   }
-  const whole = manifest.assets.every((asset) => sizes.get(asset.path) === asset.byteLength)
+  const whole = assets.every((asset) => sizes.get(asset.path) === asset.byteLength)
   return whole ? { hostKey, buildId, directory, manifest } : null
 }
 

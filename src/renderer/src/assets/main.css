@@ -1063,7 +1063,9 @@ body[data-modal-overlay-open]
     [data-slot='command-dialog-content'],
     [data-slot='sheet-content'],
     [data-onboarding-overlay]
-  ):has(~ [data-slot='dialog-overlay'], ~ [data-slot='sheet-overlay']) {
+  ):has(
+    ~ :is([data-slot='dialog-overlay'], [data-slot='sheet-overlay']):not([data-state='closed'])
+  ) {
   filter: blur(2px);
 }
 

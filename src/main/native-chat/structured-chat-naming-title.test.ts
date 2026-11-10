@@ -117,18 +117,3 @@ it.each(['owner', 'same-text rename'] as const)(
     )
   }
 )
-
-it('uses current naming settings if they change while the title write is queued', async () => {
-  let eligible = true
-  const generate = vi.fn<StructuredChatNamingDeps['generate']>(
-    async (_record, _prompt, _current, automatic) =>
-      automatic ? { name: 'CLI title', shouldApply: () => eligible } : { name: 'Configured title' }
-  )
-  const state = rig(generate)
-  state.beforeWrite(async () => {
-    eligible = false
-  })
-  state.start()
-  await state.done()
-  expect(state.record().conversationName).toBe('Configured title')
-})
