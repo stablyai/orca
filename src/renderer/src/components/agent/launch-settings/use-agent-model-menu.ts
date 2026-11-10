@@ -38,8 +38,11 @@ export function useAgentModelMenu(
   const snapshot = useAppViewExternalStore(subscribe, getSnapshot, () => absent)
   useEffect(() => {
     if (catalog && open && active) {
-      void catalog.read(source?.source === 'cli')
+      const controller = new AbortController()
+      void catalog.read(source?.source === 'cli', undefined, controller.signal)
+      return () => controller.abort()
     }
+    return undefined
   }, [catalog, open, active, snapshot.generation, source?.source])
   const menu = modelMenuOptions(snapshot.answer, {
     agent,

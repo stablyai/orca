@@ -24,20 +24,31 @@ export type HostModelMenuSnapshot = {
   generation: number
 }
 type Reader = (waitForListing: boolean) => Promise<AgentSessionModelCatalogResult | undefined>
+type PhaseResult = {
+  answer?: AgentSessionModelCatalogResult
+  reply?: AgentSessionModelCatalogResult
+  waited?: boolean
+}
 const owners = new Map<string, HostModelMenuCatalog>()
+function withoutWaitExpiry(answer: AgentSessionModelCatalogResult) {
+  if (!answer.waitExpired) {
+    return answer
+  }
+  const { waitExpired: _waitExpired, ...catalog } = answer
+  return catalog
+}
 function retained(answer: AgentSessionModelCatalogResult | undefined) {
   return answer?.listingInProgress && (answer.origin === 'unknown' || !answer.models.length)
     ? undefined
-    : answer
+    : answer && withoutWaitExpiry(answer)
 }
 
 function withListingStatus(
   held: AgentSessionModelCatalogResult,
   answer: AgentSessionModelCatalogResult
 ): AgentSessionModelCatalogResult {
-  const { waitExpired: _waitExpired, ...catalog } = held
   return {
-    ...catalog,
+    ...withoutWaitExpiry(held),
     listingInProgress: true,
     ...(answer.waitExpired ? { waitExpired: true } : {})
   }
@@ -58,7 +69,7 @@ const CLI_REUSE_INTERVAL_MS = 10 * 60 * 1000
 class HostModelMenuCatalog {
   listeners = new Set<() => void>()
   snapshot: HostModelMenuSnapshot
-  private pending?: Promise<AgentSessionModelCatalogResult | undefined>
+  private pending?: { waited: boolean; result: Promise<PhaseResult> }
   private unsubscribe?: () => void
   constructor(readonly scope: HostModelMenuScope) {
     this.snapshot = {
@@ -121,12 +132,34 @@ class HostModelMenuCatalog {
       this.retire()
     }
   }
-  read(
+  async read(
     reuseHeld = false,
-    waitForListing?: boolean
+    waitForListing?: boolean,
+    signal?: AbortSignal
   ): Promise<AgentSessionModelCatalogResult | undefined> {
+    const generation = this.snapshot.generation
+    let result = await this.readPhase(reuseHeld, waitForListing ?? false)
+    while (
+      waitForListing === undefined &&
+      result.reply?.listingInProgress &&
+      (!result.waited || result.reply.waitExpired) &&
+      generation === this.snapshot.generation &&
+      !signal?.aborted &&
+      (signal !== undefined || this.listeners.size > 0)
+    ) {
+      result = await this.readPhase(false, true)
+    }
+    return result.answer
+  }
+  private readPhase(reuseHeld: boolean, waitForListing: boolean): Promise<PhaseResult> {
+    const { target, agent, worktree } = this.scope
+    const generation = hostModelCatalogGeneration(target, agent, this.scope.sourceKey)
+    const current = () =>
+      generation === hostModelCatalogGeneration(target, agent, this.scope.sourceKey)
     if (this.pending) {
-      return this.pending
+      return waitForListing && !this.pending.waited
+        ? this.pending.result.then(() => (current() ? this.readPhase(false, true) : {}))
+        : this.pending.result
     }
     const completedAt = this.scope.sourceKey
       ? hostModelCatalogCompletedAttempt(
@@ -144,12 +177,8 @@ class HostModelMenuCatalog {
     ) {
       this.publish({ ...this.snapshot, pending: false, attempted: true })
       this.retire()
-      return Promise.resolve(this.snapshot.answer)
+      return Promise.resolve({ answer: retained(this.held() ?? this.snapshot.answer) })
     }
-    const { target, agent, worktree } = this.scope
-    const generation = hostModelCatalogGeneration(target, agent, this.scope.sourceKey)
-    const current = () =>
-      generation === hostModelCatalogGeneration(target, agent, this.scope.sourceKey)
     const request: Reader =
       this.scope.request ??
       ((waitForListing) =>
@@ -158,31 +187,17 @@ class HostModelMenuCatalog {
           ...(worktree ? { worktree } : {}),
           ...(waitForListing ? { waitForListing: true } : {})
         }))
-    this.publish({ ...this.snapshot, pending: true })
+    this.publish({ ...this.snapshot, answer: retained(this.snapshot.answer), pending: true })
     let contextUnresolved = false
-    const operation: Promise<AgentSessionModelCatalogResult | undefined> = Promise.resolve()
-      .then(() => request(waitForListing ?? false))
-      .then(async (plain) => {
-        if (!current()) {
-          return this.pending !== operation ? this.pending : undefined
-        }
-        if (waitForListing === undefined && plain?.listingInProgress) {
-          this.publish({
-            ...this.snapshot,
-            answer: withListingStatus(retained(this.snapshot.answer) ?? plain, plain),
-            pending: true
-          })
-          return request(true)
-        }
-        return plain
-      })
+    const operation: Promise<PhaseResult> = Promise.resolve()
+      .then(() => request(waitForListing))
       .catch((error) => {
         contextUnresolved = error instanceof ModelMenuContextUnresolvedError
         return undefined
       })
       .then((answer) => {
         if (!current()) {
-          return this.pending !== operation ? this.pending : undefined
+          return this.pending?.result !== operation ? (this.pending?.result ?? {}) : {}
         }
         if (this.scope.sourceKey && !contextUnresolved && !answer?.listingInProgress) {
           hostModelCatalogCompletedAttempt(
@@ -198,25 +213,28 @@ class HostModelMenuCatalog {
             target,
             agent,
             worktree ?? null,
-            answer,
+            withoutWaitExpiry(answer),
             this.scope.sourceKey
           )
         }
         const shown = answer?.listingInProgress
-          ? withListingStatus(this.held() ?? answer, answer)
+          ? withListingStatus(this.held() ?? answer, {
+              ...answer,
+              waitExpired: waitForListing && answer.waitExpired ? true : undefined
+            })
           : answer
             ? this.held()
-            : (this.held() ?? retained(this.snapshot.answer))
+            : retained(this.held() ?? this.snapshot.answer)
         this.publish({ answer: shown, pending: false, attempted: true })
-        return shown
+        return { answer: shown, reply: answer, waited: waitForListing }
       })
       .finally(() => {
-        if (this.pending === operation) {
+        if (this.pending?.result === operation) {
           this.pending = undefined
         }
         this.retire()
       })
-    this.pending = operation
+    this.pending = { waited: waitForListing, result: operation }
     return operation
   }
   private retire() {
