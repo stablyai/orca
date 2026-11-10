@@ -1,3 +1,4 @@
+// @protected-copy
 import { Check } from 'lucide-react'
 import type { SessionLinkParticipant } from '../../../../shared/session-link'
 import { tuiAgentDisplayName } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
@@ -34,7 +35,7 @@ export function SessionLinkParticipantPicker({
             'Search agent, chat, workspace or branch…'
           )}
         />
-        <CommandList className="max-h-48 scrollbar-sleek">
+        <CommandList className="max-h-48">
           <CommandEmpty>
             {t('components.sessionLink.availableEmpty', 'No available chats on this host.')}
           </CommandEmpty>
