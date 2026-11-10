@@ -6,10 +6,11 @@ import {
   type RemoteDispatchRow
 } from '../../db/remote-owned/remote-dispatch-records'
 import { getRemoteRunLink } from '../../db/remote-owned/remote-run-links'
+import type { PeerServerAnswerStatus } from '../peer-mail/peer-mail-relay'
 
 type ReadsRuntime = Pick<
   OrcaRuntimeService,
-  'getOrchestrationDb' | 'resolveOrchestrationWorkerServer'
+  'getOrchestrationDb' | 'resolveOrchestrationWorkerServer' | 'getPeerServerAnswerStatus'
 >
 
 /**
@@ -47,16 +48,18 @@ export function remoteServerName(runtime: ReadsRuntime, environmentId: string): 
 }
 
 /**
- * worker-show for a remote worker whose server could not be reached: this Orca's record in the
- * ordinary show shape, labelled with the server and the time of its last report. Metadata only;
- * the worker's output stays on its server.
+ * worker-show for a worker a paired server runs: always this Orca's record, never a call there, so
+ * it answers at once whether the server is awake, asleep or off, and agrees with worker-list. The
+ * note says when the record is from and what the pull loop last heard from the server. Metadata
+ * only: the worker's output stays on its server (worker-read), and a prompt wait arrives as mail.
  */
-export function offlineRemoteWorkerShow(runtime: ReadsRuntime, record: RemoteDispatchRow) {
+export function remoteWorkerShow(runtime: ReadsRuntime, record: RemoteDispatchRow) {
   const link = getRemoteRunLink(runtime.getOrchestrationDb(), record.conversation_id)
   const server = remoteWorkerServer(record, link?.state, (id) => remoteServerName(runtime, id))
-  const why = server.repaired
-    ? `The pairing with ${server.name} was re-made, so it no longer reports this worker here`
-    : `${server.name} could not be reached`
+  const heard = server.repaired
+    ? undefined
+    : runtime.getPeerServerAnswerStatus(record.environment_id)
+  const reachable = heard?.unreachableSince ? false : heard?.answeredAt ? true : undefined
   const owedStop = record.stop_owed
     ? ` A stop is owed; this Orca sends it when ${server.name} answers.`
     : ''
@@ -73,7 +76,7 @@ export function offlineRemoteWorkerShow(runtime: ReadsRuntime, record: RemoteDis
     worker: {
       dispatchId: record.dispatch_id,
       state: record.worker_state ?? record.status,
-      stage: 'server_unreachable',
+      stage: 'server_record',
       agentTerminalHandle: null,
       worktreeId: null,
       lastError: record.last_failure,
@@ -85,12 +88,30 @@ export function offlineRemoteWorkerShow(runtime: ReadsRuntime, record: RemoteDis
     observation: {
       status: 'unverifiable' as const,
       exactWorker: false,
-      reason: `${why}, so this is this Orca's record of the worker: its state as of ${server.asOf}. Its output is kept only on ${server.name}.${owedStop}`
+      reason: `${recordNote(server, heard)} Its output is kept only on ${server.name}.${owedStop}`
     },
-    server: { ...server, reachable: false as const },
+    server: {
+      ...server,
+      ...(reachable === undefined ? {} : { reachable }),
+      ...(heard?.answeredAt ? { lastAnsweredAt: new Date(heard.answeredAt).toISOString() } : {})
+    },
     lastReport: record.last_report,
     autoReleaseAt: null
   }
+}
+
+function recordNote(server: RemoteWorkerServer, heard: PeerServerAnswerStatus | undefined): string {
+  if (server.repaired) {
+    return `The pairing with ${server.name} was re-made, so it no longer reports this worker here; this is ${server.name}'s state as of ${server.asOf}.`
+  }
+  const state = `${server.name}'s state as of ${server.asOf}.`
+  const ago = heard?.answeredAt
+    ? `${Math.max(0, Math.round((Date.now() - heard.answeredAt) / 1000))} s ago`
+    : undefined
+  if (heard?.unreachableSince) {
+    return `${state} ${server.name} could not be reached${ago ? `; it last answered ${ago}` : ''}.`
+  }
+  return ago ? `${state} ${server.name} last answered ${ago}.` : state
 }
 
 export type RemoteWorkerListRow = ReturnType<typeof remoteWorkerListRow>

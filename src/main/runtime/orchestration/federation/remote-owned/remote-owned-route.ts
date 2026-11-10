@@ -16,7 +16,6 @@ import {
   getRemoteDispatch,
   getRemoteOwnedQuestion
 } from '../../db/remote-owned/remote-dispatch-records'
-import { OrchestrationError } from '../../orchestration-error'
 import { adoptRemoteAttempt } from '../../db/remote-owned/remote-placements'
 import {
   getOpenRemoteRunLink,
@@ -26,8 +25,8 @@ import {
 import { callRemoteOwnedServer } from './remote-owned-calls'
 import { remoteForwardKey, type RemoteForwardKey } from './remote-forward-caller'
 import { inServerTerms } from './remote-owned-answers'
-import { offlineRemoteWorkerShow, remoteServerName } from './remote-owned-reads'
-import { explainRemoteServerFailure, isRemoteServerUnreachable } from './remote-server-unreachable'
+import { remoteWorkerShow, remoteServerName } from './remote-owned-reads'
+import { explainRemoteServerFailure } from './remote-server-unreachable'
 import { serverOwnsPlacedWorkers, startRemoteOwnedWorker } from './remote-owned-start'
 import { stopRemoteWorker } from './remote-owned-stop'
 
@@ -36,7 +35,7 @@ type Routed = { handled: false } | { handled: true; result: unknown }
 const LOCAL: Routed = { handled: false }
 // Long enough for a send that starts a follow-up worker there and waits for it to be ready.
 const FORWARD_TIMEOUT_MS = 180_000
-// A read gives up soon on a sleeping server, whose socket stays open; show then answers from this Orca's record.
+// A read gives up soon on a sleeping server, whose socket stays open.
 const READ_TIMEOUT_MS = 5_000
 // What `--on <server>` sends there; send and reply --on stay peer mail.
 const SERVER_CALLS: ReadonlySet<string> = new Set([
@@ -74,6 +73,11 @@ export async function routeRemoteOwnedCall(
     return on === undefined ? LOCAL : routeServerCall(runtime, request, access, values, ctx, on)
   }
   checkDeclaredOrchestrationAccess(access, params, ctx)
+  const record = subject.dispatchId ? getRemoteDispatch(db, subject.dispatchId) : undefined
+  if (request.method === 'orchestration.workerShow' && record) {
+    // A status read is this Orca's record, never a call there: instant whatever the server is doing.
+    return { handled: true, result: remoteWorkerShow(runtime, record) }
+  }
   const forward = remoteForwardKey(
     runtime,
     ctx,
@@ -235,14 +239,6 @@ async function forwardToLink(
     seedNamedDispatches(db, link, answer)
     return inServerTerms(answer, { server, forward, link })
   } catch (error) {
-    const record = dispatchId ? getRemoteDispatch(db, dispatchId) : undefined
-    const unanswerable =
-      isRemoteServerUnreachable(error) ||
-      (error instanceof OrchestrationError && error.code === 'remote_link_closed')
-    if (record && method === 'orchestration.workerShow' && unanswerable) {
-      // The server is off, or no longer answers for this link: what this Orca last heard, never output.
-      return offlineRemoteWorkerShow(runtime, record)
-    }
     throw inServerTerms(explainRemoteServerFailure(error, { server, method, params, dispatchId }), {
       server,
       forward,
