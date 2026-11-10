@@ -740,6 +740,7 @@ it('keeps an accepted alias while its deferred replacement is owed by a held-out
     // A foreground read can publish an alias before background discovery notices it.
     await writeFile(copy, rollout('predecessorowedneedle'))
     await parseTranscript(copy, 'codex', copyHome)
+    await subject.settled()
     expect(matching('predecessorowedneedle')).toEqual({ n: 1 })
     await writeFile(primary, rollout('canonicalnewneedle'))
     await utimes(primary, fixedTime, fixedTime)
