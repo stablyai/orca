@@ -56,7 +56,7 @@ export function createBrowserScreencastDeviceMetrics(
     const generation = metricsGeneration
     if (surface && !webContents.isDestroyed() && !webContents.isCrashed()) {
       const currentSize = surface.getContentSize()
-      originalSurfaceSize ??= currentSize
+      originalSurfaceSize ??= [currentSize[0], currentSize[1]]
       if (currentSize[0] !== viewportWidth || currentSize[1] !== viewportHeight) {
         // CDP emulation alone does not resize the physical surface feeding live frames.
         surface.setContentSize(viewportWidth, viewportHeight)

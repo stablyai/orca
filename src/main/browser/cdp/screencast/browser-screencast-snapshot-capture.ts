@@ -141,8 +141,12 @@ export function createBrowserScreencastSnapshotCapture(
         if (!data) {
           return
         }
+        const bytes = Buffer.from(data, 'base64')
+        const size = readBrowserScreencastImageSize(bytes, options.format)
         image = new Uint8Array(
-          encodeSnapshot(nativeImage.createFromBuffer(Buffer.from(data, 'base64')))
+          size && (size.width > options.maxWidth || size.height > options.maxHeight)
+            ? encodeSnapshot(nativeImage.createFromBuffer(bytes))
+            : bytes
         )
       }
       if (isSnapshotStale(initialOnly, generation)) {
