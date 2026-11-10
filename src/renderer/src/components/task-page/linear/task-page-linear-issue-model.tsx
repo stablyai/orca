@@ -22,7 +22,7 @@ import {
   getLinearStateMarkerStyle
 } from '@/components/linear-state-pill-style'
 import { LoaderCircle, ChevronDown } from 'lucide-react'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 export type LinearProjectTab = 'overview' | 'issues'
 export type LinearGroupSection = {
   key: string

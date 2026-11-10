@@ -10,6 +10,7 @@ import {
   generatePullRequestFieldsFromContext
 } from './commit-message-text-generation'
 import {
+  answerCodexAppServer,
   createChildTerminationExpectation,
   createMockDiscoveryChild,
   spawnedAgentArgv,
@@ -627,12 +628,11 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
     })
     expect(generationSpawns()).toHaveLength(1)
 
-    discoveryChild.stdout.emit(
-      'data',
-      Buffer.from(JSON.stringify({ models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5' }] }))
-    )
-    discoveryChild.emit('close', 0)
+    answerCodexAppServer(discoveryChild, [
+      { data: [{ id: 'gpt-5.5', model: 'gpt-5.5', displayName: 'GPT-5.5' }], nextCursor: null }
+    ])
     await expect(blocker).resolves.toMatchObject({ success: true })
+    discoveryChild.emit('close', 0)
 
     const later = generateCommitMessageFromContext(
       { branch: 'main', stagedSummary: 'M\tREADME.md', stagedPatch: '+later' },

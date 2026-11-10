@@ -240,6 +240,14 @@
     {
       "file": "src/session/native-chat/MobileNativeChatLowerRegion.web.tsx",
       "reason": "The shipping web session owns DOM scroll anchoring and reveals focused lower controls inside the keyboard-safe viewport. Native rendering keeps its existing scroll behavior."
+    },
+    {
+      "file": "src/platform/page-box.web.ts",
+      "reason": "RNW's measure() is asynchronous and drops its callback for a detached node, so a held mic released over the dictation cancel button would never stop. The page reads the DOM box synchronously; native keeps measure()."
+    },
+    {
+      "file": "src/platform/accessibility-announcer.web.ts",
+      "reason": "React Native Web's announceForAccessibility is a no-op and VoiceOver in the shell's WebView doesn't read the page's live regions, so the page asks the shell to announce through native.a11y.announce; without it, the caller keeps its live region."
     }
   ]
 }

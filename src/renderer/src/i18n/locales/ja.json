@@ -497,22 +497,6 @@
         "missingHost": "プロキシ URL にはホストが必要です。"
       }
     },
-    "voice": {
-      "modelDescriptions": {
-        "parakeetV3": "ヨーロッパの 25 言語で最高の精度。句読点、大文字・小文字、単語単位のタイムスタンプに対応。",
-        "parakeetV2": "英語のみ。v3 と同程度の精度で、より高速。句読点と大文字・小文字に対応。",
-        "zipformerBilingual": "中国語 + 英語の混在に対応。低遅延のリアルタイムストリーミング。",
-        "paraformerBilingual": "中国語（標準中国語 + 方言）+ 英語。なまりや地域ごとの中国語に強い。",
-        "zipformerStreamingEnRetired": "提供を終了しました。文の冒頭が抜け落ちます。削除して空き容量を確保してください。",
-        "zipformerStreamingZh": "中国語のみ。1,400 万パラメーターの超軽量モデル。リソースの少ないデバイスに最適。",
-        "zipformerStreamingKo": "韓国語のみ。低遅延のリアルタイムストリーミング。",
-        "parakeetJa": "日本語のみ。3.5 万時間以上の自然な音声で学習。句読点に対応。",
-        "whisperTiny": "90 以上の言語に対応。Parakeet より精度は低いものの、対応言語が最も豊富。",
-        "senseVoice": "中国語、英語、日本語、韓国語、広東語に対応。言語を自動検出。",
-        "gpt4oMiniTranscribe": "高精度で低コストのクラウド文字起こし。OpenAI API キーが必要です。",
-        "gpt4oTranscribe": "より高精度なクラウド文字起こし。OpenAI API キーが必要です。"
-      }
-    },
     "diagnostics": {
       "errors": {
         "creatingDisabled": "確認用ファイルの作成は無効になっています",
@@ -3191,7 +3175,6 @@
             "a3346fc6ed": "ワークツリーの作成をキャンセルする",
             "532aea14ce": "キャンセル",
             "767951265d": "ワークツリーの作成中に問題が発生しました。",
-            "vmProvisioningTitle": "VMのプロビジョニング",
             "cancelProvisioning": "キャンセル",
             "vmProvisioningLogEmpty": "レシピの出力を待っています…"
           }
@@ -3667,6 +3650,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "オンにする"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "別のウィンドウに合わせたサイズ",
+            "fitHere": "ここに合わせる"
           }
         }
       },
@@ -3769,7 +3756,6 @@
             "4f327c8b3d": "Markdown を開く…",
             "3d5d6c960d": "新規 Markdown",
             "fd2b42aaa3": "新規モバイルエミュレータ",
-            "aea43b5748": "既存のエミュレータタブを開きます。",
             "b426bb2615": "モバイルエミュレータに移動",
             "4833fb2cbe": "新規ブラウザタブ",
             "d364f3c8d4": "新規ターミナル",
@@ -4472,6 +4458,9 @@
             "accounts": "保存済み Antigravity アカウント",
             "readAgo": "{{time}} に取得",
             "notRead": "使用量は不明：未取得"
+          },
+          "InlineUsageBars": {
+            "resetsAt": "{{when}} にリセット"
           }
         }
       },
@@ -5337,7 +5326,10 @@
           "69f5b5380d": "クローン作成中…",
           "cloneOnHostDescription": "Git URL を入力し、{{value0}} 上のクローン先を選択してください。",
           "cloneParentFolder": "親フォルダー",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "フォルダー名",
+          "cloneFolderTakenByRepo": "このフォルダー内の「{{value0}}」はすでに別のリポジトリのため、このクローンには専用のフォルダーが必要です。",
+          "cloneFolderNotEmpty": "このフォルダーには「{{value0}}」がすでに存在するため、このクローンには専用のフォルダーが必要です。"
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "閉じる",
@@ -5518,8 +5510,6 @@
           "888b83bf78": "セットアップスクリプトの保存に失敗しました",
           "a49196d538": "Orca が新規ワークツリーを作成するときに実行されます。",
           "savedSetupCommand": "セットアップコマンドを保存しました。",
-          "savedWithSkippedFields_one": "未対応の項目を {{count}} 件スキップしました。セットアップコマンドを保存しました。",
-          "savedWithSkippedFields_other": "未対応の項目を {{count}} 件スキップしました。セットアップコマンドを保存しました。",
           "savedInProjectSettings": "この<settings>プロジェクトの設定</settings>に保存済み"
         },
         "SetupScriptPromptCardViews": {
@@ -5532,13 +5522,12 @@
           "eefa756190": "手動で構成する",
           "ca4efcbc25": "保存",
           "fdbc6cb064": "検出されたセットアップスクリプト",
-          "7275f674cc": "検出されたセットアップ",
           "822ff300ad": "閉じる",
           "5bfd5c8779": "セットアップスクリプトを閉じる",
-          "detectedFromSource": "<source>{{source}}</source> から検出",
           "ignoresSharedSetup": "このリポジトリは共有の <yaml>orca.yaml</yaml> セットアップスクリプトを無視します。ローカルコマンドを追加するか、設定でソースを変更してください。",
-          "foundSetupCommandIn": "<source>{{source}}</source> でセットアップコマンドが見つかりました。新規ワークツリーで実行するには保存してください。",
-          "reviewSetupScript": "セットアップスクリプトを確認"
+          "reviewSetupScript": "セットアップスクリプトを確認",
+          "7275f674cc": "検出されたセットアップ",
+          "detectedFromSource": "<file>{{source}}</file> から検出"
         },
         "SetupScriptReviewDialog": {
           "title": "セットアップスクリプトを確認",
@@ -7918,7 +7907,6 @@
           "f828e1de19": "- チームと共有",
           "673a7fd10e": "確認中…",
           "5426ecbdcb": "ローカルスクリプトは実行されません",
-          "b2b06c7ce8": "利用可能な環境変数 (カーソルを合わせると詳細が表示されます):",
           "95a0411b3e": "テンプレート",
           "175daba180": "例",
           "b20c5df6ca": "「orca.yaml」ファイルを追加して、このリポジトリの共有セットアップ、アーカイブ、または Issue 自動化のデフォルトを有効にします。テンプレートの例:",
@@ -8272,7 +8260,6 @@
           "7807c11c4d": "一般",
           "6855b0f77d": "Orca を並列 Agent 作業に活用するためのコアワークフローを完了します。",
           "6d119427ef": "オンボーディングチェックリスト",
-          "eb1176a14e": "オンデバイスモデルを使用したローカルの音声からテキストへのディクテーション。",
           "5063bb47a5": "音声",
           "7118953f14": "Agent がコンピュータ上の任意のアプリを制御できるようにします。",
           "c9841721cb": "コンピュータ操作",
@@ -8782,7 +8769,6 @@
         },
         "VoicePane": {
           "68de13f72c": "モデルの削除に失敗しました。",
-          "1ba81c0ff0": "推奨",
           "cfde55c7b0": "モデルのダウンロードに失敗しました。",
           "43fd4f454b": "音声モデル",
           "ba4a900d1d": "ディクテーションモード",
@@ -8793,10 +8779,6 @@
           "506df81ba6": "OpenAI API キーが保存されました",
           "91980ce124": "{{value0}} MB",
           "61a16c8141": "抽出中…",
-          "8f4d2a51d7": "オフライン",
-          "d504ab05f0": "ストリーミング",
-          "fbe5990716": "モデルの選択",
-          "e24f7d43d2": "音声モデルを選択します。ローカルモデルはオフラインで実行されます。クラウドモデルには API キーが必要です。",
           "174da92062": "ホールド",
           "118b3c2dee": "トグル",
           "ad5d036ecc": "マイクの許可を要求できませんでした。音声ディクテーションが有効になっていませんでした。",
@@ -8805,8 +8787,11 @@
           "cd9fe37556": "マイクの許可が与えられました",
           "6fa734ed95": "{{value0}} を削除",
           "openAiKeyName": "OpenAI 転写キー",
-          "dictationShortcutDescription": "{{shortcut}} を押すと、フォーカスされているペインにテキストを音声入力できます。",
-          "dictationModesDescription": "トグル: {{shortcut}} を1回押すと開始し、もう一度押すと停止します。ホールド: {{shortcut}} を押している間、音声入力します。"
+          "dictationModeAuto": "自動",
+          "dictationModesWithAutoDescription": "自動：{{shortcut}} を押し続けると離すまで音声入力し、短く押すと開始と停止を切り替えます。ホールド：{{shortcut}} を押している間、音声入力します。トグル：{{shortcut}} を1回押すと開始し、もう一度押すと停止します。",
+          "speechGpuLabel": "GPU を使用",
+          "speechGpuDescription": "動作する場合はグラフィックカードで音声を認識し、失敗した場合は CPU で認識します。音声入力でコンピュータがフリーズしたり再起動したりする場合はオフにしてください。",
+          "updateToFasterVersion": "高速版に更新 ({{value0}} MB)"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} を削除",
@@ -10638,7 +10623,13 @@
               "modelUnloadTitle": "音声モデルの解放",
               "modelUnloadDescription": "ローカル音声モデルをメモリから解放するタイミングを選びます。",
               "modelUnloadKeyword": "解放",
-              "modelMemoryKeyword": "メモリ"
+              "modelMemoryKeyword": "メモリ",
+              "fillerWordsTitle": "フィラーを削除",
+              "fillerWordsDescription": "「えーと」「うーん」などのつなぎ言葉を音声入力のテキストから取り除きます。",
+              "fillerWordsKeyword": "フィラー",
+              "vocabularyTitle": "語彙",
+              "vocabularyDescription": "音声入力が自分の書き方で表記する名前やコード用語。個人用またはリポジトリ用。",
+              "vocabularyKeyword": "辞書"
             }
           }
         },
@@ -15613,6 +15604,7 @@
           "kernelStartFailed": "カーネルの起動に失敗しました。",
           "noPython": "このコンピュータに Python が見つかりません。[python.org](https://www.python.org/downloads/) からインストールして、セルを再実行してください。",
           "kernelDied": "カーネルが停止しました。",
+          "outputTruncated": "出力を切り詰めました: Orca はこのセルの出力の先頭部分を保持し、残りを破棄しました。すべて残すには、ファイルに書き出してください。",
           "localOnly": "ノートブックセルはこのコンピュータ上のファイルでのみ実行できます。",
           "pythonOnly": "Orca では Python ノートブックのみ実行できます。",
           "commandCopied": "コマンドをコピーしました",
@@ -16285,12 +16277,14 @@
           "noModel": "音声モデルが選択されていません。設定 > 音声 からダウンロードしてください。",
           "disabled": "音声ディクテーションは無効です。設定 > 音声 で有効にしてください。",
           "notReady": "音声モデルの準備ができていません。設定 > 音声 からダウンロードしてください。",
+          "modelNeedsUpdate": "音声モデルを引き続き使うには更新が必要です。設定 > 音声 で高速版に更新してください。",
           "unknownModel": "選択したモデルは使用できなくなりました。設定 > 音声 で別のモデルを選択してください。",
           "5d2c3e7ae3": "音声が検出されませんでした。",
           "micFallback": "選択したマイクが使用できません。システムのデフォルトを使用します。",
           "micDisconnected": "マイクが接続されていません。ディクテーションが停止しました。",
           "cloudLimitReached": "クラウドの10分の上限に達したため、ディクテーションが停止しました。",
-          "stoppedAfterSilence": "1分間音声がなかったため停止しました。"
+          "stoppedAfterSilence": "1分間音声がなかったため停止しました。",
+          "retryUnmatched": "再試行で入力済みの語句を特定できなかったため、すべて挿入しました。"
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "音声入力を挿入できなかったため、クリップボードにコピーしました。",
@@ -16298,13 +16292,21 @@
           "lost": "音声入力を挿入もコピーもできませんでした。"
         },
         "DictationIndicator": {
-          "335e1bc6cb": "ディクテーションを停止する",
-          "7f3660a7ba": "マイクを起動中…",
-          "f082d0cb9d": "処理中…",
-          "3de5a129e7": "聞き取り中",
           "4977162383": "音量が大きすぎます",
-          "25f2b7a6a5": "発話中",
-          "loadingModel": "音声モデルを読み込み中…"
+          "finishing": "仕上げ中…",
+          "listening": "聞き取り中…",
+          "cancel": "キャンセル",
+          "finish": "完了",
+          "oneMinuteLeft": "残り1分です。",
+          "sendsWhenLanded": "テキストの入力後に送信します",
+          "entersWhenLanded": "テキストの入力後に Enter を押します"
+        },
+        "DictationPillFailure": {
+          "discard": "録音を破棄",
+          "modelFailed": "音声モデルを読み込めません。",
+          "transcribeFailed": "文字起こしに失敗。録音は保持しました。",
+          "openSettings": "設定を開く",
+          "retry": "再試行"
         }
       },
       "dashboard": {
@@ -16460,10 +16462,6 @@
                     }
                   },
                   "browser": {
-                    "grab": {
-                      "title": "Agent 向けにページのコンテキストを取得する",
-                      "body": "grab ツールでページ要素のコンテキストをコピーして Agent に渡します。"
-                    },
                     "annotate": {
                       "title": "デザインのフィードバックをその場で残す",
                       "body": "要素に注釈を付けて、そのメモを Agent に送ります。"
@@ -16596,7 +16594,6 @@
             "244266c122": "インポート…",
             "e52a955e6f": "これは、[設定] > [ブラウザ] でいつでも見つけることができます。",
             "4f5ffaa6a1": "ブラウザデータをインポートする",
-            "b24fef25be": "インポート",
             "02e89014c5": "{{value1}}{{value2}} から {{value0}} Cookie をインポートしました。",
             "d40d584769": "ファイルから {{value0}} 個の Cookie をインポートしました。"
           },
@@ -16657,7 +16654,6 @@
             "4328a0a062": "取得に失敗しました: {{value0}}",
             "759f32af29": "ダウンロード中",
             "4300f38145": "{{value0}}{{value1}} からダウンロードしています",
-            "acbe79fd01": "ページ要素の取得 ({{value0}})",
             "cc4a071d3a": "ページ要素に注釈を付ける ({{value0}})",
             "572046436a": "リモートブラウザ",
             "b313a7275b": "リモートブラウザを開く",
@@ -18532,7 +18528,9 @@
     },
     "native-chat": {
       "install": {
-        "checking": "このホストで {{agent}} の準備ができているか確認しています…"
+        "checking": "このホストで {{agent}} の準備ができているか確認しています…",
+        "cliInstall": "インストール",
+        "cliRecheck": "再確認"
       },
       "reasoning": "推論",
       "contextMenu": {
@@ -18585,6 +18583,11 @@
         "providerExitedRow": "この応答の途中で {{agent}} が停止しました。この会話で続けることができます。",
         "providerExitedRejection": "このメッセージが送信される前に {{agent}} が停止しました。",
         "providerExitedAnswer": "{{agent}} が停止したため、回答は送信されませんでした。続けるにはメッセージを送信してください。",
+        "providerUnavailable": "サービスが混雑しているため、{{agent}} は応答できませんでした。別のモデルを選ぶか、しばらく待ってから再送してください。",
+        "providerSafetyStopped": "{{agent}} は安全確認の後、この応答を停止しました。リクエストを見直して再送してください。",
+        "providerResponseFailed": "{{agent}} はこの応答を完了できませんでした。詳細を開いて確認してください。",
+        "modelUnavailable": "{{agent}} は {{detail}} を使用できませんでした。別のモデルを選択して、もう一度送信してください。",
+        "selectedModel": "選択されたモデル",
         "providerRejected": "{{agent}} はこのメッセージを受け付けませんでした。",
         "providerRejectedQuoted": "{{agent}} はこのメッセージを受け付けませんでした: {{detail}}。",
         "attachmentEmpty": "このメッセージの画像が空のため、メッセージは送信されませんでした。",
@@ -18803,6 +18806,7 @@
         "noCommandsOrSkills": "一致するコマンドやスキルがありません",
         "commands": "コマンド",
         "skills": "スキル",
+        "checkingSkills": "新しいスキルを確認しています…",
         "loadingSkills": "スキルを読み込み中…",
         "clearDescription": "会話のコンテキストをクリア",
         "skillsUnavailableHost": "SSH チャットではスキルを一覧表示できません",
@@ -18942,6 +18946,8 @@
         "toggleDetails": "ターンの詳細を切り替えます"
       },
       "jumpToLatest": "最新にジャンプ",
+      "newRowsAnnouncement": "離れている間に新しいメッセージが届きました",
+      "newRowsMarker": "新着",
       "find": {
         "label": "チャット内を検索",
         "noResults": "結果はありません",
@@ -19069,6 +19075,7 @@
         "orcaStopCanContinue": "この会話で続行できます。",
         "orcaStopUnnamedServer": "リモートサーバー",
         "permissionDenied": "{{agent}} が権限を拒否しました。詳細を表示。",
+        "safetyReviewApproved": "{{agent}} がこの操作を承認しました。詳細を表示。",
         "safetyReview": "{{agent}} が安全性レビューの警告を報告しました。詳細を表示。",
         "truncatedResponse": "プロバイダーの応答は切り詰められています（元のサイズ：{{bytes}} バイト）。",
         "forkedFrom": "分岐元"
@@ -19199,7 +19206,8 @@
       "contextUsage": {
         "label": "コンテキスト {{used}} / {{window}} トークン、{{percent}}% 使用済み",
         "title": "コンテキスト",
-        "estimated": "最後の応答から推定。"
+        "estimated": "最後の応答から推定。",
+        "deferredNote": "必要時に読み込まれます。使用量には含まれません。"
       },
       "dismissDeliveryNotice": "閉じる",
       "addSelectionToChat": "チャットに追加",
@@ -19483,8 +19491,10 @@
       "composerWorkspace": {
         "copyFailed": "コピーできませんでした",
         "copyIdentity": "{{value0}} をコピー",
+        "detachedCommit": "コミット {{head}}（ブランチではありません）",
         "folder": "フォルダー",
         "mainCheckout": "メインチェックアウト",
+        "turnWorking": "このチャットの Agent が作業中です。ターンが終わってからブランチを切り替えてください。",
         "worktree": "ワークツリー"
       },
       "explicitChatWindows": "この Agent のチャットはまだ Windows では利用できません。ターミナルで開いてください。",
@@ -19906,6 +19916,9 @@
         "scrollToLatestOnSendTitle": "送信時に最新までスクロール",
         "scrollToLatestOnSendCopy": "上にスクロールした状態で送信すると、最新のメッセージに移動して返信を追従します。オフにすると現在の位置を維持します。",
         "scrollToLatestOnSendSearchPosition": "位置",
+        "markNewMessagesTitle": "チャットに戻ったときに新着メッセージを示す",
+        "markNewMessagesCopy": "チャットに戻ると、離れている間に届いたメッセージの上に「新着」の線を表示します。最新のメッセージを読んでいた場合は、そこまでスクロールします。",
+        "markNewMessagesSearchUnread": "未読",
         "followUpBehaviorCopy": "Agent の作業中に送信したメッセージは、実行中のターンに送られず、ターンが終わるまでカードとして待機します。Cmd/Ctrl+Enter では 1 件だけその逆になり、何も入力されていない場合は最初の待機カードを実行中のターンに送ります。画像付きメッセージもカードとして待機します。",
         "inlineVisualsTitle": "インライン表示",
         "inlineVisualsCopy": "Agent が返信内でグラフ、図、モックアップを表示できるようにします。新しく開始したチャットに適用されます。",
@@ -19953,7 +19966,96 @@
           "cloud": "クラウドモデルはプロバイダーのサーバーで動くため、ここには何も読み込まれません。",
           "never": "しない",
           "immediately": "すぐに"
+        },
+        "fillerWords": {
+          "title": "フィラーを削除",
+          "description": "音声入力の言語に合わせて、「えーと」「うーん」などのつなぎ言葉を入力テキストから取り除きます。"
+        },
+        "sectionDescription": "どのペインでも、入力の代わりに話せます。クラウドモデルを選ばない限り、音声はこのコンピューター上で認識されます。",
+        "input": {
+          "title": "入力",
+          "shortcut": "ショートカット",
+          "shortcutDescription": "フォーカス中のペインで音声入力を開始します。",
+          "changeShortcut": "変更"
+        },
+        "language": {
+          "title": "言語"
+        },
+        "cleanup": {
+          "title": "クリーンアップ"
+        },
+        "advanced": {
+          "title": "詳細設定"
+        },
+        "setup": {
+          "downloadingDescription": "このページを離れても大丈夫です。ダウンロードが終わると音声入力が使えます。",
+          "title": "音声入力を設定",
+          "pickModel": "どのペインでも、入力の代わりに話せます。下の音声モデルをダウンロードして始めましょう。このコンピューター上のモデルなら音声は外に出ません。",
+          "microphoneMissingTitle": "{{microphone}} が接続されていません",
+          "microphoneMissingDescription": "接続されるまで、システムの既定のマイクを使います。",
+          "changeMicrophone": "マイクを変更",
+          "onTitle": "音声入力はオンです",
+          "onLocal": "どのペインでも {{shortcut}} を押します。{{model}} はこのコンピューター上で動作します。",
+          "onCloud": "どのペインでも {{shortcut}} を押します。{{model}} はクラウドで動作します。",
+          "offTitle": "音声入力はオフです",
+          "offDescription": "オンにすると、どのペインでも {{shortcut}} で音声入力できます。",
+          "savedMicrophone": "選択したマイク",
+          "description": "どのペインでも、入力の代わりに話せます。音声はこのコンピューター上で認識されるため、外に出ません。",
+          "setUp": "設定する",
+          "asksForMicrophone": "Orca がマイクへのアクセスを求めます。"
+        },
+        "quality": {
+          "unsupported": "お使いの言語に非対応",
+          "unmeasured": "未測定",
+          "poor": "低い",
+          "fair": "まずまず",
+          "good": "良い",
+          "veryGood": "とても良い",
+          "excellent": "非常に優秀",
+          "characterErrorRate": "文字誤り率 {{percent}}%",
+          "wordErrorRate": "単語誤り率 {{percent}}%",
+          "librispeech": "テスト：LibriSpeech（朗読音声）、{{clips}} クリップ、{{date}} に測定。",
+          "fleurs": "テスト：FLEURS（朗読音声）、{{clips}} クリップ、{{date}} に測定。",
+          "bench": "Apple シリコン搭載 Mac での Orca のベンチマーク。",
+          "label": "品質：{{word}}"
+        },
+        "models": {
+          "retired": "提供終了。削除すると空き容量が増えます。",
+          "sendsToOpenAi": "音声を OpenAI に送信します。",
+          "delete": "削除",
+          "cancelDownload": "ダウンロードをキャンセル",
+          "inUse": "使用中",
+          "use": "使用",
+          "setUpCloud": "設定",
+          "download": "ダウンロード",
+          "cloud": "クラウド",
+          "description": "品質は{{language}}での評価です。評価にカーソルを合わせるとテストの詳細が表示されます。",
+          "where": "モデルの実行場所",
+          "local": "このコンピューター",
+          "cloudDescription": "クラウドモデルは音声をプロバイダーに送信します。このコンピューター上のモデルなら音声は外に出ません。",
+          "sendsToCompatible": "音声を設定したサービスに送信します。"
+        },
+        "vocabulary": {
+          "title": "語彙",
+          "description": "名前やコード用語を自分の書き方で入力します。モデルが繰り返し聞き間違える場合は、聞き取られる言い方も追加してください。",
+          "repoScope": "{{repo}} で音声入力するときだけ使います。",
+          "personalScope": "すべてのリポジトリで使います。",
+          "scope": "用語の対象",
+          "personal": "個人 · {{total}}",
+          "repo": "{{repo}} · {{total}}",
+          "heardAsChip": "← {{heardAs}}",
+          "remove": "{{term}} を削除",
+          "term": "単語またはフレーズ",
+          "heardAs": "聞き取られ方（任意）",
+          "heardAsLabel": "聞き取られ方",
+          "add": "追加",
+          "repoNameHint": "リポジトリ名をヒントとして使う",
+          "repoNameHintDescription": "リポジトリ名を認識しやすくします。",
+          "repoSaveFailed": "リポジトリの用語を保存できませんでした。このリポジトリのホストで Orca の更新が必要かもしれません。"
         }
+      },
+      "repositoryHooks": {
+        "availableEnvVars": "利用可能な環境変数"
       }
     },
     "agentChildRow": {
@@ -20207,6 +20309,24 @@
     }
   },
   "browser": {
+    "passwords": {
+      "savePrompt": {
+        "open": "パスワード保存の確認",
+        "updateTitle": "パスワードを更新しますか？",
+        "saveTitle": "パスワードを保存しますか？",
+        "username": "ユーザー名",
+        "password": "パスワード",
+        "never": "このサイトでは保存しない",
+        "notNow": "今はしない",
+        "update": "更新",
+        "save": "保存"
+      },
+      "fill": {
+        "noUsername": "（ユーザー名なし）",
+        "title": "保存済みのログイン情報",
+        "otherLogins": "このサイトの他のログイン情報"
+      }
+    },
     "loadFailure": {
       "connectionNotSecure": "接続は安全ではありません",
       "cantReachHost": "{{value0}} に接続できません",
@@ -21012,6 +21132,7 @@
       "switch": "ブランチを切り替え: {{branch}}",
       "search": "ブランチを検索",
       "recover": "{{branch}} に切り替え",
+      "copy": "ブランチ名をコピー",
       "create": "{{branch}} からブランチ {{name}} を作成",
       "open": "ワークスペースを開く",
       "occupied": "{{path}} でチェックアウト済み",
@@ -21061,7 +21182,6 @@
       "sortRelevance": "最も関連性の高い",
       "sortNewest": "最新",
       "sortResultsAriaLabel": "ソート結果: {{value0}}",
-      "consent": "全文検索を有効にしますか? Orca は、完全な会話とツール出力ごとに最大 3,072 文字を含む、ローカル Agent のトランスクリプトからこのコンピュータ上にインデックスを作成します。内容は編集されていません。認証されたペアリングされたクライアントは検索できます。",
       "remoteDisabled": "このコンピュータでは検索が無効になっています。そのコンピュータ上でトランスクリプトのインデックス作成を有効にして、セッションを検索します。",
       "titleOnly": "このコンピュータでは全文検索がオフのため、セッションのタイトルのみが照合されます。",
       "notReady": "検索インデックスはまだ準備ができていません。しばらくしてからもう一度お試しください。",
@@ -21118,7 +21238,6 @@
       "description": "このコンピュータおよびペアになっている Orca サーバー上で、Agent の言動をすべて検索します。",
       "searchDescription": "このコンピュータとペアリングされたサーバーのセッション検索をオンにするか、検索データをクリアします。",
       "indexComputers": "セッション内を検索",
-      "computersConsent": "各コンピュータは、自身の Agent の会話とツールの出力の検索可能なコピーを保持します。そのコンピュータからは何も残りません。",
       "serverVersion": "Orca v{{version}}",
       "rowSwitchLabel": "{{host}} のセッションを検索",
       "serverOffline": "オフライン",
@@ -21688,11 +21807,11 @@
   "workspaceDeletion": {
     "preferenceSaveFailed": "削除の設定を保存できませんでした",
     "alwaysForceDelete": "常に強制削除",
+    "alwaysForceDeleteDescription": "今後のすべてのワークスペース削除に適用されます。",
     "moreActions": "その他の強制削除オプション",
-    "alwaysForceDeleteTooltip": "今後のすべてのワークスペース削除に適用されます。",
     "alwaysForceDeleteBranches": "保持したブランチを常に削除する",
     "moreBranchActions": "その他のブランチ削除オプション",
-    "alwaysForceDeleteBranchesTooltip": "将来のワークスペースの削除後に保持されるブランチに適用されます。",
+    "alwaysForceDeleteBranchesDescription": "将来のワークスペースの削除後に保持されるブランチに適用されます。",
     "moreDeleteOptions": "その他の削除オプション",
     "alwaysDelete": "常に削除",
     "alwaysDeleteTooltip": "今後の削除ではこの確認をスキップします。"
@@ -22053,7 +22172,8 @@
     "refresh": "更新",
     "restartLocal": "ローカルデーモンを再起動",
     "killAllLocal": "すべてのローカルセッションを終了",
-    "killFailed": "ターミナルを終了できませんでした。最後に観測されたセッションを保持しています。"
+    "killFailed": "ターミナルを終了できませんでした。最後に観測されたセッションを保持しています。",
+    "metricDetails": "メトリクスの詳細"
   },
   "workspaceSpace": {
     "table": {
@@ -23277,5 +23397,31 @@
     "branchName": "ブランチ名",
     "invalidBranchName": "このブランチ名は無効です。別の名前を選んでください。",
     "createBranchFailed": "Orca はブランチを作成できませんでした。ターミナルでこのリポジトリを確認してから、もう一度お試しください。"
+  },
+  "speechModelUpdate": {
+    "updateTitle": "音声モデルを更新してください",
+    "updateDescription": "音声入力がより高速なエンジンで動作するようになりました。再び音声入力するには、{{model}} を一度だけダウンロードする必要があります（{{size}} MB）。",
+    "update": "更新",
+    "replacedTitle": "音声モデルが置き換えられました",
+    "replacedDescription": "{{old}} は新しい音声エンジンでは動作しません。代わりに {{model}} を使用します（{{size}} MB）。",
+    "downloadReplacement": "{{model}} をダウンロード",
+    "later": "後で",
+    "dismiss": "閉じる",
+    "updatingTitle": "{{model}} を更新中",
+    "downloadingTitle": "{{model}} をダウンロード中",
+    "downloadingDescription": "作業を続けられます。完了すると音声入力が使えるようになります。",
+    "progress": "{{done}} / {{total}} MB",
+    "cancel": "キャンセル",
+    "doneTitle": "音声入力の準備ができました",
+    "doneDescription": "{{model}} を更新しました。古いファイルは削除されました。",
+    "doneRetiredDescription": "{{model}} の準備ができました。{{old}} の古いファイルはまだディスクに残っています。",
+    "keep": "残す",
+    "deleteOld": "古いモデルを削除",
+    "deleteFailed": "{{model}} を削除できませんでした。",
+    "updateFailedTitle": "{{model}} を更新できませんでした",
+    "downloadFailedTitle": "{{model}} をダウンロードできませんでした",
+    "failedAtDescription": "ダウンロードが {{mb}} MB で止まりました。接続を確認して、もう一度お試しください。",
+    "failedDescription": "ダウンロードが止まりました。接続を確認して、もう一度お試しください。",
+    "tryAgain": "再試行"
   }
 }

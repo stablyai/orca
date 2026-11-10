@@ -14,7 +14,7 @@ import {
   getWorkspaceCleanupHostIdentity,
   resolveWorkspaceCleanupRemovalHostId
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
-import { getWorktreeOperationOwnerHostIds } from '@/lib/worktree-operation-route'
+import { getWorktreeOperationOwnerHostIds } from '@/lib/workspace/ownership/worktree-operation-route'
 import { translate } from '@/i18n/i18n'
 import type { WorkspaceCleanupFailure } from './workspace-cleanup-removal'
 import {

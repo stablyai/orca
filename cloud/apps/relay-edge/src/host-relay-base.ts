@@ -7,6 +7,7 @@ import { RELAY_CLOSE_CODE } from '../../../packages/relay-contract/src/close-cod
 import { CONTROL_CONTINUITY_LIMITS } from '../../../packages/relay-contract/src/control-continuity'
 import { ASSIGNMENT_LIMITS } from '../../../packages/relay-contract/src/assignment-invariants'
 import { relayHostCloseReasonFrom } from '../../../packages/relay-contract/src/host-close-reason'
+import { RELAY_CLIENT_KEEPALIVE_ACK_FRAME, RELAY_CLIENT_KEEPALIVE_FRAME } from '../../../packages/relay-contract/src/control-messages'
 import { parseConnId } from './splice-slot'
 import { metric } from './metrics'
 import { ObjectStore } from './object-store'
@@ -39,6 +40,11 @@ export type ControlAttachment = {
   lastRefreshAt?: number
   // Client ingress '<continent>/<colo>', for metrics.
   place?: string
+  // The host took the keepalive offer: it sends the keepalive frame, which the runtime answers
+  // without waking this object, so the alarm sends it no pings (keepalive() below).
+  clientKeepalive?: boolean
+  // A keepalive control found silent: one relay ping sent at this time (see probeSilentControls).
+  probeAt?: number
 }
 export type Attachment = ControlAttachment
 export type Conn = {
@@ -65,6 +71,8 @@ export type AuthorizeResult =
 export type ConfirmResult = { ok: true; hello: RelayHello } | { ok: false; code: number }
 
 export const NO_DEADLINE = Number.MAX_SAFE_INTEGER
+// How long a silent keepalive control has to answer the relay ping before it is closed.
+export const KEEPALIVE_PROBE_MS = 10_000
 export const SWEEP_AT_KEY = 'sweepAt'
 // 6 h ± 30 min, as the cells: desktops re-ask the director at least this often.
 export const LEASE_BASE_MS = 6 * 60 * 60 * 1000
@@ -79,6 +87,12 @@ export abstract class HostRelayBase extends DurableObject<Env> {
   // Slots handed out recently whose phone hasn't authorized yet (in memory; a hint only).
   protected recentPicks: { slot: number; at: number }[] = []
   protected backendCache: EdgeBackend | null = null
+
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env)
+    // Answered by the runtime while the object sleeps: no wake, no alarm, no duration.
+    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(RELAY_CLIENT_KEEPALIVE_FRAME, RELAY_CLIENT_KEEPALIVE_ACK_FRAME))
+  }
 
   protected get config(): EdgeConfig {
     return edgeConfig(this.env)
@@ -99,6 +113,17 @@ export abstract class HostRelayBase extends DurableObject<Env> {
   // Active until the relay token expires; after that the seat only drains (cells: drain-only).
   protected authActive(a: ControlAttachment, now = Date.now()): boolean {
     return a.phase === 'active' && now <= a.claims.exp
+  }
+
+  // Host-sent keepalive in use for this control (and not switched off since it was offered).
+  protected keepalive(a: ControlAttachment): boolean {
+    return a.clientKeepalive === true && this.config.clientKeepalive
+  }
+
+  // Last sign of life: any frame that woke the object, or a keepalive the runtime answered.
+  protected lastSeen(ws: WebSocket, a: ControlAttachment): number {
+    const answered = this.ctx.getWebSocketAutoResponseTimestamp(ws)?.getTime() ?? 0
+    return Math.max(a.lastPongAt ?? 0, answered)
   }
 
   protected otherActiveControls(ws: WebSocket): WebSocket[] {
@@ -144,7 +169,9 @@ export abstract class HostRelayBase extends DurableObject<Env> {
 
   // ---------------- lifecycle ----------------
 
-  protected async onSocketGone(ws: WebSocket, code: number, reason: string): Promise<void> {
+  // `goneAt`: when the control was last known alive plus the silence timeout, for a control found
+  // dead later than the alarm would have found it; the orphan grace counts from then.
+  protected async onSocketGone(ws: WebSocket, code: number, reason: string, goneAt = Date.now()): Promise<void> {
     const a = this.attachment(ws)
     if (!a) { return }
     // During webSocketClose the closing socket is still listed; clear it first so it can't count as live.
@@ -156,7 +183,7 @@ export abstract class HostRelayBase extends DurableObject<Env> {
         const hostReason = relayHostCloseReasonFrom(reason)
         await this.ctx.storage.put<Session>('session', {
           ...session,
-          orphanedAt: Date.now(),
+          orphanedAt: goneAt,
           ...(hostReason ? { closeReason: { reason: hostReason, expiresAt: Date.now() + ASSIGNMENT_LIMITS.dormantTtlMs } } : {})
         })
       }
@@ -168,19 +195,32 @@ export abstract class HostRelayBase extends DurableObject<Env> {
 
   protected async reschedule(): Promise<void> {
     let next = NO_DEADLINE
+    let conns: Record<string, Conn> | null = null
     for (const ws of this.ctx.getWebSockets()) {
       const a = this.attachment(ws)
       if (!a) { continue }
+      if (a.k !== 'control' || a.phase !== 'active') {
+        next = Math.min(next, a.deadline)
+        continue
+      }
       next = Math.min(
         next,
-        ...(a.k === 'control' && a.phase === 'active'
-          ? [
-              (a.lastPingAt ?? 0) + this.config.pingIntervalMs,
-              a.claims.exp + CONTROL_CONTINUITY_LIMITS.expiredAuthExistingSpliceGraceMs + 1,
-              (a.leaseExpiresAt ?? NO_DEADLINE - 1) + 1
-            ]
-          : [a.deadline])
+        a.claims.exp + CONTROL_CONTINUITY_LIMITS.expiredAuthExistingSpliceGraceMs + 1,
+        (a.leaseExpiresAt ?? NO_DEADLINE - 1) + 1
       )
+      if (!this.keepalive(a)) {
+        next = Math.min(next, (a.lastPingAt ?? 0) + this.config.pingIntervalMs)
+        continue
+      }
+      const seen = this.lastSeen(ws, a)
+      if (a.probeAt !== undefined && a.probeAt >= seen) {
+        next = Math.min(next, a.probeAt + KEEPALIVE_PROBE_MS)
+        continue
+      }
+      // Phones attached or waiting: their splices must close on time if the host dies, so check
+      // its silence when it would run out. Otherwise no alarm for liveness at all.
+      conns ??= await this.conns()
+      if (Object.keys(conns).length > 0) { next = Math.min(next, seen + this.config.silenceTimeoutMs + 1) }
     }
     const session = await this.ctx.storage.get<Session>('session')
     if (session?.orphanedAt != null) { next = Math.min(next, session.orphanedAt + this.config.orphanGraceMs) }

@@ -1,5 +1,8 @@
 import type * as UseLiveWorktreeNameModule from '../../../worktree/use-live-worktree-name'
 import type * as HostWorktreeRefreshModule from '../../../worktree/host-worktree-refresh'
+import type * as HostListQueries from '../../../host-screen/host-list-queries'
+import type * as HostQueryModule from '../../../query/host-query'
+import { hookMount } from '../hook-mount'
 import { hookScreenMount } from '../mounted-screen-tree'
 import type { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
@@ -42,6 +45,37 @@ export function clientEventStreamMountAdapters(
           crash: screen.crash()
         }),
         dispose: screen.unmount
+      }
+    },
+    // The host list's catalog read and the event router that re-reads it on desktop change notices.
+    'query.event-router-catalog': ({ client }) => {
+      const { useHostQuery } = modules.load<typeof HostQueryModule>(
+        'mobile/src/query/host-query.ts'
+      )
+      const queries = modules.load<typeof HostListQueries>(
+        'mobile/src/host-screen/host-list-queries.ts'
+      )
+      let status: string | null = null
+      const hook = hookMount(() => {
+        status = useHostQuery(
+          queries.hostWorktreeCatalogQuery,
+          { hostId: 'host-1', client },
+          queries.HOST_LIST_TARGET,
+          queries.NO_HOST_LIST_INPUT
+        ).status
+      })
+      return {
+        action(name) {
+          if (name === 'mount') {
+            return hook.mount()
+          }
+          if (name === 'unmount') {
+            return hook.unmount()
+          }
+          throw new Error(`Unknown event router action: ${name}`)
+        },
+        state: () => ({ status }),
+        dispose: () => void hook.unmount()
       }
     },
     'worktree.host-refresh': ({ client, effect }) => {

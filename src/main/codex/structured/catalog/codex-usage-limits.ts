@@ -7,7 +7,7 @@ import {
   type AgentSessionUsageLimit,
   type AgentSessionUsageLimitWindow
 } from '../../../../shared/agent-session/failures/agent-session-usage-limit'
-import type { CodexRateLimitWindowsSnapshot } from '../../../rate-limits/codex-rate-limit-window-classification'
+import type { CodexRateLimitWindowsSnapshot } from '../../../rate-limits/providers/codex/codex-rate-limit-window-classification'
 import {
   readCodexErrorAdditionalDetails,
   readCodexErrorInfo,
@@ -49,8 +49,12 @@ export class CodexUsageLimits {
   }
 
   failure(payload: unknown) {
-    const error = readCodexErrorInfo(payload)?.error
-    if (!error || !USAGE_LIMIT_ERRORS.includes(error)) {
+    const info = readCodexErrorInfo(payload)
+    if (
+      !info ||
+      (!USAGE_LIMIT_ERRORS.includes(info.error) &&
+        !(info.error === 'responseTooManyFailedAttempts' && info.status === 429))
+    ) {
       return null
     }
     const message = readCodexErrorMessage(payload)

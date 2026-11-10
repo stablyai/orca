@@ -240,6 +240,24 @@
     }
   },
   "browser": {
+    "passwords": {
+      "savePrompt": {
+        "open": "Aufforderung zum Speichern des Passworts",
+        "updateTitle": "Passwort aktualisieren?",
+        "saveTitle": "Passwort speichern?",
+        "username": "Benutzername",
+        "password": "Passwort",
+        "never": "Nie für diese Website",
+        "notNow": "Jetzt nicht",
+        "update": "Aktualisieren",
+        "save": "Speichern"
+      },
+      "fill": {
+        "noUsername": "(kein Benutzername)",
+        "title": "Gespeicherte Anmeldungen",
+        "otherLogins": "Weitere Anmeldungen auf dieser Website"
+      }
+    },
     "loadFailure": {
       "connectionNotSecure": "Die Verbindung ist nicht sicher",
       "cantReachHost": "{{value0}} ist nicht erreichbar",
@@ -952,22 +970,6 @@
         "invalid": "Eine gültige Proxy-URL eingeben.",
         "unsupportedProtocol": "Eine Proxy-URL mit http, https, socks, socks4 oder socks5 verwenden.",
         "missingHost": "Die Proxy-URL muss einen Host enthalten."
-      }
-    },
-    "voice": {
-      "modelDescriptions": {
-        "parakeetV3": "Höchste Genauigkeit für 25 europäische Sprachen. Zeichensetzung, Groß- und Kleinschreibung und Zeitstempel auf Wortebene.",
-        "parakeetV2": "Nur Englisch. Schneller als v3 bei ähnlicher Genauigkeit. Zeichensetzung und Groß- und Kleinschreibung.",
-        "zipformerBilingual": "Chinesisch + Englisch mit Sprachwechsel. Echtzeit-Streaming mit geringer Latenz.",
-        "paraformerBilingual": "Chinesisch (Mandarin + Dialekte) + Englisch. Stark bei Akzenten und regionalen Varianten des Chinesischen.",
-        "zipformerStreamingEnRetired": "Wird nicht mehr angeboten: Es verschluckt den Anfang von Sätzen. Löschen Sie es, um Speicherplatz freizugeben.",
-        "zipformerStreamingZh": "Nur Chinesisch. Sehr schlankes Modell mit 14 Mio. Parametern, ideal für Geräte mit wenig Ressourcen.",
-        "zipformerStreamingKo": "Nur Koreanisch. Echtzeit-Streaming mit geringer Latenz.",
-        "parakeetJa": "Nur Japanisch. Mit über 35.000 Stunden natürlicher Sprache trainiert. Mit Zeichensetzung.",
-        "whisperTiny": "Über 90 Sprachen. Geringere Genauigkeit als Parakeet, aber die größte Sprachabdeckung.",
-        "senseVoice": "Chinesisch, Englisch, Japanisch, Koreanisch und Kantonesisch mit automatischer Erkennung der gesprochenen Sprache.",
-        "gpt4oMiniTranscribe": "Cloud-Transkription mit hoher Genauigkeit und geringen Kosten. Benötigt einen OpenAI-API-Schlüssel.",
-        "gpt4oTranscribe": "Cloud-Transkription mit höherer Genauigkeit. Benötigt einen OpenAI-API-Schlüssel."
       }
     },
     "diagnostics": {
@@ -2787,7 +2789,7 @@
         "untitled": "Unbenannter Chat",
         "listLabel": "Chats, die fortgesetzt würden",
         "dontAskAgain": "Nicht erneut fragen (automatisch fortsetzen)",
-        "dontAskAgainHint": "Lässt sich unter Einstellungen → Experimentell → Chat-Oberfläche deaktivieren.",
+        "dontAskAgainHint": "Lässt sich unter Einstellungen → Chat → Verhalten deaktivieren.",
         "selectAgent": "{{value0}}-Chat „{{value1}}“ in {{value2}} fortsetzen",
         "dismissAll": "Alle verwerfen",
         "viewChats": "Chats anzeigen",
@@ -3721,7 +3723,6 @@
             "a3346fc6ed": "Worktree-Erstellung abbrechen",
             "532aea14ce": "Abbrechen",
             "767951265d": "Beim Erstellen des Worktrees ist ein Fehler aufgetreten.",
-            "vmProvisioningTitle": "VM wird bereitgestellt",
             "cancelProvisioning": "Abbrechen",
             "vmProvisioningLogEmpty": "Warten auf Rezeptausgabe…"
           }
@@ -4205,6 +4206,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "Aktivieren"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "Für ein anderes Fenster angepasst",
+            "fitHere": "Hier anpassen"
           }
         }
       },
@@ -4307,7 +4312,6 @@
             "4f327c8b3d": "Markdown öffnen…",
             "3d5d6c960d": "Neue Markdown-Datei erstellen",
             "fd2b42aaa3": "Neuen Mobilgeräte-Emulator erstellen",
-            "aea43b5748": "Den vorhandenen Emulator-Tab öffnen.",
             "b426bb2615": "Zum Mobilgeräte-Emulator wechseln",
             "4833fb2cbe": "Neuen Browser-Tab öffnen",
             "d364f3c8d4": "Neues Terminal öffnen",
@@ -5042,6 +5046,9 @@
             "accounts": "Gespeicherte Antigravity-Konten",
             "readAgo": "Ausgelesen {{time}}",
             "notRead": "Nutzung unbekannt: noch nicht ausgelesen"
+          },
+          "InlineUsageBars": {
+            "resetsAt": "Zurücksetzung um {{when}}"
           }
         }
       },
@@ -5969,7 +5976,10 @@
           "69f5b5380d": "Wird geklont…",
           "cloneOnHostDescription": "Die Git-URL eingeben und einen Speicherort zum Klonen auf {{value0}} auswählen.",
           "cloneParentFolder": "Übergeordneter Ordner",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "Ordnername",
+          "cloneFolderTakenByRepo": "„{{value0}}“ in diesem Ordner ist bereits ein anderes Repository, daher braucht dieser Klon einen eigenen Ordner.",
+          "cloneFolderNotEmpty": "„{{value0}}“ existiert in diesem Ordner bereits, daher braucht dieser Klon einen eigenen Ordner."
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "Schließen",
@@ -6163,8 +6173,6 @@
           "888b83bf78": "Setup-Skript konnte nicht gespeichert werden",
           "a49196d538": "Wird ausgeführt, wenn Orca einen neuen Worktree erstellt.",
           "savedSetupCommand": "Setup-Befehl gespeichert.",
-          "savedWithSkippedFields_one": "{{count}} nicht unterstütztes Feld übersprungen. Setup-Befehl gespeichert.",
-          "savedWithSkippedFields_other": "{{count}} nicht unterstützte Felder übersprungen. Setup-Befehl gespeichert.",
           "savedInProjectSettings": "In den <settings>Einstellungen dieses Projekts</settings> gespeichert"
         },
         "SetupScriptPromptCardViews": {
@@ -6177,13 +6185,12 @@
           "eefa756190": "Manuell konfigurieren",
           "ca4efcbc25": "Speichern",
           "fdbc6cb064": "Erkanntes Setup-Skript",
-          "7275f674cc": "Erkanntes Setup",
           "822ff300ad": "Ausblenden",
           "5bfd5c8779": "Setup-Skripte ausblenden",
-          "detectedFromSource": "In <source>{{source}}</source> erkannt",
           "ignoresSharedSetup": "Dieses Repo ignoriert gemeinsame Einrichtungsskripte aus <yaml>orca.yaml</yaml>. Einen lokalen Befehl hinzufügen oder die Quelle in den Einstellungen ändern.",
-          "foundSetupCommandIn": "Ein Einrichtungsbefehl wurde in <source>{{source}}</source> gefunden. Speichern, um ihn für neue Worktrees auszuführen.",
-          "reviewSetupScript": "Einrichtungsskript prüfen"
+          "reviewSetupScript": "Einrichtungsskript prüfen",
+          "7275f674cc": "Erkanntes Setup",
+          "detectedFromSource": "In <file>{{source}}</file> erkannt"
         },
         "SetupScriptReviewDialog": {
           "title": "Einrichtungsskript prüfen",
@@ -8573,7 +8580,6 @@
           "f828e1de19": "- mit dem Team geteilt",
           "673a7fd10e": "Wird geprüft…",
           "5426ecbdcb": "Lokale Skripte werden nicht ausgeführt",
-          "b2b06c7ce8": "Verfügbare Umgebungsvariablen (für Details mit der Maus darüberfahren):",
           "95a0411b3e": "Vorlage",
           "175daba180": "Beispiel",
           "b20c5df6ca": "Eine Datei `orca.yaml` hinzufügen, um gemeinsame Standardwerte für Einrichtung, Archivierung oder Issue-Automatisierung in diesem Repository zu aktivieren. Beispielvorlage:",
@@ -8927,7 +8933,6 @@
           "7807c11c4d": "Allgemein",
           "6855b0f77d": "Die grundlegenden Abläufe abschließen, die Orca für die parallele Arbeit mit Agenten nützlich machen.",
           "6d119427ef": "Checkliste für den Einstieg",
-          "eb1176a14e": "Lokales Sprachdiktat mit Modellen auf dem Gerät.",
           "5063bb47a5": "Spracheingabe",
           "7118953f14": "Agenten die Steuerung beliebiger Apps auf dem Computer ermöglichen.",
           "c9841721cb": "Computersteuerung",
@@ -9442,7 +9447,6 @@
         "VoicePane": {
           "6fa734ed95": "{{value0}} löschen",
           "68de13f72c": "Modell konnte nicht gelöscht werden.",
-          "1ba81c0ff0": "empfohlen",
           "cfde55c7b0": "Modell konnte nicht heruntergeladen werden.",
           "43fd4f454b": "Spracherkennungsmodell",
           "ba4a900d1d": "Diktatmodus",
@@ -9453,10 +9457,6 @@
           "506df81ba6": "OpenAI-API-Schlüssel gespeichert",
           "91980ce124": "{{value0}} MB",
           "61a16c8141": "Wird entpackt…",
-          "8f4d2a51d7": "offline",
-          "d504ab05f0": "Streaming",
-          "fbe5990716": "Modell auswählen",
-          "e24f7d43d2": "Ein Spracherkennungsmodell auswählen. Lokale Modelle funktionieren offline; Cloud-Modelle benötigen einen API-Schlüssel.",
           "174da92062": "Gedrückt halten",
           "118b3c2dee": "Umschalten",
           "ad5d036ecc": "Mikrofonberechtigung konnte nicht angefordert werden. Das Diktat wurde nicht aktiviert.",
@@ -9464,8 +9464,11 @@
           "1eac933202": "Die macOS-Einstellungen „Privacy & Security“ wurden geöffnet. Nach der Zugriffsfreigabe das Diktat erneut aktivieren.",
           "cd9fe37556": "Mikrofonberechtigung erteilt",
           "openAiKeyName": "OpenAI-Transkriptionsschlüssel",
-          "dictationShortcutDescription": "Mit {{shortcut}} Text in den jeweils fokussierten Bereich diktieren.",
-          "dictationModesDescription": "Umschalten: {{shortcut}} einmal zum Starten und erneut zum Stoppen drücken. Gedrückt halten: Diktieren, solange {{shortcut}} gedrückt bleibt."
+          "dictationModeAuto": "Automatisch",
+          "dictationModesWithAutoDescription": "Automatisch: Halten Sie {{shortcut}} gedrückt, um bis zum Loslassen zu diktieren, oder tippen Sie kurz zum Starten und Stoppen. Gedrückt halten: Diktieren, solange {{shortcut}} gedrückt bleibt. Umschalten: {{shortcut}} einmal zum Starten und erneut zum Stoppen drücken.",
+          "speechGpuLabel": "GPU verwenden",
+          "speechGpuDescription": "Sprache auf der Grafikkarte erkennen, wenn sie funktioniert, und auf der CPU, wenn sie versagt. Deaktivieren, wenn das Diktieren Ihren Computer einfrieren oder neu starten lässt.",
+          "updateToFasterVersion": "Auf die schnellere Version aktualisieren ({{value0}} MB)"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} entfernen",
@@ -11293,7 +11296,13 @@
               "modelUnloadTitle": "Sprachmodell entladen",
               "modelUnloadDescription": "Lege fest, wann das lokale Sprachmodell aus dem Speicher entladen wird.",
               "modelUnloadKeyword": "entladen",
-              "modelMemoryKeyword": "speicher"
+              "modelMemoryKeyword": "speicher",
+              "fillerWordsTitle": "Füllwörter entfernen",
+              "fillerWordsDescription": "Entfernt „äh“, „ähm“ und ähnliche Laute aus diktiertem Text.",
+              "fillerWordsKeyword": "füllwörter",
+              "vocabularyTitle": "Wortschatz",
+              "vocabularyDescription": "Namen und Code-Begriffe, die das Diktat auf deine Weise schreibt, für dich oder ein Repo.",
+              "vocabularyKeyword": "wörterbuch"
             }
           }
         },
@@ -16302,6 +16311,7 @@
           "kernelStartFailed": "Der Kernel konnte nicht gestartet werden.",
           "noPython": "Python wurde auf diesem Computer nicht gefunden. Python von [python.org](https://www.python.org/downloads/) installieren und die Zelle dann erneut ausführen.",
           "kernelDied": "Der Kernel ist abgestürzt.",
+          "outputTruncated": "Ausgabe gekürzt: Orca hat den Anfang der Ausgabe dieser Zelle behalten und den Rest verworfen. Um alles zu behalten, schreibe sie stattdessen in eine Datei.",
           "localOnly": "Notebook-Zellen können nur für Dateien auf diesem Computer ausgeführt werden.",
           "pythonOnly": "In Orca können nur Python-Notebooks ausgeführt werden.",
           "ownerUnresolved": "Orca kann noch nicht feststellen, auf welchem Computer sich dieses Notebook befindet. Daher können seine Zellen nicht ausgeführt werden.",
@@ -16961,12 +16971,14 @@
           "noModel": "Kein Sprachmodell ausgewählt. Laden Sie eines unter Einstellungen > Spracheingabe herunter.",
           "disabled": "Spracheingabe ist deaktiviert. Aktivieren Sie sie unter Einstellungen > Spracheingabe.",
           "notReady": "Sprachmodell nicht bereit. Laden Sie es unter Einstellungen > Spracheingabe herunter.",
+          "modelNeedsUpdate": "Ihr Sprachmodell braucht ein Update, um weiter zu funktionieren. Aktualisieren Sie es unter Einstellungen > Spracheingabe auf die schnellere Version.",
           "unknownModel": "Das ausgewählte Modell ist nicht mehr verfügbar. Wählen Sie unter Einstellungen > Spracheingabe ein anderes aus.",
           "5d2c3e7ae3": "Keine Sprache erkannt.",
           "micFallback": "Ausgewähltes Mikrofon nicht verfügbar. Systemstandard wird verwendet.",
           "micDisconnected": "Mikrofon getrennt. Diktat gestoppt.",
           "cloudLimitReached": "Diktat am 10-Minuten-Limit der Cloud gestoppt.",
-          "stoppedAfterSilence": "Nach einer Minute Stille beendet"
+          "stoppedAfterSilence": "Nach einer Minute Stille beendet",
+          "retryUnmatched": "Beim erneuten Versuch war nicht erkennbar, welche Wörter schon eingegeben waren, daher wurden alle eingefügt."
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "Das Diktat konnte nicht eingefügt werden und wurde in die Zwischenablage kopiert.",
@@ -16974,13 +16986,21 @@
           "lost": "Das Diktat konnte weder eingefügt noch kopiert werden."
         },
         "DictationIndicator": {
-          "335e1bc6cb": "Diktat stoppen",
-          "7f3660a7ba": "Mikrofon wird gestartet…",
-          "f082d0cb9d": "Wird verarbeitet…",
-          "3de5a129e7": "Hört zu",
           "4977162383": "Zu laut",
-          "25f2b7a6a5": "Sprache erkannt",
-          "loadingModel": "Sprachmodell wird geladen…"
+          "finishing": "Wird abgeschlossen…",
+          "listening": "Hört zu…",
+          "cancel": "Abbrechen",
+          "finish": "Fertig",
+          "oneMinuteLeft": "Noch eine Minute.",
+          "sendsWhenLanded": "Sendet, sobald der Text da ist",
+          "entersWhenLanded": "Drückt Enter, sobald der Text da ist"
+        },
+        "DictationPillFailure": {
+          "discard": "Aufnahme verwerfen",
+          "modelFailed": "Modell nicht geladen.",
+          "transcribeFailed": "Nicht erkannt. Aufnahme behalten.",
+          "openSettings": "Einstellungen",
+          "retry": "Wiederholen"
         }
       },
       "dashboard": {
@@ -17139,10 +17159,6 @@
                     }
                   },
                   "browser": {
-                    "grab": {
-                      "title": "Seitenkontext für Agenten erfassen",
-                      "body": "Mit dem Erfassungswerkzeug den Kontext eines Seitenelements für Agenten kopieren."
-                    },
                     "annotate": {
                       "title": "Design-Feedback direkt auf der Seite markieren",
                       "body": "Elemente mit Anmerkungen versehen und diese Notizen an einen Agenten senden."
@@ -17275,7 +17291,6 @@
             "244266c122": "Importieren…",
             "e52a955e6f": "Diese Funktion ist jederzeit unter Einstellungen > Browser verfügbar.",
             "4f5ffaa6a1": "Browserdaten importieren",
-            "b24fef25be": "Importieren",
             "02e89014c5": "{{value0}} Cookies aus {{value1}}{{value2}} importiert.",
             "d40d584769": "{{value0}} Cookies aus Datei importiert."
           },
@@ -17337,7 +17352,6 @@
             "4328a0a062": "Erfassung fehlgeschlagen: {{value0}}",
             "759f32af29": "Wird heruntergeladen",
             "4300f38145": "Wird von {{value0}}{{value1}} heruntergeladen",
-            "acbe79fd01": "Seitenelement erfassen ({{value0}})",
             "cc4a071d3a": "Seitenelement mit Anmerkung versehen ({{value0}})",
             "572046436a": "Entfernter Browser",
             "b313a7275b": "Entfernter Browser wird geöffnet",
@@ -19204,7 +19218,9 @@
     },
     "native-chat": {
       "install": {
-        "checking": "Es wird geprüft, ob {{agent}} auf diesem Host bereit ist…"
+        "checking": "Es wird geprüft, ob {{agent}} auf diesem Host bereit ist…",
+        "cliInstall": "Installieren",
+        "cliRecheck": "Erneut prüfen"
       },
       "reasoning": "Denkprozess",
       "failureWords": {
@@ -19250,6 +19266,11 @@
         "providerExitedRow": "{{agent}} wurde während dieser Antwort gestoppt. Die Unterhaltung kann fortgesetzt werden.",
         "providerExitedRejection": "{{agent}} wurde gestoppt, bevor diese Nachricht gesendet wurde.",
         "providerExitedAnswer": "{{agent}} wurde gestoppt, daher wurde die Antwort nicht gesendet. Zum Fortfahren eine Nachricht senden.",
+        "providerUnavailable": "{{agent}} konnte nicht antworten, weil der Dienst ausgelastet ist. Wähle ein anderes Modell oder warte kurz und sende erneut.",
+        "providerSafetyStopped": "{{agent}} hat diese Antwort nach einer Sicherheitsprüfung gestoppt. Überprüfe deine Anfrage und sende sie erneut.",
+        "providerResponseFailed": "{{agent}} konnte diese Antwort nicht abschließen. Öffnen Sie die Details für weitere Informationen.",
+        "modelUnavailable": "{{agent}} konnte {{detail}} nicht verwenden. Ein anderes Modell auswählen und erneut senden.",
+        "selectedModel": "das ausgewählte Modell",
         "providerRejected": "{{agent}} hat diese Nachricht nicht angenommen.",
         "providerRejectedQuoted": "{{agent}} hat diese Nachricht nicht angenommen: {{detail}}.",
         "attachmentEmpty": "Ein Bild in dieser Nachricht ist leer, daher wurde die Nachricht nicht gesendet.",
@@ -19453,6 +19474,7 @@
         "orcaStopCanContinue": "Die Unterhaltung kann fortgesetzt werden.",
         "orcaStopUnnamedServer": "dem entfernten Server",
         "permissionDenied": "{{agent}} hat die Berechtigung verweigert. Details anzeigen.",
+        "safetyReviewApproved": "{{agent}} hat diese Aktion genehmigt. Details anzeigen.",
         "safetyReview": "{{agent}} hat eine Warnung zur Sicherheitsprüfung gemeldet. Details anzeigen.",
         "truncatedResponse": "Anbieterantwort gekürzt (ursprüngliche Größe: {{bytes}} Bytes).",
         "forkedFrom": "Abgezweigt von"
@@ -19479,6 +19501,7 @@
         "noCommands": "Keine passenden Befehle",
         "commands": "Befehle",
         "skills": "Skills",
+        "checkingSkills": "Nach neuen Skills wird gesucht…",
         "loadingSkills": "Skills werden geladen…",
         "skillsLoaded": "Skills geladen",
         "clearDescription": "Unterhaltungskontext leeren",
@@ -19747,6 +19770,8 @@
         "showAgent": "{{value0}} im Gespräch anzeigen"
       },
       "jumpToLatest": "Zur neuesten Nachricht springen",
+      "newRowsAnnouncement": "Während der Abwesenheit sind neue Nachrichten eingegangen",
+      "newRowsMarker": "Neu",
       "find": {
         "label": "Im Chat suchen",
         "noResults": "Keine Ergebnisse",
@@ -19932,7 +19957,8 @@
       "contextUsage": {
         "label": "Kontext: {{used}} von {{window}} Token, {{percent}} % genutzt",
         "title": "Kontext",
-        "estimated": "Anhand der letzten Antwort geschätzt."
+        "estimated": "Anhand der letzten Antwort geschätzt.",
+        "deferredNote": "Bei Bedarf geladen. Nicht in der Nutzung enthalten."
       },
       "contextMenu": {
         "copyOrcaSessionId": "Orca-Sitzungs-ID kopieren",
@@ -20189,8 +20215,10 @@
       "composerWorkspace": {
         "copyFailed": "Kopieren fehlgeschlagen",
         "copyIdentity": "{{value0}} kopieren",
+        "detachedCommit": "Commit {{head}} (kein Branch)",
         "folder": "Ordner",
         "mainCheckout": "Haupt-Checkout",
+        "turnWorking": "Der Agent dieses Chats arbeitet. Wechsle den Branch, wenn sein Zug beendet ist.",
         "worktree": "Worktree"
       },
       "explicitChatWindows": "Der Chat dieses Agenten ist unter Windows noch nicht verfügbar. Öffne ihn stattdessen in einem Terminal.",
@@ -20613,6 +20641,9 @@
         "scrollToLatestOnSendTitle": "Beim Senden zur neuesten Nachricht scrollen",
         "scrollToLatestOnSendCopy": "Senden im hochgescrollten Zustand springt zur neuesten Nachricht und folgt der Antwort. Deaktiviere dies, um deine Position zu behalten.",
         "scrollToLatestOnSendSearchPosition": "Position",
+        "markNewMessagesTitle": "Neue Nachrichten bei der Rückkehr in einen Chat markieren",
+        "markNewMessagesCopy": "Bei der Rückkehr in einen Chat erscheint eine Neu-Linie über dem, was in deiner Abwesenheit eingegangen ist. Warst du bei der neuesten Nachricht, scrollt der Chat dorthin.",
+        "markNewMessagesSearchUnread": "ungelesen",
         "inlineVisualsTitle": "Eingebettete Grafiken",
         "inlineVisualsCopy": "Dem Agenten erlauben, Diagramme, Schaubilder und Mockups in seinen Antworten anzuzeigen. Gilt für neu gestartete Chats.",
         "inlineVisualsToggleLabel": "Eingebettete Grafiken umschalten",
@@ -20654,7 +20685,96 @@
           "cloud": "Cloud-Modelle laufen auf den Servern des Anbieters, daher bleibt hier nichts geladen.",
           "never": "Nie",
           "immediately": "Sofort"
+        },
+        "fillerWords": {
+          "title": "Füllwörter entfernen",
+          "description": "Entfernt Laute wie „äh“ und „ähm“ aus diktiertem Text, passend zur Diktiersprache."
+        },
+        "sectionDescription": "Sprechen statt tippen, in jedem Bereich. Die Sprache wird auf diesem Computer erkannt, außer du wählst ein Cloud-Modell.",
+        "input": {
+          "title": "Eingabe",
+          "shortcut": "Tastenkürzel",
+          "shortcutDescription": "Startet das Diktieren im fokussierten Bereich.",
+          "changeShortcut": "Ändern"
+        },
+        "language": {
+          "title": "Sprache"
+        },
+        "cleanup": {
+          "title": "Bereinigung"
+        },
+        "advanced": {
+          "title": "Erweitert"
+        },
+        "setup": {
+          "downloadingDescription": "Du kannst diese Seite verlassen. Diktieren funktioniert, sobald der Download fertig ist.",
+          "title": "Diktieren einrichten",
+          "pickModel": "Sprechen statt tippen, in jedem Bereich. Lade unten ein Sprachmodell herunter; Modelle auf diesem Computer behalten deine Audiodaten hier.",
+          "microphoneMissingTitle": "{{microphone}} ist nicht verbunden",
+          "microphoneMissingDescription": "Diktieren nutzt das Standardmikrofon des Systems, bis es wieder da ist.",
+          "changeMicrophone": "Mikrofon ändern",
+          "onTitle": "Diktieren ist an",
+          "onLocal": "Drücke {{shortcut}} in einem beliebigen Bereich. {{model}} läuft auf diesem Computer.",
+          "onCloud": "Drücke {{shortcut}} in einem beliebigen Bereich. {{model}} läuft in der Cloud.",
+          "offTitle": "Diktieren ist aus",
+          "offDescription": "Schalte es ein, um mit {{shortcut}} in jedem Bereich zu diktieren.",
+          "savedMicrophone": "Dein Mikrofon",
+          "description": "Sprechen statt tippen, in jedem Bereich. Die Sprache wird auf diesem Computer erkannt, deine Audiodaten bleiben also hier.",
+          "setUp": "Einrichten",
+          "asksForMicrophone": "Orca fragt nach Zugriff auf das Mikrofon."
+        },
+        "quality": {
+          "unsupported": "Unterstützt deine Sprache nicht",
+          "unmeasured": "Nicht gemessen",
+          "poor": "Schwach",
+          "fair": "Mäßig",
+          "good": "Gut",
+          "veryGood": "Sehr gut",
+          "excellent": "Hervorragend",
+          "characterErrorRate": "{{percent}} % Zeichenfehlerrate",
+          "wordErrorRate": "{{percent}} % Wortfehlerrate",
+          "librispeech": "Test: LibriSpeech (vorgelesene Sprache), {{clips}} Clips, gemessen am {{date}}.",
+          "fleurs": "Test: FLEURS (vorgelesene Sprache), {{clips}} Clips, gemessen am {{date}}.",
+          "bench": "Orcas Benchmark auf einem Mac mit Apple Silicon.",
+          "label": "Qualität: {{word}}"
+        },
+        "models": {
+          "retired": "Wird nicht mehr angeboten. Lösche es, um Speicherplatz freizugeben.",
+          "sendsToOpenAi": "Sendet deine Audiodaten an OpenAI.",
+          "delete": "Löschen",
+          "cancelDownload": "Download abbrechen",
+          "inUse": "In Verwendung",
+          "use": "Verwenden",
+          "setUpCloud": "Einrichten",
+          "download": "Herunterladen",
+          "cloud": "Cloud",
+          "description": "Die Qualität ist für {{language}} bewertet. Fahre über eine Bewertung, um den Test dahinter zu sehen.",
+          "where": "Wo Modelle laufen",
+          "local": "Auf diesem Computer",
+          "cloudDescription": "Cloud-Modelle senden deine Audiodaten an den Anbieter. Modelle auf diesem Computer behalten sie hier.",
+          "sendsToCompatible": "Sendet deine Audiodaten an den Dienst, den du eingerichtet hast."
+        },
+        "vocabulary": {
+          "title": "Wortschatz",
+          "description": "Namen und Code-Begriffe, die du auf deine Weise geschrieben haben willst. Gib an, wie das Modell sie falsch hört, wenn es sie immer wieder verwechselt.",
+          "repoScope": "Nur beim Diktieren in {{repo}}.",
+          "personalScope": "In jedem Repo.",
+          "scope": "Begriffe für",
+          "personal": "Persönlich · {{total}}",
+          "repo": "{{repo}} · {{total}}",
+          "heardAsChip": "← {{heardAs}}",
+          "remove": "{{term}} entfernen",
+          "term": "Wort oder Wendung",
+          "heardAs": "Gehört als (optional)",
+          "heardAsLabel": "Gehört als",
+          "add": "Hinzufügen",
+          "repoNameHint": "Repo-Namen als Hinweis verwenden",
+          "repoNameHintDescription": "Hilft, den Namen des Repos zu erkennen.",
+          "repoSaveFailed": "Die Begriffe des Repos konnten nicht gespeichert werden. Auf dem Host dieses Repos ist eventuell ein Orca-Update nötig."
         }
+      },
+      "repositoryHooks": {
+        "availableEnvVars": "Verfügbare Umgebungsvariablen"
       }
     },
     "agentChildRow": {
@@ -21300,6 +21420,7 @@
       "switch": "Branch wechseln: {{branch}}",
       "search": "Branches suchen",
       "recover": "Zu {{branch}} wechseln",
+      "copy": "Branch-Namen kopieren",
       "create": "Branch {{name}} aus {{branch}} erstellen",
       "open": "Arbeitsbereich öffnen",
       "occupied": "Ausgecheckt in {{path}}",
@@ -21390,7 +21511,6 @@
       "sortRelevance": "Relevanteste",
       "sortNewest": "Neueste",
       "sortResultsAriaLabel": "Ergebnisse sortieren: {{value0}}",
-      "consent": "Volltextsuche aktivieren? Orca erstellt auf diesem Computer einen Index aus lokalen Agentenprotokollen, einschließlich vollständiger Unterhaltungen und bis zu 3.072 Zeichen pro Tool-Ausgabe. Inhalte werden nicht geschwärzt. Authentifizierte, gekoppelte Clients können den Index durchsuchen.",
       "remoteDisabled": "Die Suche ist auf diesem Computer deaktiviert. Dort die Indexierung von Protokollen aktivieren, um seine Sitzungen zu durchsuchen.",
       "titleOnly": "Die Volltextsuche ist auf diesem Computer deaktiviert. Daher werden nur Sitzungstitel durchsucht.",
       "notReady": "Der Suchindex ist noch nicht bereit. In Kürze erneut versuchen.",
@@ -21450,7 +21570,6 @@
       "description": "Alles durchsuchen, was Agenten auf diesem Computer und auf gekoppelten Orca-Servern gesagt und getan haben.",
       "searchDescription": "Die Sitzungssuche für diesen Computer und gekoppelte Server aktivieren oder Suchdaten löschen.",
       "indexComputers": "Innerhalb von Sitzungen suchen",
-      "computersConsent": "Jeder Computer speichert eine durchsuchbare Kopie seiner eigenen Agentenunterhaltungen und Tool-Ausgaben. Nichts verlässt diesen Computer.",
       "serverVersion": "Orca v{{version}}",
       "rowSwitchLabel": "Sitzungen auf {{host}} durchsuchen",
       "serverOffline": "Offline",
@@ -21851,11 +21970,11 @@
   "workspaceDeletion": {
     "preferenceSaveFailed": "Die Löscheinstellung konnte nicht gespeichert werden",
     "alwaysForceDelete": "Löschen immer erzwingen",
+    "alwaysForceDeleteDescription": "Gilt für alle zukünftigen Löschvorgänge von Arbeitsbereichen.",
     "moreActions": "Weitere Optionen zum erzwungenen Löschen",
-    "alwaysForceDeleteTooltip": "Gilt für alle zukünftigen Löschvorgänge von Arbeitsbereichen.",
     "moreBranchActions": "Weitere Optionen zum Löschen von Branches",
     "alwaysForceDeleteBranches": "Beibehaltene Branches immer löschen",
-    "alwaysForceDeleteBranchesTooltip": "Gilt für Branches, die nach zukünftigen Löschvorgängen von Arbeitsbereichen beibehalten werden.",
+    "alwaysForceDeleteBranchesDescription": "Gilt für Branches, die nach zukünftigen Löschvorgängen von Arbeitsbereichen beibehalten werden.",
     "moreDeleteOptions": "Weitere Löschoptionen",
     "alwaysDelete": "Immer löschen",
     "alwaysDeleteTooltip": "Diese Bestätigung bei zukünftigen Löschvorgängen überspringen."
@@ -22551,7 +22670,8 @@
     "refresh": "Aktualisieren",
     "restartLocal": "Lokalen Daemon neu starten",
     "killAllLocal": "Alle lokalen Sitzungen beenden",
-    "killFailed": "Das Terminal konnte nicht beendet werden. Die zuletzt beobachteten Sitzungen bleiben erhalten."
+    "killFailed": "Das Terminal konnte nicht beendet werden. Die zuletzt beobachteten Sitzungen bleiben erhalten.",
+    "metricDetails": "Metrikdetails"
   },
   "browserExtensions": {
     "permission": {
@@ -23560,5 +23680,34 @@
     "branchName": "Branch-Name",
     "invalidBranchName": "Dieser Branchname ist ungültig. Wähle einen anderen Namen.",
     "createBranchFailed": "Orca konnte den Branch nicht erstellen. Prüfe dieses Repository im Terminal und versuche es erneut."
+  },
+  "checks": {
+    "gitlabAllowedFailure": "Fehlschlag erlaubt"
+  },
+  "speechModelUpdate": {
+    "updateTitle": "Sprachmodell aktualisieren",
+    "updateDescription": "Die Diktierfunktion läuft jetzt mit einer schnelleren Engine. {{model}} muss einmalig heruntergeladen werden ({{size}} MB), bevor Sie wieder diktieren können.",
+    "update": "Aktualisieren",
+    "replacedTitle": "Ihr Sprachmodell wurde ersetzt",
+    "replacedDescription": "{{old}} läuft nicht mit der neuen Spracherkennung. {{model}} ersetzt es ({{size}} MB).",
+    "downloadReplacement": "{{model}} herunterladen",
+    "later": "Später",
+    "dismiss": "Schließen",
+    "updatingTitle": "{{model}} wird aktualisiert",
+    "downloadingTitle": "{{model}} wird heruntergeladen",
+    "downloadingDescription": "Sie können weiterarbeiten. Die Diktierfunktion ist wieder da, sobald dies abgeschlossen ist.",
+    "progress": "{{done}} von {{total}} MB",
+    "cancel": "Abbrechen",
+    "doneTitle": "Diktieren ist bereit",
+    "doneDescription": "{{model}} ist aktualisiert. Die alten Dateien wurden entfernt.",
+    "doneRetiredDescription": "{{model}} ist eingerichtet. Die alten Dateien von {{old}} sind noch auf dem Datenträger.",
+    "keep": "Behalten",
+    "deleteOld": "Altes Modell löschen",
+    "deleteFailed": "{{model}} konnte nicht gelöscht werden.",
+    "updateFailedTitle": "{{model}} konnte nicht aktualisiert werden",
+    "downloadFailedTitle": "{{model}} konnte nicht heruntergeladen werden",
+    "failedAtDescription": "Der Download wurde bei {{mb}} MB unterbrochen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+    "failedDescription": "Der Download wurde unterbrochen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+    "tryAgain": "Erneut versuchen"
   }
 }

@@ -9,7 +9,7 @@ import { VoicePane } from '../voice/VoicePane'
 import { SettingsSection } from '../section-layout/SettingsSection'
 import { SettingsHostScopeUnavailableNotice } from '../host-scope/SettingsHostScopePicker'
 import { LOCAL_SETTINGS_HOST_SCOPE } from '../host-scope/settings-host-scope'
-import { wslHostDistroForTarget } from '@/lib/wsl-host-account-owner'
+import { wslHostDistroForTarget } from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsRenderContext } from './settings-render-context'
@@ -177,8 +177,8 @@ export function renderDesktopCapabilitySettingsSections(
         id="voice"
         title={t('auto.components.settings.Settings.5063bb47a5', 'Voice')}
         description={t(
-          'auto.components.settings.Settings.eb1176a14e',
-          'Local speech-to-text dictation with on-device models.'
+          'components.settings.voice.sectionDescription',
+          'Talk instead of typing in any pane. Speech is recognized on this computer unless you pick a cloud model.'
         )}
         searchEntries={navigation.getSectionSearchEntries('voice')}
       >

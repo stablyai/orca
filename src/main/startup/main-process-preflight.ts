@@ -71,7 +71,7 @@ import { electronSpeechServiceFactories } from '../host/electron-speech-services
 import { setSpeechServiceFactories } from '../speech/speech-runtime-service'
 import { setWorktreeWatcherRemoval } from '../workspaces/removal/worktree-watcher-removal'
 import { desktopWorktreeWatcherRemoval } from '../ipc/filesystem/watchers/filesystem-watcher'
-import { setDefaultProxySessionResolver } from '../network/proxy-settings'
+import { setDefaultProxySessionResolver } from '../network/electron-default-proxy-session'
 import { initDataPath, getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { applyMacPressAndHoldDefaultAtStartup } from '../window/desktop-integration/macos-press-and-hold-default'
 import { configureSessionParseCachePersistence } from '../ai-vault/parse-cache/session-parse-cache-persistence'
@@ -102,7 +102,7 @@ import {
 import { mainProcessState as state } from './main-process-state'
 import { initializeSyntheticTitleRuntime } from './synthetic-title-runtime'
 import { initializeBrowserProcessUserAgent } from '../browser/identity/browser-process-user-agent'
-import { initializeBrowserIdentityModeStore } from '../browser/identity/browser-identity-mode-store'
+import { initializeBrowserIdentityModeStore } from '../browser/identity/mode/browser-identity-mode-store'
 import { acquireProfileStateRuntimeAdmission } from '../persistence/profile-state/profile-state-access'
 import { getActiveProfileStateLocation } from '../persistence/profile-state/profile-state-active-location'
 import {

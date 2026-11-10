@@ -1,4 +1,5 @@
 import type { ConnectionState } from '../transport/connection/connection-state'
+import { BRIDGE_APP_INACTIVE_FRAME } from './bridge/bridge-app-inactive'
 
 import { BridgeCapExceededError } from './bridge-host-errors'
 import { createNativeVerbServer } from './bridge-host-native-verbs'
@@ -67,6 +68,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   // re-handshake. Null is a page older than `storageKeys`, which gets the legacy keys only.
   let pageStorageKeys: readonly string[] | null = options.sessionBack?.storageKeys ?? null
   let pageReadsConnectionPath = options.sessionBack?.connectionPathFrames === true
+  let pageReadsAppInactive = options.sessionBack?.appInactiveFrames === true
 
   const frames = createBridgeHostFrames({
     post: options.post,
@@ -218,6 +220,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
       serving = true
       pageStorageKeys = message.storageKeys ?? null
       pageReadsConnectionPath = message.connectionPathFrames === true
+      pageReadsAppInactive = message.appInactiveFrames === true
       back.readReady()
       // Dropped like the Back claim: a page still showing a terminal claims again on this `init`.
       reportRailClaim(false)
@@ -331,11 +334,17 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     publishUiLocale: (next) => {
       routes.publishUiLocale(next, deliverable())
     },
+    sendAppInactive: () => {
+      if (pageReadsAppInactive && deliverable()) {
+        send({ v: BRIDGE_PROTOCOL_VERSION, type: BRIDGE_APP_INACTIVE_FRAME })
+      }
+    },
     sendBack: back.send,
     readSessionBack: () => ({
       ...back.read(),
       ...(pageStorageKeys === null ? {} : { storageKeys: pageStorageKeys }),
       ...(pageReadsConnectionPath ? { connectionPathFrames: true as const } : {}),
+      ...(pageReadsAppInactive ? { appInactiveFrames: true as const } : {}),
       ...(railClaimed ? { terminalKeyRailClaim: { inputOwner: railOwner } } : {})
     }),
     dispose

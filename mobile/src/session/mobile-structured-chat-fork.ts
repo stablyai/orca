@@ -1,7 +1,7 @@
 import { translate } from '../i18n/mobile-i18n'
 import { triggerError } from '../platform/haptics'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
-import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import type {
   StructuredAgentSessionCreateParams,
   StructuredAgentSessionForkSource
@@ -48,7 +48,7 @@ export function mobileChatForkTabPlacement(
  *  Resolves once the outcome is known, so the caller's action stays disabled until then. */
 export async function forkMobileStructuredChat(
   scope: ForkScope,
-  agent: AgentSessionHandleProvider,
+  agent: TuiAgent,
   forkFrom: StructuredAgentSessionForkSource
 ): Promise<void> {
   const agentName = TUI_AGENT_DISPLAY_NAMES[agent]

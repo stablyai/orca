@@ -1,20 +1,5 @@
-import type { BrowserClientHostCommandEvent } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
-import type {
-  BrowserClientPageRenderer,
-  BrowserClientPageRendererIdentity
-} from '../lifecycle/browser-client-page-cleanup'
+import type { BrowserClientPageRenderer } from '../renderer/browser-client-page-renderer-contract'
 import { BrowserClientPageCommandError } from './browser-client-page-command-failure'
-
-export function browserClientPageIdentity(
-  page: Pick<BrowserClientHostCommandEvent, 'browserPageId' | 'pageHostGeneration'>,
-  partition: string
-): BrowserClientPageRendererIdentity {
-  return {
-    partition,
-    browserPageId: page.browserPageId,
-    pageHostGeneration: page.pageHostGeneration
-  }
-}
 
 export function assertCurrentBrowserClientPageRenderer(renderer: BrowserClientPageRenderer): void {
   if (

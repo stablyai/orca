@@ -12,6 +12,8 @@ export function aiVaultLocalScanKey(args?: AiVaultListArgs): string {
 export function aiVaultLocalScanScopeKey(args?: AiVaultListArgs): string {
   return JSON.stringify({
     scopePaths: [...new Set(args?.scopePaths ?? [])].sort(),
-    includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions === true
+    includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions === true,
+    // A scope-only result lacks the newest sessions elsewhere, so it never serves a full request.
+    ...(args?.scopeOnly === true ? { scopeOnly: true } : {})
   })
 }

@@ -40,7 +40,7 @@ vi.mock('../../../store/index', () => ({
     getState: () => store
   })
 }))
-vi.mock('@/lib/chat-provider-agents', () => ({
+vi.mock('@/runtime/native-chat/agent-catalogs/chat-provider-agents', () => ({
   chatProviderAgents: () => ['claude', 'codex', 'antigravity'],
   useHostStructuredAgentsVersion: () => 0
 }))
@@ -79,7 +79,7 @@ vi.mock('@/runtime/hosts/installation/managed-runtime-install-status', async (im
 vi.mock('@/runtime/hosts/installation/use-managed-runtime-install', () => ({
   useManagedRuntimeInstall: () => runtime.current
 }))
-vi.mock('../../../components/provider-accounts/AntigravityChatSignInRow', () => ({
+vi.mock('../../../components/provider-accounts/use-antigravity-chat-sign-in', () => ({
   useAntigravityChatSignIn: () => ({ flow: null })
 }))
 vi.mock(

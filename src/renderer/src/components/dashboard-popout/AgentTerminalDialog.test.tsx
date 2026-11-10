@@ -123,3 +123,24 @@ it.each([false, true])(
     )
   }
 )
+
+it('shows last messages when a card has no live terminal', () => {
+  const { rerender } = render(
+    <AgentTerminalPanel
+      card={card({
+        ptyId: null,
+        lastUserMessage: 'Roll out rc-18',
+        lastAgentMessage: 'Rollout finished'
+      })}
+      onOpenChange={() => {}}
+      onReveal={() => {}}
+    />
+  )
+  expect(screen.getByText('Roll out rc-18')).toBeInTheDocument()
+  expect(screen.getByText('Rollout finished')).toBeInTheDocument()
+
+  rerender(
+    <AgentTerminalPanel card={card({ ptyId: null })} onOpenChange={() => {}} onReveal={() => {}} />
+  )
+  expect(screen.queryByText('Rollout finished')).not.toBeInTheDocument()
+})

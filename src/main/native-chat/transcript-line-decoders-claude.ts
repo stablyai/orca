@@ -209,3 +209,26 @@ function parseTimestamp(value: unknown): number | null {
   const parsed = timestampMs(value)
   return Number.isFinite(parsed) ? parsed : null
 }
+
+/** Anything but a typed record with no message, or a user record Claude flags as meta, may be a
+ *  turn: what a transcript nothing was sent in lacks. */
+export function mayBeClaudeConversationRecord(line: string): boolean {
+  let record: unknown
+  try {
+    record = JSON.parse(line)
+  } catch {
+    return true
+  }
+  if (!record || typeof record !== 'object' || Array.isArray(record)) {
+    return true
+  }
+  // A local command's caveat or output; the decoder still keeps any meta record it can show.
+  if ('isMeta' in record && record.isMeta === true && 'type' in record && record.type === 'user') {
+    return false
+  }
+  if ('message' in record) {
+    return true
+  }
+  const type = 'type' in record ? record.type : undefined
+  return typeof type !== 'string' || !type.trim() || type === 'user' || type === 'assistant'
+}

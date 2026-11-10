@@ -15,7 +15,9 @@ import {
   resolveGitHubWorkItemTarget
 } from '../../../../src/shared/github/work-item-target'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
-import { defineHostQuery } from '../../query/host-query'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../src/shared/execution-host'
+import { worktreeIdsEqual } from '../../../../src/shared/worktree/id'
+import { defineHostQuery, type HostQuerySignal, type HostSignalEvent } from '../../query/host-query'
 import {
   hostQueryKey,
   type HostQueryParams,
@@ -126,11 +128,27 @@ function keepCheckObservation(
   return pr ? { ...next, pr } : next
 }
 
-// No desktop signal for PR changes reaches the phone, so it revalidates on focus and polls while shown.
+// The desktop's own workspaces only: a relayed server's PR refreshes never reach this stream.
+function namesThisCheckout(event: HostSignalEvent, target: HostQueryTarget): boolean {
+  return (
+    event.type === 'pullRequestChanged' &&
+    target.exec === LOCAL_EXECUTION_HOST_ID &&
+    worktreeIdsEqual(event.worktreeId, target.worktree ?? '')
+  )
+}
+
+// Sent when a desktop PR refresh sees the PR change; changes no desktop refresh sees still wait for focus or the poll.
+const pullRequestChangedSignal: HostQuerySignal = {
+  events: ['pullRequestChanged'],
+  floorMs: 1_000,
+  matches: namesThisCheckout
+}
+
 export const prBranchReviewQuery = defineHostQuery({
   family: 'pr.forBranch',
   staleTime: 30_000,
   refetchOnWindowFocus: true,
+  signal: pullRequestChangedSignal,
   fetch: async (client, target, input: PrBranchInput, previous: PrBranchReview | undefined, read) =>
     keepCheckObservation(
       await loadPrBranchReview(
@@ -146,7 +164,8 @@ export const prBranchReviewQuery = defineHostQuery({
           branch: input.branch,
           headSha: input.head,
           // Only an action's read re-learns host status; revalidations reuse what this connection knows.
-          refresh: read.live
+          refresh: read.live,
+          previous
         }
       ),
       previous
@@ -157,12 +176,21 @@ export const prChecksQuery = defineHostQuery({
   family: 'pr.checks',
   staleTime: 15_000,
   refetchOnWindowFocus: true,
-  fetch: async (client, target, input: PrChecksInput): Promise<PRCheckDetail[]> => {
+  // The event also fires when the checks rollup moves, which the summary alone can't list.
+  signal: pullRequestChangedSignal,
+  fetch: async (
+    client,
+    target,
+    input: PrChecksInput,
+    _previous,
+    read
+  ): Promise<PRCheckDetail[]> => {
     const outcome = await fetchPRChecks(client, target.worktree ?? '', {
       prNumber: input.number,
       headSha: input.head,
       // Fork checks must use the PR's own repo identity.
-      prRepo: prRepoSlug(input)
+      prRepo: prRepoSlug(input),
+      refresh: read.live
     })
     if (!outcome.ok) {
       throw new Error(outcome.error)

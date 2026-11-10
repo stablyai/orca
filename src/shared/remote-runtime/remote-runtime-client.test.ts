@@ -15,9 +15,10 @@ import {
   publicKeyFromBase64,
   publicKeyToBase64
 } from './e2ee/node/e2ee-crypto'
-import { sendRemoteRuntimeRequest, subscribeRemoteRuntimeRequest } from './remote-runtime-client'
+import { sendRemoteRuntimeRequestOnSocket } from './requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from './requests/remote-runtime-subscription-transport'
 import { remoteRuntimeClientCapabilities } from './remote-runtime-client-capabilities'
-import { BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY } from '../browser-runtime-capabilities'
+import { BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY } from '../browser/runtime/browser-runtime-capabilities'
 
 const servers: WebSocketServer[] = []
 
@@ -41,7 +42,7 @@ describe('subscribeRemoteRuntimeRequest', () => {
     const onResponse = vi.fn()
     const onError = vi.fn()
 
-    const subscription = await subscribeRemoteRuntimeRequest(
+    const subscription = await subscribeRemoteRuntimeTransport(
       server.pairing,
       'terminal.subscribe',
       { terminal: 't1' },
@@ -73,7 +74,7 @@ describe('subscribeRemoteRuntimeRequest', () => {
     const server = await createSubscriptionServer()
     const onResponse = vi.fn()
     const onError = vi.fn()
-    const subscription = await subscribeRemoteRuntimeRequest(
+    const subscription = await subscribeRemoteRuntimeTransport(
       server.pairing,
       'network.browserTunnel',
       {},
@@ -107,7 +108,7 @@ describe('subscribeRemoteRuntimeRequest', () => {
       const onError = vi.fn()
       const onClose = vi.fn()
 
-      const subscription = await subscribeRemoteRuntimeRequest(
+      const subscription = await subscribeRemoteRuntimeTransport(
         server.pairing,
         'terminal.subscribe',
         { terminal: 't1' },
@@ -141,7 +142,18 @@ describe('sendRemoteRuntimeRequest', () => {
     const server = await createInvalidHandshakeServer()
 
     await expect(
-      sendRemoteRuntimeRequest(server.pairing, 'status.get', {}, 1000)
+      sendRemoteRuntimeRequestOnSocket(
+        server.pairing,
+        'status.get',
+        {},
+        1000,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined
+      )
     ).rejects.toMatchObject({
       code: 'invalid_runtime_response',
       pairingStage: 'host-identity'
@@ -152,7 +164,18 @@ describe('sendRemoteRuntimeRequest', () => {
     const server = await createOneShotServer({ sendUndecryptableResponse: true })
 
     await expect(
-      sendRemoteRuntimeRequest(server.pairing, 'status.get', {}, 1000)
+      sendRemoteRuntimeRequestOnSocket(
+        server.pairing,
+        'status.get',
+        {},
+        1000,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined
+      )
     ).rejects.toMatchObject({
       code: 'invalid_runtime_response',
       pairingStage: 'runtime'
@@ -168,13 +191,17 @@ describe('sendRemoteRuntimeRequest', () => {
     const closeSpy = vi.spyOn(WebSocketClient.prototype, 'close')
     const controller = new AbortController()
     try {
-      const request = sendRemoteRuntimeRequest(
+      const request = sendRemoteRuntimeRequestOnSocket(
         server.pairing,
         'skills.install',
         {},
         60_000,
         undefined,
-        controller.signal
+        undefined,
+        controller.signal,
+        undefined,
+        undefined,
+        undefined
       )
       await observed
 
@@ -194,7 +221,7 @@ describe('sendRemoteRuntimeRequest', () => {
       }
     })
 
-    await sendRemoteRuntimeRequest(
+    await sendRemoteRuntimeRequestOnSocket(
       server.pairing,
       'orchestration.federationControl',
       { dispatch: 'ctx_1' },
@@ -203,7 +230,12 @@ describe('sendRemoteRuntimeRequest', () => {
         orchestrationCapability: 'capability',
         orchestrationContractVersion: 1,
         orchestrationRequestId: 'mutation_1'
-      }
+      },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined
     )
 
     expect(receivedRequest).toMatchObject({

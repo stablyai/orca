@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { ChevronRight, ListTodo, type LucideIcon } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -13,8 +14,16 @@ type HomeHostSectionProps = {
   onOpen: (hostId: string) => void
 }
 
+// Home rebuilds its connected list on every connection tick; the same desktops draw the same section.
+const sameSection = (previous: HomeHostSectionProps, next: HomeHostSectionProps): boolean =>
+  previous.onOpen === next.onOpen &&
+  previous.connectedHosts.length === next.connectedHosts.length &&
+  previous.connectedHosts.every((host, at) => host === next.connectedHosts[at])
+
 /** Home's Tasks section, opening on a connected desktop. */
-export function MobileHomeTasksSection(props: HomeHostSectionProps) {
+export const MobileHomeTasksSection = memo(function MobileHomeTasksSection(
+  props: HomeHostSectionProps
+) {
   const t = useMobileTranslation()
   return (
     <HomeSection
@@ -25,7 +34,7 @@ export function MobileHomeTasksSection(props: HomeHostSectionProps) {
       pickerTitle={t('home.listFooter.hostPickerTitle', 'Open Tasks On')}
     />
   )
-}
+}, sameSection)
 
 function HomeSection(
   props: HomeHostSectionProps & {

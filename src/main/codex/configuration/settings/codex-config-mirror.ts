@@ -5,7 +5,7 @@ import {
   recoverInterruptedGuardedFileOperation,
   writeFileAtomically,
   writeFileAtomicallyIfUnchanged
-} from '../../../codex-accounts/fs-utils'
+} from '../../../filesystem/atomic-file-publication'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../homes/codex-home-paths'
 import {
   rebaseBundledMarketplaceSources,

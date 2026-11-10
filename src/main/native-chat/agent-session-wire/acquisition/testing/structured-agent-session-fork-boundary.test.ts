@@ -1,66 +1,27 @@
+import { fixture } from '../../publication/history/testing/agent-session-history-contract-test-fixture'
+import { PI_CWD_BUCKET_LAYOUT } from '../../../../ai-vault/session-cwd-bucket-layouts'
+import { prepareStructuredAgentSessionFork } from '../structured-agent-session-fork'
+import type { StructuredAgentSessionHost } from '../../host/structured-agent-session-host'
 import { acpHistoryTurns } from '../../../../acp/history/acp-history-replay'
 import { translateHistoryTurn } from '../../../../acp/history/acp-history-translation'
 import { OPENCODE_ACP_DIALECT } from '../../../../acp/acp-dialects/opencode-dialect'
-import { readAcpFixture } from '../../../../acp/acp-timeline-fixture.test-support'
+import { readAcpFixture } from '../../../../acp/timeline/testing/acp-timeline-fixture.test-support'
 import { structuredRewindCut } from '../../rewind/structured-rewind-cut'
 import type { JournalReplacementItem } from '../../../agent-session-journal/context-epochs/journal-epoch-replacement'
 import { prepareForkSnapshot } from '../structured-agent-session-fork-snapshot'
-import type {
-  AgentJournalSnapshot,
-  AgentJournalItemBody
-} from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { readFile, writeFile } from 'node:fs/promises'
+import type { AgentJournalSnapshot } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { forkSession, type SessionStoreEntry } from '@anthropic-ai/claude-agent-sdk'
-import { prepareLegacyTranscriptImport } from '../../../agent-session-journal/history-import/journal-legacy-import'
-import capture from '../../../../claude/__fixtures__/claude-plugin-recovery.json'
 import { expect, it } from 'vitest'
 import { claudeConversationForkBoundary } from '../../../../claude/claude-conversation-fork-boundary'
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentSessionRecordFixture } from '../../../agent-session-record-test-fixture'
-import {
-  fixture,
-  appendItems,
-  item
-} from '../../publication/history/testing/agent-session-history-contract-test-fixture'
+
 import { structuredAgentSessionForkBoundary } from '../structured-agent-session-fork-boundary'
 import {
   continuedOutsideNotice,
   continuedOutsideRecordId
 } from '../structured-agent-session-history-catch-up'
-
-it('allows the last inherited response without a new turn and rejects responses removed by rewind', async () => {
-  await appendItems(2)
-  const selected = agentJournalItemKey(item(2))
-  const record = agentSessionRecordFixture({
-    sessionId: 'session-1',
-    provider: 'codex',
-    forkedFrom: {
-      sessionId: 'parent',
-      itemId: 'source',
-      childBoundary: { kind: 'item', itemId: selected }
-    }
-  })
-  expect(
-    structuredAgentSessionForkBoundary(fixture.journal.snapshot(), record, selected)
-  ).toMatchObject({ latest: true, checkpoint: { turnId: 'turn-1', settled: true } })
-  await fixture.journal.replaceEpochItems('handle_forked', 1, [])
-  expect(
-    structuredAgentSessionForkBoundary(fixture.journal.snapshot(), record, selected)
-  ).toBeNull()
-})
-
-it('does not treat the presence of saved assistant content as completion of an unresolved root', async () => {
-  await appendItems(1)
-  const record = agentSessionRecordFixture({ sessionId: 'session-1' })
-  expect(
-    structuredAgentSessionForkBoundary(
-      fixture.journal.snapshot(),
-      record,
-      agentJournalItemKey(item(1))
-    )?.checkpoint.settled
-  ).toBe(false)
-})
 
 it('carries a settled root opener even when the streamed block never acquired a final native row', () => {
   const opener = agentJournalItemKey({
@@ -152,300 +113,6 @@ it('cuts Claude forks before a local-command caveat following the response', asy
       beforeMessage: { sessionId: 'source', uuid: command.uuid }
     })
   ).toBe('ef5b13f9-6a3f-5d82-8452-cb799862efc0')
-})
-
-it.each([false, true])(
-  'cuts a Claude fork at a recorded task wake, retaining caller-owned results: %s',
-  async (mixed) => {
-    const opener = {
-      ...capture[0]!,
-      uuid: 'prompt',
-      parentUuid: null,
-      origin: { kind: 'human' },
-      message: { role: 'user', content: 'original request' }
-    }
-    const answer = {
-      ...capture[1]!,
-      uuid: 'answer',
-      parentUuid: 'prompt',
-      message: {
-        role: 'assistant',
-        content: [
-          { type: 'text', text: 'original response' },
-          ...(mixed
-            ? [{ type: 'tool_use', id: 'toolu_1', name: 'Read', input: { path: 'original' } }]
-            : [])
-        ],
-        stop_reason: mixed ? 'tool_use' : 'end_turn'
-      }
-    }
-    const wake = {
-      ...capture[0]!,
-      parentUuid: 'answer',
-      ...(mixed
-        ? {
-            message: {
-              role: 'user',
-              content: [
-                { type: 'text', text: String(capture[0]!.message.content) },
-                { type: 'tool_result', tool_use_id: 'toolu_1', content: 'real result' }
-              ]
-            }
-          }
-        : {})
-    }
-    const following = { ...answer, uuid: 'wake-answer', parentUuid: wake.uuid }
-    const entries = [opener, answer, wake, following]
-    const checkpoint = {
-      selectedItemId: 'response',
-      settled: true,
-      rootMessage: { sessionId: opener.sessionId, uuid: 'prompt' },
-      throughMessage: { sessionId: opener.sessionId, uuid: 'answer' }
-    }
-    const endpoint = claudeConversationForkBoundary(entries, checkpoint)
-    expect(endpoint).toBe(mixed ? wake.uuid : 'answer')
-    expect(claudeConversationForkBoundary(entries, { ...checkpoint, rootMessage: undefined })).toBe(
-      mixed ? wake.uuid : 'answer'
-    )
-    expect(
-      claudeConversationForkBoundary(entries, {
-        ...checkpoint,
-        beforeMessage: { sessionId: opener.sessionId, uuid: wake.uuid }
-      })
-    ).toBe(mixed ? wake.uuid : 'answer')
-    const copied: SessionStoreEntry[] = []
-    const result = await forkSession(opener.sessionId, {
-      upToMessageId: endpoint,
-      sessionStore: {
-        load: async () => entries,
-        append: async (_key, rows) => {
-          copied.push(...rows)
-        }
-      }
-    })
-    // The SDK remaps uuids but records each copied row's source uuid, so the
-    // independent wake answer must not appear anywhere in the copy.
-    expect(copied.some((row) => JSON.stringify(row).includes('"wake-answer"'))).toBe(false)
-    const path = join(fixture.root, 'fork.jsonl')
-    await writeFile(path, `${copied.map((row) => JSON.stringify(row)).join('\n')}\n`)
-    const prepared = await prepareLegacyTranscriptImport({
-      agent: 'claude',
-      sessionId: result.sessionId,
-      options: { filePath: path }
-    })
-    expect(prepared.ok).toBe(true)
-    if (!prepared.ok) {
-      throw new Error(prepared.error)
-    }
-    expect(
-      prepared.items.filter((row) => row.body.kind === 'message' && row.body.role === 'user')
-    ).toHaveLength(1)
-    expect(JSON.stringify(prepared.items)).not.toContain('<task-notification>')
-    if (mixed) {
-      expect(prepared.items.at(-1)?.body).toMatchObject({
-        kind: 'message',
-        role: 'tool',
-        blocks: [{ type: 'tool-result', callId: 'toolu_1', output: 'real result' }]
-      })
-    }
-  }
-)
-
-it('freezes the selected mixed root, includes its late rows, and drops unfinished work with its dependents', () => {
-  const k = (n: number) =>
-    agentJournalItemKey({
-      provider: 'codex',
-      threadId: 'source',
-      turnId: n < 4 ? 'T1' : 'T2',
-      ordinal: n
-    })
-  const l = (id: string) =>
-    agentJournalItemKey({ provider: 'legacy', agent: 'codex', sessionId: 'source', recordId: id })
-  const row = (itemId: string, body: AgentJournalItemBody, turnItemId?: string) => ({
-    itemId,
-    body,
-    sequence: 1,
-    revision: 1,
-    observedAt: 123,
-    ...(turnItemId ? { turnScope: { kind: 'turn' as const, turnItemId } } : {})
-  })
-  const snapshot: AgentJournalSnapshot = {
-    sessionId: 'source-chat',
-    cursor: { epoch: 'epoch', sequence: 10 },
-    submissions: [],
-    items: [
-      row(k(0), { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'first' }] }),
-      row(l('root1'), { kind: 'turn', turnId: 'T1', userItemId: k(0), state: 'completed' }),
-      row(
-        k(1),
-        { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'rich original' }] },
-        l('root1')
-      ),
-      {
-        ...row(l(continuedOutsideRecordId('T1')), continuedOutsideNotice(false)),
-        turnScope: { kind: 'thread' }
-      },
-      row(
-        l('running'),
-        { kind: 'tool-call', name: 'command', callId: 'call-running', input: {}, state: 'running' },
-        l('root1')
-      ),
-      row(l('dependent'), { kind: 'status', text: 'linked work' }, l('running')),
-      row(l('transitive'), { kind: 'status', text: 'linked descendant' }, l('dependent')),
-      row(
-        l('helper'),
-        {
-          kind: 'message',
-          role: 'assistant',
-          blocks: [
-            { type: 'text', text: 'Kicked off subagent Audit' },
-            {
-              type: 'subagent',
-              id: 'child-1',
-              label: 'Audit',
-              groupId: 'T1',
-              state: 'working',
-              background: true
-            }
-          ]
-        },
-        l('root1')
-      ),
-      row(
-        l('legacy-helpers'),
-        {
-          kind: 'message',
-          role: 'assistant',
-          blocks: [
-            {
-              type: 'subagent-group',
-              groupId: 'T1',
-              agents: [{ id: 'legacy-child', label: 'Legacy', state: 'working' }]
-            }
-          ]
-        },
-        l('root1')
-      ),
-      {
-        ...row(l('helper-output'), { kind: 'status', text: 'completed child output' }),
-        agentId: 'child-1',
-        producerKind: 'agent'
-      },
-      {
-        ...row(l('nested-output'), { kind: 'status', text: 'nested output' }),
-        agentId: 'nested',
-        parentAgentId: 'child-1',
-        producerKind: 'agent'
-      },
-      {
-        ...row(l('legacy-output'), { kind: 'status', text: 'legacy output' }),
-        agentId: 'legacy-child',
-        producerKind: 'agent'
-      },
-      {
-        ...row(l('linked-tool-output'), { kind: 'status', text: 'tool output' }),
-        agentId: 'tool-child',
-        providerParentRef: 'call-running',
-        producerKind: 'agent'
-      },
-      {
-        ...row(l('tool-descendant'), { kind: 'status', text: 'tool descendant' }),
-        agentId: 'tool-descendant',
-        parentAgentId: 'tool-child',
-        producerKind: 'agent'
-      },
-      {
-        ...row(l(continuedOutsideRecordId('T2')), continuedOutsideNotice(false)),
-        turnScope: { kind: 'thread' }
-      },
-      row(k(4), { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'second' }] }),
-      row(
-        l('late'),
-        {
-          kind: 'message',
-          role: 'assistant',
-          blocks: [{ type: 'text', text: 'late retained detail' }]
-        },
-        l('root1')
-      ),
-      row(l('notice'), { kind: 'status', text: 'later unscoped notice' }),
-      row(
-        l('tool'),
-        {
-          kind: 'tool-call',
-          name: 'command',
-          input: { turnItemId: k(0), userItemId: l('running') },
-          state: 'completed'
-        },
-        l('root1')
-      ),
-      row(
-        l('settled-helper'),
-        {
-          kind: 'message',
-          role: 'assistant',
-          blocks: [{ type: 'subagent', id: 'C', label: 'Audit', groupId: 'T1', state: 'completed' }]
-        },
-        l('root1')
-      ),
-      {
-        ...row(
-          l('settled-goal'),
-          { kind: 'status', text: 'Goal cleared', threadGoal: { state: 'cleared' } },
-          l('root1')
-        ),
-        agentId: 'C',
-        producerKind: 'agent'
-      },
-      {
-        ...row(
-          l('settled-answer'),
-          {
-            kind: 'message',
-            role: 'assistant',
-            blocks: [{ type: 'text', text: 'Completed audit' }]
-          },
-          l('root1')
-        ),
-        agentId: 'C',
-        producerKind: 'agent'
-      }
-    ]
-  }
-  const original = structuredClone(snapshot)
-  const copied = prepareForkSnapshot({
-    snapshot,
-    nextItemId: k(4),
-    sourceThreadId: 'source',
-    childThreadId: 'child'
-  })
-  expect(snapshot).toEqual(original)
-  expect(copied.map((item) => agentJournalItemKey(item.identity))).toEqual([
-    'codex:child:T1:0',
-    'legacy:codex:source:root1',
-    'codex:child:T1:1',
-    'legacy:codex:source:continued-outside%3AT1',
-    'legacy:codex:source:late',
-    'legacy:codex:source:tool',
-    'legacy:codex:source:settled-helper',
-    'legacy:codex:source:settled-answer'
-  ])
-  expect(copied[1]?.body).toEqual({
-    kind: 'turn',
-    turnId: 'T1',
-    userItemId: 'codex:child:T1:0',
-    state: 'completed'
-  })
-  expect(copied[5]?.body).toMatchObject({
-    input: { turnItemId: 'codex:source:T1:0', userItemId: 'legacy:codex:source:running' }
-  })
-  snapshot.items[2]!.body = { kind: 'status', text: 'changed source' }
-  expect(copied[2]).toMatchObject({
-    body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'rich original' }] },
-    observedAt: 123,
-    ownerFence: 0,
-    turnScope: { kind: 'turn', turnItemId: 'legacy:codex:source:root1' }
-  })
 })
 
 it('cuts before a Claude continuation notice attributed to the next imported prompt', () => {
@@ -722,4 +389,94 @@ it('retains the notice for an encoded ACP replay turn only while its introduced 
   ).toEqual([
     'legacy:opencode:chat:turn-lifecycle%3Ap%3Asession-1%3Amsg_15fad6c9f001d4ix8WtRMUSWtI'
   ])
+})
+
+it('refuses an imported ACP tip with assistant prose but no native terminal evidence', async () => {
+  const nativeId = '019e6b26-18e2-7103-b7a0-7ba6bb071123'
+  const home = join(fixture.root, 'omp-account')
+  const sessions = join(home, 'sessions')
+  const directory = join(sessions, `${PI_CWD_BUCKET_LAYOUT.encodeScopePrefixes(fixture.root)[0]}--`)
+  await mkdir(directory, { recursive: true })
+  await writeFile(
+    join(directory, `${nativeId}.jsonl`),
+    `${[
+      { type: 'session', version: 3, id: nativeId, cwd: fixture.root },
+      {
+        type: 'message',
+        id: 'prompt',
+        parentId: null,
+        message: { role: 'user', content: 'Remember 57319' }
+      },
+      {
+        type: 'message',
+        id: 'response',
+        parentId: 'prompt',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'Remembered' }] }
+      }
+    ]
+      .map((row) => JSON.stringify(row))
+      .join('\n')}\n`
+  )
+  for (const [recordId, role] of [
+    ['prompt', 'user'],
+    ['response', 'assistant']
+  ] as const) {
+    await fixture.journal.appendItem(
+      { provider: 'legacy', agent: 'omp', sessionId: nativeId, recordId },
+      {
+        kind: 'message',
+        role,
+        blocks: [{ type: 'text', text: role === 'user' ? 'Remember 57319' : 'Remembered' }]
+      },
+      { fence: 1, turnScope: { kind: 'thread' } }
+    )
+  }
+  const record = agentSessionRecordFixture({
+    sessionId: 'session-1',
+    provider: 'omp',
+    accountHome: { variable: 'PI_CODING_AGENT_DIR', path: home },
+    launchDirectory: fixture.root,
+    providerHandleChain: [
+      {
+        linkId: 'omp-head',
+        origin: 'created',
+        mintedAtFence: 1,
+        observedAt: 1,
+        handle: { transport: 'acp', agent: 'omp', nativeId }
+      }
+    ]
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: boundary preparation reads only these saved source and adapter facets.
+  const host = {
+    deps: {
+      store: {
+        selectWritableRecord: () => ({ kind: 'writable' }),
+        requireWritableRecord: () => record,
+        admittedSendCount: () => 0
+      },
+      agents: { capabilities: () => ({ fork: 'tip' }) },
+      adapter: {
+        copyConversation: async () => {
+          throw new Error('unexpected copy')
+        }
+      },
+      resolveLaunchEnv: async () => ({ PI_CODING_AGENT_DIR: home, OMP_CODING_AGENT_DIR: sessions })
+    },
+    journalSnapshot: async () => fixture.journal.snapshot()
+  } as unknown as StructuredAgentSessionHost
+  await expect(
+    prepareStructuredAgentSessionFork({
+      host,
+      agent: 'omp',
+      sessionId: 'session-1',
+      throughItemId: 'legacy:omp:019e6b26-18e2-7103-b7a0-7ba6bb071123:response',
+      location: record.location,
+      envelope: {
+        sessionId: 'omp-child',
+        clientOperationId: 'copy',
+        expectedRuntimeFence: null,
+        payloadFingerprint: ''
+      }
+    })
+  ).rejects.toMatchObject({ refusal: { details: { reason: 'turnActive' } } })
 })

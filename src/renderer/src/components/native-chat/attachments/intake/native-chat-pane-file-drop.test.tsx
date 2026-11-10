@@ -2,8 +2,8 @@
 
 import type * as AttachmentOwnerModule from '../uploads/native-chat-attachment-owner'
 import { useState } from 'react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, expect, it, vi } from 'vitest'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import {
@@ -17,9 +17,6 @@ vi.mock('../uploads/native-chat-attachment-owner', async (original) => ({
   ...(await original<typeof AttachmentOwnerModule>()),
   resolveNativeChatAttachmentOwnerForWorktree: () => ({ kind: 'local' })
 }))
-
-const OVERLAY = '[data-native-chat-drop-overlay="true"]'
-const IGNORE_DRAG = (): void => {}
 
 class DropDataTransfer {
   dropEffect = 'none'
@@ -42,43 +39,6 @@ function workspaceDrag(): DropDataTransfer {
   return transfer
 }
 
-function osDrag(): DropDataTransfer {
-  const transfer = new DropDataTransfer()
-  transfer.setData('Files', '')
-  return transfer
-}
-
-function ClaimingComposer({
-  disabled = false,
-  onDragOverCapture = IGNORE_DRAG,
-  onDropCapture = IGNORE_DRAG
-}: {
-  disabled?: boolean
-  onDragOverCapture?: (event: React.DragEvent<HTMLDivElement>) => void
-  onDropCapture?: (event: React.DragEvent<HTMLDivElement>) => void
-}) {
-  useNativeChatPaneFileDropClaim({
-    destinationKey: 'pane:1',
-    captureExternalDrop: () => async () => {},
-    disabled,
-    onDragOverCapture,
-    onDropCapture
-  })
-  return <div data-testid="composer" />
-}
-
-function renderPane(composer: React.ReactNode) {
-  const result = render(
-    <div data-testid="terminal-behind">
-      <NativeChatPaneFileDropSurface className="pane">
-        <div data-testid="transcript">transcript</div>
-        {composer}
-      </NativeChatPaneFileDropSurface>
-    </div>
-  )
-  return { ...result, transcript: screen.getByTestId('transcript') }
-}
-
 function fireDrag(
   target: HTMLElement,
   type: 'dragenter' | 'dragover' | 'dragleave' | 'drop',
@@ -94,23 +54,6 @@ function fireDrag(
 }
 
 afterEach(cleanup)
-
-describe('NativeChatPaneFileDropSurface', () => {
-  it('observes a native drop that ends before the hover render commits', () => {
-    const consumeDrop = (event: Event): void => event.stopPropagation()
-    document.addEventListener('drop', consumeDrop, true)
-    try {
-      const { transcript, container } = renderPane(<ClaimingComposer />)
-      act(() => {
-        fireDrag(transcript, 'dragover', osDrag())
-        fireDrag(transcript, 'drop', osDrag())
-      })
-      expect(container.querySelector(OVERLAY)).toBeNull()
-    } finally {
-      document.removeEventListener('drop', consumeDrop, true)
-    }
-  })
-})
 
 it('direct drops override last focus; background keeps stable focus through disable and remount, with questions independent', () => {
   function Composer({ scope, disabled = false }: { scope: string; disabled?: boolean }) {

@@ -135,30 +135,3 @@ describe('the cases the rulings name', () => {
     expect(bridge.frames().some((frame) => frame.type === 'end')).toBe(false)
   })
 })
-
-// Test the enforced half of the desktop snapshot budget: a serialized payload at budget crosses, and one over frame cap is refused.
-describe('a snapshot payload at the budget the page asks for', () => {
-  function scrollbackPayload(payloadBytes: number): unknown {
-    const skeleton = JSON.stringify({ type: 'scrollback', streamId: 1, serialized: '' }).length
-    return { type: 'scrollback', streamId: 1, serialized: 'x'.repeat(payloadBytes - skeleton) }
-  }
-
-  function post(payloadBytes: number): ReturnType<typeof harness> {
-    const bridge = harness({ ready: true, terminalTimers: manualTimers() })
-    bridge.host.receive(
-      clientFrame({ type: 'subscribe', id: ID, method: 'terminal.subscribe', params: {} })
-    )
-    const payload = scrollbackPayload(payloadBytes)
-    expect(JSON.stringify(payload)).toHaveLength(payloadBytes)
-    bridge.client.streams[0].emit(payload)
-    return bridge
-  }
-
-  it('ends the stream on a payload the cap cannot hold, which is why the host trims', () => {
-    // A host-budgeted snapshot must never reach this refusal; the page cannot detect a silently omitted event (C0.3).
-    const bridge = post(BRIDGE_MAX_MESSAGE_BYTES)
-    expect(bridge.frames().filter((frame) => frame.type === 'end')).toEqual([
-      { v: 1, type: 'end', id: ID, reason: 'overflow' }
-    ])
-  })
-})

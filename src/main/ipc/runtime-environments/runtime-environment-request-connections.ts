@@ -30,6 +30,7 @@ import {
   advanceRuntimeEnvironmentTransportGeneration,
   getRuntimeEnvironmentTransportGeneration
 } from './runtime-environment-transport-generation'
+import { noteRuntimeEnvironmentSharedControlContact } from './runtime-environment-contact-loss'
 import { declareWslHostClient } from '../../wsl/host-lifecycle/wsl-host-client-declaration'
 
 type CachedRuntimeConnection = {
@@ -280,6 +281,8 @@ function getSharedControlConnection(
         environmentId,
         clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
         ...sharedControlEnvironmentPolicy(environmentId),
+        // Ws pongs can come from a relay hop or a runtime whose request path is stuck (#39785).
+        appHeartbeat: {},
         // R39: every ready socket, including after a reconnect, re-declares this installation.
         onReady: () =>
           declareWslHostClient(environmentId, (method, params, timeoutMs) =>
@@ -298,6 +301,7 @@ function getSharedControlConnection(
             transportGeneration,
             diagnostics
           })
+          noteRuntimeEnvironmentSharedControlContact(environmentId, diagnostics)
           statusOwners
             .get(environmentId)
             ?.owner.connectionChanged(

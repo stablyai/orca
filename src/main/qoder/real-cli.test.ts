@@ -26,7 +26,7 @@ vi.mock('node:os', async (importOriginal) => {
 vi.mock('electron', () => ({ app: { getPath: () => sandbox.home } }))
 import { qoderHookService } from './hook-service'
 import { markQoderWorkspaceTrusted } from './workspace-trust'
-import { AgentHookServer } from '../agent-hooks/server'
+import { AgentHookServer } from '../agent-hooks/server/agent-hook-server'
 
 it.skipIf(process.env.ORCA_REAL_QODER_CLI_TEST !== '1')(
   'generates and resumes a real task through managed hooks',
