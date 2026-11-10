@@ -1,3 +1,4 @@
+import { followTestSinkSnapshots } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-direct-sink.test-fixture'
 import { readTestJournalItems } from '../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { openTestAgentSessionDatabase } from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -133,6 +134,7 @@ describe('Claude provider fallback', () => {
       mintEpoch: () => 'epoch-1'
     })
     const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+    await followTestSinkSnapshots(deferred, journal)
     deferred.bind({
       journal,
       fence: 1,
@@ -168,6 +170,7 @@ describe('Claude provider fallback', () => {
         now: () => 1_000
       })
       const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+      await followTestSinkSnapshots(deferred, journal)
       deferred.bind({ journal, fence: 1, publish: () => {} })
       const translator = createClaudeJournalTranslator({ sink: deferred.sink })
       const quota = message('assistant', 'quota', [{ type: 'text', text: 'Usage exhausted' }])
