@@ -1,3 +1,4 @@
+import { reopenClosedWorkspaceTab } from './reopen-closed-workspace-tab'
 import { toast } from 'sonner'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
 import { keybindingMatchesAction } from '../../../shared/keybindings'
@@ -49,9 +50,6 @@ export function handleTerminalWorkspaceKeyDown(
     mobileEmulatorEnabled,
     terminalShortcutPolicy
   } = controller
-  if (!activeWorktreeId) {
-    return
-  }
   const context = getKeybindingContext(event.target)
   const floatingWorkspaceFocused =
     isEventTargetInsideFloatingWorkspacePanel(event.target) || isFloatingWorkspacePanelFocused()
@@ -70,7 +68,7 @@ export function handleTerminalWorkspaceKeyDown(
       keybindings
     })
   }
-  if (!event.repeat) {
+  if (activeWorktreeId && !event.repeat) {
     const agentShortcut = resolveTerminalAgentTabShortcut({
       activeWorktreeId: floatingWorkspaceFocused ? FLOATING_TERMINAL_WORKTREE_ID : activeWorktreeId,
       keybindings,
@@ -112,10 +110,13 @@ export function handleTerminalWorkspaceKeyDown(
     event.preventDefault()
     notifyTerminalCapture('tab.reopenClosed')
     try {
-      useAppStore.getState().reopenClosedTab(activeWorktreeId)
+      reopenClosedWorkspaceTab(activeWorktreeId)
     } catch (error) {
       showClientCreationActionError(error)
     }
+    return
+  }
+  if (!activeWorktreeId) {
     return
   }
   if (!event.repeat && matchShortcut('tab.newBrowser')) {
