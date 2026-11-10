@@ -3,22 +3,43 @@ import {
   copyJournalCurrentWorkAuthority,
   type JournalCurrentWorkAuthority
 } from './journal-observer-read'
-import type { JournalWorkRead, JournalWorkAnswer } from './journal-work-read'
+import type { JournalWorkRead, JournalWorkAnswer, JournalSqlWorkResult } from './journal-work-read'
 import { sameJournalCursor } from './replay/journal-cursor'
 import { AgentSessionJournalError } from './writing/journal-write-guards'
 
+type WorkAnswerJournal = Pick<
+  SqlAgentSessionJournal,
+  | 'isClosed'
+  | 'identity'
+  | 'reads'
+  | 'cursor'
+  | 'physicalCursor'
+  | 'observationHandle'
+  | 'openingCursor'
+>
+
+/** Compare the worker snapshot with the same finite authority at its held lane position. */
+export function journalSqlWorkAnswerIsCurrent(
+  journal: WorkAnswerJournal,
+  capture: () => JournalCurrentWorkAuthority,
+  authority: JournalCurrentWorkAuthority,
+  answer: JournalSqlWorkResult
+): boolean {
+  const signature = JSON.stringify(authority)
+  return (
+    !journal.isClosed &&
+    sameJournalCursor(answer.cursor, journal.cursor()) &&
+    sameJournalCursor(answer.physicalCursor, journal.physicalCursor()) &&
+    authority.handle === journal.observationHandle() &&
+    sameJournalCursor(authority.openedThrough, journal.openingCursor()) &&
+    JSON.stringify(copyJournalCurrentWorkAuthority(capture())) === signature &&
+    JSON.stringify(answer.authority) === signature
+  )
+}
+
 /** Validate the worker snapshot and live owners before returning action evidence. */
 export async function readJournalSqlWorkAnswer<K extends JournalWorkRead['kind']>(
-  journal: Pick<
-    SqlAgentSessionJournal,
-    | 'isClosed'
-    | 'identity'
-    | 'reads'
-    | 'cursor'
-    | 'physicalCursor'
-    | 'observationHandle'
-    | 'openingCursor'
-  >,
+  journal: WorkAnswerJournal,
   capture: () => JournalCurrentWorkAuthority,
   operation: Extract<JournalWorkRead, { kind: K }>
 ): Promise<JournalWorkAnswer<K>> {
@@ -31,17 +52,8 @@ export async function readJournalSqlWorkAnswer<K extends JournalWorkRead['kind']
       )
     }
     const authority = copyJournalCurrentWorkAuthority(capture())
-    const signature = JSON.stringify(authority)
     const answer = await journal.reads.work({ authority, operation: requested })
-    if (
-      !journal.isClosed &&
-      sameJournalCursor(answer.cursor, journal.cursor()) &&
-      sameJournalCursor(answer.physicalCursor, journal.physicalCursor()) &&
-      authority.handle === journal.observationHandle() &&
-      sameJournalCursor(authority.openedThrough, journal.openingCursor()) &&
-      JSON.stringify(copyJournalCurrentWorkAuthority(capture())) === signature &&
-      JSON.stringify(answer.authority) === signature
-    ) {
+    if (journalSqlWorkAnswerIsCurrent(journal, capture, authority, answer)) {
       if (answer.result.kind !== operation.kind) {
         throw new Error(`journal work reader answered ${answer.result.kind} for ${operation.kind}`)
       }

@@ -1,3 +1,9 @@
+import {
+  holdClose,
+  holdAdmissionReply,
+  reattach
+} from './orchestration-structured-worker-close.test-fixture'
+import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-scheduler'
 import { readTestHostJournal } from '../../../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../../../shared/constants'
@@ -8,10 +14,7 @@ import '../../../../../native-chat/agent-session-wire/publication/history/agent-
 import '../../../../../native-chat/agent-session-wire/publication/subscribers/agent-session-subscriber-frame-fields'
 import { hostTestState } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host.test-fixture'
 import { createTestParams } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-create.test-fixture'
-import {
-  hostTestAttachParams,
-  hostTestOperationId
-} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
+import { hostTestOperationId } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   structuredWorkerIdentities,
@@ -202,39 +205,72 @@ function claimAutomaticRelease(identity: StructuredWorkerIdentity) {
   return resource
 }
 
-function holdClose(sessionId: string) {
-  const { host } = hostTestState()
-  const lane = Promise.withResolvers<void>()
-  const entered = Promise.withResolvers<void>()
-  const held = host.collaboratorsForTests().serialize(sessionId, () => lane.promise)
-  const close = host.close
-  vi.spyOn(host, 'close').mockImplementation((...args) => {
-    entered.resolve()
-    return close(...args)
-  })
-  return {
-    entered: entered.promise,
-    release: async () => {
-      lane.resolve()
-      await held
-    }
-  }
-}
-
-async function reattach(sessionId: string) {
-  const { host, store } = hostTestState()
-  const result = await host.attach(
-    { callerKey: 'redrive-test' },
-    hostTestAttachParams(store.requireWritableRecord(sessionId).lease.runtimeFence, {
-      envelope: {
-        sessionId,
-        clientOperationId: hostTestOperationId(),
-        expectedRuntimeFence: store.requireWritableRecord(sessionId).lease.runtimeFence,
-        payloadFingerprint: '0'.repeat(64)
+async function automaticCloseFixture() {
+  vi.useRealTimers()
+  vi.useFakeTimers({ toFake: ['Date'] })
+  harness.cleanup()
+  let savedSession = getDefaultWorkspaceSession()
+  state = harness.setup(
+    true,
+    partialRuntimeStore({
+      getWorkspaceSession: () => savedSession,
+      getWorkspaceSessionHostIds: () => ['local'],
+      setWorkspaceSession: (next) => {
+        savedSession = next
       }
     })
   )
-  expect(result.ok).toBe(true)
+  vi.spyOn(state.runtime, 'ensureStructuredAgentSessionHost').mockResolvedValue(undefined)
+  dispatchId = createDispatch()
+  const worker = await startOwnedWorker()
+  const { host, identity } = worker
+  const { store } = hostTestState()
+  const attached = host.collaboratorsForTests().sessions.get(identity.sessionId)
+  const lease = store.requireWritableRecord(identity.sessionId).lease
+  const tab = host.getSessionTabId(identity.sessionId)
+  if (!tab) {
+    throw new Error('Worker has no listed tab')
+  }
+  savedSession =
+    withChatTabChanges('local', savedSession, identity.worktreeId, [
+      {
+        open: { sessionId: identity.sessionId, agent: 'codex', tabId: tab }
+      }
+    ]) ?? savedSession
+  await state.runtime.publishStructuredAgentSessionTab({
+    workspaceId: identity.worktreeId,
+    sessionId: identity.sessionId,
+    agent: 'codex',
+    activate: true
+  })
+  await vi.waitFor(() =>
+    expect(host.readStatusSummary(identity.sessionId)).toMatchObject({
+      hostExecutionPhase: 'ready'
+    })
+  )
+  const resource = claimAutomaticRelease(identity)
+  const stop = vi.fn<NonNullable<typeof host.deps.adapter.closeSession>>(async () => true)
+  host.deps.adapter.closeSession = stop
+  const close = () =>
+    completeWorkerTerminalRelease({
+      runtime: state.runtime,
+      db: state.db,
+      dispatchId,
+      resource: state.db.getWorkerTerminalResource(resource.id)!
+    })
+  const presentation = state.runtime.captureStructuredAgentSessionPresentation(identity.sessionId)
+  const savedBefore = structuredClone(savedSession)
+  const retained = () => {
+    expect(state.runtime.captureStructuredAgentSessionPresentation(identity.sessionId)).toEqual(
+      presentation
+    )
+    expect(savedSession).toEqual(savedBefore)
+    expect(host.collaboratorsForTests().sessions.get(identity.sessionId)).toBe(attached)
+    expect(store.requireWritableRecord(identity.sessionId).lease).toEqual(lease)
+    expect(host.getSessionTabId(identity.sessionId)).toBe(tab)
+    expect(stop).not.toHaveBeenCalled()
+  }
+  return { ...worker, store, resource, close, retained, lease, attached }
 }
 
 describe('the structured redrive publication edge', () => {
@@ -490,7 +526,6 @@ describe('the structured redrive publication edge', () => {
       const retire = vi.spyOn(state.runtime, 'retireStructuredAgentSessionTabFromSnapshot')
       const saved = vi.spyOn(state.runtime, 'removeCapturedStructuredSessionSavedTabs')
       const hide = vi.spyOn(host, 'setSessionTabVisibility')
-      const admission = vi.spyOn(state.db, 'admitWorkerChatReleaseClose')
       const observe = vi.spyOn(host, 'observeJournalPublications')
       const create = vi.spyOn(host, 'create')
       const heldClose = holdClose(identity.sessionId)
@@ -518,8 +553,6 @@ describe('the structured redrive publication edge', () => {
         await heldClose.release()
       }
       expect(await closing).toMatchObject({ state: 'retained', processAction: 'none' })
-      expect(admission).toHaveBeenCalledExactlyOnceWith(resource.id, expect.any(Function))
-      expect(admission.mock.results[0]?.value).toBe(false)
       for (const effect of [providerStop, retire, saved, hide]) {
         expect(effect).not.toHaveBeenCalled()
       }
@@ -555,6 +588,174 @@ describe('the structured redrive publication edge', () => {
       }
     }
   )
+
+  it('retains a committed running turn while its status publication is held', async () => {
+    const h = await automaticCloseFixture()
+    const lane = holdClose(h.identity.sessionId)
+    const closing = h.close()
+    await lane.entered
+    const published = h.host.readStatusSummary(h.identity.sessionId)
+    const seen = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    const gate = state.db.admitWorkerChatReleaseClose.bind(state.db)
+    vi.spyOn(state.db, 'admitWorkerChatReleaseClose').mockImplementation((...args) => {
+      try {
+        return gate(...args)
+      } finally {
+        release.resolve()
+      }
+    })
+    const observer = h.journal.reads.observer
+    vi.spyOn(h.journal.reads, 'observer').mockImplementation(async (input) => {
+      const answer = await observer(input)
+      seen.resolve()
+      await release.promise
+      return answer
+    })
+    try {
+      await h.journal.appendItem(
+        { provider: 'orca', clientMessageId: 'running-before-close' },
+        { kind: 'turn', turnId: 'running-before-close', state: 'running' },
+        { fence: h.fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      )
+      await seen.promise
+      expect(h.host.readStatusSummary(h.identity.sessionId)).toEqual(published)
+      await lane.release()
+      expect(await closing).toMatchObject({ state: 'retained', processAction: 'none' })
+      h.retained()
+      expect(state.db.getWorkerTerminalResource(h.resource.id)).toMatchObject({
+        ownership_state: 'owned',
+        release_state: 'not_requested',
+        auto_release_at: null
+      })
+    } finally {
+      release.resolve()
+      await lane.release()
+    }
+  })
+
+  it('retains ingress admitted during the held work reply and orders queued writes after the decision', async () => {
+    const h = await automaticCloseFixture()
+    const held = holdAdmissionReply(h.journal)
+    const closing = h.close()
+    const order: string[] = []
+    const gate = state.db.admitWorkerChatReleaseClose.bind(state.db)
+    vi.spyOn(state.db, 'admitWorkerChatReleaseClose').mockImplementation((...args) => {
+      const admitted = gate(...args)
+      order.push('close decision')
+      return admitted
+    })
+    await held.entered
+    const events = hostTestState().acquire.mock.calls.at(-1)?.[0].events
+    if (!events) {
+      throw new Error('Worker provider has no event sink')
+    }
+    events.appendItem(
+      { provider: 'orca', clientMessageId: 'running-during-read' },
+      { kind: 'turn', turnId: 'running-during-read', state: 'running' },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    const queued = h.append('queued-behind-read').then(() => order.push('write committed'))
+    held.release()
+    expect(await closing).toMatchObject({ state: 'retained', processAction: 'none' })
+    await queued
+    await h.host.flushStreamedEvents(h.identity.sessionId)
+    expect(order).toEqual(['close decision', 'write committed'])
+    h.retained()
+    expect((await readTestHostJournal(h.host, h.identity.sessionId)).items).toContainEqual(
+      expect.objectContaining({
+        body: { kind: 'turn', turnId: 'running-during-read', state: 'running' }
+      })
+    )
+  })
+
+  it('lets Keep open during the work reply preserve a real unsent card and every close resource', async () => {
+    const h = await automaticCloseFixture()
+    const card = await h.journal.queuedMessages.insert({
+      messageId: hostTestOperationId(),
+      body: {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: 'Keep this unsent message' }]
+      },
+      holdReason: 'send_failed'
+    })
+    const held = holdAdmissionReply(h.journal)
+    const closing = h.close()
+    await held.entered
+    expect(state.db.keepWorkerTerminalOpen(h.identity.paneKey)).toBe(1)
+    held.release()
+    expect(await closing).toMatchObject({ state: 'retained', processAction: 'none' })
+    h.retained()
+    expect(await h.journal.queuedMessages.get(card.messageId)).toEqual(card)
+    expect(state.db.getWorkerTerminalResource(h.resource.id)).toMatchObject({
+      ownership_state: 'owned',
+      release_state: 'retained',
+      retained_reason: 'user_kept'
+    })
+  })
+
+  it('honors explicit release that joins while the automatic work read is held', async () => {
+    const h = await automaticCloseFixture()
+    const held = holdAdmissionReply(h.journal)
+    const closing = h.close()
+    await held.entered
+    const events = hostTestState().acquire.mock.calls.at(-1)?.[0].events
+    if (!events) {
+      throw new Error('Worker provider has no event sink')
+    }
+    events.appendItem(
+      { provider: 'orca', clientMessageId: 'explicit-release-turn' },
+      { kind: 'turn', turnId: 'explicit-release-turn', state: 'running' },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    state.db.requestWorkerTerminalRelease(dispatchId)
+    held.release()
+    expect(await closing).toMatchObject({
+      state: 'released',
+      processAction: 'closed_agent_terminal'
+    })
+    expect(h.store.requireWritableRecord(h.identity.sessionId).lease.claimStatus).toBe('released')
+    expect(h.host.isSessionTabVisible(h.identity.sessionId)).toBe(false)
+  })
+
+  it('retries an idle read failure through the existing countdown and then closes normally', async () => {
+    const h = await automaticCloseFixture()
+    const held = holdAdmissionReply(h.journal)
+    const closing = h.close()
+    await held.entered
+    held.fail()
+    expect(await closing).toMatchObject({ state: 'retained', processAction: 'none' })
+    h.retained()
+    expect(state.db.getWorkerTerminalResource(h.resource.id)).toMatchObject({
+      release_state: 'not_requested',
+      auto_release_at: expect.any(String)
+    })
+    vi.setSystemTime(Date.now() + 120_001)
+    await getWorkerTerminalAutoReleaseScheduler(state.runtime).releaseDue()
+    expect(state.db.getWorkerTerminalResource(h.resource.id)?.release_state).toBe('released')
+    expect(h.store.requireWritableRecord(h.identity.sessionId).lease.claimStatus).toBe('released')
+    expect(h.host.isSessionTabVisible(h.identity.sessionId)).toBe(false)
+  })
+
+  it('lets Keep open cancel the countdown rearmed after an idle read failure', async () => {
+    const h = await automaticCloseFixture()
+    const held = holdAdmissionReply(h.journal)
+    const closing = h.close()
+    await held.entered
+    held.fail()
+    expect(await closing).toMatchObject({ state: 'retained', processAction: 'none' })
+    expect(state.db.keepWorkerTerminalOpen(h.identity.paneKey)).toBe(1)
+    vi.setSystemTime(Date.now() + 120_001)
+    await getWorkerTerminalAutoReleaseScheduler(state.runtime).releaseDue()
+    h.retained()
+    expect(state.db.getWorkerTerminalResource(h.resource.id)).toMatchObject({
+      ownership_state: 'owned',
+      release_state: 'retained',
+      retained_reason: 'user_kept',
+      auto_release_at: null
+    })
+  })
 
   it('releases bookkeeping after an admitted genuinely failed provider Stop without retiring its surface', async () => {
     const { host, store } = hostTestState()

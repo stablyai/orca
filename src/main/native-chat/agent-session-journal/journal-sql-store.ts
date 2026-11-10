@@ -273,7 +273,8 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
     )
   }
 
-  /** Pure readers can join preceding commands without allowing another command between reads. */
+  /** Hold preceding commands through reads and synchronous non-journal owner effects.
+   * Never admit a nested journal operation or await its barrier inside this callback. */
   readInOrder<T>(read: (reads: JournalSqlReads) => T | Promise<T>): Promise<T> {
     return this.admit(() => read(this.reads))
   }

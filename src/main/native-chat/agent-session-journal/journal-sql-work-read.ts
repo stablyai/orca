@@ -142,6 +142,7 @@ function readWork(
       }
       return {
         kind: 'child-work',
+        working: work.working(),
         activeTurn: work.activeTurn() !== null,
         actionablePrompt: [...context.select({ kind: 'pending-prompts' })].some(
           ({ item }) => work.isCurrentItem(item.itemId) && context.displayed(item.itemId) !== null

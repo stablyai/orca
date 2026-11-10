@@ -16,6 +16,7 @@ export type JournalWorkReadResult =
   | { kind: 'state'; state: JournalObserverResult['work'] }
   | {
       kind: 'child-work'
+      working: boolean
       activeTurn: boolean
       actionablePrompt: boolean
       newestTurnCompletedAt: number | undefined

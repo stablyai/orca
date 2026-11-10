@@ -154,7 +154,8 @@ export function deferWorkerTerminalAutoRelease(this: OrchestrationDb, resourceId
 export function admitWorkerChatReleaseClose(
   this: OrchestrationDb,
   resourceId: string,
-  inTurn: (resource: WorkerTerminalResourceRow) => boolean
+  inTurn: (resource: WorkerTerminalResourceRow) => boolean,
+  retryUnknown = false
 ): boolean {
   const current = this.getWorkerTerminalResource(resourceId)
   if (
@@ -163,6 +164,18 @@ export function admitWorkerChatReleaseClose(
     inTurn(current)
   ) {
     this.deferWorkerTerminalAutoRelease(resourceId)
+    if (retryUnknown && current.pane_key) {
+      const deferred = this.getWorkerTerminalResource(resourceId)
+      if (
+        deferred?.owner_dispatch_id === current.owner_dispatch_id &&
+        deferred.terminal_handle === current.terminal_handle &&
+        deferred.process_incarnation === current.process_incarnation &&
+        deferred.pane_key === current.pane_key &&
+        deferred.release_state === 'not_requested'
+      ) {
+        this.restartWorkerTerminalAutoRelease(current.pane_key)
+      }
+    }
     return false
   }
   const { changes } = this.db

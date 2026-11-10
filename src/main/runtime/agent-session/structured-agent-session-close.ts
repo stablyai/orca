@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionCloseWork } from '../../native-chat/agent-session-wire/termination/structured-agent-session-close-work'
 import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { OrcaRuntimeService } from '../orca-runtime'
@@ -33,7 +34,7 @@ export type StructuredAgentSessionCloseOptions = {
   surface?: StructuredSessionSurface | null
   afterClose?: () => void
   // Last word in the session lane before Stop.
-  admitClose?: () => boolean
+  admitClose?: (work: StructuredAgentSessionCloseWork) => boolean
 }
 
 export async function closeStructuredAgentSessionChild(
@@ -60,8 +61,8 @@ export async function closeStructuredAgentSessionChild(
       sessionId,
       'evict',
       admitClose
-        ? () => {
-            admitted = admitClose()
+        ? (work) => {
+            admitted = admitClose(work)
             return admitted
           }
         : undefined
