@@ -208,7 +208,7 @@ export const SESSION_LINK_METHODS = [
   }),
   defineOrchestrationMethod({
     name: 'orchestration.linkSend',
-    access: { kind: 'writes', targets: { id: 'sessionLink' } },
+    access: { kind: 'writes', targets: { id: 'sessionLink', to: 'session' } },
     permission: 'workspace',
     params: LinkSendParams,
     handler: (params, context) => {
