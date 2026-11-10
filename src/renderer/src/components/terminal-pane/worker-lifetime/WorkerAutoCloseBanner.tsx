@@ -5,9 +5,9 @@ import { useAppStore } from '@/store/index'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { useWorkerAutoClose, workerKeepOpenLabel } from '@/lib/worker-auto-close'
 import { useTranslate } from '@/i18n/use-translate'
-import { formatWorkerAutoCloseCountdown } from '../../../../shared/orchestration/workers/worker-auto-close'
-import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { PaneTopWarningBanner } from '../terminal-pane/appearance/pane-top-banner/PaneTopWarningBanner'
+import { formatWorkerAutoCloseCountdown } from '../../../../../shared/orchestration/workers/worker-auto-close'
+import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
+import { PaneTopWarningBanner } from '../appearance/pane-top-banner/PaneTopWarningBanner'
 
 /** Across a temporary orchestration worker's pane: when it closes, and Keep open. */
 export function WorkerAutoCloseBanner({

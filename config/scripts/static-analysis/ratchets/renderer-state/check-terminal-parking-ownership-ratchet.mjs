@@ -26,10 +26,7 @@ const ROOTS = new Map([
     `${RENDERER}components/terminal-pane/parking/lifecycle/use-terminal-tab-cold-parking.ts`,
     ['useTerminalTabColdParking']
   ],
-  [
-    `${WATCHERS}terminal-parked-tab-watchers.ts`,
-    ['syncParkedTerminalTabWatchers', 'canWatcherCoverParkedTerminalTab']
-  ],
+  [`${WATCHERS}terminal-parked-tab-watchers.ts`, ['syncParkedTerminalTabWatchers']],
   [`${WATCHERS}parked-terminal-tab-coverage.ts`, ['canWatcherCoverParkedTerminalTab']],
   [
     `${RENDERER}lib/agent-session/resume/resume-sleeping-agent-session.ts`,

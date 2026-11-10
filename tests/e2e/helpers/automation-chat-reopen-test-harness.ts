@@ -20,7 +20,8 @@ import { getAutomationRunViewState } from '../../../src/renderer/src/components/
 import { createAutomationRunWriter } from '../../../src/main/automations/automation-run-writer'
 import { makeRepo } from '../../../src/main/persistence/persistence-test-harness'
 import { structuredAgentSessionTabId } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
-import { retireStructuredAgentSessionTab } from '../../../src/renderer/src/runtime/native-chat/tab-retirement/structured-agent-session-tab-retirement'
+import '../../../src/renderer/src/runtime/native-chat/tab-retirement/structured-agent-session-tab-retirement'
+import { retireStructuredAgentSessionTab } from '../../../src/renderer/src/runtime/native-chat/tab-retirement/structured-agent-session-host-tab-retirement'
 
 export const CHAT = 'claude_saved_reopen',
   SURVIVOR = 'codex_surviving_chat'
