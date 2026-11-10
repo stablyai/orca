@@ -154,6 +154,23 @@ export type OrcaBillingOverageResult =
   | { status: 'cap-too-high' }
   | { status: 'failed'; error: string }
 
+/** Another team the signed-in user is on, and its plan state (cloud start B2, "Switch to <team>"). */
+export type OrcaBillingTeamPlan = {
+  orgId: string
+  plan: string | null
+  planLabel: string | null
+  canStartSandbox: boolean
+}
+
+export type OrcaBillingTeamPlansResult =
+  | { status: 'ok'; teams: OrcaBillingTeamPlan[] }
+  | { status: 'unconfigured' }
+  | { status: 'signed-out' }
+  | { status: 'failed'; error: string }
+
+/** At most this many teams per lookup (the billing Worker's bound). */
+export const ORCA_BILLING_TEAM_PLANS_MAX_ORGS = 10
+
 export function isOrcaBillingPlanId(value: unknown): value is OrcaBillingPlanId {
   return ORCA_BILLING_PLAN_IDS.some((plan) => plan === value)
 }

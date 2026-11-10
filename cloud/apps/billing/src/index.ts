@@ -5,6 +5,7 @@
 //   POST /v1/billing/checkout {plan,interval,seats} -> { url } hosted Stripe Checkout
 //   POST /v1/billing/overage {enabled, spendCapCents?} opt in/out of overage, set the cap
 //   POST /v1/billing/portal                 -> { url } Stripe Customer Portal
+//   POST /v1/billing/team-plans {orgIds}    other teams' plan state ("Switch to <team>"), read-only
 // Stripe:
 //   POST /v1/stripe/webhook                 signed events
 // Sandbox control plane (CONTROL_PLANE_TOKEN):
@@ -18,10 +19,12 @@ import {
   ADMIN_ACTION_MAX_TOKEN_AGE,
   authenticateControlPlane,
   authenticateDesktop,
-  authenticateMembershipSync
+  authenticateMembershipSync,
+  readBearer
 } from './auth'
 import { SeatSyncSchema, reconcileSeats, syncSeats } from './seats'
 import { MembershipUnavailableError, authMembershipSource, type MembershipSource } from './membership'
+import { TeamPlansRequestSchema, authOrgMemberCheck, teamPlans, type OrgMemberCheck } from './team-plans'
 import { graceExpiredAccounts } from './store'
 import { CheckoutRequestSchema, createCheckout, createPortal } from './checkout'
 import { checkStart, computeEntitlement } from './entitlements'
@@ -58,7 +61,7 @@ async function readJson(request: Request): Promise<unknown> {
   return text ? JSON.parse(text) : {}
 }
 
-export type Deps = { stripe?: StripeClient; now?: () => number; membership?: MembershipSource }
+export type Deps = { stripe?: StripeClient; now?: () => number; membership?: MembershipSource; orgMember?: OrgMemberCheck }
 
 export async function handleRequest(request: Request, env: Env, ctx: ExecutionContext, deps: Deps = {}): Promise<Response> {
   const url = new URL(request.url)
@@ -82,6 +85,21 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
         }
         const entitlement = await computeEntitlement(env, caller.accountId, now)
         return json({ ...entitlement, canManageBilling: caller.canManage, offers: publicOffers(planCatalog(env)) })
+      }
+
+      case 'POST /v1/billing/team-plans': {
+        // Other teams' plan state for "Switch to <team>" (cloud start B2); read-only, own token.
+        const caller = await authenticateDesktop(env, request)
+        if (!caller) {
+          return json({ error: 'unauthorized' }, 401)
+        }
+        const body = TeamPlansRequestSchema.safeParse(await readJson(request))
+        if (!body.success) {
+          return json({ error: 'invalid_request' }, 400)
+        }
+        // authenticateDesktop accepted the bearer, so it is present.
+        const billingToken = readBearer(request.headers.get('authorization'))!
+        return json(await teamPlans(env, billingToken, body.data.orgIds, deps.orgMember ?? authOrgMemberCheck(env), now))
       }
 
       case 'POST /v1/billing/checkout': {
