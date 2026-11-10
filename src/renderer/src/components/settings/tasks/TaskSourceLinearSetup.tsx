@@ -6,7 +6,7 @@ import { ORCA_LINEAR_SKILL_NAME } from '@/lib/skills/installation/agent-feature-
 import { AgentSkillSetupPanel } from '../../skills/setup/AgentSkillSetupPanel'
 import { TaskSourceShowInTasksStep } from './TaskSourceShowInTasksStep'
 import { TaskSourceStepRow } from './TaskSourceStepRow'
-import { useLinearAgentSkillSetup } from '../../../hooks/use-linear-agent-skill-setup'
+import { useLinearAgentSkillSetup } from '../../../hooks/skills/installation/use-linear-agent-skill-setup'
 import { useTranslate } from '@/i18n/use-translate'
 
 type TaskSourceLinearSetupProps = {

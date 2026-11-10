@@ -153,8 +153,12 @@ function isAccountBoundState(key: string): boolean {
   )
 }
 
-// Preserve account-only project and server entries during merging.
-const MERGED_BY_ENTRY: ReadonlySet<string> = new Set(['projects', 'mcpServers'])
+// Merge per entry so a profile keeps its own projects, servers, and Grove confirmations.
+const MERGED_BY_ENTRY: ReadonlySet<string> = new Set([
+  'projects',
+  'mcpServers',
+  'groveChoiceSeenAt'
+])
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -171,6 +175,15 @@ function mergeEntries(key: string, current: unknown, source: unknown): unknown {
       // Preserve trust granted in this account, including just before launch.
       if (isPlainRecord(own) && own.hasTrustDialogAccepted === true && isPlainRecord(entry)) {
         merged[path] = { ...entry, hasTrustDialogAccepted: true }
+      }
+    }
+  }
+  if (key === 'groveChoiceSeenAt') {
+    // Claude trusts a confirmation only while it is fresh, so keep each account's newest one.
+    for (const [account, seenAt] of Object.entries(current)) {
+      const theirs = source[account]
+      if (typeof seenAt === 'number' && (typeof theirs !== 'number' || seenAt > theirs)) {
+        merged[account] = seenAt
       }
     }
   }

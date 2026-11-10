@@ -1,7 +1,7 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { basename } from '@/lib/path'
 import { downloadRuntimeFile } from '@/runtime/files/reads/runtime-file-read-client'
 import { downloadGrantedRuntimeFile } from '@/runtime/files/reads/runtime-remote-file-download'

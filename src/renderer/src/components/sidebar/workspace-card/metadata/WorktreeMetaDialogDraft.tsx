@@ -1,7 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react'
 import { getWorktreeMetaDialogOwner } from './worktree-meta-dialog-owner'
 import { Plus } from 'lucide-react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   Dialog,
   DialogContent,
@@ -14,7 +14,10 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { useWorktreeMetaWorkspace } from './use-worktree-meta-workspace'
-import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import {
+  getScreenSubmitShortcutLabel,
+  isScreenSubmitShortcut
+} from '@/lib/keyboard/screen-submit-shortcut'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'

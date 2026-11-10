@@ -9,7 +9,7 @@ import {
   layoutFrameTerminalTab
 } from '@/runtime/workspace-layout/frames/layout-frame-terminal-panes'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
-import { resolveTerminalTabPtyOwnership } from '../../terminal-tab-for-pty-id'
+import { resolveTerminalTabPtyOwnership } from '../tabs/terminal-tab-for-pty-id'
 import type {
   LiveTerminalSurfaceOwner,
   LiveTerminalSurfaceOwnerIndex

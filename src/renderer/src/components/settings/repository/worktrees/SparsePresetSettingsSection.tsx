@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { Plus, RefreshCcw } from 'lucide-react'
 import type { SparsePreset } from '../../../../../../shared/worktree/create-types'
 import { useAppStore } from '../../../../store/index'
-import { parseSparsePresetDirectories, validateSparsePresetName } from '@/lib/sparse-preset-draft'
+import {
+  parseSparsePresetDirectories,
+  validateSparsePresetName
+} from '@/components/sparse/sparse-preset-draft'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../../../ui/button'
 import { getSparsePresetOperationErrorMessage } from './sparse-preset-operation-error'

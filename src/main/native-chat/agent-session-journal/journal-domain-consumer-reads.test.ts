@@ -139,7 +139,18 @@ it('keeps tool echoes and harness sidecars out of the outline across neighbourin
       ]
     }
   })
-  expect((await reads.conversationOutline(100_000)).entries).toEqual([
+  await f.run({
+    kind: 'item',
+    identity: identity('worker-mail'),
+    options: scoped,
+    body: {
+      ...body('Worker report'),
+      from: { kind: 'agent', senders: [], orchestration: null }
+    }
+  })
+  const outline = await reads.conversationOutline(100_000)
+  expect(outline.humanMessagesOnly).toBe(true)
+  expect(outline.entries).toEqual([
     { itemId: 'orca:prompt', sequence: 1, preview: 'Real prompt', imageCount: 0, reply: 'Answer' }
   ])
 })

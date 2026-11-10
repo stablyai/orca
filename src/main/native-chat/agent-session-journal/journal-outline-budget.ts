@@ -56,6 +56,7 @@ export function boundJournalConversationOutline(
   }
   return {
     sessionId: source.sessionId,
+    humanMessagesOnly: true,
     cursor: source.cursor,
     entries: first === 0 ? entries : entries.slice(first),
     omittedEntries: first

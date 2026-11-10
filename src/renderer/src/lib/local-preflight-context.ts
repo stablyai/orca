@@ -17,7 +17,7 @@ import { defaultScopeHost } from '../runtime/hosts/selection/default-creation-ho
 import { getLocalProjectRuntimeWorkspace } from '../runtime/hosts/wsl/local-project-runtime-workspace'
 import { getActiveWorkspaceOwnerTarget } from './resolved-worktree-execution-host'
 import { getEnvironmentRuntimeContextKey } from '../runtime/hosts/observations/provider-runtime-context'
-import { getRendererAppPlatform } from './renderer-app-platform'
+import { getRendererAppPlatform } from '../app-shell/platform/renderer-app-platform'
 import {
   getProjectRuntimePreflightContext,
   getCachedLocalProjectRuntimeWslContext,

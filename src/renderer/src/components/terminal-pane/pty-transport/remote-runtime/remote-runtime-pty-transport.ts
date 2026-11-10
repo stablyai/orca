@@ -1,7 +1,7 @@
 import type { TerminalOutputCadence } from '../../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { webTerminalPlacementParentTabId } from '@/runtime/hosted-terminals/placement/web-session-terminal-placement'
-import { pairedAgentLaunchInputs } from '@/lib/paired-agent-launch-inputs'
+import { pairedAgentLaunchInputs } from '@/lib/agent-session/launch/routing/paired-agent-launch-inputs'
 import {
   agentSessionCreateCapabilities,
   agentSessionCreateRequest,
@@ -3942,7 +3942,7 @@ export function createRemoteRuntimePtyTransport(
             .catch(() => false)
             .then(async (promptDelivered) => {
               const { completeWebHostAgentLaunch } =
-                await import('@/lib/web-host-agent-launch-completion')
+                await import('@/lib/agent-session/launch/new-tab/web-host-agent-launch-completion')
               completeWebHostAgentLaunch({
                 agent: launchAgentToSend,
                 worktreeId,

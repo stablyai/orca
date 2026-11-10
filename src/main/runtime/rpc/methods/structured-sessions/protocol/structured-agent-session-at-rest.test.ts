@@ -1,3 +1,12 @@
+import { AgentSessionJournal } from '../../../../../native-chat/agent-session-journal/journal-store'
+import { seedQueuedRigLegacyJournal } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-legacy-journal.test-fixture'
+import { REST_TEST_CALLER } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
+import type { AgentSessionSubscribeEvent } from '../../../../../../shared/agent-session/agent-session-wire'
+import {
+  EMPTY_STRUCTURED_AGENT_SESSION,
+  reduceStructuredAgentSession
+} from '../../../../../../shared/agent-session/structured-agent-session-reducer'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 vi.mock('node:fs/promises', { spy: true })
 import '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { expect, it, vi } from 'vitest'
@@ -11,6 +20,7 @@ import {
   structuredAgentSessionOptionPicks
 } from '../../../../../../shared/agent-session/options/structured-agent-session-options'
 import {
+  hostTestAttachParams,
   hostTestOperationId,
   HOST_TEST_SESSION as SESSION
 } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
@@ -383,4 +393,84 @@ it('keeps a storage failure during catch-up retryable instead of resetting the c
     ok: true,
     result: { ok: true }
   })
+})
+
+it('replays SQL revisions and removals after a converted chat reopens without duplicate messages', async () => {
+  const { rig } = fixture
+  seedQueuedRigLegacyJournal(rig.root, SESSION)
+  const attached = await rig.host.attach(REST_TEST_CALLER, hostTestAttachParams(null))
+  if (!attached.ok) {
+    throw new Error('fixture attach refused')
+  }
+  const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+  const options = { fence: attached.fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+  const prompt = { provider: 'orca', clientMessageId: 'saved-prompt' } as const
+  const answer = { provider: 'orca', clientMessageId: 'saved-answer' } as const
+  const disposable = { provider: 'orca', clientMessageId: 'removed-status' } as const
+  await journal.appendItem(
+    prompt,
+    { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Saved question' }] },
+    options
+  )
+  await journal.appendItem(
+    answer,
+    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Before revision' }] },
+    options
+  )
+  const removed = await journal.appendItem(
+    disposable,
+    { kind: 'status', text: 'Remove after close' },
+    options
+  )
+  const before = await rig.host.history({ sessionId: SESSION, direction: 'tail' })
+  const cursor = before.page.liveCursor!
+  await rig.host.close(SESSION, 'evict')
+  const stored = await AgentSessionJournal.open({
+    database: rig.host.deps.journalDatabase,
+    identity: journal.identity,
+    now: () => rig.clock.now
+  })
+  try {
+    await stored.appendItem(
+      answer,
+      { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'After revision' }] },
+      options
+    )
+    await stored.appendTombstone(disposable, { fence: attached.fence })
+  } finally {
+    await stored.close()
+  }
+  const reopened = await rig.host.history({ sessionId: SESSION, direction: 'tail' })
+  const events: AgentSessionSubscribeEvent[] = []
+  await rig.host.subscribe({
+    id: 'restored-sql-reader',
+    sessionId: SESSION,
+    cursor,
+    snapshotCatchUp: false,
+    emit: (event) => events.push(event)
+  })
+  await vi.waitFor(() =>
+    expect(
+      events.some(
+        (event) =>
+          event.type === 'batch' &&
+          event.batch.cursor.sequence === reopened.page.liveCursor?.sequence
+      )
+    ).toBe(true)
+  )
+  const restored = events.reduce(
+    (state, event) => reduceStructuredAgentSession(state, { type: 'event', event }, 1000),
+    reduceStructuredAgentSession(
+      EMPTY_STRUCTURED_AGENT_SESSION,
+      { type: 'history-page', page: before.page },
+      1000
+    )
+  )
+  expect(
+    restored.items.filter((item) => item.body.kind === 'message').map((item) => item.body)
+  ).toEqual([
+    { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Saved question' }] },
+    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'After revision' }] }
+  ])
+  expect(restored.items.some((item) => item.itemId === removed.itemId)).toBe(false)
 })

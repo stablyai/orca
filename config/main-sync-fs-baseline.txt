@@ -554,7 +554,6 @@
 2 src/main/worker-threads/forked-child-entry-path.ts
 4 src/main/workspace-hooks/hooks.ts
 10 src/main/workspace-hooks/issue-command-file.ts
-4 src/main/workspace-hooks/worktree-runner-script.ts
 1 src/main/workspaces/catalog/folder-repo-git-conversion.ts
 2 src/main/workspaces/catalog/folder-upgrade-worktree-path.ts
 3 src/main/workspaces/execution-host/project-runtime-git-router.ts

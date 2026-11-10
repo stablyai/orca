@@ -3,8 +3,8 @@ import { applyUIZoom } from '@/lib/ui-zoom'
 import {
   computeEditorFontSize,
   nextEditorFontZoomLevel
-} from '@/lib/editor/appearance/editor-font-zoom'
-import { resolveEditorBaseFontSize } from '@/lib/editor/appearance/editor-typography'
+} from '../../../../shared/editor/editor-font-zoom'
+import { resolveEditorBaseFontSize } from '../../../../shared/editor/editor-typography'
 import { zoomLevelToPercent, stepUIZoomLevel } from '../../../../shared/ui-zoom-level'
 import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
 

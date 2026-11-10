@@ -560,7 +560,7 @@ describe('prepared worktree creation with real Git', () => {
     controller.abort()
     await expect(
       discardPreparedWorktree(repoPath, preparedPath, { signal: controller.signal }, lockReason)
-    ).resolves.toBeUndefined()
+    ).resolves.toBe('removed')
 
     expect(await listWorktrees(repoPath, { includeCreatePreparations: true })).toHaveLength(1)
   })
@@ -621,3 +621,65 @@ describe('prepared worktree creation with real Git', () => {
     )
   })
 })
+
+it.each(['replacement', 'permission'])(
+  'preserves the requested path when rollback loses %s authority',
+  async (kind) => {
+    const { repoPath, root } = await createRepo()
+    const prepared = join(root, 'prepared-rollback-authority')
+    const target = join(root, 'rollback-target')
+    const preserved = join(root, 'preserved-original')
+    const reason = createWorktreePreparationLockReason('rollback-authority')
+    await prepareWorktreeCreateCheckout(repoPath, prepared, 'main', reason)
+    const originalLock = git(prepared, ['rev-parse', '--git-path', 'locked'])
+    const failure = new Error('move rewrote pointers but rejected')
+    const run = gitRunner.gitExecFileAsync
+    let allowed = true
+    let replaced = false
+    vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
+      if (args.includes('move')) {
+        await run(args, options)
+        if (kind === 'permission') {
+          allowed = false
+        }
+        throw failure
+      }
+      if (
+        kind === 'replacement' &&
+        args[0] === 'symbolic-ref' &&
+        options.cwd === target &&
+        !replaced
+      ) {
+        replaced = true
+        git(repoPath, ['worktree', 'move', '-f', '-f', target, preserved])
+        git(repoPath, ['worktree', 'add', '--detach', target, 'HEAD'])
+        git(repoPath, ['worktree', 'lock', '--reason', reason, target])
+        await writeFile(join(target, 'user.txt'), 'preserve replacement\n')
+      }
+      return run(args, options)
+    })
+    try {
+      await expect(
+        finalizePreparedWorktree(
+          repoPath,
+          prepared,
+          target,
+          'rollback-authority',
+          'main',
+          false,
+          { canStart: () => allowed },
+          reason
+        )
+      ).rejects.toBe(failure)
+      expect(await readFile(join(target, 'version.txt'), 'utf8')).toBe('one\n')
+      if (kind === 'replacement') {
+        expect(replaced).toBe(true)
+        expect(await readFile(join(target, 'user.txt'), 'utf8')).toBe('preserve replacement\n')
+        expect(await readFile(join(preserved, 'version.txt'), 'utf8')).toBe('one\n')
+      }
+      expect(await readFile(originalLock, 'utf8')).toBe(`${reason}\n`)
+    } finally {
+      vi.restoreAllMocks()
+    }
+  }
+)

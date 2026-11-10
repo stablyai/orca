@@ -2,7 +2,7 @@ import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { AgentLaunchChoiceEditor } from '@/components/agent/launch-settings/AgentLaunchChoiceEditor'
 import { agentChatPermissionModes } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import { savedChatPermissionMode } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
-import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
+import { useChatProgramFacts } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import { useMemo } from 'react'
 import { recomputeOn } from '@/lib/recompute-on'
 import { toast } from 'sonner'
@@ -43,7 +43,7 @@ import {
   agentChoiceOpensAsChat,
   readChatProgram,
   resolveChatProgramContext
-} from '@/lib/host-chat-program'
+} from '@/lib/agent-session/launch/inventory/host-chat-program'
 import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
 import { useDetectedAgents, type AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import { AgentDefaultSetting } from '@/components/settings/agents/launch/AgentDefaultSetting'

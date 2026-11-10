@@ -196,6 +196,7 @@ export function useMobileSessionDictation(
     phoneDictation,
     removeFillerWords,
     dictationTerms,
+    silenceSeconds,
     dictationNeedsSetupRef,
     closeDictationSetup,
     refreshDictationMode
@@ -245,6 +246,7 @@ export function useMobileSessionDictation(
         executionHost
       ),
       dictationMode: scope.dictationMode,
+      silenceSeconds,
       removeFillerWords,
       dictationTerms,
       worktreeId,
@@ -266,6 +268,7 @@ export function useMobileSessionDictation(
     phoneDictation.readyRef,
     removeFillerWords,
     dictationTerms,
+    silenceSeconds,
     scope.dictationMode,
     sessionKey,
     setShowDictationSetup,

@@ -288,3 +288,72 @@ it('catches up a queue insertion between the old-reader initial page and its sid
     reading.mockRestore()
   }
 })
+
+it('preserves a returned image through a SQL restart and keeps its deletion after another restart', async () => {
+  rig = await createQueuedMessageTestRig({ restartable: true })
+  setStructuredAgentSessionHost(rig.host)
+  await rig.host.close(SESSION, 'evict')
+  rig.failNextStart(new Error('image start refused'))
+  const body = await queuedImageTestBody(rig.root, 'saved image')
+  const id = hostTestOperationId()
+  const fields = { body }
+  expect(
+    await call(
+      'agentSession.send',
+      {
+        envelope: rig.envelope(fields, 'agentSession.send', id),
+        ...fields
+      },
+      OLD
+    )
+  ).toMatchObject({ result: { ok: true } })
+  await eventually(async () => expect(await rig!.drafts()).toHaveLength(1))
+  await rig.quitRestartHostProcess()
+  setStructuredAgentSessionHost(rig.host)
+  const reopened = await call(
+    'agentSession.history',
+    { sessionId: SESSION, direction: 'tail' },
+    OLD
+  )
+  expect(reopened).toMatchObject({
+    result: {
+      page: {
+        items: expect.arrayContaining([
+          expect.objectContaining({ itemId: agentJournalSubmissionKey(id), body })
+        ]),
+        queuedMessages: [
+          expect.objectContaining({
+            body: expect.objectContaining({ command: { name: 'compact' } })
+          })
+        ]
+      }
+    }
+  })
+  const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+  expect(await journal.reads.submissionBody(id)).toEqual(body)
+  const [card] = await journal.queuedMessages.list()
+  const deletion = { messageId: card.messageId }
+  expect(
+    await call(
+      'agentSession.queuedMessageDelete',
+      {
+        envelope: rig.envelope(deletion, 'agentSession.queuedMessageDelete', hostTestOperationId()),
+        ...deletion
+      },
+      OLD
+    )
+  ).toMatchObject({ result: { ok: true } })
+  await rig.quitRestartHostProcess()
+  setStructuredAgentSessionHost(rig.host)
+  const deleted = await call('agentSession.history', { sessionId: SESSION, direction: 'tail' }, OLD)
+  expect(deleted).toMatchObject({ result: { page: { queuedMessages: [] } } })
+  expect(deleted).not.toMatchObject({
+    result: {
+      page: {
+        items: expect.arrayContaining([
+          expect.objectContaining({ itemId: agentJournalSubmissionKey(id) })
+        ])
+      }
+    }
+  })
+})

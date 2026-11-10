@@ -1,7 +1,7 @@
 import { useCallback, useContext, useEffect, useState } from 'react'
 import { Image, Pressable, Text, View } from 'react-native'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
-import { MobileNativeChatMarkdown } from '../MobileNativeChatMarkdown'
+import { MobileNativeChatMarkdown } from './MobileNativeChatMarkdown'
 import {
   isImageRefBlock,
   isTextBlock,

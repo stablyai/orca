@@ -14,6 +14,8 @@ List each in `contributes.events` (`{ "on": "<event>" }`), with `main`, the `tru
   `{ workspaceId: string | null; paneKey: string; terminalId?: string; title?: string; state: "working" | "blocked" | "waiting" | "done"; receivedAt: number; mainAgent?: { state: "working" | "blocked" | "waiting" | "done"; outcome?: "success" | "failure" | "cancellation" | "superseded" | "interruption" | "unconfirmed"; stateStartedAt: number } }`
 - `workspace.changed` (capability `workspace:read`; since 1.4.246): The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers. Each new subscriber first gets the current context.
   `{ context: { branch: string; displayName: string; terminals: { id: string; title?: string }[] } | null }`
+- `editor.typography.changed` (no capability; since 1.4.256): What Orca's file editor uses changed (a setting or the editor zoom); the payload is what `editor.readTypography` now answers. Needs no capability.
+  `{ fontFamily: string; cssFontFamily: string; fontSize: number; fontWeight: string; lineHeight: number; fontLigatures: boolean; wordWrap: "on" | "off"; minimap: boolean }`
 
 ## Frame events (`orca.on(event, handler)` in HTML panels and custom editors)
 
