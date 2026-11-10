@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react'
-import { getConsentState } from '@/lib/telemetry'
+import { getConsentState } from '@/diagnostics/telemetry/telemetry'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'

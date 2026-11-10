@@ -65,16 +65,17 @@ export function emitNativeChatMessageSent(args: {
       submissionHistory.set('confirmed-submission', Promise.resolve(true))
     }
   })
-  const priorSucceeded = confirmedPredecessor
-    ? Promise.resolve(true)
-    : Promise.any(
-        priorSubmissions.map((prior) => prior.then((sent) => (sent ? true : Promise.reject())))
-      ).catch(() => false)
   void succeeded.then(async (sent) => {
     if (!sent) {
       return
     }
-    const earlierSent = (await priorSucceeded) || (await priorSubmission?.().catch(() => false))
+    const earlierSent =
+      confirmedPredecessor ||
+      (await Promise.any(
+        [...priorSubmissions, ...(priorSubmission ? [priorSubmission()] : [])].map((prior) =>
+          prior.then((sent) => (sent ? true : Promise.reject()))
+        )
+      ).catch(() => false))
     if (earlierSent) {
       track('native_chat_follow_up_sent', props)
     }

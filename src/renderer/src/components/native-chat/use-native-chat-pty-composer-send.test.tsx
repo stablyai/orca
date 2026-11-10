@@ -4,10 +4,13 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useNativeChatPtyComposerSend } from './composer/submit/use-native-chat-pty-composer-send'
 import { sendNativeChatMessage } from './session/terminal/send/native-chat-runtime-send'
-import { track } from '@/lib/telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
 import type { NativeChatPtySubmissionOutcome } from './session/terminal/send/native-chat-pty-send-queue'
 
-vi.mock('@/lib/telemetry', () => ({ track: vi.fn(), tuiAgentToAgentKind: () => 'codex' }))
+vi.mock('@/diagnostics/telemetry/telemetry', () => ({
+  track: vi.fn(),
+  tuiAgentToAgentKind: () => 'codex'
+}))
 vi.mock('../../store/index', () => ({
   useAppStore: { getState: () => ({ clearNativeChatLaunchDraft: () => {} }) }
 }))

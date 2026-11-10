@@ -2,7 +2,7 @@
 
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { getConsentState } from '@/lib/telemetry'
+import { getConsentState } from '@/diagnostics/telemetry/telemetry'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   readPtyChatPriorSubmission,
@@ -10,7 +10,7 @@ import {
   useNativeChatSubmissionHistory
 } from './native-chat-submission-source'
 
-vi.mock('@/lib/telemetry', () => ({ getConsentState: vi.fn() }))
+vi.mock('@/diagnostics/telemetry/telemetry', () => ({ getConsentState: vi.fn() }))
 
 beforeEach(() => vi.mocked(getConsentState).mockResolvedValue({ effective: 'enabled' }))
 

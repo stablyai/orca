@@ -59,6 +59,9 @@ export function readNativeChatStructuredSubmissionDelivery(
   return new Promise((resolve) => {
     const epoch = owner.getSnapshot().state.epoch
     let queued = false
+    let previousDelivery:
+      | Pick<ReturnType<typeof owner.getSnapshot>['state'], 'submissions' | 'queuedMessages'>
+      | undefined
     const finish = (delivered: boolean) => {
       unsubscribe()
       signal.removeEventListener('abort', abort)
@@ -71,6 +74,13 @@ export function readNativeChatStructuredSubmissionDelivery(
         finish(false)
         return
       }
+      if (
+        previousDelivery?.submissions === state.submissions &&
+        previousDelivery?.queuedMessages === state.queuedMessages
+      ) {
+        return
+      }
+      previousDelivery = { submissions: state.submissions, queuedMessages: state.queuedMessages }
       const submissions = state.submissions.filter(
         (submission) =>
           submission.clientMessageId === clientMessageId ||
@@ -82,8 +92,10 @@ export function readNativeChatStructuredSubmissionDelivery(
       }
       const card = state.queuedMessages?.some((message) => message.messageId === clientMessageId)
       if (
-        submissions.some((submission) => submission.dispatchState === 'rejected') ||
-        (queued && !card && submissions.length === 0)
+        !card &&
+        ((submissions.length > 0 &&
+          submissions.every((submission) => submission.dispatchState === 'rejected')) ||
+          (queued && submissions.length === 0))
       ) {
         finish(false)
         return

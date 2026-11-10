@@ -1,10 +1,10 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../shared/native-chat/native-chat-types'
 import { emitNativeChatMessageSent } from '../components/native-chat/telemetry/native-chat-telemetry'
-import { track } from './telemetry'
+import { track } from '../diagnostics/telemetry/telemetry'
 import { launchPromptAsMessage } from '../components/native-chat/session/terminal/delivery/native-chat-pending'
 
-vi.mock('./telemetry', () => ({
+vi.mock('../diagnostics/telemetry/telemetry', () => ({
   track: vi.fn(),
   tuiAgentToAgentKind: () => 'codex'
 }))
@@ -174,7 +174,8 @@ it('does not treat a failed synthetic launch prompt as a successful predecessor'
   expect(followUps()).toEqual([])
 })
 
-it('counts a delivered follow-up using older submission evidence', async () => {
+it('counts a delivered follow-up using older evidence while another delivery remains unknown', async () => {
+  const unknown = Promise.withResolvers<boolean>()
   emitNativeChatMessageSent({
     agent: 'codex',
     runtime: 'local',
@@ -182,7 +183,7 @@ it('counts a delivered follow-up using older submission evidence', async () => {
       priorMessages: [],
       submission: Promise.resolve(true),
       priorSubmission: async () => true,
-      submissionHistory: new Map()
+      submissionHistory: new Map([['unknown-delivery', unknown.promise]])
     }
   })
   await vi.waitFor(() =>

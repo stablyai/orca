@@ -19,14 +19,17 @@ import { dispatchStructuredAgentSessionComposerCommand } from '../../../../../..
 import type { NativeChatStructuredComposerTransport } from './native-chat-structured-composer-transport'
 
 import { useNativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'
-import { track } from '@/lib/telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
 import type { NativeChatRecallSource } from '../../drafts/native-chat-sent-prompt-history'
 import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../../../../../shared/agent-session/structured-agent-session-reducer'
 import type { AgentJournalSubmission } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionReadSnapshot } from '../../session/structured/read/structured-agent-session-read-owner-contract'
 import { readNativeChatStructuredSubmissionDelivery } from '../../telemetry/native-chat-structured-submission-delivery'
 
-vi.mock('@/lib/telemetry', () => ({ track: vi.fn(), tuiAgentToAgentKind: () => 'codex' }))
+vi.mock('@/diagnostics/telemetry/telemetry', () => ({
+  track: vi.fn(),
+  tuiAgentToAgentKind: () => 'codex'
+}))
 
 import {
   createNativeChatQueuedEditDraft,
