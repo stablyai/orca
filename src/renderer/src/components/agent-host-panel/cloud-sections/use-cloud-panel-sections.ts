@@ -23,6 +23,11 @@ export type CloudPanelSectionsData = {
   asleep: boolean
   /** Shared with teammates (D13), and whose workspace it is; null when unknown. */
   sharing: CloudWorkspaceSharing | null
+  /**
+   * The caller's Personal values are left out: a teammate in a shared workspace, or a workspace whose
+   * sharing couldn't be read (D13 fails closed: it may be someone else's shared workspace).
+   */
+  withoutPersonal: boolean
 }
 
 /** A teammate's view of someone else's shared workspace: only their non-Personal values apply. */
@@ -36,10 +41,13 @@ export function cloudPanelSectionsData(args: {
   repoKey: string | null
   asleep: boolean
   sharing: CloudWorkspaceSharing | null
+  /** The workspace's sharing read failed; treat it as possibly someone else's shared workspace. */
+  sharingUnknown?: boolean
 }): CloudPanelSectionsData {
-  const guest = isGuestInSharedWorkspace(args)
-  const effective = guest ? withoutCallerPersonal(args.effective) : args.effective
+  const withoutPersonal = args.sharingUnknown === true || isGuestInSharedWorkspace(args)
+  const effective = withoutPersonal ? withoutCallerPersonal(args.effective) : args.effective
   return {
+    withoutPersonal,
     effective,
     missing: args.envVarNames ? missingSecretNames(args.envVarNames, effective) : [],
     repoKey: args.repoKey,
@@ -103,7 +111,9 @@ export function useCloudPanelSections(args: {
           envVarNames: environment?.envVarNames ?? null,
           repoKey,
           asleep,
-          sharing: sharing?.ok ? sharing.value : null
+          sharing: sharing?.ok ? sharing.value : null,
+          // A sandbox whose sharing couldn't be read fails closed (D13).
+          sharingUnknown: runtimeEnvironmentId !== null && !sharing?.ok
         })
       })
     })()

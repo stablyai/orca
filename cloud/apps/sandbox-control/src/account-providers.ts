@@ -32,9 +32,10 @@ export type AccountProvider = {
   credential(db: D1Database, keyring: Keyring, userId: string, now: number): Promise<string | null>
 }
 
-/** D13: a workspace shared with teammates never uses a personal account. */
+/** D13: a workspace shared with teammates never uses a personal account. Fails closed: only a row
+ * known to be private counts as unshared. */
 export function isSharedWorkspace(row: Pick<SandboxRow, 'visibility'>): boolean {
-  return row.visibility === 'team'
+  return row.visibility !== 'private'
 }
 
 export const claudeAccount: AccountProvider = {
