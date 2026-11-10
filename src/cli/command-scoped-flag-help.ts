@@ -6,7 +6,9 @@ const CHAT_SESSION_HELP =
   '--session <id>        Chat session id or handle from chat list or agent launch'
 
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
-  'chat rename': { session: CHAT_SESSION_HELP },
+  'chat rename': {
+    session: '--session <id>        Chat session id from chat list or agent launch'
+  },
   'chat list': {
     state: '--state <state>       Only chats in this state: working, blocked, waiting or done'
   },
