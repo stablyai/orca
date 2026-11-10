@@ -23,6 +23,13 @@ describe('focus dependency observation', () => {
   it('counts routing, action gates and escaped or non-setup dependency sets', () => {
     const mutations = [
       source.replace(
+        'return {\n    forget,',
+        "forget = (workspace: string): void => { void window.api.pty.kill('pty-to-close') }; return {\n    forget,"
+      ),
+      source.replace('return {\n    forget,', 'refresh = replacement; return {\n    forget,'),
+      source.replace('return {\n    forget,', '({ forget } = replacements); return {\n    forget,'),
+      source.replace('return {\n    forget,', 'escape(refresh, forget); return {\n    forget,'),
+      source.replace(
         'forget(workspace)\n    catalogs.',
         'forget(workspace)\n    dispatch(state)\n    catalogs.'
       ),

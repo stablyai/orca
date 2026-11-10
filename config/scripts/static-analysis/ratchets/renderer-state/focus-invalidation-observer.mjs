@@ -245,6 +245,26 @@ export function focusInvalidationReaderSpans(rel, source) {
   if (!onlyReferences(file, 'affected', allowedAffected)) {
     return []
   }
+  const exportedForget = returned[0].expression.properties.find(
+    (node) =>
+      ts.isShorthandPropertyAssignment(node) &&
+      node.name.text === 'forget' &&
+      !node.objectAssignmentInitializer
+  )
+  const ownerMethod = returned[0].expression.properties.find((node) =>
+    shape(
+      node,
+      'owner(state: State, workspace: string): TerminalPtyOwner { return owners.get(workspace) ?? refresh(state, workspace) }'
+    )
+  )
+  if (
+    !exportedForget ||
+    !ownerMethod ||
+    !onlyReferences(file, 'refresh', [refresh.name, ownerMethod, refreshLoop]) ||
+    !onlyReferences(file, 'forget', [forget.name, refresh, exportedForget])
+  ) {
+    return []
+  }
   // A redeclaration of the imported reader/predicate/resolver or refresh is never sanctioned.
   for (const name of [
     READER,
