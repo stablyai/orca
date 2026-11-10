@@ -14,6 +14,12 @@ import type {
 } from '../../session/structured/writes/use-structured-agent-session-mutate'
 import { returnMessageToComposer } from '../../session/structured/delivery/structured-agent-session-message-hand-back'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind-host'
+import {
+  nativeChatRewindPrompt,
+  previewNativeChatRewindFiles,
+  restoreNativeChatRewindFiles,
+  type NativeChatCheckpointClient
+} from './native-chat-rewind-files'
 
 export type RewindInput = Omit<
   AgentSessionRewindInput,
@@ -22,6 +28,8 @@ export type RewindInput = Omit<
   capturePresentation: CaptureStructuredAgentSessionPresentation
   /** The composer the discarded message returns to, after whatever is typed there. */
   composerScopeKey?: string
+  /** The host's per-turn file checkpoints; absent where the host can't restore files. */
+  checkpoints?: NativeChatCheckpointClient
   send: (fields: {
     itemId: string
     expectedEpoch: string
@@ -35,11 +43,25 @@ const useAgentSessionRewind = createAgentSessionRewindHook(
 const notify = { error: toast.error, message: toast.message }
 
 export function useNativeChatRewind(input: RewindInput) {
+  // The message whose files the user chose to restore, set on confirm and spent by its rewind.
+  const restoreFilesFor = useRef<string | null>(null)
   const rewind = useAgentSessionRewind(
     useMemo(() => {
       const scope = input.composerScopeKey
+      const { checkpoints } = input
       return {
         ...input,
+        // Files follow the chat only once the chat itself went back; a refused rewind keeps both.
+        send: async (fields: Parameters<RewindInput['send']>[0]) => {
+          const outcome = await input.send(fields)
+          const restore = restoreFilesFor.current === fields.itemId
+          restoreFilesFor.current = null
+          if (restore && checkpoints && outcome.kind === 'done') {
+            // The host queues the next turn's snapshot behind this restore, so a send can't race it.
+            void restoreNativeChatRewindFiles(checkpoints, fields.itemId)
+          }
+          return outcome
+        },
         notify,
         ...(scope
           ? {
@@ -55,22 +77,24 @@ export function useNativeChatRewind(input: RewindInput) {
     }, [input])
   )
   const sharedRequest = rewind.request
+  const checkpoints = input.checkpoints
   const request = useCallback(
     (itemId: string, confirm: ConfirmationDialogContextValue) =>
-      sharedRequest(itemId, () =>
-        confirm({
+      sharedRequest(itemId, async () => {
+        restoreFilesFor.current = null
+        const preview = await previewNativeChatRewindFiles(checkpoints, itemId)
+        return confirm({
           title: translate('components.native-chat.rewind.title', 'Rewind to here?'),
-          description: translate(
-            'components.native-chat.rewind.confirmation',
-            'Discard this message and everything after it? The message returns to the composer so you can edit and resend it. File changes on disk are kept.'
-          ),
+          ...nativeChatRewindPrompt(preview, (restoreFiles) => {
+            restoreFilesFor.current = restoreFiles ? itemId : null
+          }),
           confirmLabel: translate('components.native-chat.rewind.confirm', 'Rewind'),
           cancelLabel: translate('components.native-chat.rewind.cancel', 'Cancel'),
           confirmVariant: 'destructive',
           cancelVariant: 'ghost'
         })
-      ),
-    [sharedRequest]
+      }),
+    [checkpoints, sharedRequest]
   )
   const shared = rewind.surface
   const surface = useMemo<NativeChatRewindSurface | undefined>(

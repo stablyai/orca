@@ -21852,7 +21852,20 @@
         "confirmation": "Discard this message and everything after it? The message returns to the composer so you can edit and resend it. File changes on disk are kept.",
         "confirm": "Rewind",
         "cancel": "Cancel",
-        "action": "Rewind to here"
+        "action": "Rewind to here",
+        "confirmationBase": "Discard this message and everything after it? The message returns to the composer so you can edit and resend it.",
+        "restoreFiles": "Also restore files ({{files}} changed)",
+        "restoreFilesDetail": "Files go back to how they were when this message was sent. Changes made after it are discarded. You can undo this.",
+        "restoreFilesCommitsStay": "Commits made since then stay on the branch.",
+        "filesAlreadyMatch": "Files on disk already match this message.",
+        "restored": "Files restored ({{files}} changed)",
+        "restoreBusy": "Files weren't restored because the agent is still working. Nothing on disk changed.",
+        "restoreConflicts": "Files weren't restored because this worktree has unresolved merge conflicts. Nothing on disk changed.",
+        "restoreBlocked": "Files weren't restored because a folder now sits where a restored file goes. Nothing on disk changed.",
+        "restoreMissing": "Files weren't restored because the snapshot for this message is gone. Nothing on disk changed.",
+        "restoreFailed": "Orca couldn't restore every file. Check the worktree before continuing.",
+        "undoRestore": "Undo",
+        "undoneRestore": "Files are back to how they were before the rewind."
       },
       "drop": {
         "messageTitle": "Drop to attach to this message",

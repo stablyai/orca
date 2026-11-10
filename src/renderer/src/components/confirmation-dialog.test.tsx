@@ -103,6 +103,30 @@ describe('ConfirmationDialogProvider', () => {
     await waitFor(() => expect(onSettled).toHaveBeenCalledWith(true))
   })
 
+  it('starts an option at its default and hands its state over only on confirm', async () => {
+    const onConfirmed = vi.fn()
+    const { onSettled } = renderDialog({
+      title: 'Rewind to here?',
+      confirmLabel: 'Rewind',
+      option: {
+        label: 'Also restore files (3 changed)',
+        detail: 'Changes made after it are discarded.',
+        defaultChecked: true,
+        onConfirmed
+      }
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    const box = await screen.findByRole('checkbox', { name: 'Also restore files (3 changed)' })
+    expect(box.getAttribute('aria-checked')).toBe('true')
+    expect(box.getAttribute('aria-describedby')).toBe('confirmation-dialog-option-detail')
+    await userEvent.click(box)
+    await userEvent.click(screen.getByRole('button', { name: 'Rewind' }))
+
+    expect(onConfirmed).toHaveBeenCalledWith(false)
+    await waitFor(() => expect(onSettled).toHaveBeenCalledWith(true))
+  })
+
   it('never saves the preference when the user backs out', async () => {
     const onConfirmed = vi.fn()
     const { onSettled } = renderDialog({

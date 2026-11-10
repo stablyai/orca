@@ -30,6 +30,14 @@ export type ConfirmationDialogOptions = {
   ignoresOpeningGesture?: boolean
   /** Renders a "Don't ask again" checkbox. `onConfirmed` runs only when the user confirms with it checked. */
   dontAskAgain?: { label?: string; onConfirmed: () => void }
+  /** Renders a checkbox for an optional part of the action, with an optional line under it.
+   *  `onConfirmed` gets the box's state, only on confirm. */
+  option?: {
+    label: string
+    detail?: string
+    defaultChecked: boolean
+    onConfirmed: (checked: boolean) => void
+  }
   /** Runs when the cancel button settles the prompt, unlike Esc, an outside press or an abort. */
   onCancelClicked?: () => void
   /** Renders text inputs; Enter in one confirms. `onConfirmed` gets their values, only on confirm. */

@@ -37,6 +37,8 @@ export function ConfirmationDialogProvider({
   const confirmButtonRef = useRef<HTMLButtonElement>(null)
   const [queue, setQueue] = useState<ConfirmationDialogRequest[]>([])
   const [dontAskAgain, setDontAskAgain] = useState(false)
+  // null until the user touches the option, so each prompt starts from its own default.
+  const [optionChecked, setOptionChecked] = useState<boolean | null>(null)
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({})
   const activeRequest = queue[0] ?? null
   const activeRequestRef = useRef<ConfirmationDialogRequest | null>(activeRequest)
@@ -109,6 +111,10 @@ export function ConfirmationDialogProvider({
       if (confirmed && dontAskAgain) {
         request.options.dontAskAgain?.onConfirmed()
       }
+      const option = request.options.option
+      if (confirmed && option) {
+        option.onConfirmed(optionChecked ?? option.defaultChecked)
+      }
       const fields = request.options.fields
       if (confirmed && fields) {
         const defaults = Object.fromEntries(
@@ -118,6 +124,7 @@ export function ConfirmationDialogProvider({
       }
       // Why: queued prompts must not inherit this request's preference or typed values.
       setDontAskAgain(false)
+      setOptionChecked(null)
       setFieldValues({})
       request.resolve(confirmed)
       setQueue((currentQueue) => {
@@ -127,7 +134,7 @@ export function ConfirmationDialogProvider({
         return currentQueue.filter((queuedRequest) => queuedRequest.id !== request.id)
       })
     },
-    [dontAskAgain, fieldValues]
+    [dontAskAgain, fieldValues, optionChecked]
   )
 
   return (
@@ -203,6 +210,34 @@ export function ConfirmationDialogProvider({
                   />
                 </div>
               ))}
+            </div>
+          ) : null}
+          {displayedRequest?.options.option ? (
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id="confirmation-dialog-option"
+                className="mt-0.5"
+                checked={optionChecked ?? displayedRequest.options.option.defaultChecked}
+                onCheckedChange={(checked) => setOptionChecked(checked === true)}
+                aria-describedby={
+                  displayedRequest.options.option.detail
+                    ? 'confirmation-dialog-option-detail'
+                    : undefined
+                }
+              />
+              <div className="space-y-1">
+                <Label htmlFor="confirmation-dialog-option">
+                  {displayedRequest.options.option.label}
+                </Label>
+                {displayedRequest.options.option.detail ? (
+                  <p
+                    id="confirmation-dialog-option-detail"
+                    className="text-xs text-muted-foreground"
+                  >
+                    {displayedRequest.options.option.detail}
+                  </p>
+                ) : null}
+              </div>
             </div>
           ) : null}
           {displayedRequest?.options.dontAskAgain ? (

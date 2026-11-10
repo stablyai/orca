@@ -116,6 +116,11 @@ export async function beginSubmissionHandover(
   return {
     run: async (commit) => {
       try {
+        // A message that opens a turn gets a file checkpoint first, taken before the agent can
+        // write; one that joins a running turn would snapshot the agent mid-edit, so it gets none.
+        if (turnScope.kind === 'thread' && ctx.captureTurnCheckpoint && !attempt?.signal.aborted) {
+          await ctx.captureTurnCheckpoint(agentJournalSubmissionKey(clientMessageId), attempt?.signal)
+        }
         let outcome: AgentSessionDispatchOutcome | null
         try {
           for (;;) {
