@@ -67,7 +67,7 @@ function HistoryTotalsList({
             variant="ghost"
             size="sm"
             onClick={() => onSelect(row.key)}
-            className="h-auto w-full items-start gap-2 whitespace-normal text-left"
+            className="h-auto w-full items-start whitespace-normal text-left"
           >
             <span
               aria-hidden="true"
