@@ -2,7 +2,7 @@ import {
   buildServeSimKeyboardFramesForKey,
   type ServeSimKeyboardFrame
 } from '../../../../shared/emulator-keyboard-frame'
-import { measureClipboardTextByteLength } from '../../../../shared/clipboard-text'
+import { measureUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
 
 export const EMULATOR_KEYBOARD_PASTE_MAX_BYTES = 4 * 1024
 export const EMULATOR_KEYBOARD_PASTE_MAX_FRAMES_PER_CHUNK = 48
@@ -77,7 +77,7 @@ function validateEmulatorKeyboardPasteText(
   maxBytes?: number
 ): EmulatorKeyboardPasteValidation {
   const byteLimit = getPositiveIntegerLimit(maxBytes, EMULATOR_KEYBOARD_PASTE_MAX_BYTES)
-  const byteLengthMeasurement = measureClipboardTextByteLength(text, { stopAfterBytes: byteLimit })
+  const byteLengthMeasurement = measureUtf8ByteLength(text, { stopAfterBytes: byteLimit })
   if (byteLengthMeasurement.exceededLimit) {
     return { byteLength: byteLengthMeasurement.byteLength, reason: 'too-large', status: 'rejected' }
   }

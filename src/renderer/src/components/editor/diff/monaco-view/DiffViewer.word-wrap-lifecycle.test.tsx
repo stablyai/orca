@@ -79,7 +79,7 @@ vi.mock('@/store/slices/diff-comments/diff-comment-owner', () => ({
   selectDiffCommentView: () => ({ owner: null, comments: undefined }),
   diffCommentOwnerKey: () => ''
 }))
-vi.mock('@/lib/monaco-setup', () => ({
+vi.mock('@/lib/editor/monaco/monaco-setup', () => ({
   monaco: { Uri: { parse: (path: string) => path }, editor: { getModel: () => null } }
 }))
 vi.mock('../../useContextualCopySetup', () => ({

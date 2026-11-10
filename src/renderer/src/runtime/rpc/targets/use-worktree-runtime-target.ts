@@ -8,7 +8,7 @@ import {
   runtimeTargetForOwnerEnvironment,
   runtimeTargetEnvironmentId
 } from './runtime-client-target'
-import '../../../lib/wsl-host-account-owner'
+import '../../provider-accounts/ownership/wsl-host-account-owner'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 
 /** Target the workspace owner rather than the focused host or port scans hit the wrong machine. Direct-SSH owners return null. */

@@ -98,6 +98,27 @@ export function projectStructuredAgentSessionMessages(
   submissions: readonly AgentJournalSubmission[],
   projectItems = projectStructuredItemsToNativeChat
 ): NativeChatMessage[] {
+  return projectStructuredAgentSessionMessageRows(items, optimistic, submissions, projectItems)
+    .output
+}
+
+export type StructuredAgentSessionItemProjector = (
+  items: readonly AgentJournalRenderItem[]
+) => NativeChatMessage[]
+
+export type StructuredAgentSessionMessageRows = {
+  output: NativeChatMessage[]
+  /** Rows before the held cards and optimistic echoes. */
+  conversationEnd: number
+  hasStoppedSends: boolean
+}
+
+export function projectStructuredAgentSessionMessageRows(
+  items: readonly AgentJournalRenderItem[],
+  optimistic: readonly StructuredAgentSessionOptimisticMessage[],
+  submissions: readonly AgentJournalSubmission[],
+  projectItems: StructuredAgentSessionItemProjector
+): StructuredAgentSessionMessageRows {
   // Keep stopped-before-start sends in conversation history; queued handoffs stay in their cards.
   const stoppedBeforeStart = new Map(
     submissions
@@ -182,14 +203,16 @@ export function projectStructuredAgentSessionMessages(
     : collapseProviderRetryRuns(delivered)
   const conversation =
     shownStopped.size > 0 ? withStopRowsAfterStoppedSends(ordered, shownStopped) : ordered
-  return [
-    // Merge unsent rows at journal positions after stop grouping so each run retains one stop notice.
-    ...(unsentItems.length > 0
+  // Merge unsent rows at journal positions after stop grouping so each run retains one stop notice.
+  const placed =
+    unsentItems.length > 0
       ? withRowsAtJournalPlaces(
           conversation,
           projectItems(unsentItems).map((message) => ({ ...message, unsent: true as const }))
         )
-      : conversation),
+      : conversation
+  const output = [
+    ...placed,
     // Held cards follow the conversation outside its runs.
     ...held,
     // Host rows supersede client echoes under either client or provider IDs.
@@ -227,6 +250,11 @@ export function projectStructuredAgentSessionMessages(
         }
       })
   ]
+  return {
+    output,
+    conversationEnd: placed.length,
+    hasStoppedSends: stoppedBeforeStart.size > 0
+  }
 }
 
 /** Merge placed rows in journal order so clients rendering the list directly need no sort. */

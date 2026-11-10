@@ -300,12 +300,18 @@
       "plan": "计划",
       "stoppedManually": "已手动停止",
       "permissionDenied": "{{agent}} 拒绝了权限。查看详情。",
+      "safetyReviewApproved": "{{agent}} 已批准此操作。查看详情。",
       "safetyReview": "{{agent}} 报告了安全审查警告。查看详情。",
       "truncatedResponse": "提供方响应已截断（原始大小：{{bytes}} 字节）。",
       "modelFallback": "Claude 已切换模型：{{from}} → {{to}}。",
       "signIn": "登录",
       "signInHint": "在运行此聊天的电脑上打开终端",
       "forkedFrom": "分支来源"
+    },
+    "ciResultLine": {
+      "failingLead": "CI 失败:",
+      "greenLead": "CI 通过:",
+      "at": "提交"
     },
     "orcaStop": {
       "canContinue": "您可以在此对话中继续。",
@@ -593,6 +599,7 @@
       "fullCopySaveUpdate": "完整复制和保存此附件的功能将在手机更新中提供。"
     },
     "hostOutage": {
+      "offlineAsOf": "{{host}} 已离线 · 截至 {{time}}",
       "reconnecting": "{{hostName}} 正在重新连接…",
       "stopped": "{{hostName}} 已停止。请在你的电脑上启动它。",
       "server": "服务器",
@@ -1293,6 +1300,62 @@
       "sessionLimit": "这台电脑上正在听写的设备过多。请等其中一台结束后再试。",
       "sessionLost": "听写与电脑的连接已断开。请重试。",
       "updateFailed": "更新听写设置失败"
+    },
+    "controls": {
+      "start": "听写",
+      "starting": "正在开始听写",
+      "stop": "停止并插入",
+      "finishing": "正在完成听写",
+      "cancel": "取消听写",
+      "meterOnPhone": "正在录音，{{duration}}，在此手机上",
+      "meterOn": "正在录音，{{duration}}，在 {{computer}} 上",
+      "meterOnComputer": "正在录音，{{duration}}，在电脑上",
+      "meter": "正在录音，{{duration}}",
+      "durationMinutesSeconds": "{{minutes}} {{seconds}}",
+      "durationSeconds_one": "{{count}} 秒",
+      "durationSeconds_other": "{{count}} 秒",
+      "durationMinutes_one": "{{count}} 分钟",
+      "durationMinutes_other": "{{count}} 分钟",
+      "discard": "丢弃录音",
+      "retry": "重试听写",
+      "retryShort": "重试"
+    },
+    "status": {
+      "finishingOn": "正在 {{computer}} 上完成",
+      "finishingOnComputer": "正在电脑上完成",
+      "movedTo": "已转到 {{computer}}",
+      "movedToComputer": "已转到电脑"
+    },
+    "failure": {
+      "connectionLost": "连接已断开",
+      "connectionSlow": "连接太慢",
+      "phoneStopped": "已在此手机上停止",
+      "stopped": "听写已停止",
+      "recordingKept": "录音已保留"
+    },
+    "announce": {
+      "typedInto": "已输入到 {{target}}",
+      "insertedIn": "已插入到 {{target}}",
+      "listeningOnPhone": "正在听。正在此手机上转写。",
+      "listeningOn": "正在听。正在 {{computer}} 上转写。",
+      "listeningOnComputer": "正在听。正在电脑上转写。",
+      "finishing": "正在完成。",
+      "inserted": "已插入。",
+      "cancelled": "已取消听写。",
+      "movedTo": "此手机已停止转写。在 {{computer}} 上继续。",
+      "movedToComputer": "此手机已停止转写。在电脑上继续。",
+      "stoppedKept": "听写已停止。{{reason}}。录音已保留。",
+      "stoppedKeptGeneric": "听写已停止。录音已保留。",
+      "stillListening": "仍在听。"
+    },
+    "pill": {
+      "open": "打开",
+      "listening": "正在听",
+      "starting": "正在开始",
+      "finishing": "正在完成",
+      "stopped": "听写已停止",
+      "label": "听写到 {{target}}，{{duration}}",
+      "hint": "轻点两下返回"
     }
   },
   "files": {
@@ -1402,12 +1465,6 @@
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "{{count}} 个活跃",
-      "heading": "智能体",
-      "showAll": "显示全部 {{count}} 个",
-      "showFewer": "收起"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "关闭 Orca {{version}} 更新提示",
       "title": "Orca {{version}} 已可用",
@@ -1531,6 +1588,8 @@
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "要删除“{{name}}”（{{branch}}）吗？",
+      "deleteDestroysEnvironment": "这也会销毁 Orca 为其创建的环境“{{environment}}”，包括其中未提交的更改和正在运行的终端。",
+      "deleteKeepsEnvironment": "Orca 为其创建的环境“{{environment}}”会继续运行：其配方没有销毁步骤。",
       "deleteWorktree": "删除工作树",
       "pin": "固定",
       "primaryWorktreeDeleteHint": "主工作树不能删除。请改为移除项目。",
@@ -2101,6 +2160,10 @@
       "providerExitedRejection": "{{agent}} 在发送此消息前已停止。",
       "providerExitedRow": "{{agent}} 在生成此回复时停止了。您可以在此对话中继续。",
       "providerRateLimited": "{{agent}} 已被限流，正在重试。",
+      "providerUnavailable": "{{agent}} 因服务繁忙而无法回复。请选择其他模型，或稍等片刻后重新发送。",
+      "providerSafetyStopped": "{{agent}} 在安全检查后停止了此次回复。请检查您的请求后重新发送。",
+      "providerResponseFailed": "{{agent}} 未能完成此回复。打开详情了解更多信息。",
+      "selectedModel": "所选模型",
       "providerRejected": "{{agent}} 未接受此消息。",
       "providerRejectedQuoted": "{{agent}} 未接受此消息：{{detail}}。",
       "providerRetryLastError": "上次错误：{{detail}}。",
@@ -2190,8 +2253,7 @@
       "copyPathLabel": "复制 Markdown 文件路径",
       "copySource": "复制 Markdown 源码",
       "discard": "放弃",
-      "dismissKeyboard": "关闭键盘",
-      "dismissKeyboardHint": "隐藏软键盘，并保持 Markdown 编辑器打开。",
+      "previewTruncated": "预览已截断。",
       "readOnly": "只读"
     },
     "nativeChatAttachActions": {
@@ -2400,11 +2462,7 @@
     "terminalInputActions": {
       "attachFileHint": "长按可改为附加文件",
       "attachPhoto": "附加照片",
-      "sendingImage": "正在发送图片",
-      "startDictation": "开始语音听写",
-      "startingDictation": "正在启动语音听写",
-      "stopDictation": "停止语音听写",
-      "transcribingDictation": "正在转写语音听写内容"
+      "sendingImage": "正在发送图片"
     },
     "terminalLiveInputStatus": {
       "listening": "正在聆听",
@@ -2413,8 +2471,6 @@
       "processing": "处理中",
       "releaseMicHint": "松开麦克风按钮即可停止",
       "startingMic": "正在启动麦克风",
-      "stopHint": "点按麦克风停止",
-      "transcribing": "正在桌面上转写",
       "uploadingImage": "正在将图片上传到主机",
       "uploadingImageTitle": "正在上传图片"
     },
@@ -2508,7 +2564,8 @@
       "insertFailed": "无法插入听写文本",
       "insertFailedCopied": "无法插入听写文本，已复制到剪贴板",
       "inserted": "已插入听写文本",
-      "stoppedAfterSilence": "静音一分钟后已停止"
+      "stoppedAfterSilence": "静音一分钟后已停止",
+      "stoppedAtCloudLimit": "已达 10 分钟云端上限。听写已停止。"
     },
     "useNativeChatStop": {
       "stopNotSent": "停止指令未发送",
@@ -2829,6 +2886,8 @@
       "dictationHeading": "听写",
       "dictationMode": "听写模式",
       "dictationModeDescription": "切换：按一次开始，再按一次停止。按住：按住期间进行听写。",
+      "dictationModeWithAutoDescription": "自动：轻按开始和停止；在电脑上按住快捷键会一直录音，直到松开。按住：按住期间进行听写。切换：按一次开始，再按一次停止。",
+      "autoMode": "自动",
       "downloadFailed": "下载失败",
       "enableDictation": "启用语音听写",
       "holdMode": "按住",

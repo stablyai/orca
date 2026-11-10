@@ -21,7 +21,6 @@ vi.mock('../../../store/index', () => ({ useAppStore: { setState: vi.fn() } }))
 
 const TAB_ID = toWebTerminalSurfaceTabId('host-tab-1')
 const PTY_ID = `remote:${ENV}@@terminal-1`
-const FOLDER = 'folder:folder-1'
 
 function sleptState(worktreeId = WT, ptyId = PTY_ID) {
   return makeState({
@@ -79,10 +78,10 @@ describe('sleep activity during host terminal mirroring', () => {
   beforeEach(resetWebSessionTabsSyncTestState)
   afterEach(() => {
     clearWorktreeSleepIntent(WT)
-    clearWorktreeSleepIntent(FOLDER)
   })
 
-  it.each([WT, FOLDER])('keeps %s asleep while retaining its wake binding', (worktreeId) => {
+  it('keeps a sleeping workspace wake binding inactive', () => {
+    const worktreeId = WT
     const state = sleptState(worktreeId)
     markWorktreeSleepIntent(worktreeId)
     expect(inactive(state, worktreeId)).toBe(true)

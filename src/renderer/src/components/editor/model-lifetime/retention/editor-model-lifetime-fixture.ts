@@ -1,6 +1,6 @@
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import { vi } from 'vitest'
-import { createEditorModelRegistry } from '@/lib/editor-model-registry'
+import { createEditorModelRegistry } from '@/lib/editor/monaco/editor-model-registry'
 import { createEditorTabsStore } from '@/store/slices/editor/editor-slice-test-harness'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'

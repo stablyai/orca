@@ -18,13 +18,8 @@ import {
   getAgentStatusHooksDescription,
   getAgentStatusHooksTitle
 } from './behavior/agent-status-hooks-copy'
-import {
-  getAgentWorkspaceTrustDescription,
-  getAgentWorkspaceTrustTitle
-} from './behavior/agent-workspace-trust-copy'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
-
 import { AgentLaunchSettingsSection } from './launch/AgentLaunchSettingsSection'
 import {
   AgentPermissionsSetting,
@@ -33,6 +28,7 @@ import {
 import type { SettingsHostScope } from '../host-scope/settings-host-scope'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { useTranslate } from '@/i18n/use-translate'
+import { AgentWorkspaceTrustSetting } from './behavior/AgentWorkspaceTrustSetting'
 
 type AgentSettingProps = {
   settings: GlobalSettings
@@ -120,7 +116,7 @@ function renderAgentPermissions(props: AgentPermissionsSettingProps): React.Reac
   return <AgentPermissionsSetting {...props} />
 }
 
-export function AgentStatusHooksSetting({ settings, updateSettings }: AgentSettingProps) {
+function AgentStatusHooksSetting({ settings, updateSettings }: AgentSettingProps) {
   const t = useTranslate()
   const enabled = settings.agentStatusHooksEnabled !== false
   return (
@@ -134,21 +130,7 @@ export function AgentStatusHooksSetting({ settings, updateSettings }: AgentSetti
   )
 }
 
-export function AgentWorkspaceTrustSetting({ settings, updateSettings }: AgentSettingProps) {
-  const t = useTranslate()
-  const enabled = settings.agentWorkspaceTrustEnabled !== false
-  return (
-    <SettingsSwitchRow
-      label={getAgentWorkspaceTrustTitle(t)}
-      description={getAgentWorkspaceTrustDescription(t)}
-      checked={enabled}
-      onChange={() => updateSettings({ agentWorkspaceTrustEnabled: !enabled })}
-      ariaLabel={getAgentWorkspaceTrustTitle(t)}
-    />
-  )
-}
-
-export function AgentGeneratedTabTitlesSetting({ settings, updateSettings }: AgentSettingProps) {
+function AgentGeneratedTabTitlesSetting({ settings, updateSettings }: AgentSettingProps) {
   const t = useTranslate()
   const enabled = settings.tabAutoGenerateTitle === true
   return (

@@ -77,6 +77,8 @@ type ChatViewProps = MobileNativeChatSendProps &
     error?: string
     // Permanent read failure replaces the pane because further chat actions cannot succeed.
     readFailedFinally?: boolean
+    /** A sent /clear hid the old rows: show a blank list until its divider lands, not the new-chat copy. */
+    clearing?: boolean
     agent?: string | null
     sessionLive?: boolean
     /** The turn is live: working, or waiting on the reader. */
@@ -138,6 +140,7 @@ export function MobileNativeChatView({
   status,
   error,
   readFailedFinally = false,
+  clearing = false,
   agent,
   sessionLive,
   agentWorking,
@@ -235,7 +238,6 @@ export function MobileNativeChatView({
       : (ask ?? permission ?? question ?? collapsedPrompt ?? awaitingInput) != null,
     send: onSend
   })
-  const { lockReason } = offlineQueue
   const handleSend = useCallback(
     async (...send: Parameters<typeof onSend>): Promise<boolean> => {
       // Retire the previous notice before this action can report a new one.
@@ -313,10 +315,10 @@ export function MobileNativeChatView({
   // Changing text scale relays out every row, so preserve the page’s reading anchor.
   const layoutKey = `${fontScale}`
   const footer = mobileNativeChatListFooter(liveStatus, turns.waitingRows, renderItem)
-  const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error, sessionLive)
+  const emptyState = mobileNativeChatEmptyState(status, agent, error, sessionLive, clearing)
 
   const composerPlaceholder = mobileNativeChatComposerPlaceholder(
-    lockReason,
+    offlineQueue.lockReason,
     turnIndicator?.afterStop
   )
   const promptOwnsInput = useMobileNativeChatPromptInputOwner(
@@ -346,7 +348,7 @@ export function MobileNativeChatView({
         collapsedPrompt={collapsedPrompt}
       />
       <MobileNativeChatInputLockStatus
-        lockReason={lockReason}
+        lockReason={offlineQueue.lockReason}
         waitingText={composerPlaceholder}
         hostOutage={hostOutage}
       />

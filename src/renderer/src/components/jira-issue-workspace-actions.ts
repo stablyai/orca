@@ -10,7 +10,7 @@ import type {
 } from '../../../shared/jira/jira-types'
 import { applyJiraIssueKeyCasing } from '../../../shared/workspace-name'
 import type { WorkspaceSeedNameOptions } from '../../../shared/workspace-name'
-import { getJiraIssueKeyCasingSeedOptions } from '@/lib/jira-issue-key-casing'
+import { getJiraIssueKeyCasingSeedOptions } from '@/lib/work-items/jira/jira-issue-key-casing'
 import { buildJiraIssuePrompt } from './jira-prompt-templates'
 import {
   issueCopiedMessage,

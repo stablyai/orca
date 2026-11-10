@@ -7,7 +7,7 @@ import {
   type LinearCreateIssueResult,
   type LinearMutationResult
 } from './runtime-linear-client'
-import type { RowLessSource as RuntimeLinearSettings } from '../../lib/default-creation-host'
+import type { RowLessSource as RuntimeLinearSettings } from '../hosts/selection/default-creation-host'
 
 export async function linearCreateIssue(
   settings: RuntimeLinearSettings,

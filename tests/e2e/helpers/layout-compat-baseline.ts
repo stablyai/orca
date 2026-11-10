@@ -6,7 +6,8 @@ import { expect } from './orca-app'
 import type { RuntimeClient } from '../../../src/cli/runtime/client'
 import { decodePairingOffer } from '../../../src/shared/remote-runtime/pairing/pairing'
 import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/remote-runtime/pairing/paired-runtime-connection'
-import { subscribeRemoteRuntimeRequest } from '../../../src/shared/remote-runtime/remote-runtime-client'
+import '../../../src/shared/remote-runtime/requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from '../../../src/shared/remote-runtime/requests/remote-runtime-subscription-transport'
 import type { RuntimeMobileSessionTabsResult } from '../../../src/shared/runtime-session-contracts'
 import { isServeMintedPtySessionId } from '../../../src/shared/terminal/pty/lifecycle/pty-session-id-format'
 import type {
@@ -156,7 +157,7 @@ export async function readPublishedLayout(
     resolveSnapshot = resolve
     rejectSnapshot = reject
   })
-  const subscription = await subscribeRemoteRuntimeRequest<unknown>(
+  const subscription = await subscribeRemoteRuntimeTransport<unknown>(
     pairedRuntimeConnectionFromOffer(decodePairingOffer(pairingUrl)),
     'layout.subscribe',
     {},

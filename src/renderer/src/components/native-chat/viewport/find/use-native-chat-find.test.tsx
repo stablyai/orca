@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import { useRef, type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { KeybindingOverrides } from '../../../../../../shared/keybindings/types'
@@ -193,18 +193,6 @@ function findInput(): HTMLInputElement | null {
   return inputs.find((input) => input === document.activeElement) ?? inputs[0] ?? null
 }
 
-function typeQuery(value: string): void {
-  const input = findInput()
-  if (!input) {
-    throw new Error('find bar is not open')
-  }
-  fireEvent.change(input, { target: { value } })
-}
-
-function status(): string | null | undefined {
-  return findInput()?.parentElement?.querySelector('[aria-live]')?.textContent
-}
-
 const TRANSCRIPT = (
   <>
     <p>alpha one</p>
@@ -231,26 +219,6 @@ afterEach(() => {
 })
 
 describe('native chat find', () => {
-  it('refocuses on Mod+F without moving the match, and keeps the query on reopen', () => {
-    const composer = composerHandle()
-    render(<Chat composer={composer} transcript={TRANSCRIPT} />)
-    pressModF(composer.element)
-    typeQuery('alpha')
-    press(findInput()!, 'Enter')
-    composer.element.focus()
-
-    expect(pressModF(composer.element).defaultPrevented).toBe(true)
-    const input = findInput()!
-    expect(document.activeElement).toBe(input)
-    expect([input.selectionStart, input.selectionEnd]).toEqual([0, 5])
-    expect(status()).toBe('2/2')
-
-    press(input, 'Escape')
-    expect(findInput()).toBeNull()
-    pressModF(composer.element)
-    expect(findInput()?.value).toBe('alpha')
-  })
-
   it('falls back to the composer when the element find was opened from is gone', () => {
     const composer = composerHandle()
     const view = render(

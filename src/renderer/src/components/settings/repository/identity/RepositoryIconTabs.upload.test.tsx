@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import * as i18n from '@/i18n/i18n'
-import * as imageEncoding from '@/lib/image-blob-png'
+import * as imageEncoding from '@/lib/clipboard/images/image-blob-png'
 import { sanitizeRepoIcon, type RepoIcon } from '../../../../../../shared/repo-icon'
 import { RepositoryIconTabs } from './RepositoryIconTabs'
 import { RepositoryIconPicker } from './RepositoryIconPicker'
@@ -111,7 +111,7 @@ async function renderPicker({
     button.textContent?.includes('Upload')
   )
   const github = [...container.querySelectorAll('button')].find((button) =>
-    button.textContent?.includes('Use GitHub Avatar')
+    button.textContent?.includes('Use GitHub avatar')
   )
   if (!upload || !github) {
     throw new Error('Missing icon controls')

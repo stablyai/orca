@@ -25,7 +25,8 @@ export function structuredQuestionCard(
         multiSelect: question.multiSelect,
         options: question.options.map((option) => ({
           label: option.label,
-          ...(option.description ? { description: option.description } : {})
+          ...(option.description ? { description: option.description } : {}),
+          ...(option.preview ? { preview: option.preview } : {})
         }))
       }))
     },

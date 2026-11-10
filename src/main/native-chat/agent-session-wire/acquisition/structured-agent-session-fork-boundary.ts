@@ -50,13 +50,9 @@ export function structuredAgentSessionForkBoundary(
   const identity = keys.nativeIdentity(selected.itemId)
   const opener = turn?.userItemId ? keys.nativeIdentity(turn.userItemId) : undefined
   const head = record.providerHandleChain.at(-1)
-  const anchor = record.forkedFrom?.childBoundary
-  const anchorIndex =
-    anchor?.kind === 'item' ? items.findIndex((item) => item.itemId === anchor.itemId) : -1
   const settled = Boolean(
     next ||
     (turn && (turn.state === 'completed' || turn.state === 'interrupted')) ||
-    index <= anchorIndex ||
     record.lease.deathEvidence
   )
   const checkpoint: Checkpoint = {

@@ -28,97 +28,60 @@ describe('mobile structured agent-session launch', () => {
       kind: 'unknown'
     })
   })
+})
 
-  it('treats malformed structured responses as unknown', async () => {
-    const client = clientReturning(
-      { ok: true, result: { supported: true } },
-      { ok: true, result: { ok: true, value: { sessionId: '' } } }
-    )
-
-    await expect(
-      createMobileStructuredAgentSession(client, 'workspace-1', 'codex')
-    ).resolves.toMatchObject({
-      kind: 'unknown'
-    })
-  })
-
-  it.each(['structured_agent_session_unsupported', 'method_not_found'])(
-    'treats a top-level %s as a definitive refusal',
-    async (code) => {
-      const client = clientReturning(
-        { ok: true, result: { supported: true } },
-        { ok: false, error: { code, message: 'structured create unavailable' } }
-      )
-
-      await expect(
-        createMobileStructuredAgentSession(client, 'workspace-1', 'codex')
-      ).resolves.toEqual({
-        kind: 'failed',
-        message: 'structured create unavailable'
-      })
-    }
-  )
-
-  it.each(['agent_session_operation_unknown', 'runtime_error', 'future_unknown_code'])(
-    'keeps a top-level %s outcome unknown',
-    async (code) => {
-      const client = clientReturning(
-        { ok: true, result: { supported: true } },
-        { ok: false, error: { code, message: 'create outcome ambiguous' } }
-      )
-
-      await expect(
-        createMobileStructuredAgentSession(client, 'workspace-1', 'codex')
-      ).resolves.toEqual({
-        kind: 'unknown',
-        message: 'create outcome ambiguous'
-      })
-    }
-  )
-
-  it('treats an envelope unsupported refusal as definitive', async () => {
-    const client = clientReturning(
-      { ok: true, result: { supported: true } },
-      {
-        ok: true,
-        result: {
-          ok: false,
-          refusal: {
-            code: 'structured_agent_session_unsupported',
-            message: 'structured create unavailable'
-          }
-        }
+it('settles a proven missing-original fork refusal but keeps a lost earlier attempt unknown', async () => {
+  const refusal = {
+    ok: true,
+    result: {
+      ok: false,
+      refusal: {
+        code: 'agent_session_identity_required',
+        details: { reason: 'recordMissing' },
+        createAttemptRefusedBeforeCommit: true,
+        message: 'Source chat unavailable'
       }
-    )
-
-    await expect(
-      createMobileStructuredAgentSession(client, 'workspace-1', 'codex')
-    ).resolves.toEqual({
-      kind: 'failed',
-      message: 'structured create unavailable'
-    })
-  })
-
-  it.each(['agent_session_operation_unknown', 'agent_session_ownership_unknown', 'future_code'])(
-    'keeps an envelope %s refusal unknown',
-    async (code) => {
-      const client = clientReturning(
-        { ok: true, result: { supported: true } },
-        {
-          ok: true,
-          result: {
-            ok: false,
-            refusal: { code, message: 'create outcome ambiguous' }
-          }
-        }
-      )
-
-      await expect(
-        createMobileStructuredAgentSession(client, 'workspace-1', 'codex')
-      ).resolves.toEqual({
-        kind: 'unknown',
-        message: 'create outcome ambiguous'
-      })
     }
-  )
+  }
+  const client = clientReturning({ ok: true, result: { supported: true } }, refusal)
+  const forkFrom = { sessionId: 'copied-chat', throughItemId: 'legacy:opencode:source:reply-1' }
+  expect(
+    (await createMobileStructuredAgentSession(client, 'workspace-1', 'opencode', forkFrom)).kind
+  ).toBe('failed')
+  const lost = clientReturning({ ok: true, result: { supported: true } }, refusal)
+  lost.sendRequest
+    .mockImplementationOnce(async () => ({ ok: true, result: { supported: true } }))
+    .mockRejectedValueOnce(markRpcDeliveryUnknown(new Error('reply lost')))
+    .mockResolvedValueOnce(refusal)
+  expect(
+    (await createMobileStructuredAgentSession(lost, 'workspace-1', 'opencode', forkFrom)).kind
+  ).toBe('unknown')
+})
+
+it('settles a proven fork read refusal without settling a prior lost copy', async () => {
+  const refusal = {
+    ok: true,
+    result: {
+      ok: false,
+      refusal: {
+        code: 'agent_session_identity_required',
+        details: { reason: 'transcriptUnreadable' },
+        createAttemptRefusedBeforeCommit: true,
+        message: 'Codex could not read the saved chat.'
+      }
+    }
+  }
+  const client = clientReturning({ ok: true, result: { supported: true } }, refusal)
+  const forkFrom = { sessionId: 'source-chat', throughItemId: 'codex:source:selected:1' }
+  expect(
+    (await createMobileStructuredAgentSession(client, 'workspace-1', 'codex', forkFrom)).kind
+  ).toBe('failed')
+  const lost = clientReturning({ ok: true, result: { supported: true } }, refusal)
+  lost.sendRequest
+    .mockImplementationOnce(async () => ({ ok: true, result: { supported: true } }))
+    .mockRejectedValueOnce(markRpcDeliveryUnknown(new Error('copy reply lost')))
+    .mockResolvedValueOnce(refusal)
+  expect(
+    (await createMobileStructuredAgentSession(lost, 'workspace-1', 'codex', forkFrom)).kind
+  ).toBe('unknown')
 })

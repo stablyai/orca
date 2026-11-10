@@ -9,7 +9,7 @@ import {
   automationLaunchWorkspace
 } from './automation-launch-surface'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { filterEnabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type {
   AutomationLaunchPreferences,

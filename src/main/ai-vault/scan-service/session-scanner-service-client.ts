@@ -218,7 +218,7 @@ export class AiVaultScannerServiceClient {
   }
 
   private onMessage(message: unknown): void {
-    if (!isAiVaultServiceChildMessage(message)) {
+    if (!isAiVaultServiceChildMessage(message) || message.type === 'trace') {
       this.onFault(new Error('AI Vault service sent a malformed message.'))
       return
     }

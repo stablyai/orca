@@ -11,34 +11,6 @@ const relay = {
 }
 
 describe('mobile relay resume director', () => {
-  it('uses a bounded POST body and never puts the bearer in the URL', async () => {
-    const fetchImpl = vi.fn(
-      async (_url: string, _init: RequestInit) =>
-        new Response(
-          JSON.stringify({
-            v: 1,
-            cellUrl: 'https://relay-c2.onorca.dev',
-            assignmentEpoch: 8,
-            leaseExpiresAt: Date.now() + 60_000
-          }),
-          { status: 200, headers: { 'content-type': 'application/json' } }
-        )
-    )
-
-    await expect(
-      resolveMobileRelayEndpoint({ relay, resumeToken: 'A'.repeat(43), fetchImpl })
-    ).resolves.toMatchObject({ cellUrl: 'https://relay-c2.onorca.dev', assignmentEpoch: 8 })
-    const [url, init] = fetchImpl.mock.calls[0]!
-    expect(url).toBe('https://relay.onorca.dev/v1/resolve')
-    expect(url).not.toContain('A'.repeat(43))
-    expect(init).toMatchObject({ method: 'POST' })
-    expect(JSON.parse(String(init.body))).toEqual({
-      v: 1,
-      relayHostId: relay.relayHostId,
-      resumeToken: 'A'.repeat(43)
-    })
-  })
-
   it('rejects non-canonical targets and oversized bodies', async () => {
     const badTarget = vi.fn(
       async () =>

@@ -11,7 +11,7 @@ import {
   pendingCreationHeldChatMessage,
   type PendingWorktreeCreation
 } from '@/lib/workspace/creation/pending-worktree-creation'
-import { shouldPreserveEditableFocus } from '@/lib/editable-focus-preservation'
+import { shouldPreserveEditableFocus } from '@/lib/text-input/focus/editable-focus-preservation'
 import { NativeChatComposer } from '@/components/native-chat/composer/NativeChatComposer'
 import type { NativeChatComposerHandle } from '@/components/native-chat/composer/native-chat-composer-types'
 import type { NativeChatStructuredComposerTransport } from '@/components/native-chat/composer/submit/native-chat-structured-composer-transport'

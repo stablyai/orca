@@ -14,7 +14,7 @@ import {
   hasSkillCopyNeedingAttention,
   skillPlanHasDetails,
   type SkillFreshnessDisplayStatus
-} from '@/lib/skill-freshness-display-status'
+} from '@/lib/skills/presentation/skill-freshness-display-status'
 import { requestSkillFreshnessUpdateDialog } from './skill-freshness-update-dialog'
 
 function statusPill(
@@ -50,7 +50,13 @@ function statusPill(
 }
 
 // Presence alone cannot imply freshness; copies the updater cannot reach need attention instead of green.
-export function SkillFreshnessStatusPill({ skillName }: { skillName: string }): React.JSX.Element {
+export function SkillFreshnessStatusPill({
+  skillName,
+  hideCurrent = false
+}: {
+  skillName: string
+  hideCurrent?: boolean
+}): React.JSX.Element | null {
   const t = useTranslate()
   const { plan, unsupported, loading, error } = useSkillFreshness(
     useActiveProjectSkillRuntime().bundledSkillTarget
@@ -71,6 +77,9 @@ export function SkillFreshnessStatusPill({ skillName }: { skillName: string }): 
         {t('auto.components.skills.SkillFreshnessStatusPill.checkFailed', 'Check failed')}
       </IntegrationStatusPill>
     )
+  }
+  if (hideCurrent && !skillPlanHasDetails(plan, skillName)) {
+    return null
   }
   return <SkillPlanStatusPill plan={plan} skillName={skillName} />
 }
@@ -96,36 +105,38 @@ export function SkillUnsupportedStatusPill({
 export function SkillPlanStatusPill({
   plan,
   skillName,
-  target
+  target,
+  installed = true
 }: {
   plan: BundledSkillPlan | null
   skillName: string
   target?: BundledSkillTarget | null
+  installed?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const status = getSkillFreshnessDisplayStatus(plan, skillName)
   const entry = plan?.skills.find((skill) => skill.name === skillName)
-  const needsAttention =
-    hasSkillCopyNeedingAttention(plan, skillName) ||
-    Boolean(
-      entry?.ops.some(
-        (op) => op.kind === 'leave' && (op.reason === 'edited' || op.reason === 'other')
-      )
-    )
-  // Offer Details for any planned location/action, including adding an agent link.
-  const hasDetails = needsAttention || skillPlanHasDetails(plan, skillName)
+  const needsAttention = hasSkillCopyNeedingAttention(plan, skillName)
+  // Details reviews installed copies; pending installs use the panel's Install action.
+  const hasDetails = needsAttention || (installed && skillPlanHasDetails(plan, skillName))
   return (
     <span className="inline-flex items-center gap-2">
-      {statusPill(
-        needsAttention
-          ? 'needs-attention'
-          : status === 'up-to-date' &&
-              entry?.ops.some(
-                (op) => op.kind === 'write' || op.kind === 'link' || op.kind === 'copy'
-              )
-            ? 'installed'
-            : status,
-        t
+      {!needsAttention && !installed ? (
+        <IntegrationStatusPill tone="attention">
+          {t('auto.components.settings.AgentSkillSetupPanel.5289300939', 'Not installed')}
+        </IntegrationStatusPill>
+      ) : (
+        statusPill(
+          needsAttention
+            ? 'needs-attention'
+            : status === 'up-to-date' &&
+                entry?.ops.some(
+                  (op) => op.kind === 'write' || op.kind === 'link' || op.kind === 'copy'
+                )
+              ? 'installed'
+              : status,
+          t
+        )
       )}
       {hasDetails ? (
         <Button

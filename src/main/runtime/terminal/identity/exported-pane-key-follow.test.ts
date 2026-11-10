@@ -2,7 +2,7 @@
 // ORCA_PANE_KEY its env exported, so that key's agent status must follow it to the new pane.
 import { randomUUID } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { agentHookServer } from '../../../agent-hooks/server'
+import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import type { PtyProcessInfo } from '../../../providers/pty-process-info'
 
 await import('../../orca-runtime-tests/runtime-test-module-registration.spec')

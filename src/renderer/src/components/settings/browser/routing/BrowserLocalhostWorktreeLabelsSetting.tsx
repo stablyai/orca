@@ -14,8 +14,8 @@ export function BrowserLocalhostWorktreeLabelsSetting({
 }: BrowserLocalhostWorktreeLabelsSettingProps): React.JSX.Element {
   const t = useTranslate()
   const title = t(
-    'auto.components.settings.BrowserLocalhostWorktreeLabelsSetting.8ac8c3ad19',
-    'Localhost Worktree Labels'
+    'auto.components.settings.BrowserLocalhostWorktreeLabelsSetting.1af20fbf51',
+    'Localhost worktree labels'
   )
   const description = t(
     'auto.components.settings.BrowserLocalhostWorktreeLabelsSetting.1db3c8b983',

@@ -10,7 +10,7 @@ import { reads as issueReadRegistry } from '@/store/slices/linear/linear-issue-r
 import { pendingLinearIssueWrites } from '@/store/slices/linear/linear-issue-publication'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 import { writeLinearIssue } from '@/lib/work-items/linear/linear-issue-write'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 import { useLinearIssueWorkspaceDetail } from '../../linear-issue-workspace-detail-state'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import { expect, it } from 'vitest'

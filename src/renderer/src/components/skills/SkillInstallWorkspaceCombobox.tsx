@@ -202,7 +202,7 @@ export function SkillInstallWorkspaceCombobox({
             value={query}
             onValueChange={setQuery}
           />
-          <TooltipProvider delayDuration={200}>
+          <TooltipProvider>
             <CommandList className="max-h-72">
               <CommandEmpty>
                 {t(

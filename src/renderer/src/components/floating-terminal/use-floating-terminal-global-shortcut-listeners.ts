@@ -4,7 +4,7 @@ import {
   isFloatingWorkspaceTerminalInputTarget,
   switchFloatingWorkspaceTab
 } from '@/lib/floating-workspace-terminal-actions'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { useAppStore } from '@/store'
 import {
   keybindingMatchesAction,
@@ -14,7 +14,7 @@ import {
 import { toModifierDoubleTapEvent } from '../../../../shared/modifier-double-tap-detector'
 import type { FloatingTerminalPanelLocalState } from './use-floating-terminal-panel-local-state'
 import type { FloatingTerminalPanelShortcuts } from './use-floating-terminal-panel-shortcuts'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 const FLOATING_TAB_SWITCH_ACTIONS: readonly KeybindingActionId[] = [
   'tab.nextSameType',

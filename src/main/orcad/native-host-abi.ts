@@ -41,10 +41,12 @@ export function detectLibcFromReportHeader(
 
 export function detectNativeHostAbi(): NativeHostAbi {
   let header: unknown
-  try {
-    header = (process.report?.getReport?.() as { header?: unknown } | undefined)?.header
-  } catch {
-    header = undefined
+  if (process.platform === 'linux') {
+    try {
+      header = (process.report?.getReport?.() as { header?: unknown } | undefined)?.header
+    } catch {
+      header = undefined
+    }
   }
   const { libc, glibcVersion } = detectLibcFromReportHeader(process.platform, header)
   return {
