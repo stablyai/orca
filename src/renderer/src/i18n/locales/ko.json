@@ -18528,7 +18528,9 @@
     },
     "native-chat": {
       "install": {
-        "checking": "이 호스트에서 {{agent}}이(가) 준비되었는지 확인하는 중…"
+        "checking": "이 호스트에서 {{agent}}이(가) 준비되었는지 확인하는 중…",
+        "cliInstall": "설치",
+        "cliRecheck": "다시 확인"
       },
       "reasoning": "추론",
       "contextMenu": {
@@ -19997,7 +19999,10 @@
           "onCloud": "어느 창에서든 {{shortcut}}을(를) 누르세요. {{model}}은(는) 클라우드에서 실행됩니다.",
           "offTitle": "받아쓰기가 꺼져 있습니다",
           "offDescription": "켜면 어느 창에서든 {{shortcut}}으로 받아쓸 수 있습니다.",
-          "savedMicrophone": "선택한 마이크"
+          "savedMicrophone": "선택한 마이크",
+          "description": "어느 창에서든 입력 대신 말하세요. 음성은 이 컴퓨터에서 인식되므로 오디오가 밖으로 나가지 않습니다.",
+          "setUp": "설정",
+          "asksForMicrophone": "Orca가 마이크 접근 권한을 요청합니다."
         },
         "quality": {
           "unsupported": "사용하는 언어를 지원하지 않음",

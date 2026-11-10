@@ -30,6 +30,8 @@ function render(
       onDownloadModel={() => {}}
       onCancelDownload={() => {}}
       onShowMicrophone={() => {}}
+      suggestion={undefined}
+      onSetUp={() => {}}
     />
   )
 }
@@ -57,4 +59,36 @@ export const needsUpdate = defineFixture({
 export const downloading = defineFixture({
   width: 760,
   render: () => render(true, parakeet, { id: 'v3', status: 'downloading', progress: 0.42 })
+})
+
+export const setUp = defineFixture({
+  width: 760,
+  render: () => (
+    <VoiceSetupCard
+      voiceSettings={{ ...getDefaultVoiceSettings(), enabled: false, sttModel: '' }}
+      selectedModel={undefined}
+      selectedState={undefined}
+      permissionPending={false}
+      onToggleVoiceDictation={() => {}}
+      onDownloadModel={() => {}}
+      onCancelDownload={() => {}}
+      onShowMicrophone={() => {}}
+      suggestion={{
+        model: parakeet,
+        quality: {
+          kind: 'rated',
+          tier: 4,
+          errorRate: {
+            language: 'en',
+            percent: 3.7,
+            metric: 'wer',
+            test: 'librispeech',
+            clips: 73,
+            measuredOn: '2026-11-06'
+          }
+        }
+      }}
+      onSetUp={() => {}}
+    />
+  )
 })

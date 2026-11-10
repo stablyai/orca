@@ -22,6 +22,7 @@ import {
 } from '../applying-settings/terminal-settings-migrations'
 import {
   canonicalizePersistedFloatingWorkspaceDirectory,
+  canonicalTrustedFloatingTerminalCwd,
   normalizeFloatingWorkspaceTrustedCwds
 } from '../restoring-sessions/floating-workspace-normalization'
 
@@ -151,7 +152,7 @@ export function prepareLoadedTerminalSettings(
   const floatingTerminalCwdMigrated =
     parsed.settings?.floatingTerminalCwdMigratedToAppWorkspace === true
   // Repair the old empty notes-directory migration; terminal cwd and notes now resolve separately.
-  const migratedFloatingTerminalCwd = floatingTerminalCwdMigrated
+  const configuredFloatingTerminalCwd = floatingTerminalCwdMigrated
     ? !parsed.settings?.floatingTerminalCwd
       ? defaults.settings.floatingTerminalCwd
       : parsed.settings.floatingTerminalCwd
@@ -184,6 +185,18 @@ export function prepareLoadedTerminalSettings(
     }
   }
   if (normalizedFloatingTerminalTrustedCwds.changed) {
+    markNeedsSave()
+  }
+  // Why: settings are raw JSON here; a malformed cwd falls back to the default instead of failing reads.
+  const migratedFloatingTerminalCwd =
+    typeof configuredFloatingTerminalCwd === 'string'
+      ? canonicalTrustedFloatingTerminalCwd(
+          configuredFloatingTerminalCwd,
+          migratedFloatingTerminalTrustedCwds,
+          homeDir
+        )
+      : defaults.settings.floatingTerminalCwd
+  if (migratedFloatingTerminalCwd !== configuredFloatingTerminalCwd) {
     markNeedsSave()
   }
   return {
