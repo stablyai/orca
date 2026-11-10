@@ -5,10 +5,13 @@
       "connecting": "ホストに接続中…",
       "connectingTo": "「{{name}}」に接続中…",
       "default": "システムのデフォルト",
+      "fableWindow": "Fable",
       "hostNotFound": "ホストが見つかりません",
       "invalidSnapshot": "ホストからのアカウントスナップショットが無効です",
       "loadingAccounts": "アカウントを読み込み中…",
       "manageAccountsHint": "デスクトップの「設定」→「アカウント」から、アカウントの追加や再認証を行ってください。",
+      "mcpWindow": "MCP",
+      "otherAgents": "その他の Agent",
       "refreshAccounts": "アカウントを更新",
       "sessionWindow": "5時間",
       "switchFailed": "アカウントを切り替えられませんでした",
@@ -107,16 +110,12 @@
       "pastePairingCode": "またはペアリングコードを貼り付け",
       "scanCodeStep": "QR コードをスキャン",
       "title": "デスクトップのペアリング",
-      "tryAgain": "再試行"
+      "tryAgain": "再試行",
+      "codeNoLongerValid": "このペアリングコードは期限切れ、使用済み、または置き換え済みです。デスクトップで新しいコードを表示して、もう一度スキャンしてください。"
     },
     "terminalSettings": {
-      "autocomplete": "自動補完と自動修正",
-      "autocompleteOff": "オフ",
-      "autocompleteOn": "オン",
       "defaultText": "標準（100%）",
       "keepPhoneSize": "スマートフォンサイズを維持（デフォルト）",
-      "keyboardInputDescription": "自動補完、自動修正、スペル候補は、バッファー方式のコマンド入力にのみ適用されます。キーボード上部の二重矢印ボタンでリアルタイム入力から切り替えると、「送信」をタップする前にコマンドを編集できます。コマンド、フラグ、パスが書き換わるのを防ぐため、デフォルトではオフです。",
-      "keyboardInputHeading": "キーボード入力",
       "largeText": "大（125%）",
       "largerText": "特大（150%）",
       "largestText": "最大 (200%)",
@@ -188,8 +187,14 @@
       "sendMessage": "メッセージを送信",
       "sendQueue": "キューに入れる",
       "sendSteer": "今すぐ送信",
+      "sendSteerQueued": "次を今すぐ送信",
       "sendQueueHint": "現在のターンの後に実行します",
       "sendSteerHint": "Agent が今行っている作業に加えます"
+    },
+    "contextUsage": {
+      "label": "コンテキスト {{used}} / {{window}} トークン、{{percent}}% 使用済み",
+      "title": "コンテキスト",
+      "estimated": "最後の応答から推定。"
     },
     "composerAttachments": {
       "attachedImage": "添付画像",
@@ -201,7 +206,6 @@
     },
     "composerPlaceholder": {
       "prompt": "何でも聞いてください。@ でファイルを参照、/ でコマンドを実行",
-      "reconnecting": "再接続中…",
       "waitingForTerminal": "ターミナルを待っています…"
     },
     "diffCard": {
@@ -216,16 +220,30 @@
       "historyRepaired": "このチャットの履歴の一部を読み込めませんでした。"
     },
     "message": {
-      "copyMessage": "メッセージをコピーする"
+      "copyMessage": "メッセージをコピーする",
+      "forkFromResponse": "この応答から分岐",
+      "forkFromResponseHint": "このターンの終わりまでの応答全体を含む新しいチャット"
     },
     "messageActionsSheet": {
       "clipboardRejected": "クリップボードがテキストを受け付けませんでした。",
       "copyFailed": "コピーに失敗しました",
       "copyMessage": "メッセージをコピーする",
-      "selectText": "テキストを選択"
+      "selectText": "テキストを選択",
+      "rewind": "ここに巻き戻す"
     },
     "nativeChatImageViewer": {
-      "closeImage": "画像を閉じる"
+      "closeImage": "画像を閉じる",
+      "imageActions": "画像の操作",
+      "copyImage": "画像をコピー",
+      "saveImage": "画像を保存",
+      "share": "共有…",
+      "imageCopied": "画像をコピーしました",
+      "imageSaved": "画像を保存しました",
+      "copyFailed": "画像をコピーできませんでした",
+      "saveFailed": "画像を保存できませんでした",
+      "shareFailed": "画像を共有できませんでした",
+      "photosAccessDenied": "設定で Orca に写真の追加を許可してください",
+      "imageTooLarge": "この画像は大きすぎます"
     },
     "nativeChatProse": {
       "attachedImage": "添付画像",
@@ -282,8 +300,18 @@
       "plan": "プラン",
       "stoppedManually": "手動で停止しました",
       "permissionDenied": "{{agent}} が権限を拒否しました。詳細を表示。",
+      "safetyReviewApproved": "{{agent}} がこの操作を承認しました。詳細を表示。",
       "safetyReview": "{{agent}} が安全性レビューの警告を報告しました。詳細を表示。",
-      "truncatedResponse": "プロバイダーの応答は切り詰められています（元のサイズ：{{bytes}} バイト）。"
+      "truncatedResponse": "プロバイダーの応答は切り詰められています（元のサイズ：{{bytes}} バイト）。",
+      "modelFallback": "Claudeがモデルを切り替えました: {{from}} → {{to}}。",
+      "signIn": "サインイン",
+      "signInHint": "このチャットを実行しているコンピューターでターミナルを開きます",
+      "forkedFrom": "分岐元"
+    },
+    "ciResultLine": {
+      "failingLead": "CI 失敗:",
+      "greenLead": "CI 成功:",
+      "at": "コミット"
     },
     "orcaStop": {
       "canContinue": "この会話で続行できます。",
@@ -292,6 +320,13 @@
       "remote": "この応答の途中で、{{machine}} の Orca が停止しました。",
       "unnamedServer": "リモートサーバー",
       "update": "この応答の途中で、{{machine}} の Orca がアップデートのため再起動しました。"
+    },
+    "interruptedContinue": {
+      "failed": "このチャットを続行できませんでした。もう一度試すか、メッセージを送信してください。",
+      "explanation": "続行すると、Agent はまず最後の手順が完了したかどうかを確認します。"
+    },
+    "sendError": {
+      "dismiss": "閉じる"
     },
     "permission": {
       "needsAccessTo": "アクセスが必要なパス: ",
@@ -324,13 +359,23 @@
       "resumeSending": "キュー内のメッセージの送信を再開",
       "title": "キュー内のメッセージ"
     },
+    "offlineQueue": {
+      "failed": "送信できませんでした — 「送信」をタップして再試行",
+      "waitingFor": "{{host}} に再接続すると送信されます",
+      "waiting": "デスクトップに再接続すると送信されます",
+      "behind": "待機中 — 前のメッセージに対応が必要です",
+      "closed": "Orca が閉じる前に送信されませんでした"
+    },
     "receipt": {
       "cancelled": "キャンセル",
       "cancelledBy": "{{device}} でキャンセルされました",
       "emptyAnswer": "空の回答",
       "resolved": "解決済み",
       "resolver": "{{device}} で回答しました",
-      "unavailable": "選択した回答は利用できません"
+      "unavailable": "選択した回答は利用できません",
+      "thisPhone": "このスマートフォン",
+      "computer": "コンピューター",
+      "otherDevice": "別のデバイス"
     },
     "sessionOptionCopy": {
       "availableAfterSessionStarts": "セッション開始後に利用できます。",
@@ -373,7 +418,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "既定",
-      "notReportedMarker": "未報告"
+      "notReportedMarker": "未報告",
+      "moreModels": "その他のモデル",
+      "fewerModels": "表示を減らす"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "Agent に送信済み — 未確認"
@@ -509,12 +556,19 @@
     "usageLimit": {
       "reached": "{{agent}} が使用量の上限に達しました。",
       "reachedNamed": "{{agent}} が{{window}}の上限に達しました。",
-      "resetsAt": "{{when}} にリセットされます。",
       "theAgent": "Agent",
       "windowCredits": "追加使用量",
       "windowSession": "セッション",
       "windowWeekly": "週間",
-      "windowWeeklyModel": "モデル別の週間"
+      "windowWeeklyModel": "モデル別の週間",
+      "switchAccount": "アカウントを切り替え",
+      "autoContinueCancelFailed": "自動続行をキャンセルできませんでした。もう一度お試しください。",
+      "autoContinueCancel": "続けない",
+      "statusResetAt": "{{time}} にリセット済み",
+      "statusResetsAt": "{{time}} にリセット",
+      "statusContinuesShortly": "Orca がまもなく続けます",
+      "statusContinuesThen": "その時点で Orca が続けます",
+      "statusWontContinue": "Orca は自動的には続けません"
     },
     "useImageUpload": {
       "attachFailed": "添付に失敗しました。",
@@ -525,9 +579,77 @@
     "agentMessage": {
       "handedOffToAgent": "Agentに引き継ぎました",
       "startedAgent": "Agentを開始しました"
+    },
+    "textAttachmentPreview": {
+      "unreadableReply": "添付ファイルの応答を読み取れません。もう一度お試しください。",
+      "incompleteReply": "添付ファイルが変更されたか、応答が不完全でした。閉じてもう一度お試しください。",
+      "notText": "このファイルはテキストとしてプレビューできません。保存して別のアプリで開いてください。",
+      "openFailed": "添付ファイルを開けませんでした。もう一度お試しください。",
+      "hostUpdate": "このホストはまだテキスト添付ファイルを開けません。ホストのOrcaを更新してから再試行してください。",
+      "copyTooLarge": "このファイルは大きすぎてコピーできません。代わりに保存してください。",
+      "connectionChanged": "接続が変更されました。添付ファイルをもう一度開いてください。",
+      "hostChanged": "添付ファイルのホストが変更されました。閉じて開き直してください。",
+      "readFailed": "添付ファイルを読み取れませんでした。再接続してもう一度お試しください。ファイルが削除または変更された可能性があります。",
+      "copyFrame": "この添付ファイルの全内容のコピーには、今後のスマートフォンのアップデートが必要です。",
+      "copyFailed": "添付ファイルをコピーできませんでした。もう一度お試しください。",
+      "pastedText": "貼り付けたテキスト",
+      "textAttachment": "テキスト添付ファイル",
+      "byteSize": "{{size}} バイト",
+      "saveUpdate": "保存はスマートフォンのアップデートで利用可能になります。",
+      "fullCopySaveUpdate": "この添付ファイルの全内容のコピーと保存は、スマートフォンのアップデートで利用可能になります。"
+    },
+    "hostOutage": {
+      "offlineAsOf": "{{host}} はオフラインです · {{time}} 時点",
+      "reconnecting": "{{hostName}} に再接続しています…",
+      "stopped": "{{hostName}} は停止しています。コンピューターで起動してください。",
+      "server": "サーバー",
+      "unavailable": "{{hostName}} はスマートフォンから利用できません。コンピューターでそのプロジェクトのいずれかを開いてください。"
+    },
+    "goal": {
+      "chip": "ゴール",
+      "exitMode": "ゴールモードを終了する",
+      "placeholder": "目標を説明し、最良の結果を得るために測定可能な結果を定義する",
+      "pursuing": "目標を追求中",
+      "set": "目標を設定済み",
+      "paused": "一時停止されたゴール",
+      "blocked": "ゴール阻止",
+      "limited": "目標が限定されている",
+      "clear": "目標を削除",
+      "expand": "完全な目標を表示",
+      "collapse": "完全な目標を非表示にする",
+      "attachmentsUnsupported": "目標を設定する前に添付ファイルを削除してください。",
+      "pause": "一時停止",
+      "resume": "再開"
+    },
+    "rewind": {
+      "title": "ここに巻き戻しますか?",
+      "confirmation": "このメッセージとそれ以降をすべて破棄しますか? メッセージは入力欄に戻り、編集して再送信できます。ディスク上のファイルの変更は保持されます。",
+      "confirm": "巻き戻す",
+      "unsupported": "このチャットは以前のメッセージに戻れません。",
+      "historyNotPaginated": "この古い Codex チャットは以前のメッセージに戻れません。「ここに巻き戻す」を使用するには、新規チャットを開始してください。",
+      "busy": "Agent がアイドル状態になり、このチャットであなたの対応を待つものがなくなると利用できます。",
+      "staleEpoch": "会話が変更されました。最新のメッセージを確認して、もう一度お試しください。",
+      "invalidTarget": "会話をこのメッセージに戻すことはできません。何も変更されていません。",
+      "historyLimit": "この会話は長すぎて巻き戻せません。何も変更されていません。",
+      "providerRefused": "Agent はこのメッセージに戻れませんでした。",
+      "proofMismatch": "Agent の履歴がこのチャットと一致しませんでした。続行する前に会話を確認してください。",
+      "outcomeUnknown": "Orca は会話が以前のメッセージに戻ったかどうかを確認できませんでした。次のメッセージが送信される前に確認します。",
+      "refused": "Orca はこのメッセージに戻れませんでした。続行する前に会話を確認してください。",
+      "unavailable": "チャットの接続が完了するまでお待ちください。",
+      "outcomeUnknownReturned": "Orca は会話がこのメッセージに戻ったかどうかを確認できませんでした。メッセージは入力欄に戻っており、次のメッセージが送信される前に Orca が会話を確認します。",
+      "timeout": "このメッセージに戻った後、チャットが更新されませんでした。最新の内容を確認するには、開き直してください。",
+      "pending": "会話が以前のメッセージに戻るまでお待ちください。"
+    },
+    "fork": {
+      "busy": "別のチャットまたはターミナルを開いています。しばらく待ってから {{agent}} のチャットを再度分岐してください。",
+      "unconfirmed": "{{agent}} は分岐を確認できませんでした。チャットが開いている可能性があります。再度分岐する前にセッション履歴を確認してください。",
+      "failed": "{{agent}} はこのチャットを分岐できませんでした。{{detail}}",
+      "unsupported": "このホストでは古いバージョンの Orca が実行されています。ホストの Orca を更新して再試行してください。"
     }
   },
   "common": {
+    "details": "詳細",
+    "hideDetails": "詳細を非表示",
     "back": "戻る",
     "cancel": "キャンセル",
     "close": "閉じる",
@@ -719,12 +841,14 @@
     },
     "hostCard": {
       "hostActions": "「{{title}}」の操作",
+      "needsYou_one": "{{count}} 件が対応待ち",
+      "needsYou_other": "{{count}} 件が対応待ち",
       "openHost": "「{{title}}」を開く",
       "pairingInvalid": "ペアリングが無効",
       "pairingTemporarilyUnavailable": "ペアリングが一時的に利用できません",
       "repairHint": "タップしてデスクトップと再ペアリングしてください。",
+      "sameNetworkOnlyHint": "同じ Wi-Fi または Tailscale でのみ接続できます。どこからでも接続するには、デスクトップでサインインしてもう一度ペアリングしてください",
       "unlockHint": "スマートフォンのロックを解除してから、タップして再試行してください。",
-      "updateDesktopHint": "デスクトップの Orca を更新してサインインすると、どこからでも接続できます。",
       "worktreeAccessibilitySummary": "{{summary}}、{{activeCount}} 件がアクティブ"
     },
     "hostDiagnosticsLink": {
@@ -752,7 +876,16 @@
     },
     "markdownBlocks": {
       "copyCode": "コードをコピーする",
-      "openImage": "画像を開く"
+      "openImage": "画像を開く",
+      "wrapLines": "行を折り返す",
+      "disableLineWrap": "行の折り返しを無効にする"
+    },
+    "markdownCallout": {
+      "note": "メモ",
+      "tip": "ヒント",
+      "important": "重要",
+      "warning": "警告",
+      "caution": "注意"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "ドロワーを閉じる"
@@ -799,7 +932,8 @@
     },
     "prSidebar": {
       "loading": "PR を読み込み中…",
-      "notPermitted": "GitHub アカウントが接続されていないため、アクセスできません。"
+      "notPermitted": "GitHub アカウントが接続されていないため、アクセスできません。",
+      "retryLoading": "PR の読み込みを再試行"
     },
     "protocolBlockScreen": {
       "backToHosts": "ホストに戻る",
@@ -958,6 +1092,12 @@
     "mermaidDiagram": {
       "expand": "図を拡大",
       "label": "Mermaid 図"
+    },
+    "native-chat": {
+      "composer": {
+        "planMode": "プラン",
+        "exitPlanMode": "プランモードを終了"
+      }
     }
   },
   "connection": {
@@ -1148,16 +1288,74 @@
   },
   "dictation": {
     "setup": {
-      "alreadyActive": "コンピュータまたは別のスマートフォンで、すでにディクテーションを使用中です。",
+      "alreadyActive": "コンピュータまたは別のスマートフォンで、すでにディクテーションを使用中です。複数のデバイスから同時にディクテーションするには、コンピュータの Orca をアップデートしてください。",
       "cloudModelNeedsKey": "OpenAI キーが必要",
       "deleteFailed": "モデルの削除に失敗しました。",
       "desktopUpdateRequired": "モバイルの音声設定を使用するには、ペアリング済みのデスクトップの Orca アプリを更新してください。",
       "downloadFailed": "ダウンロードの開始に失敗しました。",
       "loadFailed": "ディクテーションモデルの読み込みに失敗しました。",
+      "modelBusy": "別のデバイスが異なる音声モデルでディクテーション中です。終わってから、もう一度お試しください。",
       "repairRequired": "ディクテーションを使用するには、このスマートフォンをコンピュータと再度ペアリングしてください。",
       "serverUpdateRequired": "音声ディクテーションを使用するには、このサーバーの Orca を更新してください。",
+      "sessionLimit": "このコンピュータでディクテーション中のデバイスが多すぎます。いずれかが終わってから、もう一度お試しください。",
       "sessionLost": "ディクテーション中にコンピュータとの接続が切れました。再試行してください。",
       "updateFailed": "ディクテーション設定の更新に失敗しました。"
+    },
+    "controls": {
+      "start": "音声入力",
+      "starting": "音声入力を開始しています",
+      "stop": "停止して挿入",
+      "finishing": "音声入力を仕上げています",
+      "cancel": "音声入力をキャンセル",
+      "meterOnPhone": "録音中、{{duration}}、このスマートフォンで処理",
+      "meterOn": "録音中、{{duration}}、{{computer}} で処理",
+      "meterOnComputer": "録音中、{{duration}}、コンピュータで処理",
+      "meter": "録音中、{{duration}}",
+      "durationMinutesSeconds": "{{minutes}} {{seconds}}",
+      "durationSeconds_one": "{{count}} 秒",
+      "durationSeconds_other": "{{count}} 秒",
+      "durationMinutes_one": "{{count}} 分",
+      "durationMinutes_other": "{{count}} 分",
+      "discard": "録音を破棄",
+      "retry": "音声入力を再試行",
+      "retryShort": "再試行"
+    },
+    "status": {
+      "finishingOn": "{{computer}} で仕上げています",
+      "finishingOnComputer": "コンピュータで仕上げています",
+      "movedTo": "{{computer}} に切り替えました",
+      "movedToComputer": "コンピュータに切り替えました"
+    },
+    "failure": {
+      "connectionLost": "接続が切れました",
+      "connectionSlow": "接続が遅すぎます",
+      "phoneStopped": "このスマートフォンで停止しました",
+      "stopped": "音声入力が停止しました",
+      "recordingKept": "録音は保持されています"
+    },
+    "announce": {
+      "typedInto": "{{target}} に入力しました",
+      "insertedIn": "{{target}} に挿入しました",
+      "listeningOnPhone": "聞き取り中。このスマートフォンで文字起こししています。",
+      "listeningOn": "聞き取り中。{{computer}} で文字起こししています。",
+      "listeningOnComputer": "聞き取り中。コンピュータで文字起こししています。",
+      "finishing": "仕上げ中。",
+      "inserted": "挿入しました。",
+      "cancelled": "音声入力をキャンセルしました。",
+      "movedTo": "このスマートフォンでの文字起こしが止まりました。{{computer}} で続けます。",
+      "movedToComputer": "このスマートフォンでの文字起こしが止まりました。コンピュータで続けます。",
+      "stoppedKept": "音声入力が停止しました。{{reason}}。録音は保持されています。",
+      "stoppedKeptGeneric": "音声入力が停止しました。録音は保持されています。",
+      "stillListening": "聞き取りを続けています。"
+    },
+    "pill": {
+      "open": "開く",
+      "listening": "聞き取り中",
+      "starting": "開始中",
+      "finishing": "仕上げ中",
+      "stopped": "音声入力が停止しました",
+      "label": "{{target}} への音声入力、{{duration}}",
+      "hint": "ダブルタップで戻る"
     }
   },
   "files": {
@@ -1167,7 +1365,6 @@
       "connecting": "デスクトップに接続中…",
       "emptyState": "ファイルが見つかりません。",
       "loadFailed": "ファイルを読み込めませんでした。",
-      "loadInterrupted": "フォルダーの読み込みが中断されました。",
       "title": "ファイル",
       "truncatedList": "{{worktreeLabel}} - 先頭の 5000 件を表示",
       "waiting": "デスクトップへの接続を待っています…"
@@ -1175,11 +1372,21 @@
     "fileExplorerRow": {
       "fileUnavailable": "「{{name}}」はモバイルでは利用できません",
       "loadFolderFailed": "フォルダーを読み込めませんでした",
+      "loadedOfTotal": "{{total}} 件中 {{loaded}} 件",
       "loading": "読み込み中…",
       "openFolder": "フォルダー「{{name}}」を開く",
       "previewFile": "ファイル「{{name}}」をプレビュー",
       "retryLoading": "{{path}} の読み込みを再試行",
+      "searchAll": "すべて検索",
+      "searchAllIn": "{{folder}} をすべて検索",
+      "searched": "{{folder}} の {{total}} 件中 {{loaded}} 件を検索しました。",
+      "searching": "{{folder}} を検索中… {{total}} 件中 {{loaded}} 件",
+      "showMore": "さらに {{rows}} 件を表示",
       "unavailable": "モバイルでは利用不可"
+    },
+    "fileExplorerRowActions": {
+      "copyName": "名前をコピー",
+      "copyRelativePath": "相対パスをコピー"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "読み込み済みの Markdown ソースをコピー",
@@ -1248,6 +1455,13 @@
       "openFailed": "この PDF を開けませんでした",
       "opening": "PDF を開いています…",
       "updateRequired": "PDF を開くには Orca Mobile を更新してください。"
+    },
+    "unsavedEditsOffer": {
+      "changedSince": "{{time}} の編集以降、デスクトップで変更されました",
+      "copyMyEdits": "自分の編集をコピー",
+      "discard": "破棄",
+      "restore": "復元",
+      "unsavedFrom": "{{time}} の未保存の編集"
     }
   },
   "home": {
@@ -1255,6 +1469,20 @@
       "dismissAccessibilityLabel": "Orca {{version}} の更新通知を閉じる",
       "title": "Orca {{version}} が利用可能です",
       "updateAccessibilityLabel": "Orca {{version}} が利用可能です。タップして更新してください。"
+    },
+    "automationsTab": {
+      "connectDesktop": "自動化を表示・実行するには、{{desktop}} に接続してください。",
+      "createHint": "+ をタップすると Agent の実行を予定できます。",
+      "emptyTitle": "Agent の作業を予定",
+      "lastStatus": "前回：{{status}}",
+      "newAutomation": "新しい自動化",
+      "noAutomations": "自動化はまだありません",
+      "pairDesktop": "自動化を表示・実行するには、デスクトップとペアリングしてください。",
+      "paused": "一時停止中",
+      "scheduled": "スケジュール実行",
+      "showFor": "自動化を表示するデスクトップ",
+      "toggleFailed": "{{name}} を更新できませんでした",
+      "updateDesktop": "自動化を使用するには、{{desktop}} の Orca を更新してください。"
     },
     "emptyState": {
       "connectedDescription": "デスクトップがここに表示されます。すべての通信はエンドツーエンドで暗号化されます。",
@@ -1266,9 +1494,7 @@
       "title": "デスクトップに接続"
     },
     "listFooter": {
-      "hostPickerTitle": "タスクを開くホスト",
-      "automationsHeading": "自動化",
-      "automationsHostPickerTitle": "オートメーションを開くホスト"
+      "hostPickerTitle": "タスクを開くホスト"
     },
     "listHeader": {
       "desktopsHeading": "デスクトップ"
@@ -1279,6 +1505,33 @@
       "removeHostMessage": "「{{name}}」を削除しますか？後で再度ペアリングできます。",
       "removeHostTitle": "ホストを削除",
       "tryAgain": "再試行してください。"
+    },
+    "stats": {
+      "agentTime": "Agent 時間",
+      "agentsSpawned": "起動した Agent",
+      "days": "{{days}}日",
+      "heading": "あなたの統計",
+      "hours": "{{hours}}時間",
+      "minutes": "{{minutes}}分",
+      "prsCreated": "作成された PR"
+    },
+    "tabs": {
+      "automations": "自動化",
+      "chooseDesktop": "{{desktop}}、別のデスクトップを選択",
+      "feed": "フィード",
+      "usage": "使用状況"
+    },
+    "usage": {
+      "active": "使用中",
+      "addAccounts": "デスクトップの「設定」→「アカウント」からアカウントを追加してください。",
+      "connectDesktop": "Agent アカウントの使用状況を表示するには、{{desktop}} に接続してください。",
+      "emptyTitle": "使用状況はまだありません",
+      "openAccountsHint": "このデスクトップのアカウントを開きます",
+      "pairDesktop": "Agent アカウントの使用状況を表示するには、デスクトップとペアリングしてください。",
+      "refresh": "使用状況を更新",
+      "showUsageFor": "使用状況を表示するデスクトップ",
+      "updatedAgo": "{{time}}前に更新",
+      "updatedJustNow": "たった今更新"
     }
   },
   "hooks": {
@@ -1290,7 +1543,10 @@
       "microphoneInitFailed": "マイクの初期化に失敗しました",
       "microphoneInterrupted": "マイクの使用が中断されたため、音声ディクテーションを停止しました。再試行してください。",
       "microphonePermissionDenied": "マイクの使用が許可されていません",
-      "noSpeech": "音声が検出されませんでした。"
+      "noSpeech": "音声が検出されませんでした。",
+      "phoneUnavailable": "この端末での音声入力は準備ができていません。音声設定でダウンロードするか、「自動」を選んでください。",
+      "phoneFailed": "この端末での音声入力が停止しました。もう一度お試しください。",
+      "phoneBusy": "この端末の音声入力はまだ起動中です。少し待ってからもう一度お試しください。"
     }
   },
   "host": {
@@ -1332,13 +1588,16 @@
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "「{{name}}」（{{branch}}）を削除しますか？",
+      "deleteDestroysEnvironment": "Orca がこのワークツリー用に作成した環境「{{environment}}」も、コミットされていない変更や実行中のターミナルごと破棄されます。",
+      "deleteKeepsEnvironment": "Orca がこのワークツリー用に作成した環境「{{environment}}」は動作し続けます。レシピに破棄ステップがありません。",
       "deleteWorktree": "ワークツリーを削除",
       "pin": "ピン",
       "primaryWorktreeDeleteHint": "プライマリワークツリーは削除できません。代わりにプロジェクトを削除してください。",
       "removeHost": "ホストを削除",
       "removeHostMessage": "「{{name}}」を削除しますか？後で再度ペアリングできます。",
       "sleep": "スリープ",
-      "unpin": "固定を解除する"
+      "unpin": "固定を解除する",
+      "rename": "名前を変更"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "チェック：失敗",
@@ -1420,6 +1679,12 @@
       "thisComputer": "このコンピュータ",
       "waitingForDesktop": "まだデスクトップの応答を待っています",
       "workspaceOptions": "ワークスペースのオプション"
+    },
+    "workspaceRenameSheet": {
+      "title": "ワークスペースの名前を変更",
+      "emptyUsesBranch": "空欄の場合はブランチ名を使用します。",
+      "emptyUsesFolder": "空欄の場合はフォルダー名を使用します。",
+      "failed": "ワークスペースの名前を変更できませんでした。{{reason}}"
     }
   },
   "navigation": {
@@ -1479,7 +1744,7 @@
       "notificationsTitle": "Agent からの呼びかけを見逃さない",
       "openInChatUi": "セッションをチャット UI で開く",
       "openInTerminal": "セッションをターミナルで開く",
-      "sessionViewDescription": "この端末で、対応する Agent セッションをターミナルとチャット UI のどちらで開くか選択してください。セッションタブを長押しすると表示を切り替えられます。デフォルトは後から「設定」で変更できます。",
+      "sessionViewDescription": "この端末で、対応する Agent セッションをターミナルとチャット UI のどちらで開くか選択してください。セッションタブを長押しすると表示を切り替えられます。デフォルトはいつでも「設定」→「Chat UI」で変更できます。",
       "sessionViewTitle": "セッションの表示方法は？",
       "skipNotifications": "今は通知を有効にしない",
       "useChatUi": "チャット UI を使用"
@@ -1639,7 +1904,7 @@
     },
     "prViewPanel": {
       "branchUnavailable": "現在のブランチを取得できません。",
-      "providerUnavailable": "このプロバイダーではホスト型レビューパネルを利用できません。"
+      "githubRemoteRequired": "このタブでプルリクエストの詳細を表示するには、GitHub のリモートが必要です。対応する他のサービスでは、「変更点」からレビューを作成してブラウザーで開けます。"
     },
     "reviewerPickerDrawer": {
       "loadFailed": "ユーザーの読み込みに失敗しました",
@@ -1662,15 +1927,18 @@
     "accessoryKeys": {
       "dismissKeyboard": "キーボードを閉じる",
       "sendKey": "{{label}} を送信",
-      "modifierHint": "次のキーに適用されます。ダブルタップすると維持されます。",
       "typeCharacter": "{{character}}を入力",
       "interrupt": "ターミナルを中断",
       "keysModeLabel": "キーモード：入力はターミナルに直接送られます。メッセージモードに切り替える",
       "messageModeLabel": "メッセージモード：入力してから送信します。キーモードに切り替える",
-      "keysMode": "キー",
-      "messageMode": "メッセージ",
       "moreKeys": "その他のキーと操作",
-      "showKeyboard": "キーボードを表示"
+      "showKeyboard": "キーボードを表示",
+      "dismissKeyboardHint": "現在のターミナルセッションを開いたまま、ソフトウェアキーボードを非表示にします。",
+      "switchToDesktopMode": "デスクトップモードに切り替え",
+      "switchToPhoneMode": "スマートフォンモードに切り替え",
+      "pasteFromClipboard": "クリップボードから貼り付け",
+      "paste": "貼り付け",
+      "addCustomShortcut": "カスタムショートカットを追加"
     },
     "activeContent": {
       "createTab": "タブを作成",
@@ -1694,13 +1962,8 @@
       "noUpdate": "{{value0}}更新なし"
     },
     "agentMessageAttribution": {
-      "from": "{{sender}} から",
-      "fromMore": "{{sender}} ほか {{count}} 名から",
-      "fromUnnamed": "Agent から",
-      "messageFrom": "{{sender}} からのメッセージ",
-      "messageFromMore": "{{sender}} ほか {{count}} 名からのメッセージ",
-      "messageFromUnnamed": "Agent からのメッセージ",
-      "unnamedSender": "Agent"
+      "unnamedSender": "Agent",
+      "fromSender": "送信元:"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "ターミナルの作成に失敗しました。",
@@ -1725,6 +1988,7 @@
       "countWorkflows_one": "{{count}} ワークフロー",
       "countWorkflows_other": "{{count}} ワークフロー",
       "detailsUnavailable": "このセッションではタスクの詳細は利用できません。",
+      "outputFile": "出力: {{value0}}",
       "groupAgents": "Agent",
       "groupMonitors": "モニター",
       "groupShell": "シェル",
@@ -1781,11 +2045,7 @@
     },
     "commandDock": {
       "liveInputHint": "入力したテキストは、選択中のターミナルに直接送信されます。",
-      "liveInputLabel": "ターミナルへのリアルタイム入力",
-      "sendCommand": "コマンドを送信",
-      "messageAgentPlaceholder": "{{agent}}にメッセージ",
-      "writeCommandPlaceholder": "コマンドを入力して送信",
-      "theAgent": "Agent"
+      "liveInputLabel": "ターミナルへのリアルタイム入力"
     },
     "contentRow": {
       "dismissCreationWarning": "ワークスペース作成の警告を閉じる"
@@ -1799,13 +2059,11 @@
       "saveNote": "メモを保存"
     },
     "diffReviewLoaders": {
-      "changesLoadFailed": "変更を読み込めません。",
       "committedChangesFailed": "コミット済みの変更の読み込みに失敗しました。",
       "committedChangesUnavailable": "コミット済みの変更は利用できません。",
       "committedDiffUnavailable": "コミット済みの差分は利用できません。",
       "desktopUpdateRequired": "モバイルで変更をレビューするには、デスクトップの Orca を更新してください。",
       "diffLoadFailed": "差分を読み込めません。",
-      "invalidSourceControlResponse": "ソース管理からの応答が無効でした。",
       "reviewNotesLoadFailed": "レビューノートを読み込めません。"
     },
     "diffReviewQueue": {
@@ -1891,6 +2149,8 @@
       "managedAccountEnvOverride": "この Claude の起動では独自の Anthropic サインイン変数が設定されています。管理対象の Claude アカウントを使用するには、それらを削除してください。",
       "managedAccountUnsupported": "WSL に Claude アカウントが追加されていますが、Claude チャットには Windows の Claude アカウントが必要です。",
       "modelUnavailable": "{{agent}} は {{detail}} を使用できませんでした。別のモデルを選択して、もう一度送信してください。",
+      "modelUnavailableUpdate": "{{agent}} は {{detail}} を使用できませんでした。再起動後も維持するには {{agent}} を {{minimumVersion}} 以降に更新するか、別のモデルを選択して、もう一度送信してください。",
+      "modelNotSelected": "{{agent}} でモデルが選択されていません。モデルの選択と {{agent}} のサインインを確認して、もう一度送信してください。",
       "noTurnToStop": "{{agent}} には停止できる実行中のターンがありませんでした。",
       "notDelivered": "このメッセージは配信されませんでした。",
       "notDeliveredSendAgain": "このメッセージは配信されませんでした。続けるには、もう一度送信してください。",
@@ -1900,6 +2160,10 @@
       "providerExitedRejection": "このメッセージが送信される前に {{agent}} が停止しました。",
       "providerExitedRow": "この応答の途中で {{agent}} が停止しました。この会話で続けることができます。",
       "providerRateLimited": "{{agent}} はレート制限を受けているため、再試行しています。",
+      "providerUnavailable": "サービスが混雑しているため、{{agent}} は応答できませんでした。別のモデルを選ぶか、しばらく待ってから再送してください。",
+      "providerSafetyStopped": "{{agent}} は安全確認の後、この応答を停止しました。リクエストを見直して再送してください。",
+      "providerResponseFailed": "{{agent}} はこの応答を完了できませんでした。詳細を開いて確認してください。",
+      "selectedModel": "選択されたモデル",
       "providerRejected": "{{agent}} はこのメッセージを受け付けませんでした。",
       "providerRejectedQuoted": "{{agent}} はこのメッセージを受け付けませんでした: {{detail}}。",
       "providerRetryLastError": "直近のエラー: {{detail}}。",
@@ -1938,7 +2202,8 @@
       "usageLimitWindowWeeklyModel": "モデル別の週間",
       "waitForBackgroundTasks": "バックグラウンドタスクが終わるまでお待ちください。",
       "waitForStart": "Agent の起動が終わるまでお待ちください。",
-      "writeFailed": "Orca はこのメッセージを Agent に渡せなかったため、送信されませんでした。"
+      "writeFailed": "Orca はこのメッセージを Agent に渡せなかったため、送信されませんでした。",
+      "pluginInputRequired": "{{agent}} は「{{plugin}}」プラグインがターミナルペインで入力を待っているため停止しました。チャットセッションでプラグインを無効にするか、{{agent}} のターミナルでタスクを実行してください。"
     },
     "fileReader": {
       "copyReviewNotes": "レビューメモをコピー",
@@ -1988,8 +2253,7 @@
       "copyPathLabel": "Markdown ファイルのパスをコピー",
       "copySource": "Markdown ソースをコピー",
       "discard": "破棄",
-      "dismissKeyboard": "キーボードを閉じる",
-      "dismissKeyboardHint": "Markdown エディターを開いたまま、ソフトウェアキーボードを非表示にします。",
+      "previewTruncated": "プレビューは一部省略されています。",
       "readOnly": "読み取り専用"
     },
     "nativeChatAttachActions": {
@@ -2038,7 +2302,8 @@
       "promptUnconfirmed": "Agent は起動しましたが、プロンプトの送信を確認できませんでした。"
     },
     "prActionsEngine": {
-      "mergeFailed": "PR のマージに失敗しました。"
+      "mergeFailed": "PR のマージに失敗しました。",
+      "refreshFailed": "プルリクエストを更新できませんでした。"
     },
     "prAiTriageLaunch": {
       "agentStarted": "Agent を起動しました。",
@@ -2071,8 +2336,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "キュー内のメッセージにコマンドは保存できません。",
-      "editing": "メッセージを編集中",
-      "editingAttributed": "メッセージを編集中 · {{attribution}}"
+      "editing": "メッセージを編集中"
     },
     "quickCommandEditorForm": {
       "action": "操作",
@@ -2169,7 +2433,8 @@
       "terminalName": "ターミナル名",
       "unsavedMarkdown": "Markdown の未保存の変更",
       "urlPrompt": "URL を入力してください。空欄のままにすると新規タブが開きます。",
-      "allowAutoClose": "自動終了を許可"
+      "allowAutoClose": "自動終了を許可",
+      "renameTerminalFailed": "ターミナルの名前を変更できませんでした。{{reason}}"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "このワークスペースホストでは有効な AI Agent が検出されませんでした。",
@@ -2197,11 +2462,7 @@
     "terminalInputActions": {
       "attachFileHint": "長押しすると、写真の代わりにファイルを添付できます。",
       "attachPhoto": "写真を添付",
-      "sendingImage": "画像を送信中…",
-      "startDictation": "音声ディクテーションを開始",
-      "startingDictation": "音声ディクテーションを開始中",
-      "stopDictation": "音声ディクテーションを停止",
-      "transcribingDictation": "音声ディクテーションを文字起こし中"
+      "sendingImage": "画像を送信中…"
     },
     "terminalLiveInputStatus": {
       "listening": "聞き取り中",
@@ -2210,8 +2471,6 @@
       "processing": "処理中",
       "releaseMicHint": "マイクボタンから指を離すと停止",
       "startingMic": "マイクを起動中",
-      "stopHint": "マイクをタップして停止",
-      "transcribing": "デスクトップで文字起こし中",
       "uploadingImage": "ホストに画像をアップロード中",
       "uploadingImageTitle": "画像をアップロード中"
     },
@@ -2305,7 +2564,8 @@
       "insertFailed": "ディクテーションの結果を挿入できませんでした。",
       "insertFailedCopied": "ディクテーションの結果を挿入できず、クリップボードにコピーしました。",
       "inserted": "ディクテーションの結果を挿入しました。",
-      "stoppedAfterSilence": "1分間音声がなかったため停止しました。"
+      "stoppedAtCloudLimit": "クラウドの10分の上限に達したため、ディクテーションが停止しました。",
+      "stoppedAfterSilenceSeconds": "{{seconds}} 秒間無音だったため停止しました"
     },
     "useNativeChatStop": {
       "stopNotSent": "停止要求を送信できませんでした。",
@@ -2467,14 +2727,6 @@
       "saveFailedTitle": "レイアウトを保存できませんでした",
       "saveFailedMessage": "このレイアウトは一時的に適用されます。もう一度選択すると保存を再試行できます。"
     },
-    "terminalArrowPad": {
-      "label": "矢印キー",
-      "hint": "端をタップすると矢印キーを1回押し、長押ししてドラッグすると繰り返します",
-      "up": "上",
-      "down": "下",
-      "left": "左",
-      "right": "右"
-    },
     "terminalMoreKeys": {
       "sendKey": "{{label}}を送信",
       "paste": "貼り付け",
@@ -2634,6 +2886,8 @@
       "dictationHeading": "ディクテーション",
       "dictationMode": "ディクテーションモード",
       "dictationModeDescription": "トグル：1 回押すと開始し、もう一度押すと停止します。ホールド：押している間だけ音声入力します。",
+      "dictationModeWithAutoDescription": "自動：タップで開始と停止。コンピュータではショートカットを押し続けると離すまで録音します。ホールド：押している間だけ音声入力します。トグル：1 回押すと開始し、もう一度押すと停止します。",
+      "autoMode": "自動",
       "downloadFailed": "ダウンロードに失敗しました",
       "enableDictation": "音声ディクテーションを有効にする",
       "holdMode": "ホールド",
@@ -2649,6 +2903,20 @@
     },
     "agents": {
       "permissionOwnAll": "Agent 独自の設定"
+    },
+    "voiceTranscribeOn": {
+      "heading": "文字起こしの場所",
+      "description": "この端末で聞き取った音声は端末の外に出ません。「自動」では、この端末で文字起こしできないときにコンピュータを使います。",
+      "automatic": "自動",
+      "phone": "この端末",
+      "computer": "コンピュータ",
+      "phoneReady": "この端末で使用可能",
+      "phoneNeedsDownload": "言語のダウンロードが必要",
+      "phoneDownloading": "ダウンロード中… {{progress}}%",
+      "phoneUnsupported": "この端末では使用できません",
+      "download": "この端末にダウンロード",
+      "downloadSize": "約 {{size}} MB",
+      "phoneChecking": "確認中…"
     }
   },
   "sourceControl": {
@@ -3141,7 +3409,8 @@
       "moreFields_one": "+{{count}} フィールド",
       "moreFields_other": "+{{count}} フィールド",
       "noItems": "プロジェクトのアイテムがありません。",
-      "pullRequestSubtitle": "PR · {{repository}}{{number}}"
+      "pullRequestSubtitle": "PR · {{repository}}{{number}}",
+      "linkedPullRequestsOverflow": "他{{count}}件"
     },
     "githubProjectPickers": {
       "add": "追加",
@@ -3171,6 +3440,16 @@
     "githubViewControls": {
       "openView": "GitHub でビューを開く"
     },
+    "hostedMerge": {
+      "merged": "マージ済み",
+      "closed": "クローズ済み",
+      "conflicts": "競合あり",
+      "behind": "遅れあり",
+      "blocked": "ブロック中",
+      "checksPending": "チェック待ち",
+      "ableToMerge": "マージ可能",
+      "unknown": "不明"
+    },
     "itemActions": {
       "changeStatus": "ステータスを変更",
       "copyGitHubLink": "GitHub リンクをコピーする",
@@ -3194,7 +3473,6 @@
       "pipelineJobs_one": "{{count}} 件のジョブ",
       "pipelineJobs_other": "{{count}} 件のジョブ",
       "rerunAll": "すべて再実行",
-      "rerunFailed": "失敗分を再実行",
       "subIssueTitle": "サブ Issue のタイトル",
       "subIssues": "サブ Issue"
     },
@@ -3318,6 +3596,11 @@
       "updated": "更新日時",
       "updatedSortDescription": "アクティビティが新しい順"
     },
+    "pagination": {
+      "pageUnreachable": "ページ {{page}} は GitHub 検索で取得できる範囲を超えています。",
+      "loadPageFailed": "ページ {{page}} を GitHub から読み込めませんでした。",
+      "noMoreResults": "ページ {{page}} にこれ以上の結果はありません。"
+    },
     "pickerProjection": {
       "allRepos": "すべてのリポジトリ",
       "allSites": "すべてのサイト",
@@ -3425,7 +3708,6 @@
       "requestReview": "レビューを依頼",
       "requestReviewers": "レビューの依頼先",
       "rerunAll": "すべて再実行",
-      "rerunFailed": "失敗分を再実行",
       "reviewers": "レビュアー",
       "viewFile": "表示"
     },
@@ -3835,6 +4117,8 @@
       "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "元のAgentペインは利用できません。保存済みの出力はここに残ります。",
       "openAgent": "Agentを開く",
       "retryHistory": "履歴を再読み込み",
+      "fullOutputUnavailable": "完全な出力を読み込めませんでした。",
+      "retryFullOutput": "再試行",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "読み込んだ履歴に一致する実行はありません。さらに読み込んでください。",
       "noMatchingRunsYet": "一致する実行はまだありません。",
       "runSummary": "{{title}}、{{status}}、{{date}}",
@@ -3874,9 +4158,12 @@
       "unknownResult": "不明な結果",
       "notReported": "未報告",
       "searchOptions": "オプションを検索",
-      "scheduleAgentWorkAndViewRuns": "Agentの作業を予定し、実行を確認",
       "task": "タスク",
-      "review": "確認"
+      "review": "確認",
+      "discardChangesTitle": "変更を破棄しますか？",
+      "discardChangesMessage": "この自動化への未保存の変更は失われます。",
+      "discard": "破棄",
+      "keepEditing": "編集を続ける"
     },
     "orphanIssues": {
       "hostReselection": "実行する前に、このオートメーションを編集してホストを選択し直してください。",
@@ -3894,6 +4181,7 @@
       "noRunnableHost": "このオートメーションには実行するホストがありません。",
       "wslMoveInProgress": "このオートメーションのプロジェクトを WSL ホストへ移動中のため、Orca は今回の実行をスキップしました。移動が完了すると実行が再開されます。",
       "wslMoveOwnedByHost": "このオートメーションのプロジェクトは現在 WSL ホスト上で動作しており、オートメーションもそこで実行されます。Orca はこのローカルコピーを実行しなくなりました。",
+      "managedHostServer": "{{host}} への移行が必要",
       "missedGraceWindow": "Orca が次に確認した時点で、この実行は実行漏れの猶予時間を過ぎていました。",
       "targetMissing": "オートメーションのホストは登録されていないため、このオートメーションを実行する場所がありません。",
       "targetReplaced": "オートメーションのホストが削除され、再登録されたため、実行するにはこのオートメーションを再度関連付ける必要があります。",

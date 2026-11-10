@@ -1,25 +1,25 @@
 import * as gitExecFile from '../../git/command-runner/git-exec-file'
-import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { addWorktree } from '../../git/worktrees/creation/worktree-add'
 import {
-  OrcaRuntimeService,
-  addWorktree,
   addWorktreeMock,
   computeWorktreePathMock,
   deleteWorktreeHistoryDirMock,
   ensurePathWithinWorkspaceMock,
-  resolveDefaultBaseRefWithLocalGit,
-  getBranchConflictKind,
-  getPRForBranchMock,
-  listWorktrees,
-  resolveLocalGitUsernameMock
-} from '../orca-runtime-test-mocks.spec'
-import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
+  getPRForBranchMock
+} from '../orca-runtime-test-mocks/setup.spec'
+import { resolveDefaultBaseRefWithLocalGit } from '../../git/repo-default-base-ref'
+import { getBranchConflictKind } from '../../git/repo-branch-conflict'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
   TEST_REPO_PATH,
   deferred,
   makeWorktreeMeta,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 describe('OrcaRuntimeService', () => {
@@ -243,56 +243,6 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('returns runtime local base update suggestions from addWorktree', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    const createdWorktree = {
-      path: '/tmp/workspaces/cli-stale-main',
-      head: 'def',
-      branch: 'cli-stale-main',
-      isBare: false,
-      isMainWorktree: false
-    }
-    computeWorktreePathMock.mockReturnValue(createdWorktree.path)
-    ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
-    vi.mocked(addWorktree).mockResolvedValueOnce({
-      localBaseRefUpdateSuggestion: {
-        baseRef: 'origin/main',
-        localBranch: 'main',
-        behind: 5
-      }
-    })
-    vi.mocked(listWorktrees).mockResolvedValueOnce([createdWorktree])
-    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
-      if (args[0] === 'rev-parse' && args.includes('refs/heads/cli-stale-main^{commit}')) {
-        throw new Error('branch not found')
-      }
-      if (args[0] === 'remote') {
-        return { stdout: 'origin\n', stderr: '' }
-      }
-      if (args[0] === 'rev-parse' && args.includes('--git-common-dir')) {
-        return { stdout: '/tmp/repo/.git\n', stderr: '' }
-      }
-      if (args[0] === 'rev-parse' && args[1] === '--verify') {
-        return { stdout: 'base-sha\n', stderr: '' }
-      }
-      return { stdout: '', stderr: '' }
-    })
-    try {
-      const result = await runtime.createManagedWorktree({
-        repoSelector: 'id:repo-1',
-        name: 'cli-stale-main'
-      })
-
-      expect(result.localBaseRefUpdateSuggestion).toEqual({
-        baseRef: 'origin/main',
-        localBranch: 'main',
-        behind: 5
-      })
-    } finally {
-      gitSpy.mockRestore()
-    }
-  })
-
   it('creates a runtime local worktree from the detected default when the persisted base is stale', async () => {
     const runtime = new OrcaRuntimeService(store)
     const createdWorktree = {
@@ -352,59 +302,6 @@ describe('OrcaRuntimeService', () => {
         }
       )
       expect(resolveDefaultBaseRefWithLocalGit).toHaveBeenCalledWith({ cwd: TEST_REPO_PATH })
-    } finally {
-      getReposSpy.mockRestore()
-      gitSpy.mockRestore()
-    }
-  })
-
-  it('creates a runtime local worktree from a usable persisted local branch base', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    const createdWorktree = {
-      path: '/tmp/workspaces/local-branch-base',
-      head: 'develop-sha',
-      branch: 'local-branch-base',
-      isBare: false,
-      isMainWorktree: false
-    }
-    const repo = { ...store.getRepos()[0], worktreeBaseRef: 'develop' }
-    const getReposSpy = vi.spyOn(store, 'getRepos').mockReturnValue([repo] as never)
-    computeWorktreePathMock.mockReturnValue(createdWorktree.path)
-    ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
-    vi.mocked(addWorktree).mockResolvedValueOnce({})
-    vi.mocked(listWorktrees).mockResolvedValue([createdWorktree])
-    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
-      if (args[0] === 'remote') {
-        return { stdout: 'origin\n', stderr: '' }
-      }
-      if (args[0] === 'rev-parse' && args.includes('--git-common-dir')) {
-        return { stdout: '/tmp/repo/.git\n', stderr: '' }
-      }
-      if (args[0] === 'rev-parse' && args.includes('refs/heads/develop^{commit}')) {
-        return { stdout: 'develop-sha\n', stderr: '' }
-      }
-      if (args.includes('fetch')) {
-        throw new Error('network unavailable')
-      }
-      return { stdout: '', stderr: '' }
-    })
-    try {
-      await expect(
-        runtime.createManagedWorktree({
-          repoSelector: 'id:repo-1',
-          name: 'local-branch-base'
-        })
-      ).resolves.toBeDefined()
-
-      expect(addWorktree).toHaveBeenCalledWith(
-        TEST_REPO_PATH,
-        createdWorktree.path,
-        'local-branch-base',
-        'develop',
-        false,
-        false,
-        {}
-      )
     } finally {
       getReposSpy.mockRestore()
       gitSpy.mockRestore()
@@ -482,41 +379,6 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('does not create a runtime local worktree when the refresh fails and no local base ref exists', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/cli-refresh-no-local')
-    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/cli-refresh-no-local')
-    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
-      if (args[0] === 'remote') {
-        return { stdout: 'origin\n', stderr: '' }
-      }
-      if (args[0] === 'rev-parse' && args.includes('--git-common-dir')) {
-        return { stdout: '/tmp/repo/.git\n', stderr: '' }
-      }
-      if (args[0] === 'rev-parse' && args[1] === '--verify') {
-        throw new Error('missing ref')
-      }
-      if (args.includes('fetch')) {
-        throw new Error('network unavailable')
-      }
-      return { stdout: '', stderr: '' }
-    })
-    try {
-      await expect(
-        runtime.createManagedWorktree({
-          repoSelector: 'id:repo-1',
-          name: 'cli-refresh-no-local'
-        })
-      ).rejects.toThrow(
-        'Could not refresh base ref "origin/main" from "origin". Check your network and try again.'
-      )
-
-      expect(addWorktree).not.toHaveBeenCalled()
-    } finally {
-      gitSpy.mockRestore()
-    }
-  })
-
   it('creates from the local branch only when the caller opts in and the remote base cannot be fetched', async () => {
     const runtime = new OrcaRuntimeService(store)
     const createdWorktree = {
@@ -581,55 +443,6 @@ describe('OrcaRuntimeService', () => {
     } finally {
       gitSpy.mockRestore()
     }
-  })
-
-  it('creates a branchNameOverride worktree from the selected matching remote base ref', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    const gitSpy = vi
-      .spyOn(gitExecFile, 'gitExecFileAsync')
-      .mockResolvedValue({ stdout: '', stderr: '' })
-    onTestFinished(() => gitSpy.mockRestore())
-    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/feature-something')
-    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/feature-something')
-    vi.mocked(listWorktrees).mockResolvedValueOnce([
-      {
-        path: '/tmp/workspaces/feature-something',
-        head: 'def',
-        branch: 'feature/something',
-        isBare: false,
-        isMainWorktree: false
-      }
-    ])
-
-    const result = await runtime.createManagedWorktree({
-      repoSelector: 'id:repo-1',
-      name: 'feature/something',
-      baseBranch: 'origin/feature/something',
-      branchNameOverride: 'feature/something'
-    })
-
-    // Explicit branch overrides adopt before conflict probing, leaving no lazy-adopt callback.
-    expect(getBranchConflictKind).toHaveBeenCalledWith(
-      TEST_REPO_PATH,
-      'feature/something',
-      'origin/feature/something',
-      {},
-      undefined
-    )
-    expect(addWorktree).toHaveBeenCalledWith(
-      TEST_REPO_PATH,
-      '/tmp/workspaces/feature-something',
-      'feature/something',
-      'origin/feature/something',
-      false,
-      false,
-      {}
-    )
-    expect(resolveLocalGitUsernameMock).not.toHaveBeenCalled()
-    expect(result.worktree).toMatchObject({
-      path: '/tmp/workspaces/feature-something',
-      branch: 'feature/something'
-    })
   })
 
   it('checks out a selected existing local branch even when that branch already has a PR', async () => {

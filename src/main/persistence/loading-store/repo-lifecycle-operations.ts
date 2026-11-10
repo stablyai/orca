@@ -1,4 +1,4 @@
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { ProjectHostSetup, ProjectHostSetupUpdateArgs } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { RepoHostTarget } from '../../../shared/repo-host-identity'
@@ -27,8 +27,8 @@ import {
 } from '../../workspaces/catalog/local-worktree-scan-generation'
 
 import type { StoreRuntimeState } from './store-runtime-state'
-import type { WriteSchedulingOperations } from './write-scheduling'
-import { scheduleSave } from './write-scheduling'
+
+import { type WriteSchedulingOperations, scheduleSave } from './write-scheduling'
 import { pruneDeregisteredRepoUiResidue } from './repo-lifecycle-ui-residue'
 import { isWslMoveProjectSessionFrozen } from '../moving-wsl-projects/wsl-move-scope-guard'
 import { dropOrcadTerminalRestoreHintsForWorktrees } from '../migrating-orcad-catalog/orcad-terminal-restore-hint-store'
@@ -44,6 +44,14 @@ function removeLocalRepoSession(
     ? session
     : removeRepoFromWorkspaceSession(session, repoId)
 }
+function countSessionTerminalTabs(session: WorkspaceSessionState): number {
+  let count = 0
+  for (const tabs of Object.values(session.tabsByWorktree)) {
+    count += tabs.length
+  }
+  return count
+}
+
 type RepoLifecycleOperationsRuntime = Pick<
   StoreRuntimeState,
   | 'gitUsernameCache'
@@ -140,6 +148,7 @@ export class RepoLifecycleOperations {
     if (orphanRepoIds.size === 0) {
       return []
     }
+    const tabCountBefore = countSessionTerminalTabs(state.workspaceSession)
     for (const repoId of orphanRepoIds) {
       retireLocalWorktreeScanGeneration(repoId)
       releaseWslStoppedWorktreeRescan(repoId)
@@ -152,6 +161,10 @@ export class RepoLifecycleOperations {
       )
     }
     pruneDeregisteredRepoUiResidue(state.ui, orphanRepoIds)
+    console.info(
+      `[persistence] swept residue of ${orphanRepoIds.size} deregistered repo(s), dropping ${tabCountBefore - countSessionTerminalTabs(state.workspaceSession)} local terminal tab(s):`,
+      [...orphanRepoIds]
+    )
     return [...orphanRepoIds]
   }
 
@@ -174,18 +187,20 @@ export class RepoLifecycleOperations {
         | 'folderUpgradeGitRootPath'
         | 'executionHostId'
         | 'symlinkPaths'
+        | 'dictationTerms'
         | 'issueSourcePreference'
         | 'forkSyncMode'
+        | 'agentWorkspaceTrust'
         | 'externalWorktreeVisibilityPromptDismissedAt'
         | 'externalWorktreeInboxBaselinePaths'
         | 'importedExternalWorktreePaths'
         | 'customWorktreeVisibilitySources'
         | 'worktreeVisibilitySourcePreferences'
         | 'projectGroupId'
-        | 'projectGroupOrder'
         | 'projectHostSetupMethod'
       >
     > & {
+      projectGroupOrder?: number | null
       externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
       agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
       sourceControlAi?: Repo['sourceControlAi'] | null

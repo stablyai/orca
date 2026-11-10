@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { captureWorktreeOperationGenerationSnapshot } from '@/lib/worktree-operation-generation'
-import type { EditorFileOperationProvenance } from '@/lib/editor-file-operation-provenance'
+import { captureWorktreeOperationGenerationSnapshot } from '@/lib/workspace/ownership/worktree-operation-generation'
+import type { EditorFileOperationProvenance } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import {
   selectEditorExternalWatchTargets as getEditorExternalWatchTargets,
   type EditorExternalWatchTargetState
@@ -11,7 +11,7 @@ vi.mock('@/store', () => ({
     getState: vi.fn()
   }
 }))
-vi.mock('@/components/editor/editor-autosave', () => ({
+vi.mock('@/components/editor/autosave/editor-autosave', () => ({
   notifyEditorExternalFileChange: vi.fn(),
   getOpenFilesForExternalFileChange: vi.fn(() => [])
 }))

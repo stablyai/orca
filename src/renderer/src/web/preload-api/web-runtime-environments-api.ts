@@ -5,7 +5,7 @@ import {
 const pendingSubscriptions = new Map<string, WebRuntimeSubscriptionRegistration>()
 import { verifyAndAddWebRuntimeEnvironment } from './web-runtime-pairing-verification'
 import type { PreloadApi } from '../../../../preload/api-types'
-import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
 import { parseWebPairingInput } from '../web-pairing'
 import {
   createStoredWebRuntimeEnvironment,

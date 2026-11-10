@@ -1,6 +1,6 @@
 import { DESKTOP_READ_WINDOW } from '../native-chat/transcript-watch-contract'
 import { ipcMain, type IpcMainEvent, type WebContents } from 'electron'
-import type { AgentType } from '../../shared/agent-status-types'
+import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
 import type {
   NativeChatMessage,
   NativeChatTurnLifecycle
@@ -14,7 +14,7 @@ import {
   type SubscribeNativeChatTranscriptArgs
 } from '../native-chat/transcript-watch'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
-import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { openNativeChatTranscript } from '../native-chat/native-chat-open-wake'
 
 export { clearNativeChatTranscriptCache }

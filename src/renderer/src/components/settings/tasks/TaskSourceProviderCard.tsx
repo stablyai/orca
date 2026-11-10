@@ -13,6 +13,7 @@ import {
   type TaskProviderSetupStatus
 } from './task-source-setup-state'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 type TaskSourceProviderCardProps = {
   icon: ReactNode
@@ -26,45 +27,33 @@ type TaskSourceProviderCardProps = {
   children?: ReactNode
 }
 
-function getSetupStatusLabel(status: TaskProviderSetupStatus): string {
+function getSetupStatusLabel(status: TaskProviderSetupStatus, t: Translate = translate): string {
   switch (status) {
     case 'checking':
-      return translate(
-        'auto.components.settings.TaskSourceProviderCard.statusChecking',
-        'Checking…'
-      )
+      return t('auto.components.settings.TaskSourceProviderCard.statusChecking', 'Checking…')
     case 'ready':
-      return translate('auto.components.settings.TaskSourceProviderCard.statusReady', 'Ready')
+      return t('auto.components.settings.TaskSourceProviderCard.statusReady', 'Ready')
     case 'connect-required':
-      return translate(
+      return t(
         'auto.components.settings.TaskSourceProviderCard.statusConnectRequired',
         'Connect required'
       )
     case 'skill-required':
-      return translate(
+      return t(
         'auto.components.settings.TaskSourceProviderCard.statusSkillRequired',
         'Skill required'
       )
     case 'skill-unverified':
-      return translate(
-        'auto.components.settings.TaskSourceProviderCard.statusUnverified',
-        'Cannot verify'
-      )
+      return t('auto.components.settings.TaskSourceProviderCard.statusUnverified', 'Cannot verify')
     case 'unavailable':
-      return translate(
+      return t(
         'auto.components.settings.TaskSourceProviderCard.statusUnavailable',
         'Status unavailable'
       )
     case 'hidden':
-      return translate(
-        'auto.components.settings.TaskSourceProviderCard.statusHidden',
-        'Hidden from Tasks'
-      )
+      return t('auto.components.settings.TaskSourceProviderCard.d2d9e9707b', 'Hidden from tasks')
     case 'incomplete':
-      return translate(
-        'auto.components.settings.TaskSourceProviderCard.statusIncomplete',
-        'Needs setup'
-      )
+      return t('auto.components.settings.TaskSourceProviderCard.statusIncomplete', 'Needs setup')
   }
 }
 
@@ -79,6 +68,7 @@ export function TaskSourceProviderCard({
   onToggleVisible,
   children
 }: TaskSourceProviderCardProps): React.JSX.Element {
+  const t = useTranslate()
   const [expanded, setExpanded] = useState(defaultExpanded)
   const [lastDefaultExpanded, setLastDefaultExpanded] = useState(defaultExpanded)
   // Automatic readiness updates may open cards but cannot close a card the user is using.
@@ -94,8 +84,8 @@ export function TaskSourceProviderCard({
   const setupId = useId()
 
   return (
-    <div className="rounded-xl border border-border/60 bg-card/30">
-      <div className="flex flex-wrap items-start gap-3 p-3.5">
+    <div>
+      <div className="flex flex-wrap items-start gap-3 py-3.5">
         <span
           className={cn(
             'flex size-9 shrink-0 items-center justify-center rounded-md border',
@@ -111,7 +101,7 @@ export function TaskSourceProviderCard({
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm font-semibold text-foreground">{name}</p>
             <IntegrationStatusPill tone={TASK_PROVIDER_SETUP_STATUS_TONE[status]}>
-              {getSetupStatusLabel(status)}
+              {getSetupStatusLabel(status, t)}
             </IntegrationStatusPill>
             {isTaskProviderChecking(readiness) ||
             status === 'ready' ||
@@ -134,10 +124,10 @@ export function TaskSourceProviderCard({
               // Keep the last visible provider keyboard-focusable so its lock reason remains discoverable.
               aria-disabled={visibilityLocked}
               className={cn(visibilityLocked && 'cursor-not-allowed opacity-60')}
-              aria-label={getShowInTasksActionLabel(visible, canHide, name)}
+              aria-label={getShowInTasksActionLabel(visible, canHide, name, t)}
               onClick={visibilityLocked ? undefined : onToggleVisible}
             >
-              {getShowInTasksLabel(visible, canHide)}
+              {getShowInTasksLabel(visible, canHide, t)}
             </Button>
           ) : null}
           <Button
@@ -148,12 +138,12 @@ export function TaskSourceProviderCard({
             aria-controls={setupId}
             aria-label={
               expanded
-                ? translate(
+                ? t(
                     'auto.components.settings.TaskSourceProviderCard.collapseSetup',
                     'Collapse {{provider}} setup steps',
                     { provider: name }
                   )
-                : translate(
+                : t(
                     'auto.components.settings.TaskSourceProviderCard.expandSetup',
                     'Show {{provider}} setup steps',
                     { provider: name }
@@ -167,7 +157,7 @@ export function TaskSourceProviderCard({
       </div>
 
       {expanded ? (
-        <div id={setupId} className="border-t border-border/50 px-3.5 py-1">
+        <div id={setupId} className="border-t border-border/50 py-1 pl-12">
           {children}
         </div>
       ) : null}

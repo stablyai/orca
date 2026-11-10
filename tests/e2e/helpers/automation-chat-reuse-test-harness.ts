@@ -10,22 +10,23 @@ import { expect, vi, type Mock } from 'vitest'
 import { gitExecFileAsync } from '../../../src/main/git/runner'
 import { getRepoMainWorktreeId } from '../../../src/shared/worktree/id'
 import type { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
-import type { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
+import type { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host'
 import { createRuntimeAutomationService } from '../../../src/main/automations/runtime-automation-service'
 import { createAutomationRunWriter } from '../../../src/main/automations/automation-run-writer'
+import { runNowSettled } from '../../../src/main/automations/automation-run-now-settled.test-fixture'
 import type { AutomationChatLaunchRequest } from '../../../src/main/automations/automation-chat-agent-launch'
 import { automationRunOperationId } from '../../../src/main/automations/automation-run-operation'
+import { refuseUnclassified } from '../../../src/shared/agent-session/failures/agent-session-wire-refusals'
 import { agentJournalItemKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import {
   HOST_TEST_NOW,
   HOST_TEST_THREAD,
   HOST_TEST_LOCATION
-} from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import {
-  createQueuedMessageTestRig,
-  eventually
-} from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
+} from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { createQueuedMessageTestRig } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
+
+import { eventually } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
 import {
   createStore,
   closeTestStores,
@@ -33,7 +34,7 @@ import {
   readPersistedStateJson
 } from '../../../src/main/persistence/persistence-test-harness'
 
-export type ChatReuseMode = 'normal' | 'lost-reply' | 'restart'
+export type ChatReuseMode = 'normal' | 'lost-reply' | 'refused-reply' | 'restart'
 
 export async function exerciseBusyChatReuse(
   mode: ChatReuseMode,
@@ -108,22 +109,43 @@ export async function exerciseBusyChatReuse(
       if (mode === 'lost-reply') {
         throw new Error('accepted reply lost')
       }
+      if (mode === 'refused-reply') {
+        return { ok: false, refusal: refuseUnclassified('agent_session_operation_unknown', 'lost') }
+      }
       return answer
     })
+    const tabOwner = new ChatOpenTestRuntime(disk)
+    vi.spyOn(tabOwner, 'ensureStructuredAgentSessionHost').mockResolvedValue()
+    vi.spyOn(tabOwner, 'openAgentSessionRecordStore').mockResolvedValue(rig.store)
+    tabOwner.projectStructuredAgentSessionTab({
+      workspaceId: location.workspaceId,
+      sessionId: 'selected-survivor',
+      agent: 'codex',
+      activate: true
+    })
+    const tabsBefore = await tabOwner.listMobileSessionTabs(`id:${location.workspaceId}`)
+    expect(tabsBefore.tabs).not.toContainEqual(expect.objectContaining({ sessionId }))
+    expect(tabsBefore.activeTabId).toBe('agent-session:selected-survivor')
     const runtimeFacade = {
       ensureStructuredAgentSessionHost: async () => {},
       openAgentSessionRecordStore: async () => rig.store,
       openedAgentSessionRecordStore: () => rig.store,
       setAutomationService: vi.fn(),
       notifyAutomationsChanged: vi.fn(),
+      canOpenRunTerminals: () => true,
       showManagedWorktree: async () => {
         throw new Error('optional display unavailable')
-      }
+      },
+      publishStructuredAgentSessionTab: tabOwner.publishStructuredAgentSessionTab.bind(tabOwner)
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the runtime facade is scripted; the real host/store and service/send/receipt/queue/observer/writer execute.
     const runtime = runtimeFacade as unknown as OrcaRuntimeService
-    service = createRuntimeAutomationService({ store: disk, runtime, headless: true })
-    const dispatched = await service.runNow(saved.id)
+    service = createRuntimeAutomationService({
+      store: disk,
+      runtime,
+      allowRemoteHostScheduling: true
+    })
+    const dispatched = await runNowSettled(service, disk, saved.id)
     expect(dispatched).toMatchObject({
       status: 'dispatched',
       sessionKind: 'chat',
@@ -133,6 +155,9 @@ export async function exerciseBusyChatReuse(
     expect(await rig.drafts()).toEqual([{ messageId: q, state: 'waiting' }])
     expect(await rig.handoff(q)).toBeUndefined()
     expect(send).toHaveBeenCalledOnce()
+    const tabsAfter = await tabOwner.listMobileSessionTabs(`id:${location.workspaceId}`)
+    expect(tabsAfter.tabs).toContainEqual(expect.objectContaining({ sessionId }))
+    expect(tabsAfter.activeTabId).toBe(tabsBefore.activeTabId)
     service.start()
     await eventually(() =>
       expect(rig.host.collaboratorsForTests().sessions['observers'].size).toBe(1)
@@ -149,7 +174,11 @@ export async function exerciseBusyChatReuse(
       })
       await rig.restartHostProcess()
       controls.setHost(rig.host)
-      service = createRuntimeAutomationService({ store: disk, runtime, headless: true })
+      service = createRuntimeAutomationService({
+        store: disk,
+        runtime,
+        allowRemoteHostScheduling: true
+      })
       service.start()
       await eventually(() =>
         expect(disk.listAutomationRuns(saved.id).find((r) => r.id === current.id)).toMatchObject({

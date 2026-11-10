@@ -1,5 +1,5 @@
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
-import { recordClosedTerminalTabTombstone } from '../closed-terminal-tab-tombstones'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
+import { recordClosedTerminalTabTombstone } from './closed-terminal-tab-tombstones'
 import {
   addWorkspace,
   emptySession,

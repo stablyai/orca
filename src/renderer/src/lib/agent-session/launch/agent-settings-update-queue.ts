@@ -1,6 +1,6 @@
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
-import { buildAgentAvailabilitySettingsUpdate } from '../../../../../shared/tui-agent-selection'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import { buildAgentAvailabilitySettingsUpdate } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
 
 export type AgentAvailabilityUpdateQueueOptions = {
   getSettings: () => GlobalSettings | null | undefined

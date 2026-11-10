@@ -2,8 +2,8 @@ import { useEffect, useId, useRef } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '../store'
-import { translate } from '@/i18n/i18n'
-import { shouldFocusMobileDriverAction } from './terminal-pane/mobile-driver-overlay-focus'
+import { useTranslate } from '@/i18n/use-translate'
+import { shouldFocusMobileDriverAction } from './terminal-pane/mobile-driver/mobile-driver-overlay-focus'
 import { awaitsCodexRestartAnswer } from './codex-restart-notice-state'
 
 function isInsideHiddenTree(element: HTMLElement): boolean {
@@ -73,6 +73,7 @@ function LoudRestartOverlay({
   onDismiss: () => void
   onRestart: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const titleId = useId()
   const bodyId = useId()
   const rootRef = useRef<HTMLDivElement>(null)
@@ -129,10 +130,10 @@ function LoudRestartOverlay({
           </div>
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <div className="text-xs font-medium uppercase tracking-wide text-foreground">
-              {translate('auto.components.CodexRestartChip.d3e8a1f4b2', 'Account switched')}
+              {t('auto.components.CodexRestartChip.d3e8a1f4b2', 'Account switched')}
             </div>
             <div id={titleId} className="text-base font-semibold leading-tight">
-              {translate(
+              {t(
                 'auto.components.CodexRestartChip.a4c8e1b2f7',
                 'Codex is still signed in as {{value0}}',
                 { value0: restartNotice.previousAccountLabel }
@@ -141,7 +142,7 @@ function LoudRestartOverlay({
           </div>
         </div>
         <div id={bodyId} className="text-sm leading-relaxed text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.CodexRestartChip.9375620cc3',
             'Restart this session to use {{value0}}. It stays on the previous account until you do.',
             { value0: restartNotice.nextAccountLabel }
@@ -149,11 +150,11 @@ function LoudRestartOverlay({
         </div>
         <div className="mt-1 flex flex-wrap justify-end gap-2">
           <Button type="button" variant="outline" size="sm" onClick={onDismiss}>
-            {translate('auto.components.CodexRestartChip.6133594b12', 'Keep old account')}
+            {t('auto.components.CodexRestartChip.6133594b12', 'Keep old account')}
           </Button>
           <Button type="button" variant="default" size="sm" onClick={onRestart}>
             <RefreshCw />
-            {translate('auto.components.CodexRestartChip.c72a5fb234', 'Restart')}
+            {t('auto.components.CodexRestartChip.c72a5fb234', 'Restart')}
           </Button>
         </div>
       </div>

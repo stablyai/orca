@@ -1,12 +1,18 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
-import type { AskAnswerSelection } from '../../../../../src/shared/native-chat/input/native-chat-ask-answer'
+import {
+  nativeChatAnswerOperationEvidence,
+  type NativeChatAnswerOperation,
+  type NativeChatAnswerSource,
+  type AskAnswerSelection
+} from '../../../../../src/shared/native-chat/input/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
 import type { AgentJournalFreeTextInput } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import {
   askAcceptsEmptyAnswer,
   askConfirmAction,
+  askQuestionShowsPreviews,
   askConfirmLabel,
   askTypedText,
   toggleAskOption
@@ -17,15 +23,18 @@ import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { MessageBox } from '../../../components/composer-input/MessageBox'
-import { MobileNativeChatCardHeaderAction } from '../MobileNativeChatCardHeaderAction'
+import { MobileNativeChatCardHeaderAction } from './MobileNativeChatCardHeaderAction'
+import { MobileNativeChatQuestionText } from '../transcript/MobileNativeChatQuestionText'
 import { useMobileNativeChatAskAutoAdvance } from './use-mobile-native-chat-ask-auto-advance'
 import { MobileNativeChatAskOptionRow } from './MobileNativeChatAskOptionRow'
 import { useMobileNativeChatReplyScroll } from './use-mobile-native-chat-reply-scroll'
 
 type Props = {
   prompt: AskPrompt
+  answerSendSource?: NativeChatAnswerSource
+  answerPending?: boolean
   // Use option indices so Claude’s selector can navigate without pasting labels.
-  onAnswer: (selections: AskAnswerSelection[]) => Promise<boolean>
+  onAnswer: (selections: AskAnswerSelection[], onCreated?: (id: string) => void) => Promise<boolean>
   onCancel?: () => Promise<boolean>
   // Collapse writes nothing to the agent.
   onCollapse?: () => void
@@ -47,6 +56,8 @@ const OTHER = -1
 
 export function MobileNativeChatAsk({
   prompt,
+  answerPending = false,
+  answerSendSource,
   onAnswer,
   onCancel,
   onCollapse,
@@ -55,15 +66,31 @@ export function MobileNativeChatAsk({
 }: Props): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const { scrollRef, inputRef, revealReply, onViewportLayout } = useMobileNativeChatReplyScroll()
+  const { scrollRef, inputRef, revealReply, scrollViewProps, revealContent } =
+    useMobileNativeChatReplyScroll()
   const [index, setIndex] = useState(0)
   const [selections, setSelections] = useState<number[][]>(() => prompt.questions.map(() => []))
   const [otherText, setOtherText] = useState<string[]>(() =>
     prompt.questions.map((_, qi) => freeTextInputs?.[qi]?.initialValue ?? '')
   )
-  const [submitting, setSubmitting] = useState(false)
-  const submittingRef = useRef(false)
-  const autoAdvance = useMobileNativeChatAskAutoAdvance()
+  const [operation, setOperation] = useState<NativeChatAnswerOperation | null>(null)
+  const operationRef = useRef<NativeChatAnswerOperation | null>(null)
+  const operationId = operation?.clientMessageId
+  const evidence = useMemo(
+    () =>
+      nativeChatAnswerOperationEvidence(
+        operationId,
+        answerSendSource?.messages ?? [],
+        answerSendSource?.submissions
+      ),
+    [operationId, answerSendSource?.messages, answerSendSource?.submissions]
+  )
+  const isLocalPending = (current: NativeChatAnswerOperation | null): boolean =>
+    current !== null &&
+    ((current.clientMessageId === operationId ? evidence : undefined) ?? current.inFlight)
+  const sending = operation?.inFlight === true && isLocalPending(operation)
+  const submitting = isLocalPending(operation) || answerPending
+  const autoAdvance = useMobileNativeChatAskAutoAdvance(submitting)
   // Open each step at its question and end the last step's edit, so no typing lands out of view.
   const showStep = (next: (current: number) => number): void => {
     inputRef.current?.blur()
@@ -80,15 +107,19 @@ export function MobileNativeChatAsk({
   // Delay single-select advance to show the choice; Other still needs text.
   const toggle = (qi: number, optIndex: number, multi: boolean): void => {
     // Block same-frame taps before disabled state renders.
-    if (submittingRef.current) {
+    if (isLocalPending(operationRef.current) || answerPending) {
       return
     }
     const cur = selections[qi] ?? []
+    // A pick reveals its preview, so a re-tap keeps it and the user confirms.
+    const keep = optIndex !== OTHER && askQuestionShowsPreviews(prompt.questions[qi])
     const picked = !cur.includes(optIndex)
-    const next = selections.map((s, i) => (i === qi ? toggleAskOption(cur, optIndex, multi) : s))
+    const next = selections.map((s, i) =>
+      i === qi ? toggleAskOption(cur, optIndex, multi, keep) : s
+    )
     setSelections(next)
     autoAdvance.cancel()
-    if (picked && !multi && optIndex !== OTHER) {
+    if (picked && !multi && optIndex !== OTHER && !keep) {
       autoAdvance.schedule(() => void advance(next))
     }
   }
@@ -120,16 +151,27 @@ export function MobileNativeChatAsk({
     prompt.questions.some((_, i) => isAnswered(i, sel))
 
   const submit = async (sel: number[][]): Promise<void> => {
-    if (!anyAnswered(sel) || submittingRef.current) {
+    if (!anyAnswered(sel) || isLocalPending(operationRef.current) || answerPending) {
       return
     }
-    submittingRef.current = true
-    setSubmitting(true)
+    const current: NativeChatAnswerOperation = { inFlight: true }
+    operationRef.current = current
+    setOperation(current)
     try {
-      await onAnswer(prompt.questions.map((_, i) => selectionFor(i, sel)))
+      await onAnswer(
+        prompt.questions.map((_, i) => selectionFor(i, sel)),
+        (id) => {
+          current.clientMessageId = id
+          if (operationRef.current === current) {
+            setOperation({ ...current })
+          }
+        }
+      )
     } finally {
-      submittingRef.current = false
-      setSubmitting(false)
+      current.inFlight = false
+      if (operationRef.current === current) {
+        setOperation({ ...current })
+      }
     }
   }
 
@@ -144,14 +186,17 @@ export function MobileNativeChatAsk({
 
   const cancel = async (): Promise<void> => {
     autoAdvance.cancel()
-    if (!submittingRef.current && onCancel) {
-      submittingRef.current = true
-      setSubmitting(true)
+    if (!(operationRef.current?.inFlight && isLocalPending(operationRef.current)) && onCancel) {
+      const current: NativeChatAnswerOperation = { inFlight: true }
+      operationRef.current = current
+      setOperation(current)
       try {
         await onCancel()
       } finally {
-        submittingRef.current = false
-        setSubmitting(false)
+        current.inFlight = false
+        if (operationRef.current === current) {
+          setOperation({ ...current })
+        }
       }
     }
   }
@@ -207,14 +252,9 @@ export function MobileNativeChatAsk({
         </ScrollView>
       ) : null}
 
-      <ScrollView
-        ref={scrollRef}
-        onLayout={onViewportLayout}
-        style={styles.scroll}
-        keyboardShouldPersistTaps="always"
-      >
+      <ScrollView {...scrollViewProps} style={styles.scroll} keyboardShouldPersistTaps="always">
         <View style={styles.questionRow}>
-          <Text style={styles.questionText}>{q.question}</Text>
+          <MobileNativeChatQuestionText title content={q.question} style={styles.questionText} />
           <MobileNativeChatCardHeaderAction
             onCollapse={
               onCollapse &&
@@ -223,7 +263,7 @@ export function MobileNativeChatAsk({
                 onCollapse()
               })
             }
-            disabled={submitting}
+            disabled={sending}
           />
         </View>
         {q.options.map((opt, optIndex) => (
@@ -231,6 +271,8 @@ export function MobileNativeChatAsk({
             key={`${optIndex}:${opt.label}`}
             label={opt.label}
             description={opt.description}
+            preview={opt.preview}
+            onPreviewLayout={revealContent}
             selected={(selections[index] ?? []).includes(optIndex)}
             multi={q.multiSelect}
             disabled={submitting}
@@ -267,7 +309,7 @@ export function MobileNativeChatAsk({
         <Pressable
           style={({ pressed }) => [styles.cancel, pressed && pressedStyle]}
           onPress={() => void cancel()}
-          disabled={submitting}
+          disabled={sending}
           hitSlop={8}
         >
           <Text style={styles.cancelText}>{t('common.cancel', 'Cancel')}</Text>
@@ -341,9 +383,6 @@ const styles = themedStyleSheet(() => ({
   questionRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
   questionText: {
     flex: 1,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize + 1,
-    fontWeight: '600',
     marginVertical: spacing.sm
   },
   other: {

@@ -1,5 +1,5 @@
-import type { PtyChildProcessVerdict } from '../../../shared/terminal-process-inspection'
-import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-process-recognition'
+import type { PtyChildProcessVerdict } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
+import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-status/process/agent-process-recognition'
 import { getCheapProcessTableSnapshot } from '../../../shared/cheap-process-table-snapshot-reader'
 import {
   getProcessTableSnapshot,

@@ -7,19 +7,19 @@ import {
   normalizeTerminalCustomThemes,
   terminalCustomThemeToXtermTheme,
   type TerminalCustomTheme
-} from '../../../shared/terminal-custom-themes'
+} from '../../../shared/terminal-themes/terminal-custom-themes'
 import {
-  DEFAULT_TERMINAL_THEME_DARK,
-  DEFAULT_TERMINAL_THEME_LIGHT,
-  lookupTerminalTheme,
   resolveTerminalPalette,
-  type TerminalPaletteSettings,
-  type TerminalThemeLookupSettings
-} from '../../../shared/terminal-theme-selection'
+  type TerminalPaletteSettings
+} from '../../../shared/terminal-themes/terminal-theme-selection'
+import {
+  disambiguatedContentPluginNames,
+  disambiguatedPluginContentLabels
+} from '../components/plugins/presentation/plugin-name-disambiguation'
+import type { Translate } from '../i18n/use-translate'
 
 export const BUILTIN_TERMINAL_THEME_NAMES = getThemeNames()
 
-export { DEFAULT_TERMINAL_THEME_DARK, DEFAULT_TERMINAL_THEME_LIGHT }
 export const DEFAULT_TERMINAL_DIVIDER_DARK = '#3f3f46'
 export const DEFAULT_TERMINAL_DIVIDER_LIGHT = '#d4d4d8'
 
@@ -48,20 +48,10 @@ export function getSystemPrefersDark(): boolean {
   return window.matchMedia('(prefers-color-scheme: dark)').matches
 }
 
-export function getBuiltinTheme(name: string): ITheme | null {
-  return getTheme(name)
-}
-
-export function getTerminalTheme(
-  settings: TerminalThemeLookupSettings | undefined,
-  selection: string
-): ITheme | null {
-  return lookupTerminalTheme(settings, selection)
-}
-
 export function getAvailableTerminalThemeOptions(
   settings: Pick<GlobalSettings, 'terminalCustomThemes' | 'terminalPluginPalettes'>,
-  pluginThemes: readonly PluginTerminalThemeRegistration[] = []
+  pluginThemes: readonly PluginTerminalThemeRegistration[] = [],
+  t?: Translate
 ): TerminalThemeOption[] {
   const builtinOptions = BUILTIN_TERMINAL_THEME_NAMES.map((name) => ({
     value: name,
@@ -80,11 +70,17 @@ export function getAvailableTerminalThemeOptions(
       previewTheme: terminalCustomThemeToXtermTheme(theme)
     })
   )
+  const labels = disambiguatedPluginContentLabels(
+    pluginThemes,
+    [...builtinOptions, ...customOptions].map((option) => option.label),
+    t
+  )
+  const pluginNames = disambiguatedContentPluginNames(pluginThemes, t)
   const pluginOptions = pluginThemes.map((theme) => ({
     value: theme.id,
-    label: theme.label,
+    label: labels.get(theme.id) ?? theme.label,
     group: 'plugin' as const,
-    sourceLabel: theme.pluginName,
+    sourceLabel: pluginNames.get(theme.pluginKey) ?? theme.pluginName,
     mode: theme.mode,
     previewTheme: theme.terminal
   }))
@@ -155,8 +151,3 @@ export function resolvePaneStyleOptions(
     focusFollowsMouse: settings.terminalFocusFollowsMouse
   }
 }
-
-export {
-  isTerminalBackgroundLight,
-  resolveOpaqueTerminalBackground
-} from '../../../shared/terminal-title-contrast'

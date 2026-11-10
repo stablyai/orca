@@ -4,31 +4,35 @@ import { PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
 
-export function renderResourceUsageStatusTrigger({
-  daemonUnreachable,
-  resourceManagerAriaLabel,
-  spaceScanReady,
-  iconOnly,
-  commitToneClass,
-  memBadgeLabel,
-  triggerSessionCount,
-  orphanCount,
-  resourceManagerTooltipLines
-}: {
-  daemonUnreachable: boolean
-  resourceManagerAriaLabel: string
-  spaceScanReady: boolean
-  iconOnly: boolean
-  commitToneClass: string | null
-  memBadgeLabel: string
-  triggerSessionCount: number | null
-  orphanCount: number
-  resourceManagerTooltipLines: { id: string; text: string; emphasized: boolean }[]
-}): React.JSX.Element {
+export function renderResourceUsageStatusTrigger(
+  {
+    daemonUnreachable,
+    resourceManagerAriaLabel,
+    spaceScanReady,
+    iconOnly,
+    commitToneClass,
+    memBadgeLabel,
+    triggerSessionCount,
+    orphanCount,
+    resourceManagerTooltipLines
+  }: {
+    daemonUnreachable: boolean
+    resourceManagerAriaLabel: string
+    spaceScanReady: boolean
+    iconOnly: boolean
+    commitToneClass: string | null
+    memBadgeLabel: string
+    triggerSessionCount: number | null
+    orphanCount: number
+    resourceManagerTooltipLines: { id: string; text: string; emphasized: boolean }[]
+  },
+  t: Translate = translate
+): React.JSX.Element {
   return (
-    <Tooltip delayDuration={150}>
+    <Tooltip>
       <TooltipTrigger asChild>
         <PopoverTrigger asChild>
           <button
@@ -37,7 +41,7 @@ export function renderResourceUsageStatusTrigger({
             className="relative inline-flex items-center gap-1.5 cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
             aria-label={
               daemonUnreachable
-                ? translate(
+                ? t(
                     'auto.components.status.bar.ResourceUsageStatusSegment.59f178fe11',
                     '{{value0}}, daemon unreachable',
                     { value0: resourceManagerAriaLabel }
@@ -82,7 +86,7 @@ export function renderResourceUsageStatusTrigger({
             {daemonUnreachable && (
               <AlertTriangle
                 className="size-3 text-yellow-500"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.status.bar.ResourceUsageStatusSegment.ca95d077db',
                   'Daemon unreachable'
                 )}

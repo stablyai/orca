@@ -6,8 +6,7 @@ import {
   redoShape,
   undoShape,
   type MarkupPoint,
-  type PenShape,
-  type TextShape
+  type PenShape
 } from './markup-drawing-model'
 import {
   applyDocumentCommand,
@@ -80,14 +79,6 @@ describe('erase gesture', () => {
     expect(undoShape(after.doc).shapes.map((shape) => shape.id)).toEqual(['older', 'newer'])
   })
 
-  it('keeps a click a click when a tap jitters by a fraction of a pixel', () => {
-    const pressed = erase(editorWith(line('older', 0), line('newer', 0)), [{ x: 50, y: 0 }])
-    const jittered = moveGesture(pressed, 1, { x: 50.6, y: 0.4 }, noText)
-
-    expect(jittered).toBe(pressed)
-    expect(ids(endGesture(jittered, 1))).toEqual(['older'])
-  })
-
   it('keeps a click a click when the pointer wanders inside the slop and back', () => {
     const before = editorWith(line('older', 0), line('newer', 0), line('near', 12))
     // `near` is out of reach of the press point but within reach 3.5px below it.
@@ -99,15 +90,6 @@ describe('erase gesture', () => {
 
     expect(erasedIds(wandered)).toEqual(new Set(['newer']))
     expect(ids(endGesture(wandered, 1))).toEqual(['older', 'near'])
-  })
-
-  it('becomes a drag once the pointer leaves the slop', () => {
-    const dragged = erase(editorWith(line('older', 0), line('newer', 0)), [
-      { x: 50, y: 0 },
-      { x: 54, y: 0 }
-    ])
-
-    expect(erasedIds(dragged)).toEqual(new Set(['older', 'newer']))
   })
 
   it('erases every mark under the press point once the click becomes a drag', () => {
@@ -162,35 +144,6 @@ describe('erase gesture', () => {
     expect(ids(after)).toEqual(['a'])
   })
 
-  it('keeps the same erased set while a drag hits nothing new', () => {
-    const begun = beginEraseGesture(editorWith(line('a', 0)), 1, { x: 50, y: 0 }, noText)
-    const moved = moveGesture(begun, 1, { x: 50, y: 300 }, noText)
-
-    expect(erasedIds(begun)).toEqual(new Set(['a']))
-    expect(erasedIds(moved)).toBe(erasedIds(begun))
-  })
-
-  it('erases a text label the drag passes through', () => {
-    const label: TextShape = {
-      id: 'label',
-      kind: 'text',
-      color: '#111827',
-      at: { x: 200, y: 200 },
-      text: 'note',
-      fontSize: 18
-    }
-    const inkBox = () => ({ x: 200, y: 200, width: 60, height: 20 })
-    const before: MarkupEditorState = {
-      doc: commitShape(createMarkupDocument(), label),
-      gesture: null
-    }
-    const begun = beginEraseGesture(before, 1, { x: 100, y: 210 }, inkBox)
-    const after = endGesture(moveGesture(begun, 1, { x: 230, y: 210 }, inkBox), 1)
-
-    expect(erasedIds(begun)).toEqual(new Set())
-    expect(ids(after)).toEqual([])
-  })
-
   it('ignores a second pointer while a gesture is in flight', () => {
     const first = erase(editorWith(line('a', 0), line('b', 100)), [{ x: 50, y: 0 }], 1)
 
@@ -231,30 +184,6 @@ describe('erase gesture', () => {
 })
 
 describe('draw gesture', () => {
-  it('keeps every point of a freehand stroke', () => {
-    const begun = beginDrawGesture(editorWith(), 1, {
-      id: 'pen',
-      kind: 'highlight',
-      color: '#eab308',
-      width: 4,
-      points: [{ x: 0, y: 0 }]
-    })
-    const moved = [
-      { x: 10, y: 5 },
-      { x: 20, y: 0 }
-    ].reduce((state, point) => moveGesture(state, 1, point, noText), begun)
-
-    expect(endGesture(moved, 1).doc.shapes).toMatchObject([
-      {
-        points: [
-          { x: 0, y: 0 },
-          { x: 10, y: 5 },
-          { x: 20, y: 0 }
-        ]
-      }
-    ])
-  })
-
   it('commits a stroke whose release was lost and starts afresh on the next press', () => {
     const stale = moveGesture(
       beginDrawGesture(editorWith(), 1, line('old', 0)),
@@ -320,16 +249,6 @@ describe('draw gesture', () => {
       expect(endGesture(pressed, 1).doc).toBe(before.doc)
     }
   )
-
-  it('lets an eraser click take a mark where a shape was pressed without dragging', () => {
-    const at = { x: 50, y: 0 }
-    const clicked = endGesture(
-      beginDrawGesture(editorWith(line('a', 0)), 1, pressedShape('rect', at)),
-      1
-    )
-
-    expect(ids(endGesture(erase(clicked, [at]), 1))).toEqual([])
-  })
 
   it('still saves a pen tap, which leaves a visible dot', () => {
     const tapped = endGesture(

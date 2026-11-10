@@ -1,21 +1,18 @@
-import {
-  combinedDiffViewportAttributes,
-  combinedDiffRowAttributes
-} from '../../combined-diff-viewport'
+import { combinedDiffViewportAttributes, combinedDiffRowAttributes } from './combined-diff-viewport'
 import type React from 'react'
 import { useMemo } from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { joinPath } from '@/lib/path'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
-import type { DiffCommentOwner } from '@/store/diff-comment-owner'
-import { DiffSectionItem } from '../../DiffSectionItem'
-import type { DiffSectionItemProps } from '../../diff-section-item-props'
-import { DiffNotesSendMenu } from '../../DiffNotesSendMenu'
-import { canOpenDiffSectionPreviewToSide } from '../../diff-section-preview'
-import type { DiffSection } from '../../diff-section-types'
+import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment-owner'
+import { DiffSectionItem } from '../../diff/sections/DiffSectionItem'
+import type { DiffSectionItemProps } from '../../diff/sections/diff-section-item-props'
+import { DiffNotesSendMenu } from '../../diff/review/DiffNotesSendMenu'
+import { canOpenDiffSectionPreviewToSide } from '../../diff/sections/diff-section-preview'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
 import type { CombinedDiffScrollThumb } from './use-combined-diff-scrollbar'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function CombinedDiffSectionList({
   activeGroupId,
@@ -76,6 +73,7 @@ export function CombinedDiffSectionList({
   toggleSection: (index: number) => void
   virtualizer: Virtualizer<HTMLDivElement, Element>
 }): React.JSX.Element {
+  const t = useTranslate()
   // Index comments once by file instead of rescanning all worktree comments per visible row.
   const commentCountByFilePath = useMemo(() => {
     const counts = new Map<string, number>()
@@ -128,8 +126,8 @@ export function CombinedDiffSectionList({
                   openSection={openSection}
                   openSectionTitle={
                     isAllMode || isBranchMode || isCommitMode
-                      ? translate('auto.components.editor.CombinedDiffViewer.openDiff', 'Open diff')
-                      : translate(
+                      ? t('auto.components.editor.CombinedDiffViewer.openDiff', 'Open diff')
+                      : t(
                           'auto.components.editor.CombinedDiffViewer.openInEditor',
                           'Open in editor'
                         )

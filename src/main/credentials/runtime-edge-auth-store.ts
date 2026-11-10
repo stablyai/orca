@@ -3,8 +3,8 @@ import { rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { getSecretStore } from '../../shared/secret-store'
-import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
-import { writeSecureFile } from '../../shared/secure-file'
+import { readNodeFileSyncWithinLimit } from '../../shared/file-content/node-bounded-file-reader'
+import { writeSecureFile } from '../../shared/secure-storage/secure-file'
 import {
   endpointAuthOrigin,
   normalizeEndpointAuthHeaders,
@@ -13,9 +13,9 @@ import {
 import {
   getPreferredPairedRuntimeConnection,
   type KnownRuntimeEnvironment
-} from '../../shared/runtime-environments'
+} from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import { remoteRuntimeConnectOptions } from '../../shared/remote-runtime/remote-runtime-connect-bound'
-import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
+import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 
 type EdgeAuth = NonNullable<PairedRuntimeConnection['edgeAuth']>
 const connectionCredentials = new Map<string, { identity: string; edgeAuth: EdgeAuth | null }>()

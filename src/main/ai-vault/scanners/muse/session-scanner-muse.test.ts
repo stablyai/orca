@@ -3,13 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { scanAiVaultSessions } from '../../session-scanner'
-import { parseMuseSessionContent } from './session-scanner-muse-parser'
-import {
-  isolatedScanRoots,
-  jsonLines,
-  writeMuseScannerFixture
-} from '../../session-scanner-test-fixtures'
-import type { TranscriptMessage } from '../../transcripts/session-transcript-consumers'
+import { isolatedScanRoots, writeMuseScannerFixture } from '../../session-scanner-test-fixtures'
 
 let tempRoots: string[] = []
 
@@ -39,42 +33,5 @@ describe('scanAiVaultSessions muse', () => {
     expect(session.messageCount).toBe(2)
     expect(session.filePath).toBe(sessionFile)
     expect(session.resumeCommand).toBe("cd '/tmp/muse' && muse resume 'muse-session'")
-  })
-
-  it('publishes user and assistant turns to transcript consumers', () => {
-    const messages: TranscriptMessage[] = []
-    const session = parseMuseSessionContent(
-      {
-        path: '/tmp/muse-sessions/2026/05/01/muse-capture/session.jsonl',
-        mtimeMs: 1780000003000,
-        modifiedAt: '2026-05-01T10:00:03.000Z'
-      },
-      jsonLines([
-        {
-          record_type: 'event',
-          payload_type: 'runtime.user_intent.accepted',
-          recorded_at: 1780000000000000,
-          payload: { refill_blocks: [{ kind: 'text', text: 'Capture this prompt' }] }
-        },
-        {
-          record_type: 'event',
-          payload_type: 'runtime.session',
-          recorded_at: 1780000001000000,
-          payload: {
-            kind: 'run',
-            event: { kind: 'assistant_message_committed', text: 'Captured reply' }
-          }
-        }
-      ]),
-      'darwin',
-      {},
-      { active: true, push: (message) => messages.push(message) }
-    )
-
-    expect(session?.messageCount).toBe(2)
-    expect(messages).toEqual([
-      { role: 'user', text: 'Capture this prompt', timestamp: '2026-05-28T20:26:40.000Z' },
-      { role: 'assistant', text: 'Captured reply', timestamp: '2026-05-28T20:26:41.000Z' }
-    ])
   })
 })

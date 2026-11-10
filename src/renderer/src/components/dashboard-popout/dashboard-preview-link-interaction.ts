@@ -1,20 +1,20 @@
 import type { PreviewTerminalLinkHandler } from './preview-terminal-links'
 import type { Terminal } from '@xterm/xterm'
 import type { LinkActionRequest } from '@/components/link-actions/link-action-request'
-import { installTerminalLinkifierClickPriming } from '@/components/terminal-pane/terminal-linkifier-click-priming'
-import { installTerminalLinkPointerGesture } from '@/components/terminal-pane/terminal-link-pointer-gesture'
-import { installTerminalLinkPtyMouseSuppression } from '@/components/terminal-pane/terminal-link-pty-mouse-suppression'
-import { requestTerminalLinkAction } from '@/components/terminal-pane/terminal-link-action-request'
-import { terminalLinkClickBehaviorFor } from '@/components/terminal-pane/terminal-link-click-behavior'
+import { installTerminalLinkifierClickPriming } from '@/components/terminal-pane/links/gestures/terminal-linkifier-click-priming'
+import { installTerminalLinkPointerGesture } from '@/components/terminal-pane/links/gestures/terminal-link-pointer-gesture'
+import { installTerminalLinkPtyMouseSuppression } from '@/components/terminal-pane/links/gestures/terminal-link-pty-mouse-suppression'
+import { requestTerminalLinkAction } from '@/components/terminal-pane/links/terminal-link-action-request'
+import { terminalLinkClickBehaviorFor } from '@/components/terminal-pane/links/gestures/terminal-link-click-behavior'
 import {
   isTerminalLinkActionActivation,
   isTerminalLinkDirectActivation
-} from '@/components/terminal-pane/terminal-link-activation'
-import { getTerminalBufferPositionForMouseEvent } from '@/components/terminal-pane/terminal-mouse-buffer-position'
-import { findHttpLinkAtTerminalMouseEvent } from '@/components/terminal-pane/terminal-url-link-hit-testing'
-import { findTerminalHttpLinkAtBufferPosition } from '../../../../shared/terminal-link-buffer-hit-testing'
-import { httpLinkDirectClickDestination } from '@/lib/http-link-destinations'
-import { isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
+} from '@/components/terminal-pane/links/gestures/terminal-link-activation'
+import { getTerminalBufferPositionForMouseEvent } from '@/components/terminal-pane/input/pointer/terminal-mouse-buffer-position'
+import { findHttpLinkAtTerminalMouseEvent } from '@/components/terminal-pane/links/http/terminal-url-link-hit-testing'
+import { findTerminalHttpLinkAtBufferPosition } from '../../../../shared/terminal/links/terminal-link-buffer-hit-testing'
+import { httpLinkDirectClickDestination } from '@/lib/browser/navigation/http-link-destinations'
+import { isWindowsUserAgent } from '@/lib/user-agent-platform'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   dashboardPreviewHttpActions,

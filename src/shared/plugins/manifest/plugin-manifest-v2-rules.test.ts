@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { z } from 'zod'
-import { pluginEngineFloor } from './plugin-engine-floor'
-import { PLUGIN_ENUM_SINCE_KEY } from './plugin-engine-floor-keys'
+
 import { parseHostPluginManifest, parsePluginManifest } from './plugin-manifest'
 import {
   PLUGIN_DERIVED_PUBLISHER_SINCE,
   PLUGIN_MANIFEST_V2_SINCE
 } from './plugin-schema-field-docs'
+import { PLUGIN_EDITOR_TYPOGRAPHY_SINCE } from '../workers/plugin-host-api-editor-typography'
 
 function v2(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -77,25 +76,22 @@ describe('manifest format 2 rules', () => {
       error: 'pluginApi: data plugins never call the host API; remove pluginApi'
     })
   })
+})
 
-  it('counts enum values and only fields that are present', () => {
-    const schema = z.object({
-      kind: z.enum(['old', 'new']).meta({
-        'x-orca-since': '1.0.0',
-        [PLUGIN_ENUM_SINCE_KEY]: { old: '1.0.0', new: '3.0.0' }
-      }),
-      extra: z.string().optional().meta({ 'x-orca-since': '5.0.0' }),
-      list: z.array(z.object({ x: z.string().meta({ 'x-orca-since': '4.0.0' }) })).default([])
+describe('event subscriptions', () => {
+  const worker = (on: string) =>
+    v2({
+      execution: 'trusted-worker',
+      main: 'main.mjs',
+      engines: { orca: `>=${PLUGIN_EDITOR_TYPOGRAPHY_SINCE}` },
+      contributes: { events: [{ on }] }
     })
-    expect(pluginEngineFloor(schema, { kind: 'old', list: [] })).toEqual({
-      version: '1.0.0',
-      field: 'kind'
+
+  it('needs no capability for editor typography, unlike workspace events', () => {
+    expect(parsePluginManifest(worker('editor.typography.changed'))).toMatchObject({ ok: true })
+    expect(parsePluginManifest(worker('workspace.changed'))).toMatchObject({
+      ok: false,
+      error: expect.stringContaining('requires the workspace:read capability')
     })
-    expect(pluginEngineFloor(schema, { kind: 'new', list: [] })?.version).toBe('3.0.0')
-    expect(pluginEngineFloor(schema, { kind: 'old', list: [{ x: 'a' }] })).toEqual({
-      version: '4.0.0',
-      field: 'list[0].x'
-    })
-    expect(pluginEngineFloor(schema, { kind: 'old', list: [], extra: 'y' })?.version).toBe('5.0.0')
   })
 })

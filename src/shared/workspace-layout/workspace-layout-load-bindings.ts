@@ -4,8 +4,8 @@ import {
   isPaneSleepRecord,
   type SleepingAgentSessionRecord
 } from '../agent-session/lifecycle/agent-session-resume'
-import type { TerminalLayoutSnapshot } from '../terminal-tab-types'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { TerminalLayoutSnapshot } from './terminal-tab-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import { omitStoredFields } from './stored-record-fields'
 import type {
   CarriedSessionFields,

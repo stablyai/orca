@@ -1,5 +1,5 @@
 import type { ClientOptions } from 'ws'
-import type { PairedRuntimeConnection } from '../paired-runtime-connection'
+import type { PairedRuntimeConnection } from './pairing/paired-runtime-connection'
 import { endpointAuthOrigin, normalizeEndpointAuthHeaders } from '../network/endpoint-auth-headers'
 
 /** Bound silent Node WebSocket connects before the whole-RPC timeout (15s, or 60s in the CLI).

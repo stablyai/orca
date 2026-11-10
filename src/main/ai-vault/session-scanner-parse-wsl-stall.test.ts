@@ -3,7 +3,6 @@ import type * as NodeFsPromisesModule from 'node:fs/promises'
 import type { SessionFileCandidate } from './session-scanner-types'
 
 const STALLED_PATH = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.claude\\projects\\p\\a.jsonl'
-const SIBLING_PATH = '\\\\wsl.localhost\\Debian\\home\\ada\\.claude\\projects\\p\\b.jsonl'
 
 const mocks = vi.hoisted(() => ({ open: vi.fn(), readdir: vi.fn() }))
 
@@ -14,7 +13,12 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
   readdir: mocks.readdir
 }))
 
+import * as transcriptFs from '../native-chat/wsl-transcript-fs-access'
 import { parseAgentSessionFileCached } from './parse-cache/session-scanner-parse-cache'
+import {
+  registerTranscriptConsumer,
+  resetTranscriptConsumersForTests
+} from './transcripts/session-transcript-consumers'
 import { resetSessionParseCacheForTests } from './parse-cache/session-parse-cache-store'
 import {
   resetWslTranscriptFsGateForTests,
@@ -85,6 +89,7 @@ async function releaseAndSettle(): Promise<void> {
 beforeEach(() => {
   resetWslTranscriptFsGateForTests()
   resetSessionParseCacheForTests()
+  resetTranscriptConsumersForTests()
   mocks.open.mockReset()
   mocks.readdir.mockReset()
   mocks.readdir.mockResolvedValue([])
@@ -95,28 +100,61 @@ beforeEach(() => {
 
 afterEach(async () => {
   await releaseAndSettle()
+  resetTranscriptConsumersForTests()
+  vi.restoreAllMocks()
   vi.useRealTimers()
 })
 
 describe('AI Vault session parse with a stalled WSL transcript body read', () => {
-  it('refuses the stalled candidate and still parses a sibling on a healthy distro', async () => {
-    mocks.open.mockResolvedValue({ read: vi.fn(stalls), close: vi.fn(async () => {}) })
-    // Attach before advancing time: rejection must reach scan issue reporting without becoming unhandled.
-    const refusal = expect(
-      parseAgentSessionFileCached(candidate(STALLED_PATH, body(2), 1), 'linux')
-    ).rejects.toBeInstanceOf(WslTranscriptFsError)
-    await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS + 1)
-    await refusal
-
-    await releaseAndSettle()
-    const siblingBytes = body(2)
-    mocks.open.mockResolvedValue(servingHandle(siblingBytes))
-
-    const sibling = await parseAgentSessionFileCached(
-      candidate(SIBLING_PATH, siblingBytes, 1),
-      'linux'
+  it('cancels stalled EOF finalization, cleans up, and admits the next read', async () => {
+    const bytes = body(2)
+    const file = candidate(STALLED_PATH.replace('a.jsonl', 'finalization.jsonl'), bytes, 1)
+    mocks.open.mockResolvedValue(servingHandle(bytes))
+    let entered!: () => void
+    const finalizing = new Promise<void>((resolve) => {
+      entered = resolve
+    })
+    const readdir = vi.spyOn(transcriptFs, 'wslGatedReaddir').mockImplementationOnce(() => {
+      entered()
+      return new Promise(() => {})
+    })
+    const finishes = vi.fn()
+    registerTranscriptConsumer({
+      beginRead: () => ({ message: () => {}, finish: finishes })
+    })
+    const controller = new AbortController()
+    const first = parseAgentSessionFileCached(
+      file,
+      'linux',
+      undefined,
+      undefined,
+      controller.signal
     )
-    expect(sibling?.messageCount).toBe(2)
+    const cancelled = first.catch((error) => {
+      expect(error).toMatchObject({
+        name: 'AbortError',
+        message: 'Agent Session History scan was cancelled'
+      })
+      return 'cancelled'
+    })
+    await finalizing
+    let nextMessageCount: number | undefined
+    const next = parseAgentSessionFileCached(file, 'linux').then((session) => {
+      nextMessageCount = session?.messageCount
+      return session
+    })
+    let result: string | undefined
+    void cancelled.then((value) => {
+      result = typeof value === 'string' ? value : 'completed'
+    })
+    controller.abort()
+    await vi.advanceTimersByTimeAsync(100)
+    expect(result).toBe('cancelled')
+    expect(finishes).toHaveBeenNthCalledWith(1, expect.objectContaining({ cancelled: true }))
+    expect(nextMessageCount).toBe(2)
+    await next
+    expect(finishes).toHaveBeenCalledTimes(2)
+    readdir.mockRestore()
   })
 
   it('caches no resume point when the newline probe is refused mid-append', async () => {

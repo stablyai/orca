@@ -4,10 +4,13 @@ import * as processHost from '@orca/process-host'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { encodePairingOffer } from '../../shared/pairing'
-import { generateKeyPair, publicKeyToBase64 } from '../../shared/e2ee-crypto'
-import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
-import { writeSecureFile } from '../../shared/secure-file'
+import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
+import {
+  generateKeyPair,
+  publicKeyToBase64
+} from '../../shared/remote-runtime/e2ee/node/e2ee-crypto'
+import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
+import { writeSecureFile } from '../../shared/secure-storage/secure-file'
 import { addEnvironmentFromPairingCode } from './environments'
 import { resolveRemoteConnection } from './runtime-remote-pairing'
 import { readRemoteEdgeAuthFile } from './remote-edge-auth-file'

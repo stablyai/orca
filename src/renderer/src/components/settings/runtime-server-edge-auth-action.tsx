@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeEdgeAuthStatus } from '../../../../shared/runtime-edge-auth-types'
 import { normalizeEndpointAuthHeaders } from '../../../../shared/network/endpoint-auth-headers'
 import { translate } from '@/i18n/i18n'

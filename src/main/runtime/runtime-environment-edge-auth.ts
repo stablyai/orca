@@ -1,10 +1,10 @@
 import {
   getPreferredPairedRuntimeConnection,
   type KnownRuntimeEnvironment
-} from '../../shared/runtime-environments'
+} from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import { readCachedRuntimeEdgeAuth } from '../credentials/runtime-edge-auth-store'
 import { remoteRuntimeConnectOptions } from '../../shared/remote-runtime/remote-runtime-connect-bound'
-import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
+import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 
 export function resolveRuntimeEnvironmentConnection(
   userDataPath: string,

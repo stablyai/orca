@@ -1,7 +1,7 @@
-import { useSyncExternalStore } from 'react'
+import { useAppViewExternalStore } from '@/store/retained-views/app-state-view'
 import { shallow } from 'zustand/shallow'
-import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 
 /** Pending local IPC outlives observers; matching menus must retain its physical owner. */
 const pending = new Map<string, AgentPickerAcquisition>()
@@ -11,9 +11,13 @@ type Observer = {
 }
 type Reads = {
   settings?: () => Promise<AgentPickerEntry[] | undefined>
-  catalog: (entry: AgentPickerEntry) => Promise<AgentPickerEntry['catalog'] | undefined>
+  catalog: (
+    entry: AgentPickerEntry,
+    waitForListing: boolean
+  ) => Promise<AgentPickerEntry['catalog'] | undefined>
   support: (entry: AgentPickerEntry) => Promise<AgentPickerEntry['structured'] | undefined>
 }
+type ReadKind = 'catalog' | 'refresh' | 'support'
 type SupportRead = {
   state: 'queued' | 'pending' | 'settled'
   value?: AgentPickerEntry['structured']
@@ -23,8 +27,8 @@ class AgentPickerAcquisition {
   readonly observers = new Set<Observer>()
   entries: AgentPickerEntry[]
   settingsPending = false
-  private outstanding = { catalog: 0, support: 0 }
-  private queued: Record<'catalog' | 'support', Set<number>>
+  private outstanding = { catalog: 0, refresh: 0, support: 0 }
+  private queued: Record<ReadKind, Set<number>>
   private supports = new Map<number, SupportRead>()
   private defaults: AgentPickerEntry[]
 
@@ -48,6 +52,7 @@ class AgentPickerAcquisition {
       catalog: new Set(
         this.entries.flatMap((entry, i) => (entry.catalogRead === 'pending' ? [i] : []))
       ),
+      refresh: new Set(),
       support: new Set(this.supports.keys())
     }
   }
@@ -85,6 +90,7 @@ class AgentPickerAcquisition {
     }
     observer.publish(this.entries)
     this.admit('catalog')
+    this.admit('refresh')
     this.admit('support')
     return () => {
       this.observers.delete(observer)
@@ -142,7 +148,27 @@ class AgentPickerAcquisition {
       })
   }
 
-  private admit(kind: 'catalog' | 'support') {
+  private async readCatalog(entry: AgentPickerEntry, index: number, waitForListing: boolean) {
+    const catalog = await this.reads.catalog(entry, waitForListing)
+    // An open picker waits on a running listing, and again when a wait used its whole budget.
+    const refresh =
+      this.observers.size > 0 &&
+      (waitForListing ? catalog?.waitExpired : catalog?.listingInProgress) === true
+    if (refresh) {
+      this.queued.refresh.add(index)
+    }
+    this.entries = this.entries.map((e, i) =>
+      i === index
+        ? {
+            ...e,
+            ...(catalog ? { catalog } : {}),
+            catalogRead: !catalog ? 'failed' : refresh ? 'pending' : 'settled'
+          }
+        : e
+    )
+  }
+
+  private admit(kind: ReadKind) {
     while (this.observers.size && this.outstanding[kind] < 2 && this.queued[kind].size) {
       const priorities = [...this.observers].map((o) => o.selected())
       const preferred = this.entries.findIndex((e) => priorities.includes(e.agent))
@@ -159,37 +185,24 @@ class AgentPickerAcquisition {
         this.supports.set(index, { state: 'pending' })
       }
       const read =
-        kind === 'catalog'
-          ? this.reads
-              .catalog(entry)
-              .then((catalog) => {
-                this.entries = this.entries.map((e, i) =>
-                  i === index
-                    ? {
-                        ...e,
-                        ...(catalog ? { catalog } : {}),
-                        catalogRead: 'settled'
-                      }
-                    : e
-                )
-              })
-              .catch((error: unknown) => {
-                const unsupported =
-                  typeof error === 'object' &&
-                  error !== null &&
-                  'code' in error &&
-                  (error.code === 'method_not_found' ||
-                    error.code === 'structured_agent_session_unsupported' ||
-                    error.code === 'forbidden')
-                this.entries = this.entries.map((e, i) =>
-                  i === index
-                    ? {
-                        ...e,
-                        catalogRead: unsupported ? 'unsupported' : 'failed'
-                      }
-                    : e
-                )
-              })
+        kind !== 'support'
+          ? this.readCatalog(entry, index, kind === 'refresh').catch((error: unknown) => {
+              const unsupported =
+                typeof error === 'object' &&
+                error !== null &&
+                'code' in error &&
+                (error.code === 'method_not_found' ||
+                  error.code === 'structured_agent_session_unsupported' ||
+                  error.code === 'forbidden')
+              this.entries = this.entries.map((e, i) =>
+                i === index
+                  ? {
+                      ...e,
+                      catalogRead: unsupported ? 'unsupported' : 'failed'
+                    }
+                  : e
+              )
+            })
           : this.reads
               .support(entry)
               .catch(() => undefined)
@@ -203,6 +216,9 @@ class AgentPickerAcquisition {
           this.outstanding[kind]--
           this.publish()
           this.admit(kind)
+          if (kind === 'catalog') {
+            this.admit('refresh')
+          }
           this.retire()
         })
     }
@@ -213,6 +229,7 @@ class AgentPickerAcquisition {
       !this.observers.size &&
       !this.settingsPending &&
       !this.outstanding.catalog &&
+      !this.outstanding.refresh &&
       !this.outstanding.support
     ) {
       pending.delete(this.key)
@@ -292,5 +309,5 @@ export function createAgentPickerInventorySource(
 export function useAgentPickerInventoryEntries(
   source: AgentPickerInventorySource
 ): AgentPickerEntry[] {
-  return useSyncExternalStore(source.subscribe, source.getSnapshot, source.getSnapshot)
+  return useAppViewExternalStore(source.subscribe, source.getSnapshot, source.getSnapshot)
 }

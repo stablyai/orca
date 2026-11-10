@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import { shallow } from 'zustand/shallow'
 import { useAppStore } from '@/store/index'
 import {
   getTaskPageRepoCacheRows,
@@ -14,6 +15,19 @@ export function useTaskPageWorkItemsCacheSelection(
   githubPerRepoPageLimit: number,
   appliedWorkItemsCacheQuery: string
 ) {
+  const collections = useAppStore((s) => s.githubSourceCollections)
+  // Why: only the selected owners' candidate references; another owner's publication keeps this snapshot.
+  const selectCandidates = useMemo(() => {
+    let last: ReturnType<typeof collections.candidate>[] = []
+    return () => {
+      const next = selectedRepos.map((repo) => collections.candidate(repo))
+      if (!shallow(next, last)) {
+        last = next
+      }
+      return last
+    }
+  }, [collections, selectedRepos])
+  const candidateEntries = useSyncExternalStore(collections.subscribe, selectCandidates)
   const workItemsCacheRows = useMemo(
     () =>
       getTaskPageRepoCacheRows(
@@ -25,14 +39,19 @@ export function useTaskPageWorkItemsCacheSelection(
   )
   // Why a ref, not state: each row's last committed current cache key; the entry is always read live.
   const sourceDisplayCacheKeysRef = useRef(new Map<string, string>())
+  const candidates = useMemo(
+    () => new Map(workItemsCacheRows.map((row, index) => [row.sourceKey, candidateEntries[index]])),
+    [candidateEntries, workItemsCacheRows]
+  )
   const selectWorkItemsCacheEntries = useMemo(
     () =>
       createTaskPageWorkItemsCacheSelector(
         workItemsCacheRows,
         !isGitHubWorkItemsQueryTooLarge(appliedWorkItemsCacheQuery),
-        (sourceKey) => sourceDisplayCacheKeysRef.current.get(sourceKey)
+        (sourceKey) => sourceDisplayCacheKeysRef.current.get(sourceKey),
+        (sourceKey) => candidates.get(sourceKey)
       ),
-    [appliedWorkItemsCacheQuery, workItemsCacheRows]
+    [appliedWorkItemsCacheQuery, workItemsCacheRows, candidates]
   )
   const { current: selectedWorkItemsCacheEntries, display: sourceDisplayWorkItemsCacheEntries } =
     useAppStore((s) => selectWorkItemsCacheEntries(s.workItemsCache))

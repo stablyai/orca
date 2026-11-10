@@ -1,0 +1,184 @@
+import type { LinearIssue } from '../../../../../../shared/linear/issue-types'
+import '@/store/slices/linear/linear-issue-read'
+import { consumeLinearIssueRead } from '@/store/slices/linear/linear-issue-read-lifecycle'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
+import { PrioritySemaphore } from '../../../../../../shared/priority-semaphore'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getTaskSourceCacheScope } from '../../../../../../shared/work-items/task-source-context'
+import { canReadWorkspaceReferenceReview } from './workspace-reference-review-source'
+import { isWorkspaceRepositoryAttachment } from '../metadata/worktree-attachment-editing'
+import {
+  matchesWorkspaceReferenceUrl,
+  getWorkspaceReferenceLinearWorkspaceId,
+  matchWorkspaceReferenceReview,
+  type WorkspaceReferenceDetails,
+  type WorkspaceReferenceRequest
+} from './workspace-reference-details'
+
+type Entry<T> = { data: T | null; fetchedAt: number; stale?: boolean }
+const reads = new PrioritySemaphore(3)
+
+type ReferenceCache =
+  | 'hostedReviewCache'
+  | 'linearIssueCache'
+  | 'jiraIssueSummaryCache'
+  | 'issueCache'
+
+// Keep long-lived readers out of the read closures' store-snapshot scope.
+function cacheEntryReader<K extends ReferenceCache>(cache: K, key: string) {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both sides index the same cache K; TypeScript loses that correlation at the second index.
+  return (state: AppState) => state[cache]?.[key] as AppState[K][string] | undefined
+}
+
+function lookup<T>(
+  state: AppState,
+  getRawEntry: (state: AppState) => Entry<T> | undefined,
+  read: (signal?: AbortSignal) => Promise<T | null>,
+  project: (value: T) => WorkspaceReferenceDetails | null
+) {
+  const entry = getRawEntry(state)
+  return {
+    getRawEntry,
+    getEntry: () => entry && { ...entry, data: entry.data && project(entry.data) },
+    read: async (signal?: AbortSignal) => {
+      const value = await read(signal)
+      return value && project(value)
+    }
+  }
+}
+
+export function getWorkspaceReferenceLookup(request: WorkspaceReferenceRequest, state: AppState) {
+  const { item, workspace, repo, sourceContext } = request
+  if (item.type !== 'issue') {
+    if (!repo || !canReadWorkspaceReferenceReview(request, request.knownProvider)) {
+      return null
+    }
+    return lookup(
+      state,
+      cacheEntryReader('hostedReviewCache', request.key),
+      () =>
+        state.fetchHostedReviewForBranch(repo.path, workspace.branch ?? '', {
+          exactReviewKey: request.key,
+          repoId: repo.id,
+          repoOwnerExecutionHostId: getRepoExecutionHostId(repo),
+          admissionTier: request.admissionTier ?? 'interactive',
+          linkedGitHubPR: item.provider === 'github' ? item.number : null,
+          linkedGitLabMR: item.provider === 'gitlab' ? item.number : null,
+          linkedBitbucketPR: item.provider === 'bitbucket' ? item.number : null,
+          linkedAzureDevOpsPR: item.provider === 'azure-devops' ? item.number : null,
+          linkedGiteaPR: item.provider === 'gitea' ? item.number : null
+        }),
+      (review) =>
+        matchWorkspaceReferenceReview(item, review)
+          ? { title: review.title, url: review.url, review }
+          : null
+    )
+  }
+  if (!sourceContext) {
+    return null
+  }
+  const scope = getTaskSourceCacheScope(sourceContext)
+  const identifier = item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier
+  if (item.provider === 'linear' && identifier && sourceContext.provider === 'linear') {
+    const workspaceId = getWorkspaceReferenceLinearWorkspaceId(
+      item.linearWorkspaceId,
+      sourceContext
+    )
+    const cacheKey = `${scope}::${workspaceId}::${identifier}`
+    return lookup(
+      state,
+      cacheEntryReader('linearIssueCache', cacheKey),
+      async (signal) => {
+        let issue: LinearIssue | null = null
+        await consumeLinearIssueRead(
+          state.fetchLinearIssue(identifier, workspaceId, { sourceContext }),
+          () => !signal?.aborted,
+          (data) => {
+            issue = data
+          },
+          signal
+        )
+        return issue
+      },
+      (issue) =>
+        issue.identifier.toLowerCase() === identifier.toLowerCase() &&
+        matchesWorkspaceReferenceUrl(item, issue.url) &&
+        (workspaceId === 'all' || issue.workspaceId === workspaceId)
+          ? {
+              title: issue.title,
+              url: issue.url,
+              stateName: issue.state.name,
+              stateType: issue.state.type
+            }
+          : null
+    )
+  }
+  if (item.provider === 'jira' && identifier && sourceContext.provider === 'jira') {
+    const identity = sourceContext.providerIdentity
+    const siteId = identity?.provider === 'jira' ? identity.siteId : null
+    if (!siteId) {
+      return null
+    }
+    const cacheKey = `${scope}::${siteId}::${identifier.toUpperCase()}`
+    return lookup(
+      state,
+      cacheEntryReader('jiraIssueSummaryCache', cacheKey),
+      () => state.lookupJiraIssueSummary(sourceContext, identifier, siteId),
+      (issue) =>
+        issue.key.toLowerCase() === identifier.toLowerCase() &&
+        issue.siteId === siteId &&
+        matchesWorkspaceReferenceUrl(item, issue.url)
+          ? {
+              title: issue.title,
+              url: issue.url,
+              stateName: issue.status.name,
+              stateType:
+                issue.status.categoryKey === 'done'
+                  ? 'completed'
+                  : issue.status.categoryKey === 'indeterminate'
+                    ? 'started'
+                    : issue.status.categoryKey === 'new'
+                      ? 'unstarted'
+                      : undefined
+            }
+          : null
+    )
+  }
+  if (
+    item.provider === 'github' &&
+    repo &&
+    sourceContext.provider === 'github' &&
+    isWorkspaceRepositoryAttachment(item, repo)
+  ) {
+    const cacheKey = `${scope}::${repo.id}::${item.number}`
+    return lookup(
+      state,
+      cacheEntryReader('issueCache', cacheKey),
+      () => state.fetchIssue(repo.path, item.number, { repoId: repo.id, sourceContext }),
+      (issue) =>
+        issue.number === item.number && matchesWorkspaceReferenceUrl(item, issue.url)
+          ? { title: issue.title, url: issue.url, issueState: issue.state }
+          : null
+    )
+  }
+  return null
+}
+
+export async function readWorkspaceReferenceDetails(
+  request: WorkspaceReferenceRequest,
+  signal?: AbortSignal
+): Promise<WorkspaceReferenceDetails | null> {
+  const release = await reads.acquire(request.admissionTier === 'background' ? 1 : 0, signal)
+  try {
+    if (signal?.aborted) {
+      return null
+    }
+    return (
+      (await getWorkspaceReferenceLookup(request, useAppStore.getState())?.read(signal)) ?? null
+    )
+  } finally {
+    // Native reads retain admission until settlement, even after demand disappears.
+    release()
+  }
+}

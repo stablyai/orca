@@ -1,4 +1,4 @@
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   isWslHookRelayConnectionId,
   WSL_HOOK_RELAY_CONNECTION_PREFIX
@@ -11,7 +11,7 @@ import {
 } from '../wsl/filesystem/wsl-unc-access-gate'
 import { wslGatedAccess } from './wsl-transcript-fs-access'
 import { WSL_TRANSCRIPT_RUNNING_LEASE_MS } from './wsl-transcript-running-admission'
-import { agentHookServer } from '../agent-hooks/server'
+import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { nativeChatTranscriptPathOnExecutionHost } from './ssh-transcript-path'
 
 type HookRow = Pick<AgentStatusIpcPayload, 'connectionId' | 'providerSession'>

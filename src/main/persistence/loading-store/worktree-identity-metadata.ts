@@ -1,4 +1,4 @@
-import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachment-mutation'
+import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachments/workspace-attachment-mutation'
 import type { DiffCommentBaseMutation } from '../../../shared/diff-comment-mutation'
 import { randomUUID } from 'node:crypto'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
@@ -11,8 +11,8 @@ import {
 } from '../../../shared/worktree/host-qualified-identity'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { StoreRuntimeState } from './store-runtime-state'
-import type { WriteSchedulingOperations } from './write-scheduling'
-import { scheduleSave } from './write-scheduling'
+
+import { type WriteSchedulingOperations, scheduleSave } from './write-scheduling'
 import { mergeWorktreeMetaForWrite } from './worktree-meta-write-normalization'
 import {
   isLocalOnlyWorktreeMetaId,

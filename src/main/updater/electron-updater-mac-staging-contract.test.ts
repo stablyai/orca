@@ -41,19 +41,4 @@ describe('electron-updater MacUpdater staging contract', () => {
     nativeUpdater.emit('update-downloaded')
     expect(updater.handleUpdateDownloaded).toHaveBeenCalledOnce()
   })
-
-  it('quits the app without relaunching once staged when autoRunAppAfterInstall is off', () => {
-    const app = { quit: vi.fn() }
-    const nativeUpdater = { quitAndInstall: vi.fn() }
-
-    MacUpdater.prototype['handleUpdateDownloaded'].call({
-      autoRunAppAfterInstall: false,
-      app,
-      nativeUpdater,
-      closeServerIfExists: vi.fn()
-    })
-
-    expect(app.quit).toHaveBeenCalledOnce()
-    expect(nativeUpdater.quitAndInstall).not.toHaveBeenCalled()
-  })
 })

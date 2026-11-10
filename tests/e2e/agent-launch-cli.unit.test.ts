@@ -2,10 +2,10 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_LAUNCH_RUNTIME_CAPABILITIES } from '../../src/shared/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITIES } from '../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
 import type { StructuredAgentSessionFirstMessage } from '../../src/shared/agent-session/structured-agent-session-create'
 import { openTestAgentSessionRecordStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
-import { closeTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+import { closeTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { RuntimeClient, RuntimeClientError } from '../../src/cli/runtime-client'
 import { callAgentLaunch, readCliAgentLaunch } from '../../src/cli/agent-launch-request'
 import { parseArgs } from '../../src/cli/args'
@@ -16,17 +16,21 @@ import {
   rpcContext,
   runtimeStub,
   setAgentLaunchRecordStore
-} from '../../src/main/runtime/rpc/methods/agent-launch.test-fixture'
+} from '../../src/main/runtime/rpc/methods/agent-launch/agent-launch.test-fixture'
 
 const chatCreate = vi.hoisted(() => vi.fn())
 const terminalPrompt = vi.hoisted(() => vi.fn(async () => true))
-vi.mock('../../src/main/runtime/rpc/methods/structured-agent-session-create', () => ({
-  createStructuredAgentSessionForWorktree: chatCreate
-}))
-vi.mock('../../src/main/runtime/rpc/methods/agent-launch-terminal-prompt', () => ({
+vi.mock(
+  '../../src/main/runtime/rpc/methods/structured-sessions/creation/structured-agent-session-create',
+  () => ({
+    createStructuredAgentSessionForWorktree: chatCreate
+  })
+)
+vi.mock('../../src/main/runtime/rpc/methods/agent-launch/agent-launch-terminal-prompt', () => ({
   deliverTerminalAgentLaunchPrompt: terminalPrompt
 }))
-const { AGENT_LAUNCH_METHODS } = await import('../../src/main/runtime/rpc/methods/agent-launch')
+const { AGENT_LAUNCH_METHODS } =
+  await import('../../src/main/runtime/rpc/methods/agent-launch/agent-launch')
 
 let directory: string
 beforeEach(async () => {
@@ -296,11 +300,17 @@ describe('CLI launch through host surface creation and replay admission', () => 
   })
 
   it.each([undefined, 'current'])(
-    'uses the innermost native folder for %s before Git fallback',
+    'uses the innermost enclosing folder workspace for %s',
     async (selector) => {
       const client = hostClient(runtimeStub())
       vi.spyOn(console, 'log').mockImplementation(() => {})
       const call = vi.mocked(client.call)
+      call.mockResolvedValueOnce({
+        id: 'list',
+        ok: true,
+        result: { worktrees: [], totalCount: 0, truncated: false },
+        _meta: { runtimeId: 'runtime-1' }
+      })
       call.mockResolvedValueOnce({
         id: 'folders',
         ok: true,
@@ -323,10 +333,9 @@ describe('CLI launch through host surface creation and replay admission', () => 
         cwd: '/tmp/repo/nested/deeper',
         json: true
       })
-      expect(call).not.toHaveBeenCalledWith('worktree.list', expect.anything())
       expect(call).toHaveBeenCalledWith(
         'agent.launchReplay',
-        expect.objectContaining({ target: { kind: 'existing', worktree: 'id:folder:nested' } })
+        expect.objectContaining({ target: { kind: 'existing', worktree: 'folder:nested' } })
       )
     }
   )

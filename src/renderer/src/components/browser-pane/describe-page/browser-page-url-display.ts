@@ -1,11 +1,12 @@
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
+import '../../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import {
   normalizeBrowserNavigationUrl,
   normalizeExternalBrowserUrl,
   redactKagiSessionToken
 } from '../../../../../shared/browser-url'
-import { isBlankBrowserUrl } from '@/lib/browser-palette-search'
+import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
 import { browserFileUrlToAbsolutePath } from './browser-artifact-upload'
 import type { BrowserTabPageState } from './browser-page-types'
 

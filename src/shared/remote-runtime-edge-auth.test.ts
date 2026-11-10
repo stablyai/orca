@@ -5,9 +5,9 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import {
   LOCAL_HTTPS_TEST_CERTIFICATE,
   LOCAL_HTTPS_TEST_PRIVATE_KEY
-} from '../main/browser/browser-local-https-test-certificate'
-import { generateKeyPair, publicKeyToBase64 } from './e2ee-crypto'
-import type { PairedRuntimeConnection } from './paired-runtime-connection'
+} from '../main/browser/electron-fixtures/browser-local-https-test-certificate'
+import { generateKeyPair, publicKeyToBase64 } from './remote-runtime/e2ee/node/e2ee-crypto'
+import type { PairedRuntimeConnection } from './remote-runtime/pairing/paired-runtime-connection'
 import { openRemoteRuntimeWebSocket } from './remote-runtime/requests/remote-runtime-request-websocket'
 import { sendRemoteRuntimeRequestOnSocket } from './remote-runtime/requests/remote-runtime-request-socket'
 import { subscribeRemoteRuntimeTransport } from './remote-runtime/requests/remote-runtime-subscription-transport'
@@ -71,7 +71,7 @@ const dialers = {
         {
           onClose: () => resolve(),
           onError: () => resolve(),
-          onTextFrame: vi.fn()
+          onFrame: vi.fn()
         },
         1000
       )

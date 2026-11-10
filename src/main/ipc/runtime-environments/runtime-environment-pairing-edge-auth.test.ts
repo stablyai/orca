@@ -1,21 +1,29 @@
+import { getPreferredPairingOffer } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { PAIRING_TICKET_EXCHANGE_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/pairing/ticket-exchange-capability'
 import { removeTree } from '../../../shared/windows-transient-lock-removal'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { encodePairingOffer, parsePairingCode } from '../../../shared/pairing'
-import { generateKeyPair, publicKeyToBase64 } from '../../../shared/e2ee-crypto'
+import {
+  encodePairingOffer,
+  parsePairingCode
+} from '../../../shared/remote-runtime/pairing/pairing'
+import {
+  generateKeyPair,
+  publicKeyToBase64
+} from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import {
   listEnvironments,
   addEnvironmentFromPairingCode
-} from '../../../shared/runtime-environment-store'
+} from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   verifyAndAddRuntimeEnvironmentFromPairingCode,
   verifyAndRepairRuntimeEnvironmentFromPairingCode
 } from './runtime-environment-pairing-verification'
 const mocks = vi.hoisted(() => ({ send: vi.fn(), write: vi.fn(), read: vi.fn() }))
-vi.mock('../../../shared/remote-runtime/remote-runtime-client', () => ({
-  sendRemoteRuntimeRequest: mocks.send
+vi.mock('../../../shared/remote-runtime/requests/remote-runtime-request-socket', () => ({
+  sendRemoteRuntimeRequestOnSocket: mocks.send
 }))
 vi.mock('../../credentials/runtime-edge-auth-store', () => ({
   writeRuntimeEdgeAuth: mocks.write,
@@ -130,4 +138,35 @@ describe('verified desktop pairing edge credentials', () => {
     expect(mocks.send).not.toHaveBeenCalled()
     expect(mocks.write).not.toHaveBeenCalled()
   })
+})
+
+it('exchanges a protected pairing ticket and saves its replacement identity', async () => {
+  mocks.send.mockImplementation(async (connection) => {
+    if (connection.edgeAuth?.headers['X-Token'] !== 'synthetic-secret') {
+      throw new Error('Protected endpoint refused the handshake')
+    }
+    return {
+      ok: true,
+      _meta: { runtimeId: 'test-runtime' },
+      result: {
+        runtimeId: 'test-runtime',
+        rendererGraphEpoch: 1,
+        graphStatus: 'ready',
+        authoritativeWindowId: null,
+        liveTabCount: 0,
+        liveLeafCount: 0,
+        protocolVersion: 999999,
+        capabilities: [PAIRING_TICKET_EXCHANGE_RUNTIME_CAPABILITY]
+      }
+    }
+  })
+  const result = await verifyAndAddRuntimeEnvironmentFromPairingCode(directory, {
+    name: 'server',
+    pairingCode: code,
+    edgeAuthHeaders: headers
+  })
+  expect(result.ok).toBe(true)
+  expect(getPreferredPairingOffer(listEnvironments(directory)[0]!).deviceToken).not.toBe(
+    'synthetic-device'
+  )
 })

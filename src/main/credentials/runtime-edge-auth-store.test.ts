@@ -3,8 +3,8 @@ import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import * as secureFile from '../../shared/secure-file'
-import { createEnvironmentFromPairingOffer } from '../../shared/runtime-environments'
+import * as secureFile from '../../shared/secure-storage/secure-file'
+import { createEnvironmentFromPairingOffer } from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import { setSecretStore, _resetSecretStoreForTests } from '../../shared/secret-store'
 import { resolveRuntimeEnvironmentConnection } from '../runtime/runtime-environment-edge-auth'
 import {

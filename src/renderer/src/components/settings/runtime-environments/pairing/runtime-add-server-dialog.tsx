@@ -1,12 +1,12 @@
+import { useTranslate } from '@/i18n/use-translate'
 import { useState } from 'react'
 import type { RuntimeEdgeAuthHeader } from '../../../../../../shared/runtime-edge-auth-types'
-import { parseHostAccessLink } from '../../../../../../shared/remote-pairing-address'
+import { parseHostAccessLink } from '../../../../../../shared/remote-runtime/pairing/remote-pairing-address'
 import {
   endpointAuthOrigin,
   normalizeEndpointAuthHeaders
 } from '../../../../../../shared/network/endpoint-auth-headers'
 import { RuntimeEdgeAuthFields, newRuntimeEdgeAuthRow } from '../../runtime-edge-auth-fields'
-import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import {
   Dialog,
@@ -43,6 +43,7 @@ export function RuntimeAddServerDialog({
   retryCredentials,
   onSubmit
 }: RuntimeAddServerDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const takenNames = useAppStore((state) => state.runtimeEnvironments)
   const parsed = parseHostAccessLink(accessLink)
   const credentialBindingKey = parsed.ok
@@ -63,10 +64,10 @@ export function RuntimeAddServerDialog({
       <DialogContent scrollable>
         <DialogHeader>
           <DialogTitle>
-            {translate('auto.components.settings.serverList.addTitle', 'Add server')}
+            {t('auto.components.settings.serverList.addTitle', 'Add server')}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.settings.serverList.addDescriptionShort',
               'Paste the access link from Share this computer on the other machine.'
             )}

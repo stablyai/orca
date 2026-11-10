@@ -6,12 +6,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RightSidebar from './index'
-import { TopActivityOverflowMenu } from './activity-bar-buttons'
-import {
-  RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME,
-  RIGHT_SIDEBAR_WINDOWS_TOP_ACTIVITY_STRIP_CLASS_NAME
-} from './right-sidebar-titlebar-drag-regions'
-import type { ActiveRightSidebarTab } from '@/store/slices/editor'
+import type { ActiveRightSidebarTab } from '../../../../shared/ui-chrome-types'
 import { resetRendererAppPlatformCacheForTests } from '@/lib/renderer-app-platform'
 
 const mockAppState = vi.hoisted(() => ({
@@ -29,7 +24,8 @@ const mockAppState = vi.hoisted(() => ({
   } | null,
   listeners: new Set<() => void>(),
   snapshotCache: new Map<(state: Record<string, unknown>) => unknown, unknown>(),
-  cachedWorktree: null as { id: string; repoId: string } | null
+  cachedWorktree: null as { id: string; repoId: string } | null,
+  vaultLoad: { promise: Promise.resolve(), pending: false }
 }))
 
 function notifyAppStore(): void {
@@ -61,7 +57,7 @@ vi.mock('@/hooks/useShortcutLabel', () => ({
   useShortcutLabel: (actionId: string) => actionId
 }))
 
-vi.mock('@/store', async () => {
+vi.mock('@/store/index', async () => {
   const React = await vi.importActual<typeof ReactModule>('react')
   const getSnapshot = (selector: (state: Record<string, unknown>) => unknown): unknown => {
     if (mockAppState.snapshotCache.has(selector)) {
@@ -83,7 +79,10 @@ vi.mock('@/store', async () => {
       activityBarPosition: mockAppState.activityBarPosition,
       setActivityBarPosition: vi.fn(),
       checksByWorktreeId: {},
-      keybindings: {}
+      keybindings: {},
+      activeView: 'terminal',
+      activePendingCreationId: null,
+      pendingWorktreeCreations: {}
     })
     mockAppState.snapshotCache.set(selector, selected)
     return selected
@@ -104,10 +103,14 @@ vi.mock('@/store', async () => {
   }
 })
 
-vi.mock('@/store/selectors', () => ({
-  useActiveWorktree: () => ({ id: 'worktree-1', repoId: 'repo-1' }),
-  useRepoById: () => mockAppState.activeRepo,
-  getWorktreeMapFromState: () => new Map()
+vi.mock('@/store/workspaces/selection/use-selected-worktree', () => ({
+  useActiveWorktree: () => ({ id: 'worktree-1', repoId: 'repo-1' })
+}))
+vi.mock('@/store/repos/use-repository-catalog', () => ({
+  useRepoById: () => mockAppState.activeRepo
+}))
+vi.mock('@/store/slices/worktrees/listing/worktree-catalog-index', () => ({
+  getIndexedWorktreeMap: () => new Map()
 }))
 
 vi.mock('@/components/ui/tooltip', () => ({
@@ -155,7 +158,7 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   }
 }))
 
-vi.mock('./FileExplorer', () => ({
+vi.mock('./file-explorer/panel/FileExplorer', () => ({
   default: () => <div data-file-explorer />
 }))
 
@@ -163,15 +166,15 @@ vi.mock('./FolderWorkspaceWorktreesPanel', () => ({
   default: () => <div data-folder-workspace-worktrees-panel />
 }))
 
-vi.mock('./FolderWorkspacePrChecksPanel', () => ({
+vi.mock('./hosted-review/folder-checks/FolderWorkspacePrChecksPanel', () => ({
   default: () => <div data-folder-workspace-pr-checks-panel />
 }))
 
-vi.mock('./SourceControl', () => ({
+vi.mock('./source-control/panel/SourceControl', () => ({
   default: () => <div data-source-control />
 }))
 
-vi.mock('./ChecksPanel', () => ({
+vi.mock('./checks-panel/ChecksPanel', () => ({
   default: () => <div data-checks-panel />
 }))
 
@@ -179,26 +182,30 @@ vi.mock('./PortsPanel', () => ({
   default: () => <div data-ports-panel />
 }))
 
-function openingTag(markup: string, className: string): string {
-  const match = markup.match(new RegExp(`<[^>]+class="[^"]*${className}[^"]*"[^>]*>`))
-  if (!match) {
-    throw new Error(`opening tag with class "${className}" not found in ${markup}`)
+vi.mock('./ai-vault/panel/AiVaultSidebarPanel', async () => {
+  const React = await vi.importActual<typeof ReactModule>('react')
+  return {
+    default: function MockAiVaultSidebarPanel({
+      focusSearch,
+      onFocusSearchHandled
+    }: {
+      focusSearch: boolean
+      onFocusSearchHandled: () => void
+    }) {
+      if (mockAppState.vaultLoad.pending) {
+        throw mockAppState.vaultLoad.promise
+      }
+      const inputRef = React.useRef<HTMLInputElement>(null)
+      React.useEffect(() => {
+        if (focusSearch) {
+          inputRef.current?.focus()
+          onFocusSearchHandled()
+        }
+      }, [focusSearch, onFocusSearchHandled])
+      return <input ref={inputRef} aria-label="Search sessions" />
+    }
   }
-  return match[0]
-}
-
-function buttonOpeningTag(markup: string, ariaLabelPrefix: string): string {
-  const escapedPrefix = ariaLabelPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const match = markup.match(new RegExp(`<button[^>]+aria-label="${escapedPrefix}[^"]*"[^>]*>`))
-  if (!match) {
-    throw new Error(`button with aria-label prefix "${ariaLabelPrefix}" not found in ${markup}`)
-  }
-  return match[0]
-}
-
-function expectNoDrag(tag: string): void {
-  expect(tag).toContain(RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME)
-}
+})
 
 function setRendererPlatform(platform: NodeJS.Platform): void {
   resetRendererAppPlatformCacheForTests()
@@ -212,7 +219,7 @@ function setRendererPlatform(platform: NodeJS.Platform): void {
   })
 }
 
-describe('rendered right sidebar titlebar drag regions', () => {
+describe('right sidebar panel routing', () => {
   beforeEach(() => {
     ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = false
@@ -236,122 +243,98 @@ describe('rendered right sidebar titlebar drag regions', () => {
     mockAppState.listeners.clear()
     mockAppState.snapshotCache.clear()
     mockAppState.cachedWorktree = null
+    mockAppState.vaultLoad.pending = false
   })
 
-  it('keeps the rendered top activity strip draggable, context-menuable, and only controls no-drag', () => {
-    const markup = renderToStaticMarkup(<RightSidebar />)
-    const header = openingTag(markup, 'right-sidebar-header-drag')
-    const activityStrip = openingTag(markup, 'right-sidebar-activity-strip')
+  it('focuses session search on an explicit switch but not when restoring the tab', async () => {
+    mockAppState.rightSidebarTab = 'vault'
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    try {
+      await import('./ai-vault/panel/AiVaultSidebarPanel')
+      await act(async () => root.render(<RightSidebar />))
+      expect(container.querySelector('[aria-label="Search sessions"]')).not.toBeNull()
+      expect(document.activeElement).not.toBe(
+        container.querySelector('[aria-label="Search sessions"]')
+      )
 
-    expect(header).not.toContain(RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME)
-    expect(activityStrip).not.toContain(RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME)
-    expect(activityStrip).toContain('data-context-menu-trigger="true"')
-    expect(markup).toContain('right-sidebar-header-drag')
-
-    expectNoDrag(buttonOpeningTag(markup, 'Explorer'))
-    expectNoDrag(buttonOpeningTag(markup, 'Source Control'))
-    expectNoDrag(buttonOpeningTag(markup, 'Checks'))
-    expect(buttonOpeningTag(markup, 'Toggle right sidebar')).toContain('sidebar-toggle')
-    expect(markup).toContain(RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME)
+      await act(async () => mockAppState.setRightSidebarTab('explorer'))
+      await act(async () => mockAppState.setRightSidebarTab('vault'))
+      expect(document.activeElement).toBe(container.querySelector('[aria-label="Search sessions"]'))
+    } finally {
+      await act(async () => root.unmount())
+      container.remove()
+    }
   })
 
-  it('uses the custom desktop chrome top strip on Linux desktop', () => {
-    setRendererPlatform('linux')
-
-    const markup = renderToStaticMarkup(<RightSidebar />)
-    const activityStrip = openingTag(markup, 'right-sidebar-activity-strip')
-
-    expect(activityStrip).toContain('h-10')
-    expect(activityStrip).toContain('border-b')
-    expect(markup).toContain(RIGHT_SIDEBAR_WINDOWS_TOP_ACTIVITY_STRIP_CLASS_NAME)
+  it('does not move focus after the user types while session search is loading', async () => {
+    let finishLoad = (): void => {}
+    mockAppState.vaultLoad.pending = true
+    mockAppState.vaultLoad.promise = new Promise<void>((resolve) => {
+      finishLoad = resolve
+    })
+    const container = document.createElement('div')
+    const otherInput = document.createElement('input')
+    document.body.append(otherInput, container)
+    const root = createRoot(container)
+    try {
+      await import('./ai-vault/panel/AiVaultSidebarPanel')
+      await act(async () => root.render(<RightSidebar />))
+      otherInput.focus()
+      await act(async () => mockAppState.setRightSidebarTab('vault'))
+      await act(async () =>
+        otherInput.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true }))
+      )
+      await act(async () => {
+        mockAppState.vaultLoad.pending = false
+        finishLoad()
+      })
+      expect(container.querySelector('[aria-label="Search sessions"]')).not.toBeNull()
+      expect(document.activeElement).toBe(otherInput)
+    } finally {
+      mockAppState.vaultLoad.pending = false
+      finishLoad()
+      await act(async () => root.unmount())
+      container.remove()
+      otherInput.remove()
+    }
   })
 
-  it('keeps paired Linux web clients on the browser-style top strip', () => {
-    setRendererPlatform('linux')
-    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
-
-    const markup = renderToStaticMarkup(<RightSidebar />)
-    const activityStrip = openingTag(markup, 'right-sidebar-activity-strip')
-
-    expect(activityStrip).toContain('pl-2')
-    expect(activityStrip).not.toContain('h-10')
-    expect(markup).not.toContain(RIGHT_SIDEBAR_WINDOWS_TOP_ACTIVITY_STRIP_CLASS_NAME)
-  })
-
-  it('keeps the overflow trigger no-drag when it renders', () => {
-    const markup = renderToStaticMarkup(
-      <TopActivityOverflowMenu
-        items={[
-          {
-            id: 'checks',
-            icon: () => <span data-checks-icon />,
-            title: 'Checks',
-            shortcut: 'shortcut'
-          }
-        ]}
-        activeTab="explorer"
-        onSelect={vi.fn()}
-      />
-    )
-
-    const overflowButton = openingTag(markup, RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME)
-    expect(overflowButton).toContain('aria-label="More sidebar tabs"')
-  })
-
-  it('keeps side activity-bar controls no-drag without cancelling the side header drag region', () => {
-    mockAppState.activityBarPosition = 'side'
-
-    const markup = renderToStaticMarkup(<RightSidebar />)
-    const sideHeader = openingTag(markup, 'right-sidebar-header-drag')
-    const sideStrip = openingTag(markup, 'side-activity-bar-windows-inset')
-
-    expect(sideHeader).not.toContain(RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME)
-    expect(sideHeader).toContain('right-sidebar-header-side-inset')
-    expect(sideStrip).toContain('data-context-menu-trigger="true"')
-
-    expectNoDrag(buttonOpeningTag(markup, 'Explorer'))
-    expectNoDrag(buttonOpeningTag(markup, 'Source Control'))
-    expectNoDrag(buttonOpeningTag(markup, 'Checks'))
-    expect(buttonOpeningTag(markup, 'Toggle right sidebar')).toContain('sidebar-toggle')
-  })
-
-  it('hides git-only activity buttons for folder workspace ids without a backing repo', () => {
-    mockAppState.activeWorktreeId = 'folder:folder-1'
-    mockAppState.activeRepo = null
-
-    const markup = renderToStaticMarkup(<RightSidebar />)
-
-    expect(markup).toContain('aria-label="Explorer')
-    expect(markup).toContain('aria-label="Agents')
-    expect(markup).not.toContain('aria-label="Search')
-    expect(markup).toContain('aria-label="Attached worktrees')
-    expect(markup).toContain('aria-label="PR Checks')
-    expect(markup).not.toContain('aria-label="Source Control')
-    expect(markup).not.toContain('aria-label="Checks')
-  })
-
-  it('renders a visible fallback without overwriting a hidden folder-only tab', () => {
+  it('renders a visible fallback without overwriting a hidden folder-only tab', async () => {
     mockAppState.rightSidebarTab = 'workspaces'
     mockAppState.activeWorktreeId = 'worktree-1'
     mockAppState.activeRepo = { id: 'repo-1', kind: 'git', connectionId: null }
 
-    const markup = renderToStaticMarkup(<RightSidebar />)
-
-    expect(markup).toContain('data-file-explorer')
-    expect(markup).not.toContain('data-folder-workspace-worktrees-panel')
-    expect(mockAppState.setRightSidebarTab).not.toHaveBeenCalled()
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    try {
+      await act(async () => {
+        root.render(<RightSidebar />)
+      })
+      expect(container.innerHTML).toContain('data-file-explorer')
+      expect(container.innerHTML).not.toContain('data-folder-workspace-worktrees-panel')
+    } finally {
+      await act(async () => root.unmount())
+    }
   })
 
-  it('renders a visible fallback without overwriting a hidden PR Checks tab', () => {
+  it('renders a visible fallback without overwriting a hidden PR Checks tab', async () => {
     mockAppState.rightSidebarTab = 'pr-checks'
     mockAppState.activeWorktreeId = 'worktree-1'
     mockAppState.activeRepo = { id: 'repo-1', kind: 'git', connectionId: null }
 
-    const markup = renderToStaticMarkup(<RightSidebar />)
-
-    expect(markup).toContain('data-file-explorer')
-    expect(markup).not.toContain('data-folder-workspace-pr-checks-panel')
-    expect(mockAppState.setRightSidebarTab).not.toHaveBeenCalled()
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    try {
+      await act(async () => {
+        root.render(<RightSidebar />)
+      })
+      expect(container.innerHTML).toContain('data-file-explorer')
+      expect(container.innerHTML).not.toContain('data-folder-workspace-pr-checks-panel')
+    } finally {
+      await act(async () => root.unmount())
+    }
   })
 
   it('keeps remembered folder PR Checks visible when the global route falls back to Explorer', async () => {

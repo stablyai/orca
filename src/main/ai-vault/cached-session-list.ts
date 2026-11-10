@@ -1,32 +1,26 @@
-import { isWslUncPath } from '../../shared/wsl-paths'
-import { join } from 'node:path'
-import { claudeProfileHistoryDirs } from '../claude-accounts/claude-profile-installed-router'
 import {
   clearAiVaultBackgroundRestartCircuit,
   resetAiVaultScannerBackgroundForTests,
   scanAiVaultSessionsInBackground
 } from './scan-service/session-scanner-background'
-import { getCachedWslDistros, hasCachedWslDistros } from '../wsl/discovery/distro-catalog'
-import {
-  listLastKnownRunningWslHomeDirs,
-  readRunningWslHomeDirsUnlessStopped
-} from '../wsl/discovery/wsl-home-unless-stopped'
 import {
   carryOverUnconfirmedWslSessions,
   resetAiVaultWslSessionCarryover
 } from './ai-vault-wsl-session-carryover'
-import { filterPathsToRunningWslDistrosAsync } from '../wsl/filesystem/wsl-running-path-filter'
 import {
   isAiVaultScanCancelledError,
   type AiVaultListArgs,
   type AiVaultListResult
-} from '../../shared/ai-vault-types'
-import { aiVaultLocalScanKey, aiVaultLocalScanScopeKey } from '../../shared/ai-vault-local-scan-key'
-import type { AiVaultScanOptions } from './session-scanner-types'
-import { managedOpenCodeAccountDataDirs } from '../opencode/opencode-managed-account-data-dirs'
-import { prepareOpenCodeWslReaders } from './scanners/opencode/reader-transport/opencode-wsl-runtime-preparation'
-import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+} from '../../shared/ai-vault/contracts/ai-vault-types'
+import {
+  aiVaultLocalScanKey,
+  aiVaultLocalScanScopeKey
+} from '../../shared/ai-vault/scanning/ai-vault-local-scan-key'
 import { AiVaultScanCoordinator } from './ai-vault-scan-coordinator'
+import {
+  resetAiVaultSessionSourcesForTests,
+  resolveLocalAiVaultScanRoots
+} from './ai-vault-scan-roots'
 import {
   attachAiVaultScopeCwdAliases,
   resolveAiVaultScopeRealPaths
@@ -40,7 +34,16 @@ import {
   requestedAiVaultSessionDepth,
   truncateAiVaultListResult,
   type AiVaultSessionDepth
-} from '../../shared/ai-vault-session-depth'
+} from '../../shared/ai-vault/scanning/ai-vault-session-depth'
+
+export {
+  configureAiVaultSessionSources,
+  configuredAdditionalCodexHomePaths,
+  getAiVaultWslHomeDirs,
+  getAiVaultWslScanHomeDirs,
+  localAiVaultScanRoots,
+  type AiVaultSessionSources
+} from './ai-vault-scan-roots'
 
 // Desktop and runtime RPC share this cache to avoid duplicate scans when mobile and desktop open together.
 const AI_VAULT_CACHE_TTL_MS = 60_000
@@ -54,11 +57,6 @@ export class AiVaultLocalScanError extends Error {
   }
 }
 
-// Configure sources through the runtime service; headless serve never runs window-only IPC registration.
-export type AiVaultSessionSources = {
-  getAdditionalCodexHomePaths?: () => readonly string[]
-}
-
 type CachedAiVaultList = {
   key: string
   depth: AiVaultSessionDepth
@@ -68,63 +66,8 @@ type CachedAiVaultList = {
 
 let cachedList: CachedAiVaultList | null = null
 let scanCoordinator = new AiVaultScanCoordinator()
-let sources: AiVaultSessionSources = {}
 // Reject cache writes from scans that began before invalidation, or late results can resurrect deleted sessions.
 let cacheGeneration = 0
-
-export function configureAiVaultSessionSources(next: AiVaultSessionSources): void {
-  sources = next
-}
-
-type LocalAiVaultScanRoots = Required<
-  Pick<AiVaultScanOptions, 'additionalCodexSessionsDirs' | 'wslHomeDirs'>
-> &
-  Pick<
-    AiVaultScanOptions,
-    | 'executionHostId'
-    | 'wslOpenCodeReaders'
-    | 'claudeProfileProjectsDirs'
-    | 'opencodeAccountDataDirs'
-  >
-
-/** Resolve fresh WSL roots for both listing and indexing; distros can start or stop between scans. */
-export async function localAiVaultScanRoots(): Promise<LocalAiVaultScanRoots> {
-  return (await resolveLocalAiVaultScanRoots()).roots
-}
-
-/** `wslConfirmed` is false when no confirmed running list was read: WSL rows are then unknown, not gone. */
-async function resolveLocalAiVaultScanRoots(): Promise<{
-  roots: LocalAiVaultScanRoots
-  wslConfirmed: boolean
-}> {
-  const [additionalCodexHomes, wsl] = await Promise.all([
-    // Confirmed only: a stale list could name a distro that stopped; a failed probe drops WSL homes.
-    filterPathsToRunningWslDistrosAsync(configuredAdditionalCodexHomePaths(), {
-      requireConfirmed: true
-    }).catch(() => configuredAdditionalCodexHomePaths().filter((home) => !isWslUncPath(home))),
-    scanWslHomeDirs()
-  ])
-  return {
-    wslConfirmed: wsl.confirmed,
-    roots: {
-      additionalCodexSessionsDirs: additionalCodexHomes.map((homePath) =>
-        join(homePath, 'sessions')
-      ),
-      wslHomeDirs: wsl.homes,
-      // Scanner workers have no account router; supply profile roots from this process.
-      claudeProfileProjectsDirs: claudeProfileHistoryDirs('projects'),
-      opencodeAccountDataDirs: managedOpenCodeAccountDataDirs(),
-      wslOpenCodeReaders: await prepareOpenCodeWslReaders(wsl.homes),
-      // Runtime-addressed callers restamp host-local results at the RPC edge instead of rescanning.
-      executionHostId: LOCAL_EXECUTION_HOST_ID
-    }
-  }
-}
-
-/** Resume validation must use the same extra Codex homes that discovery lists. */
-export function configuredAdditionalCodexHomePaths(): readonly string[] {
-  return sources.getAdditionalCodexHomePaths?.() ?? []
-}
 
 export async function listAiVaultSessions(
   args?: AiVaultListArgs,
@@ -137,9 +80,11 @@ export async function listAiVaultSessions(
   if (args?.force === true) {
     clearAiVaultBackgroundRestartCircuit()
   }
+  // A full list for the same paths holds every row a scope-only one would, so All -> Project needs no rescan.
+  const fullKey = args?.scopeOnly ? aiVaultLocalScanScopeKey({ ...args, scopeOnly: false }) : key
   if (
     args?.force !== true &&
-    cachedList?.key === key &&
+    (cachedList?.key === key || cachedList?.key === fullKey) &&
     cachedList.expiresAt > now &&
     aiVaultCachedDepthServes(cachedList.depth, depth, args?.scopePaths)
   ) {
@@ -172,6 +117,7 @@ export async function listAiVaultSessions(
           limit: args?.limit,
           unlimited: args?.unlimited,
           scopePaths: args?.scopePaths ? scope.scanScopePaths : undefined,
+          scopeOnly: args?.scopeOnly,
           ...roots
         },
         scanSignal,
@@ -204,36 +150,6 @@ export async function listAiVaultSessions(
   })
 }
 
-/** Trust cached absence of any distro; otherwise a confirmed running list (E9). */
-async function scanWslHomeDirs(): Promise<{ homes: string[]; confirmed: boolean }> {
-  if (
-    process.platform !== 'win32' ||
-    (hasCachedWslDistros() && getCachedWslDistros()?.length === 0)
-  ) {
-    return { homes: [], confirmed: true }
-  }
-  return readRunningWslHomeDirsUnlessStopped()
-}
-
-/** WSL homes for work that reads inside them: a stopped distro's home is absent, not refused. */
-export async function getAiVaultWslScanHomeDirs(): Promise<string[]> {
-  return (await scanWslHomeDirs()).homes
-}
-
-/**
- * WSL roots for checking a path a user act names (delete, subagent listing): a containment check
- * reads nothing, so a failed probe must not narrow them and keeps the last-known-good list.
- */
-export async function getAiVaultWslHomeDirs(): Promise<string[]> {
-  if (
-    process.platform !== 'win32' ||
-    (hasCachedWslDistros() && getCachedWslDistros()?.length === 0)
-  ) {
-    return []
-  }
-  return listLastKnownRunningWslHomeDirs()
-}
-
 export function aiVaultSessionListCacheGeneration(): number {
   return cacheGeneration
 }
@@ -249,6 +165,6 @@ export function invalidateAiVaultSessionListCache(): void {
 export function resetAiVaultSessionListCacheForTests(): void {
   invalidateAiVaultSessionListCache()
   scanCoordinator = new AiVaultScanCoordinator()
-  sources = {}
+  resetAiVaultSessionSourcesForTests()
   resetAiVaultScannerBackgroundForTests()
 }

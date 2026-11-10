@@ -6,16 +6,17 @@ import {
 import {
   getWorkspaceAttachments,
   normalizeWorkspaceAttachmentUpdate
-} from '../../../../../../shared/workspace-attachments'
+} from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { normalizeGitHubPRSuppressionUpdate } from '../../../../../../shared/worktree/github-pr-suppression'
-import type { WorktreeSlice } from '../../worktree-helpers'
+
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { translate } from '@/i18n/i18n'
-import { isPositiveHostedReviewNumber } from '../../../../../../shared/hosted-review'
+import { isPositiveHostedReviewNumber } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { displayNameUpdatePinsLabel } from '../../../../../../shared/worktree/display-name-provenance'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
-import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
+import type { WorktreeSlice } from '../worktree-slice-contract'
+import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import {
   findKnownWorktreeById,
   getFolderWorkspaceMetaUpdates
@@ -34,9 +35,9 @@ import { buildWorktreeMetaStateUpdate } from './worktree-meta-state-update'
 import { withPendingSidebarRowWrites } from '@/lib/sidebar-pending-layer'
 import { isRuntimeSelectorNotFoundError } from '../listing/runtime-worktree-rpc-errors'
 import { runtimeTargetForWorktreeOwner } from '../listing/worktree-owner-target'
-import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
+import { runtimeTargetForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 
-import { hasUniqueIndexedRepositoryHost } from '@/lib/repository-owner-index'
+import { hasUniqueIndexedRepositoryHost } from '@/lib/workspace/ownership/repository-owner-index'
 import { resolveReviewRepository } from '@/lib/review-owner'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 export function createUpdateWorktreeMeta(

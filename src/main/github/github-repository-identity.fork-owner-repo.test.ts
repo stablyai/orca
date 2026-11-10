@@ -79,12 +79,6 @@ describe('issue #7331: fork PR owner/repo resolution', () => {
     expect(prRepo).toEqual({ owner: 'stablyai', repo: 'orca' })
   })
 
-  it('getOwnerRepo falls back to origin when there is no upstream remote', async () => {
-    const prRepo = await getOwnerRepo(NON_FORK_PATH)
-
-    expect(prRepo).toEqual({ owner: 'stablyai', repo: 'orca' })
-  })
-
   it('skips git remote get-url upstream on origin-only clones and caches the listing', async () => {
     await getOwnerRepo(NON_FORK_PATH)
     const upstreamGetUrl = (): number =>

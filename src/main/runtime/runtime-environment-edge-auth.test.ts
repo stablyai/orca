@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createEnvironmentFromPairingOffer } from '../../shared/runtime-environments'
+import { createEnvironmentFromPairingOffer } from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import { readRuntimeEdgeAuth } from '../credentials/runtime-edge-auth-store'
 import { resolveRuntimeEnvironmentConnection } from './runtime-environment-edge-auth'
 vi.mock('../credentials/runtime-edge-auth-store', () => {

@@ -5,10 +5,13 @@
       "connecting": "Verbindung zum Host wird hergestellt…",
       "connectingTo": "Verbindung zu {{name}} wird hergestellt…",
       "default": "Systemstandard",
+      "fableWindow": "Fable",
       "hostNotFound": "Host nicht gefunden",
       "invalidSnapshot": "Ungültige Momentaufnahme der Konten vom Host",
       "loadingAccounts": "Konten werden geladen…",
       "manageAccountsHint": "Konten auf dem Desktop unter Einstellungen → Konten hinzufügen oder erneut authentifizieren.",
+      "mcpWindow": "MCP",
+      "otherAgents": "Weitere Agenten",
       "refreshAccounts": "Konten aktualisieren",
       "sessionWindow": "5 h",
       "switchFailed": "Konto konnte nicht gewechselt werden",
@@ -107,16 +110,12 @@
       "pastePairingCode": "Oder Kopplungscode einfügen",
       "scanCodeStep": "QR-Code scannen",
       "title": "Mit Desktop koppeln",
-      "tryAgain": "Erneut versuchen"
+      "tryAgain": "Erneut versuchen",
+      "codeNoLongerValid": "Dieser Kopplungscode ist abgelaufen, wurde bereits verwendet oder wurde ersetzt. Zeige auf deinem Computer einen neuen Code an und scanne erneut."
     },
     "terminalSettings": {
-      "autocomplete": "Autovervollständigung & Autokorrektur",
-      "autocompleteOff": "Aus",
-      "autocompleteOn": "Ein",
       "defaultText": "Standard (100 %)",
       "keepPhoneSize": "Smartphone-Größe beibehalten (Standard)",
-      "keyboardInputDescription": "Autovervollständigung, Autokorrektur und Rechtschreibvorschläge gelten nur für die gepufferte Befehlseingabe. Mit der Doppelpfeil-Schaltfläche über der Tastatur von der direkten zur gepufferten Eingabe wechseln und den Befehl vor dem Tippen auf „Senden“ bearbeiten. Standardmäßig deaktiviert, damit Befehle, Flags und Pfade nicht verändert werden.",
-      "keyboardInputHeading": "TASTATUREINGABE",
       "largeText": "Groß (125 %)",
       "largerText": "Größer (150 %)",
       "largestText": "Am größten (200 %)",
@@ -188,8 +187,14 @@
       "sendMessage": "Nachricht senden",
       "sendQueue": "Einreihen",
       "sendSteer": "Steuern",
+      "sendSteerQueued": "Wartende steuern",
       "sendQueueHint": "Läuft nach dem aktuellen Durchgang",
       "sendSteerHint": "Fließt in das ein, was der Agent gerade tut"
+    },
+    "contextUsage": {
+      "label": "Kontext: {{used}} von {{window}} Token, {{percent}} % genutzt",
+      "title": "Kontext",
+      "estimated": "Anhand der letzten Antwort geschätzt."
     },
     "composerAttachments": {
       "attachedImage": "Angehängtes Bild",
@@ -201,7 +206,6 @@
     },
     "composerPlaceholder": {
       "prompt": "Frage stellen, @ für Dateiverweise, / für Befehle",
-      "reconnecting": "Verbindung wird wiederhergestellt…",
       "waitingForTerminal": "Warten auf Terminal…"
     },
     "diffCard": {
@@ -216,16 +220,30 @@
       "historyRepaired": "Ein Teil des Chatverlaufs konnte nicht geladen werden."
     },
     "message": {
-      "copyMessage": "Nachricht kopieren"
+      "copyMessage": "Nachricht kopieren",
+      "forkFromResponse": "Ab dieser Antwort abzweigen",
+      "forkFromResponseHint": "Ein neuer Chat mit dieser vollständigen Antwort bis zum Ende des Durchgangs"
     },
     "messageActionsSheet": {
       "clipboardRejected": "Die Zwischenablage hat den Text abgewiesen.",
       "copyFailed": "Kopieren fehlgeschlagen",
       "copyMessage": "Nachricht kopieren",
-      "selectText": "Text auswählen"
+      "selectText": "Text auswählen",
+      "rewind": "Bis hierher zurücksetzen"
     },
     "nativeChatImageViewer": {
-      "closeImage": "Bild schließen"
+      "closeImage": "Bild schließen",
+      "imageActions": "Bildaktionen",
+      "copyImage": "Bild kopieren",
+      "saveImage": "Bild sichern",
+      "share": "Teilen …",
+      "imageCopied": "Bild kopiert",
+      "imageSaved": "Bild gesichert",
+      "copyFailed": "Bild konnte nicht kopiert werden",
+      "saveFailed": "Bild konnte nicht gesichert werden",
+      "shareFailed": "Bild konnte nicht geteilt werden",
+      "photosAccessDenied": "Erlaube Orca in den Einstellungen, Fotos hinzuzufügen",
+      "imageTooLarge": "Dieses Bild ist zu groß"
     },
     "nativeChatProse": {
       "attachedImage": "Angehängtes Bild",
@@ -282,8 +300,18 @@
       "plan": "Plan",
       "stoppedManually": "Manuell gestoppt",
       "permissionDenied": "{{agent}} hat die Berechtigung verweigert. Details anzeigen.",
+      "safetyReviewApproved": "{{agent}} hat diese Aktion genehmigt. Details anzeigen.",
       "safetyReview": "{{agent}} hat eine Warnung zur Sicherheitsprüfung gemeldet. Details anzeigen.",
-      "truncatedResponse": "Anbieterantwort gekürzt (ursprüngliche Größe: {{bytes}} Bytes)."
+      "truncatedResponse": "Anbieterantwort gekürzt (ursprüngliche Größe: {{bytes}} Bytes).",
+      "modelFallback": "Claude hat das Modell gewechselt: {{from}} → {{to}}.",
+      "signIn": "Anmelden",
+      "signInHint": "Öffnet ein Terminal auf dem Computer, auf dem dieser Chat läuft",
+      "forkedFrom": "Abgezweigt von"
+    },
+    "ciResultLine": {
+      "failingLead": "CI fehlgeschlagen bei",
+      "greenLead": "CI grün bei",
+      "at": "auf"
     },
     "orcaStop": {
       "canContinue": "Die Unterhaltung kann fortgesetzt werden.",
@@ -292,6 +320,13 @@
       "remote": "Orca auf {{machine}} wurde während dieser Antwort gestoppt.",
       "unnamedServer": "dem entfernten Server",
       "update": "Orca auf {{machine}} wurde während dieser Antwort für ein Update neu gestartet."
+    },
+    "interruptedContinue": {
+      "failed": "Dieser Chat konnte nicht fortgesetzt werden. Erneut versuchen oder eine Nachricht senden.",
+      "explanation": "Beim Fortfahren prüft der Agent zuerst, ob sein letzter Schritt abgeschlossen wurde."
+    },
+    "sendError": {
+      "dismiss": "Ausblenden"
     },
     "permission": {
       "needsAccessTo": "Benötigt Zugriff auf: ",
@@ -324,13 +359,23 @@
       "resumeSending": "Senden der Nachrichten in der Warteschlange fortsetzen",
       "title": "Nachrichten in der Warteschlange"
     },
+    "offlineQueue": {
+      "failed": "Nicht gesendet – zum erneuten Versuch auf Senden tippen",
+      "waitingFor": "Wird gesendet, wenn {{host}} wieder erreichbar ist",
+      "waiting": "Wird gesendet, wenn der Desktop wieder erreichbar ist",
+      "behind": "Wartet – eine Nachricht davor braucht Aufmerksamkeit",
+      "closed": "Nicht gesendet, bevor Orca geschlossen wurde"
+    },
     "receipt": {
       "cancelled": "Abgebrochen",
       "cancelledBy": "Auf {{device}} abgebrochen",
       "emptyAnswer": "Leere Antwort",
       "resolved": "Erledigt",
       "resolver": "Auf {{device}} beantwortet",
-      "unavailable": "Ausgewählte Antwort nicht verfügbar"
+      "unavailable": "Ausgewählte Antwort nicht verfügbar",
+      "thisPhone": "diesem Smartphone",
+      "computer": "dem Computer",
+      "otherDevice": "einem anderen Gerät"
     },
     "sessionOptionCopy": {
       "availableAfterSessionStarts": "Nach dem Sitzungsstart verfügbar.",
@@ -373,7 +418,9 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "Standard",
-      "notReportedMarker": "Nicht gemeldet"
+      "notReportedMarker": "Nicht gemeldet",
+      "moreModels": "Weitere Modelle",
+      "fewerModels": "Weniger Modelle"
     },
     "sessionOptionSegments": {
       "dispatchUnconfirmed": "An den Agenten gesendet — nicht bestätigt"
@@ -513,12 +560,19 @@
     "usageLimit": {
       "reached": "{{agent}} hat das Nutzungslimit erreicht.",
       "reachedNamed": "{{agent}} hat das Limit erreicht ({{window}}).",
-      "resetsAt": "Nächste Zurücksetzung: {{when}}.",
       "theAgent": "Der Agent",
       "windowCredits": "Zusätzliche Nutzung",
       "windowSession": "Sitzung",
       "windowWeekly": "Wöchentliche Nutzung",
-      "windowWeeklyModel": "Wöchentliche Modellnutzung"
+      "windowWeeklyModel": "Wöchentliche Modellnutzung",
+      "switchAccount": "Konto wechseln",
+      "autoContinueCancelFailed": "Die automatische Fortsetzung konnte nicht abgebrochen werden. Versuche es erneut.",
+      "autoContinueCancel": "Nicht fortsetzen",
+      "statusResetAt": "Zurückgesetzt um {{time}}",
+      "statusResetsAt": "Wird um {{time}} zurückgesetzt",
+      "statusContinuesShortly": "Orca setzt gleich fort",
+      "statusContinuesThen": "Orca setzt dann fort",
+      "statusWontContinue": "Orca setzt nicht automatisch fort"
     },
     "useImageUpload": {
       "attachFailed": "Anhängen fehlgeschlagen",
@@ -529,9 +583,77 @@
     "agentMessage": {
       "handedOffToAgent": "An Agenten übergeben",
       "startedAgent": "Agent gestartet"
+    },
+    "textAttachmentPreview": {
+      "unreadableReply": "Die Antwort zum Anhang ist nicht lesbar. Erneut versuchen.",
+      "incompleteReply": "Der Anhang wurde geändert oder die Antwort war unvollständig. Schließen und erneut versuchen.",
+      "notText": "Diese Datei kann nicht als Text angezeigt werden. Speichere sie, um sie in einer anderen App zu öffnen.",
+      "openFailed": "Anhang konnte nicht geöffnet werden. Erneut versuchen.",
+      "hostUpdate": "Dieser Host kann Textanhänge noch nicht öffnen. Aktualisiere Orca auf diesem Host und versuche es erneut.",
+      "copyTooLarge": "Diese Datei ist zu groß zum Kopieren. Speichere sie stattdessen.",
+      "connectionChanged": "Die Verbindung hat sich geändert. Versuche erneut, den Anhang zu öffnen.",
+      "hostChanged": "Der Host des Anhangs hat sich geändert. Schließe den Anhang und öffne ihn erneut.",
+      "readFailed": "Anhang konnte nicht gelesen werden. Stelle die Verbindung wieder her und versuche es erneut. Die Datei wurde möglicherweise entfernt oder geändert.",
+      "copyFrame": "Für „Vollständig kopieren“ bei diesem Anhang ist das kommende Smartphone-Update erforderlich.",
+      "copyFailed": "Anhang konnte nicht kopiert werden. Erneut versuchen.",
+      "pastedText": "Eingefügter Text",
+      "textAttachment": "Textanhang",
+      "byteSize": "{{size}} Byte",
+      "saveUpdate": "Speichern wird mit einem Smartphone-Update verfügbar sein.",
+      "fullCopySaveUpdate": "„Vollständig kopieren“ und Speichern werden für diesen Anhang mit einem Smartphone-Update verfügbar sein."
+    },
+    "hostOutage": {
+      "offlineAsOf": "{{host}} ist offline · Stand {{time}}",
+      "reconnecting": "{{hostName}} verbindet sich erneut…",
+      "stopped": "{{hostName}} ist gestoppt. Starte es auf deinem Computer.",
+      "server": "Der Server",
+      "unavailable": "{{hostName}} ist von deinem Telefon aus nicht verfügbar. Öffne eines seiner Projekte auf deinem Computer."
+    },
+    "goal": {
+      "chip": "Ziel",
+      "exitMode": "Zielmodus verlassen",
+      "placeholder": "Ziel beschreiben und für beste Ergebnisse messbare Resultate festlegen",
+      "pursuing": "Ziel wird verfolgt",
+      "set": "Ziel festgelegt",
+      "paused": "Pausiertes Ziel",
+      "blocked": "Ziel blockiert",
+      "limited": "Ziel eingeschränkt",
+      "clear": "Ziel entfernen",
+      "expand": "Vollständiges Ziel anzeigen",
+      "collapse": "Vollständiges Ziel ausblenden",
+      "attachmentsUnsupported": "Vor dem Festlegen eines Ziels die Anhänge entfernen.",
+      "pause": "Pausieren",
+      "resume": "Fortsetzen"
+    },
+    "rewind": {
+      "title": "Bis hierher zurücksetzen?",
+      "confirmation": "Diese Nachricht und alle folgenden verwerfen? Die Nachricht steht danach wieder im Eingabefeld und kann bearbeitet und erneut gesendet werden. Dateiänderungen auf dem Datenträger bleiben erhalten.",
+      "confirm": "Zurücksetzen",
+      "unsupported": "Dieser Chat kann nicht zu einer früheren Nachricht zurückgesetzt werden.",
+      "historyNotPaginated": "Dieser ältere Codex-Chat kann nicht zu einer früheren Nachricht zurückgesetzt werden. Einen neuen Chat starten, um „Bis hierher zurücksetzen“ zu verwenden.",
+      "busy": "Verfügbar, sobald der Agent inaktiv ist und im Chat keine Aktion mehr aussteht.",
+      "staleEpoch": "Das Gespräch hat sich geändert. Die neuesten Nachrichten prüfen und erneut versuchen.",
+      "invalidTarget": "Das Gespräch kann nicht zu dieser Nachricht zurückgesetzt werden. Es wurde nichts geändert.",
+      "historyLimit": "Dieses Gespräch ist zu lang, um darin zurückzugehen. Es wurde nichts geändert.",
+      "providerRefused": "Der Agent konnte nicht zu dieser Nachricht zurückkehren.",
+      "proofMismatch": "Der Verlauf des Agenten stimmte nicht mit diesem Chat überein. Das Gespräch vor dem Fortfahren prüfen.",
+      "outcomeUnknown": "Orca konnte nicht bestätigen, ob das Gespräch zu einer früheren Nachricht zurückgesetzt wurde. Dies wird vor dem Senden der nächsten Nachricht geprüft.",
+      "refused": "Orca konnte nicht zu dieser Nachricht zurückkehren. Das Gespräch vor dem Fortfahren prüfen.",
+      "unavailable": "Warten, bis die Verbindung zum Chat hergestellt ist.",
+      "outcomeUnknownReturned": "Orca konnte nicht bestätigen, ob das Gespräch zu dieser Nachricht zurückgesetzt wurde. Die Nachricht steht wieder im Eingabefeld, und Orca prüft das Gespräch vor dem Senden der nächsten Nachricht.",
+      "timeout": "Der Chat wurde nach dem Zurücksetzen zu dieser Nachricht nicht aktualisiert. Erneut öffnen, um den neuesten Stand zu sehen.",
+      "pending": "Warten, bis das Gespräch zur früheren Nachricht zurückgesetzt wurde."
+    },
+    "fork": {
+      "busy": "Ein anderer Chat oder ein Terminal wird geöffnet. Warte und zweige dann den {{agent}}-Chat erneut ab.",
+      "unconfirmed": "{{agent}} konnte das Abzweigen nicht bestätigen. Der Chat wurde möglicherweise dennoch geöffnet; prüfe den Sitzungsverlauf, bevor du erneut abzweigst.",
+      "failed": "{{agent}} konnte diesen Chat nicht abzweigen. {{detail}}",
+      "unsupported": "Auf diesem Host läuft eine ältere Orca-Version. Aktualisiere Orca auf dem Host und versuche es erneut."
     }
   },
   "common": {
+    "details": "Details",
+    "hideDetails": "Details ausblenden",
     "back": "Zurück",
     "cancel": "Abbrechen",
     "close": "Schließen",
@@ -723,12 +845,14 @@
     },
     "hostCard": {
       "hostActions": "Aktionen für {{title}}",
+      "needsYou_one": "{{count}} braucht dich",
+      "needsYou_other": "{{count}} brauchen dich",
       "openHost": "{{title}} öffnen",
       "pairingInvalid": "Kopplung ungültig",
       "pairingTemporarilyUnavailable": "Kopplung vorübergehend nicht verfügbar",
       "repairHint": "Zum erneuten Koppeln mit dem Desktop tippen",
+      "sameNetworkOnlyHint": "Verbindet sich nur im selben WLAN oder über Tailscale. Für Verbindungen von überall auf dem Desktop anmelden und erneut koppeln",
       "unlockHint": "Telefon entsperren, dann zum erneuten Versuch tippen",
-      "updateDesktopHint": "Orca auf dem Desktop aktualisieren und sich dort anmelden, um von überall eine Verbindung herzustellen",
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} aktiv"
     },
     "hostDiagnosticsLink": {
@@ -756,7 +880,16 @@
     },
     "markdownBlocks": {
       "copyCode": "Code kopieren",
-      "openImage": "Bild öffnen"
+      "openImage": "Bild öffnen",
+      "wrapLines": "Zeilen umbrechen",
+      "disableLineWrap": "Zeilenumbruch deaktivieren"
+    },
+    "markdownCallout": {
+      "note": "Hinweis",
+      "tip": "Tipp",
+      "important": "Wichtig",
+      "warning": "Warnung",
+      "caution": "Vorsicht"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Bereich schließen"
@@ -803,7 +936,8 @@
     },
     "prSidebar": {
       "loading": "Pull Request wird geladen…",
-      "notPermitted": "Nicht erlaubt – das GitHub-Konto ist nicht verbunden."
+      "notPermitted": "Nicht erlaubt – das GitHub-Konto ist nicht verbunden.",
+      "retryLoading": "Pull Request erneut laden"
     },
     "protocolBlockScreen": {
       "backToHosts": "Zurück zu Hosts",
@@ -962,6 +1096,12 @@
     "mermaidDiagram": {
       "expand": "Diagramm vergrößern",
       "label": "Mermaid-Diagramm"
+    },
+    "native-chat": {
+      "composer": {
+        "planMode": "Planen",
+        "exitPlanMode": "Planungsmodus verlassen"
+      }
     }
   },
   "connection": {
@@ -1152,16 +1292,74 @@
   },
   "dictation": {
     "setup": {
-      "alreadyActive": "Auf dem Computer oder einem anderen Smartphone wird bereits diktiert.",
+      "alreadyActive": "Auf dem Computer oder einem anderen Smartphone wird bereits diktiert. Orca auf dem Computer aktualisieren, um auf mehreren Geräten gleichzeitig zu diktieren.",
       "cloudModelNeedsKey": "OpenAI-Schlüssel erforderlich",
       "deleteFailed": "Modell konnte nicht gelöscht werden",
       "desktopUpdateRequired": "Die gekoppelte Orca-Desktop-App aktualisieren, um die Spracheingabeeinstellungen auf dem Smartphone zu nutzen.",
       "downloadFailed": "Download konnte nicht gestartet werden",
       "loadFailed": "Diktatmodelle konnten nicht geladen werden",
+      "modelBusy": "Ein anderes Gerät diktiert mit einem anderen Spracherkennungsmodell. Erneut versuchen, sobald es fertig ist.",
       "repairRequired": "Dieses Smartphone erneut mit dem Computer koppeln, um das Diktat zu nutzen.",
       "serverUpdateRequired": "Orca auf diesem Server aktualisieren, um das Diktat zu nutzen.",
+      "sessionLimit": "Auf diesem Computer diktieren zu viele Geräte. Erneut versuchen, sobald eines fertig ist.",
       "sessionLost": "Die Verbindung zum Computer wurde beim Diktat unterbrochen. Erneut versuchen.",
       "updateFailed": "Diktateinstellungen konnten nicht aktualisiert werden"
+    },
+    "controls": {
+      "start": "Diktieren",
+      "starting": "Diktat wird gestartet",
+      "stop": "Stoppen und einfügen",
+      "finishing": "Diktat wird abgeschlossen",
+      "cancel": "Diktat abbrechen",
+      "meterOnPhone": "Aufnahme, {{duration}}, auf diesem Telefon",
+      "meterOn": "Aufnahme, {{duration}}, auf {{computer}}",
+      "meterOnComputer": "Aufnahme, {{duration}}, auf dem Computer",
+      "meter": "Aufnahme, {{duration}}",
+      "durationMinutesSeconds": "{{minutes}} {{seconds}}",
+      "durationSeconds_one": "{{count}} Sekunde",
+      "durationSeconds_other": "{{count}} Sekunden",
+      "durationMinutes_one": "{{count}} Minute",
+      "durationMinutes_other": "{{count}} Minuten",
+      "discard": "Aufnahme verwerfen",
+      "retry": "Diktat wiederholen",
+      "retryShort": "Wiederholen"
+    },
+    "status": {
+      "finishingOn": "Wird auf {{computer}} abgeschlossen",
+      "finishingOnComputer": "Wird auf dem Computer abgeschlossen",
+      "movedTo": "Zu {{computer}} gewechselt",
+      "movedToComputer": "Zum Computer gewechselt"
+    },
+    "failure": {
+      "connectionLost": "Verbindung unterbrochen",
+      "connectionSlow": "Verbindung zu langsam",
+      "phoneStopped": "Auf diesem Telefon gestoppt",
+      "stopped": "Diktat gestoppt",
+      "recordingKept": "Aufnahme behalten"
+    },
+    "announce": {
+      "typedInto": "Eingetippt in {{target}}",
+      "insertedIn": "Eingefügt in {{target}}",
+      "listeningOnPhone": "Hört zu. Transkription auf diesem Telefon.",
+      "listeningOn": "Hört zu. Transkription auf {{computer}}.",
+      "listeningOnComputer": "Hört zu. Transkription auf dem Computer.",
+      "finishing": "Wird abgeschlossen.",
+      "inserted": "Eingefügt.",
+      "cancelled": "Diktat abgebrochen.",
+      "movedTo": "Dieses Telefon hat die Transkription beendet. Weiter auf {{computer}}.",
+      "movedToComputer": "Dieses Telefon hat die Transkription beendet. Weiter auf dem Computer.",
+      "stoppedKept": "Diktat gestoppt. {{reason}}. Deine Aufnahme bleibt erhalten.",
+      "stoppedKeptGeneric": "Diktat gestoppt. Deine Aufnahme bleibt erhalten.",
+      "stillListening": "Hört weiter zu."
+    },
+    "pill": {
+      "open": "Öffnen",
+      "listening": "Hört zu",
+      "starting": "Startet",
+      "finishing": "Wird abgeschlossen",
+      "stopped": "Diktat gestoppt",
+      "label": "Diktat in {{target}}, {{duration}}",
+      "hint": "Doppeltippen, um zurückzukehren"
     }
   },
   "files": {
@@ -1171,7 +1369,6 @@
       "connecting": "Verbindung zum Desktop wird hergestellt…",
       "emptyState": "Keine Dateien gefunden",
       "loadFailed": "Dateien konnten nicht geladen werden.",
-      "loadInterrupted": "Laden des Ordners unterbrochen",
       "title": "Dateien",
       "truncatedList": "{{worktreeLabel}} – Erste 5000 werden angezeigt",
       "waiting": "Warten auf den Desktop…"
@@ -1179,11 +1376,21 @@
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} auf Mobilgeräten nicht verfügbar",
       "loadFolderFailed": "Ordner konnte nicht geladen werden",
+      "loadedOfTotal": "{{loaded}} von {{total}}",
       "loading": "Wird geladen…",
       "openFolder": "Ordner {{name}} öffnen",
       "previewFile": "Vorschau der Datei {{name}} anzeigen",
       "retryLoading": "{{path}} erneut laden",
+      "searchAll": "Alle durchsuchen",
+      "searchAllIn": "Ganz {{folder}} durchsuchen",
+      "searched": "{{loaded}} von {{total}} in {{folder}} durchsucht.",
+      "searching": "{{folder}} wird durchsucht… {{loaded}} von {{total}}",
+      "showMore": "{{rows}} weitere anzeigen",
       "unavailable": "Auf Mobilgeräten nicht verfügbar"
+    },
+    "fileExplorerRowActions": {
+      "copyName": "Namen kopieren",
+      "copyRelativePath": "Relativen Pfad kopieren"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Geladenen Markdown-Quelltext kopieren",
@@ -1252,6 +1459,13 @@
       "openFailed": "Diese PDF-Datei konnte nicht geöffnet werden",
       "opening": "PDF wird geöffnet…",
       "updateRequired": "Orca Mobile aktualisieren, um PDFs zu öffnen"
+    },
+    "unsavedEditsOffer": {
+      "changedSince": "Auf dem Desktop geändert seit deinen Änderungen von {{time}}",
+      "copyMyEdits": "Meine Änderungen kopieren",
+      "discard": "Verwerfen",
+      "restore": "Wiederherstellen",
+      "unsavedFrom": "Nicht gespeicherte Änderungen von {{time}}"
     }
   },
   "home": {
@@ -1259,6 +1473,20 @@
       "dismissAccessibilityLabel": "Update-Hinweis für Orca {{version}} ausblenden",
       "title": "Orca {{version}} ist verfügbar",
       "updateAccessibilityLabel": "Orca {{version}} ist verfügbar, zum Aktualisieren antippen"
+    },
+    "automationsTab": {
+      "connectDesktop": "{{desktop}} verbinden, um Automatisierungen anzuzeigen und auszuführen.",
+      "createHint": "Auf + tippen, um einen Agenten zu planen.",
+      "emptyTitle": "Agentenarbeit planen",
+      "lastStatus": "Zuletzt: {{status}}",
+      "newAutomation": "Neue Automatisierung",
+      "noAutomations": "Noch keine Automatisierungen",
+      "pairDesktop": "Einen Desktop koppeln, um Automatisierungen anzuzeigen und auszuführen.",
+      "paused": "Pausiert",
+      "scheduled": "Geplant",
+      "showFor": "Automatisierungen anzeigen für",
+      "toggleFailed": "{{name}} konnte nicht aktualisiert werden",
+      "updateDesktop": "Orca auf {{desktop}} aktualisieren, um Automatisierungen zu nutzen."
     },
     "emptyState": {
       "connectedDescription": "Der Desktop erscheint hier. Alles ist Ende-zu-Ende-verschlüsselt.",
@@ -1270,9 +1498,7 @@
       "title": "Desktop verbinden"
     },
     "listFooter": {
-      "hostPickerTitle": "Aufgaben auf Host öffnen",
-      "automationsHeading": "Automatisierungen",
-      "automationsHostPickerTitle": "Automatisierungen öffnen auf"
+      "hostPickerTitle": "Aufgaben auf Host öffnen"
     },
     "listHeader": {
       "desktopsHeading": "Desktop-Computer"
@@ -1283,6 +1509,33 @@
       "removeHostMessage": "„{{name}}“ entfernen? Eine erneute Kopplung ist später möglich.",
       "removeHostTitle": "Host entfernen",
       "tryAgain": "Bitte erneut versuchen."
+    },
+    "stats": {
+      "agentTime": "Agentenzeit",
+      "agentsSpawned": "Gestartete Agenten",
+      "days": "{{days}} T",
+      "heading": "Deine Statistiken",
+      "hours": "{{hours}} Std.",
+      "minutes": "{{minutes}} Min.",
+      "prsCreated": "Erstellte PRs"
+    },
+    "tabs": {
+      "automations": "Automatisierungen",
+      "chooseDesktop": "{{desktop}}, anderen Desktop auswählen",
+      "feed": "Feed",
+      "usage": "Nutzung"
+    },
+    "usage": {
+      "active": "Aktiv",
+      "addAccounts": "Konten auf dem Desktop unter Einstellungen → Konten hinzufügen.",
+      "connectDesktop": "{{desktop}} verbinden, um die Nutzung der Agentenkonten zu sehen.",
+      "emptyTitle": "Noch keine Nutzung",
+      "openAccountsHint": "Öffnet die Konten dieses Desktops",
+      "pairDesktop": "Einen Desktop koppeln, um die Nutzung der Agentenkonten zu sehen.",
+      "refresh": "Nutzung aktualisieren",
+      "showUsageFor": "Nutzung anzeigen für",
+      "updatedAgo": "Vor {{time}} aktualisiert",
+      "updatedJustNow": "Gerade eben aktualisiert"
     }
   },
   "hooks": {
@@ -1294,7 +1547,10 @@
       "microphoneInitFailed": "Mikrofon konnte nicht initialisiert werden.",
       "microphoneInterrupted": "Das Diktat wurde beendet, weil die Mikrofonaufnahme unterbrochen wurde. Erneut versuchen.",
       "microphonePermissionDenied": "Mikrofonzugriff verweigert",
-      "noSpeech": "Keine Sprache erkannt."
+      "noSpeech": "Keine Sprache erkannt.",
+      "phoneUnavailable": "Diktieren auf diesem Telefon ist nicht bereit. Lade es in den Spracheinstellungen herunter oder wähle Automatisch.",
+      "phoneFailed": "Diktieren auf diesem Telefon funktioniert nicht mehr. Versuche es erneut.",
+      "phoneBusy": "Diktieren auf diesem Telefon startet noch. Versuche es gleich noch einmal."
     }
   },
   "host": {
@@ -1336,13 +1592,16 @@
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "„{{name}}“ ({{branch}}) löschen?",
+      "deleteDestroysEnvironment": "Dadurch wird auch die Umgebung „{{environment}}“ gelöscht, die Orca dafür erstellt hat, samt nicht committeter Änderungen und laufender Terminals.",
+      "deleteKeepsEnvironment": "Die Umgebung „{{environment}}“, die Orca dafür erstellt hat, läuft weiter: Ihr Rezept hat keinen Löschschritt.",
       "deleteWorktree": "Worktree löschen",
       "pin": "Anheften",
       "primaryWorktreeDeleteHint": "Primärer Worktree — kann nicht gelöscht werden. Stattdessen das Projekt entfernen.",
       "removeHost": "Host entfernen",
       "removeHostMessage": "„{{name}}“ entfernen? Eine erneute Kopplung ist später möglich.",
       "sleep": "In Ruhezustand versetzen",
-      "unpin": "Anheftung aufheben"
+      "unpin": "Anheftung aufheben",
+      "rename": "Umbenennen"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Checks: fehlgeschlagen",
@@ -1424,6 +1683,12 @@
       "thisComputer": "Dieser Computer",
       "waitingForDesktop": "Es wird noch auf den Desktop gewartet",
       "workspaceOptions": "Arbeitsbereichsoptionen"
+    },
+    "workspaceRenameSheet": {
+      "title": "Arbeitsbereich umbenennen",
+      "emptyUsesBranch": "Leer lassen, um den Branchnamen zu verwenden.",
+      "emptyUsesFolder": "Leer lassen, um den Ordnernamen zu verwenden.",
+      "failed": "Der Arbeitsbereich konnte nicht umbenannt werden. {{reason}}"
     }
   },
   "navigation": {
@@ -1483,7 +1748,7 @@
       "notificationsTitle": "Nicht verpassen, wenn ein Agent dich braucht",
       "openInChatUi": "Sitzungen in der Chat-Oberfläche öffnen",
       "openInTerminal": "Sitzungen im Terminal öffnen",
-      "sessionViewDescription": "Festlegen, ob unterstützte Agenten-Sitzungen auf diesem Gerät im Terminal oder in der Chat-Oberfläche geöffnet werden. Einen Sitzungs-Tab gedrückt halten, um die Ansicht zu wechseln, oder den Standard später in den Einstellungen ändern.",
+      "sessionViewDescription": "Festlegen, ob unterstützte Agenten-Sitzungen auf diesem Gerät im Terminal oder in der Chat-Oberfläche geöffnet werden. Einen Sitzungs-Tab gedrückt halten, um die Ansicht zu wechseln, oder den Standard jederzeit unter Einstellungen → Chat-Oberfläche ändern.",
       "sessionViewTitle": "Wie sollen Sitzungen geöffnet werden?",
       "skipNotifications": "Benachrichtigungen vorerst überspringen",
       "useChatUi": "Chat-Oberfläche verwenden"
@@ -1643,7 +1908,7 @@
     },
     "prViewPanel": {
       "branchUnavailable": "Aktueller Branch nicht verfügbar.",
-      "providerUnavailable": "Gehostetes Review-Panel für diesen Anbieter nicht verfügbar."
+      "githubRemoteRequired": "Dieser Tab benötigt ein GitHub-Remote, um Pull-Request-Details anzuzeigen. Für andere unterstützte Plattformen kannst du unter Änderungen ein Review erstellen und im Browser öffnen."
     },
     "reviewerPickerDrawer": {
       "loadFailed": "Personen konnten nicht geladen werden.",
@@ -1666,15 +1931,18 @@
     "accessoryKeys": {
       "dismissKeyboard": "Tastatur ausblenden",
       "sendKey": "{{label}} senden",
-      "modifierHint": "Gilt für die nächste Taste. Doppeltippen zum Beibehalten.",
       "typeCharacter": "{{character}} eingeben",
       "interrupt": "Terminal unterbrechen",
       "keysModeLabel": "Tastenmodus: Eingaben gehen direkt an das Terminal. Zum Nachrichtenmodus wechseln",
       "messageModeLabel": "Nachrichtenmodus: Schreiben, dann senden. Zum Tastenmodus wechseln",
-      "keysMode": "Tasten",
-      "messageMode": "Nachricht",
       "moreKeys": "Weitere Tasten und Aktionen",
-      "showKeyboard": "Tastatur anzeigen"
+      "showKeyboard": "Tastatur anzeigen",
+      "dismissKeyboardHint": "Blendet die Bildschirmtastatur aus und lässt die aktuelle Terminal-Sitzung geöffnet.",
+      "switchToDesktopMode": "In den Desktop-Modus wechseln",
+      "switchToPhoneMode": "In den Smartphone-Modus wechseln",
+      "pasteFromClipboard": "Aus der Zwischenablage einfügen",
+      "paste": "Einfügen",
+      "addCustomShortcut": "Benutzerdefiniertes Tastenkürzel hinzufügen"
     },
     "activeContent": {
       "createTab": "Tab erstellen",
@@ -1698,13 +1966,8 @@
       "noUpdate": "Seit {{value0}} keine Meldung"
     },
     "agentMessageAttribution": {
-      "from": "Von {{sender}}",
-      "fromMore": "Von {{sender}} +{{count}}",
-      "fromUnnamed": "Von einem Agenten",
-      "messageFrom": "Nachricht von {{sender}}",
-      "messageFromMore": "Nachricht von {{sender}} +{{count}}",
-      "messageFromUnnamed": "Nachricht von einem Agenten",
-      "unnamedSender": "einem Agenten"
+      "unnamedSender": "einem Agenten",
+      "fromSender": "Von"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "Terminal konnte nicht erstellt werden.",
@@ -1729,6 +1992,7 @@
       "countWorkflows_one": "{{count}} Arbeitsablauf",
       "countWorkflows_other": "{{count}} Arbeitsabläufe",
       "detailsUnavailable": "Aufgabendetails sind für diese Sitzung nicht verfügbar.",
+      "outputFile": "Ausgabe: {{value0}}",
       "groupAgents": "Agenten",
       "groupMonitors": "Überwachungen",
       "groupShell": "Shell",
@@ -1785,11 +2049,7 @@
     },
     "commandDock": {
       "liveInputHint": "Eingegebener Text wird direkt an das aktive Terminal gesendet",
-      "liveInputLabel": "Live-Eingabe im Terminal",
-      "sendCommand": "Befehl senden",
-      "messageAgentPlaceholder": "Nachricht an {{agent}}",
-      "writeCommandPlaceholder": "Befehl schreiben und dann senden",
-      "theAgent": "dem Agenten"
+      "liveInputLabel": "Live-Eingabe im Terminal"
     },
     "contentRow": {
       "dismissCreationWarning": "Warnung zur Erstellung des Arbeitsbereichs ausblenden"
@@ -1803,13 +2063,11 @@
       "saveNote": "Notiz speichern"
     },
     "diffReviewLoaders": {
-      "changesLoadFailed": "Änderungen konnten nicht geladen werden.",
       "committedChangesFailed": "Committete Änderungen konnten nicht geladen werden.",
       "committedChangesUnavailable": "Committete Änderungen nicht verfügbar",
       "committedDiffUnavailable": "Diff der committeten Änderungen ist nicht verfügbar.",
       "desktopUpdateRequired": "Orca auf dem Desktop aktualisieren, um Änderungen auf dem Mobilgerät zu prüfen.",
       "diffLoadFailed": "Diff konnte nicht geladen werden.",
-      "invalidSourceControlResponse": "Die Antwort der Quellcodeverwaltung war ungültig.",
       "reviewNotesLoadFailed": "Review-Notizen konnten nicht geladen werden."
     },
     "diffReviewQueue": {
@@ -1895,6 +2153,8 @@
       "managedAccountEnvOverride": "Dieser Claude-Start legt eigene Variablen für die Anthropic-Anmeldung fest. Diese entfernen, um ein verwaltetes Claude-Konto zu verwenden.",
       "managedAccountUnsupported": "Auch wenn in WSL ein Claude-Konto hinzugefügt wurde, benötigen Claude-Chats ein Claude-Konto unter Windows.",
       "modelUnavailable": "{{agent}} konnte {{detail}} nicht verwenden. Ein anderes Modell auswählen und erneut senden.",
+      "modelUnavailableUpdate": "{{agent}} konnte {{detail}} nicht verwenden. {{agent}} auf {{minimumVersion}} oder neuer aktualisieren, damit es nach einem Neustart erhalten bleibt, oder ein anderes Modell auswählen und erneut senden.",
+      "modelNotSelected": "{{agent}} hat kein Modell ausgewählt. Modellauswahl und {{agent}}-Anmeldung prüfen und erneut senden.",
       "noTurnToStop": "{{agent}} hatte keinen laufenden Durchgang, der gestoppt werden konnte.",
       "notDelivered": "Diese Nachricht wurde nicht zugestellt.",
       "notDeliveredSendAgain": "Diese Nachricht wurde nicht zugestellt. Zum Fortfahren erneut senden.",
@@ -1904,6 +2164,10 @@
       "providerExitedRejection": "{{agent}} wurde gestoppt, bevor diese Nachricht gesendet wurde.",
       "providerExitedRow": "{{agent}} wurde während dieser Antwort gestoppt. Die Unterhaltung kann fortgesetzt werden.",
       "providerRateLimited": "{{agent}} hat das Ratenlimit erreicht und versucht es erneut.",
+      "providerUnavailable": "{{agent}} konnte nicht antworten, weil der Dienst ausgelastet ist. Wähle ein anderes Modell oder warte kurz und sende erneut.",
+      "providerSafetyStopped": "{{agent}} hat diese Antwort nach einer Sicherheitsprüfung gestoppt. Überprüfe deine Anfrage und sende sie erneut.",
+      "providerResponseFailed": "{{agent}} konnte diese Antwort nicht abschließen. Öffnen Sie die Details für weitere Informationen.",
+      "selectedModel": "das ausgewählte Modell",
       "providerRejected": "{{agent}} hat diese Nachricht nicht angenommen.",
       "providerRejectedQuoted": "{{agent}} hat diese Nachricht nicht angenommen: {{detail}}.",
       "providerRetryLastError": "Letzter Fehler: {{detail}}.",
@@ -1942,7 +2206,8 @@
       "usageLimitWindowWeeklyModel": "Wöchentliche Modellnutzung",
       "waitForBackgroundTasks": "Warten, bis die Hintergrundaufgaben abgeschlossen sind.",
       "waitForStart": "Warten, bis der Agent vollständig gestartet ist.",
-      "writeFailed": "Orca konnte diese Nachricht nicht an den Agenten übergeben, daher wurde sie nicht gesendet."
+      "writeFailed": "Orca konnte diese Nachricht nicht an den Agenten übergeben, daher wurde sie nicht gesendet.",
+      "pluginInputRequired": "{{agent}} wurde angehalten, weil das Plugin „{{plugin}}“ in einem Terminalbereich auf eine Eingabe wartet. Deaktiviere das Plugin für Chatsitzungen oder führe die Aufgabe in einem {{agent}}-Terminal aus."
     },
     "fileReader": {
       "copyReviewNotes": "Review-Notizen kopieren",
@@ -1992,8 +2257,7 @@
       "copyPathLabel": "Pfad der Markdown-Datei kopieren",
       "copySource": "Markdown-Quelltext kopieren",
       "discard": "Verwerfen",
-      "dismissKeyboard": "Tastatur ausblenden",
-      "dismissKeyboardHint": "Blendet die Bildschirmtastatur aus und lässt den Markdown-Editor geöffnet.",
+      "previewTruncated": "Vorschau gekürzt.",
       "readOnly": "Schreibgeschützt"
     },
     "nativeChatAttachActions": {
@@ -2042,7 +2306,8 @@
       "promptUnconfirmed": "Der Agent wurde gestartet, aber der Versand des Prompts konnte nicht bestätigt werden."
     },
     "prActionsEngine": {
-      "mergeFailed": "Pull Request konnte nicht gemergt werden."
+      "mergeFailed": "Pull Request konnte nicht gemergt werden.",
+      "refreshFailed": "Pull Request konnte nicht aktualisiert werden."
     },
     "prAiTriageLaunch": {
       "agentStarted": "Agent gestartet",
@@ -2075,8 +2340,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "Befehle können nicht in einer Nachricht in der Warteschlange gespeichert werden.",
-      "editing": "Nachricht wird bearbeitet",
-      "editingAttributed": "Nachricht wird bearbeitet · {{attribution}}"
+      "editing": "Nachricht wird bearbeitet"
     },
     "quickCommandEditorForm": {
       "action": "Aktion",
@@ -2173,7 +2437,8 @@
       "terminalName": "Terminal-Name",
       "unsavedMarkdown": "Ungespeicherte Markdown-Änderungen",
       "urlPrompt": "URL eingeben oder für einen neuen Tab leer lassen.",
-      "allowAutoClose": "Automatisches Schließen erlauben"
+      "allowAutoClose": "Automatisches Schließen erlauben",
+      "renameTerminalFailed": "Das Terminal konnte nicht umbenannt werden. {{reason}}"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "Auf dem Host dieses Arbeitsbereichs wurde kein aktivierter KI-Agent erkannt.",
@@ -2201,11 +2466,7 @@
     "terminalInputActions": {
       "attachFileHint": "Lange drücken, um stattdessen eine Datei anzuhängen",
       "attachPhoto": "Foto anhängen",
-      "sendingImage": "Bild wird gesendet",
-      "startDictation": "Diktat starten",
-      "startingDictation": "Diktat wird gestartet",
-      "stopDictation": "Diktat beenden",
-      "transcribingDictation": "Diktat wird transkribiert"
+      "sendingImage": "Bild wird gesendet"
     },
     "terminalLiveInputStatus": {
       "listening": "Hört zu",
@@ -2214,8 +2475,6 @@
       "processing": "Wird verarbeitet",
       "releaseMicHint": "Zum Stoppen Mikrofon loslassen",
       "startingMic": "Mikrofon wird gestartet",
-      "stopHint": "Zum Stoppen Mikrofon antippen",
-      "transcribing": "Transkription auf dem Desktop",
       "uploadingImage": "Bild wird auf den Host hochgeladen",
       "uploadingImageTitle": "Bild wird hochgeladen"
     },
@@ -2309,7 +2568,8 @@
       "insertFailed": "Diktat konnte nicht eingefügt werden",
       "insertFailedCopied": "Diktat konnte nicht eingefügt werden und wurde daher in die Zwischenablage kopiert",
       "inserted": "Diktat eingefügt",
-      "stoppedAfterSilence": "Nach einer Minute Stille beendet"
+      "stoppedAtCloudLimit": "Diktat am 10-Minuten-Limit der Cloud gestoppt.",
+      "stoppedAfterSilenceSeconds": "Nach {{seconds}} Sekunden Stille gestoppt"
     },
     "useNativeChatStop": {
       "stopNotSent": "Stoppbefehl nicht gesendet",
@@ -2471,14 +2731,6 @@
       "saveFailedTitle": "Layout konnte nicht gespeichert werden",
       "saveFailedMessage": "Dieses Layout gilt vorerst. Wähle es erneut aus, um das Speichern zu wiederholen."
     },
-    "terminalArrowPad": {
-      "label": "Pfeiltasten",
-      "hint": "Eine Seite antippen für einen Tastendruck oder gedrückt halten und ziehen zum Wiederholen",
-      "up": "Nach oben",
-      "down": "Nach unten",
-      "left": "Nach links",
-      "right": "Nach rechts"
-    },
     "terminalMoreKeys": {
       "sendKey": "{{label}} senden",
       "paste": "Einfügen",
@@ -2638,6 +2890,8 @@
       "dictationHeading": "DIKTAT",
       "dictationMode": "Diktatmodus",
       "dictationModeDescription": "Umschalten: einmal zum Starten und erneut zum Stoppen drücken. Gedrückt halten: währenddessen diktieren.",
+      "dictationModeWithAutoDescription": "Automatisch: Tippen zum Starten und Stoppen; am Computer nimmt das Gedrückthalten des Kürzels auf, bis Sie loslassen. Gedrückt halten: währenddessen diktieren. Umschalten: einmal zum Starten und erneut zum Stoppen drücken.",
+      "autoMode": "Automatisch",
       "downloadFailed": "Download fehlgeschlagen",
       "enableDictation": "Diktat aktivieren",
       "holdMode": "Gedrückt halten",
@@ -2653,6 +2907,20 @@
     },
     "agents": {
       "permissionOwnAll": "Eigene Einstellungen der Agenten"
+    },
+    "voiceTranscribeOn": {
+      "heading": "TRANSKRIBIEREN AUF",
+      "description": "Was dieses Telefon hört, bleibt auf ihm. Automatisch nutzt deinen Computer, wenn dieses Telefon nicht transkribieren kann.",
+      "automatic": "Automatisch",
+      "phone": "Dieses Telefon",
+      "computer": "Computer",
+      "phoneReady": "Auf diesem Telefon bereit",
+      "phoneNeedsDownload": "Sprachdownload erforderlich",
+      "phoneDownloading": "Wird geladen… {{progress}} %",
+      "phoneUnsupported": "Auf diesem Telefon nicht verfügbar",
+      "download": "Für dieses Telefon herunterladen",
+      "downloadSize": "Etwa {{size}} MB",
+      "phoneChecking": "Wird geprüft…"
     }
   },
   "sourceControl": {
@@ -3096,6 +3364,21 @@
     }
   },
   "tasks": {
+    "hostedMerge": {
+      "merged": "Zusammengeführt",
+      "closed": "Geschlossen",
+      "conflicts": "Konflikte",
+      "behind": "Nicht aktuell",
+      "blocked": "Blockiert",
+      "checksPending": "Prüfungen ausstehend",
+      "ableToMerge": "Zusammenführen möglich",
+      "unknown": "Unbekannt"
+    },
+    "pagination": {
+      "pageUnreachable": "Seite {{page}} liegt außerhalb des Bereichs der GitHub-Suche.",
+      "loadPageFailed": "Seite {{page}} konnte nicht von GitHub geladen werden.",
+      "noMoreResults": "Keine weiteren Ergebnisse auf Seite {{page}}."
+    },
     "composerSource": {
       "baseFailed": "Der Basis-Branch konnte nicht ermittelt werden.",
       "forkPushWarning": "Bei diesem PR ist „Allow edits from maintainers“ deaktiviert; GitHub könnte einen Push zum Fork ablehnen."
@@ -3145,7 +3428,8 @@
       "moreFields_one": "+{{count}} Feld",
       "moreFields_other": "+{{count}} Felder",
       "noItems": "Keine Projekteinträge",
-      "pullRequestSubtitle": "Pull Request · {{repository}}{{number}}"
+      "pullRequestSubtitle": "Pull Request · {{repository}}{{number}}",
+      "linkedPullRequestsOverflow": "+{{count}} weitere"
     },
     "githubProjectPickers": {
       "add": "Hinzufügen",
@@ -3198,7 +3482,6 @@
       "pipelineJobs_one": "{{count}} Job",
       "pipelineJobs_other": "{{count}} Jobs",
       "rerunAll": "Alle erneut ausführen",
-      "rerunFailed": "Fehlgeschlagene erneut ausführen",
       "subIssueTitle": "Titel des Unter-Issues",
       "subIssues": "Untergeordnete Issues"
     },
@@ -3429,7 +3712,6 @@
       "requestReview": "Review anfordern",
       "requestReviewers": "Prüfer anfordern",
       "rerunAll": "Alle erneut ausführen",
-      "rerunFailed": "Fehlgeschlagene erneut ausführen",
       "reviewers": "Prüfer",
       "viewFile": "Anzeigen"
     },
@@ -3838,6 +4120,8 @@
       "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "Das ursprüngliche Agentenfenster ist nicht verfügbar. Gespeicherte Ausgaben bleiben hier.",
       "openAgent": "Agenten öffnen",
       "retryHistory": "Verlauf erneut laden",
+      "fullOutputUnavailable": "Die vollständige Ausgabe konnte nicht geladen werden.",
+      "retryFullOutput": "Erneut versuchen",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "Keine passenden Ausführungen im geladenen Verlauf. Lade weitere, um fortzufahren.",
       "noMatchingRunsYet": "Noch keine passenden Ausführungen.",
       "runSummary": "{{title}}, {{status}}, {{date}}",
@@ -3878,9 +4162,12 @@
       "unknownResult": "Unbekanntes Ergebnis",
       "notReported": "Nicht gemeldet",
       "searchOptions": "Optionen suchen",
-      "scheduleAgentWorkAndViewRuns": "Agentenarbeit planen und Ausführungen ansehen",
       "task": "Aufgabe",
-      "review": "Prüfen"
+      "review": "Prüfen",
+      "discardChangesTitle": "Änderungen verwerfen?",
+      "discardChangesMessage": "Nicht gespeicherte Änderungen an dieser Automatisierung gehen verloren.",
+      "discard": "Verwerfen",
+      "keepEditing": "Weiter bearbeiten"
     },
     "orphanIssues": {
       "hostReselection": "Bearbeite diese Automatisierung und wähle ihren Host erneut aus, bevor du sie ausführst.",
@@ -3898,6 +4185,7 @@
       "noRunnableHost": "Dieser Automatisierung fehlt ein Host zur Ausführung.",
       "wslMoveInProgress": "Das Projekt dieser Automatisierung wird auf seinen WSL-Host verschoben. Deshalb hat Orca diese Ausführung übersprungen. Die Ausführungen werden nach Abschluss des Verschiebens fortgesetzt.",
       "wslMoveOwnedByHost": "Das Projekt dieser Automatisierung läuft jetzt auf seinem WSL-Host, der die Automatisierung dort ausführt. Orca führt diese lokale Kopie nicht mehr aus.",
+      "managedHostServer": "Migration zu {{host}} erforderlich",
       "missedGraceWindow": "Bei der nächsten Prüfung durch Orca war die Nachholfrist für diese verpasste Ausführung bereits abgelaufen.",
       "targetMissing": "Der Host der Automatisierung ist nicht mehr registriert. Daher gibt es für diese Automatisierung keinen Ausführungsort.",
       "targetReplaced": "Der Host der Automatisierung wurde entfernt und erneut registriert. Daher muss diese Automatisierung vor der Ausführung erneut zugeordnet werden.",

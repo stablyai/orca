@@ -1,15 +1,21 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { create } from 'zustand'
-import { getConnectionIdForFile } from '@/lib/connection-context'
-import { editorTabFileAccess } from '@/lib/local-file-access'
-import { getRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
-import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
+import { getConnectionIdForFile } from '@/lib/workspace/ownership/connection-context'
+import { editorTabFileAccess } from '@/lib/files/access/local-file-access'
+import { getRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
+import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'
 import { useAppStore } from '@/store'
-import type { OpenFile } from '@/store/slices/editor'
-import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
-import { editorModelSiblingTabs, setEditorDiskBaseline } from './editor-save-disk-precondition'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import { getDiskBaselineSignature } from '../../../../shared/file-write/disk-baseline-signature'
+import {
+  editorModelSiblingTabs,
+  setEditorDiskBaseline
+} from './save/queue/editor-save-disk-precondition'
 import type { CustomEditorHost } from './plugin-custom-editor-host-types'
-import { ORCA_EDITOR_FILE_SAVED_EVENT, type EditorFileSavedDetail } from './editor-autosave'
+import {
+  ORCA_EDITOR_FILE_SAVED_EVENT,
+  type EditorFileSavedDetail
+} from './autosave/editor-autosave'
 
 /**
  * A write to the file on disk while a custom editor tab holds unsaved edits, merged by the editor

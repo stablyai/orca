@@ -1,5 +1,5 @@
 import { useId } from 'react'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid } from '../../../../shared/non-secure-context-uuid'
 import { Plus, X } from 'lucide-react'
 import type { RuntimeEdgeAuthHeader } from '../../../../shared/runtime-edge-auth-types'
 import { normalizeEndpointAuthHeaders } from '../../../../shared/network/endpoint-auth-headers'
@@ -10,7 +10,7 @@ import { Label } from '../ui/label'
 
 export type RuntimeEdgeAuthDraftRow = RuntimeEdgeAuthHeader & { id: string }
 export function newRuntimeEdgeAuthRow(): RuntimeEdgeAuthDraftRow {
-  return { id: createBrowserUuid(), name: '', value: '' }
+  return { id: createNonSecureContextUuid(), name: '', value: '' }
 }
 export function RuntimeEdgeAuthFields({
   rows,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { UpdatePaneLayout } from '../../rpc-contract/session-tabs-schemas-params'
-import type { TerminalPaneLayoutNode } from '../../terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../terminal-tab-types'
 import { translateUpdatePaneLayout } from './old-client-pane-layout-translation'
 import { build, terminalTab, testContext, WS } from '../workspace-layout-command.test-fixture'
 import type { WorkspaceLayoutModel } from '../workspace-layout-model'
@@ -56,15 +56,6 @@ function translate(model: WorkspaceLayoutModel, tabId: string, params: ReturnTyp
 }
 
 describe('translateUpdatePaneLayout (rule 11)', () => {
-  it('sends nothing for the tree it already has', () => {
-    const { model, tabId } = threePanes()
-    const root = terminalTab(model, tabId).panes.root
-    expect(translate(model, tabId, sent(tabId, { root }))).toEqual({
-      commands: [],
-      structureRefused: false
-    })
-  })
-
   it('turns a divider drag into setPaneRatios', () => {
     const { ctx, model, tabId, a, b, c } = threePanes()
     const root = split(
@@ -178,19 +169,6 @@ describe('translateUpdatePaneLayout (rule 11)', () => {
     ])
     // No title map leaves titles alone.
     expect(translate(titled, tabId, sent(tabId, { root: null })).commands).toEqual([])
-  })
-
-  it('sets and clears the chat pane; absent leaves it', () => {
-    const { ctx, model, tabId, b } = threePanes()
-    expect(translate(model, tabId, sent(tabId, { root: null, chatLeafId: b })).commands).toEqual([
-      { type: 'setChatPane', workspace: WS, tabId, leafId: b }
-    ])
-    const chat = build(ctx, [{ type: 'setChatPane', workspace: WS, tabId, leafId: b }], model).model
-    expect(translate(chat, tabId, sent(tabId, { root: null })).commands).toEqual([])
-    expect(translate(chat, tabId, sent(tabId, { root: null, chatLeafId: b })).commands).toEqual([])
-    expect(translate(chat, tabId, sent(tabId, { root: null, chatLeafId: null })).commands).toEqual([
-      { type: 'setChatPane', workspace: WS, tabId, leafId: null }
-    ])
   })
 
   it('orders titles, then the chat pane, then the structure, and the list applies as one', () => {

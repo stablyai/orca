@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  createHarnessStoreState,
-  loadIpcEventsHarness,
-  type HarnessStoreState
-} from './ipc-events-test-harness'
+import { loadIpcEventsHarness } from './ipc-events-test-harness'
+import { createHarnessStoreState, type HarnessStoreState } from './ipc-events-harness-store-state'
 import type * as CmdJRowIndexJump from '@/lib/cmd-j-row-index-jump'
 
 type CmdJRowIndexJumpModule = typeof CmdJRowIndexJump

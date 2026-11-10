@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createEnvironmentFromPairingOffer } from '../../../shared/runtime-environments'
+import { createEnvironmentFromPairingOffer } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { registerRuntimeEnvironmentEdgeAuthHandlers } from './runtime-environment-edge-auth-handlers'
 const dependencies = vi.hoisted(() => ({
   handlers: new Map<string, (...args: unknown[]) => unknown>(),
@@ -15,7 +15,7 @@ vi.mock('electron', () => ({
       dependencies.handlers.set(channel, fn)
   }
 }))
-vi.mock('../../../shared/runtime-environment-store', () => ({
+vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
   resolveEnvironment: dependencies.resolve
 }))
 vi.mock('../../credentials/runtime-edge-auth-store', () => ({

@@ -18,11 +18,11 @@ import {
 } from './editable-context-menu'
 import { createEditableContextMenuPopup } from './editable-context-menu-popup'
 import type { CreateMainWindowOptions, MainWindowLoadObserver } from './main-window-contracts'
-import { browserRouteWebContentsRegistry } from '../browser/browser-route-session-runtime'
+import { browserRouteWebContentsRegistry } from '../browser/routing/sessions/browser-route-session-runtime'
 import {
   attachBrowserClientPageRenderer,
   retireBrowserClientPageRenderer
-} from '../browser/browser-client-page-renderer-runtime'
+} from '../browser/client-pages/renderer/browser-client-page-renderer-runtime'
 import { registerRendererDocumentNavigation } from './renderer-document-navigation'
 import { createRendererRecoveryReloadWatchdog } from './renderer-recovery-reload-watchdog'
 import { createRendererLaunchFailureBackoff } from './renderer-launch-failure-backoff'

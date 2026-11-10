@@ -1,6 +1,6 @@
 import { getLegacyOpenCodeEnvKeysToDelete } from '../../opencode/legacy-shared-config-dir'
 import { restoreManagedDataAccountEnvironment } from '../../../shared/managed-data-account-environment'
-import { restoreOrStripOverlayEnv } from '../../../shared/agent-overlay-env'
+import { restoreOrStripOverlayEnv } from '../../../shared/agent-launch/startup/agent-overlay-env'
 import { delimiter } from 'node:path'
 import { dropInheritedOrcaFishHistory } from '../../pty/history/fish-history-session'
 import { removeAppImageRuntimeEnv } from '../../pty/shell-startup/appimage-terminal-env'
@@ -15,21 +15,22 @@ import { dropInheritedOrcaHistFile } from '../../pty/history/worktree-history-fi
 import {
   gitCredentialPromptGuardEnv,
   mergeGitConfigEnvProtocol
-} from '../../../shared/git-credential-prompt-env'
-import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../../shared/terminal-git-credential-guard'
+} from '../../../shared/git/commands/git-credential-prompt-env'
+import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../../shared/shell/launch/terminal-git-credential-guard'
 import {
   ORCA_IMAGE_PROTOCOL_ENV,
   ORCA_IMAGE_PROTOCOL_VALUE
-} from '../../../shared/terminal-image-protocol'
+} from '../../../shared/terminal/images/terminal-image-protocol'
 import {
   expandWindowsEnvironmentVariables,
   expandWindowsPathEnvironmentVariables
 } from '../../../shared/windows-environment-expansion'
-import { applyScrubSafeAgentEnvAliases } from '../../../shared/agent-hook-scrub-safe-env'
-import type { TuiAgent } from '../../../shared/tui-agent'
-import type { PtySubprocessOptions } from '../pty-subprocess'
+import { applyScrubSafeAgentEnvAliases } from '../../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import type { PtySubprocessOptions } from './pty-subprocess'
 import { REMOTE_VIEWER_CLIPBOARD_ENV } from '../../../shared/remote-viewer-clipboard-env'
 import { ORCAD_SERVER_LAUNCH_ENV_KEYS } from '../../../shared/orcad-server-launch-env'
+import { stripInheritedClaudeSessionEnv } from '../../../shared/agent-launch/startup/claude-parent-session-env'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -56,7 +57,7 @@ function composeGuardedDaemonGitConfigEnv(
   if (policy !== 'guard' && launchAgent === undefined) {
     return
   }
-  // Preserve the long-lived daemon’s inherited Git config while appending the guard.
+  // Apply the guard after the inherited-env merge so it reflects the pane's final askpass values.
   Object.assign(env, gitCredentialPromptGuardEnv(env, process.platform))
 }
 
@@ -186,6 +187,7 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
     [ORCA_IMAGE_PROTOCOL_ENV]: ORCA_IMAGE_PROTOCOL_VALUE
   } satisfies Record<string, string>
   stripLegacyTerminalShimEnv(env, process.platform)
+  stripInheritedClaudeSessionEnv(env, { launchEnv: opts.env, envToDelete: opts.envToDelete })
   composeGuardedDaemonGitConfigEnv(env, opts.env, opts.launchAgent)
   deleteRequestedDaemonEnvKeys(env, opts.envToDelete)
   if (opts.env?.TERM) {
@@ -227,8 +229,10 @@ export function rescrubDaemonPtyEnvironment(
 /** Shell preparation can restore ambient state, so pane isolation is enforced again here. */
 export function finalizeDaemonPtyEnvironment(
   env: Record<string, string>,
-  requestedEnv: Record<string, string> | undefined
+  requestedEnv: Record<string, string> | undefined,
+  envToDelete?: readonly string[]
 ): void {
+  stripInheritedClaudeSessionEnv(env, { launchEnv: requestedEnv, envToDelete })
   expandWindowsPathEnvironmentVariables(env)
   collapseWindowsPathEnvKeys(env, requestedEnv)
   const requestedPath = requestedEnv

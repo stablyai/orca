@@ -1,7 +1,7 @@
 export const DESKTOP_READ_WINDOW = 300
 export const UNFLUSHED_SETTLE_MS = 1_500
 
-import type { AgentType } from '../../shared/agent-status-types'
+import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
 import type {
   NativeChatMessage,
   NativeChatTurnLifecycle

@@ -1,3 +1,4 @@
+import { traceSessionSearch } from './session-search-trace'
 import type SyncDatabase from '../sqlite/sync-database'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import type {
@@ -5,8 +6,12 @@ import type {
   TranscriptReadOutcome,
   TranscriptSessionIdentity
 } from '../ai-vault/transcripts/session-transcript-consumers'
-import { SessionSearchWriteBuffer } from './session-search-write-buffer'
-import { EMPTY_CONTENT_HASH, foldContentHash } from './session-search-content-hash'
+import { SessionSearchWriteBuffer, SessionSearchStagingBudget } from './session-search-write-buffer'
+import {
+  EMPTY_CONTENT_HASH,
+  foldContentHash,
+  type SessionContentHash
+} from './session-search-content-hash'
 import type {
   SessionSearchFileIdentity,
   SessionSearchIndexedFile
@@ -38,6 +43,10 @@ type FileCursor = Pick<FileRow, 'session_row_id' | 'byte_offset'>
 export type SessionSearchFileWrite = {
   /** Commit named chunks at the ceiling; spill anonymous reads privately until atomic publication. */
   add(message: TranscriptMessage): void
+  failed?(): boolean
+  cancelled?(): boolean
+  drain?(): Promise<void>
+  addPrepared?(rows: Iterable<TranscriptMessage>, hash: SessionContentHash): void
   /** Atomically publish final rows, metadata, and cursor; return false if the source changed meanwhile. */
   commit(outcome: TranscriptReadOutcome): boolean
   /** Ends an incomplete or failed read without publishing its buffered rows. */
@@ -48,13 +57,15 @@ export class SessionSearchIndexWriter {
   private readonly records: SessionSearchFileRecords
   private readonly activeWrites = new Map<string, { removed: boolean; readers: number }>()
   private readonly pendingBuffers = new Set<SessionSearchWriteBuffer>()
+  private readonly staging = new SessionSearchStagingBudget()
   private closed = false
 
   constructor(
     private readonly db: SyncDatabase,
     private readonly commitChars: number = SESSION_SEARCH_COMMIT_CHARS,
     /** Schedule bounded orphan reclamation after commit; synchronous cleanup would enlarge the transaction. */
-    private readonly onOrphanedRows: () => void = () => undefined
+    private readonly onOrphanedRows: () => void = () => undefined,
+    private readonly onMessagesChanged: (delta: number) => void = () => undefined
   ) {
     this.records = new SessionSearchFileRecords(db)
   }
@@ -90,7 +101,9 @@ export class SessionSearchIndexWriter {
     candidate: SessionFileCandidate,
     mode: 'replace' | 'append',
     previousByteOffset: number,
-    identity?: () => TranscriptSessionIdentity | null
+    identity?: () => TranscriptSessionIdentity | null,
+    _indexing?: boolean,
+    _signal?: AbortSignal
   ): SessionSearchFileWrite | null {
     if (this.closed) {
       return null
@@ -119,9 +132,10 @@ export class SessionSearchIndexWriter {
     const cursor = this.cursor(path)
     this.db.exec('BEGIN IMMEDIATE')
     try {
-      this.dropSession(cursor?.session_row_id ?? null)
+      const removed = this.dropSession(cursor?.session_row_id ?? null)
       this.db.prepare('DELETE FROM files WHERE path = ?').run(path)
       this.db.exec('COMMIT')
+      this.onMessagesChanged(-removed)
     } catch (error) {
       this.db.exec('ROLLBACK')
       throw error
@@ -131,7 +145,7 @@ export class SessionSearchIndexWriter {
   close(): void {
     this.closed = true
     for (const buffer of this.pendingBuffers) {
-      buffer.clear()
+      buffer.release()
     }
     this.pendingBuffers.clear()
     for (const active of this.activeWrites.values()) {
@@ -154,7 +168,7 @@ export class SessionSearchIndexWriter {
   ): SessionSearchFileWrite {
     const db = this.db
     const path = candidate.file.path
-    const buffer = new SessionSearchWriteBuffer(this.commitChars)
+    const buffer = new SessionSearchWriteBuffer(this.commitChars, this.staging)
     this.pendingBuffers.add(buffer)
     // Recheck inside each transaction to prevent stale chunks resurrecting deleted or superseded rows.
     let expected = opened
@@ -169,7 +183,7 @@ export class SessionSearchIndexWriter {
         return
       }
       released = true
-      buffer.clear()
+      buffer.release()
       this.pendingBuffers.delete(buffer)
       lifetime.readers--
       if (lifetime.readers === 0 && this.activeWrites.get(path) === lifetime) {
@@ -197,90 +211,101 @@ export class SessionSearchIndexWriter {
     const write = (
       outcome: TranscriptReadOutcome | null,
       named: TranscriptSessionIdentity | null
-    ): boolean => {
-      const decoded = outcome?.session ?? null
-      db.exec('BEGIN IMMEDIATE')
-      try {
-        if (!current()) {
-          db.exec('ROLLBACK')
-          return false
-        }
-        if (outcome && !decoded) {
-          // Advance the cursor even without a decoded session to avoid rereading the same empty content.
-          this.dropSession(session)
-          session = null
-          this.records.upsertFile(candidate, outcome.byteOffset, null, outcome.prefixHash)
-        } else {
-          if (replaced) {
-            session ??= this.records.createSessionRow(candidate)
-          } else {
-            const previous = session
-            session = this.records.createSessionRow(candidate)
-            if (previous !== null) {
-              db.prepare('DELETE FROM sessions WHERE id = ?').run(previous)
-              orphaned = true
+    ): boolean =>
+      traceSessionSearch(
+        append ? 'commit' : 'replace',
+        () => {
+          const decoded = outcome?.session ?? null
+          db.exec('BEGIN IMMEDIATE')
+          let delta = 0
+          try {
+            if (!current()) {
+              db.exec('ROLLBACK')
+              return false
             }
-            replaced = true
+            if (outcome && !decoded) {
+              // Advance the cursor even without a decoded session to avoid rereading the same empty content.
+              delta -= this.dropSession(session)
+              session = null
+              this.records.upsertFile(candidate, outcome.byteOffset, null, outcome.prefixHash)
+            } else {
+              if (replaced) {
+                session ??= this.records.createSessionRow(candidate)
+              } else {
+                const previous = session
+                session = this.records.createSessionRow(candidate)
+                if (previous !== null) {
+                  db.prepare('DELETE FROM sessions WHERE id = ?').run(previous)
+                  orphaned = true
+                }
+                replaced = true
+              }
+              for (const row of buffer.rows()) {
+                insertSearchMessage(db, session, row)
+                delta++
+              }
+              if (decoded) {
+                this.records.updateSession(decoded, session, hash)
+              } else if (named) {
+                // Committed chunks need searchable identity even if the read never finishes.
+                this.records.updateProvisionalSession(session, named, candidate)
+              }
+              this.records.upsertFile(
+                candidate,
+                outcome ? outcome.byteOffset : PARTIAL_FILE_CURSOR,
+                session,
+                outcome?.prefixHash
+              )
+            }
+            db.exec('COMMIT')
+            this.onMessagesChanged(delta)
+          } catch (error) {
+            db.exec('ROLLBACK')
+            throw error
           }
-          for (const row of buffer.rows()) {
-            insertSearchMessage(db, session, row)
+          // Schedule reclamation only after commit; rolled-back generations remain live.
+          if (orphaned) {
+            orphaned = false
+            this.onOrphanedRows()
           }
-          if (decoded) {
-            this.records.updateSession(decoded, session, hash)
-          } else if (named) {
-            // Committed chunks need searchable identity even if the read never finishes.
-            this.records.updateProvisionalSession(session, named, candidate)
+          expected = {
+            session_row_id: session,
+            byte_offset: outcome ? outcome.byteOffset : PARTIAL_FILE_CURSOR
           }
-          this.records.upsertFile(
-            candidate,
-            outcome ? outcome.byteOffset : PARTIAL_FILE_CURSOR,
-            session,
-            outcome?.prefixHash
-          )
-        }
-        db.exec('COMMIT')
-      } catch (error) {
-        db.exec('ROLLBACK')
-        throw error
-      }
-      // Schedule reclamation only after commit; rolled-back generations remain live.
-      if (orphaned) {
-        orphaned = false
-        this.onOrphanedRows()
-      }
-      expected = {
-        session_row_id: session,
-        byte_offset: outcome ? outcome.byteOffset : PARTIAL_FILE_CURSOR
-      }
-      buffer.clear()
-      return true
-    }
+          buffer.clear()
+          return true
+        },
+        { append: append ? 1 : 0, replace: append ? 0 : 1, rescueRejections: 0 }
+      )
 
-    return {
-      add: (message) => {
-        if (released || fenced || this.closed) {
+    const stage = (rows: Iterable<TranscriptMessage>): void => {
+      if (released || fenced || this.closed) {
+        discard()
+        return
+      }
+      for (const row of rows) {
+        buffer.add(row)
+        if (!buffer.ready) {
+          continue
+        }
+        const named = identity?.() ?? null
+        if (!named && buffer.spillReady) {
+          buffer.spill()
+        } else if (named && !write(null, named)) {
+          fenced = true
           discard()
           return
         }
+      }
+    }
+    return {
+      add: (message) => {
         hash = foldContentHash(hash, [message])
-        // Split before checking the ceiling so one huge message cannot force an oversized named chunk.
-        for (const row of searchMessageRows([message])) {
-          buffer.add(row)
-          if (!buffer.ready && (!identity || !buffer.hasSpilled)) {
-            continue
-          }
-          const named = identity?.() ?? null
-          if (!buffer.ready && !named) {
-            continue
-          }
-          if (!named) {
-            buffer.spill()
-          } else if (!write(null, named)) {
-            fenced = true
-            discard()
-            return
-          }
-        }
+        stage(searchMessageRows([message]))
+      },
+      addPrepared: (rows, preparedHash) => {
+        hash = preparedHash
+        stage(rows)
       },
       commit: (outcome) => {
         try {
@@ -293,11 +318,12 @@ export class SessionSearchIndexWriter {
     }
   }
 
-  private dropSession(sessionRowId: number | null): void {
+  private dropSession(sessionRowId: number | null): number {
     if (sessionRowId === null) {
-      return
+      return 0
     }
-    deleteSearchMessages(this.db, sessionRowId)
+    const removed = deleteSearchMessages(this.db, sessionRowId)
     this.db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionRowId)
+    return removed
   }
 }

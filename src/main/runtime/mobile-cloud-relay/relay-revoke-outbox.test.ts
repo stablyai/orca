@@ -2,12 +2,12 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type * as SecureFileModule from '../../../shared/secure-file'
+import type * as SecureFileModule from '../../../shared/secure-storage/secure-file'
 import { RelayRevokeOutbox } from './relay-revoke-outbox'
 
 const secureFileMocks = vi.hoisted(() => ({ failWrites: false }))
 
-vi.mock('../../../shared/secure-file', async (importOriginal) => {
+vi.mock('../../../shared/secure-storage/secure-file', async (importOriginal) => {
   const actual = await importOriginal<typeof SecureFileModule>()
   return {
     ...actual,

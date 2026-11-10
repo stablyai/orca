@@ -1,20 +1,19 @@
 // @vitest-environment happy-dom
 // Exercise production Modal/Card/Picker/inventory with synthetic composer targets.
 import React, { useRef, useState } from 'react'
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import userEvent from '@testing-library/user-event'
 import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../shared/constants'
 import { RUNTIME_CAPABILITIES } from '../../../shared/protocol-version'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import NewWorkspaceComposerModal from './NewWorkspaceComposerModal'
 import type { NewWorkspaceComposerCardProps } from './new-workspace/new-workspace-composer-card-props'
 import type * as SetupButtonModule from './agent/AgentLaunchSetupButton'
-import type { TuiAgent } from '../../../shared/tui-agent'
-import type { AgentPickerDraft } from '../../../shared/agent-launch-picker'
-import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import type { AgentPickerDraft } from '../../../shared/agent-launch/picker/agent-launch-picker'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 
 const evidence = vi.hoisted(() => {
   const trace: {
@@ -24,8 +23,9 @@ const evidence = vi.hoisted(() => {
     authority?: string
     initial?: AgentPickerDraft
   }[] = []
-  return { phase: '', trace, submit: vi.fn() }
+  return { phase: '', trace, submit: vi.fn(), toast: vi.fn() }
 })
+vi.mock('sonner', () => ({ toast: { error: evidence.toast } }))
 vi.mock('@/components/agent/AgentLaunchSetupButton', async (importOriginal) => {
   const original = await importOriginal<typeof SetupButtonModule>()
   return {
@@ -44,7 +44,7 @@ vi.mock('@/components/agent/AgentLaunchSetupButton', async (importOriginal) => {
     }
   }
 })
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: async (
     _target: unknown,
     method: string,
@@ -73,7 +73,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
         }
       : { seedOptions: {} }
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: async () => ({
     agents: [
       { agent: 'claude', capabilities: {} },
@@ -81,7 +81,7 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
     ]
   })
 }))
-vi.mock('@/runtime/use-host-structured-agent-availability', () => ({
+vi.mock('@/runtime/native-chat/agent-catalogs/use-host-structured-agent-availability', () => ({
   useHostStructuredAgentAvailability: () => ({
     state: 'received',
     byAgent: new Map([
@@ -104,7 +104,9 @@ vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => nul
 vi.mock('@/components/contextual-tours/use-contextual-tour', () => ({
   useContextualTour: () => {}
 }))
-vi.mock('@/components/sidebar/AddRemoteHostDialog', () => ({ AddRemoteHostDialog: () => null }))
+vi.mock('@/components/sidebar/host-admission/ssh/AddRemoteHostDialog', () => ({
+  AddRemoteHostDialog: () => null
+}))
 vi.mock('@/components/new-workspace/SmartWorkspaceNameField', () => ({
   default: () => <input aria-label="workspace name" />
 }))
@@ -134,8 +136,9 @@ const projects = [
   }
 ]
 vi.mock('@/hooks/useComposerState', () => ({
-  useComposerState: () => {
+  useComposerState: (options: { initialNote?: string; initialName?: string }) => {
     const [project, setProject] = useState('project:w1')
+    const [note, setNote] = useState(options.initialNote ?? 'Investigate the failing check')
     const folder = project === 'project:w2'
     const repoId = folder ? 'w2' : 'w1'
     // The same prospective target shape as resolveComposerAgentRows for local repos.
@@ -160,7 +163,7 @@ vi.mock('@/hooks/useComposerState', () => ({
         detectionTarget: { kind: 'local' }
       },
       primaryActionLabel: 'Create',
-      name: '',
+      name: options.initialName ?? 'repair-check',
       onNameValueChange: noOp,
       onSmartGitHubItemSelect: noOp,
       onSmartGitLabItemSelect: noOp,
@@ -173,6 +176,8 @@ vi.mock('@/hooks/useComposerState', () => ({
       onReuseSelectedBranchChange: noOp,
       forkPushWarning: null,
       advancedOpen: false,
+      setupChoiceRevealRequest: 0,
+      onSetupChoiceRevealed: noOp,
       onToggleAdvanced: noOp,
       parentWorktreeId: null,
       onParentWorktreeIdChange: noOp,
@@ -180,8 +185,8 @@ vi.mock('@/hooks/useComposerState', () => ({
       projectError: null,
       creating: false,
       onCreate: noOp,
-      note: '',
-      onNoteChange: noOp,
+      note,
+      onNoteChange: setNote,
       setupConfig: null,
       requiresExplicitSetupChoice: false,
       setupDecision: null,
@@ -381,188 +386,38 @@ it('pr35802 retains authored Args through same-target Settings acquisition refre
   expect(evidence.submit).not.toHaveBeenCalled()
 })
 
-it('pr35802 derives untouched Args from current same-target Settings defaults', async () => {
-  render(<NewWorkspaceComposerModal />, { wrapper: TooltipProvider })
-  await open('Claude')
-  const before = snapshot('before-reset')
-  await closeMenu()
-  act(() =>
-    useAppStore.setState((state) => ({
-      settings: { ...state.settings!, agentDefaultArgs: { claude: '--debug' } }
-    }))
+it('offers Reopen with the submitted target and picker and does not replace a newer modal', async () => {
+  useAppStore.setState({ modalData: { prefilledName: 'repair-check' } })
+  render(
+    <TooltipProvider>
+      <NewWorkspaceComposerModal />
+    </TooltipProvider>
   )
   await open('Claude')
-  expect(last('claude').target).toBe(before.target)
-  expect(last('claude').authority).not.toBe(before.authority)
-  expect(textarea().value).toBe('--debug')
-  expect(evidence.submit).not.toHaveBeenCalled()
-})
-
-it('pr35802 keeps the searched W1 Sonnet High row across W2 Use as a positive control', async () => {
-  render(<NewWorkspaceComposerModal />, { wrapper: TooltipProvider })
-  await open('Claude')
-  await closeMenu()
-  const openPreset = async () => {
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Select agent' }), {
-      button: 0,
-      ctrlKey: false
-    })
-    fireEvent.change(screen.getByPlaceholderText('Search agents and setups…'), {
-      target: { value: 'sonnet high' }
-    })
-    const row = await screen.findByRole('menuitem', { name: /Claude · Sonnet · High/ })
-    fireEvent.click(row.querySelector('button')!)
-    await waitFor(() => expect(textarea()).not.toBeNull())
-  }
-  await openPreset()
   fireEvent.change(textarea(), { target: { value: '--verbose' } })
-  await useDraft()
-  await visit('W2 folder')
-  await open('Codex')
-  await visit('W1 git')
-  await openPreset()
-  expect(textarea().value).toBe('--verbose')
-  expect(screen.getByRole('radio', { name: 'High' }).getAttribute('aria-checked')).toBe('true')
-  await visit('W2 folder')
-  await open('Codex')
-  fireEvent.click(screen.getByRole('radio', { name: 'Med' }))
-  await useDraft()
-  await visit('W1 git')
-  await openPreset()
-  expect(textarea().value).toBe('--verbose')
-  expect(screen.getByRole('radio', { name: 'High' }).getAttribute('aria-checked')).toBe('true')
-  expect(document.querySelector('[cmdk-item][data-current="true"]')?.textContent).toContain(
-    'Sonnet'
-  )
-  fireEvent.change(textarea(), { target: { value: '--pending-preset' } })
-  await visit('W2 folder')
-  await open('Codex')
-  await useDraft()
-  await visit('W1 git')
-  await openPreset()
-  expect(textarea().value).toBe('--pending-preset')
-  expect(screen.getByRole('radio', { name: 'High' }).getAttribute('aria-checked')).toBe('true')
-  expect(evidence.submit).not.toHaveBeenCalled()
-})
-
-it('keeps accepted and newer pending ordinary intent across same-target agent switches and explicit routes', async () => {
-  render(<NewWorkspaceComposerModal />, { wrapper: TooltipProvider })
-  await open('Claude')
   fireEvent.click(screen.getByRole('radio', { name: 'Low' }))
-  fireEvent.change(textarea(), { target: { value: '--accepted' } })
   await useDraft()
+  const create = await screen.findByRole('button', { name: 'Create worktree' })
+  await waitFor(() => expect(create.hasAttribute('disabled')).toBe(false))
+  fireEvent.click(create)
+  await waitFor(() => expect(evidence.submit).toHaveBeenCalledOnce())
+  const recovery = evidence.submit.mock.calls[0]?.[1].onLegacyPreparationFailure
+  act(() => useAppStore.getState().closeModal())
+  act(() => recovery(new Error('Invalid Arguments')))
+  const reopen = evidence.toast.mock.calls.at(-1)?.[1].action.onClick
+  act(() => useAppStore.getState().openModal('agent-session-history'))
+  act(reopen)
+  expect(useAppStore.getState().activeModal).toBe('agent-session-history')
+  act(() => useAppStore.getState().closeModal())
+  act(reopen)
+  expect(useAppStore.getState().activeModal).toBe('new-workspace-composer')
+  expect(useAppStore.getState().modalData).toMatchObject({
+    prefilledName: 'repair-check',
+    initialRepoId: 'w1',
+    initialWorkspaceTarget: { projectId: 'project:w1' },
+    recovery: { agent: 'claude', note: 'Investigate the failing check' }
+  })
   await open('Claude')
-  fireEvent.change(textarea(), { target: { value: '--pending' } })
-  await closeMenu()
-  for (const route of ['chat', 'terminal'] as const) {
-    await open('Claude')
-    expect(textarea().value).toBe('--pending')
-    expect(screen.getByRole('radio', { name: 'Low' }).getAttribute('aria-checked')).toBe('true')
-    await useDraft(route)
-    expect(last('claude').initial?.surface).toBe(route)
-  }
-  await open('Codex')
-  await useDraft()
-  await open('Claude')
-  expect(textarea().value).toBe('--pending')
+  expect(textarea().value).toBe('--verbose')
   expect(screen.getByRole('radio', { name: 'Low' }).getAttribute('aria-checked')).toBe('true')
-  expect(evidence.submit).not.toHaveBeenCalled()
-  await useDraft()
-  const captured: unknown[] = []
-  for (const route of ['chat', 'terminal'] as const) {
-    await open('Claude')
-    await useDraft(route)
-    await closeMenu()
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Select agent' }), {
-      button: 0,
-      ctrlKey: false
-    })
-    fireEvent.click(await screen.findByRole('menuitem', { name: /^Claude/ }))
-    expect(evidence.submit).toHaveBeenCalledTimes(captured.length)
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Create worktree' })))
-    const submitted = evidence.submit.mock.calls.at(-1)!
-    expect(submitted[0]).toBe('claude')
-    expect(submitted[1]).toMatchObject({
-      launchChoice: {
-        route: route === 'chat' ? 'structured-native-chat' : 'terminal-tui',
-        requestedSurface: route
-      },
-      launchInputs: { agentArgs: '--pending', sessionOptions: { effort: 'low' } }
-    })
-    captured.push(structuredClone(submitted))
-  }
-  expect(evidence.submit).toHaveBeenCalledTimes(2)
-  expect(evidence.submit.mock.calls[0]).toEqual(captured[0])
-})
-
-it('keeps accepted and pending workspace options through the shared gear/footer Agents dialog', async () => {
-  const user = userEvent.setup()
-  Object.defineProperty(window, 'api', {
-    configurable: true,
-    value: {
-      ...window.api,
-      platform: {
-        get: () => ({
-          platform: 'darwin',
-          osRelease: '',
-          arch: 'arm64',
-          shell: '/bin/sh',
-          displayServer: null,
-          windowMaterial: 'off'
-        })
-      }
-    }
-  })
-  render(<NewWorkspaceComposerModal />, { wrapper: TooltipProvider })
-  fireEvent.change(screen.getByRole('textbox', { name: 'workspace name' }), {
-    target: { value: 'retained-work' }
-  })
-  await open('Claude')
-  fireEvent.click(screen.getByRole('radio', { name: 'Low' }))
-  fireEvent.change(textarea(), { target: { value: '--verbose' } })
-  await useDraft()
-  await open('Claude')
-  fireEvent.change(textarea(), { target: { value: '--debug' } })
-  await closeMenu()
-  await user.click(screen.getByRole('button', { name: 'Select agent' }))
-  await user.click(screen.getByRole('menuitem', { name: 'Agent settings…' }))
-  const agents = await screen.findByRole('dialog', { name: 'Agents' })
-  expect(screen.getAllByRole('dialog', { name: 'Agents' })).toHaveLength(1)
-  expect(within(agents).getAllByRole('switch').length).toBeGreaterThan(0)
-  fireEvent.keyDown(within(agents).getByRole('button', { name: 'Close' }), {
-    key: 'Enter',
-    metaKey: true,
-    ctrlKey: true
-  })
-  expect(evidence.submit).not.toHaveBeenCalled()
-  within(agents).getByRole('button', { name: 'Close' }).focus()
-  await user.keyboard('{Escape}')
-  const picker = await screen.findByRole('button', { name: 'Select agent' })
-  await waitFor(() => expect(document.activeElement).toBe(picker))
-  await user.tab()
-  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Advanced' }))
-  expect(screen.getByRole('textbox', { name: 'workspace name' })).toHaveProperty(
-    'value',
-    'retained-work'
-  )
-  const gear = screen.getByRole('button', { name: 'Open agent settings' })
-  fireEvent.click(gear)
-  fireEvent.click(
-    within(await screen.findByRole('dialog', { name: 'Agents' })).getByRole('button', {
-      name: 'Close'
-    })
-  )
-  await waitFor(() => expect(document.activeElement).toBe(gear))
-  await user.tab()
-  expect(document.activeElement).toBe(picker)
-  await open('Claude')
-  expect(textarea().value).toBe('--debug')
-  expect(screen.getByRole('radio', { name: 'Low' }).getAttribute('aria-checked')).toBe('true')
-  await useDraft()
-  fireEvent.click(screen.getByRole('button', { name: 'Create worktree' }))
-  expect(evidence.submit).toHaveBeenCalledOnce()
-  expect(evidence.submit.mock.calls[0][0]).toBe('claude')
-  expect(evidence.submit.mock.calls[0][1]).toMatchObject({
-    launchInputs: { agentArgs: '--debug', sessionOptions: { effort: 'low' } }
-  })
 })

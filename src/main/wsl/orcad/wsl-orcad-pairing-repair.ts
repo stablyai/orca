@@ -1,20 +1,20 @@
 /** Use the managed SSH repair gate for refused WSL enrollment: serialize, cap attempts and require the pinned host key. Read new offers inside the local distro. */
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   findWslHostDeployment,
   refreshWslHostPairing
-} from '../../../shared/runtime-environment-wsl-host-store'
-import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
+import type { KnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { readActiveManagedOrcadReadiness } from '../../managed-server/lifecycle/orcad-managed-bound-port'
 import {
   ManagedOrcadPairingRepairs,
   type ManagedOrcadPairingRepairDeps
 } from '../../managed-server/lifecycle/orcad-managed-pairing-repair'
-import type { WslOrcadHostTransport } from './wsl-orcad-host-transport'
+
 import { OrcadManagedPairingRepairFailedError } from '../../managed-server/lifecycle/orcad-managed-pairing-repair-failure'
 import { notifyManagedOrcadPairingRepaired } from '../../managed-server/lifecycle/orcad-managed-pairing-repaired-listener'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
-import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
+import { type WslOrcadHostTransport, createWslOrcadHostTransport } from './wsl-orcad-host-transport'
 import type { WslOrcadPairingRecovery } from './wsl-orcad-pairing-identity'
 
 type WslOrcadHostAccess = { target: WslOrcadHostTarget; connection: WslOrcadHostTransport }

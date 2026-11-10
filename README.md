@@ -17,13 +17,13 @@
 
 <p align="center">
   <strong>The AI Orchestrator for 100x builders.</strong><br/>
-  Run Codex, ClaudeCode, OpenCode or Pi side-by-side — each in its own worktree, tracked in one place.
+  Run Claude Code, Codex, and any other coding agent in parallel, each in its own worktree. Chat or terminal, on your laptop or in the cloud, with diffs, a browser, and a CLI in one app.
 </p>
 
 <h3 align="center"><a href="https://onorca.dev/download"><ins>Download Orca</ins></a></h3>
 
 <p align="center">
-  <img src="docs/assets/readme-hero.jpg" alt="Orca desktop app running agents in parallel worktrees, with the Orca mobile companion app in the corner" width="960" />
+  <img src="docs/assets/readme-hero.jpg" alt="Orca desktop app with a coordinator agent running worker agents in parallel workspaces, and the Orca mobile app in the corner" width="960" />
 </p>
 
 ## Features
@@ -32,15 +32,85 @@
 <tr>
 <td width="50%" valign="middle">
 
-### Mobile Companion
+### Chat or Terminal
 
-Monitor and steer your agents from your phone — get notified when an agent finishes and send follow-ups from anywhere.
+Run any agent in Chat UI or as the raw CLI, and move a conversation between the two without losing context.
+
+[Docs →](https://www.onorca.dev/docs/agents/native-chat)
+
+</td>
+<td width="50%">
+  <a href="https://www.onorca.dev/docs/agents/native-chat"><picture><source srcset="docs/assets/readme-features/chat-or-terminal.webp" type="image/webp"><img src="docs/assets/readme-features/chat-or-terminal.poster.jpg" alt="The same agent conversation in Chat UI and in the terminal, side by side" width="100%" /></picture></a>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
+
+### Orchestrate Agents
+
+Hand a big task to one agent. It splits the work, starts worker agents in their own workspaces, and brings their results back to you.
+
+[Docs →](https://www.onorca.dev/docs/cli/orchestration)
+
+</td>
+<td width="50%">
+  <a href="https://www.onorca.dev/docs/cli/orchestration"><picture><source srcset="docs/assets/readme-features/orchestration.webp" type="image/webp"><img src="docs/assets/readme-features/orchestration.poster.jpg" alt="A coordinator agent splitting a task between two worker agents and reporting their results" width="100%" /></picture></a>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
+
+### Run Anywhere
+
+Pair a Remote Orca Server, work on any SSH host, or give a worktree its own cloud VM. Your agents keep running when your laptop sleeps.
+
+[Docs →](https://www.onorca.dev/docs/ways-to-run)
+
+</td>
+<td width="50%">
+  <a href="https://www.onorca.dev/docs/ways-to-run"><picture><source srcset="docs/assets/readme-features/remote.webp" type="image/webp"><img src="docs/assets/readme-features/remote.poster.jpg" alt="Choosing which machine a new worktree runs on, from this computer to an SSH host or a per-workspace environment" width="100%" /></picture></a>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
+
+### Mobile App
+
+Pair Orca with the mobile app to get pinged when an agent needs you, reply in chat, and keep work moving on any of your machines when you are away from your desk.
 
 [iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Android APK](https://www.onorca.dev/download/android) · [Docs →](https://www.onorca.dev/docs/mobile)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/mobile"><picture><source srcset="docs/assets/feature-wall/mobile-companion-app-showcase.gif" type="image/gif"><img src="docs/assets/feature-wall/mobile-companion-app-showcase.jpg" alt="Orca desktop with the mobile companion app" width="100%" /></picture></a>
+  <a href="https://www.onorca.dev/docs/mobile"><picture><source srcset="docs/assets/readme-features/mobile-companion.webp" type="image/webp"><img src="docs/assets/readme-features/mobile-companion.poster.jpg" alt="The Orca mobile app getting a notification that Claude needs input, opening the session, and replying so the agent opens the PR" width="100%" /></picture></a>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
+
+### Review AI Output
+
+Review diffs, leave notes on exact changed lines, and send focused feedback back to an agent.
+
+[Docs →](https://www.onorca.dev/docs/review/annotate-ai-diff)
+
+</td>
+<td width="50%">
+  <a href="https://www.onorca.dev/docs/review/annotate-ai-diff"><picture><source srcset="docs/assets/readme-features/annotate-ai-diffs.webp" type="image/webp"><img src="docs/assets/readme-features/annotate-ai-diffs.poster.jpg" alt="A note on a changed diff line sent back to the agent" width="100%" /></picture></a>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
+
+### Git Integration
+
+Draft commit messages and pull requests from the diff, then send failing checks or PR review comments back to an agent to fix.
+
+[Docs →](https://www.onorca.dev/docs/review/commit-push)
+
+</td>
+<td width="50%">
+  <a href="https://www.onorca.dev/docs/review/commit-push"><picture><source srcset="docs/assets/readme-features/git-integration.webp" type="image/webp"><img src="docs/assets/readme-features/git-integration.poster.jpg" alt="Drafting a commit and pull request, then sending a review comment back to the agent" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -48,27 +118,13 @@ Monitor and steer your agents from your phone — get notified when an agent fin
 
 ### Parallel Worktrees
 
-Fan one prompt across five agents, each in its own isolated git worktree — compare the results and merge the winner.
+Quickly split tasks into isolated environments, so multiple agents can work side by side without interfering with each other.
 
 [Docs →](https://www.onorca.dev/docs/model/worktrees)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/model/worktrees"><picture><source srcset="docs/site/public/docs/tab-split.gif" type="image/gif"><img src="docs/site/public/docs/posters/tab-split.jpg" alt="Parallel worktree orchestration" width="100%" /></picture></a>
-</td>
-</tr>
-<tr>
-<td width="50%" valign="middle">
-
-### Terminal Splits
-
-Ghostty-class terminals with WebGL rendering, infinite splits, and scrollback that survives restarts.
-
-[Docs →](https://www.onorca.dev/docs/terminal)
-
-</td>
-<td width="50%">
-  <a href="https://www.onorca.dev/docs/terminal"><picture><source srcset="resources/onboarding/feature-wall/tile-02.webp" type="image/webp"><img src="resources/onboarding/feature-wall/tile-02.poster.jpg" alt="Terminal splits" width="100%" /></picture></a>
+  <a href="https://www.onorca.dev/docs/model/worktrees"><picture><source srcset="docs/assets/readme-features/parallel-worktrees.webp" type="image/webp"><img src="docs/assets/readme-features/parallel-worktrees.poster.jpg" alt="Creating a new worktree with its own agent next to other running worktrees" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -76,13 +132,13 @@ Ghostty-class terminals with WebGL rendering, infinite splits, and scrollback th
 
 ### Design Mode
 
-Click any UI element in a real Chromium window to send its HTML, CSS, and a cropped screenshot straight into your agent's prompt.
+Click any element in Orca's browser to copy its HTML, styles, and selector, then paste it into your agent's chat.
 
 [Docs →](https://www.onorca.dev/docs/browser/design-mode)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/browser/design-mode"><picture><source srcset="docs/site/public/docs/orca-design-mode.gif" type="image/gif"><img src="resources/onboarding/feature-wall/tile-05.poster.jpg" alt="Embedded browser and Design Mode" width="100%" /></picture></a>
+  <a href="https://www.onorca.dev/docs/browser/design-mode"><picture><source srcset="docs/assets/readme-features/design-mode.webp" type="image/webp"><img src="docs/assets/readme-features/design-mode.poster.jpg" alt="Picking a button in Orca's browser and sending it to the agent's chat" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -90,55 +146,13 @@ Click any UI element in a real Chromium window to send its HTML, CSS, and a crop
 
 ### GitHub &amp; Linear, Native
 
-Browse PRs, issues, and project boards in-app — open a worktree from any task and review without a context switch.
+See your GitHub and Linear tasks in one place, and start a workspace for each when you're ready to build.
 
 [Docs →](https://www.onorca.dev/docs/review/linear)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/review/linear"><picture><source srcset="resources/onboarding/feature-wall/tile-03.webp" type="image/webp"><img src="resources/onboarding/feature-wall/tile-03.poster.jpg" alt="GitHub and Linear task workflows in Orca" width="100%" /></picture></a>
-</td>
-</tr>
-<tr>
-<td width="50%" valign="middle">
-
-### SSH Worktrees
-
-Run agents on a beefy remote box with full file editing, git, and terminals — auto-reconnect and port forwarding included.
-
-[Docs →](https://www.onorca.dev/docs/ssh)
-
-</td>
-<td width="50%">
-  <a href="https://www.onorca.dev/docs/ssh"><picture><source srcset="resources/onboarding/feature-wall/tile-06.webp" type="image/webp"><img src="resources/onboarding/feature-wall/tile-06.poster.jpg" alt="Remote worktrees over SSH" width="100%" /></picture></a>
-</td>
-</tr>
-<tr>
-<td width="50%" valign="middle">
-
-### Annotate AI Diffs
-
-Drop comments on any diff line and ship them back to the agent — review, edit, and commit without leaving Orca.
-
-[Docs →](https://www.onorca.dev/docs/review/annotate-ai-diff)
-
-</td>
-<td width="50%">
-  <a href="https://www.onorca.dev/docs/review/annotate-ai-diff"><picture><source srcset="docs/site/public/docs/annotate-ai-diff.gif" type="image/gif"><img src="resources/onboarding/feature-wall/tile-08.poster.jpg" alt="Annotate AI-generated diffs" width="100%" /></picture></a>
-</td>
-</tr>
-<tr>
-<td width="50%" valign="middle">
-
-### Drag Files to Agents
-
-VS Code's editor with autosave everywhere — drag files or images straight into an agent prompt.
-
-[Docs →](https://www.onorca.dev/docs/editing/file-explorer)
-
-</td>
-<td width="50%">
-  <a href="https://www.onorca.dev/docs/editing/file-explorer"><picture><source srcset="resources/onboarding/feature-wall/tile-07.gif" type="image/gif"><img src="resources/onboarding/feature-wall/tile-07.poster.jpg" alt="Drag files and images into an agent prompt" width="100%" /></picture></a>
+  <a href="https://www.onorca.dev/docs/review/linear"><picture><source srcset="docs/assets/readme-features/github-linear-tasks.webp" type="image/webp"><img src="docs/assets/readme-features/github-linear-tasks.poster.jpg" alt="GitHub and Linear issues in Orca, with a workspace started from a Linear issue" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -146,25 +160,56 @@ VS Code's editor with autosave everywhere — drag files or images straight into
 
 ### Orca CLI
 
-Agents drive Orca too — script every workflow with `orca worktree create`, `snapshot`, `click`, and `fill`.
+Anything you can do in Orca, your agents can do too: create worktrees, start workers, drive the browser and desktop apps, and schedule automations, all from the command line.
 
 [Docs →](https://www.onorca.dev/docs/cli/overview)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/cli/overview"><picture><source srcset="resources/onboarding/feature-wall/tile-09.webp" type="image/webp"><img src="resources/onboarding/feature-wall/tile-09.poster.jpg" alt="Script Orca from the CLI" width="100%" /></picture></a>
+  <a href="https://www.onorca.dev/docs/cli/overview"><picture><source srcset="docs/assets/readme-features/orca-cli.webp" type="image/webp"><img src="docs/assets/readme-features/orca-cli.poster.jpg" alt="An agent running orca worktree create to start a worker in a new worktree" width="100%" /></picture></a>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
+
+### Plugins
+
+Themes, editors, languages, and panels from the community, installed in a click.
+
+[Browse plugins →](https://www.onorca.dev/plugins)
+
+</td>
+<td width="50%">
+  <a href="https://www.onorca.dev/plugins"><picture><source srcset="docs/assets/readme-features/plugins.webp" type="image/webp"><img src="docs/assets/readme-features/plugins.poster.jpg" alt="Installing the Orca Midnight theme from the plugin catalog" width="100%" /></picture></a>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
+
+### Split Anything
+
+Put agents, terminals, browsers, and diffs side by side in split panes shaped to the task.
+
+[Docs →](https://www.onorca.dev/docs/model/tabs-panes-splits)
+
+</td>
+<td width="50%">
+  <a href="https://www.onorca.dev/docs/model/tabs-panes-splits"><picture><source srcset="docs/assets/readme-features/split-anything.webp" type="image/webp"><img src="docs/assets/readme-features/split-anything.poster.jpg" alt="Dragging tabs into split panes with an agent, browser, terminal, and diff" width="100%" /></picture></a>
 </td>
 </tr>
 </table>
 
 **Also in the box:**
 
-- **[Quick open](https://www.onorca.dev/docs/model/quick-open)** — Search across worktrees, files, agents, commands, and repo context without leaving your flow.
-- **[Account switcher &amp; usage tracking](https://www.onorca.dev/docs/agents/usage-tracking)** — See Claude and Codex usage and rate-limit resets, and hot-swap accounts without re-logging in.
-- **[Rich repo previews](https://www.onorca.dev/docs/editing/markdown)** — Preview Markdown, images, PDFs, and repo docs in the workspace.
-- **[Computer Use](https://www.onorca.dev/docs/cli/computer-use)** — Let agents operate desktop apps and visible UI when a workflow needs real interaction.
-- **[Notifications and unread state](https://www.onorca.dev/docs/notifications)** — Know when an agent finishes or needs attention, then mark threads unread to come back later.
-- **And many, many more** — we ship daily, so this list is perpetually behind. The [changelog](https://github.com/stablyai/orca/releases) is the real feature list.
+- **[Drag Files to Agents](https://www.onorca.dev/docs/editing/file-explorer)**: drag files from the explorer, or images from your desktop, straight into an agent's prompt.
+- **[Jump Anywhere](https://www.onorca.dev/docs/model/quick-open)**: one shortcut jumps to any workspace or tab across every repo and host.
+- **[Rich Previews](https://www.onorca.dev/docs/editing/viewers)**: open images, PDFs, and Markdown right in the workspace, next to the agent that made them.
+- **[Mobile Emulator](https://www.onorca.dev/docs/cli/overview#mobile-emulator)**: run an iOS Simulator or Android emulator beside your agent, and let it tap, type, and check its own work.
+- **[Dictation](https://www.onorca.dev/docs/settings#voice)**: press a shortcut and talk. Orca types what you say into the agent's prompt or terminal.
+- **[Usage &amp; Accounts](https://www.onorca.dev/docs/agents/usage-tracking)**: see how much of your agent limits you've used and when they reset, and switch accounts without logging out.
+- **[Automations](https://www.onorca.dev/docs/cli/automations)**: schedule prompts to run on any repo: nightly dependency bumps, weekly triage, flaky-test sweeps.
+- **[Computer Use](https://www.onorca.dev/docs/cli/computer-use)**: when there's no CLI or API, agents can see and drive desktop apps and external browsers.
+- **And many, many more**: we ship daily, so this list is perpetually behind. The [changelog](https://github.com/stablyai/orca/releases) is the real feature list.
 
 ---
 
@@ -227,12 +272,14 @@ _Or via a package manager:_
 brew install --cask stablyai/orca/orca
 # Upgrade an existing install
 brew upgrade --cask stablyai/orca/orca
+# Release candidates (conflicts with the stable cask; uninstall it first)
+brew install --cask stablyai/orca/orca@rc
 
 # Arch Linux (AUR) — or stably-orca-git to build from source
 yay -S stably-orca-bin
 ```
 
-### Mobile Companion — iOS, Android
+### Mobile App — iOS, Android
 
 Pair with your desktop app to monitor and steer your agents from your phone.
 
@@ -245,9 +292,9 @@ Pair with your desktop app to monitor and steer your agents from your phone.
 
 - **Discord:** Join the community on **[Discord](https://discord.gg/fzjDKHxv8Q)**.
 - **Twitter / X:** Follow **[@orca_build](https://x.com/orca_build)** for updates and announcements.
-- **WeChat:** Scan to join the Orca community WeChat group.
+- **WeChat:** Scan to join an Orca community WeChat group.
 
-  <img src="docs/assets/wechat-qr-group14.jpg" alt="WeChat QR code for the Orca community" width="160" />
+  <img src="docs/assets/wechat-qr.jpg" alt="WeChat QR code for the Orca community" width="160" />
 
 - **Feedback &amp; Ideas:** We ship fast. Missing something? [Request a new feature](https://github.com/stablyai/orca/issues).
 - **Privacy:** See the [privacy &amp; telemetry docs](https://www.onorca.dev/docs/telemetry) for what anonymous usage data Orca collects and how to opt out.
@@ -259,11 +306,8 @@ Pair with your desktop app to monitor and steer your agents from your phone.
 
 Want to contribute or run locally? See our [CONTRIBUTING.md](.github/CONTRIBUTING.md) guide.
 
-The relay that pairs the mobile app with a desktop host is also in this repository under
-[`cloud/`](cloud/README.md), with a separate pnpm workspace and setup guide.
-
 <a href="https://github.com/stablyai/orca/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=stablyai/orca" alt="Orca contributors" />
+  <img src="https://contrib.rocks/image?repo=stablyai/orca&max=500&columns=30" alt="Orca contributors" />
 </a>
 
 <p align="center">

@@ -1,7 +1,7 @@
-import { automationRequiresHostReselection } from '../../shared/automation-repo-target'
-import type { Automation } from '../../shared/automations-types'
+import { automationRequiresHostReselection } from '../../shared/automations/ownership/automation-repo-target'
+import type { Automation } from '../../shared/automations/automation-definition'
 import type { SshTarget } from '../../shared/ssh-types'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
 import { parseExecutionHostId } from '../../shared/execution-host'
@@ -9,12 +9,12 @@ import {
   resolveAutomationWorkspaceSshTargetId,
   resolveAutomationWorkspaceHost,
   type AutomationWorkspaceSshPin
-} from '../../shared/automation-workspace-pin'
+} from '../../shared/automations/ownership/automation-workspace-pin'
 import {
   isWorkspaceSshPinRepinned,
   type SshTargetIdForGeneration
-} from '../../shared/automation-workspace-repin'
-import type { FolderWorkspaceHostState } from '../../shared/folder-workspace-execution-host'
+} from '../../shared/automations/ownership/automation-workspace-repin'
+import type { FolderWorkspaceHostState } from '../../shared/folder-workspaces/folder-workspace-execution-host'
 import {
   nextSshTargetGeneration,
   resolveSshTargetGenerationHighWaterMark,

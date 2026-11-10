@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import { z } from 'zod'
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
-import { getPreferredPairedRuntimeConnection } from '../../../shared/runtime-environments'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { getPreferredPairedRuntimeConnection } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { normalizeEndpointAuthHeaders } from '../../../shared/network/endpoint-auth-headers'
 import {
   clearRuntimeEdgeAuth,

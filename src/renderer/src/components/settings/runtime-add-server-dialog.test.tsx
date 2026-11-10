@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { encodePairingOffer } from '../../../../shared/pairing'
+import { encodePairingOffer } from '../../../../shared/remote-runtime/pairing/pairing'
 import { RuntimeAddServerDialog } from './runtime-environments/pairing/runtime-add-server-dialog'
 vi.mock('@/store', () => ({ useAppStore: () => [] }))
 afterEach(() => cleanup())

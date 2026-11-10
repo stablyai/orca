@@ -5,6 +5,7 @@ import type { RuntimeAccessGrant } from '../../../../../../shared/runtime-access
 import { Label } from '../../../ui/label'
 import { RuntimeAccessGrantList } from './RuntimeAccessGrantList'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { RuntimePairingGeneratorForm } from './RuntimePairingGeneratorForm'
 import {
   RUNTIME_PAIRING_LOOPBACK_ADDRESS,
@@ -13,15 +14,23 @@ import {
   runtimePairingLinkCache,
   runtimePairingReachForIntent,
   selectRuntimePairingIntent,
-  type RuntimePairingIntent,
-  type RuntimePairingUrlGeneratorProps
+  type RuntimePairingIntent
 } from './runtime-pairing-link-state'
+import { useRuntimePairingLinkExpiry } from './use-runtime-pairing-link-expiry'
+import { useRuntimePairingUrlCopy } from './use-runtime-pairing-url-copy'
+
+type RuntimePairingUrlGeneratorProps = {
+  framed?: boolean
+  showHeader?: boolean
+  showGeneratorForm?: boolean
+}
 
 export function RuntimePairingUrlGenerator({
   framed = true,
   showHeader = true,
   showGeneratorForm = true
 }: RuntimePairingUrlGeneratorProps): React.JSX.Element {
+  const t = useTranslate()
   const [networkInterfaces, setNetworkInterfaces] = useState<{ name: string; address: string }[]>(
     []
   )
@@ -39,34 +48,16 @@ export function RuntimePairingUrlGenerator({
   const [runtimePairingDeviceId, setRuntimePairingDeviceId] = useState<string | null>(
     runtimePairingLinkCache.runtimePairingDeviceId
   )
+  const [expiresAt, setExpiresAt] = useState(runtimePairingLinkCache.expiresAt)
   const [runtimeAccessGrants, setRuntimeAccessGrants] = useState<RuntimeAccessGrant[]>([])
   const [isLoadingAccessGrants, setIsLoadingAccessGrants] = useState(false)
   const [refreshingNetworkInterfaces, setRefreshingNetworkInterfaces] = useState(false)
   const [revokingGrantId, setRevokingGrantId] = useState<string | null>(null)
-  const [copiedTarget, setCopiedTarget] = useState<'web' | 'pairing' | null>(null)
   const [isGeneratingPairing, setIsGeneratingPairing] = useState(false)
   const networkInterfaceLoadIdRef = useRef(0)
   const accessGrantLoadIdRef = useRef(0)
-  const copiedTargetResetTimerRef = useRef<number | null>(null)
   const mountedRef = useMountedRef()
-
-  const clearCopiedTargetResetTimer = useCallback((): void => {
-    if (copiedTargetResetTimerRef.current === null) {
-      return
-    }
-    window.clearTimeout(copiedTargetResetTimerRef.current)
-    copiedTargetResetTimerRef.current = null
-  }, [])
-
-  const setContainerNode = useCallback(
-    (node: HTMLDivElement | null): void => {
-      // Cancel surface-owned copy timers when Settings detaches.
-      if (!node) {
-        clearCopiedTargetResetTimer()
-      }
-    },
-    [clearCopiedTargetResetTimer]
-  )
+  const { copiedTarget, copyGeneratedUrl, setContainerNode } = useRuntimePairingUrlCopy(mountedRef)
 
   const loadRuntimeAccessGrants = useCallback(
     async (options: { showToastOnError?: boolean } = {}): Promise<void> => {
@@ -173,6 +164,7 @@ export function RuntimePairingUrlGenerator({
       setWebClientUrl(null)
       setRuntimePairingDeviceId(null)
       setGeneratedAddress(null)
+      setExpiresAt(null)
     }
   }
 
@@ -197,7 +189,7 @@ export function RuntimePairingUrlGenerator({
           // Prefer specific exposure guidance after widening failure, with generic fallback for other unavailable cases (STA-2370).
           toast.error(
             result.guidance ??
-              translate(
+              t(
                 'auto.components.settings.RuntimePairingUrlGenerator.2752126f3e',
                 'Runtime pairing is unavailable.'
               )
@@ -209,23 +201,25 @@ export function RuntimePairingUrlGenerator({
         address,
         pairingUrl: result.pairingUrl,
         webClientUrl: result.webClientUrl,
-        deviceId: result.deviceId
+        deviceId: result.deviceId,
+        expiresAt: result.expiresAt ?? null
       })
       if (mountedRef.current) {
         setRuntimePairingUrl(result.pairingUrl)
         setWebClientUrl(result.webClientUrl)
         setRuntimePairingDeviceId(result.deviceId)
         setGeneratedAddress(address)
+        setExpiresAt(result.expiresAt ?? null)
       }
       await loadRuntimeAccessGrants()
       if (mountedRef.current) {
         toast.success(
           result.webClientUrl
-            ? translate(
+            ? t(
                 'auto.components.settings.RuntimePairingUrlGenerator.6dd594a507',
                 'Generated web client URL.'
               )
-            : translate(
+            : t(
                 'auto.components.settings.RuntimePairingUrlGenerator.11d5248e62',
                 'Generated pairing URL.'
               )
@@ -236,7 +230,7 @@ export function RuntimePairingUrlGenerator({
         toast.error(
           error instanceof Error
             ? error.message
-            : translate(
+            : t(
                 'auto.components.settings.RuntimePairingUrlGenerator.2ed55c841a',
                 'Failed to generate pairing URL.'
               )
@@ -256,7 +250,7 @@ export function RuntimePairingUrlGenerator({
       if (!result.revoked) {
         if (mountedRef.current) {
           toast.error(
-            translate(
+            t(
               'auto.components.settings.RuntimePairingUrlGenerator.d797f516b1',
               'Shared access was already revoked.'
             )
@@ -275,7 +269,7 @@ export function RuntimePairingUrlGenerator({
       }
       if (mountedRef.current) {
         toast.success(
-          translate(
+          t(
             'auto.components.settings.RuntimePairingUrlGenerator.9f8e037c4a',
             'Shared access revoked.'
           )
@@ -286,7 +280,7 @@ export function RuntimePairingUrlGenerator({
         toast.error(
           error instanceof Error
             ? error.message
-            : translate(
+            : t(
                 'auto.components.settings.RuntimePairingUrlGenerator.e8d83f2b0f',
                 'Failed to revoke shared access.'
               )
@@ -299,43 +293,12 @@ export function RuntimePairingUrlGenerator({
     }
   }
 
-  const copyGeneratedUrl = async (target: 'web' | 'pairing', value: string): Promise<void> => {
-    try {
-      await window.api.ui.writeClipboardText(value)
-      if (mountedRef.current) {
-        clearCopiedTargetResetTimer()
-        setCopiedTarget(target)
-        copiedTargetResetTimerRef.current = window.setTimeout(() => {
-          copiedTargetResetTimerRef.current = null
-          if (mountedRef.current) {
-            setCopiedTarget((current) => (current === target ? null : current))
-          }
-        }, 1400)
-        toast.success(
-          target === 'web'
-            ? translate(
-                'auto.components.settings.RuntimePairingUrlGenerator.13704d635e',
-                'Copied web client URL.'
-              )
-            : translate(
-                'auto.components.settings.RuntimePairingUrlGenerator.df0aa45a86',
-                'Copied pairing URL.'
-              )
-        )
-      }
-    } catch (error) {
-      if (mountedRef.current) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : translate(
-                'auto.components.settings.RuntimePairingUrlGenerator.d6c081adf4',
-                'Failed to copy URL.'
-              )
-        )
-      }
-    }
-  }
+  const linkExpiry = useRuntimePairingLinkExpiry({
+    expiresAt,
+    grantId: runtimePairingDeviceId,
+    grants: runtimeAccessGrants,
+    onExpired: () => void loadRuntimeAccessGrants()
+  })
 
   const containerClassName = framed
     ? 'space-y-3 rounded-lg border border-border/50 bg-muted/25 p-3'
@@ -373,13 +336,13 @@ export function RuntimePairingUrlGenerator({
       {showHeader ? (
         <div className="space-y-1">
           <Label id="runtime-share-server-label">
-            {translate(
+            {t(
               'auto.components.settings.RuntimePairingUrlGenerator.f8500e134a',
               'Share this Orca server'
             )}
           </Label>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.RuntimePairingUrlGenerator.ff80904fc4',
               'Create a revocable access grant for browser or desktop clients.'
             )}
@@ -398,6 +361,7 @@ export function RuntimePairingUrlGenerator({
           runtimePairingUrl={runtimePairingUrl}
           copiedTarget={copiedTarget}
           generatedAddress={generatedAddress}
+          linkExpiry={linkExpiry}
           onIntentChange={updateIntent}
           onSelectedAddressChange={updateSelectedAddress}
           onRefreshNetworkInterfaces={() => void loadNetworkInterfaces({ showToastOnError: true })}

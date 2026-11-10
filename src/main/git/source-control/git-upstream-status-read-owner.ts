@@ -1,4 +1,4 @@
-import type { GitUpstreamStatus } from '../../../shared/git-status-types'
+import type { GitUpstreamStatus } from '../../../shared/git/status/git-status-types'
 import type { GitPushTarget } from '../../../shared/worktree/types'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../../shared/in-flight-promise-dedupe'
 

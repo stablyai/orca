@@ -1,8 +1,8 @@
-import { cancelActiveWorktreeRemoval } from '@/store/active-worktree-deselection-intent'
-import type { WorktreeSlice } from '../../worktree-helpers'
+import { cancelActiveWorktreeRemoval } from '@/store/workspaces/selection/active-worktree-deselection-intent'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
-import { projectWorktreeTabModelReconciliation } from '../../tabs'
-import { moveFocusToRendererBeforeFocusedWebviewHidden } from '../../browser-webview-cleanup'
+import { projectWorktreeTabModelReconciliation } from '../../tabs/tabs-reconciliation'
+import { moveFocusToRendererBeforeFocusedWebviewHidden } from '../../../../components/browser-pane/host-guest/webview-registry'
 import { tabHasLivePty } from '../../../../../../shared/tab-has-live-pty'
 import { markInputQuietSchedulerInput, scheduleAfterInputQuiet } from '@/lib/input-quiet-scheduler'
 import {
@@ -10,7 +10,7 @@ import {
   ACTIVE_WORKTREE_TERMINAL_PREP_IDLE_TIMEOUT_MS,
   ACTIVE_WORKTREE_TERMINAL_PREP_INPUT_QUIET_MS
 } from '../listing/worktree-slice-constants'
-import { markWorktreeTabsForActivationSpawn } from '../../tabs/worktree-layout-lifecycle'
+import { markWorktreeTabsForActivationSpawn } from '../../tabs/worktree-terminal-tab-respawn'
 import {
   isWorkspaceKey,
   parseWorkspaceKey,

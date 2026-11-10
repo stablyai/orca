@@ -1,5 +1,5 @@
 import { translate } from '../i18n/mobile-i18n'
-import { endpointScheme } from './host-endpoint'
+import { endpointScheme } from './hosts/host-endpoint'
 
 import {
   endpointAuthOrigin,

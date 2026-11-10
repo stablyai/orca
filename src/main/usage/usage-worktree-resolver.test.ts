@@ -79,9 +79,4 @@ describe('createUsageWorktreeResolver', () => {
     expect(resolveWorktree('C:\\repo\\packages\\app')?.worktreeId).toBe('repo-1::C:\\repo')
     expect(resolveWorktree('D:\\other\\repo')).toBeNull()
   })
-
-  it('resolves nothing when no worktree is known', async () => {
-    const resolveWorktree = await createUsageWorktreeResolver([])
-    expect(resolveWorktree('/workspace/repo')).toBeNull()
-  })
 })

@@ -1,6 +1,7 @@
+import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../ai-vault-scan-cancellation'
 import { createHash } from 'node:crypto'
 import { readTranscriptSlice } from '../../native-chat/wsl-transcript-fs-access'
-import type { AiVaultSession } from '../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { parseAgentSessionFile } from '../session-scanner-agent-parser'
 import { consumeCompleteJsonlLines } from '../session-scanner-jsonl-reader'
 import type { ResumableSessionParseState, SessionFileCandidate } from '../session-scanner-types'
@@ -14,10 +15,10 @@ import {
   mergeSkippedTranscriptRecords,
   type SkippedTranscriptRecord
 } from './session-transcript-record-budget'
-import { throwIfAiVaultScanCancelled } from '../ai-vault-scan-cancellation'
 
 type TranscriptSessionEnrichment = {
   /** Complete consumer metadata before committing; the returned fold stays unmodified. */
+  indexing?: boolean
   sessionForConsumers?: (session: AiVaultSession | null) => Promise<AiVaultSession | null>
 }
 
@@ -89,6 +90,8 @@ export async function readResumableTranscript(
     !canResume && prefixHash ? nonEmpty(transcriptResumableOffsets(args.candidate)) : undefined
   channel.beginRead({
     candidate: args.candidate,
+    indexing: args.indexing,
+    signal: args.signal,
     mode: canResume ? 'append' : 'replace',
     previousByteOffset: startOffset,
     identity: () => state.identity?.() ?? null,
@@ -104,6 +107,7 @@ export async function readResumableTranscript(
         reached: (offset, digest) => channel.prefixReached(offset, digest)
       },
       onLine: (line) => state.consumeLine(line),
+      drain: () => channel.drain(),
       // Preserve `this` for parsers that implement these hooks as methods.
       onLineBytes: state.consumeLineBytes?.bind(state),
       shouldStop: state.shouldStop?.bind(state),
@@ -123,9 +127,10 @@ export async function readResumableTranscript(
       channel.mute(() => displayState.consumeLine(partialLine))
     }
 
-    const session = await displayState.finalize(args.platform)
+    throwIfAiVaultScanCancelled(args.signal)
+    const session = await displayState.finalize(args.platform, { signal: args.signal })
     const consumerSession = args.sessionForConsumers
-      ? await args.sessionForConsumers(session)
+      ? await waitForAiVaultScan(args.sessionForConsumers(session), args.signal)
       : session
     throwIfAiVaultScanCancelled(args.signal)
     channel.finishRead({
@@ -155,8 +160,10 @@ export async function readResumableTranscript(
       session: null,
       byteOffset: startOffset,
       incomplete: true,
-      cancelled: args.signal?.aborted === true
+      cancelled:
+        args.signal?.aborted === true || (error instanceof Error && error.name === 'AbortError')
     })
+    throwIfAiVaultScanCancelled(args.signal)
     throw error
   }
 }
@@ -177,7 +184,13 @@ export async function readWholeTranscript(
     args.stats.bytesRead += file.sizeBytes ?? 0
   }
   const channel = new TranscriptMessageChannel()
-  channel.beginRead({ candidate: args.candidate, mode: 'replace', previousByteOffset: 0 })
+  channel.beginRead({
+    candidate: args.candidate,
+    mode: 'replace',
+    previousByteOffset: 0,
+    indexing: args.indexing,
+    signal: args.signal
+  })
   try {
     const session = await parseAgentSessionFile(
       args.candidate,
@@ -187,7 +200,7 @@ export async function readWholeTranscript(
       args.onSkippedRecords
     )
     const consumerSession = args.sessionForConsumers
-      ? await args.sessionForConsumers(session)
+      ? await waitForAiVaultScan(args.sessionForConsumers(session), args.signal)
       : session
     throwIfAiVaultScanCancelled(args.signal)
     channel.finishRead({
@@ -201,8 +214,10 @@ export async function readWholeTranscript(
       session: null,
       byteOffset: 0,
       incomplete: true,
-      cancelled: args.signal?.aborted === true
+      cancelled:
+        args.signal?.aborted === true || (error instanceof Error && error.name === 'AbortError')
     })
+    throwIfAiVaultScanCancelled(args.signal)
     throw error
   }
 }
@@ -217,6 +232,9 @@ async function endsWithNewlineAt(
   offset: number,
   signal?: AbortSignal
 ): Promise<boolean> {
-  const slice = await readTranscriptSlice(path, offset - 1, 1, 'scan', signal)
+  const slice = await waitForAiVaultScan(
+    readTranscriptSlice(path, offset - 1, 1, 'scan', signal),
+    signal
+  )
   return slice.length === 1 && slice[0] === NEWLINE_BYTE
 }

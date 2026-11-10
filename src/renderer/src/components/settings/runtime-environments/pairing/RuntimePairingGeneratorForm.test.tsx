@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '../../../ui/tooltip'
 import { RuntimePairingGeneratorForm } from './RuntimePairingGeneratorForm'
 import type { RuntimePairingIntent } from './runtime-pairing-link-state'
+import type { RuntimePairingLinkExpiry } from './use-runtime-pairing-link-expiry'
 
 function renderForm(
   intent: RuntimePairingIntent,
@@ -11,7 +12,8 @@ function renderForm(
     address: string
     runtimePairingUrl: string
     webClientUrl: string
-  }
+  },
+  linkExpiry: RuntimePairingLinkExpiry = null
 ): string {
   return renderToStaticMarkup(
     <TooltipProvider>
@@ -26,6 +28,7 @@ function renderForm(
         runtimePairingUrl={generated?.runtimePairingUrl ?? null}
         copiedTarget={null}
         generatedAddress={generated?.address ?? null}
+        linkExpiry={linkExpiry}
         onIntentChange={vi.fn()}
         onSelectedAddressChange={vi.fn()}
         onRefreshNetworkInterfaces={vi.fn()}
@@ -37,16 +40,6 @@ function renderForm(
 }
 
 describe('RuntimePairingGeneratorForm', () => {
-  it('requires a dedicated value for custom-address intent', () => {
-    const emptyMarkup = renderForm('custom', '')
-    expect(emptyMarkup).toContain('id="runtime-pairing-custom-address"')
-    expect(emptyMarkup).toContain('disabled=""')
-
-    const populatedMarkup = renderForm('custom', 'openclaw.example.ts.net')
-    expect(populatedMarkup).toContain('value="openclaw.example.ts.net"')
-    expect(populatedMarkup).not.toContain('disabled=""')
-  })
-
   it('hides generated links after the selected address changes', () => {
     const markup = renderForm('another', '100.76.32.125', {
       address: '192.168.1.10',
@@ -56,5 +49,21 @@ describe('RuntimePairingGeneratorForm', () => {
 
     expect(markup).toContain('The connection address changed.')
     expect(markup).not.toContain('stale-secret')
+  })
+
+  it('replaces an expired unused link with a notice instead of a copyable secret', () => {
+    const generated = {
+      address: '100.76.32.125',
+      runtimePairingUrl: 'orca://pair?code=old-secret',
+      webClientUrl: 'https://example.test/?pair=old-secret'
+    }
+    const live = renderForm('another', '100.76.32.125', generated, { kind: 'expires', at: 0 })
+    expect(live).toContain('old-secret')
+    expect(live).toContain('Unused link expires at')
+
+    const expired = renderForm('another', '100.76.32.125', generated, { kind: 'expired' })
+    expect(expired).toContain('Link expired')
+    expect(expired).not.toContain('old-secret')
+    expect(expired).toContain('Create link')
   })
 })

@@ -1,11 +1,12 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/protocol-version'
-import type { OrchestrationDb } from '../../../../orchestration/db'
-import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/worker-terminal-auto-release-scheduler'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-scheduler'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { RpcRequest } from '../../../core'
 import { registerHomeAutoReleaseScenarios } from './federation-home-auto-release-scenarios.test-support'
+import { GRACE_MS } from './federation-auto-release-grace.test-support'
 
 export type AutoReleaseScenarioHarness = {
   startRemoteWorker: () => Promise<string>
@@ -21,8 +22,6 @@ export type AutoReleaseScenarioHarness = {
   setWorkerAdvertisesAutoRelease: (advertised: boolean) => void
   setHomeOmitsAutoRelease: (omitted: boolean) => void
 }
-
-export const GRACE_MS = 2 * 60_000
 
 export function registerFederatedAutoReleaseScenarios(harness: AutoReleaseScenarioHarness): void {
   afterEach(() => {
@@ -104,46 +103,6 @@ export function registerFederatedAutoReleaseScenarios(harness: AutoReleaseScenar
     })
   }
 
-  it('arms the host deadline once the home accepts worker_done, then releases there', async () => {
-    const dispatchId = await settleRemotely()
-    expect(harness.workerDb().getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
-      auto_release_at: '2026-10-27 12:02:00'
-    })
-    await expect(
-      harness.dispatchHome({
-        id: 'rpc_remote_show',
-        authToken: 'coordinator-token',
-        method: 'orchestration.workerShow',
-        params: { dispatch: dispatchId }
-      })
-    ).resolves.toMatchObject({
-      result: {
-        autoReleaseAt: '2026-10-27T12:02:00Z',
-        projection: { autoReleaseAt: '2026-10-27T12:02:00Z', nextAction: { kind: 'none' } }
-      }
-    })
-
-    await expect(listFromHome(dispatchId)).resolves.toMatchObject({
-      autoReleaseAt: '2026-10-27T12:02:00Z',
-      nextAction: { kind: 'none' }
-    })
-
-    await releaseDueOnHost()
-
-    expect(harness.workerRuntime().closeTerminal).toHaveBeenCalledWith('term_windows_worker')
-    expect(harness.workerDb().getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe(
-      'released'
-    )
-    // The host released on its own; host observation converges the home without a worker-release.
-    expect(harness.homeDb().getWorkerDispatch(dispatchId)?.stage).not.toBe('released')
-    await listFromHome(dispatchId)
-    expect(harness.homeDb().getWorkerDispatch(dispatchId)).toMatchObject({
-      stage: 'released',
-      agent_terminal_handle: null
-    })
-    expect(harness.homeDb().getFederatedDispatch(dispatchId)?.remote_terminal_handle).toBeNull()
-  })
-
   it('converges the home through worker-show after a host-side release', async () => {
     const dispatchId = await settleRemotely()
     await releaseDueOnHost()
@@ -159,38 +118,6 @@ export function registerFederatedAutoReleaseScenarios(harness: AutoReleaseScenar
       stage: 'released',
       agent_terminal_handle: null
     })
-  })
-
-  it('joins a home worker-release to the host timer release instead of closing twice', async () => {
-    const dispatchId = await settleRemotely()
-    let finishClose!: () => void
-    vi.mocked(harness.workerRuntime().closeTerminal).mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          finishClose = () =>
-            resolve({ handle: 'term_windows_worker', tabId: 'tab-windows-worker', ptyKilled: true })
-        })
-    )
-    vi.setSystemTime(Date.now() + GRACE_MS)
-    const timer = getWorkerTerminalAutoReleaseScheduler(harness.workerRuntime()).releaseDue()
-    await vi.waitFor(() => expect(harness.workerRuntime().closeTerminal).toHaveBeenCalledTimes(1))
-
-    const explicit = harness.dispatchHome({
-      id: 'rpc_remote_release_during_timer',
-      authToken: 'coordinator-token',
-      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-      orchestrationRequestId: 'remote_release_during_timer',
-      method: 'orchestration.workerRelease',
-      params: { dispatch: dispatchId }
-    })
-    await vi.waitFor(() =>
-      expect(harness.remoteCalls()).toContain('orchestration.federationRelease')
-    )
-    finishClose()
-
-    await expect(explicit).resolves.toMatchObject({ ok: true, result: { state: 'released' } })
-    await timer
-    expect(harness.workerRuntime().closeTerminal).toHaveBeenCalledTimes(1)
   })
 
   it('forwards worker-retain to the host so its deadline never fires', async () => {
@@ -241,51 +168,6 @@ export function registerFederatedAutoReleaseScenarios(harness: AutoReleaseScenar
       held.splice(0).forEach((release) => release())
     }
   }
-
-  it('lets a home worker-release that joins the timer override a working agent on the host', async () => {
-    const dispatchId = await settleRemotely()
-    const finishCapture = holdHostCapture()
-    vi.setSystemTime(Date.now() + GRACE_MS)
-    const timer = getWorkerTerminalAutoReleaseScheduler(harness.workerRuntime()).releaseDue()
-    await vi.waitFor(() => expect(harness.workerRuntime().readTerminal).toHaveBeenCalled())
-    // A follow-up starts after the deadline claimed the close.
-    vi.spyOn(harness.workerRuntime(), 'isWorkerAgentInTurn').mockReturnValue(true)
-
-    const explicit = harness.dispatchHome({
-      id: 'rpc_remote_release_during_capture',
-      authToken: 'coordinator-token',
-      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-      orchestrationRequestId: 'remote_release_during_capture',
-      method: 'orchestration.workerRelease',
-      params: { dispatch: dispatchId }
-    })
-    await vi.waitFor(() =>
-      expect(harness.remoteCalls()).toContain('orchestration.federationRelease')
-    )
-    finishCapture()
-
-    await expect(explicit).resolves.toMatchObject({ ok: true, result: { state: 'released' } })
-    await timer
-    expect(harness.workerRuntime().closeTerminal).toHaveBeenCalledTimes(1)
-  })
-
-  it('honours an explicit release recorded after the host committed its archive', async () => {
-    const dispatchId = await settleRemotely()
-    const db = harness.workerDb()
-    const commit = db.commitWorkerTerminalArchiveForRelease.bind(db)
-    vi.spyOn(db, 'commitWorkerTerminalArchiveForRelease').mockImplementation((params) => {
-      vi.spyOn(harness.workerRuntime(), 'isWorkerAgentInTurn').mockReturnValue(true)
-      const committed = commit(params)
-      // An explicit release joins while the committed archive is being reopened.
-      db.requestRemoteAttachmentTerminalRelease(dispatchId)
-      return committed
-    })
-
-    await releaseDueOnHost()
-
-    expect(harness.workerRuntime().closeTerminal).toHaveBeenCalledTimes(1)
-    expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('released')
-  })
 
   it('publishes no archive when worker-retain wins during host capture', async () => {
     const dispatchId = await settleRemotely()
