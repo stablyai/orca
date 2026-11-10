@@ -52,10 +52,21 @@ export function account(label) {
   return { email, password }
 }
 
+// Optional local copy of the staging (test env) PropelAuth API key, for shells without gcloud.
+export const API_KEY_FILE =
+  process.env.ORCA_STAGING_PROPELAUTH_KEY_FILE ??
+  join(homedir(), '.orca-secrets', 'staging-propelauth-api-key')
+
 let apiKey
 function propelAuthApiKey() {
-  // Read from the staging secret each run, kept in memory only.
-  apiKey ??= execFileSync(
+  if (!PROPELAUTH_URL.endsWith('.propelauthtest.com')) {
+    throw new Error('refusing: these scripts only talk to the PropelAuth test env')
+  }
+  if (!apiKey && existsSync(API_KEY_FILE)) {
+    apiKey = readFileSync(API_KEY_FILE, 'utf8').trim()
+  }
+  // Otherwise read the staging secret each run, kept in memory only.
+  apiKey ||= execFileSync(
     'gcloud',
     [
       'secrets',

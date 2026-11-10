@@ -15,9 +15,12 @@ Teams: Orca Staging Eval Team (`org_5cc9ceb6-3bc2-4259-8152-ea232e15ed16`) and A
 ## Secrets
 
 Passwords live only in `~/.orca-secrets/staging-test-accounts.env` (0600; override the path with
-`ORCA_STAGING_ACCOUNTS_FILE`). The scripts read the PropelAuth API key from the staging secret
-`propelauth-api-key` (GCP project `onorca-cloud-staging`) on each run and keep it in memory. They
-never print passwords, tokens or keys. Nothing secret is committed.
+`ORCA_STAGING_ACCOUNTS_FILE`). The scripts read the PropelAuth (test env) API key from
+`~/.orca-secrets/staging-propelauth-api-key` (0600; override with `ORCA_STAGING_PROPELAUTH_KEY_FILE`)
+when it exists. Otherwise they read the staging secret `propelauth-api-key` (GCP project
+`onorca-cloud-staging`) on each run, which needs a non-expired `gcloud auth login`. The key stays in
+memory. The scripts refuse to talk to anything but the PropelAuth test env, and they never print
+passwords, tokens or keys. Nothing secret is committed.
 
 ## Scripts
 
@@ -33,6 +36,15 @@ Playwright Chromium.
 - `node signin.mjs OWNER|MEMBER --open-url-file <file>`: signs a dev desktop in. Launch the app
   with `ORCA_CLOUD_DEV_OPEN_URL_FILE=<file>` and click Sign in; the script completes the hosted
   login and the app receives the callback.
+- `node cleanup-teams.mjs [--yes] [org_<id> ...] [--prefix <name prefix>]`: deletes the throwaway
+  teams that checks leave behind. It's a dry run unless you pass `--yes`. It only touches teams that
+  meet all three conditions:
+  - one of the test accounts owns it;
+  - the name starts with a throwaway prefix (`W9 Acceptance `, `Invite Paging Check `,
+    `Orca Check `), or you named its Orca id;
+  - it isn't one of the two kept eval teams.
+
+  Run `node cleanup-teams.mjs --yes` after every check that creates teams.
 - `node invite-paging-check.mjs [N=105]`: live check of more than 100 pending invites. It creates a
   throwaway team, seeds N example.com invites, checks that the roster lists all N, revokes one from
   page 2, checks for N-1, then deletes the team.
