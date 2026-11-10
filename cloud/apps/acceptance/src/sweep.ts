@@ -1,6 +1,7 @@
 // Finds and removes anything an eval run left behind: ledger sandboxes not marked destroyed (deleted at
 // Vercel with their snapshots) and Stripe test customers. Only ids from eval ledgers are touched.
 //   tsx src/sweep.ts [--dry-run]
+import { execFileSync } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { control, vercel } from './clients'
@@ -26,6 +27,18 @@ for (const run of loadRuns()) {
         r.destroyedAt = new Date().toISOString()
         r.label = `${r.label ?? ''} [swept]`
         changed = true
+      }
+    } else if (r.kind === 'other' && r.id.startsWith('org_')) {
+      // Staging teams: the shared cleanup script (#130) only deletes test-account teams it recognizes.
+      console.log(`${run.runId} staging team ${r.id}`)
+      if (!dry) {
+        try {
+          execFileSync('node', [new URL('../../../dev/scripts/staging-test-accounts/cleanup-teams.mjs', import.meta.url).pathname, '--yes', r.id], { stdio: 'inherit', timeout: 120_000 })
+          r.destroyedAt = new Date().toISOString()
+          changed = true
+        } catch {
+          console.log('  cleanup-teams failed (PropelAuth key unavailable?)')
+        }
       }
     } else if (r.kind === 'other' && r.id.startsWith('key_')) {
       console.log(`${run.runId} api key ${r.id}`)

@@ -9,6 +9,8 @@ import { log, type Check, type Ctx } from '../context'
 
 const SCRIPTS = new URL('../../../../dev/scripts/staging-test-accounts/', import.meta.url).pathname
 
+class SkipError extends Error {}
+
 type Staging = { orgId: string; providerOrgId: string | null; token: string; createMs: number; tag: string }
 let staging: Promise<Staging> | null = null
 
@@ -27,8 +29,21 @@ function session(label: 'OWNER' | 'MEMBER'): string {
   }
 }
 
+/** Dry run of the cleanup script: fails when the PropelAuth test-env key is unavailable. */
+function cleanupAvailable(): boolean {
+  try {
+    execFileSync('node', [`${SCRIPTS}cleanup-teams.mjs`], { stdio: 'ignore', timeout: 120_000 })
+    return true
+  } catch {
+    return false
+  }
+}
+
 function team(ctx: Ctx): Promise<Staging> {
   staging ??= (async () => {
+    if (!cleanupAvailable()) {
+      throw new SkipError('staging team cleanup unavailable (no ~/.orca-secrets/staging-propelauth-api-key and gcloud needs re-login); not creating a team that could not be deleted')
+    }
     const { orcaAuth } = await common()
     const token = session('OWNER')
     const tag = ctx.run.file.runId.replace(/[^0-9]/g, '').slice(-8)
@@ -43,28 +58,26 @@ function team(ctx: Ctx): Promise<Staging> {
   return staging
 }
 
-async function deleteTeam(ctx: Ctx, s: Staging): Promise<number | null> {
-  const { orcaAuth, propelAuth, account } = await common()
-  let providerOrgId = s.providerOrgId
-  if (!providerOrgId) {
-    const me = await propelAuth('GET', `/api/backend/v1/user/email?email=${encodeURIComponent(account('OWNER').email)}&include_orgs=true`)
-    const orgs = Object.values(me.body?.org_id_to_org_info ?? {}) as Array<{ org_id: string; org_name: string }>
-    providerOrgId = orgs.find((o) => o.org_name === `W9 Acceptance ${s.tag}`)?.org_id ?? null
-  }
-  void orcaAuth
-  if (!providerOrgId) {
-    return null
-  }
-  const removed = await propelAuth('DELETE', `/api/backend/v1/org/${providerOrgId}`)
-  if (removed.status < 300) {
+/** Shared staging cleanup (cloud/dev/scripts/staging-test-accounts/cleanup-teams.mjs, #130), by explicit id. */
+async function deleteTeam(ctx: Ctx, s: Staging): Promise<string> {
+  try {
+    execFileSync('node', [`${SCRIPTS}cleanup-teams.mjs`, '--yes', s.orgId], { stdio: ['ignore', 'pipe', 'pipe'], timeout: 120_000 })
     ctx.run.destroyed('other', s.orgId)
+    return 'deleted'
+  } catch (error) {
+    return `failed: ${String((error as { stderr?: Buffer }).stderr ?? error).split('\n').find(Boolean)?.slice(0, 160) ?? 'unknown'}`
   }
-  return removed.status
 }
 
 export const teamChecks: Record<string, Check> = {
   'team.create': async (ctx) => {
-    const s = await team(ctx)
+    const s = await team(ctx).catch((e: unknown) => (e instanceof Error ? e : new Error(String(e))))
+    if (s instanceof SkipError) {
+      return { status: 'skipped', detail: s.message }
+    }
+    if (s instanceof Error) {
+      throw s
+    }
     const { orcaAuth } = await common()
     const roster = await orcaAuth(s.token, 'GET', `/v1/desktop/orgs/${s.orgId}/members`)
     const me = (roster.body?.members ?? []).find((m: any) => m.role === 'owner')
@@ -77,7 +90,13 @@ export const teamChecks: Record<string, Check> = {
   },
 
   'team.invite': async (ctx) => {
-    const s = await team(ctx)
+    const s = await team(ctx).catch((e: unknown) => (e instanceof Error ? e : new Error(String(e))))
+    if (s instanceof SkipError) {
+      return { status: 'skipped', detail: s.message }
+    }
+    if (s instanceof Error) {
+      throw s
+    }
     const { orcaAuth } = await common()
     try {
       const email = `orca-w9+${s.tag}@example.com`
@@ -97,7 +116,7 @@ export const teamChecks: Record<string, Check> = {
       }
     } finally {
       // PropelAuth deletion needs gcloud (staging secret); if that is unavailable the team stays in the ledger as not destroyed.
-      const del = await deleteTeam(ctx, s).catch((error: unknown) => `failed: ${String(error).split('\n')[0]!.slice(0, 120)}`)
+      const del = await deleteTeam(ctx, s)
       ctx.run.note(`staging team ${s.orgId} delete -> ${del}`)
       staging = null
     }
