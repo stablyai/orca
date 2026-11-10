@@ -2,6 +2,7 @@ import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
 import { readWorkspaceMetadataSet } from '../../../../shared/worktree/workspace-metadata-set'
 import { useAppStore } from '../../store'
+import { selectWorktreesByRepo } from '../../store/workspaces/catalog/workspace-record-fields'
 import { getRuntimeEnvironmentRevision } from '../../runtime/rpc/environment-revisions/runtime-environment-revision'
 import { getRuntimeEnvironmentConnectionGeneration } from '../../store/slices/runtime-status/runtime-status-connection-generation'
 import {
@@ -16,7 +17,10 @@ let listingWatch: (() => void) | null = null
 // A listing that read metadata before a record's write may land after it; refill its titles then.
 function watchListings(): void {
   listingWatch ??= useAppStore.subscribe((state, previous) => {
-    if (state.worktreesByRepo !== previous.worktreesByRepo && hasPendingIssueTitles()) {
+    if (
+      selectWorktreesByRepo(state) !== selectWorktreesByRepo(previous) &&
+      hasPendingIssueTitles()
+    ) {
       useAppStore.setState(reapplyPendingIssueTitles(state, previous))
     }
   })
