@@ -7,6 +7,7 @@ import { CodexUsagePane } from './CodexUsagePane'
 import { GrokUsagePane } from './GrokUsagePane'
 import { OpenCodeUsagePane } from './OpenCodeUsagePane'
 import { MuseUsagePane } from './MuseUsagePane'
+import { PiUsagePane } from './PiUsagePane'
 import { UsageOverviewPane } from './UsageOverviewPane'
 import { Button } from '../ui/button'
 import {
@@ -58,7 +59,7 @@ function formatTrackingSince(
   })
 }
 
-type UsageTab = 'overview' | 'claude' | 'codex' | 'opencode' | 'muse' | 'grok'
+type UsageTab = 'overview' | 'claude' | 'codex' | 'opencode' | 'muse' | 'pi' | 'grok'
 
 const USAGE_ANALYTICS_OPTIONS = [
   {
@@ -89,6 +90,12 @@ const USAGE_ANALYTICS_OPTIONS = [
     id: 'muse',
     get label() {
       return translate('auto.lib.agent.catalog.muse_label', 'Muse')
+    }
+  },
+  {
+    id: 'pi',
+    get label() {
+      return translate('auto.lib.agent.catalog.302934c5d9', 'Pi')
     }
   },
   {
@@ -219,6 +226,8 @@ export function StatsPane(): React.JSX.Element {
             <OpenCodeUsagePane />
           ) : activeUsageTab === 'muse' ? (
             <MuseUsagePane />
+          ) : activeUsageTab === 'pi' ? (
+            <PiUsagePane />
           ) : (
             <GrokUsagePane />
           )}

@@ -1,6 +1,7 @@
 import type { CodexUsageSummary } from '../../../../shared/codex-usage-types'
 import type { OpenCodeUsageSummary } from '../../../../shared/opencode-usage-types'
 import type { MuseUsageSummary } from '../../../../shared/muse-usage-types'
+import type { PiUsageSummary } from '../../../../shared/pi-usage-types'
 import { countActiveDays, getClaudeDailyTotal } from './usage-overview-daily-series'
 import type { UsageOverviewInput, UsageProviderOverview } from './usage-overview-types'
 import { translate } from '@/i18n/i18n'
@@ -13,7 +14,8 @@ function getCodexNewInputTokens(summary: CodexUsageSummary | null): number {
   return Math.max(summary.inputTokens - summary.cachedInputTokens, 0)
 }
 
-function getMuseNewInputTokens(summary: MuseUsageSummary | null): number {
+// Muse and Pi report cached input as a subset of input.
+function getSubsetCachedNewInputTokens(summary: MuseUsageSummary | PiUsageSummary | null): number {
   if (!summary) {
     return 0
   }
@@ -148,12 +150,44 @@ export function createMuseProvider(
     activityLabel: 'events',
     activityCount: summary?.events ?? 0,
     totalTokens: summary?.totalTokens ?? 0,
-    newInputTokens: getMuseNewInputTokens(summary),
+    newInputTokens: getSubsetCachedNewInputTokens(summary),
     outputTokens: summary?.outputTokens ?? 0,
     cacheTokens: summary?.cachedInputTokens ?? 0,
     reasoningTokens: summary?.reasoningOutputTokens ?? 0,
     // Muse logs carry no price.
     estimatedCostUsd: null,
+    hasPartialCost: false,
+    topModel: summary?.topModel ?? null,
+    topProject: summary?.topProject ?? null,
+    activeDays: countActiveDays(dailyActiveDays)
+  }
+}
+
+export function createPiProvider(
+  input: UsageOverviewInput['pi'],
+  t: Translate = translate
+): UsageProviderOverview {
+  const summary = input.summary
+  const dailyActiveDays = input.daily
+    .filter((entry) => entry.totalTokens > 0)
+    .map((entry) => entry.day)
+  return {
+    id: 'pi',
+    label: t('auto.lib.agent.catalog.302934c5d9', 'Pi'),
+    enabled: input.scanState?.enabled ?? false,
+    isScanning: input.scanState?.isScanning ?? false,
+    hasData: summary?.hasAnyPiData ?? input.scanState?.hasAnyPiData ?? false,
+    lastScanCompletedAt: input.scanState?.lastScanCompletedAt ?? null,
+    lastScanError: input.scanState?.lastScanError ?? null,
+    sessions: summary?.sessions ?? 0,
+    activityLabel: 'events',
+    activityCount: summary?.events ?? 0,
+    totalTokens: summary?.totalTokens ?? 0,
+    newInputTokens: getSubsetCachedNewInputTokens(summary),
+    outputTokens: summary?.outputTokens ?? 0,
+    cacheTokens: summary?.cachedInputTokens ?? 0,
+    reasoningTokens: summary?.reasoningOutputTokens ?? 0,
+    estimatedCostUsd: summary?.estimatedCostUsd ?? null,
     hasPartialCost: false,
     topModel: summary?.topModel ?? null,
     topProject: summary?.topProject ?? null,

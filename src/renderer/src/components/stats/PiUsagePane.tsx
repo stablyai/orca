@@ -1,0 +1,205 @@
+import { useEffect } from 'react'
+import { Activity, Brain, Coins, DatabaseZap, FolderKanban, Sparkles } from 'lucide-react'
+import type { PiUsageRange, PiUsageScope } from '../../../../shared/pi-usage-types'
+import { useAppStore } from '../../store'
+import { ClaudeUsageLoadingState } from './ClaudeUsageLoadingState'
+import { PiUsageDetails } from './PiUsageDetails'
+import { StatCard } from './StatCard'
+import { UsageFilterRadioGroup, UsageTrackingPaneShell } from './UsageTrackingPaneShell'
+import { formatCost, formatTokens, formatUpdatedAt } from './usage-formatters'
+import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+
+// Why: generic labels reuse the OpenCode pane's keys so both panes share one translation.
+const RANGE_OPTIONS: PiUsageRange[] = ['7d', '30d', '90d', 'all']
+const SCOPE_OPTIONS: { value: PiUsageScope; label: string }[] = [
+  {
+    value: 'orca',
+    get label() {
+      return translate('auto.components.stats.OpenCodeUsagePane.e04c58327c', 'Orca worktrees only')
+    }
+  },
+  {
+    value: 'all',
+    get label() {
+      return translate('auto.components.stats.PiUsagePane.scopeAll', 'All local Pi usage')
+    }
+  }
+]
+const RANGE_LABELS: Record<PiUsageRange, string> = {
+  get '7d'() {
+    return translate('auto.components.stats.OpenCodeUsagePane.rangeLast7Days', 'Last 7 days')
+  },
+  get '30d'() {
+    return translate('auto.components.stats.OpenCodeUsagePane.rangeLast30Days', 'Last 30 days')
+  },
+  get '90d'() {
+    return translate('auto.components.stats.OpenCodeUsagePane.rangeLast90Days', 'Last 90 days')
+  },
+  get all() {
+    return translate('auto.components.stats.OpenCodeUsagePane.rangeAllTime', 'All time')
+  }
+}
+
+export function PiUsagePane(): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
+  const scanState = useAppStore((state) => state.piUsageScanState)
+  const summary = useAppStore((state) => state.piUsageSummary)
+  const daily = useAppStore((state) => state.piUsageDaily)
+  const modelBreakdown = useAppStore((state) => state.piUsageModelBreakdown)
+  const projectBreakdown = useAppStore((state) => state.piUsageProjectBreakdown)
+  const recentSessions = useAppStore((state) => state.piUsageRecentSessions)
+  const scope = useAppStore((state) => state.piUsageScope)
+  const range = useAppStore((state) => state.piUsageRange)
+  const fetchPiUsage = useAppStore((state) => state.fetchPiUsage)
+  const setPiUsageEnabled = useAppStore((state) => state.setPiUsageEnabled)
+  const refreshPiUsage = useAppStore((state) => state.refreshPiUsage)
+  const setPiUsageScope = useAppStore((state) => state.setPiUsageScope)
+  const setPiUsageRange = useAppStore((state) => state.setPiUsageRange)
+  const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
+
+  useEffect(() => {
+    void fetchPiUsage()
+  }, [fetchPiUsage])
+
+  const handleSetEnabled = (enabled: boolean): void => {
+    recordFeatureInteraction('usage-tracking')
+    void setPiUsageEnabled(enabled)
+  }
+
+  const title = t('auto.components.stats.PiUsagePane.title', 'Pi Usage Tracking')
+  const enableLabel = t(
+    'auto.components.stats.PiUsagePane.enableLabel',
+    'Enable Pi usage analytics'
+  )
+
+  if (!scanState?.enabled) {
+    return (
+      <UsageTrackingPaneShell
+        enabled={false}
+        title={title}
+        disabledDescription={t(
+          'auto.components.stats.PiUsagePane.disabledDescription',
+          'Reads local Pi session logs to show token, model, and session stats.'
+        )}
+        enableLabel={enableLabel}
+        onEnabledChange={handleSetEnabled}
+      />
+    )
+  }
+
+  if (!summary && (scanState.isScanning || scanState.lastScanCompletedAt === null)) {
+    return (
+      <ClaudeUsageLoadingState
+        title={title}
+        summaryCardCount={6}
+        summaryGridClassName="md:grid-cols-3"
+      />
+    )
+  }
+
+  const hasAnyData = summary?.hasAnyPiData ?? scanState.hasAnyPiData
+
+  return (
+    <UsageTrackingPaneShell
+      enabled
+      title={title}
+      status={
+        <>
+          {formatUpdatedAt(scanState.lastScanCompletedAt, t, intlLocale)}
+          {scanState.lastScanError
+            ? t(
+                'auto.components.stats.OpenCodeUsagePane.6cc7782458',
+                ' • Last scan error: {{value0}}',
+                { value0: scanState.lastScanError }
+              )
+            : ''}
+        </>
+      }
+      isRefreshing={scanState.isScanning}
+      hasData={hasAnyData}
+      enableLabel={enableLabel}
+      optionsLabel={t('auto.components.stats.PiUsagePane.optionsLabel', 'Pi usage options')}
+      filtersLabel={t('auto.components.stats.OpenCodeUsagePane.01583b30aa', 'Filters')}
+      refreshAriaLabel={t('auto.components.stats.PiUsagePane.refreshAriaLabel', 'Refresh Pi usage')}
+      refreshLabel={t('auto.components.stats.OpenCodeUsagePane.603cd138dc', 'Refresh')}
+      filterSections={[
+        <UsageFilterRadioGroup
+          key="scope"
+          label={t('auto.components.stats.OpenCodeUsagePane.40d283c837', 'Scope')}
+          value={scope}
+          options={SCOPE_OPTIONS}
+          onValueChange={(value) => void setPiUsageScope(value)}
+        />,
+        <UsageFilterRadioGroup
+          key="range"
+          label={t('auto.components.stats.OpenCodeUsagePane.b5ed5c9fd0', 'Range')}
+          value={range}
+          options={RANGE_OPTIONS.map((value) => ({ value, label: RANGE_LABELS[value] }))}
+          onValueChange={(value) => void setPiUsageRange(value)}
+        />
+      ]}
+      selectionSummary={
+        <>
+          {SCOPE_OPTIONS.find((option) => option.value === scope)?.label} • {RANGE_LABELS[range]}
+        </>
+      }
+      emptyMessage={t(
+        'auto.components.stats.PiUsagePane.emptyMessage',
+        'No local Pi usage found yet for this scope.'
+      )}
+      onEnabledChange={handleSetEnabled}
+      onRefresh={() => void refreshPiUsage()}
+    >
+      <>
+        <div className="grid gap-3 md:grid-cols-3">
+          <StatCard
+            label={t('auto.components.stats.OpenCodeUsagePane.d637a892ed', 'Input tokens')}
+            value={formatTokens(summary?.inputTokens ?? 0, intlLocale)}
+            icon={<Sparkles className="size-4" />}
+          />
+          <StatCard
+            label={t('auto.components.stats.OpenCodeUsagePane.7aa4d8ce35', 'Output tokens')}
+            value={formatTokens(summary?.outputTokens ?? 0, intlLocale)}
+            icon={<Activity className="size-4" />}
+          />
+          <StatCard
+            label={t('auto.components.stats.OpenCodeUsagePane.603504ee3b', 'Cached input')}
+            value={formatTokens(summary?.cachedInputTokens ?? 0, intlLocale)}
+            icon={<DatabaseZap className="size-4" />}
+          />
+          <StatCard
+            label={t('auto.components.stats.OpenCodeUsagePane.5a65d68b77', 'Reasoning output')}
+            value={formatTokens(summary?.reasoningOutputTokens ?? 0, intlLocale)}
+            icon={<Brain className="size-4" />}
+          />
+          <StatCard
+            label={t('auto.components.stats.OpenCodeUsagePane.7e9433469a', 'Sessions / Events')}
+            value={`${(summary?.sessions ?? 0).toLocaleString(intlLocale)} / ${(summary?.events ?? 0).toLocaleString(intlLocale)}`}
+            icon={<FolderKanban className="size-4" />}
+          />
+          <StatCard
+            label={t('auto.components.stats.OpenCodeUsagePane.15c34d4b08', 'Recorded cost')}
+            value={formatCost(summary?.estimatedCostUsd ?? null)}
+            icon={<Coins className="size-4" />}
+          />
+        </div>
+        <p className="px-1 text-xs text-muted-foreground">
+          {t(
+            'auto.components.stats.PiUsagePane.costNote',
+            'Cost is what Pi recorded for each response from your model prices. Responses from unpriced models are not counted.'
+          )}
+        </p>
+
+        <PiUsageDetails
+          daily={daily}
+          modelBreakdown={modelBreakdown}
+          projectBreakdown={projectBreakdown}
+          recentSessions={recentSessions}
+          summary={summary}
+        />
+      </>
+    </UsageTrackingPaneShell>
+  )
+}
