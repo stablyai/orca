@@ -7,8 +7,8 @@ const HOUR = 3600
 export const sampleOffers: OrcaBillingOffers = {
   team: {
     label: 'Team',
-    monthlyPriceLabel: '$50/seat/mo',
-    annualPriceLabel: '$480/seat/yr',
+    monthlyPriceLabel: '$50 per seat per month',
+    annualPriceLabel: '$480 per seat, billed yearly',
     monthlyPriceCentsPerSeat: 5000,
     annualPriceCentsPerSeat: 48000,
     largeMachineWeight: 1,

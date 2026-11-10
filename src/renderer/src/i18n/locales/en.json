@@ -20519,8 +20519,6 @@
           "nextInvoice": "Next invoice (est.)",
           "nextInvoiceOn": "{{value0}} · {{value1}}",
           "notAnEmail": "Not an email address",
-          "perMonth": "{{value0}}/month",
-          "perYear": "{{value0}}/year",
           "planEnds": "Plan ends",
           "rateLimited": "Too many team changes at once. Wait a minute and try again.",
           "readOnly": "Only owners and admins can invite people or change roles.",
@@ -20579,7 +20577,9 @@
           "nowOwner": "{{value0}} is now an owner",
           "perSeatPerMonth": "{{value0}} per seat per month",
           "createInvalid2": "Use letters, numbers, spaces or underscores (up to 64).",
-          "nameTaken": "That team name is taken. Try another."
+          "nameTaken": "That team name is taken. Try another.",
+          "totalPerMonth": "{{total}} per month",
+          "totalPerYear": "{{total}} per year"
         },
         "manageBilling": "Manage billing",
         "comparePlans": "Compare plans",
@@ -20600,8 +20600,6 @@
           "loadFailed": "Could not load plans. Try again in a moment.",
           "currentPlan": "Current plan",
           "billedMonthly": "Billed monthly",
-          "totalYear": "{{value0}} / year",
-          "totalMonth": "{{value0}} / month",
           "checkout": "Continue to checkout",
           "entLead": "Everything in Team, plus:",
           "entHint": "Tell us about your team and where you run.",
@@ -20635,7 +20633,9 @@
           "perSeatPerMonth": "per seat per month",
           "seatsPerMember_one": "{{count}} seat, one per team member",
           "seatsPerMember_other": "{{count}} seats, one per team member",
-          "vpWakeBody2": "Idle sandboxes sleep to save hours and wake with your files as you left them."
+          "vpWakeBody2": "Idle sandboxes sleep to save hours and wake with your files as you left them.",
+          "totalPerMonth": "{{total}} per month",
+          "totalPerYear": "{{total}} per year"
         },
         "capLabel2": "Monthly spend cap",
         "capSaved": "Saved",
@@ -20653,13 +20653,10 @@
           "opening": "Opening secure checkout…",
           "openingBody": "Stripe’s checkout opens in your browser.",
           "paid": "Payment confirmed",
-          "perMo": "/mo",
-          "perYr": "/yr",
           "planAnnual": "{{value0}} · Annual",
           "planMonthly": "{{value0}} · Monthly",
           "renewsNote": "Renews {{value0}}. Before tax. Seats follow your team.",
           "reopen": "Reopen checkout",
-          "seatsTimes2": "{{value0}} × {{value1}}{{value2}}",
           "subtitle": "Pay on Stripe’s secure page in your browser. Orca picks it up the moment it goes through.",
           "timedOut": "Still waiting for Stripe",
           "timedOutBody": "If you already paid, confirmation can take a minute. Otherwise reopen checkout.",
@@ -20670,7 +20667,11 @@
           "secured2": "Payments by Stripe · Cards, Apple Pay and Link · Bank verification",
           "canceledBody2": "Nothing was charged. You can choose a plan again any time.",
           "titleCanceled": "Checkout canceled",
-          "titlePaid": "Welcome to Orca Cloud"
+          "titlePaid": "Welcome to Orca Cloud",
+          "lineItemMonthly_one": "{{seats}} × {{price}} per seat per month",
+          "lineItemMonthly_other": "{{seats}} × {{price}} per seat per month",
+          "lineItemYearly_one": "{{seats}} × {{price}} per seat, billed yearly",
+          "lineItemYearly_other": "{{seats}} × {{price}} per seat, billed yearly"
         },
         "health": {
           "ending": "Ending",
@@ -20681,11 +20682,11 @@
         "paymentAskAdmin": "Ask an owner or admin to update the payment method.",
         "upgrade": {
           "askOwner": "Ask an owner or admin to upgrade.",
-          "body2": "Hosted sandboxes for the whole team. Agents keep running when you close your laptop. {{value0}}/seat/month.",
           "bodyNoPrice": "Hosted sandboxes for the whole team. Agents keep running when you close your laptop.",
           "cta": "See plans",
           "menuItem": "Upgrade to Orca Cloud",
-          "title": "Upgrade to use Orca Cloud"
+          "title": "Upgrade to use Orca Cloud",
+          "body3": "Hosted sandboxes for the whole team. Agents keep running when you close your laptop. {{price}} per seat per month."
         },
         "upsellLineNoPrice": "Orca Cloud runs agents in hosted sandboxes for your whole team.",
         "askAdmin2": "Ask an owner or admin to change the plan.",
