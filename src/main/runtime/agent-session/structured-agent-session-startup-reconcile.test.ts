@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { agentSessionRecordFixture } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { journalDatabasePath } from '../../native-chat/agent-session-journal/database/journal-host-database'
+import { journalDomainDatabasePath } from '../../native-chat/agent-session-journal/database/journal-domain-database'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost,
@@ -39,7 +39,7 @@ async function seedChat(options: { newer?: boolean } = {}) {
     await seedTestAgentSessionStoreFromNewerBuild(root)
   }
   await closeTestJournalHostDatabases()
-  return { path: journalDatabasePath(root), sessionId: record.sessionId }
+  return { path: journalDomainDatabasePath(root), sessionId: record.sessionId }
 }
 
 function startupRuntime(log = recordingStructuredAgentSessionLogger()) {

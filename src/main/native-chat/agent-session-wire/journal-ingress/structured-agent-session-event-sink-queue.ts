@@ -9,25 +9,15 @@ import type {
 } from './structured-agent-session-event-sink'
 import type { StructuredAgentSessionHistoryJournal } from './structured-agent-session-journal-views'
 import { StructuredAgentSessionSinkSnapshots } from './structured-agent-session-sink-snapshots'
-
-export type StructuredAgentSessionSinkOperation = {
-  sequence: number
-  bytes: number
-  /** Only publications coalesce by key; replacing journal writes would reorder them behind later work. */
-  publicationKey?: string
-  /** Handover synchronously joins the journal queue in submission order. */
-  run: (target: StructuredAgentSessionEventTarget) => Promise<unknown> | void
-}
-
-type Admitted = StructuredAgentSessionSinkOperation & { superseded?: boolean }
+import {
+  StructuredAgentSessionDispatch,
+  runStructuredAgentSessionSinkOperation,
+  type Admitted,
+  type StructuredAgentSessionSinkOperation
+} from './structured-agent-session-dispatch'
 
 const MAX_PRE_CONTROL_OPERATIONS = 1_024
 const MAX_PRE_CONTROL_BYTES = 32 * 1024 * 1024
-
-export type StructuredAgentSessionDrainWaiter = {
-  through: number
-  resolve: (result: StructuredAgentSessionSinkBarrier) => void
-}
 
 /** Hand writes to the journal in issuance order; bound startup work until reading can pause. */
 export class StructuredAgentSessionSinkQueue {
@@ -45,8 +35,14 @@ export class StructuredAgentSessionSinkQueue {
   private handedOverSequence = 0
   private handedOverSettled: Promise<void> = Promise.resolve()
   private readonly buffered: Admitted[] = []
-  private readonly waitingPublications = new Map<string, Admitted>()
-  private readonly waiters: StructuredAgentSessionDrainWaiter[] = []
+  private readonly dispatch = new StructuredAgentSessionDispatch(
+    () => this.seal(),
+    () => !this.closed && this.failure === null
+  )
+  private readonly waiters: {
+    through: number
+    resolve: (result: StructuredAgentSessionSinkBarrier) => void
+  }[] = []
   private readonly settledTurnListeners = new Set<(turnItemIds: readonly string[]) => void>()
   private releaseSettledTurns: (() => void) | undefined
   private readingPaused = false
@@ -127,6 +123,7 @@ export class StructuredAgentSessionSinkQueue {
     if (this.closed) {
       return
     }
+    this.seal()
     this.target = target
     this.releaseSettledTurns?.()
     this.releaseSettledTurns = target.observeSettledTurns?.((turnItemIds) => {
@@ -135,17 +132,19 @@ export class StructuredAgentSessionSinkQueue {
       }
     })
     for (const operation of this.buffered.splice(0)) {
-      this.handOver(operation, target)
+      this.stage(operation, target)
     }
   }
 
   unbind(): void {
+    this.seal()
     this.releaseSettledTurns?.()
     this.releaseSettledTurns = undefined
     this.target = null
   }
 
   close(): void {
+    this.seal()
     this.releaseSettledTurns?.()
     this.releaseSettledTurns = undefined
     this.snapshots.close()
@@ -155,7 +154,13 @@ export class StructuredAgentSessionSinkQueue {
   }
 
   barrier = (): Promise<StructuredAgentSessionSinkBarrier> => {
+    this.flushLiveText()
     const through = this.acceptedSequence
+    this.seal()
+    return this.waitThrough(through)
+  }
+
+  private waitThrough(through: number): Promise<StructuredAgentSessionSinkBarrier> {
     if (this.settledSequence >= through) {
       return Promise.resolve(this.barrierResult())
     }
@@ -164,8 +169,10 @@ export class StructuredAgentSessionSinkQueue {
 
   /** Unlike barrier, report close-dropped admitted writes as not landed. */
   written = async (): Promise<StructuredAgentSessionSinkBarrier> => {
+    this.flushLiveText()
     const through = this.acceptedSequence
-    const settled = await this.barrier()
+    this.seal()
+    const settled = await this.waitThrough(through)
     return settled.ok && this.handedOverSequence < through
       ? { ok: false, error: new Error('the sink closed before its writes landed') }
       : settled
@@ -183,15 +190,12 @@ export class StructuredAgentSessionSinkQueue {
     const key = operation.publicationKey
     const replaceAt =
       key === undefined ? -1 : this.buffered.findIndex((queued) => queued.publicationKey === key)
-    const replaced =
-      replaceAt >= 0
-        ? this.buffered[replaceAt]
-        : key === undefined
-          ? undefined
-          : this.waitingPublications.get(key)
-    const queuedBytes =
-      this.queuedBytes + operation.bytes - (replaceAt >= 0 ? (replaced?.bytes ?? 0) : 0)
-    const queuedOperations = this.queuedOperations + (replaceAt >= 0 ? 0 : 1)
+    const replaced = replaceAt >= 0 ? this.buffered[replaceAt] : undefined
+    const queuedBytes = this.queuedBytes + operation.bytes - (replaced?.bytes ?? 0)
+    const queuedOperations =
+      this.queuedOperations +
+      (operation.operations ?? 1) -
+      (replaceAt >= 0 ? (replaced?.operations ?? 1) : 0)
     if (
       !this.hasBoundReadingControl &&
       (queuedBytes > MAX_PRE_CONTROL_BYTES || queuedOperations > MAX_PRE_CONTROL_OPERATIONS)
@@ -202,14 +206,11 @@ export class StructuredAgentSessionSinkQueue {
     const accepted: Admitted = { ...operation, sequence: ++this.acceptedSequence }
     if (replaceAt >= 0) {
       this.buffered.splice(replaceAt, 1)
-    } else if (replaced) {
-      // Superseded publications still settle in order as no-ops.
-      replaced.superseded = true
     }
     this.queuedBytes = queuedBytes
     this.queuedOperations = queuedOperations
     if (this.target) {
-      this.handOver(accepted, this.target)
+      this.stage(accepted, this.target)
     } else {
       this.buffered.push(accepted)
     }
@@ -217,30 +218,33 @@ export class StructuredAgentSessionSinkQueue {
     return { accepted: true }
   }
 
-  private handOver(operation: Admitted, bound: StructuredAgentSessionEventTarget): void {
-    const earlier = this.handedOverSettled
-    this.handedOverSequence = operation.sequence
-    const key = operation.publicationKey
-    let outcome: Promise<unknown>
-    if (key === undefined) {
-      outcome = runNow(() => operation.run(bound))
-    } else {
-      this.waitingPublications.set(key, operation)
-      // Publications read in journal order so they cannot overtake prior writes.
-      outcome = runNow(() =>
-        bound.journal.readInOrder(() => {
-          if (this.waitingPublications.get(key) === operation) {
-            this.waitingPublications.delete(key)
-          }
-          return operation.superseded || this.closed || this.failure !== null
-            ? undefined
-            : operation.run(bound)
-        })
-      )
+  /** One synchronous provider dispatch is indivisible, including work beyond ready-batch caps. */
+  private stage(operation: Admitted, bound: StructuredAgentSessionEventTarget): void {
+    if (!operation.steps && operation.publicationKey === undefined) {
+      this.seal()
+      this.handOver(operation, bound)
+      return
     }
+    this.dispatch.push(operation)
+  }
+
+  private seal(): void {
+    if (this.target) {
+      const operation = this.dispatch.seal(this.target)
+      if (operation) {
+        this.handOver(operation, this.target)
+      }
+    }
+  }
+
+  private handOver(operation: Admitted, bound: StructuredAgentSessionEventTarget): void {
+    this.handedOverSequence = operation.sequence
+    const outcome = runStructuredAgentSessionSinkOperation(operation, bound)
     // Observe failure immediately even if earlier writes are still settling.
     const landed = outcome.then(() => undefined, this.fail)
-    this.handedOverSettled = Promise.all([earlier, landed]).then(() => this.settle(operation))
+    this.handedOverSettled = Promise.all([this.handedOverSettled, landed]).then(() =>
+      this.settle(operation)
+    )
   }
 
   private settle(operation: Admitted): void {
@@ -252,12 +256,12 @@ export class StructuredAgentSessionSinkQueue {
 
   private release(operation: Admitted): void {
     this.queuedBytes = Math.max(0, this.queuedBytes - operation.bytes)
-    this.queuedOperations = Math.max(0, this.queuedOperations - 1)
+    this.queuedOperations = Math.max(0, this.queuedOperations - (operation.operations ?? 1))
   }
 
   /** Buffered drops settle only after earlier handed-over writes so barriers cannot overtake them. */
   private dropBuffered(): void {
-    const dropped = this.buffered.splice(0)
+    const dropped = [...this.dispatch.take(), ...this.buffered.splice(0)]
     for (const operation of dropped) {
       this.release(operation)
     }
@@ -326,13 +330,5 @@ export class StructuredAgentSessionSinkQueue {
     }
     this.dropBuffered()
     this.updateBackpressure()
-  }
-}
-
-function runNow(run: () => Promise<unknown> | void): Promise<unknown> {
-  try {
-    return Promise.resolve(run())
-  } catch (error) {
-    return Promise.reject(error)
   }
 }

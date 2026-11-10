@@ -61,6 +61,7 @@ function transitionAppend(
 ): (transition: StructuredAgentSessionTransition) => StructuredAgentSessionSinkAdmission {
   return (transition) =>
     queue.submit({
+      operations: Math.max(1, transition.steps.length) + (transition.publish ? 1 : 0),
       bytes:
         transition.steps.reduce((total, step) => total + step.reservedBytes, 0) +
         (transition.publish ? 1 : 0),

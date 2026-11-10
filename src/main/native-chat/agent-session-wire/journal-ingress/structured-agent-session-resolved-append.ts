@@ -6,7 +6,6 @@ import type {
 import { structuredAgentSessionJournalAppendOptions } from './structured-agent-session-journal-append-options'
 import type { StructuredAgentSessionSinkQueue } from './structured-agent-session-event-sink-queue'
 import type { JournalTimelineItemResolution } from '../../agent-session-journal/writing/journal-timeline-resolution'
-import { restoreJournalSqlFailure } from '../../agent-session-journal/journal-sql-failure'
 import type { JournalStepOutcome } from '../../agent-session-journal/writing/journal-writer-step'
 
 /** The writer resolves each item at its queue position, seeing prior writes and no later ones. */
@@ -28,30 +27,30 @@ export function createStructuredAgentSessionResolvedAppend(
     options: StructuredAgentSessionItemAppendOptions,
     publish: boolean,
     onOutcome?: (outcome: JournalStepOutcome) => void
-  ) =>
-    queue.submit({
-      bytes: reservedBytes + (publish ? 1 : 0),
-      run: async (bound) => {
-        const result = await bound.journal.appendSteps([
-          {
-            kind: 'resolved-item',
-            reservedBytes,
-            resolution,
-            options: structuredAgentSessionJournalAppendOptions(bound.fence, options)
-          }
-        ])
-        if (result.failure) {
-          throw restoreJournalSqlFailure(result.failure)
+  ) => {
+    const admission = queue.submit({
+      bytes: reservedBytes,
+      steps: (bound) => [
+        {
+          kind: 'resolved-item',
+          reservedBytes,
+          resolution,
+          options: structuredAgentSessionJournalAppendOptions(bound.fence, options)
         }
+      ],
+      onResolved: (result) => {
         const outcome = result.outcomes[0]
-        if (publish && outcome?.kind === 'committed' && outcome.wrote) {
-          bound.publish()
-        }
         if (outcome) {
           onOutcome?.(outcome)
         }
       }
     })
+    if (admission.accepted && publish) {
+      return queue.submit({ bytes: 1, publicationKey: 'publish', run: (bound) => bound.publish() })
+    }
+    return admission
+  }
+
   const identityOnly =
     (publish: boolean): NonNullable<StructuredAgentSessionEventSink['tryAppendResolvedItem']> =>
     (identitySizeBound, resolution, options) =>

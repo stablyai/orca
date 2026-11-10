@@ -4,7 +4,11 @@ import type {
 } from '../../../../shared/agent-session/journal/agent-journal-creation-facts'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { JournalItemAppendInput, JournalItemAppendOptions } from '../journal-store-contracts'
+import type {
+  JournalItemAppendInput,
+  JournalItemAppendOptions,
+  JournalLifecycleBatchInput
+} from '../journal-store-contracts'
 import type { JournalSqlFailure } from '../journal-sql-failure'
 import type { JournalLifecycleIdentityMutationInput } from './journal-lifecycle-mutation'
 import type { JournalTimelineItemResolution } from './journal-timeline-resolution'
@@ -25,6 +29,11 @@ export type JournalWriterSettlementResolution =
 
 export type JournalWriterStep =
   | ({ kind: 'item'; reservedBytes: number } & JournalItemAppendInput)
+  | {
+      kind: 'lifecycle'
+      reservedBytes: number
+      input: Pick<JournalLifecycleBatchInput, 'settlementId' | 'mutations' | 'fence' | 'ownerFence'>
+    }
   | (Omit<JournalItemAppendInput, 'body'> & {
       kind: 'creation-fact'
       epoch: string

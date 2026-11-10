@@ -62,6 +62,7 @@ export function insertJournalDomainImportPage(
         executionOwner,
         hidden,
         item,
+        displayed,
         originalStopNoteJson,
         queueCommandTurn,
         queueFailedOutcome,
@@ -70,7 +71,7 @@ export function insertJournalDomainImportPage(
         queueFailureReportTurnItemId
       } of page.rows) {
         const payload = JSON.stringify(item)
-        const { metadata, values } = journalDomainItemColumns(item, payload)
+        const { metadata, values } = journalDomainItemColumns(item, payload, displayed)
         const result = insert.run(
           ...prefix,
           item.itemId,

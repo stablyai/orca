@@ -58,7 +58,12 @@ export function itemStep(
   }
 }
 
-export async function rig() {
+export async function rig(
+  options: Pick<
+    Parameters<typeof createDeferredStructuredAgentSessionEventSink>[0],
+    'watermarks' | 'readingControl'
+  > = {}
+) {
   const root = await mkdtemp(join(tmpdir(), 'orca-transition-'))
   roots.push(root)
   const journal: AgentSessionJournal = await journals.open({
@@ -73,7 +78,10 @@ export async function rig() {
     now: () => 1_000
   })
   const publishes: number[] = []
-  const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging(SESSION))
+  const deferred = createDeferredStructuredAgentSessionEventSink({
+    ...testEventSinkLogging(SESSION),
+    ...options
+  })
   const bind = () => deferred.bind({ journal, fence: 1, publish: () => publishes.push(1) })
   return { root, journal, deferred, sink: deferred.sink, publishes, bind }
 }

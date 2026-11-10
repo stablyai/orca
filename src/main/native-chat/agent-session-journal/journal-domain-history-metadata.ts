@@ -33,7 +33,8 @@ export type JournalDomainHistoryMetadata = {
 /** Pass the stored payload text when the caller already serialized it. */
 export function journalDomainHistoryMetadata(
   item: AgentJournalRenderItem,
-  payloadJson?: string
+  payloadJson?: string,
+  displayed = item
 ): JournalDomainHistoryMetadata {
   const root = isRootAgentJournalItem(item)
   const block = item.body.kind === 'message' ? subagentItemBlock(item.body) : null
@@ -45,7 +46,7 @@ export function journalDomainHistoryMetadata(
     turnMarker: Number(
       readAgentJournalTurn(item.body) !== null || isAgentSessionContextClear(item.body)
     ),
-    ...journalDomainItemWire(item, payloadJson)
+    ...journalDomainItemWire(item, payloadJson, displayed)
   }
 }
 
@@ -59,23 +60,35 @@ export function journalDomainNamedSubagentIds(item: AgentJournalRenderItem): str
 // form elsewhere only overstates a size, which shortens a page but never drops content.
 export const JOURNAL_ITEM_DETAIL_MAX_BYTES = REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES - 64 * 1024
 
-export function journalDomainItemWire(item: AgentJournalRenderItem, payloadJson?: string) {
-  const bytes = Buffer.byteLength(payloadJson ?? JSON.stringify(item), 'utf8')
+export function journalDomainItemWire(
+  item: AgentJournalRenderItem,
+  payloadJson?: string,
+  displayed = item
+) {
+  const projected = displayed !== item
+  const displayJson = projected ? JSON.stringify(displayed) : (payloadJson ?? JSON.stringify(item))
+  const bytes = Buffer.byteLength(displayJson, 'utf8')
   const detailJson =
     bytes > JOURNAL_ITEM_DETAIL_MAX_BYTES
-      ? JSON.stringify(shortenedAgentJournalItem(item, JOURNAL_ITEM_DETAIL_MAX_BYTES, bytes))
-      : null
+      ? JSON.stringify(shortenedAgentJournalItem(displayed, JOURNAL_ITEM_DETAIL_MAX_BYTES, bytes))
+      : projected
+        ? displayJson
+        : null
   if (
-    item.body.kind !== 'tool-call' &&
-    item.body.kind !== 'diff' &&
+    displayed.body.kind !== 'tool-call' &&
+    displayed.body.kind !== 'diff' &&
     bytes <= HISTORY_PAGE_CONTENT_BUDGET_BYTES
   ) {
-    return { wireBytes: null, wireJson: null, detailJson }
+    return {
+      wireBytes: projected ? bytes : null,
+      wireJson: projected ? displayJson : null,
+      detailJson
+    }
   }
-  const sent = agentJournalItemForWire(item)
+  const sent = agentJournalItemForWire(displayed)
   return {
-    wireBytes: sent.item === item ? null : sent.bytes,
-    wireJson: sent.item === item ? null : JSON.stringify(sent.item),
+    wireBytes: !projected && sent.item === item ? null : sent.bytes,
+    wireJson: !projected && sent.item === item ? null : JSON.stringify(sent.item),
     detailJson
   }
 }

@@ -117,9 +117,13 @@ export const JOURNAL_DOMAIN_ITEM_COLUMNS = [
   'legacy_provider_item_key'
 ] as const
 
-/** One payload projection supplies import, current writes and derived Stop revisions. */
-export function journalDomainItemColumns(item: AgentJournalRenderItem, payload: string) {
-  const metadata = journalDomainHistoryMetadata(item, payload)
+/** Source facts and explicit presentation supply import and current writes. */
+export function journalDomainItemColumns(
+  item: AgentJournalRenderItem,
+  payload: string,
+  displayed = item
+) {
+  const metadata = journalDomainHistoryMetadata(item, payload, displayed)
   const [, commandEntry, , assistantProse, turnScopeKind] = journalItemStatusMetadata(item)
   const turn = readAgentJournalTurn(item.body)
   const identity = parseAgentJournalItemKey(item.itemId)
@@ -133,7 +137,7 @@ export function journalDomainItemColumns(item: AgentJournalRenderItem, payload: 
       metadata.wireBytes,
       metadata.wireJson,
       metadata.detailJson,
-      journalDomainOutlineSource(item),
+      journalDomainOutlineSource(displayed),
       item.turnScope?.kind === 'turn' ? item.turnScope.turnItemId : null,
       ...journalDomainItemReadColumns(item),
       ...journalDomainItemLifecycleColumns(item),

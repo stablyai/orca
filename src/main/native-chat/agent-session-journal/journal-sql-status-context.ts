@@ -10,6 +10,7 @@ import type { JournalStatusItem, JournalStatusItemSelection } from './journal-st
 import { sqlJournalStatusItems } from './journal-sql-status-items'
 import { sqlFailedStatusItems, sqlHasStatusRequestItem } from './journal-sql-status-request-items'
 import { sqlStatusRelatedInputIds } from './journal-sql-status-inputs'
+import { journalDomainFullDisplaySql } from './journal-domain-stop-notes'
 import type { JournalDomainSubmissionStoredFacts } from './journal-domain-submission-records'
 import {
   journalDomainInputForItem,
@@ -26,7 +27,8 @@ export class JournalSqlStatusContext {
   private readonly selected = new Map<string, JournalStatusItem[]>()
   private readonly items = new Map<
     string,
-    { item: AgentJournalRenderItem; hidden: boolean; fence: number } | undefined
+    | { item: AgentJournalRenderItem; displayJson: unknown; hidden: boolean; fence: number }
+    | undefined
   >()
   private readonly submissions = new Map<string, AgentJournalSubmission | undefined>()
   private readonly ordinals = new Map<string, number>()
@@ -62,7 +64,8 @@ export class JournalSqlStatusContext {
   private current(id: string) {
     if (!this.items.has(id)) {
       const row = this.scope.db
-        .prepare(`SELECT payload_json,hidden,COALESCE(execution_owner,owner_fence) AS fence
+        .prepare(`SELECT payload_json,${journalDomainFullDisplaySql()} AS display_json,
+        hidden,COALESCE(execution_owner,owner_fence) AS fence
         FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?`)
         .get(...this.scope.prefix, id)
       if (row) {
@@ -73,6 +76,7 @@ export class JournalSqlStatusContext {
         row
           ? {
               item: this.scope.decode<AgentJournalRenderItem>(row.payload_json),
+              displayJson: row.display_json === row.payload_json ? null : row.display_json,
               hidden: Boolean(row.hidden),
               fence: Number(row.fence)
             }
@@ -84,10 +88,14 @@ export class JournalSqlStatusContext {
 
   item = (id: string) => this.current(id)?.item
 
-  /** Visibility and Stop display are committed by the owning writer with the current payload. */
+  /** Semantic display uses the writer's saved Stop rewrite without shortening ordinary items. */
   displayed = (id: string): AgentJournalRenderItem | null => {
     const row = this.current(id)
-    return row && !row.hidden ? row.item : null
+    return row && !row.hidden
+      ? row.displayJson === null
+        ? row.item
+        : this.scope.decode<AgentJournalRenderItem>(row.displayJson)
+      : null
   }
 
   submission = (id: string) => {

@@ -21,6 +21,7 @@ import {
 } from './journal-domain-lifecycle'
 import { journalLifecycleMutationItemId } from './writing/journal-lifecycle-mutation'
 import { journalDomainContextHead } from './journal-sql-continuation-context'
+import { applyJournalDomainLifecycleOperation } from './journal-domain-taken-stop'
 
 export type JournalDomainStepsCommit = JournalDomainLifecycleCommit & { value: JournalStepsResult }
 
@@ -100,6 +101,19 @@ function writeStep(
   savedAt: number
 ): { commit?: JournalDomainLifecycleCommit; outcome: JournalStepOutcome } {
   const { target } = command
+  if (step.kind === 'lifecycle') {
+    if (Buffer.byteLength(JSON.stringify(step.input), 'utf8') + 512 > step.reservedBytes) {
+      throw new Error('structured agent-session transition step exceeded its reserved size')
+    }
+    const commit = applyJournalDomainLifecycleOperation(
+      db,
+      target,
+      { kind: 'lifecycle', input: step.input },
+      savedAt,
+      command.facts?.stopSettle
+    )
+    return { commit, outcome: { kind: 'committed', wrote: commit.coordinates.length > 0 } }
+  }
   const view = journalDomainTimelineReads(
     db,
     target,

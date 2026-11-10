@@ -58,6 +58,7 @@ export type JournalDomainImportItem = {
   executionOwner: number | null
   hidden: boolean
   item: AgentJournalRenderItem
+  displayed?: AgentJournalRenderItem
   turnItemId: string | null
   originalStopNoteJson: string | null
   queueCommandTurn: boolean
@@ -197,22 +198,27 @@ function* importPages(
   )
   yield* paged(
     'items',
-    items.map(([key, item], index) => ({
-      ordinal: index + 1,
-      ownerFence: state.itemFences.get(key) ?? 0,
-      executionOwner: state.itemExecutionOwners.get(key) ?? null,
-      hidden: !journalInputPresentationMember(state, key),
-      queueCommandTurn: isCommand(item),
-      queueFailedOutcome: settledFailure(item),
-      queueFailedAt: journalInputOrder(state).newestTurn.importFailure(key).failedAt,
-      queueFailureWitnessedThrough:
-        journalInputOrder(state).newestTurn.importFailure(key).witnessedThrough,
-      queueFailureReportTurnItemId: (() => {
-        const report = reportedTurnItemId(item)
-        return report === null ? null : (state.aliases.get(report) ?? report)
-      })(),
-      ...journalDomainStopNote(item, (id) => state.items.get(id))
-    }))
+    items.map(([key, item], index) => {
+      const stop = journalDomainStopNote(item, (id) => state.items.get(id))
+      return {
+        ordinal: index + 1,
+        ownerFence: state.itemFences.get(key) ?? 0,
+        executionOwner: state.itemExecutionOwners.get(key) ?? null,
+        hidden: !journalInputPresentationMember(state, key),
+        queueCommandTurn: isCommand(item),
+        queueFailedOutcome: settledFailure(item),
+        queueFailedAt: journalInputOrder(state).newestTurn.importFailure(key).failedAt,
+        queueFailureWitnessedThrough:
+          journalInputOrder(state).newestTurn.importFailure(key).witnessedThrough,
+        queueFailureReportTurnItemId: (() => {
+          const report = reportedTurnItemId(item)
+          return report === null ? null : (state.aliases.get(report) ?? report)
+        })(),
+        ...stop,
+        item,
+        ...(stop.item === item ? {} : { displayed: stop.item })
+      }
+    })
   )
   yield* paged(
     'tombstones',

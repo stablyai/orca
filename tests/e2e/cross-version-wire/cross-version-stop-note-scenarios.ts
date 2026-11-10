@@ -40,7 +40,10 @@ export function describeReleasedStopNoteProjection(port: ScenarioPort): void {
           }
         )
         expect(render(state)).toMatchObject({ type: 'text', text: ordinary.text })
-        expect(state.items[0]).toEqual(items.find((item) => item.itemId === noteId))
+        expect(state.items[0]).toEqual({
+          ...items.find((item) => item.itemId === noteId),
+          body: ordinary
+        })
         expect(await rig.journal.reads.itemBody(noteId)).toEqual(stored)
       })
       it.each([false, true])(
@@ -52,11 +55,15 @@ export function describeReleasedStopNoteProjection(port: ScenarioPort): void {
           const replies = await subscribe()
           replies.length = 0
           await turn('interrupted', batch)
-          // The note's batch follows the committed turn end.
+          const committed = rig.journal.cursor()
+          // Select the ordinary turn batch, excluding an asynchronous initial note correction.
           const event = await vi.waitFor(() => {
             const found = events(replies).find(
               (event) =>
-                event.type === 'batch' && event.batch.items.some((item) => item.itemId === noteId)
+                event.type === 'batch' &&
+                event.batch.cursor.epoch === committed.epoch &&
+                event.batch.cursor.sequence === committed.sequence &&
+                event.batch.items.some((item) => item.itemId === turnItemId)
             )
             expect(found).toBeDefined()
             return found

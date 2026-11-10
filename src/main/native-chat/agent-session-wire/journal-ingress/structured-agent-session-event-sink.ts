@@ -223,19 +223,21 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
   const appendLifecycleBatch = (
     settlementId: string,
     mutations: readonly JournalLifecycleIdentityMutationInput[]
-  ): StructuredAgentSessionSinkAdmission =>
-    queue.submit({
-      bytes: Buffer.byteLength(JSON.stringify({ settlementId, mutations }), 'utf8') + 512,
-      run: (bound) =>
-        bound.journal.appendLifecycleBatch({
-          settlementId,
-          mutations,
-          // Preserve per-mutation linkage instead of stamping the whole row.
-          fence: bound.fence,
-          // Provider observations use the bound child’s execution fence.
-          ownerFence: bound.fence
-        })
+  ): StructuredAgentSessionSinkAdmission => {
+    const reservedBytes =
+      Buffer.byteLength(JSON.stringify({ settlementId, mutations }), 'utf8') + 1024
+    return queue.submit({
+      bytes: reservedBytes,
+      operations: Math.max(1, mutations.length),
+      steps: (bound) => [
+        {
+          kind: 'lifecycle',
+          reservedBytes,
+          input: { settlementId, mutations, fence: bound.fence, ownerFence: bound.fence }
+        }
+      ]
     })
+  }
 
   const publish = (
     options: StructuredAgentSessionPublishOptions = {}
@@ -253,12 +255,15 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
   ) =>
     queue.submit({
       bytes: estimateStructuredAgentSessionItemBytes(identity, body),
-      run: (bound) =>
-        bound.journal.appendItem(
+      steps: (bound) => [
+        {
+          kind: 'item',
           identity,
           body,
-          structuredAgentSessionJournalAppendOptions(bound.fence, options)
-        )
+          reservedBytes: estimateStructuredAgentSessionItemBytes(identity, body),
+          options: structuredAgentSessionJournalAppendOptions(bound.fence, options)
+        }
+      ]
     })
 
   const appendTombstone = (
@@ -321,10 +326,7 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
       queue.close()
     },
     drained: queue.barrier,
-    lifecycleBarrier: () => {
-      queue.flushLiveText()
-      return queue.barrier()
-    },
+    lifecycleBarrier: queue.barrier,
     state: queue.state
   }
 }

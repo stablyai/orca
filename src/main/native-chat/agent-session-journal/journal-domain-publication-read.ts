@@ -5,6 +5,7 @@ import type {
 import type { AgentSessionForkedFrom } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { journalContextEpoch } from './context-epochs/journal-context-cursor'
 import type { JournalSqlScope } from './journal-sql-scope'
+import { journalDomainFullDisplaySql } from './journal-domain-stop-notes'
 
 export type JournalPublicationRead =
   | {
@@ -49,7 +50,7 @@ export function readJournalDomainPublication(
         ])
       ]
       const rows = db
-        .prepare(`SELECT item.payload_json FROM json_each(?) wanted
+        .prepare(`SELECT ${journalDomainFullDisplaySql('item')} AS payload_json FROM json_each(?) wanted
         CROSS JOIN journal_items item INDEXED BY journal_items_visible_position
         WHERE item.session_id=? AND item.epoch=? AND item.hidden=0 AND item.sequence=wanted.value
         ORDER BY item.sequence,item.sequence_index,item.ordinal`)
@@ -70,7 +71,7 @@ export function readJournalDomainPublication(
     case 'projected-stop-notes': {
       const limit = Math.max(1, Math.min(128, Math.floor(operation.limit)))
       const rows = db
-        .prepare(`SELECT ordinal,payload_json FROM journal_items
+        .prepare(`SELECT ordinal,COALESCE(wire_json,payload_json) AS payload_json FROM journal_items
         INDEXED BY journal_items_original_stop_note
         WHERE session_id=? AND epoch=? AND hidden=0 AND original_stop_note_json IS NOT NULL
         AND ordinal>? ORDER BY ordinal LIMIT ?`)

@@ -94,7 +94,7 @@ export function writeJournalDomainCurrentItem(
   })
   const next = stopNote.item
   const sequence = input.writtenSequence ?? next.sequence
-  const failure = journalDomainQueueFailure(db, target, next, input.previous?.item, sequence)
+  const failure = journalDomainQueueFailure(db, target, item, input.previous?.item, sequence)
   const previousReport =
     input.previous && reportedTurnItemId(input.previous.item) !== null
       ? db
@@ -102,8 +102,8 @@ export function writeJournalDomainCurrentItem(
         WHERE session_id=? AND epoch=? AND item_id=?`)
           .get(...prefix, next.itemId)
       : undefined
-  const payload = JSON.stringify(next)
-  const { metadata, values } = journalDomainItemColumns(next, payload)
+  const payload = JSON.stringify(item)
+  const { metadata, values } = journalDomainItemColumns(item, payload, next)
   db.prepare(`INSERT INTO journal_items(session_id,epoch,item_id,ordinal,revision,sequence,sequence_index,owner_fence,execution_owner,payload_json,
       hidden,original_stop_note_json,queue_command_turn,queue_failed_outcome,queue_failed_at,
       queue_failure_witnessed_through,queue_failure_report_turn_item_id,placement_json,${JOURNAL_DOMAIN_ITEM_COLUMNS.join(',')})

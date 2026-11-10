@@ -15,6 +15,9 @@ import { journalSqlRetryRows } from './journal-sql-retry-rows.test-fixture'
 import type { JournalRow } from './durable-rows/journal-row-schema'
 import { messageFixture, target } from './journal-sql-message.test-fixture'
 import { readJournalSqlPoint } from './journal-sql-point-read'
+import { JournalSqlScope } from './journal-sql-scope'
+import { JournalSqlStatusContext } from './journal-sql-status-context'
+import { removeJournalDomainItem } from './journal-domain-item-removal'
 
 const close: (() => void)[] = []
 afterEach(() => close.splice(0).forEach((fn) => fn()))
@@ -48,11 +51,16 @@ function fixture() {
     )
   const turn = (state: 'running' | 'interrupted' | 'completed') =>
     write('turn-1', { kind: 'turn', turnId: 'turn-1', state })
-  return { ...value, write, turn }
+  const display = () =>
+    readJournalSqlPoint(value.db, {
+      sessionId: 'chat',
+      operation: { kind: 'item-detail', itemId: noteId }
+    })
+  return { ...value, write, turn, display }
 }
 
-it('commits Stop display revisions with the turn, catches up by ordinary identities, and restores the exact source', () => {
-  const { db, item, write, turn } = fixture()
+it('commits Stop display with the turn at its original revision and restores the exact source', () => {
+  const { db, item, write, turn, display } = fixture()
   turn('running')
   const noted = write('stop:turn-1', original, turnId)
   expect(noted.items[0]!.body).toEqual(original)
@@ -65,13 +73,36 @@ it('commits Stop display revisions with the turn, catches up by ordinary identit
   }
   const stopped = turn('interrupted')
   expect(stopped.items.map((value) => value.itemId)).toEqual([turnId, noteId])
-  expect(item(noteId)).toMatchObject({
-    revision: 2,
-    sequence: 12,
-    observedAt: 20,
-    body: { kind: 'status', text: 'Cancellation requested.' }
+  expect(item(noteId)).toMatchObject({ revision: 1, sequence: 12, observedAt: 20, body: original })
+  expect(display()).toMatchObject({
+    item: {
+      revision: 1,
+      sequence: 12,
+      observedAt: 20,
+      body: { kind: 'status', text: 'Cancellation requested.' }
+    }
   })
-  expect(item(noteId)!.body).not.toHaveProperty('failure')
+  const context = new JournalSqlStatusContext(new JournalSqlScope(db, 'chat', 'epoch'))
+  expect(context.item(noteId)?.body).toEqual(original)
+  expect(context.displayed(noteId)?.body).toEqual({
+    kind: 'status',
+    text: 'Cancellation requested.'
+  })
+  expect(
+    readJournalSqlPoint(db, {
+      sessionId: 'chat',
+      operation: {
+        kind: 'fork-marker-group',
+        boundary: { kind: 'item', itemId: noteId }
+      }
+    })
+  ).toMatchObject({
+    snapshot: {
+      items: [
+        { itemId: noteId, revision: 1, body: { kind: 'status', text: 'Cancellation requested.' } }
+      ]
+    }
+  })
   expect(
     readJournalSqlPoint(db, {
       sessionId: 'chat',
@@ -102,6 +133,7 @@ it('commits Stop display revisions with the turn, catches up by ordinary identit
   }
   expect(cursors).toEqual([13, 14, 15])
   expect(seen).toEqual(['orca:large-1', 'orca:large-2', turnId, noteId])
+  expect(turn('interrupted').items.map((value) => value.itemId)).toEqual([turnId])
   expect(turn('completed').items.at(-1)!.body).toEqual(original)
   expect(
     readJournalSqlPoint(db, {
@@ -109,7 +141,7 @@ it('commits Stop display revisions with the turn, catches up by ordinary identit
       operation: { kind: 'projected-stop-notes', afterOrdinal: -1, limit: 128 }
     })
   ).toMatchObject({ kind: 'projected-stop-notes', items: [], nextOrdinal: null })
-  expect(item(noteId)).toMatchObject({ revision: 3, sequence: 12, observedAt: 20, body: original })
+  expect(item(noteId)).toMatchObject({ revision: 1, sequence: 12, observedAt: 20, body: original })
   write('stop:turn-1', { kind: 'status', text: 'Confirmed.' }, turnId)
   expect(
     db
@@ -120,7 +152,7 @@ it('commits Stop display revisions with the turn, catches up by ordinary identit
 })
 
 it('rolls back both the changed turn and its Stop revision when the derived write fails', () => {
-  const { db, item, write, turn } = fixture()
+  const { db, item, write, turn, display } = fixture()
   turn('interrupted')
   expect(write('stop:turn-1', original, turnId).items[0]!.body).toEqual({
     kind: 'status',
@@ -133,17 +165,42 @@ it('rolls back both the changed turn and its Stop revision when the derived writ
     WHEN NEW.item_id='orca:stop%3Aturn-1' BEGIN SELECT RAISE(ABORT, 'stop revision failed'); END`)
   expect(() => turn('completed')).toThrow('stop revision failed')
   expect(item(turnId)!.body).toEqual({ kind: 'turn', turnId: 'turn-1', state: 'interrupted' })
-  expect(item(noteId)).toMatchObject({
-    revision: 1,
-    body: { kind: 'status', text: 'Cancellation requested.' }
+  expect(item(noteId)).toMatchObject({ revision: 1, body: original })
+  expect(display()).toMatchObject({
+    item: { revision: 1, body: { kind: 'status', text: 'Cancellation requested.' } }
   })
   expect(
     db.prepare('SELECT sequence,changes_json FROM journal_events ORDER BY sequence').all()
   ).toEqual(before)
 })
 
+it('keeps full semantic source when an unprojected Stop has a shortened wire head and restores it on removal', () => {
+  const { db, item, write, turn, display } = fixture()
+  const large = {
+    kind: 'status' as const,
+    text: 'x'.repeat(2_097_152),
+    failure: { kind: 'cancelUnconfirmed' as const }
+  }
+  turn('running')
+  write('stop:turn-1', large, turnId)
+  const context = () => new JournalSqlStatusContext(new JournalSqlScope(db, 'chat', 'epoch'))
+  expect(context().displayed(noteId)?.body).toEqual(large)
+  expect(display()).toMatchObject({ item: { body: large } })
+  expect(turn('running').items.map((value) => value.itemId)).toEqual([turnId])
+  turn('interrupted')
+  const revised = { ...large, text: 'New source failure.' }
+  expect(write('stop:turn-1', revised, turnId).items[0]).toMatchObject({
+    revision: 2,
+    body: { kind: 'status', text: 'Cancellation requested.' }
+  })
+  expect(item(noteId)).toMatchObject({ revision: 2, body: revised })
+  const removed = runJournalTransaction(db, () => removeJournalDomainItem(db, target, turnId, 100))
+  expect(removed.items).toMatchObject([{ itemId: noteId, revision: 2, body: revised }])
+  expect(display()).toMatchObject({ item: { revision: 2, body: revised } })
+})
+
 it('imports an already interrupted Stop from the complete raw source even when its note page precedes its turn', () => {
-  const { db, item } = fixture()
+  const { db, item, display } = fixture()
   db.exec('DELETE FROM journal_chat_state')
   const { db: source } = openJournalDatabase(':memory:')
   close.push(() => source.close())
@@ -186,10 +243,9 @@ it('imports an already interrupted Stop from the complete raw source even when i
     })
   }
   runJournalTransaction(db, () => finishJournalDomainImport(db, header))
-  expect(item(noteId)).toMatchObject({
-    revision: 4,
-    sequence: 2,
-    body: { kind: 'status', text: 'Cancellation requested.' }
+  expect(item(noteId)).toMatchObject({ revision: 4, sequence: 2, body: original })
+  expect(display()).toMatchObject({
+    item: { revision: 4, sequence: 2, body: { kind: 'status', text: 'Cancellation requested.' } }
   })
   expect(
     db
