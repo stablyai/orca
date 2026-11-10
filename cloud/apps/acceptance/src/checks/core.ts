@@ -39,14 +39,21 @@ export const coreChecks: Record<string, Check> = {
   },
 
   'sub.size': async (ctx) => {
+    // Conductor parity: 8 vCPU / 16 GB for everyone. Standard is 8/16 since core U18 (#194); the old
+    // `large` value maps to Standard.
     const p = await ctx.primary()
     const r = await ctx.exec(p.sandbox.session!.id, 'nproc; awk "/MemTotal/{print int(\\$2/1024/1024+0.5)}" /proc/meminfo')
     const [cpus, memGb] = r.stdout.trim().split('\n').map(Number)
-    const large = await control.as(ctx.solo, 'POST', '/v1/sandboxes', { workspaceId: 'w9-xl', machineSize: 'xlarge' })
-    const ok = cpus === 4 && (memGb ?? 0) >= 7
+    const large = await ctx.sandboxes.create(ctx.solo, { workspaceId: 'w9-large-alias', machineSize: 'large' })
+    const largeSize = large.body?.sandbox?.machineSize
+    if (large.status === 200) {
+      await ctx.sandboxes.destroy(large.body.sandbox.id)
+    }
+    const xl = await control.as(ctx.solo, 'POST', '/v1/sandboxes', { workspaceId: 'w9-xl', machineSize: 'xlarge' })
+    const ok = cpus === 8 && (memGb ?? 0) >= 15 && large.status === 200 && largeSize === 'standard'
     return {
       status: ok ? 'pass' : 'fail',
-      detail: `standard = ${cpus} vCPU / ${memGb} GB; xlarge refused with ${large.status} (${large.body?.error}). Large (8 vCPU) is exercised in the benchmark run.`,
+      detail: `standard = ${cpus} vCPU / ${memGb} GB (Conductor: 8 / 16); machineSize 'large' -> ${large.status} as '${largeSize}'; xlarge -> ${xl.status} (${xl.body?.error})`,
       evidence: [log('nproc/mem', r.stdout)]
     }
   },
