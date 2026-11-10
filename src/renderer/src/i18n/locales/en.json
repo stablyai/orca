@@ -27427,7 +27427,12 @@
       "edit": "Edit",
       "empty": "No agent keys in Cloud secrets.",
       "emptyMember": "Add your own, or ask an owner or admin for a team key.",
-      "manage": "Open Cloud secrets"
+      "manage": "Open Cloud secrets",
+      "loading": "Loading keys…",
+      "noneHere": "No keys apply to this host.",
+      "addOne": "Add one in Agent API keys",
+      "scopeAll": "Every host except Orca Cloud",
+      "scopeHosts": "Only the hosts you picked"
     },
     "unreachable": "Couldn’t reach Orca Cloud.",
     "section": {
@@ -27529,6 +27534,19 @@
       "sshDisconnected": "Open a workspace on {{host}} to sign in or out.",
       "unreachable": "Can’t reach {{host}}. Sign-in and sign-out need it online.",
       "archived": "This workspace is archived."
+    },
+    "host": {
+      "signedIn": "Signed in",
+      "apiKey": "Signed in with an API key",
+      "signedOut": "Signed out",
+      "notInstalled": "Not installed",
+      "unknown": "Not checked yet",
+      "signOut": "Sign out…",
+      "cantCheck": "Orca can’t check sign-ins on {{host}} yet. Start an agent in a workspace there to sign in.",
+      "noAnswer": "{{host}} didn’t answer. It may run an older Orca.",
+      "checking": "Checking…",
+      "lastChecked": "last checked {{date}}",
+      "signInHint": "Start {{agent}} in a workspace on {{host}} to sign in."
     }
   },
   "cloudSecretsAsk": {

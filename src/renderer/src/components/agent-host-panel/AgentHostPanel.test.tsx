@@ -3,7 +3,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Sheet } from '@/components/ui/sheet'
 import type { OrcaCloudAgentsStatus } from '../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
-import { CloudHostPanel } from './AgentHostPanel'
+import { CloudHostPanel, HostPanel } from './AgentHostPanel'
 import type { ResolvedAgentHost } from './use-agent-host'
 
 const STATUS: OrcaCloudAgentsStatus = {
@@ -98,5 +98,58 @@ describe('AgentHostPanel on Orca Cloud', () => {
       'agentApiKeys.list'
     ])
     expect(calls.filter((call) => !allowed.has(call))).toEqual([])
+  })
+})
+
+describe('AgentHostPanel on hosts with their own login', () => {
+  const stopped = (
+    kind: ResolvedAgentHost['kind'],
+    availability: ResolvedAgentHost['availability']
+  ): ResolvedAgentHost => ({
+    hostId: 'runtime:env-2',
+    label: 'Ubuntu-24.04',
+    kind,
+    availability,
+    environmentId: 'env-2',
+    cloud: null
+  })
+
+  it.each([
+    ['wsl', 'stopped'],
+    ['recipe', 'suspended'],
+    ['paired', 'unreachable'],
+    ['sshOrcad', 'disconnected']
+  ] as const)(
+    'never asks a %s host that is %s (no start, resume, wake or connect)',
+    async (kind, availability) => {
+      const calls: string[] = []
+      Object.defineProperty(window, 'api', { value: recordingApi(calls), configurable: true })
+      render(
+        <Sheet open>
+          <HostPanel host={stopped(kind, availability)} />
+        </Sheet>
+      )
+      await waitFor(() => expect(calls).toContain('agentApiKeys.list'))
+      const allowed = new Set(['agentApiKeys.list', 'ephemeralVm.forwardedEnvSummary'])
+      expect(calls.filter((call) => !allowed.has(call))).toEqual([])
+    }
+  )
+
+  it('shows why sign-in actions are off on a stopped distro', async () => {
+    const calls: string[] = []
+    Object.defineProperty(window, 'api', { value: recordingApi(calls), configurable: true })
+    render(
+      <Sheet open>
+        <HostPanel host={stopped('wsl', 'stopped')} />
+      </Sheet>
+    )
+    expect(
+      await screen.findByText(
+        'Ubuntu-24.04 is stopped. Opening a workspace on it starts it as usual.'
+      )
+    ).toBeTruthy()
+    expect(
+      screen.getByText('Sign-ins inside the distro. Windows sign-ins don’t carry over.')
+    ).toBeTruthy()
   })
 })

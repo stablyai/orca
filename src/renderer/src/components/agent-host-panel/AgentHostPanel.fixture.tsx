@@ -264,3 +264,4 @@ export const hostMenu = defineFixture({
     </div>
   )
 })
+export * from './agent-host-panel-host-fixtures'
