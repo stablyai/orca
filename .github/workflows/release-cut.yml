@@ -686,6 +686,7 @@ jobs:
 
       - name: Create draft release with bounded generated notes
         env:
+          SOURCE_SHA: ${{ needs.cut.outputs.source_sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.cut.outputs.tag }}
         run: node config/scripts/release/publication/create-draft-release.mjs "$TAG"
