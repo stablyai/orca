@@ -64,7 +64,8 @@ export type TerminalState = {
   pendingStartupByTabId: Record<
     string,
     {
-      command: string
+      /** Absent when the startup carries only spawn env, e.g. a paired viewer's plain terminal (#39852). */
+      command?: string
       delivery?: 'terminal-paste'
       startupCommandDelivery?: StartupCommandDelivery
       env?: Record<string, string>

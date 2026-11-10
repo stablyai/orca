@@ -8,7 +8,7 @@ import {
   Trash2
 } from 'lucide-react'
 import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Button } from '../ui/button'
 import { HoverCardContent } from '../ui/hover-card'
 import { formatBytes, getWorkspaceSpaceBranchLabel } from './workspace-space-format'

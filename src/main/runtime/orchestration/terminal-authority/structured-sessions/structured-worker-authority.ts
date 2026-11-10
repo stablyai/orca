@@ -106,13 +106,9 @@ export function isRecordedStructuredWorkerSession(
   sessionId: OrcaSessionId,
   db: OrchestrationDb
 ): boolean {
-  return Boolean(
-    db.db
-      .prepare(
-        `SELECT 1 FROM dispatch_contexts
-         WHERE assignee_orca_session_id = ? AND process_incarnation = ? LIMIT 1`
-      )
-      .get(sessionId, structuredWorkerProcessIncarnation(sessionId))
+  return db.hasRecordedStructuredWorkerSession(
+    sessionId,
+    structuredWorkerProcessIncarnation(sessionId)
   )
 }
 

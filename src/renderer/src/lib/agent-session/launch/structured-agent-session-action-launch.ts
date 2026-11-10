@@ -6,7 +6,7 @@ import {
   getStructuredLaunchStateBySessionId,
   publishStructuredLaunchChange
 } from './structured-agent-session-launch-registry'
-import { focusTerminalTabSurface } from '../../focus-terminal-tab-surface'
+import { focusTerminalTabSurface } from '../../../components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import type { Tab } from '../../../../../shared/tab-types'
 import type { StructuredAgentLaunchSettlement } from './continuation/structured-agent-launch-settlement'
 import type { ProvisionalLaunchArgs } from '../structured-agent-session-provisional-tab'

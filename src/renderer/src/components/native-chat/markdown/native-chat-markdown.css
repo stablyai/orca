@@ -25,6 +25,11 @@
   font-size: 1.0714285714em;
 }
 
+/* 13/14 keeps the default table size; em follows Text size the way headings do. */
+.native-chat-markdown table {
+  font-size: 0.9285714286em;
+}
+
 .native-chat-markdown a {
   word-break: normal;
   overflow-wrap: anywhere;

@@ -73,3 +73,20 @@ it('records where a resumed process really started over the folder its seed name
 
   expect(recordedSession()?.cwd).toBe('/elsewhere')
 })
+
+it('names the pane session from a --fork-session start, which Claude 2.1.214+ reports as fork', async () => {
+  // Captured from Claude 2.1.321 `claude --resume <id> --fork-session` before any message.
+  await claudeHook({
+    session_id: 'b47ec7fc-07e4-4012-8b28-1d5daa938f52',
+    transcript_path:
+      '/Users/u/.claude/projects/-private-tmp-w39942fork/b47ec7fc-07e4-4012-8b28-1d5daa938f52.jsonl',
+    cwd: '/private/tmp/w39942fork',
+    hook_event_name: 'SessionStart',
+    source: 'fork'
+  })
+
+  expect(recordedSession()).toMatchObject({
+    id: 'b47ec7fc-07e4-4012-8b28-1d5daa938f52',
+    cwd: '/private/tmp/w39942fork'
+  })
+})

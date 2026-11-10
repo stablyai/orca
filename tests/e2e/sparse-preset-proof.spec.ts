@@ -244,7 +244,7 @@ test('sparse preset editor visual proof', async ({ orcaPage }, testInfo) => {
     state.openSettingsTarget({ pane: 'repo', repoId: active.repoId })
     state.openSettingsPage()
   })
-  await orcaPage.getByRole('button', { name: 'New Preset', exact: true }).click()
+  await orcaPage.getByRole('button', { name: /^New preset$/i }).click()
   const settingsEditor = orcaPage.getByRole('region', { name: 'New sparse preset' })
   await settingsEditor.getByLabel('Name', { exact: true }).fill('web app and shared ui')
   await addDirectory(settingsEditor, 'apps/web')
@@ -254,7 +254,7 @@ test('sparse preset editor visual proof', async ({ orcaPage }, testInfo) => {
   await expect(orcaPage.getByRole('dialog')).toHaveCount(0)
   await capture('preset-settings')
   await settingsEditor.getByRole('button', { name: 'Cancel', exact: true }).click()
-  await expect(orcaPage.getByRole('button', { name: 'New Preset', exact: true })).toBeFocused()
+  await expect(orcaPage.getByRole('button', { name: /^New preset$/i })).toBeFocused()
   await orcaPage
     .getByRole('button', { name: /^Edit (Shared UI|Web app and shared UI)$/ })
     .first()

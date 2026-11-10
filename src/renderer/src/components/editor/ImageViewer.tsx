@@ -1,6 +1,6 @@
 import { Image as ImageIcon, Maximize2, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
 import { type JSX, type SyntheticEvent, useMemo, useState } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import PdfViewer from './PdfViewer'
 import { IMAGE_VIEWER_ZOOM_STEP } from './image-viewer-zoom'
 import type { PanZoomSize } from '../../../../shared/pan-zoom-view'
