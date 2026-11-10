@@ -1,5 +1,3 @@
-import { useSourceControlReview } from './use-source-control-review'
-import { entryReviewSource } from '@/lib/editor/diff-reviewed-files'
 import React from 'react'
 import { ChevronDown, MessageSquare, Minus, Plus, Trash, Undo2 } from 'lucide-react'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
@@ -43,6 +41,7 @@ import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-la
 export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   entryKey,
   entry,
+  viewed,
   currentWorktreeId,
   worktreePath,
   depth = 0,
@@ -62,6 +61,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   submoduleExpansion
 }: {
   entryKey: string
+  viewed: boolean
   entry: GitStatusEntry
   currentWorktreeId: string
   worktreePath: string
@@ -82,8 +82,6 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   // When set, the row is a dirty submodule: clicking toggles lazy expansion instead of opening an uninformative gitlink diff.
   submoduleExpansion?: { isExpanded: boolean; onToggle: () => void }
 }): React.JSX.Element {
-  const review = useSourceControlReview(currentWorktreeId, worktreePath)
-  const viewed = review.isViewed(entry, entryReviewSource(entry))
   const t = useTranslate()
   useUiLanguageRevision()
   const fileName = basename(entry.path)

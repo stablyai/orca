@@ -1,4 +1,3 @@
-import { useSourceControlReview } from './use-source-control-review'
 import React from 'react'
 import { MessageSquare } from 'lucide-react'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
@@ -22,6 +21,7 @@ import { useTranslate } from '@/i18n/use-translate'
 
 export function BranchEntryRow({
   entry,
+  viewed,
   currentWorktreeId,
   worktreePath,
   depth = 0,
@@ -32,6 +32,7 @@ export function BranchEntryRow({
   commentCount,
   showPathHint = true
 }: {
+  viewed: boolean
   entry: GitBranchChangeEntry
   currentWorktreeId: string
   worktreePath: string
@@ -43,8 +44,6 @@ export function BranchEntryRow({
   commentCount: number
   showPathHint?: boolean
 }): React.JSX.Element {
-  const review = useSourceControlReview(currentWorktreeId, worktreePath)
-  const viewed = review.isViewed(entry, 'branch')
   const t = useTranslate()
   const fileName = basename(entry.path)
   const parentDir = dirname(entry.path)

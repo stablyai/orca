@@ -34,6 +34,7 @@ const empty = new Set<string>()
 const noBranches = []
 const submoduleStatus = {}
 afterEach(() => {
+  vi.restoreAllMocks()
   cleanup()
   useAppStore.setState(useAppStore.getInitialState(), true)
 })
@@ -44,6 +45,7 @@ it.each([
 ])(
   'moves viewed rows below unviewed rows, restores alphabetical order on unmark, and resets after file edits at %s',
   async (rootPath, eventRoot) => {
+    vi.spyOn(Date, 'now').mockReturnValue(1800000000000)
     useAppStore.setState(useAppStore.getInitialState(), true)
     useAppStore.setState({
       activeWorktreeId: 'wt-1',
@@ -62,7 +64,7 @@ it.each([
     )
     const key = diffReviewKey(owner, 'a.ts', 'unstaged')
     const record = {
-      viewedAt: 1,
+      viewedAt: 1800000000000,
       modifiedTime: 123,
       contentSignature: 'reviewed-content',
       entrySignature: '["modified",null,1,1]'

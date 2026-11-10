@@ -41,9 +41,15 @@ export function nextDiffReviewEntry(
   }
   const isUnviewed = (entry: DiffReviewNavigationEntry) =>
     records.get(entry.key)?.entrySignature !== entry.entrySignature
-  const unviewed = entries.filter(isUnviewed)
-  if (!entries.slice(index + 1).some(isUnviewed) && unviewed.length > 1) {
-    return entries[index === 0 ? entries.length - 1 : index - 1]
+  for (let i = index + 1; i < entries.length; i += 1) {
+    if (isUnviewed(entries[i])) {
+      return entries[i]
+    }
+  }
+  for (let i = index - 1; i >= 0; i -= 1) {
+    if (isUnviewed(entries[i])) {
+      return entries[i]
+    }
   }
   return entries[(index + 1) % entries.length]
 }

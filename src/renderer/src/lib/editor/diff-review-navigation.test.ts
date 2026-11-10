@@ -21,4 +21,11 @@ describe('Viewed file navigation', () => {
     expect(nextDiffReviewEntry(entries, 'c', new Map())?.key).toBe('b')
     expect(nextDiffReviewEntry(entries, 'missing', new Map())).toBeUndefined()
   })
+  it('skips viewed neighbors in both directions', () => {
+    const records = new Map([
+      ['b', { viewedAt: 1, modifiedTime: null, contentSignature: '', entrySignature: 'b' }]
+    ])
+    expect(nextDiffReviewEntry(entries, 'a', records)?.key).toBe('c')
+    expect(nextDiffReviewEntry(entries, 'c', records)?.key).toBe('a')
+  })
 })

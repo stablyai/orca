@@ -11,6 +11,8 @@ export type ReviewedDiff = {
   contentSignature: string
   entrySignature: string
 }
+const MAX_RECORDS = 5000
+const MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000
 const STORAGE_KEY = 'orca.reviewed-diffs.v1'
 const listeners = new Set<() => void>()
 let records: ReadonlyMap<string, ReviewedDiff> | undefined
@@ -93,6 +95,18 @@ export function setDiffReviewed(key: string, value: ReviewedDiff | null): void {
     next.set(key, value)
   } else if (!next.delete(key)) {
     return
+  }
+  const cutoff = Date.now() - MAX_AGE_MS
+  for (const [recordKey, record] of next) {
+    if (record.viewedAt < cutoff) {
+      next.delete(recordKey)
+    }
+  }
+  if (next.size > MAX_RECORDS) {
+    const oldest = [...next].sort((a, b) => a[1].viewedAt - b[1].viewedAt)
+    for (const [recordKey] of oldest.slice(0, next.size - MAX_RECORDS)) {
+      next.delete(recordKey)
+    }
   }
   records = next
   try {
