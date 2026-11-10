@@ -43,7 +43,15 @@ type FolderOpenArgs = {
 export async function openDetectedFolder(args: FolderOpenArgs): Promise<void> {
   const { folderPath, hostWorkspaceFile, onFailure } = args
   if (args.openWithSystemDefault) {
-    await window.api.shell.openFilePath(folderPath, LOCAL_EXECUTION_HOST_ID)
+    let opened = false
+    try {
+      opened = await window.api.shell.openFilePath(folderPath, LOCAL_EXECUTION_HOST_ID)
+    } catch {
+      opened = false
+    }
+    if (!opened) {
+      onFailure({ verdict: 'unavailable' })
+    }
     return
   }
   if (hostWorkspaceFile) {

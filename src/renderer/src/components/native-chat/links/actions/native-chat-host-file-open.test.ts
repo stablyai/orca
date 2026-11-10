@@ -161,6 +161,27 @@ it('reports a paired folder outside the workspace instead of revealing it', asyn
   expect(onOpenFailure).toHaveBeenCalledWith({ verdict: 'unavailable' })
 })
 
+it('reports a local folder the OS could not open', async () => {
+  const folderPath = '/home/me/project/docs'
+  const localContext = {
+    worktreeId: 'wt-local',
+    worktreePath: '/home/me/project',
+    runtimeEnvironmentId: null
+  }
+  storeState.activeWorktreeId = localContext.worktreeId
+  statMock.mockResolvedValue({ isDirectory: true })
+  openFilePathMock.mockResolvedValue(false)
+  const onOpenFailure = vi.fn()
+  openDetectedFilePath(folderPath, null, null, {
+    ...nativeChatFileOpenDeps({ absolutePath: folderPath, line: null, column: null }, localContext),
+    onOpenFailure
+  })
+  await flushDoubleRaf()
+
+  expect(openFilePathMock).toHaveBeenCalledWith(folderPath, 'local')
+  expect(onOpenFailure).toHaveBeenCalledWith({ verdict: 'unavailable' })
+})
+
 it('labels a trailing-separator folder link as Open folder', () => {
   const actions = nativeChatFileLinkActions(
     { absolutePath: '/srv/repo/docs', line: null, column: null, isDirectoryHint: true },
