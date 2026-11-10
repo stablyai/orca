@@ -4,7 +4,7 @@ import {
   normalizeRuntimePathForComparison
 } from '../../../../shared/cross-platform-path'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { getRendererAppPlatform } from '../renderer-app-platform'
+import { getRendererAppPlatform } from '../../app-shell/platform/renderer-app-platform'
 
 export type LatencyPercentiles = {
   count: number

@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { importExternalPathsToRuntime } from '@/runtime/files/imports/runtime-file-import-client'
 import { translate } from '@/i18n/i18n'

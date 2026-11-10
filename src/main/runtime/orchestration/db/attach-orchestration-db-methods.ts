@@ -11,6 +11,7 @@ import { attachFederationRelayAck } from './federation/federation-relay-ack'
 import { attachLegacyRemoteDbMethods } from '../legacy-remote/legacy-remote-db-methods'
 import { attachLegacyRemoteHomeDbMethods } from '../legacy-remote-home/legacy-remote-home-db-methods'
 import { attachPeerMailStore } from './federation/peer-mail-store'
+import { attachPeerRunStore } from './peer-runs/peer-run-store'
 import { attachLegacyAskOperation } from './legacy/legacy-ask-operation'
 import { attachLegacyCompatibilityCandidates } from './legacy/legacy-compatibility-candidates'
 import { attachLegacyCompatibilityPrincipals } from './legacy/legacy-compatibility-principals'
@@ -107,6 +108,7 @@ export function attachOrchestrationDbMethods(ctor: { prototype: object }): void 
   attachLegacyRemoteDbMethods(ctor)
   attachFederationRelayAck(ctor)
   attachPeerMailStore(ctor)
+  attachPeerRunStore(ctor)
   attachWorkerTerminalResourceStore(ctor)
   attachWorkerTerminalTransfer(ctor)
   attachWorkerTerminalRelease(ctor)

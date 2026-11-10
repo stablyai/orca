@@ -5,7 +5,7 @@ import {
 } from '@/components/github/use-github-image-uploads'
 import React, { useCallback, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { reviewCommentMarkdown } from './review-comment-markdown'
 import { CommentReactions } from '@/components/github/CommentReactions'

@@ -12,7 +12,7 @@ import { getOrchestrationPaneSearchEntries } from '@/components/settings/orchest
 import { getVoicePaneSearchEntries } from '@/components/settings/voice/voice-pane-search'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { SettingsNavSection } from '@/lib/settings-navigation-types'
+import type { SettingsNavSection } from '@/components/settings/navigation/settings-navigation-types'
 import {
   Blocks,
   Bot,

@@ -25,6 +25,7 @@ export default function PinnedTabCloseDialog(): React.JSX.Element {
   const [previousRequest, setPreviousRequest] = useState(request)
 
   const tabLabel = request?.tabLabel.trim()
+  const unsentNotes = request?.unsentNotes === true
 
   // Reset new requests before paint without reviving a cancelled request’s checkbox state.
   if (request !== previousRequest) {
@@ -53,16 +54,26 @@ export default function PinnedTabCloseDialog(): React.JSX.Element {
       <DialogContent className="max-w-sm" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle className="text-sm">
-            {t(
-              'auto.components.terminal.pane.PinnedTabCloseDialog.6c190f295a',
-              'Close pinned tab?'
-            )}
+            {unsentNotes
+              ? t(
+                  'auto.components.terminal.pane.PinnedTabCloseDialog.unsent_notes_title',
+                  'Discard unsent notes?'
+                )
+              : t(
+                  'auto.components.terminal.pane.PinnedTabCloseDialog.6c190f295a',
+                  'Close pinned tab?'
+                )}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {t(
-              'auto.components.terminal.pane.PinnedTabCloseDialog.0d1963f4a6',
-              'This tab is pinned. Are you sure you want to close it?'
-            )}
+            {unsentNotes
+              ? t(
+                  'auto.components.terminal.pane.PinnedTabCloseDialog.unsent_notes_description',
+                  "This tab has notes you haven't sent. Closing it discards them."
+                )
+              : t(
+                  'auto.components.terminal.pane.PinnedTabCloseDialog.0d1963f4a6',
+                  'This tab is pinned. Are you sure you want to close it?'
+                )}
           </DialogDescription>
         </DialogHeader>
         {tabLabel ? (
@@ -70,19 +81,21 @@ export default function PinnedTabCloseDialog(): React.JSX.Element {
             {tabLabel}
           </p>
         ) : null}
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id={checkboxId}
-            checked={dontAskAgain}
-            onCheckedChange={(checked) => setDontAskAgain(checked === true)}
-          />
-          <Label htmlFor={checkboxId} className="text-xs font-normal text-muted-foreground">
-            {t(
-              'auto.components.terminal.pane.PinnedTabCloseDialog.dont_ask_again',
-              "Don't ask again for pinned tabs"
-            )}
-          </Label>
-        </div>
+        {unsentNotes ? null : (
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id={checkboxId}
+              checked={dontAskAgain}
+              onCheckedChange={(checked) => setDontAskAgain(checked === true)}
+            />
+            <Label htmlFor={checkboxId} className="text-xs font-normal text-muted-foreground">
+              {t(
+                'auto.components.terminal.pane.PinnedTabCloseDialog.dont_ask_again',
+                "Don't ask again for pinned tabs"
+              )}
+            </Label>
+          </div>
+        )}
         <DialogFooter className="gap-2">
           <Button type="button" variant="outline" size="sm" onClick={dismissPinnedTabClose}>
             {t('auto.components.terminal.pane.PinnedTabCloseDialog.0b38ee2f86', 'Cancel')}

@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, Copy } from 'lucide-react'
-import { cn } from '../../lib/utils'
+import { cn } from '../../lib/class-names'
 import type { PairingNetworkInterface } from '../../../../shared/pairing-address-auto-selection'
 import { AndroidLogo, IosBrandIcon } from './MobileBrandIcons'
 import type { InstallCopy } from './mobile-platform-copy'

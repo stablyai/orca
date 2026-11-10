@@ -148,10 +148,7 @@ vi.mock('../../../../../../shared/new-workspace/workspace-source', async (import
   isGitLabIssueUrl: vi.fn(() => false)
 }))
 
-vi.mock('@/lib/telemetry', () => ({
-  track: vi.fn(),
-  tuiAgentToAgentKind: mockLaunchAgentKind
-}))
+vi.mock('@/diagnostics/telemetry/telemetry', () => ({ track: vi.fn() }))
 const mockLaunchAgentKind = vi.hoisted(() => (agent: string) => agent)
 vi.mock('../../../../../../shared/agent-kind', async (importOriginal) => ({
   ...(await importOriginal<typeof LaunchAgentKindModule>()),

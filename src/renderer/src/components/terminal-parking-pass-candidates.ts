@@ -12,7 +12,8 @@ import {
   type TerminalWorktreeRetentionCandidate
 } from './terminal-pane/parking/retention/terminal-hidden-worktree-retention'
 import { getTerminalParkingPolicyOverrides } from './terminal-pane/parking/instrumentation/terminal-parking-e2e-overrides'
-import { canWatcherCoverParkedTerminalTab } from './terminal-pane/parking/output-watchers/terminal-parked-tab-watchers'
+import './terminal-pane/parking/output-watchers/terminal-parked-tab-watchers'
+import { canWatcherCoverParkedTerminalTab } from './terminal-pane/parking/output-watchers/parked-terminal-tab-coverage'
 import { getHeldTerminalPrewarmWorktrees } from './terminal/terminal-worktree-prewarm'
 import type { TerminalParkingFoundation } from './use-terminal-parking-foundation'
 

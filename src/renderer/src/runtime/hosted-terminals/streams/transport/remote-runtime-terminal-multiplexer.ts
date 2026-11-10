@@ -3,8 +3,8 @@ import {
   encodeTerminalStreamJson
 } from '../../../../../../shared/terminal/stream/terminal-stream-protocol'
 import type { TerminalOutputCadence } from '../../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
-import { e2eDisableRemoteTerminalStallRecovery } from '@/lib/e2e-config'
-import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { e2eDisableRemoteTerminalStallRecovery } from '@/app-shell/startup/e2e-config'
+import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
 import { RemoteRuntimeTerminalBinaryController } from '../frames/remote-runtime-terminal-binary-controller'
 import { CONTROL_STREAM_ID } from '../frames/remote-terminal-multiplex-event'
 import { disposeRemoteTerminalStreamState } from '../remote-terminal-stream-disposal'

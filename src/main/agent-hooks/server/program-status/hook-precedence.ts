@@ -41,11 +41,19 @@ export function programStatusHookYieldEndsAt(
   ) {
     return Infinity
   }
-  // Settled turns are naturally silent; a later wait must prove intervening program work.
-  if (previous.payload.state === 'done' && payload.state === 'waiting') {
-    return programWorkingSince !== undefined && programWorkingSince > previous.receivedAt
+  // A settled turn yields only to program work begun after it (a replayed done keeps its own time):
+  // Codex re-reports the settled turn's working while a background terminal it started runs.
+  if (
+    previous.payload.state === 'done' &&
+    (payload.state === 'waiting' || payload.state === 'working')
+  ) {
+    const doneAt = previous.evidenceObservedAt ?? previous.receivedAt
+    if (programWorkingSince === undefined || programWorkingSince <= doneAt) {
+      return Infinity
+    }
+    return payload.state === 'waiting'
       ? undefined
-      : Infinity
+      : previous.receivedAt + HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS
   }
   // A question sends no hooks while open, so a `working` that began before it (e.g. re-sent by the
   // lease renewal) proves nothing; a working transition after it keeps the silence fallback.

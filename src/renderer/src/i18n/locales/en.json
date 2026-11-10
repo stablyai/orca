@@ -2266,7 +2266,8 @@
         "setupAgentStartupPolicySaveFailed": "Failed to save setup startup behavior.",
         "5f3d2c8a1b": "Failed to resolve MR base.",
         "dropPartiallyAttached_one": "{{failureCount}} of {{count}} item could not be attached.",
-        "dropPartiallyAttached_other": "{{failureCount}} of {{count}} items could not be attached."
+        "dropPartiallyAttached_other": "{{failureCount}} of {{count}} items could not be attached.",
+        "folderSetupSupportCheckFailed": "Couldn't confirm whether this host runs folder setup scripts. Try again."
       },
       "useGlobalFileDrop": {
         "38c9f034ff": "Failed to upload dropped files.",
@@ -2287,6 +2288,7 @@
       "useIpcEvents": {
         "0e3cf53060": "Browser tab {{value0}} not found",
         "2f6637fe6c": "Browser tab {{value0}} is pinned",
+        "unsent_notes_close_canceled": "Browser tab {{value0}} has unsent notes, and the user kept it open",
         "a8d2bf8e9e": "No active browser tab to close",
         "f000b2ff76": "No active worktree",
         "7a64b31991": "Local terminal creation is unavailable while a remote runtime is active",
@@ -4510,7 +4512,9 @@
             "0d1963f4a6": "This tab is pinned. Are you sure you want to close it?",
             "dont_ask_again": "Don't ask again for pinned tabs",
             "0b38ee2f86": "Cancel",
-            "c337c9d75c": "Close"
+            "c337c9d75c": "Close",
+            "unsent_notes_title": "Discard unsent notes?",
+            "unsent_notes_description": "This tab has notes you haven't sent. Closing it discards them."
           },
           "TerminalSshReconnectOverlay": {
             "authFailed": "Authentication failed for {{value0}}. Connect again to continue this terminal session.",
@@ -11188,11 +11192,9 @@
             "fbfd2386e8": "archive script",
             "4c17787d7b": "archive",
             "8655e3387b": "hooks",
-            "acd1157f0c": "Local and shared scripts that run before a worktree is archived.",
             "491b05d6e6": "setup command",
             "a31b43a7f8": "setup script",
             "5590388dfa": "setup",
-            "baaf70bb37": "Local and shared scripts that run after a new worktree is created.",
             "d73fb47b45": ".claude/mcp.json",
             "db11b337c4": ".claude.json",
             "26f42fe773": ".cursor/mcp.json",
@@ -13789,7 +13791,8 @@
           "worktreeRemoved": "When a workspace is removed",
           "agentStatusChanged": "When an agent’s status changes",
           "detail": "Background code runs",
-          "workspaceChanged": "When you switch workspace or its terminals change"
+          "workspaceChanged": "When you switch workspace or its terminals change",
+          "editorTypographyChanged": "When the editor font or zoom changes"
         },
         "pluginInstallAction": {
           "installed": "{{value0}} installed",
@@ -18873,6 +18876,8 @@
           "reloaded": "Reloaded"
         },
         "FolderWorkspaceSourceControl": {
+          "changeCount_one": "{{count}} change",
+          "changeCount_other": "{{count}} changes",
           "openWorktree": "Open this worktree",
           "reconnect": "Reconnect to see this worktree’s changes."
         },
@@ -21613,6 +21618,15 @@
       },
       "repositoryHooks": {
         "availableEnvVars": "Available environment variables"
+      },
+      "RepositoryHooksSection": {
+        "folderRunPolicyDescription": "Default behavior when a new workspace is created.",
+        "folderTitle": "Workspace hooks",
+        "folderDescription": "Scripts that run in this folder when a workspace is created or removed. Every workspace shares the folder. Local scripts are stored on this machine; `orca.yaml` scripts are shared with your team.",
+        "folderSetupDescription": "Local and shared scripts that run after a new workspace is created.",
+        "folderArchiveDescription": "Local and shared scripts that run before a workspace is removed.",
+        "folderSetupFieldDescription": "Runs after a new workspace is created; create child worktrees, install deps, copy env files.",
+        "folderArchiveFieldDescription": "Runs before a workspace is removed."
       }
     },
     "agentChildRow": {

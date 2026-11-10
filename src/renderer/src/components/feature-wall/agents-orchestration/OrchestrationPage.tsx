@@ -20,7 +20,7 @@ import {
 import { arrowPathFromCoordTo, bubblePathBetweenRows } from './orchestration-bubble-path'
 import { AgentRow, WorkspaceCard } from './orchestration-cards'
 import { useTranslate } from '@/i18n/use-translate'
-import { forceLayoutReflow } from '@/lib/force-layout-reflow'
+import { forceLayoutReflow } from '@/lib/overlay-interaction/force-layout-reflow'
 
 const INITIAL_CHILD_PENDING: RowPending = {
   'child-codex': true,
