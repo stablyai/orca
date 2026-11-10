@@ -84,7 +84,8 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
     onChildWorkChanged: (sessionId, producer) => {
       subagentRows.changed(sessionId, producer)
       args.onChildWorkChanged?.(sessionId)
-    }
+    },
+    drainChildWork: (sessionId) => subagentRows.drain(sessionId)
   })
   return feed
 }

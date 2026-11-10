@@ -61,6 +61,7 @@ export type StructuredAgentSessionStatusFeedDeps = {
     sessionId: string,
     producer?: StructuredAgentSessionChildWorkProducer
   ) => void
+  drainChildWork?: (sessionId?: string) => Promise<void>
   namingActiveSessionIds?: () => string[]
   namingFailure?: (sessionId: string) => StructuredChatNamingFailure | undefined
   onAgentStarted?: (sessionId: string) => void

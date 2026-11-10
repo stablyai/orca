@@ -3,7 +3,6 @@ import { createStructuredAgentSessionConversationReads } from './structured-agen
 import { continuationContextReader as contextReader } from '../recovery/structured-agent-session-continuation-context'
 import { structuredAgentStartJournal } from '../acquisition/structured-agent-start-journal'
 import { StructuredConversationCommandController as CommandController } from '../operations/structured-conversation-command-controller'
-// Serialize durable mutations per conversation; open at rest and start a child only when work needs it.
 
 import type { AgentSessionSubscribeInput } from '../publication/subscribers/agent-session-subscribe-input'
 import { createStartupRecovery } from '../recovery/structured-agent-session-restart-reconcile'
@@ -85,7 +84,7 @@ export class StructuredAgentSessionHost {
       (id, e) => this.eventRecovery.recoverAfterSinkFailure(id, e),
       (expired) => this.lifetime.expireStartup(expired),
       (id) => this.conversationDelivery?.loop.isRunning(id) ?? false,
-      this.clientDelivery.childWorkOpen
+      this.clientDelivery
     )
     this.conversationDelivery = conversation.createStructuredAgentSessionConversationDelivery({
       deps,

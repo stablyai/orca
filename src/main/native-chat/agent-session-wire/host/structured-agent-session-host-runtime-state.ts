@@ -25,6 +25,7 @@ import { recordAgentSessionStartup } from '../../../observability/agent-session-
 import { StructuredAgentSessionStartupAttempts } from '../startup/structured-agent-session-startup-attempt'
 
 import type { StructuredAgentSessionExpiredStartup } from '../startup/structured-agent-session-startup-tracking'
+import type { StructuredAgentSessionClientDelivery } from '../publication/subscribers/structured-agent-session-client-delivery'
 import {
   StructuredAgentSessionStartupContractError,
   StructuredAgentSessionStartupExpiredError
@@ -48,7 +49,10 @@ export class StructuredAgentSessionHostRuntimeState {
     /** Expire published starts; still-acquiring attempts abort here. */
     onStartupExpired?: (expired: StructuredAgentSessionExpiredStartup) => void,
     private readonly deliveryActive?: (sessionId: string) => boolean,
-    private readonly childWorkOpen?: (sessionId: string) => boolean
+    private readonly childWork?: Pick<
+      StructuredAgentSessionClientDelivery,
+      'childWorkOpen' | 'drainChildWork'
+    >
   ) {
     this.acquireAborts = new StructuredAgentSessionAcquireAborts((id) => this.refreshActivity(id))
     this.startFlights = new StructuredAgentSessionStartFlights((id) => this.refreshActivity(id))
@@ -166,7 +170,7 @@ export class StructuredAgentSessionHostRuntimeState {
             this.executing(sessionId) ||
               work.activeTurn ||
               work.actionablePrompt ||
-              this.childWorkOpen?.(sessionId) === true
+              this.childWork?.childWorkOpen(sessionId) === true
           )
         } catch (error) {
           if (!current()) {
@@ -253,20 +257,31 @@ export class StructuredAgentSessionHostRuntimeState {
     this.refreshActivity(sessionId)
   }
 
-  flushEventSink(sessionId: string): Promise<void> {
-    return this.requireSuccessfulBarrier(
+  async flushEventSink(sessionId: string): Promise<void> {
+    await this.requireSuccessfulBarrier(
+      this.currentEventSink(sessionId)?.drained() ?? Promise.resolve({ ok: true } as const)
+    )
+    await this.childWork?.drainChildWork(sessionId)
+    await this.requireSuccessfulBarrier(
       this.currentEventSink(sessionId)?.drained() ?? Promise.resolve({ ok: true } as const)
     )
   }
 
-  lifecycleBarrier(sessionId: string): Promise<StructuredAgentSessionSinkBarrier> {
-    return this.eventSinks.get(sessionId)?.lifecycleBarrier() ?? Promise.resolve({ ok: true })
+  async lifecycleBarrier(sessionId: string): Promise<StructuredAgentSessionSinkBarrier> {
+    const barrier = await (this.eventSinks.get(sessionId)?.lifecycleBarrier() ??
+      Promise.resolve({ ok: true } as const))
+    if (!barrier.ok) {
+      return barrier
+    }
+    await this.childWork?.drainChildWork(sessionId)
+    return this.eventSinks.get(sessionId)?.lifecycleBarrier() ?? { ok: true }
   }
 
   async flushAllEventSinks(): Promise<void> {
     await Promise.all(
       [...this.eventSinks.values()].map((sink) => this.requireSuccessfulBarrier(sink.drained()))
     )
+    await this.childWork?.drainChildWork()
   }
 
   private async requireSuccessfulBarrier(

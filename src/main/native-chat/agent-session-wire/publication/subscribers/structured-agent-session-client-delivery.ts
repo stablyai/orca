@@ -148,6 +148,8 @@ export class StructuredAgentSessionClientDelivery {
 
   drainStatusWrites = (): Promise<void> => this.savedStatus.drain()
 
+  drainChildWork = (sessionId?: string): Promise<void> => this.statusFeed.drainChildWork(sessionId)
+
   publishSavedStatusGroup = (
     visit: Parameters<StructuredAgentSessionStatusFeed['publishSavedGroup']>[0]
   ): void => this.statusFeed.publishSavedGroup(visit)
@@ -278,6 +280,7 @@ export class StructuredAgentSessionClientDelivery {
 
   async closeAll(): Promise<void> {
     this.publications?.endPublications()
+    await this.drainChildWork()
     await this.drainStatusWrites()
     this.requestFailures.clear()
     this.stopAtRestCommandUpdates()

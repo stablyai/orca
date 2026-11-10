@@ -166,7 +166,9 @@ export function createSavedStructuredStatusGroup(
     }
     const summary = savedStructuredAgentSessionStatus(record, markerAt)
     published.set(record.sessionId, { summary, firstInputSubmissionKey: null })
-    sink(summary, record.location, publisher)
+    if (summary.status !== null) {
+      sink(summary, record.location, publisher)
+    }
     broadcast({ type: 'status', session: summary })
   }
   return (visit) => {

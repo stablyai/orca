@@ -8,6 +8,8 @@ import type {
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AgentSessionTurnActivity } from '../../../../shared/agent-session/agent-session-wire'
+import type { StructuredAgentSessionPublishOptions } from './structured-agent-session-dispatch'
+export type { StructuredAgentSessionPublishOptions } from './structured-agent-session-dispatch'
 import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type { JournalLifecycleIdentityMutationInput } from '../../agent-session-journal/writing/journal-lifecycle-mutation'
 import type { JournalTimelineItemResolution } from '../../agent-session-journal/writing/journal-timeline-resolution'
@@ -47,13 +49,6 @@ export type StructuredAgentSessionAppendOptions = AgentJournalProducerLinkage & 
   observedAt?: number
 }
 
-export type StructuredAgentSessionPublishOptions = Pick<
-  StructuredAgentSessionAppendOptions,
-  'lifecycle'
-> & {
-  coalescingKey?: string
-}
-
 /** Creation fixes turn scope; revisions keep it. */
 export type StructuredAgentSessionItemAppendOptions = StructuredAgentSessionAppendOptions & {
   echoOf?: JournalItemEcho['echoOf']
@@ -89,6 +84,7 @@ export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSi
     options?: StructuredAgentSessionAppendOptions
   ): StructuredAgentSessionSinkAdmission
   publish(options?: StructuredAgentSessionPublishOptions): void
+  publishChildWork?: StructuredAgentSessionSinkQueue['publishChildWork']
   /** Not ok if any admitted write failed or close dropped it unwritten. */
   written?(): Promise<StructuredAgentSessionSinkBarrier>
   setActivity?(activity: AgentSessionTurnActivity | null): void
@@ -309,6 +305,7 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
       appendTombstone: (identity) => void appendTombstone(identity),
       tryAppendTombstone: appendTombstone,
       publish: (options = {}) => void publish(options),
+      publishChildWork: queue.publishChildWork,
       written: queue.written,
       setActivity: (activity) => {
         queue.submit({

@@ -246,7 +246,7 @@ export class StructuredAgentSessionStatusFeed {
     const previous = this.acceptedSends.get(sessionId)
     this.acceptedSends.set(sessionId, acceptedSendKey)
     if (previous !== undefined && acceptedSendKey !== previous) {
-      this.admitChildWork(sessionId, session, [
+      this.ownership.admitChildWork(this.deps, sessionId, session, [
         { type: 'turn-started', observedAt: this.deps.now() }
       ])
     }
@@ -265,12 +265,21 @@ export class StructuredAgentSessionStatusFeed {
     producer?: StructuredAgentSessionChildWorkProducer,
     observed?: (projection: StructuredAgentSessionJournalProjection) => void
   ): void {
-    const session = this.deps.sessions.get(sessionId)
-    if (!session || !this.admitChildWork(sessionId, session, evidence, producer)) {
-      return
-    }
-    this.publish(sessionId, undefined, undefined, observed)
+    this.ownership.publishChildWorkAfterWrites(
+      this.deps,
+      sessionId,
+      evidence,
+      producer,
+      (session) => {
+        if (this.ownership.admitChildWork(this.deps, sessionId, session, evidence, producer)) {
+          this.publish(sessionId, session.journal, undefined, observed)
+        }
+      }
+    )
   }
+
+  drainChildWork = (sessionId?: string): Promise<void> =>
+    this.deps.drainChildWork?.(sessionId) ?? Promise.resolve()
 
   readChildWork(sessionId: string): AgentChildWorkView[] | undefined {
     try {
@@ -297,26 +306,6 @@ export class StructuredAgentSessionStatusFeed {
 
   readChildWorkRecords = (sessionId: string): AgentChildWorkRecord[] | undefined =>
     this.ownership.readChildWorkRecords(sessionId)
-
-  private admitChildWork(
-    sessionId: string,
-    session: StatusFeedSession,
-    evidence: AgentChildWorkEvidence[],
-    producer?: StructuredAgentSessionChildWorkProducer
-  ): boolean {
-    try {
-      this.ownership.publishChildWork(sessionId, evidence, session.params.provider)
-    } catch (error) {
-      this.logFailure('child-work-publish', 'child work publish failed', sessionId, error)
-      return false
-    }
-    try {
-      this.deps.onChildWorkChanged?.(sessionId, producer)
-    } catch (error) {
-      this.logFailure('child-work-observer', 'child work observer failed', sessionId, error)
-    }
-    return true
-  }
 
   private sink(
     summary: AgentSessionStatusSummary,

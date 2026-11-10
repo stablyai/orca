@@ -1,9 +1,65 @@
-import type { StructuredAgentSessionEventTarget } from './structured-agent-session-event-sink'
 import type {
   JournalWriterStep,
   JournalStepsResult
 } from '../../agent-session-journal/writing/journal-writer-step'
 import { restoreJournalSqlFailure } from '../../agent-session-journal/journal-sql-failure'
+import type { AgentChildWorkEvidence } from '../../../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
+import type {
+  StructuredAgentSessionEventTarget,
+  StructuredAgentSessionSinkAdmission,
+  StructuredAgentSessionAppendOptions
+} from './structured-agent-session-event-sink'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+
+export type StructuredAgentSessionPublishOptions = Pick<
+  StructuredAgentSessionAppendOptions,
+  'lifecycle'
+> & {
+  coalescingKey?: string
+}
+
+export type ChildWorkPublication = (
+  evidence: readonly AgentChildWorkEvidence[],
+  publish: (journal: SqlAgentSessionJournal) => void
+) => StructuredAgentSessionSinkAdmission
+
+export function createLiveTextPublication(
+  submit: (
+    operation: Omit<StructuredAgentSessionSinkOperation, 'sequence'>
+  ) => StructuredAgentSessionSinkAdmission,
+  current: (bound: StructuredAgentSessionEventTarget) => boolean,
+  read: () => readonly AgentJournalRenderItem[]
+): () => StructuredAgentSessionSinkAdmission {
+  return () =>
+    submit({
+      bytes: 1,
+      publicationKey: 'live-text',
+      run: (bound) => {
+        if (current(bound)) {
+          bound.publishLiveText?.(read())
+        }
+      }
+    })
+}
+
+export function createChildWorkPublication(
+  submit: (
+    operation: Omit<StructuredAgentSessionSinkOperation, 'sequence'>
+  ) => StructuredAgentSessionSinkAdmission,
+  current: (bound: StructuredAgentSessionEventTarget) => boolean
+): ChildWorkPublication {
+  return (evidence, publish) =>
+    submit({
+      bytes: Buffer.byteLength(JSON.stringify(evidence), 'utf8') + 64,
+      run: (bound) =>
+        bound.journal.readInOrder(() => {
+          if (current(bound)) {
+            publish(bound.journal)
+          }
+        })
+    })
+}
 
 export type StructuredAgentSessionSinkOperation = {
   sequence: number

@@ -4,6 +4,8 @@ import type * as events from './structured-agent-session-event-sink'
 import type { StructuredAgentSessionHistoryJournal } from './structured-agent-session-journal-views'
 import { StructuredAgentSessionSinkSnapshots } from './structured-agent-session-sink-snapshots'
 import {
+  createChildWorkPublication,
+  createLiveTextPublication,
   StructuredAgentSessionDispatch,
   runStructuredAgentSessionSinkOperation,
   type Admitted,
@@ -48,16 +50,16 @@ export class StructuredAgentSessionSinkQueue {
 
   flushLiveText = (): void => this.snapshots.flushLiveText()
 
-  publishLiveText = (): events.StructuredAgentSessionSinkAdmission =>
-    this.submit({
-      bytes: 1,
-      publicationKey: 'live-text',
-      run: (bound) => {
-        if (this.target === bound) {
-          bound.publishLiveText?.(this.liveText())
-        }
-      }
-    })
+  publishLiveText = createLiveTextPublication(
+    (operation) => this.submit(operation),
+    (bound) => this.target === bound,
+    this.liveText
+  )
+
+  publishChildWork = createChildWorkPublication(
+    (operation) => this.submit(operation),
+    (bound) => this.target === bound && !this.closed && this.failure === null
+  )
   readonly snapshots = new StructuredAgentSessionSinkSnapshots(() => {
     this.syncReading()
     this.notifyJournalBound()

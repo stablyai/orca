@@ -36,7 +36,7 @@ export type AgentChildWorkRowView = AgentChildWorkView &
 /** Writes through the reporting child’s sink and fence. */
 export type StructuredAgentSessionChildWorkProducer = Pick<
   StructuredAgentSessionEventSink,
-  'appendItem' | 'tryAppendItem' | 'written'
+  'appendItem' | 'tryAppendItem' | 'written' | 'publishChildWork'
 >
 
 type Row = {
@@ -67,6 +67,16 @@ export class StructuredAgentSessionSubagentRows {
   private readonly changes = new Map<string, Promise<void>>()
 
   constructor(private readonly deps: StructuredAgentSessionSubagentRowsDeps) {}
+
+  async drain(sessionId?: string): Promise<void> {
+    for (;;) {
+      const pending = sessionId ? [this.changes.get(sessionId)] : [...this.changes.values()]
+      if (!pending.some(Boolean)) {
+        return
+      }
+      await Promise.all(pending)
+    }
+  }
 
   /** Queue changed rows and unchanged running rows the reporting child has not claimed. */
   changed(sessionId: string, producer?: StructuredAgentSessionChildWorkProducer): void {
@@ -140,7 +150,7 @@ export class StructuredAgentSessionSubagentRows {
     }
     if (queued.size > 0) {
       this.queued.set(sessionId, queued)
-      void this.write(sessionId)
+      await this.write(sessionId)
     }
   }
 

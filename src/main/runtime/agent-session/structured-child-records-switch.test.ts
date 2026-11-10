@@ -155,12 +155,7 @@ describe('the chat strip and the session list read the same host child records',
         }
       }
     })
-    // Journal writes land asynchronously; let each frame's rows publish before the next.
-    const settle = async () => {
-      for (let tick = 0; tick < 5; tick += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 0))
-      }
-    }
+    const settle = () => host.flushStreamedEvents(SESSION)
     const notify = async (method: string, params: Record<string, unknown>) => {
       connections[0]?.onNotification?.(method, params)
       await settle()
@@ -174,7 +169,8 @@ describe('the chat strip and the session list read the same host child records',
     const parentRow = () => server.getStatusSnapshot().find((row) => row.structuredHost)
     const summaryRows = () => rows(summaries.at(-1)?.children)
     const stripRows = () => rows(strip.at(-1)?.children ?? undefined)
-    const both = (expected: Row[]) => {
+    const both = async (expected: Row[]) => {
+      await vi.waitFor(() => expect(stripRows()).toEqual(expected))
       expect(summaryRows()).toEqual(expected)
       const sources = collectRuntimeWorktreeAgentSources({
         hookSnapshots: server.getStatusSnapshot(),
@@ -190,21 +186,48 @@ describe('the chat strip and the session list read the same host child records',
       expect(stripRows()).toEqual(expected)
     }
 
-    await notify('turn/started', { threadId: THREAD, turn: { id: 'p1', status: 'inProgress' } })
-    await item('item/completed', THREAD, 'p1', {
-      type: 'agentMessage',
-      id: 'lead-1',
-      text: 'Spawning a reviewer'
+    const journal = host.collaboratorsForTests().sessions.get(SESSION)?.journal
+    if (!journal) {
+      throw new Error('expected the attached journal')
+    }
+    const entered = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    const held = journal.readInOrder(() => {
+      entered.resolve()
+      return release.promise
     })
-    await notify('turn/started', { threadId: REVIEWER, turn: { id: 'r1', status: 'inProgress' } })
-    await item('item/started', THREAD, 'p1', {
-      type: 'subAgentActivity',
-      id: 'spawn-1',
-      kind: 'started',
-      agentThreadId: REVIEWER,
-      agentPath: '/root/review'
-    })
-    both([{ kind: 'agent', description: 'review', state: 'working', membership: 'live' }])
+    await entered.promise
+    try {
+      connections[0]?.onNotification?.('turn/started', {
+        threadId: THREAD,
+        turn: { id: 'p1', status: 'inProgress' }
+      })
+      connections[0]?.onNotification?.('item/completed', {
+        threadId: THREAD,
+        turnId: 'p1',
+        item: { type: 'agentMessage', id: 'lead-1', text: 'Spawning a reviewer' }
+      })
+      connections[0]?.onNotification?.('turn/started', {
+        threadId: REVIEWER,
+        turn: { id: 'r1', status: 'inProgress' }
+      })
+      connections[0]?.onNotification?.('item/started', {
+        threadId: THREAD,
+        turnId: 'p1',
+        item: {
+          type: 'subAgentActivity',
+          id: 'spawn-1',
+          kind: 'started',
+          agentThreadId: REVIEWER,
+          agentPath: '/root/review'
+        }
+      })
+    } finally {
+      release.resolve()
+    }
+    await held
+    await settle()
+    await both([{ kind: 'agent', description: 'review', state: 'working', membership: 'live' }])
 
     await item('item/started', REVIEWER, 'r1', {
       type: 'commandExecution',
@@ -221,7 +244,7 @@ describe('the chat strip and the session list read the same host child records',
       status: 'inProgress'
     })
     // Foreground shell records keep status live; surfaces show the child's tool instead.
-    both([
+    await both([
       {
         kind: 'agent',
         description: 'review',
@@ -239,7 +262,7 @@ describe('the chat strip and the session list read the same host child records',
       status: 'completed',
       exitCode: 0
     })
-    both([
+    await both([
       {
         kind: 'agent',
         description: 'review',
@@ -256,7 +279,7 @@ describe('the chat strip and the session list read the same host child records',
 
     // The child finishes; the shell it launched still runs.
     await notify('turn/completed', { threadId: REVIEWER, turn: { id: 'r1', status: 'completed' } })
-    both([
+    await both([
       {
         kind: 'agent',
         description: 'review',
@@ -287,7 +310,7 @@ describe('the chat strip and the session list read the same host child records',
     expect(parentRow()).toMatchObject({ state: 'done' })
     // Finished child records remain until the user's next turn; exited command records are removed immediately.
     expect(summaries.at(-1)).not.toHaveProperty('children')
-    expect(strip.at(-1)).toBeNull()
+    await vi.waitFor(() => expect(strip.at(-1)).toBeNull())
     const stored = () => rows(server.getStructuredChildWorkViews(parentSubject(summaries)))
     expect(stored()).toEqual([
       {
@@ -335,17 +358,17 @@ describe('the chat strip and the session list read the same host child records',
       item: { type: 'userMessage', id: 'user-2', clientId: clientOperationId }
     })
     await vi.waitFor(() => expect(stored()).toEqual([]))
-    expect(strip.at(-1)).toBeNull()
+    await vi.waitFor(() => expect(strip.at(-1)).toBeNull())
     expect(summaries.at(-1)).not.toHaveProperty('children')
 
     // The reviewer's next run is still going when the provider exits: it settles with an outcome
     // nobody reported, and leaves both lists.
     await notify('turn/started', { threadId: REVIEWER, turn: { id: 'r2', status: 'inProgress' } })
-    both([{ kind: 'agent', description: 'review', state: 'working', membership: 'live' }])
+    await both([{ kind: 'agent', description: 'review', state: 'working', membership: 'live' }])
     connections[0]?.onExit?.(new Error('scripted provider exit'))
     await settle()
     expect(summaries.at(-1)).not.toHaveProperty('children')
-    expect(strip.at(-1)).toBeNull()
+    await vi.waitFor(() => expect(strip.at(-1)).toBeNull())
     expect(stored()).toEqual([
       {
         kind: 'agent',

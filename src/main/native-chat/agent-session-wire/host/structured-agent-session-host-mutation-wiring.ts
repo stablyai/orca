@@ -62,7 +62,12 @@ export function createStructuredAgentSessionHostMutationContext(
     },
     conversation: input.lifetime.conversation,
     readChildWork: input.clientDelivery.readChildWork,
-    publishChildWork: input.clientDelivery.publishChildWork,
+    publishChildWork: (sessionId, evidence) =>
+      input.clientDelivery.publishChildWork(
+        sessionId,
+        evidence,
+        input.runtimeState.currentEventSink(sessionId)?.sink
+      ),
     publishWorkChanged: (sessionId) => input.clientDelivery.publishGenerationEnded(sessionId),
     captureChildWorkStops: input.clientDelivery.captureChildWorkStops,
     childWorkOpen: input.clientDelivery.childWorkOpen,
