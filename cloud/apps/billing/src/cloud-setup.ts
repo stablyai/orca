@@ -14,7 +14,7 @@
 import { z } from 'zod'
 import type { BillingCaller } from './auth'
 import { createCheckout, OPEN_STATUSES } from './checkout'
-import type { TrialPort } from './cloud-setup-trial'
+import type { TrialGrantInput, TrialPort } from './cloud-setup-trial'
 import { computeEntitlement } from './entitlements'
 import type { Env } from './env'
 import type { MembershipSource } from './membership'
@@ -147,9 +147,11 @@ export type CreateSetupSessionResult =
 
 export async function createSetupSession(
   env: Env,
+  trial: TrialPort,
   caller: BillingCaller,
   body: z.infer<typeof CreateSetupSessionSchema>,
-  now: number
+  now: number,
+  ip?: string
 ): Promise<CreateSetupSessionResult> {
   const recent = await env.BILLING_DB.prepare(
     'SELECT COUNT(*) AS n FROM cloud_setup_sessions WHERE user_id = ?1 AND created_at > ?2'
@@ -195,6 +197,17 @@ export async function createSetupSession(
       expiresAt
     )
     .run()
+  if (keepTeam && orgAccount && needs.has('plan')) {
+    // The desktop's active team is the session's team: like a team setup picks, it gets its
+    // one-time trial now if it never had a plan or a trial, so the chain skips T3 and Checkout.
+    await grantTrialIfEligible(
+      env,
+      trial,
+      orgAccount,
+      { userId: caller.userId, ...(caller.email ? { email: caller.email } : {}), ...(ip ? { ip } : {}) },
+      now
+    )
+  }
   return { ok: true, id, url: setupPageUrl(env, '/start', { session: id, ticket }), expiresAt }
 }
 
@@ -461,28 +474,45 @@ export async function bindSetupTeam(
     },
     now
   )
-  const state = await planState(env, trial, accountId, now)
-  if (state.plan !== null || !parseNeeds(row).has('plan')) {
+  if (!parseNeeds(row).has('plan')) {
     return { ok: true, trial: 'not_needed' }
+  }
+  return { ok: true, trial: await grantTrialIfEligible(env, trial, accountId, body, now) }
+}
+
+/**
+ * The team's plan step: a live plan or trial needs nothing; a team that never had either gets its
+ * one-time trial now (N11 limits apply); one whose trial is used up goes to T3 and Checkout.
+ */
+async function grantTrialIfEligible(
+  env: Env,
+  trial: TrialPort,
+  accountId: string,
+  who: Omit<TrialGrantInput, 'accountId'>,
+  now: number
+): Promise<'granted' | 'unavailable' | 'not_needed'> {
+  const state = await planState(env, trial, accountId, now)
+  if (state.plan !== null) {
+    return 'not_needed'
   }
   if (state.trial) {
     // Had a trial and used it up: Checkout.
-    return { ok: true, trial: 'unavailable' }
+    return 'unavailable'
   }
   const granted = await trial.grant(
     env,
     {
       accountId,
-      userId: body.userId,
-      ...(body.email ? { email: body.email } : {}),
-      ...(body.emailVerified !== undefined ? { emailVerified: body.emailVerified } : {}),
-      ...(body.githubUserId ? { githubUserId: body.githubUserId } : {}),
-      ...(body.githubOwnerId ? { githubOwnerId: body.githubOwnerId } : {}),
-      ...(body.ip ? { ip: body.ip } : {})
+      userId: who.userId,
+      ...(who.email ? { email: who.email } : {}),
+      ...(who.emailVerified !== undefined ? { emailVerified: who.emailVerified } : {}),
+      ...(who.githubUserId ? { githubUserId: who.githubUserId } : {}),
+      ...(who.githubOwnerId ? { githubOwnerId: who.githubOwnerId } : {}),
+      ...(who.ip ? { ip: who.ip } : {})
     },
     now
   )
-  return { ok: true, trial: granted.ok ? 'granted' : 'unavailable' }
+  return granted.ok ? 'granted' : 'unavailable'
 }
 
 export const SetupErrorSchema = z
