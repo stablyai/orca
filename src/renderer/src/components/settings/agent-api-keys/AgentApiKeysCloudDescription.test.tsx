@@ -10,7 +10,7 @@ describe('AgentApiKeysCloudDescription', () => {
     const open = vi.fn()
     const { container } = render(<AgentApiKeysCloudDescription onOpenCloudSecrets={open} />)
     expect(container.textContent).toBe(
-      'Keys here are for this computer and your SSH and paired hosts. For Orca Cloud, use Cloud secrets.'
+      'Keys here work on this computer and your SSH and paired hosts. To use a key in cloud workspaces, save it to your Orca account in Cloud secrets.'
     )
     fireEvent.click(screen.getByRole('button', { name: 'Cloud secrets' }))
     expect(open).toHaveBeenCalledTimes(1)

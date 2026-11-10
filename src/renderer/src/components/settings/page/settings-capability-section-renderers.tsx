@@ -118,7 +118,7 @@ export function renderAgentApiKeysSettingsSection(
   return model.showDesktopOnlySettings ? (
     <SettingsSection
       id="agent-api-keys"
-      title={t('auto.components.settings.agentApiKeys.title', 'Agent API Keys')}
+      title={t('settings.agentApiKeys.title', 'Agent API keys')}
       description={
         model.orcaCloudApiAvailable ? (
           <AgentApiKeysCloudDescription

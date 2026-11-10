@@ -13,8 +13,8 @@ export function AgentApiKeysCloudDescription({
     <Trans
       i18n={i18n}
       defaults={t(
-        'settings.agentApiKeys.descriptionWithCloudLink',
-        'Keys here are for this computer and your SSH and paired hosts. For Orca Cloud, use <secrets>Cloud secrets</secrets>.'
+        'settings.agentApiKeys.descriptionCloudSecretsLink',
+        'Keys here work on this computer and your SSH and paired hosts. To use a key in cloud workspaces, save it to your Orca account in <secrets>Cloud secrets</secrets>.'
       )}
       components={{
         // Not <link>: the Trans parser treats HTML void tag names as self-closing.

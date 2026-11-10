@@ -21,18 +21,19 @@ export function runningOrcaCloudMcpWorkspaces(
   records: readonly EphemeralVmRuntimeRecord[]
 ): OrcaCloudMcpWorkspace[] {
   return records
-    .filter(
-      (record) =>
-        record.recipe?.provider === 'orca-cloud' &&
-        record.status === 'running' &&
-        Boolean(record.runtimeEnvironmentId)
-    )
+    .filter((record) => record.recipe?.provider === 'orca-cloud' && record.status === 'running')
     .sort((a, b) => b.createdAt - a.createdAt || a.id.localeCompare(b.id))
-    .map((record) => ({
-      runtimeId: record.id,
-      name: record.workspaceName || null,
-      environmentId: record.runtimeEnvironmentId as string
-    }))
+    .flatMap((record) =>
+      record.runtimeEnvironmentId
+        ? [
+            {
+              runtimeId: record.id,
+              name: record.workspaceName || null,
+              environmentId: record.runtimeEnvironmentId
+            }
+          ]
+        : []
+    )
 }
 
 export function OrcaCloudMcpServersView({

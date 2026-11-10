@@ -155,12 +155,11 @@ export function EphemeralVmRuntimeRow({
         <div className="px-4 pb-3 pl-8">
           <Button
             type="button"
-            variant="ghost"
+            variant="quiet"
             size="xs"
-            className="gap-1 text-muted-foreground hover:text-foreground"
             onClick={() => openSettingsTarget({ pane: 'cloud-mcp', repoId: null })}
             aria-label={t('settings.orcaCloud.mcp.openFor', 'MCP servers for {{name}}', {
-              name: runtime.workspaceName || runtime.recipeId
+              name: runtime.workspaceName || t('settings.orcaCloud.mcp.unnamed', 'Cloud workspace')
             })}
           >
             {t('cloudMcpSync.title', 'MCP servers')}

@@ -78,13 +78,13 @@ function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPr
 
 // Why a ring and not tabIndex -1: Radix makes every panel a tab stop (WAI-ARIA tabpanel), which
 // panels that start with text, not a control, need; so the stop must stay visible when reached.
-// Inset so panels inside overflow-hidden shells (dialogs, full-height panes) never clip it.
+// Offset like Button's ring so panel text never sits against it.
 function TabsContent({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Content>) {
   return (
     <TabsPrimitive.Content
       data-slot="tabs-content"
       className={cn(
-        'flex-1 rounded-md outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid focus-visible:outline-focus-ring',
+        'flex-1 rounded-md outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-focus-ring',
         className
       )}
       {...props}

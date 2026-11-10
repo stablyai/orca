@@ -73,11 +73,11 @@ export function buildCapabilitySettingsSections(
       ? [
           {
             id: 'agent-api-keys',
-            title: t('auto.components.settings.agentApiKeys.title', 'Agent API Keys'),
+            title: t('settings.agentApiKeys.title', 'Agent API keys'),
             description: isOrcaCloudApiAvailable
               ? t(
-                  'settings.agentApiKeys.descriptionWithCloud',
-                  'Keys here are for this computer and your SSH and paired hosts. For Orca Cloud, use Cloud secrets.'
+                  'settings.agentApiKeys.descriptionCloudSecrets',
+                  'Keys here work on this computer and your SSH and paired hosts. To use a key in cloud workspaces, save it to your Orca account in Cloud secrets.'
                 )
               : t(
                   'auto.components.settings.agentApiKeys.description',

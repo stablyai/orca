@@ -213,7 +213,7 @@ export const agentApiKeysHeader = defineFixture({
   render: () => (
     <Page
       id="agent-api-keys"
-      title="Agent API Keys"
+      title="Agent API keys"
       description={<AgentApiKeysCloudDescription onOpenCloudSecrets={noop} />}
     />
   )
