@@ -1,6 +1,6 @@
 import type { Translate } from '../i18n/mobile-i18n'
 import { isRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
-import type { CloudRole, CloudWorkspace } from './cloud-control-plane-client'
+import type { CloudRole, CloudSeatOwner, CloudWorkspace } from './cloud-control-plane-client'
 import { CloudRequestError } from './cloud-control-plane-request'
 import { CloudAttachError, type CloudAttachPhase } from './cloud-workspace-attach'
 import { entitlementDeniedMessage } from './cloud-entitlement-copy'
@@ -12,7 +12,8 @@ import { formatElapsed } from './cloud-workspace-display'
 export function attachErrorMessage(
   error: unknown,
   t: Translate,
-  role: CloudRole | null = null
+  role: CloudRole | null = null,
+  owner: CloudSeatOwner | null = null
 ): string {
   if (error instanceof CloudAttachError) {
     switch (error.code) {
@@ -51,7 +52,7 @@ export function attachErrorMessage(
       )
     }
     if (error.code === 'entitlement_denied') {
-      return entitlementDeniedMessage(error, role, 'existing', t)
+      return entitlementDeniedMessage(error, role, 'existing', t, owner)
     }
     if (error.code === 'network_error' || error.code === 'timeout') {
       return t(
