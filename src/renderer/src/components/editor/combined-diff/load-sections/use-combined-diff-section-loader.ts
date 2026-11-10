@@ -95,6 +95,7 @@ export function useCombinedDiffSectionLoader({
 
       let result: GitDiffResult
       let operation: ReturnType<typeof acquireCombinedDiffSectionOperation> | undefined
+      let reviewModifiedTime: Promise<number | null | undefined> | undefined
       let error: string | undefined
       try {
         operation = acquireCombinedDiffSectionOperation(file, entry.path)
@@ -110,6 +111,7 @@ export function useCombinedDiffSectionLoader({
         })
         result = loaded.result
         operation = loaded.operation
+        reviewModifiedTime = loaded.reviewModifiedTime
       } catch (err) {
         error = getDiffSectionLoadErrorMessage(err)
         result = {
@@ -162,7 +164,7 @@ export function useCombinedDiffSectionLoader({
       const current = sectionsRef.current[index]
       // Identical revalidation must not swap Monaco models or remeasure an unchanged row.
       const wasShowingContent = current !== undefined && !current.loading
-      if (
+      const unchanged =
         wasShowingContent &&
         isUnchangedDiffSectionReload(current, {
           diffResult: storedResult,
@@ -171,7 +173,29 @@ export function useCombinedDiffSectionLoader({
           originalContent: storedContent.originalContent,
           modifiedContent: storedContent.modifiedContent
         })
-      ) {
+      const expectedResult = unchanged ? current.diffResult : storedResult
+      void reviewModifiedTime?.then((time) => {
+        if (
+          error ||
+          generationRef.current !== gen ||
+          (sectionLoadTokensRef.current.get(index) ?? 0) !== loadToken
+        ) {
+          return
+        }
+        setSections((previous) => {
+          try {
+            operation?.assertCurrent()
+          } catch {
+            return previous
+          }
+          return previous.map((section, sectionIndex) =>
+            sectionIndex === index && !section.dirty && section.diffResult === expectedResult
+              ? { ...section, reviewModifiedTime: time }
+              : section
+          )
+        })
+      })
+      if (unchanged) {
         const provenanceChanged =
           JSON.stringify(current.operation?.provenance) !== JSON.stringify(operation?.provenance)
         // Persist the loaded index while retaining unchanged bodies and their models.

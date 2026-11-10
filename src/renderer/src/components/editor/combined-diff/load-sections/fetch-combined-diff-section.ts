@@ -1,3 +1,8 @@
+import { joinPath } from '@/lib/path'
+import {
+  statRuntimePath,
+  isMissingRuntimePathError
+} from '@/runtime/files/metadata/runtime-file-metadata-client'
 import {
   getRuntimeGitBranchDiff,
   getRuntimeGitCommitDiff,
@@ -32,12 +37,19 @@ export function fetchCombinedDiffSection({
   operation?: ReturnType<typeof acquireCombinedDiffSectionOperation>
 }): Promise<{
   result: GitDiffResult
+  reviewModifiedTime: Promise<number | null | undefined>
   operation: ReturnType<typeof acquireCombinedDiffSectionOperation>
 }> {
+  const reviewModifiedTime = Promise.resolve()
+    .then(() => statRuntimePath(operation.context, joinPath(file.filePath, entry.path)))
+    .then(
+      (stat) => stat.mtime,
+      (error: unknown) => (isMissingRuntimePathError(error) ? null : undefined)
+    )
   const retainResult = async (result: Promise<GitDiffResult>) => {
     const value = await result
     operation.assertCurrent()
-    return { result: value, operation }
+    return { result: value, operation, reviewModifiedTime }
   }
   if ((isBranchMode || (isAllMode && !('area' in entry))) && branchCompare) {
     return retainResult(

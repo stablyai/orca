@@ -39,6 +39,7 @@ import {
 } from './review-controls/combined-diff-skipped-conflicts'
 import { useCombinedDiffNotesActions } from './review-controls/use-combined-diff-notes-actions'
 import { useCombinedDiffSectionActions } from './review-controls/use-combined-diff-section-actions'
+import { useCombinedDiffReviewedCollapse } from './review-controls/use-combined-diff-reviewed-collapse'
 import { useCombinedDiffViewPreferences } from './review-controls/use-combined-diff-view-preferences'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 
@@ -112,6 +113,12 @@ export default function CombinedDiffViewer({
     setSectionHeights,
     setSections,
     succession: buildCombinedDiffViewTabSuccession(file.id, viewStateScopeId),
+    viewStateKey
+  })
+  const viewedSectionKeys = useCombinedDiffReviewedCollapse({
+    file,
+    entrySet,
+    setSections,
     viewStateKey
   })
   const { loadSection, loadDeferredSection } = useCombinedDiffSectionLoader({
@@ -194,10 +201,10 @@ export default function CombinedDiffViewer({
     markDirectScrollInput,
     scrollToIndex: anchors.scrollToSectionIndex,
     sectionIndexByKey,
-    sections,
     sectionsRef: registry.sectionsRef,
     toggleSection,
-    treeMode: entrySet.treeMode
+    treeMode: entrySet.treeMode,
+    viewedSectionKeys
   })
   const combinedGitStatusSignature = useCombinedDiffSectionRevalidation({
     file,

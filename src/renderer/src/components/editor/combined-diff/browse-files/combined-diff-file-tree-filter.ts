@@ -25,7 +25,7 @@ export function isCombinedDiffFileTreeQueryTooLarge(
   return isClipboardTextByteLengthOverLimit(query, maxBytes)
 }
 
-export function isCombinedDiffSectionViewed(
+export function isCombinedDiffSectionLoaded(
   section: Pick<DiffSection, 'loading' | 'loadOnDemand'>
 ): boolean {
   return !section.loading && section.loadOnDemand !== true
