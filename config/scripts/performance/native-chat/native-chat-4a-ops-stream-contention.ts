@@ -16,7 +16,7 @@ import {
   waitForIdle,
   waitForWorking
 } from './native-chat-4a-session'
-import { chatDatabasePath } from './native-chat-4a-sqlite-observer'
+import { chatDatabasePath, hasTable, openReadOnly } from './native-chat-4a-sqlite-observer'
 import { streamTextObserver } from './native-chat-4a-source-observer'
 import {
   replyPrompt,
@@ -36,6 +36,55 @@ export async function competingSend(
   const answer = await send(page(ctx), ctx.arm, sessionId, replyPrompt(tag), true, beforeRequest)
   await waitForDurable(page(ctx), sessionId, `4A-TAIL-${tag}`, 300_000, 25)
   return { hostMs: answer.hostMs, durableMs: Date.now() - sentAt }
+}
+
+// Only post-baseline rows, newest revision per ID: old running journal revisions cannot prove overlap.
+function runningToolsObserver(file: string, sessionId: string) {
+  const db = openReadOnly(file)
+  try {
+    const domain = hasTable(db, 'journal_chat_state')
+    const position = domain ? 'ordinal' : 'seq'
+    const source = `${domain ? 'journal_items' : 'journal_rows'} WHERE session_id=? AND epoch=
+      (SELECT epoch FROM ${domain ? 'journal_chat_state' : 'journal_sessions'} WHERE session_id=?)`
+    const baseline = db
+      .prepare(
+        `SELECT epoch,${position} AS position FROM ${source} ORDER BY ${position} DESC LIMIT 1`
+      )
+      .get(sessionId, sessionId)
+    if (!baseline || typeof baseline.epoch !== 'string' || typeof baseline.position !== 'number') {
+      throw new Error('no current source boundary; live contention not exercised')
+    }
+    const tail = `FROM ${source} AND ${position}>? ORDER BY ${position} DESC LIMIT 40`
+    const query = db.prepare(
+      domain
+        ? `SELECT epoch,item_id AS id,kind,lifecycle_state AS state ${tail}`
+        : `SELECT epoch,json_extract(row_json,'$.itemId') AS id,
+          json_extract(row_json,'$.body.kind') AS kind,json_extract(row_json,'$.body.state') AS state
+          FROM (SELECT epoch,seq,row_json ${tail}) ORDER BY seq DESC`
+    )
+    return {
+      epoch: baseline.epoch,
+      position: baseline.position,
+      read: () => {
+        const seen = new Set<string>()
+        const running: string[] = []
+        for (const item of query.all(sessionId, sessionId, baseline.position)) {
+          if (item.epoch !== baseline.epoch || typeof item.id !== 'string' || seen.has(item.id)) {
+            continue
+          }
+          seen.add(item.id)
+          if (item.kind === 'tool-call' && item.state === 'running') {
+            running.push(item.id)
+          }
+        }
+        return running
+      },
+      close: () => db.close()
+    }
+  } catch (error) {
+    db.close()
+    throw error
+  }
 }
 
 export async function phaseSample(
@@ -159,13 +208,20 @@ export async function liveToolBurstRows(ctx: RunContext): Promise<void> {
       toolRunMs: 250,
       largeItems: ctx.manifest.largeItems,
       toolOutputBytes: ctx.workload.history.toolOutputBytes,
-      concurrent: 'other-chat send after first new running tool observed'
+      concurrent: 'other-chat send with a post-fence, read-only running-tool witness at dispatch',
+      observation: 'latest 40 post-baseline source rows; newest revision per item; no held snapshot'
     }
   })
-  await sampled(ctx, row, ctx.workload.stream.samples, async () => {
+  await sampled(ctx, row, ctx.workload.stream.samples, async (index) => {
     const existing = new Set(
       (await history(page(ctx), sessionId, 'tail', 40)).page.items.map((item) => item.itemId)
     )
+    const file = chatDatabasePath(ctx.launch.userDataDir)
+    if (!file) {
+      throw new Error('no chat database; live contention not exercised')
+    }
+    const observer = runningToolsObserver(file, sessionId)
+    const runningTools = () => observer.read().filter((id) => !existing.has(id))
     const tag = tagFor('burst')
     const stopPressure = samplePressure(ctx.launch.app, ctx.launch.userDataDir)
     let pressure
@@ -174,25 +230,31 @@ export async function liveToolBurstRows(ctx: RunContext): Promise<void> {
       sample = await measured(ctx, async () => {
         const sent = await send(page(ctx), ctx.arm, sessionId, toolBurstPrompt(ctx.workload, tag))
         const deadline = Date.now() + 300_000
-        let live = 0
-        while (Date.now() < deadline) {
-          const tail = await history(page(ctx), sessionId, 'tail', 40)
-          live = tail.page.items.filter(
-            (item) =>
-              !existing.has(item.itemId) &&
-              item.body?.kind === 'tool-call' &&
-              item.body.state === 'running'
-          ).length
-          if (live > 0) {
-            break
-          }
+        let live = runningTools()
+        while (live.length === 0 && Date.now() < deadline) {
           await new Promise((resolve) => setTimeout(resolve, 25))
+          live = runningTools()
         }
-        if (live === 0) {
+        if (live.length === 0) {
           throw new Error('no new running tool observed; live contention not exercised')
         }
-        const [otherSend, settled] = await Promise.all([
-          competingSend(ctx, other),
+        const [otherSend, settled] = await Promise.allSettled([
+          competingSend(ctx, other, () => {
+            live = runningTools()
+            row.context[`observedRunningToolsAtCompetingSend.sample${index + 1}`] = JSON.stringify({
+              sessionId,
+              epoch: observer.epoch,
+              afterPosition: observer.position,
+              burstTag: tag,
+              count: live.length,
+              itemIds: live
+            })
+            if (live.length === 0) {
+              throw new Error(
+                'no new running tool at competing-send dispatch; contention unexercised'
+              )
+            }
+          }),
           (async () => {
             await waitForDurable(page(ctx), sessionId, `4A-TAIL-${tag}`, 300_000, 25)
             const tail = await waitForIdle(page(ctx), sessionId, 300_000)
@@ -209,18 +271,25 @@ export async function liveToolBurstRows(ctx: RunContext): Promise<void> {
             return { completed, done }
           })()
         ])
+        if (otherSend.status === 'rejected') {
+          throw otherSend.reason
+        }
+        if (settled.status === 'rejected') {
+          throw settled.reason
+        }
         return {
           hostMs: sent.hostMs,
-          e2eMs: settled.done - sent.startedAt,
+          e2eMs: settled.value.done - sent.startedAt,
           extra: {
-            observedRunningToolsAtCompetingSend: live,
-            completedTools: settled.completed,
-            competingHostMs: otherSend.hostMs,
-            competingDurableMs: otherSend.durableMs
+            observedRunningToolsAtCompetingSend: live.length,
+            completedTools: settled.value.completed,
+            competingHostMs: otherSend.value.hostMs,
+            competingDurableMs: otherSend.value.durableMs
           }
         }
       })
     } finally {
+      observer.close()
       pressure = await stopPressure()
     }
     return {
