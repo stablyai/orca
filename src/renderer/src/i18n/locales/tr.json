@@ -20633,8 +20633,9 @@
         "dictationLanguage": {
           "unsupported": "{{model}} {{language}} dilini desteklemiyor, bu yüzden dili kendisi algılar.",
           "auto": "Otomatik algıla",
-          "ignoredShort": "Kalite buna göre puanlanır. {{model}} bunu kullanmaz.",
-          "rated": "Konuştuğunuz dil. Kalite buna göre puanlanır."
+          "rated": "Konuştuğunuz dil. Kalite buna göre puanlanır.",
+          "alwaysUses": "Konuştuğunuz dil. {{model}} her zaman {{language}} kullanır.",
+          "detectsItself": "Konuştuğunuz dil. {{model}} dili kendisi algılar."
         },
         "modelUnload": {
           "cloud": "Bulut modelleri sağlayıcının sunucularında çalışır, bu yüzden burada hiçbir şey yüklü kalmaz."
@@ -20691,7 +20692,7 @@
             "parakeetV2": "Hızlı. Yalnızca İngilizce, bunda en doğrusu.",
             "whisperTiny": "En küçük indirme. Dikteyi denemek için iyi.",
             "whisperTurbo": "En çok dil, yaklaşık 100. GPU olmadan yavaş.",
-            "senseVoice": "Hızlı. Çince, Kantonca, Japonca, Korece ve İngilizce.",
+            "senseVoice": "Hızlı. Çince, Japonca ve Korece için.",
             "nemotron": "Arapça, Hintçe ve Japonca dahil 27 dil."
           }
         },

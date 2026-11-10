@@ -27,7 +27,7 @@ type VoiceSpeechModelRowProps = VoiceSpeechModelRowActions & {
 
 // Columns shared with the header through subgrid, so every row's button gets the widest label's width.
 export const SPEECH_MODEL_GRID_COLUMNS =
-  'grid grid-cols-[minmax(0,1fr)_fit-content(8rem)_auto_1.5rem_auto] @max-lg:grid-cols-[minmax(0,1fr)_1.5rem_auto]'
+  'grid grid-cols-[minmax(0,1fr)_minmax(6.5rem,max-content)_minmax(4.5rem,auto)_1.5rem_auto] @max-lg:grid-cols-[minmax(0,1fr)_1.5rem_auto]'
 export const SPEECH_MODEL_WIDE_ONLY = '@max-lg:hidden'
 
 export function VoiceSpeechModelRow({
@@ -158,7 +158,7 @@ export function VoiceSpeechModelRow({
         </div>
         {subline ? <div className="text-xs text-muted-foreground">{subline}</div> : null}
       </div>
-      <div className={cn('min-w-0', SPEECH_MODEL_WIDE_ONLY)}>
+      <div className={cn('min-w-0 max-w-36 text-xs', SPEECH_MODEL_WIDE_ONLY)}>
         {quality ? <VoiceSpeechModelQuality quality={quality} /> : null}
       </div>
       <div

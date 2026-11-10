@@ -21621,8 +21621,9 @@
         "dictationLanguage": {
           "unsupported": "{{model}} não suporta {{language}}, por isso detecta o idioma sozinho.",
           "auto": "Detectar automaticamente",
-          "ignoredShort": "A qualidade é avaliada para ele. {{model}} não o usa.",
-          "rated": "O idioma que você fala. A qualidade é avaliada para ele."
+          "rated": "O idioma que você fala. A qualidade é avaliada para ele.",
+          "alwaysUses": "O idioma que você fala. {{model}} sempre usa {{language}}.",
+          "detectsItself": "O idioma que você fala. {{model}} o detecta sozinho."
         },
         "modelUnload": {
           "cloud": "Modelos na nuvem rodam nos servidores do provedor, então nada fica carregado aqui."
@@ -21679,7 +21680,7 @@
             "parakeetV2": "Rápido. Só inglês, e o mais preciso nele.",
             "whisperTiny": "O menor download. Bom para experimentar o ditado.",
             "whisperTurbo": "Mais idiomas, cerca de 100. Lento sem GPU.",
-            "senseVoice": "Rápido. Chinês, cantonês, japonês, coreano e inglês.",
+            "senseVoice": "Rápido. Para chinês, japonês e coreano.",
             "nemotron": "27 idiomas, incluindo árabe, hindi e japonês."
           }
         },

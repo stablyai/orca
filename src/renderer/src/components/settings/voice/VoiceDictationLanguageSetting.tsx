@@ -21,11 +21,18 @@ function describeLanguageSetting(
   intlLocale?: string
 ): string {
   if (model && modelIgnoresLanguage) {
-    return t(
-      'components.settings.voice.dictationLanguage.ignoredShort',
-      'Quality is rated for it. {{model}} doesn’t use it.',
-      { model: model.label }
-    )
+    // Models without a language hint either know one language or work out which of theirs you speak.
+    return model.languages.length === 1
+      ? t(
+          'components.settings.voice.dictationLanguage.alwaysUses',
+          'The language you speak. {{model}} always uses {{language}}.',
+          { model: model.label, language: languageDisplayName(model.languages[0], intlLocale) }
+        )
+      : t(
+          'components.settings.voice.dictationLanguage.detectsItself',
+          'The language you speak. {{model}} detects it by itself.',
+          { model: model.label }
+        )
   }
   if (model && language !== DICTATION_LANGUAGE_AUTO && !engineDictationLanguage(model, language)) {
     return t(
@@ -86,6 +93,7 @@ export function VoiceDictationLanguageSetting({
       control={
         <SettingsSearchableSelect
           ariaLabel={label}
+          fitValue
           value={language}
           groups={[
             {

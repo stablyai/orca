@@ -9,14 +9,14 @@ export function VoiceSpeechModelQuality({
   const t = useTranslate()
   if (quality.kind === 'unsupported') {
     return (
-      <span className="block text-xs leading-snug text-muted-foreground">
+      <span className="block leading-snug text-muted-foreground">
         {t('components.settings.voice.quality.unsupported', 'Doesn’t support your language')}
       </span>
     )
   }
   if (quality.kind === 'unmeasured') {
     return (
-      <span className="block text-xs leading-snug text-muted-foreground">
+      <span className="block leading-snug text-muted-foreground">
         {t('components.settings.voice.quality.unmeasured', 'Not measured')}
       </span>
     )
@@ -28,5 +28,5 @@ export function VoiceSpeechModelQuality({
     t('components.settings.voice.quality.veryGood', 'Very good'),
     t('components.settings.voice.quality.excellent', 'Excellent')
   ][quality.tier - 1]
-  return <span className="text-sm">{word}</span>
+  return <span>{word}</span>
 }

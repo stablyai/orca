@@ -36,7 +36,7 @@ export function speechModelDescription(
     case 'sense-voice-zh-en-ja-ko-yue':
       return t(
         'components.settings.voice.models.about.senseVoice',
-        'Fast. Chinese, Cantonese, Japanese, Korean and English.'
+        'Fast. For Chinese, Japanese and Korean.'
       )
     case 'nemotron-3.5-asr-streaming-0.6b':
       return t(

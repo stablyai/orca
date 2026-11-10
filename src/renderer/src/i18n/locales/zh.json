@@ -19931,8 +19931,9 @@
         "dictationLanguage": {
           "unsupported": "{{model}} 不支持{{language}}，因此会自动检测语言。",
           "auto": "自动检测",
-          "ignoredShort": "质量按此语言评分。{{model}} 不使用此设置。",
-          "rated": "你说的语言。质量按此语言评分。"
+          "rated": "你说的语言。质量按此语言评分。",
+          "alwaysUses": "你说的语言。{{model}} 始终使用{{language}}。",
+          "detectsItself": "你说的语言。{{model}} 会自动识别。"
         },
         "modelUnload": {
           "cloud": "云端模型在服务商的服务器上运行，因此这里不会加载任何内容。"
@@ -19989,7 +19990,7 @@
             "parakeetV2": "速度快。仅支持英语，英语最准确。",
             "whisperTiny": "下载最小。适合试用听写。",
             "whisperTurbo": "语言最多，约 100 种。没有 GPU 时较慢。",
-            "senseVoice": "速度快。中文、粤语、日语、韩语和英语。",
+            "senseVoice": "速度快。适用于中文、日语和韩语。",
             "nemotron": "27 种语言，包括阿拉伯语、印地语和日语。"
           }
         },

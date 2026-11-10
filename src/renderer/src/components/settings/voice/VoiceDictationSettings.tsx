@@ -129,6 +129,7 @@ export function VoiceDictationSettings(props: VoiceDictationSettingsProps): Reac
         description={modeDescription}
         control={
           <SettingsSegmentedControl<DictationShortcutMode>
+            size="sm"
             value={mode}
             onChange={(next) => onUpdateVoiceSettings(dictationShortcutModeSettings(next))}
             ariaLabel={t('auto.components.settings.VoicePane.ba4a900d1d', 'Dictation Mode')}

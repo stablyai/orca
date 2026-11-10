@@ -20651,8 +20651,9 @@
         "dictationLanguage": {
           "unsupported": "{{model}} unterstützt {{language}} nicht und erkennt die Sprache daher selbst.",
           "auto": "Automatisch erkennen",
-          "ignoredShort": "Die Qualität wird dafür bewertet. {{model}} nutzt sie nicht.",
-          "rated": "Die Sprache, die du sprichst. Die Qualität wird dafür bewertet."
+          "rated": "Die Sprache, die du sprichst. Die Qualität wird dafür bewertet.",
+          "alwaysUses": "Die Sprache, die du sprichst. {{model}} nutzt immer {{language}}.",
+          "detectsItself": "Die Sprache, die du sprichst. {{model}} erkennt sie selbst."
         },
         "modelUnload": {
           "cloud": "Cloud-Modelle laufen auf den Servern des Anbieters, daher bleibt hier nichts geladen."
@@ -20709,7 +20710,7 @@
             "parakeetV2": "Schnell. Nur Englisch, darin am genauesten.",
             "whisperTiny": "Kleinster Download. Gut zum Ausprobieren.",
             "whisperTurbo": "Die meisten Sprachen, rund 100. Langsam ohne GPU.",
-            "senseVoice": "Schnell. Chinesisch, Kantonesisch, Japanisch, Koreanisch und Englisch.",
+            "senseVoice": "Schnell. Für Chinesisch, Japanisch und Koreanisch.",
             "nemotron": "27 Sprachen, darunter Arabisch, Hindi und Japanisch."
           }
         },

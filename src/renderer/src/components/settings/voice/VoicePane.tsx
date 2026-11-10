@@ -14,13 +14,12 @@ import {
   voiceDictationPermissionToasts
 } from './voice-dictation-toggle'
 import { VoiceDictationLanguageSetting } from './VoiceDictationLanguageSetting'
-import { VoiceVocabularySetting } from './VoiceVocabularySetting'
+import { VoiceWordsSettings } from './VoiceWordsSettings'
 import { VoiceInputSettings } from './VoiceInputSettings'
 import { VoiceDictationSettings } from './VoiceDictationSettings'
 import { startSpeechModelDownload } from './speech-model-download'
 import { VoiceModelUnloadSetting } from './VoiceModelUnloadSetting'
 import { VoiceSpeechModelSection } from './VoiceSpeechModelSection'
-import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { VoiceSpeechGpuSetting } from './VoiceSpeechGpuSetting'
 import { useTranslate } from '@/i18n/use-translate'
@@ -340,22 +339,10 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         onUpdateVoiceSettings={updateVoiceSettings}
       />
 
-      <SettingsGroup title={t('components.settings.voice.words.title', 'Words')}>
-        <SettingsSwitchRow
-          label={t('components.settings.voice.fillerWords.0134406785', 'Remove filler words')}
-          description={t('components.settings.voice.fillerWords.short', 'Drops “um” and “uh”.')}
-          checked={voiceSettings.removeFillerWords}
-          onChange={() =>
-            updateVoiceSettings({ removeFillerWords: !voiceSettings.removeFillerWords })
-          }
-        />
-        <div data-settings-row="" className="py-3">
-          <VoiceVocabularySetting
-            voiceSettings={voiceSettings}
-            onUpdateVoiceSettings={updateVoiceSettings}
-          />
-        </div>
-      </SettingsGroup>
+      <VoiceWordsSettings
+        voiceSettings={voiceSettings}
+        onUpdateVoiceSettings={updateVoiceSettings}
+      />
 
       <SettingsGroup title={t('components.settings.voice.advanced.title', 'Advanced')}>
         <VoiceSpeechGpuSetting
