@@ -223,8 +223,6 @@ export const billingChecks: Record<string, Check> = {
     }
   },
 
-  'team.create': async () => ({ status: 'not_landed', detail: 'Orgs live in Orca Cloud auth (login.onorca.dev); team endpoints merged but not deployed — waiting on team-billing-ux' }),
-  'team.invite': async () => ({ status: 'not_landed', detail: 'Invites live in Orca Cloud auth; not deployed — waiting on team-billing-ux' }),
 
   /** Not a catalog row: tears down the shared Team checkout at the end of the billing checks. */
   'billing.teardown': async (ctx) => {

@@ -5,6 +5,7 @@ import { benchCreate, benchWakeAndRollover } from './bench'
 import { CATALOG } from './catalog'
 import { agentChecks } from './checks/agents'
 import { billingChecks } from './checks/billing'
+import { teamChecks } from './checks/team'
 import { lifecycleChecks } from './checks/lifecycle'
 import { platformChecks } from './checks/platform'
 import { coreChecks } from './checks/core'
@@ -27,7 +28,7 @@ const only = value('only')?.split(',')
 const skip = new Set(value('skip')?.split(',') ?? [])
 const n = Number(value('n') ?? 10)
 
-const CHECKS: Record<string, Check> = { ...pendingChecks, ...coreChecks, ...secretChecks, ...opsChecks, ...billingChecks, ...agentChecks, ...lifecycleChecks, ...platformChecks }
+const CHECKS: Record<string, Check> = { ...pendingChecks, ...coreChecks, ...secretChecks, ...opsChecks, ...billingChecks, ...agentChecks, ...lifecycleChecks, ...platformChecks, ...teamChecks }
 /** Checks that change the primary's lifecycle run after the ones that only read it; cleanup is last. */
 const LATE = ['billing.teardown', 'ops.kill-switch', 'life.sleep-wake', 'life.rollover', 'ops.cleanup']
 
