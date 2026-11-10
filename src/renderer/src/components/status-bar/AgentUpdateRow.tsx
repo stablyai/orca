@@ -24,18 +24,25 @@ export function AgentUpdateRow({
       ? row.current
       : `${row.current} → ${row.latest}`
 
-  const copyCommand = async (command: string): Promise<void> => {
+  const copyText = async (text: string, kind: 'command' | 'details'): Promise<void> => {
     try {
-      await window.api.ui.writeClipboardText(command)
+      await window.api.ui.writeClipboardText(text)
       toast.success(
-        t('auto.components.status.bar.AgentUpdateStatusSegment.commandCopied', 'Command copied')
+        kind === 'command'
+          ? t('auto.components.status.bar.AgentUpdateStatusSegment.commandCopied', 'Command copied')
+          : t('auto.components.status.bar.AgentUpdateStatusSegment.detailsCopied', 'Details copied')
       )
     } catch {
       toast.error(
-        t(
-          'auto.components.status.bar.AgentUpdateStatusSegment.commandCopyFailed',
-          'Could not copy the command'
-        )
+        kind === 'command'
+          ? t(
+              'auto.components.status.bar.AgentUpdateStatusSegment.commandCopyFailed',
+              'Could not copy the command'
+            )
+          : t(
+              'auto.components.status.bar.AgentUpdateStatusSegment.detailsCopyFailed',
+              'Could not copy the details'
+            )
       )
     }
   }
@@ -67,7 +74,7 @@ export function AgentUpdateRow({
             'auto.components.status.bar.AgentUpdateStatusSegment.copyCommand',
             'Copy command'
           )}
-          onClick={() => void copyCommand(command)}
+          onClick={() => void copyText(command, 'command')}
         >
           <Copy />
         </Button>
@@ -100,9 +107,22 @@ export function AgentUpdateRow({
         </code>
       )}
       {failure !== null && (
-        <p className="mt-1 truncate text-2xs text-destructive" title={failure}>
-          {failure}
-        </p>
+        <div className="mt-1 flex items-start gap-1">
+          <p className="min-w-0 flex-1 select-text break-words text-2xs text-destructive line-clamp-3">
+            {failure}
+          </p>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label={t(
+              'auto.components.status.bar.AgentUpdateStatusSegment.copyDetails',
+              'Copy details'
+            )}
+            onClick={() => void copyText(failure, 'details')}
+          >
+            <Copy />
+          </Button>
+        </div>
       )}
     </li>
   )

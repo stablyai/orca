@@ -5767,7 +5767,10 @@
             "title": "Agent updates · {{count}}",
             "updateAll": "Update all",
             "restartHint": "Restart running sessions to use the new version",
-            "updateRequestFailed": "Could not start the update"
+            "updateRequestFailed": "Could not start the update",
+            "copyDetails": "Copy details",
+            "detailsCopied": "Details copied",
+            "detailsCopyFailed": "Could not copy the details"
           },
           "InlineUsageBars": {
             "now": "now",
