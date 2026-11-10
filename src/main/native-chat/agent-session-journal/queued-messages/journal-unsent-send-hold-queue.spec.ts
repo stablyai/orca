@@ -16,32 +16,22 @@ export function registerJournalUnsentSendHoldQueueTests(
     ])(
       'in acceptance order, ahead of the cards already waiting, a hand-off by $by among them',
       async ({ origin, order }) => {
-        const journal = await fixture.afterRestart(async (earlier) => {
-          await earlier.queuedMessages.insert({
-            messageId: 'H',
-            body: fixture.message('H')
-          })
-          await earlier.queuedMessages.insert({
-            messageId: 'C',
-            body: fixture.message('C')
-          })
-          await fixture.accept(earlier, 'A', { origin: 'client', source: USER_MESSAGE_SOURCE })
-          await earlier.appendSubmission(
-            {
-              clientMessageId: 'H-handoff',
-              payloadFingerprint: fixture.fingerprint(fixture.message('H')),
-              body: fixture.message('H'),
-              fence: 0,
-              handoverRecorded: true,
-              origin
-            },
-            { messageId: 'H', expect: 'waiting' }
-          )
-          await fixture.accept(earlier, 'B', { origin: 'client', source: USER_MESSAGE_SOURCE })
-        })
+        const journal = await fixture.openHistorical([
+          fixture.historicalQueue(2, 'H'),
+          fixture.historicalQueue(3, 'C'),
+          fixture.historicalSend(4, 'A'),
+          fixture.historicalSend(5, 'H-handoff', {
+            body: fixture.message('H'),
+            queuedMessageId: 'H',
+            origin
+          }),
+          fixture.historicalSend(6, 'B')
+        ])
         await fixture.hold(journal)
 
         expect(await fixture.cardOrder(journal)).toEqual(order)
+        await journal.close()
+        expect(await fixture.cardOrder(await fixture.open())).toEqual(order)
       }
     )
   })
@@ -81,43 +71,49 @@ export function registerJournalUnsentSendHoldQueueTests(
     it.each(['stopped', 'reserved-command', 'moved-command'] as const)(
       'preserves the %s ordering boundary',
       async (shape) => {
-        const journal = await fixture.afterRestart(async (earlier) => {
-          if (shape === 'stopped') {
-            await earlier.queuedMessages.insert({ messageId: 'W', body: fixture.message('W') })
-            await earlier.appendStopEvent({ reason: 'user-stop' }, 0)
-            await fixture.accept(earlier, 'S', { origin: 'client', source: USER_MESSAGE_SOURCE })
-            return
-          }
-          await earlier.queuedMessages.insert({
-            messageId: 'C1',
-            body: { ...fixture.message('/compact'), command: { name: 'compact' as const } }
-          })
-          await fixture.accept(earlier, 'S', { origin: 'client', source: USER_MESSAGE_SOURCE })
-          await earlier.queuedMessages.insert({ messageId: 'C2', body: fixture.message('C2') })
-          await earlier.queuedMessages.move({ messageId: 'C2', beforeMessageId: 'C1' })
-          if (shape === 'reserved-command') {
-            await earlier.appendSubmission(
-              {
-                clientMessageId: 'command-attempt',
-                origin: 'client',
-                body: { ...fixture.message('/compact'), command: { name: 'compact' as const } },
-                payloadFingerprint: fixture.fingerprint({
-                  ...fixture.message('/compact'),
-                  command: { name: 'compact' as const }
-                }),
-                handoverRecorded: true,
-                fence: 0
-              },
-              { messageId: 'C1', expect: 'waiting' }
-            )
-            await earlier.resolveDispatch({
-              clientMessageId: 'command-attempt',
-              state: 'pending',
-              turnScope: { kind: 'thread' },
-              fence: 0
-            })
-          }
-        })
+        const command = { ...fixture.message('/compact'), command: { name: 'compact' as const } }
+        const journal = await fixture.openHistorical(
+          shape === 'stopped'
+            ? [
+                fixture.historicalQueue(2, 'W'),
+                {
+                  ...fixture.historicalBase(3),
+                  kind: 'tombstone',
+                  itemId: 'orca:stop',
+                  revision: 1,
+                  stopEvent: { reason: 'user-stop', at: 1_003 }
+                },
+                fixture.historicalSend(4, 'S')
+              ]
+            : [
+                fixture.historicalQueue(2, 'C1', command),
+                fixture.historicalSend(3, 'S'),
+                fixture.historicalQueue(4, 'C2'),
+                {
+                  ...fixture.historicalBase(5),
+                  kind: 'queue',
+                  messageId: 'C2',
+                  change: { op: 'moved', position: 1 }
+                },
+                ...(shape === 'reserved-command'
+                  ? [
+                      fixture.historicalSend(6, 'command-attempt', {
+                        body: command,
+                        queuedMessageId: 'C1'
+                      }),
+                      {
+                        ...fixture.historicalBase(7),
+                        kind: 'dispatch' as const,
+                        clientMessageId: 'command-attempt',
+                        state: 'pending' as const,
+                        providerItemId: null,
+                        reason: null,
+                        turnScope: { kind: 'thread' as const }
+                      }
+                    ]
+                  : [])
+              ]
+        )
         expect(await fixture.cardOrder(journal)).toEqual(
           shape === 'stopped'
             ? ['S', 'W']

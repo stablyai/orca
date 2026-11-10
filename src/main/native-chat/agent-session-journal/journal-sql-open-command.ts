@@ -14,10 +14,11 @@ import {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { staleSubagentRosterRevisions } from './item-lifecycle/journal-subagent-liveness'
 import { applyJournalDomainLifecycle } from './journal-domain-lifecycle'
+import { withdrawOpeningDerivedQueue } from './journal-open-queue-withdrawal'
 
 export type JournalOpenRecoveryResult = {
   failures: {
-    step: 'pending-unknown' | 'hold-unsent' | 'queue-reopen'
+    step: 'pending-unknown' | 'hold-unsent' | 'withdraw-derived' | 'queue-reopen'
     failure: JournalSqlFailure
   }[]
   reopenFloor: AgentJournalCursor | null
@@ -37,6 +38,13 @@ export function applyJournalSqlOpenCommand(
   const { target } = command
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: open returns its physical pre-recovery cursor.
   const openedThrough = opened.value as AgentJournalCursor
+  const fence =
+    recover?.fence ??
+    Number(
+      db
+        .prepare('SELECT highest_fence FROM journal_chat_state WHERE session_id=? AND epoch=?')
+        .get(target.sessionId, target.epoch)!.highest_fence
+    )
   settleOpeningLiveWork(db, target, savedAt)
   const recovery: JournalOpenRecoveryResult = { failures: [], reopenFloor: null }
   const attempt = <Value>(
@@ -56,23 +64,28 @@ export function applyJournalSqlOpenCommand(
       return undefined
     }
   }
-  if (recover) {
-    for (const kind of ['pending-unknown', 'hold-unsent'] as const) {
-      const result = attempt(kind, () =>
-        applyJournalDomainInputRecovery(
-          db,
-          target,
-          kind === 'pending-unknown'
-            ? { kind, fence: recover.fence }
-            : { kind, fence: recover.fence, hold: { cause: 'hostRestarted' } },
-          { openedThrough },
-          savedAt
-        )
+  for (const kind of recover
+    ? (['pending-unknown', 'hold-unsent'] as const)
+    : (['hold-unsent'] as const)) {
+    const result = attempt(kind, () =>
+      applyJournalDomainInputRecovery(
+        db,
+        target,
+        kind === 'pending-unknown'
+          ? { kind, fence }
+          : { kind, fence, hold: { cause: 'hostRestarted' } },
+        { openedThrough },
+        savedAt
       )
-      if (result && 'failure' in result.value) {
-        recovery.failures.push({ step: kind, failure: result.value.failure })
-      }
+    )
+    if (result && 'failure' in result.value) {
+      recovery.failures.push({ step: kind, failure: result.value.failure })
     }
+  }
+  attempt('withdraw-derived', () =>
+    withdrawOpeningDerivedQueue(db, stateDirectory, target, openedThrough, savedAt)
+  )
+  if (recover) {
     attempt('queue-reopen', () => {
       if (journalDomainQueueAwaitsReopen(db, target)) {
         const head = db
@@ -82,7 +95,7 @@ export function applyJournalSqlOpenCommand(
         applyJournalDomainControlCommand(
           db,
           target,
-          { kind: 'queue-reopen-mark', fence: recover.fence },
+          { kind: 'queue-reopen-mark', fence },
           {},
           savedAt
         )

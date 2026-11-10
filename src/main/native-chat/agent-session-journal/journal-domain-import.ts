@@ -1,6 +1,7 @@
 import type Database from '../../sqlite/sync-database'
 import {
   restoredJournalDomainSubmissions,
+  readImportedRetiredAcceptances,
   type JournalDomainImportAttempt
 } from './journal-domain-import-submissions'
 export type { JournalDomainImportAttempt } from './journal-domain-import-submissions'
@@ -29,6 +30,7 @@ import { journalOutcomeSource } from './outcomes/journal-outcome-format'
 import { memoryJournalMap, memoryJournalSet } from './journal-memory-collections'
 import type { JournalReducerState } from './projection/journal-reducer'
 import { journalDomainStopNote } from './journal-domain-stop-notes'
+import { placeImportedLegacyQueue } from './journal-domain-import-queue'
 import type { JournalQueuePauseMarks } from './queued-messages/queued-message-pause-marks'
 import type { JournalHistoryOrigin } from './context-epochs/journal-history-origin'
 import {
@@ -129,6 +131,7 @@ export function prepareJournalDomainImport(
     journalOutcomeSource(db, sessionId, state.epoch) ?? undefined,
     cards
   )
+  placeImportedLegacyQueue(state, cards, personal)
   return {
     sessionId,
     workspaceId: String(
@@ -158,7 +161,7 @@ export function prepareJournalDomainImport(
       },
       queueFailureBoundary: journalInputOrder(state).newestTurn.importBoundary()
     },
-    pages: importPages(state, cards, personal)
+    pages: importPages(state, cards, personal, readImportedRetiredAcceptances(db, state))
   }
 }
 
@@ -190,7 +193,8 @@ function currentCards(
 function* importPages(
   state: JournalReducerState,
   cards: ReadonlyMap<string, QueuedMessageRow>,
-  personal: (submission: AgentJournalSubmission) => boolean
+  personal: (submission: AgentJournalSubmission) => boolean,
+  retiredAccepted: ReadonlyMap<string, AgentJournalSubmission>
 ): Generator<JournalDomainImportPage> {
   // Ties keep the restored map order, exactly as the restored timeline sorts them.
   const items = [...memoryJournalMap(state.items)].toSorted(([, a], [, b]) =>
@@ -234,7 +238,7 @@ function* importPages(
       ...(echoes.has(providerItemId) ? { echo: { value: echoes.get(providerItemId) } } : {})
     }))
   )
-  yield* paged('attempts', restoredJournalDomainSubmissions(state, personal))
+  yield* paged('attempts', restoredJournalDomainSubmissions(state, personal, retiredAccepted))
   yield* paged(
     'removed-turns',
     [...memoryJournalSet(state.removedTurnIds)].map((turnId) => ({ turnId }))

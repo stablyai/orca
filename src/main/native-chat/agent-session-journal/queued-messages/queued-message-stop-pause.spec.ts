@@ -2,7 +2,9 @@ import { seedTestJournalHistoricalRows } from '../replay/journal-historical-inpu
 import { openTestJournalHostDatabase } from '../store-lifecycle/journal-host-database-test-support'
 import type { createFixture } from './queued-message-pause-contract-test-fixture'
 import { describe, expect, it } from 'vitest'
-import { QueuedMessageNotConsumableError } from './queued-message-consume-error'
+import { agentSessionRecordFixture } from '../../agent-session-record-test-fixture'
+import { encodeAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
+import type { JournalAutomaticSelection } from '../journal-automatic-submission'
 
 export function registerQueuedMessageStopPauseTests(
   fixture: ReturnType<typeof createFixture>
@@ -35,29 +37,58 @@ export function registerQueuedMessageStopPauseTests(
     })
 
     it("the queue's own consume is refused in its transaction while the pause holds the card; Send-now is not", async () => {
+      const record = agentSessionRecordFixture({ sessionId: fixture.IDENTITY.sessionId })
+      openTestJournalHostDatabase(fixture.root)
+        .db.prepare('INSERT INTO agent_session_records(session_id,record_json) VALUES(?,?)')
+        .run(record.sessionId, JSON.stringify(encodeAgentSessionRecord(record)))
       const journal = await fixture.open()
       await fixture.queueDraft(journal, 'draft-1')
       await fixture.userStop(journal)
-      const consume = (id: string, automatic: boolean) =>
-        journal.appendSubmission(
-          {
-            clientMessageId: id,
-            payloadFingerprint: fixture.fingerprintOf('draft-1'),
-            body: fixture.message('draft-1'),
-            fence: 0,
-            handoverRecorded: true
+      const selection: JournalAutomaticSelection = {
+        authority: {
+          handle: journal.observationHandle(),
+          record: {
+            currentFence: 1,
+            ownerObservation: { claimStatus: 'live', unreconciled: false, handoffStage: null }
           },
-          {
-            messageId: 'draft-1',
-            expect: 'waiting',
-            ...(automatic ? { yieldsToPause: true as const } : {})
-          }
+          child: null,
+          handingOver: [],
+          continuingUnadmitted: [],
+          finalizing: [],
+          openedThrough: journal.openingCursor(),
+          operationalRevision: 0
+        },
+        child: null,
+        steering: { kind: 'codex-unavailable' }
+      }
+      const automatic = (clientMessageId: string) =>
+        journal.claimAutomaticSubmission(
+          { clientMessageId, fence: 1 },
+          async () => selection,
+          () => 'owed'
         )
-      await expect(consume('drain-1', true)).rejects.toBeInstanceOf(QueuedMessageNotConsumableError)
+      expect(await automatic('drain-1')).toEqual({ kind: 'waiting' })
       expect(await journal.reads.submission('drain-1')).toBeUndefined()
       expect((await journal.queuedMessages.get('draft-1'))?.state).toBe('waiting')
-      await consume('send-now-1', false)
-      expect((await journal.queuedMessages.get('draft-1'))?.state).toBe('dispatched')
+      await journal.appendQueueResume(1)
+      expect(await automatic('drain-after-resume')).toEqual({
+        kind: 'claimed',
+        messageId: 'draft-1',
+        clientMessageId: 'drain-after-resume'
+      })
+      await fixture.queueDraft(journal, 'draft-2')
+      await journal.appendStopEvent({ reason: 'user-stop' }, 1)
+      await journal.appendSubmission(
+        {
+          clientMessageId: 'send-now-1',
+          payloadFingerprint: fixture.fingerprintOf('draft-2'),
+          body: fixture.message('draft-2'),
+          fence: 1,
+          handoverRecorded: true
+        },
+        { messageId: 'draft-2', expect: 'waiting' }
+      )
+      expect((await journal.queuedMessages.get('draft-2'))?.state).toBe('dispatched')
     })
 
     it("a rewind's epoch replacement restates a Stop still pausing, and not one a turn ended", async () => {
@@ -194,17 +225,16 @@ export function registerQueuedMessageStopPauseTests(
           state: 'accepted',
           providerItemId: null,
           reason: null
-        },
-        {
-          ...row(6),
-          kind: 'tombstone',
-          itemId: 'orca:retired-person',
-          revision: 1,
-          retireSubmission: true
         }
       ],
       true
     )
+    const db = openTestJournalHostDatabase(fixture.root).db
+    const source = db.prepare('SELECT generation,through_seq FROM journal_outcome_epochs').get()!
+    db.prepare(
+      "INSERT INTO journal_outcomes (generation,seq,field,entry_key,format,ordinal,value_json,deleted) VALUES (?,?,'submissions',?,2,'s0000000000000001:0000000000000001','null',1)"
+    ).run(source.generation, Number(source.through_seq) + 1, JSON.stringify('retired-person'))
+    db.prepare('UPDATE journal_outcome_epochs SET through_seq=through_seq+1').run()
     const restored = await fixture.open()
     expect(await restored.reads.submission('retired-person')).toBeUndefined()
     expect((await restored.queuedMessages.nextInputCard())?.messageId).toBe('W')

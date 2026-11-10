@@ -15,9 +15,13 @@ import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/age
 import type { JournalWriterOperation } from '../journal-writer-command'
 type UnsentSendHold = Extract<JournalWriterOperation, { kind: 'hold-unsent' }>['hold']
 import type { AgentSessionJournal } from '../journal-store'
+import type { JournalRow, JournalSubmissionRow } from '../durable-rows/journal-row-schema'
+import type { JournalQueueRow } from './journal-queue-events'
+import { seedTestJournalHistoricalRows } from '../replay/journal-historical-inputs.test-support'
 import {
   closeTestJournalHostDatabases,
-  createTrackedJournalOpener
+  createTrackedJournalOpener,
+  openTestJournalHostDatabase
 } from '../store-lifecycle/journal-host-database-test-support'
 
 export function createFixture() {
@@ -116,6 +120,58 @@ export function createFixture() {
     return open()
   }
 
+  const historicalBase = (seq: number) => ({
+    v: 4,
+    epoch: 'old-queue',
+    seq,
+    fence: 0,
+    ts: 1_000 + seq
+  })
+  function historicalQueue(
+    seq: number,
+    messageId: string,
+    body = message(messageId),
+    position = seq
+  ): JournalQueueRow {
+    return {
+      ...historicalBase(seq),
+      kind: 'queue',
+      messageId,
+      change: { op: 'queued', body, position, queuedAt: { epoch: 'old-queue', sequence: seq } }
+    }
+  }
+  function historicalSend(
+    seq: number,
+    clientMessageId: string,
+    fields: Partial<JournalSubmissionRow> = {}
+  ): JournalSubmissionRow {
+    const body = fields.body ?? message(clientMessageId)
+    return {
+      ...historicalBase(seq),
+      kind: 'submission',
+      clientMessageId,
+      body,
+      payloadFingerprint: fingerprint(body),
+      providerHandle: claudeProviderHandle('native-1', null),
+      origin: 'client',
+      source: { kind: 'user' },
+      handoverRecorded: true,
+      ...fields
+    }
+  }
+  async function openHistorical(rows: JournalRow[]) {
+    seedTestJournalHistoricalRows(openTestJournalHostDatabase(root).db, IDENTITY, [
+      {
+        ...historicalBase(1),
+        kind: 'epoch',
+        reason: 'session_created',
+        providerHandle: claudeProviderHandle('native-1', null)
+      },
+      ...rows
+    ])
+    return open()
+  }
+
   async function cardOrder(journal: AgentSessionJournal): Promise<string[]> {
     return (await journal.queuedMessages.list())
       .filter((card) => card.state === 'waiting')
@@ -155,6 +211,10 @@ export function createFixture() {
     },
     fingerprint,
     hold,
+    historicalBase,
+    historicalQueue,
+    historicalSend,
+    openHistorical,
     journals,
     message,
     open,

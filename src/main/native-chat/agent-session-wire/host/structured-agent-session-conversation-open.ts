@@ -105,6 +105,7 @@ export async function openStructuredAgentSessionConversationJournal(
       const messages = {
         'pending-unknown': 'marking pending sends unknown on open failed',
         'hold-unsent': 'settling sends an earlier process left queued failed on open',
+        'withdraw-derived': 'withdrawing replaced restart work failed on open',
         'queue-reopen': 'marking a reopened queue failed'
       }
       deps.logger.warn(messages[step], {

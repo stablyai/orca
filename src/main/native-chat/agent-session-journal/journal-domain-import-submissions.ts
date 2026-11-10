@@ -2,6 +2,9 @@ import { journalInputOrder } from './input-order/journal-input-order'
 import { memoryJournalMap } from './journal-memory-collections'
 import { readAnsweredTurn } from './projection/journal-dispatch-reducer'
 import type Database from '../../sqlite/sync-database'
+import { journalOutcomeSource } from './outcomes/journal-outcome-format'
+import { decodeJournalOutcome } from './outcomes/journal-outcome-codec'
+import { outcomeFormat1EntryParsers } from './outcomes/journal-outcome-format-1'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
@@ -59,7 +62,8 @@ export function restoredJournalDomainSubmission(
     submission,
     sequence: journalInputSourceSequence(source) ?? submission.submittedSequence ?? 0,
     index: source?.kind === 'outcome-admission' ? (source.item.sequenceIndex ?? 0) : 0,
-    ordinal,
+    // A retired outcome may outlive the reconstructed admission's ordinal.
+    ordinal: Number.isFinite(ordinal) ? ordinal : (submission.submittedSequence ?? 0),
     candidate: state.inputs.candidates.has(id),
     admittedPersonal,
     echoObserved: state.inputs.echoes.has(agentJournalSubmissionKey(id)),
@@ -145,7 +149,8 @@ export function insertJournalDomainImportedSubmission(
 /** Restore current dispatch membership from each saved submission. */
 export function restoredJournalDomainSubmissions(
   state: JournalReducerState,
-  personal: (submission: AgentJournalSubmission) => boolean
+  personal: (submission: AgentJournalSubmission) => boolean,
+  retiredAccepted: ReadonlyMap<string, AgentJournalSubmission> = new Map()
 ): JournalDomainImportAttempt[] {
   const order = journalInputOrder(state)
   const current = [...memoryJournalMap(state.submissions).values()].map((submission) =>
@@ -156,20 +161,56 @@ export function restoredJournalDomainSubmissions(
       personal(submission)
     )
   )
-  const retained = [...memoryJournalMap(state.inputs.sources)].flatMap(([id, source]) =>
-    state.submissions.has(id)
-      ? []
-      : [
-          {
-            ...restoredJournalDomainSubmission(
-              state,
-              source.kind === 'submission' ? journalSubmissionFromRow(source) : source.submission,
-              order.inputOrdinal(id),
-              false
-            ),
-            current: false
-          }
-        ]
-  )
+  const retained = [
+    ...new Set([...memoryJournalMap(state.inputs.sources).keys(), ...retiredAccepted.keys()])
+  ].flatMap((id) => {
+    if (state.submissions.has(id)) {
+      return []
+    }
+    const source = state.inputs.sources.get(id)
+    const submission =
+      retiredAccepted.get(id) ??
+      (source?.kind === 'submission' ? journalSubmissionFromRow(source) : source?.submission)
+    if (!submission) {
+      return []
+    }
+    return [
+      {
+        ...restoredJournalDomainSubmission(
+          state,
+          submission,
+          order.inputOrdinal(id),
+          retiredAccepted.has(id) && personal(submission)
+        ),
+        current: false
+      }
+    ]
+  })
   return [...current, ...retained]
+}
+
+/** Preserve historical acceptance without restoring a deleted current submission key. */
+export function readImportedRetiredAcceptances(
+  db: Database.Database,
+  state: JournalReducerState
+): Map<string, AgentJournalSubmission> {
+  const source = journalOutcomeSource(db, state.sessionId, state.epoch)
+  const accepted = new Map<string, AgentJournalSubmission>()
+  if (!source) {
+    return accepted
+  }
+  const rows = db.prepare(`SELECT seq,field,entry_key,format,ordinal,value_json,deleted
+    FROM journal_outcomes WHERE generation=? AND seq<=? AND field='submissions' AND deleted=0 ORDER BY seq DESC`)
+  for (const row of rows.iterate(source.generation, source.through)) {
+    const value = decodeJournalOutcome(row)
+    const [id, submission] = outcomeFormat1EntryParsers.submissions.parse(JSON.parse(value.json))
+    if (
+      submission.dispatchState === 'accepted' &&
+      !state.submissions.has(id) &&
+      !accepted.has(id)
+    ) {
+      accepted.set(id, submission)
+    }
+  }
+  return accepted
 }

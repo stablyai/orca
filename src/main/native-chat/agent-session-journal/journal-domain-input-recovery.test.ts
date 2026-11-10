@@ -239,6 +239,28 @@ it('requeues a proven-unrun linked attempt but never requeues an uncertain hando
   })
 })
 
+it('fronts current unlinked sends while preserving an explicit linked card and remains stable on reopen', () => {
+  const f = fixture()
+  f.seed('H')
+  f.seed('C')
+  f.db.prepare("UPDATE journal_queue_cards SET position=4 WHERE message_id='C'").run()
+  f.admit('A')
+  f.admit('H-handoff', { body: message('H') }, { messageId: 'H', expect: 'waiting' })
+  f.admit('B')
+  const order = () =>
+    f.db
+      .prepare(
+        "SELECT message_id FROM journal_queue_cards WHERE state='waiting' ORDER BY position,message_id"
+      )
+      .all()
+      .map((row) => row.message_id)
+  f.recover({ kind: 'hold-unsent', fence: 1, hold: { cause: 'hostRestarted' } }, f.head())
+  expect(order()).toEqual(['A', 'B', 'H', 'C'])
+  f.restart()
+  f.recover({ kind: 'hold-unsent', fence: 1, hold: { cause: 'hostRestarted' } }, f.head())
+  expect(order()).toEqual(['A', 'B', 'H', 'C'])
+})
+
 it('keeps only admitted personal input or commands and never defaults an unknown source to personal', () => {
   const f = fixture()
   f.admit('personal', { source: undefined })
