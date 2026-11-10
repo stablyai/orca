@@ -7,12 +7,14 @@ import type { AgentMessageSource } from '../../../shared/agent-session/agent-ses
 import type { QueuedMessageOwed } from './queued-messages/queued-message-consume-error'
 import { JournalGoalAttachmentInverse } from './writing/journal-goal-attachment-inverse'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type {
+  AgentJournalItemIdentity,
+  AgentJournalCursor,
+  AgentSessionJournalIdentity
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { readJournalSqlWorkAnswer } from './journal-sql-work-answer'
 import { JournalEpochReplacements } from './context-epochs/journal-epoch-replacements'
 import { journalWroteBeforeOpen } from './replay/journal-cursor'
-import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalSqlDatabase } from './database/journal-sql-database'
 import type { JournalSqlOwner } from './journal-sql-owner'
 import type { JournalWriterCommit } from './journal-writer-changes'

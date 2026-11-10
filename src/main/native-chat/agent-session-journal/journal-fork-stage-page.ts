@@ -7,8 +7,10 @@ import {
   isRootAgentJournalItem
 } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { journalDomainNamedSubagentIds } from './journal-domain-history-metadata'
-import { prepareJournalDomainItemRow } from './journal-domain-import-rows'
-import { insertJournalDomainItemRows } from './journal-domain-import-rows'
+import {
+  prepareJournalDomainItemRow,
+  insertJournalDomainItemRows
+} from './journal-domain-import-rows'
 import { JournalDerivedTurnScope } from './projection/journal-derived-turn-scope'
 import { journalItemRevisionValue } from './projection/journal-item-fold'
 import {
