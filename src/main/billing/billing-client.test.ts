@@ -132,8 +132,8 @@ describe('billing client', () => {
     const offers = {
       team: {
         label: 'Team',
-        monthlyPriceLabel: '$50/seat/mo',
-        annualPriceLabel: '$480/seat/yr',
+        monthlyPriceLabel: '$50 per seat per month',
+        annualPriceLabel: '$480 per seat, billed yearly',
         includedHoursPerSeat: 60,
         concurrentSandboxesPerSeat: 3,
         idleSleepMinutes: 15,

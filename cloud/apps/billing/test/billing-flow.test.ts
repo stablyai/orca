@@ -221,7 +221,7 @@ describe('entitlements, overage and usage', () => {
       canManageBilling: true,
       period: { start: PERIOD_START * 1000, end: PERIOD_END * 1000 }
     })
-    expect(entitlement.body.offers.team).toMatchObject({ monthlyPriceLabel: '$50/seat/mo', annualPriceLabel: '$480/seat/yr' })
+    expect(entitlement.body.offers.team).toMatchObject({ monthlyPriceLabel: '$50 per seat per month', annualPriceLabel: '$480 per seat, billed yearly' })
     expect(entitlement.body.offers.enterprise).toMatchObject({ label: 'Enterprise', priceLabel: 'Custom' })
 
     for (let i = 0; i < 4; i++) {

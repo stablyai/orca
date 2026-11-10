@@ -8,7 +8,6 @@ import type { OrcaBillingOffers } from '../../../../../shared/orca-billing'
 import { openFailureCopy } from '../plan-billing-copy'
 import { formatCents, periodTotalCents } from '../plans/plans-pricing'
 import type { CheckoutPhase } from './checkout-flow'
-import { seatCountLabel } from '../team/team-copy'
 
 export type CheckoutPanelProps = {
   phase: Exclude<CheckoutPhase, { kind: 'idle' }>
@@ -37,6 +36,7 @@ function OrderSummary({
     renews.setMonth(renews.getMonth() + 1)
   }
   const renewsLabel = new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(renews)
+  const seatCount = new Intl.NumberFormat(locale).format(seats)
   return (
     <dl className="space-y-2 rounded-lg border border-border bg-muted/40 p-4 text-sm">
       <div className="flex items-baseline justify-between gap-3">
@@ -52,18 +52,27 @@ function OrderSummary({
         <dd className="text-muted-foreground tabular-nums">
           {perSeat === null
             ? null
-            : t(
-                'auto.components.billing.checkout.seatsTimes2',
-                '{{value0}} × {{value1}}{{value2}}',
-                {
-                  value0: seatCountLabel(seats, t),
-                  value1: formatCents(perSeat, locale),
-                  value2:
-                    interval === 'year'
-                      ? t('auto.components.billing.checkout.perYr', '/yr')
-                      : t('auto.components.billing.checkout.perMo', '/mo')
-                }
-              )}
+            : interval === 'year'
+              ? t(
+                  'auto.components.billing.checkout.lineItemYearly',
+                  '{{seats}} × {{price}} per seat, billed yearly',
+                  {
+                    count: seats,
+                    seats: seatCount,
+                    price: formatCents(perSeat, locale),
+                    defaultValue_one: '{{seats}} × {{price}} per seat, billed yearly'
+                  }
+                )
+              : t(
+                  'auto.components.billing.checkout.lineItemMonthly',
+                  '{{seats}} × {{price}} per seat per month',
+                  {
+                    count: seats,
+                    seats: seatCount,
+                    price: formatCents(perSeat, locale),
+                    defaultValue_one: '{{seats}} × {{price}} per seat per month'
+                  }
+                )}
         </dd>
       </div>
       <div className="flex items-baseline justify-between gap-3 border-t border-border/60 pt-2">

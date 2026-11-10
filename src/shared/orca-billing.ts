@@ -64,7 +64,7 @@ export function classifyEntitlementDenial(
 export type OrcaBillingOffers = {
   team: {
     label: string
-    /** Display only, e.g. "$50/seat/mo"; Stripe charges the configured price. */
+    /** Display only, e.g. "$50 per seat per month"; Stripe charges the configured price. */
     monthlyPriceLabel: string
     annualPriceLabel: string
     /** Per-seat prices in cents for totals and the annual saving; null from older services. */
