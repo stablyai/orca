@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import {
   CloudWorkspaceListResponseSchema,
+  CloudWorkspaceResponseSchema,
   type CloudWorkspace as TeamWorkspace
 } from '../../../src/shared/cloud-workspaces/cloud-workspaces-wire'
 import {
@@ -291,6 +292,33 @@ export async function isCloudWorkspaceGoneFromRegistry(
     return false
   } catch (error) {
     return error instanceof CloudRequestError && error.status === 404 && error.code === 'not_found'
+  }
+}
+
+/** Whose seat a start counts against: the per-seat running cap counts the workspace owner's. */
+export type CloudSeatOwner = { self: boolean; name: string | null }
+
+/**
+ * The workspace's owner as the team registry names them (GET /v1/team/workspaces/:id), so an
+ * at-cap error can say whose seat is full. `self` comes from the registry's `access`, not a
+ * client-side id compare.
+ */
+export async function readCloudWorkspaceOwner(
+  plane: CloudControlPlane,
+  sandboxId: string,
+  signal?: AbortSignal
+): Promise<CloudSeatOwner> {
+  // Short, like the role read: the denial is already known and the generic copy is the fallback.
+  const { workspace } = await request(
+    plane,
+    'GET',
+    `/v1/team/workspaces/${encodeURIComponent(sandboxId)}`,
+    CloudWorkspaceResponseSchema,
+    { timeoutMs: 3_000, signal }
+  )
+  return {
+    self: workspace.access === 'owner',
+    name: workspace.memberNames?.[workspace.ownerUserId] ?? null
   }
 }
 

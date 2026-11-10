@@ -5131,10 +5131,13 @@
       "teamLimit": "Your team is at its limit of running sandboxes (3 per seat).",
       "memberLimit": "You’re at your limit of running sandboxes.",
       "ownerSeatLimit": "The workspace owner is at their limit of running sandboxes, and this workspace runs on their seat.",
+      "teammateSeatLimit": "{{name}} is at their limit of running sandboxes, and this workspace runs on their seat.",
+      "seatOwnerFallback": "The workspace owner",
       "other": "Your team’s plan doesn’t allow this right now.",
       "next": {
         "limit": "Put one to sleep or delete it, then try again.",
         "ownerSeatLimit": "Ask them to put one to sleep (or put one to sleep yourself if it’s your workspace), then try again.",
+        "teammateSeatLimit": "Ask them to put one to sleep, then try again.",
         "hoursAdmin": "Turn on overage in Orca on your computer, then try again.",
         "hoursMember": "Ask an owner or admin to add hours.",
         "capAdmin": "Raise the spend cap in Orca on your computer, then try again.",
