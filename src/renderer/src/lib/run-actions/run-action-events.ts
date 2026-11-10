@@ -36,6 +36,10 @@ async function autoRunAfterSetup(worktreeId: string): Promise<void> {
   }
 }
 
+function isCommandFinishedDetail(value: unknown): value is TerminalCommandFinishedEventDetail {
+  return typeof value === 'object' && value !== null && 'worktreeId' in value
+}
+
 function handleCommandFinished(detail: TerminalCommandFinishedEventDetail): void {
   const { tabId, exitCode } = detail
   if (!tabId) {
@@ -87,7 +91,9 @@ function pruneClosedRunTabs(state: AppState): void {
 /** Follows run terminals: their exits update status, and closing one forgets its run. */
 export function installRunActionEvents(): () => void {
   const onFinished = (event: Event): void => {
-    handleCommandFinished((event as CustomEvent<TerminalCommandFinishedEventDetail>).detail)
+    if (event instanceof CustomEvent && isCommandFinishedDetail(event.detail)) {
+      handleCommandFinished(event.detail)
+    }
   }
   window.addEventListener(ORCA_TERMINAL_COMMAND_FINISHED_EVENT, onFinished)
   const unsubscribe = useAppStore.subscribe((state, previous) => {

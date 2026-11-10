@@ -28,8 +28,8 @@ function StatusDot({ status }: { status: RunActionStatus | undefined }): React.J
       aria-hidden
       className={cn(
         'inline-block size-1.5 shrink-0 rounded-full',
-        status === 'running' && 'bg-emerald-500',
-        status === 'stopping' && 'bg-amber-500 motion-safe:animate-pulse',
+        status === 'running' && 'bg-status-success',
+        status === 'stopping' && 'bg-status-warning motion-safe:animate-pulse',
         status === 'failed' && 'bg-destructive',
         (status === 'exited' || status === 'stopped') && 'bg-muted-foreground/50'
       )}
@@ -53,7 +53,7 @@ function useStatusLabel(): (run: RunActionRun | undefined) => string {
         return run.exitCode === null
           ? t('runActions.status.failed', 'Failed')
           : t('runActions.status.failedWithCode', 'Failed (exit {{code}})', { code: run.exitCode })
-      default:
+      case undefined:
         return t('runActions.status.notRunning', 'Not running')
     }
   }
@@ -86,11 +86,11 @@ function ActionRow({
   const live = isRunLive(run?.status)
   return (
     <>
-      <DropdownMenuLabel className="flex items-center gap-2 pt-2 text-xs font-medium">
+      <div className="flex items-center gap-2 px-2 pt-2 text-xs font-medium">
         <StatusDot status={run?.status} />
         <span className="min-w-0 flex-1 truncate">{action.name}</span>
         <span className="shrink-0 font-normal text-muted-foreground">{statusLabel(run)}</span>
-      </DropdownMenuLabel>
+      </div>
       <div
         className="truncate px-2 pb-1 font-mono text-[11px] text-muted-foreground"
         title={action.command}
@@ -200,9 +200,7 @@ export function RunActionButtonView({
             </React.Fragment>
           ))}
           <DropdownMenuSeparator />
-          <DropdownMenuLabel className="text-xs font-medium">
-            {t('runActions.ports', 'Ports')}
-          </DropdownMenuLabel>
+          <DropdownMenuLabel>{t('runActions.ports', 'Ports')}</DropdownMenuLabel>
           {ports.length === 0 ? (
             <div className="px-2 pb-2 text-xs text-muted-foreground">
               {t('runActions.noPorts', 'No servers listening in this workspace yet.')}

@@ -16,12 +16,16 @@ type MockState = {
   setActiveTabType: ReturnType<typeof vi.fn>
 }
 
-const mocks = vi.hoisted(() => ({
-  ensureHooksConfirmed: vi.fn(async () => 'run' as 'run' | 'skip'),
-  checkRuntimeHooks: vi.fn(),
-  sendRuntimePtyInput: vi.fn(() => true),
-  subscribers: [] as ((state: unknown, previous: unknown) => void)[]
-}))
+type Subscriber = (state: unknown, previous: unknown) => void
+const mocks = vi.hoisted(() => {
+  const subscribers: ((state: unknown, previous: unknown) => void)[] = []
+  return {
+    ensureHooksConfirmed: vi.fn(async (): Promise<'run' | 'skip'> => 'run'),
+    checkRuntimeHooks: vi.fn(),
+    sendRuntimePtyInput: vi.fn(() => true),
+    subscribers
+  }
+})
 
 let state: MockState
 let nextTab = 0
@@ -29,7 +33,7 @@ let nextTab = 0
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => state,
-    subscribe: (listener: (state: unknown, previous: unknown) => void) => {
+    subscribe: (listener: Subscriber) => {
       mocks.subscribers.push(listener)
       return () => {}
     }

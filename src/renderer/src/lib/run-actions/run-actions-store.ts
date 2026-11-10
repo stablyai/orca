@@ -26,10 +26,61 @@ function readPersisted(): RunsByWorktree {
   try {
     const raw = globalThis.localStorage?.getItem(STORAGE_KEY)
     const parsed: unknown = raw ? JSON.parse(raw) : null
-    return parsed && typeof parsed === 'object' ? (parsed as RunsByWorktree) : {}
+    return sanitizePersisted(parsed)
   } catch {
     return {}
   }
+}
+
+const STATUSES: readonly RunActionStatus[] = ['running', 'stopping', 'stopped', 'exited', 'failed']
+
+function readRun(value: unknown): RunActionRun | null {
+  if (typeof value !== 'object' || value === null) {
+    return null
+  }
+  const run: Record<string, unknown> = { ...value }
+  const { worktreeId, repoId, actionId, actionName, tabId, status, exitCode, startedAt } = run
+  if (
+    typeof worktreeId !== 'string' ||
+    typeof repoId !== 'string' ||
+    typeof actionId !== 'string' ||
+    typeof actionName !== 'string' ||
+    typeof tabId !== 'string' ||
+    typeof startedAt !== 'number' ||
+    !STATUSES.some((known) => known === status)
+  ) {
+    return null
+  }
+  return {
+    worktreeId,
+    repoId,
+    actionId,
+    actionName,
+    tabId,
+    status: STATUSES.find((known) => known === status) ?? 'exited',
+    exitCode: typeof exitCode === 'number' ? exitCode : null,
+    startedAt
+  }
+}
+
+/** Storage is outside our control (older builds, hand edits): keep only well-formed runs. */
+function sanitizePersisted(value: unknown): RunsByWorktree {
+  const out: RunsByWorktree = {}
+  if (typeof value !== 'object' || value === null) {
+    return out
+  }
+  for (const byAction of Object.values(value)) {
+    if (typeof byAction !== 'object' || byAction === null) {
+      continue
+    }
+    for (const entry of Object.values(byAction)) {
+      const run = readRun(entry)
+      if (run) {
+        ;(out[run.worktreeId] ??= {})[run.actionId] = run
+      }
+    }
+  }
+  return out
 }
 
 function persist(): void {

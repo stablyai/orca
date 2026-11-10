@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import {
@@ -14,8 +14,6 @@ import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data
 type PersistedBlock = { base: number; allocatedAt: number }
 
 const USE_REFRESH_MS = 24 * 60 * 60 * 1000
-type PersistedRegistry = { version: 1; blocks: Record<string, PersistedBlock> }
-
 const SLOT_COUNT = Math.floor(
   (WORKSPACE_PORT_RANGE_END - WORKSPACE_PORT_RANGE_START) / WORKSPACE_PORT_BLOCK_SIZE
 )
@@ -34,53 +32,89 @@ function slotBase(slot: number): number {
   return WORKSPACE_PORT_RANGE_START + slot * WORKSPACE_PORT_BLOCK_SIZE
 }
 
-function isValidBlock(value: unknown): value is PersistedBlock {
-  if (!value || typeof value !== 'object') {
-    return false
+function readBlock(value: unknown): PersistedBlock | null {
+  if (typeof value !== 'object' || value === null) {
+    return null
   }
-  const { base, allocatedAt } = value as Record<string, unknown>
-  return (
-    typeof base === 'number' &&
-    Number.isInteger(base) &&
-    base >= WORKSPACE_PORT_RANGE_START &&
-    base + WORKSPACE_PORT_BLOCK_SIZE <= WORKSPACE_PORT_RANGE_END &&
-    (base - WORKSPACE_PORT_RANGE_START) % WORKSPACE_PORT_BLOCK_SIZE === 0 &&
-    typeof allocatedAt === 'number'
-  )
+  const { base, allocatedAt }: Record<string, unknown> = { ...value }
+  if (
+    typeof base !== 'number' ||
+    !Number.isInteger(base) ||
+    base < WORKSPACE_PORT_RANGE_START ||
+    base + WORKSPACE_PORT_BLOCK_SIZE > WORKSPACE_PORT_RANGE_END ||
+    (base - WORKSPACE_PORT_RANGE_START) % WORKSPACE_PORT_BLOCK_SIZE !== 0 ||
+    typeof allocatedAt !== 'number'
+  ) {
+    return null
+  }
+  return { base, allocatedAt }
+}
+
+function parseRegistry(text: string): Map<string, PersistedBlock> {
+  const blocks = new Map<string, PersistedBlock>()
+  const parsed: unknown = JSON.parse(text)
+  const entries =
+    typeof parsed === 'object' && parsed !== null && 'blocks' in parsed ? parsed.blocks : null
+  if (typeof entries !== 'object' || entries === null) {
+    return blocks
+  }
+  const seenBases = new Set<number>()
+  for (const [key, value] of Object.entries(entries)) {
+    const block = readBlock(value)
+    // A hand-edited duplicate keeps its first owner; the second re-allocates on next use.
+    if (block && !seenBases.has(block.base)) {
+      seenBases.add(block.base)
+      blocks.set(key, block)
+    }
+  }
+  return blocks
+}
+
+function toBlock(base: number): WorkspacePortBlock {
+  return { base, count: WORKSPACE_PORT_BLOCK_SIZE }
 }
 
 /**
  * One host-wide table of workspace → port block. A block never changes once allocated, so a dev
  * server keeps its URL across restarts, sleeps and app updates; two workspaces never share one.
+ * All file I/O is async and serialized, so allocation never blocks the main or orcad loop.
  */
 export class WorkspacePortBlockRegistry {
   private blocks: Map<string, PersistedBlock> | null = null
+  private queue: Promise<unknown> = Promise.resolve()
 
   constructor(
     private readonly filePath: string,
     private readonly now: () => number = Date.now
   ) {}
 
+  /** The block already known in memory, without touching disk (null until first allocation). */
+  peekBlock(worktreePath: string): WorkspacePortBlock | null {
+    const block = this.blocks?.get(normalizeRuntimePathForComparison(worktreePath))
+    return block ? toBlock(block.base) : null
+  }
+
   /** The workspace's block, allocating one on first use. */
-  getBlock(worktreePath: string): WorkspacePortBlock {
+  getBlock(worktreePath: string): Promise<WorkspacePortBlock> {
     const key = normalizeRuntimePathForComparison(worktreePath)
-    const cached = this.load().get(key)
+    const cached = this.blocks?.get(key)
     if (cached && this.now() - cached.allocatedAt < USE_REFRESH_MS) {
-      return { base: cached.base, count: WORKSPACE_PORT_BLOCK_SIZE }
+      return Promise.resolve(toBlock(cached.base))
     }
+    const next = this.queue.then(() => this.allocateOrRefresh(key))
+    this.queue = next.catch(() => undefined)
+    return next
+  }
+
+  private async allocateOrRefresh(key: string): Promise<WorkspacePortBlock> {
     // Re-read before writing: another Orca process on this host may have allocated since.
-    this.blocks = null
-    const blocks = this.load()
+    const blocks = await this.load()
     const existing = blocks.get(key)
-    if (existing) {
-      blocks.set(key, { base: existing.base, allocatedAt: this.now() })
-      this.save(blocks)
-      return { base: existing.base, count: WORKSPACE_PORT_BLOCK_SIZE }
-    }
-    const base = this.allocate(key, blocks)
+    const base = existing?.base ?? this.allocate(key, blocks)
     blocks.set(key, { base, allocatedAt: this.now() })
-    this.save(blocks)
-    return { base, count: WORKSPACE_PORT_BLOCK_SIZE }
+    this.blocks = blocks
+    await this.save(blocks)
+    return toBlock(base)
   }
 
   private allocate(key: string, blocks: Map<string, PersistedBlock>): number {
@@ -92,47 +126,35 @@ export class WorkspacePortBlockRegistry {
         return base
       }
     }
-    // Every slot is held: reclaim the oldest allocation, which belongs to a long-gone checkout.
-    let oldestKey: string | null = null
+    // Every slot is held: reclaim the least recently used one, which belongs to a long-gone checkout.
+    let oldestKey = ''
+    let oldest: PersistedBlock = { base: slotBase(preferred), allocatedAt: Infinity }
     for (const [candidateKey, block] of blocks) {
-      if (oldestKey === null || block.allocatedAt < blocks.get(oldestKey)!.allocatedAt) {
+      if (block.allocatedAt < oldest.allocatedAt) {
         oldestKey = candidateKey
+        oldest = block
       }
     }
-    const reclaimed = blocks.get(oldestKey!)!.base
-    blocks.delete(oldestKey!)
-    return reclaimed
+    blocks.delete(oldestKey)
+    return oldest.base
   }
 
-  private load(): Map<string, PersistedBlock> {
-    if (this.blocks) {
-      return this.blocks
-    }
-    const blocks = new Map<string, PersistedBlock>()
+  private async load(): Promise<Map<string, PersistedBlock>> {
     try {
-      const parsed = JSON.parse(readFileSync(this.filePath, 'utf8')) as Partial<PersistedRegistry>
-      const seenBases = new Set<number>()
-      for (const [key, block] of Object.entries(parsed.blocks ?? {})) {
-        // A hand-edited duplicate keeps its first owner; the second re-allocates on next use.
-        if (isValidBlock(block) && !seenBases.has(block.base)) {
-          seenBases.add(block.base)
-          blocks.set(key, block)
-        }
-      }
+      return parseRegistry(await readFile(this.filePath, 'utf8'))
     } catch {
-      // Missing or unreadable: start empty; allocations re-derive from the same hash.
+      // Missing or unreadable: keep what this process knows; allocations re-derive from the hash.
+      return new Map(this.blocks ?? [])
     }
-    this.blocks = blocks
-    return blocks
   }
 
-  private save(blocks: Map<string, PersistedBlock>): void {
-    const payload: PersistedRegistry = { version: 1, blocks: Object.fromEntries(blocks) }
+  private async save(blocks: Map<string, PersistedBlock>): Promise<void> {
     try {
-      mkdirSync(dirname(this.filePath), { recursive: true })
+      await mkdir(dirname(this.filePath), { recursive: true })
       const tmp = `${this.filePath}.${process.pid}.tmp`
-      writeFileSync(tmp, `${JSON.stringify(payload)}\n`, 'utf8')
-      renameSync(tmp, this.filePath)
+      const payload = { version: 1, blocks: Object.fromEntries(blocks) }
+      await writeFile(tmp, `${JSON.stringify(payload)}\n`, 'utf8')
+      await rename(tmp, this.filePath)
     } catch {
       // A read-only profile still hands out consistent blocks for this process's lifetime.
     }
@@ -155,14 +177,15 @@ function getDefaultRegistry(): WorkspacePortBlockRegistry | null {
 }
 
 /** Null when the host has no profile directory to keep allocations stable in. */
-export function getWorkspacePortBlock(worktreePath: string): WorkspacePortBlock | null {
-  if (!worktreePath) {
-    return null
-  }
-  return getDefaultRegistry()?.getBlock(worktreePath) ?? null
+export async function getWorkspacePortBlockForWorktreeId(
+  worktreeId: string
+): Promise<WorkspacePortBlock | null> {
+  const path = splitWorktreeId(worktreeId)?.worktreePath
+  const registry = path ? getDefaultRegistry() : null
+  return registry && path ? registry.getBlock(path) : null
 }
 
-export function getWorkspacePortBlockForWorktreeId(worktreeId: string): WorkspacePortBlock | null {
-  const parsed = splitWorktreeId(worktreeId)
-  return parsed?.worktreePath ? getWorkspacePortBlock(parsed.worktreePath) : null
+/** For synchronous callers (setup/archive env): known once any terminal in the workspace opened. */
+export function peekWorkspacePortBlock(worktreePath: string): WorkspacePortBlock | null {
+  return worktreePath ? (getDefaultRegistry()?.peekBlock(worktreePath) ?? null) : null
 }
