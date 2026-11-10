@@ -16,7 +16,7 @@ import { OrchestrationDb } from '../../db/orchestration-db'
 import { getRemoteDispatch } from '../../db/remote-owned/remote-dispatch-records'
 import { importRemoteOwnedItem } from '../../db/remote-owned/remote-owned-import'
 import { getRemotePlacement } from '../../db/remote-owned/remote-placements'
-import { remoteServerPin } from '../../db/remote-owned/remote-run-links'
+import { closeRemoteRunLink, remoteServerPin } from '../../db/remote-owned/remote-run-links'
 import type {
   OrchestrationEnvironmentTransport,
   OrchestrationWorkerServer
@@ -46,7 +46,7 @@ describe('commands about a worker a paired server owns', () => {
   let capabilities: string[]
   let whileSending: () => Promise<void>
   let sequence = 0
-  const server: OrchestrationWorkerServer = {
+  let server: OrchestrationWorkerServer = {
     environmentId: 'env_b',
     name: 'devB',
     peerFingerprint: 'host_b',
@@ -94,6 +94,7 @@ describe('commands about a worker a paired server owns', () => {
   })
 
   beforeEach(() => {
+    server = { ...server, pairingRevision: 1 }
     sent = []
     answers = {}
     whileSending = async () => undefined
@@ -252,6 +253,29 @@ describe('commands about a worker a paired server owns', () => {
 
     expect(retry.ok).toBe(false)
     expect(sent.filter((s) => s.method === 'orchestration.workerStart')).toHaveLength(1)
+  })
+
+  it('frees the Task when the pairing is re-made while its start waits', async () => {
+    whileSending = async () => {
+      server.pairingRevision = 2
+      closeRemoteRunLink(
+        db,
+        String(
+          record(db.db.prepare('SELECT conversation_id FROM remote_run_links').get())
+            .conversation_id
+        ),
+        're-paired'
+      )
+    }
+    answers['orchestration.workerStart'] = [started()]
+    const response = await call(
+      'orchestration.workerStart',
+      { from: 'term_coord', on: 'devB', spec: 'repaired', worktree: 'new-top-level' },
+      { requestId: REQUEST }
+    )
+
+    expect(response.ok).toBe(false)
+    expect(db.getTask(String(sent[0].params.adoptTaskId))?.status).toBe('ready')
   })
 
   it('scopes the retry key to the caller: two terminals reusing an ID never collide, one retrying gets its own key', async () => {
