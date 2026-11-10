@@ -18,6 +18,8 @@ export type AgentSessionCheckpointPreview =
       /** Commits were made after the snapshot; they stay on the branch. */
       headMoved: boolean
       createdAt: number
+      /** The changed paths, sorted, at most AGENT_SESSION_CHECKPOINT_PREVIEW_PATHS of them. */
+      paths?: string[]
       /** An agent is working in this workspace now, so a restore would refuse. */
       busy?: boolean
     }
@@ -28,6 +30,8 @@ export type AgentSessionCheckpointRestoreResult = {
   /** Restores the files as they were right before this restore. */
   undoId: string
 }
+
+export const AGENT_SESSION_CHECKPOINT_PREVIEW_PATHS = 200
 
 /** Why a restore refused before changing any file. */
 export const AGENT_SESSION_CHECKPOINT_RESTORE_REFUSALS = [
