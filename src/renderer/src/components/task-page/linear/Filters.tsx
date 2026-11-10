@@ -7,7 +7,7 @@ import { useAppStore } from '@/store'
 import { Plus, LoaderCircle, RefreshCw, Search, X } from 'lucide-react'
 import LinearIssueAttributeFilterDropdowns from '@/components/linear-issue-attribute-filter-dropdowns'
 import { Input } from '@/components/ui/input'
-import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
+import { shouldSuppressEnterSubmit } from '@/lib/workspace/creation/new-workspace-enter-guard'
 import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 export function TaskPageLinearFilters({
   model

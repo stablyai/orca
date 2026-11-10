@@ -2,9 +2,7 @@ import { useRouter, useFocusEffect } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   notifyManager,
-  queryOptions,
   replaceEqualDeep,
-  skipToken,
   useQueries,
   useQueryClient,
   type QueryObserverResult
@@ -12,11 +10,12 @@ import {
 import { warmUpWebShell } from '../../modules/orca-mobile-web-shell/src'
 import {
   countAgentsNeedingYouByHost,
+  selectActiveAgents,
   selectAgentsNeedingYou,
   type AgentListInput
 } from '../agents/agent-list-rows'
 import { useAgentActivityWrites } from '../agents/use-agent-activity-writes'
-import { accountsSnapshotFamily, accountsSnapshotKey } from '../accounts/accounts-snapshot-stream'
+import { accountsSnapshotOptions } from '../accounts/accounts-snapshot-stream'
 import type { AccountsSnapshot } from '../components/AccountUsage'
 import {
   HOST_LIST_TARGET,
@@ -31,12 +30,11 @@ import {
 import {
   selectConnectableHostProfiles,
   sortHostsByLastConnected
-} from '../transport/hosts/host-catalog-selection'
-import { loadHostCatalog } from '../transport/hosts/host-store'
-import type { HostCatalogEntry } from '../transport/hosts/host-profile'
+} from '../host-catalog/host-catalog-selection'
+import { loadHostCatalog } from '../host-catalog/host-store'
+import type { HostCatalogEntry } from '../host-catalog/host-profile'
 import { hostObserverOptions, type HostQuery } from '../query/host-query'
 import { isHostNotConnectedError } from '../query/host-query-errors'
-import type { HostQueryKey } from '../query/host-query-key'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   homeWorktreeCountsQuery,
@@ -60,15 +58,6 @@ const homeQueryOptions = <TData>(
   query: HostQuery<typeof NO_HOST_LIST_INPUT, TData>,
   host: HomeHost
 ) => hostObserverOptions(query, host.client, host.hostId, HOST_LIST_TARGET, NO_HOST_LIST_INPUT)
-
-// Kept by the accounts stream (use-mobile-home-host-connections), never fetched.
-const homeAccountsOptions = (hostId: string) =>
-  queryOptions<AccountsSnapshot | null, Error, AccountsSnapshot | null, HostQueryKey>({
-    queryKey: accountsSnapshotKey(hostId),
-    queryFn: skipToken,
-    gcTime: Infinity,
-    meta: { streamBacked: true, persist: accountsSnapshotFamily.persist }
-  })
 
 const readOf = (result: QueryObserverResult<HomeWorktreeCounts>) => ({
   data: result.data,
@@ -158,7 +147,7 @@ export function useMobileHomeData() {
     subscribed: homeFocused
   })
   const accountsQueries = useMemo(
-    () => homeHosts.map(({ hostId }) => homeAccountsOptions(hostId)),
+    () => homeHosts.map(({ hostId }) => accountsSnapshotOptions(hostId)),
     [homeHosts]
   )
   // Usage is live: only a snapshot from this connection shows, never a stored or disconnected one.
@@ -265,6 +254,7 @@ export function useMobileHomeData() {
     [sortedHosts, hostStates, worktreeInfo, now, pendingActivity]
   )
   const agentsNeedingYou = useMemo(() => selectAgentsNeedingYou(agentList), [agentList])
+  const activeAgents = useMemo(() => selectActiveAgents(agentList), [agentList])
   const needsYouByHost = useMemo(
     () => countAgentsNeedingYouByHost(agentsNeedingYou),
     [agentsNeedingYou]
@@ -286,6 +276,7 @@ export function useMobileHomeData() {
     ...connections,
     accountsByHost,
     applyAgentActivity: agentActivity.apply,
+    activeAgents,
     agentList,
     agentsNeedingYou,
     connectedHosts,

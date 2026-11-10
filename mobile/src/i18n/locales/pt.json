@@ -1360,13 +1360,47 @@
       "durationSeconds_many": "{{count}} segundos",
       "durationMinutes_one": "{{count}} minuto",
       "durationMinutes_other": "{{count}} minutos",
-      "durationMinutes_many": "{{count}} minutos"
+      "durationMinutes_many": "{{count}} minutos",
+      "discard": "Descartar gravação",
+      "retry": "Tentar ditado novamente",
+      "retryShort": "Tentar novamente"
     },
     "status": {
       "finishingOn": "Finalizando em {{computer}}",
       "finishingOnComputer": "Finalizando no computador",
       "movedTo": "Passou para {{computer}}",
       "movedToComputer": "Passou para o computador"
+    },
+    "failure": {
+      "connectionLost": "Conexão perdida",
+      "connectionSlow": "Conexão muito lenta",
+      "phoneStopped": "Parou neste telefone",
+      "stopped": "Ditado interrompido",
+      "recordingKept": "Gravação mantida"
+    },
+    "announce": {
+      "typedInto": "Digitado em {{target}}",
+      "insertedIn": "Inserido em {{target}}",
+      "listeningOnPhone": "Ouvindo. Transcrevendo neste telefone.",
+      "listeningOn": "Ouvindo. Transcrevendo em {{computer}}.",
+      "listeningOnComputer": "Ouvindo. Transcrevendo no computador.",
+      "finishing": "Finalizando.",
+      "inserted": "Inserido.",
+      "cancelled": "Ditado cancelado.",
+      "movedTo": "Este telefone parou de transcrever. Continuando em {{computer}}.",
+      "movedToComputer": "Este telefone parou de transcrever. Continuando no computador.",
+      "stoppedKept": "Ditado interrompido. {{reason}}. Sua gravação foi mantida.",
+      "stoppedKeptGeneric": "Ditado interrompido. Sua gravação foi mantida.",
+      "stillListening": "Ainda ouvindo."
+    },
+    "pill": {
+      "open": "Abrir",
+      "listening": "Ouvindo",
+      "starting": "Iniciando",
+      "finishing": "Finalizando",
+      "stopped": "Ditado interrompido",
+      "label": "Ditado para {{target}}, {{duration}}",
+      "hint": "Toque duas vezes para voltar"
     }
   },
   "files": {
@@ -2198,6 +2232,10 @@
       "providerExitedRejection": "{{agent}} parou antes de esta mensagem ser enviada.",
       "providerExitedRow": "{{agent}} parou enquanto esta resposta estava em andamento. Você pode continuar nesta conversa.",
       "providerRateLimited": "{{agent}} atingiu o limite de requisições e está tentando novamente.",
+      "providerUnavailable": "{{agent}} não conseguiu responder porque o serviço está ocupado. Escolha outro modelo ou aguarde um pouco e envie novamente.",
+      "providerSafetyStopped": "{{agent}} interrompeu esta resposta após uma verificação de segurança. Revise sua solicitação e envie novamente.",
+      "providerResponseFailed": "{{agent}} não conseguiu concluir esta resposta. Abra os detalhes para obter mais informações.",
+      "selectedModel": "o modelo selecionado",
       "providerRejected": "{{agent}} não aceitou esta mensagem.",
       "providerRejectedQuoted": "{{agent}} não aceitou esta mensagem: {{detail}}.",
       "providerRetryLastError": "Último erro: {{detail}}.",
@@ -2600,8 +2638,8 @@
       "insertFailed": "Não foi possível inserir o ditado",
       "insertFailedCopied": "Não foi possível inserir o ditado, então ele foi copiado para a área de transferência",
       "inserted": "Ditado inserido",
-      "stoppedAfterSilence": "Parou após um minuto de silêncio",
-      "stoppedAtCloudLimit": "O ditado foi interrompido no limite de 10 minutos da nuvem."
+      "stoppedAtCloudLimit": "O ditado foi interrompido no limite de 10 minutos da nuvem.",
+      "stoppedAfterSilenceSeconds": "Parado após {{seconds}} segundos de silêncio"
     },
     "useNativeChatStop": {
       "stopNotSent": "Comando de parada não enviado",
@@ -3414,6 +3452,21 @@
     }
   },
   "tasks": {
+    "hostedMerge": {
+      "merged": "Mesclado",
+      "closed": "Fechado",
+      "conflicts": "Conflitos",
+      "behind": "Desatualizado",
+      "blocked": "Bloqueado",
+      "checksPending": "Verificações pendentes",
+      "ableToMerge": "Pode ser mesclado",
+      "unknown": "Desconhecido"
+    },
+    "pagination": {
+      "pageUnreachable": "A página {{page}} está além do que a pesquisa do GitHub pode retornar.",
+      "loadPageFailed": "A página {{page}} não pôde ser carregada do GitHub.",
+      "noMoreResults": "Não há mais resultados na página {{page}}."
+    },
     "composerSource": {
       "baseFailed": "Falha ao determinar a branch base.",
       "forkPushWarning": "Este PR está com \"Permitir edições de mantenedores\" desativado; o GitHub pode rejeitar o push para o fork."

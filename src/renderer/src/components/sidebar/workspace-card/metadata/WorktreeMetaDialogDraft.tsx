@@ -34,7 +34,7 @@ import { resizeCommentTextarea } from './worktree-comment-textarea-sizing'
 import {
   isImeOwnedKeyboardEvent,
   useImeEnterGestureOwnership
-} from '@/lib/ime-composition-keyboard-event'
+} from '@/lib/text-input/ime/ime-composition-keyboard-event'
 
 const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
   const t = useTranslate()

@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { useAppStore } from '../../store'
-import { focusTerminalTabSurface } from '../../lib/focus-terminal-tab-surface'
+import { focusTerminalTabSurface } from '../terminal-pane/input/focus/focus-terminal-tab-surface'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import { createWebRuntimeSessionBrowserTab } from '../../runtime/browser/creation/web-runtime-browser-creation'
 import { createWebRuntimeSessionTerminal } from '../../runtime/hosted-terminals/creation/web-runtime-terminal-creation'

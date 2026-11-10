@@ -25,7 +25,7 @@ export function getLocalHookFields(
   return [
     {
       name: 'setup',
-      label: t('auto.components.settings.RepositoryHooksSection.52b31baf02', 'Setup Script'),
+      label: t('auto.components.settings.RepositoryHooksSection.1ecf0b115a', 'Setup script'),
       description: t(
         'auto.components.settings.RepositoryHooksSection.f0710e1c83',
         'Runs after a new worktree is created; install deps, copy env files, run migrations.'
@@ -37,7 +37,7 @@ export function getLocalHookFields(
     },
     {
       name: 'archive',
-      label: t('auto.components.settings.RepositoryHooksSection.9a100323ff', 'Archive Script'),
+      label: t('auto.components.settings.RepositoryHooksSection.bfdb1266ce', 'Archive script'),
       description: t(
         'auto.components.settings.RepositoryHooksSection.6f90ebe3fd',
         'Runs before a worktree is archived or removed.'

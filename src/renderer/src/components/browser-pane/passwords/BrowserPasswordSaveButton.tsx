@@ -22,7 +22,7 @@ function hostOf(origin: string): string {
   }
 }
 
-/** Key icon beside the address bar, opening Orca's offer to save or update a login that worked. */
+/** A chip in the address field, opening Orca's offer to save or update a login that worked. */
 export function BrowserPasswordSaveButton({
   browserPageId,
   isActive
@@ -69,12 +69,14 @@ function BrowserPasswordSavePopover({
       <PopoverTrigger asChild>
         <Button
           type="button"
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7 shrink-0"
+          variant="outline"
+          size="xs"
           aria-label={t('browser.passwords.savePrompt.open', 'Saved password offer')}
         >
-          <KeyRound className="size-4" />
+          <KeyRound className="size-3.5" />
+          {isUpdate
+            ? t('browser.passwords.savePrompt.updateChip', 'Update password')
+            : t('browser.passwords.savePrompt.saveChip', 'Save password')}
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -115,7 +117,7 @@ function BrowserPasswordSavePopover({
               </div>
             </div>
           </div>
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             {isUpdate ? (
               <span />
             ) : (
@@ -123,7 +125,7 @@ function BrowserPasswordSavePopover({
                 {t('browser.passwords.savePrompt.never', 'Never for this site')}
               </Button>
             )}
-            <div className="flex items-center gap-2">
+            <div className="ml-auto flex items-center gap-2">
               <Button
                 type="button"
                 variant="secondary"

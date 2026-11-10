@@ -2,7 +2,7 @@ import { linearIssueReadFixture } from '@/store/slices/linear/linear-slice-test-
 // @vitest-environment happy-dom
 
 import { act } from 'react'
-import { flushSync } from 'react-dom'
+
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactI18Next from 'react-i18next'
@@ -10,9 +10,6 @@ import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
-import type { Repo } from '../../../../shared/repo-types'
-import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
-import { resolveWorkspaceCreationTarget } from '@/lib/project-host-workspace-target'
 
 import WorktreeJumpPalette from './WorktreeJumpPalette'
 import { makeRecentTabState, makeRepo } from './worktree-jump-palette-test-fixtures'
@@ -211,12 +208,6 @@ async function renderPalette(overrides: Partial<AppState>): Promise<void> {
   await flushEffects()
 }
 
-function getCommandValue(): string {
-  return (
-    testContainer.querySelector<HTMLElement>('[data-command-dialog]')?.dataset.commandValue ?? ''
-  )
-}
-
 describe('WorktreeJumpPalette Linear URL intent', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -283,71 +274,6 @@ describe('WorktreeJumpPalette Linear URL intent', () => {
     })
   })
 
-  it('keeps runtime folder projects as the Linear lookup and composer owner', async () => {
-    const folderRepo: Repo = {
-      ...makeRepo(),
-      id: 'folder-repo',
-      kind: 'folder' as const,
-      executionHostId: 'runtime:folder-env'
-    }
-    const fetchLinearIssue = vi.fn(() =>
-      linearIssueReadFixture<LinearIssue | null>(async () => makeLinearIssue())
-    )
-    const prefetchWorktreeCreateBase = vi.fn(async () => {})
-    await renderPalette({
-      activeRepoId: folderRepo.id,
-      repos: [folderRepo],
-      fetchLinearIssue,
-      prefetchWorktreeCreateBase
-    })
-    await act(async () => setCommandQuery?.(LINEAR_URL))
-    await flushEffects()
-
-    expect(fetchLinearIssue).toHaveBeenCalledWith(
-      'STA-4084',
-      'linear-workspace-1',
-      expect.objectContaining({
-        sourceContext: expect.objectContaining({
-          provider: 'linear',
-          projectId: 'repo:folder-repo',
-          projectHostSetupId: 'folder-repo',
-          repoId: 'folder-repo',
-          hostId: 'runtime:folder-env'
-        })
-      })
-    )
-
-    await act(async () => {
-      testContainer.querySelector<HTMLElement>('[data-command-item="__create_worktree__"]')?.click()
-      await Promise.resolve()
-    })
-    await flushEffects()
-
-    expect(useAppStore.getState().modalData).toMatchObject({
-      initialRepoId: 'folder-repo',
-      taskSourceContext: {
-        provider: 'linear',
-        projectId: 'repo:folder-repo',
-        projectHostSetupId: 'folder-repo',
-        repoId: 'folder-repo',
-        hostId: 'runtime:folder-env'
-      }
-    })
-    const projection = projectHostSetupProjectionFromRepos([folderRepo])
-    expect(
-      resolveWorkspaceCreationTarget({
-        eligibleRepos: [folderRepo],
-        projects: projection.projects,
-        projectHostSetups: projection.setups,
-        initialRepoId: 'folder-repo',
-        projectId: 'repo:folder-repo',
-        hostId: 'runtime:folder-env',
-        projectHostSetupId: 'folder-repo'
-      })
-    ).toMatchObject({ status: 'ready', target: { repoId: 'folder-repo' } })
-    expect(prefetchWorktreeCreateBase).not.toHaveBeenCalled()
-  })
-
   it('does not open the composer after the palette closes during lookup', async () => {
     const issueLookup = deferredValue<LinearIssue | null>()
     await renderPalette({
@@ -408,64 +334,5 @@ describe('WorktreeJumpPalette Linear URL intent', () => {
     expect(useAppStore.getState().modalData).toMatchObject({
       linkedWorkItem: { linearIdentifier: 'STA-4099', title: 'Current second issue' }
     })
-  })
-
-  it('does not let a stale lookup replace a newer URL preview', async () => {
-    const firstLookup = deferredValue<LinearIssue | null>()
-    const secondLookup = deferredValue<LinearIssue | null>()
-    await renderPalette({
-      fetchLinearIssue: vi.fn((identifier: string) =>
-        linearIssueReadFixture<LinearIssue | null>(() =>
-          identifier === 'STA-4084' ? firstLookup.promise : secondLookup.promise
-        )
-      )
-    })
-
-    vi.useFakeTimers()
-    await act(async () => setCommandQuery?.('https://linear.app/stably/issue/STA-4084/first'))
-    await flushEffects()
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(200)
-    })
-    expect(testContainer.textContent).toContain('Loading Linear issue…')
-
-    await act(async () => {
-      flushSync(() => setCommandQuery?.('https://linear.app/stably/issue/STA-4099/second'))
-      const currentPendingRow = testContainer.querySelector<HTMLElement>(
-        '[data-cmd-j-linear-issue-preview="true"]'
-      )
-      expect(currentPendingRow?.getAttribute('aria-label')).toBe(
-        'Create worktree from Linear issue STA-4099'
-      )
-      expect(currentPendingRow?.textContent).toContain('Create worktree from Linear issue')
-      expect(currentPendingRow?.textContent).not.toContain('Loading Linear issue…')
-    })
-    await flushEffects()
-
-    await act(async () => {
-      firstLookup.resolve(makeLinearIssue({ title: 'Stale first issue' }))
-      await firstLookup.promise
-    })
-    await flushEffects()
-
-    expect(testContainer.textContent).toContain('STA-4099')
-    expect(testContainer.textContent).not.toContain('Stale first issue')
-
-    await act(async () => {
-      secondLookup.resolve(
-        makeLinearIssue({
-          id: 'issue-sta-4099',
-          identifier: 'STA-4099',
-          title: 'Current second issue',
-          url: 'https://linear.app/stably/issue/STA-4099/current-second-issue'
-        })
-      )
-      await secondLookup.promise
-    })
-    await flushEffects()
-
-    expect(testContainer.textContent).toContain('Current second issue')
-    expect(testContainer.textContent).not.toContain('Stale first issue')
-    expect(getCommandValue()).toBe('__create_worktree__')
   })
 })

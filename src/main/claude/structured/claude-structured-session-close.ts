@@ -86,6 +86,7 @@ export async function resolveClaudeAcquisitionError(input: {
 }
 
 export function settleClaudeExitedSession(session: ClaudeSession): void {
+  session.delivery.dispose()
   retireClaudeDispatchWaiters(session)
   settleClaudeTurnEndWaiters(session)
   for (const prompt of session.prompts.clear()) {
@@ -113,6 +114,7 @@ async function finalizeClaudePublishedSession(
   input: CloseClaudePublishedSessionInput,
   session: ClaudeSession
 ): Promise<boolean> {
+  session.delivery.dispose()
   settleClaudeTurnEndWaiters(session)
   // Null settles callbacks without writing responses during SDK cleanup.
   for (const prompt of session.prompts.clear()) {

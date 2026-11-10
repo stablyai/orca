@@ -21,7 +21,7 @@ export function NativeChatAgentControls({
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    // Hover-only row chrome: find skips it rather than counting what the mouse happens to show.
+    // Row chrome, not transcript: find skips it.
     <div data-native-chat-find-skip className={cn('flex items-center gap-1', className)}>
       {/* A visual line means nothing pasted outside Orca, so the copy leaves it out. An image-only
           response has nothing to copy, so it has no Copy. */}

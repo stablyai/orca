@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import './markdown-preview-search'
-import { findTextMatchRanges } from '../../../../lib/text-match-ranges'
+import { findTextMatchRanges } from '../../../../lib/text-search/text-match-ranges'
 
 describe('findTextMatchRanges', () => {
   it('folds uppercase Greek queries the same way as the indexed text', () => {

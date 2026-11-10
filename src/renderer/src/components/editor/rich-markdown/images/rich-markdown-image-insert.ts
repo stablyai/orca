@@ -8,8 +8,8 @@ import {
   acquireEditorFileOperation,
   getEditorFileOperationContext
 } from '@/lib/editor/file-operations/editor-file-operation-owner'
-import { editorTabDocumentFolderAccess } from '@/lib/local-file-access'
-import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
+import { editorTabDocumentFolderAccess } from '@/lib/files/access/local-file-access'
+import { requireRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
 import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { translate } from '@/i18n/i18n'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'

@@ -1,5 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { useAppStore } from '@/store'
 import {

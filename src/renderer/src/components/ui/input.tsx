@@ -2,7 +2,7 @@ import * as React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
 
 import { cn } from '@/lib/utils'
-import { ImeInput } from '@/lib/ime-text-field'
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 
 const inputVariants = cva('', {
   variants: {
@@ -13,7 +13,10 @@ const inputVariants = cva('', {
     surface: {
       default: '',
       background:
-        'bg-background text-foreground placeholder:text-muted-foreground dark:bg-background'
+        'bg-background text-foreground placeholder:text-muted-foreground dark:bg-background',
+      // A bare text run inside a field that draws its own fill, border and focus ring.
+      embedded:
+        'h-auto border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 dark:bg-transparent'
     },
     density: {
       default: '',

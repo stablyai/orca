@@ -49,8 +49,8 @@ export {
   getTabEntryAllowAbsolutePaths,
   isTabEntryAbsolutePathAllowed
 } from './tab-create-entry-local-path'
-import { statUserOpenedPath } from '@/lib/user-opened-local-path'
-import { openHtmlFilePreview } from '@/lib/open-html-file-preview'
+import { statUserOpenedPath } from '@/lib/files/access/user-opened-local-path'
+import { openHtmlFilePreview } from '@/lib/browser/documents/open-html-file-preview'
 import { selectFileListWorktree } from '@/store/workspaces/selection/known-worktree-selection'
 import {
   assertEditorFileOperationCurrent,

@@ -11,7 +11,7 @@ const mockPasteDraftWhenAgentReady = vi.fn<(request: Record<string, unknown>) =>
 )
 
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => store } }))
-vi.mock('@/lib/new-workspace', () => ({ CLIENT_PLATFORM: 'darwin' }))
+vi.mock('@/lib/workspace/creation/new-workspace', () => ({ CLIENT_PLATFORM: 'darwin' }))
 vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionIdFromState: mockLaunchConnectionId
 }))

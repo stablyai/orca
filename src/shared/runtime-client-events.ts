@@ -40,6 +40,8 @@ export type RuntimeClientEvent =
   | { type: 'worktreeRowsChanged' }
   /** What mobileRelay.hosts.list answers changed; phones re-read it instead of polling. */
   | { type: 'relayHostsChanged' }
+  /** A desktop PR refresh found this checkout's PR (or its absence) changed; phones re-read it. */
+  | { type: 'pullRequestChanged'; worktreeId: string; repoId: string; branch: string }
   | ({ type: 'nativeChatLaunchDraftResolved' } & RuntimeNativeChatLaunchDraftResolution)
   | { type: 'terminalSideEffects'; batch: TerminalSideEffectBatch }
   /** Only while this host's own phone reads the sidebar feed; every other reader drops it. */

@@ -10,9 +10,9 @@ import type {
   WorkspaceSleepTarget
 } from '../../../../../../shared/workspace-sleep'
 import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
-import { resolveTerminalPtyOwner } from '@/lib/terminal-worktree-route'
+import { resolveTerminalPtyOwner } from '@/lib/workspace/ownership/terminal-worktree-route'
 import { runtimeRpcTargetForAuthorityKey } from '@/runtime/rpc/targets/runtime-client-target'
-import { workspacePublishingHosts } from '@/store/slices/worktrees/teardown/host-twin-worktree-purge'
+import { workspacePublishingHosts } from '@/store/slices/worktrees/teardown/host-twin-purge-scopes'
 import { resolveTerminalTeardownOwner } from '@/store/terminals/terminal-teardown-owner'
 import type { AppState } from '@/store/types'
 

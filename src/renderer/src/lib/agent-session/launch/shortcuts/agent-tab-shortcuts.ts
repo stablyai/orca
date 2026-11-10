@@ -1,4 +1,4 @@
-import { acquireAgentLaunchChoices } from '../../../host-chat-program-acquisition'
+import { acquireAgentLaunchChoices } from '../inventory/host-chat-program-acquisition'
 import { agentTabActionId } from '../../../../../../shared/keybindings/definitions'
 import type {
   AgentTabActionId,
@@ -17,7 +17,7 @@ import {
   type ProspectiveWorkspace,
   worktreeLaunchWorkspace
 } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import { agentChoiceMayOpenAsChat } from '@/lib/host-chat-program'
+import { agentChoiceMayOpenAsChat } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import {
   ensureAgentLaunchPreferences,
   readAgentLaunchPreferencesForWorktree

@@ -12,7 +12,8 @@ import {
   sequencerAbortRuntimeGit,
   sequencerContinueRuntimeGit
 } from '@/runtime/source-control/git/runtime-git-commit-actions-client'
-import { GIT_GRAPH_REFRESH_EVENT } from '@/lib/git-graph-tab'
+import '@/lib/source-control/graph/git-graph-tab'
+import { GIT_GRAPH_REFRESH_EVENT } from '@/lib/source-control/graph/git-graph-refresh-event'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { useSourceControlWorktreeContext } from './use-worktree-context'
 import type { GitCommitAction } from '../../../../../../shared/git/commands/git-commit-action'

@@ -1,3 +1,4 @@
+import { replaceTabBuckets, replaceRecordEntries } from '@/store/keyed-record-transitions'
 import type { AppState } from '../types'
 
 type TerminalTabReconnectState = Pick<
@@ -74,19 +75,10 @@ export function getOrphanTerminalIds(
   )
 }
 
-export function buildOrphanTerminalCleanupPatch(
-  state: OrphanTerminalCleanupState,
-  worktreeId: string,
-  orphanTerminalIds: Set<string>
-): Pick<
+type OrphanTerminalCompanionCleanup = Pick<
   AppState,
-  | 'tabsByWorktree'
-  | 'ptyIdsByTabId'
-  | 'runtimePaneTitlesByTabId'
   | 'expandedPaneByTabId'
   | 'canExpandPaneByTabId'
-  | 'terminalLayoutsByTabId'
-  | 'pendingStartupByTabId'
   | 'pendingInitialCwdByTabId'
   | 'pendingIssueCommandSplitByTabId'
   | 'automaticAgentResumeClaimsByTabId'
@@ -96,16 +88,26 @@ export function buildOrphanTerminalCleanupPatch(
   | 'cacheTimerByKey'
   | 'activeTabIdByWorktree'
   | 'activeTabId'
-> {
+>
+
+/** The orphans' per-tab caches and selection; callers that build seam records themselves use only this part. */
+export function buildOrphanTerminalCompanionCleanupPatch(
+  state: Omit<
+    OrphanTerminalCleanupState,
+    | 'ptyIdsByTabId'
+    | 'runtimePaneTitlesByTabId'
+    | 'terminalLayoutsByTabId'
+    | 'pendingStartupByTabId'
+  >,
+  worktreeId: string,
+  orphanTerminalIds: Set<string>,
+  // The full cleanup already filtered this bucket; reuse it instead of a second pass.
+  keptTabs?: AppState['tabsByWorktree'][string]
+): OrphanTerminalCompanionCleanup {
   if (orphanTerminalIds.size === 0) {
     return {
-      tabsByWorktree: state.tabsByWorktree,
-      ptyIdsByTabId: state.ptyIdsByTabId,
-      runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
       expandedPaneByTabId: state.expandedPaneByTabId,
       canExpandPaneByTabId: state.canExpandPaneByTabId,
-      terminalLayoutsByTabId: state.terminalLayoutsByTabId,
-      pendingStartupByTabId: state.pendingStartupByTabId,
       pendingInitialCwdByTabId: state.pendingInitialCwdByTabId,
       pendingIssueCommandSplitByTabId: state.pendingIssueCommandSplitByTabId,
       automaticAgentResumeClaimsByTabId: state.automaticAgentResumeClaimsByTabId,
@@ -118,15 +120,11 @@ export function buildOrphanTerminalCleanupPatch(
     }
   }
 
-  const nextTabs = (state.tabsByWorktree[worktreeId] ?? []).filter(
-    (tab) => !orphanTerminalIds.has(tab.id)
-  )
-  const nextPtyIdsByTabId = { ...state.ptyIdsByTabId }
-  const nextRuntimePaneTitlesByTabId = { ...state.runtimePaneTitlesByTabId }
+  const firstKeptTab = keptTabs
+    ? keptTabs[0]
+    : (state.tabsByWorktree[worktreeId] ?? []).find((tab) => !orphanTerminalIds.has(tab.id))
   const nextExpandedPaneByTabId = { ...state.expandedPaneByTabId }
   const nextCanExpandPaneByTabId = { ...state.canExpandPaneByTabId }
-  const nextTerminalLayoutsByTabId = { ...state.terminalLayoutsByTabId }
-  const nextPendingStartupByTabId = { ...state.pendingStartupByTabId }
   const nextPendingInitialCwdByTabId = { ...state.pendingInitialCwdByTabId }
   const nextPendingIssueCommandSplitByTabId = { ...state.pendingIssueCommandSplitByTabId }
   const nextAutomaticAgentResumeClaimsByTabId = {
@@ -144,12 +142,8 @@ export function buildOrphanTerminalCleanupPatch(
 
   // Share per-tab cache teardown across creation/reconciliation so orphan detection and cleanup cannot diverge.
   for (const orphanTabId of orphanTerminalIds) {
-    delete nextPtyIdsByTabId[orphanTabId]
-    delete nextRuntimePaneTitlesByTabId[orphanTabId]
     delete nextExpandedPaneByTabId[orphanTabId]
     delete nextCanExpandPaneByTabId[orphanTabId]
-    delete nextTerminalLayoutsByTabId[orphanTabId]
-    delete nextPendingStartupByTabId[orphanTabId]
     delete nextPendingInitialCwdByTabId[orphanTabId]
     delete nextPendingIssueCommandSplitByTabId[orphanTabId]
     delete nextAutomaticAgentResumeClaimsByTabId[orphanTabId]
@@ -162,24 +156,9 @@ export function buildOrphanTerminalCleanupPatch(
     }
   }
 
-  const nextActiveTabIdByWorktree = {
-    ...state.activeTabIdByWorktree,
-    [worktreeId]: orphanTerminalIds.has(state.activeTabIdByWorktree[worktreeId] ?? '')
-      ? (nextTabs[0]?.id ?? null)
-      : state.activeTabIdByWorktree[worktreeId]
-  }
-
   return {
-    tabsByWorktree: {
-      ...state.tabsByWorktree,
-      [worktreeId]: nextTabs
-    },
-    ptyIdsByTabId: nextPtyIdsByTabId,
-    runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId,
     expandedPaneByTabId: nextExpandedPaneByTabId,
     canExpandPaneByTabId: nextCanExpandPaneByTabId,
-    terminalLayoutsByTabId: nextTerminalLayoutsByTabId,
-    pendingStartupByTabId: nextPendingStartupByTabId,
     pendingInitialCwdByTabId: nextPendingInitialCwdByTabId,
     pendingIssueCommandSplitByTabId: nextPendingIssueCommandSplitByTabId,
     automaticAgentResumeClaimsByTabId: nextAutomaticAgentResumeClaimsByTabId,
@@ -187,8 +166,57 @@ export function buildOrphanTerminalCleanupPatch(
     nativeChatLaunchDraftByTabId: nextNativeChatLaunchDraftByTabId,
     tabBarOrderByWorktree: nextTabBarOrderByWorktree,
     cacheTimerByKey: nextCacheTimerByKey,
-    activeTabIdByWorktree: nextActiveTabIdByWorktree,
+    activeTabIdByWorktree: {
+      ...state.activeTabIdByWorktree,
+      [worktreeId]: orphanTerminalIds.has(state.activeTabIdByWorktree[worktreeId] ?? '')
+        ? (firstKeptTab?.id ?? null)
+        : state.activeTabIdByWorktree[worktreeId]
+    },
     activeTabId:
       state.activeTabId && orphanTerminalIds.has(state.activeTabId) ? null : state.activeTabId
+  }
+}
+
+export function buildOrphanTerminalCleanupPatch(
+  state: OrphanTerminalCleanupState,
+  worktreeId: string,
+  orphanTerminalIds: Set<string>
+): Pick<AppState, keyof OrphanTerminalCleanupState> {
+  if (orphanTerminalIds.size === 0) {
+    return {
+      ...buildOrphanTerminalCompanionCleanupPatch(state, worktreeId, orphanTerminalIds),
+      tabsByWorktree: state.tabsByWorktree,
+      ptyIdsByTabId: state.ptyIdsByTabId,
+      runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
+      terminalLayoutsByTabId: state.terminalLayoutsByTabId,
+      pendingStartupByTabId: state.pendingStartupByTabId
+    }
+  }
+  const keptTabs = (state.tabsByWorktree[worktreeId] ?? []).filter(
+    (tab) => !orphanTerminalIds.has(tab.id)
+  )
+  const companions = buildOrphanTerminalCompanionCleanupPatch(
+    state,
+    worktreeId,
+    orphanTerminalIds,
+    keptTabs
+  )
+  const deletions = [...orphanTerminalIds].map((id) => [id, null] as const)
+  return {
+    ...companions,
+    tabsByWorktree: replaceTabBuckets(state.tabsByWorktree, [[worktreeId, keptTabs]]),
+    ptyIdsByTabId: replaceRecordEntries<string[]>(state.ptyIdsByTabId, deletions),
+    runtimePaneTitlesByTabId: replaceRecordEntries<Record<number, string>>(
+      state.runtimePaneTitlesByTabId,
+      deletions
+    ),
+    terminalLayoutsByTabId: replaceRecordEntries<AppState['terminalLayoutsByTabId'][string]>(
+      state.terminalLayoutsByTabId,
+      deletions
+    ),
+    pendingStartupByTabId: replaceRecordEntries<AppState['pendingStartupByTabId'][string]>(
+      state.pendingStartupByTabId,
+      deletions
+    )
   }
 }
