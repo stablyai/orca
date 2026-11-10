@@ -6728,8 +6728,7 @@
           "todo": "未着手",
           "inProgress": "進行中",
           "inReview": "レビュー中",
-          "done": "完了",
-          "numbered": "ステータス {{number}}"
+          "done": "完了"
         }
       },
       "shared": {

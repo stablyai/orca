@@ -7209,8 +7209,7 @@
           "todo": "待處理",
           "inProgress": "進行中",
           "inReview": "審核中",
-          "done": "已完成",
-          "numbered": "狀態 {{number}}"
+          "done": "已完成"
         }
       },
       "shared": {

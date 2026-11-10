@@ -7365,8 +7365,7 @@
           "todo": "Yapılacak",
           "inProgress": "Devam ediyor",
           "inReview": "İncelemede",
-          "done": "Tamamlandı",
-          "numbered": "Durum {{number}}"
+          "done": "Tamamlandı"
         }
       },
       "shared": {

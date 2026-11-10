@@ -7271,8 +7271,7 @@
           "todo": "À faire",
           "inProgress": "En cours",
           "inReview": "En revue",
-          "done": "Terminé",
-          "numbered": "Statut {{number}}"
+          "done": "Terminé"
         }
       },
       "shared": {

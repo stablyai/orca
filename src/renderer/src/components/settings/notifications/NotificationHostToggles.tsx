@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { ChevronDown, Server } from 'lucide-react'
 import type { NotificationSourceId } from '../../../../../shared/notification-source'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../ui/collapsible'
@@ -24,7 +25,15 @@ export function NotificationHostToggles({
   onChange
 }: NotificationHostTogglesProps): React.JSX.Element | null {
   const t = useTranslate()
-  const hostOptions = pickerExecutionHosts(useNotificationSourceOptions())
+  const sourceOptions = useNotificationSourceOptions()
+  const hostOptions = useMemo(
+    () =>
+      pickerExecutionHosts(sourceOptions).map((host) => ({
+        ...host,
+        searchText: translateHostDisplayLabel(host, t)
+      })),
+    [sourceOptions, t]
+  )
   const mutedSourceIds = new Set(mutedNotificationSourceIds)
   const isMuted = (host: (typeof hostOptions)[number]): boolean =>
     [host.id, ...(host.aliasHostIds ?? [])].some((id) => mutedSourceIds.has(id))

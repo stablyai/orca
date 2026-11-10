@@ -64,9 +64,7 @@ export function BrowserToolbarProfileSub({
         <UserRound className="mr-2 size-3.5" />
         {t('browser.toolbar.profile', 'Profile')}
         <span className="ml-auto truncate pl-2 text-xs text-muted-foreground">
-          {currentProfile
-            ? translateBrowserSessionProfileLabel(currentProfile.label, currentProfile.id)
-            : t('auto.components.browser.pane.BrowserToolbarMenu.ed8f54509d', 'Default')}
+          {translateBrowserSessionProfileLabel(currentProfile?.label, effectiveProfileId)}
         </span>
       </DropdownMenuSubTrigger>
       <DropdownMenuPortal>

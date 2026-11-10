@@ -2076,11 +2076,6 @@
       }
     },
     "onboarding": {
-      "agentSurface": {
-        "chat": {
-          "terminalFallback": "Agents without chat support and folders opened through SSH or WSL on this computer still open in a terminal."
-        }
-      },
       "integrations": {
         "capabilities": {
           "browseIssues": "Browse GitHub issues and pull requests in the Tasks view without leaving Orca",
@@ -2327,11 +2322,6 @@
         "storageUnavailable": "Your disk may be full or read-only. Free up space, then restart Orca.",
         "unknown": "Restart Orca to try again."
       }
-    }
-  },
-  "sessionHistory": {
-    "settings": {
-      "computersConsent": "Each computer keeps its own searchable index of agent conversations. Authenticated paired clients can receive search results."
     }
   },
   "sessionSearch": {

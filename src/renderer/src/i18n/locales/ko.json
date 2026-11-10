@@ -6725,8 +6725,7 @@
           "todo": "할 일",
           "inProgress": "진행 중",
           "inReview": "검토 중",
-          "done": "완료",
-          "numbered": "상태 {{number}}"
+          "done": "완료"
         }
       },
       "shared": {

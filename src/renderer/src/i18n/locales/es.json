@@ -7001,8 +7001,7 @@
           "todo": "Por hacer",
           "inProgress": "En curso",
           "inReview": "En revisión",
-          "done": "Hecho",
-          "numbered": "Estado {{number}}"
+          "done": "Hecho"
         }
       },
       "shared": {

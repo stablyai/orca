@@ -13201,8 +13201,7 @@
           "todo": "A fazer",
           "inProgress": "Em andamento",
           "inReview": "Em revisão",
-          "done": "Concluído",
-          "numbered": "Status {{number}}"
+          "done": "Concluído"
         }
       },
       "editor": {

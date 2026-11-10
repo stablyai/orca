@@ -1,4 +1,4 @@
-import type React from 'react'
+import React, { useMemo } from 'react'
 import {
   DropdownMenuCheckboxItem,
   DropdownMenuSub,
@@ -71,7 +71,14 @@ export function SidebarHostScopeMenuSection({
 }: SidebarHostScopeMenuSectionProps): React.JSX.Element {
   const t = useTranslate()
   const allVisible = !visibleWorkspaceHostIds
-  const hostRows = pickerExecutionHosts(hostOptions)
+  const hostRows = useMemo(
+    () =>
+      pickerExecutionHosts(hostOptions).map((host) => ({
+        ...host,
+        searchText: translateHostDisplayLabel(host, t)
+      })),
+    [hostOptions, t]
+  )
   const checkedRowIds = new Set(
     (visibleWorkspaceHostIds
       ? getCheckedHostRows(hostRows, visibleWorkspaceHostIds)

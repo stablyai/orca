@@ -1,3 +1,4 @@
+import { useTranslate } from '@/i18n/use-translate'
 import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
 import { useEffect, useEffectEvent, useMemo, useState } from 'react'
 import { useAppStore } from '@/store/index'
@@ -40,6 +41,7 @@ export function useWorktreeJumpPaletteTaskSearch({
   filterModel,
   defaultHostId
 }: Input) {
+  const t = useTranslate()
   const connectionScope = useAppStore(
     useShallow((state) => ({
       jira: state.jiraConnectionRevisions,
@@ -50,8 +52,8 @@ export function useWorktreeJumpPaletteTaskSearch({
   const [snapshot, setSnapshot] = useState<SearchSnapshot | null>(null)
   const [retryNonce, setRetryNonce] = useState(0)
   const hostLabels = useMemo(
-    () => new Map(hostOptions.map((host) => [host.id, translateHostDisplayLabel(host)])),
-    [hostOptions]
+    () => new Map(hostOptions.map((host) => [host.id, translateHostDisplayLabel(host, t)])),
+    [hostOptions, t]
   )
   const session = useMemo(() => ({ visible }), [visible])
   const effectiveFilter = {
@@ -78,6 +80,7 @@ export function useWorktreeJumpPaletteTaskSearch({
       repo.kind
     ]),
     connectionScope,
+    [...hostLabels],
     retryNonce
   ])
   const buildRequests = useEffectEvent((signal: AbortSignal) =>

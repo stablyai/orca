@@ -7992,8 +7992,7 @@
           "todo": "Todo",
           "inProgress": "In progress",
           "inReview": "In review",
-          "done": "Done",
-          "numbered": "Status {{number}}"
+          "done": "Done"
         },
         "workspaceKanbanStatusLane": {
           "newWorkspaceInStatus": "New workspace in {{status}}"

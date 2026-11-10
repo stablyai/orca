@@ -7721,8 +7721,7 @@
           "todo": "К выполнению",
           "inProgress": "В работе",
           "inReview": "На проверке",
-          "done": "Готово",
-          "numbered": "Статус {{number}}"
+          "done": "Готово"
         }
       },
       "shared": {

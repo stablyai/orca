@@ -14,7 +14,6 @@ import { getLinearPriorityLabel } from '@/components/task-page/task-page-localiz
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { translateUnassignedLabel } from '@/i18n/unassigned-label'
-import { translateDefaultWorkflowStateLabel } from '@/components/sidebar/workspace-board-status-label'
 import {
   LINEAR_EDIT_CHIP_CLASS,
   LINEAR_EDIT_MENU_ITEM_CLASS,
@@ -76,7 +75,7 @@ export function renderLinearIssueChipsLayout(
               className="inline-block size-2 shrink-0 rounded-full"
               style={getLinearStateMarkerStyle(localState.color)}
             />
-            <span className="truncate">{translateDefaultWorkflowStateLabel(localState.name)}</span>
+            <span className="truncate">{localState.name}</span>
             <LinearEditChipAdornment loading={states.loading} pending={statePending} />
           </button>
         </PopoverTrigger>
@@ -104,7 +103,7 @@ export function renderLinearIssueChipsLayout(
                     className="inline-block size-2 rounded-full"
                     style={{ backgroundColor: s.color }}
                   />
-                  {translateDefaultWorkflowStateLabel(s.name)}
+                  {s.name}
                 </button>
               ))}
             </div>

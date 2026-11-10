@@ -6935,8 +6935,7 @@
           "todo": "待办",
           "inProgress": "进行中",
           "inReview": "评审中",
-          "done": "完成",
-          "numbered": "状态 {{number}}"
+          "done": "完成"
         },
         "workspaceKanbanStatusLane": {
           "newWorkspaceInStatus": "在「{{status}}」中新建工作区"

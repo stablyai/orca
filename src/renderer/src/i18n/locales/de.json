@@ -7388,8 +7388,7 @@
           "todo": "Zu erledigen",
           "inProgress": "In Bearbeitung",
           "inReview": "In Prüfung",
-          "done": "Fertig",
-          "numbered": "Status {{number}}"
+          "done": "Fertig"
         }
       },
       "shared": {
