@@ -199,7 +199,7 @@ describe('remote runtime pty latched-pane retention', () => {
         await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 6_000)
         expect(transport.getRecoveryState?.().phase).toBe('disconnected')
         latched.push(await registries())
-        transport.destroy?.()
+        void transport.destroy?.()
         await vi.advanceTimersByTimeAsync(1_000)
         settled.push(await registries())
       }
@@ -245,7 +245,7 @@ describe('remote runtime pty latched-pane retention', () => {
       expect(await registries()).toEqual({ subscribers: 8, scheduled: 8 })
 
       for (const transport of transports) {
-        transport.destroy?.()
+        void transport.destroy?.()
       }
       await vi.advanceTimersByTimeAsync(1_000)
       expect(await registries()).toEqual({ subscribers: 0, scheduled: 0 })
@@ -274,7 +274,7 @@ describe('remote runtime pty latched-pane retention', () => {
       expect(vi.getTimerCount()).toBe(0)
       expect(await registries()).toEqual(baseline)
 
-      transport.destroy?.()
+      void transport.destroy?.()
       await vi.advanceTimersByTimeAsync(1_000)
       expect(await registries()).toEqual({ subscribers: 0, scheduled: 0 })
     } finally {
@@ -321,7 +321,7 @@ describe('remote runtime pty latched-pane retention', () => {
       // Each revive re-derives the handle; it must not leave extra live stream subscriptions behind.
       expect(subscribeFrameCount()).toBe(subscribesAtFirstLatch)
 
-      transport.destroy?.()
+      void transport.destroy?.()
       await vi.advanceTimersByTimeAsync(1_000)
       expect(await registries()).toEqual({ subscribers: 0, scheduled: 0 })
       expect(vi.getTimerCount()).toBe(0)
@@ -356,7 +356,7 @@ describe('remote runtime pty latched-pane retention', () => {
       // Permit at most one same-handle subscribe per spent window, regardless of snapshot publication count.
       expect(subscribeFrameCount() - subscribesAtLatch).toBeLessThanOrEqual(1)
 
-      transport.destroy?.()
+      void transport.destroy?.()
       await vi.advanceTimersByTimeAsync(1_000)
       expect(await registries()).toEqual({ subscribers: 0, scheduled: 0 })
       expect(vi.getTimerCount()).toBe(0)

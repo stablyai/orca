@@ -60,7 +60,7 @@ export function registerOsMarkdownFileOpenBridge(unsubs: (() => void)[]): void {
 
   // Why: a cold-start "Open With" resolves before this listener attaches; drain what main queued.
   const pending = window.api.ui.consumePendingMarkdownFileOpens?.()
-  if (pending && typeof pending.then === 'function') {
+  if (typeof pending?.then === 'function') {
     void pending.then(openOsRequestedDocuments).catch(reportOsRequestedDocumentFailure)
   }
 }

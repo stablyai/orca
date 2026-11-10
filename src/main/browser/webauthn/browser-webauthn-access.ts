@@ -10,7 +10,7 @@ type SelectWebAuthnAccountHandler = (
   event: Electron.Event,
   details: Electron.SelectWebauthnAccountDetails,
   callback: (credentialId?: string | null) => void
-) => Promise<void>
+) => void
 const selectWebAuthnAccountHandlers = new WeakMap<Session, SelectWebAuthnAccountHandler>()
 
 function isSecureBrowserOrigin(rawOrigin: string | undefined): boolean {
@@ -97,7 +97,7 @@ export function installBrowserWebAuthnAccessHandlers(browserSession: Session): v
     browserSession.removeListener('select-webauthn-account', previousHandler)
   }
   const selectWebAuthnAccountHandler: SelectWebAuthnAccountHandler = (event, details, callback) =>
-    handleBrowserSelectWebAuthnAccount(browserSession, event, details, callback)
+    void handleBrowserSelectWebAuthnAccount(browserSession, event, details, callback)
   selectWebAuthnAccountHandlers.set(browserSession, selectWebAuthnAccountHandler)
   browserSession.on('select-webauthn-account', selectWebAuthnAccountHandler)
 }

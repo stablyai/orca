@@ -67,7 +67,7 @@ describe('terminal.stopExact post-stop verification', () => {
       write: () => true,
       kill: () => true,
       stopAndWait: async () => {
-        runtime.onPtyExit(PTY, 0, INCARNATION, { providerExitObserved: true })
+        void runtime.onPtyExit(PTY, 0, INCARNATION, { providerExitObserved: true })
         stopped = true
         return true
       },

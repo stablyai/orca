@@ -252,7 +252,7 @@ function waitForAgentDraftInputReadyOnTab(args: {
       if (args.launchPty) {
         // Each pane's readiness attaches before its primary handler drains startup bytes.
         for (const ptyId of ptyIds) {
-          watchPty(ptyId)
+          void watchPty(ptyId)
         }
       } else if (ptyIds[0]) {
         deliverPty(ptyIds[0])

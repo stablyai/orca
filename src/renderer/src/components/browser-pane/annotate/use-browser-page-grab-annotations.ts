@@ -164,7 +164,7 @@ export function useBrowserPageGrabAnnotations({
     if (!grab.contextMenu) {
       const text = formatGrabPayloadAsText(grab.payload)
       void window.api.ui.writeClipboardText(text)
-      recordFeatureInteraction('browser-grab')
+      void recordFeatureInteraction('browser-grab')
       showGrabToast(copiedGrabToastMessage(), 'success', grab.payload)
     }
   }, [
@@ -191,9 +191,9 @@ export function useBrowserPageGrabAnnotations({
 
   const startGrabIntent = useCallback(
     (nextIntent: GrabIntent): void => {
-      recordFeatureInteraction('browser-grab')
+      void recordFeatureInteraction('browser-grab')
       if (nextIntent === 'annotate') {
-        recordFeatureInteraction('browser-annotations')
+        void recordFeatureInteraction('browser-annotations')
       }
       setGrabIntent(nextIntent)
       if (nextIntent === 'copy') {
@@ -239,7 +239,7 @@ export function useBrowserPageGrabAnnotations({
     }
     const text = formatGrabPayloadAsText(payload)
     void window.api.ui.writeClipboardText(text)
-    recordFeatureInteraction('browser-grab')
+    void recordFeatureInteraction('browser-grab')
     showGrabToast(copiedGrabToastMessage(), 'success', payload)
     grab.rearm()
   }, [grab, recordFeatureInteraction, showGrabToast])
@@ -254,7 +254,7 @@ export function useBrowserPageGrabAnnotations({
     if (!dataUrl?.startsWith('data:image/png;base64,')) {
       return
     }
-    recordFeatureInteraction('browser-grab')
+    void recordFeatureInteraction('browser-grab')
     copyGrabScreenshot(dataUrl, (copied) => showGrabScreenshotToast(copied, payload))
     grab.rearm()
   }, [copyGrabScreenshot, grab, recordFeatureInteraction, showGrabScreenshotToast])
@@ -275,7 +275,7 @@ export function useBrowserPageGrabAnnotations({
         payload: createBrowserAnnotationPayload(payload),
         ...(imagePaths.length > 0 ? { imagePaths } : {})
       })
-      recordFeatureInteraction('browser-annotations')
+      void recordFeatureInteraction('browser-annotations')
       pendingAnnotationPayloadRef.current = null
       setPendingAnnotationPayload(null)
       showGrabToast(annotationAddedGrabToastMessage(), 'success', payload)

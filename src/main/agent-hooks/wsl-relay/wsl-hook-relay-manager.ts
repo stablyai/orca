@@ -110,9 +110,9 @@ export class WslHookRelayManager {
   }
   /** Resume only running distros: wsl -d would boot one the user shut down. */
   resumeStoppedRelays(): void {
-    resumeWslStoppedRelays(this.stoppedByHooksOff, this.deps.isDistroRunning, (distro, home) =>
-      this.ensureForDistro(distro, home)
-    )
+    resumeWslStoppedRelays(this.stoppedByHooksOff, this.deps.isDistroRunning, (distro, home) => {
+      void this.ensureForDistro(distro, home)
+    })
   }
   private async ensureInternal(
     requestedDistro: string | null,

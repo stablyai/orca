@@ -74,7 +74,7 @@ describe('CommentMarkdown GitHub attachment images', () => {
     const mounted = renderCommentMarkdown(content, {
       [attachmentUrl]: 'https://private-user-images.githubusercontent.com/1/image.png?jwt=EXPIRED'
     })
-    act(() => mounted.querySelector('img')?.dispatchEvent(new window.Event('error')))
+    void act(() => mounted.querySelector('img')?.dispatchEvent(new window.Event('error')))
     expect(mounted.querySelector('img')).toBeNull()
     expect(mounted.querySelector('a')?.href).toBe(attachmentUrl)
     act(() =>
@@ -113,7 +113,7 @@ describe('CommentMarkdown GitHub attachment images', () => {
     const image = mounted.querySelector('img')!
     act(() => startTransition(() => root?.render(body(fresh, pending))))
     expect(mounted.querySelector('img')).toBe(image)
-    act(() => image.dispatchEvent(new window.Event('load')))
+    void act(() => image.dispatchEvent(new window.Event('load')))
     act(() => root?.render(body(fresh, null)))
     expect(mounted.querySelector('img')).toBe(image)
     expect(image.src).toBe(first)

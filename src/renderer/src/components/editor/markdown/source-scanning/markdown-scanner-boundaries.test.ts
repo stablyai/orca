@@ -30,7 +30,7 @@ it('does not expose inline spans inside fenced content', () => {
 it.each(['-', '--', '---'])('keeps multiline spans after a bare %s line', (divider) => {
   const source = `Text\n${divider}\nA \`code\nspan\` here`
   const spans: string[] = []
-  marked.walkTokens(marked.lexer(source), (token) => {
+  void marked.walkTokens(marked.lexer(source), (token) => {
     if (token.type === 'codespan') {
       spans.push(token.raw)
     }

@@ -68,7 +68,7 @@ export class ClaudeTranscriptDecoder {
     if (!input.tokens) {
       const tokens: Token[] = []
       try {
-        this.parse(text, (token: Token) => {
+        void this.parse(text, (token: Token) => {
           tokens.push(token)
         })
         input.tokens = tokens

@@ -57,6 +57,11 @@ export const OXLINT_SCANS = [
     args: ['--type-aware', '--config', 'config/oxlint-code-quality-type-aware.json']
   },
   {
+    // Diff-scoped only: these rules roughly double the full-repo type-aware pass's memory and time.
+    label: 'type-aware promises',
+    args: ['--type-aware', '--config', 'config/oxlint-code-quality-type-aware-promises.json']
+  },
+  {
     label: 'React Doctor',
     args: [
       '--config',

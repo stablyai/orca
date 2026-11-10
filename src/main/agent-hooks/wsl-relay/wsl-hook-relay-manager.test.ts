@@ -250,7 +250,7 @@ describe('WslHookRelayManager', () => {
         idleStopMs: 1_000,
         spawnRelay: vi.fn(() => Object.assign(fakeChild(), { kill }))
       })
-      manager.ensureForDistro('Ubuntu', codexHome)
+      void manager.ensureForDistro('Ubuntu', codexHome)
       await vi.waitFor(() => expect(manager.getGuestEndpointFilePath('Ubuntu')).not.toBeNull())
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
       try {
@@ -299,7 +299,7 @@ describe('WslHookRelayManager', () => {
 
     vi.useFakeTimers()
     try {
-      manager.ensureForDistro('Ubuntu')
+      void manager.ensureForDistro('Ubuntu')
       await flush()
       expect(spawnRelay).toHaveBeenCalledTimes(1)
       expect(deps.warn).toHaveBeenCalledWith(expect.stringContaining('relay died before sentinel'))
@@ -308,7 +308,7 @@ describe('WslHookRelayManager', () => {
       expect(isDistroRunning).toHaveBeenCalledTimes(1)
 
       // A fresh ensure replaces the failed state while its restart probe is pending.
-      manager.ensureForDistro('Ubuntu')
+      void manager.ensureForDistro('Ubuntu')
       await flush()
       expect(spawnRelay).toHaveBeenCalledTimes(2)
 
@@ -317,7 +317,7 @@ describe('WslHookRelayManager', () => {
       await flush()
       expect(deps.warn).not.toHaveBeenCalledWith(expect.stringContaining('distro not running'))
 
-      manager.ensureForDistro('Ubuntu')
+      void manager.ensureForDistro('Ubuntu')
       await flush()
       expect(spawnRelay).toHaveBeenCalledTimes(2)
     } finally {

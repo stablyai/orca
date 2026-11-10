@@ -70,7 +70,7 @@ export function renderGeminiAccountsSection(
             checked={settings.geminiCliOAuthEnabled}
             onCheckedChange={(checked) => {
               recordFeatureInteraction('usage-tracking')
-              updateSettings({
+              void updateSettings({
                 geminiCliOAuthEnabled: checked
               })
             }}

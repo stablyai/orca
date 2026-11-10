@@ -150,7 +150,7 @@ export async function flushStructuredAgentSessionHost(
     }
 ): Promise<void> {
   for (const session of context.sessions.values()) {
-    closeStructuredAgentSessionHandovers(session.journal, 'hostRestarted')
+    void closeStructuredAgentSessionHandovers(session.journal, 'hostRestarted')
   }
   const retainSessionIds = new Set<string>()
   await tearDownStructuredAgentSessionHost({

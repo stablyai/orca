@@ -83,7 +83,7 @@ describe('worktree.ps terminal verdicts for an SSH host', () => {
       }
     })
     // The relay drop reports every PTY of the host with an unconfirmed exit.
-    runtime.onPtyExit(PTY_ID, -1)
+    void runtime.onPtyExit(PTY_ID, -1)
 
     const row = await psRow(runtime)
 
@@ -96,7 +96,7 @@ describe('worktree.ps terminal verdicts for an SSH host', () => {
 
   it('reports nothing for a terminal whose host confirmed the exit', async () => {
     const runtime = makeRuntime({ hasPty: () => false, listProcesses: async () => [] })
-    runtime.onPtyExit(PTY_ID, -1, undefined, { hostExitConfirmed: true })
+    void runtime.onPtyExit(PTY_ID, -1, undefined, { hostExitConfirmed: true })
 
     const row = await psRow(runtime)
 
@@ -110,7 +110,7 @@ describe('worktree.ps terminal verdicts for an SSH host', () => {
       hasPty: () => (reachable ? true : null),
       listProcesses: async () => (reachable ? [{ id: PTY_ID, worktreeId: WORKTREE_ID }] : [])
     })
-    runtime.onPtyExit(PTY_ID, -1)
+    void runtime.onPtyExit(PTY_ID, -1)
     expect((await psRow(runtime))?.unverifiableTerminalCount).toBe(1)
 
     reachable = true

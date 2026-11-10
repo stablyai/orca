@@ -182,7 +182,7 @@ export function useNativeChatFork(input: {
     if (!throughItemId) {
       return 'none'
     }
-    request(throughItemId)
+    void request(throughItemId)
     return 'started'
   }, [request])
   const supportKind = support.kind

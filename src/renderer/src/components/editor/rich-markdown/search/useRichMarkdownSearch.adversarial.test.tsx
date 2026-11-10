@@ -58,7 +58,7 @@ function mountSearch(content = '<p>beta beta</p><p>Edit here</p>', strict = fals
   act(() => hook.result.current.openSearch())
   const query = (value: string) => {
     act(() => hook.result.current.searchActions.setSearchQuery(value))
-    act(() => vi.advanceTimersByTime(150))
+    void act(() => vi.advanceTimersByTime(150))
   }
   const selectedText = () =>
     editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to)
@@ -103,7 +103,7 @@ describe('rich Markdown search adversarial interactions', () => {
         ...init
       })
 
-      act(() => input.dispatchEvent(event))
+      void act(() => input.dispatchEvent(event))
 
       expect(hook.result.current.searchState.isSearchOpen).toBe(true)
       expect(hook.result.current.searchState.searchQuery).toBe('beta')
@@ -119,7 +119,7 @@ describe('rich Markdown search adversarial interactions', () => {
     scrollTo.mockClear()
     act(() => hook.result.current.searchActions.toggleMatchCase())
     act(() => hook.result.current.searchActions.toggleWholeWord())
-    act(() => editor.commands.insertContent('XY'))
+    void act(() => editor.commands.insertContent('XY'))
     expect(editor.getText()).toBe('beta beta\n\nEdit hereXY')
     expect(scrollTo).not.toHaveBeenCalled()
   })
@@ -130,7 +130,7 @@ describe('rich Markdown search adversarial interactions', () => {
     )
     query('beta')
     documentCaret()
-    act(() => editor.commands.insertContent('X'))
+    void act(() => editor.commands.insertContent('X'))
     scrollTo.mockClear()
     act(() => hook.result.current.searchActions.moveToMatch(1))
     expect(selectedText()).toBe('beta')
@@ -179,7 +179,7 @@ describe('rich Markdown search adversarial interactions', () => {
     act(() => hook.result.current.searchActions.setSearchQuery('target'))
     beforePassiveRef.current = () => editor.commands.setContent('<p>prefix prefix target</p>')
     scrollTo.mockClear()
-    act(() => vi.advanceTimersByTime(150))
+    void act(() => vi.advanceTimersByTime(150))
     expect(hook.result.current.searchState.matchCount).toBe(1)
     expect(selectedText()).toBe('target')
     expect(editor.state.selection.from).toBe(15)
@@ -193,7 +193,7 @@ describe('rich Markdown search adversarial interactions', () => {
       act(() => hook.result.current.searchActions.moveToMatch(1))
     }
     expect(hook.result.current.searchState.activeMatchIndex).toBe(4)
-    act(() => editor.commands.setContent('<p>beta beta beta</p>'))
+    void act(() => editor.commands.setContent('<p>beta beta beta</p>'))
     expect(hook.result.current.searchState.activeMatchIndex).toBe(0)
     act(() => hook.result.current.searchActions.moveToMatch(1))
     expect(hook.result.current.searchState.activeMatchIndex).toBe(1)
@@ -205,7 +205,7 @@ describe('rich Markdown search adversarial interactions', () => {
     query('beta')
     act(() => hook.result.current.searchActions.setSearchQuery('Edit'))
     act(() => hook.result.current.searchActions.setReplaceQuery('changed'))
-    act(() => editor.commands.setTextSelection(editor.state.doc.content.size - 1))
+    void act(() => editor.commands.setTextSelection(editor.state.doc.content.size - 1))
     scrollTo.mockClear()
     act(() => hook.result.current.searchActions.replaceCurrentMatch())
     expect(editor.getText()).toBe('beta beta\n\nchanged here')
@@ -218,7 +218,7 @@ describe('rich Markdown search adversarial interactions', () => {
     const { editor, hook, input, query, documentCaret, scrollTo } = mountSearch(undefined, true)
     query('beta')
     documentCaret()
-    act(() => editor.commands.insertContent('X'))
+    void act(() => editor.commands.insertContent('X'))
     act(() => input.focus())
     act(() => hook.rerender({ currentEditor: null }))
     const replacement = new Editor({ extensions: [StarterKit], content: '<p>beta</p>' })

@@ -125,7 +125,7 @@ describe('disconnected input grace across retries', () => {
 
       // Why both: held input is one ordered stream; the stale part may be the Ctrl+C the rest relies on.
       expect(sentText()).toBe('STALE\ry\r')
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -154,7 +154,7 @@ describe('disconnected input grace across retries', () => {
       await vi.advanceTimersByTimeAsync(50)
 
       expect(sentText()).toBe('ls\r')
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -202,7 +202,7 @@ describe('disconnected input grace across retries', () => {
       await vi.advanceTimersByTimeAsync(50)
 
       expect(sentText()).toBe('ls\r')
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -244,7 +244,7 @@ describe('disconnected input grace across retries', () => {
       await vi.advanceTimersByTimeAsync(50)
 
       expect(sentText()).toBe('')
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }

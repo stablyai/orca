@@ -142,7 +142,7 @@ export function useTaskPageLinearIssueCreation(model: TaskPageLinearProjectCreat
         return
       }
       setLinearRefreshNonce((n) => n + 1)
-      useAppStore.getState().recordFeatureInteraction('linear-tasks')
+      void useAppStore.getState().recordFeatureInteraction('linear-tasks')
 
       let release = () => {}
       const observation = { release: () => release() }

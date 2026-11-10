@@ -76,7 +76,7 @@ describe('TerminalPaneRecoveryPortals', () => {
     panes.forEach((pane) => document.body.appendChild(pane))
     const view = render(<TerminalPaneRecoveryPortals controller={controllerFor(panes)} />)
 
-    act(() => vi.advanceTimersByTime(CALM_STATUS_REVEAL_DELAY_MS))
+    void act(() => vi.advanceTimersByTime(CALM_STATUS_REVEAL_DELAY_MS))
 
     expect(view.container.querySelectorAll('[data-remote-server-outage-notice]')).toHaveLength(0)
     expect(
@@ -110,7 +110,7 @@ describe('TerminalPaneRecoveryPortals', () => {
     panes.forEach((pane) => document.body.appendChild(pane))
     const view = render(<TerminalPaneRecoveryPortals controller={controllerFor(panes)} />)
 
-    act(() => vi.advanceTimersByTime(CALM_STATUS_REVEAL_DELAY_MS))
+    void act(() => vi.advanceTimersByTime(CALM_STATUS_REVEAL_DELAY_MS))
 
     expect(view.container.querySelectorAll('[data-remote-server-outage-notice]')).toHaveLength(1)
     expect(
@@ -133,7 +133,7 @@ describe('TerminalPaneRecoveryPortals', () => {
       </>
     )
     const view = render(surfaces(left, right))
-    act(() => vi.advanceTimersByTime(CALM_STATUS_REVEAL_DELAY_MS * 2))
+    void act(() => vi.advanceTimersByTime(CALM_STATUS_REVEAL_DELAY_MS * 2))
     const notices = () => view.container.querySelectorAll('[data-remote-server-outage-notice]')
     const paneBanners = () =>
       document.querySelectorAll('[data-terminal-remote-runtime-reconnect-banner]')
@@ -144,7 +144,7 @@ describe('TerminalPaneRecoveryPortals', () => {
     expect(notices()).toHaveLength(1)
     expect(paneBanners()).toHaveLength(0)
 
-    act(() => vi.advanceTimersByTime(CALM_STATUS_MIN_VISIBLE_MS))
+    void act(() => vi.advanceTimersByTime(CALM_STATUS_MIN_VISIBLE_MS))
     expect(notices()).toHaveLength(0)
     expect(paneBanners()).toHaveLength(2)
   })
@@ -166,7 +166,7 @@ describe('TerminalPaneRecoveryPortals', () => {
     expect(
       document.querySelectorAll('[data-terminal-remote-runtime-reconnect-banner="ssh-sign-in"]')
     ).toHaveLength(1)
-    act(() => vi.advanceTimersByTime(CALM_STATUS_REVEAL_DELAY_MS * 2))
+    void act(() => vi.advanceTimersByTime(CALM_STATUS_REVEAL_DELAY_MS * 2))
     expect(view.container.querySelectorAll('[data-remote-server-outage-notice]')).toHaveLength(0)
   })
 
@@ -177,7 +177,7 @@ describe('TerminalPaneRecoveryPortals', () => {
     document.body.append(pane)
     const controller = controllerFor([pane])
     const view = render(<TerminalPaneRecoveryPortals controller={controller} />)
-    act(() => vi.advanceTimersByTime(CALM_STATUS_REVEAL_DELAY_MS * 2))
+    void act(() => vi.advanceTimersByTime(CALM_STATUS_REVEAL_DELAY_MS * 2))
     expect(view.container.querySelectorAll('[data-remote-server-outage-notice]')).toHaveLength(1)
 
     view.rerender(
@@ -212,7 +212,7 @@ describe('TerminalPaneRecoveryPortals', () => {
       </>
     )
     const view = render(surfaces(left))
-    act(() => vi.advanceTimersByTime(CALM_STATUS_REVEAL_DELAY_MS * 2))
+    void act(() => vi.advanceTimersByTime(CALM_STATUS_REVEAL_DELAY_MS * 2))
     const notices = () => view.container.querySelectorAll('[data-remote-server-outage-notice]')
 
     view.rerender(surfaces({ ...left, isVisible: false }))

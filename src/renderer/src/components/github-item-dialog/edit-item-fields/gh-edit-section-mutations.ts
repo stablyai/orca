@@ -107,7 +107,7 @@ export function runGHEditStateChange({
       // An edit that began untracked is admitted now: a record that can own it (after a reconnect or
       // upgrade) settles it, else the untracked publisher applies it once.
       const current = (owner ?? beginEdit(before, sourceContext, change))(true)
-      useAppStore.getState().recordFeatureInteraction('github-tasks')
+      void useAppStore.getState().recordFeatureInteraction('github-tasks')
       patchProjectRowIfNeeded({ state: current.state })
       onMutated()
     },
@@ -166,7 +166,7 @@ export function runGHEditLabelToggle({
     },
     onSuccess: () => {
       settle(true)
-      useAppStore.getState().recordFeatureInteraction('github-tasks')
+      void useAppStore.getState().recordFeatureInteraction('github-tasks')
       onMutated()
     },
     onError: (err) => toast.error(err)
@@ -240,7 +240,7 @@ export function runGHEditAssigneeToggle({
     },
     onSuccess: () => {
       settle(true)
-      useAppStore.getState().recordFeatureInteraction('github-tasks')
+      void useAppStore.getState().recordFeatureInteraction('github-tasks')
       onMutated()
     },
     onError: (err) => toast.error(err)

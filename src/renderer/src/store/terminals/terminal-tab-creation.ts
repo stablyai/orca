@@ -302,10 +302,10 @@ export function createTerminalTabCreationActions(
       const shouldRecordInteraction =
         options?.recordInteraction ?? (!options?.pendingActivationSpawn && !options?.initialPtyId)
       if (shouldRecordInteraction) {
-        get().recordFeatureInteraction?.('terminal-tabs')
+        void get().recordFeatureInteraction?.('terminal-tabs')
       }
       if (splitGroupId) {
-        get().recordFeatureInteraction?.('terminal-panes')
+        void get().recordFeatureInteraction?.('terminal-panes')
       }
       return tab
     }

@@ -14,9 +14,9 @@ describe('workspace board close linger', () => {
       { initialProps: { open: true } }
     )
     act(() => rerender({ open: false }))
-    act(() => vi.advanceTimersByTime(299))
+    void act(() => vi.advanceTimersByTime(299))
     act(() => rerender({ open: true }))
-    act(() => vi.advanceTimersByTime(1))
+    void act(() => vi.advanceTimersByTime(1))
     expect(result.current).toBe(true)
   })
 })

@@ -41,7 +41,7 @@ export function useExternalAutomationActions({
     try {
       await scopedExternal.runExternalAction(scope, job.id, action)
       if (action === 'run') {
-        useAppStore.getState().recordFeatureInteraction('automation-run')
+        void useAppStore.getState().recordFeatureInteraction('automation-run')
       }
       await pageRefresh.refresh({ awaitExternalManagers: true })
       if (action === 'delete') {

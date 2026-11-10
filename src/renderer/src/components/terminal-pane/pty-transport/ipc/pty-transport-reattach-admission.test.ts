@@ -332,7 +332,7 @@ describe('createIpcPtyTransport', () => {
       sessionId: 'pty-preexisting'
     })
 
-    transport.destroy?.()
+    void transport.destroy?.()
     if (!spawnControls.resolve) {
       throw new Error('Expected spawn resolver to be captured')
     }
@@ -360,7 +360,7 @@ describe('createIpcPtyTransport', () => {
       callbacks: {}
     })
 
-    transport.destroy?.()
+    void transport.destroy?.()
     if (!spawnControls.resolve) {
       throw new Error('Expected spawn resolver to be captured')
     }
@@ -408,7 +408,7 @@ describe('createIpcPtyTransport', () => {
       callbacks: {}
     })
 
-    transport.destroy?.()
+    void transport.destroy?.()
     if (!spawnControls.resolve) {
       throw new Error('Expected spawn resolver to be captured')
     }

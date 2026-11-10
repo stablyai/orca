@@ -217,10 +217,10 @@ describe('client-hosted browser pane over a dead guest', () => {
   it('ignores queued load events after guest loss', () => {
     const onUpdatePageState = vi.fn()
     render(paneElement(true, { onUpdatePageState }))
-    act(() => webview.dispatchEvent(new Event('destroyed')))
+    void act(() => webview.dispatchEvent(new Event('destroyed')))
     onUpdatePageState.mockClear()
 
-    act(() => webview.dispatchEvent(pageNavigationStart()))
+    void act(() => webview.dispatchEvent(pageNavigationStart()))
 
     expect(onUpdatePageState).not.toHaveBeenCalled()
     expect(screen.getByText('Client-hosted browser unavailable')).toBeTruthy()

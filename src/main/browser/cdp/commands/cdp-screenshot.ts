@@ -188,7 +188,7 @@ function captureUntilDrawn(
       send(FRAME_PROBE_PARAMS)?.catch(() => {})
     } else {
       probes = FRAME_PROBE_OFFSETS_MS.map((offsetMs) =>
-        setTimeout(() => send(FRAME_PROBE_PARAMS)?.catch(() => {}), offsetMs)
+        setTimeout(() => void send(FRAME_PROBE_PARAMS)?.catch(() => {}), offsetMs)
       )
     }
     send(params)?.then(

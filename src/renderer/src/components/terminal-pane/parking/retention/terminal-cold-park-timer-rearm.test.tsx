@@ -145,7 +145,7 @@ function firstParkedElapsedMs(options: { publishTitles: boolean }): number {
 
   for (let tick = 1; tick <= 12; tick += 1) {
     // advanceTimersByTime moves Date.now() and fires due timers together.
-    act(() => vi.advanceTimersByTime(TICK_MS))
+    void act(() => vi.advanceTimersByTime(TICK_MS))
     // Both runs re-render every tick; only the flooded one publishes titles.
     act(() => root?.render(<ParkingHost writes={options.publishTitles ? tick : 0} />))
     if (latestParkedTabIds.size > 0) {

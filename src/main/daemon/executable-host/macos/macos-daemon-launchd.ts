@@ -201,6 +201,7 @@ export async function launchMacDaemonFromStableBundle(
     args: ['bootstrap', domain, jobPath],
     timeoutMs: BOOTSTRAP_TIMEOUT_MS,
     maxOutputBytes: 8192
+    // oxlint-disable-next-line typescript/no-misused-promises -- Promise#finally awaits removeJobFile
   }).finally(removeJobFile)
   if (bootstrap.timedOut) {
     throw new Error('Could not start the macOS terminal service')

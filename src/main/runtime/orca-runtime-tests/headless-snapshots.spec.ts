@@ -318,7 +318,7 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.preparePtyExecutionContext('pty-reused', 'Ubuntu', { resetIncarnation: true })
     runtime.registerPty('pty-reused', TEST_WORKTREE_ID)
-    runtime.onPtyExit('pty-reused', 0)
+    void runtime.onPtyExit('pty-reused', 0)
 
     runtime.preparePtyExecutionContext('pty-reused', null, { resetIncarnation: true })
     runtime.registerPty('pty-reused', TEST_WORKTREE_ID)

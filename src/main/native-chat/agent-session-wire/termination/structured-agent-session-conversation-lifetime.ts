@@ -125,7 +125,7 @@ export function createStructuredAgentSessionConversationLifetime(
     if (matches() && deps().store.getRecord(sessionId)) {
       const journal = sessions.get(sessionId)?.journal
       if (journal) {
-        closeStructuredAgentSessionHandovers(journal)
+        void closeStructuredAgentSessionHandovers(journal)
       }
       starts.abort()
     }

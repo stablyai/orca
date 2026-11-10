@@ -113,7 +113,7 @@ describe('first agent launch in a repo', () => {
         await answerAgentWorkspaceTrustDecision('agent-asks')
         await connecting
         for (const transport of transports) {
-          transport.destroy?.()
+          void transport.destroy?.()
         }
         restorePtySpecWindow(originalWindow)
       }

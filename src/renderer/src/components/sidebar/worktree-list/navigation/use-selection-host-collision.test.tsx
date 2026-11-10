@@ -68,8 +68,8 @@ describe('sidebar selection host collisions', () => {
       shiftKey: false
     } as React.MouseEvent<HTMLElement>
 
-    act(() => selection.updateSelectionForGesture(additiveEvent, local))
-    act(() => selection.updateSelectionForGesture(additiveEvent, remote))
+    void act(() => selection.updateSelectionForGesture(additiveEvent, local))
+    void act(() => selection.updateSelectionForGesture(additiveEvent, remote))
 
     expect(selection.selectedWorktrees.map((worktree) => worktree.hostId)).toEqual([
       'local',

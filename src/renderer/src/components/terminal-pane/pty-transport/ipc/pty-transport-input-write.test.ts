@@ -408,7 +408,7 @@ describe('createIpcPtyTransport', () => {
       if (teardown === 'disconnect') {
         transport.disconnect()
       } else if (teardown === 'destroy') {
-        transport.destroy?.()
+        void transport.destroy?.()
       } else {
         onExit?.({ id: 'pty-1', code: 0 })
       }

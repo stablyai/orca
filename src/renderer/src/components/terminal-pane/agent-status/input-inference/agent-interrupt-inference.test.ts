@@ -34,9 +34,9 @@ describe('agent interrupt inference', () => {
       now: () => 1_100
     })
 
-    tracker.observeInputIntent('plain-escape')
+    void tracker.observeInputIntent('plain-escape')
     entry = makeEntry({ agentType: 'opencode', prompt: 'second task', stateStartedAt: 1_050 })
-    tracker.observeInputIntent('plain-escape')
+    void tracker.observeInputIntent('plain-escape')
     vi.runOnlyPendingTimers()
 
     expect(inferInterrupt).not.toHaveBeenCalled()
@@ -58,8 +58,8 @@ describe('agent interrupt inference', () => {
         now: () => 1_100
       })
 
-      tracker.observeInputIntent('ctrl-c')
-      tracker.observeInputIntent('plain-escape')
+      void tracker.observeInputIntent('ctrl-c')
+      void tracker.observeInputIntent('plain-escape')
       vi.advanceTimersByTime(500)
 
       expect(inferInterrupt).toHaveBeenCalledTimes(1)
@@ -82,7 +82,7 @@ describe('agent interrupt inference', () => {
       now: () => 1_100
     })
 
-    tracker.observeInputIntent('plain-escape')
+    void tracker.observeInputIntent('plain-escape')
     entry = makeEntry({ updatedAt: 1_001 })
     vi.advanceTimersByTime(500)
 
@@ -111,9 +111,9 @@ describe('agent interrupt inference', () => {
         now: () => 2_100
       })
 
-      tracker.observeInputIntent('plain-escape', newerEntry, 2)
+      void tracker.observeInputIntent('plain-escape', newerEntry, 2)
       currentEntry = undefined
-      tracker.observeInputIntent('plain-escape', olderEntry, 1)
+      void tracker.observeInputIntent('plain-escape', olderEntry, 1)
       vi.advanceTimersByTime(500)
 
       expect(inferInterrupt).toHaveBeenCalledWith({

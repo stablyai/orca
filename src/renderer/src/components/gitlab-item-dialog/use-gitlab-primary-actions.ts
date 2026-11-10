@@ -35,7 +35,7 @@ export function useGitLabPrimaryActions(
       const res = await gitLabApiFor(repoSelector).closeMR({ ...repoSelector, iid: item.number })
       if (res.ok) {
         if (mountedRef.current) {
-          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
+          void useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
           toast.success(
             translate('auto.components.GitLabItemDialog.9b11cd233f', 'Closed MR !{{value0}}', {
               value0: item.number
@@ -71,7 +71,7 @@ export function useGitLabPrimaryActions(
       const res = await gitLabApiFor(repoSelector).reopenMR({ ...repoSelector, iid: item.number })
       if (res.ok) {
         if (mountedRef.current) {
-          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
+          void useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
           toast.success(
             translate('auto.components.GitLabItemDialog.865ea2703e', 'Reopened MR !{{value0}}', {
               value0: item.number
@@ -105,7 +105,7 @@ export function useGitLabPrimaryActions(
       const res = await gitLabApiFor(repoSelector).mergeMR({ ...repoSelector, iid: item.number })
       if (res.ok) {
         if (mountedRef.current) {
-          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
+          void useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
           toast.success(
             translate('auto.components.GitLabItemDialog.e089f62594', 'Merged MR !{{value0}}', {
               value0: item.number
@@ -163,7 +163,7 @@ export function useGitLabPrimaryActions(
           setCommentDraftState((current) =>
             current.itemId === itemId ? { itemId, value: '' } : current
           )
-          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
+          void useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
           if (ownsResult()) {
             handleRefresh()
           }

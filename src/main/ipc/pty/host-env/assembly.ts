@@ -138,7 +138,7 @@ export function buildPtyHostEnv(
         explicitPiAgentKind === 'pi' || explicitPiAgentKind === 'omp'
           ? explicitPiAgentKind
           : undefined
-      wslHookRelayManager.ensureForDistro(distro, opts.selectedCodexHomePath, wslLaunchKind)
+      void wslHookRelayManager.ensureForDistro(distro, opts.selectedCodexHomePath, wslLaunchKind)
       const guestEndpoint = wslHookRelayManager.getGuestEndpointFilePath(distro)
       if (guestEndpoint) {
         baseEnv.ORCA_AGENT_HOOK_ENDPOINT = guestEndpoint

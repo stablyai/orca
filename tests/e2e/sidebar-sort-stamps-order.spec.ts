@@ -45,7 +45,7 @@ test('the window sidebar order follows the host stamps in Recent and Smart', asy
       throw new Error('Expected the seeded secondary worktree')
     }
     // A newer Recent stamp on the other row, with no tier on either.
-    store.getState().updateWorktreeMeta(other.id, { lastActivityAt: Date.now() })
+    void store.getState().updateWorktreeMeta(other.id, { lastActivityAt: Date.now() })
     return other.id
   }, pane.worktreeId)
   const ids = [pane.worktreeId, otherId]

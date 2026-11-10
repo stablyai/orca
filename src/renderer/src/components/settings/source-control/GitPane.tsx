@@ -221,7 +221,7 @@ export function GitPane({
               const next = e.target.value
               lastCommittedPrefixRef.current = next
               setCustomPrefixDraft(next)
-              updateSettings({ branchPrefixCustom: next })
+              void updateSettings({ branchPrefixCustom: next })
             }}
             placeholder={
               settings.branchPrefix === 'git-username'

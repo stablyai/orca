@@ -83,11 +83,12 @@ function createRuntimeInternals(
     flushOrThrow: () => {}
   }) as never
   const runtime = new OrcaRuntimeService(store)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial controller stub; these tests call only the methods defined here.
   runtime.setPtyController({
     write: () => true,
     kill: () => true,
     stopAndWait: async (ptyId: string) => {
-      runtime.onPtyExit(ptyId, -1)
+      void runtime.onPtyExit(ptyId, -1)
       return true
     },
     getForegroundProcess: async () => null,

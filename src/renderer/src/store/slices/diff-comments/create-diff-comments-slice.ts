@@ -73,7 +73,7 @@ function deliverySnapshotMatches(
 // Why: best-effort telemetry runs only after the note is on disk, so a throw here must not report a failed save.
 function recordReviewNoteInteraction(get: () => AppState): void {
   try {
-    get().recordFeatureInteraction?.('review-notes')
+    void get().recordFeatureInteraction?.('review-notes')
   } catch (err) {
     console.error('Failed to record review-notes interaction:', err)
   }

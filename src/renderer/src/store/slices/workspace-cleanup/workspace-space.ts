@@ -121,7 +121,7 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
   cancelWorkspaceSpaceScan: async () => {
     const cancelled = await window.api.workspaceSpace.cancel()
     if (cancelled) {
-      get().recordFeatureInteraction?.('workspace-cleanup')
+      void get().recordFeatureInteraction?.('workspace-cleanup')
     }
     if (cancelled) {
       set((state) =>
@@ -161,7 +161,7 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
     if (inFlightScan) {
       return inFlightScan
     }
-    get().recordFeatureInteraction?.('workspace-cleanup')
+    void get().recordFeatureInteraction?.('workspace-cleanup')
     set({
       workspaceSpaceScanning: true,
       workspaceSpaceScanProgress: null,
@@ -202,7 +202,7 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
   },
   removeWorkspaceSpaceWorktrees: (worktreeTargets) => {
     if (worktreeTargets.length > 0) {
-      get().recordFeatureInteraction?.('workspace-cleanup')
+      void get().recordFeatureInteraction?.('workspace-cleanup')
     }
     set((state) => {
       const deletedIds = new Set(

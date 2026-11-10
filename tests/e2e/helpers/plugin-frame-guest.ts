@@ -74,9 +74,9 @@ export async function clickInGuest(guest: Locator, selector: string): Promise<vo
     throw new Error(`no ${selector} in the plugin guest`)
   }
   await guest.evaluate((webview: Electron.WebviewTag, { x, y }) => {
-    webview.sendInputEvent({ type: 'mouseMove', x, y })
-    webview.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 })
-    webview.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 })
+    void webview.sendInputEvent({ type: 'mouseMove', x, y })
+    void webview.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 })
+    void webview.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 })
   }, point)
 }
 

@@ -308,6 +308,7 @@ export class AcpAgentConnection extends AcpSessionRuntime {
     this.managed.child.stdout.resume()
   }
 
+  // oxlint-disable-next-line typescript/no-misused-promises -- base never calls close(); AcpAgentConnection callers await the kill verdict
   override close(error?: Error): Promise<boolean> {
     this.lifecycle.closing ||= this.managed.rootVerdict !== 'exited'
     clearTimeout(this.lifecycle.outputEndTimer)

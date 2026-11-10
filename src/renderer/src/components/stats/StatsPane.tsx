@@ -118,7 +118,7 @@ export function StatsPane(): React.JSX.Element {
     USAGE_ANALYTICS_OPTIONS[0]
 
   useEffect(() => {
-    recordFeatureInteraction('usage-tracking')
+    void recordFeatureInteraction('usage-tracking')
     void fetchStatsSummary()
   }, [fetchStatsSummary, recordFeatureInteraction])
 

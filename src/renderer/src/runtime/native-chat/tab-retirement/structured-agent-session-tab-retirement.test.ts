@@ -213,12 +213,12 @@ describe('structured agent session tab retirement', () => {
           release = () => resolve('closed')
         })
     )
-    retireStructuredAgentSessionTab({
+    void retireStructuredAgentSessionTab({
       target,
       worktreeId: 'wt-1',
       sessionId: 'session-1'
     })
-    retireStructuredAgentSessionTab({
+    void retireStructuredAgentSessionTab({
       target,
       worktreeId: 'wt-1',
       sessionId: 'session-1'
@@ -232,7 +232,7 @@ describe('structured agent session tab retirement', () => {
     const remoteTarget = { kind: 'environment', environmentId: 'server-1' } as const
     const remote = getStructuredAgentSessionReadOwner('session-1', remoteTarget)
     const dispose = vi.spyOn(local, 'dispose')
-    retireStructuredAgentSessionTab({ target, worktreeId: 'wt-1', sessionId: 'session-1' })
+    void retireStructuredAgentSessionTab({ target, worktreeId: 'wt-1', sessionId: 'session-1' })
     expect(findStructuredAgentSessionReadOwner('session-1', target)).toBeUndefined()
     expect(findStructuredAgentSessionReadOwner('session-1', remoteTarget)).toBe(remote)
     expect(dispose).toHaveBeenCalledOnce()

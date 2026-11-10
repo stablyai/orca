@@ -239,8 +239,9 @@ export function DiffSectionItem({
 
     modifiedEditorsRef.current.set(index, modified)
     const original = editor.getOriginalEditor()
-    const cleanupSaveShortcut = installEditorSaveShortcut(modified.getContainerDomNode(), () =>
-      handleSectionSaveRef.current(index)
+    const cleanupSaveShortcut = installEditorSaveShortcut(
+      modified.getContainerDomNode(),
+      () => void handleSectionSaveRef.current(index)
     )
     const cleanupOriginalFindShortcut = installMonacoEditorFindShortcut(original)
     const cleanupModifiedFindShortcut = installMonacoEditorFindShortcut(modified)

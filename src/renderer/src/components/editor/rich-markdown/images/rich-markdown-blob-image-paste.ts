@@ -66,7 +66,7 @@ export function scheduleRichMarkdownBlobImageImport({
     getRichMarkdownImageResolverContextVersion(editor) === contextVersion
   // Why: fetch now, before the source surface can revoke its object URLs.
   const reads = sources.map((src) => fetch(src, { signal: controller.signal }))
-  reads.forEach((read) => read.catch(() => {}))
+  reads.forEach((read) => void read.catch(() => {}))
 
   void (async () => {
     let failed = false

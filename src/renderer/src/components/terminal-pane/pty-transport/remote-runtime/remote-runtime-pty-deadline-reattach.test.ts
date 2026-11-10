@@ -231,7 +231,7 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
       expect(transport.isConnected()).toBe(true)
       expect(transport.getPtyId()).toBe('remote:env-1@@terminal-after-timeout')
       expect(onPtyExit).not.toHaveBeenCalled()
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -260,7 +260,7 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
       emitSnapshot(latestSubscribePayload().streamId, 'reattached')
       expect(transport.isConnected()).toBe(true)
       expect(onError).not.toHaveBeenCalled()
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -283,7 +283,7 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
       await vi.advanceTimersByTimeAsync(1_000)
 
       expect(subscribedTerminalHandles()).toEqual(['terminal-stale'])
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -315,7 +315,7 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
       emitSnapshot(latestSubscribePayload().streamId, 'reattached')
       expect(transport.isConnected()).toBe(true)
       expect(onError).not.toHaveBeenCalled()
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -347,7 +347,7 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
       emitSnapshot(latestSubscribePayload().streamId, 'reattached')
       expect(transport.isConnected()).toBe(true)
       expect(onError).not.toHaveBeenCalled()
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -393,7 +393,7 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
       expect(retryAllRemoteRuntimePtyRecoveriesNow()).toBe(0)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
       expect(runtimeCall.mock.calls.length).toBe(callsBeforeRetry)
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -448,7 +448,7 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
 
       // The recovery deadline never fired, so the fenced handle stays fenced.
       expect(subscribedTerminalHandles()).toHaveLength(subscribesBeforeRepublish)
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -487,7 +487,7 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
       await vi.advanceTimersByTimeAsync(0)
 
       expect(retryAllRemoteRuntimePtyRecoveriesNow()).toBe(1)
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }

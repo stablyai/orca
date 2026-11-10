@@ -189,7 +189,7 @@ describe('Interactive wait visibility and terminal admission', () => {
       })
       await expect(runtime.getTerminalInteractiveWait(handle)).resolves.not.toBeNull()
 
-      runtime.onPtyExit(PTY_ID, 0)
+      void runtime.onPtyExit(PTY_ID, 0)
 
       await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toBeUndefined()
     })

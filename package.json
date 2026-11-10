@@ -20,6 +20,7 @@
     "audit:code-quality": "pnpm run audit:code-quality:native && pnpm run audit:code-quality:type-aware && pnpm run audit:react-doctor",
     "audit:code-quality:native": "oxlint --config config/oxlint-code-quality-native-plugins.json src config tests mobile --deny-warnings",
     "audit:code-quality:type-aware": "oxlint --type-aware --config config/oxlint-code-quality-type-aware.json src config tests --deny-warnings",
+    "audit:code-quality:type-aware-promises": "oxlint --type-aware --config config/oxlint-code-quality-type-aware-promises.json src config tests --deny-warnings",
     "audit:react-doctor": "node config/scripts/dependency-security/audit-tools/run-audit-tool.mjs react-doctor . --yes --no-supply-chain --no-telemetry --blocking none",
     "audit:dead-code": "node config/scripts/dependency-security/audit-tools/run-audit-tool.mjs knip --config config/knip.json",
     "check:changed": "node config/scripts/preflight/changed-checks/check-changed.mjs",

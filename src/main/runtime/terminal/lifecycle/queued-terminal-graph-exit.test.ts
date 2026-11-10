@@ -124,7 +124,7 @@ describe('host exit authority over queued renderer graphs', () => {
       finishStop = done
     })
     const stop = vi.fn(async () => {
-      runtime.onPtyExit(PTY, 0, FIRST, { providerExitObserved: true })
+      void runtime.onPtyExit(PTY, 0, FIRST, { providerExitObserved: true })
       stopped = true
       await gate
       return true
@@ -162,16 +162,16 @@ describe('host exit authority over queued renderer graphs', () => {
       await pending
       resolve.mockRestore()
       map.mockRestore()
-      runtime.onPtyExit(PTY, 0, FIRST)
+      void runtime.onPtyExit(PTY, 0, FIRST)
     }
   })
 
   it('admits a registered successor and ignores the predecessor exit', () => {
     const runtime = new ExitAuthorityRuntime()
     register(runtime)
-    runtime.onPtyExit(PTY, 0, FIRST)
+    void runtime.onPtyExit(PTY, 0, FIRST)
     register(runtime, NEXT)
-    runtime.onPtyExit(PTY, 0, FIRST)
+    void runtime.onPtyExit(PTY, 0, FIRST)
     graph(runtime)
     expect(runtime.capture()).toEqual({ connected: true, incarnationId: NEXT })
     expect(runtime.getPtyLivenessVerdict(PTY)).toBeNull()
@@ -180,7 +180,7 @@ describe('host exit authority over queued renderer graphs', () => {
   it('admits a same-ID spawn before its registration commits', () => {
     const runtime = new ExitAuthorityRuntime()
     register(runtime)
-    runtime.onPtyExit(PTY, 0, FIRST)
+    void runtime.onPtyExit(PTY, 0, FIRST)
     runtime.onPtySpawned(PTY, NEXT)
     graph(runtime)
     expect(runtime.capture()).toEqual({ connected: true, incarnationId: NEXT })
@@ -190,7 +190,7 @@ describe('host exit authority over queued renderer graphs', () => {
   it('allows owning inventory to prove the same ID live again', async () => {
     const runtime = new ExitAuthorityRuntime()
     register(runtime)
-    runtime.onPtyExit(PTY, 0, FIRST)
+    void runtime.onPtyExit(PTY, 0, FIRST)
     runtime.setPtyController({
       write: () => true,
       kill: () => true,

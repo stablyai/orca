@@ -117,7 +117,7 @@ export function createBrowserCookieImportActions(
           browserProfile
         })) as BrowserCookieImportResult
         if (result.ok) {
-          get().recordFeatureInteraction?.('cookie-import')
+          void get().recordFeatureInteraction?.('cookie-import')
           set((state) =>
             browserImportStateForHostUpdate(state, hostId, {
               profileId,
@@ -183,7 +183,7 @@ export function createBrowserCookieImportActions(
       try {
         const ok = await window.api.browser.sessionClearDefaultCookies()
         if (ok && getBrowserSettingsHostId(get()) === hostId) {
-          get().recordFeatureInteraction?.('cookie-import')
+          void get().recordFeatureInteraction?.('cookie-import')
           await get().fetchBrowserSessionProfiles()
         }
         return ok

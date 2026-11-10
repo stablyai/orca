@@ -128,7 +128,7 @@ export function useRemoteBrowserPageKeyboard({
     const params = { worktree: runtimeWorktree, page: pageId }
     const rpcOptions = { timeoutMs: 15_000, suppressFeatureInteraction: true }
     setPaneNotice(null)
-    enqueueRemoteInput(async () => {
+    void enqueueRemoteInput(async () => {
       try {
         if (input.method === 'browser.keyboardInsertText') {
           // Why: a paste pressed before our queued copy finished carries the clipboard from before it.

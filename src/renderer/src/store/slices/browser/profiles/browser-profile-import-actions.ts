@@ -52,7 +52,7 @@ export function createBrowserProfileImportActions(
             })) ?? remoteCookieImportUnavailable())
           : await window.api.browser.sessionImportCookies({ profileId })
         if (result.ok) {
-          get().recordFeatureInteraction?.('cookie-import')
+          void get().recordFeatureInteraction?.('cookie-import')
           set((state) =>
             browserImportStateForHostUpdate(state, hostId, {
               profileId,

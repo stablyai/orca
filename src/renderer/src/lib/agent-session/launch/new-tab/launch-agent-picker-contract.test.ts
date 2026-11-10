@@ -112,7 +112,7 @@ it('keeps pristine, edited and reopened historical-host picker launches free of 
             onDraftChange: setup.change,
             onUse: (draft) => {
               if (setup.accept(draft)) {
-                launch(row, draft, entry)
+                void launch(row, draft, entry)
               }
             }
           })

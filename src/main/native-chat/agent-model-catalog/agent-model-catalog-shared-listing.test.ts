@@ -416,7 +416,7 @@ it.each(['cold', 'warm'] as const)(
       second()
     } finally {
       leave()
-      service.stop()
+      void service.stop()
       vi.useRealTimers()
     }
   }

@@ -130,7 +130,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       )
       expect(onPtyExit).not.toHaveBeenCalled()
       expect(onError).not.toHaveBeenCalled()
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }

@@ -51,9 +51,12 @@ export function WindowsFirewallNotice({
   }, [address, mountedRef, pairingReady])
 
   useEffect(() => {
-    void inspect()
-    window.addEventListener('focus', inspect)
-    return () => window.removeEventListener('focus', inspect)
+    const handleFocus = (): void => {
+      void inspect()
+    }
+    handleFocus()
+    window.addEventListener('focus', handleFocus)
+    return () => window.removeEventListener('focus', handleFocus)
   }, [inspect])
 
   if (!status?.supported) {

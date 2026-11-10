@@ -60,7 +60,7 @@ describe('virtual Find navigation ownership', () => {
     'lets %s input cancel a result before worker blocks arrive, while Next still works',
     (type) => {
       const { root, scroll, rerender, unmount, client } = setup()
-      act(() =>
+      void act(() =>
         root.dispatchEvent(
           type === 'keydown'
             ? new KeyboardEvent(type, { key: 'PageDown', bubbles: true })
@@ -79,7 +79,7 @@ describe('virtual Find navigation ownership', () => {
 
   it('lets explicit Next reveal a single match after its initial result was cancelled', () => {
     const { root, scroll, rerender, result, unmount, client } = setup()
-    act(() => root.dispatchEvent(new Event('wheel')))
+    void act(() => root.dispatchEvent(new Event('wheel')))
     rerender({ activeMatch: { block: 0, occurrence: 0 }, query: 'needle' })
     expect(scroll).not.toHaveBeenCalled()
     act(() => result.current())
@@ -91,7 +91,9 @@ describe('virtual Find navigation ownership', () => {
   it('keeps query editing independent of viewport scroll input and cleans up listeners', () => {
     const { root, input, scroll, rerender, unmount, client } = setup()
     const remove = vi.spyOn(root, 'removeEventListener')
-    act(() => input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true })))
+    void act(() =>
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }))
+    )
     rerender({ activeMatch: { block: 1, occurrence: 0 }, query: 'needle' })
     expect(scroll).toHaveBeenCalledExactlyOnceWith(1, { align: 'center' })
     unmount()
@@ -150,7 +152,7 @@ describe('Find ranges after rendered content changes', () => {
     )
     const before = [...(registry.get('markdown-preview-search-active-match') ?? [])][0]
     expect(before?.toString()).toBe('const needle')
-    act(() => root.dispatchEvent(new Event('wheel')))
+    void act(() => root.dispatchEvent(new Event('wheel')))
     const replacement = document.createElement('code')
     replacement.textContent = code.textContent
     code.replaceWith(replacement)

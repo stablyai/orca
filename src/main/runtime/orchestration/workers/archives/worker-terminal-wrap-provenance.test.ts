@@ -40,7 +40,7 @@ describe('host wrap provenance in worker output', () => {
       fixture.runtime.readTerminal(fixture.handle, opts)
     )
     vi.mocked(h.runtime.closeTerminal).mockImplementation(async (handle) => {
-      fixture.runtime.onPtyExit('pty-1', 0)
+      void fixture.runtime.onPtyExit('pty-1', 0)
       return { handle, tabId: 'tab-worker', ptyKilled: true }
     })
     await h.call('orchestration.workerRelease', { dispatch: dispatchId })
@@ -92,7 +92,7 @@ describe('host wrap provenance in worker output', () => {
       expect(readTail(live).join('')).not.toContain('abcdefghijklmnopqrstuvwx')
       expect(readTail(live).join('')).toContain('PermissionDenied')
       vi.mocked(h.runtime.closeTerminal).mockImplementation(async (handle) => {
-        fixture.runtime.onPtyExit('pty-1', 0)
+        void fixture.runtime.onPtyExit('pty-1', 0)
         return { handle, tabId: 'tab-worker', ptyKilled: true }
       })
       await h.call('orchestration.workerRelease', { dispatch: dispatchId })
@@ -162,7 +162,7 @@ describe('host wrap provenance in worker output', () => {
     })
     expect(live).toMatchObject({ terminal: { draft: 'dcap_sssss\nPermissionDenied' } })
     vi.mocked(h.runtime.closeTerminal).mockImplementation(async (handle) => {
-      fixture.runtime.onPtyExit('pty-1', 0)
+      void fixture.runtime.onPtyExit('pty-1', 0)
       return { handle, tabId: 'tab-worker', ptyKilled: true }
     })
     await h.call('orchestration.workerRelease', { dispatch: dispatchId })

@@ -370,7 +370,7 @@ describe('OrcaRuntimeService', () => {
     const closeTerminalTab = vi.fn(async () => {})
     let runtime!: OrcaRuntimeService
     const kill = vi.fn((closedPtyId: string) => {
-      runtime.onPtyExit(closedPtyId, 0)
+      void runtime.onPtyExit(closedPtyId, 0)
       return true
     })
     runtime = new OrcaRuntimeService(runtimeStore as never)

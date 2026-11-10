@@ -43,19 +43,19 @@ export function createUiTaskActions(set: UISliceSet, get: UISliceGet): Partial<U
             tasks: wasTasksPreviouslyInteracted
           }
         }))
-        get().recordFeatureInteraction?.('tasks')
+        void get().recordFeatureInteraction?.('tasks')
       }
       if (data.openGitHubWorkItem) {
-        get().recordFeatureInteraction?.('github-tasks')
+        void get().recordFeatureInteraction?.('github-tasks')
       }
       if (data.openGitLabWorkItem) {
-        get().recordFeatureInteraction?.('gitlab-tasks')
+        void get().recordFeatureInteraction?.('gitlab-tasks')
       }
       if (data.openLinearIssue) {
-        get().recordFeatureInteraction?.('linear-tasks')
+        void get().recordFeatureInteraction?.('linear-tasks')
       }
       if (data.openJiraIssue) {
-        get().recordFeatureInteraction?.('jira-tasks')
+        void get().recordFeatureInteraction?.('jira-tasks')
       }
       // Why: record a Tasks visit in shared back/forward history; all task-source variants collapse to one deduped 'tasks' entry.
       const detailEntry = data.openGitHubWorkItem

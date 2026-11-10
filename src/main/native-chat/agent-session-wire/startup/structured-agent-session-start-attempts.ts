@@ -151,7 +151,7 @@ export function registerStructuredAgentSessionStart(
       attempts.abandon(sessionId, attemptId)
       context.publishStatus(sessionId)
     })
-  context.tasks.trackAttach(outcome.then(() => Promise.all([attempting, recorded])))
+  void context.tasks.trackAttach(outcome.then(() => Promise.all([attempting, recorded])))
   register()
   return outcome
 }

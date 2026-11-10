@@ -136,7 +136,7 @@ describe('remote runtime pane whose host session already ended (#31539)', () => 
     expect(shown).toEqual(['terminal-ended'])
     expect(transport.getRecoveryState?.().phase).toBe('ended')
     expect(transport.getPtyId()).toBeNull()
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('settles on the exit cause a host without verdicts records', async () => {
@@ -148,7 +148,7 @@ describe('remote runtime pane whose host session already ended (#31539)', () => 
 
     await vi.waitFor(() => expect(onPtyExit).toHaveBeenCalledWith(HOST_TAB_PTY_ID))
     expect(transport.getRecoveryState?.().phase).toBe('ended')
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it.each([
@@ -178,7 +178,7 @@ describe('remote runtime pane whose host session already ended (#31539)', () => 
     expect(onPtyExit).not.toHaveBeenCalled()
     expect(transport.getRecoveryState?.().phase).not.toBe('ended')
     expect(transport.getPtyId()).toBe(HOST_TAB_PTY_ID)
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it.each([
@@ -223,7 +223,7 @@ describe('remote runtime pane whose host session already ended (#31539)', () => 
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(onPtyExit).not.toHaveBeenCalled()
     expect(transport.getRecoveryState?.().phase).not.toBe('ended')
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('leaves a stopped pane the host still publishes to be re-created on activation', async () => {
@@ -266,7 +266,7 @@ describe('remote runtime pane whose host session already ended (#31539)', () => 
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(onPtyExit).not.toHaveBeenCalled()
     expect(transport.getRecoveryState?.().phase).not.toBe('ended')
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('hands a settled pane back once a host snapshot publishes its new process', async () => {
@@ -284,7 +284,7 @@ describe('remote runtime pane whose host session already ended (#31539)', () => 
     await publishHostSurface({ terminal: 'terminal-ended', incarnationId: 'inc-2' }, 7)
     await publishHostSurface({ terminal: 'terminal-later' }, 8)
     expect(onHostReboundExitedPty.mock.calls).toEqual([['remote:hub-env@@terminal-ended']])
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('hands a settled pane back to a new handle the host binds to it', async () => {
@@ -297,7 +297,7 @@ describe('remote runtime pane whose host session already ended (#31539)', () => 
     await publishHostSurface({ terminal: 'terminal-restarted' }, 4)
 
     expect(onHostReboundExitedPty.mock.calls).toEqual([['remote:hub-env@@terminal-restarted']])
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('hands a settled pane back to a process the host published while the exit was confirming', async () => {
@@ -337,7 +337,7 @@ describe('remote runtime pane whose host session already ended (#31539)', () => 
     await vi.waitFor(() =>
       expect(onHostReboundExitedPty.mock.calls).toEqual([['remote:hub-env@@terminal-ended']])
     )
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('settles a pane whose restore attach is refused as stale before it binds', async () => {
@@ -381,6 +381,6 @@ describe('remote runtime pane whose host session already ended (#31539)', () => 
     expect(shown).toEqual(['terminal-ended'])
     expect(transport.getRecoveryState?.().phase).toBe('ended')
     expect(subscriptionSendBinary).not.toHaveBeenCalled()
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 })

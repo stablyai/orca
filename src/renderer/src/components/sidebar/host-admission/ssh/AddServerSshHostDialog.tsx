@@ -50,7 +50,7 @@ export function AddServerSshHostDialog({
         setSshTargetsMetadata: () => {
           void refreshRuntimeEnvironmentSshTargetMetadata(environmentId).catch(() => {})
         },
-        recordFeatureInteraction
+        recordFeatureInteraction: (feature) => void recordFeatureInteraction(feature)
       })
       if (outcome === 'saved') {
         setForm(EMPTY_FORM)

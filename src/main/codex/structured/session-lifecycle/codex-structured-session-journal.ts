@@ -39,7 +39,7 @@ export function createCodexSessionJournalTranslator(input: {
         onUserMessageEcho: (clientMessageId, providerIdentity) => {
           // Duplicate exact echoes retry receipt persistence while the send remains unsettled.
           dispatchEchoes.settle(clientMessageId)
-          deps.onDispatchSettledLate?.({ sessionId, clientMessageId, providerIdentity })
+          void deps.onDispatchSettledLate?.({ sessionId, clientMessageId, providerIdentity })
         }
       })
     : null

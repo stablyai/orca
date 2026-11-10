@@ -116,12 +116,12 @@ describe('installed WSL transcript watcher lifecycle', () => {
     await vi.advanceTimersByTimeAsync(50)
     const statsBeforeStop = mocks.stat.mock.calls.length
 
-    mocks.observation?.(false)
+    void mocks.observation?.(false)
     await vi.advanceTimersByTimeAsync(100)
     expect(mocks.stat).toHaveBeenCalledTimes(statsBeforeStop)
 
     mocks.filterRunning.mockResolvedValue([UNC_PATH])
-    mocks.observation?.(true)
+    void mocks.observation?.(true)
     await vi.advanceTimersByTimeAsync(0)
 
     expect(mocks.stat.mock.calls.length).toBeGreaterThan(statsBeforeStop)

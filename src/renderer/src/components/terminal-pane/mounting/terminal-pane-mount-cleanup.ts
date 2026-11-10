@@ -110,7 +110,7 @@ export function cleanupTerminalPaneMount(args: {
     ) {
       transport.detach?.({ preserveExitObserver: false })
     } else {
-      transport.destroy?.()
+      void transport.destroy?.()
     }
   }
   if (!tabStillExists) {

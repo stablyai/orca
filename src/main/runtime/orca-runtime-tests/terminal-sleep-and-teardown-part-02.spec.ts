@@ -159,7 +159,7 @@ describe('OrcaRuntimeService', () => {
       write: () => true,
       kill: () => false,
       stopAndWait: async (ptyId) => {
-        runtime.onPtyExit(ptyId, -1)
+        void runtime.onPtyExit(ptyId, -1)
         return true
       },
       getForegroundProcess: async () => null,
@@ -230,7 +230,7 @@ describe('OrcaRuntimeService', () => {
       kill: () => false,
       stopAndWait: async (ptyId) => {
         const result = await stop.promise
-        runtime.onPtyExit(ptyId, -1)
+        void runtime.onPtyExit(ptyId, -1)
         return result
       },
       getForegroundProcess: async () => null,
@@ -342,7 +342,7 @@ describe('OrcaRuntimeService', () => {
       write: () => true,
       kill: () => false,
       stopAndWait: async (ptyId) => {
-        runtime.onPtyExit(ptyId, -1)
+        void runtime.onPtyExit(ptyId, -1)
         return true
       },
       getForegroundProcess: async () => null,
@@ -411,7 +411,7 @@ describe('OrcaRuntimeService', () => {
       write: () => true,
       kill: () => false,
       stopAndWait: async (ptyId) => {
-        runtime.onPtyExit(ptyId, -1)
+        void runtime.onPtyExit(ptyId, -1)
         return true
       },
       getForegroundProcess: async () => null,
@@ -462,11 +462,11 @@ describe('OrcaRuntimeService', () => {
         if (failedAttempts === 1) {
           throw new Error('stop failed')
         }
-        runtime.onPtyExit(ptyId, -1)
+        void runtime.onPtyExit(ptyId, -1)
         return true
       }
       const stopped = await secondStop.promise
-      runtime.onPtyExit(ptyId, -1)
+      void runtime.onPtyExit(ptyId, -1)
       return stopped
     })
     runtime.setPtyController({
@@ -520,7 +520,7 @@ describe('OrcaRuntimeService', () => {
       kill: () => false,
       stopAndWait: async (ptyId) => {
         stopped.push(ptyId)
-        runtime.onPtyExit(ptyId, -1)
+        void runtime.onPtyExit(ptyId, -1)
         return true
       },
       getForegroundProcess: async () => null,

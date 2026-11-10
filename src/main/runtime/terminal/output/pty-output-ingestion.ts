@@ -111,7 +111,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     // Capture query ownership in the ingestion/drop tick; queued writes must not reinterpret later subscriber/settings changes.
     const forwardQueryReplies = this.shouldAnswerQueriesForLiveChunk(ptyId)
     // Hydrate before tracking live data: publish the seeded state/chain first or a late seed could overwrite live bytes.
-    this.maybeHydrateHeadlessFromRenderer(ptyId)
+    void this.maybeHydrateHeadlessFromRenderer(ptyId)
     // The shared tracker processes every title in byte order, preserving coalesced working-to-idle transitions (#1083).
     this.trackHeadlessTerminalData(ptyId, data, outputSequence, forwardQueryReplies)
 

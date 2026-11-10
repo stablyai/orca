@@ -53,7 +53,7 @@ export class CdpWsProxy {
       this.responder,
       this.sessions,
       () => this.client,
-      () => this.stop()
+      () => void this.stop()
     )
     this.navigation = new CdpPageNavigationCommands(
       webContents,

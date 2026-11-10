@@ -119,7 +119,7 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     runtime.markPtyStopRequested(PTY_ID)
     // Renderer teardown removes the leaf first; exit must still settle the dispatch.
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-    runtime.onPtyExit(PTY_ID, 0)
+    void runtime.onPtyExit(PTY_ID, 0)
     expect(observe(db, ctx.id)).toEqual({
       status: 'failed',
       last_failure: 'Terminal closed by operator request',
@@ -132,7 +132,7 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     const closed = createRuntime(closedDb)
     const closedCtx = dispatchOnHandle(closedDb, 'no escalation on close')
     closed.markPtyStopRequested(PTY_ID)
-    closed.onPtyExit(PTY_ID, 0)
+    void closed.onPtyExit(PTY_ID, 0)
     // Prove settlement before absence checks so an inert dispatch cannot pass.
     expect(observe(closedDb, closedCtx.id).termination_reason).toBe('operator_close')
     expect(escalations(closedDb, closedCtx.runId)).toHaveLength(0)
@@ -140,7 +140,7 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     const crashDb = createDb()
     const crashed = createRuntime(crashDb)
     const crashCtx = dispatchOnHandle(crashDb, 'escalate on crash')
-    crashed.onPtyExit(PTY_ID, 0, undefined, { cause: { kind: 'signaled', signal: 9 } })
+    void crashed.onPtyExit(PTY_ID, 0, undefined, { cause: { kind: 'signaled', signal: 9 } })
     expect(escalations(crashDb, crashCtx.runId)).toHaveLength(1)
   })
 
@@ -153,7 +153,7 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     expect(runtime.isPtyStopRequested(PTY_ID)).toBe(false)
 
     const ctx = dispatchOnHandle(db, 'crash after respawn')
-    runtime.onPtyExit(PTY_ID, 0, undefined, { cause: { kind: 'signaled', signal: 9 } })
+    void runtime.onPtyExit(PTY_ID, 0, undefined, { cause: { kind: 'signaled', signal: 9 } })
     expect(observe(db, ctx.id)).toEqual({
       status: 'failed',
       last_failure: 'Agent process killed by signal 9',
@@ -167,7 +167,7 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     const ctx = dispatchOnHandle(db, 'stop requested but never confirmed')
     runtime.markPtyStopRequested(PTY_ID)
     // -1 reports an unverified stop, so the process may still own a revoked dispatch.
-    runtime.onPtyExit(PTY_ID, -1)
+    void runtime.onPtyExit(PTY_ID, -1)
     expect(observe(db, ctx.id)).toEqual({
       status: 'failed',
       last_failure: 'Agent process stop was requested but never confirmed',
@@ -187,7 +187,7 @@ describe('STA-4603/STA-4536 exit provenance', () => {
       result: JSON.stringify({ provenance: 'worker_report', outcome: 'succeeded' })
     })
     expect(settlement.action).toBe('settled')
-    runtime.onPtyExit(PTY_ID, 0)
+    void runtime.onPtyExit(PTY_ID, 0)
     expect(observe(db, ctx.id)).toMatchObject({ status: 'completed', last_failure: null })
   })
 
@@ -201,7 +201,7 @@ describe('STA-4603/STA-4536 exit provenance', () => {
       kill: () => true,
       getForegroundProcess: async () => null,
       stopAndWait: async (ptyId: string) => {
-        runtime.onPtyExit(ptyId, 0)
+        void runtime.onPtyExit(ptyId, 0)
         return true
       }
     })

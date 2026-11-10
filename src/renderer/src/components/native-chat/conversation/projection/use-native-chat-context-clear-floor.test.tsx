@@ -55,7 +55,7 @@ describe('useNativeChatContextClearFloor', () => {
     hook.rerender({ epoch: 'epoch-a', items: [message(1), message(2), clear(3)] })
     expect(hook.view).toEqual({ shown: [1, 2, 3], clearing: true, clears: 0 })
 
-    act(() => vi.advanceTimersByTime(NATIVE_CHAT_CONTEXT_CLEAR_FADE_MS))
+    void act(() => vi.advanceTimersByTime(NATIVE_CHAT_CONTEXT_CLEAR_FADE_MS))
     expect(hook.view).toEqual({ shown: [3], clearing: false, clears: 1 })
   })
 
@@ -65,9 +65,9 @@ describe('useNativeChatContextClearFloor', () => {
     expect(hook.view).toEqual({ shown: [1, 2], clearing: true, clears: 0 })
 
     // Already faded out by the time the divider lands, so it swaps without a second fade.
-    act(() => vi.advanceTimersByTime(NATIVE_CHAT_CONTEXT_CLEAR_FADE_MS))
+    void act(() => vi.advanceTimersByTime(NATIVE_CHAT_CONTEXT_CLEAR_FADE_MS))
     hook.rerender({ epoch: 'epoch-a', items: [message(1), message(2), clear(3)] })
-    act(() => vi.advanceTimersByTime(0))
+    void act(() => vi.advanceTimersByTime(0))
     expect(hook.view).toEqual({ shown: [3], clearing: false, clears: 1 })
 
     // The answered press hides nothing once later history trims its divider out.

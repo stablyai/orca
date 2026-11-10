@@ -216,7 +216,7 @@ export function registerMobileAndTerminalCloseIpcBridge(
     )
     unsubs.push(window.api.ui.onWorkspaceSleep(movePause.follow))
   } else {
-    unsubs.push(window.api.ui.onWorkspaceSleep(followWorkspaceSleep))
+    unsubs.push(window.api.ui.onWorkspaceSleep((notice) => void followWorkspaceSleep(notice)))
   }
 
   unsubs.push(

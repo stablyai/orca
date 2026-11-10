@@ -282,7 +282,7 @@ export async function dropFromHostInventory(
   ptyId: string
 ): Promise<void> {
   if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
-    runtime.onPtyExit(ptyId, 0)
+    void runtime.onPtyExit(ptyId, 0)
     return
   }
   const encoded = getPtyExecutionHost(ptyId)

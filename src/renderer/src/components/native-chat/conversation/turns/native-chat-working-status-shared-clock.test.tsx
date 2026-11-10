@@ -56,20 +56,20 @@ describe('native chat working status elapsed clock', () => {
     renderTurns(3, 1_000_000)
 
     expect(vi.getTimerCount()).toBe(1)
-    act(() => vi.advanceTimersByTime(3_000))
+    void act(() => vi.advanceTimersByTime(3_000))
     expect(elapsedLabels()).toEqual(['Working for 3s', 'Working for 3s', 'Working for 3s'])
   })
 
   it('stops ticking while hidden and re-syncs the elapsed value on return', () => {
     renderTurns(1, 1_000_000)
-    act(() => vi.advanceTimersByTime(3_000))
+    void act(() => vi.advanceTimersByTime(3_000))
     expect(elapsedLabels()).toEqual(['Working for 3s'])
 
     setDocumentVisibility('hidden')
     expect(vi.getTimerCount()).toBe(0)
 
     // A minute of hidden wall-clock: no callbacks, no commits, label frozen.
-    act(() => vi.advanceTimersByTime(60_000))
+    void act(() => vi.advanceTimersByTime(60_000))
     expect(elapsedLabels()).toEqual(['Working for 3s'])
 
     // Returning re-derives elapsed from startedAt, so nothing was lost.

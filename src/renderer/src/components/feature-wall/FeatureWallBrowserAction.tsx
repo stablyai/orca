@@ -131,7 +131,7 @@ function BrowserSkillInstallForRuntime({
     setBusy(true)
     try {
       const result = await runOnboardingFeatureSetup(BROWSER_ONLY_FEATURE_SETUP)
-      recordFeatureInteraction('agent-browser-setup')
+      void recordFeatureInteraction('agent-browser-setup')
       // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
       if (legacyWsl) {
         const command = buildAgentFeatureSkillInstallCommand(result.skillNames)

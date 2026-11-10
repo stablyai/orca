@@ -53,7 +53,7 @@ describe('foreground group signalling over the in-process reader', () => {
       readProcessCwd: async () => null,
       readProcessPath: async () => null
     })
-    claimDarwinTerminalNaming(() => new Promise<never>(() => {}))
+    void claimDarwinTerminalNaming(() => new Promise<never>(() => {}))
     // An 80ms ps, killed at its timeout like process-host's runProcess.
     runProcess.mockImplementation(
       ({ args, timeoutMs }: { args: string[]; timeoutMs: number }) =>

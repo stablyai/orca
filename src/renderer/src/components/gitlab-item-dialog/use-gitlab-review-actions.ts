@@ -101,7 +101,7 @@ export function useGitLabReviewActions(
           setReviewerOptions((current) =>
             current ? dedupeGitLabUsers([...current, ...result.reviewers]) : current
           )
-          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
+          void useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
         } else {
           toast.error(codeHostErrorText(result))
         }
@@ -190,7 +190,7 @@ export function useGitLabReviewActions(
           current ? { ...current, comments: [...current.comments, result.comment] } : current
         )
         setInlineCommentBody('')
-        useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
+        void useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
         toast.success(
           translate('auto.components.GitLabItemDialog.60c13320c4', 'Inline comment added')
         )
@@ -244,7 +244,7 @@ export function useGitLabReviewActions(
                   }
                 : current
             )
-            useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
+            void useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
           }
         } else if (mountedRef.current) {
           toast.error(codeHostErrorText(res))

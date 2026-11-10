@@ -205,7 +205,7 @@ describe('notebook document editing lifecycle', () => {
     expect(parseIpynb(text()).cells[0]?.source).toBe('pane a edit')
 
     // Pane B's delayed commit was based on the original text; it must not overwrite pane A.
-    act(() => vi.advanceTimersByTime(400))
+    void act(() => vi.advanceTimersByTime(400))
     expect(parseIpynb(text()).cells[0]?.source).toBe('pane a edit')
     expect(notifyStaleViewEditRejected).toHaveBeenCalledOnce()
     expect(panes.result.current.b.sourceDrafts).toEqual({})
@@ -228,7 +228,7 @@ describe('notebook document editing lifecycle', () => {
       panes.result.current.a.updateCellSource(0, 'pane a edit')
       panes.result.current.a.flushSourceDrafts()
     })
-    act(() => vi.advanceTimersByTime(400))
+    void act(() => vi.advanceTimersByTime(400))
 
     const notebook = parseIpynb(text())
     expect(notebook.cells.map((cell) => cell.source)).toEqual(['pane a edit', 'pane b edit'])
@@ -246,8 +246,8 @@ describe('notebook document editing lifecycle', () => {
     })
     expect(panes.result.current.b.sourceDrafts).toEqual({})
     expect(vi.getTimerCount()).toBe(0)
-    act(() => panes.result.current.b.flushSourceDrafts())
-    act(() => vi.advanceTimersByTime(400))
+    void act(() => panes.result.current.b.flushSourceDrafts())
+    void act(() => vi.advanceTimersByTime(400))
     expect(notifyStaleViewEditRejected).not.toHaveBeenCalled()
 
     act(() => {

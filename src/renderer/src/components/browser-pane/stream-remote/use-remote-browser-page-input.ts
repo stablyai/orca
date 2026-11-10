@@ -151,7 +151,7 @@ export function useRemoteBrowserPageInput({
       }
     }
     setPaneNotice(null)
-    enqueueRemoteInput(async () => {
+    void enqueueRemoteInput(async () => {
       if (!isCurrentRemoteOperationToken(operationToken)) {
         return
       }
@@ -201,7 +201,7 @@ export function useRemoteBrowserPageInput({
     }
     event.preventDefault()
     setPaneNotice(null)
-    enqueueRemoteInput(async () => {
+    void enqueueRemoteInput(async () => {
       if (!isCurrentRemoteOperationToken(operationToken)) {
         return
       }

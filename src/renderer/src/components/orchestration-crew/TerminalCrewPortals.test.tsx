@@ -69,7 +69,7 @@ const ipcTransports: ReturnType<typeof createIpcPtyTransport>[] = []
 function resetFixture() {
   cleanup()
   for (const transport of ipcTransports.splice(0)) {
-    transport.destroy?.()
+    void transport.destroy?.()
   }
   for (const manager of managers) {
     manager.destroy()

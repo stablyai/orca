@@ -286,6 +286,7 @@ export default function RichMarkdownEditor({
   })
 
   const handleLocalImagePick = useLocalImagePick(editor, filePath, worktreeId, runtimeEnvironmentId)
+  // oxlint-disable-next-line typescript/no-misused-promises -- useLocalImagePick catches its own failures
   handleLocalImagePickRef.current = handleLocalImagePick
 
   const {
@@ -318,7 +319,7 @@ export default function RichMarkdownEditor({
         payload,
         editor: ed,
         toggleLink: toggleLinkFromToolbar,
-        pickImage: handleLocalImagePick
+        pickImage: () => void handleLocalImagePick()
       })
     })
   }, [handleLocalImagePick, toggleLinkFromToolbar])

@@ -391,7 +391,7 @@ it('keeps a picked Plan skill held as a message instead of enabling the native m
     })
   )
   const field = screen.getByRole('textbox')
-  act(() =>
+  void act(() =>
     promptEditor(field).commands.insertContent({
       type: 'nativeChatSkill',
       attrs: { token: '/plan', path: '/skills/plan/SKILL.md' }
@@ -437,7 +437,7 @@ it.each([false, true])(
       )
       return data.getData('text/plain')
     }
-    act(() => editor().commands.setTextSelection({ from: 6, to: 11 }))
+    void act(() => editor().commands.setTextSelection({ from: 6, to: 11 }))
     await act(async () => paste('x'.repeat(32768)))
     const raw = promptValue(field())
     expect(raw).toMatch(/^hello\[Pasted text\]\(orca-paste:[0-9a-f-]{36}\)end$/)
@@ -446,7 +446,9 @@ it.each([false, true])(
     const clock = vi.spyOn(Date, 'now').mockReturnValue(1000000)
     if (reconstruct) {
       // Model another window reconstructing the editor from the saved pending draft.
-      act(() => editor().commands.setContent(promptTextContent(`${raw}!`), { emitUpdate: false }))
+      void act(() =>
+        editor().commands.setContent(promptTextContent(`${raw}!`), { emitUpdate: false })
+      )
     }
     await act(async () => pending.resolve('/p/saved.txt'))
     expect(promptValue(field())).toBe(reconstruct ? `${raw}!` : raw)
@@ -456,12 +458,12 @@ it.each([false, true])(
     )
     act(() => mocks.state.fieldProps?.onSend())
     await waitFor(() => expect(promptValue(field())).toBe(''))
-    act(() => editor().commands.undo())
+    void act(() => editor().commands.undo())
     clock.mockRestore()
     expect(resolveNativeChatPastedText(PANE, promptValue(field()))).toBe('hello @/p/saved.txt end')
-    act(() => editor().commands.undo())
+    void act(() => editor().commands.undo())
     expect(promptValue(field())).toBe('helloworldend')
-    act(() => editor().commands.redo())
+    void act(() => editor().commands.redo())
     expect(resolveNativeChatPastedText(PANE, promptValue(field()))).toBe('hello @/p/saved.txt end')
     await nativeChatComposerDraftWriteSettled(PANE)
     view.unmount()
@@ -473,7 +475,7 @@ it.each([false, true])(
     expect(resolveNativeChatPastedText(PANE, promptValue(field()))).toBe('hello @/p/saved.txt end')
     const failed = Promise.withResolvers<string>()
     installPreloadApi({ savePastedTextAsFile: () => failed.promise })
-    act(() => editor().commands.selectAll())
+    void act(() => editor().commands.selectAll())
     await act(async () => paste('y'.repeat(32768)))
     const failedRaw = promptValue(field())
     expect(readNativeChatComposerDraft(PANE).pastedTextFiles).toBeUndefined()
@@ -484,7 +486,7 @@ it.each([false, true])(
     fireEvent.keyDown(field(), { key: 'Enter' })
     expect(promptValue(field())).toBe(failedRaw)
     act(() => expect(copy()).toBe('Paste not saved'))
-    act(() => editor().commands.undo())
+    void act(() => editor().commands.undo())
     expect(resolveNativeChatPastedText(PANE, promptValue(field()))).toBe('hello @/p/saved.txt end')
     installPreloadApi({ saveClipboardImageAsTempFile: () => new Promise(() => {}) })
     await act(async () => fireEvent(field(), imagePaste()))
@@ -527,7 +529,7 @@ it.each(['terminal', 'structured', 'goal'] as const)(
       act(() => mocks.state.fieldProps?.onSend())
       expect(mocks.goal).not.toHaveBeenCalled()
       expect(promptValue(field())).toBe(failedDraft)
-      act(() => promptEditor(field()).commands.undo())
+      void act(() => promptEditor(field()).commands.undo())
       expect(promptValue(field())).toBe('')
     }
     const text = 'exact clipboard source\r\n'.repeat(2000)
@@ -557,7 +559,7 @@ it.each(['terminal', 'structured', 'goal'] as const)(
       expect(promptValue(field())).toBe(raw)
       act(() => mocks.state.fieldProps?.onSend())
       await waitFor(() => expect(promptValue(field())).toBe(''))
-      act(() => promptEditor(field()).commands.undo())
+      void act(() => promptEditor(field()).commands.undo())
       expect(resolveNativeChatPastedText(PANE, promptValue(field()))).toBe('@/p/structured.txt')
     }
     const copied = new DataTransfer()

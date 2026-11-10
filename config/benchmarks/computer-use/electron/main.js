@@ -11,7 +11,7 @@ process.on('uncaughtException', (error) => {
 if (process.env.ORCA_COMPUTER_BENCH_ISOLATED !== '1') {
   process.exit(1)
 }
-app.whenReady().then(() => {
+void app.whenReady().then(() => {
   const w = new BrowserWindow({
     x: 60,
     y: 60,
@@ -40,7 +40,7 @@ app.whenReady().then(() => {
       }
     }
   })
-  w.loadURL(
+  void w.loadURL(
     `data:text/html,${encodeURIComponent(`<html><head><title>BenchElectron</title></head>
   <body style="font:14px sans-serif;height:4000px">
   <input id=field aria-label="field"><input id=decoy aria-label="decoy">
@@ -83,7 +83,7 @@ app.whenReady().then(() => {
       height: 200,
       title: 'BenchSibling'
     })
-    sibling.loadURL('data:text/html,<title>BenchSibling</title><input aria-label="sibling">')
+    void sibling.loadURL('data:text/html,<title>BenchSibling</title><input aria-label="sibling">')
     w.on('closed', () => sibling.close())
   }
   setInterval(() => {

@@ -399,7 +399,7 @@ describe('VirtualizedList scroll-margin lifecycle', () => {
       writable: true,
       value: firstRows.length * VIRTUALIZED_LIST_ROW_HEIGHT_PX
     })
-    act(() => scroller.dispatchEvent(new Event('scroll')))
+    void act(() => scroller.dispatchEvent(new Event('scroll')))
 
     expect(host.querySelector('[data-testid="second-row"]')?.textContent).toBe('second-row-000')
     expect(host.querySelectorAll('[data-testid="second-row"]').length).toBeLessThan(

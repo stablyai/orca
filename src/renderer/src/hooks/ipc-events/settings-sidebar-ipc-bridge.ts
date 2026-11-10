@@ -43,7 +43,7 @@ export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): voi
     .catch(() => {})
 
   const pendingSkillShare = window.api.ui.consumePendingSkillShare?.()
-  if (pendingSkillShare && typeof pendingSkillShare.then === 'function') {
+  if (typeof pendingSkillShare?.then === 'function') {
     void pendingSkillShare
       .then((shareId) => {
         if (shareId) {
@@ -55,7 +55,7 @@ export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): voi
 
   unsubs.push(window.api.ui.onOpenPluginInstallLink?.(openPluginInstallLink) ?? (() => {}))
   const pendingPluginLink = window.api.ui.consumePendingPluginInstallLink?.()
-  if (pendingPluginLink && typeof pendingPluginLink.then === 'function') {
+  if (typeof pendingPluginLink?.then === 'function') {
     void pendingPluginLink
       .then((link) => {
         if (link) {

@@ -209,6 +209,7 @@ export function scheduleHistoryGc(getLiveWorktreeIds: () => Promise<Set<string>>
   }
   historyGcCancelled = false
   // Let workspace hydration finish before competing for disk I/O.
+  // oxlint-disable-next-line typescript/no-misused-promises -- body catches every failure
   scheduledHistoryGcTimer = setTimeout(async () => {
     scheduledHistoryGcTimer = null
     historyGcStarting = true

@@ -28,7 +28,7 @@ export function OrchestrationSetupCard(props: {
       error={activeSkillRuntime.installDisabledReason ?? skill.error}
       installDisabled={Boolean(activeSkillRuntime.installDisabledReason)}
       onBeforeInstall={() => {
-        useAppStore.getState().recordFeatureInteraction('agent-orchestration-setup')
+        void useAppStore.getState().recordFeatureInteraction('agent-orchestration-setup')
       }}
       onRecheck={skill.refresh}
       freshnessSkillName={

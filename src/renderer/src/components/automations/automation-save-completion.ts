@@ -40,7 +40,7 @@ export async function completeAutomationSave(
   selectAutomationId(automation.id)
   setCreateOpen(false)
   if (editingAutomationId === null) {
-    useAppStore.getState().recordFeatureInteraction('automation-created')
+    void useAppStore.getState().recordFeatureInteraction('automation-created')
   }
   if (moveTarget && !originalRemoved) {
     return

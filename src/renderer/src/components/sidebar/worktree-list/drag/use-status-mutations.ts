@@ -212,7 +212,7 @@ export function useWorktreeStatusMutations(args: {
       if (result.shouldSwitchToManual) {
         switchSortToManualAfterDrop()
       }
-      useAppStore.getState().recordFeatureInteraction('workspace-board-actions')
+      void useAppStore.getState().recordFeatureInteraction('workspace-board-actions')
       void updateWorktreesMeta(result.updates)
     },
     [manualOrderCatalog, sortBy, updateWorktreesMeta, workspaceStatuses]

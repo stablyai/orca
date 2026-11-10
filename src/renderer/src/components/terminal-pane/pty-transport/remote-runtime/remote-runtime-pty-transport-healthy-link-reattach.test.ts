@@ -114,7 +114,7 @@ describe('remote runtime PTY reattach on a healthy link', () => {
     emitSnapshot(latestSubscribePayload().streamId, 'reattached')
     expect(transport.isConnected()).toBe(true)
     expect(transport.getRecoveryState?.().phase).toBe('connected')
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('keeps reattaching a still-ready handle that ends repeatedly instead of parking', async () => {
@@ -133,7 +133,7 @@ describe('remote runtime PTY reattach on a healthy link', () => {
       expect(transport.isConnected()).toBe(true)
       expect(transport.getRecoveryState?.().phase).toBe('connected')
     }
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('retries a resubscribe whose host answered without a ready handle', async () => {
@@ -152,7 +152,7 @@ describe('remote runtime PTY reattach on a healthy link', () => {
     await vi.advanceTimersByTimeAsync(5_000)
 
     expect(subscribedTerminalHandles()).toEqual(['terminal-1', 'terminal-1'])
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('retries an attach whose host surface stayed pending past the bounded wait', async () => {
@@ -176,7 +176,7 @@ describe('remote runtime PTY reattach on a healthy link', () => {
     await vi.advanceTimersByTimeAsync(5_000)
 
     expect(subscribedTerminalHandles()).toEqual(['terminal-1'])
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('retries a resubscribe past repeated inventory failures once the host answers again', async () => {
@@ -201,7 +201,7 @@ describe('remote runtime PTY reattach on a healthy link', () => {
       await vi.advanceTimersByTimeAsync(35_000)
 
       expect(subscribedTerminalHandles()).toEqual(['terminal-1', 'terminal-1'])
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       warn.mockRestore()
     }
@@ -221,6 +221,6 @@ describe('remote runtime PTY reattach on a healthy link', () => {
     expect(transport.getRecoveryState?.().phase).toBe('disconnected')
     expect(transport.isConnected()).toBe(false)
     expect(transport.retryRecovery?.()).toBe(true)
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 })

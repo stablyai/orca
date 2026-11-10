@@ -136,7 +136,7 @@ export function PRActionsPanel({
         prRepo,
         updates: { state: nextState }
       })
-      useAppStore.getState().recordFeatureInteraction('github-tasks')
+      void useAppStore.getState().recordFeatureInteraction('github-tasks')
       toast.success(
         nextState === 'closed'
           ? t('auto.components.GitHubItemDialog.9f88657c4e', 'Pull request closed')
@@ -227,7 +227,7 @@ export function PRActionsPanel({
           { local: false }
         )
       }
-      useAppStore.getState().recordFeatureInteraction('github-tasks')
+      void useAppStore.getState().recordFeatureInteraction('github-tasks')
       toast.success(t('auto.components.GitHubItemDialog.dbe5e2448e', 'Pull request merged'))
     } catch {
       toast.error(t('auto.components.GitHubItemDialog.aba792c8b3', 'Failed to merge pull request'))
@@ -289,7 +289,7 @@ export function PRActionsPanel({
           { local: false }
         )
       }
-      useAppStore.getState().recordFeatureInteraction('github-tasks')
+      void useAppStore.getState().recordFeatureInteraction('github-tasks')
       toast.success(
         enabled
           ? t('auto.components.GitHubItemDialog.a35ea5a0f6', 'Auto-merge enabled')

@@ -48,7 +48,7 @@ describe('ArtifactPreview', () => {
     expect(screen.queryByText('Preview unavailable')).not.toBeInTheDocument()
     act(() => dispatchLoadFailure(webview, { errorCode: -3, isMainFrame: true }))
     expect(screen.queryByText('Preview unavailable')).not.toBeInTheDocument()
-    act(() => webview.dispatchEvent(new Event('did-stop-loading')))
+    void act(() => webview.dispatchEvent(new Event('did-stop-loading')))
     expect(screen.queryByText('Preview unavailable')).not.toBeInTheDocument()
 
     act(() => dispatchLoadFailure(webview, { errorCode: -105, isMainFrame: true }))
@@ -64,7 +64,7 @@ describe('ArtifactPreview', () => {
     })
     expect(document.querySelector('webview')).not.toBeNull()
 
-    act(() => vi.advanceTimersByTime(20_000))
+    void act(() => vi.advanceTimersByTime(20_000))
 
     expect(screen.getByText('Preview unavailable')).toBeInTheDocument()
   })
@@ -74,7 +74,7 @@ describe('ArtifactPreview', () => {
     vi.mocked(window.api.browser.sessionResolvePartition).mockReturnValue(new Promise(() => {}))
     render(<ArtifactPreview shareUrl="https://share.onorca.dev/a/report" />)
 
-    act(() => vi.advanceTimersByTime(20_000))
+    void act(() => vi.advanceTimersByTime(20_000))
 
     expect(screen.getByText('Preview unavailable')).toBeInTheDocument()
   })

@@ -97,6 +97,7 @@ export default function MobilePage(): React.JSX.Element {
     setPairingQrError,
     setPairLoading,
     setRelayMintFailure,
+    // oxlint-disable-next-line typescript/no-misused-promises -- fetchOrcaProfileAuthStatus catches; stable identity feeds useCallback deps
     refreshAuthStatus
   })
   useLayoutEffect(() => {

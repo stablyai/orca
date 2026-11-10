@@ -283,7 +283,7 @@ describe('browser grab toast owner', () => {
     expect(next.view.result.current.grabToast).toBe(replacementToast)
     expect(next.bounds).toHaveBeenCalledTimes(1)
     expect(vi.getTimerCount()).toBe(1)
-    act(() => vi.advanceTimersByTime(2000))
+    void act(() => vi.advanceTimersByTime(2000))
     expect(next.view.result.current.grabToast).toBeNull()
     expect(vi.getTimerCount()).toBe(0)
   })

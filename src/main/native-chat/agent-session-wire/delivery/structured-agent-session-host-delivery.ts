@@ -236,7 +236,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     await settleInterruptedStructuredAgentSessionCommands(deps, sessionId, session)
     input.clientDelivery.publishRestored(sessionId)
     if (session.journal.inputOrder.recoverableSubmissions().some(isQueuedAgentJournalSubmission)) {
-      loop.wake(sessionId)
+      void loop.wake(sessionId)
     }
   }
   const wakesQueued = new Set<string>()
@@ -261,7 +261,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     void input
       .serialize(sessionId, async () => {
         wakesQueued.delete(sessionId)
-        loop.wake(sessionId)
+        void loop.wake(sessionId)
       })
       .catch((error: unknown) => {
         wakesQueued.delete(sessionId)

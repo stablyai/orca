@@ -48,7 +48,7 @@ export async function disposeCatalogMutationHost(rig: RestTestRig): Promise<void
   rig.host.stopDelivery()
   const { lifetime, runtimeState, sessions } = rig.host.collaboratorsForTests()
   lifetime.dispose()
-  rig.host.deps.modelCatalog?.stop()
+  void rig.host.deps.modelCatalog?.stop()
   try {
     await catalogMutationDeadline(
       (async () => {
@@ -56,12 +56,12 @@ export async function disposeCatalogMutationHost(rig: RestTestRig): Promise<void
         await runtimeState.flushAllEventSinks()
         await Promise.all([...sessions.values()].map((session) => session.journal.close()))
         sessions.clear()
-        rig.host['clientDelivery'].closeAll()
+        void rig.host['clientDelivery'].closeAll()
       })(),
       'fixture resource drain'
     )
   } finally {
-    closeTestJournalHostDatabase(rig.root)
+    await closeTestJournalHostDatabase(rig.root)
   }
 }
 

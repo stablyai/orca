@@ -34,10 +34,7 @@ export function registerProjectCatalogIpcBridge(
 
   unsubs.push(
     window.api.worktrees.onChanged(
-      async (data: {
-        repoId: string
-        renamed?: { oldWorktreeId: string; newWorktreeId: string }
-      }) => {
+      (data: { repoId: string; renamed?: { oldWorktreeId: string; newWorktreeId: string } }) => {
         // Preserve local event origin through queue/focus changes; rekey folder renames before deletion diff so moved state survives.
         worktreeChangeRefreshQueue.enqueue(
           adoptFromEndpoint({ kind: 'local' }, { kind: 'worktreeEvent', row: data })

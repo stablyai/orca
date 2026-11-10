@@ -92,7 +92,7 @@ export default function BrowserPane({
     }
     for (const page of browserPages) {
       if (getBrowserPageRuntimeEnvironmentId(page, activeRuntimeEnvironmentId)) {
-        destroyPersistentWebview(page.id)
+        void destroyPersistentWebview(page.id)
       }
     }
   }, [activeRuntimeEnvironmentId, browserPages, runtimeEnvironmentActive])

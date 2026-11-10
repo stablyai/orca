@@ -113,7 +113,7 @@ describe('remote pane whose first attach replays no image', () => {
       await vi.waitFor(() => expect(onConnect).toHaveBeenCalledTimes(1))
       expect(onReplayData).not.toHaveBeenCalled()
       expect(onStreamRecovered).toHaveBeenCalledTimes(1)
-      transport.destroy?.()
+      void transport.destroy?.()
     }
   )
 
@@ -129,7 +129,7 @@ describe('remote pane whose first attach replays no image', () => {
     // Still replayed so its modes apply; the pull then supplies the screen.
     expect(onReplayData).toHaveBeenCalledTimes(1)
     expect(onStreamRecovered).toHaveBeenCalledTimes(1)
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('pulls the retained buffer when the initial snapshot exceeded the replay limit', async () => {
@@ -152,7 +152,7 @@ describe('remote pane whose first attach replays no image', () => {
     expect(onReplayData).not.toHaveBeenCalled()
     expect(onError).not.toHaveBeenCalledWith(REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE)
     expect(onStreamRecovered).toHaveBeenCalledTimes(1)
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('does not pull again when the initial snapshot carried the screen', async () => {
@@ -167,7 +167,7 @@ describe('remote pane whose first attach replays no image', () => {
     expect(onStreamRecovered).not.toHaveBeenCalled()
     emitOutput(streamId, 'LIVE')
     expect(onStreamRecovered).not.toHaveBeenCalled()
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('does not pull for a terminal this pane just created', async () => {
@@ -179,6 +179,6 @@ describe('remote pane whose first attach replays no image', () => {
 
     await vi.waitFor(() => expect(onConnect).toHaveBeenCalledTimes(1))
     expect(onStreamRecovered).not.toHaveBeenCalled()
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 })

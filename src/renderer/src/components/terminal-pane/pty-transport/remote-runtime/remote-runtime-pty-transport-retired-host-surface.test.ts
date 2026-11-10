@@ -144,7 +144,7 @@ describe('remote runtime pane whose host retired its surface (#38151)', () => {
     expect(onPtyExit).toHaveBeenCalledOnce()
     expect(runtimeSubscribe).not.toHaveBeenCalled()
     expect(transport.getRecoveryState?.().phase).toBe('ended')
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('ends the pane with the exit code when its stream ends on the exit', async () => {
@@ -166,7 +166,7 @@ describe('remote runtime pane whose host retired its surface (#38151)', () => {
     expect(onPtyExit).toHaveBeenCalledOnce()
     expect(runtimeSubscribe).toHaveBeenCalledOnce()
     expect(transport.getRecoveryState?.().phase).toBe('ended')
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('ends the pane on the close record alone when the host no longer keeps the terminal', async () => {
@@ -183,7 +183,7 @@ describe('remote runtime pane whose host retired its surface (#38151)', () => {
 
     await vi.waitFor(() => expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-1'))
     expect(transport.getRecoveryState?.().phase).toBe('ended')
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('hands the ended pane to a replacement the host publishes later', async () => {
@@ -211,7 +211,7 @@ describe('remote runtime pane whose host retired its surface (#38151)', () => {
       expect(onHostReboundExitedPty).toHaveBeenCalledWith('remote:env-1@@terminal-restarted')
     )
     expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-ended', 127)
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('keeps a pane the host restarted after the close record it first read', async () => {
@@ -240,6 +240,6 @@ describe('remote runtime pane whose host retired its surface (#38151)', () => {
       timeout: 5_000
     })
     expect(onPtyExit).not.toHaveBeenCalled()
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 })

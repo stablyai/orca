@@ -51,7 +51,7 @@ export function retireUnboundIpcTerminalPane(args: UnboundTerminalPaneRetirement
       tabId
     })
   }
-  transport.destroy?.({
+  void transport.destroy?.({
     onAbandonedConnect: (returnedPtyId) => {
       if (returnedPtyId !== requestedPtyId) {
         return false

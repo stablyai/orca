@@ -52,7 +52,7 @@ vi.mock('electron', () => ({
                     mocks.scripts.set(script.id, { ...script })
                   }
                 }
-                complete(callback)
+                void complete(callback)
               },
               updateContentScripts(updates: Script[], callback: () => void) {
                 if (!mocks.nativeError) {
@@ -60,13 +60,13 @@ vi.mock('electron', () => ({
                     mocks.scripts.set(update.id, { ...mocks.scripts.get(update.id), ...update })
                   }
                 }
-                complete(callback)
+                void complete(callback)
               },
               unregisterContentScripts(filter: { ids?: string[] }, callback: () => void) {
                 for (const id of filter.ids ?? [...mocks.scripts.keys()]) {
                   mocks.scripts.delete(id)
                 }
-                complete(callback)
+                void complete(callback)
               },
               getRegisteredContentScripts(
                 filterOrCallback: { ids?: string[] } | ((value: Script[]) => void),

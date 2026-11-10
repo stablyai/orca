@@ -277,10 +277,10 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
       eligible: () => this.passiveStructuredSessionTabChangeEligible({ close: sessionId })
     })
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      this.queueChatTabChanges(changesNow)
+      void this.queueChatTabChanges(changesNow)
     } else {
       for (const queued of changesNow()) {
-        this.changeWindowlessChatTabs(queued.worktreeId, [queued.change], queued.eligible)
+        void this.changeWindowlessChatTabs(queued.worktreeId, [queued.change], queued.eligible)
       }
     }
   }

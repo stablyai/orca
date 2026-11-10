@@ -66,7 +66,7 @@ describe('OrcaRuntimeService', () => {
     const after = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
     expect(after.terminals).toHaveLength(1)
     expect(after.terminals[0].handle).toBe(stableHandle)
-    runtime.onPtyExit('pty-plain', 0)
+    void runtime.onPtyExit('pty-plain', 0)
     await expect(waiting).resolves.toMatchObject({ handle: stableHandle, status: 'exited' })
   })
 
@@ -171,7 +171,7 @@ describe('OrcaRuntimeService', () => {
       tabId: currentTabId,
       leafId: HEADLESS_LEAF_ID
     })
-    runtime.onPtyExit(appPtyId, -1, undefined, { hostExitConfirmed: true })
+    void runtime.onPtyExit(appPtyId, -1, undefined, { hostExitConfirmed: true })
     const createTerminal = vi.spyOn(runtime, 'createTerminal')
 
     await expect(

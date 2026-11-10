@@ -107,7 +107,7 @@ export function PRAssigneesPanel({
       const nextLogins = nextAssignees.map((user) => user.login)
       const prevLogins = prevAssignees.map((user) => user.login)
 
-      run('assignees', {
+      void run('assignees', {
         mutate: () =>
           runIssueUpdate({
             repoId: item.repoId,
@@ -136,7 +136,7 @@ export function PRAssigneesPanel({
           patchProjectRowIfNeeded(prevLogins)
         },
         onSuccess: () => {
-          useAppStore.getState().recordFeatureInteraction('github-tasks')
+          void useAppStore.getState().recordFeatureInteraction('github-tasks')
           onMutated()
         },
         onError: (err) => {

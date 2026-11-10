@@ -72,7 +72,7 @@ function fixture() {
   const retire = attachRichMarkdownViewport(editor, root, container)
   act(() => hook.result.current.openSearch())
   act(() => hook.result.current.searchActions.setSearchQuery('beta'))
-  act(() => vi.advanceTimersByTime(150))
+  void act(() => vi.advanceTimersByTime(150))
   const navigate = (top: number) => {
     target = top
     act(() => hook.result.current.searchActions.moveToMatch(1))
@@ -136,7 +136,7 @@ describe('rich Markdown live viewport', () => {
     lease.frame(frame)
     lifetime.rerender({ key: 'two' })
     expect(lease.current()).toBe(false)
-    act(() => vi.advanceTimersByTime(30))
+    void act(() => vi.advanceTimersByTime(30))
     expect(frame).not.toHaveBeenCalled()
     const current = richMarkdownViewport(f.container)
     act(() => lifetime.result.current.bindContainer(null))

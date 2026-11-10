@@ -157,7 +157,7 @@ async function command(input: {
   )
 }
 
-app.whenReady().then(async () => {
+void app.whenReady().then(async () => {
   parent = new BrowserWindow({
     show: false,
     webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false }

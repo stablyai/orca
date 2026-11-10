@@ -23,7 +23,7 @@ export function StatusBarUsageEmptyCta({
 
   // Open all providers because a new user has no provider selection yet.
   const handleOpenSettings = useCallback(() => {
-    recordFeatureInteraction('usage-tracking')
+    void recordFeatureInteraction('usage-tracking')
     openSettingsTarget({
       pane: 'accounts',
       repoId: null,

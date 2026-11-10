@@ -116,7 +116,7 @@ describe('ProjectRoadmap', () => {
     const marker = scroller.querySelector<HTMLElement>('.sticky.top-0 .absolute')!
     const before = Number.parseFloat(marker.style.left)
     scroller.scrollLeft = 123
-    act(() => vi.advanceTimersByTime(2100))
+    void act(() => vi.advanceTimersByTime(2100))
     expect(Number.parseFloat(marker.style.left) - before).toBeCloseTo(148 / 30)
     expect(scroller.scrollLeft).toBe(123)
     expect(vi.getTimerCount()).toBe(1)

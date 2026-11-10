@@ -92,7 +92,7 @@ export function createPostHogClient(writeKey: string, consent: ConsentState): Po
   })
 
   if (shouldOptOutSdkAtInit(consent)) {
-    client.optOut()
+    void client.optOut()
   }
   return client
 }

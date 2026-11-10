@@ -52,6 +52,7 @@ export class AcpTextTasks {
       this.pending.delete(task)
       gate?.leave()
     })
+    // oxlint-disable-next-line typescript/no-misused-promises -- Promise#finally waits for root exit on purpose
     return input.shouldExecute ? finalized.finally(() => rootExited) : finalized
   }
 

@@ -69,7 +69,7 @@ export function OpenCodeUsagePane(): React.JSX.Element {
   }, [fetchOpenCodeUsage])
 
   const handleSetEnabled = (enabled: boolean): void => {
-    recordFeatureInteraction('usage-tracking')
+    void recordFeatureInteraction('usage-tracking')
     void setOpenCodeUsageEnabled(enabled)
   }
 

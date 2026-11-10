@@ -132,7 +132,7 @@ export function createTerminalPaneClosedHandler(
           }
           clearTabPtyId(tabId, ptyId)
         }
-        transport.destroy?.()
+        void transport.destroy?.()
       }
       paneTransportsRef.current.delete(paneId)
     }

@@ -65,7 +65,7 @@ describe('host-written terminal use', () => {
       const { runtime, meta } = createHeadlessRuntime()
       // Typing in a plain shell from the phone goes through the host's one input funnel.
       runtime.terminalRunFacts.recordInput('pty-1', 'driving', 'ls\r', now - 2 * DAY_MS)
-      runtime.onPtyExit('pty-1', 0)
+      void runtime.onPtyExit('pty-1', 0)
       expect(meta[WT]?.lastTerminalUseAt).toBe(now - 2 * DAY_MS)
       const workspace = { isArchived: false, lastActivityAt: meta[WT]?.lastActivityAt ?? 0 }
       expect(isWorkspaceOldForCleanup(workspace, now)).toBe(true)

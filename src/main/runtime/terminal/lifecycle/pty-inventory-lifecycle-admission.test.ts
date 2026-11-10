@@ -23,7 +23,7 @@ describe('inventory admission after a PTY lifecycle change', () => {
       }
       const pending = runtime.read()
       if (mode !== 'unknown-start-spawn') {
-        runtime.onPtyExit(PTY, 0, PREDECESSOR, { providerExitObserved: true })
+        void runtime.onPtyExit(PTY, 0, PREDECESSOR, { providerExitObserved: true })
       }
       if (mode === 'registered-successor') {
         runtime.register(SUCCESSOR)
@@ -62,7 +62,7 @@ describe('inventory admission after a PTY lifecycle change', () => {
     const { runtime } = createInventoryRuntime(() => reply.promise)
     runtime.registerPty(PTY, WORKTREE)
     const pending = runtime.read()
-    runtime.onPtyExit(PTY, 0, undefined, { providerExitObserved: true })
+    void runtime.onPtyExit(PTY, 0, undefined, { providerExitObserved: true })
     runtime.registerPty(PTY, WORKTREE)
     reply.resolve([{ id: PTY, cwd: '', title: 'stale legacy title', worktreeId: WORKTREE }])
     expect(await pending).toBeNull()
@@ -78,7 +78,7 @@ describe('inventory admission after a PTY lifecycle change', () => {
     const { runtime } = createInventoryRuntime(() => reply.promise)
     runtime.register(SUCCESSOR)
     const pending = runtime.read(null)
-    runtime.onPtyExit(PTY, 0, PREDECESSOR, { providerExitObserved: true })
+    void runtime.onPtyExit(PTY, 0, PREDECESSOR, { providerExitObserved: true })
     reply.resolve([processRow(PTY, SUCCESSOR)])
     expect((await pending)?.allLivePtyIds).toEqual(new Set([PTY]))
     expect(runtime.capture().incarnationId).toBe(SUCCESSOR)

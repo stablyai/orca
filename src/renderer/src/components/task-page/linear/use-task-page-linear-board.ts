@@ -150,7 +150,7 @@ export function useTaskPageLinearBoard(model: TaskPageLinearListProjectionModel)
         invalidateLinearIssueLists({
           scope
         })
-        useAppStore.getState().recordFeatureInteraction('linear-tasks')
+        void useAppStore.getState().recordFeatureInteraction('linear-tasks')
       } catch {
         toast.error(
           translate('auto.components.TaskPage.6775c05483', 'Failed to update Linear state')

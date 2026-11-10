@@ -340,7 +340,7 @@ async function publishHostRecovery(
   installMultiplexFlowControl(connection)
   await connection.sendAckRecoverySnapshot?.(stream)
   await expect.poll(() => onReplayData.mock.calls.length).toBe(2)
-  transport.destroy?.()
+  void transport.destroy?.()
   const [data, meta] = onReplayData.mock.calls[1]!
   return { data, meta: meta ?? {}, published: published! }
 }

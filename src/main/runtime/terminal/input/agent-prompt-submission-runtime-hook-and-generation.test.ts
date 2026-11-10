@@ -298,7 +298,7 @@ describe('agent prompt submission runtime hook and generation cases', () => {
     const obsolete = expect(first).rejects.toThrow('terminal_handle_stale')
     await firstWrite
     if (retirement === 'exit') {
-      runtime.onPtyExit('pty-prompt', 0)
+      void runtime.onPtyExit('pty-prompt', 0)
     } else {
       runtime.synchronizePtyOutputSequenceFromProvider(
         'pty-prompt',

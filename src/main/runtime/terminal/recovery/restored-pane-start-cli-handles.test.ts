@@ -120,7 +120,7 @@ describe('a CLI trigger on a saved pane with no terminal (layout-owner build)', 
     await expect(send).resolves.toMatchObject({ handle, accepted: true })
     expect(write).toHaveBeenCalledWith('pty-c', 'echo hi', 'driving')
     await expect(read).resolves.toMatchObject({ handle, status: 'running' })
-    runtime.onPtyExit('pty-c', 0)
+    void runtime.onPtyExit('pty-c', 0)
 
     await expect(wait).resolves.toMatchObject({ handle, condition: 'exit', satisfied: true })
     expect(spawn).toHaveBeenCalledOnce()
@@ -172,7 +172,7 @@ describe('a CLI trigger on a saved pane with no terminal (layout-owner build)', 
       runtime.sendTerminal(handle, { text: 'echo bound', enter: true }, DRIVING)
     ).resolves.toMatchObject({ handle, accepted: true })
     expect(write).toHaveBeenCalledWith('pty-c', 'echo bound', 'driving')
-    runtime.onPtyExit('pty-c', 0)
+    void runtime.onPtyExit('pty-c', 0)
 
     await expect(wait).resolves.toMatchObject({ handle, condition: 'exit', satisfied: true })
     expect(spawn).toHaveBeenCalledOnce()

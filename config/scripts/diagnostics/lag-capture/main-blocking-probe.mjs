@@ -77,6 +77,7 @@ export function installRendererIpcProbe() {
   const keys = []
   let pending = false
   let stopped = false
+  // oxlint-disable-next-line typescript/no-misused-promises -- body catches failures and guards overlap via pending
   const timer = setInterval(async () => {
     if (pending || stopped) {
       return

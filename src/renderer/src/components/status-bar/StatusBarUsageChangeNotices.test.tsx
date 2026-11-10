@@ -87,7 +87,7 @@ describe('status bar usage change notices', () => {
   }
 
   function settle(): void {
-    act(() => vi.advanceTimersByTime(1_800))
+    void act(() => vi.advanceTimersByTime(1_800))
   }
 
   it.each(['verbose', 'compact'])('preserves the open menu and focus when choosing %s', (mode) => {

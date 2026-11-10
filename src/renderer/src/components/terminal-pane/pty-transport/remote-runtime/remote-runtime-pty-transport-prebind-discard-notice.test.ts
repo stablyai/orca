@@ -102,6 +102,6 @@ describe('remote pre-bind typing discard notice', () => {
     await vi.waitFor(() => expect(inputFrameTexts().join('')).toBe('echo hi\r'))
 
     expect(onTypingDiscardedBeforeBind).not.toHaveBeenCalled()
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 })

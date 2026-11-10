@@ -190,7 +190,7 @@ function cleanupLocalWatchersForSender(senderId: number): void {
         watcherLifecycleState.pendingTeardowns.delete(key)
       }
       cancelLocalBatchFlush(watchedRoot)
-      trackDetachedLocalUnsubscribe(key, watchedRoot)
+      void trackDetachedLocalUnsubscribe(key, watchedRoot)
       watcherLifecycleState.watchedRoots.delete(key)
     }
   }

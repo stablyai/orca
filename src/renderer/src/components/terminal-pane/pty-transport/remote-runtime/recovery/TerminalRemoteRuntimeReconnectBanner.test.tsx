@@ -190,7 +190,7 @@ describe('CalmRemoteRuntimeReconnectBanner', () => {
         onReconnect={vi.fn()}
       />
     )
-    act(() => vi.advanceTimersByTime(CALM_STATUS_REVEAL_DELAY_MS - 1))
+    void act(() => vi.advanceTimersByTime(CALM_STATUS_REVEAL_DELAY_MS - 1))
     rerender(
       <CalmRemoteRuntimeReconnectBanner
         recovery={{ phase: 'recovering', cause: 'connection' }}
@@ -201,7 +201,7 @@ describe('CalmRemoteRuntimeReconnectBanner', () => {
     )
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
 
-    act(() => vi.advanceTimersByTime(1))
+    void act(() => vi.advanceTimersByTime(1))
     expect(screen.getByText('Reconnecting to Desk')).toBeInTheDocument()
     expect(screen.getByText('tailscale ping 100.101.102.103')).toBeInTheDocument()
   })
@@ -246,11 +246,11 @@ describe('CalmRemoteRuntimeReconnectBanner', () => {
     const { rerender } = render(
       <CalmRemoteRuntimeReconnectBanner {...props} recovery={{ phase: 'backoff' }} />
     )
-    act(() => vi.advanceTimersByTime(CALM_STATUS_REVEAL_DELAY_MS + 100))
+    void act(() => vi.advanceTimersByTime(CALM_STATUS_REVEAL_DELAY_MS + 100))
     rerender(<CalmRemoteRuntimeReconnectBanner {...props} recovery={null} />)
     expect(screen.getByRole('status')).toBeInTheDocument()
 
-    act(() => vi.advanceTimersByTime(CALM_STATUS_MIN_VISIBLE_MS))
+    void act(() => vi.advanceTimersByTime(CALM_STATUS_MIN_VISIBLE_MS))
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 
@@ -264,7 +264,7 @@ describe('CalmRemoteRuntimeReconnectBanner', () => {
         onReconnect={vi.fn()}
       />
     )
-    act(() => vi.advanceTimersByTime(CALM_STATUS_REVEAL_DELAY_MS * 2))
+    void act(() => vi.advanceTimersByTime(CALM_STATUS_REVEAL_DELAY_MS * 2))
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 
@@ -275,7 +275,7 @@ describe('CalmRemoteRuntimeReconnectBanner', () => {
     const { rerender } = render(
       <CalmRemoteRuntimeReconnectBanner {...props} recovery={recovery} heldByServer />
     )
-    act(() => vi.advanceTimersByTime(CALM_STATUS_REVEAL_DELAY_MS * 2))
+    void act(() => vi.advanceTimersByTime(CALM_STATUS_REVEAL_DELAY_MS * 2))
     rerender(
       <CalmRemoteRuntimeReconnectBanner {...props} recovery={recovery} heldByServer={false} />
     )

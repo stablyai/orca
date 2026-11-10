@@ -82,7 +82,7 @@ export class RuntimeRemoteFetchController {
     const previous = this.remoteFetchQueueTail.get(remoteKey)
     const promise = previous ? previous.then(runFetch, runFetch) : runFetch()
     this.remoteFetchQueueTail.set(remoteKey, promise)
-    promise.finally(() => {
+    void promise.finally(() => {
       if (this.remoteFetchQueueTail.get(remoteKey) === promise) {
         this.remoteFetchQueueTail.delete(remoteKey)
       }

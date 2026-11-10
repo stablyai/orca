@@ -25,7 +25,7 @@ export function MobileEmulatorAgentSetupGuide({
   }
 
   const openSettings = (): void => {
-    recordFeatureInteraction('mobile-emulator-agent-setup')
+    void recordFeatureInteraction('mobile-emulator-agent-setup')
     openSettingsTarget({ pane: 'mobile-emulator', repoId: null })
     openSettingsPage()
   }

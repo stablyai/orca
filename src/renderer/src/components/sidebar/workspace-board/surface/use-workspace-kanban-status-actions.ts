@@ -24,7 +24,7 @@ export function useWorkspaceKanbanStatusActions(args: {
   updateWorktreeMeta: ReturnType<typeof useAppStore.getState>['updateWorktreeMeta']
 }) {
   const recordInteraction = (): void => {
-    useAppStore.getState().recordFeatureInteraction('workspace-board-actions')
+    void useAppStore.getState().recordFeatureInteraction('workspace-board-actions')
   }
   const handleRenameStatus = useCallback(
     (statusId: string, label: string) => {

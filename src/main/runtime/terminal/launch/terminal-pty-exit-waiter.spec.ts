@@ -32,7 +32,7 @@ export function registerTerminalPtyExitWaiterTests(): void {
               cause
             })
           if (exitBeforeWait) {
-            exit()
+            void exit()
           }
           const waits = [
             runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 100 }),
@@ -44,10 +44,10 @@ export function registerTerminalPtyExitWaiterTests(): void {
           ]
           const outcomes = Promise.all(waits.map((wait) => wait.catch((error: unknown) => error)))
           if (!exitBeforeWait) {
-            exit()
+            void exit()
           }
           const settled = vi.fn()
-          outcomes.then(settled)
+          void outcomes.then(settled)
           await vi.advanceTimersByTimeAsync(0)
           expect(settled).toHaveBeenCalledOnce()
           for (const error of await outcomes) {
@@ -98,12 +98,14 @@ export function registerTerminalPtyExitWaiterTests(): void {
             expect(probe).toHaveBeenCalled()
           }
           if (end !== 'replacement') {
-            runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 137, 'inc-1', { providerExitObserved: true })
+            void runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 137, 'inc-1', {
+              providerExitObserved: true
+            })
           } else {
             runtime.onPtySpawned(TRANSCRIPT_PANE_PTY_ID, 'inc-2')
           }
           const settled = vi.fn()
-          outcome.then(settled)
+          void outcome.then(settled)
           await vi.advanceTimersByTimeAsync(0)
           expect(settled).toHaveBeenCalledOnce()
           expect(await outcome).toMatchObject({
@@ -142,9 +144,11 @@ export function registerTerminalPtyExitWaiterTests(): void {
             freshLaunch: true,
             text: 'do the task'
           })
-          runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 137, 'inc-1', { providerExitObserved: true })
+          void runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 137, 'inc-1', {
+            providerExitObserved: true
+          })
           const settled = vi.fn()
-          delivered.then(settled)
+          void delivered.then(settled)
           await vi.advanceTimersByTimeAsync(0)
           expect(settled).toHaveBeenCalledExactlyOnceWith(false)
           expect(send).not.toHaveBeenCalled()

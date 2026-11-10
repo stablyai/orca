@@ -38,7 +38,7 @@ function releaseAbsentPaneProcess(
     'replaced',
     owner.incarnationId ?? null
   )
-  runtime?.onPtyExit(owner.ptyId, UNVERIFIED_PROCESS_EXIT_CODE, owner.incarnationId, {
+  void runtime?.onPtyExit(owner.ptyId, UNVERIFIED_PROCESS_EXIT_CODE, owner.incarnationId, {
     hostExitConfirmed: true
   })
   settleStop?.(true)

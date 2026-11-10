@@ -148,7 +148,7 @@ function relevantHeaders(headers) {
   return result
 }
 
-app.whenReady().then(async () => {
+void app.whenReady().then(async () => {
   const browserSession = session.fromPartition(partition)
   await browserSession.clearStorageData()
   const identities = {

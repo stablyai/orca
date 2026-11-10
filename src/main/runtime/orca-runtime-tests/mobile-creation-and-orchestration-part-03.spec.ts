@@ -167,7 +167,7 @@ describe('OrcaRuntimeService', () => {
       await runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle' })
       write.mockClear()
 
-      runtime.onPtyExit('pty-1', 0)
+      void runtime.onPtyExit('pty-1', 0)
       runtime.onPtySpawned('pty-1', undefined, { awaitsRegistration: false })
       registerLivePty(runtime, 'pty-1', TEST_WORKTREE_ID, null, { tabId: 'tab-1', leafId })
       // Rebuild without the previous leaf so PTY-level tail clearing is tested.
@@ -275,7 +275,7 @@ describe('OrcaRuntimeService', () => {
       write.mockClear()
 
       // Same-id respawn is writable before new status; dead-process idle must never authorize replacement writes.
-      runtime.onPtyExit('pty-1', 0)
+      void runtime.onPtyExit('pty-1', 0)
       runtime.onPtySpawned('pty-1', undefined, { awaitsRegistration: false })
       setInMemoryOrchestrationMessages(runtime, db)
       bindSinglePtyRun(db, terminal.handle)

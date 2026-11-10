@@ -13,7 +13,7 @@ export function registerRateLimitIpcBridge(unsubs: (() => void)[]): void {
     })
   )
   // The startup get is a fallback: a push before resolution permanently wins.
-  window.api.rateLimits.get().then((state) => {
+  void window.api.rateLimits.get().then((state) => {
     initialSnapshotPending = false
     if (receivedPushBeforeInitialSnapshot) {
       return

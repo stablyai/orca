@@ -83,7 +83,7 @@ describe('OrcaRuntimeService', () => {
       kill: () => false,
       stopAndWait: async (ptyId) => {
         stopped.push(ptyId)
-        runtime.onPtyExit(ptyId, -1)
+        void runtime.onPtyExit(ptyId, -1)
         return true
       },
       getForegroundProcess: async () => null,
@@ -151,7 +151,7 @@ describe('OrcaRuntimeService', () => {
       stopAndWait: async (ptyId, opts) => {
         stopped.push(ptyId)
         expect(opts).toEqual({ keepHistory: true })
-        runtime.onPtyExit(ptyId, -1)
+        void runtime.onPtyExit(ptyId, -1)
         return true
       },
       getForegroundProcess: async () => null,
@@ -218,7 +218,7 @@ describe('OrcaRuntimeService', () => {
       kill: () => false,
       stopAndWait: async (ptyId) => {
         stopped.push(ptyId)
-        runtime.onPtyExit(ptyId, -1)
+        void runtime.onPtyExit(ptyId, -1)
         return true
       },
       getForegroundProcess: async () => null,

@@ -63,6 +63,7 @@ function loadKey(scanKey: string): void {
   }
   rememberKey(requestedKeys, scanKey)
   const request = window.api.aiVault.getScanProgress?.(scanKey)
+  // oxlint-disable-next-line typescript/no-misused-promises -- stale preloads may lack getScanProgress
   if (!request) {
     return
   }

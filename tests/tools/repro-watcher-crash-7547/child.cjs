@@ -108,7 +108,7 @@ if (!isMainThread && workerData && workerData.role === 'subscriber') {
   // Watch the main env’s same directory from a worker, then tear down per mode.
   const { dir, mode, holdMs } = workerData
   const watcher = require(watcherPath)
-  ;(async () => {
+  void (async () => {
     let sub
     try {
       sub = await watcher.subscribe(dir, () => {}, OPTS)

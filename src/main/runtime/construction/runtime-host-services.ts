@@ -242,7 +242,7 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
       this.adoptLegacyWorkerTerminal(candidate, workspace, inventory, activation),
     getRendererEpoch: () => this.rendererGraphEpoch,
     reveal: (candidate) => this.revealLegacyWorkerTerminal(candidate),
-    onPtyExit: (candidate) => this.onPtyExit(candidate.ptyId, 0, candidate.incarnationId),
+    onPtyExit: (candidate) => void this.onPtyExit(candidate.ptyId, 0, candidate.incarnationId),
     persist: (resolutions) => this.legacyWorkerRecoveryPersistence.persist(resolutions),
     rollback: (candidate) => this.rollbackLegacyWorkerTerminalSurface(candidate),
     reconcileMissing: (candidate) =>

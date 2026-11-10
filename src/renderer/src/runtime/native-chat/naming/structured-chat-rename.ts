@@ -65,7 +65,7 @@ async function submitRename(
     return
   }
   if (opts?.recordInteraction !== false) {
-    get().recordFeatureInteraction?.('terminal-tabs')
+    void get().recordFeatureInteraction?.('terminal-tabs')
   }
   try {
     await callRuntimeRpc<RenameResult>(target, 'agentSession.rename', {

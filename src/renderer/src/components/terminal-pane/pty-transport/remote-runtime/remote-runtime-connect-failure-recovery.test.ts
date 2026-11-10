@@ -95,7 +95,7 @@ describe('recoverable connect failures on a remote runtime pane', () => {
       await vi.advanceTimersByTimeAsync(1_000)
       expect(resolvePaneCalls).toBeGreaterThan(1)
 
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -131,7 +131,7 @@ describe('recoverable connect failures on a remote runtime pane', () => {
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
       expect(transport.retryRecovery?.()).toBe(true)
 
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -159,7 +159,7 @@ describe('recoverable connect failures on a remote runtime pane', () => {
       // A deadline that lands mid-attempt parks nothing, so the latch must still stay revivable.
       expect(transport.retryRecovery?.()).toBe(true)
 
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }

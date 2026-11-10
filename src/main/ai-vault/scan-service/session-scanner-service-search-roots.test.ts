@@ -82,7 +82,7 @@ it('refreshes a late root without rebuilding the index', async () => {
     'a conversation in a distro that started later'
   ])
 
-  subject.apply(init(spawnRoots))
+  void subject.apply(init(spawnRoots))
   await indexedSessions('conversation', ['early-session'])
 
   const close = vi.spyOn(SessionSearchIndexer.prototype, 'close')

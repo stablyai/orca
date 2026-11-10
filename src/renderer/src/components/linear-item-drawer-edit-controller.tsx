@@ -64,7 +64,7 @@ export function useLinearIssueEditController({
       const stateValue = { name: newState.name, type: newState.type, color: newState.color }
 
       const scope = getLinearSourceScope(providerSettings)
-      run('state', {
+      void run('state', {
         mutate: () =>
           writeLinearIssue(
             { ...issue, ...editState },
@@ -74,7 +74,7 @@ export function useLinearIssueEditController({
           ),
         onSuccess: () => {
           useAppStore.getState().invalidateLinearIssueLists({ scope })
-          useAppStore.getState().recordFeatureInteraction('linear-tasks')
+          void useAppStore.getState().recordFeatureInteraction('linear-tasks')
         },
         formatError: taskProviderErrorMessage,
         onError: (err) => toast.error(taskProviderErrorText(err))
@@ -87,14 +87,14 @@ export function useLinearIssueEditController({
     (value: string) => {
       const priority = Number.parseInt(value, 10)
       const scope = getLinearSourceScope(providerSettings)
-      run('priority', {
+      void run('priority', {
         mutate: () =>
           writeLinearIssue({ ...issue, ...editState }, { priority }, providerSettings, () =>
             linearUpdateIssue(providerSettings, issue.id, { priority }, issue.workspaceId)
           ),
         onSuccess: () => {
           useAppStore.getState().invalidateLinearIssueLists({ scope })
-          useAppStore.getState().recordFeatureInteraction('linear-tasks')
+          void useAppStore.getState().recordFeatureInteraction('linear-tasks')
         },
         formatError: taskProviderErrorMessage,
         onError: (err) => toast.error(taskProviderErrorText(err))
@@ -106,13 +106,13 @@ export function useLinearIssueEditController({
   const handleEstimateChange = useCallback(
     (estimate: number | null) => {
       setEstimatePopoverOpen(false)
-      run('estimate', {
+      void run('estimate', {
         mutate: () =>
           writeLinearIssue({ ...issue, ...editState }, { estimate }, providerSettings, () =>
             linearUpdateIssue(providerSettings, issue.id, { estimate }, issue.workspaceId)
           ),
         onSuccess: () => {
-          useAppStore.getState().recordFeatureInteraction('linear-tasks')
+          void useAppStore.getState().recordFeatureInteraction('linear-tasks')
         },
         formatError: taskProviderErrorMessage,
         onError: (err) => toast.error(taskProviderErrorText(err))
@@ -150,7 +150,7 @@ export function useLinearIssueEditController({
         ? { id: member.id, displayName: member.displayName, avatarUrl: member.avatarUrl }
         : undefined
       const scope = getLinearSourceScope(providerSettings)
-      run('assignee', {
+      void run('assignee', {
         mutate: () =>
           writeLinearIssue(
             { ...issue, ...editState },
@@ -160,7 +160,7 @@ export function useLinearIssueEditController({
           ),
         onSuccess: () => {
           useAppStore.getState().invalidateLinearIssueLists({ scope })
-          useAppStore.getState().recordFeatureInteraction('linear-tasks')
+          void useAppStore.getState().recordFeatureInteraction('linear-tasks')
         },
         formatError: taskProviderErrorMessage,
         onError: (err) => toast.error(taskProviderErrorText(err))
@@ -181,7 +181,7 @@ export function useLinearIssueEditController({
         .filter((n): n is string => !!n)
 
       const scope = getLinearSourceScope(providerSettings)
-      run('labels', {
+      void run('labels', {
         mutate: () =>
           writeLinearIssue(
             { ...issue, ...editState },
@@ -197,7 +197,7 @@ export function useLinearIssueEditController({
           ),
         onSuccess: () => {
           useAppStore.getState().invalidateLinearIssueLists({ scope })
-          useAppStore.getState().recordFeatureInteraction('linear-tasks')
+          void useAppStore.getState().recordFeatureInteraction('linear-tasks')
         },
         formatError: taskProviderErrorMessage,
         onError: (err) => toast.error(taskProviderErrorText(err))

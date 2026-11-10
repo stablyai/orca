@@ -62,7 +62,7 @@ export function cutClosingStructuredAgentSession(
   }
   const journal = host.sessions.get(sessionId)?.journal
   if (journal) {
-    closeStructuredAgentSessionHandovers(journal)
+    void closeStructuredAgentSessionHandovers(journal)
   }
   const { deps, runtimeState } = host.context()
   if (deps.store.selectWritableRecord(sessionId).kind !== 'unreadable') {

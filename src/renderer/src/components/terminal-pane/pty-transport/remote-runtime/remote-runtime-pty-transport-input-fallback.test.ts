@@ -79,7 +79,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       await vi.waitFor(() => expect(onWriteUnavailable).toHaveBeenCalledOnce())
       // Why: refused one-shot input never enters the journal; the remount must still warn of it.
       expect(undeliveredWhenNotified).toBe(true)
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -123,7 +123,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
       await vi.waitFor(() => expect(onWriteUnavailable).toHaveBeenCalledOnce())
       expect(onError).not.toHaveBeenCalled()
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -190,7 +190,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
       expect(oldWriteUnavailable).not.toHaveBeenCalled()
       expect(replacementWriteUnavailable).not.toHaveBeenCalled()
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }

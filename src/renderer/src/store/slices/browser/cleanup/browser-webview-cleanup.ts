@@ -8,7 +8,7 @@ import { releaseBrowserPageMount } from '../../../../components/browser-pane/hos
 // Release admission with guest destruction on close, purge, conversion or eviction.
 export function destroyRemovedBrowserWebview(browserPageId: string): void {
   releaseBrowserPageMount(browserPageId)
-  destroyPersistentWebview(browserPageId)
+  void destroyPersistentWebview(browserPageId)
 }
 
 /** Destroys every page in `previousIds` the store no longer holds; returns the ids it holds now. */

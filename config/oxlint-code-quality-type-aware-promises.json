@@ -1,0 +1,38 @@
+{
+  "$schema": "../node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript"],
+  "categories": {
+    "correctness": "off",
+    "suspicious": "off",
+    "pedantic": "off",
+    "perf": "off",
+    "style": "off",
+    "restriction": "off",
+    "nursery": "off"
+  },
+  "rules": {
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-promises": [
+      "error",
+      {
+        "checksVoidReturn": {
+          "attributes": false
+        }
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["**/*.test.*", "**/*.spec.*", "**/*.test-fixture.*", "**/tests/**"],
+      "rules": {
+        "typescript/no-misused-promises": [
+          "error",
+          {
+            "checksVoidReturn": false
+          }
+        ]
+      }
+    }
+  ],
+  "ignorePatterns": ["**/node_modules", "**/dist", "**/out"]
+}

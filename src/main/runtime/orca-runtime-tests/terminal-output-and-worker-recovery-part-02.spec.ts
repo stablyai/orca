@@ -640,7 +640,7 @@ describe('OrcaRuntimeService', () => {
     expect(flushOrThrow).toHaveBeenCalled()
 
     serializeProviderBuffer.mockClear()
-    runtime.onPtyExit('pty-legacy', 0, incarnationId)
+    void runtime.onPtyExit('pty-legacy', 0, incarnationId)
     runtime.onPtySpawned('pty-legacy', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', {
       awaitsRegistration: false
     })

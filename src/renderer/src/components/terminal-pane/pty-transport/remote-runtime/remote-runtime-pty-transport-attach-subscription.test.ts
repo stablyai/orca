@@ -127,7 +127,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     expect(onWriteUnavailable).toHaveBeenCalledOnce()
     expect(onError).not.toHaveBeenCalled()
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('does not report a rejected write from a superseded multiplex stream', async () => {
@@ -172,7 +172,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     )
 
     expect(onWriteUnavailable).not.toHaveBeenCalled()
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('does not report attachment health until the authoritative PTY snapshot arrives', async () => {
@@ -185,7 +185,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(transport.isConnected()).toBe(false)
     emitSnapshot(latestSubscribePayload().streamId, 'authoritative state')
     expect(transport.isConnected()).toBe(true)
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   // Why: retained gauges would inflate every later high-water profile.
@@ -202,10 +202,10 @@ describe('createRemoteRuntimePtyTransport', () => {
       await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
       expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(1)
 
-      transport[teardown]?.()
+      void transport[teardown]?.()
 
       expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(0)
-      transport.destroy?.()
+      void transport.destroy?.()
     }
   )
 
@@ -263,7 +263,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       )
       expect(recoveryEpochs.size).toBe(1)
       expect(transport.getPtyId()).toBe('remote:env-1@@terminal-1')
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -302,7 +302,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(onError).not.toHaveBeenCalled()
       expect(transport.isConnected()).toBe(true)
       expect(transport.getPtyId()).toBe('remote:env-1@@terminal-1')
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -334,7 +334,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(transport.getRecoveryState?.().phase).toBe('offline')
     expect(unsubscribe).toHaveBeenCalledTimes(1)
     expect(runtimeSubscribe).toHaveBeenCalledTimes(1)
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('reports viewer disconnect as an unverifiable remote exit', async () => {
@@ -355,7 +355,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-1', -1)
     expect(transport.getPtyId()).toBeNull()
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('clears every retained transport error when the current stream becomes healthy', async () => {
@@ -396,6 +396,6 @@ describe('createRemoteRuntimePtyTransport', () => {
     emitSnapshot(latestSubscribePayload().streamId, 'recovered')
 
     expect(onErrorCleared.mock.calls.map(([message]) => message)).toEqual(errors)
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 })

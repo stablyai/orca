@@ -37,7 +37,7 @@ function mountSearch() {
   })
   act(() => hook.result.current.openSearch())
   act(() => hook.result.current.searchActions.setSearchQuery('beta'))
-  act(() => vi.advanceTimersByTime(150))
+  void act(() => vi.advanceTimersByTime(150))
   const dispose = () => {
     hook.unmount()
     editor.destroy()
@@ -57,17 +57,17 @@ describe('rich markdown editing with Find open', () => {
     const { editor, hook, scrollTo, dispose } = mountSearch()
     try {
       const insertion = editor.state.doc.content.size - 1
-      act(() => editor.commands.setTextSelection(insertion))
+      void act(() => editor.commands.setTextSelection(insertion))
       scrollTo.mockClear()
-      act(() => editor.commands.insertContent('X'))
-      act(() => editor.commands.insertContent('Y'))
+      void act(() => editor.commands.insertContent('X'))
+      void act(() => editor.commands.insertContent('Y'))
       expect(editor.getText()).toBe('beta beta\n\nEdit hereXY')
       expect(editor.state.selection.from).toBe(insertion + 2)
       expect(editor.state.selection.empty).toBe(true)
       expect(hook.result.current.searchState.matchCount).toBe(2)
       expect(hook.result.current.searchState.isSearchOpen).toBe(true)
       expect(scrollTo).not.toHaveBeenCalled()
-      act(() => editor.commands.undo())
+      void act(() => editor.commands.undo())
       expect(editor.getText()).toBe('beta beta\n\nEdit here')
       expect(scrollTo).not.toHaveBeenCalled()
     } finally {
@@ -87,7 +87,7 @@ describe('rich markdown editing with Find open', () => {
       expect(editor.isFocused).toBe(true)
       const selection = editor.state.selection
       scrollTo.mockClear()
-      act(() => vi.advanceTimersByTime(150))
+      void act(() => vi.advanceTimersByTime(150))
       expect(hook.result.current.searchState.matchCount).toBe(1)
       expect(editor.state.selection.eq(selection)).toBe(true)
       expect(scrollTo).not.toHaveBeenCalled()

@@ -22,6 +22,7 @@ const rootRuleNames = new Set(readConfigRules('.oxlintrc.json'))
 const secondaryOnlyRuleNames = [
   ...new Set([
     ...readConfigRules('config/oxlint-code-quality-type-aware.json'),
+    ...readConfigRules('config/oxlint-code-quality-type-aware-promises.json'),
     ...readConfigRules('config/oxlint-code-quality-native-plugins.json')
   ])
 ].filter((rule) => !rootRuleNames.has(rule))

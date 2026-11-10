@@ -67,7 +67,7 @@ it('settles continuous placement changes and drains the next worktree open', asy
     }
   })
   try {
-    queue([
+    void queue([
       {
         worktreeId: 'wt',
         change: {
@@ -130,7 +130,7 @@ it('checks admission inside the actual profile queue before replacement close ef
       }
     }
   })
-  queue(() => [
+  void queue(() => [
     {
       worktreeId: workspace,
       change: { close: 'session-a', tabId: 'agent-chat-tab-v1-old' },
@@ -203,7 +203,7 @@ it('refuses a captured close when another actual holder now uses that id for a d
       }
     }
   })
-  queue([{ worktreeId: workspace, change: { close: 'captured', tabId: 'same-tab' } }])
+  void queue([{ worktreeId: workspace, change: { close: 'captured', tabId: 'same-tab' } }])
   await settled.promise
   expect(reply).toMatchObject({ ok: false })
   expect(effects).not.toHaveBeenCalled()

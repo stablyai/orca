@@ -95,7 +95,7 @@ describe.each(['darwin', 'linux', 'win32'] as const)('%s native-handle contract'
       failIo(fixture, operation)
       fixture.handle.onExit(() => {
         fixture.handle.kill()
-        fixture.handle.forceKill()
+        void fixture.handle.forceKill()
         fixture.handle.signal('SIGTERM')
       })
       fixture.proc._simulateExit(0)
@@ -112,7 +112,7 @@ describe.each(['darwin', 'linux', 'win32'] as const)('%s native-handle contract'
         const signal = vi.spyOn(process, 'kill').mockReturnValue(true)
         failIo(fixture, operation)
         fixture.handle.kill()
-        fixture.handle.forceKill()
+        void fixture.handle.forceKill()
         fixture.proc._simulateExit(137)
         fixture.handle.dispose()
         expect(fixture.proc.kill).toHaveBeenCalledOnce()
@@ -131,7 +131,7 @@ describe.each(['darwin', 'linux', 'win32'] as const)('%s native-handle contract'
       const delivered: string[] = []
       fixture.handle.onData((data) => {
         delivered.push(data)
-        fixture.handle.forceKill()
+        void fixture.handle.forceKill()
       })
       fixture.handle.onExit((code) => delivered.push(`exit:${code}`))
       expect(delivered).toEqual(['final output', 'exit:7'])
@@ -151,7 +151,7 @@ describe.each(['darwin', 'linux', 'win32'] as const)('%s native-handle contract'
       // A fresh handle exercises force-kill without Windows double-close semantics.
       const forced = createFixture()
       failIo(forced, operation)
-      forced.handle.forceKill()
+      void forced.handle.forceKill()
       if (platform === 'win32') {
         // An unverified PID can be reused; the per-PTY job/native handle owns this process tree.
         expect(signal).not.toHaveBeenCalled()
@@ -163,7 +163,7 @@ describe.each(['darwin', 'linux', 'win32'] as const)('%s native-handle contract'
 
       forced.proc._simulateExit(137)
       signal.mockClear()
-      forced.handle.forceKill()
+      void forced.handle.forceKill()
       forced.handle.signal('SIGTERM')
       expect(signal).not.toHaveBeenCalled()
       fixture.proc._simulateExit(0)

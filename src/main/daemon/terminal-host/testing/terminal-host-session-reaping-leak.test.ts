@@ -164,7 +164,7 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
         streamClient: streamClient()
       })
 
-      stubbornHost.kill('stubborn')
+      void stubbornHost.kill('stubborn')
       expect(emulatorDispose).not.toHaveBeenCalled()
 
       // The fallback requests force-kill but still cannot claim physical exit.

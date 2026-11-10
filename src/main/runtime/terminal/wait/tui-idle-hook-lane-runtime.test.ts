@@ -189,7 +189,7 @@ describe('Claude indexed task wakeup readiness', () => {
           expect(new Set(indexed.mock.calls.map(([paneKey]) => paneKey))).toEqual(new Set([PANE]))
           expect(full).not.toHaveBeenCalled()
         } finally {
-          pane.runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 0)
+          void pane.runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 0)
         }
       }
     )

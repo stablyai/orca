@@ -168,7 +168,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
       expect(transport.getPtyId()).toBe('remote:env-1@@terminal-flapping')
       expect(onPtyExit).not.toHaveBeenCalled()
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }

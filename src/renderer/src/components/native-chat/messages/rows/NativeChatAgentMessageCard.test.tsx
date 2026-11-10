@@ -367,7 +367,7 @@ it.each(['task', 'mail', 'generic'] as const)(
       spy.mockClear()
     }
     for (const progress of [60, null, 60, 0, 100]) {
-      act(() =>
+      void act(() =>
         useAppStore
           .getState()
           .setAgentProgramStatus(

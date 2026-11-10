@@ -340,7 +340,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     })
 
     expect(ptyId ? getFitOverrideForPty(ptyId) : null).toBeNull()
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('gives separate paired viewers of the same host pane distinct refresh identities', async () => {
@@ -375,8 +375,8 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(clientIds[0]).not.toBe(clientIds[1])
     })
 
-    first.destroy?.()
-    second.destroy?.()
+    void first.destroy?.()
+    void second.destroy?.()
   })
 
   it('does not let an encoded restored terminal id override the current worktree owner', async () => {
@@ -583,7 +583,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
     runtimeCall.mockClear()
 
-    transport.destroy?.()
+    void transport.destroy?.()
 
     expect(transport.getRecoveryState?.().phase).toBe('disposed')
     expect(runtimeCall).not.toHaveBeenCalledWith(
@@ -605,7 +605,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
     runtimeCall.mockClear()
 
-    transport.destroy?.()
+    void transport.destroy?.()
 
     expect(runtimeCall).not.toHaveBeenCalledWith(
       expect.objectContaining({

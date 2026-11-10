@@ -56,7 +56,7 @@ test('shows Stop and the loading line during a held reload, then returns to Relo
     if (reloadReleased) {
       release()
     } else {
-      new Promise<void>((resolve) => reloadResolvers.push(resolve)).then(release)
+      void new Promise<void>((resolve) => reloadResolvers.push(resolve)).then(release)
     }
   })
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))

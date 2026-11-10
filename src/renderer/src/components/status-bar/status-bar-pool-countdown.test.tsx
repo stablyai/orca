@@ -58,7 +58,7 @@ describe('status-bar pool countdown', () => {
       <ProviderSegment p={null} compact={false} display="used" />
     )
     rerender(<ProviderSegment p={limits()} compact={false} display="used" />)
-    act(() => vi.advanceTimersByTime(30_001))
+    void act(() => vi.advanceTimersByTime(30_001))
     expect(container.textContent).toContain('1h 29m')
   })
 })

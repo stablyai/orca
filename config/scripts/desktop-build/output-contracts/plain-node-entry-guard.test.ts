@@ -38,7 +38,7 @@ function runWriteBundle(plugin: Plugin, dir: string, code = ''): void {
   if (typeof hook !== 'function') {
     throw new Error('Expected writeBundle hook')
   }
-  hook.call(
+  void hook.call(
     { meta: { watchMode: false } } as never,
     { dir } as Rollup.NormalizedOutputOptions,
     createBundle(code)
@@ -132,7 +132,7 @@ describe('CLI and worker thread entry guard', () => {
     if (typeof hook !== 'function') {
       throw new Error('Expected writeBundle hook')
     }
-    hook.call(
+    void hook.call(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This hook reads only meta.watchMode from its context.
       { meta: { watchMode } } as never,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This hook reads only dir from the output options.

@@ -280,7 +280,7 @@ function TabBarCreateEntrySession({
       className="pb-1"
       onSubmit={(event) => {
         event.preventDefault()
-        submitOption()
+        void submitOption()
       }}
       onKeyDown={(event) => {
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -400,7 +400,7 @@ function TabBarCreateEntrySession({
                 loading={pending && index === activeSelectedIndex}
                 onClick={() => {
                   setSelectionGuidance(null)
-                  submitOption(option)
+                  void submitOption(option)
                 }}
               />
             ))

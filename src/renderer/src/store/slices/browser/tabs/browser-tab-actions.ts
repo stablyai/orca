@@ -213,7 +213,7 @@ export function createBrowserTabActions(
             )
           })
           if (created) {
-            get().recordFeatureInteraction('browser-tab-created')
+            void get().recordFeatureInteraction('browser-tab-created')
             return
           }
         } catch (error) {
@@ -232,7 +232,7 @@ export function createBrowserTabActions(
         browserRuntimeEnvironmentId: null,
         ...(split ? { split } : { targetGroupId: groupId })
       })
-      get().recordFeatureInteraction('browser-tab-created')
+      void get().recordFeatureInteraction('browser-tab-created')
     },
 
     openBrowserProfileTabInActiveWorkspace: async (url, profileId) => {

@@ -60,12 +60,12 @@ describe('useListMultiSelection', () => {
   it('prunes rows that stop rendering and falls back to a surviving anchor', () => {
     setPlatform(false)
     render([a, b, c, d])
-    act(() => selection.updateSelectionForGesture(gesture({ ctrlKey: true }), b))
-    act(() => selection.updateSelectionForGesture(gesture({ ctrlKey: true }), c))
+    void act(() => selection.updateSelectionForGesture(gesture({ ctrlKey: true }), b))
+    void act(() => selection.updateSelectionForGesture(gesture({ ctrlKey: true }), c))
 
     render([a, c, d])
     expect(selection.selectedKeys).toEqual(new Set(['c']))
-    act(() => selection.updateSelectionForGesture(gesture({ shiftKey: true }), d))
+    void act(() => selection.updateSelectionForGesture(gesture({ shiftKey: true }), d))
     expect(selection.selectedItems).toEqual([c, d])
   })
 })

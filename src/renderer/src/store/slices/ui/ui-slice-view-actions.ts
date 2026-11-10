@@ -35,7 +35,7 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
         worktreeNavHistoryIndex: rewindHistoryIndexPastView(state, 'automations')
       })),
     openSpacePage: () => {
-      get().recordFeatureInteraction?.('workspace-cleanup')
+      void get().recordFeatureInteraction?.('workspace-cleanup')
       if (typeof window !== 'undefined' && window.api?.workspaceSpace?.openWindow) {
         void window.api.workspaceSpace.openWindow()
         return

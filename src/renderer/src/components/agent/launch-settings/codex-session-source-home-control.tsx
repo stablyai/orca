@@ -61,7 +61,7 @@ function saveCodexSessionSourceHome(
   const current = settings.codexSessionSourceHome ?? {}
   const trimmed = args.value.trim()
   if (args.runtime === 'host') {
-    updateSettings({ codexSessionSourceHome: { ...current, host: trimmed || undefined } })
+    void updateSettings({ codexSessionSourceHome: { ...current, host: trimmed || undefined } })
     return
   }
   const nextWsl = { ...current.wsl }
@@ -72,7 +72,7 @@ function saveCodexSessionSourceHome(
   } else {
     delete nextWsl[targetKey]
   }
-  updateSettings({
+  void updateSettings({
     codexSessionSourceHome: {
       ...current,
       wsl: Object.keys(nextWsl).length > 0 ? nextWsl : undefined

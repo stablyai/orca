@@ -13,7 +13,7 @@ type UseTerminalSaveDialogResult = {
   saveDialogFile: OpenFile | null
   requestCloseFile: (fileId: string) => void
   handleSaveDialogSave: () => void
-  handleSaveDialogDiscard: () => void
+  handleSaveDialogDiscard: () => Promise<void>
   handleSaveDialogCancel: () => void
 }
 

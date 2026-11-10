@@ -67,7 +67,7 @@ it('constructs nothing and touches no disk while the setting is off', async () =
     RECENT_SESSION_ID
   )
   const subject = newInstance()
-  subject.apply({ enabled: false, historyDays: null })
+  void subject.apply({ enabled: false, historyDays: null })
   await subject.settled()
 
   expect(subject.running).toBe(false)
@@ -89,16 +89,16 @@ it('closes the live pair and starts a new one on a settings change', async () =>
   await utimes(ancient, longAgo, longAgo)
 
   const subject = newInstance()
-  subject.apply({ enabled: true, historyDays: null })
+  void subject.apply({ enabled: true, historyDays: null })
   await subject.settled()
   expect(await searchFor('ancient')).toEqual([ANCIENT_SESSION_ID])
 
-  subject.apply({ enabled: true, historyDays: 30 })
+  void subject.apply({ enabled: true, historyDays: 30 })
   await subject.settled()
   expect(await searchFor('ancient')).toEqual([])
   expect(await searchFor('recent')).toEqual([RECENT_SESSION_ID])
 
-  subject.apply({ enabled: true, historyDays: null })
+  void subject.apply({ enabled: true, historyDays: null })
   await subject.settled()
   expect(await searchFor('ancient')).toEqual([ANCIENT_SESSION_ID])
   expect(errors).toEqual([])
@@ -111,7 +111,7 @@ it('removes the database on clear and rebuilds only while consent stands', async
     RECENT_SESSION_ID
   )
   const subject = newInstance()
-  subject.apply({ enabled: true, historyDays: null })
+  void subject.apply({ enabled: true, historyDays: null })
   await subject.settled()
   expect(await searchFor('distinctive')).toEqual([RECENT_SESSION_ID])
 
@@ -121,7 +121,7 @@ it('removes the database on clear and rebuilds only while consent stands', async
   await subject.settled()
   expect(await searchFor('distinctive')).toEqual([RECENT_SESSION_ID])
 
-  subject.apply({ enabled: false, historyDays: null })
+  void subject.apply({ enabled: false, historyDays: null })
   await subject.clear()
   expect(subject.running).toBe(false)
   expect(existsSync(harness.databasePath)).toBe(false)
@@ -188,7 +188,7 @@ it('refuses a page cursor minted before clear even when the rebuilt generation m
     await writeClaudeTranscript(transcriptPath(id), [`shared clear fence ${id}`], id)
   }
   const subject = newInstance()
-  subject.apply({ enabled: true, historyDays: null })
+  void subject.apply({ enabled: true, historyDays: null })
   await subject.settled()
   const first = await subject.search({ query: 'shared clear fence', limit: 1 })
   if (first.kind !== 'results' || !first.page.cursor) {
@@ -209,7 +209,7 @@ it('keeps pagination stable when the clock crosses retention before a purge', as
     await writeClaudeTranscript(transcriptPath(id), [`distinctive conversation ${id}`], id)
   }
   const subject = newInstance()
-  subject.apply({ enabled: true, historyDays: 30 })
+  void subject.apply({ enabled: true, historyDays: 30 })
   await subject.settled()
   const first = await subject.search({ query: 'distinctive', limit: 1 })
   if (first.kind !== 'results') {

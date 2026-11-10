@@ -157,7 +157,7 @@ export function useGitLabDetailsEditing(
           setTitleDraft('')
           setBodyDraft('')
           setLabelDraft('')
-          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
+          void useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
         }
       } else if (mountedRef.current) {
         toast.error(codeHostErrorText(res))

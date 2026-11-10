@@ -172,7 +172,7 @@ export function registerActionEffortCreateTests(
             )
           })
           if (held) {
-            holdStructuredAgentSessionLaunchOption(launch.sessionId, 'effort', held)
+            void holdStructuredAgentSessionLaunchOption(launch.sessionId, 'effort', held)
           }
           await launch.launchResult
           const params = CreateIntentParams.parse(

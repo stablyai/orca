@@ -141,7 +141,7 @@ export function ClaudeSwitcherForOwner({
         runtime: target.runtime,
         wslDistro: target.wslDistro
       })
-      recordFeatureInteraction('claude-account-switching')
+      void recordFeatureInteraction('claude-account-switching')
       if (mountedRef.current) {
         setAccounts(next)
       }

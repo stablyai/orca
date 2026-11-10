@@ -131,7 +131,7 @@ describe('useMobileOverlayTicks desktop-fit restore', () => {
       setFitOverride('pty-1', 'mobile-fit', 60, 24)
     })
     flushAnimationFrames()
-    act(() => vi.advanceTimersByTime(100))
+    void act(() => vi.advanceTimersByTime(100))
     expect(pane.terminal.cols).toBe(60)
     expect(pane.terminal.rows).toBe(24)
     expect(pane.terminal.resize).not.toHaveBeenCalledWith(49, 20)
@@ -162,7 +162,7 @@ describe('useMobileOverlayTicks desktop-fit restore', () => {
       setFitOverride('pty-1', 'mobile-fit', 49, 20)
     })
     flushAnimationFrames()
-    act(() => vi.advanceTimersByTime(100))
+    void act(() => vi.advanceTimersByTime(100))
     expect(pane.terminal.cols).toBe(49)
     expect(pane.terminal.rows).toBe(20)
     expect(pane.terminal.refresh).not.toHaveBeenCalled()
@@ -175,7 +175,7 @@ describe('useMobileOverlayTicks desktop-fit restore', () => {
     act(() => setFitOverride('pty-1', 'desktop-fit', 120, 40))
     managerRef.current = null
     flushAnimationFrames()
-    act(() => vi.advanceTimersByTime(100))
+    void act(() => vi.advanceTimersByTime(100))
     expect(pane.terminal.cols).toBe(49)
     expect(pane.terminal.refresh).not.toHaveBeenCalled()
     expect(pane.fitAddon.fit).not.toHaveBeenCalled()
@@ -193,7 +193,7 @@ describe('useMobileOverlayTicks desktop-fit restore', () => {
       setFitOverride('pty-1', 'desktop-fit', 140, 50)
     })
     flushAnimationFrames()
-    act(() => vi.advanceTimersByTime(100))
+    void act(() => vi.advanceTimersByTime(100))
     expect(pane.terminal.cols).toBe(140)
     expect(pane.terminal.rows).toBe(50)
     expect(pane.terminal.resize).not.toHaveBeenCalledWith(120, 40)
@@ -207,7 +207,7 @@ describe('useMobileOverlayTicks desktop-fit restore', () => {
       beginTerminalScrollIntentBufferRebuild(pane.terminal)
       act(() => setFitOverride('pty-1', 'desktop-fit', 120, 40))
       flushAnimationFrames()
-      act(() => vi.advanceTimersByTime(100))
+      void act(() => vi.advanceTimersByTime(100))
       if (transition === 'unmount') {
         binding.unmount()
       } else if (transition === 'retirement') {
@@ -236,7 +236,7 @@ describe('useMobileOverlayTicks desktop-fit restore', () => {
     beginTerminalScrollIntentBufferRebuild(pane.terminal)
     act(() => setFitOverride('pty-1', 'desktop-fit', 120, 40))
     flushAnimationFrames()
-    act(() => vi.advanceTimersByTime(100))
+    void act(() => vi.advanceTimersByTime(100))
     binding.setPanes([replacement])
     endTerminalScrollIntentBufferRebuild(pane.terminal)
     await act(async () => {

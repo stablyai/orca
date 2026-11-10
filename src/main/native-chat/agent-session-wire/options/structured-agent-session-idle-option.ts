@@ -121,5 +121,5 @@ export function confirmIdleStructuredAgentSessionOption(
     }
   }
   const pending = run()
-  context.trackProviderOperation?.(pending)
+  void context.trackProviderOperation?.(pending)
 }

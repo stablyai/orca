@@ -176,10 +176,10 @@ export class WatcherProcessSupervisor {
           reportTerminalError: reportWatcherTerminalError,
           restartChild: () => this.restartAfterCancelledSubscribe(child)
         }),
-      restartAfterCancelledSubscribe: (child) => this.restartAfterCancelledSubscribe(child),
+      restartAfterCancelledSubscribe: (child) => void this.restartAfterCancelledSubscribe(child),
       terminateUnavailableChild: (child) => {
         if (child) {
-          this.terminateUnavailableChild(child)
+          void this.terminateUnavailableChild(child)
         }
       },
       shouldReportTerminalError: () => this.shutdown.disposalRevision === disposalRevision,
@@ -197,7 +197,7 @@ export class WatcherProcessSupervisor {
       return
     }
     if (code === undefined) {
-      this.terminateUnavailableChild(proc)
+      void this.terminateUnavailableChild(proc)
       return
     }
     this.slot.child = null

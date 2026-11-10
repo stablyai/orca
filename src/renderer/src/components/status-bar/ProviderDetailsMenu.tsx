@@ -57,7 +57,7 @@ export function ProviderDetailsMenu({
   const handleOpenChange = (nextOpen: boolean): void => {
     if (nextOpen) {
       menuFocusHandoff.reset()
-      recordFeatureInteraction('usage-tracking')
+      void recordFeatureInteraction('usage-tracking')
     }
     onOpenChange?.(nextOpen)
   }

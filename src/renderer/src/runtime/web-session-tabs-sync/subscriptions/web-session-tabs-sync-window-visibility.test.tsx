@@ -279,11 +279,11 @@ describe('useWebSessionTabsSync window visibility', () => {
     })
     expect(subscriptions.every(({ unsubscribe }) => unsubscribe.mock.calls.length === 0)).toBe(true)
 
-    act(() => vi.advanceTimersByTime(1))
+    void act(() => vi.advanceTimersByTime(1))
     expect(subscriptions.every(({ unsubscribe }) => unsubscribe.mock.calls.length === 1)).toBe(true)
 
     act(() => setDocumentVisibility('visible'))
-    act(() => vi.advanceTimersByTime(WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS))
+    void act(() => vi.advanceTimersByTime(WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS))
     await act(settle)
     expect(runtimeSubscribe).toHaveBeenCalledTimes(6)
     expect(runtimeCallMethods()).toEqual(EMPTY_INVENTORY_CALLS)

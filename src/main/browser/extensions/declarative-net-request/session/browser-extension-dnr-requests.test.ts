@@ -225,7 +225,7 @@ describe('declarativeNetRequest in Orca request handlers', () => {
     )
     const requests = Array.from({ length: 2_001 }, () => details('https://cdn.example/file'))
     for (const request of requests) {
-      decider.beforeRequest(session, request)
+      void decider.beforeRequest(session, request)
     }
     for (const request of requests) {
       expect(decider.headersReceived(session, headersReceived(request, {}))).toEqual({
@@ -247,8 +247,8 @@ describe('declarativeNetRequest in Orca request handlers', () => {
     setBrowserSessionRequestDecider(decider)
     const failed = details('https://first.example/', { resourceType: 'mainFrame' })
     const pending = details('https://second.example/', { resourceType: 'mainFrame' })
-    decider.beforeRequest(session, failed)
-    decider.beforeRequest(session, pending)
+    void decider.beforeRequest(session, failed)
+    void decider.beforeRequest(session, pending)
     finish('onErrorOccurred', failed)
     expect(runtime.matched.actionCount(BLOCKER, TAB)).toBe(1)
     runtime.matched.commitNavigation(TAB)
@@ -270,7 +270,7 @@ describe('declarativeNetRequest in Orca request handlers', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the observer reads id/session and subscribes only to native events.
     observeBrowserExtensionDnrContents(contents as unknown as Electron.WebContents)
     const request = details('https://download.example/file', { resourceType: 'mainFrame' })
-    decider.beforeRequest(session, request)
+    void decider.beforeRequest(session, request)
     finish('onCompleted', request)
     contents.emit('did-stop-loading')
     expect(runtime.matched.actionCount(BLOCKER, TAB)).toBe(1)
@@ -313,7 +313,7 @@ describe('declarativeNetRequest in Orca request handlers', () => {
     const navigate = (url: string, method: string, responseHeaders: Record<string, string[]>) => {
       frame.origin = new URL(url).origin
       const request = details(url, { resourceType: 'mainFrame', method, frame: mainFrame })
-      decider.beforeRequest(session, request)
+      void decider.beforeRequest(session, request)
       decider.headersReceived(session, headersReceived(request, responseHeaders))
       runtime.frames.commit(runtime.engine, TAB, mainFrame, url)
       return decider.beforeRequest(

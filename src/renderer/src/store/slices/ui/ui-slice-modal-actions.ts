@@ -7,7 +7,7 @@ export function createUiModalActions(set: UISliceSet, get: UISliceGet): Partial<
     modalData: {},
     openModal: (modal, data = {}) => {
       if (modal === 'add-repo' || modal === 'create-worktree') {
-        get().recordFeatureInteraction?.('workspace-creation')
+        void get().recordFeatureInteraction?.('workspace-creation')
       }
       const evicted = get().modalData
       set({

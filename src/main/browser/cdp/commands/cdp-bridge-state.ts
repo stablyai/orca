@@ -143,7 +143,7 @@ export class CdpBridgeState {
         resolve: resolve as (value: unknown) => void,
         reject
       })
-      this.processQueue(tabId)
+      void this.processQueue(tabId)
     })
   }
 

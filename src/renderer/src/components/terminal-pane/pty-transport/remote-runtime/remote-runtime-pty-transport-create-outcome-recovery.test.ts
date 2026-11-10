@@ -80,7 +80,7 @@ describe('createRemoteRuntimePtyTransport', () => {
           trustWorktreeId: 'worktree-y'
         })
       } finally {
-        transport.destroy?.()
+        void transport.destroy?.()
       }
     } finally {
       vi.useRealTimers()
@@ -134,7 +134,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(creates[1].params?.reconcileExisting).toBe(true)
     expect(onPtySpawn).toHaveBeenCalledTimes(1)
     expect(transport.getPtyId()).toBe('remote:env-1@@terminal-once')
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('clips a reconciled create timeout to the budget left after a slow capability probe', async () => {
@@ -173,7 +173,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         .filter((args) => args.method === 'terminal.create')
       expect(createRequests).toHaveLength(2)
       expect(createRequests[1].timeoutMs).toBe(1_000)
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -199,7 +199,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     ).toHaveLength(1)
     expect(onError).not.toHaveBeenCalled()
     expect(transport.getRecoveryState?.().phase).toBe('disconnected')
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('surfaces an authoritative capability-probe failure after an unknown create outcome', async () => {
@@ -223,7 +223,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(
       runtimeCall.mock.calls.filter(([args]) => args.method === 'terminal.create')
     ).toHaveLength(1)
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('stops unknown terminal-create recovery at the cutoff and remains manually retryable', async () => {
@@ -298,7 +298,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(createRequests.slice(1).every((args) => args.params?.reconcileExisting === true)).toBe(
         true
       )
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -366,7 +366,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(runtimeCall.mock.calls.filter(([args]) => args.method === 'status.get')).toHaveLength(
         1
       )
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }

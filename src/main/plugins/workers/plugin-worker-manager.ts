@@ -198,7 +198,7 @@ export class PluginWorkerManager {
     }
     const decision = this.recordFailure(pluginKey, `worker exited unexpectedly (code ${code})`)
     if (decision.restart) {
-      this.beginActivation(record.spec, record.generation, decision)
+      void this.beginActivation(record.spec, record.generation, decision)
     }
   }
 

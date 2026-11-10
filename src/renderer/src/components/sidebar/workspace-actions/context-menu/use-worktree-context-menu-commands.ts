@@ -67,10 +67,10 @@ export function useWorktreeContextMenuCommands(args: {
       args.worktree,
       args.repo?.connectionId
     )
-    window.api.ui.writeClipboardText(formatClipboardFilePath(args.worktree.path, owner))
+    void window.api.ui.writeClipboardText(formatClipboardFilePath(args.worktree.path, owner))
   }, [args])
   const handleCopyName = useCallback(() => {
-    window.api.ui.writeClipboardText(resolveWorktreeDisplayName(args.worktree))
+    void window.api.ui.writeClipboardText(resolveWorktreeDisplayName(args.worktree))
   }, [args])
   const handleToggleRead = useCallback(() => {
     args.setWorkspaceUnreadByUser(

@@ -423,7 +423,7 @@ describe('committed adopting create RPC replay', () => {
     await entered.promise
     expect(sourceRoute).toHaveBeenCalledOnce()
     if (absent) {
-      runtime.onPtyExit('source-pty', 0)
+      void runtime.onPtyExit('source-pty', 0)
     }
     if (unary) {
       rows = []

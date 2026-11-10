@@ -76,7 +76,7 @@ export function TaskPageGitLabItemList({
               tabIndex={0}
               key={`${item.repoId}:${item.repoHostId ?? ''}:${item.id}`}
               onClick={() => {
-                useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
+                void useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
                 openGitLabDetailPage(item)
               }}
               onKeyDown={(e) => {
@@ -85,7 +85,7 @@ export function TaskPageGitLabItemList({
                 }
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault()
-                  useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
+                  void useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
                   openGitLabDetailPage(item)
                 }
               }}

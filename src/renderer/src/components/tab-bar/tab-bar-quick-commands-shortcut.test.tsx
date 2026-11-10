@@ -139,7 +139,7 @@ describe('quick command shortcut ownership changes', () => {
       shiftUp()
     })
     menus.focus('left')
-    act(shiftDown)
+    void act(shiftDown)
     expect(menus.left).not.toHaveBeenCalled()
     act(() => {
       shiftUp()

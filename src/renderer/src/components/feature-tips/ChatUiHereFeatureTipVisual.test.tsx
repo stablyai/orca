@@ -35,14 +35,14 @@ describe('chat tip visual lifetime', () => {
     // Each act settles the next production beat; passing the loop boundary must make progress.
     for (let beats = 0; Date.now() - started < 13_000 && beats < 250; beats++) {
       expect(vi.getTimerCount()).toBe(1)
-      act(() => vi.advanceTimersToNextTimer())
+      void act(() => vi.advanceTimersToNextTimer())
     }
     expect(Date.now() - started).toBeGreaterThanOrEqual(13_000)
     expect(container.innerHTML).not.toBe(initial)
     act(() => changeMotion(true))
     expect(vi.getTimerCount()).toBe(0)
     const finished = container.innerHTML
-    act(() => vi.advanceTimersByTime(30_000))
+    void act(() => vi.advanceTimersByTime(30_000))
     expect(container.innerHTML).toBe(finished)
     act(() => changeMotion(false))
     expect(vi.getTimerCount()).toBe(1)
@@ -55,12 +55,12 @@ describe('chat tip visual lifetime', () => {
     const changeMotion = motion(false)
     const { container } = render(<ChatUiDemoCard loop={false} />)
     for (let beat = 0; vi.getTimerCount() > 0 && beat < 250; beat++) {
-      act(() => vi.advanceTimersToNextTimer())
+      void act(() => vi.advanceTimersToNextTimer())
     }
     expect(vi.getTimerCount()).toBe(0)
     expect(container.querySelectorAll('[data-on="true"]').length).toBeGreaterThan(10)
     const finished = container.innerHTML
-    act(() => vi.advanceTimersByTime(30_000))
+    void act(() => vi.advanceTimersByTime(30_000))
     expect(container.innerHTML).toBe(finished)
     act(() => changeMotion(true))
     act(() => changeMotion(false))

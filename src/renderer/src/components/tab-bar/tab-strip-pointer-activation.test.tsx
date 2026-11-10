@@ -44,7 +44,7 @@ describe('useTabStripPointerActivation', () => {
     const { result } = renderHook(() => useTabStripPointerActivation({ onActivate }))
 
     act(() => result.current.onPointerDown(pointerDownEvent(10, 10)))
-    act(() => window.dispatchEvent(new Event('focus')))
+    void act(() => window.dispatchEvent(new Event('focus')))
     firePointer('pointerup', 11, 11)
 
     expect(onActivate).toHaveBeenCalledTimes(1)
@@ -61,8 +61,8 @@ describe('useTabStripPointerActivation', () => {
     const { result } = renderHook(() => useTabStripPointerActivation({ onActivate }))
 
     act(() => result.current.onPointerDown(pointerDownEvent(10, 10)))
-    act(() => window.dispatchEvent(new Event('focus')))
-    act(() => window.dispatchEvent(new Event('focus')))
+    void act(() => window.dispatchEvent(new Event('focus')))
+    void act(() => window.dispatchEvent(new Event('focus')))
     firePointer('pointerup', 11, 11)
 
     expect(onActivate).not.toHaveBeenCalled()

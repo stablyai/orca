@@ -132,7 +132,7 @@ describe('remote reattach type-ahead', () => {
       })
     } finally {
       resolution.resolve()
-      transport.destroy?.()
+      void transport.destroy?.()
     }
   })
 
@@ -151,7 +151,7 @@ describe('remote reattach type-ahead', () => {
     // The interrupt carries the typing queued ahead of it, so order holds across both paths.
     expect(acceptedSends).toEqual(['before\x03'])
     await vi.waitFor(() => expect(inputFrameTexts()).toEqual(['after\r']))
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it.each([undefined, 'remote:env-2@@terminal-1', 'remote:terminal-1'])(
@@ -166,7 +166,7 @@ describe('remote reattach type-ahead', () => {
       await connecting
       await flushAsyncTicks()
       expect(inputFrameTexts()).toEqual([])
-      transport.destroy?.()
+      void transport.destroy?.()
     }
   )
 
@@ -187,7 +187,7 @@ describe('remote reattach type-ahead', () => {
       await expect(accepted).resolves.toBe(false)
       await flushAsyncTicks()
       expect(inputFrameTexts()).toEqual([])
-      transport.destroy?.()
+      void transport.destroy?.()
     }
   )
 
@@ -216,7 +216,7 @@ describe('remote reattach type-ahead', () => {
       expect(transport.sendInput('on-new-snapshot', 'driving')).toBe(true)
       await vi.waitFor(() => expect(inputFrameTexts().join('')).toMatch(/on-new-snapshot$/))
       expect(inputFrameTexts().join('')).toBe(`${delivered}on-new-snapshot`)
-      transport.destroy?.()
+      void transport.destroy?.()
     }
   )
 
@@ -228,20 +228,20 @@ describe('remote reattach type-ahead', () => {
       if (action === 'attach') {
         transport.attach({ existingPtyId: ORIGINAL_ID, callbacks: {} })
         await expect(preEntry).resolves.toBe(false)
-        transport.destroy?.()
+        void transport.destroy?.()
         return
       }
       const connecting = transport.connect({ url: '', sessionId: ORIGINAL_ID, callbacks: {} })
       await waitForCreate()
       const accepted = transport.sendInputAccepted?.('stale\r', 'driving')
-      transport[action]?.()
+      void transport[action]?.()
       await expect(preEntry).resolves.toBe(false)
       await expect(accepted).resolves.toBe(false)
       created.resolve('terminal-1')
       await connecting
       await flushAsyncTicks()
       expect(inputFrameTexts()).toEqual([])
-      transport.destroy?.()
+      void transport.destroy?.()
     }
   )
 
@@ -259,7 +259,7 @@ describe('remote reattach type-ahead', () => {
       await connecting
       await completeAttach()
       await vi.waitFor(() => expect(inputFrameTexts().join('')).toBe('echo hi\r'))
-      transport.destroy?.()
+      void transport.destroy?.()
     })
 
     it('drops its typing when startup work appeared before the terminal bound', async () => {
@@ -276,7 +276,7 @@ describe('remote reattach type-ahead', () => {
       expect(transport.sendInput('live', 'driving')).toBe(true)
       await vi.waitFor(() => expect(inputFrameTexts().join('')).toMatch(/live$/))
       expect(inputFrameTexts().join('')).toBe('live')
-      transport.destroy?.()
+      void transport.destroy?.()
     })
 
     it('drops its typing when the first create binds no terminal', async () => {
@@ -291,7 +291,7 @@ describe('remote reattach type-ahead', () => {
       await expect(accepted).resolves.toBe(false)
       await flushAsyncTicks()
       expect(inputFrameTexts()).toEqual([])
-      transport.destroy?.()
+      void transport.destroy?.()
     })
     // Why: the host adopts a live terminal for this tab and leaf, or restores history into a new
     // one; typing made for a blank pane must not run in either (#10065).
@@ -314,7 +314,7 @@ describe('remote reattach type-ahead', () => {
       expect(transport.sendInput('live', 'driving')).toBe(true)
       await vi.waitFor(() => expect(inputFrameTexts().join('')).toMatch(/live$/))
       expect(inputFrameTexts().join('')).toBe('live')
-      transport.destroy?.()
+      void transport.destroy?.()
     })
 
     it('drops typing held across a failed first create when a later connect creates', async () => {
@@ -338,7 +338,7 @@ describe('remote reattach type-ahead', () => {
       expect(transport.sendInput('live', 'driving')).toBe(true)
       await vi.waitFor(() => expect(inputFrameTexts().join('')).toMatch(/live$/))
       expect(inputFrameTexts().join('')).toBe('live')
-      transport.destroy?.()
+      void transport.destroy?.()
     })
 
     it('drops its typing when replayed history appeared before the terminal bound', async () => {
@@ -356,7 +356,7 @@ describe('remote reattach type-ahead', () => {
       expect(transport.sendInput('live', 'driving')).toBe(true)
       await vi.waitFor(() => expect(inputFrameTexts().join('')).toMatch(/live$/))
       expect(inputFrameTexts().join('')).toBe('live')
-      transport.destroy?.()
+      void transport.destroy?.()
     })
   })
 
@@ -382,7 +382,7 @@ describe('remote reattach type-ahead', () => {
     it('delivers typing from before and during the attach to the terminal it names', async () => {
       const transport = await attachRemountedPane()
       await vi.waitFor(() => expect(inputFrameTexts().join('')).toBe('echo hi\r'))
-      transport.destroy?.()
+      void transport.destroy?.()
     })
 
     it('drops that typing when the host now holds another terminal', async () => {
@@ -392,7 +392,7 @@ describe('remote reattach type-ahead', () => {
       expect(transport.sendInput('live', 'driving')).toBe(true)
       await vi.waitFor(() => expect(inputFrameTexts().join('')).toMatch(/live$/))
       expect(inputFrameTexts().join('')).not.toContain('echo')
-      transport.destroy?.()
+      void transport.destroy?.()
     })
 
     it('drops typing from before the attach when the pane has startup work', async () => {
@@ -400,7 +400,7 @@ describe('remote reattach type-ahead', () => {
       expect(transport.sendInput('live', 'driving')).toBe(true)
       await vi.waitFor(() => expect(inputFrameTexts().join('')).toMatch(/live$/))
       expect(inputFrameTexts().join('')).toBe('ho hi\rlive')
-      transport.destroy?.()
+      void transport.destroy?.()
     })
   })
 })

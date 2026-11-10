@@ -264,7 +264,7 @@ describe('a withdrawn message put back during an IME composition', () => {
 
     fireEvent.compositionStart(input)
     changePrompt(input, 'abc안')
-    act(() => appendNativeChatDraftCache(pane, 'withdrawn'))
+    void act(() => appendNativeChatDraftCache(pane, 'withdrawn'))
     changePrompt(input, 'abc안녕')
     fireEvent.compositionEnd(input, { data: '안녕' })
 
@@ -279,7 +279,7 @@ describe('a withdrawn message put back during an IME composition', () => {
     changePrompt(input, 'abc')
     fireEvent.compositionStart(input)
     changePrompt(input, 'abc안')
-    act(() => appendNativeChatDraftCache(pane, 'withdrawn'))
+    void act(() => appendNativeChatDraftCache(pane, 'withdrawn'))
     fireEvent.compositionEnd(input, { data: '안' })
 
     changePrompt(input, 'abc안\n\nwithdrawn!')
@@ -303,7 +303,7 @@ describe('a withdrawn message put back during an IME composition', () => {
 
     fireEvent.compositionStart(input)
     changePrompt(input, '안녕하')
-    act(() => appendNativeChatDraftCache(pane, 'withdrawn'))
+    void act(() => appendNativeChatDraftCache(pane, 'withdrawn'))
     await act(async () => {
       dispatch.resolve(PASS_THROUGH)
       await dispatch.promise

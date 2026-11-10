@@ -37,6 +37,7 @@ export async function readCheckedDragTempSourceBytes(
       signal,
       window: { offset: 0, length: source.size }
     }
+    // oxlint-disable-next-line typescript/no-misused-promises -- Promise#finally awaits this check and propagates its DropCopyError
   ).finally(async () => {
     if (!isSameSnapshot(await source.handle.stat(), source.snapshot)) {
       throw new DropCopyError('changed')

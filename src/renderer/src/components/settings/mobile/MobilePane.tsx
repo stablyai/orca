@@ -184,7 +184,7 @@ export function MobilePane(): React.JSX.Element {
           return
         }
         if (result.available) {
-          useAppStore.getState().recordFeatureInteraction('mobile-pairing')
+          void useAppStore.getState().recordFeatureInteraction('mobile-pairing')
           if (mountedRef.current) {
             setQrDataUrl(result.qrDataUrl)
             setQrSize(result.qrSize)

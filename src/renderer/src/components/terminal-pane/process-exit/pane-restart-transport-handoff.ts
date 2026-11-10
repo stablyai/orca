@@ -11,6 +11,6 @@ export function releasePaneTransportForRestart(transport: PtyTransport | undefin
   if (replacesPtyId) {
     transport?.detach?.({ preserveExitObserver: false })
   }
-  transport?.destroy?.()
+  void transport?.destroy?.()
   return replacesPtyId
 }

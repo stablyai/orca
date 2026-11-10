@@ -164,7 +164,7 @@ export function useRemoteFileBrowserPathPreview({
       }
       debounceTimerRef.current = setTimeout(() => {
         debounceTimerRef.current = null
-        resolvePathInput(raw)
+        void resolvePathInput(raw)
       }, PATH_DEBOUNCE_MS)
     },
     [clearFileHint, preview, resolvePathInput, pathFlavor, setFilter]
@@ -190,7 +190,7 @@ export function useRemoteFileBrowserPathPreview({
         }
         const value = inputRef.current?.value ?? ''
         if (!isRemoteFileBrowserPathResolveTextTooLarge(value) && isPathMode(value, pathFlavor)) {
-          resolvePathInput(value)
+          void resolvePathInput(value)
         }
       }, 0)
     },

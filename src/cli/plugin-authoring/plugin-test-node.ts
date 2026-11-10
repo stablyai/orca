@@ -55,6 +55,7 @@ export async function selectPluginTestNode(
       maxOutputBytes: 4096
     })
     .catch(() => null)
+    // oxlint-disable-next-line typescript/no-misused-promises -- Promise#finally awaits the temp-dir removal
     .finally(() => rm(empty, { recursive: true, force: true }))
   const answer = probe?.code === 0 ? probe.stdout.trim() : ''
   const space = answer.indexOf(' ')

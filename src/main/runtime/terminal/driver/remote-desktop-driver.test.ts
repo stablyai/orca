@@ -497,7 +497,7 @@ describe('terminal layout runtime dispatch and ownership', () => {
     expect(secondResize).not.toHaveBeenCalled()
 
     await second.handleMobileSubscribe('pty-1', 'client', { cols: 60, rows: 30 })
-    first.onPtyExit('pty-1', 0)
+    void first.onPtyExit('pty-1', 0)
 
     expect(second.isMobileSubscriberActive('pty-1')).toBe(true)
     expect(second.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'client' })

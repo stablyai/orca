@@ -115,7 +115,7 @@ export function MonacoGutterContextMenu({
               { relativePath, ...getRemoteUrlLineRange(line, selection) }
             )
             if (url) {
-              window.api.ui.writeClipboardText(url)
+              void window.api.ui.writeClipboardText(url)
             }
           }}
         >

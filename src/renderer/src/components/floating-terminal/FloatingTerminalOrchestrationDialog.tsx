@@ -123,7 +123,7 @@ export function FloatingTerminalOrchestrationDialog({
           hideHeader
           installLabel={t('auto.components.skills.SkillInstallDialog.39acb9e8f4', 'Install skill')}
           onBeforeInstall={() => {
-            useAppStore.getState().recordFeatureInteraction('agent-orchestration-setup')
+            void useAppStore.getState().recordFeatureInteraction('agent-orchestration-setup')
           }}
           onRecheck={recheckOrchestrationSkill}
         />

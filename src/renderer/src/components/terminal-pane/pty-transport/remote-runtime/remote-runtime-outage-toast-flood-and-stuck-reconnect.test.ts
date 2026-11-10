@@ -243,7 +243,7 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
 
     expect(onError).not.toHaveBeenCalled()
     expect(recoveryPhases).toContain('backoff')
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('keeps manual recovery available after a fatal resubscribe error', async () => {
@@ -311,7 +311,7 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
     await vi.waitFor(() =>
       expect(runtimeSubscribe.mock.calls.length).toBeGreaterThan(subscribeCallsBeforeTriggers)
     )
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('re-materializes a pending host surface on online and manual recovery', async () => {
@@ -406,7 +406,7 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
       emitSnapshot(latestSubscribePayload().streamId, 'rematerialized')
       expect(transport.isConnected()).toBe(true)
       expect(transport.getPtyId()).toBe('remote:env-1@@terminal-2')
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }

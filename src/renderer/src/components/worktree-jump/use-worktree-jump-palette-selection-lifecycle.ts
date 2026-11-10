@@ -81,7 +81,7 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
   const hasAnyMiddleResults = middleItems.length > 0
   useEffect(() => {
     if (visible && !wasVisibleRef.current) {
-      recordFeatureInteraction('cmd-j')
+      void recordFeatureInteraction('cmd-j')
       createLookupGuard.invalidate()
       const appState = useAppStore.getState()
       activeGroupSnapshotRef.current = captureCmdJActiveGroupSnapshot(appState, activeWorktreeId)

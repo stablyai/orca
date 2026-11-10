@@ -67,7 +67,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       } else {
         expect(call?.params).not.toHaveProperty('terminalKittyKeyboardProtocol')
       }
-      transport.destroy?.()
+      void transport.destroy?.()
     }
   )
 
@@ -95,7 +95,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     })
 
     const connect = transport.connect({ url: '', callbacks: {} })
-    transport.destroy?.()
+    void transport.destroy?.()
     resolveCreate({ ok: true, result: { terminal: { handle: 'terminal-late' } } })
     await connect
 
@@ -137,7 +137,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       params: { terminal: 'terminal-late' },
       timeoutMs: 15_000
     })
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('does not close a live owner adopted after provisional pane handoff', async () => {
@@ -175,7 +175,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         expect.objectContaining({ method: 'terminal.ensureAgentSession' })
       )
     )
-    transport.destroy?.()
+    void transport.destroy?.()
     resolveEnsure({
       ok: true,
       result: {
@@ -224,7 +224,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         expect.objectContaining({ method: 'terminal.createAgentSession' })
       )
     )
-    transport.destroy?.()
+    void transport.destroy?.()
     resolveCreate({
       ok: true,
       result: {
@@ -549,7 +549,7 @@ describe('createRemoteRuntimePtyTransport', () => {
           expect.objectContaining({ method: 'terminal.resolvePane' })
         )
       } finally {
-        transport.destroy?.()
+        void transport.destroy?.()
       }
     }
   )

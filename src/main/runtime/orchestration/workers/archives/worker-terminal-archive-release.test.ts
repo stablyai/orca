@@ -87,7 +87,7 @@ describe('released worker archives preserve the host screen', () => {
     vi.mocked(h.runtime.closeTerminal).mockImplementation(async (handle) => {
       const archive = h.db.getWorkerTerminalArchive(dispatchId)
       expect(archive?.content).toContain(ARCHIVE_SCREEN_LINES[1])
-      fixture.runtime.onPtyExit('pty-1', 0)
+      void fixture.runtime.onPtyExit('pty-1', 0)
       return { handle, tabId: 'tab-worker', ptyKilled: true }
     })
 
@@ -143,7 +143,7 @@ describe('released worker archives preserve the host screen', () => {
         fixture.runtime.readTerminal(fixture.handle, opts)
       )
       vi.mocked(h.runtime.closeTerminal).mockImplementation(async (handle) => {
-        fixture.runtime.onPtyExit('pty-1', 0)
+        void fixture.runtime.onPtyExit('pty-1', 0)
         return { handle, tabId: 'tab-worker', ptyKilled: true }
       })
       await h.call('orchestration.workerRelease', { dispatch: dispatchId })

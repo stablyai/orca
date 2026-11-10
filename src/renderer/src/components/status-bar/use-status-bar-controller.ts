@@ -271,7 +271,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const handleUsageMenuOpenChange = (nextOpen: boolean): void => {
     if (nextOpen) {
       usageMenuFocusHandoff.reset()
-      recordFeatureInteraction('usage-tracking')
+      void recordFeatureInteraction('usage-tracking')
     }
     setUsageMenuOpen(nextOpen)
   }

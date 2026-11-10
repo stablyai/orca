@@ -44,6 +44,8 @@ export function cancelPendingWatcherSubscribe({
     return
   }
   // Only the child knows native setup state; prove its teardown before settling the caller.
-  cancelledSubscribes.begin(record.id, child, error, pending.reject, () => restartChild(child))
+  cancelledSubscribes.begin(record.id, child, error, pending.reject, () => {
+    void restartChild(child)
+  })
   sendCancel(child, record.id)
 }

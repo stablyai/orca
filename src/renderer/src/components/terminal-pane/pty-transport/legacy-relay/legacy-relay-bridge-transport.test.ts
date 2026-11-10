@@ -354,7 +354,7 @@ describe('a runtime pane bridged to an older relay’s terminal', () => {
     bridge.attach.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)))
     publishPanes([{ ptyId: PTY, targetId: 'ssh-box', tabId: 'tab-1', state: 'live' }])
     await vi.waitFor(() => expect(bridge.attach).toHaveBeenCalledTimes(2))
-    transport.destroy?.()
+    void transport.destroy?.()
     answer({ status: 'attached', replay: '', acquisitionId: 9 })
     await vi.waitFor(() =>
       expect(bridge.detach).toHaveBeenCalledWith({ ptyId: PTY, acquisitionId: 9 })
@@ -380,7 +380,7 @@ describe('a runtime pane bridged to an older relay’s terminal', () => {
     expect(bridge.close).not.toHaveBeenCalled()
     const closed = createLegacyRelayBridgeTransport(PTY, innerTransport())
     await closed.connect({ url: '', sessionId: PTY, callbacks: callbacks() })
-    closed.destroy?.()
+    void closed.destroy?.()
     expect(bridge.close).toHaveBeenCalledWith({ ptyId: PTY })
   })
 

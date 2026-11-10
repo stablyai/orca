@@ -67,7 +67,7 @@ export function FloatingWorkspacePane({
     if (!path) {
       return
     }
-    useAppStore.getState().recordFeatureInteraction('floating-workspace')
+    void useAppStore.getState().recordFeatureInteraction('floating-workspace')
     updateSettings({ floatingTerminalCwd: path })
   }
 
@@ -113,9 +113,9 @@ export function FloatingWorkspacePane({
           checked={settings.floatingTerminalEnabled}
           onChange={() => {
             if (!settings.floatingTerminalEnabled) {
-              useAppStore.getState().recordFeatureInteraction('floating-workspace')
+              void useAppStore.getState().recordFeatureInteraction('floating-workspace')
             } else {
-              useAppStore.getState().recordFeatureInteraction('floating-workspace-hidden')
+              void useAppStore.getState().recordFeatureInteraction('floating-workspace-hidden')
             }
             updateSettings({
               floatingTerminalEnabled: !settings.floatingTerminalEnabled
@@ -177,7 +177,7 @@ export function FloatingWorkspacePane({
                 updateSettings({
                   floatingTerminalTriggerLocation: value as FloatingTerminalTriggerLocation
                 })
-                useAppStore.getState().recordFeatureInteraction('floating-workspace')
+                void useAppStore.getState().recordFeatureInteraction('floating-workspace')
               }}
             >
               <ToggleGroupItem value="floating-button">

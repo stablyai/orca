@@ -56,7 +56,7 @@ describe('terminal rename before renderer graph hydration', () => {
       expect(renameTerminal).toHaveBeenCalledWith('host-tab', title)
       // Main-owned last-pane exit closes its tab; model restart with a fresh runtime over the saved session instead.
       if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
-        runtime.onPtyExit('omp-initial-pty', 0)
+        void runtime.onPtyExit('omp-initial-pty', 0)
       }
       const restored = new OrcaRuntimeService(checkedStore)
       restored.setPtyController({

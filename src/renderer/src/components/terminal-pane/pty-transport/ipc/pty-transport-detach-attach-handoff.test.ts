@@ -60,7 +60,7 @@ describe('createIpcPtyTransport', () => {
       await transport.connect({ url: '', callbacks: {} })
       expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(1)
 
-      transport[teardown]?.()
+      void transport[teardown]?.()
 
       expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(0)
     }

@@ -24,7 +24,7 @@ vi.mock(
 )
 afterEach(async () => {
   const remaining = await releaseAgentSessionRecordStore()
-  remaining?.journalDatabase.close()
+  await remaining?.journalDatabase.close()
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
 })
@@ -69,7 +69,7 @@ it('publishes a restored session peer in the first completed Crew frame', async 
     if (!released) {
       throw new Error('Expected fixture-owned seeded slot')
     }
-    released.journalDatabase.close()
+    await released.journalDatabase.close()
     h.db.insertMessage({
       from: `orca_session_id:${ids[1]}`,
       to: `orca_session_id:${ids[0]}`,
@@ -100,7 +100,7 @@ it('publishes a restored session peer in the first completed Crew frame', async 
     controller.abort()
     await subscription
     const opened = await releaseAgentSessionRecordStore()
-    opened?.journalDatabase.close()
+    await opened?.journalDatabase.close()
     h.close()
     profilePath.mockRestore()
   }

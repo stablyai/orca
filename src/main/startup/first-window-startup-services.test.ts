@@ -30,7 +30,7 @@ describe('startFirstWindowStartupServices', () => {
     expect(events).toEqual(['daemon-started', 'hooks-started'])
 
     let completed = false
-    started.firstWindowReady.then(() => {
+    void started.firstWindowReady.then(() => {
       completed = true
     })
 

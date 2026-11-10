@@ -14,7 +14,7 @@ export abstract class CodexRuntimeHomeSync extends CodexRuntimeHomeWsl {
     launchEnv?: NodeJS.ProcessEnv
   ): void {
     if (target?.runtime === 'wsl') {
-      this.startLegacyWslAuthDrain(this.resolveWslDefaultTarget(target))
+      void this.startLegacyWslAuthDrain(this.resolveWslDefaultTarget(target))
       return
     }
 
