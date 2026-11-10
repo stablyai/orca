@@ -1,26 +1,6 @@
 // Run-home half of today's remote attachments (`worker-start --on` drives a worker on a paired Orca).
-// Frozen: bug fixes only. Code outside this folder imports it only through this module.
-import { attachFederatedDispatchStore } from './federated-dispatch-store'
-import type { FederatedDispatchStoreMethods } from './federated-dispatch-store'
-import { attachFederatedHomeAutoReleaseStore } from './federated-home-auto-release-store'
-import type { FederatedHomeAutoReleaseStoreMethods } from './federated-home-auto-release-store'
-import { attachFederatedWorkerStartReconcile } from './federated-worker-start-reconcile'
-import type { FederatedWorkerStartReconcileMethods } from './federated-worker-start-reconcile'
-import { attachFederationRelayImport } from './federation-relay-import'
-import type { FederationRelayImportMethods } from './federation-relay-import'
-
-export type LegacyRemoteHomeDbMethods = FederatedWorkerStartReconcileMethods &
-  FederatedDispatchStoreMethods &
-  FederationRelayImportMethods &
-  FederatedHomeAutoReleaseStoreMethods
-
-export function attachLegacyRemoteHomeDbMethods(ctor: { prototype: object }): void {
-  attachFederatedWorkerStartReconcile(ctor)
-  attachFederatedDispatchStore(ctor)
-  attachFederationRelayImport(ctor)
-  attachFederatedHomeAutoReleaseStore(ctor)
-}
-
+// Frozen: bug fixes only. Code outside this folder imports it only through this module,
+// except the DB layer, which uses legacy-remote-home-db-methods.ts.
 /** The one place a worker start leaves the local path: `worker-start --on <server>`. */
 export { startFederatedWorker } from './federated-worker-start'
 
