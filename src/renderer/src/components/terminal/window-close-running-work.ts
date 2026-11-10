@@ -19,6 +19,7 @@ export type WindowCloseRunningWork =
   | { kind: 'chat' }
   | { kind: 'pinned' }
 
+/** Returns true if any workspace across unified or legacy stores contains at least one pinned tab. */
 function hasPinnedTabs(state: AppState): boolean {
   for (const tabs of Object.values(state.unifiedTabsByWorktree ?? {})) {
     if (tabs?.some((tab) => tab.isPinned === true)) {
@@ -33,6 +34,7 @@ function hasPinnedTabs(state: AppState): boolean {
   return false
 }
 
+/** Collects all terminal tab and entity IDs across legacy and unified tab collections. */
 function collectAllTerminalTabIds(state: AppState): string[] {
   const ids = new Set<string>()
   for (const tabs of Object.values(state.tabsByWorktree ?? {})) {
@@ -57,6 +59,10 @@ function collectAllTerminalTabIds(state: AppState): string[] {
   return [...ids]
 }
 
+/**
+ * Probes structured agent sessions to determine if any session is actively running or busy.
+ * Defaults to busy on probe failure or timeout to avoid silently closing an unverified chat.
+ */
 async function checkAnyAgentSessionBusy(
   sessions: { workspaceId: string; tab: Tab }[]
 ): Promise<boolean> {
@@ -73,14 +79,20 @@ async function checkAnyAgentSessionBusy(
             resolve(busy)
           }
         }
-        const timer = setTimeout(() => finish(false), WINDOW_CLOSE_PROBE_TIMEOUT_MS)
-        admitStructuredAgentSession(workspaceId, tab, 'window-close', (busy) => {
+        // Why: an unanswered or failed probe cannot prove the chat is idle; mirror the helper's busy-on-deadline fallback.
+        const timer = setTimeout(() => finish(true), WINDOW_CLOSE_PROBE_TIMEOUT_MS)
+        try {
+          admitStructuredAgentSession(workspaceId, tab, 'window-close', (busy) => {
+            clearTimeout(timer)
+            finish(busy)
+          }).catch(() => {
+            clearTimeout(timer)
+            finish(true)
+          })
+        } catch {
           clearTimeout(timer)
-          finish(busy)
-        }).catch(() => {
-          clearTimeout(timer)
-          finish(false)
-        })
+          finish(true)
+        }
       })
   )
   const results = await Promise.all(probes)

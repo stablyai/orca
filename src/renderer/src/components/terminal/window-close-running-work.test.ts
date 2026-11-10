@@ -452,4 +452,31 @@ describe('assessWindowCloseRunningWork', () => {
       kind: 'chat'
     })
   })
+
+  it('treats an unresponsive chat probe as busy after timeout to prevent silent closure', async () => {
+    vi.useFakeTimers()
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: null },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'agent-1',
+            entityId: 'session-1',
+            contentType: 'agent-session'
+          }
+        ]
+      },
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: {}
+    })
+    admitStructuredAgentSessionMock.mockReturnValue(new Promise(() => {}))
+
+    const pending = assessWindowCloseRunningWork({ isQuitting: false })
+    await vi.advanceTimersByTimeAsync(WINDOW_CLOSE_PROBE_TIMEOUT_MS)
+
+    await expect(pending).resolves.toEqual({
+      kind: 'chat'
+    })
+  })
 })
