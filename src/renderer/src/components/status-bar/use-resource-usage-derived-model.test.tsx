@@ -189,3 +189,65 @@ describe('Resource Manager folder ownership', () => {
     expect(groups.some((project) => project.repoId === foreign.repoId)).toBe(false)
   })
 })
+
+describe('Resource Manager paired-server totals', () => {
+  it('adds each sampled server to the summary and terminal count', () => {
+    const snapshot = {
+      worktrees: [],
+      host: { totalMemory: 16384 },
+      totalMemory: 2048,
+      totalCpu: 2,
+      processMemoryMetric: 'rss'
+    } as unknown as MemorySnapshot
+    const serverRow = (id: string, memory: number, sessions: number): WorktreeMemory => ({
+      worktreeId: id,
+      worktreeName: id,
+      repoId: 'repo',
+      repoName: 'Repo',
+      cpu: 10,
+      memory,
+      history: [],
+      sessions: Array.from({ length: sessions }, (_, i) => ({
+        sessionId: `${id}-${i}`,
+        paneKey: null,
+        pid: i + 1,
+        cpu: 1,
+        memory: 1
+      }))
+    })
+    const { result } = renderHook(() =>
+      useResourceUsageDerivedModel({
+        open: true,
+        resourceSnapshot: snapshot,
+        runtimeHostResources: [
+          {
+            hostId: 'runtime:one',
+            hostLabel: 'One',
+            worktrees: [serverRow('a', 3000, 2), serverRow('b', 1000, 1)]
+          },
+          { hostId: 'runtime:two', hostLabel: 'Two', worktrees: [serverRow('c', 500, 4)] }
+        ],
+        sessions: [],
+        resourceSessionBindings: {
+          tabsByWorktree: {},
+          ptyIdsByTabId: {},
+          workspaceSessionReady: true
+        },
+        runtimePaneTitlesByTabId: {},
+        repos: [],
+        allWorktrees: [],
+        projectGroups: [],
+        browserTabsByWorktree: {},
+        workspaceSessionReady: true,
+        sessionCount: 1,
+        sessionsError: false,
+        memorySnapshotError: null,
+        snapshot,
+        spaceScanReady: false
+      })
+    )
+    expect(result.current.totalMemory).toBe(6548)
+    expect(result.current.totalCpu).toBe(32)
+    expect(result.current.triggerSessionCount).toBe(8)
+  })
+})
