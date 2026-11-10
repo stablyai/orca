@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Repo } from '../../../../../../shared/repo-types'
 import { makeWorktree } from '../worktree.test-fixture'
 import {
   createTestStore,
@@ -22,6 +23,20 @@ const review = {
   number: 37557,
   title: 'Review',
   url: 'https://github.com/stablyai/orca/pull/37557'
+}
+
+// The row's own Repo: without it a URL-linked PR may be another repository's, which a branch switch keeps.
+const repo: Repo = {
+  id: 'repo1',
+  path: '/path',
+  displayName: 'orca',
+  badgeColor: '#000',
+  addedAt: 0,
+  gitRemoteIdentity: {
+    canonicalKey: 'github.com/stablyai/orca',
+    remoteName: 'origin',
+    remoteUrl: 'https://github.com/stablyai/orca.git'
+  }
 }
 
 function linkedWorktree() {
@@ -48,7 +63,7 @@ describe('review retention across detached HEAD', () => {
     const local = linkedWorktree()
     const remote = { ...local, hostId: 'ssh:box-b' as const, instanceId: 'remote-instance' }
     const store = createTestStore()
-    store.setState({ worktreesByRepo: { repo1: [local, remote] } })
+    store.setState({ repos: [repo], worktreesByRepo: { repo1: [local, remote] } })
 
     store.getState().updateWorktreeGitIdentity(id, { branch: null }, 'local')
     expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({

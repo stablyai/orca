@@ -25,6 +25,9 @@ export const HOSTED_REVIEW_METHODS = [
         ...(params.userRefresh === true ? { userRefresh: true } : {}),
         ...(params.reportReadOutcome === true ? { reportReadOutcome: true } : {}),
         linkedGitHubPR: params.linkedGitHubPR ?? null,
+        ...(params.linkedGitHubPRRepository
+          ? { linkedGitHubPRRepository: params.linkedGitHubPRRepository }
+          : {}),
         ...(fallbackGitHubPR !== null ? { fallbackGitHubPR } : {}),
         linkedGitLabMR: params.linkedGitLabMR ?? null,
         linkedBitbucketPR: params.linkedBitbucketPR ?? null,

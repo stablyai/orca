@@ -1,5 +1,6 @@
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { HostedReviewInfo } from '../../shared/source-control/hosted-review/hosted-review-contracts'
+import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 
 export type CacheEntry = {
   review: HostedReviewInfo | null
@@ -14,6 +15,7 @@ export type HostedReviewBranchCacheIdentity = {
   executionHostId: ExecutionHostId
   branch: string
   linkedGitHubPR?: number | null
+  linkedGitHubPRRepository?: GitHubOwnerRepo | null
   fallbackGitHubPR?: number | null
   linkedGitLabMR?: number | null
   linkedBitbucketPR?: number | null

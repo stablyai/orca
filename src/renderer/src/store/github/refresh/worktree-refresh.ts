@@ -1,6 +1,8 @@
 import type { AppState } from '../../types'
 import type { GitHubPRRefreshCandidate } from '../../../../../shared/github/pull-request-refresh-types'
 import type { Repo } from '../../../../../shared/repo-types'
+import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
+import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import {
   getRepoExecutionHostId,
@@ -23,6 +25,7 @@ import { settingsForGitHubRepoOwner } from '../work-items/work-item-routing'
 import { githubHostedReviewFallbackPRNumber } from '../pull-requests/pr-result-routing'
 import { resolvePRBranchFallback } from '../../../../../shared/github/pr-branch-fallback-rule'
 import { selectWorktreesByRepo } from '../../workspaces/catalog/workspace-record-fields'
+import { getLinkedGitHubPRRepository } from '../pull-requests/linked-pr-repository'
 
 export function findWorktreeById(
   state: AppState,
@@ -206,14 +209,25 @@ export function isStaleExactLinkedPRLookup(
   state: AppState,
   worktreeId: string | undefined,
   linkedPRNumber: number | null | undefined,
-  executionHostId?: string,
+  executionHostId: string | undefined,
+  linkedPRRepository: GitHubOwnerRepo | null,
   lookupIndex?: WorktreeLookupIndex
 ): boolean {
   if (!worktreeId || linkedPRNumber == null) {
     return false
   }
   const worktree = findWorktreeById(state, worktreeId, executionHostId, lookupIndex)
-  return worktree?.linkedPR !== linkedPRNumber
+  if (!worktree || worktree.linkedPR !== linkedPRNumber) {
+    return true
+  }
+  // Why: relinking the same number to another repository makes the older lookup stale too;
+  // the row is read under the Repo its request was built from.
+  const repo = findWorktreeReviewOwner(state, worktreeId, executionHostId, lookupIndex)?.repo
+  const repositoryKey = (repository: GitHubOwnerRepo | null) =>
+    repository ? githubRepoIdentityKey(repository) : null
+  return (
+    repositoryKey(getLinkedGitHubPRRepository(worktree, repo)) !== repositoryKey(linkedPRRepository)
+  )
 }
 
 export function buildPRRefreshCandidate(
@@ -261,6 +275,7 @@ export function buildPRRefreshCandidate(
   const sshStatus = repo.connectionId
     ? state.sshConnectionStates.get(repo.connectionId)?.status
     : null
+  const linkedPRRepository = getLinkedGitHubPRRepository(worktree, repo)
   return {
     repoId: repo.id,
     repoPath: repoPath ?? repo.path,
@@ -273,6 +288,7 @@ export function buildPRRefreshCandidate(
     isSelected: state.activeWorktreeId === worktree.id,
     // Why: persisted linked PR metadata is exact; PR cache numbers are only fallback hints after branch-lookup misses.
     linkedPRNumber: worktree.linkedPR ?? null,
+    ...(linkedPRRepository ? { linkedPRRepository } : {}),
     fallbackPRNumber,
     fallbackPRSource,
     isBare: worktree.isBare,

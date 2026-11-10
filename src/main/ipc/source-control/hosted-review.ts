@@ -17,6 +17,7 @@ import {
   hostedReviewForBranchReply
 } from '../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { readHostedReviewForBranch } from '../../source-control/hosted-review'
+import { linkedPRRepositoryHint } from '../../github/client/lookup/linked-pr-repository'
 import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import { listRepoWorktreeGraph } from '../../workspaces/catalog/repo-worktrees'
 import {
@@ -120,6 +121,8 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
     // Sidebar cards and the checks panel poll this for every provider; gh/glab in WSL boot it (E9).
     // Only an explicit Refresh may start a stopped distro; admissionTier is priority only, and
     // the visible scheduler sends 'interactive' for the selected card on a timer.
+    const linkedGitHubPRRepository =
+      args.linkedGitHubPR != null ? linkedPRRepositoryHint(args.linkedGitHubPRRepository) : null
     const read = await guardWslUncPathAccess(
       repo.path,
       () =>
@@ -128,6 +131,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
           executionHostId: getStoredRepoExecutionHostId(repo),
           branch: args.branch,
           linkedGitHubPR: args.linkedGitHubPR ?? null,
+          ...(linkedGitHubPRRepository ? { linkedGitHubPRRepository } : {}),
           fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
           linkedGitLabMR: args.linkedGitLabMR ?? null,
           linkedBitbucketPR: args.linkedBitbucketPR ?? null,
@@ -142,7 +146,11 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
       { wake: args.wakeWslDistro === true, wslDistro: localGitOptions.wslDistro }
     )
     const review = read.review
-    if (review?.provider === 'github' && !stats.hasCountedPR(review.url)) {
+    if (
+      review?.provider === 'github' &&
+      !review.linkedFromOtherRepository &&
+      !stats.hasCountedPR(review.url)
+    ) {
       stats.record({
         type: 'pr_created',
         at: Date.now(),

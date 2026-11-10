@@ -11,6 +11,7 @@ import {
   type HostedReviewClearUpdates
 } from '../../../../../../shared/worktree/hosted-review-branch-ownership'
 import { observeDetachedHostedReviewOwner } from './detached-hosted-review-owners'
+import { keepOtherRepositoryPRLink } from '../../../github/pull-requests/linked-pr-repository'
 import {
   applyHostedReviewLinkClear,
   getHostedReviewLinkMutationGeneration,
@@ -148,7 +149,11 @@ export function createUpdateWorktreeGitIdentity(
           hostId: worktree.hostId
         }
         const owner = observeDetachedHostedReviewOwner(worktreeId, copy.owner, worktree, nextBranch)
-        const clear = hostedReviewClearUpdates(owner, nextBranch, worktree)
+        const clear = keepOtherRepositoryPRLink(
+          hostedReviewClearUpdates(owner, nextBranch, worktree),
+          worktree,
+          s.repos
+        )
         if (clear) {
           shouldPersistHostedReviewClear = true
           clearedBranch = nextBranch

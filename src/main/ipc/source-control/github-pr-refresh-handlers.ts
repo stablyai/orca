@@ -7,6 +7,8 @@ import type {
   PRRefreshOutcome
 } from '../../../shared/github/pull-request-refresh-types'
 import type { Repo } from '../../../shared/repo-types'
+import type { GitHubOwnerRepo } from '../../../shared/github/pull-request-types'
+import { linkedPRRepositoryHint } from '../../github/client/lookup/linked-pr-repository'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { getPRForBranch } from '../../github/client/lookup/get-pr-for-branch'
 import type { GitHubPRBranchLookupOptions } from '../../github/client/lookup/pull-request-lookup-data'
@@ -45,7 +47,11 @@ export function registerGitHubPRRefreshHandlers(
   // The windows these handlers serve are the renderers the coordinator reports to.
   setPRRefreshRendererPort(electronPRRefreshRenderer)
   function recordPRIfNeeded(repo: Repo, outcome: PRRefreshOutcome): void {
-    if (outcome.kind === 'found' && !stats.hasCountedPR(outcome.pr.url)) {
+    if (
+      outcome.kind === 'found' &&
+      !outcome.pr.linkedFromOtherRepository &&
+      !stats.hasCountedPR(outcome.pr.url)
+    ) {
       stats.record({
         type: 'pr_created',
         at: Date.now(),
@@ -79,6 +85,7 @@ export function registerGitHubPRRefreshHandlers(
         repoPath: string
         branch: string
         linkedPRNumber?: number | null
+        linkedPRRepository?: GitHubOwnerRepo | null
         fallbackPRNumber?: number | null
         acceptMergedFallbackPR?: boolean
         currentHeadOid?: string | null
@@ -96,11 +103,14 @@ export function registerGitHubPRRefreshHandlers(
         typeof args.currentHeadOid === 'string' && args.currentHeadOid.trim().length > 0
           ? args.currentHeadOid.trim()
           : null
+      const linkedPRRepository =
+        args.linkedPRNumber != null ? linkedPRRepositoryHint(args.linkedPRRepository) : null
       const lookupOptions: GitHubPRBranchLookupOptions | undefined = hostedReviewOptions
         ? { ...hostedReviewOptions }
         : args.acceptMergedFallbackPR === true ||
             currentHeadOid !== null ||
-            args.userRefresh === true
+            args.userRefresh === true ||
+            linkedPRRepository
           ? {}
           : undefined
       if (lookupOptions && args.userRefresh === true) {
@@ -111,6 +121,9 @@ export function registerGitHubPRRefreshHandlers(
       }
       if (lookupOptions && currentHeadOid !== null) {
         lookupOptions.currentHeadOid = currentHeadOid
+      }
+      if (lookupOptions && linkedPRRepository) {
+        lookupOptions.linkedPRRepository = linkedPRRepository
       }
       const lookupOptionArgs: [] | [GitHubPRBranchLookupOptions] = lookupOptions
         ? [lookupOptions]
@@ -130,7 +143,7 @@ export function registerGitHubPRRefreshHandlers(
           ),
         { wake: args.wakeWslDistro === true }
       )
-      if (pr && !stats.hasCountedPR(pr.url)) {
+      if (pr && !pr.linkedFromOtherRepository && !stats.hasCountedPR(pr.url)) {
         stats.record({
           type: 'pr_created',
           at: Date.now(),

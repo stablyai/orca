@@ -9,6 +9,7 @@ import type {
   HostedReviewInfo
 } from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import { cachedHostedReviewOutcome } from '../../shared/source-control/hosted-review/hosted-review-contracts'
+import { githubRepoIdentityKey } from '../../shared/github/repository-identity-key'
 import {
   __resetHostedReviewActiveClaimsForTests,
   isActiveBranch,
@@ -69,6 +70,9 @@ export function hostedReviewBranchCacheKey(identity: HostedReviewBranchCacheIden
     identity.branch,
     // Each linked id selects a different lookup, so it belongs in the identity.
     identity.linkedGitHubPR ?? '',
+    identity.linkedGitHubPRRepository
+      ? githubRepoIdentityKey(identity.linkedGitHubPRRepository)
+      : '',
     identity.fallbackGitHubPR ?? '',
     identity.linkedGitLabMR ?? '',
     identity.linkedBitbucketPR ?? '',

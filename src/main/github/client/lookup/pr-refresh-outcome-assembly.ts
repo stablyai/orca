@@ -30,6 +30,7 @@ export function assemblePRRefreshFoundOutcome(args: {
   confirmedContainedHeadOid: string | null
   headDivergedFromMergedPRAtOid: string | null
   conflictSummary: PRConflictSummary | undefined
+  linkedFromOtherRepository?: boolean
 }): PRRefreshOutcome {
   const {
     data,
@@ -87,7 +88,8 @@ export function assemblePRRefreshFoundOutcome(args: {
       failingCheckNames: checkResult.failingCheckNames,
       prRepo: dataRepo ?? undefined,
       headRepo: dataHeadRepo ?? undefined,
-      conflictSummary
+      conflictSummary,
+      ...(args.linkedFromOtherRepository ? { linkedFromOtherRepository: true } : {})
     }
   }
   if (checksReadComplete) {

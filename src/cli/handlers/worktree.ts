@@ -60,6 +60,7 @@ import { assertGitLabLinkFlagProjectsMatch } from './worktree-gitlab-link-contex
 import {
   assertReferenceWritesSupported,
   getCreateReferenceInputs,
+  withLinkedPRReference,
   resolveReferenceInputs
 } from '../reference-input'
 
@@ -232,11 +233,12 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       return
     }
     await assertGitLabLinkFlagProjectsMatch(flags, client, { worktree })
+    const links = await withLinkedPRReference(client, worktree, reviewLinks)
     const parentFields = await resolveSetParentFields(flags, cwd, client)
     const pending = callNamingParentEnvironment<RuntimeWorktreeSetResult>(client, 'worktree.set', {
       worktree,
       displayName: getOptionalStringFlag(flags, 'display-name'),
-      ...reviewLinks,
+      ...links,
       ...linearIssueLink,
       // An explicit empty value clears the stored comment.
       comment: getOptionalStringFlagAllowingEmpty(flags, 'comment'),

@@ -114,3 +114,21 @@ it('does not revive primary success after an exact lookup returns unavailable', 
   )
   expect(hook.result.current[getWorkspaceAttachmentKey(request.item)]).toBeUndefined()
 })
+
+it('lets the row review drive a PR linked from another repository once the host resolved it there', () => {
+  const linked = {
+    provider: 'github' as const,
+    type: 'pr' as const,
+    number: 9,
+    url: 'https://github.com/acme/code/pull/9'
+  }
+  const row = { ...referenceWorkspace, linkedPR: 9, linkedItems: [linked] }
+  const review = referenceReview(9, { url: linked.url, state: 'merged' })
+  const detailsFor = (rowReview: typeof review) =>
+    renderHook(() => useWorkspaceReferenceDetails(row, referenceRepo, rowReview, false)).result
+      .current[getWorkspaceAttachmentKey(linked)]
+
+  // Without the host's proof, another repository's attachment stays gated.
+  expect(detailsFor(review)).toBeUndefined()
+  expect(detailsFor({ ...review, linkedFromOtherRepository: true })?.review?.state).toBe('merged')
+})

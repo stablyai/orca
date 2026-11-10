@@ -26,7 +26,8 @@ export const GITHUB_PULL_REQUEST_METHODS = [
         params.currentHeadOid,
         params.reason,
         params.userRefresh,
-        clientKind
+        clientKind,
+        params.linkedPRRepository
       )
   }),
   defineMethod({

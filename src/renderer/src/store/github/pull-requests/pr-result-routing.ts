@@ -1,10 +1,11 @@
 import type { AppState } from '../../types'
 import type { RuntimeFocusSettings } from '../../../../../shared/github/github-cache-key'
-import type { PRInfo } from '../../../../../shared/github/pull-request-types'
+import type { GitHubOwnerRepo, PRInfo } from '../../../../../shared/github/pull-request-types'
+import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../../shared/source-control/hosted-review/hosted-review-github'
 import {
   getHostedReviewCacheKey,
-  linkedReviewHintKey
+  githubPRHintKey
 } from '../../slices/hosted-review/hosted-review-cache-identity'
 import {
   hasNewerHostedReviewCacheEntry,
@@ -53,10 +54,12 @@ export function isGitHubLinkedReviewHintKey(hintKey: string | undefined): boolea
 
 export function prLookupHintKey(
   linkedPRNumber: number | null,
-  fallbackPRNumber: number | null
+  fallbackPRNumber: number | null,
+  linkedPRRepository: GitHubOwnerRepo | null = null
 ): string {
   if (linkedPRNumber !== null) {
-    return `linked:${linkedPRNumber}`
+    const repository = linkedPRRepository ? `${githubRepoIdentityKey(linkedPRRepository)}#` : ''
+    return `linked:${repository}${linkedPRNumber}`
   }
   return fallbackPRNumber !== null ? `fallback:${fallbackPRNumber}` : ''
 }
@@ -67,7 +70,7 @@ export function linkedReviewHintKeyForNoGitHubPR(
   if (entry?.data?.provider === 'github') {
     return isGitHubLinkedReviewHintKey(entry.linkedReviewHintKey)
       ? entry.linkedReviewHintKey
-      : linkedReviewHintKey({ linkedGitHubPR: entry.data.number })
+      : githubPRHintKey(entry.data, entry.data.githubRepository)
   }
   return entry?.linkedReviewHintKey
 }
@@ -152,7 +155,7 @@ export function syncHostedReviewCacheFromGitHubPRResult(args: {
       data: args.pr ? hostedReviewInfoFromGitHubPRInfo(args.pr) : null,
       fetchedAt: args.fetchedAt,
       linkedReviewHintKey: args.pr
-        ? linkedReviewHintKey({ linkedGitHubPR: args.pr.number })
+        ? githubPRHintKey(args.pr, args.pr.prRepo)
         : linkedReviewHintKeyForNoGitHubPR(hostedReviewEntry),
       ...(branchLookupGitHubPRNumber !== undefined ? { branchLookupGitHubPRNumber } : {})
     }),

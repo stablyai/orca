@@ -1,5 +1,11 @@
 import type { RepoKind } from '../repo-types'
-import type { CheckStatus, PRInfo, PRMergeableState, PRState } from './pull-request-types'
+import type {
+  CheckStatus,
+  GitHubRepositoryIdentity,
+  PRInfo,
+  PRMergeableState,
+  PRState
+} from './pull-request-types'
 
 /** Classified failures drive stable empty-state copy. Auth/permission/repo_unavailable/gh_unavailable make existing-review lookup impossible and must hide Create. */
 export type PRRefreshErrorType =
@@ -45,6 +51,8 @@ export type GitHubPRRefreshAlias = {
   connectionId?: string | null
   executionHostId?: string | null
   linkedPRNumber?: number | null
+  /** Repository of a URL-linked PR outside the worktree's repo; absent keeps the repo's remotes. */
+  linkedPRRepository?: GitHubRepositoryIdentity | null
   fallbackPRNumber?: number | null
   fallbackPRSource?: 'explicit' | 'pr-cache' | 'hosted-review' | null
   // Carry request-time HEAD so merged PR containment can confirm divergence before consumers clear durable links.

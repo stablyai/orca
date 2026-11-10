@@ -77,7 +77,8 @@ export class RuntimeHostedReviewCommands {
     currentHeadOid?: string | null,
     reason?: GitHubPRRefreshReason,
     userRefresh?: boolean,
-    clientKind?: DeviceScope
+    clientKind?: DeviceScope,
+    linkedPRRepository?: GitHubOwnerRepo | null
   ): Promise<PRRefreshOutcome> {
     const repo = await this.deps.resolveRepo(repoSelector)
     const lookupOptions: GitHubPRBranchLookupOptions = {
@@ -94,6 +95,9 @@ export class RuntimeHostedReviewCommands {
     }
     if (typeof currentHeadOid === 'string' && currentHeadOid.trim().length > 0) {
       lookupOptions.currentHeadOid = currentHeadOid.trim()
+    }
+    if (linkedPRNumber != null && linkedPRRepository) {
+      lookupOptions.linkedPRRepository = linkedPRRepository
     }
     const lookupOptionArgs: [] | [GitHubPRBranchLookupOptions] =
       Object.keys(lookupOptions).length > 0 ? [lookupOptions] : []
@@ -121,7 +125,10 @@ export class RuntimeHostedReviewCommands {
         repoPath: repo.path,
         branch,
         connectionId,
-        linkedPRNumber: linkedPRNumber ?? null
+        linkedPRNumber: linkedPRNumber ?? null,
+        ...(lookupOptions.linkedPRRepository
+          ? { linkedPRRepository: lookupOptions.linkedPRRepository }
+          : {})
       },
       () =>
         getPRForBranchOutcome(
@@ -145,6 +152,7 @@ export class RuntimeHostedReviewCommands {
     userRefresh?: boolean
     reportReadOutcome?: boolean
     linkedGitHubPR?: number | null
+    linkedGitHubPRRepository?: GitHubOwnerRepo | null
     fallbackGitHubPR?: number | null
     linkedGitLabMR?: number | null
     linkedBitbucketPR?: number | null
@@ -162,6 +170,9 @@ export class RuntimeHostedReviewCommands {
       ...(args.force === true ? { force: true } : {}),
       ...(args.userRefresh === true ? { userRefresh: true } : {}),
       linkedGitHubPR: args.linkedGitHubPR ?? null,
+      ...(args.linkedGitHubPR != null && args.linkedGitHubPRRepository
+        ? { linkedGitHubPRRepository: args.linkedGitHubPRRepository }
+        : {}),
       fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
       linkedGitLabMR: args.linkedGitLabMR ?? null,
       linkedBitbucketPR: args.linkedBitbucketPR ?? null,
@@ -170,7 +181,7 @@ export class RuntimeHostedReviewCommands {
       ...executionOptions
     })
     const review = read.review
-    if (review?.provider === 'github') {
+    if (review?.provider === 'github' && !review.linkedFromOtherRepository) {
       this.deps.recordCreated(repo.id, review.number, review.url)
     }
     return hostedReviewForBranchReply(read, args.reportReadOutcome)

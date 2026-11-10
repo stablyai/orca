@@ -114,6 +114,7 @@ export async function getPRForBranchOutcome(
         options.currentHeadOid ?? null,
         options.checkPageLimit ?? null,
         options.exactRepository ?? null,
+        options.linkedPRRepository ?? null,
         scope.readScope
       ])
       return runCoalescedProbe(

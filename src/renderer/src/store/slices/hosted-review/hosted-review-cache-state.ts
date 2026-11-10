@@ -177,6 +177,7 @@ export function isStaleMergedGitHubReviewForHead(
     data !== undefined &&
     (!('provider' in data) || data.provider === 'github') &&
     data.state === 'merged' &&
+    data.linkedFromOtherRepository !== true &&
     typeof data.headSha === 'string' &&
     data.headSha.length > 0 &&
     data.headSha !== head &&
@@ -254,6 +255,9 @@ export function hostedReviewBranchLookupArgs(
     currentHeadOid: options?.currentHeadOid ?? null,
     ...(options?.active === true ? { active: true } : {}),
     linkedGitHubPR: options?.linkedGitHubPR ?? null,
+    ...(options?.linkedGitHubPR != null && options.linkedGitHubPRRepository
+      ? { linkedGitHubPRRepository: options.linkedGitHubPRRepository }
+      : {}),
     ...(fallbackGitHubPR !== null ? { fallbackGitHubPR } : {}),
     linkedGitLabMR: options?.linkedGitLabMR ?? null,
     linkedBitbucketPR: options?.linkedBitbucketPR ?? null,

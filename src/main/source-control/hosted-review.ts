@@ -7,8 +7,9 @@ import {
 } from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import { assertRemoteUrlReadable } from '../git/remotes/remote-url-probe'
 import { forgetGiteaPullRequestReads } from '../gitea/pull-request-read-forgetting'
-import type { ForgeProviderId } from './forge-provider'
+import type { ForgeProviderId, ForgeReviewForBranchInput } from './forge-provider'
 import { getForgeProviderForRepository } from './forge-provider-detection'
+import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import { hostedReviewSshConnectionId } from './hosted-review-execution-host'
 import { readHostedReviewBranchCache } from './hosted-review-branch-cache'
 import {
@@ -19,12 +20,19 @@ import {
 function reviewLinkForProvider(
   input: Parameters<typeof readHostedReviewForBranch>[0],
   provider: ForgeProviderId
-): { linkedReviewNumber?: number | null; fallbackReviewNumber?: number | null } {
+): Pick<
+  ForgeReviewForBranchInput,
+  'linkedReviewNumber' | 'fallbackReviewNumber' | 'githubLinkedPRRepo'
+> {
   switch (provider) {
     case 'github':
       return {
         linkedReviewNumber: input.linkedGitHubPR ?? null,
-        fallbackReviewNumber: input.linkedGitHubPR == null ? (input.fallbackGitHubPR ?? null) : null
+        fallbackReviewNumber:
+          input.linkedGitHubPR == null ? (input.fallbackGitHubPR ?? null) : null,
+        ...(input.linkedGitHubPR != null && input.linkedGitHubPRRepository
+          ? { githubLinkedPRRepo: input.linkedGitHubPRRepository }
+          : {})
       }
     case 'gitlab':
       return { linkedReviewNumber: input.linkedGitLabMR ?? null }
@@ -49,6 +57,7 @@ export async function readHostedReviewForBranch(
     executionHostId: ExecutionHostId
     branch: string
     linkedGitHubPR?: number | null
+    linkedGitHubPRRepository?: GitHubOwnerRepo | null
     fallbackGitHubPR?: number | null
     linkedGitLabMR?: number | null
     linkedBitbucketPR?: number | null

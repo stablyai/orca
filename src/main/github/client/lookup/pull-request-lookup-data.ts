@@ -96,6 +96,8 @@ export type GitHubPRBranchLookupOptions = HostedReviewExecutionOptions & {
   checkPageLimit?: number
   /** A CI-line watch's own PR repository: lookups read only it, never another remote by number. */
   exactRepository?: GitHubOwnerRepo
+  /** Repository named by the linked PR's stored URL; used only when it is none of the repo's remotes. */
+  linkedPRRepository?: GitHubOwnerRepo | null
 }
 
 export function mapRestPRMergeable(pr: RestPullRequest): PRMergeableState {

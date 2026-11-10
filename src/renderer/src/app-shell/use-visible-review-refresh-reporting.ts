@@ -59,6 +59,7 @@ function reportIdentity(state: AppState): string {
         candidate.connectionState,
         candidate.executionHostId,
         candidate.cacheKey,
+        candidate.linkedPRRepository ?? null,
         repo.gitRemoteIdentity?.canonicalKey,
         Boolean(state.prCache[candidate.cacheKey]?.data),
         state.hostedReviewCache[key]?.data?.provider

@@ -51,6 +51,8 @@ export type HostedReviewInfo = {
   /** Target branch name for review-created worktree compare-base repair. */
   baseRefName?: string
   conflictSummary?: PRConflictSummary
+  /** Mirrors PRInfo.linkedFromOtherRepository. */
+  linkedFromOtherRepository?: boolean
 }
 
 export type HostedReviewForBranchArgs = {
@@ -64,6 +66,8 @@ export type HostedReviewForBranchArgs = {
   repoOwnerExecutionHostId?: string
   branch: string
   linkedGitHubPR?: number | null
+  /** Repository of a URL-linked GitHub PR outside this repo; absent keeps the repo's remotes. */
+  linkedGitHubPRRepository?: GitHubRepositoryIdentity | null
   fallbackGitHubPR?: number | null
   linkedGitLabMR?: number | null
   linkedBitbucketPR?: number | null

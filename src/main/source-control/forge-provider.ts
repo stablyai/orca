@@ -60,6 +60,8 @@ export type ForgeReviewForBranchInput = ForgeProviderRepositoryContext & {
   // The inspected checkout HEAD scopes implicit merged-review visibility.
   currentHeadOid?: string | null
   userRefresh?: boolean
+  // GitHub-only: repository named by the linked PR's stored URL.
+  githubLinkedPRRepo?: HostedReviewInfo['githubRepository'] | null
 }
 
 export type ForgeReviewByNumberInput = ForgeProviderRepositoryContext & {
@@ -178,7 +180,8 @@ const gitHubForgeProvider = {
         ...executionArgs[0],
         ...(input.userRefresh === true ? { userRefresh: true } : {}),
         ...(fallbackReviewNumber !== null ? { acceptMergedFallbackPR: true } : {}),
-        currentHeadOid: input.currentHeadOid ?? null
+        currentHeadOid: input.currentHeadOid ?? null,
+        ...(input.githubLinkedPRRepo && { linkedPRRepository: input.githubLinkedPRRepo })
       }
     )
     return unwrapGitHubPRForBranchOutcome(outcome)

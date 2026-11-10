@@ -33,6 +33,8 @@ export function shouldClearBranchMismatchedLinkedOpenPR(args: {
   return (
     linkedPRNumber != null &&
     pr?.number === linkedPRNumber &&
+    // Why: another repository's PR branch never names this worktree's branch.
+    pr.linkedFromOtherRepository !== true &&
     // Draft reviews are open PRs too; don't let their distinct renderer state leave a stale durable link wedged after a branch switch.
     (pr.state === 'open' || pr.state === 'draft') &&
     requestHeadOid !== null &&

@@ -1,5 +1,5 @@
 import type { WorkspaceAttachment } from '../shared/worktree/types'
-import type { RuntimeStatus } from '../shared/runtime-types'
+import type { RuntimeStatus, RuntimeWorktreeRecord } from '../shared/runtime-types'
 import type { JiraIssue } from '../shared/jira/jira-types'
 import {
   isResolvedJiraIssueMatch,
@@ -13,6 +13,7 @@ import {
 } from '../shared/workspace-attachments/workspace-reference-identity'
 
 import type { HandlerContext } from './dispatch'
+import { getWorkspaceAttachments } from '../shared/workspace-attachments/workspace-attachments'
 import { type RuntimeClient, RuntimeClientError } from './runtime-client'
 import { getOptionalStringFlag, getRepeatedStringFlag } from './flags'
 import { resolveJiraTarget } from './jira-target'
@@ -126,4 +127,44 @@ export function getCreateReferenceInputs(
   }
   getOptionalStringFlag(flags, 'reference-site')
   return parseReferenceInputs(urls)
+}
+
+/**
+ * `worktree set --pr <url>`: the review links plus an add-only delta that keeps the PR's URL (and
+ * so its repository). linkedPR selects the first linked PR with that number, so another URL
+ * already linked under the same number would keep the selection.
+ */
+export async function withLinkedPRReference<T extends { linkedPRReference?: WorkspaceAttachment }>(
+  client: RuntimeClient,
+  worktree: string,
+  { linkedPRReference: reference, ...links }: T
+): Promise<
+  Omit<T, 'linkedPRReference'> & {
+    linkedItemsBase?: WorkspaceAttachment[]
+    linkedItems?: WorkspaceAttachment[]
+  }
+> {
+  if (!reference) {
+    return links
+  }
+  await assertReferenceWritesSupported(client)
+  const { result } = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
+    worktree
+  })
+  const identity = getWorkspaceReferenceIdentity(reference)
+  const clash = getWorkspaceAttachments(result.worktree).find(
+    (item) =>
+      item.provider === 'github' &&
+      item.type === 'pr' &&
+      item.number === reference.number &&
+      item.url &&
+      getWorkspaceReferenceIdentity(item) !== identity
+  )
+  if (clash) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `PR #${reference.number} from ${clash.url} is already linked and would stay selected. Remove it with \`orca reference remove ${clash.url} --worktree <selector>\`, then retry.`
+    )
+  }
+  return { ...links, linkedItemsBase: [], linkedItems: [reference] }
 }

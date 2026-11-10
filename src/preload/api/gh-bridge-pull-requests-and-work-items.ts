@@ -23,6 +23,7 @@ export const ghPullRequestsAndWorkItemsApi = {
     repoId?: string | null
     branch: string
     linkedPRNumber?: number | null
+    linkedPRRepository?: GitHubOwnerRepo | null
     fallbackPRNumber?: number | null
     acceptMergedFallbackPR?: boolean
     currentHeadOid?: string | null

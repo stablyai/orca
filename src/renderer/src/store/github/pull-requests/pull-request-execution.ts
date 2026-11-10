@@ -5,7 +5,7 @@ import type { AppState } from '../../types'
 import type { RuntimeFocusSettings } from '../../../../../shared/github/github-cache-key'
 import type { GitHubSlice } from '../github-slice-contract'
 import type { Repo } from '../../../../../shared/repo-types'
-import type { PRInfo } from '../../../../../shared/github/pull-request-types'
+import type { GitHubOwnerRepo, PRInfo } from '../../../../../shared/github/pull-request-types'
 import type { CacheEntry, GitHubPRFallbackSource } from '../cache/cache-model'
 import {
   withDirectPRRefreshSettlement,
@@ -26,6 +26,7 @@ import { inflightPRRequests, prRequestGenerations } from '../requests/request-co
 import { getRuntimeRepoTarget } from '../repositories/repository-routing'
 import { isWslHostOffForForge, withForgeHostOffSkip } from '../repositories/wsl-host-off-forge'
 import { cachedPRCandidateFields } from './pr-refresh-cached-candidate-fields'
+import { foundPRForLinkedRepository } from './linked-pr-repository'
 import { lookupPRForBranchOverIpc } from './pr-for-branch-ipc-fallback'
 import { setGitHubPRResultCaches, shouldPreserveExistingPRForFallbackMiss } from './pr-result-cache'
 import { findWorktreeById, isStaleExactLinkedPRLookup } from '../refresh/worktree-refresh'
@@ -47,6 +48,7 @@ export function startPullRequestLookup(args: {
   cacheKey: string
   cached: CacheEntry<PRInfo> | undefined
   linkedPRNumber: number | null
+  linkedPRRepository: GitHubOwnerRepo | null
   fallbackPRNumber: number | null
   fallbackPRSource: GitHubPRFallbackSource | null
   generation: number
@@ -67,6 +69,7 @@ export function startPullRequestLookup(args: {
     cacheKey,
     cached,
     linkedPRNumber,
+    linkedPRRepository: linkedRepo,
     fallbackPRNumber,
     fallbackPRSource,
     generation,
@@ -102,6 +105,7 @@ export function startPullRequestLookup(args: {
               repo: runtimeRepo.repo.id,
               branch,
               linkedPRNumber,
+              ...(linkedRepo ? { linkedPRRepository: linkedRepo } : {}),
               currentHeadOid: requestHeadOid,
               ...(options?.reason ? { reason: options.reason } : {}),
               ...(options?.userRefresh === true ? { userRefresh: true } : {}),
@@ -121,6 +125,7 @@ export function startPullRequestLookup(args: {
               worktreeId: options?.worktreeId,
               currentHeadOid: requestHeadOid,
               linkedPRNumber,
+              ...(linkedRepo ? { linkedPRRepository: linkedRepo } : {}),
               fallbackPRNumber,
               fallbackPRSource,
               connectionId: repo?.connectionId ?? null,
@@ -145,7 +150,7 @@ export function startPullRequestLookup(args: {
       if (!checkContract.sourceCurrent()) {
         return cached?.data ?? null
       }
-      const pr = outcome.kind === 'found' ? outcome.pr : null
+      const pr = foundPRForLinkedRepository(outcome, linkedRepo)
       let acceptedPR: PRInfo | null = null
       // RPC and lost IPC replies get no coordinator settlement; a lost reply is reported only to the click that asked, so polls stay silent.
       if (
@@ -162,7 +167,15 @@ export function startPullRequestLookup(args: {
         let skippedStaleLinkedPRLookup = false
         set((s) => {
           // Why: unlinking a PR mid exact-linked-PR-lookup must stop the older result from restoring the manual link UI.
-          if (isStaleExactLinkedPRLookup(s, options?.worktreeId, linkedPRNumber, executionHostId)) {
+          if (
+            isStaleExactLinkedPRLookup(
+              s,
+              options?.worktreeId,
+              linkedPRNumber,
+              executionHostId,
+              linkedRepo
+            )
+          ) {
             skippedStaleLinkedPRLookup = true
             return s
           }

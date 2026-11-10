@@ -24,6 +24,7 @@ import {
 } from './pull-request-lookup-data'
 import { lookupPRByBranchName } from './pr-branch-lookup'
 import { lookupPRByNumber } from './pr-number-lookup'
+import { linkedPRLookupRepository } from './linked-pr-repository'
 import { derivePRRefreshData } from './branch-lookup-derived-data'
 import { assemblePRRefreshFoundOutcome } from './pr-refresh-outcome-assembly'
 import { shouldRetryTrackedUpstreamBranch } from './tracked-upstream-cache'
@@ -63,8 +64,10 @@ export async function resolvePRForBranchOutcome(input: {
   const { headRepo } = resolved
   const candidates = exactRepositoryCandidates(resolved.candidates, options.exactRepository)
   const reads = { checkPageLimit: options.checkPageLimit, userRefresh: options.userRefresh }
+  // Why the row's own remotes: a watch's exactRepository must not hide the other-repository flag.
+  const otherRepository = linkedPRLookupRepository(linkedPRNumber, options, resolved.candidates)
   // Without local cwd, unresolved connection-backed lookups could follow ambient GH_REPO/GH_HOST.
-  if (connectionId && candidates.length === 0) {
+  if ((connectionId && candidates.length === 0) || otherRepository === 'refused') {
     return { kind: 'no-pr', fetchedAt: Date.now() }
   }
   let data: PullRequestLookupData | null = null
@@ -135,7 +138,7 @@ export async function resolvePRForBranchOutcome(input: {
   if (typeof linkedPRNumber === 'number') {
     usedExactNumberLookup = true
     const exactLookup = await lookupPRByNumber({
-      candidates,
+      candidates: otherRepository ? [otherRepository] : candidates,
       number: linkedPRNumber,
       ghOptions,
       executionScope,
@@ -238,11 +241,13 @@ export async function resolvePRForBranchOutcome(input: {
         : {})
     }
   }
-  dataHeadRepo = pullRequestHeadRepository(data, dataRepo) ?? dataHeadRepo
+  dataHeadRepo =
+    pullRequestHeadRepository(data, dataRepo) ?? (otherRepository ? null : dataHeadRepo)
   const headDivergedFromMergedPRAtOid = await linkedMergedPRDivergedHeadOid(
     data,
     linkedPRNumber,
-    explicitCurrentHeadOid,
+    // Why: another repository's PR head is never this worktree's line of work.
+    otherRepository ? null : explicitCurrentHeadOid,
     (candidate, headOid) =>
       mergedPRContainsHead(
         candidate,
@@ -289,7 +294,8 @@ export async function resolvePRForBranchOutcome(input: {
     localGitOptions,
     ghOptions,
     executionScope,
-    usedExactNumberLookup
+    usedExactNumberLookup,
+    linkedFromOtherRepository: otherRepository !== null
   })
 
   return assemblePRRefreshFoundOutcome({
@@ -301,6 +307,7 @@ export async function resolvePRForBranchOutcome(input: {
     stackMergeQueueRequired,
     confirmedContainedHeadOid,
     headDivergedFromMergedPRAtOid,
-    conflictSummary
+    conflictSummary,
+    linkedFromOtherRepository: otherRepository !== null
   })
 }
