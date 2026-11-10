@@ -4,15 +4,16 @@ import { describe, expect, it } from 'vitest'
 
 const SRC = resolve(import.meta.dirname, '../../..')
 // Each folder has one entry module, plus a DB-only one so the DB layer never loads rpc code.
+const DB_LAYER = 'main/runtime/orchestration/db/'
 const LEGACY_ENTRIES_BY_FOLDER = {
-  'main/runtime/orchestration/legacy-remote/': [
-    'main/runtime/orchestration/legacy-remote/legacy-remote.ts',
-    'main/runtime/orchestration/legacy-remote/legacy-remote-db-methods.ts'
-  ],
-  'main/runtime/orchestration/legacy-remote-home/': [
-    'main/runtime/orchestration/legacy-remote-home/legacy-remote-home.ts',
-    'main/runtime/orchestration/legacy-remote-home/legacy-remote-home-db-methods.ts'
-  ]
+  'main/runtime/orchestration/legacy-remote/': {
+    entry: 'main/runtime/orchestration/legacy-remote/legacy-remote.ts',
+    dbEntry: 'main/runtime/orchestration/legacy-remote/legacy-remote-db-methods.ts'
+  },
+  'main/runtime/orchestration/legacy-remote-home/': {
+    entry: 'main/runtime/orchestration/legacy-remote-home/legacy-remote-home.ts',
+    dbEntry: 'main/runtime/orchestration/legacy-remote-home/legacy-remote-home-db-methods.ts'
+  }
 }
 const IMPORT_SPECIFIER =
   /(?:from\s+|import\s*\(\s*|import\s+|require\(\s*)['"](\.{1,2}\/[^'"]+)['"]/g
@@ -57,9 +58,9 @@ describe('legacy remote-attachment folders', () => {
           continue
         }
         const to = srcPath(target)
-        for (const [folder, entries] of Object.entries(LEGACY_ENTRIES_BY_FOLDER)) {
+        for (const [folder, { entry, dbEntry }] of Object.entries(LEGACY_ENTRIES_BY_FOLDER)) {
           if (to.startsWith(folder) && !from.startsWith(folder)) {
-            if (entries.includes(to)) {
+            if (to === entry || (to === dbEntry && from.startsWith(DB_LAYER))) {
               entryImporters.add(`${from} -> ${to}`)
             } else {
               violations.push(`${from} -> ${to}`)
