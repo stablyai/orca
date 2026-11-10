@@ -24,4 +24,16 @@ describe('standalone runtime artifacts', () => {
       'out/mobile-web/index.html.br'
     ])
   })
+
+  it('ships the host-only language catalogs with the page assets', () => {
+    const manifest = {
+      assets: [{ path: 'index.html' }],
+      catalogs: [{ locale: 'de', path: 'catalogs/de.json' }]
+    }
+
+    expect(orcadMobileWebAssetFilenames(JSON.stringify(manifest))).toEqual([
+      'out/mobile-web/catalogs/de.json',
+      'out/mobile-web/index.html'
+    ])
+  })
 })
