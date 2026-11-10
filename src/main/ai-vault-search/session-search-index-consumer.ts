@@ -59,7 +59,7 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
     return this.store.resumableCursor(candidate)?.byteOffset ?? null
   }
 
-  beginRead(start: TranscriptReadStart): TranscriptReadConsumer | null {
+  beginRead(start: TranscriptReadStart): SessionSearchReadConsumer | null {
     const { candidate } = start
     if (this.store.acceptingReads === false) {
       return null
@@ -182,7 +182,7 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
     }
   }
 
-  finish(outcome: TranscriptReadOutcome): void {
+  finish(outcome: TranscriptReadOutcome): void | Promise<void> {
     if (
       outcome.cancelled ||
       this.publication?.valid() === false ||
@@ -226,10 +226,9 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
         this.publication?.release()
       }
       if (this.write.settled) {
-        void this.write.settled().then(acknowledge, () => acknowledge(false))
-      } else {
-        acknowledge(true)
+        return this.write.settled().then(acknowledge, () => acknowledge(false))
       }
+      acknowledge(true)
       return
     }
     // Stamp and count repeated read failures so unchanged unreadable files can be held out.

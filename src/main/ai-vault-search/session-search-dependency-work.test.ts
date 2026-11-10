@@ -7,7 +7,6 @@ import { appendFile, mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import * as filesystem from '../native-chat/wsl-transcript-fs-access'
-import * as parser from '../ai-vault/parse-cache/session-scanner-parse-cache'
 import {
   codexFixture,
   CODEX_FIXTURE_SESSION_ID
@@ -39,12 +38,14 @@ it.each([40, 400])(
     })
     const streams = vi.spyOn(filesystem, 'openTranscriptReadStream')
     const slices = vi.spyOn(filesystem, 'readTranscriptSlice')
-    const reads = vi.spyOn(parser, 'parseAgentSessionFileCached')
+    const transcripts = new Set<string>()
     try {
       await mkdir(root, { recursive: true })
       for (const id of ids) {
+        const path = join(root, fixture.fileName.replace(CODEX_FIXTURE_SESSION_ID, id))
+        transcripts.add(path)
         await writeFile(
-          join(root, fixture.fileName.replace(CODEX_FIXTURE_SESSION_ID, id)),
+          path,
           `${fixture.seedLines.join('\n').replaceAll(CODEX_FIXTURE_SESSION_ID, id)}\n`
         )
       }
@@ -52,13 +53,13 @@ it.each([40, 400])(
       await subject.start()
       streams.mockClear()
       slices.mockClear()
-      reads.mockClear()
       // Lost delivery must re-observe the input, not reread it or force every transcript.
       notifySessionSearchOverflow(dirname(root))
       clock.advance(20000)
       await subject.settled()
       expect(streams.mock.calls.filter(([path]) => path === index)).toHaveLength(0)
-      expect(reads).not.toHaveBeenCalled()
+      expect(streams.mock.calls.filter(([path]) => transcripts.has(path))).toHaveLength(0)
+      expect(slices.mock.calls.filter(([path]) => transcripts.has(path))).toHaveLength(0)
       const append = `${JSON.stringify({ id: ids[0], thread_name: 'Changed title' })}\n`
       const size = Buffer.byteLength(records.join('') + append)
       await appendFile(index, append)
@@ -81,7 +82,8 @@ it.each([40, 400])(
       expect(indexBytes).toBeLessThanOrEqual(
         2 * (Buffer.byteLength(append) + Buffer.byteLength(records[0]) + 1)
       )
-      expect(reads).toHaveBeenCalledTimes(1)
+      expect(streams.mock.calls.filter(([path]) => transcripts.has(path))).toHaveLength(0)
+      expect(slices.mock.calls.filter(([path]) => transcripts.has(path))).toHaveLength(0)
       expect(
         harness.read((db) =>
           db.prepare("SELECT count(*) AS n FROM sessions WHERE title='Changed title'").get()
@@ -95,7 +97,6 @@ it.each([40, 400])(
     } finally {
       streams.mockRestore()
       slices.mockRestore()
-      reads.mockRestore()
       await subject.close()
       await harness.cleanup()
     }

@@ -84,7 +84,7 @@ export async function runSessionSearchIndexPass(
         signal: options.signal
       })
       if (consumer) {
-        consumer.finish({
+        await consumer.finish({
           session,
           byteOffset: row.byteOffset,
           prefixHash: row.prefixHash,
