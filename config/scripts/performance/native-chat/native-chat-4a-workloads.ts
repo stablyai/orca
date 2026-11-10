@@ -29,6 +29,9 @@ export type Workload = {
     queuedEvery: number
     fillerChats: number
     fillerTurns: number
+    /** Only the separate uniform memory recipe overrides the small fillers. */
+    fillerTools?: number
+    fillerToolOutputBytes?: number
   }
   /** Streams are long; `samples` per stream case, separate from the warm row count. */
   stream: { cases: StreamCase[]; chunkBytes: number; intervalMs: number; samples: number }
@@ -161,8 +164,8 @@ export function fillerTurn(chat: number, turn: number, workload: Workload): stri
   const op = {
     op: 'history',
     tag: `filler-${chat}-${turn}`,
-    tools: 2,
-    toolOutputBytes: 500,
+    tools: workload.history.fillerTools ?? 2,
+    toolOutputBytes: workload.history.fillerToolOutputBytes ?? 500,
     replyBytes: 400
   }
   return providerText.formatDirective(op, workload.history.promptBytes)

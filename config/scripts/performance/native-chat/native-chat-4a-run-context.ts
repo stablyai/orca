@@ -1,6 +1,9 @@
 // What every 4a operation family receives, plus the one helper that turns a timed action into a row sample.
+import { existsSync, renameSync } from 'node:fs'
+import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
-import type { Arm, Launch } from './native-chat-4a-arm'
+import { copyProfile, launchArm, stopArm, type Arm, type Launch } from './native-chat-4a-arm'
+import { ConversionObserver } from './native-chat-4a-sqlite-observer'
 import type { Manifest } from './native-chat-4a-fixture'
 import { hostWorkMark, rendererNow } from './native-chat-4a-probes'
 import type { Row, Sample } from './native-chat-4a-report'
@@ -64,3 +67,60 @@ export const resetTags = (): void => {
 }
 export const tagFor = (prefix: string): string =>
   `${prefix}-${String((unique += 1)).padStart(5, '0')}`
+
+// Each seed copy's first launch converts on the candidate; the observer starts before it, reading only.
+export function profileRunner(input: {
+  arm: Arm
+  out: string
+  stubCommand: string
+  workload: Workload
+  rows: Row[]
+  log: (line: string) => void
+}) {
+  return async (
+    seedDir: string,
+    manifest: Manifest,
+    phase: string,
+    body: (ctx: RunContext, observer: ConversionObserver) => Promise<void>,
+    workload = input.workload
+  ): Promise<void> => {
+    const { rows, log } = input
+    const profileDir = path.join(input.out, 'profile')
+    if (existsSync(profileDir)) {
+      renameSync(profileDir, path.join(input.out, `stale-profile-${Date.now()}`))
+    }
+    copyProfile(seedDir, profileDir)
+    resetTags()
+    const observer = new ConversionObserver(profileDir)
+    const open = () => launchArm(input.arm, profileDir, input.stubCommand)
+    const ctx = {
+      arm: input.arm,
+      launch: await open().catch(async (error: unknown) => {
+        await observer.stop()
+        throw error
+      }),
+      workload,
+      manifest,
+      rows,
+      log,
+      relaunch: async () => undefined
+    }
+    ctx.relaunch = async () => {
+      await stopArm(ctx.launch)
+      ctx.launch = await open()
+    }
+    try {
+      await body(ctx, observer)
+    } finally {
+      await observer.stop()
+      await stopArm(ctx.launch)
+      renameSync(
+        profileDir,
+        path.join(
+          input.out,
+          `after-${input.arm.name}-${phase}-${manifest.toolOutputBytes}-${input.arm.sha.slice(0, 8)}`
+        )
+      )
+    }
+  }
+}

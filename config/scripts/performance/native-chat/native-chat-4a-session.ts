@@ -6,7 +6,10 @@ import type { Page } from '@stablyai/playwright-test'
 import { operationId, type Arm } from './native-chat-4a-arm'
 import { rendererTime, rpc, visibleChatState } from './native-chat-4a-probes'
 
-type HistoryItem = { itemId: string; body?: { kind?: string; role?: string; state?: string } }
+type HistoryItem = {
+  itemId: string
+  body?: { kind?: string; role?: string; state?: string; output?: { byteLength?: number } }
+}
 export type HistoryPage = {
   epoch: string
   fence?: number

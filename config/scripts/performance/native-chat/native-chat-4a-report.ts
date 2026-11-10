@@ -116,6 +116,102 @@ function contextCell(row: Row | undefined): string {
     .join(', ')
 }
 
+function memoryValue(row: Row | undefined): number | null {
+  return row?.skipped
+    ? null
+    : (stat(row?.samples.map((sample) => sample.extra?.bytes) ?? [])?.p50 ?? null)
+}
+
+/** Positive reduction means the candidate uses fewer bytes; negative activation deltas have no relative denominator. */
+export function memoryComparison(base: ArmResult, next: ArmResult) {
+  const left = new Map(
+    base.rows.filter((row) => row.family === 'memory').map((row) => [key(row), row])
+  )
+  const right = new Map(
+    next.rows.filter((row) => row.family === 'memory').map((row) => [key(row), row])
+  )
+  return [...new Set([...left.keys(), ...right.keys()])].map((id) => {
+    const a = left.get(id)
+    const b = right.get(id)
+    if (a && b && !a.skipped && !b.skipped) {
+      for (const field of [
+        'seedRecipe',
+        'seedSha',
+        'chats',
+        'completedToolsPerChat',
+        'toolOutputBytes'
+      ]) {
+        if (a.context[field] === undefined || a.context[field] !== b.context[field]) {
+          throw new Error(
+            `memory comparison: arms disagree on or lack ${field}; use one identical seed`
+          )
+        }
+      }
+    }
+    const mainBytes = memoryValue(a)
+    const candidateBytes = memoryValue(b)
+    const reductionBytes =
+      mainBytes === null || candidateBytes === null ? null : mainBytes - candidateBytes
+    return {
+      operation: (a ?? b)!.operation,
+      phase: (a ?? b)!.variant,
+      mainBytes,
+      candidateBytes,
+      reductionBytes,
+      reductionPercent:
+        reductionBytes !== null && mainBytes !== null && mainBytes > 0
+          ? (reductionBytes / mainBytes) * 100
+          : null,
+      mainSkipped: a?.skipped ?? (mainBytes === null ? 'measurement missing' : null),
+      candidateSkipped: b?.skipped ?? (candidateBytes === null ? 'measurement missing' : null)
+    }
+  })
+}
+
+function memoryMarkdown(base: ArmResult, next?: ArmResult): string[] {
+  const compared = memoryComparison(base, next ?? base)
+  if (compared.length === 0) {
+    return []
+  }
+  const bytes = (value: number | null, skipped?: string | null): string =>
+    skipped
+      ? `skipped: ${skipped}`
+      : value === null
+        ? 'skipped: measurement missing'
+        : value.toFixed(0)
+  const lines = [
+    '',
+    'Main-process memory (bytes; median of the final stable 5-sample window). Each arm uses its own copy of one separate uniform seed. Conversion completes before the baseline. Every chat is opened through history and held subscribed until both active samples finish; no provider starts. The baseline can already include chats restored at startup, so compare absolute active bytes as well as activation deltas. These counts model the eight-hour completed-tool workload; this is not an eight-hour soak.',
+    '',
+    next
+      ? `| Counter | Phase | ${base.arm} bytes | ${next.arm} bytes | Reduction bytes | Reduction % |`
+      : `| Counter | Phase | ${base.arm} bytes |`,
+    next ? '| --- | --- | --- | --- | --- | --- |' : '| --- | --- | --- |'
+  ]
+  for (const row of compared) {
+    const cells = [row.operation, row.phase, bytes(row.mainBytes, row.mainSkipped)]
+    if (next) {
+      cells.push(
+        bytes(row.candidateBytes, row.candidateSkipped),
+        bytes(row.reductionBytes),
+        row.reductionPercent === null ? '—' : `${row.reductionPercent.toFixed(2)}%`
+      )
+    }
+    lines.push(`| ${cells.join(' | ')} |`)
+  }
+  lines.push(
+    '',
+    'RSS is process.memoryUsage().rss for the whole main process including workers, not macOS physical footprint. heapUsed/external/arrayBuffers cover the main V8 isolate. external includes arrayBuffers; do not sum them. Activation deltas subtract phase medians. GC runs only when main already exposes global.gc; unavailable or failed counters are explicitly skipped. Positive reduction means fewer candidate bytes. Seed time and logical file bytes (including the isolated provider home, not APFS allocated blocks) are recorded in each arm fixture and row Shape.'
+  )
+  for (const result of next ? [base, next] : [base]) {
+    const row = result.rows.find((value) => value.family === 'memory')
+    if (row) {
+      lines.push('', `${result.arm} memory Shape: ${contextCell(row)}`)
+    }
+  }
+  return lines
+}
+
 export function comparisonMarkdown(base: ArmResult, next: ArmResult): string {
   const nextRows = new Map(next.rows.map((row) => [key(row), row]))
   const baseRows = new Map(base.rows.map((row) => [key(row), row]))
@@ -131,6 +227,9 @@ export function comparisonMarkdown(base: ArmResult, next: ArmResult): string {
   ]
   const seen = new Set<string>()
   for (const row of ordered) {
+    if (row.family === 'memory') {
+      continue
+    }
     if (seen.has(key(row))) {
       continue
     }
@@ -151,6 +250,7 @@ export function comparisonMarkdown(base: ArmResult, next: ArmResult): string {
     '',
     WRITER_SPAN_DISCLOSURE
   )
+  lines.push(...memoryMarkdown(base, next))
   return `${lines.join('\n')}\n`
 }
 
@@ -164,11 +264,15 @@ export function armMarkdown(result: ArmResult): string {
     '| --- | --- | --- | --- | --- | --- |'
   ]
   for (const row of result.rows) {
+    if (row.family === 'memory') {
+      continue
+    }
     const summary = summarizeRow(row)
     lines.push(
       `| ${row.family} | ${row.operation} | ${caseCell(row)} | ${row.skipped ? `skipped: ${row.skipped}` : cell(primary(summary))} | ${cell(summary.hostMs)} | ${contextCell(row)} |`
     )
   }
+  lines.push(...memoryMarkdown(result))
   return `${lines.join('\n')}\n`
 }
 
@@ -197,7 +301,7 @@ export function writeComparison(
   }
   writeFileSync(
     path.join(out, `${name}.json`),
-    `${JSON.stringify({ workload, machine, arms: summaries }, null, 2)}\n`
+    `${JSON.stringify({ workload, machine, arms: summaries, memoryComparison: memoryComparison(base, next) }, null, 2)}\n`
   )
   writeFileSync(path.join(out, `${name}.md`), comparisonMarkdown(base, next))
   log(`wrote ${path.join(out, `${name}.md`)}`)
