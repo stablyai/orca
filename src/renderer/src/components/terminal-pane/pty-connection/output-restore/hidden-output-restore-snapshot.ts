@@ -245,8 +245,8 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
                 }
                 if (replayChangedDimensions && session.isRendererPtyResizeAuthoritative()) {
                   session.transport.resize(session.pane.terminal.cols, session.pane.terminal.rows)
-                  if (!isRemoteRuntimePtyId(currentPtyId)) {
-                    // Why: redundant SIGWINCH makes alt-screen TUIs rebuild their scroll viewport to the top on tab return.
+                  if (skippedAltFrame && !isRemoteRuntimePtyId(currentPtyId)) {
+                    // Why: redundant SIGWINCH makes alt-screen TUIs rebuild their scroll viewport to the top on tab return; only skipped alt frames need explicit signal.
                     window.api.pty.signal(currentPtyId, 'SIGWINCH')
                   }
                 }

@@ -6,6 +6,7 @@ import {
 import {
   captureTerminalStructuralScrollIntent,
   isTerminalStructuralScrollIntentCurrent,
+  markTerminalFollowOutput,
   restoreTerminalStructuralScrollIntent,
   type TerminalScrollIntentTarget,
   type TerminalStructuralScrollIntentSnapshot
@@ -17,8 +18,10 @@ const ERASE_SCROLLBACK_PARAMETER = 3
 // Wait for quiet, not one non-growing write: redraw chunks may contain only cursor/color bytes mid-rebuild.
 const REDRAW_SETTLE_MS = 120
 
-// Cap waiting so endless output cannot defer the pin forever.
+// Cap waiting when stalled so endless non-growing output cannot defer the pin forever.
 const MAX_PENDING_RESTORE_MS = 1_000
+// Allow multi-second normal-buffer full-history rebuilds (e.g. agy InlineStrategy on long contexts) to finish streaming while baseY is actively growing.
+const MAX_ACTIVE_REBUILD_RESTORE_MS = 15_000
 
 type CancelScheduled = () => void
 type ScheduleSettle = (run: () => void, delayMs: number) => CancelScheduled
@@ -45,7 +48,9 @@ export type TerminalLiveScrollbackRestore = {
 type PendingRestore = {
   snapshot: TerminalStructuralScrollIntentSnapshot
   bottomOffset: number
+  lastBaseY: number
   deadline: number
+  hardDeadline: number
   cancelSettle: CancelScheduled
 }
 
@@ -112,11 +117,13 @@ export function installTerminalLiveScrollbackRestore(
     }
     // Check the live viewport: durable pre-remount intent can still say pinned after the reader returned to bottom; arming would stop follow-output.
     if (isTerminalViewportAtBottom(current.viewportY, current.baseY)) {
+      markTerminalFollowOutput(terminal)
       return false
     }
     const live = pending
     // Reuse the first pin/deadline: repeated erases would otherwise recapture a wiped stub or defer restoration forever.
     if (live && isTerminalStructuralScrollIntentCurrent(terminal, live.snapshot)) {
+      live.lastBaseY = 0
       armSettle(live)
       return false
     }
@@ -125,6 +132,7 @@ export function installTerminalLiveScrollbackRestore(
       return false
     }
     disarm()
+    const startedAt = now()
     const active: PendingRestore = {
       // Use live coordinates; durable pre-remount capture may describe a buffer the reader no longer sees.
       snapshot: {
@@ -135,7 +143,9 @@ export function installTerminalLiveScrollbackRestore(
         revision: captured.revision
       },
       bottomOffset: current.baseY - current.viewportY,
-      deadline: now() + MAX_PENDING_RESTORE_MS,
+      lastBaseY: 0,
+      deadline: startedAt + MAX_PENDING_RESTORE_MS,
+      hardDeadline: startedAt + MAX_ACTIVE_REBUILD_RESTORE_MS,
       cancelSettle: () => {}
     }
     pending = active
@@ -164,6 +174,14 @@ export function installTerminalLiveScrollbackRestore(
 
   const parsedSubscription = terminal.onWriteParsed?.(() => {
     if (pending) {
+      const current = readTerminalScrollBufferSnapshot(terminal)
+      if (current && current.baseY > pending.lastBaseY) {
+        pending.lastBaseY = current.baseY
+        pending.deadline = Math.min(
+          pending.hardDeadline,
+          Math.max(pending.deadline, now() + MAX_PENDING_RESTORE_MS)
+        )
+      }
       armSettle(pending)
     }
   })

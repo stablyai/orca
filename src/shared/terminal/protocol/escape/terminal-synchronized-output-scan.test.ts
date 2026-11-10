@@ -78,4 +78,14 @@ describe('resolveSynchronizedOutputSafeSplit', () => {
     // The remainder must still contain a complete, parseable close.
     expect(data.slice(splitAt)).toContain(CLOSE)
   })
+
+  it('never severs a 24-bit RGB SGR CSI sequence across chunk boundaries', () => {
+    const prefix = 'x'.repeat(100)
+    const sgr = '\x1b[38;2;154;165;206;48;2;26;27;38m'
+    const data = `${prefix}${sgr}hello`
+    const limit = prefix.length + 14
+    const splitAt = resolveSynchronizedOutputSafeSplit(data, limit)
+    expect(splitAt).toBe(prefix.length)
+    expect(data.slice(splitAt).startsWith(sgr)).toBe(true)
+  })
 })

@@ -166,4 +166,18 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
     settle()
     expect(term.buffer.active.viewportY).toBe(afterUserScrollY)
   })
+
+  it('keeps the pin pending across a multi-second normal-buffer rebuild while baseY is still growing', async () => {
+    const { term, advance, settle, bottomOffset } = await pinnedTerminalWithRestore()
+
+    // Start CSI 3 J rebuild and stream chunks every 80ms for 1,600ms (>1,000ms initial deadline).
+    await write(term, '\x1b[2J\x1b[H\x1b[3J')
+    for (let batch = 0; batch < 20; batch += 1) {
+      advance(80)
+      await writeLines(term, 10, `batch-${batch}-`)
+    }
+
+    settle()
+    expect(term.buffer.active.baseY - term.buffer.active.viewportY).toBe(bottomOffset)
+  })
 })
