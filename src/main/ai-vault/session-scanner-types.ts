@@ -24,6 +24,10 @@ export type AiVaultScanOptions = {
   // Override the default Codex home to test unprefixed resume commands without reading user data.
   defaultCodexHomeDir?: string
   wslHomeDirs?: readonly string[]
+  // Projects directory Windows can read when ~/.claude is a WSL symlink. Tests inject this.
+  resolveWslClaudeProjectsDir?: (homeDir: string) => Promise<string | null>
+  // Real WSL Claude projects directories added for this scan.
+  extraClaudeProjectsDirs?: readonly string[]
   wslOpenCodeReaders?: readonly OpenCodeWslRuntime[]
   geminiSessionsDir?: string
   antigravityBrainDir?: string
