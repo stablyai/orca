@@ -3,6 +3,7 @@ import { getProviderAccountsOwnerKey } from '@/runtime/provider-accounts/observa
 import { AgentsPane } from '../agents/AgentsPane'
 import { AgentApiKeysSection } from '../agent-api-keys/AgentApiKeysSection'
 import { OrcaCloudAccountsSection } from '../agent-accounts/OrcaCloudAccountsSection'
+import { AgentAccountsOverviewSection } from '../agent-accounts/overview/AgentAccountsOverviewSection'
 import { AgentApiKeysCloudDescription } from '../agent-api-keys/AgentApiKeysCloudDescription'
 import { AgentDefaultSurfaceSection } from '../agents/surfaces/AgentDefaultSurfaceSection'
 import { ComputerUsePane } from '../computer-use/ComputerUsePane'
@@ -126,7 +127,12 @@ export function renderAgentAccountsSettingsSection(
       )}
       searchEntries={navigation.getSectionSearchEntries('agent-accounts')}
     >
-      {view.isSectionMounted('agent-accounts') ? <OrcaCloudAccountsSection /> : null}
+      {view.isSectionMounted('agent-accounts') ? (
+        <>
+          <OrcaCloudAccountsSection />
+          <AgentAccountsOverviewSection />
+        </>
+      ) : null}
     </SettingsSection>
   ) : null
 }

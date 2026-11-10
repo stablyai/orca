@@ -27854,5 +27854,46 @@
     "groupAccount": "{{agents}} from your Orca account",
     "groupKey": "{{agents}} with {{key}}",
     "notOffered": "Signs in for each cloud workspace for now"
+  },
+  "agentAccountsOverview": {
+    "action": {
+      "review": "Review",
+      "checkAgain": "Check again",
+      "accounts": "Accounts",
+      "manage": "Manage"
+    },
+    "cloud": "Orca Cloud",
+    "cloudAll": "all your cloud workspaces",
+    "title": "Sign-ins by host",
+    "description": "Where Claude and Codex are signed in, and which key they use. Orca never copies a sign-in between machines.",
+    "filter": "Show",
+    "all": "All",
+    "attention": "Needs attention · {{count}}",
+    "signedOut": "Sign in to Orca to see cloud workspaces here.",
+    "signedOutDetail": "Hosts on this computer’s list are shown below.",
+    "signIn": "Sign in",
+    "host": "Host",
+    "actions": "Actions",
+    "openRow": "Open agent accounts for {{host}}",
+    "emptyTitle": "Only this computer so far",
+    "emptyDetail": "When you add an SSH host, pair a machine or start a cloud workspace, its sign-ins show up here.",
+    "footnote": "“Signed in” means the host confirmed it in the last minute. Orca Cloud comes from your Orca account, so there’s nothing to check per sandbox. Orca doesn’t wake a sandbox just to check sign-ins.",
+    "summary": "Checked {{count}} hosts. {{attention}} need attention.",
+    "cell": {
+      "signedIn": "Signed in",
+      "signedInChecked": "Signed in · checked {{date}}",
+      "signedOut": "Signed out",
+      "expired": "Sign-in expired",
+      "apiKey": "API key",
+      "notInstalled": "Not installed",
+      "notConnected": "Not connected",
+      "checking": "Checking…",
+      "couldntCheck": "Couldn’t check",
+      "notChecked": "Not checked",
+      "cloudAccount": "Your Orca account",
+      "cloudKeyMember": "{{key}} · set by your team",
+      "cloudNotSetUp": "Not set up",
+      "cloudPaused": "Each workspace signs in (temporarily)"
+    }
   }
 }
