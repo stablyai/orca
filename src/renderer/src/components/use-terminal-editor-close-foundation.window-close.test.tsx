@@ -82,6 +82,32 @@ describe('proceedToNativeWindowClose', () => {
     expect(confirmWindowCloseMock).not.toHaveBeenCalled()
   })
 
+  it('raises the dialog with kind chat when an active chat is busy', async () => {
+    assessWindowCloseRunningWorkMock.mockResolvedValue({ kind: 'chat' })
+    const { result } = mountFoundation()
+
+    await act(async () => {
+      result.current.proceedToNativeWindowClose(false)
+    })
+
+    expect(result.current.windowCloseDialogOpen).toBe(true)
+    expect(result.current.windowCloseDialogKind).toBe('chat')
+    expect(confirmWindowCloseMock).not.toHaveBeenCalled()
+  })
+
+  it('raises the dialog with kind pinned when pinned tabs exist', async () => {
+    assessWindowCloseRunningWorkMock.mockResolvedValue({ kind: 'pinned' })
+    const { result } = mountFoundation()
+
+    await act(async () => {
+      result.current.proceedToNativeWindowClose(false)
+    })
+
+    expect(result.current.windowCloseDialogOpen).toBe(true)
+    expect(result.current.windowCloseDialogKind).toBe('pinned')
+    expect(confirmWindowCloseMock).not.toHaveBeenCalled()
+  })
+
   // Assessment exceptions must not leave SIGKILL as the only way to close.
   it('falls through to the close when the assessment throws', async () => {
     assessWindowCloseRunningWorkMock.mockRejectedValue(new Error('store blew up'))

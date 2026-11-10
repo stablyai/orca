@@ -88,6 +88,16 @@ export function TerminalWorkspaceDialogs({
                     'auto.components.Terminal.b7c1f0a934',
                     'A remote host could not be reached, so Orca cannot tell whether work is still running there. Close the window anyway?'
                   )
+                : windowCloseDialogKind === 'chat'
+                ? translate(
+                    'auto.components.Terminal.closeWindowActiveChatsDescription',
+                    'There are active chats. Close the window anyway?'
+                  )
+                : windowCloseDialogKind === 'pinned'
+                ? translate(
+                    'auto.components.Terminal.closeWindowPinnedTabsDescription',
+                    'There are pinned tabs. Close the window anyway?'
+                  )
                 : translate(
                     'auto.components.Terminal.7958465754',
                     'There are terminals with running processes. Close the window anyway?'

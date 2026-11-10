@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { getStateMock, inspectRuntimeTerminalProcessMock } = vi.hoisted(() => ({
-  getStateMock: vi.fn(),
-  inspectRuntimeTerminalProcessMock: vi.fn()
-}))
+const { getStateMock, inspectRuntimeTerminalProcessMock, admitStructuredAgentSessionMock } =
+  vi.hoisted(() => ({
+    getStateMock: vi.fn(),
+    inspectRuntimeTerminalProcessMock: vi.fn(),
+    admitStructuredAgentSessionMock: vi.fn()
+  }))
 
 vi.mock('@/store', () => ({
   useAppStore: { getState: getStateMock }
@@ -11,6 +13,10 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   inspectRuntimeTerminalProcess: inspectRuntimeTerminalProcessMock
+}))
+
+vi.mock('@/lib/agent-session/structured-agent-session-busy', () => ({
+  admitStructuredAgentSession: admitStructuredAgentSessionMock
 }))
 
 import {
@@ -53,6 +59,14 @@ function answerWith(byPtyId: Record<string, unknown>): void {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  admitStructuredAgentSessionMock.mockImplementation((_workspace, _tab, _intent, effect) => {
+    effect(false, {
+      current: () => true,
+      busy: () => false,
+      signal: new AbortController().signal
+    })
+    return Promise.resolve()
+  })
 })
 
 afterEach(() => {
@@ -212,5 +226,199 @@ describe('assessWindowCloseRunningWork', () => {
     await assessWindowCloseRunningWork({ isQuitting: true })
 
     expect(inspectRuntimeTerminalProcessMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('warns with kind chat when an agent session in unifiedTabsByWorktree is busy', async () => {
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: null },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'agent-1',
+            entityId: 'session-1',
+            contentType: 'agent-session'
+          }
+        ]
+      },
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: {}
+    })
+    admitStructuredAgentSessionMock.mockImplementation((_ws, _tab, _intent, effect) => {
+      effect(true, {
+        current: () => true,
+        busy: () => true,
+        signal: new AbortController().signal
+      })
+      return Promise.resolve()
+    })
+
+    await expect(assessWindowCloseRunningWork({ isQuitting: false })).resolves.toEqual({
+      kind: 'chat'
+    })
+  })
+
+  it('does not warn for an agent session when it is idle', async () => {
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: null },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'agent-1',
+            entityId: 'session-1',
+            contentType: 'agent-session'
+          }
+        ]
+      },
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: {}
+    })
+    admitStructuredAgentSessionMock.mockImplementation((_ws, _tab, _intent, effect) => {
+      effect(false, {
+        current: () => true,
+        busy: () => false,
+        signal: new AbortController().signal
+      })
+      return Promise.resolve()
+    })
+
+    await expect(assessWindowCloseRunningWork({ isQuitting: false })).resolves.toEqual({
+      kind: 'none'
+    })
+  })
+
+  it('probes unified terminal tabs and warns when a process is live', async () => {
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: null },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'tab-unified-1',
+            entityId: 'term-1',
+            contentType: 'terminal'
+          }
+        ]
+      },
+      tabsByWorktree: {},
+      ptyIdsByTabId: { 'term-1': [LOCAL_PTY] },
+      terminalLayoutsByTabId: {}
+    })
+    answerWith({ [LOCAL_PTY]: BUSY })
+
+    await expect(assessWindowCloseRunningWork({ isQuitting: false })).resolves.toEqual({
+      kind: 'running'
+    })
+  })
+
+  it('warns with kind pinned when pinned tabs exist in unifiedTabsByWorktree', async () => {
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: null, confirmClosePinnedTab: true },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'tab-pinned-1',
+            entityId: 'editor-1',
+            contentType: 'editor',
+            isPinned: true
+          }
+        ]
+      },
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: {}
+    })
+
+    await expect(assessWindowCloseRunningWork({ isQuitting: false })).resolves.toEqual({
+      kind: 'pinned'
+    })
+  })
+
+  it('does not warn for pinned tabs when confirmClosePinnedTab is false', async () => {
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: null, confirmClosePinnedTab: false },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'tab-pinned-1',
+            entityId: 'editor-1',
+            contentType: 'editor',
+            isPinned: true
+          }
+        ]
+      },
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: {}
+    })
+
+    await expect(assessWindowCloseRunningWork({ isQuitting: false })).resolves.toEqual({
+      kind: 'none'
+    })
+  })
+
+  it('skips chat and terminal process confirmation when skipCloseTerminalWithRunningProcessConfirm is true', async () => {
+    getStateMock.mockReturnValue({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        skipCloseTerminalWithRunningProcessConfirm: true,
+        confirmClosePinnedTab: false
+      },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'agent-1',
+            entityId: 'session-1',
+            contentType: 'agent-session'
+          }
+        ]
+      },
+      tabsByWorktree: { 'worktree-1': [{ id: 'tab-1' }] },
+      ptyIdsByTabId: { 'tab-1': [LOCAL_PTY] },
+      terminalLayoutsByTabId: {}
+    })
+    answerWith({ [LOCAL_PTY]: BUSY })
+
+    await expect(assessWindowCloseRunningWork({ isQuitting: false })).resolves.toEqual({
+      kind: 'none'
+    })
+    expect(admitStructuredAgentSessionMock).not.toHaveBeenCalled()
+    expect(inspectRuntimeTerminalProcessMock).not.toHaveBeenCalled()
+  })
+
+  it('prioritizes busy chat over pinned tabs', async () => {
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: null, confirmClosePinnedTab: true },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'agent-1',
+            entityId: 'session-1',
+            contentType: 'agent-session'
+          },
+          {
+            id: 'tab-pinned-1',
+            entityId: 'editor-1',
+            contentType: 'editor',
+            isPinned: true
+          }
+        ]
+      },
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: {}
+    })
+    admitStructuredAgentSessionMock.mockImplementation((_ws, _tab, _intent, effect) => {
+      effect(true, {
+        current: () => true,
+        busy: () => true,
+        signal: new AbortController().signal
+      })
+      return Promise.resolve()
+    })
+
+    await expect(assessWindowCloseRunningWork({ isQuitting: false })).resolves.toEqual({
+      kind: 'chat'
+    })
   })
 })
