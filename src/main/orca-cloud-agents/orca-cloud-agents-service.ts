@@ -18,7 +18,11 @@ import {
   type AgentCredentialsClient
 } from './agent-credentials-client'
 import { runClaudeSetupToken, type SpawnSetupToken } from './claude-setup-token-runner'
-import { startCodexBrokerSession, type CodexBrokerSession } from './codex-broker-driver'
+import {
+  isCodexSignInUrl,
+  startCodexBrokerSession,
+  type CodexBrokerSession
+} from './codex-broker-driver'
 
 export type OrcaCloudAgentsServiceDeps = {
   client: AgentCredentialsClient | null
@@ -27,6 +31,11 @@ export type OrcaCloudAgentsServiceDeps = {
   readClaudeEmail: () => string | null
   openExternal: (url: string) => Promise<void>
   broadcast: (setups: OrcaCloudAgentSetups) => void
+  /**
+   * Who is signed in to Orca (null when signed out). A setup belongs to the identity it started
+   * under: if that changes, its result is dropped instead of landing in another Orca account.
+   */
+  identity?: () => string | null
   now?: () => number
   codexPollMs?: number
 }
@@ -49,11 +58,7 @@ export function isProviderSignInUrl(agent: OrcaCloudAccountAgent, value: string)
   if (agent === 'claude') {
     return CLAUDE_REOPEN_HOSTS.has(url.hostname)
   }
-  return (
-    url.hostname === 'openai.com' ||
-    url.hostname.endsWith('.openai.com') ||
-    url.hostname === 'chatgpt.com'
-  )
+  return isCodexSignInUrl(value)
 }
 
 export function createOrcaCloudAgentsService(deps: OrcaCloudAgentsServiceDeps) {
@@ -63,10 +68,49 @@ export function createOrcaCloudAgentsService(deps: OrcaCloudAgentsServiceDeps) {
   let claudeUrl: string | null = null
   let codexSession: CodexBrokerSession | null = null
   let codexRun: { live: boolean } | null = null
+  // A captured or pasted token is being stored: it can't be cancelled or raced by another one.
+  let claudeSaving = false
+  const identity = deps.identity ?? (() => null)
+  let setupsIdentity = identity()
 
   const update = (agent: OrcaCloudAccountAgent, setup: OrcaCloudAgentSetup): void => {
     setups = { ...setups, [agent]: setup }
-    deps.broadcast(setups)
+    try {
+      deps.broadcast(setups)
+    } catch {
+      // A closing window must not break the setup itself.
+    }
+  }
+
+  function stopClaudeRun(): void {
+    claudeRun?.abort()
+    claudeRun = null
+    claudeUrl = null
+  }
+
+  function stopCodexRun(): CodexBrokerSession | null {
+    const session = codexSession
+    codexSession = null
+    if (codexRun) {
+      codexRun.live = false
+      codexRun = null
+    }
+    return session
+  }
+
+  /** Signing out or switching Orca accounts ends any setup that started under the old one. */
+  function followIdentity(): void {
+    const current = identity()
+    if (current === setupsIdentity) {
+      return
+    }
+    setupsIdentity = current
+    stopClaudeRun()
+    void stopCodexRun()?.cancel()
+    if (!claudeSaving) {
+      update('claude', { phase: 'idle' })
+    }
+    update('codex', { phase: 'idle' })
   }
 
   async function attempt<T>(
@@ -88,21 +132,29 @@ export function createOrcaCloudAgentsService(deps: OrcaCloudAgentsServiceDeps) {
   /** Stores a Claude token in the Orca account; the token goes out once and is dropped here. */
   async function storeClaude(
     token: string,
-    label: string | null
+    label: string | null,
+    owner: string | null
   ): Promise<OrcaCloudAgentsResult<true>> {
+    if (identity() !== owner) {
+      update('claude', { phase: 'failed', error: 'signed_out' })
+      return { ok: false, error: 'signed_out' }
+    }
+    claudeSaving = true
     update('claude', { phase: 'saving' })
     const result = await attempt(async (client) => {
       await client.putClaude(token, label ?? undefined)
       return true as const
     })
+    claudeSaving = false
     update('claude', result.ok ? { phase: 'saved' } : { phase: 'failed', error: result.error })
     return result
   }
 
   function startClaude(): void {
-    if (claudeRun) {
+    if (claudeRun || claudeSaving) {
       return
     }
+    const owner = identity()
     const controller = new AbortController()
     claudeRun = controller
     claudeUrl = null
@@ -124,7 +176,7 @@ export function createOrcaCloudAgentsService(deps: OrcaCloudAgentsServiceDeps) {
       claudeRun = null
       claudeUrl = null
       if (outcome.ok) {
-        await storeClaude(outcome.token, deps.readClaudeEmail())
+        await storeClaude(outcome.token, deps.readClaudeEmail(), owner)
         return
       }
       switch (outcome.error) {
@@ -149,14 +201,21 @@ export function createOrcaCloudAgentsService(deps: OrcaCloudAgentsServiceDeps) {
     // Updates from a cancelled run are dropped (the driver reports its first step synchronously).
     const run = { live: true }
     codexRun = run
+    const owner = identity()
     const session = startCodexBrokerSession({
       client: deps.client!,
       now,
       ...(deps.codexPollMs ? { pollMs: deps.codexPollMs } : {}),
       onUpdate: (setup) => {
-        if (run.live) {
-          update('codex', setup)
+        if (!run.live) {
+          return
         }
+        if (identity() !== owner) {
+          void stopCodexRun()?.cancel()
+          update('codex', { phase: 'failed', error: 'signed_out' })
+          return
+        }
+        update('codex', setup)
       }
     })
     codexSession = session
@@ -168,18 +227,24 @@ export function createOrcaCloudAgentsService(deps: OrcaCloudAgentsServiceDeps) {
   }
 
   return {
-    setups: (): OrcaCloudAgentSetups => setups,
+    setups: (): OrcaCloudAgentSetups => {
+      followIdentity()
+      return setups
+    },
 
-    status: (): Promise<OrcaCloudAgentsResult<OrcaCloudAgentsStatus>> =>
-      attempt(async (client) => {
+    status: (): Promise<OrcaCloudAgentsResult<OrcaCloudAgentsStatus>> => {
+      followIdentity()
+      return attempt(async (client) => {
         const [credentials, sources] = await Promise.all([client.credentials(), client.sources()])
         return { credentials, sources }
-      }),
+      })
+    },
 
     start: (agent: OrcaCloudAccountAgent): OrcaCloudAgentsResult<true> => {
       if (!deps.client) {
         return { ok: false, error: 'not_configured' }
       }
+      followIdentity()
       if (agent === 'claude') {
         startClaude()
       } else {
@@ -190,18 +255,15 @@ export function createOrcaCloudAgentsService(deps: OrcaCloudAgentsServiceDeps) {
 
     cancel: async (agent: OrcaCloudAccountAgent): Promise<void> => {
       if (agent === 'claude') {
-        claudeRun?.abort()
-        claudeRun = null
-        claudeUrl = null
+        // A token already on its way to the Orca account finishes; the row shows the result.
+        if (claudeSaving) {
+          return
+        }
+        stopClaudeRun()
         update('claude', { phase: 'idle' })
         return
       }
-      const session = codexSession
-      codexSession = null
-      if (codexRun) {
-        codexRun.live = false
-        codexRun = null
-      }
+      const session = stopCodexRun()
       update('codex', { phase: 'idle' })
       await session?.cancel()
     },
@@ -220,9 +282,10 @@ export function createOrcaCloudAgentsService(deps: OrcaCloudAgentsServiceDeps) {
 
     /** "Paste the token instead": stop setup-token and show the masked field. */
     usePaste: (): void => {
-      claudeRun?.abort()
-      claudeRun = null
-      claudeUrl = null
+      if (claudeSaving) {
+        return
+      }
+      stopClaudeRun()
       update('claude', { phase: 'paste', reason: 'chosen' })
     },
 
@@ -232,10 +295,12 @@ export function createOrcaCloudAgentsService(deps: OrcaCloudAgentsServiceDeps) {
       if (!CLAUDE_SETUP_TOKEN_PATTERN.test(token)) {
         return { ok: false, error: 'invalid_token' }
       }
-      claudeRun?.abort()
-      claudeRun = null
+      if (claudeSaving) {
+        return { ok: false, error: 'unavailable' }
+      }
+      stopClaudeRun()
       // A pasted token may come from another account, so no label: the server names it.
-      const result = await storeClaude(token, null)
+      const result = await storeClaude(token, null, identity())
       if (!result.ok && result.error === 'invalid_token') {
         // Keep the field open so the person can paste again.
         update('claude', { phase: 'paste', reason: 'chosen' })

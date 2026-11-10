@@ -30,7 +30,13 @@ const DEFAULT_TIMEOUT_MS = 600_000
 const MAX_SCAN_CHARS = 16_000
 // After the token prints, setup-token exits on its own; this is the backstop.
 const EXIT_GRACE_MS = 3_000
-// Terminal escapes become a separator, so a styled word right after the token can't extend it.
+// Redraws can repeat the token; the longest complete copy seen in this window wins.
+const SETTLE_MS = 1_000
+// Styling and cursor show/hide never break a line, so they vanish; every other terminal escape
+// (cursor moves, erases) and control character becomes a line break, so text from another spot on
+// the screen can't extend the token.
+// eslint-disable-next-line no-control-regex
+const INLINE_ESCAPE = /\u001b\[[0-9;:?]*[mhl]/g
 const TERMINAL_ESCAPE =
   // eslint-disable-next-line no-control-regex
   /\u001b\[[0-?]*[ -/]*[@-~]|\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)|\u001b[@-Z\\-_]|[\u0000-\u0008\u000b-\u001f\u007f]/g
@@ -42,12 +48,13 @@ const AUTHORIZE_HOSTS = new Set(['claude.ai', 'claude.com', 'console.anthropic.c
 const LINK = /https:\/\/[^\s"'<>]+(?=\s)/g
 
 function plainText(raw: string): string {
-  return raw.replace(TERMINAL_ESCAPE, '\n')
+  return raw.replace(INLINE_ESCAPE, '').replace(TERMINAL_ESCAPE, '\n')
 }
 
 /**
- * The setup-token in `text`, once it is complete: followed by a non-token character, or at the end
- * when `final` (the process exited). Exported for tests; callers never log its result.
+ * The setup-token in `text`, once complete: followed by a non-token character, or at the end when
+ * `final` (the process exited). With several copies (a redraw), the longest wins, so a copy cut by
+ * a repaint never beats the whole one. Exported for tests; callers never log its result.
  */
 export function findSetupToken(text: string, final: boolean): string | null {
   const plain = plainText(text)
@@ -55,8 +62,11 @@ export function findSetupToken(text: string, final: boolean): string | null {
   for (const match of plain.matchAll(TOKEN_CANDIDATE)) {
     const end = (match.index ?? 0) + match[0].length
     const terminated = end < plain.length && !TOKEN_CHAR.test(plain[end])
-    if ((terminated || final) && CLAUDE_SETUP_TOKEN_PATTERN.test(match[0])) {
-      // The last complete one wins: a redraw repeats the same token.
+    if (
+      (terminated || final) &&
+      CLAUDE_SETUP_TOKEN_PATTERN.test(match[0]) &&
+      match[0].length > (found?.length ?? 0)
+    ) {
       found = match[0]
     }
   }
@@ -96,8 +106,15 @@ export function runClaudeSetupToken(options: {
     let exited = false
     let scanned = ''
     let linkSeen = false
+    let best: string | null = null
     let timer: ReturnType<typeof setTimeout> | null = null
+    let settleTimer: ReturnType<typeof setTimeout> | null = null
     let graceTimer: ReturnType<typeof setTimeout> | null = null
+    const remember = (token: string | null): void => {
+      if (token && token.length > (best?.length ?? 0)) {
+        best = token
+      }
+    }
 
     const kill = (): void => {
       if (child && !exited) {
@@ -116,9 +133,13 @@ export function runClaudeSetupToken(options: {
       if (timer) {
         clearTimeout(timer)
       }
+      if (settleTimer) {
+        clearTimeout(settleTimer)
+      }
       signal.removeEventListener('abort', onAbort)
       // Nothing of the output outlives the run.
       scanned = ''
+      best = null
       if (stop === 'kill') {
         kill()
       } else if (stop === 'grace' && !exited) {
@@ -146,9 +167,17 @@ export function runClaudeSetupToken(options: {
             return
           }
           scanned = `${scanned}${chunk}`.slice(-MAX_SCAN_CHARS)
-          const token = findSetupToken(scanned, false)
-          if (token) {
-            finish({ ok: true, token }, 'grace')
+          remember(findSetupToken(scanned, false))
+          if (best && !settleTimer) {
+            settleTimer = setTimeout(() => {
+              const token = best
+              if (token) {
+                finish({ ok: true, token }, 'grace')
+              }
+            }, SETTLE_MS)
+            settleTimer.unref?.()
+          }
+          if (best) {
             return
           }
           if (DENIED.test(plainText(scanned))) {
@@ -168,7 +197,10 @@ export function runClaudeSetupToken(options: {
           if (graceTimer) {
             clearTimeout(graceTimer)
           }
-          const token = settled ? null : findSetupToken(scanned, true)
+          if (!settled) {
+            remember(findSetupToken(scanned, true))
+          }
+          const token = best
           finish(token ? { ok: true, token } : { ok: false, error: 'capture_failed' }, 'none')
         })
       },

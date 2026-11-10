@@ -73,7 +73,7 @@ describe('orca cloud agents service', () => {
     vi.restoreAllMocks()
   })
 
-  function setup(client = fakeClient()) {
+  function setup(client = fakeClient(), identity: () => string | null = () => 'p1:u1') {
     const child = fakeChild()
     const broadcasts: OrcaCloudAgentSetups[] = []
     const openExternal = vi.fn(async () => {})
@@ -82,7 +82,8 @@ describe('orca cloud agents service', () => {
       spawnSetupToken: async () => child,
       readClaudeEmail: () => 'a@acme.dev',
       openExternal,
-      broadcast: (setups) => broadcasts.push(setups)
+      broadcast: (setups) => broadcasts.push(setups),
+      identity
     })
     return { service, child, broadcasts, openExternal, client }
   }
@@ -104,6 +105,7 @@ describe('orca cloud agents service', () => {
     expect(await service.reopen('claude')).toBe(true)
     expect(openExternal).toHaveBeenCalledWith(AUTHORIZE)
     child.emit(`Your OAuth token (valid for 1 year):\n\n${TOKEN}\n\nStore this token`)
+    child.exit()
     await tick()
     expect(client.putClaude).toHaveBeenCalledWith(TOKEN, 'a@acme.dev')
     expect(service.setups().claude).toEqual({ phase: 'saved' })
@@ -156,6 +158,43 @@ describe('orca cloud agents service', () => {
     await tick()
     expect(client.putClaude).not.toHaveBeenCalled()
     expect(service.setups().claude).toEqual({ phase: 'idle' })
+  })
+
+  it('drops a captured token when the Orca account changed during setup', async () => {
+    let who = 'p1:u1'
+    const { service, child, client, broadcasts } = setup(fakeClient(), () => who)
+    service.start('claude')
+    await tick()
+    who = 'p1:u2'
+    child.emit(`${TOKEN}\n`)
+    child.exit()
+    await tick()
+    expect(client.putClaude).not.toHaveBeenCalled()
+    expect(broadcasts.at(-1)?.claude).toEqual({ phase: 'failed', error: 'signed_out' })
+    // The next read under the new account starts clean.
+    expect(service.setups().claude).toEqual({ phase: 'idle' })
+  })
+
+  it('does not let cancel or a paste race a token that is being stored', async () => {
+    let release: () => void = () => {}
+    const client = fakeClient({
+      putClaude: vi.fn(
+        () =>
+          new Promise<AgentCredentialsView>((resolve) => {
+            release = () => resolve(VIEW)
+          })
+      )
+    })
+    const { service } = setup(client)
+    const first = service.pasteClaudeToken(TOKEN)
+    await tick()
+    expect(service.setups().claude).toEqual({ phase: 'saving' })
+    await service.cancel('claude')
+    expect(await service.pasteClaudeToken(TOKEN)).toEqual({ ok: false, error: 'unavailable' })
+    expect(service.setups().claude).toEqual({ phase: 'saving' })
+    release()
+    expect(await first).toEqual({ ok: true, value: true })
+    expect(client.putClaude).toHaveBeenCalledTimes(1)
   })
 
   it('reports not_configured without a control plane', () => {

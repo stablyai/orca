@@ -42,7 +42,7 @@ async function started(child: FakeChild) {
   const outcome = runClaudeSetupToken({
     spawn: async () => child,
     signal: controller.signal,
-    timeoutMs: 1_000,
+    timeoutMs: 10_000,
     onAuthorizeUrl
   })
   // Let the spawn promise settle so listeners are attached.
@@ -58,8 +58,15 @@ describe('findSetupToken', () => {
     expect(findSetupToken(`Your OAuth token:\n${TOKEN}`, true)).toBe(TOKEN)
   })
 
-  it('treats terminal styling as a separator, so a styled word after it is not absorbed', () => {
-    expect(findSetupToken(`\u001b[1m${TOKEN}\u001b[22mStore this token`, false)).toBe(TOKEN)
+  it('drops styling inside the token but breaks on cursor moves around it', () => {
+    const styled = `${TOKEN.slice(0, 30)}\u001b[?25l\u001b[1m${TOKEN.slice(30)}\u001b[22m`
+    expect(findSetupToken(`${styled}\n`, false)).toBe(TOKEN)
+    expect(findSetupToken(`${TOKEN}\u001b[7;1HStore this token`, false)).toBe(TOKEN)
+  })
+
+  it('prefers the whole token over a copy a repaint cut short', () => {
+    const cut = `${TOKEN.slice(0, 40)}\u001b[3;1H${TOKEN.slice(40)}`
+    expect(findSetupToken(`${cut}\n${TOKEN}\n`, false)).toBe(TOKEN)
   })
 
   it('ignores anything that is not a setup-token', () => {
@@ -83,14 +90,30 @@ describe('runClaudeSetupToken', () => {
   })
 
   it('captures the token across chunks and reports the sign-in link once', async () => {
+    vi.useFakeTimers()
     const child = fakeChild()
     const { outcome, onAuthorizeUrl } = await started(child)
     child.emit(`Opening browser…\n${AUTHORIZE}\n`)
     child.emit(`${AUTHORIZE}\n`)
     child.emit(`\u001b[32m✓\u001b[0m Your token:\n${TOKEN.slice(0, 30)}`)
     child.emit(`${TOKEN.slice(30)}\n`)
+    await vi.advanceTimersByTimeAsync(1_000)
     await expect(outcome).resolves.toEqual({ ok: true, token: TOKEN })
     expect(onAuthorizeUrl).toHaveBeenCalledTimes(1)
+    // The child exits on its own; the backstop kills it only if it doesn't.
+    expect(child.killed).toBe(false)
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(child.killed).toBe(true)
+  })
+
+  it('waits for a repaint before settling on a token', async () => {
+    vi.useFakeTimers()
+    const child = fakeChild()
+    const { outcome } = await started(child)
+    child.emit(`${TOKEN.slice(0, 40)}\u001b[3;1H${TOKEN.slice(40)}\n`)
+    child.emit(`\u001b[2J${TOKEN}\n`)
+    await vi.advanceTimersByTimeAsync(1_000)
+    await expect(outcome).resolves.toEqual({ ok: true, token: TOKEN })
   })
 
   it('takes a token printed right before exit', async () => {
@@ -137,8 +160,22 @@ describe('runClaudeSetupToken', () => {
     vi.useFakeTimers()
     const slow = fakeChild()
     const second = await started(slow)
-    vi.advanceTimersByTime(1_001)
+    vi.advanceTimersByTime(10_001)
     await expect(second.outcome).resolves.toEqual({ ok: false, error: 'timed_out' })
     expect(slow.killed).toBe(true)
+  })
+})
+
+describe('setupTokenInvocation', () => {
+  it('runs a Windows shim through cmd with the shared quoting, as one verbatim line', async () => {
+    const { setupTokenInvocation } = await import('./claude-setup-token-pty')
+    const shim = 'C:\\Users\\Ada Lovelace\\AppData\\Roaming\\npm\\claude.cmd'
+    const windows = setupTokenInvocation(shim, 'win32')
+    expect(typeof windows.args).toBe('string')
+    expect(windows.args).toBe(`/d /v:off /s /c ""${shim}" "setup-token""`)
+    expect(setupTokenInvocation('/usr/local/bin/claude', 'darwin')).toEqual({
+      file: '/usr/local/bin/claude',
+      args: ['setup-token']
+    })
   })
 })

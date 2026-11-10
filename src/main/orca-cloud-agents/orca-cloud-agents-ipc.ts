@@ -9,6 +9,8 @@ import {
 import { withCloudBuildDefaults } from '../cloud-build-defaults'
 import { getHostedSandboxConfig } from '../hosted-sandbox/hosted-sandbox-config'
 import { claudeStateFile, readClaudeFolderLogin } from '../claude-accounts/claude-account-folder'
+import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
+import { getOrcaProfileIndexGeneration } from '../orca-profiles/profile-index-generation'
 import { createAgentCredentialsClient } from './agent-credentials-client'
 import { spawnClaudeSetupTokenPty } from './claude-setup-token-pty'
 import {
@@ -53,6 +55,26 @@ function readClaudeEmail(): string | null {
   }
 }
 
+/** The signed-in Orca user, re-read only when the profile index changes (sign-in, sign-out, switch). */
+function orcaIdentityReader(userDataPath: string): () => string | null {
+  let cached: { generation: number; identity: string | null } | null = null
+  return () => {
+    const generation = getOrcaProfileIndexGeneration()
+    if (cached?.generation !== generation) {
+      let identity: string | null = null
+      try {
+        const active = ensureActiveOrcaProfile(userDataPath)
+        const userId = active.profile.cloud?.userId
+        identity = userId ? `${active.profile.id}:${userId}` : null
+      } catch {
+        identity = null
+      }
+      cached = { generation, identity }
+    }
+    return cached.identity
+  }
+}
+
 // One per app: a setup running when a window reattaches keeps going instead of being orphaned.
 let shared: OrcaCloudAgentsService | null = null
 
@@ -75,7 +97,8 @@ function serviceFor(userDataPath: string): OrcaCloudAgentsService {
     spawnSetupToken: spawnClaudeSetupTokenPty,
     readClaudeEmail,
     openExternal: (url) => shell.openExternal(url),
-    broadcast
+    broadcast,
+    identity: orcaIdentityReader(userDataPath)
   })
   return shared
 }

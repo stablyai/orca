@@ -42,8 +42,8 @@ export function OrcaCloudAccountsSection(): React.JSX.Element | null {
         if (!api) {
           return 'not_configured'
         }
-        const result = await api.pasteClaudeToken({ token })
-        return result.ok ? null : result.error
+        const result = await api.pasteClaudeToken({ token }).catch(() => null)
+        return result === null ? 'unknown' : result.ok ? null : result.error
       },
       remove: async (agent) => {
         if (!api) {

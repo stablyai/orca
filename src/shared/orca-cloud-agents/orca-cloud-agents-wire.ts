@@ -57,7 +57,8 @@ export const AgentSourcesResponseSchema = z.looseObject({
 export type AgentSourcesView = z.infer<typeof AgentSourcesResponseSchema>
 
 export const CodexBrokerStartResponseSchema = z.object({
-  brokerId: z.string().min(1).max(128),
+  // Used in a request path: a leading letter or digit, so never '.' or '..'.
+  brokerId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/),
   verificationUrl: z.string().url().max(512),
   userCode: z.string().min(1).max(64),
   expiresAt: z.number().finite()

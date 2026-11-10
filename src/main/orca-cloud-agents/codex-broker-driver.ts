@@ -10,6 +10,24 @@ import {
   type AgentCredentialsClient
 } from './agent-credentials-client'
 
+/** The broker's sign-in page must be OpenAI's; anything else is never shown or opened. */
+export function isCodexSignInUrl(value: string): boolean {
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    return false
+  }
+  return (
+    url.protocol === 'https:' &&
+    !url.username &&
+    !url.password &&
+    (url.hostname === 'openai.com' ||
+      url.hostname.endsWith('.openai.com') ||
+      url.hostname === 'chatgpt.com')
+  )
+}
+
 export type CodexBrokerDriverDeps = {
   client: Pick<
     AgentCredentialsClient,
@@ -22,6 +40,8 @@ export type CodexBrokerDriverDeps = {
 }
 
 const POLL_MS = 3_000
+// Whatever the broker says, a device code is never waited on for longer than this.
+const MAX_WAIT_MS = 20 * 60_000
 // A transient poll failure is retried; this many in a row ends the setup.
 const MAX_POLL_FAILURES = 5
 const BROKER_FAILURES = new Set(['not_a_chatgpt_login', 'store_failed', 'cancelled'])
@@ -74,12 +94,18 @@ export function startCodexBrokerSession(deps: CodexBrokerDriverDeps): CodexBroke
       await deps.client.cancelCodexBroker(started.brokerId).catch(() => undefined)
       return
     }
+    if (!isCodexSignInUrl(started.verificationUrl)) {
+      await deps.client.cancelCodexBroker(started.brokerId).catch(() => undefined)
+      deps.onUpdate({ phase: 'failed', error: 'broker_unavailable' })
+      return
+    }
+    const deadline = Math.min(started.expiresAt, startedAt + MAX_WAIT_MS)
     deps.onUpdate({
       phase: 'device',
       startedAt,
       userCode: started.userCode,
       verificationUrl: started.verificationUrl,
-      expiresAt: started.expiresAt
+      expiresAt: deadline
     })
     let failures = 0
     while (!controller.signal.aborted) {
@@ -87,7 +113,7 @@ export function startCodexBrokerSession(deps: CodexBrokerDriverDeps): CodexBroke
       if (controller.signal.aborted) {
         return
       }
-      if (now() >= started.expiresAt) {
+      if (now() >= deadline) {
         await deps.client.cancelCodexBroker(started.brokerId).catch(() => undefined)
         deps.onUpdate({ phase: 'failed', error: 'code_expired' })
         return

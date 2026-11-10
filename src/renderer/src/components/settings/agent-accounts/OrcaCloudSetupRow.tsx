@@ -35,11 +35,15 @@ function PasteTokenForm({
       return
     }
     setSaving(true)
-    const result = await onPaste(value)
-    setSaving(false)
-    // The field is cleared either way: a rejected value isn't kept around in the renderer.
-    setValue('')
-    setError(result)
+    let result: OrcaCloudAgentsErrorCode | null = 'unknown'
+    try {
+      result = await onPaste(value)
+    } finally {
+      setSaving(false)
+      // Cleared whatever happens: a value that wasn't stored isn't kept around in the renderer.
+      setValue('')
+      setError(result)
+    }
   }
   return (
     <form className="space-y-1.5" onSubmit={(event) => void submit(event)}>

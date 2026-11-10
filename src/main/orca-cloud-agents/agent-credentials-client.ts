@@ -34,7 +34,8 @@ export type AgentCredentialsClient = {
 }
 
 const CancelResponse = z.looseObject({})
-const BROKER_ID = /^[A-Za-z0-9_.:-]{1,128}$/
+// Leading letter or digit: '.' and '..' would resolve to another path.
+const BROKER_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/
 
 function brokerPath(brokerId: string): string {
   if (!BROKER_ID.test(brokerId)) {
@@ -83,13 +84,13 @@ export function createAgentCredentialsClient(
   }
 }
 
-const SERVER_CODES: Partial<Record<string, OrcaCloudAgentsErrorCode>> = {
-  broker_in_progress: 'broker_in_progress',
-  rate_limited: 'rate_limited',
-  broker_unavailable: 'broker_unavailable',
-  no_golden_image: 'no_golden_image',
-  not_configured: 'not_configured'
-}
+const SERVER_CODES = new Map<string, OrcaCloudAgentsErrorCode>([
+  ['broker_in_progress', 'broker_in_progress'],
+  ['rate_limited', 'rate_limited'],
+  ['broker_unavailable', 'broker_unavailable'],
+  ['no_golden_image', 'no_golden_image'],
+  ['not_configured', 'not_configured']
+])
 
 /** The code the renderer turns into copy. Never the error's message. */
 export function agentCredentialsFailureCode(error: unknown): OrcaCloudAgentsErrorCode {
@@ -97,7 +98,7 @@ export function agentCredentialsFailureCode(error: unknown): OrcaCloudAgentsErro
     return 'unknown'
   }
   const serverError = error instanceof HostedSandboxRefusalError ? error.serverError : null
-  const named = serverError ? SERVER_CODES[serverError] : undefined
+  const named = serverError ? SERVER_CODES.get(serverError) : undefined
   if (named) {
     return named
   }

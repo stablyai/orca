@@ -9,11 +9,14 @@ const START = {
   expiresAt: 1_000
 }
 
-function harness(statuses: { status: 'pending' | 'active' | 'failed'; error?: string }[]) {
+function harness(
+  statuses: { status: 'pending' | 'active' | 'failed'; error?: string }[],
+  start = START
+) {
   let clock = 0
   const updates: OrcaCloudAgentSetup[] = []
   const client = {
-    startCodexBroker: vi.fn(async () => START),
+    startCodexBroker: vi.fn(async () => start),
     codexBrokerStatus: vi.fn(async () => statuses.shift() ?? { status: 'pending' as const }),
     cancelCodexBroker: vi.fn(async () => {})
   }
@@ -59,6 +62,27 @@ describe('startCodexBrokerSession', () => {
     await session.done
     expect(client.cancelCodexBroker).toHaveBeenCalledWith('brk_1')
     expect(updates.map((u) => u.phase)).not.toContain('saved')
+  })
+
+  it('never shows a sign-in page that is not OpenAI', async () => {
+    const { session, updates, client } = harness([], {
+      ...START,
+      verificationUrl: 'https://evil.example/device'
+    })
+    await session.done
+    expect(updates.map((u) => u.phase)).toEqual(['preparing', 'failed'])
+    expect(client.cancelCodexBroker).toHaveBeenCalledWith('brk_1')
+  })
+
+  it('caps the wait even if the broker says the code lasts for days', async () => {
+    const { session, updates } = harness(
+      Array.from({ length: 30 }, () => ({ status: 'pending' as const })),
+      { ...START, expiresAt: Number.MAX_SAFE_INTEGER }
+    )
+    // The fake clock moves 100 ms per poll, so cap it via a short wait in this test.
+    await Promise.race([session.done, new Promise((resolve) => setTimeout(resolve, 50))])
+    await session.cancel()
+    expect(updates[1]).toMatchObject({ phase: 'device', expiresAt: 20 * 60_000 })
   })
 
   it('maps a refused start to a code', async () => {

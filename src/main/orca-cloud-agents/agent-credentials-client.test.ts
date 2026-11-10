@@ -117,6 +117,16 @@ describe('createAgentCredentialsClient', () => {
       'DELETE /v1/agent-credentials/codex/broker/brk_1'
     ])
     await expect(client.codexBrokerStatus('../secrets')).rejects.toThrow()
+    await expect(client.cancelCodexBroker('..')).rejects.toThrow()
+  })
+
+  it('never maps an inherited property name to a code', async () => {
+    const { client } = fakeControlPlane(() =>
+      Response.json({ error: 'constructor' }, { status: 500 })
+    )
+    expect(agentCredentialsFailureCode(await failure(() => client.credentials()))).toBe(
+      'unavailable'
+    )
   })
 
   it('writes the default Source', async () => {

@@ -1,8 +1,11 @@
 // Production spawn for the setup-token runner: `claude setup-token` in a pseudo-terminal, because
 // Claude's sign-in UI needs a TTY. Wide columns keep the printed token on one line.
 import { stat } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { isAbsolute } from 'node:path'
 import { resolveClaudeCommand, withCliRuntimeOnPath } from '../codex-cli/command'
+import { buildClaudeChildProcessEnv } from '../claude/claude-child-process-environment'
+import { buildWindowsCommandInvocation } from '../claude-accounts/windows-command-invocation'
 import { stripInheritedClaudeSessionEnv } from '../../shared/agent-launch/startup/claude-parent-session-env'
 import type { SetupTokenProcess, SpawnSetupToken } from './claude-setup-token-runner'
 
@@ -12,18 +15,31 @@ function enoent(): Error {
   return Object.assign(new Error('claude is not installed.'), { code: 'ENOENT' })
 }
 
+/**
+ * What to run. Windows shims (.cmd) go through the command interpreter with the same quoting as
+ * Orca's other Claude commands, handed to ConPTY as one verbatim command line.
+ */
+export function setupTokenInvocation(
+  command: string,
+  platform: NodeJS.Platform = process.platform
+): { file: string; args: string[] | string } {
+  if (platform === 'win32' && /\.(cmd|bat)$/i.test(command)) {
+    const invocation = buildWindowsCommandInvocation(command, ['setup-token'])
+    return { file: invocation.command, args: invocation.args.join(' ') }
+  }
+  return { file: command, args: ['setup-token'] }
+}
+
 export const spawnClaudeSetupTokenPty: SpawnSetupToken = async () => {
   const command = resolveClaudeCommand()
   if (isAbsolute(command) && !(await stat(command).catch(() => null))) {
     throw enoent()
   }
-  const env: NodeJS.ProcessEnv = { ...process.env }
+  // Like Orca's other Claude children: no inherited auth overrides, no parent session stamps.
+  const env: NodeJS.ProcessEnv = buildClaudeChildProcessEnv()
   stripInheritedClaudeSessionEnv(env)
   const childEnv = withCliRuntimeOnPath(command, { ...env, TERM: 'xterm-256color' })
-  // Windows shims (.cmd) need the command interpreter; ConPTY can't start them directly.
-  const viaShell = process.platform === 'win32' && /\.(cmd|bat)$/i.test(command)
-  const file = viaShell ? (process.env.ComSpec ?? 'cmd.exe') : command
-  const args = viaShell ? ['/d', '/s', '/c', `"${command}" setup-token`] : ['setup-token']
+  const { file, args } = setupTokenInvocation(command)
   const pty = await import('node-pty')
   let child: ReturnType<typeof pty.spawn>
   try {
@@ -31,12 +47,13 @@ export const spawnClaudeSetupTokenPty: SpawnSetupToken = async () => {
       name: 'xterm-256color',
       cols: COLUMNS,
       rows: 40,
+      cwd: homedir(),
       env: childEnv as Record<string, string>
     })
   } catch (error) {
     throw (error as { code?: unknown })?.code === 'ENOENT' ? enoent() : error
   }
-  const process_: SetupTokenProcess = {
+  const handle: SetupTokenProcess = {
     onData: (listener) => {
       child.onData(listener)
     },
@@ -45,5 +62,5 @@ export const spawnClaudeSetupTokenPty: SpawnSetupToken = async () => {
     },
     kill: () => child.kill()
   }
-  return process_
+  return handle
 }

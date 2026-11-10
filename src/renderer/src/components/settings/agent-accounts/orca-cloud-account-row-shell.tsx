@@ -61,7 +61,7 @@ export function RowShell({
   return (
     <li
       data-orca-cloud-account={agent}
-      className="grid min-h-16 grid-cols-[6rem_minmax(0,1fr)] items-center gap-x-4 border-t border-border py-3 first:border-t-0"
+      className="grid min-h-16 grid-cols-[5rem_minmax(0,1fr)] items-center gap-x-4 border-t border-border py-3 first:border-t-0"
     >
       <h4 className="text-sm font-medium text-foreground">{agentName(agent, t)}</h4>
       <div className="flex min-w-0 flex-col gap-2">
