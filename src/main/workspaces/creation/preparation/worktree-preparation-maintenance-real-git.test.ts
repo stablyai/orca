@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import * as gitRunner from '../../../git/command-runner/git-exec-file'
+import { toHostFilesystemPath } from '../../../filesystem/host-tree-removal'
 import { preparationCapacityUsed } from './worktree-preparation-discard-retry'
 import { _resetWorktreeCreatePreparationsForTests } from './worktree-create-preparation'
 import { discardRepoPreparations, listPreparations } from './worktree-create-preparation-pool'
@@ -65,7 +66,7 @@ it('retires a parked identity-read lease, then removes only through its fresh na
   const lock = git(entry.preparedPath, 'rev-parse', '--git-path', 'locked')
   const readStarted = Promise.withResolvers<void>()
   const readReleased = Promise.withResolvers<void>()
-  identityRead.path = dirname(lock)
+  identityRead.path = dirname(toHostFilesystemPath(lock))
   identityRead.started = readStarted.resolve
   identityRead.resume = readReleased.promise
   const run = gitRunner.gitExecFileAsync
@@ -111,7 +112,7 @@ it('keeps original pause acquisition as its wake and never releases the successo
   vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
   enableMaintenance()
   const maintenance = getLocalRepoRefMaintenance()
-  const pause = maintenance.pause.bind(maintenance)
+  const acquireLease = maintenance.pause.bind(maintenance)
   const acquiring = Promise.withResolvers<void>()
   const acquired = Promise.withResolvers<void>()
   const successor = Promise.withResolvers<void>()
@@ -119,7 +120,7 @@ it('keeps original pause acquisition as its wake and never releases the successo
   const releases: string[] = []
   vi.spyOn(maintenance, 'pause')
     .mockImplementationOnce(async (reason) => {
-      const release = await pause(reason)
+      const release = await acquireLease(reason)
       acquired.resolve()
       await acquiring.promise
       return () => {
@@ -128,7 +129,7 @@ it('keeps original pause acquisition as its wake and never releases the successo
       }
     })
     .mockImplementationOnce(async (reason) => {
-      const release = await pause(reason)
+      const release = await acquireLease(reason)
       successorReady.resolve()
       await successor.promise
       return release
