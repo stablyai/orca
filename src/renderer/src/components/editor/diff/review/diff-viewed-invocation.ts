@@ -61,19 +61,27 @@ export async function requestViewedMark({
   onFailure: () => void
 }): Promise<void> {
   try {
+    const worktreePath = owner.worktreePath
+    if (!worktreePath) {
+      onFailure()
+      return
+    }
     const invokingState = useAppStore.getState()
     const invokingTab = editorViewTab(invokingState, file.id, viewId)
     const placement = editorViewPlacement(invokingState, file, viewId)
     const operation = acquireEditorFileOperation(useAppStore.getState, file)
-    const modifiedTime = await statRuntimePath(operation.context, file.filePath).then(
-      (stat) => stat.mtime,
-      (error: unknown) => {
-        if (isMissingRuntimePathError(error)) {
-          return null
-        }
-        throw error
-      }
-    )
+    const modifiedTime =
+      file.diffSource === 'commit'
+        ? null
+        : await statRuntimePath(operation.context, file.filePath).then(
+            (stat) => stat.mtime,
+            (error: unknown) => {
+              if (isMissingRuntimePathError(error)) {
+                return null
+              }
+              throw error
+            }
+          )
     operation.assertCurrent()
     if (!isMounted() || !isCurrentContent() || modifiedTime !== content.reviewModifiedTime) {
       return
@@ -85,11 +93,14 @@ export async function requestViewedMark({
     }
     const listKey = diffReviewListKey(diffReviewOwnerKey(owner), scope)
     let entries = getDiffReviewList(listKey)
-    if (entries.length === 0 && (file.diffSource === 'unstaged' || file.diffSource === 'staged')) {
+    if (
+      !entries.some((entry) => entry.key === key) &&
+      (file.diffSource === 'unstaged' || file.diffSource === 'staged')
+    ) {
       entries = buildUncommittedReviewEntries({
         owner,
         worktreeId: file.worktreeId,
-        worktreePath: owner.worktreePath!,
+        worktreePath: worktreePath,
         rows: buildSourceControlDisplaySections(
           groupSourceControlEntries(state.gitStatusByWorktree[file.worktreeId] ?? []),
           resolveSourceControlGroupOrder(state.settings?.sourceControlGroupOrder)
@@ -101,7 +112,7 @@ export async function requestViewedMark({
           operation.provenance.generation.route.runtimeEnvironmentId ?? undefined
       })
     }
-    if (entries.length === 0 && file.diffSource === 'branch') {
+    if (!entries.some((entry) => entry.key === key) && file.diffSource === 'branch') {
       const compare = state.gitBranchCompareSummaryByWorktree[file.worktreeId]
       if (
         compare?.status === 'ready' &&
@@ -123,7 +134,7 @@ export async function requestViewedMark({
                 .getState()
                 .openBranchDiff(
                   file.worktreeId,
-                  owner.worktreePath!,
+                  worktreePath,
                   entry,
                   compare,
                   detectLanguage(entry.path),

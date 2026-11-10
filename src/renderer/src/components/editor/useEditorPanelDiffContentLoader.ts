@@ -99,6 +99,17 @@ export function useEditorPanelDiffContentLoader({
           // Forced reloads must bypass deduped reads that predate external changes.
           inFlightDiffReads.delete(key)
         }
+        const readReviewMetadata = () =>
+          effectiveDiffSource === 'commit'
+            ? Promise.resolve(null)
+            : statRuntimePath(
+                { target: fileTarget, worktreeId: file.worktreeId, worktreePath, connectionId },
+                file.filePath
+              ).then(
+                (stat) => stat.mtime,
+                (error: unknown) => (isMissingRuntimePathError(error) ? null : undefined)
+              )
+        const beforeTime = await readReviewMetadata()
         let pending = inFlightDiffReads.get(key)
         if (!pending) {
           const promise: Promise<DiffContent> =
@@ -165,13 +176,6 @@ export function useEditorPanelDiffContentLoader({
             }
           })
         }
-        const reviewMetadata = statRuntimePath(
-          { target: fileTarget, worktreeId: file.worktreeId, worktreePath, connectionId },
-          file.filePath
-        ).then(
-          (stat) => stat.mtime,
-          (error: unknown) => (isMissingRuntimePathError(error) ? null : undefined)
-        )
         const result = await pending.promise
         if (diffReadGenerationRef.current[file.id] !== generation) {
           return
@@ -185,7 +189,8 @@ export function useEditorPanelDiffContentLoader({
         ) {
           stampCleanTabDiskBaseline(file.id, { content: result.modifiedContent, isBinary: false })
         }
-        const reviewModifiedTime = await reviewMetadata
+        const afterTime = await readReviewMetadata()
+        const reviewModifiedTime = beforeTime === afterTime ? afterTime : undefined
         if (diffReadGenerationRef.current[file.id] === generation) {
           setDiffContents((prev) =>
             prev[file.id] === result

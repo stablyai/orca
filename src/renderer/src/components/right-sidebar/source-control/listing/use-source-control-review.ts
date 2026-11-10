@@ -143,6 +143,10 @@ export function useRevalidateSourceControlReviews(
         return
       }
       const invalidate = (entry: DiffReviewEntry, source: 'unstaged' | 'staged' | 'branch') => {
+        const key = keyFor(entry, source)
+        if (!key || !getReviewedDiffs().has(key)) {
+          return
+        }
         const absolutePath = joinPath(owner.worktreePath!, entry.path)
         const changed = payload.events.some((event) =>
           [event.absolutePath, event.oldAbsolutePath].some(

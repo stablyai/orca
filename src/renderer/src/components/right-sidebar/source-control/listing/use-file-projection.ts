@@ -99,12 +99,14 @@ export function useSourceControlFileProjection({
       unfilteredDisplaySections
         .map((section) => ({
           ...section,
-          items: [...filterSourceControlPathEntries(section.items, fileFilterState)].sort((a, b) =>
-            sourceControlViewMode === 'list'
-              ? Number(review.isViewed(a, entryReviewSource(a))) -
-                Number(review.isViewed(b, entryReviewSource(b)))
-              : 0
-          )
+          items: filterSourceControlPathEntries(section.items, fileFilterState)
+            .map((entry) => ({
+              entry,
+              viewed:
+                sourceControlViewMode === 'list' && review.isViewed(entry, entryReviewSource(entry))
+            }))
+            .sort((a, b) => Number(a.viewed) - Number(b.viewed))
+            .map(({ entry }) => entry)
         }))
         .filter((section) => section.items.length > 0),
     [fileFilterState, unfilteredDisplaySections, review, sourceControlViewMode]
@@ -117,12 +119,16 @@ export function useSourceControlFileProjection({
   // Stable sorting commutes with filtering, including ties; sort once to keep collator work off keystrokes.
   const sortedBranchEntries = useMemo(
     () =>
-      [...branchEntries].sort(
-        (a, b) =>
-          (sourceControlViewMode === 'list'
-            ? Number(review.isViewed(a, 'branch')) - Number(review.isViewed(b, 'branch'))
-            : 0) || compareFileNames(a.path, b.path)
-      ),
+      branchEntries
+        .map((entry) => ({
+          entry,
+          viewed: sourceControlViewMode === 'list' && review.isViewed(entry, 'branch')
+        }))
+        .sort(
+          (a, b) =>
+            Number(a.viewed) - Number(b.viewed) || compareFileNames(a.entry.path, b.entry.path)
+        )
+        .map(({ entry }) => entry),
     [branchEntries, review, sourceControlViewMode]
   )
   const filteredBranchEntries = useMemo(

@@ -1,3 +1,4 @@
+import { acquireCombinedDiffSectionOperation } from '../load-sections/combined-diff-section-connection'
 import type { fetchCombinedDiffSection } from '../load-sections/fetch-combined-diff-section'
 import { getLargeDiffRenderLimit } from '../../../../../../shared/large-diff-render-limit'
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
@@ -61,19 +62,20 @@ async function requestCombinedViewedMark({
       }
       signature = diffReviewContentSignature(result)
     }
-    const { operation, key } = combinedDiffReviewIdentity(file, section)
-    const modifiedTime = await statRuntimePath(
-      operation.context,
-      joinPath(file.filePath, section.path)
-    ).then(
-      (stat) => stat.mtime,
-      (error: unknown) => {
-        if (isMissingRuntimePathError(error)) {
-          return null
-        }
-        throw error
-      }
-    )
+    const { key } = combinedDiffReviewIdentity(file, section)
+    const operation = acquireCombinedDiffSectionOperation(file, section.path)
+    const modifiedTime =
+      file.diffSource === 'combined-commit'
+        ? null
+        : await statRuntimePath(operation.context, joinPath(file.filePath, section.path)).then(
+            (stat) => stat.mtime,
+            (error: unknown) => {
+              if (isMissingRuntimePathError(error)) {
+                return null
+              }
+              throw error
+            }
+          )
     operation.assertCurrent()
     assertLoadedCurrent?.()
     if (!isMounted() || expectedTime !== modifiedTime || !isCurrentSection(modifiedTime)) {

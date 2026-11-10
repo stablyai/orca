@@ -1,3 +1,4 @@
+import { acquireCombinedDiffSectionOperation } from '../load-sections/combined-diff-section-connection'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
@@ -89,7 +90,7 @@ export function useCombinedDiffReviewedCollapse({
     for (const entry of entries) {
       const collapse = async (): Promise<void> => {
         try {
-          const { operation, key } = combinedDiffReviewIdentity(file, {
+          const { key } = combinedDiffReviewIdentity(file, {
             path: entry.path,
             area: 'area' in entry ? entry.area : undefined
           })
@@ -102,18 +103,19 @@ export function useCombinedDiffReviewedCollapse({
           ) {
             return
           }
-          const modifiedTime = await statRuntimePath(
-            operation.context,
-            joinPath(file.filePath, entry.path)
-          ).then(
-            (stat) => stat.mtime,
-            (error: unknown) => {
-              if (isMissingRuntimePathError(error)) {
-                return null
-              }
-              throw error
-            }
-          )
+          const operation = acquireCombinedDiffSectionOperation(file, entry.path)
+          const modifiedTime =
+            file.diffSource === 'combined-commit'
+              ? null
+              : await statRuntimePath(operation.context, joinPath(file.filePath, entry.path)).then(
+                  (stat) => stat.mtime,
+                  (error: unknown) => {
+                    if (isMissingRuntimePathError(error)) {
+                      return null
+                    }
+                    throw error
+                  }
+                )
           operation.assertCurrent()
           if (cancelled || getReviewedDiffs().get(key) !== record) {
             return

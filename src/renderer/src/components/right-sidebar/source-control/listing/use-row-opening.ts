@@ -55,15 +55,18 @@ export function useSourceControlRowOpening({
   const placementWorkspaceId = scope?.placementWorkspaceId
   const placementId = placementWorkspaceId ?? activeWorktreeId
   const runtimeEnvironmentId = sourceControlScopeRuntimeEnvironmentId(scope)
-  const review = useSourceControlReview(activeWorktreeId, worktreePath)
+  const { owner: reviewOwner, keyFor: reviewKeyFor } = useSourceControlReview(
+    activeWorktreeId,
+    worktreePath
+  )
 
   useEffect(() => {
-    if (!review.owner || !activeWorktreeId || !worktreePath) {
+    if (!reviewOwner || !activeWorktreeId || !worktreePath) {
       return
     }
-    const ownerKey = diffReviewOwnerKey(review.owner)
+    const ownerKey = diffReviewOwnerKey(reviewOwner)
     const uncommitted = buildUncommittedReviewEntries({
-      owner: review.owner,
+      owner: reviewOwner,
       worktreeId: activeWorktreeId,
       worktreePath,
       rows: reviewSelectionEntries.flatMap(({ entry }) =>
@@ -80,7 +83,7 @@ export function useSourceControlRowOpening({
     const branch =
       branchSummary?.status === 'ready'
         ? visibleBranchEntries.flatMap((entry) => {
-            const key = review.keyFor(entry, 'branch')
+            const key = reviewKeyFor(entry, 'branch')
             return key
               ? [
                   {
@@ -121,7 +124,8 @@ export function useSourceControlRowOpening({
       clearBranch()
     }
   }, [
-    review,
+    reviewOwner,
+    reviewKeyFor,
     activeWorktreeId,
     worktreePath,
     reviewSelectionEntries,

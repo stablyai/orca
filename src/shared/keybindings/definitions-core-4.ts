@@ -13,8 +13,8 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     // Why: Conductor uses Control+V on macOS; preserve Ctrl+V paste on other platforms.
     defaultBindings: {
       darwin: ['Ctrl+V'],
-      linux: ['Alt+Shift+V'],
-      win32: ['Alt+Shift+V']
+      linux: ['Alt+Shift+F12'],
+      win32: ['Alt+Shift+F12']
     }
   },
   {

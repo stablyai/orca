@@ -1,5 +1,13 @@
+import { useDiffReviewReadInvalidation } from './use-diff-review-read-invalidation'
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render as renderComponent, screen } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  renderHook,
+  render as renderComponent,
+  screen
+} from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
@@ -84,8 +92,8 @@ function registerFilteredList(onOpen: (path: string) => void): void {
 describe('single-file diff Viewed', () => {
   it.each([
     ['Macintosh', { ctrlKey: true }],
-    ['Windows', { altKey: true, shiftKey: true }],
-    ['Linux', { altKey: true, shiftKey: true }]
+    ['Windows', { key: 'F12', altKey: true, shiftKey: true }],
+    ['Linux', { key: 'F12', altKey: true, shiftKey: true }]
   ])('toggles Viewed from the focused diff on %s', async (userAgent, modifiers) => {
     vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(userAgent)
     const opened: string[] = []
@@ -155,6 +163,76 @@ describe('single-file diff Viewed', () => {
     view.rerender(
       <DiffViewedControl file={file} content={{ ...content, modifiedContent: 'other' }} />
     )
+    expect(screen.getByRole('checkbox').getAttribute('aria-checked')).toBe('false')
+  })
+
+  it('invalidates a changed read once a dirty section becomes clean', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000)
+    const key = 'dirty-read'
+    const record = {
+      viewedAt: 1_800_000_000_000,
+      modifiedTime: 123,
+      contentSignature: 'before',
+      entrySignature: ''
+    }
+    setDiffReviewed(key, record)
+    const view = renderHook(
+      ({ signature, valid }) =>
+        useDiffReviewReadInvalidation({
+          key,
+          record,
+          signature,
+          valid,
+          modifiedTime: 123
+        }),
+      { initialProps: { signature: 'before', valid: true } }
+    )
+    view.rerender({ signature: 'after', valid: false })
+    expect(getReviewedDiffs().has(key)).toBe(true)
+    view.rerender({ signature: 'after', valid: true })
+    expect(getReviewedDiffs().has(key)).toBe(false)
+  })
+
+  it('advances using status entries when the filtered list omits the current file', async () => {
+    const owner = getEditorFileReadContext(useAppStore.getState(), file, '/repo')
+    unregister = registerDiffReviewList(diffReviewListKey(diffReviewOwnerKey(owner), 'unstaged'), [
+      {
+        key: diffReviewKey(owner, 'c.ts', 'unstaged'),
+        entrySignature: '',
+        open: vi.fn()
+      }
+    ])
+    const openDiff = vi.fn()
+    useAppStore.setState({
+      openDiff,
+      gitStatusByWorktree: {
+        'wt-1': ['a.ts', 'b.ts'].map((path) => ({
+          path,
+          area: 'unstaged' as const,
+          status: 'modified' as const,
+          added: 1,
+          removed: 1
+        }))
+      }
+    })
+    render(<DiffViewedControl file={file} content={content} />)
+    await act(async () => fireEvent.click(screen.getByRole('checkbox')))
+    expect(openDiff).toHaveBeenCalledWith(
+      'wt-1',
+      '/repo/b.ts',
+      'b.ts',
+      'typescript',
+      false,
+      expect.any(Object)
+    )
+  })
+
+  it('hides an existing mark while content is stale or failed', async () => {
+    const view = render(<DiffViewedControl file={file} content={content} />)
+    await act(async () => fireEvent.click(screen.getByRole('checkbox')))
+    view.rerender(<DiffViewedControl file={file} content={{ ...content, isStale: true }} />)
+    expect(screen.getByRole('checkbox').getAttribute('aria-checked')).toBe('false')
+    view.rerender(<DiffViewedControl file={file} content={{ ...content, loadError: true }} />)
     expect(screen.getByRole('checkbox').getAttribute('aria-checked')).toBe('false')
   })
 

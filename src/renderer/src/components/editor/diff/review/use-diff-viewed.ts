@@ -83,6 +83,8 @@ export function useDiffViewed(
   const viewed =
     !file.isDirty &&
     record != null &&
+    !content?.isStale &&
+    !content?.loadError &&
     (signature === null || record.contentSignature === signature) &&
     (content?.reviewModifiedTime === undefined ||
       record.modifiedTime === content.reviewModifiedTime)

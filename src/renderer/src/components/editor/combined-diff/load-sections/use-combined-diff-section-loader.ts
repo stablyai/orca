@@ -95,7 +95,7 @@ export function useCombinedDiffSectionLoader({
 
       let result: GitDiffResult
       let operation: ReturnType<typeof acquireCombinedDiffSectionOperation> | undefined
-      let reviewModifiedTime: Promise<number | null | undefined> | undefined
+      let reviewModifiedTime: number | null | undefined
       let error: string | undefined
       try {
         operation = acquireCombinedDiffSectionOperation(file, entry.path)
@@ -111,7 +111,7 @@ export function useCombinedDiffSectionLoader({
         })
         result = loaded.result
         operation = loaded.operation
-        reviewModifiedTime = loaded.reviewModifiedTime
+        reviewModifiedTime = await loaded.reviewModifiedTime
       } catch (err) {
         error = getDiffSectionLoadErrorMessage(err)
         result = {
@@ -173,28 +173,6 @@ export function useCombinedDiffSectionLoader({
           originalContent: storedContent.originalContent,
           modifiedContent: storedContent.modifiedContent
         })
-      const expectedResult = unchanged ? current.diffResult : storedResult
-      void reviewModifiedTime?.then((time) => {
-        if (
-          error ||
-          generationRef.current !== gen ||
-          (sectionLoadTokensRef.current.get(index) ?? 0) !== loadToken
-        ) {
-          return
-        }
-        setSections((previous) => {
-          try {
-            operation?.assertCurrent()
-          } catch {
-            return previous
-          }
-          return previous.map((section, sectionIndex) =>
-            sectionIndex === index && !section.dirty && section.diffResult === expectedResult
-              ? { ...section, reviewModifiedTime: time }
-              : section
-          )
-        })
-      })
       if (unchanged) {
         const provenanceChanged =
           JSON.stringify(current.operation?.provenance) !== JSON.stringify(operation?.provenance)
@@ -205,11 +183,11 @@ export function useCombinedDiffSectionLoader({
           } catch {
             return prev
           }
-          return provenanceChanged
-            ? prev.map((section, i) =>
-                i === index && !section.dirty ? { ...section, operation } : section
-              )
-            : [...prev]
+          return prev.map((section, i) =>
+            i === index && !section.dirty
+              ? { ...section, ...(provenanceChanged ? { operation } : {}), reviewModifiedTime }
+              : section
+          )
         })
         return
       }
@@ -233,6 +211,7 @@ export function useCombinedDiffSectionLoader({
                 loading: false,
                 error,
                 largeDiffRenderLimit,
+                reviewModifiedTime,
                 // Changed content needs a fresh generation because model paths otherwise retain the old snapshot.
                 contentGeneration: wasShowingContent
                   ? (s.contentGeneration ?? 0) + 1

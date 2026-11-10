@@ -114,19 +114,16 @@ export function useSourceControlPanelViewState({
         )
         return next.size === previous.size ? previous : next
       })
-      setCollapsedSections((previous) => {
-        if (!previous.has(area)) {
-          return previous
-        }
-        const next = new Set(previous)
+      if (collapsedSections.has(area)) {
+        const next = new Set(collapsedSections)
         next.delete(area)
+        setCollapsedSections(next)
         if (activeWorktreeId) {
           collapsedSectionsByWorktree.set(activeWorktreeId, next)
         }
-        return next
-      })
+      }
     },
-    [activeWorktreeId]
+    [activeWorktreeId, collapsedSections]
   )
 
   return {

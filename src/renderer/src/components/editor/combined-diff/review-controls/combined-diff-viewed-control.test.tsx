@@ -1,3 +1,4 @@
+import { acquireCombinedDiffSectionOperation } from '../load-sections/combined-diff-section-connection'
 // @vitest-environment happy-dom
 import { useRef, useState } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -14,7 +15,6 @@ import { DiffViewedControl } from '../../diff/review/diff-viewed-control'
 import { DiffSectionHeader } from '../../diff/sections/DiffSectionHeader'
 import { useCombinedDiffEntrySet } from '../resolve-changes/use-combined-diff-entry-set'
 import { useCombinedDiffReviewedCollapse } from './use-combined-diff-reviewed-collapse'
-import { combinedDiffReviewIdentity } from './combined-diff-review-identity'
 import type { fetchCombinedDiffSection } from '../load-sections/fetch-combined-diff-section'
 import { CombinedDiffViewedControl } from './combined-diff-viewed-control'
 
@@ -254,7 +254,10 @@ it.each(['branch', 'commit'] as const)(
     const historical = useAppStore.getState().openFiles.find((file) => file.diffSource === source)!
     const individual = render(
       <TooltipProvider>
-        <DiffViewedControl file={historical} content={{ ...result, reviewModifiedTime: 123 }} />
+        <DiffViewedControl
+          file={historical}
+          content={{ ...result, reviewModifiedTime: source === 'commit' ? null : 123 }}
+        />
       </TooltipProvider>
     )
     await act(async () => fireEvent.click(screen.getByRole('checkbox', { name: 'Viewed' })))
@@ -279,7 +282,7 @@ it.each(['branch', 'commit'] as const)(
           loading: false,
           dirty: false,
           diffResult: result,
-          reviewModifiedTime: 123,
+          reviewModifiedTime: source === 'commit' ? null : 123,
           largeDiffRenderLimit: null
         }}
         setSections={() => {}}
@@ -319,8 +322,7 @@ it.each([123, 124])(
       finish({
         result,
         reviewModifiedTime: Promise.resolve(123),
-        operation: combinedDiffReviewIdentity(combined, { path: 'a.ts', area: 'unstaged' })
-          .operation
+        operation: acquireCombinedDiffSectionOperation(combined, 'a.ts')
       })
     )
     expect(checkbox.getAttribute('aria-checked')).toBe(mtime === 123 ? 'true' : 'false')
@@ -352,7 +354,7 @@ it('rejects an unloaded review invalidated during the final file verification', 
     result,
     reviewModifiedTime: Promise.resolve(123),
     operation: {
-      ...combinedDiffReviewIdentity(combined, { path: 'a.ts', area: 'unstaged' }).operation,
+      ...acquireCombinedDiffSectionOperation(combined, 'a.ts'),
       assertCurrent
     }
   })

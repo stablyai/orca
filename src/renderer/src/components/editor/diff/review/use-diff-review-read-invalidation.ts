@@ -20,6 +20,9 @@ export function useDiffReviewReadInvalidation({
 }): void {
   const previousRead = useRef({ signature, modifiedTime })
   useEffect(() => {
+    if (!valid) {
+      return
+    }
     const changed =
       previousRead.current.signature !== signature ||
       previousRead.current.modifiedTime !== modifiedTime
