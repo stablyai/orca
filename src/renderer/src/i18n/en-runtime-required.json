@@ -1935,8 +1935,7 @@
       "workers_other": "{{count}} workers"
     },
     "sessionLink": {
-      "description": "Connect two existing local chats. You control the story, permissions and continuation.",
-      "linked": "Linked with"
+      "description": "Connect two existing local chats. You control the story, permissions and continuation."
     },
     "tab": {
       "bar": {
