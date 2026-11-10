@@ -1,4 +1,7 @@
-import { conversationRecordReader } from '../orchestration/addressing/session-lineage/structured-session-lineage'
+import {
+  conversationRecordReader,
+  type AgentSessionRecordReader
+} from '../orchestration/addressing/session-lineage/structured-session-lineage'
 import { createHash } from 'node:crypto'
 
 import { afterEach, expect, it, vi } from 'vitest'
@@ -26,9 +29,6 @@ import { MIRROR_LEAVES_STEP_1 } from '../terminal/records/runtime-leaf-record-pr
 import type { RuntimeLeafRecord } from '../terminal/records/runtime-terminal-state-records'
 
 import { makeTuiIdlePty } from '../terminal/wait/tui-idle-wait-test-harness'
-
-import '../orchestration/addressing/session-lineage/structured-session-lineage'
-import type { AgentSessionRecordReader } from '../orchestration/addressing/session-lineage/structured-session-lineage'
 
 import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 

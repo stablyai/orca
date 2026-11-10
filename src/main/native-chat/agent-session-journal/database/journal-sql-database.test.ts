@@ -14,10 +14,12 @@ import {
   journalSqlWorkerPath
 } from '../journal-sql-worker-bundle.test-fixture'
 import type { JournalWriterEffect } from '../journal-writer-effects'
-import { withTestAgentSessionDatabase } from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import {
+  withTestAgentSessionDatabase,
+  storedTestAgentSessionRecord
+} from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { CommandReceiptExistsError } from '../writing/command-receipt-transaction'
 import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { storedTestAgentSessionRecord } from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 
 const roots: string[] = []
 const databases: JournalSqlDatabase[] = []

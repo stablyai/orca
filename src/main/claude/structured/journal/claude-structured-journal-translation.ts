@@ -1,4 +1,4 @@
-import { claudeProvisionalCorrectionWriter } from '../../claude-provisional-row-corrections'
+import * as correctionRows from '../../claude-provisional-row-corrections'
 import { ClaudeTaskInvocations } from '../../claude-task-invocations'
 import { ClaudeJournalBoundDelivery } from '../../claude-journal-bound-delivery'
 import type * as contract from '../../claude-journal-translator-contract'
@@ -14,7 +14,6 @@ import {
 } from '../launch/claude-structured-provider-fallback'
 import { ClaudeBackgroundTaskRows } from '../../claude-background-task-rows'
 import { ClaudeToolOriginRegistry } from '../../claude-tool-origin-registry'
-import { ClaudeProvisionalRowCorrections } from '../../claude-provisional-row-corrections'
 import { createClaudeStreamedThinking } from '../../claude-streamed-thinking'
 import { ClaudeSubagentIdentities } from '../../claude-subagent-identities'
 import { ClaudeJournaledSubagents } from '../../claude-subagent-journaled-identities'
@@ -80,10 +79,10 @@ export function createClaudeJournalTranslator(
     journaled
   })
   const childQueries = claudeChildToolQueries({ tools, toolOrigins, linkage: subagents.linkage })
-  const corrections = new ClaudeProvisionalRowCorrections({
+  const corrections = new correctionRows.ClaudeProvisionalRowCorrections({
     ...subagents.linkage,
     turnScope,
-    rewrite: claudeProvisionalCorrectionWriter(deps.sink),
+    rewrite: correctionRows.claudeProvisionalCorrectionWriter(deps.sink),
     publish: () => deps.sink.publish()
   })
   const backgroundTasks = new ClaudeBackgroundTaskRows({

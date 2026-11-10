@@ -1,11 +1,11 @@
 import type Database from '../../sqlite/sync-database'
-import type { SqliteRow } from '../../sqlite/sqlite-statement'
 
 export function createJournalForkWorkspace(db: Database.Database): void {
   if (
-    (db.pragma('compile_options') as SqliteRow[]).some((row) =>
-      Object.values(row).includes('TEMP_STORE=3')
-    )
+    db
+      .prepare('PRAGMA compile_options')
+      .all()
+      .some((row) => Object.values(row).includes('TEMP_STORE=3'))
   ) {
     throw new Error('fork preparation requires file-backed temporary storage')
   }

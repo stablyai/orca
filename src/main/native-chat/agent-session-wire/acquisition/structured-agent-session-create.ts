@@ -7,8 +7,7 @@ import type {
 } from '../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionCaller } from '../host/structured-agent-session-host-types'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
-import type { reserveRequestFor } from './structured-agent-session-attach'
-import type { AgentSessionAttachParams } from './structured-agent-session-attach'
+import type { reserveRequestFor, AgentSessionAttachParams } from './structured-agent-session-attach'
 
 export type StructuredAgentSessionCreateOptions = {
   firstMessage?: StructuredAgentSessionFirstMessage

@@ -28,7 +28,28 @@ export function receiptRow(operation: JournalSqlStoreOperation): JournalReceiptS
     case 'automatic-submission':
     case 'send-admission':
       return 'submission'
-    default:
+    case 'accept-late':
+    case 'command-open':
+    case 'command-settle':
+    case 'context-clear':
+    case 'context-rewind':
+    case 'dead-generation-settle':
+    case 'edit-lease':
+    case 'epoch-replace':
+    case 'fork-install':
+    case 'handover':
+    case 'hold-unsent':
+    case 'late-dispatch':
+    case 'lifecycle':
+    case 'pending-reject':
+    case 'pending-unknown':
+    case 'queued-reject':
+    case 'rewind-cut':
+    case 'shutdown-cut':
+    case 'stale-settle':
+    case 'start-failure-settle':
+    case 'steps':
+    case 'unheld-turns-settle':
       return undefined
   }
 }

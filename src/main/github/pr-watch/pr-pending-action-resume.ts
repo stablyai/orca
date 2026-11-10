@@ -1,5 +1,5 @@
 import { verifyOpenedPRAction } from './pr-opened-action-verification'
-import type { PendingPush } from './pr-pending-action-types'
+import * as PR from './pr-pending-action-types'
 // Resumes captured PR obligations in bounded batches, off the user's action path. Deadlines are the
 // ones fixed at capture; a restart resumes the same row and never renews them. Each obligation is
 // saved as decided on its own, so a sibling still resolving never holds back or loses it.
@@ -8,7 +8,6 @@ import type { GitHubPRRefreshCandidate } from '../../../shared/github/pull-reque
 import type { PRInfo } from '../../../shared/github/pull-request-types'
 import { pushedPullRequestHead, type PushRemote } from './pr-chat-action-recorder'
 import { PRPendingActionDrain } from './pr-pending-action-drain'
-import type { PRPendingActionResumeDeps, PRVerifiedAction } from './pr-pending-action-types'
 import {
   openPRPendingObligations,
   prPendingActionKey,
@@ -16,20 +15,21 @@ import {
   type PRPendingObligation
 } from './pr-pending-actions'
 import * as watch from './pr-watch-types'
-import { pendingActionTiming as timing } from './pr-pending-action-types'
+
+const timing = PR.pendingActionTiming
 
 type Transient = { transient: true }
 const TRANSIENT: Transient = { transient: true }
 
 export class PRPendingActionResume {
-  private readonly pushes = new Set<PendingPush>()
+  private readonly pushes = new Set<PR.PendingPush>()
   private readonly timers = new Set<ReturnType<typeof setTimeout>>()
   private readonly passes: PRPendingActionDrain<PRPendingActionRow>
   // Rows whose settle or defer committed this run; only those may wake another pass at once.
   private readonly committed = new WeakSet<PRPendingActionRow>()
   private stopped = false
 
-  constructor(private readonly deps: PRPendingActionResumeDeps) {
+  constructor(private readonly deps: PR.PRPendingActionResumeDeps) {
     this.passes = new PRPendingActionDrain({
       readDue: (limit, running) =>
         this.stopped || deps.database.readOnly || deps.database.isClosed
@@ -102,7 +102,7 @@ export class PRPendingActionResume {
   private async settle(
     row: PRPendingActionRow,
     indices: number[],
-    verified: PRVerifiedAction[]
+    verified: PR.PRVerifiedAction[]
   ): Promise<void> {
     if (this.stopped || this.deps.database.isClosed || indices.length === 0) {
       return
@@ -165,7 +165,7 @@ export class PRPendingActionResume {
     const branch = obligation.target.branch
     const candidate = { ...base, branch, cacheKey: `${base.cacheKey}>${branch}` }
     return new Promise((resolve, reject) => {
-      const push: PendingPush = {
+      const push: PR.PendingPush = {
         candidate,
         update: { branch, newSha: obligation.evidence.newSha },
         remote,
@@ -257,7 +257,7 @@ export class PRPendingActionResume {
   }
 
   private async settleVerified(
-    push: PendingPush,
+    push: PR.PendingPush,
     key: watch.ParsedPRKey,
     pr: PRInfo,
     head: { headSha: string; superseded: boolean },
@@ -267,7 +267,7 @@ export class PRPendingActionResume {
       return
     }
     const { row } = push
-    const verified = (headSha: string | null, movedAt: number | null): PRVerifiedAction => ({
+    const verified = (headSha: string | null, movedAt: number | null): PR.PRVerifiedAction => ({
       action: {
         chatId: row.chatId,
         anchor: row.anchor,

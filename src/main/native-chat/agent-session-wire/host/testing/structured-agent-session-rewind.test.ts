@@ -1,7 +1,9 @@
 import { expectAtomicRewindCompletion } from './structured-agent-session-rewind-replay.test-fixture'
 import { expectUsageLimitCompletionRollback } from './structured-agent-session-rewind-usage-limit.test-fixture'
-import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
-import { readTestJournalSnapshot } from '../../../agent-session-journal/journal-observation.test-support'
+import {
+  readTestHostJournal,
+  readTestJournalSnapshot
+} from '../../../agent-session-journal/journal-observation.test-support'
 import { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import { recoverStructuredRewind } from '../../rewind/structured-rewind-recovery'
 import { persistRewindRecord } from '../../rewind/structured-rewind-record'
