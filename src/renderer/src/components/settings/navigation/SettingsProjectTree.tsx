@@ -136,12 +136,14 @@ export function SettingsProjectTree({
         if (!first.projectCopy?.split) {
           return renderRow(first, false)
         }
-        const target = children.find((child) => child.id === activeSectionId) ?? first
+        const targetId = first.projectCopy.sectionIds.includes(activeSectionId)
+          ? activeSectionId
+          : first.id
         return (
           <div key={first.projectCopy.projectId}>
             <button
               type="button"
-              onClick={() => onSelectSection(target.id)}
+              onClick={() => onSelectSection(targetId)}
               className={rowClassName(false)}
             >
               <RepoIconGlyph

@@ -41,9 +41,11 @@ export function buildRemoteSettingsSections(
 ): SettingsNavSection[] {
   const repoLookup = buildProjectSetupRepoLookup(repos)
   const projectList = buildSettingsProjectList(repos, projectGrouping)
-  const copyCounts = new Map<string, number>()
+  const sectionsByProject = new Map<string, string[]>()
   for (const entry of projectList) {
-    copyCounts.set(entry.projectId, (copyCounts.get(entry.projectId) ?? 0) + 1)
+    const ids = sectionsByProject.get(entry.projectId) ?? []
+    ids.push(`repo-${entry.selectionKey}`)
+    sectionsByProject.set(entry.projectId, ids)
   }
   const showDesktopOnlySettings = !isWebClient
   return [
@@ -195,7 +197,8 @@ export function buildRemoteSettingsSections(
         projectCopy: {
           projectId: settingsProject.projectId,
           projectTitle: project.displayName,
-          split: (copyCounts.get(settingsProject.projectId) ?? 0) > 1,
+          split: (sectionsByProject.get(settingsProject.projectId)?.length ?? 0) > 1,
+          sectionIds: sectionsByProject.get(settingsProject.projectId) ?? [],
           hostId: setup?.executionHostId ?? representativeHostId,
           path: setup?.path ?? representativeRepo?.path ?? ''
         },

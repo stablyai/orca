@@ -131,6 +131,7 @@ export type SettingsNavSection = {
     projectId: string
     projectTitle: string
     split: boolean
+    sectionIds: readonly string[]
     hostId: ExecutionHostId
     path: string
   }

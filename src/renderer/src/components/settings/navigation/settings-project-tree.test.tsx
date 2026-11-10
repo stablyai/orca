@@ -8,7 +8,7 @@ import type { Repo } from '../../../../../shared/repo-types'
 import { buildSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
 import { useAppStore } from '@/store'
 import { TooltipProvider } from '../../ui/tooltip'
-import { SettingsSidebar } from './SettingsSidebar'
+import { SettingsProjectTree } from './SettingsProjectTree'
 import { getSettingsSectionSearchEntries, rankSettingsSearchItems } from '../search/settings-search'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -70,14 +70,11 @@ it.each(['host', 'folder'] as const)(
       act(() =>
         root.render(
           <TooltipProvider>
-            <SettingsSidebar
+            <SettingsProjectTree
               activeSectionId={active}
-              settings={settings}
-              generalGroups={[]}
-              repoSections={visible}
-              hasRepos
-              onBack={() => {}}
+              sections={visible}
               onSelectSection={onSelect}
+              rowClassName={() => ''}
             />
           </TooltipProvider>
         )
@@ -92,13 +89,7 @@ it.each(['host', 'folder'] as const)(
       show(remote.id)
       expect(
         [...container.querySelectorAll('button')].map((row) => row.textContent?.trim())
-      ).toEqual([
-        'Back to app',
-        'App',
-        'app~/projects/app',
-        'second-copy~\\src\\second-copy',
-        'Handbook'
-      ])
+      ).toEqual(['App', 'app~/projects/app', 'second-copy~\\src\\second-copy', 'Handbook'])
       expect(container.querySelectorAll('[aria-current="page"]')).toHaveLength(1)
       expect(container.querySelector('[aria-current="page"]')?.textContent).toBe(
         'second-copy~\\src\\second-copy'
@@ -119,8 +110,9 @@ it.each(['host', 'folder'] as const)(
         getSettingsSectionSearchEntries
       ).map(({ item }) => item)
       expect(matches.map((section) => section.id)).toEqual([remote.id])
-      show('general', matches)
-      expect(button('App')).toBeDefined()
+      show(local.id, matches)
+      act(() => button('App').click())
+      expect(onSelect).toHaveBeenLastCalledWith(local.id)
       act(() => button('second-copy~\\src\\second-copy').click())
       expect(onSelect).toHaveBeenLastCalledWith(remote.id)
     } finally {
@@ -151,20 +143,17 @@ it('keeps repository mode and a single checkout as ordinary project rows', () =>
     act(() =>
       root.render(
         <TooltipProvider>
-          <SettingsSidebar
+          <SettingsProjectTree
             activeSectionId={sections[0].id}
-            settings={settings}
-            generalGroups={[]}
-            repoSections={sections}
-            hasRepos
-            onBack={() => {}}
+            sections={sections}
             onSelectSection={() => {}}
+            rowClassName={() => ''}
           />
         </TooltipProvider>
       )
     )
     expect([...container.querySelectorAll('button')].map((row) => row.textContent?.trim())).toEqual(
-      ['Back to app', 'App', 'Handbook']
+      ['App', 'Handbook']
     )
     expect(container.querySelector('[aria-current="page"]')?.textContent).toBe('App')
   } finally {
