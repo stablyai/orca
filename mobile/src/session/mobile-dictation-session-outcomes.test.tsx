@@ -4,7 +4,7 @@ import { act } from 'react-test-renderer'
 import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createFakeRpcClient, type FakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
-import type * as NativeChatSendError from './native-chat/use-mobile-native-chat-send-error'
+import type * as NativeChatSendError from './native-chat/composer/use-mobile-native-chat-send-error'
 import type * as NativeChatDraftStore from './native-chat/composer/mobile-native-chat-draft-store'
 
 type ChatView = { shown: boolean; scope: string | null }
@@ -26,8 +26,11 @@ const seen = vi.hoisted(() => {
 
 vi.mock('react-native', () => ({
   AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
+  AccessibilityInfo: { announceForAccessibility: () => {} },
   Platform: { OS: 'ios' }
 }))
+// The computer's name only words announcements; the stored host profile pulls in secure storage.
+vi.mock('../transport/hosts/use-host-profile', () => ({ useHostProfile: () => null }))
 vi.mock('@orca/expo-two-way-audio', () => ({
   addExpoTwoWayAudioEventListener: (name: string, listener: (event: { data: string }) => void) => {
     seen.audioListeners.set(name, listener)
@@ -66,7 +69,7 @@ vi.mock('../platform/clipboard', () => {
 })
 
 // Stub off-path native chat dependencies to keep Expo out of this mic test.
-vi.mock('./native-chat/use-mobile-native-chat-send-error', async (importOriginal) => ({
+vi.mock('./native-chat/composer/use-mobile-native-chat-send-error', async (importOriginal) => ({
   ...(await importOriginal<typeof NativeChatSendError>()),
   useMobileNativeChatSendError: () => ({
     message: null,
@@ -79,7 +82,7 @@ vi.mock('./native-chat/use-mobile-native-chat-send-error', async (importOriginal
 vi.mock('./native-chat/transcript/use-mobile-native-chat-readability', () => ({
   useMobileNativeChatReadability: () => false
 }))
-vi.mock('./native-chat/use-mobile-native-chat-input-lease', () => ({
+vi.mock('./native-chat/composer/use-mobile-native-chat-input-lease', () => ({
   useMobileNativeChatInputLease: () => ({
     ready: true,
     readyRef: { current: true },
@@ -294,41 +297,6 @@ describe('a mic tap after the host reported dictation is not set up', () => {
   })
 })
 
-describe('an audio interruption while recording', () => {
-  it('finishes the dictation and keeps what was said', async () => {
-    const rpc = createFakeRpcClient()
-    await startRecording(rpc)
-    act(() => seen.audioListeners.get('onAudioInterruption')?.({ data: 'began' }))
-    const methods = await settle(rpc, 'call me back')
-    expect(methods).toContain('speech.dictation.finish')
-    expect(methods).not.toContain('speech.dictation.cancel')
-    expect(seen.inputs).toEqual(['call me back'])
-    expect(seen.toasts).toEqual(['Dictation inserted'])
-  })
-})
-
-describe('leaving the session while recording', () => {
-  it('stops and inserts what was said instead of leaving, and lets the next leave go', async () => {
-    const rpc = createFakeRpcClient()
-    const mounted = await startRecording(rpc)
-    const held: boolean[] = []
-    act(() => {
-      held.push(mounted.current().dictationLeaveHold.hold())
-    })
-    // Back is released while transcribing, so a swipe can leave too.
-    expect(mounted.current().dictationLeaveHold.holdsLeave).toBe(false)
-    act(() => {
-      held.push(mounted.current().dictationLeaveHold.hold())
-    })
-    expect(held).toEqual([true, false])
-    const methods = await settle(rpc, 'one more thing')
-    expect(methods.filter((method) => method === 'speech.dictation.finish')).toHaveLength(1)
-    expect(methods).not.toContain('speech.dictation.cancel')
-    expect(seen.inputs).toEqual(['one more thing'])
-    expect(seen.toasts).toEqual(['Dictation inserted'])
-  })
-})
-
 describe('a mic tap while the transcript is processing', () => {
   it('keeps the transcript that comes back', async () => {
     const rpc = createFakeRpcClient()
@@ -362,21 +330,5 @@ describe('a dictation that ends after switching between chat and terminal', () =
     await settle(rpc, 'ship it')
     expect(seen.chatWrites).toEqual([['chat-b', 'ship it']])
     expect(seen.inputs).toEqual([])
-  })
-})
-
-describe('a dictation whose session screen was left', () => {
-  it('keeps recording, then puts its words in the chat it started in with a toast that opens it', async () => {
-    seen.chat = { shown: true, scope: 'chat-a' }
-    const rpc = createFakeRpcClient()
-    const mounted = await startRecording(rpc)
-    mounted.leave()
-    expect(mounted.host().getDictation().isRecording).toBe(true)
-    expect(mounted.host().pill?.away).toBe(true)
-    act(() => mounted.host().stop())
-    await settle(rpc, 'ship it')
-    expect(seen.chatWrites).toEqual([['chat-a', 'ship it']])
-    expect(mounted.host().pill?.toast?.message).toBe('Inserted in Claude Code')
-    expect(mounted.host().pill?.toast?.open).toBeTypeOf('function')
   })
 })

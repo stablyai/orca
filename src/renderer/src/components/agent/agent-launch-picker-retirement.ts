@@ -1,4 +1,7 @@
-import type { AgentPickerRetainedSetup } from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
+import {
+  agentPickerCatalogAuthoritative,
+  type AgentPickerRetainedSetup
+} from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import { launchDraftSources } from '../native-chat/drafts/native-chat-launch-draft-source'
 
@@ -19,9 +22,8 @@ export function retireAgentPickerSetups(
   const membership = new Map(
     entries.map((entry) => [
       entryKey(entry),
-      entry.catalog.origin === 'unknown' || entry.catalog.listingInProgress
-        ? undefined
-        : new Map(
+      agentPickerCatalogAuthoritative(entry)
+        ? new Map(
             entry.catalog.models.map((model) => [
               model.id,
               model.effortsKnown === false
@@ -29,6 +31,7 @@ export function retireAgentPickerSetups(
                 : new Set(model.efforts.map((effort) => effort.value))
             ])
           )
+        : undefined
     ])
   )
   const retire = (

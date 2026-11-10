@@ -54,6 +54,7 @@ export function useNativeChatTranscriptWindow({
   slots,
   isVisible,
   revealIndex,
+  newRowsMarkerIndex,
   typography = DEFAULT_ROW_TYPOGRAPHY
 }: {
   scrollRef: React.RefObject<HTMLDivElement | null>
@@ -61,6 +62,8 @@ export function useNativeChatTranscriptWindow({
   isVisible: boolean
   /** Slot the transcript was asked to reveal, or -1. */
   revealIndex: number
+  /** Slot drawing the "New" marker, or -1. */
+  newRowsMarkerIndex?: number
   /** Chat text scale; gap scales with the text size. */
   typography?: NativeChatRowTypography
 }): NativeChatTranscriptWindow {
@@ -71,8 +74,8 @@ export function useNativeChatTranscriptWindow({
   const previousMeasurementKeysRef = useRef<ReadonlySet<string> | null>(null)
   const retiredMeasurementCountRef = useRef(0)
   const pinned = useMemo(
-    () => nativeChatPinnedRowIndexes({ count: slots.length, revealIndex }),
-    [slots.length, revealIndex]
+    () => nativeChatPinnedRowIndexes({ count: slots.length, revealIndex, newRowsMarkerIndex }),
+    [slots.length, revealIndex, newRowsMarkerIndex]
   )
   // Keep measured offsets through content-only growth to preserve the end anchor; rebuild only on structural changes.
   // Encoded only when the slots change: scroll and range renders reuse it.

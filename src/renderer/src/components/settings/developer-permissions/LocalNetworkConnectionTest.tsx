@@ -196,8 +196,8 @@ export function LocalNetworkConnectionTest(): React.JSX.Element {
                     'Testing...'
                   )
                 : t(
-                    'auto.components.settings.DeveloperPermissionsPane.connectionTestAction',
-                    'Test Connection'
+                    'auto.components.settings.DeveloperPermissionsPane.a162df27d5',
+                    'Test connection'
                   )}
             </Button>
           </form>

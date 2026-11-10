@@ -15,5 +15,10 @@ class OrcaGzipUtf8CodecModule : Module() {
     Function("decodeUtf8") { input: ByteArray ->
       decodeStrictUtf8(input)
     }
+
+    // Async: a whole bundle asset can take tens of ms, too long to hold the JS thread.
+    AsyncFunction("brotliDecompress") { input: ByteArray, outputLimit: Int ->
+      brotliDecompressBounded(input, outputLimit)
+    }
   }
 }

@@ -1,6 +1,6 @@
 import { adoptMaterializedRuntimePtySpawn } from './spawn-early'
 import { createRuntimePtySpawnState } from './spawn-state'
-import { getProviderForPty, localProvider } from '../provider/registry'
+import { getProviderForPty, hasPtyProviderForInspection, localProvider } from '../provider/registry'
 import {
   getLocalAutomaticWorkStatus,
   localTerminalLimit,
@@ -82,6 +82,12 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     inspectProcess: (ptyId, options) => inspectProcessFromRuntimeController(ptyId, options),
     confirmForegroundProcess: (ptyId) => confirmForegroundProcessFromRuntimeController(ptyId),
     confirmShellForeground: (ptyId) => confirmShellForegroundFromRuntimeController(ptyId),
+    // Why local only: the daemon that outlives main is this host's.
+    setLaunchNote: (ptyId, change) => {
+      if (hasPtyProviderForInspection(ptyId)) {
+        getProviderForPty(ptyId).setLaunchNote?.(ptyId, change)
+      }
+    },
     getCwd: (ptyId) => getCwdFromRuntimeController(ptyId),
     hasChildProcesses: (ptyId) => hasChildProcessesFromRuntimeController(ptyId),
     clearBuffer: (ptyId) => clearBufferFromRuntimeController(deps, ptyId),

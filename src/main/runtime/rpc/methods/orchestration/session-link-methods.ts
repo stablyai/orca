@@ -11,7 +11,8 @@ import {
   writeSessionLinkControl,
   writeSessionLinkPolicy
 } from '../../../orchestration/session-links/session-link-owner-control'
-import { defineMethod, type RpcContext } from '../../core'
+import type { RpcContext } from '../../core'
+import { defineOrchestrationMethod } from './access/orchestration-method-access'
 import {
   LinkCreateParams,
   LinkSetPolicyParams,
@@ -75,8 +76,9 @@ async function verifyResumeParticipants(
 }
 
 export const SESSION_LINK_METHODS = [
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.linkSetPolicy',
+    access: { kind: 'writes', targets: { id: 'sessionLink' } },
     permission: 'workspace',
     params: LinkSetPolicyParams,
     handler: async (params, context) => {
@@ -93,8 +95,9 @@ export const SESSION_LINK_METHODS = [
       return snapshot(context, params.id)
     }
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.linkCandidates',
+    access: { kind: 'reads', targets: { sessionId: 'session' }, collection: true },
     permission: 'workspace',
     params: LinkListParams,
     handler: async ({ sessionId }, context) => {
@@ -124,8 +127,12 @@ export const SESSION_LINK_METHODS = [
       }
     }
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.linkCreate',
+    access: {
+      kind: 'writes',
+      targets: { id: 'sessionLink', sessionId: 'session', partnerSessionId: 'session' }
+    },
     permission: 'workspace',
     params: LinkCreateParams,
     handler: async (params, context) => {
@@ -183,8 +190,9 @@ export const SESSION_LINK_METHODS = [
       return snapshot(context, params.id)
     }
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.linkCurrent',
+    access: { kind: 'reads', targets: { sessionId: 'session' } },
     permission: 'workspace',
     params: LinkListParams,
     handler: ({ sessionId }, context) => {
@@ -199,14 +207,16 @@ export const SESSION_LINK_METHODS = [
       return link ? snapshot(context, link.id) : null
     }
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.linkShow',
+    access: { kind: 'reads', targets: { id: 'sessionLink' } },
     permission: 'workspace',
     params: LinkShowParams,
     handler: ({ id }, context) => snapshot(context, id)
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.linkSend',
+    access: { kind: 'writes', targets: { id: 'sessionLink' } },
     permission: 'workspace',
     params: LinkSendParams,
     handler: (params, context) => {
@@ -245,8 +255,9 @@ export const SESSION_LINK_METHODS = [
       return snapshot(context, params.id)
     }
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.linkResolve',
+    access: { kind: 'writes', targets: { id: 'sessionLink' } },
     permission: 'workspace',
     params: LinkResolveParams,
     handler: (params, context) => {
@@ -256,8 +267,9 @@ export const SESSION_LINK_METHODS = [
       return snapshot(context, params.id)
     }
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.linkControl',
+    access: { kind: 'writes', targets: { id: 'sessionLink' } },
     permission: 'workspace',
     params: LinkControlParams,
     handler: async (params, context) => {

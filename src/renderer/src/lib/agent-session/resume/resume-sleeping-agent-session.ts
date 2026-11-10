@@ -1,3 +1,4 @@
+import { sleepingAgentRecordIndex } from '@/store/terminals/sleeping-agent-record-index'
 import { useAppStore } from '@/store/index'
 import { isWorkspaceSleepRecord } from '../../../../../shared/workspace-sleep'
 import {
@@ -154,7 +155,9 @@ function providerSessionOwnedElsewhere(
   state: ReturnType<typeof useAppStore.getState>
 ): boolean {
   // Claim keys handle same-workspace duplicates; finished notes, moved hosts and foreign-machine records cannot claim sessions.
-  return Object.values(state.sleepingAgentSessionsByPaneKey).some(
+  return Array.from(
+    sleepingAgentRecordIndex.providerSessionCandidates(state.sleepingAgentSessionsByPaneKey, record)
+  ).some(
     (other) =>
       other.worktreeId !== record.worktreeId &&
       other.agent === record.agent &&
@@ -221,7 +224,9 @@ export function resumeSleepingAgentSessionsForWorktree(
     return 0
   }
   // Main resumes workspace sleep records in their own panes; only stranded ones get a fresh tab here.
-  const worktreeRecords = Object.values(state.sleepingAgentSessionsByPaneKey)
+  const worktreeRecords = sleepingAgentRecordIndex
+    .entries(state.sleepingAgentSessionsByPaneKey, worktreeId)
+    .map(([, record]) => record)
     .filter(
       (record) =>
         record.worktreeId === worktreeId &&

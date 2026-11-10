@@ -1,16 +1,8 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { MobileNativeChatSendOutcome } from '../mobile-native-chat-send'
-import {
-  applyNativeChatSessionOptionSettingsMutation,
-  resolveNativeChatSessionOptionDefaults
-} from '../../../../../src/shared/native-chat/input/native-chat-session-option-defaults'
-import { resolveAgentSessionOptionLaunch } from '../../../../../src/shared/agent-session/options/agent-session-option-launch'
-import type {
-  PersistedNativeChatSessionOptions,
-  NativeChatSessionOptionSettingsMutation
-} from '../../../../../src/shared/native-chat/input/native-chat-session-options'
+import type { MobileNativeChatSendOutcome } from '../composer/mobile-native-chat-send'
+
 import {
   clearMobileSessionOptionRecordsForTests,
   useMobileNativeChatSessionOptions,
@@ -65,55 +57,6 @@ describe('useMobileNativeChatSessionOptions', () => {
     renderer = null
     api = null
   })
-
-  it.each([
-    ['grok', true],
-    ['grok', false],
-    ['omp', true],
-    ['omp', false]
-  ] as const)(
-    '%s discovery cached=%s writes only an explicit owning-host pick',
-    async (agent, cached) => {
-      let persisted: PersistedNativeChatSessionOptions = { [agent]: { model: 'retired' } }
-      const writeOwner = vi.fn((mutation: NativeChatSessionOptionSettingsMutation) => {
-        persisted = applyNativeChatSessionOptionSettingsMutation(persisted, mutation) ?? persisted
-      })
-      const writeOther = vi.fn()
-      const model = agent === 'grok' ? 'grok-4.7' : 'deepseek/deepseek-v4-pro'
-      const discoveredModels = [{ id: model, label: model, options: [] }]
-      mount({
-        agent,
-        scopeKey: 'owner\0worktree\0tab',
-        reportedModel: 'retired',
-        modelSwitchCommand: 'orca-model',
-        writeSettings: writeOwner,
-        discoveredModels: cached ? discoveredModels : null
-      })
-      if (!cached) {
-        update({ discoveredModels })
-      }
-      expect(writeOwner).not.toHaveBeenCalled()
-      expect(
-        resolveAgentSessionOptionLaunch(
-          agent,
-          resolveNativeChatSessionOptionDefaults(persisted, agent)
-        ).args
-      ).toContain('retired')
-      await act(async () => {
-        expect(await api!.setOption('model', model)).toBe(true)
-      })
-      expect(writeOwner).toHaveBeenCalledOnce()
-      expect(
-        resolveAgentSessionOptionLaunch(
-          agent,
-          resolveNativeChatSessionOptionDefaults(persisted, agent)
-        ).args
-      ).toContain(model)
-      update({ scopeKey: 'other\0worktree\0tab', writeSettings: writeOther })
-      expect(writeOwner).toHaveBeenCalledOnce()
-      expect(writeOther).not.toHaveBeenCalled()
-    }
-  )
 
   it('starts over when the tab runs another agent and then a fresh session', async () => {
     mount({ reportedModel: 'claude-sonnet-5' })

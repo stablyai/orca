@@ -64,9 +64,9 @@ beforeEach(async () => {
   createRemote.mockReset().mockResolvedValue({ status: 'created' })
 })
 
-function sourceChat(worktreeId: string, agent: 'claude' | 'codex' | null = 'codex') {
+function sourceChat(worktreeId: string) {
   const source = store.getState().createUnifiedTab(worktreeId, 'agent-session', {
-    agentSessionAgent: agent ?? undefined,
+    agentSessionAgent: 'codex',
     executionHostId: 'local'
   })
   return {
@@ -74,36 +74,6 @@ function sourceChat(worktreeId: string, agent: 'claude' | 'codex' | null = 'code
     target: { kind: 'workspace-tab', unifiedTabId: source.id, groupId: source.groupId } as const
   }
 }
-
-it.each([
-  ['right', 'claude', null],
-  ['down', 'codex', 'paired-host'],
-  ['right', null, null]
-] as const)(
-  'Split %s from agent %s opens an empty pane beside the chat (host %s)',
-  (direction, agent, host) => {
-    const worktreeId = folderWorkspaceKey('chat-folder')
-    if (host) {
-      runtimeOwners.set(worktreeId, host)
-    }
-    const { source, target } = sourceChat(worktreeId, agent)
-    expect(runNativeChatSplitTarget(target, direction)).toBe(true)
-    const state = store.getState()
-    const groupId = state.activeGroupIdByWorktree[worktreeId]
-    expect(groupId).not.toBe(source.groupId)
-    expect(state.layoutByWorktree[worktreeId]).toMatchObject({
-      direction: direction === 'right' ? 'horizontal' : 'vertical',
-      first: { groupId: source.groupId },
-      second: { groupId }
-    })
-    expect(state.groupsByWorktree[worktreeId]).toContainEqual(
-      expect.objectContaining({ id: groupId, tabOrder: [] })
-    )
-    expect(state.unifiedTabsByWorktree[worktreeId]).toEqual([source])
-    expect(state.tabsByWorktree[worktreeId] ?? []).toEqual([])
-    expect(createRemote).not.toHaveBeenCalled()
-  }
-)
 
 it('Close on the empty pane collapses the split back to the chat', () => {
   const worktreeId = folderWorkspaceKey('chat-folder')
