@@ -174,6 +174,7 @@ export function useWorktreeJumpPaletteController({
     ...recentTabs,
     ...projectTargets,
     ...quickActions,
+    ...extraResults,
     ...sections,
     ...listEntries,
     ...selectionLifecycle,

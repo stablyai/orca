@@ -301,6 +301,13 @@ describe('WorktreeJumpPalette extra result sources', () => {
     expect(rowKinds()).toEqual(['extra', 'worktree'])
   })
 
+  it('counts extra rows in the announced result count', async () => {
+    await renderPalette(workspaceNamed('Release notes'))
+    await typeQuery('triage')
+    expect(rowKinds()).toEqual(['extra'])
+    expect(testContainer.textContent).toContain('1 result found.')
+  })
+
   it('caps empty-query rows after recent workspaces and runs onSelect on Enter', async () => {
     extra.titles = ['First', 'Second', 'Third']
     await renderPalette(workspaceNamed('Triage notes'))
