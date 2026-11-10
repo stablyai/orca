@@ -172,7 +172,8 @@ async function smoke(api: ReturnType<typeof createVercelSandboxApi>, snapshotId:
         // Each agent CLI starts (catches a broken pin or a pruned file it needed).
         'for b in opencode gemini cursor-agent copilot; do timeout 60 $b --version >/dev/null 2>&1 || { echo "$b --version failed"; exit 1; }; done',
         'orca status 2>&1 | grep -q "runtimeReachable: true"',
-        'df -h / | awk \'NR==2{print "disk", $2}\''
+        'df -h / | awk \'NR==2{print "disk", $3 "/" $2}\'',
+        'echo "opt-orca $(du -sm /opt/orca | cut -f1) MB"'
       ].join(' && ')],
       timeoutMs: 90_000
     })
