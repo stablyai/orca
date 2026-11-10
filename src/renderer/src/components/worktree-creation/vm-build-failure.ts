@@ -134,6 +134,26 @@ export function isBillingFailure(failure: VmBuildFailure | null): boolean {
   )
 }
 
+/**
+ * The raw error a user-authored recipe printed, for the card's Details disclosure. Orca Cloud never
+ * shows it. A recipe's terse exit message gets the build log's first error line after it.
+ */
+export function localRawError(
+  failure: VmBuildFailure | null,
+  firstErrorLine: string | null
+): string | null {
+  if (failure?.kind !== 'provision' && failure?.kind !== 'create') {
+    return null
+  }
+  const error = failure.error.trim()
+  const extra =
+    failure.kind === 'provision' && firstErrorLine && !error.includes(firstErrorLine)
+      ? firstErrorLine
+      : null
+  const text = [error, extra].filter(Boolean).join('\n\n')
+  return text === '' ? null : text
+}
+
 /** Refused before anything started: an account limit, not a broken build. */
 export function isAccountGate(failure: VmBuildFailure | null): boolean {
   return failure !== null && ACCOUNT_GATES.has(failure.kind)

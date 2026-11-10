@@ -2,11 +2,12 @@ import React from 'react'
 import { InlineError } from '@/components/ui/inline-error'
 import { useTranslate } from '@/i18n/use-translate'
 import { VmBuildReveal } from './VmBuildReveal'
-import { isAccountGate, type VmBuildFailure } from './vm-build-failure'
+import { isAccountGate, localRawError, type VmBuildFailure } from './vm-build-failure'
 import { getLastBillingStatus } from '@/components/billing/billing-summary-store'
 import { sandboxLimitFromBilling, vmBuildFailureCopy } from './vm-build-failure-copy'
 import { FailureActionRow, type VmBuildFailureActions } from './VmBuildFailureActions'
 import { CheckRow } from './VmBuildCheckRow'
+import { VmBuildErrorDetails } from './VmBuildErrorDetails'
 
 export type { VmBuildFailureActions }
 
@@ -87,10 +88,7 @@ export function VmBuildFailureCard({
       sheet?.querySelector<HTMLElement>('[data-vm-build-heading]')?.focus({ preventScroll: true })
     }
   }, [open, run])
-  const detail =
-    visible?.kind === 'provision' && !cloud && firstErrorLine && firstErrorLine !== copy?.body
-      ? firstErrorLine
-      : null
+  const rawError = cloud ? null : localRawError(visible, firstErrorLine)
 
   return (
     <VmBuildReveal open={failure !== null} className="pt-4">
@@ -108,9 +106,8 @@ export function VmBuildFailureCard({
             }
             detail={copy.body}
           >
-            {detail ? (
-              <p className="break-words font-mono text-xs text-muted-foreground">{detail}</p>
-            ) : null}
+            {/* Keyed on the text so a new error starts collapsed again. */}
+            {rawError ? <VmBuildErrorDetails key={rawError} text={rawError} /> : null}
             {visible.kind === 'checks' ? (
               <ul className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-2">
                 {visible.problems.map((check, index) => (

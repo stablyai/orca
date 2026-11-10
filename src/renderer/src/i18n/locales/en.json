@@ -4281,6 +4281,8 @@
             "checksBodyCloud2_other": "Open it anyway and fix them inside the workspace, or run the checks again after changing your project.",
             "provisionBodyCloudKept": "Something went wrong while starting the sandbox. Try again, or delete the sandbox to stop using sandbox hours.",
             "provisionBodyCloud2": "Something went wrong while starting the sandbox. Nothing was created, and you weren’t charged.",
+            "provisionBodyVm": "Your VM recipe stopped with an error before the VM was ready.",
+            "createBodyVm": "The VM started, but creating the workspace on it stopped with an error.",
             "teamLimitBodyCount_one": "Your team can run {{count}} sandbox at once ({{value1}} per seat). Put it to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
             "teamLimitBodyCount_other": "Your team can run {{count}} sandboxes at once ({{value1}} per seat). Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
             "memberLimitBodyCount_one": "You can run {{count}} sandbox at once. Put it to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
@@ -4350,6 +4352,16 @@
             "bodyCloud": "The sandbox and anything on it are deleted, and the workspace isn’t created.",
             "bodyVm": "The VM and anything on it are destroyed, and the workspace isn’t created.",
             "keep": "Keep it"
+          },
+          "VmBuildErrorDetails": {
+            "copyFailed": "Couldn’t copy the details.",
+            "toggle": "Details",
+            "truncated": "Showing the first {{shown}} of {{count}} lines. Copy includes all of them.",
+            "copied": "Copied",
+            "copy": "Copy details",
+            "copiedStatus": "Details copied",
+            "truncated_one": "Showing the first {{shown}} of {{count}} line. Copy includes all of it.",
+            "truncated_other": "Showing the first {{shown}} of {{count}} lines. Copy includes all of them."
           }
         }
       },

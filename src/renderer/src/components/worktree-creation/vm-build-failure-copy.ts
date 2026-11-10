@@ -6,6 +6,7 @@ import type {
 } from '../../../../shared/orca-billing'
 import type { VmBuildFailure } from './vm-build-failure'
 import { sandboxLimitBody } from './vm-build-limit-copy'
+import { localRecipeFailureCopy } from './vm-build-recipe-failure-copy'
 
 /** The running-sandbox caps billing enforces: per member, and per team (per seat × seats). */
 export type SandboxLimit = { perSeat: number; team: number }
@@ -263,13 +264,7 @@ export function vmBuildFailureCopy(
                   'Something went wrong while starting the sandbox. Nothing was created, and you weren’t charged.'
                 )
           }
-        : {
-            title: t(
-              'auto.components.worktree.creation.VmBuildFailureCard.provisionTitleVm',
-              'The VM recipe failed'
-            ),
-            body: failure.error
-          }
+        : localRecipeFailureCopy('provision', t)
     case 'create':
       return cloud
         ? {
@@ -282,12 +277,6 @@ export function vmBuildFailureCopy(
               'The sandbox started, but Orca couldn’t open the workspace on it. Try again, or open the logs for details.'
             )
           }
-        : {
-            title: t(
-              'auto.components.worktree.creation.VmBuildFailureCard.createTitleVm',
-              'Couldn’t create the workspace on the VM'
-            ),
-            body: failure.error
-          }
+        : localRecipeFailureCopy('create', t)
   }
 }

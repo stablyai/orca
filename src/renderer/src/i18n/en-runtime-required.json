@@ -1339,6 +1339,11 @@
       },
       "worktree": {
         "creation": {
+          "VmBuildErrorDetails": {
+            "truncated": "Showing the first {{shown}} of {{count}} lines. Copy includes all of them.",
+            "truncated_one": "Showing the first {{shown}} of {{count}} line. Copy includes all of it.",
+            "truncated_other": "Showing the first {{shown}} of {{count}} lines. Copy includes all of them."
+          },
           "VmBuildFailureCard": {
             "checksBodyCloud2_one": "Open it anyway and fix it inside the workspace, or run the checks again after changing your project.",
             "checksBodyCloud2_other": "Open it anyway and fix them inside the workspace, or run the checks again after changing your project.",
