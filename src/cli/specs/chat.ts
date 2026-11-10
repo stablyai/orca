@@ -19,7 +19,7 @@ export const CHAT_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['chat', 'list'],
     summary: 'List agent chats with their workspace, state and last reply',
-    usage: 'orca chat list [--worktree <name-or-id>] [--state <state>] [--json]',
+    usage: 'orca chat list [--worktree <selector>] [--state <state>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'state'],
     notes: [
       'Lists the top-level chats Orca shows as agent tabs. Terminal agents are read with `orca terminal`.',

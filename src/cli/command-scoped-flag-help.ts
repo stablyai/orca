@@ -2,7 +2,20 @@
 const FILE_OPEN_FOCUS_HELP =
   "--focus                Bring the user to the file (switches Orca's window to its worktree)"
 
+const CHAT_SESSION_HELP =
+  '--session <id>        Chat session id or handle from chat list or agent launch'
+
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
+  'chat rename': { session: CHAT_SESSION_HELP },
+  'chat list': {
+    state: '--state <state>       Only chats in this state: working, waiting, blocked or done'
+  },
+  'chat read': { session: CHAT_SESSION_HELP },
+  'chat send': {
+    session: CHAT_SESSION_HELP,
+    wait: '--wait                 Wait until the chat finishes or needs your answer'
+  },
+  'chat wait': { session: CHAT_SESSION_HELP },
   'extension reload': {
     'extension-id':
       '--extension-id <id>   Installed unpacked extension ID; also accepted positionally',
