@@ -1,5 +1,5 @@
 import React, { useId, useRef, useState } from 'react'
-import { ChevronRight, Share2 } from 'lucide-react'
+import { ChevronRight, LogIn, Share2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -152,6 +152,7 @@ export function SharedLinksList({
           {status === 'error' && needsSignIn && (
             <div className="mb-1">
               <OrcaSignInButton variant="outline" size="xs">
+                <LogIn aria-hidden />
                 {signInAgainActionLabel(t)}
               </OrcaSignInButton>
             </div>
