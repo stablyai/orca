@@ -115,9 +115,9 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
 
   readonly workspaceSleepPlatform: WorkspaceSleepPlatform | null
 
-  protected readonly getAgentStatusSnapshotForPaneFn: Bindings['getAgentStatusSnapshotForPane']
+  declare protected readonly getAgentStatusSnapshotForPaneFn: HostServices['getAgentStatusSnapshotForPaneFn']
 
-  protected readonly publicPaneStatusFn: Bindings['getPublicAgentStatusSnapshotForPane']
+  protected readonly publicPaneStatusFn?: Bindings['getPublicAgentStatusSnapshotForPane']
 
   /** The agent's full final reply for that finished lead turn; status rows carry only a capped preview. */
   readonly getAcceptedAgentReply: Bindings['getAcceptedAgentReply']
@@ -252,7 +252,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
       this.stats = stats
     }
     this.getAgentStatusSnapshotFn = deps?.getAgentStatusSnapshot ?? null
-    this.getAgentStatusSnapshotForPaneFn = deps?.getAgentStatusSnapshotForPane
+    this.getAgentStatusSnapshotForPaneFn = deps?.getAgentStatusSnapshotForPane ?? null
     this.publicPaneStatusFn = deps?.getPublicAgentStatusSnapshotForPane
     this.structuredAgentStatusSinkFn = deps?.structuredAgentStatusSink ?? null
     this.readObservedAgentStatusPaneIdentityFn =
