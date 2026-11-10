@@ -281,6 +281,10 @@ describe('WorktreeJumpPalette extra result sources', () => {
     await renderPalette(workspaceNamed('Triager notes'))
     await typeQuery('triage')
     expect(rowKinds()).toEqual(['extra', 'worktree'])
+    // Enter targets the leading row.
+    expect(
+      testContainer.querySelector<HTMLElement>('[data-command-dialog]')?.dataset.commandValue
+    ).toBe(extraRow('Triage helper')?.dataset.commandItem)
   })
 
   it('follows workspaces on a tie', async () => {
