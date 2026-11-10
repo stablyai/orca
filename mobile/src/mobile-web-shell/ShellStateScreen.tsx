@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Platform, Pressable, Text, View } from 'react-native'
-import { currentWebViewProvider } from '../../modules/orca-mobile-web-shell/src/webview-provider'
+import { currentWebViewProvider } from '../../modules/orca-mobile-web-shell/src'
 import { ProtocolBlockScreen } from '../components/ProtocolBlockScreen'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
