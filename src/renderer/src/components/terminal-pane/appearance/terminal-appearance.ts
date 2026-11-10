@@ -32,22 +32,8 @@ import { maybePushMode2031Flip } from '../emulation/terminal-mode-2031-replies'
 import { resolveTerminalMinimumContrastRatio } from '../../../../../shared/terminal-themes/terminal-contrast-correction'
 import { resolveTerminalInlineImagesEnabled } from '../../../../../shared/terminal/images/terminal-inline-images-settings'
 import { windowBackdropActive } from '@/app-shell/appearance/window-backdrop'
-import { contrastRatio, over, type Rgba } from '../../../../../shared/color/rgba-contrast'
+import { contrastRatio, hexToRgb, over, type Rgba } from '../../../../../shared/color/rgba-contrast'
 import { getTerminalFontSizeOverride } from './terminal-font-size-overrides'
-
-function hexToRgb(hex: string): Rgba {
-  let clean = hex.replace('#', '')
-  if (clean.length === 3) {
-    clean = clean
-      .split('')
-      .map((c) => c + c)
-      .join('')
-  }
-  const r = Number.parseInt(clean.slice(0, 2), 16)
-  const g = Number.parseInt(clean.slice(2, 4), 16)
-  const b = Number.parseInt(clean.slice(4, 6), 16)
-  return [r, g, b, 1]
-}
 
 export function hexToRgba(hex: string, alpha: number): string {
   const [r, g, b] = hexToRgb(hex)

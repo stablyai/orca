@@ -1,9 +1,6 @@
 import type mermaid from 'mermaid'
-import {
-  contrast,
-  luminance,
-  READABLE_CONTRAST
-} from '../../../../shared/mermaid-flowchart-contrast'
+import { hexToRgb, readableOn, rgbaToHex } from '../../../../shared/color/rgba-contrast'
+import { READABLE_CONTRAST } from '../../../../shared/mermaid-flowchart-contrast'
 
 export type MermaidThemeColors = {
   background: string
@@ -12,37 +9,6 @@ export type MermaidThemeColors = {
   secondary: string
   tertiary: string
   border: string
-}
-
-function mixHex(from: string, to: string, amount: number): string {
-  const channel = (hex: string, index: number): number =>
-    Number.parseInt(hex.slice(1 + index * 2, 3 + index * 2), 16)
-  return `#${[0, 1, 2]
-    .map((index) => {
-      const value = channel(from, index) + (channel(to, index) - channel(from, index)) * amount
-      return Math.round(value).toString(16).padStart(2, '0')
-    })
-    .join('')}`
-}
-
-// Mermaid draws dark-mode labels in the foreground colour, so a pastel chart token would hide them;
-// tint such a fill toward the background just until the label reads.
-function readableFill(fill: string, foreground: string, background: string): string {
-  const foregroundLuminance = luminance(foreground)
-  if (foregroundLuminance === null) {
-    return fill
-  }
-  for (let step = 0; step < 20; step++) {
-    const mixed = mixHex(fill, background, step / 20)
-    const fillLuminance = luminance(mixed)
-    if (
-      fillLuminance !== null &&
-      contrast(foregroundLuminance, fillLuminance) >= READABLE_CONTRAST
-    ) {
-      return mixed
-    }
-  }
-  return background
 }
 
 export function getMermaidConfig(
@@ -63,7 +29,9 @@ export function getMermaidConfig(
 }
 
 function darkThemeVariables(colors: MermaidThemeColors): Record<string, string | boolean> {
-  const surface = (fill: string): string => readableFill(fill, colors.foreground, colors.background)
+  // Mermaid draws dark-mode labels in the foreground colour, so darken a pastel chart token until it reads.
+  const surface = (fill: string): string =>
+    rgbaToHex(readableOn(hexToRgb(fill), [hexToRgb(colors.foreground)], true, READABLE_CONTRAST))
   // Seeds stay the theme's because git and venn pair them with their own label colours. Fills are
   // pinned only when tinted, so otherwise a diagram's own primaryColor/tertiaryColor still drives them.
   const tinted = (fill: string, keys: string[]): Record<string, string> => {

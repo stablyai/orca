@@ -1,7 +1,7 @@
 export const READABLE_CONTRAST = 4.5
 
 /** WCAG relative luminance of a `#rrggbb` or opaque `rgb()` colour; null for anything else. */
-export function luminance(color: string): number | null {
+function luminance(color: string): number | null {
   const hex = /^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(color)
   const rgb = /^rgba?\(([^)]+)\)$/i.exec(color)
   const channels = hex
@@ -19,7 +19,7 @@ export function luminance(color: string): number | null {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b
 }
 
-export function contrast(a: number, b: number): number {
+function contrast(a: number, b: number): number {
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
 }
 
