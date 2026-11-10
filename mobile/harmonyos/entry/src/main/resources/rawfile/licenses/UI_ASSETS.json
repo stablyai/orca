@@ -286,6 +286,13 @@
       "package": "lucide-static",
       "version": "0.577.0",
       "source": "package/icons/grip-vertical.svg"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_key_round.svg",
+      "sha256": "050f55b234ed6b3801e5346c046a3980af4447b25a58e87cffd8d3b1a561c849",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/key-round.svg"
     }
   ]
 }

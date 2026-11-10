@@ -8,6 +8,8 @@ import { sha256 } from '../transport/crypto/Sha256';
 import { utf8Decode, base64DecodeCanonical } from '../transport/crypto/Bytes';
 import { DeviceRowStore } from './DeviceRowStore';
 import { HostMachineDescriptor, readHostMachineDescriptor } from './HostMachine';
+import { deletePageStorage } from './PageStorageStore';
+import { clearHomeResume } from '../home/HomeResume';
 
 /**
  * Paired-host catalog: non-secret metadata in preferences, the device token in the
@@ -42,6 +44,32 @@ const PREFS_NAME = 'orca_hosts';
 const PREFS_KEY = 'hosts';
 const PAIRING_PREFS_NAME = 'orca_relay_pairing';
 const PAIRING_PENDING_KEY = 'pending';
+const CLEANUP_PREFIX = 'cleanup.';
+const CLEANUP_CONFIRM_MS = 3000;
+const cleanupListeners = new Set<() => void>();
+const cleanupRequests = new Map<string, Promise<void>>();
+
+export interface HostCredentialCleanupState { count: number; storageUnreadable: boolean; }
+
+function pendingCleanupIds(prefs: preferences.Preferences): string[] {
+  return Object.keys(prefs.getAllSync()).filter((key: string): boolean =>
+    /^cleanup\.[a-f0-9]{32}$/.test(key) && prefs.getSync(key, false) === true)
+    .map((key: string): string => key.slice(CLEANUP_PREFIX.length));
+}
+
+export async function loadPendingHostCredentialCleanup(context: common.Context): Promise<HostCredentialCleanupState> {
+  try { return { count: pendingCleanupIds(await loadPrefs(context)).length, storageUnreadable: false }; }
+  catch (e) { return { count: 0, storageUnreadable: true }; }
+}
+
+export function subscribePendingHostCredentialCleanup(listener: () => void): () => void {
+  cleanupListeners.add(listener);
+  return (): void => { cleanupListeners.delete(listener); };
+}
+
+function notifyCleanupChanged(): void {
+  cleanupListeners.forEach((listener: () => void): void => { try { listener(); } catch (e) {} });
+}
 
 function hostIdFromKey(publicKeyB64: string): string {
   let encoded = new util.TextEncoder().encodeInto(publicKeyB64);
@@ -106,14 +134,9 @@ async function readHostList(context: common.Context): Promise<HostMeta[]> {
 
 async function writeHostList(context: common.Context, hosts: HostMeta[], beforeWrite?: () => void): Promise<void> {
   let prefs = await loadPrefs(context);
-  let texts: string[] = [];
-  for (let i = 0; i < hosts.length; i++) {
-    texts.push(JSON.stringify(hosts[i]));
-  }
-  let previous = await prefs.get(PREFS_KEY, '[]');
-  beforeWrite?.();
-  try { await prefs.put(PREFS_KEY, `[${texts.join(',')}]`); await prefs.flush(); }
-  catch (e) { await prefs.put(PREFS_KEY, previous); throw e as Error; }
+  let previous = prefs.getSync(PREFS_KEY, '[]');
+  try { beforeWrite?.(); prefs.putSync(PREFS_KEY, JSON.stringify(hosts)); prefs.flushSync(); }
+  catch (e) { prefs.putSync(PREFS_KEY, previous); throw e as Error; }
 }
 
 export async function listHosts(context: common.Context): Promise<HostMeta[]> {
@@ -156,6 +179,8 @@ export function saveHost(context: common.Context, meta: HostMeta, deviceToken: s
     if (!Number.isSafeInteger(pairingStartedAt) || pairingStartedAt < 0 || (removedAt > 0 && pairingStartedAt <= removedAt)) { throw new Error('Pairing was superseded by desktop removal'); }
     let prefs = await loadPrefs(context);
     let lastPairing = prefs.getSync(`paired.${meta.id}`, 0) as number;
+    let cleanupKey = `${CLEANUP_PREFIX}${meta.id}`;
+    let pendingCleanup = prefs.getSync(cleanupKey, false) === true;
     if (pairingStartedAt < lastPairing || (recovering && pairingStartedAt === 0)) { throw new Error('Pairing was superseded by a newer pairing'); }
     if (expectedJournal && (expectedJournal.startedAt !== pairingStartedAt
       || !matchesPairingJournal(await readHostPairingJournal(context, meta.id), expectedJournal))) {
@@ -167,32 +192,40 @@ export function saveHost(context: common.Context, meta: HostMeta, deviceToken: s
       throw new Error('Invalid paired host');
     }
     let hosts = await readHostList(context);
-    let oldToken = await getDeviceToken(context, meta.id);
-    let oldRelay = await getRelayCredential(context, meta.id);
+    let at = hosts.findIndex((host: HostMeta): boolean => host.id === meta.id);
+    let oldToken = at >= 0 ? await getDeviceToken(context, meta.id) : null;
+    let oldRelay = at >= 0 ? await getRelayCredential(context, meta.id) : null;
     if (meta.relay) { readRelayEndpoint(meta.relay, meta.publicKeyB64); }
     if (relayCredential) { readRelayCredential(relayCredential); }
-    let at = hosts.findIndex((host: HostMeta): boolean => host.id === meta.id);
     if (at >= 0) {
       let previous = hosts[at]; meta.machineName = meta.machineName ?? meta.name;
       if (previous.personalName) { meta.personalName = previous.personalName; meta.name = previous.personalName; }
       hosts[at] = meta;
     } else { meta.machineName = meta.machineName ?? meta.name; hosts.push(meta); }
     if (canCommit && !canCommit()) { throw new Error('Pairing was cancelled'); }
+    if (pendingCleanup) {
+      await clearRemovedHostPageStorage(context, meta.id);
+      await clearRemovedHostPairingJournal(context, meta.id, removedAt);
+      if (canCommit && !canCommit()) { throw new Error('Pairing was cancelled'); }
+    }
     await putToken(meta.id, deviceToken);
     try {
       if (relayCredential) { await putRelayCredential(meta.id, relayCredential); }
-      else if (!meta.relay) { await removeRelayCredential(meta.id); }
+      else if (!meta.relay || at < 0) { await removeRelayCredential(meta.id); }
       await writeHostList(context, hosts, (): void => {
         if (canCommit && !canCommit()) { throw new Error('Pairing was cancelled'); }
         prefs.putSync(`paired.${meta.id}`, pairingStartedAt);
+        if (pendingCleanup) { prefs.deleteSync(cleanupKey); }
       });
     }
     catch (e) {
       prefs.putSync(`paired.${meta.id}`, lastPairing);
+      if (pendingCleanup) { prefs.putSync(cleanupKey, true); }
       if (oldToken === null) { await removeToken(meta.id); } else { await putToken(meta.id, oldToken); }
       if (oldRelay) { await putRelayCredential(meta.id, oldRelay); } else { await removeRelayCredential(meta.id); }
       throw e as Error;
     }
+    if (pendingCleanup) { notifyCleanupChanged(); }
   });
 }
 
@@ -219,19 +252,82 @@ export async function getDeviceToken(context: common.Context, hostId: string): P
 export function deleteHost(context: common.Context, hostId: string): Promise<void> {
   return mutateHost(async (): Promise<void> => {
     if (!/^[a-f0-9]{32}$/.test(hostId)) { throw new Error('Invalid host identity'); }
-    let hosts = await readHostList(context);
-    let oldToken = await getDeviceToken(context, hostId);
-    let oldRelay = await getRelayCredential(context, hostId);
-    let prefs = await loadPrefs(context); prefs.putSync(`removed.${hostId}`, Date.now()); prefs.flushSync();
-    await clearHostPairingJournalUnlocked(context, hostId);
-    await removeToken(hostId);
-    try { await removeRelayCredential(hostId); await writeHostList(context, hosts.filter((host: HostMeta): boolean => host.id !== hostId)); }
+    let prefs = await loadPrefs(context);
+    let previousHosts = prefs.getSync(PREFS_KEY, '[]') as string;
+    let remaining = parseHosts(previousHosts).filter((host: HostMeta): boolean => host.id !== hostId);
+    let removalKey = `removed.${hostId}`;
+    let cleanupKey = `${CLEANUP_PREFIX}${hostId}`;
+    let previousRemoval = prefs.getSync(removalKey, 0) as number;
+    let previousCleanup = prefs.getSync(cleanupKey, false) === true;
+    let pairedAt = prefs.getSync(`paired.${hostId}`, 0) as number;
+    try {
+      prefs.putSync(PREFS_KEY, JSON.stringify(remaining));
+      prefs.putSync(removalKey, Math.max(previousRemoval, pairedAt, Date.now()));
+      prefs.putSync(cleanupKey, true);
+      prefs.flushSync();
+    }
     catch (e) {
-      if (oldToken !== null) { await putToken(hostId, oldToken); }
-      if (oldRelay) { await putRelayCredential(hostId, oldRelay); }
+      prefs.putSync(PREFS_KEY, previousHosts);
+      prefs.putSync(removalKey, previousRemoval);
+      if (!previousCleanup) { prefs.deleteSync(cleanupKey); }
       throw e as Error;
     }
+    notifyCleanupChanged();
   });
+}
+
+async function clearRemovedHostPageStorage(context: common.Context, hostId: string): Promise<void> {
+  clearHomeResume(context, hostId);
+  await deletePageStorage(context, hostId);
+}
+
+async function clearRemovedHostPairingJournal(context: common.Context, hostId: string, removedAt: number): Promise<void> {
+  let journal = await readHostPairingJournal(context, hostId);
+  if (!journal || journal.startedAt <= removedAt) { await clearHostPairingJournalUnlocked(context, hostId); }
+}
+
+function startPendingHostCredentialCleanup(context: common.Context, onlyHostId?: string): Promise<void> {
+  let requestKey = onlyHostId ?? '';
+  let existing = cleanupRequests.get(requestKey);
+  if (existing) { return existing; }
+  let request = mutateHost(async (): Promise<void> => {
+    let prefs = await loadPrefs(context);
+    let hosts = parseHosts(prefs.getSync(PREFS_KEY, '[]') as string);
+    for (let hostId of pendingCleanupIds(prefs)) {
+      if (onlyHostId !== undefined && hostId !== onlyHostId) { continue; }
+      let cleanupKey = `${CLEANUP_PREFIX}${hostId}`;
+      try {
+        if (!hosts.some((host: HostMeta): boolean => host.id === hostId)) {
+          let removedAt = prefs.getSync(`removed.${hostId}`, 0) as number;
+          let pairedAt = prefs.getSync(`paired.${hostId}`, 0) as number;
+          if (!Number.isSafeInteger(removedAt) || removedAt <= 0 || pairedAt > removedAt) { continue; }
+          await clearRemovedHostPairingJournal(context, hostId, removedAt);
+          await removeToken(hostId);
+          await removeRelayCredential(hostId);
+          await clearRemovedHostPageStorage(context, hostId);
+        }
+        prefs.deleteSync(cleanupKey);
+        try { prefs.flushSync(); } catch (e) { prefs.putSync(cleanupKey, true); throw e as Error; }
+        notifyCleanupChanged();
+      } catch (e) { }
+    }
+  }).finally((): void => { cleanupRequests.delete(requestKey); });
+  cleanupRequests.set(requestKey, request);
+  return request;
+}
+
+export async function retryPendingHostCredentialCleanup(context: common.Context, onlyHostId?: string): Promise<HostCredentialCleanupState> {
+  let timer = -1;
+  try {
+    let request = startPendingHostCredentialCleanup(context, onlyHostId);
+    // Keep the mutation held until the native delete settles, even when Settings stops waiting.
+    await new Promise<void>((resolve, reject): void => {
+      timer = setTimeout(resolve, CLEANUP_CONFIRM_MS);
+      request.then(resolve, reject);
+    });
+    return await loadPendingHostCredentialCleanup(context);
+  } catch (e) { return { count: 0, storageUnreadable: true }; }
+  finally { if (timer >= 0) { clearTimeout(timer); } }
 }
 
 async function putRelayCredential(hostId: string, credential: RelayCredential): Promise<void> {

@@ -1,9 +1,7 @@
 import { invalidateHomePrewarm } from '../webshell/HomeShellPrewarm';
 import { common } from '@kit.AbilityKit';
-import { deleteHost } from './HostStore';
-import { deletePageStorage } from './PageStorageStore';
+import { deleteHost, retryPendingHostCredentialCleanup } from './HostStore';
 import { forgetDesktopConnection } from '../transport/DesktopConnections';
-import { clearHomeResume } from '../home/HomeResume';
 import { WebBundleFetcher } from '../transport/WebBundleFetcher';
 
 export async function removeDesktop(context: common.Context, hostId: string, onDeleted: () => void): Promise<void> {
@@ -12,6 +10,5 @@ export async function removeDesktop(context: common.Context, hostId: string, onD
   forgetDesktopConnection(hostId);
   WebBundleFetcher.forgetPairedBundle(context, hostId);
   onDeleted();
-  clearHomeResume(context, hostId);
-  await deletePageStorage(context, hostId);
+  retryPendingHostCredentialCleanup(context, hostId).catch(() => {});
 }

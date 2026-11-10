@@ -202,7 +202,7 @@ export class DesktopConnection {
 
   disconnect(): void {
     this.wanted = false; this.paused = true;
-    this.closeTransport(); this.publish('stopped', '已断开');
+    this.closeTransport(); this.publish('stopped', this.removed ? '主机不存在' : '已断开');
   }
 
   forget(): void { this.removed = true; this.meta = null; this.disconnect(); }

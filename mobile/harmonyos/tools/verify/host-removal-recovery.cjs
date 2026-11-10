@@ -12,7 +12,11 @@ function hostStorage() {
   let now = 1800000000000
   let failJournalRemove = false
   let failJournalWrite = false
+  let failTokenRemove = false
+  let failPageRemove = false
+  let failHostFlush = false
   let waitAfterTokenUpdate
+  let waitBeforeTokenRemoval
   let recoveryDial
   let randomSequence = 0
   const sha256 = (value) => Uint8Array.from(createHash('sha256').update(value).digest())
@@ -68,6 +72,15 @@ function hostStorage() {
     },
     async remove(query) {
       const key = alias(query)
+      if (key.startsWith('orca.token.') && waitBeforeTokenRemoval) {
+        const wait = waitBeforeTokenRemoval
+        waitBeforeTokenRemoval = undefined
+        await wait()
+      }
+      if (key.startsWith('orca.token.') && failTokenRemove) {
+        failTokenRemove = false
+        throw new Error('Asset Store temporarily unavailable')
+      }
       if (key.startsWith('orca.relay.pair.') && failJournalRemove) {
         failJournalRemove = false
         throw new Error('Journal removal failed')
@@ -119,6 +132,9 @@ function hostStorage() {
       getSync(key, fallback) {
         return stored.has(key) ? stored.get(key) : fallback
       },
+      getAllSync() {
+        return Object.fromEntries(stored)
+      },
       putSync(key, value) {
         stored.set(key, value)
       },
@@ -128,45 +144,61 @@ function hostStorage() {
       hasSync(key) {
         return stored.has(key)
       },
-      flushSync() {}
+      flushSync() {
+        if (name === 'orca_hosts' && failHostFlush) {
+          failHostFlush = false
+          throw new Error('Host preference flush failed')
+        }
+      }
     }
   }
   const preferences = {
     getPreferences: async (...args) => getPreferences(...args),
     getPreferencesSync: getPreferences
   }
-  const host = loadArkts(
-    'storage/HostStore.ets',
-    [
-      'hostIdFor',
-      'saveHost',
-      'deleteHost',
-      'listHosts',
-      'getDeviceToken',
-      'getRelayCredential',
-      'updateRelayCredential',
-      'updateHostMachine',
-      'updateHostNameAndEndpoint',
-      'hostRemovalTimestamp',
-      'hostPairingTimestamp',
-      'readHostPairingJournal',
-      'writeHostPairingJournal',
-      'listHostPairingJournals',
-      'clearHostPairingJournal'
-    ],
-    {
-      ...protocol,
-      util,
-      sha256,
-      utf8Decode,
-      base64DecodeCanonical,
-      asset,
-      preferences,
-      DeviceRowStore,
-      readHostMachineDescriptor,
-      Date: clock
-    }
-  )
+  const openHost = () =>
+    loadArkts(
+      'storage/HostStore.ets',
+      [
+        'hostIdFor',
+        'saveHost',
+        'deleteHost',
+        'loadPendingHostCredentialCleanup',
+        'retryPendingHostCredentialCleanup',
+        'listHosts',
+        'getDeviceToken',
+        'getRelayCredential',
+        'updateRelayCredential',
+        'updateHostMachine',
+        'updateHostNameAndEndpoint',
+        'hostRemovalTimestamp',
+        'hostPairingTimestamp',
+        'readHostPairingJournal',
+        'writeHostPairingJournal',
+        'listHostPairingJournals',
+        'clearHostPairingJournal'
+      ],
+      {
+        ...protocol,
+        util,
+        sha256,
+        utf8Decode,
+        base64DecodeCanonical,
+        asset,
+        preferences,
+        DeviceRowStore,
+        clearHomeResume: () => {},
+        deletePageStorage: async () => {
+          if (failPageRemove) {
+            failPageRemove = false
+            throw new Error('Page storage temporarily unavailable')
+          }
+        },
+        readHostMachineDescriptor,
+        Date: clock
+      }
+    )
+  const host = openHost()
   class RpcSuccess {
     constructor(id, result) {
       this.id = id
@@ -243,7 +275,11 @@ function hostStorage() {
     onTokenUpdate(wait) {
       waitAfterTokenUpdate = wait
     },
+    onTokenRemoval(wait) {
+      waitBeforeTokenRemoval = wait
+    },
     host,
+    openHost,
     pairing,
     offer,
     client,
@@ -273,6 +309,15 @@ function hostStorage() {
     },
     failJournalRemoval: () => {
       failJournalRemove = true
+    },
+    failTokenRemoval: () => {
+      failTokenRemove = true
+    },
+    failPageRemoval: () => {
+      failPageRemove = true
+    },
+    failHostFlush: () => {
+      failHostFlush = true
     }
   }
 }
@@ -436,6 +481,7 @@ test('removing a desktop while invite recovery checks its status prevents a new 
   assert.deepEqual(Array.from(await recovery), [])
   assert.deepEqual(requests, ['pairing.getEndpoints'])
   assert.equal((await host.listHosts({})).length, 0)
+  await host.retryPendingHostCredentialCleanup({})
   assert.equal(await host.readHostPairingJournal({}, meta.id), null)
 })
 
@@ -472,6 +518,7 @@ test('removing a paired host prevents a committed but uncleared pairing journal 
   assert.deepEqual(Array.from(await host.listHosts({})), [])
   await pairing.recoverRelayPairings({})
   assert.deepEqual(Array.from(await host.listHosts({})), [])
+  await host.retryPendingHostCredentialCleanup({})
   assert.equal(await host.getDeviceToken({}, meta.id), null)
   assert.equal(await host.getRelayCredential({}, meta.id), null)
 })
@@ -487,7 +534,90 @@ test('a direct pairing started before removal cannot restore the removed desktop
     /superseded/
   )
   assert.deepEqual(Array.from(await host.listHosts({})), [])
+  await host.retryPendingHostCredentialCleanup({})
   assert.equal(await host.getDeviceToken({}, meta.id), null)
+})
+
+test('a removed desktop stays removed across restart when credential deletion fails', async () => {
+  const { host, openHost, meta, relay, protocol, advance, failTokenRemoval } = hostStorage()
+  const startedAt = advance()
+  const token = 'T'.repeat(43)
+  await host.saveHost(
+    {},
+    { ...meta, relay },
+    'previous-device-token',
+    {
+      token,
+      hash: protocol.relayCredentialHash(token),
+      version: 1,
+      expiresAt: startedAt + 86400000
+    },
+    startedAt
+  )
+  advance()
+  failTokenRemoval()
+  await host.deleteHost({}, meta.id)
+  assert.equal((await host.retryPendingHostCredentialCleanup({})).count, 1)
+
+  const restarted = openHost()
+  assert.deepEqual(Array.from(await restarted.listHosts({})), [])
+  assert.equal((await restarted.loadPendingHostCredentialCleanup({})).count, 1)
+  assert.equal((await restarted.retryPendingHostCredentialCleanup({})).count, 0)
+  assert.equal(await restarted.getDeviceToken({}, meta.id), null)
+  assert.equal(await restarted.getRelayCredential({}, meta.id), null)
+})
+
+test('credential cleanup preserves a newer unpublished Relay journal', async () => {
+  const { host, pairing, offer, client, meta, advance, failPageRemoval } = hostStorage()
+  await host.saveHost({}, meta, 'previous-device-token', undefined, advance())
+  advance()
+  await host.deleteHost({}, meta.id)
+  failPageRemoval()
+  assert.equal((await host.retryPendingHostCredentialCleanup({})).count, 1)
+
+  const replacement = await pairing.beginRelayPairing({}, offer, advance(), active)
+  assert.equal((await host.retryPendingHostCredentialCleanup({})).count, 0)
+  assert.equal((await host.readHostPairingJournal({}, meta.id)).reqId, replacement.reqId)
+  const prepared = await pairing.prepareRelayPairing({}, replacement, meta, client, active)
+  await pairing.commitRelayPairing({}, meta, 'replacement-device-token', prepared, active)
+  await host.retryPendingHostCredentialCleanup({})
+  assert.equal(await host.getDeviceToken({}, meta.id), 'replacement-device-token')
+})
+
+test('a failed removal commit preserves the original pairing and leaves no cleanup intent', async () => {
+  const { host, meta, advance, failHostFlush } = hostStorage()
+  await host.saveHost({}, meta, 'previous-device-token', undefined, advance())
+  advance()
+  failHostFlush()
+  await assert.rejects(host.deleteHost({}, meta.id), /preference flush failed/)
+  assert.equal((await host.listHosts({}))[0].id, meta.id)
+  assert.equal(host.hostRemovalTimestamp({}, meta.id), 0)
+  assert.equal((await host.retryPendingHostCredentialCleanup({})).count, 0)
+  assert.equal(await host.getDeviceToken({}, meta.id), 'previous-device-token')
+})
+
+test('a replacement pairing survives an older credential delete still running in the Asset Store', async () => {
+  const { host, meta, advance, onTokenRemoval } = hostStorage()
+  await host.saveHost({}, meta, 'previous-device-token', undefined, advance())
+  advance()
+  await host.deleteHost({}, meta.id)
+
+  const started = Promise.withResolvers()
+  const finish = Promise.withResolvers()
+  onTokenRemoval(() => {
+    started.resolve()
+    return finish.promise
+  })
+  const cleaning = host.retryPendingHostCredentialCleanup({})
+  await started.promise
+  const repairing = host.saveHost({}, meta, 'replacement-device-token', undefined, advance())
+  await new Promise((resolve) => setImmediate(resolve))
+  finish.resolve()
+  await Promise.all([cleaning, repairing])
+
+  assert.equal((await host.listHosts({}))[0].id, meta.id)
+  assert.equal((await host.loadPendingHostCredentialCleanup({})).count, 0)
+  assert.equal(await host.getDeviceToken({}, meta.id), 'replacement-device-token')
 })
 
 test('desktop machine details survive a host-list reload and stale status cannot cross a pairing', async () => {

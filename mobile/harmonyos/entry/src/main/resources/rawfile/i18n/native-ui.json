@@ -7973,5 +7973,83 @@
   },
   "home.activeAgents.heading": {
     "en": "Active"
+  },
+  "settings.pendingCredentialCleanupCard.title": {
+    "de": "Kopplungszugangsdaten bereinigen",
+    "en": "Pairing credential cleanup",
+    "es": "Eliminación de credenciales de emparejamiento",
+    "fr": "Suppression des identifiants d'appairage",
+    "ja": "ペアリング認証情報の削除",
+    "ko": "페어링 자격 증명 정리",
+    "pt": "Limpeza de credenciais de pareamento",
+    "ru": "Удаление учётных данных сопряжения",
+    "tr": "Eşleştirme kimlik bilgilerini temizleme",
+    "zh-Hant": "配對憑證清理",
+    "zh": "配对凭据清理"
+  },
+  "settings.pendingCredentialCleanupCard.retryFailed": {
+    "de": "Die Bereinigung konnte weiterhin nicht bestätigt werden. Später erneut versuchen.",
+    "en": "Cleanup still couldn't be confirmed. Try again later.",
+    "es": "Aún no se ha podido confirmar la eliminación. Vuelve a intentarlo más tarde.",
+    "fr": "La suppression n'a toujours pas pu être confirmée. Réessayez plus tard.",
+    "ja": "削除の完了をまだ確認できません。しばらくしてから再試行してください。",
+    "ko": "정리 완료 여부를 아직 확인하지 못했습니다. 나중에 다시 시도하세요.",
+    "pt": "Ainda não foi possível confirmar a limpeza. Tente novamente mais tarde.",
+    "ru": "Подтвердить удаление по-прежнему не удалось. Повторите попытку позже.",
+    "tr": "Temizleme işlemi hâlâ doğrulanamadı. Daha sonra yeniden deneyin.",
+    "zh-Hant": "仍無法確認是否已清理完成，請稍後再試。",
+    "zh": "仍无法确认清理结果。请稍后重试。"
+  },
+  "settings.pendingCredentialCleanupCard.cleanupUnconfirmed_one": {
+    "de": "Die Bereinigung von {{count}} Zugangsdaten-Eintrag auf diesem Gerät konnte nicht bestätigt werden.",
+    "en": "Couldn't confirm cleanup for {{count}} credential on this device.",
+    "es": "No se pudo confirmar la eliminación de {{count}} credencial en este dispositivo.",
+    "fr": "Impossible de confirmer la suppression de {{count}} identifiant sur cet appareil.",
+    "ja": "このデバイスで、認証情報 {{count}} 件の削除完了を確認できませんでした。",
+    "ko": "이 기기의 자격 증명 {{count}}개가 정리되었는지 확인하지 못했습니다.",
+    "pt": "Não foi possível confirmar a limpeza de {{count}} credencial neste dispositivo.",
+    "ru": "Не удалось подтвердить удаление {{count}} набора учётных данных с этого устройства.",
+    "tr": "Bu cihazdaki {{count}} kimlik bilgisinin temizlendiği doğrulanamadı.",
+    "zh-Hant": "無法確認此裝置上的 {{count}} 個憑證是否已清除。",
+    "zh": "无法确认此设备上的 {{count}} 个凭据是否已清理。"
+  },
+  "settings.pendingCredentialCleanupCard.cleanupUnconfirmed_other": {
+    "de": "Die Bereinigung von {{count}} Zugangsdaten-Einträgen auf diesem Gerät konnte nicht bestätigt werden.",
+    "en": "Couldn't confirm cleanup for {{count}} credentials on this device.",
+    "es": "No se pudo confirmar la eliminación de {{count}} credenciales en este dispositivo.",
+    "fr": "Impossible de confirmer la suppression de {{count}} identifiants sur cet appareil.",
+    "ja": "このデバイスで、認証情報 {{count}} 件の削除完了を確認できませんでした。",
+    "ko": "이 기기의 자격 증명 {{count}}개가 정리되었는지 확인하지 못했습니다.",
+    "pt": "Não foi possível confirmar a limpeza de {{count}} credenciais neste dispositivo.",
+    "ru": "Не удалось подтвердить удаление {{count}} набора учётных данных с этого устройства.",
+    "tr": "Bu cihazdaki {{count}} kimlik bilgisinin temizlendiği doğrulanamadı.",
+    "zh-Hant": "無法確認此裝置上的 {{count}} 個憑證是否已清除。",
+    "zh": "无法确认此设备上的 {{count}} 个凭据是否已清理。"
+  },
+  "settings.pendingCredentialCleanupCard.statusCheckFailed": {
+    "de": "Der Bereinigungsstatus auf diesem Gerät konnte nicht geprüft werden. Zur Sicherheit erneut versuchen.",
+    "en": "Couldn't check cleanup status on this device. Retry to be safe.",
+    "es": "No se pudo comprobar el estado de la eliminación en este dispositivo. Vuelve a intentarlo para asegurarte.",
+    "fr": "Impossible de vérifier l'état de la suppression sur cet appareil. Réessayez par précaution.",
+    "ja": "このデバイスでの認証情報の削除状況を確認できませんでした。念のため再試行してください。",
+    "ko": "이 기기의 정리 상태를 확인하지 못했습니다. 안전을 위해 다시 시도하세요.",
+    "pt": "Não foi possível verificar o status da limpeza neste dispositivo. Tente novamente por segurança.",
+    "ru": "Не удалось проверить, удалены ли учётные данные с этого устройства. На всякий случай повторите попытку.",
+    "tr": "Bu cihazdaki temizleme işleminin durumu kontrol edilemedi. Önlem olarak yeniden deneyin.",
+    "zh-Hant": "無法檢查此裝置的清理狀態。為確保安全，請重試。",
+    "zh": "无法检查此设备上的清理状态。为确保安全，请重试。"
+  },
+  "settings.pendingCredentialCleanupCard.retryCleanup": {
+    "de": "Löschen der Kopplungszugangsdaten erneut versuchen",
+    "en": "Retry clearing pairing credentials",
+    "es": "Reintentar la eliminación de credenciales de emparejamiento",
+    "fr": "Réessayer de supprimer les identifiants d'appairage",
+    "ja": "ペアリング認証情報の削除を再試行",
+    "ko": "페어링 자격 증명 삭제 다시 시도",
+    "pt": "Tentar limpar as credenciais de pareamento novamente",
+    "ru": "Повторить удаление учётных данных сопряжения",
+    "tr": "Eşleştirme kimlik bilgilerini temizlemeyi yeniden dene",
+    "zh-Hant": "重試清除配對憑證",
+    "zh": "重试清除配对凭据"
   }
 }

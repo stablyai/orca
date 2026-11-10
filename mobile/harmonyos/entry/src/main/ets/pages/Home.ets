@@ -27,6 +27,7 @@ import { HomeUsageCard, HomeUsageWindow, HomeAutomation, HomeAutomationRun, home
   readHomeAutomationRuns, homeAutomationToggleParams } from '../home/HomeAccountUsage';
 import { homeAutomationSchedule, homeUsageResetCountdown } from '../home/HomeTabPresentation';
 import { SETTINGS_LINK_ITEMS, SETTINGS_MENU_ITEMS, SettingsMenuItem } from '../settings/SettingsMenu';
+import { PendingCredentialCleanupCard } from '../settings/PendingCredentialCleanupCard';
 import { loadMobileOnboardingSteps } from '../onboarding/MobileOnboardingPlan';
 import { recoverRelayPairings } from '../transport/RelayPairing';
 import { HomeStats, readHomeStats, totalHomeStats } from '../home/HomeStats';
@@ -1875,6 +1876,7 @@ struct Home {
       Scroll() {
         Column({ space: 12 }) {
           this.settingsGroup(SETTINGS_MENU_ITEMS, false)
+          PendingCredentialCleanupCard()
           this.settingsGroup(SETTINGS_LINK_ITEMS, true)
         }
         .width('100%')
