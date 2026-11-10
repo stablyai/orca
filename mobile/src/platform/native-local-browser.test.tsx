@@ -11,7 +11,9 @@ vi.mock('react-native', () => ({ View: 'View' }))
 vi.mock('../theme/themed-styles', () => ({ themedStyleSheet: (make: () => unknown) => make() }))
 vi.mock('../theme/mobile-theme', () => ({ colors: { bgBase: '#000' } }))
 vi.mock('../theme/use-mobile-color-scheme', () => ({ useMobileColorScheme: () => 'dark' }))
-vi.mock('../transport/connection/host-client-hooks', () => ({ useHostClient: () => ({ client: {} }) }))
+vi.mock('../transport/connection/host-client-hooks', () => ({
+  useHostClient: () => ({ client: {} })
+}))
 const TUNNEL = { status: 'ready', proxyKey: 'proxy-1', storeId: 'store-1' }
 vi.mock('../browser/use-mobile-browser-local-tunnel', () => ({
   canRenderBrowserLocally: () => true,
