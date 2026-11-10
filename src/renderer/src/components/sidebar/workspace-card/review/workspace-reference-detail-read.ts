@@ -18,6 +18,17 @@ import {
 type Entry<T> = { data: T | null; fetchedAt: number; stale?: boolean }
 const reads = new PrioritySemaphore(3)
 
+type ReferenceCache =
+  | 'hostedReviewCache'
+  | 'linearIssueCache'
+  | 'jiraIssueSummaryCache'
+  | 'issueCache'
+
+// Keep long-lived readers out of the read closures' store-snapshot scope.
+function cacheEntryReader<K extends ReferenceCache>(cache: K, key: string) {
+  return (state: AppState): AppState[K][string] | undefined => state[cache]?.[key]
+}
+
 function lookup<T>(
   state: AppState,
   getRawEntry: (state: AppState) => Entry<T> | undefined,
@@ -26,7 +37,6 @@ function lookup<T>(
 ) {
   const entry = getRawEntry(state)
   return {
-    rawEntry: entry,
     getRawEntry,
     getEntry: () => entry && { ...entry, data: entry.data && project(entry.data) },
     read: async (signal?: AbortSignal) => {
@@ -44,7 +54,7 @@ export function getWorkspaceReferenceLookup(request: WorkspaceReferenceRequest, 
     }
     return lookup(
       state,
-      (state) => state.hostedReviewCache?.[request.key],
+      cacheEntryReader('hostedReviewCache', request.key),
       () =>
         state.fetchHostedReviewForBranch(repo.path, workspace.branch ?? '', {
           exactReviewKey: request.key,
@@ -76,7 +86,7 @@ export function getWorkspaceReferenceLookup(request: WorkspaceReferenceRequest, 
     const cacheKey = `${scope}::${workspaceId}::${identifier}`
     return lookup(
       state,
-      (state) => state.linearIssueCache?.[cacheKey],
+      cacheEntryReader('linearIssueCache', cacheKey),
       async (signal) => {
         let issue: LinearIssue | null = null
         await consumeLinearIssueRead(
@@ -111,7 +121,7 @@ export function getWorkspaceReferenceLookup(request: WorkspaceReferenceRequest, 
     const cacheKey = `${scope}::${siteId}::${identifier.toUpperCase()}`
     return lookup(
       state,
-      (state) => state.jiraIssueSummaryCache?.[cacheKey],
+      cacheEntryReader('jiraIssueSummaryCache', cacheKey),
       () => state.lookupJiraIssueSummary(sourceContext, identifier, siteId),
       (issue) =>
         issue.key.toLowerCase() === identifier.toLowerCase() &&
@@ -142,7 +152,7 @@ export function getWorkspaceReferenceLookup(request: WorkspaceReferenceRequest, 
     const cacheKey = `${scope}::${repo.id}::${item.number}`
     return lookup(
       state,
-      (state) => state.issueCache?.[cacheKey],
+      cacheEntryReader('issueCache', cacheKey),
       () => state.fetchIssue(repo.path, item.number, { repoId: repo.id, sourceContext }),
       (issue) =>
         issue.number === item.number && matchesWorkspaceReferenceUrl(item, issue.url)
