@@ -2962,7 +2962,12 @@
       "skip": "Skip",
       "step": "Step {{step}}",
       "other": "Other…",
-      "answerPlaceholder": "Type your answer"
+      "answerPlaceholder": "Type your answer",
+      "optionPreview": "{{option}} preview",
+      "previewPosition": "{{current}} of {{total}}",
+      "chosen": "Chosen",
+      "chooseThis": "Choose this",
+      "viewPreview": "View"
     },
     "permission": {
       "reason": "Reason: ",
