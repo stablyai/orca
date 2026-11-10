@@ -1,4 +1,5 @@
 import React from 'react'
+import { orcaCloudRowHint } from './run-target-row-hints'
 import { Cloud } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
@@ -318,6 +319,7 @@ export function RunTargetOrcaCloudRow({
       busy={pending}
       onArm={onArm}
       onCommit={onSelect}
+      description={orcaCloudRowHint(access, t)}
       trailing={<OrcaCloudMeta access={access} onAction={onBlockedAction} />}
     />
   )
