@@ -5,7 +5,10 @@ import type { SessionLink } from '../../../../../shared/session-link'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
 
 export function isSessionLinkOwner(context: RpcContext): boolean {
-  return context.caller?.kind === 'desktop'
+  return (
+    context.caller?.kind === 'desktop' ||
+    (context.caller?.kind === 'paired-device' && context.clientKind === 'runtime')
+  )
 }
 export function requireSessionLinkOwner(context: RpcContext): void {
   if (!isSessionLinkOwner(context)) {

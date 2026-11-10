@@ -57,6 +57,47 @@ describe('session link caller authority', () => {
     return handler.handler(handler.params?.parse(params), context)
   }
 
+  it('lets an authenticated paired desktop read the host link and send an owner note', () => {
+    const remote: RpcContext = {
+      runtime,
+      caller: { kind: 'paired-device', deviceId: 'windows' },
+      clientKind: 'runtime'
+    }
+    expect(
+      call('orchestration.linkCurrent', { sessionId: 'codex_implement' }, remote)
+    ).toMatchObject({
+      link: { id: 'link-1' }
+    })
+    call(
+      'orchestration.linkSend',
+      {
+        id: 'link-1',
+        operationId: 'remote-note',
+        body: 'Continue with the agreed scope.',
+        kind: 'owner-note'
+      },
+      remote
+    )
+    expect(store.events('link-1')).toHaveLength(2)
+    expect(store.events('link-1').every((event) => event.actor === 'owner')).toBe(true)
+  })
+
+  it('does not infer owner authority from unproven or mobile client metadata', () => {
+    for (const context of [
+      { runtime, clientKind: 'runtime' as const },
+      { runtime, caller: { kind: 'local-cli' as const }, clientKind: 'runtime' as const },
+      {
+        runtime,
+        caller: { kind: 'paired-device' as const, deviceId: 'phone' },
+        clientKind: 'mobile' as const
+      }
+    ]) {
+      expect(() =>
+        call('orchestration.linkCurrent', { sessionId: 'codex_implement' }, context)
+      ).toThrow('Read only')
+    }
+  })
+
   it('refuses create/resume from the CLI even when it supplies valid participant IDs', async () => {
     await expect(
       call(

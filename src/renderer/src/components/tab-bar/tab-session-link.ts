@@ -1,12 +1,15 @@
 import type { AppState } from '@/store/types'
 import type { Tab } from '../../../../shared/tab-types'
-import { structuredAgentSessionOwnerForTab } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
+import {
+  structuredAgentSessionOwnerForTab,
+  structuredAgentSessionTargetForTab
+} from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 
 export function isLinkableChatTab(state: AppState, tab: Tab | undefined): tab is Tab {
   return Boolean(
     tab?.contentType === 'agent-session' &&
     (tab.agentSessionAgent === 'claude' || tab.agentSessionAgent === 'codex') &&
-    structuredAgentSessionOwnerForTab(state, tab) === 'local'
+    structuredAgentSessionTargetForTab(state, tab) !== null
   )
 }
 
@@ -20,12 +23,22 @@ export function tabSessionLinkRequest(
   if (!isLinkableChatTab(state, clicked)) {
     return null
   }
+  const target = structuredAgentSessionTargetForTab(state, clicked)
+  if (!target) {
+    return null
+  }
   const active = state.activeWorktreeId
     ? (state.getActiveTab(state.activeWorktreeId) ?? undefined)
     : undefined
   const source =
-    isLinkableChatTab(state, active) && active.entityId !== clicked.entityId ? active : clicked
+    isLinkableChatTab(state, active) &&
+    structuredAgentSessionOwnerForTab(state, active) ===
+      structuredAgentSessionOwnerForTab(state, clicked) &&
+    active.entityId !== clicked.entityId
+      ? active
+      : clicked
   return {
+    target,
     sessionId: source.entityId,
     sourceName: source.customLabel ?? names?.get(source.entityId)?.conversationName ?? source.label,
     ...(source.entityId !== clicked.entityId

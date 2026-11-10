@@ -21734,7 +21734,8 @@
       "policyResumed": "Collaboration limits changed and link continued",
       "ownerAnswered": "Answered by the owner",
       "optionalNote": "Optional note to both agents",
-      "sendResume": "Send and continue"
+      "sendResume": "Send and continue",
+      "hostDescription": "Connect two existing chats on this host. You control the story, permissions and continuation."
     },
     "wslHostMark": {
       "runsOn": "Runs on WSL: {{distro}} (Linux)"

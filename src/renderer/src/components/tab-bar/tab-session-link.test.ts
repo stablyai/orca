@@ -33,6 +33,7 @@ describe('tabSessionLinkRequest', () => {
     const clicked = { ...chat('partner'), customLabel: 'Architecture review' }
     expect(tabSessionLinkRequest(state(selected, clicked), clicked.worktreeId, clicked.id)).toEqual(
       {
+        target: { kind: 'local' },
         sessionId: 'source',
         sourceName: 'Implementation',
         partnerSessionId: 'partner',
@@ -45,6 +46,7 @@ describe('tabSessionLinkRequest', () => {
     expect(
       tabSessionLinkRequest(state(selected, selected), selected.worktreeId, selected.id)
     ).toEqual({
+      target: { kind: 'local' },
       sessionId: 'source',
       sourceName: 'source'
     })
@@ -52,13 +54,30 @@ describe('tabSessionLinkRequest', () => {
   it('uses the clicked chat when an editor is selected', () => {
     const selected = { ...chat('editor'), contentType: 'editor' as const }
     expect(tabSessionLinkRequest(state(selected), 'workspace', 'tab-partner')).toEqual({
+      target: { kind: 'local' },
       sessionId: 'partner',
       sourceName: 'partner'
     })
   })
-  it('does not offer local links for remote chats or terminal tabs', () => {
+  it('routes remote chats to their host without pairing across different hosts', () => {
     const remote = { ...chat('partner'), executionHostId: 'runtime:remote' as const }
-    expect(tabSessionLinkRequest(state(null, remote), 'workspace', remote.id)).toBeNull()
+    expect(
+      tabSessionLinkRequest(state(chat('local'), remote), 'workspace', remote.id)
+    ).toMatchObject({
+      target: { kind: 'environment', environmentId: 'remote' },
+      sessionId: 'partner'
+    })
+    expect(
+      tabSessionLinkRequest(
+        state({ ...chat('source'), executionHostId: 'runtime:remote' }, remote),
+        'workspace',
+        remote.id
+      )
+    ).toMatchObject({
+      target: { kind: 'environment', environmentId: 'remote' },
+      sessionId: 'source',
+      partnerSessionId: 'partner'
+    })
     const terminal = { ...chat('terminal'), contentType: 'terminal' as const }
     expect(tabSessionLinkRequest(state(null, terminal), 'workspace', terminal.id)).toBeNull()
   })

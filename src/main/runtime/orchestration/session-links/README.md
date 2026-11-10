@@ -1,6 +1,6 @@
 # Session links: first slice
 
-A person explicitly pairs two existing local Claude or Codex chats from **Work together…** in a chat header. The preview shows the partner chat, workspace, branch, task, story and roles. Only the desktop transport can create or resume a link. One current link is allowed per conversation; structured workers and remote sessions are excluded from this slice.
+A person explicitly pairs two existing Claude or Codex chats on the same host from **Work together…** in a chat header. The preview shows the partner chat, workspace, branch, task, story and roles. The host desktop and authenticated paired desktop transports can create or resume a link. One current link is allowed per conversation; structured workers and pairs spanning different hosts are excluded from this slice.
 
 The durable link and chronological journal live in the host orchestration SQLite database. Link messages also use the existing orchestration message store as inspect-only mail. Ordinary mail resets do not erase the link journal. Agent messages retain typed agent provenance and a link label on desktop and mobile. Model requests use the session's normal provider/account; local transport does not mean offline inference.
 
@@ -30,6 +30,6 @@ The acceptance scenario pairs an implementer with a reviewer: the implementer se
 
 ## Deferred
 
-Dedicated mobile link controls, remote links, multiple peers, file-write collision detection, editable live roles are outside this slice. Mobile preserves link attribution and ordinary chat participation. Existing orchestration Runs/Dispatches keep their own lifecycle authority.
+Dedicated mobile link controls, cross-host links, multiple peers, file-write collision detection, editable live roles are outside this slice. Mobile preserves link attribution and ordinary chat participation. Existing orchestration Runs/Dispatches keep their own lifecycle authority.
 
 An unconfirmed delivery can be marked reviewed only by the desktop owner after checking the recipient chat. This cancels that outbox event without changing its original operation, reserves no send, and leaves the link paused. Resume admits later messages only. A late receipt for the reviewed event cannot resend it.

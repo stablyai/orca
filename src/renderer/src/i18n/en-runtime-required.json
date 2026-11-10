@@ -1934,6 +1934,10 @@
       "workers_one": "{{count}} worker",
       "workers_other": "{{count}} workers"
     },
+    "sessionLink": {
+      "description": "Connect two existing local chats. You control the story, permissions and continuation.",
+      "linked": "Linked with"
+    },
     "tab": {
       "bar": {
         "bulkClose": {
@@ -1985,9 +1989,6 @@
           "discarded_other": "Unsaved edits in {{count}} files will be discarded:"
         }
       }
-    },
-    "sessionLink": {
-      "linked": "Linked with"
     }
   },
   "dashboard": {

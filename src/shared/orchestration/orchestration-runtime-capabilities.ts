@@ -1,3 +1,5 @@
+export const SESSION_LINK_PAIRED_DESKTOP_CAPABILITY =
+  'orchestration.session-links-paired-desktop.v1' as const
 export const SESSION_LINK_OWNER_CHOICES_CAPABILITY =
   'orchestration.session-link-owner-choices.v1' as const
 export const SESSION_LINK_POLICY_CAPABILITY = 'orchestration.session-link-policy.v1' as const
@@ -45,6 +47,7 @@ export const ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY = 'orchestration.contract
 
 export const ORCHESTRATION_RUNTIME_CAPABILITIES = [
   SESSION_LINK_CAPABILITY,
+  SESSION_LINK_PAIRED_DESKTOP_CAPABILITY,
   SESSION_LINK_POLICY_CAPABILITY,
   SESSION_LINK_OWNER_CHOICES_CAPABILITY,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,

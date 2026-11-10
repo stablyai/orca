@@ -2,11 +2,18 @@
 import type * as SessionHostSupportModule from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { SessionLinkSnapshot, LinkCreateParams } from '../../../../shared/session-link'
+import {
+  SessionLinkSnapshot,
+  LinkCreateParams,
+  SESSION_LINK_PAIRED_DESKTOP_CAPABILITY
+} from '../../../../shared/session-link'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { useSessionLink } from './use-session-link'
 
-const rpc = vi.hoisted(() => ({ call: vi.fn(), supports: vi.fn(async () => true) }))
+const rpc = vi.hoisted(() => ({
+  call: vi.fn(),
+  supports: vi.fn(async (_target: unknown, _capability: string) => true)
+}))
 vi.mock('@/runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: rpc.call
 }))
@@ -52,12 +59,15 @@ const fields = {
   role: 'implementer'
 }
 
+beforeEach(() => {
+  rpc.call.mockReset().mockResolvedValue(null)
+  rpc.supports.mockReset().mockResolvedValue(true)
+})
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
 describe('session link mutation recovery', () => {
-  beforeEach(() => rpc.call.mockReset().mockResolvedValue(null))
-  afterEach(() => {
-    cleanup()
-    vi.useRealTimers()
-  })
   function hook() {
     return renderHook(() => useSessionLink('codex-work', { kind: 'local' }, false))
   }
@@ -172,4 +182,49 @@ describe('session link mutation recovery', () => {
       rpc.call.mock.calls.filter(([, method]) => method === 'orchestration.linkShow')
     ).toHaveLength(1)
   })
+})
+
+it('reads and resumes a link on its remote host without querying the local runtime', async () => {
+  const target = { kind: 'environment', environmentId: 'macbook' } as const
+  rpc.supports.mockResolvedValue(true)
+  rpc.call.mockImplementation(async (_target, method) =>
+    method === 'orchestration.linkCurrent' || method === 'orchestration.linkControl'
+      ? snapshot('remote-link')
+      : null
+  )
+  const { result } = renderHook(() => useSessionLink('codex-work', target, false))
+  await waitFor(() => expect(result.current.snapshot?.link.id).toBe('remote-link'))
+  expect(rpc.supports).toHaveBeenCalledWith(target, SESSION_LINK_PAIRED_DESKTOP_CAPABILITY)
+  await act(async () => {
+    expect(
+      await result.current.mutate('orchestration.linkControl', {
+        id: 'remote-link',
+        action: 'resume',
+        version: 1
+      })
+    ).toBe(true)
+  })
+  expect(
+    rpc.call.mock.calls.every(([destination]) => destination.environmentId === 'macbook')
+  ).toBe(true)
+})
+
+it('does not query links on an older remote host without the capability', async () => {
+  rpc.supports.mockImplementation(
+    async (_target, capability) => capability !== SESSION_LINK_PAIRED_DESKTOP_CAPABILITY
+  )
+  const { result } = renderHook(() =>
+    useSessionLink(
+      'codex-work',
+      {
+        kind: 'environment',
+        environmentId: 'older-host'
+      },
+      false
+    )
+  )
+  await act(async () => {})
+  expect(result.current.supported).toBe(false)
+  expect(rpc.call).not.toHaveBeenCalled()
+  rpc.supports.mockResolvedValue(true)
 })

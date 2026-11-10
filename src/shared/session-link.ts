@@ -3,6 +3,7 @@ import { isOrcaSessionId, type OrcaSessionId } from './orca-session-address'
 
 export {
   SESSION_LINK_CAPABILITY,
+  SESSION_LINK_PAIRED_DESKTOP_CAPABILITY,
   SESSION_LINK_OWNER_CHOICES_CAPABILITY,
   SESSION_LINK_POLICY_CAPABILITY
 } from './orchestration/orchestration-runtime-capabilities'

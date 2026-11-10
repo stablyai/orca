@@ -81,8 +81,8 @@ export function SessionLinkControl({
             <DialogTitle>{t('components.sessionLink.title', 'Work together')}</DialogTitle>
             <DialogDescription>
               {t(
-                'components.sessionLink.description',
-                'Connect two existing local chats. You control the story, permissions and continuation.'
+                'components.sessionLink.hostDescription',
+                'Connect two existing chats on this host. You control the story, permissions and continuation.'
               )}
             </DialogDescription>
           </DialogHeader>

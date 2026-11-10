@@ -1,3 +1,4 @@
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { sessionLinkOwnerRequest } from '../../../../shared/session-link-wait'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import { translate as t } from '@/i18n/i18n'
@@ -9,12 +10,14 @@ import { useSessionLink } from './use-session-link'
 
 export function SessionLinkOwnerQuestion({
   sessionId,
+  target,
   shouldFocus = false
 }: {
   sessionId: string
+  target: RuntimeClientTarget
   shouldFocus?: boolean
 }): React.JSX.Element | null {
-  const state = useSessionLink(sessionId, { kind: 'local' }, false)
+  const state = useSessionLink(sessionId, target, false)
   const snapshot = state.snapshot
   const request = snapshot && sessionLinkOwnerRequest(snapshot.events)
   if (
@@ -142,9 +145,11 @@ export function sessionLinkOwnerQuestion(
     'sessionId' | 'target' | 'isVisible' | 'agent' | 'isFocusedGroup'
   >
 ): React.JSX.Element | null {
-  return view.isVisible &&
-    view.target.kind === 'local' &&
-    (view.agent === 'claude' || view.agent === 'codex') ? (
-    <SessionLinkOwnerQuestion sessionId={view.sessionId} shouldFocus={view.isFocusedGroup} />
+  return view.isVisible && (view.agent === 'claude' || view.agent === 'codex') ? (
+    <SessionLinkOwnerQuestion
+      sessionId={view.sessionId}
+      target={view.target}
+      shouldFocus={view.isFocusedGroup}
+    />
   ) : null
 }

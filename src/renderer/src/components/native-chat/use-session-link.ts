@@ -1,3 +1,4 @@
+import { subscribeRuntimeHostContactRegained } from '@/runtime/hosts/connections/runtime-host-contact-regained'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { z } from 'zod'
@@ -6,7 +7,8 @@ import {
   SessionLinkParticipant,
   SessionLinkSnapshot,
   SESSION_LINK_POLICY_CAPABILITY,
-  SESSION_LINK_CAPABILITY
+  SESSION_LINK_CAPABILITY,
+  SESSION_LINK_PAIRED_DESKTOP_CAPABILITY
 } from '../../../../shared/session-link'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { translate as t } from '@/i18n/i18n'
@@ -101,9 +103,14 @@ export function useSessionLink(sessionId: string, target: RuntimeClientTarget, o
     setCandidates(null)
     setSupported(false)
     setPolicySupported(false)
-    if (destination.kind === 'local') {
+    const probe = () =>
       void Promise.all([
-        structuredAgentSessionHostSupports(destination, SESSION_LINK_CAPABILITY),
+        structuredAgentSessionHostSupports(
+          destination,
+          destination.kind === 'local'
+            ? SESSION_LINK_CAPABILITY
+            : SESSION_LINK_PAIRED_DESKTOP_CAPABILITY
+        ),
         structuredAgentSessionHostSupports(destination, SESSION_LINK_POLICY_CAPABILITY)
       ]).then(([ok, policyOk]) => {
         if (!cancelled) {
@@ -111,8 +118,13 @@ export function useSessionLink(sessionId: string, target: RuntimeClientTarget, o
           setPolicySupported(policyOk)
         }
       })
-    }
+    probe()
+    const unsubscribe =
+      destination.kind === 'environment'
+        ? subscribeRuntimeHostContactRegained(destination.environmentId, probe)
+        : undefined
     return () => {
+      unsubscribe?.()
       cancelled = true
       invalidate()
     }

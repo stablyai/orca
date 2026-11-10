@@ -185,7 +185,7 @@ export const policySettings = defineFixture({
 export const ownerQuestionInChat = defineFixture({
   width: 360,
   setup: () => setup('paused'),
-  render: () => <SessionLinkOwnerQuestion sessionId={source.sessionId} />
+  render: () => <SessionLinkOwnerQuestion sessionId={source.sessionId} target={{ kind: 'local' }} />
 })
 
 export const ownerQuestionRussian = defineFixture({
@@ -199,7 +199,7 @@ export const ownerQuestionRussian = defineFixture({
     useAppStore.setState({ settings: { ...settings, uiLanguage: 'ru' } })
     await i18n.changeLanguage(await loadRendererUiLanguage('ru'))
   },
-  render: () => <SessionLinkOwnerQuestion sessionId={source.sessionId} />
+  render: () => <SessionLinkOwnerQuestion sessionId={source.sessionId} target={{ kind: 'local' }} />
 })
 
 const longOwnerQuestion = `Offline checks passed. Should we run the next verification stage with a maximum budget of $0.10, or continue using offline evidence only?
@@ -249,7 +249,7 @@ function setupLongOwnerQuestion() {
 
 const renderOwnerQuestion = () => (
   <div className="native-chat-appearance bg-chat-pane">
-    <SessionLinkOwnerQuestion sessionId={source.sessionId} />
+    <SessionLinkOwnerQuestion sessionId={source.sessionId} target={{ kind: 'local' }} />
   </div>
 )
 export const ownerQuestion390 = defineFixture({

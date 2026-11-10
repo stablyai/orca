@@ -17,9 +17,12 @@ vi.mock(
   '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability',
   async (importOriginal) => ({
     ...(await importOriginal<typeof SessionHostCapabilityModule>()),
-    structuredAgentSessionHostSupports: async () => true
+    useStructuredAgentSessionHostCapabilityState: () => 'supported'
   })
 )
+vi.mock('@/runtime/native-chat/host-capabilities/structured-agent-session-host-support', () => ({
+  structuredAgentSessionHostSupports: async () => true
+}))
 vi.mock('@/runtime/native-chat/status/structured-agent-session-status-feed', () => ({
   getStructuredAgentSessionStatusFeed: () => ({ getNamingSnapshot: () => new Map() })
 }))
@@ -69,64 +72,74 @@ const tab = (id: string): Tab => ({
   sortOrder: 0,
   createdAt: 0
 })
-it('keeps the selected pair after the context menu closes and submits only after confirmation', async () => {
-  const source = tab('source'),
-    partner = tab('partner')
-  setLocalRuntimeCapabilitiesForTests([SESSION_LINK_CAPABILITY])
-  useAppStore.setState({
-    activeWorktreeId: 'workspace',
-    unifiedTabsByWorktree: { workspace: [source, partner] },
-    activeGroupIdByWorktree: { workspace: 'group' },
-    groupsByWorktree: {
-      workspace: [
-        {
-          id: 'group',
-          worktreeId: 'workspace',
-          activeTabId: source.id,
-          tabOrder: [source.id, partner.id]
-        }
-      ]
-    }
-  })
-  rpc.mockImplementation(async (_target, method, fields) => {
-    if (method === 'orchestration.linkCandidates') {
-      return { source: participant('source'), candidates: [participant('partner')], history: [] }
-    }
-    if (method === 'orchestration.linkCreate') {
-      return {
-        link: {
-          id: fields.id,
-          story: fields.story,
-          participants: [participant('source'), participant('partner')],
-          state: 'active',
-          reason: '',
-          version: 1,
-          turns: 0,
-          messages: 0,
-          createdAt: 1,
-          updatedAt: 1
-        },
-        events: []
+it.each(['local', 'runtime:macbook'] as const)(
+  'keeps the selected pair on %s after the menu closes and submits to its owner',
+  async (host) => {
+    const source = { ...tab('source'), executionHostId: host },
+      partner = { ...tab('partner'), executionHostId: host }
+    setLocalRuntimeCapabilitiesForTests([SESSION_LINK_CAPABILITY])
+    useAppStore.setState({
+      activeWorktreeId: 'workspace',
+      unifiedTabsByWorktree: { workspace: [source, partner] },
+      activeGroupIdByWorktree: { workspace: 'group' },
+      groupsByWorktree: {
+        workspace: [
+          {
+            id: 'group',
+            worktreeId: 'workspace',
+            activeTabId: source.id,
+            tabOrder: [source.id, partner.id]
+          }
+        ]
       }
-    }
-    return null
-  })
-  const view = render(<Harness menuOpen />)
-  fireEvent.click(screen.getByRole('button', { name: 'Menu action' }))
-  view.rerender(<Harness menuOpen={false} />)
-  expect(await screen.findByText('source chat')).toBeTruthy()
-  expect(screen.getByText('partner chat')).toBeTruthy()
-  expect(rpc.mock.calls.some(([, method]) => method === 'orchestration.linkCreate')).toBe(false)
-  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Slice 1b' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Create link and introduce agents' }))
-  await waitFor(() =>
-    expect(
-      rpc.mock.calls.find(([, method]) => method === 'orchestration.linkCreate')?.[2]
-    ).toMatchObject({
-      sessionId: 'codex-source',
-      partnerSessionId: 'codex-partner',
-      story: 'Slice 1b',
-      role: 'implementer'
     })
-  )
-})
+    rpc.mockImplementation(async (_target, method, fields) => {
+      if (method === 'orchestration.linkCandidates') {
+        return { source: participant('source'), candidates: [participant('partner')], history: [] }
+      }
+      if (method === 'orchestration.linkCreate') {
+        return {
+          link: {
+            id: fields.id,
+            story: fields.story,
+            participants: [participant('source'), participant('partner')],
+            state: 'active',
+            reason: '',
+            version: 1,
+            turns: 0,
+            messages: 0,
+            createdAt: 1,
+            updatedAt: 1
+          },
+          events: []
+        }
+      }
+      return null
+    })
+    const view = render(<Harness menuOpen />)
+    fireEvent.click(screen.getByRole('button', { name: 'Menu action' }))
+    view.rerender(<Harness menuOpen={false} />)
+    expect(await screen.findByText('source chat')).toBeTruthy()
+    expect(screen.getByText('partner chat')).toBeTruthy()
+    expect(rpc.mock.calls.some(([, method]) => method === 'orchestration.linkCreate')).toBe(false)
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Checkout slice 2' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create link and introduce agents' }))
+    await waitFor(() =>
+      expect(
+        rpc.mock.calls.find(([, method]) => method === 'orchestration.linkCreate')?.[2]
+      ).toMatchObject({
+        sessionId: 'codex-source',
+        partnerSessionId: 'codex-partner',
+        story: 'Checkout slice 2',
+        role: 'implementer'
+      })
+    )
+    expect(
+      rpc.mock.calls.every(([target]) =>
+        host === 'local'
+          ? target.kind === 'local'
+          : target.kind === 'environment' && target.environmentId === 'macbook'
+      )
+    ).toBe(true)
+  }
+)
