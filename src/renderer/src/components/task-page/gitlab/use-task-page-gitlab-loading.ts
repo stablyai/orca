@@ -1,18 +1,31 @@
 import type { TaskPageProviderMetadataModel } from '../use-task-page-provider-metadata'
 import { useEffect } from 'react'
 import { translate } from '@/i18n/i18n'
-import { readIpcErrorDetail } from '@/lib/ipc-error'
-import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
+import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
+import {
+  gitLabApiFor,
+  type GitLabCapabilityChecks
+} from '@/runtime/repository-gitlab/gitlab-owner-api'
 import { mapSettledWithConcurrency } from '../../../../../shared/map-with-concurrency'
 import type { Repo } from '../../../../../shared/repo-types'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import type { GitLabDialogRepoSelector } from '../../gitlab-item-dialog/gitlab-item-dialog-types'
 import type { GitLabWorkItem, GitLabTodo } from '../../../../../shared/gitlab-types'
-import { getTaskPageRepoSourceContext } from '../../../lib/task-repo-source-context'
+import { getTaskPageRepoSourceContext } from '../../../lib/work-items/task-repo-source-context'
 import { isGitLabIssueFilter, isGitLabMRFilter } from '../task-page-source-context'
 
 // Leave headroom below the runtime RPC foreground concurrency of eight for sidebar and other callers.
 export const GITLAB_TASK_FETCH_CONCURRENCY = 6
+
+// Rows and errors belong to the query that loaded them, so a changed filter never shows the previous filter's rows.
+export function gitLabListQueryKey(
+  view: string,
+  filter: string,
+  involvement: string | null,
+  reposKey: string
+): string {
+  return JSON.stringify([view, filter, view === 'mrs' ? involvement : null, reposKey])
+}
 
 function gitLabTaskRepoSelector(repo: Repo): GitLabDialogRepoSelector {
   return {
@@ -37,6 +50,13 @@ type GitLabLoadingInput = Pick<
   | 'setGitlabTodos'
   | 'setGitlabTodosLoading'
   | 'activeGitlabFilter'
+  | 'gitlabMRInvolvement'
+  | 'gitlabItems'
+  | 'gitlabError'
+  | 'gitlabLoading'
+  | 'displayedGitLabItems'
+  | 'gitlabListQueryKey'
+  | 'setGitlabListQueryKey'
 >
 
 export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model: Model): Model {
@@ -52,8 +72,17 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     gitlabView,
     setGitlabTodos,
     setGitlabTodosLoading,
-    activeGitlabFilter
+    activeGitlabFilter,
+    gitlabMRInvolvement,
+    gitlabListQueryKey,
+    setGitlabListQueryKey
   } = model
+  const currentListQueryKey = gitLabListQueryKey(
+    gitlabView,
+    activeGitlabFilter,
+    gitlabMRInvolvement,
+    selectedReposKey
+  )
   // Fetch issues and MRs separately so a failure stays scoped to its tab.
   useEffect(() => {
     if (taskSource !== 'gitlab') {
@@ -76,11 +105,14 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     const eligibleRepos = selectedRepos
     if (eligibleRepos.length === 0) {
       setGitlabItems([])
+      setGitlabListQueryKey(currentListQueryKey)
       setGitlabLoading(false)
       setGitlabError(null)
       return
     }
     let stale = false
+    // One answer per runtime and capability for this refresh, so N projects on one server probe it once.
+    const capabilityChecks: GitLabCapabilityChecks = new Map()
     setGitlabLoading(true)
     setGitlabError(null)
     const fetchItems =
@@ -114,10 +146,11 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
           }
         : (repo: (typeof eligibleRepos)[0]) => {
             const selector = gitLabTaskRepoSelector(repo)
-            return gitLabApiFor(selector)
+            return gitLabApiFor(selector, { capabilityChecks })
               .listMRs({
                 ...selector,
                 state: activeMRFilter ?? 'opened',
+                ...(gitlabMRInvolvement ? { involvement: gitlabMRInvolvement } : {}),
                 page: 1,
                 perPage: 50
               })
@@ -173,6 +206,7 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
         }
         merged.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
         setGitlabItems(merged)
+        setGitlabListQueryKey(currentListQueryKey)
         // Show failures only when no usable rows remain; mixed selections may include non-GitLab repos.
         if (errs.length > 0 && merged.length === 0) {
           setGitlabError(errs[0])
@@ -191,11 +225,13 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     taskSource,
     gitlabView,
     activeGitlabFilter,
+    gitlabMRInvolvement,
     gitlabRefreshNonce,
     selectedReposKey,
     setGitlabError,
     setGitlabItems,
-    setGitlabLoading
+    setGitlabLoading,
+    setGitlabListQueryKey
   ])
 
   // Todos are user-scoped and ignore repo/chip filters, so fetch them independently.
@@ -239,5 +275,11 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     setGitlabTodosLoading,
     setGitlabTodos
   ])
+  if (gitlabView !== 'todos' && gitlabListQueryKey !== currentListQueryKey) {
+    model.gitlabItems = []
+    model.displayedGitLabItems = []
+    model.gitlabError = null
+    model.gitlabLoading = true
+  }
   return model
 }

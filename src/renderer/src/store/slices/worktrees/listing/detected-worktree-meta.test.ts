@@ -6,12 +6,12 @@ import {
   makeFolderWorkspace,
   makeProjectGroup
 } from '../../../../components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
-import { findFolderWorkspaceOwner } from '@/lib/folder-workspace-runtime-owner'
-import { selectWorkspaceByHostTarget } from '../../../workspace-record-selectors'
-import { resolveWorkspaceDirectory } from '@/lib/workspace-directory'
+import { findFolderWorkspaceOwner } from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
+import { selectWorkspaceByHostTarget } from '../../../workspaces/selection/workspace-host-target'
+import { resolveWorkspaceDirectory } from '@/lib/workspace/paths/workspace-directory'
 import { resolveQualifiedFolderWorkspaceResult } from '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import type { Repo } from '../../../../../../shared/repo-types'
-import { findIndexedFolderWorkspaceOwner } from '@/lib/worktree-runtime-owner-index'
+import { findIndexedFolderWorkspaceOwner } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { resolveNotificationTabOwner } from '@/attention/notification-subject-owner'
 import { getWorktreeDeleteStateKey } from '../teardown/worktree-delete-state'
@@ -109,4 +109,30 @@ describe('inherited folder consumer identity', () => {
       expect(findKnownWorktreeById(next, `folder:${folder.id}`)).toBe(changed)
     }
   )
+})
+
+describe('selected folder catalog replacement', () => {
+  it('observes a folder added to a replacement catalog and preserves qualified lookup', () => {
+    const folderWorkspaces = [makeFolderWorkspace({ id: 'existing' })]
+    const state = {
+      folderWorkspaces,
+      projectGroups: [makeProjectGroup()],
+      repos: [],
+      worktreesByRepo: {},
+      detectedWorktreesByRepo: {},
+      floatingWorkspacePath: null
+    }
+    expect(findKnownWorktreeById(state, 'folder:missing', 'local')).toBeUndefined()
+    const folder = makeFolderWorkspace({ id: 'missing', folderPath: '/new-folder' })
+    const next = { ...state, folderWorkspaces: [...folderWorkspaces, folder] }
+    expect(findKnownWorktreeById(next, 'folder:missing', 'local')?.path).toBe('/new-folder')
+    const narrow = {
+      ...state,
+      folderWorkspaces: [folder],
+      projectGroups: undefined,
+      repos: undefined
+    }
+    expect(findKnownWorktreeById(narrow, 'folder:missing')?.path).toBe('/new-folder')
+    expect(findKnownWorktreeById(narrow, 'folder:missing', 'local')).toBeUndefined()
+  })
 })

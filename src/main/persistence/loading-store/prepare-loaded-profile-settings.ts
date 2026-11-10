@@ -1,10 +1,11 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
-import { deriveGlobalWindowsRuntimeDefaultFromLegacySettings } from '../../../shared/project-execution-runtime'
-import { normalizeTaskProviderSettings } from '../../../shared/task-providers'
+import { deriveGlobalWindowsRuntimeDefaultFromLegacySettings } from '../../../shared/execution-host/project-runtime-legacy-migration'
+import { normalizeTaskProviderSettings } from '../../../shared/work-items/task-providers'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../shared/auto-rename-branch-from-work-settings'
 import { normalizePluginSystemEnabledDefaultOn } from '../../../shared/plugins/plugin-system-settings'
+import { migrateNestedWorkerMaxDepthDefault } from '../../../shared/orchestration/workers/nested-worker-depth'
 import {
   addMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddress,
@@ -37,6 +38,7 @@ export type PreparedLoadedProfileSettings = {
     'autoRenameBranchFromWork' | 'autoRenameBranchFromWorkDefaultedOn'
   >
   migratedPluginSystemEnabled: ReturnType<typeof normalizePluginSystemEnabledDefaultOn>
+  migratedNestedWorkerMaxDepth: ReturnType<typeof migrateNestedWorkerMaxDepthDefault>
   migratedTerminalCursorStyle: Pick<
     GlobalSettings,
     'terminalCursorStyle' | 'terminalCursorStyleDefaultedToBlock'
@@ -91,6 +93,10 @@ export function prepareLoadedProfileSettings(
   )
   const migratedPluginSystemEnabled = normalizePluginSystemEnabledDefaultOn(parsed.settings)
   if (parsed.settings?.pluginSystemDefaultedOn !== true) {
+    markNeedsSave()
+  }
+  const migratedNestedWorkerMaxDepth = migrateNestedWorkerMaxDepthDefault(parsed.settings)
+  if (parsed.settings?.nestedWorkerMaxDepthDefaultedToFour !== true) {
     markNeedsSave()
   }
   const migratedTerminalCursorStyle = normalizeTerminalCursorStyleDefault(parsed.settings)
@@ -269,6 +275,7 @@ export function prepareLoadedProfileSettings(
     migratedExperimentalActivity,
     migratedAutoRenameBranchFromWork,
     migratedPluginSystemEnabled,
+    migratedNestedWorkerMaxDepth,
     migratedTerminalCursorStyle,
     migratedTerminalLineHeight,
     terminalRightClickToPasteDefaultedForPlatform,

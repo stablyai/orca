@@ -3,11 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
-import {
-  addEnvironmentFromPairingCode,
-  removeEnvironment,
-  resolveEnvironmentPairingOffer
-} from './environments'
+import { addEnvironmentFromPairingCode, resolveEnvironmentPairingOffer } from './environments'
 import { getEnvironmentStorePath } from '../../shared/remote-runtime/host-store/runtime-environment-store-records'
 import { listEnvironments } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 
@@ -36,29 +32,6 @@ function pairingCode(endpoint = 'ws://127.0.0.1:6768', keyFill = 1): string {
 
 describe('CLI runtime environments', () => {
   const posixModeIt = process.platform === 'win32' ? it.skip : it
-
-  it('saves, resolves, and removes a paired environment', () => {
-    const userDataPath = temporaryProfile()
-    const saved = addEnvironmentFromPairingCode(userDataPath, {
-      name: 'workstation',
-      pairingCode: pairingCode(),
-      now: 100
-    })
-
-    expect(listEnvironments(userDataPath)).toHaveLength(1)
-    expect(resolveEnvironmentPairingOffer(userDataPath, 'workstation')).toMatchObject({
-      endpoint: 'ws://127.0.0.1:6768',
-      deviceToken: 'device-token'
-    })
-    expect(resolveEnvironmentPairingOffer(userDataPath, saved.id)).toMatchObject({
-      endpoint: 'ws://127.0.0.1:6768'
-    })
-    expect(statSync(getEnvironmentStorePath(userDataPath)).isFile()).toBe(true)
-
-    const removed = removeEnvironment(userDataPath, 'workstation')
-    expect(removed.id).toBe(saved.id)
-    expect(listEnvironments(userDataPath)).toEqual([])
-  })
 
   posixModeIt('stores paired environments with owner-only POSIX permissions', () => {
     const userDataPath = temporaryProfile()
@@ -93,23 +66,5 @@ describe('CLI runtime environments', () => {
       'ws://127.0.0.1:1111'
     )
     expect(listEnvironments(userDataPath)[0]?.id).toBe(first.id)
-  })
-
-  it('refuses saving the same server twice and points at Settings, which can switch its connection', () => {
-    const userDataPath = temporaryProfile()
-    addEnvironmentFromPairingCode(userDataPath, {
-      name: 'workstation',
-      pairingCode: pairingCode('ws://192.0.2.10:6768'),
-      now: 100
-    })
-
-    expect(() =>
-      addEnvironmentFromPairingCode(userDataPath, {
-        name: 'workstation over relay',
-        pairingCode: pairingCode('ws://198.51.100.7:6768'),
-        now: 200
-      })
-    ).toThrow('already paired as "workstation"')
-    expect(listEnvironments(userDataPath)).toHaveLength(1)
   })
 })

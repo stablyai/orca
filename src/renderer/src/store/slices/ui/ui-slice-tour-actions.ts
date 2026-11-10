@@ -1,9 +1,11 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import {
-  getContextualTour,
   hasContextualTourActionStep,
+  isContextualTourStepDone
+} from '../../../../../shared/contextual-tour-action-steps'
+import {
+  getContextualTour,
   type ContextualTourId,
-  isContextualTourStepDone,
   getContextualTourStepIndex
 } from '../../../../../shared/contextual-tours'
 import {
@@ -188,7 +190,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
         if (nextStepIndex !== null) {
           return { activeContextualTourStepIndex: nextStepIndex }
         }
-        // Why: browser step 3's target lives in a closed menu until that step is active.
+        // Why: the browser tour's last target lives in a closed menu until that step is active.
         if (
           s.activeContextualTourId === 'browser' &&
           s.activeContextualTourStepIndex + 1 < tour.steps.length

@@ -9,6 +9,8 @@ import { parsePluginVmRecipeArtifact } from '../../shared/plugins/artifacts/plug
 import { PLUGIN_IMAGE_RULES } from '../../shared/plugins/images/plugin-image-fields'
 import { PLUGIN_NEW_FILE_TEMPLATE_MAX_BYTES } from '../../shared/plugins/contributions/plugin-new-file-contribution'
 import { validatePluginImageArtifacts } from './plugin-image-artifact-validation'
+import { validatePluginFontArtifacts } from './plugin-font-files'
+import { PLUGIN_FONT_FILE_MAX_BYTES } from '../../shared/plugins/contributions/plugin-font-contribution'
 import { PLUGIN_PANEL_ENTRY_MAX_BYTES } from '../../shared/plugins/frames/plugin-frame-entry-limits'
 import {
   PLUGIN_WORKER_ENTRY_MAX_BYTES,
@@ -96,6 +98,11 @@ function declaredArtifactPaths(manifest: PluginManifest): DeclaredArtifact[] {
     ),
     ...c.iconThemes.flatMap((theme) =>
       declaredFile(`icon theme "${theme.id}"`, theme.path, PLUGIN_ICON_THEME_MAX_BYTES)
+    ),
+    ...c.fonts.flatMap((font) =>
+      font.faces.flatMap((face) =>
+        declaredFile(`font "${font.family}"`, face.path, PLUGIN_FONT_FILE_MAX_BYTES)
+      )
     ),
     ...c.syntaxes.flatMap((syntax) => [
       ...declaredFile(
@@ -198,6 +205,10 @@ export async function validatePluginInstallContent(
   )
   if (!images.ok) {
     return images
+  }
+  const fonts = await validatePluginFontArtifacts(rootDir, manifest)
+  if (!fonts.ok) {
+    return fonts
   }
   const vmRecipeIds = new Set<string>()
   for (const contribution of manifest.contributes.vmRecipes) {

@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { gitRepositoryOwnerLabel } from '../../../../../shared/plugins/catalog/plugin-marketplace'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import {
   Dialog,
@@ -23,6 +23,7 @@ export function PluginCatalogLinkDialog({
   onCancel: () => void
   onConfirm: () => Promise<void>
 }): React.JSX.Element {
+  const t = useTranslate()
   const cancelRef = useRef<HTMLButtonElement>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -35,10 +36,7 @@ export function PluginCatalogLinkDialog({
     } catch (cause) {
       console.warn('[plugins] adding a linked catalog failed:', cause)
       setError(
-        translate(
-          'auto.components.plugins.PluginCatalogLinkDialog.failed',
-          'Couldn’t add this catalog.'
-        )
+        t('auto.components.plugins.PluginCatalogLinkDialog.failed', 'Couldn’t add this catalog.')
       )
     } finally {
       setBusy(false)
@@ -64,14 +62,12 @@ export function PluginCatalogLinkDialog({
       >
         <DialogHeader>
           <DialogTitle>
-            {translate(
-              'auto.components.plugins.PluginCatalogLinkDialog.title',
-              'Add catalog {{value0}}?',
-              { value0: gitRepositoryOwnerLabel(url) ?? url }
-            )}
+            {t('auto.components.plugins.PluginCatalogLinkDialog.title', 'Add catalog {{value0}}?', {
+              value0: gitRepositoryOwnerLabel(url) ?? url
+            })}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.plugins.PluginCatalogLinkDialog.body',
               'A link asked to show {{value0}} from this catalog. Add catalogs only from people you trust.',
               { value0: catalog?.pluginKey ?? '' }
@@ -82,11 +78,11 @@ export function PluginCatalogLinkDialog({
         {error ? <p className="text-xs text-destructive">{error}</p> : null}
         <DialogFooter>
           <Button ref={cancelRef} variant="ghost" disabled={busy} onClick={onCancel}>
-            {translate('auto.components.plugins.PluginCatalogLinkDialog.cancel', 'Cancel')}
+            {t('auto.components.plugins.PluginCatalogLinkDialog.cancel', 'Cancel')}
           </Button>
           <Button disabled={busy} onClick={() => void add()}>
             {busy ? <Loader2 className="animate-spin" /> : null}
-            {translate('auto.components.plugins.PluginCatalogLinkDialog.add', 'Add catalog')}
+            {t('auto.components.plugins.PluginCatalogLinkDialog.add', 'Add catalog')}
           </Button>
         </DialogFooter>
       </DialogContent>

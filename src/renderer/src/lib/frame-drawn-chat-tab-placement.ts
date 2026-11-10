@@ -5,10 +5,11 @@ import type { StructuredAgentSessionCreateParams } from '../../../shared/agent-s
 import { AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-create-capabilities'
 import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { useAppStore } from '@/store'
-import { readCachedRuntimeEnvironmentCapability } from '@/runtime/runtime-rpc-client'
-import { serverLayoutApplyRoute } from '@/runtime/server-layout-apply-routes'
-import { isFrameDrawnServerWorkspace } from '@/runtime/web-session-tabs-sync/frame-drawn-server-workspaces'
+import { readCachedRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
+import { serverLayoutApplyRoute } from '@/runtime/workspace-layout/server/server-layout-apply-routes'
+import { isFrameDrawnServerWorkspace } from '@/runtime/web-session-tabs-sync/frame-drawn-server-workspace-set'
 import { noteDesktopCreatedServerTab } from './desktop-created-server-tabs'
+import type { StructuredLaunchSurfaceAddress } from './agent-session/launch/structured-agent-session-launch-record'
 
 function frameDrawnEnvironment(
   target: RuntimeClientTarget | null,
@@ -57,12 +58,35 @@ function chatTabPlacement(
   return { groupId: group.id, ...(afterTabId ? { afterTabId } : {}) }
 }
 
+/** A deferred chat (a fork) has no tab yet: its captured address names the group and the tabs before it. */
+function addressTabPlacement(
+  environmentId: string,
+  worktreeId: string,
+  address: StructuredLaunchSurfaceAddress | undefined
+): TabPlacement | undefined {
+  if (address?.worktreeId !== worktreeId) {
+    return undefined
+  }
+  const route = serverLayoutApplyRoute(environmentId, worktreeId)
+  const afterTabId = route
+    ? address.precedingTabIds.map((id) => route.serverTabId(id)).findLast((id) => id !== null)
+    : undefined
+  if (!address.targetGroupId && !afterTabId) {
+    return undefined
+  }
+  return {
+    ...(address.targetGroupId ? { groupId: address.targetGroupId } : {}),
+    ...(afterTabId ? { afterTabId } : {})
+  }
+}
+
 /** Read placement synchronously as create is sent; yielding lets a retiring source invalidate the launch. */
 export function withFrameDrawnChatTabPlacement(intent: {
   target: RuntimeClientTarget
   worktreeId: string
   sessionId: string
   params: StructuredAgentSessionCreateParams
+  surfaceAddress?: StructuredLaunchSurfaceAddress
 }): StructuredAgentSessionCreateParams {
   const environmentId = frameDrawnEnvironment(intent.target, intent.worktreeId)
   if (!environmentId) {
@@ -75,11 +99,11 @@ export function withFrameDrawnChatTabPlacement(intent: {
       AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY
     ) === true
   const tabPlacement = supported
-    ? chatTabPlacement(
+    ? (chatTabPlacement(
         environmentId,
         intent.worktreeId,
         structuredAgentSessionTabId(intent.sessionId)
-      )
+      ) ?? addressTabPlacement(environmentId, intent.worktreeId, intent.surfaceAddress))
     : undefined
   return tabPlacement ? { ...intent.params, tabPlacement } : intent.params
 }

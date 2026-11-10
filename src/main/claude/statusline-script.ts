@@ -1,14 +1,14 @@
 import {
   WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD,
   buildPosixClaudeBackgroundJobGuardLines
-} from '../agent-hooks/claude-background-job-guard'
-import { posixCurlCommand } from '../agent-hooks/hook-post-command'
-import { WINDOWS_HOOK_STDIN_READER } from '../agent-hooks/hook-stdin-contract'
+} from '../agent-hooks/installation/scripts/claude-background-job-guard'
+import { posixCurlCommand } from '../agent-hooks/installation/scripts/hook-post-command'
+import { WINDOWS_HOOK_STDIN_READER } from '../agent-hooks/installation/scripts/hook-stdin-contract'
 import {
   CLAUDE_STATUSLINE_MIN_POST_INTERVAL_SECONDS,
   CLAUDE_STATUSLINE_PATHNAME
 } from '../../shared/claude-statusline-rate-limits'
-import { wrapWindowsDirectCmdHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
+import { wrapWindowsDirectCmdHookCommand } from '../agent-hooks/installation/commands/windows-direct-cmd-hook-command'
 import { getManagedCommand } from './hook-settings'
 
 const STATUSLINE_CLEANUP_LABEL = 'orca_statusline_cleanup'

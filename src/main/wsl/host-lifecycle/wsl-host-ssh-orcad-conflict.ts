@@ -7,7 +7,7 @@ import {
   getPreferredPairingOffer,
   type KnownRuntimeEnvironment
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { wslHostAddRefusal } from './wsl-host-add-admission'
 

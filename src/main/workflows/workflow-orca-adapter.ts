@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/orchestration/orchestration-runtime-capabilities'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
+import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
 import { parseMail, parseStartReceipt, record, text } from './workflow-orca-receipts'
 import type { WorkflowOrcaAdapter } from './workflow-orca-adapter-contract'
 import { captureWorkflowWorkerAnswer } from './workflow-worker-answer-capture'
@@ -25,7 +26,7 @@ export function createWorkflowOrcaAdapter(runtime: OrcaRuntimeService): Workflow
     params: Record<string, unknown>,
     requestId?: string
   ): Promise<unknown> => {
-    dispatcher ??= new RpcDispatcher({ runtime })
+    dispatcher ??= new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS })
     const id = requestId ?? `wf-${randomUUID()}`
     const response = await dispatcher.dispatch(
       {

@@ -2,8 +2,8 @@ import { Check, ChevronDown } from 'lucide-react'
 import { useId, useRef, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 import type { LocalizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { COMPOSER_FIELD_CLASS } from './create-hosted-review-composer-field-class'
 import { CreateHostedReviewComposerMessage } from './CreateHostedReviewComposerMessage'
@@ -46,6 +46,7 @@ export function CreateHostedReviewBasePicker({
   strippedBranch,
   baseSameAsBranch
 }: CreateHostedReviewBasePickerProps): React.JSX.Element {
+  const t = useTranslate()
   const [activeResult, setActiveResult] = useState(-1)
   const inputRef = useRef<HTMLInputElement>(null)
   // Why: marks a blur that an explicit Enter/Escape already resolved.
@@ -142,13 +143,13 @@ export function CreateHostedReviewBasePicker({
           htmlFor={fieldId}
           className="shrink-0 whitespace-nowrap text-[11px] font-medium text-muted-foreground"
         >
-          {translate(
+          {t(
             'auto.components.right.sidebar.CreateHostedReviewBasePicker.205ef284fa',
             'Base branch'
           )}
         </Label>
         <span className="min-w-0 truncate text-[11px] text-muted-foreground" title={strippedBranch}>
-          {translate(
+          {t(
             'auto.components.right.sidebar.CreateHostedReviewBasePicker.bb4b41d563',
             'from {{value0}}',
             { value0: strippedBranch }
@@ -160,7 +161,7 @@ export function CreateHostedReviewBasePicker({
         <Input
           id={fieldId}
           ref={inputRef}
-          aria-label={translate(
+          aria-label={t(
             'auto.components.right.sidebar.SourceControl.6055949c50',
             '{{value0}} base branch',
             { value0: copy.titleLabel }
@@ -192,7 +193,7 @@ export function CreateHostedReviewBasePicker({
           // Name the actual default, which may be trunk rather than main.
           placeholder={
             trimmedRepoDefault ||
-            translate('auto.components.right.sidebar.SourceControl.e64a632456', 'main')
+            t('auto.components.right.sidebar.SourceControl.e64a632456', 'main')
           }
           className={cn(COMPOSER_FIELD_CLASS, 'pl-2 pr-7')}
         />
@@ -238,7 +239,7 @@ export function CreateHostedReviewBasePicker({
 
       {showRepoDefaultHint ? (
         <p className="px-2 text-[11px] text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.right.sidebar.CreateHostedReviewBasePicker.da4d57c9c2',
             'Leave empty to use {{value0}}.',
             { value0: trimmedRepoDefault }
@@ -248,7 +249,7 @@ export function CreateHostedReviewBasePicker({
 
       {showNoResults ? (
         <p className="px-2 text-[11px] text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.right.sidebar.CreateHostedReviewBasePicker.5a9315b61a',
             'No branches match “{{value0}}”. Press Enter to use it anyway.',
             { value0: trimmedQuery }
@@ -258,7 +259,7 @@ export function CreateHostedReviewBasePicker({
 
       {baseSameAsBranch ? (
         <CreateHostedReviewComposerMessage>
-          {translate(
+          {t(
             'auto.components.right.sidebar.SourceControl.ae743199cd',
             'Choose a different base branch before creating a {{value0}}.',
             { value0: copy.reviewLabel }

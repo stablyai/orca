@@ -22,6 +22,12 @@ export const INLINE_ACTION_CLASS_NAMES = {
   actionButton: '!m-0 !self-center'
 }
 
+// Why: a two-way choice ends at the right edge, the way the Windows terminal weight notice keeps Okay
+// at the end; the global footer rule otherwise starts actions under the copy.
+export const TRAILING_ACTIONS_CLASS_NAMES = {
+  cancelButton: '!ml-auto'
+}
+
 // Why: scope to real modals; Radix menus/selects also set body pointer-events:none.
 function isModalOverlayOpen(element: Element): boolean {
   return element.ownerDocument.body.querySelector(MODAL_OVERLAY_CHILD_SELECTOR) !== null

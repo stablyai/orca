@@ -1,0 +1,398 @@
+import type * as React from 'react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { connectPanePty } from '../connect-pane-pty'
+import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
+import { flushAsyncTicks } from '../test-fixtures/pty-connection-test-async'
+import {
+  createManager,
+  createMockTransport,
+  createPane,
+  leafIdForPane,
+  type MockTransport
+} from '../test-fixtures/pty-connection-test-pane-fixtures'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from '../test-fixtures/pty-connection-test-deps'
+import {
+  installTerminalTestGlobals,
+  restoreTerminalTestGlobals
+} from '../test-fixtures/pty-connection-test-environment'
+import { createInitialStoreState } from '../test-fixtures/pty-connection-test-store-fixtures'
+import type { StoreState } from '../test-fixtures/pty-connection-test-store-state'
+import type * as TerminalWorktreeRouteModule from '@/lib/workspace/ownership/terminal-worktree-route'
+const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+  '@/lib/agent-status/aggregation/worktree-agent-status'
+)
+
+const {
+  notifyCodexPaneBoundForStaleSweep,
+  scheduleRuntimeGraphSync,
+  shouldSeedCacheTimerOnInitialTitle,
+  toastInfo,
+  waitForAgentDraftInputReady,
+  sendAgentDraftPasteContent,
+  onPasteTimeout,
+  pasteTimeoutNotice
+} = vi.hoisted(() => ({
+  waitForAgentDraftInputReady: vi.fn(),
+  sendAgentDraftPasteContent: vi.fn(async () => true),
+  onPasteTimeout: vi.fn(),
+  pasteTimeoutNotice: vi.fn(),
+  notifyCodexPaneBoundForStaleSweep: vi.fn(),
+  scheduleRuntimeGraphSync: vi.fn(),
+  shouldSeedCacheTimerOnInitialTitle: vi.fn(() => false),
+  toastInfo: vi.fn()
+}))
+
+let mockStoreState: StoreState
+let transportFactoryQueue: MockTransport[] = []
+let createdTransportOptions: Record<string, unknown>[] = []
+let storeSubscribers: ((state: StoreState) => void)[] = []
+
+const layoutOwner = vi.hoisted(() => ({ isMain: false }))
+
+vi.mock('../../../../../../shared/layout-owner-switch', () => ({
+  get ORCA_LAYOUT_OWNER_IS_MAIN() {
+    return layoutOwner.isMain
+  }
+}))
+
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({ scheduleRuntimeGraphSync }))
+
+vi.mock('@/lib/agent-session/messaging/paste/agent-draft-readiness', () => ({
+  waitForAgentDraftInputReady
+}))
+
+const { requestTerminalPaneRecovery } = vi.hoisted(() => ({
+  requestTerminalPaneRecovery: vi.fn(async () => undefined)
+}))
+
+vi.mock('../../render-health/recovery/terminal-pane-recovery', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  requestTerminalPaneRecovery
+}))
+
+const pairedRoute = vi.hoisted(() => {
+  const route: { runtimeEnvironmentId: string | null } = { runtimeEnvironmentId: null }
+  return route
+})
+
+vi.mock('@/lib/workspace/ownership/terminal-worktree-route', async (importOriginal) => {
+  const actual = await importOriginal<typeof TerminalWorktreeRouteModule>()
+  return {
+    ...actual,
+    resolveTerminalWorktreeRoute: (
+      ...args: Parameters<typeof actual.resolveTerminalWorktreeRoute>
+    ) =>
+      pairedRoute.runtimeEnvironmentId
+        ? { runtimeEnvironmentId: pairedRoute.runtimeEnvironmentId }
+        : actual.resolveTerminalWorktreeRoute(...args)
+  }
+})
+
+vi.mock('../../pty-transport/remote-runtime/remote-runtime-pty-transport', () => ({
+  createRemoteRuntimePtyTransport: vi.fn(
+    (_environmentId: string, options: Record<string, unknown>) => {
+      createdTransportOptions.push(options)
+      const nextTransport = transportFactoryQueue.shift()
+      if (!nextTransport) {
+        throw new Error('No mock transport queued')
+      }
+      return nextTransport
+    }
+  )
+}))
+
+vi.mock('@/lib/agent-session/messaging/paste/agent-draft-paste-content', () => ({
+  sendAgentDraftPasteContent
+}))
+
+vi.mock('@/lib/agent-session/launch/prompt/launch-agent-paste-timeout-notice', () => ({
+  createPasteReadinessTimeoutNotice: (args: unknown) => {
+    pasteTimeoutNotice(args)
+    return { onTimeout: onPasteTimeout, wasNotified: () => false }
+  }
+}))
+
+vi.mock('@/store/index', () => ({
+  useAppStore: {
+    getState: () => mockStoreState,
+    subscribe: (listener: (state: StoreState) => void) => {
+      storeSubscribers.push(listener)
+      return () => {
+        storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+      }
+    }
+  }
+}))
+
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
+  const { buildAgentStatusModuleMock } =
+    await import('../test-fixtures/pty-connection-test-environment')
+  return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
+})
+
+vi.mock('../../titles/cache-timer-seeding', () => ({ shouldSeedCacheTimerOnInitialTitle }))
+
+vi.mock('sonner', () => ({ toast: { info: toastInfo } }))
+
+vi.mock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
+  notifyCodexPaneBoundForStaleSweep
+}))
+
+vi.mock('react', async (importOriginal) => {
+  const actual = await importOriginal<typeof React>()
+  return {
+    ...actual,
+    useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
+  }
+})
+
+vi.mock('../../pty-transport/ipc/pty-transport', () => ({
+  createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
+    createdTransportOptions.push(options)
+    const nextTransport = transportFactoryQueue.shift()
+    if (!nextTransport) {
+      throw new Error('No mock transport queued')
+    }
+    return nextTransport
+  })
+}))
+
+type ConnectedAgentPane = {
+  paneKey: string
+  transport: MockTransport
+  type: (data: string) => void
+  bind: (ptyId: string) => void
+  unbind: () => void
+  resolveConnect: (result: unknown) => void
+  dispose: () => void
+}
+
+function connectAgentPane(overrides: Record<string, unknown> = {}): ConnectedAgentPane {
+  const transport = createMockTransport()
+  let ptyId: string | null = null
+  transport.getPtyId.mockImplementation(() => ptyId)
+  transport.sendInput.mockImplementation(() => ptyId !== null)
+  let resolveConnect: (result: unknown) => void = () => {}
+  transport.connect.mockImplementation(() => new Promise((resolve) => (resolveConnect = resolve)))
+  transportFactoryQueue.push(transport)
+  const pane = createPane(1)
+  const userInputListeners: (() => void)[] = []
+  Object.assign(pane.terminal, {
+    _core: {
+      coreService: {
+        onUserInput: (listener: () => void) => {
+          userInputListeners.push(listener)
+          return { dispose: vi.fn() }
+        }
+      }
+    }
+  })
+  const connectArgs = [
+    pane,
+    createManager(1),
+    buildPaneConnectionDeps(() => mockStoreState, {
+      startup: { command: 'claude', launchAgent: 'claude' },
+      ...overrides
+    })
+  ]
+  bindPaneAgentTitleMocks(connectArgs[2], agentTitleMocks)
+
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared pane fixtures implement the members connectPanePty touches.
+  const binding = connectPanePty(...(connectArgs as unknown as Parameters<typeof connectPanePty>))
+  return {
+    paneKey: makePaneKey('tab-1', leafIdForPane(1)),
+    transport,
+    type: (data) => {
+      for (const listener of userInputListeners) {
+        listener()
+      }
+      for (const [listener] of pane.terminal.onData.mock.calls) {
+        listener(data)
+      }
+    },
+    bind: (id) => {
+      ptyId = id
+      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn
+      if (typeof onPtySpawn === 'function') {
+        onPtySpawn(id)
+      }
+    },
+    unbind: () => {
+      ptyId = null
+    },
+    resolveConnect: (result) => {
+      if (result && typeof result === 'object' && 'id' in result && typeof result.id === 'string') {
+        ptyId = result.id
+      }
+      resolveConnect(result)
+    },
+    dispose: () => binding.dispose()
+  }
+}
+
+describe('agent pane keys typed before its PTY binds', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    transportFactoryQueue = []
+    createdTransportOptions = []
+    storeSubscribers = []
+    mockStoreState = createInitialStoreState(() => mockStoreState)
+    await installTerminalTestGlobals()
+  })
+
+  afterEach(async () => {
+    pairedRoute.runtimeEnvironmentId = null
+    await restoreTerminalTestGlobals()
+  })
+
+  it('pastes them as an unsubmitted draft once the agent is ready', async () => {
+    waitForAgentDraftInputReady.mockResolvedValue(true)
+    const pane = connectAgentPane()
+    await flushAsyncTicks(20)
+
+    pane.type('make the tests pass')
+    pane.type('\r')
+    expect(pane.transport.sendInput).not.toHaveBeenCalled()
+
+    pane.bind('pty-1')
+    await flushAsyncTicks(20)
+
+    expect(waitForAgentDraftInputReady).toHaveBeenCalledWith(
+      'pty-1',
+      expect.any(Number),
+      expect.any(String)
+    )
+    expect(sendAgentDraftPasteContent).toHaveBeenCalledWith(
+      'pty-1',
+      'make the tests pass',
+      'driving',
+      expect.any(Function)
+    )
+    pane.dispose()
+  })
+
+  it('drops them with a notice when the agent never reports ready', async () => {
+    waitForAgentDraftInputReady.mockResolvedValue(false)
+    const pane = connectAgentPane()
+    await flushAsyncTicks(20)
+
+    pane.type('hello')
+    pane.bind('pty-1')
+    await flushAsyncTicks(20)
+
+    expect(sendAgentDraftPasteContent).not.toHaveBeenCalled()
+    expect(onPasteTimeout).toHaveBeenCalledOnce()
+    // The typed text exists nowhere else, so the notice must carry it back to the user.
+    expect(pasteTimeoutNotice).toHaveBeenCalledWith(
+      expect.objectContaining({ droppedText: 'hello' })
+    )
+    pane.dispose()
+  })
+
+  it('sends keys typed after the bind live and drops the draft rather than pasting over them', async () => {
+    let ready!: (value: boolean) => void
+    waitForAgentDraftInputReady.mockReturnValue(
+      new Promise<boolean>((resolve) => (ready = resolve))
+    )
+    const pane = connectAgentPane()
+    await flushAsyncTicks(20)
+
+    pane.type('fix it')
+    pane.bind('pty-1')
+    pane.type('y')
+    expect(pane.transport.sendInput).toHaveBeenCalledWith('y', 'driving')
+
+    ready(true)
+    await flushAsyncTicks(20)
+
+    expect(sendAgentDraftPasteContent).not.toHaveBeenCalled()
+    expect(onPasteTimeout).toHaveBeenCalledOnce()
+    pane.dispose()
+  })
+
+  it('drops the held draft when the pane closes before the bind', async () => {
+    const pane = connectAgentPane()
+    await flushAsyncTicks(20)
+
+    pane.type('lost on close')
+    pane.dispose()
+    pane.bind('pty-1')
+    await flushAsyncTicks(20)
+
+    expect(waitForAgentDraftInputReady).not.toHaveBeenCalled()
+    expect(sendAgentDraftPasteContent).not.toHaveBeenCalled()
+  })
+
+  it('discards the draft when the first bind is a reattach result, then sends keys live', async () => {
+    const pane = connectAgentPane()
+    await flushAsyncTicks(20)
+
+    waitForAgentDraftInputReady.mockResolvedValue(true)
+    pane.type('held')
+    pane.resolveConnect({ id: 'pty-1', isReattach: true })
+    await flushAsyncTicks(40)
+    // A later fresh spawn (the cold-restore resume) must not receive the old draft either.
+    pane.unbind()
+    pane.bind('pty-2')
+    await flushAsyncTicks(20)
+    pane.type('z')
+
+    expect(waitForAgentDraftInputReady).not.toHaveBeenCalled()
+    expect(sendAgentDraftPasteContent).not.toHaveBeenCalled()
+    expect(pane.transport.sendInput).toHaveBeenCalledWith('z', 'driving')
+    pane.dispose()
+  })
+
+  // Why: the paired-server transport holds and delivers type-ahead itself, Ctrl+C included.
+  it('leaves a paired-server agent pane resuming a live entry on its own transport', async () => {
+    pairedRoute.runtimeEnvironmentId = 'env-1'
+    const paneKey = makePaneKey('tab-1', leafIdForPane(1))
+    mockStoreState.agentStatusByPaneKey[paneKey] = {
+      state: 'working',
+      prompt: '',
+      agentType: 'claude',
+      paneKey,
+      updatedAt: 1_000,
+      stateStartedAt: 1_000,
+      stateHistory: [],
+      providerSession: { key: 'session_id', id: 'session-1' }
+    }
+    const pane = connectAgentPane({ startup: undefined })
+    await flushAsyncTicks(20)
+
+    pane.type('before reattach')
+    pane.type('\x03')
+
+    expect(pane.transport.sendInput).toHaveBeenCalledWith('before reattach', 'driving')
+    // Ctrl+C takes the acknowledged-write path.
+    expect(pane.transport.sendInputAccepted).toHaveBeenCalledWith('\x03', 'driving')
+    pane.bind('pty-1')
+    await flushAsyncTicks(20)
+    expect(waitForAgentDraftInputReady).not.toHaveBeenCalled()
+    expect(sendAgentDraftPasteContent).not.toHaveBeenCalled()
+    pane.dispose()
+  })
+
+  // Why: a first connect hung past its grace must still let typing arm recovery.
+  it('still requests recovery for keys held while the first connect hangs past its grace', async () => {
+    const pane = connectAgentPane()
+    await flushAsyncTicks(20)
+
+    pane.type('a')
+    expect(requestTerminalPaneRecovery).not.toHaveBeenCalled()
+
+    const now = Date.now()
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 61_000)
+    try {
+      pane.type('b')
+      expect(requestTerminalPaneRecovery).toHaveBeenCalledTimes(1)
+    } finally {
+      clock.mockRestore()
+    }
+    pane.dispose()
+  })
+})

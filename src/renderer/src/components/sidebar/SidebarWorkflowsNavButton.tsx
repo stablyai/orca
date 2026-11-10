@@ -1,7 +1,7 @@
 import React from 'react'
 import { Workflow } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 
 export function SidebarWorkflowsNavButton(): React.JSX.Element {

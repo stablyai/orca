@@ -2,9 +2,14 @@ import type {
   BrowserGrabComputedStyles,
   BrowserGrabPayload,
   BrowserPageAnnotation
-} from '../../../../../shared/browser-grab-types'
+} from '../../../../../shared/browser/element-grab/browser-grab-types'
+import { isWindowsAbsolutePathLike } from '../../../../../shared/cross-platform-path'
 
 function formatPageHeading(payload: BrowserGrabPayload): string {
+  // Document previews report a file path; `C:\` would otherwise parse as a URL scheme.
+  if (isWindowsAbsolutePathLike(payload.page.sanitizedUrl)) {
+    return payload.page.sanitizedUrl
+  }
   try {
     const url = new URL(payload.page.sanitizedUrl)
     return `${url.pathname}${url.search}`

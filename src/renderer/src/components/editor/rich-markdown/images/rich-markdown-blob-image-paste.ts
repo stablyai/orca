@@ -2,9 +2,9 @@ import type { Editor } from '@tiptap/react'
 import type { Slice } from '@tiptap/pm/model'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { blobToBase64, convertImageBlobToPng } from '@/lib/image-blob-png'
-import { importExternalPathsToRuntime } from '@/runtime/runtime-file-import-client'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { blobToBase64, convertImageBlobToPng } from '@/lib/clipboard/images/image-blob-png'
+import { importExternalPathsToRuntime } from '@/runtime/files/imports/runtime-file-import-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { assertClipboardImageBase64LengthWithinLimit } from '../../../../../../shared/clipboard-image'
 import { getRichMarkdownImageResolverContextVersion } from './rich-markdown-image-context'
 import {
@@ -77,7 +77,9 @@ export function scheduleRichMarkdownBlobImageImport({
         if (!response.ok) {
           throw new Error(`Failed to read ${src}`)
         }
-        const png = await convertImageBlobToPng(await response.blob())
+        const png = await convertImageBlobToPng(await response.blob(), {
+          downscaleToFit: true
+        })
         const contentBase64 = await blobToBase64(png)
         assertClipboardImageBase64LengthWithinLimit(contentBase64.length)
         // Skip the write when the paste was transformed (e.g. to plain text) or the image was removed.

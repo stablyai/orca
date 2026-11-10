@@ -1,3 +1,4 @@
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import React, { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { ExternalLink, FolderOpen } from 'lucide-react'
@@ -8,13 +9,13 @@ import {
   ContextMenuSubContent,
   ContextMenuSubTrigger
 } from '@/components/ui/context-menu'
-import { useAppStore } from '@/store/index'
-import { getRouteForLocalPathOpenOwner } from '@/lib/local-path-open-guard'
-import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
-import { getWorkspaceEditorSshHost } from '@/lib/workspace-editor-ssh-target'
-import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
+import { getRouteForLocalPathOpenOwner } from '@/lib/files/os-open/local-path-open-guard'
+import { OpenInApplicationIcon } from '@/lib/files/os-open/open-in-app-catalog'
+import { getWorkspaceEditorSshHost } from '@/components/file-actions/workspace-editor-ssh-target'
+import { NO_OPEN_IN_APPLICATIONS } from '@/lib/files/os-open/open-in-application-selection'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { translate } from '@/i18n/i18n'
+import type { OpenInApplication } from '../../../../shared/ui-chrome-types'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   getOpenInEntryAvailability,
   openOpenInAppsSettings,
@@ -32,15 +33,18 @@ export function OpenInContextSubmenu({
   workspaceId,
   owner
 }: OpenInContextSubmenuProps): React.JSX.Element {
-  const openInApplications = useAppStore(
+  const t = useTranslate()
+  const openInApplications = useAppStateValue(
     (s) => s.settings?.openInApplications ?? NO_OPEN_IN_APPLICATIONS
   )
   const openInRoute = useMemo(() => getRouteForLocalPathOpenOwner(owner), [owner])
   const workspace = useMemo(() => (workspaceId ? { workspaceId } : null), [workspaceId])
-  const runtimeSshHost = useAppStore(useShallow((s) => getWorkspaceEditorSshHost(s, workspace)))
+  const runtimeSshHost = useAppStateValue(
+    useShallow((s) => getWorkspaceEditorSshHost(s, workspace))
+  )
 
   const handleOpen = useCallback(
-    (command: string) => {
+    (application: OpenInApplication) => {
       if (!path) {
         return
       }
@@ -49,7 +53,8 @@ export function OpenInContextSubmenu({
         worktreePath: path,
         ...openInRoute,
         workspace,
-        command,
+        openInApplicationId: application.id,
+        command: application.command,
         subject: 'path'
       })
     },
@@ -60,7 +65,7 @@ export function OpenInContextSubmenu({
     <ContextMenuSub>
       <ContextMenuSubTrigger disabled={!path}>
         <FolderOpen className="size-3.5" />
-        {translate('auto.components.sidebar.WorktreeOpenInMenu.8009ab69a6', 'Open in')}
+        {t('auto.components.sidebar.WorktreeOpenInMenu.8009ab69a6', 'Open in')}
       </ContextMenuSubTrigger>
       <ContextMenuSubContent className="w-52">
         {openInApplications.map((application) => {
@@ -69,12 +74,13 @@ export function OpenInContextSubmenu({
             openInRoute.connectionId,
             openInRoute.runtimeEnvironmentId,
             openInRoute.ownerUnresolved,
-            runtimeSshHost
+            runtimeSshHost,
+            t
           )
           return (
             <ContextMenuItem
               key={application.id}
-              onSelect={() => handleOpen(application.command)}
+              onSelect={() => handleOpen(application)}
               disabled={!path || availability.disabled}
             >
               {application.command ? (
@@ -93,7 +99,7 @@ export function OpenInContextSubmenu({
         })}
         {openInApplications.length > 0 ? <ContextMenuSeparator /> : null}
         <ContextMenuItem onSelect={openOpenInAppsSettings}>
-          {translate('auto.components.sidebar.WorktreeOpenInMenu.1417fd8380', 'Customize apps...')}
+          {t('auto.components.sidebar.WorktreeOpenInMenu.1417fd8380', 'Customize apps...')}
         </ContextMenuItem>
       </ContextMenuSubContent>
     </ContextMenuSub>

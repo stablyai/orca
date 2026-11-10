@@ -21,8 +21,9 @@ import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { NewTabAgentMenuModel } from '../tab-bar/new-tab-agent-menu-model'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { getIntlLocale, translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { getTerminalQuickCommandAgentOptions } from './terminal-quick-command-agent-options'
 import type { TerminalQuickCommandDialogDraftMemory } from './terminal-quick-command-dialog-draft'
 import { TerminalQuickCommandAppendEnterSwitch } from './TerminalQuickCommandAppendEnterSwitch'
@@ -54,31 +55,35 @@ type TerminalQuickCommandContentSectionProps = {
   toggleAppendEnter: () => void
 }
 
-function getBodyLengthLabel(bodySize: TerminalQuickCommandBodySize): string {
+function getBodyLengthLabel(
+  bodySize: TerminalQuickCommandBodySize,
+  t: Translate = translate,
+  intlLocale: string = getIntlLocale()
+): string {
   if (bodySize.unit === 'bytes') {
-    return translate(
+    return t(
       'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.size_count',
       '{{value0}} / {{value1}}',
       { value0: formatKilobytes(bodySize.used), value1: formatKilobytes(bodySize.max) }
     )
   }
-  return translate(
+  return t(
     'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.length_count',
     '{{value0}} / {{value1}} characters',
     {
-      value0: bodySize.used.toLocaleString(getIntlLocale()),
-      value1: bodySize.max.toLocaleString(getIntlLocale())
+      value0: bodySize.used.toLocaleString(intlLocale),
+      value1: bodySize.max.toLocaleString(intlLocale)
     }
   )
 }
 
-function getBodyRefusalLabel(belowCurrentPromptCap: boolean): string {
+function getBodyRefusalLabel(belowCurrentPromptCap: boolean, t: Translate = translate): string {
   return belowCurrentPromptCap
-    ? translate(
+    ? t(
         'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.prompt_over_host_limit',
         'Too long for this host. Update Orca on the host to save longer prompts.'
       )
-    : translate(
+    : t(
         'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.length_over_limit',
         'Too long to save.'
       )
@@ -94,8 +99,10 @@ export function TerminalQuickCommandContentSection({
   setDraft,
   toggleAppendEnter
 }: TerminalQuickCommandContentSectionProps): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   useUiLanguageRevision()
-  const unsupportedLabel = translate(
+  const unsupportedLabel = t(
     'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.026cfb232a',
     'Does not support prompt commands'
   )
@@ -136,11 +143,8 @@ export function TerminalQuickCommandContentSection({
   const commandText = isTerminalAgentQuickCommand(draft) ? draft.prompt : draft.command
   // Why: the frame header is a plain span, so the textarea carries the accessible name itself.
   const commandFieldLabel = isAgentAction
-    ? translate(
-        'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.dc921c17ee',
-        'Prompt'
-      )
-    : translate(
+    ? t('auto.components.terminal.quick.commands.TerminalQuickCommandDialog.dc921c17ee', 'Prompt')
+    : t(
         'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.command_label',
         'Command'
       )
@@ -166,7 +170,7 @@ export function TerminalQuickCommandContentSection({
             )}
           >
             <Label>
-              {translate(
+              {t(
                 'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.0adba8fa0c',
                 'Agent'
               )}
@@ -175,7 +179,7 @@ export function TerminalQuickCommandContentSection({
               model={QUICK_COMMAND_PICKER_MODEL}
               entries={entries}
               agent={selectedAgent}
-              emptyLabel={translate(
+              emptyLabel={t(
                 'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.346d409ab2',
                 'Choose agent'
               )}
@@ -201,7 +205,7 @@ export function TerminalQuickCommandContentSection({
           </span>
           {isAgentAction ? (
             <span className="shrink-0 text-[11px] text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.agent_toolbar_hint',
                 'Supports /goal, skills, paths'
               )}
@@ -233,11 +237,11 @@ export function TerminalQuickCommandContentSection({
           }}
           placeholder={
             isAgentAction
-              ? translate(
+              ? t(
                   'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.577a342c7d',
                   'Ask the agent to investigate this workspace'
                 )
-              : translate(
+              : t(
                   'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.79af0c0841',
                   'npm run dev'
                 )
@@ -259,7 +263,7 @@ export function TerminalQuickCommandContentSection({
             />
           ) : (
             <span className="text-[11px] text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.agent_footer_hint',
                 'Multi-line prompts are fine — keep them focused.'
               )}
@@ -270,7 +274,7 @@ export function TerminalQuickCommandContentSection({
               {/* Why static text in the alert: a live count would re-announce on every keystroke. */}
               {bodyTooLong ? (
                 <span id={refusalId} role="alert" className="text-destructive">
-                  {getBodyRefusalLabel(bodySize.olderHostCap)}
+                  {getBodyRefusalLabel(bodySize.olderHostCap, t)}
                 </span>
               ) : null}
               <span
@@ -280,12 +284,12 @@ export function TerminalQuickCommandContentSection({
                   bodyTooLong ? 'text-destructive' : 'text-muted-foreground'
                 )}
               >
-                {getBodyLengthLabel(bodySize)}
+                {getBodyLengthLabel(bodySize, t, intlLocale)}
               </span>
             </span>
           ) : (
             <span className="shrink-0 text-[11px] text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.resize_hint',
                 'Drag corner to resize'
               )}

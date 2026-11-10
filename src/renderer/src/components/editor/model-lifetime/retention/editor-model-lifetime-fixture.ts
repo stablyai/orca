@@ -1,9 +1,10 @@
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import { vi } from 'vitest'
-import { createEditorModelRegistry } from '@/lib/editor-model-registry'
-import { createEditorTabsStore } from '@/store/slices/editor-slice-test-harness'
-import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
-import { createStoreSessionMockApi } from '@/store/slices/store-session-test-harness'
+import { createEditorModelRegistry } from '@/lib/editor/monaco/editor-model-registry'
+import { createEditorTabsStore } from '@/store/slices/editor/editor-slice-test-harness'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
+import { createStoreSessionMockApi } from '@/store/testing/app-store-session-api.test-fixture'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { attachClosedEditorTabCleanup } from './closed-editor-tab-controller'
 import { toEditorModelUri } from '../identity/editor-model-uri'
@@ -13,7 +14,7 @@ import {
   diffViewStateCache,
   editorViewStateCache,
   pdfViewPositionCache
-} from '@/lib/scroll-cache'
+} from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 
 const workspace = 'model-fixture::/fixture/workspace'
 const models: monaco.editor.ITextModel[] = []
@@ -55,6 +56,7 @@ export function createModelLifetimeFixture(register = true) {
     const file = modelLifetimeFile(id)
     const model = modelLifetimeEditorModel(file.filePath, `${id}\n${'x'.repeat(256 * 1024)}`)
     store.setState({ openFiles: [...store.getState().openFiles, file], activeFileId: id })
+    store.getState().createUnifiedTab(workspace, 'editor', { entityId: id, label: id })
     return { file, model }
   }
   return { store, bridge, attach, add }

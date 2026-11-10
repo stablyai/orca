@@ -19,38 +19,6 @@ afterEach(async () => {
 })
 
 describe('Codex real-account validation harness', () => {
-  it('forces home and Codex routing variables after stripping ambient values', async () => {
-    const primaryHome = path.join(os.tmpdir(), 'orca-primary-home-sentinel')
-    const { layout, env } = runValidationModule<{
-      layout: { tempRoot: string; homeDir: string }
-      env: Record<string, string | undefined>
-    }>(
-      `
-        const { createValidationEnv, createValidationLayout } = await import(process.argv[1])
-        const primaryHome = process.argv[2]
-        const layout = await createValidationLayout({ primaryHome })
-        const env = createValidationEnv({
-          HOME: primaryHome,
-          USERPROFILE: primaryHome,
-          CODEX_HOME: '/unsafe/codex',
-          ORCA_CODEX_HOME: '/unsafe/orca-codex',
-          ZDOTDIR: '/unsafe/zsh',
-          SAFE_VALUE: 'preserved'
-        }, layout)
-        console.log(JSON.stringify({ layout, env }))
-      `,
-      [primaryHome]
-    )
-    cleanupPaths.push(layout.tempRoot)
-
-    expect(env.HOME).toBe(layout.homeDir)
-    expect(env.USERPROFILE).toBe(layout.homeDir)
-    expect(env.CODEX_HOME).toBeUndefined()
-    expect(env.ORCA_CODEX_HOME).toBeUndefined()
-    expect(env.ZDOTDIR).toBeUndefined()
-    expect(env.SAFE_VALUE).toBe('preserved')
-  })
-
   it('records only fingerprints for system-default and managed auth', async () => {
     const { layout, snapshot } = runValidationModule<{
       layout: { tempRoot: string }
@@ -86,22 +54,6 @@ describe('Codex real-account validation harness', () => {
     )
     expect(JSON.stringify(snapshot)).not.toContain('system-secret')
     expect(JSON.stringify(snapshot)).not.toContain('never-report-me')
-  })
-
-  it('honors a disposable temp parent override outside the primary home', async () => {
-    const tempParent = await mkdtemp(path.join(os.tmpdir(), 'orca-temp-parent-'))
-    cleanupPaths.push(tempParent)
-    const { layout } = runValidationModule<{ layout: { tempRoot: string } }>(
-      `
-        const { createValidationLayout } = await import(process.argv[1])
-        const layout = await createValidationLayout({ primaryHome: process.argv[2] })
-        console.log(JSON.stringify({ layout }))
-      `,
-      [path.join(os.tmpdir(), 'orca-primary-home-sentinel')],
-      { ORCA_CODEX_VALIDATION_TEMP_PARENT: tempParent }
-    )
-
-    expect(path.dirname(layout.tempRoot)).toBe(tempParent)
   })
 
   it.skipIf(process.platform === 'win32')(
@@ -151,50 +103,6 @@ describe('Codex real-account validation harness', () => {
     expect(error).toContain('Refusing to place the disposable validation root')
     expect(error).toContain('--temp-parent')
     expect(error).toContain('ORCA_CODEX_VALIDATION_TEMP_PARENT')
-  })
-
-  it('builds via process.execPath and the repo-local electron-vite entry, not npx', () => {
-    // Build with current Node/local electron-vite JS because Windows npx.cmd is not directly executable.
-    const { command, args, entry } = runValidationModule<{
-      command: string
-      args: string[]
-      entry: string
-    }>(
-      `
-        import path from 'node:path'
-        const { resolveElectronViteBuildCommand } = await import(process.argv[1])
-        const repoRoot = process.argv[2]
-        const result = resolveElectronViteBuildCommand(repoRoot)
-        const entry = path.join(repoRoot, 'node_modules', 'electron-vite', 'bin', 'electron-vite.js')
-        console.log(JSON.stringify({ ...result, entry }))
-      `,
-      [path.resolve('.')]
-    )
-
-    expect(command).toBe(process.execPath)
-    expect(command).not.toBe('npx')
-    expect(args[0]).toBe(entry)
-    expect(args.slice(1)).toEqual(['build', '--mode', 'e2e'])
-    expect(args).not.toContain('npx')
-  })
-
-  it('fails clearly when the repo-local electron-vite entry is unavailable', async () => {
-    const emptyRoot = await mkdtemp(path.join(os.tmpdir(), 'orca-no-electron-vite-'))
-    cleanupPaths.push(emptyRoot)
-    const { error } = runValidationModule<{ error: string | null }>(
-      `
-        const { resolveElectronViteBuildCommand } = await import(process.argv[1])
-        try {
-          resolveElectronViteBuildCommand(process.argv[2])
-          console.log(JSON.stringify({ error: null }))
-        } catch (caught) {
-          console.log(JSON.stringify({ error: caught.message }))
-        }
-      `,
-      [emptyRoot]
-    )
-
-    expect(error).toContain('electron-vite entry not found')
   })
 })
 

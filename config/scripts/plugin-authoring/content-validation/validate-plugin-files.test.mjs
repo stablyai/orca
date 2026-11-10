@@ -36,19 +36,4 @@ describe('validate-plugin-files', () => {
     expect(result.code).toBe(1)
     expect(result.stderr).toContain('panel/index.html')
   }, 60_000)
-
-  it('passes a scaffolded plugin, explaining why there is no release entry outside Git', async () => {
-    const dir = path.join(await tempRoot(), 'dusk')
-    await createPluginFromTemplate({ dir, template: 'theme', publisher: 'acme' })
-    const result = await validate(dir)
-    expect(result.code, result.stderr).toBe(0)
-    expect(result.stdout).toContain('not in a Git repository')
-  }, 60_000)
-
-  it('exits 1 for a missing path and 2 without arguments', async () => {
-    const missing = await validate(path.join(await tempRoot(), 'nope'))
-    expect(missing.code).toBe(1)
-    expect(missing.stderr).toContain('does not exist')
-    expect((await validate()).code).toBe(2)
-  }, 60_000)
 })

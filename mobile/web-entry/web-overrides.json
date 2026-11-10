@@ -2,12 +2,20 @@
   "$comment": "Every .web.* sibling the Route A web build resolves ahead of its native file. One entry per documented React Native Web gap; config/scripts/mobile-web-app-web-overrides.test.mjs fails on an unlisted one, a listed file that is gone, or one with no native sibling.",
   "overrides": [
     {
-      "file": "src/transport/client-context.web.tsx",
+      "file": "src/session/native-chat/composer/MobileNativeChatComposerAllocation.web.tsx",
+      "reason": "The shipping host page measures the active editor's real chrome and menu reservation against the lower chat allocation, preserving native field sizing outside that DOM layout. Geometry consumers stay isolated from menu and queue rows."
+    },
+    {
+      "file": "src/session/native-chat/composer/MobileNativeChatComposerMenuLayer.web.tsx",
+      "reason": "The phone session renders in the host-served page. Suggestions must escape the queued editor’s scrolling clip while staying inside the chat’s stacking and visibility ancestry. DOM geometry and ancestor scroll/resize events anchor that portal; the native fallback retains its existing inline rendering."
+    },
+    {
+      "file": "src/transport/connection/client-context.web.tsx",
       "reason": "The page has no websocket transport and no pairing keychain. This is the single transport substitution point: it serves the BridgeRpcClient the entry built, for every hostId, because the bridge protocol names no host. The entry mounts nothing until init lands, so this provider never holds a client that cannot answer."
     },
     {
       "file": "packages/expo-two-way-audio/src/ExpoTwoWayAudioModule.web.ts",
-      "reason": "Vendored with the module, not added for Route A. Nothing on the page reaches it any more: dictation's capture went behind src/platform/dictation-capture.web.ts, which asks the shell for the microphone, so the only importer of @orca/expo-two-way-audio is the native half of that seam. The file stays because it ships with the vendored module, and it answers denied microphone permission and no playback, which is what a browser outside the shell can honestly say."
+      "reason": "Vendored with the module, not added for Route A. Nothing on the page reaches it any more: dictation's capture went behind src/platform/dictation-capture.web.ts, which asks the shell for the microphone, so the only importer of @orca/expo-two-way-audio is the native half of that seam. The file stays because it ships with the vendored module, and it answers denied microphone permission, which is what a browser outside the shell can honestly say."
     },
     {
       "file": "src/navigation/use-back-claim.web.ts",
@@ -18,15 +26,23 @@
       "reason": "The page is one document standing in for one screen, so a route it does not render has to be handed to the app that does. The native file is the router; this one posts a navigate notify for a target outside the page's routes and pushes locally for one inside them."
     },
     {
-      "file": "src/transport/host-store.web.ts",
+      "file": "src/host-catalog/host-store.web.ts",
       "reason": "expo-secure-store resolves to {} on web, so the real store answers loadHosts() with an empty array and every screen that looks this host up paints \"Host not found\" over the host the shell just opened. This one serves the profile init carried, without the credential the bridge already holds."
     },
     {
-      "file": "src/transport/host-removal-lifecycle.web.ts",
+      "file": "src/host-catalog/host-connection-history.web.ts",
+      "reason": "Recency belongs to the native host list. The host-served page retains the existing no-op and imports no native metadata mutation queue."
+    },
+    {
+      "file": "src/host-descriptors/host-descriptor-persistence.web.ts",
+      "reason": "Last-known descriptors belong to the native host list; the page owns no descriptor persistence."
+    },
+    {
+      "file": "src/host-catalog/host-removal-lifecycle.web.ts",
       "reason": "Removing a host is pairing work and the page holds neither the host list nor the credential, so the real lifecycle's removeHost resolved without doing anything and the screen reported success for a host that was still paired. This one refuses with PageHostRemovalUnavailableError, whose message names the app's host list. It is also the fence that keeps push-registration.ts out of the page bundle: the native file's import of it was that subsystem's only path into a page route, and the page has neither the device token nor the gateway client push needs."
     },
     {
-      "file": "src/transport/host-device-token-store.web.ts",
+      "file": "src/host-credentials/host-device-token-store.web.ts",
       "reason": "expo-secure-store resolves to {} on web, and the bridge carries the RPC, so the page holds no device token."
     },
     {
@@ -118,7 +134,7 @@
       "reason": "Not an RN Web API gap but a transport one that exists only in the page: a screencast frame crosses the bridge as one message under BRIDGE_MAX_MESSAGE_BYTES, and a phone's mobile view at the native device scale factor produces a worst-case JPEG larger than that. This file budgets the mobile view's area against the cap, the envelope it measures rather than names, and one worst-case bytes-per-pixel constant. Web view mode is untouched, because a letterboxed desktop viewport is not an area the page can predict."
     },
     {
-      "file": "src/session/terminal-snapshot-byte-budget.web.ts",
+      "file": "src/terminal/session/terminal-snapshot-byte-budget.web.ts",
       "reason": "Not an RN Web API gap but a transport one that exists only in the page. A terminal's first frame is its scrollback snapshot, which the desktop trims to 512 KiB of raw terminal text while the bridge measures the serialized event against BRIDGE_MAX_MESSAGE_BYTES. An ANSI snapshot is mostly ESC bytes and JSON spends six on each, so a colour-dense 80-column screen comes back at 669,268 bytes against a 655,360-byte cap and the stream ends with overflow before a live byte is painted. This file derives the budget the page sends in terminal.subscribe from the cap less the event envelope; the native sibling sends nothing, because a socket frame has no ceiling above it and a budget there would shrink a phone's scrollback for a limit that does not exist."
     },
     {
@@ -131,15 +147,27 @@
     },
     {
       "file": "src/terminal/terminal-webview-html.web.ts",
-      "reason": "The native file composes the whole WebView document, which splices in the 612 KiB minified xterm engine string. On the page that string is unusable — the shell's CSP is script-src 'self' with frame-src 'none', so there is no nested document to load it into — and it would be the largest single module in the session route's closure. The web file answers the caret options, the markup and the stylesheet, which is everything the page mounts, and nothing else; mobile-web-terminal-engine-closure.test.mjs is the fence."
+      "reason": "The native file composes the whole WebView document, which splices in the 612 KiB minified xterm engine string. On the page that string is unusable — the shell's CSP is script-src 'self' with frame-src 'none', so there is no nested document to load it into — and it would be the largest single module in the session route's closure. The web file answers the caret options, the markup and the stylesheet, which is everything the page mounts, and nothing else."
     },
     {
       "file": "src/platform/dictation-capture.web.ts",
       "reason": "Dictation's capture seam. The native file holds the microphone through @orca/expo-two-way-audio, which a browser does not have; this one asks the shell for it over native.audio.start|read|stop, draining the shell's ring on a timer and raising each reply as the events the engine emits directly, and taking the utterance's tail off the stop's own reply. The screen an open microphone holds awake is not in this seam at all: the device module that opens the mic takes it and gives it back on both hosts. The flow above the seam is one file on both hosts."
     },
     {
+      "file": "src/platform/on-device-speech.web.ts",
+      "reason": "Dictation's on-device recognizer. Native screens never dictate on the phone, so the native file answers null; the session page asks the shell over native.speech.act, whose recognizer hears the microphone the shell already captures, and answers null on shells that do not grant the verb so dictation goes to the computer as before."
+    },
+    {
+      "file": "src/platform/on-device-speech-locale.web.ts",
+      "reason": "The language the phone's recognizer is asked about. The native file reads the device's language list through expo-localization, which the page does not load; the WebView's navigator.languages is that same list, so the shell's Voice settings and the session page ask about one locale."
+    },
+    {
       "file": "src/platform/pdf-opener.web.ts",
       "reason": "Native file routes never render a preview themselves: they mount this page, which cannot show a PDF because the shell's CSP refuses frames and objects. This one asks the shell through native.pdf.view, which downloads the file and shows it in Quick Look or the Android PDF viewer, cancels that download when the preview is left, and returns null on shells that do not grant the verb so the preview asks for an app update."
+    },
+    {
+      "file": "src/platform/image-actions.web.ts",
+      "reason": "The page cannot reach the clipboard, Photos or the share sheet: the shell origin is not a secure context on iOS and Android WebView has no Web Share. This one stages a base64 image to the shell a chunk at a time over native.image.act, because a chat image passes the 640 KiB frame cap, then asks the shell to copy, save or share it; web images go by URL because the page cannot read cross-origin pixels. Shells that do not grant the verb get null, so the viewer offers no actions."
     },
     {
       "file": "src/platform/media-picker.web.ts",
@@ -174,7 +202,7 @@
       "reason": "react-native-web's keydown handler withholds onSubmitEditing whenever the Enter keydown reports a composition — nativeEvent.isComposing, or the Android keyCode 229 that stands for it — which is a soft keyboard's normal state mid-word, so Enter on the page neither sent the line nor cleared the field while native Android's editor action fired as it always does. Both terminal fields reach their send through onSubmitEditing alone and both are bound here: the live input's carriage return, and the buffered command field's draft. The native file binds nothing, because that editor action needs no help; this one listens for beforeinput and acts on insertLineBreak and insertParagraph, the browser's own end-of-line signals. react-native-web calls preventDefault on every keydown it does submit on, so those events exist only in the cases it dropped and never produce a second carriage return; an IME still choosing a candidate reports insertCompositionText and is left alone."
     },
     {
-      "file": "src/transport/host-app-version-store.web.ts",
+      "file": "src/host-descriptors/host-app-version-store.web.ts",
       "reason": "The page keeps no record of the host's status.get app version because nothing in it reads one — the reader is the native troubleshoot screen's — and a key the page only writes is not page state, so it is not admitted through page-storage-keys.ts and every mount's write was refused and logged instead."
     },
     {
@@ -198,7 +226,7 @@
       "reason": "The fold is a native reserved region the WebView cannot see: WebKit exposes no viewport segments, and the native file reads an Expo module the page does not have. This one reads the fold the shell measured over the page from `init`, already in the page's px."
     },
     {
-      "file": "src/session/shell-terminal-key-rail.web.ts",
+      "file": "src/terminal/session/shell-terminal-key-rail.web.ts",
       "reason": "The iPhone Duo key rail is drawn by the shell in a side inset strip the page cannot reach. The native file has no shell around it and answers no rail; this one reads whether the shell shows one from `init` and takes its presses from the bridge."
     },
     {
@@ -208,6 +236,22 @@
     {
       "file": "src/platform/shell-storage.web.ts",
       "reason": "Native settings screens can cover a still-mounted page. Observe same-session storage snapshots so preference readers refresh on return without remounting the terminal."
+    },
+    {
+      "file": "src/components/mobile-markdown-math-typesetter.web.ts",
+      "reason": "KaTeX draws a formula as HTML and CSS with its own fonts, which only a document can show. The native file leaves formulas as their source, so the native bundle never carries KaTeX; this one loads KaTeX with the first formula the page draws and adds its stylesheet."
+    },
+    {
+      "file": "src/session/native-chat/MobileNativeChatLowerRegion.web.tsx",
+      "reason": "The shipping web session owns DOM scroll anchoring and reveals focused lower controls inside the keyboard-safe viewport. Native rendering keeps its existing scroll behavior."
+    },
+    {
+      "file": "src/platform/page-box.web.ts",
+      "reason": "RNW's measure() is asynchronous and drops its callback for a detached node, so a held mic released over the dictation cancel button would never stop. The page reads the DOM box synchronously; native keeps measure()."
+    },
+    {
+      "file": "src/platform/accessibility-announcer.web.ts",
+      "reason": "React Native Web's announceForAccessibility is a no-op and VoiceOver in the shell's WebView doesn't read the page's live regions, so the page asks the shell to announce through native.a11y.announce; without it, the caller keeps its live region."
     }
   ]
 }

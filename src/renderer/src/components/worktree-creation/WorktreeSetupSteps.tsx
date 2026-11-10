@@ -2,35 +2,24 @@ import React from 'react'
 import { Circle, CircleCheck, CircleX, Loader2, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatElapsedTime } from './worktree-creation-clock'
 import type { WorktreeSetupStep, WorktreeSetupStepId } from './worktree-setup-steps'
 
-function stepLabel(id: WorktreeSetupStepId, agentLabel: string): string {
+function stepLabel(id: WorktreeSetupStepId, agentLabel: string, t: Translate = translate): string {
   switch (id) {
     case 'prepare':
-      return translate(
-        'auto.components.worktree.creation.WorktreeSetupSteps.prepare',
-        'Prepare workspace'
-      )
+      return t('auto.components.worktree.creation.WorktreeSetupSteps.prepare', 'Prepare workspace')
     case 'fetch':
-      return translate(
-        'auto.components.worktree.creation.WorktreeSetupSteps.fetch',
-        'Fetch base branch'
-      )
+      return t('auto.components.worktree.creation.WorktreeSetupSteps.fetch', 'Fetch base branch')
     case 'create':
-      return translate(
-        'auto.components.worktree.creation.WorktreeSetupSteps.create',
-        'Create worktree'
-      )
+      return t('auto.components.worktree.creation.WorktreeSetupSteps.create', 'Create worktree')
     case 'setup':
-      return translate(
-        'auto.components.worktree.creation.WorktreeSetupSteps.setup',
-        'Set up workspace'
-      )
+      return t('auto.components.worktree.creation.WorktreeSetupSteps.setup', 'Set up workspace')
     case 'start-agent':
-      return translate(
+      return t(
         'auto.components.worktree.creation.WorktreeSetupSteps.startAgent',
         'Start {{agent}}',
         { agent: agentLabel }
@@ -38,7 +27,7 @@ function stepLabel(id: WorktreeSetupStepId, agentLabel: string): string {
   }
 }
 
-function StepIcon({ state }: { state: WorktreeSetupStep['state'] }): React.JSX.Element {
+export function StepIcon({ state }: { state: WorktreeSetupStep['state'] }): React.JSX.Element {
   switch (state) {
     case 'running':
       return (
@@ -68,6 +57,7 @@ export function WorktreeSetupSteps({
   onRetry: () => void
   onDismiss: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const progressId = React.useId()
   return (
     <div className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground">
@@ -84,7 +74,7 @@ export function WorktreeSetupSteps({
                   step.state === 'failed' && 'text-destructive'
                 )}
               >
-                {stepLabel(step.id, agentLabel)}
+                {stepLabel(step.id, agentLabel, t)}
               </span>
               {step.percent !== null ? (
                 <span className="text-xs tabular-nums text-muted-foreground">{step.percent}%</span>
@@ -111,16 +101,10 @@ export function WorktreeSetupSteps({
           <div className="flex items-center gap-1.5">
             <Button type="button" variant="outline" size="xs" onClick={onRetry}>
               <RotateCcw />
-              {translate(
-                'auto.components.worktree.creation.WorktreeCreationPanel.34dd5ee38b',
-                'Retry'
-              )}
+              {t('auto.components.worktree.creation.WorktreeCreationPanel.34dd5ee38b', 'Retry')}
             </Button>
             <Button type="button" variant="ghost" size="xs" onClick={onDismiss}>
-              {translate(
-                'auto.components.worktree.creation.WorktreeCreationPanel.dabd226118',
-                'Dismiss'
-              )}
+              {t('auto.components.worktree.creation.WorktreeCreationPanel.dabd226118', 'Dismiss')}
             </Button>
           </div>
         </div>

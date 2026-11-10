@@ -9,7 +9,7 @@ import type {
   WorkflowRouteGuard,
   WorkflowRouteGuardInput
 } from '../runtime/orchestration/workflow-route-guard'
-import type { MessageType } from '../runtime/orchestration/types'
+import type { MessageType } from '../runtime/orchestration/db/orchestration-records'
 import { recordWorkflowMessage } from './workflow-edge-delivery'
 import { findWorkflowTaskForSender } from './workflow-mail-pump'
 import type { WorkflowRunSession } from './workflow-run-session'

@@ -5,9 +5,9 @@ import './runtime-test-module-registration.spec'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
-import { getBrowserHostLeaseRegistry } from '../browser-host/browser-host-lease-registry-instance'
+import { getBrowserHostLeaseRegistry } from '../browser-host/leases/browser-host-lease-registry-instance'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
+import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
 
@@ -218,6 +218,7 @@ function makePostRevealWorkerRecoveryHarness(
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This recovery fixture reaches only the listed planner, terminal settlement and authority lookup methods.
   runtime.setOrchestrationDb({
     crewChanges: new CrewChanges(),
+    hasAnyDispatchContexts: () => true,
     listSessionDispatchesForPresentation: () => [],
     reconcileMissingWorkerTerminal: vi.fn(),
     getActiveDispatchForTerminal: () => undefined,

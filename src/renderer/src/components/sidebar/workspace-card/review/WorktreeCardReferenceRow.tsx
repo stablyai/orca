@@ -6,9 +6,9 @@ import { GitHubIcon } from '@/components/icons/GitHubIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { FilePathCursorTooltip } from '@/components/file-path-cursor-tooltip'
-import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
-import { observeOffscreenAnimation } from '@/lib/offscreen-animation-pause'
+import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
+import { observeOffscreenAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import {
   ReviewChecksIndicator,
   reviewStateLabel
@@ -94,18 +94,17 @@ export function WorktreeCardReferenceRow({
   origins?: ReactNode
   actions?: ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const ProviderMark = PROVIDER_MARKS[provider]
   const sourceText = [ProviderMark ? null : provider, source].filter(Boolean).join(' · ')
   return (
     <div className="flex min-w-0 items-start gap-2" data-stale={stale || undefined}>
       {stale ? (
-        <span className="sr-only">
-          {translate('workspace.links.lastKnownStatus', 'Last known status')}
-        </span>
+        <span className="sr-only">{t('workspace.links.lastKnownStatus', 'Last known status')}</span>
       ) : null}
       <div className="mt-0.5 flex w-3.5 shrink-0 items-center">
         {review ? (
-          <StateGlyph label={reviewStateLabel(review.state, getReviewLabel(review))}>
+          <StateGlyph label={reviewStateLabel(review.state, getReviewLabel(review), t)}>
             <ReviewIcon review={review} className="size-3.5" showChecks={false} />
           </StateGlyph>
         ) : taskState ? (
@@ -130,7 +129,7 @@ export function WorktreeCardReferenceRow({
               className="workspace-reference-title block w-full rounded-sm text-xs font-medium leading-snug underline decoration-muted-foreground/50 underline-offset-2 outline-none hover:decoration-foreground focus-visible:ring-2 focus-visible:ring-ring"
               onPointerEnter={(event) => measureTitleOverflow(event.currentTarget)}
               onFocus={(event) => measureTitleOverflow(event.currentTarget)}
-              aria-label={translate('workspace.links.openItem', 'Open {{label}}', {
+              aria-label={t('workspace.links.openItem', 'Open {{label}}', {
                 label
               })}
               onClick={(event) => {
@@ -150,7 +149,7 @@ export function WorktreeCardReferenceRow({
             onPointerEnter={(event) => measureTitleOverflow(event.currentTarget)}
             onFocus={(event) => measureTitleOverflow(event.currentTarget)}
             disabled={!onManage}
-            aria-label={translate('workspace.links.openItem', 'Open {{label}}', {
+            aria-label={t('workspace.links.openItem', 'Open {{label}}', {
               label
             })}
             onClick={onManage}
@@ -197,13 +196,14 @@ export function WorktreeCardReferenceRow({
 
 // Why: one chip plus a count (only the count when narrow) stays legible; the tooltip lists all.
 function ReferenceLabels({ labels }: { labels: readonly string[] }): React.JSX.Element {
+  const t = useTranslate()
   const list = labels.join(', ')
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span
           tabIndex={0}
-          aria-label={translate('workspace.links.labels', 'Labels: {{labels}}', { labels: list })}
+          aria-label={t('workspace.links.labels', 'Labels: {{labels}}', { labels: list })}
           className="ml-1 flex min-w-0 shrink items-center gap-1 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Badge

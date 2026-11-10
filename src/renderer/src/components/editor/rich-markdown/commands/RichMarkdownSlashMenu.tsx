@@ -1,7 +1,7 @@
 import React from 'react'
 import type { Editor } from '@tiptap/react'
 import { Search } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { runSlashCommand } from './rich-markdown-slash-commands'
 import type {
   SlashCommand,
@@ -10,29 +10,27 @@ import type {
 } from './rich-markdown-slash-command-primitives'
 
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { RichMarkdownCompletionPopover } from '../completion-popovers/RichMarkdownCompletionPopover'
 import { useRichMarkdownCompletionScroll } from '../completion-popovers/useRichMarkdownCompletionScroll'
 
-function slashCommandGroupLabel(group: SlashCommandGroup): string {
+function slashCommandGroupLabel(group: SlashCommandGroup, t: Translate = translate): string {
   switch (group) {
     case 'Headings':
-      return translate('auto.components.editor.RichMarkdownSlashMenu.groupHeadings', 'Headings')
+      return t('auto.components.editor.RichMarkdownSlashMenu.groupHeadings', 'Headings')
     case 'Toggle headings':
-      return translate(
+      return t(
         'auto.components.editor.RichMarkdownSlashMenu.groupToggleHeadings',
         'Toggle headings'
       )
     case 'Basic blocks':
-      return translate(
-        'auto.components.editor.RichMarkdownSlashMenu.groupBasicBlocks',
-        'Basic blocks'
-      )
+      return t('auto.components.editor.RichMarkdownSlashMenu.groupBasicBlocks', 'Basic blocks')
     case 'Advanced':
-      return translate('auto.components.editor.RichMarkdownSlashMenu.groupAdvanced', 'Advanced')
+      return t('auto.components.editor.RichMarkdownSlashMenu.groupAdvanced', 'Advanced')
     case 'Media':
-      return translate('auto.components.editor.RichMarkdownSlashMenu.groupMedia', 'Media')
+      return t('auto.components.editor.RichMarkdownSlashMenu.groupMedia', 'Media')
     case 'Others':
-      return translate('auto.components.editor.RichMarkdownSlashMenu.groupOthers', 'Others')
+      return t('auto.components.editor.RichMarkdownSlashMenu.groupOthers', 'Others')
   }
 }
 
@@ -55,6 +53,7 @@ export function RichMarkdownSlashMenu({
   onEmojiPick,
   onClose
 }: RichMarkdownSlashMenuProps): React.JSX.Element {
+  const t = useTranslate()
   const { viewportRef, activeItemRef } = useRichMarkdownCompletionScroll(
     selectedIndex,
     filteredCommands
@@ -68,22 +67,16 @@ export function RichMarkdownSlashMenu({
       onClose={onClose}
       className="rich-markdown-slash-menu"
       role="dialog"
-      ariaLabel={translate(
-        'auto.components.editor.RichMarkdownSlashMenu.2e0400b958',
-        'Slash commands'
-      )}
+      ariaLabel={t('auto.components.editor.RichMarkdownSlashMenu.2e0400b958', 'Slash commands')}
     >
       <div className="rich-markdown-slash-search" onMouseDown={(event) => event.preventDefault()}>
         <Search className="size-3.5" />
         <input
-          aria-label={translate(
-            'auto.components.editor.RichMarkdownSlashMenu.550189b06c',
-            'Search blocks'
-          )}
+          aria-label={t('auto.components.editor.RichMarkdownSlashMenu.550189b06c', 'Search blocks')}
           readOnly
           type="text"
           value={slashMenu.query}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.editor.RichMarkdownSlashMenu.dbdd2ad15f',
             'Search blocks...'
           )}
@@ -92,10 +85,7 @@ export function RichMarkdownSlashMenu({
       <div ref={viewportRef} className="rich-markdown-slash-results scrollbar-sleek" role="listbox">
         {filteredCommands.length === 0 ? (
           <div className="rich-markdown-slash-empty">
-            {translate(
-              'auto.components.editor.RichMarkdownSlashMenu.82c6816ff8',
-              'No blocks found'
-            )}
+            {t('auto.components.editor.RichMarkdownSlashMenu.82c6816ff8', 'No blocks found')}
           </div>
         ) : (
           filteredCommands.map((command, index) => {
@@ -105,7 +95,7 @@ export function RichMarkdownSlashMenu({
               <React.Fragment key={command.id}>
                 {showGroup ? (
                   <div className="rich-markdown-slash-section">
-                    {slashCommandGroupLabel(command.group)}
+                    {slashCommandGroupLabel(command.group, t)}
                   </div>
                 ) : null}
                 <button

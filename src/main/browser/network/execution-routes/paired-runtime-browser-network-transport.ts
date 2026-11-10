@@ -4,19 +4,25 @@ import {
 } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
-import {
-  subscribeRemoteRuntimeRequest,
-  type RemoteRuntimeSubscription
-} from '../../../../shared/remote-runtime/remote-runtime-client'
-import type { RemoteRuntimeSubscriptionOptions } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
+import '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
+import type {
+  RemoteRuntimeTransportSubscription,
+  RemoteRuntimeSubscriptionOptions
+} from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
-  BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
-} from '../../../../shared/browser-runtime-capabilities'
+  BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
+  BROWSER_NETWORK_TUNNEL_WINDOW_V2_CAPABILITY
+} from '../../../../shared/browser/runtime/browser-runtime-capabilities'
 import { BrowserNetworkTunnelClient } from '../tunnels/browser-network-tunnel-client'
 import type { BrowserNetworkTunnelOutboundMemoryLease } from '../tunnels/browser-network-tunnel-outbound-memory-budget'
+import {
+  BROWSER_NETWORK_TUNNEL_LEGACY_FLOW_CONTROL,
+  BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL
+} from '../tunnels/browser-network-tunnel-stream-state'
 
 const BROWSER_TUNNEL_WS_SOFT_CAP_BYTES = 1024 * 1024
 const BROWSER_TUNNEL_WS_MAX_QUEUED_BYTES = 7 * 1024 * 1024
@@ -41,7 +47,7 @@ type PairedRuntimeBrowserNetworkTransportOptions = {
 export class PairedRuntimeBrowserNetworkTransport {
   private readonly options: PairedRuntimeBrowserNetworkTransportOptions
   private tunnelValue: BrowserNetworkTunnelClient | null = null
-  private subscription: RemoteRuntimeSubscription | null = null
+  private subscription: RemoteRuntimeTransportSubscription | null = null
   private startPromise: Promise<BrowserNetworkTunnelClient> | null = null
   private rejectReady: ((error: Error) => void) | null = null
   private closed = false
@@ -93,7 +99,7 @@ export class PairedRuntimeBrowserNetworkTransport {
     this.rejectReady = rejectReady
     let readyTimeout: ReturnType<typeof setTimeout> | null = null
     try {
-      const subscription = await subscribeRemoteRuntimeRequest(
+      const subscription = await subscribeRemoteRuntimeTransport(
         this.options.connection,
         'network.browserTunnel',
         {
@@ -126,7 +132,12 @@ export class PairedRuntimeBrowserNetworkTransport {
             }
             const result = parsed.data
             if (result.type === 'ready') {
-              this.acceptReady(result.tunnelGeneration, resolveReady, rejectReady)
+              this.acceptReady(
+                result.tunnelGeneration,
+                result.capabilities?.includes(BROWSER_NETWORK_TUNNEL_WINDOW_V2_CAPABILITY) === true,
+                resolveReady,
+                rejectReady
+              )
               return
             }
             if (this.tunnelValue?.generation === result.tunnelGeneration) {
@@ -168,6 +179,7 @@ export class PairedRuntimeBrowserNetworkTransport {
             ...(this.options.subscription?.clientCapabilities ?? []),
             BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
             BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
+            BROWSER_NETWORK_TUNNEL_WINDOW_V2_CAPABILITY,
             ...(this.options.executionHost.kind === 'native'
               ? []
               : [BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY])
@@ -208,6 +220,7 @@ export class PairedRuntimeBrowserNetworkTransport {
 
   private acceptReady(
     tunnelGeneration: number,
+    windowV2: boolean,
     resolveReady: () => void,
     rejectReady: (error: Error) => void
   ): void {
@@ -227,6 +240,9 @@ export class PairedRuntimeBrowserNetworkTransport {
         sendBinary: (bytes) => this.subscription?.sendBinary(bytes) ?? false,
         outboundMemory: this.options.outboundMemory,
         maxStreamIds: this.options.maxStreamIds,
+        flowControl: windowV2
+          ? BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL
+          : BROWSER_NETWORK_TUNNEL_LEGACY_FLOW_CONTROL,
         onClosed: (error) => this.fail(error, rejectReady)
       })
       this.options.onReady(this, tunnelGeneration)

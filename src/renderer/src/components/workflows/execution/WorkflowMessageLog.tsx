@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { workflowMessagesToCsv } from '../../../../../shared/workflow/workflow-metrics'
 import type {
   WorkflowMessage,

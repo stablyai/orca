@@ -1,6 +1,6 @@
-import { worktreeMatchesGitHubNumber } from '@/lib/github-work-item-workspace-attachment'
-import { getPaletteWorktreeExecutionHostId } from '@/lib/palette-repo-resolution'
-import { findRepoForHost } from '@/store/slices/repo-host-identity'
+import { worktreeMatchesGitHubNumber } from '@/lib/work-items/github/github-work-item-workspace-attachment'
+import { getPaletteWorktreeExecutionHostId } from '@/lib/workspace/search/palette-repo-resolution'
+import { findRepoForHost } from '@/store/repos/repo-host-identity'
 import {
   parseGitHubIssueOrPRLink,
   parseGitHubIssueOrPRNumber
@@ -9,17 +9,17 @@ import {
   getLinkedWorkItemSuggestedName,
   getLinkedWorkItemWorkspaceName
 } from '../../../../shared/workspace-name'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import type { WorktreeJumpPaletteCreateWorktreeInput } from './worktree-jump-palette-create-worktree-input'
-import { lookupGitHubWorkItemForSource } from '@/lib/github-work-item-source-lookup'
-import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
-import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
-import { getRepoMapFromState } from '@/store/selectors'
+import { lookupGitHubWorkItemForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
+import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace/activation/workspace-activation-terminal-focus'
+import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import { useAppStore } from '@/store/index'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import { buildTaskSourceContextFromRepo } from '../../../../shared/task-source-context'
-import { buildLinearIssueComposerData } from '@/lib/linear-linked-work-item'
-import { isWorktreePaletteCreateActivationAllowed } from '@/lib/worktree-palette-create-action'
+import { buildTaskSourceContextFromRepo } from '../../../../shared/work-items/task-source-context'
+import { buildLinearIssueComposerData } from '@/lib/work-items/linear/linear-linked-work-item'
+import { isWorktreePaletteCreateActivationAllowed } from '@/lib/workspace/search/worktrees/worktree-palette-create-action'
 
 export function createWorktreeJumpPaletteWorktreeHandler({
   workspaces,
@@ -214,7 +214,7 @@ export function createWorktreeJumpPaletteWorktreeHandler({
       }
       const repo =
         (state.activeRepoId ? (repoMap.get(state.activeRepoId) ?? null) : null) ||
-        [...getRepoMapFromState(state).values()].find((candidate) => isGitRepoKind(candidate))
+        [...getIndexedRepoMap(state.repos).values()].find((candidate) => isGitRepoKind(candidate))
       if (!repo || !isGitRepoKind(repo)) {
         openComposer({ prefilledName: trimmed })
         return

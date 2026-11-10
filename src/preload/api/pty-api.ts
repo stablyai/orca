@@ -1,10 +1,11 @@
+import type { RuntimeTerminalAttention } from '../../shared/runtime-terminal-contracts'
 import type { PaintedRestorePane } from '../../shared/painted-restore-ack'
 import type {
   PtyFencedTerminationRequest,
   PtyFencedTerminationOutcome
 } from '../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import type { ResourceViewAdmission } from '../../shared/resource-view-admission'
-import type { SpawnIntent } from '../../shared/host-spawn-admission'
+import type { SpawnIntent } from '../../shared/terminal/pty/admission/spawn-admission-contract'
 import type {
   SavedResumeDecision,
   TerminalLaunchResult,
@@ -17,7 +18,7 @@ import type {
   TerminalLeafMoveRequest,
   TerminalLeafMoveResult
 } from '../../shared/workspace-layout/terminal-leaf-move'
-import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../shared/execution-host/project-execution-runtime'
 import type {
   PtyListedSession,
   PtySessionListScope,
@@ -54,6 +55,7 @@ export type PtyApi = {
     resumeOrigin?: 'saved'
     launchToken?: string
     launchAgent?: TuiAgent
+    trustWorktreeId?: string
     startupCommandDelivery?: StartupCommandDelivery
     connectionId?: string | null
     worktreeId?: string
@@ -77,6 +79,8 @@ export type PtyApi = {
     spawnIntent?: SpawnIntent
     // A restore no user act asked for; main holds it for a stopped WSL distro. Older mains ignore it.
     wslPassiveRestore?: true
+    // The user's "let agents ask" answer for this launch; older mains ignore it.
+    skipAgentWorkspaceTrust?: true
     agentLaunch?: AgentPaneLaunchRequest
     // Main emits agent_started only after a successful spawn.
     telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
@@ -111,6 +115,8 @@ export type PtyApi = {
     shellReadyArmed?: boolean
   }>
   write: (id: string, data: string, inputKind: TerminalInputKind) => void
+  /** Genuine xterm input admitted by a local or remote transport; carries no terminal bytes. */
+  noteUserInput?: () => void
   /** `requireWriteSettlement` waits for the provider's acknowledgment on any provider. */
   writeAccepted: (
     id: string,
@@ -121,6 +127,8 @@ export type PtyApi = {
   onWriteUnavailable?: (callback: (payload: { id: string }) => void) => () => void
   resize: (id: string, cols: number, rows: number) => void
   claimViewport: (id: string, cols: number, rows: number) => void
+  /** Who besides this window is viewing or typing into these PTYs; empty for unknown ids. */
+  getTerminalAttention: (ids: string[]) => Promise<Record<string, RuntimeTerminalAttention>>
   reportGeometry: (id: string, cols: number, rows: number) => void
   signal: (id: string, signal: string) => void
   clearBuffer: (id: string) => void
@@ -192,6 +200,8 @@ export type PtyApi = {
   getAuthoritativeBufferSnapshotCapabilities?: (
     ids: string[]
   ) => Promise<{ id: string; authoritative: boolean | null }[]>
+  /** Local sessions the provider answers are absent; omitted where no local main owns sessions. */
+  getGoneSessionIds?: (ids: string[]) => Promise<string[]>
   hasPty: (id: string) => Promise<boolean | null>
   moveLeafToNewTab: (request: TerminalLeafMoveRequest) => Promise<TerminalLeafMoveResult>
   getMainBufferSnapshot: (

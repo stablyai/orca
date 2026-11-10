@@ -2,12 +2,12 @@ import { useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from
 import { useShallow } from 'zustand/react/shallow'
 import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
-import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
+import { resolveLeftSidebarStyleVariables } from '@/app-shell/appearance/left-sidebar-appearance'
 import { resolveLeftTitlebarChromeLayout } from '@/lib/titlebar-left-chrome'
-import { selectWorktreeCreationSurfaceShown } from '@/lib/worktree-creation-surface'
+import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/worktree-creation-surface'
 import { useAppStore } from '../store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import { selectActiveTerminalChromeState } from '../store/active-terminal-chrome-selector'
+import { selectActiveTerminalChromeState } from './active-terminal-chrome-selector'
 import {
   hasRequestedBackgroundTerminalWorktreeMount,
   subscribeBackgroundTerminalWorktreeMountRequests

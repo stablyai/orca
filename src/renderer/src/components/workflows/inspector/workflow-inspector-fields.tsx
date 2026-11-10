@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useWorkflowEditorStore } from '../workflow-editor-store'
 import { translate } from '@/i18n/i18n'
 

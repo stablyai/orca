@@ -9,10 +9,11 @@ import {
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
 import { TabHoverCard } from './TabHoverCard'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
+import '../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/browser/browser-blank-page'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
-import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
+import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import { getLiveBrowserUrl } from '../browser-pane/describe-page/live-browser-url-registry'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import {
@@ -24,22 +25,26 @@ import {
 } from './drop-indicator'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from './tab-context-menu-opening'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { BrowserFavicon } from '@/components/browser-favicon'
 import { AgentCursorGlyph } from '../browser-pane/agent-cursor/agent-cursor-glyph'
-import { useBrowserAgentDrivesAnyPage } from '../browser-pane/agent-cursor/browser-agent-activity-state'
+import {
+  useBrowserAgentControllerHost,
+  useBrowserAgentDrivesAnyPage
+} from '../browser-pane/agent-cursor/browser-agent-activity-state'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
 import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 
-export function formatBrowserTabUrlLabel(url: string): string {
+export function formatBrowserTabUrlLabel(url: string, t: Translate = translate): string {
   if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {
-    return translate('auto.components.browser.pane.BrowserPane.366bf5d62c', 'New Tab')
+    return t('auto.components.browser.pane.BrowserPane.366bf5d62c', 'New Tab')
   }
   try {
     const parsed = new URL(url)
@@ -49,19 +54,19 @@ export function formatBrowserTabUrlLabel(url: string): string {
   }
 }
 
-export function getBrowserTabLabel(tab: BrowserTabState): string {
+export function getBrowserTabLabel(tab: BrowserWorkspace, t?: Translate): string {
   if (
     !tab.title ||
     tab.title === tab.url ||
     tab.title === ORCA_BROWSER_BLANK_URL ||
     tab.title === 'about:blank'
   ) {
-    return formatBrowserTabUrlLabel(tab.url)
+    return formatBrowserTabUrlLabel(tab.url, t)
   }
   return tab.title || tab.url
 }
 
-function isBlankBrowserTab(tab: BrowserTabState): boolean {
+function isBlankBrowserTab(tab: BrowserWorkspace): boolean {
   return tab.url === ORCA_BROWSER_BLANK_URL || tab.url === 'about:blank'
 }
 
@@ -81,7 +86,7 @@ export default function BrowserTab({
   dropIndicator,
   includeTopTabBorder = true
 }: {
-  tab: BrowserTabState
+  tab: BrowserWorkspace
   isActive: boolean
   isPinned: boolean
   hasTabsToRight: boolean
@@ -99,6 +104,7 @@ export default function BrowserTab({
   dropIndicator?: DropIndicator
   includeTopTabBorder?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   // Keep dragged tabs anchored; only the insertion bar moves.
   const { attributes, listeners, setNodeRef } = useSortable({
     id: tab.id,
@@ -115,7 +121,7 @@ export default function BrowserTab({
   } catch {
     // invalid URL — leave disabled
   }
-  const tabLabel = getBrowserTabLabel(tab)
+  const tabLabel = getBrowserTabLabel(tab, t)
   const audible = useAppStore((s) =>
     (s.browserPagesByWorkspace[tab.id] ?? []).some((page) => s.browserAudiblePageIds[page.id])
   )
@@ -124,10 +130,14 @@ export default function BrowserTab({
   const showAudioControl = audible || audioMuted
   const setBrowserTabAudioMuted = useAppStore((s) => s.setBrowserTabAudioMuted)
   const toggleAudioMutedLabel = audioMuted
-    ? translate('components.tab.bar.BrowserTab.unmuteTab', 'Unmute Tab')
-    : translate('components.tab.bar.BrowserTab.muteTab', 'Mute Tab')
-  const agentDriving = useBrowserAgentDrivesAnyPage(tab.pageIds ?? [tab.activePageId])
-  const agentDrivingLabel = translate('browserTab.agentDriving', 'An agent is using this page')
+    ? t('components.tab.bar.BrowserTab.unmuteTab', 'Unmute Tab')
+    : t('components.tab.bar.BrowserTab.muteTab', 'Mute Tab')
+  const tabPageIds = tab.pageIds ?? [tab.activePageId]
+  const agentDriving = useBrowserAgentDrivesAnyPage(tabPageIds)
+  const controllerHost = useBrowserAgentControllerHost(tabPageIds)
+  const agentDrivingLabel = controllerHost
+    ? t('browserTab.controlledByHost', 'Controlled by {{host}}', { host: controllerHost })
+    : t('browserTab.agentDriving', 'An agent is using this page')
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
@@ -255,13 +265,14 @@ export default function BrowserTab({
           ) : (
             <TabHoverCard
               title={tabLabel}
+              showWhenUnclipped={controllerHost !== null}
               icon={<BrowserFavicon faviconUrl={tab.faviconUrl} className="size-4" />}
               programName={
                 agentDriving
                   ? agentDrivingLabel
                   : isBlankBrowserTab(tab)
-                    ? translate('tabHoverCard.browser', 'Browser')
-                    : formatBrowserTabUrlLabel(redactKagiSessionToken(tab.url))
+                    ? t('tabHoverCard.browser', 'Browser')
+                    : formatBrowserTabUrlLabel(redactKagiSessionToken(tab.url), t)
               }
             >
               {tabRoot}
@@ -284,7 +295,7 @@ export default function BrowserTab({
         {onDuplicate ? (
           <>
             <ContextMenuItem inset onSelect={onDuplicate}>
-              {translate('auto.components.tab.bar.BrowserTab.5d6e89891f', 'Duplicate Tab')}
+              {t('auto.components.tab.bar.BrowserTab.5d6e89891f', 'Duplicate Tab')}
             </ContextMenuItem>
             <ContextMenuSeparator />
           </>
@@ -292,8 +303,8 @@ export default function BrowserTab({
         <ContextMenuItem onSelect={onTogglePin}>
           {isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
           {isPinned
-            ? translate('auto.components.tab.bar.BrowserTab.c5aaee8c39', 'Unpin Tab')
-            : translate('auto.components.tab.bar.BrowserTab.911542656f', 'Pin Tab')}
+            ? t('auto.components.tab.bar.BrowserTab.c5aaee8c39', 'Unpin Tab')
+            : t('auto.components.tab.bar.BrowserTab.911542656f', 'Pin Tab')}
         </ContextMenuItem>
         {showAudioControl ? (
           <ContextMenuItem inset onSelect={() => setBrowserTabAudioMuted(tab.id, !audioMuted)}>
@@ -304,10 +315,10 @@ export default function BrowserTab({
         <ContextMenuSeparator />
         <ContextMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
           <X className="size-3.5" />
-          {translate('auto.components.tab.bar.BrowserTab.1611a1324b', 'Close')}
+          {t('auto.components.tab.bar.BrowserTab.1611a1324b', 'Close')}
         </ContextMenuItem>
         <ContextMenuItem inset onSelect={onCloseOthers} disabled={tabCount <= 1}>
-          {translate('components.tab.bar.BrowserTab.closeOthers', 'Close Others')}
+          {t('components.tab.bar.BrowserTab.closeOthers', 'Close Others')}
         </ContextMenuItem>
         <CloseSplitPaneMenuItem menuKind="context" onCloseSplitPane={onCloseSplitPane} />
         <ContextMenuItem
@@ -315,7 +326,7 @@ export default function BrowserTab({
           onSelect={() => void window.api.shell.openUrl(openInBrowserUrl)}
           disabled={!isHttpUrl}
         >
-          {translate('auto.components.tab.bar.BrowserTab.6e0bc8f3a8', 'Open In Browser')}
+          {t('auto.components.tab.bar.BrowserTab.6e0bc8f3a8', 'Open In Browser')}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

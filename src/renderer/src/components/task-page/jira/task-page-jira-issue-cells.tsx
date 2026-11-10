@@ -1,8 +1,9 @@
 import React from 'react'
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { getIntlLocale, translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import type { JiraIssue } from '../../../../../shared/jira/jira-types'
 import {
   formatJiraEstimate,
@@ -13,12 +14,12 @@ import { getJiraPriorityTone } from './task-page-jira-status-tone'
 
 const MUTED_CELL = 'block truncate text-[12px] text-muted-foreground'
 
-export function noPriorityLabel(): string {
-  return translate('auto.components.TaskPage.713179dfdc', 'No priority')
+export function noPriorityLabel(t: Translate = translate): string {
+  return t('auto.components.TaskPage.713179dfdc', 'No priority')
 }
 
-export function unassignedLabel(): string {
-  return translate('auto.components.TaskPage.42a9160321', 'Unassigned')
+export function unassignedLabel(t: Translate = translate): string {
+  return t('auto.components.TaskPage.42a9160321', 'Unassigned')
 }
 
 export function JiraPriorityText({
@@ -28,9 +29,10 @@ export function JiraPriorityText({
   issue: JiraIssue
   className?: string
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <span className={cn(getJiraPriorityTone(issue.priority?.name), className)}>
-      {issue.priority?.name ?? noPriorityLabel()}
+      {issue.priority?.name ?? noPriorityLabel(t)}
     </span>
   )
 }
@@ -58,6 +60,7 @@ function ParentCell({ issue }: { issue: JiraIssue }): React.JSX.Element {
 }
 
 function AssigneeCell({ issue }: { issue: JiraIssue }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex min-w-0 items-center gap-2 text-[12px] text-muted-foreground">
       {issue.assignee?.avatarUrl ? (
@@ -71,7 +74,7 @@ function AssigneeCell({ issue }: { issue: JiraIssue }): React.JSX.Element {
           {issue.assignee?.displayName?.slice(0, 1) ?? '-'}
         </span>
       )}
-      <span className="truncate">{issue.assignee?.displayName ?? unassignedLabel()}</span>
+      <span className="truncate">{issue.assignee?.displayName ?? unassignedLabel(t)}</span>
     </div>
   )
 }
@@ -88,6 +91,7 @@ export function JiraIssueCell({
   formatUpdatedAt: (updatedAt: string) => string
   getStatusTone: (categoryKey: string) => string
 }): React.JSX.Element | null {
+  const intlLocale = useIntlLocale()
   switch (column) {
     case 'status':
       return (
@@ -119,13 +123,13 @@ export function JiraIssueCell({
     case 'originalEstimate':
       return (
         <span className={cn(MUTED_CELL, 'text-right tabular-nums')}>
-          {formatJiraEstimate(issue.originalEstimateSeconds)}
+          {formatJiraEstimate(issue.originalEstimateSeconds, intlLocale)}
         </span>
       )
     case 'remainingEstimate':
       return (
         <span className={cn(MUTED_CELL, 'text-right tabular-nums')}>
-          {formatJiraEstimate(issue.remainingEstimateSeconds)}
+          {formatJiraEstimate(issue.remainingEstimateSeconds, intlLocale)}
         </span>
       )
     case 'updated':
@@ -137,7 +141,7 @@ export function JiraIssueCell({
             </div>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={6}>
-            {new Date(issue.updatedAt).toLocaleString(getIntlLocale())}
+            {new Date(issue.updatedAt).toLocaleString(intlLocale)}
           </TooltipContent>
         </Tooltip>
       )

@@ -1,4 +1,4 @@
-import type { TaskStatus } from '../runtime/orchestration/types'
+import type { TaskStatus } from '../runtime/orchestration/db/orchestration-records'
 import type {
   WorkflowMailMessage,
   WorkflowOrcaDispatchSnapshot,

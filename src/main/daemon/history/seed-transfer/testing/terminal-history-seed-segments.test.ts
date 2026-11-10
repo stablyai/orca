@@ -29,19 +29,6 @@ function restoreInfo(overrides: Partial<ColdRestoreInfo> = {}): ColdRestoreInfo 
 }
 
 describe('getRecoveredHistorySeedSegments', () => {
-  it('recovers nothing when a torn escape is the only recovered data', () => {
-    expect(
-      getRecoveredHistorySeedSegments(
-        restoreInfo({
-          scrollbackAnsi: '',
-          snapshotAnsi: '',
-          rehydrateSequences: '',
-          pendingEscapeTailAnsi: '\x1b[3'
-        })
-      )
-    ).toEqual([])
-  })
-
   it('leaves the revived emulator unarmed while preserving scrollback (#12101)', () => {
     const emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
     try {

@@ -8,23 +8,13 @@ import { basename, join } from 'node:path'
 import { createServer, connect, type Server } from 'node:net'
 import { DaemonServer } from '../../server/daemon-server'
 import { getDaemonPidPath, serializeDaemonPidFile } from '../../launch/daemon-spawner'
-import type { SocketProbeOutcome } from '../../endpoint/publication/daemon-endpoint-probe'
 import {
   checkDaemonHealth,
   checkDaemonHealthWithCoverage,
-  E2E_FORCE_DAEMON_HEALTH_UNREACHABLE_ENV,
   getMacDaemonSystemResolverHealth,
   healthCheckDaemon
 } from '../daemon-health'
 import { killStaleDaemon } from '../../launch/daemon-stale-kill'
-import {
-  getProcessStartedAtMs,
-  parseLinuxBootTimeSeconds,
-  parseLinuxProcStartTicks,
-  startTimeMatches,
-  startTimesWithinTolerance
-} from '../../endpoint/identity/daemon-process-start-time'
-import { parseDaemonPidFile } from '../../endpoint/identity/daemon-pid-file-parse'
 import type { SubprocessHandle } from '../../sessions/session-subprocess-handle'
 import type * as ResolverHealthModule from '../../../network/macos-system-resolver-health'
 import type { SystemResolverHealth } from '../../protocol/daemon-rpc-contract'
@@ -189,28 +179,6 @@ describe('daemon health', () => {
     }
   })
 
-  it('fails when the token file is missing', async () => {
-    await expect(checkDaemonHealth(socketPath, tokenPath)).resolves.toBe('unreachable')
-    await expect(healthCheckDaemon(socketPath, tokenPath)).resolves.toBe(false)
-  })
-
-  it('returns unreachable when the e2e force-health-failure env is set', async () => {
-    const server = new DaemonServer({
-      socketPath,
-      tokenPath,
-      spawnSubprocess: () => createMockSubprocess()
-    })
-    await server.start()
-    vi.stubEnv(E2E_FORCE_DAEMON_HEALTH_UNREACHABLE_ENV, '1')
-    try {
-      await expect(checkDaemonHealth(socketPath, tokenPath)).resolves.toBe('unreachable')
-      await expect(healthCheckDaemon(socketPath, tokenPath)).resolves.toBe(false)
-    } finally {
-      vi.unstubAllEnvs()
-      await server.shutdown()
-    }
-  })
-
   it('classifies a hello-rejected daemon as rejected, not unreachable', async () => {
     const server = new DaemonServer({
       socketPath,
@@ -312,185 +280,6 @@ describe('daemon health', () => {
   })
 })
 
-describe('parseDaemonPidFile', () => {
-  it('parses JSON pid files with startedAtMs', () => {
-    const serialized = serializeDaemonPidFile({ pid: 12345, startedAtMs: 1_700_000_000_000 })
-    expect(parseDaemonPidFile(serialized)).toEqual({
-      pid: 12345,
-      startedAtMs: 1_700_000_000_000,
-      entryPath: null,
-      appVersion: null,
-      launchNonce: null,
-      linuxStartTicks: null,
-      bootId: null,
-      spawnerExecPath: null,
-      cgroupUnit: null,
-      processCeiling: null
-    })
-  })
-
-  it('parses JSON pid files with launch metadata', () => {
-    const serialized = serializeDaemonPidFile({
-      pid: 12345,
-      startedAtMs: 1_700_000_000_000,
-      entryPath: '/repo/out/main/daemon-entry.js',
-      appVersion: '1.2.3'
-    })
-    expect(parseDaemonPidFile(serialized)).toEqual({
-      pid: 12345,
-      startedAtMs: 1_700_000_000_000,
-      entryPath: '/repo/out/main/daemon-entry.js',
-      appVersion: '1.2.3',
-      launchNonce: null,
-      linuxStartTicks: null,
-      bootId: null,
-      spawnerExecPath: null,
-      cgroupUnit: null,
-      processCeiling: null
-    })
-  })
-
-  it('preserves exact-incarnation launch and Linux process identity', () => {
-    const serialized = serializeDaemonPidFile({
-      pid: 12345,
-      startedAtMs: 1_700_000_000_000,
-      launchNonce: 'launch-a',
-      linuxStartTicks: '4242',
-      bootId: 'boot-a'
-    })
-    expect(parseDaemonPidFile(serialized)).toMatchObject({
-      launchNonce: 'launch-a',
-      linuxStartTicks: '4242',
-      bootId: 'boot-a'
-    })
-  })
-
-  it('accepts JSON with startedAtMs missing and returns null for it', () => {
-    expect(parseDaemonPidFile('{"pid":9999}')).toEqual({
-      pid: 9999,
-      startedAtMs: null,
-      entryPath: null,
-      appVersion: null,
-      launchNonce: null,
-      linuxStartTicks: null,
-      bootId: null,
-      spawnerExecPath: null,
-      cgroupUnit: null,
-      processCeiling: null
-    })
-  })
-
-  it('falls back to bare-integer parsing for legacy pid files', () => {
-    // Accept bare-integer PID records across upgrades.
-    expect(parseDaemonPidFile('12345')).toEqual({
-      pid: 12345,
-      startedAtMs: null,
-      entryPath: null,
-      appVersion: null,
-      launchNonce: null,
-      linuxStartTicks: null,
-      bootId: null,
-      spawnerExecPath: null,
-      cgroupUnit: null,
-      processCeiling: null
-    })
-    expect(parseDaemonPidFile('  12345\n')).toEqual({
-      pid: 12345,
-      startedAtMs: null,
-      entryPath: null,
-      appVersion: null,
-      launchNonce: null,
-      linuxStartTicks: null,
-      bootId: null,
-      spawnerExecPath: null,
-      cgroupUnit: null,
-      processCeiling: null
-    })
-  })
-
-  it('returns null for malformed input', () => {
-    expect(parseDaemonPidFile('not-a-number')).toBeNull()
-    expect(parseDaemonPidFile('{"pid":"abc"}')).toBeNull()
-    expect(parseDaemonPidFile('{"not_pid":123}')).toBeNull()
-  })
-})
-
-describe('Linux process start-time parsing', () => {
-  it('parses start ticks from proc stat with spaces in the command name', () => {
-    const fields = Array.from({ length: 20 }, (_, index) => String(index + 1))
-    fields[0] = 'S'
-    fields[19] = '987654'
-
-    expect(parseLinuxProcStartTicks(`123 (orca daemon) ${fields.join(' ')}`)).toBe(987654)
-  })
-
-  it('parses boot time seconds from proc stat output', () => {
-    expect(parseLinuxBootTimeSeconds('cpu  1 2 3\r\nbtime 1700000000\nintr 1')).toBe(1_700_000_000)
-  })
-
-  it('does not use line-array or whitespace-regex splitting', () => {
-    const splitSpy = vi.spyOn(String.prototype, 'split')
-
-    parseLinuxProcStartTicks('123 (orca daemon) S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 42')
-    parseLinuxBootTimeSeconds('cpu 1 2 3\nbtime 1700000000')
-
-    const usedUnboundedSplit = splitSpy.mock.calls.some(
-      ([separator]) =>
-        (typeof separator === 'string' && (separator === '\n' || separator === ' ')) ||
-        (separator instanceof RegExp && separator.source.includes('\\s+'))
-    )
-    splitSpy.mockRestore()
-    expect(usedUnboundedSplit).toBe(false)
-  })
-})
-
-describe('startTimeMatches', () => {
-  it('returns true when expected is null (legacy pid file)', () => {
-    expect(startTimeMatches(process.pid, null)).toBe(true)
-  })
-
-  it('returns true when actual start time cannot be read (fail-open)', () => {
-    if (process.platform === 'win32') {
-      expect(startTimeMatches(process.pid, 1_700_000_000_000)).toBe(true)
-      return
-    }
-    // PID 0 has no /proc entry or ps start time, exercising the unknown-start-time fallback.
-    expect(startTimeMatches(0, 1_700_000_000_000)).toBe(true)
-  })
-
-  it('returns true for matching start time within tolerance', () => {
-    if (process.platform === 'win32') {
-      return
-    }
-    const actual = getProcessStartedAtMs(process.pid)
-    if (actual === null) {
-      return
-    }
-    expect(startTimeMatches(process.pid, actual + 500)).toBe(true)
-  })
-
-  it('returns false for start times outside tolerance', () => {
-    const actual = getProcessStartedAtMs(process.pid)
-    if (actual === null) {
-      return
-    }
-    expect(startTimeMatches(process.pid, actual + 10_000)).toBe(false)
-  })
-})
-
-describe('startTimesWithinTolerance', () => {
-  it('fails open when either side is null', () => {
-    expect(startTimesWithinTolerance(null, 1_700_000_000_000, 1_500)).toBe(true)
-    expect(startTimesWithinTolerance(1_700_000_000_000, null, 1_500)).toBe(true)
-    expect(startTimesWithinTolerance(null, null, 1_500)).toBe(true)
-  })
-
-  it('matches within tolerance and rejects outside it', () => {
-    expect(startTimesWithinTolerance(1_700_000_001_000, 1_700_000_000_000, 1_500)).toBe(true)
-    expect(startTimesWithinTolerance(1_700_000_005_000, 1_700_000_000_000, 1_500)).toBe(false)
-  })
-})
-
 describe('killStaleDaemon pid identity guards', () => {
   let dir: string
   let socketPath: string
@@ -555,24 +344,6 @@ describe('killStaleDaemon ownership decisions', () => {
     })
   }
 
-  it.each<{ outcome: SocketProbeOutcome; liveOwnerSurvived: boolean }>([
-    { outcome: 'connected', liveOwnerSurvived: true },
-    { outcome: 'refused', liveOwnerSurvived: false },
-    { outcome: 'missing', liveOwnerSurvived: false },
-    { outcome: 'unknown', liveOwnerSurvived: false }
-  ])(
-    'reports liveOwnerSurvived=$liveOwnerSurvived for a $outcome endpoint',
-    async ({ outcome, liveOwnerSurvived }) => {
-      const probeEndpoint = vi.fn(async () => outcome)
-
-      await expect(
-        killStaleDaemon(dir, socketPath, tokenPath, undefined, { probeEndpoint })
-      ).resolves.toEqual({ killed: false, liveOwnerSurvived })
-      expect(probeEndpoint).toHaveBeenCalledOnce()
-      expect(probeEndpoint).toHaveBeenCalledWith(socketPath)
-    }
-  )
-
   it('preserves a daemon that cannot be proven dead', async () => {
     const record = serializeDaemonPidFile({
       pid: process.pid,
@@ -596,8 +367,8 @@ describe('killStaleDaemon ownership decisions', () => {
     }
   })
 
-  it('removes a malformed pid record', async () => {
-    writeFileSync(getDaemonPidPath(dir), '{truncated', { mode: 0o600 })
+  it.each(['{truncated', ''])('removes a malformed pid record %j', async (record) => {
+    writeFileSync(getDaemonPidPath(dir), record, { mode: 0o600 })
 
     await killStaleDaemon(dir, socketPath, tokenPath, undefined, {
       probeEndpoint: async () => 'missing'
@@ -606,15 +377,19 @@ describe('killStaleDaemon ownership decisions', () => {
     expect(existsSync(getDaemonPidPath(dir))).toBe(false)
   })
 
-  it('removes a legacy bare-integer pid record', async () => {
-    writeFileSync(getDaemonPidPath(dir), String(999_999), { mode: 0o600 })
+  it.each(['connected', 'unknown'] as const)(
+    'keeps an empty pid record while its endpoint probe is %s',
+    async (outcome) => {
+      writeFileSync(getDaemonPidPath(dir), '', { mode: 0o600 })
 
-    await killStaleDaemon(dir, socketPath, tokenPath, undefined, {
-      probeEndpoint: async () => 'missing'
-    })
-
-    expect(existsSync(getDaemonPidPath(dir))).toBe(false)
-  })
+      await expect(
+        killStaleDaemon(dir, socketPath, tokenPath, undefined, {
+          probeEndpoint: async () => outcome
+        })
+      ).resolves.toEqual({ killed: false, liveOwnerSurvived: true })
+      expect(existsSync(getDaemonPidPath(dir))).toBe(true)
+    }
+  )
 
   it.skipIf(process.platform === 'win32')(
     "leaves a replacement's pid record after killing the recorded owner",

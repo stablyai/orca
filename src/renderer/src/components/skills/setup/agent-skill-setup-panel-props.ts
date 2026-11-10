@@ -1,10 +1,10 @@
 import type { BundledSkillPlan } from '../../../../../shared/bundled-skill-plan'
-import type { BundledSkillTarget } from '@/lib/bundled-skill-target'
+import type { BundledSkillTarget } from '@/lib/skills/runtime/bundled-skill-target'
 import type { ComponentProps, ReactNode } from 'react'
-import type { LocalAgentRuntime } from '../../../lib/skill-runtime-command'
+import type { LocalAgentRuntime } from '../../../lib/skills/runtime/skill-runtime-command'
 import type { Button } from '../../ui/button'
 
-type AgentSkillSetupPanelVariant = 'card' | 'inline'
+type AgentSkillSetupPanelVariant = 'card' | 'inline' | 'row'
 
 export type AgentSkillSetupPanelProps = {
   title: string

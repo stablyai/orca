@@ -1,5 +1,8 @@
+import { ClaudePluginInputError } from '../claude-plugin-ui'
 import { claudePromptCardWritten } from '../claude-child-work-evidence'
 import type {
+  ClaudeAcquisitionAttempt,
+  ClaudeSessionExit,
   ClaudeSession,
   ClaudeStructuredSessionAdapterDeps,
   ClaudeStructuredSessionEvent
@@ -22,7 +25,12 @@ export function emitClaudeStructuredSessionEvent({
   deps,
   publishChildWork
 }: ClaudeEventDelivery): void {
-  if (event.type === 'ended') {
+  if (event.type === 'retiring') {
+    // Retire host input before publishing the logical failure to subscribers.
+    deps.onEvent?.(event)
+  }
+  if (event.type === 'ended' || event.type === 'retiring') {
+    session?.delivery.dispose()
     session?.childWork.clear()
     session?.backgroundTasks.clear()
   } else if (event.type === 'message') {
@@ -36,8 +44,31 @@ export function emitClaudeStructuredSessionEvent({
     session.events?.publish()
   }
   session?.translator?.handle(event)
-  deps.onEvent?.(event)
+  if (event.type !== 'retiring') {
+    deps.onEvent?.(event)
+  }
   publishChildWork(event.sessionId, session, event.type === 'message' ? event.message : null)
   // Child waiting requires the card to be durable.
   void claudePromptCardWritten(session, event)?.then(() => publishChildWork(event.sessionId))
+}
+
+export function deliverClaudeConnectionEvent(
+  sessions: ReadonlyMap<string, ClaudeSession>,
+  exits: ReadonlyMap<string, ClaudeSessionExit>,
+  attempt: ClaudeAcquisitionAttempt,
+  sessionId: string,
+  event: () => void,
+  payload?: unknown
+): void {
+  attempt.delivery.deliver(() => {
+    if (attempt.cancelled || exits.get(sessionId)?.error instanceof ClaudePluginInputError) {
+      return
+    }
+    if (
+      sessions.get(sessionId)?.connection === attempt.connection ||
+      exits.get(sessionId)?.connection === attempt.connection
+    ) {
+      event()
+    }
+  }, payload)
 }

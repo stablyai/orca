@@ -10,7 +10,7 @@ import {
   CommandList
 } from '@/components/ui/command'
 import { Switch } from '@/components/ui/switch'
-import { discoverSkillsForRuntimeTarget } from '@/runtime/runtime-skills-client'
+import { discoverSkillsForRuntimeTarget } from '@/runtime/skills/configuration/runtime-skills-client'
 import type { DiscoveredSkill } from '../../../../../shared/skills'
 import {
   WORKFLOW_TOOLS,

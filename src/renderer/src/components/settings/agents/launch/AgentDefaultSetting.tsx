@@ -1,10 +1,11 @@
 import { Check } from 'lucide-react'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 
-import { type AgentCatalogEntry, AgentIcon } from '@/lib/agent-catalog'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
-import { SettingsSubsectionHeader } from '../../form-controls/SettingsFormControls'
+import type { AgentCatalogEntry } from '@/lib/agent-catalog/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
 function DefaultAgentPill({
   active,
@@ -42,7 +43,8 @@ export function AgentDefaultSetting({
   catalog,
   description,
   onSetDefault,
-  defaultOpensAsChat = false
+  defaultOpensAsChat = false,
+  permissions
 }: {
   defaultAgent: TuiAgent | 'blank' | null
   detectedIds: Set<string> | null
@@ -52,7 +54,9 @@ export function AgentDefaultSetting({
   catalog: AgentCatalogEntry[]
   description: string
   onSetDefault: (agent: TuiAgent | 'blank' | null) => void
+  permissions: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const storedDefaultAgent =
     defaultAgent !== null && defaultAgent !== 'blank'
       ? catalog.find((agent) => agent.id === defaultAgent)
@@ -63,18 +67,17 @@ export function AgentDefaultSetting({
       : enabledDetectedAgents
 
   return (
-    <section className="space-y-4">
-      <SettingsSubsectionHeader
-        title={translate('auto.components.settings.AgentsPane.385212c7a1', 'Default Agent')}
-        description={description}
-      />
-      <div className="flex flex-wrap gap-2">
+    <SettingsGroup
+      title={t('auto.components.settings.AgentsPane.3bddd54c9e', 'Default agent')}
+      description={description}
+    >
+      <div className="flex flex-wrap gap-2 py-4">
         <DefaultAgentPill
           active={defaultAgent === null}
           onClick={() => onSetDefault(defaultAgent === null ? 'blank' : null)}
         >
           {defaultAgent === null && <Check className="size-3.5" />}
-          {translate('auto.components.settings.AgentsPane.92033495ff', 'Auto')}
+          {t('auto.components.settings.AgentsPane.92033495ff', 'Auto')}
         </DefaultAgentPill>
         {defaultAgentPills.map((agent) => {
           const isActive = defaultAgent === agent.id
@@ -87,7 +90,7 @@ export function AgentDefaultSetting({
               onClick={() => onSetDefault(isActive ? 'blank' : agent.id)}
               title={
                 isUndetected
-                  ? translate(
+                  ? t(
                       'auto.components.settings.AgentsPane.storedDefaultUndetected',
                       'Saved as your default, but not detected right now'
                     )
@@ -101,6 +104,9 @@ export function AgentDefaultSetting({
           )
         })}
       </div>
-    </section>
+      <div data-settings-row="" className="py-3">
+        {permissions}
+      </div>
+    </SettingsGroup>
   )
 }

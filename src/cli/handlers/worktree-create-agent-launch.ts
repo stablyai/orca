@@ -1,5 +1,9 @@
 // Use agent.launch for surface/model/effort; older hosts fall back to the create startup terminal.
 
+import {
+  folderSetupUnsupportedWarning,
+  withFolderSetupSupportWarning
+} from './folder-setup-support-warning'
 import type { AgentLaunchResult } from '../../shared/agent-launch/contracts/agent-launch-intent'
 import {
   AGENT_LAUNCH_LOCAL_PRESENTATION_RUNTIME_CAPABILITY,
@@ -23,7 +27,7 @@ import { withCliAgentLaunchRecovery } from '../agent-launch-recovery'
 
 type WorktreeAgentLaunchResult = Pick<
   RuntimeWorktreeCreateResult,
-  'lineage' | 'workspaceLineage'
+  'lineage' | 'workspaceLineage' | 'crossStoreLineage'
 > & {
   /** Absent only when the host could not show the worktree it just created. */
   worktree?: RuntimeWorktreeRecord
@@ -65,7 +69,7 @@ export async function createWorktreeWithAgent(args: {
       startupPrompt: launch.prompt?.text ?? '',
       launchSource: 'cli'
     }
-    const created = await withSetupDecisionRecovery(
+    const response = await withSetupDecisionRecovery(
       withCliAgentLaunchRecovery(
         client.call<RuntimeWorktreeCreateResult>('worktree.create', params),
         {
@@ -74,6 +78,10 @@ export async function createWorktreeWithAgent(args: {
         }
       )
     )
+    const created = {
+      ...response,
+      result: await withFolderSetupSupportWarning(client, response.result, create)
+    }
     printHookWarning(created.result, json)
     printLineageSummary(created.result, json)
     printResult(created, json, formatWorktreeShow)
@@ -93,12 +101,22 @@ export async function createWorktreeWithAgent(args: {
     launch.operationId !== undefined
   )
   const worktree = await showLaunchedWorktree(client, launched.result.worktreeId)
+  const setupWarning = await folderSetupUnsupportedWarning(
+    client,
+    launched.result.worktreeId,
+    create
+  )
+  if (setupWarning) {
+    // stderr keeps --json output parseable while still reporting the skipped setup.
+    console.error(`warning: ${setupWarning}`)
+  }
   const result: WorktreeAgentLaunchResult = {
     ...(worktree
       ? {
           worktree,
           lineage: worktree.lineage,
-          workspaceLineage: worktree.workspaceLineage ?? null
+          workspaceLineage: worktree.workspaceLineage ?? null,
+          crossStoreLineage: worktree.crossStoreLineage ?? null
         }
       : { lineage: null }),
     launch: launched.result

@@ -1,4 +1,4 @@
-import type { TaskStatus } from '../runtime/orchestration/types'
+import type { TaskStatus } from '../runtime/orchestration/db/orchestration-records'
 import { isWorkflowJsonRecord } from '../../shared/workflow/workflow-json-record'
 
 /** Defensive readers for Orca receipts; a missing field reads as unknown, never as success. */

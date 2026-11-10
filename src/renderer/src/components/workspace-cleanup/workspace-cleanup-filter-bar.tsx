@@ -5,8 +5,8 @@ import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   useAppliedWorkspaceCleanupFilters,
   WorkspaceCleanupAppliedFilterChips
@@ -52,9 +52,10 @@ export function WorkspaceCleanupFilterBar({
   onClearFilters: () => void
   onClearAppliedFilter: (filter: WorkspaceCleanupAppliedFilter) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const { filters, totalCount } = facetProps
   const applied = useAppliedWorkspaceCleanupFilters(filters)
-  const filtersLabel = translate('components.workspace.cleanup.browse.filters', 'Filters')
+  const filtersLabel = t('components.workspace.cleanup.browse.filters', 'Filters')
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2.5">
       <div className="relative w-[28rem] min-w-[180px] shrink">
@@ -62,14 +63,11 @@ export function WorkspaceCleanupFilterBar({
         <Input
           value={filters.query}
           onChange={(event) => onQueryChange(event.target.value)}
-          placeholder={translate(
+          placeholder={t(
             'components.workspace.cleanup.browse.searchPlaceholder',
             'Search name, repo, branch, path, host'
           )}
-          aria-label={translate(
-            'components.workspace.cleanup.browse.searchLabel',
-            'Search workspaces'
-          )}
+          aria-label={t('components.workspace.cleanup.browse.searchLabel', 'Search workspaces')}
           adornment="trailing"
           className="h-8 pl-8 text-xs"
         />
@@ -105,7 +103,7 @@ export function WorkspaceCleanupFilterBar({
             </ScrollArea>
             <div className="flex items-center justify-between gap-2 border-t border-border px-3 py-2">
               <span className="text-[11px] text-muted-foreground">
-                {translate(
+                {t(
                   'components.workspace.cleanup.browse.showingCount',
                   'Showing {{value0}} of {{value1}}',
                   { value0: matchedCount, value1: totalCount }
@@ -118,7 +116,7 @@ export function WorkspaceCleanupFilterBar({
                 onClick={onClearFilters}
               >
                 <RotateCcw className="size-3.5" />
-                {translate('components.workspace.cleanup.browse.clearFilters', 'Clear filters')}
+                {t('components.workspace.cleanup.browse.clearFilters', 'Clear filters')}
               </Button>
             </div>
           </PopoverContent>
@@ -134,19 +132,15 @@ export function WorkspaceCleanupFilterBar({
           </>
         ) : null}
         {hasActiveFilters
-          ? translate(
+          ? t(
               'components.workspace.cleanup.browse.showingCount',
               'Showing {{value0}} of {{value1}}',
               { value0: matchedCount, value1: totalCount }
             )
-          : translate(
-              'components.workspace.cleanup.browse.workspaceCount',
-              '{{count}} workspaces',
-              {
-                count: totalCount,
-                defaultValue_one: '{{count}} workspace'
-              }
-            )}
+          : t('components.workspace.cleanup.browse.workspaceCount', '{{count}} workspaces', {
+              count: totalCount,
+              defaultValue_one: '{{count}} workspace'
+            })}
       </span>
 
       {/* Why out here and not only in the popover: a filter narrowing the list must be
@@ -154,7 +148,7 @@ export function WorkspaceCleanupFilterBar({
       {hasActiveFilters ? (
         <Button variant="ghost" size="sm" className="shrink-0" onClick={onClearFilters}>
           <RotateCcw className="size-3.5" />
-          {translate('components.workspace.cleanup.browse.clearFilters', 'Clear filters')}
+          {t('components.workspace.cleanup.browse.clearFilters', 'Clear filters')}
         </Button>
       ) : null}
 
@@ -169,19 +163,20 @@ function SizeScanButton({
   totalCount,
   onRun
 }: WorkspaceCleanupSizeScanAction): React.JSX.Element {
-  const idleLabel = translate(
+  const t = useTranslate()
+  const idleLabel = t(
     'components.workspace.cleanup.browse.measureSizesTitle',
     'Scan workspace sizes'
   )
   const label = !scanning
     ? idleLabel
     : totalCount > 0
-      ? translate(
+      ? t(
           'components.workspace.cleanup.browse.measuringSizesProgress',
           'Scanning {{value0}}/{{value1}}',
           { value0: scannedCount, value1: totalCount }
         )
-      : translate('components.workspace.cleanup.browse.measuringSizes', 'Scanning sizes')
+      : t('components.workspace.cleanup.browse.measuringSizes', 'Scanning sizes')
   return (
     <Button variant="link" size="inline" className="shrink-0" disabled={scanning} onClick={onRun}>
       {/* Reserved spinner slot keeps the link from shifting when a scan starts. */}
@@ -201,10 +196,11 @@ function SizeScanButton({
 
 // Reserve the spinner's slot so the count beside it stays put while git checks finish.
 function GitCheckIndicator({ pendingCount }: { pendingCount: number }): React.JSX.Element {
+  const t = useTranslate()
   if (pendingCount === 0) {
     return <span className="size-3.5" aria-hidden="true" />
   }
-  const label = translate(
+  const label = t(
     'components.workspace.cleanup.browse.checkingGit',
     'Checking git status: {{value0}} left',
     { value0: pendingCount }

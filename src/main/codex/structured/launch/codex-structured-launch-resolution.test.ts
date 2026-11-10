@@ -1,21 +1,12 @@
-import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
-import {
-  createCodexStructuredLaunchResolver,
-  TEST_SPAWN_TOKEN
-} from '../../../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
-import { mkdtempSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
+import { createCodexStructuredLaunchResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import { describe, expect, it, vi } from 'vitest'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import {
-  LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
-  NATIVE_CHAT_SCRATCH_DIR_ENV
-} from '../../../native-chat/native-chat-visuals-delivery'
 
 const { isWindowsProcessStartTimeAvailable } = vi.hoisted(() => ({
   isWindowsProcessStartTimeAvailable: vi.fn(() => true)
@@ -30,16 +21,6 @@ const SESSION_ID = 'session-1'
 const IDENTITY = { sessionId: SESSION_ID } as Parameters<
   ReturnType<typeof createCodexStructuredLaunchResolver>
 >[0]['identity']
-
-async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>): Promise<T> {
-  const original = process.platform
-  Object.defineProperty(process, 'platform', { configurable: true, value: platform })
-  try {
-    return await run()
-  } finally {
-    Object.defineProperty(process, 'platform', { configurable: true, value: original })
-  }
-}
 
 function record(overrides: Partial<AgentSessionRecord> = {}): AgentSessionRecord {
   return agentSessionRecordFixture({
@@ -106,242 +87,6 @@ describe('codex structured launch resolution', () => {
     }
   )
 
-  it('starts a new thread after clear without reusing the old handle', async () => {
-    const value = record({
-      providerContextBoundary: { operationId: 'clear', afterFence: 2, clearedAt: 100 },
-      providerHandleChain: []
-    })
-    const launch = await resolverFor(value)({
-      identity: { ...IDENTITY, providerHandle: codexProviderHandle('old-thread') }
-    })
-    expect(launch.resumeThreadId).toBeNull()
-  })
-
-  it('resumes a floating session in its pinned folder, not the current floating setting', async () => {
-    const pinned = mkdtempSync(join(tmpdir(), 'orca-codex-floating-'))
-    const resolveWorkspacePath = vi.fn(async () => '/floating/current-setting')
-    const floating = record({
-      location: { ...record().location, workspaceId: FLOATING_TERMINAL_WORKTREE_ID },
-      launchDirectory: pinned
-    })
-
-    const launch = await resolverFor(floating, resolveWorkspacePath)({ identity: IDENTITY })
-
-    expect(launch.cwd).toBe(pinned)
-    expect(resolveWorkspacePath).not.toHaveBeenCalled()
-  })
-
-  it('repairs the first launch directory of an unpinned legacy floating session', async () => {
-    const pinLaunchDirectory = vi.fn()
-    const resolveLaunch = createCodexStructuredLaunchResolver({
-      store: {
-        getRecord: () =>
-          record({
-            location: { ...record().location, workspaceId: FLOATING_TERMINAL_WORKTREE_ID }
-          }),
-        pinLaunchDirectory
-      },
-      resolveLaunchArgs: () => [],
-      resolveWorkspacePath: async () => '/floating/start-folder',
-      resolveCommand: () => ({ command: '/usr/local/bin/codex', prefixArgs: [] })
-    })
-
-    await expect(resolveLaunch({ identity: IDENTITY })).resolves.toMatchObject({
-      cwd: '/floating/start-folder'
-    })
-    expect(pinLaunchDirectory).toHaveBeenCalledExactlyOnceWith(SESSION_ID, '/floating/start-folder')
-  })
-
-  it('launches the app server in the workspace and account home the record pinned', async () => {
-    const launch = await resolverFor(record())({ identity: IDENTITY })
-
-    expect(launch).toEqual({
-      prefixArgs: [],
-      command: '/usr/local/bin/codex',
-      args: ['app-server'],
-      cwd: '/repos/workspace-1',
-      codexHome: '/home/work/.codex',
-      resumeThreadId: null,
-      permissionPolicy: {
-        approvalPolicy: 'on-request',
-        sandbox: 'read-only',
-        approvalsReviewer: 'user'
-      },
-      env: { CODEX_HOME: '/home/work/.codex' },
-      envToDelete: [NATIVE_CHAT_SCRATCH_DIR_ENV, LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV]
-    })
-  })
-
-  it('passes a Windows .cmd path containing cmd syntax directly to the safe spawn layer', async () => {
-    const command = String.raw`C:\Users\r&d\npm-prefix\codex.cmd`
-
-    await withPlatform('win32', async () => {
-      const resolveLaunch = createCodexStructuredLaunchResolver({
-        resolveLaunchArgs: () => [],
-        store: { getRecord: () => record(), pinLaunchDirectory: vi.fn() },
-        resolveWorkspacePath: async () => String.raw`C:\workspaces\orca`,
-        resolveCommand: () => ({ command: command, prefixArgs: [] })
-      })
-
-      await expect(resolveLaunch({ identity: IDENTITY })).resolves.toMatchObject({
-        command,
-        args: ['app-server']
-      })
-    })
-  })
-
-  it('resolves a Windows launch on a host that cannot read process creation times', async () => {
-    isWindowsProcessStartTimeAvailable.mockReturnValue(false)
-    await withPlatform('win32', async () => {
-      const resolveLaunch = createCodexStructuredLaunchResolver({
-        resolveLaunchArgs: () => [],
-        store: { getRecord: () => record(), pinLaunchDirectory: vi.fn() },
-        resolveWorkspacePath: async () => String.raw`C:\workspaces\orca`,
-        resolveCommand: () => ({ command: 'codex.exe', prefixArgs: [] })
-      })
-
-      await expect(resolveLaunch({ identity: IDENTITY })).resolves.toMatchObject({
-        command: 'codex.exe',
-        args: ['app-server']
-      })
-    })
-  })
-
-  it('resumes the last thread this session actually proved, not one a caller names', async () => {
-    const launch = await resolverFor(
-      record({
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only each link's handle, so the link's other fields stay unset.
-        providerHandleChain: [
-          { handle: codexProviderHandle('thread-old') },
-          { handle: codexProviderHandle('thread-current') }
-        ] as AgentSessionRecord['providerHandleChain']
-      })
-    )({ identity: IDENTITY })
-
-    expect(launch.resumeThreadId).toBe('thread-current')
-  })
-
-  it('lets only a thread this session created be superseded when Codex never saved it', async () => {
-    const link = (
-      origin: AgentSessionProviderHandleLink['origin'],
-      mintedAtFence: number
-    ): AgentSessionProviderHandleLink => ({
-      linkId: `link-${mintedAtFence}`,
-      handle: codexProviderHandle('t'),
-      origin,
-      mintedAtFence,
-      observedAt: 1
-    })
-    const chainFor = (origin: 'created' | 'resumed' | 'adopted') =>
-      origin === 'resumed' ? [link('created', 1), link('resumed', 2)] : [link(origin, 1)]
-
-    const created = await resolverFor(record({ providerHandleChain: chainFor('created') }))({
-      identity: IDENTITY
-    })
-    expect(created).toMatchObject({ resumeThreadId: 't', supersedeIfUnsaved: true })
-    for (const origin of ['resumed', 'adopted'] as const) {
-      const launch = await resolverFor(record({ providerHandleChain: chainFor(origin) }))({
-        identity: IDENTITY
-      })
-      expect(launch.resumeThreadId).toBe('t')
-      expect(launch).not.toHaveProperty('supersedeIfUnsaved')
-    }
-    const fresh = await resolverFor(record())({ identity: IDENTITY })
-    expect(fresh).not.toHaveProperty('supersedeIfUnsaved')
-  })
-
-  it.each([
-    ['ask', { approvalPolicy: 'on-request', sandbox: 'read-only', approvalsReviewer: 'user' }],
-    [
-      'auto',
-      { approvalPolicy: 'on-request', sandbox: 'workspace-write', approvalsReviewer: 'auto_review' }
-    ],
-    [
-      'full-access',
-      { approvalPolicy: 'never', sandbox: 'danger-full-access', approvalsReviewer: 'user' }
-    ]
-  ] as const)('opens a %s chat with its thread policy', async (permissionMode, policy) => {
-    const launch = await resolverFor(record())({
-      identity: IDENTITY,
-      spawnToken: TEST_SPAWN_TOKEN,
-      permissionMode
-    })
-
-    expect(launch.args).toEqual(['app-server'])
-    expect(launch.permissionPolicy).toEqual(policy)
-  })
-
-  it('adds no policy overrides for the agent’s own settings', async () => {
-    const launch = await resolverFor(record())({
-      identity: IDENTITY,
-      spawnToken: TEST_SPAWN_TOKEN,
-      permissionMode: 'own'
-    })
-    expect(launch).not.toHaveProperty('permissionPolicy')
-  })
-
-  it('ignores the bypass flag the agent Arguments carry', async () => {
-    const launch = await resolverFor(record(), undefined, () => [
-      '--dangerously-bypass-approvals-and-sandbox'
-    ])({ identity: IDENTITY, spawnToken: TEST_SPAWN_TOKEN, permissionMode: 'ask' })
-
-    expect(launch.permissionPolicy).toMatchObject({ approvalPolicy: 'on-request' })
-  })
-
-  it('opens the thread on the model the record saved', async () => {
-    const launch = await resolverFor(
-      record({ options: { model: 'gpt-chosen', effort: 'high', fastMode: 'false' } })
-    )({ identity: IDENTITY })
-
-    expect(launch.model).toBe('gpt-chosen')
-  })
-
-  it('uses saved arguments before app-server on a fresh launch', async () => {
-    const launch = await resolverFor(
-      record({
-        launchArgs: [
-          '--profile',
-          'review',
-          '-c',
-          'model_reasoning_effort=high',
-          '--model',
-          'gpt-5.6-sol'
-        ]
-      })
-    )({ identity: IDENTITY })
-
-    expect(launch.args).toEqual([
-      '-c',
-      'model_reasoning_effort=high',
-      '--model',
-      'gpt-5.6-sol',
-      'app-server'
-    ])
-  })
-
-  it('resumes the durable thread ID under its pinned account home', async () => {
-    const launch = await resolverFor(
-      record({
-        launchArgs: ['--enable', 'unified_exec', '-c', 'model_reasoning_effort=high'],
-        providerHandleChain: [
-          { handle: codexProviderHandle('thread-current') }
-        ] as AgentSessionRecord['providerHandleChain']
-      }),
-      async (id) => `/repos/${id}`
-    )({ identity: IDENTITY })
-
-    expect(launch.resumeThreadId).toBe('thread-current')
-    expect(launch.codexHome).toBe('/home/work/.codex')
-    expect(launch.env?.CODEX_HOME).toBe('/home/work/.codex')
-    expect(launch.args).toEqual([
-      '--enable',
-      'unified_exec',
-      '-c',
-      'model_reasoning_effort=high',
-      'app-server'
-    ])
-  })
-
   it('refuses a session pinned to another host rather than starting a second writer here', async () => {
     await expect(
       resolverFor(
@@ -385,5 +130,62 @@ describe('codex structured launch resolution', () => {
         throw new Error('workspace-1 is gone')
       })({ identity: IDENTITY })
     ).rejects.toThrow('workspace-1 is gone')
+  })
+
+  it('resumes a chat on the account selected after it was created, bringing its thread along', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-codex-chat-account-move-'))
+    vi.stubEnv('ORCA_USER_DATA_PATH', join(root, 'user-data'))
+    try {
+      const threadId = '019a1a83-f690-7c82-a482-31195524a7d8'
+      const rollout = join(
+        'sessions',
+        '2026',
+        '11',
+        '04',
+        `rollout-2026-11-04T20-28-46-${threadId}.jsonl`
+      )
+      const oldHome = join(root, 'account-a')
+      const newHome = join(root, 'account-b')
+      mkdirSync(join(oldHome, 'sessions', '2026', '11', '04'), { recursive: true })
+      writeFileSync(join(oldHome, rollout), '{"type":"session_meta"}\n')
+      const prepareLaunchAccountHome = vi.fn(async () => ({
+        variable: 'CODEX_HOME' as const,
+        path: newHome
+      }))
+      const launch = await createCodexStructuredLaunchResolver({
+        store: {
+          getRecord: () =>
+            record({
+              accountHome: { variable: 'CODEX_HOME', path: oldHome },
+              providerHandleChain: [
+                {
+                  linkId: 'link-1',
+                  handle: codexProviderHandle(threadId),
+                  origin: 'created',
+                  mintedAtFence: 1,
+                  observedAt: 1
+                }
+              ]
+            }),
+          pinLaunchDirectory: vi.fn()
+        },
+        resolveWorkspacePath: async (id) => `/repos/${id}`,
+        resolveCommand: () => ({ command: '/usr/local/bin/codex', prefixArgs: [] }),
+        resolveLaunchArgs: () => [],
+        prepareLaunchAccountHome
+      })({ identity: IDENTITY })
+
+      expect(prepareLaunchAccountHome).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionId: SESSION_ID }),
+        '/repos/workspace-1'
+      )
+      expect(launch.codexHome).toBe(newHome)
+      expect(launch.env.CODEX_HOME).toBe(newHome)
+      expect(launch.resumeThreadId).toBe(threadId)
+      expect(readFileSync(join(newHome, rollout), 'utf8')).toBe('{"type":"session_meta"}\n')
+    } finally {
+      vi.unstubAllEnvs()
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })

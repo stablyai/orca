@@ -8,8 +8,8 @@ import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui
 import { executeAgentLaunch } from '../../../../../agent-launch/agent-launch-executor'
 import type { AgentLaunchSurfaceFactory } from '../../../../../agent-launch/agent-launch-surface-factories'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
-import { WORKER_START_VOCABULARY } from '../../orchestration-worker-start-mode'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import { WORKER_START_VOCABULARY } from '../structured-workers/orchestration-worker-start-mode'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { tearDownFailedWorkerStart } from './failed-worker-start-teardown'
 import type { WorkerStartInput } from './worker-start-schema'
@@ -193,7 +193,8 @@ async function launchWorkerAgent(
     await tearDownFailedWorkerStart({
       runtime: args.runtime,
       structuredSession,
-      dispatchId: args.dispatchId
+      dispatchId: args.dispatchId,
+      error
     })
     throw error
   }

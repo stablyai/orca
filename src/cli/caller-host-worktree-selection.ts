@@ -1,24 +1,39 @@
 import { resolve as resolvePath } from 'node:path'
 import type { TuiAgent } from '../shared/agent-launch/catalog/tui-agent'
-import {
-  isPathInsideOrEqual,
-  normalizeRuntimePathForComparison
-} from '../shared/cross-platform-path'
 import { projectGroupIdFromRepoId } from '../shared/folder-workspaces/folder-workspace-worktree'
+import { isFloatingWorkspaceId } from '../shared/floating-workspace-worktree'
+import { parseWorkspaceKey } from '../shared/workspace-scope'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../shared/execution-host'
-import { readOrchestrationCompatibilityEvidence } from '../shared/orchestration-compatibility-evidence'
-import type { RuntimeWorktreeListResult, RuntimeWorktreeRecord } from '../shared/runtime-types'
+import { readOrchestrationCompatibilityEvidence } from '../shared/orchestration/orchestration-compatibility-evidence'
+import type { RuntimeWorktreeListResult } from '../shared/runtime-types'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime/types'
+import { refuseUnresolvedOwner, type CatalogRow } from './workspace-catalog-row'
+import { createCwdContainment, isOnCallerFilesystem } from './caller-cwd-containment'
 
-type CatalogRow = Pick<RuntimeWorktreeRecord, 'id' | 'path' | 'hostId'> & {
-  identity?: { key: string }
-  repoId?: string
+export type { CatalogRow }
+
+/** Group-level folder workspaces join the catalog keyed `folder:<id>`, beside repo-backed rows. */
+function isFolderRow(row: CatalogRow): boolean {
+  return parseWorkspaceKey(row.id)?.type === 'folder'
+}
+
+/** The workspace this Orca terminal belongs to: a repo-backed id or a folder key. */
+export function getCallerWorkspaceIds(
+  env: Readonly<Record<string, string | undefined>> = process.env
+): string[] {
+  return [env.ORCA_WORKTREE_ID, env.ORCA_WORKSPACE_ID].flatMap((id) => id?.trim() || [])
+}
+
+type CallerWorkspace = string | readonly string[] | undefined
+
+function callerIdsOf(caller: CallerWorkspace): readonly string[] {
+  return caller === undefined ? [] : typeof caller === 'string' ? [caller] : caller
 }
 
 /** SSH relays stamp the caller host; otherwise use this machine. */
@@ -42,16 +57,16 @@ function enclosingCandidatesOnHost<Row extends CatalogRow>(
   cwd: string,
   hostId: ExecutionHostId
 ): { row: Row; comparisonPath: string }[] {
-  const currentPath = resolvePath(cwd)
+  const contains = createCwdContainment(cwd, hostId)
   const candidates: { row: Row; comparisonPath: string }[] = []
   for (const row of catalog) {
-    if (!isOnCallerHost(row, hostId)) {
+    if (!row.hostUnresolved && !isOnCallerHost(row, hostId)) {
       continue
     }
-    const rawPath = resolvePath(row.path)
-    if (isPathInsideOrEqual(rawPath, currentPath)) {
-      // WSL comparison keys are not raw paths; only use them for rank and equivalence.
-      candidates.push({ row, comparisonPath: normalizeRuntimePathForComparison(rawPath) })
+    // WSL comparison keys are not raw paths; only use them for rank and equivalence.
+    const comparisonPath = contains(row.path, isOnCallerFilesystem(row))
+    if (comparisonPath !== null) {
+      candidates.push({ row, comparisonPath })
     }
   }
   return candidates
@@ -66,8 +81,9 @@ function worktreeSelections(rows: readonly CatalogRow[], catalog: readonly Catal
     hostsById.set(row.id, hosts)
   }
   return rows.map((row) => ({
-    selector:
-      (hostsById.get(row.id)?.size ?? 0) > 1 && row.identity?.key
+    selector: isFolderRow(row)
+      ? row.id
+      : (hostsById.get(row.id)?.size ?? 0) > 1 && row.identity?.key
         ? `identity:${row.identity.key}`
         : `id:${row.id}`,
     worktreeId: row.id
@@ -89,46 +105,31 @@ export function selectorPurpose(flag: string): WorkspaceSelectionPurpose {
 
 export type HostScopedWorktreeSelection = { selector: string; worktreeId: string }
 
+/** Innermost wins; at equal depth the caller's own workspace wins; otherwise every distinct owner. */
 function enclosingWorkspaceOwners(
   catalog: readonly CatalogRow[],
   cwd: string,
   hostId: ExecutionHostId,
-  callerWorktreeId?: string
+  caller?: CallerWorkspace
 ): CatalogRow[] {
   const candidates = enclosingCandidatesOnHost(catalog, cwd, hostId)
   const depth = Math.max(-1, ...candidates.map(({ comparisonPath }) => comparisonPath.length))
   const innermost = candidates.filter(({ comparisonPath }) => comparisonPath.length === depth)
-  const caller = innermost.find(({ row }) => row.id === callerWorktreeId)
-  if (caller) {
-    return [caller.row]
-  }
-  const first = innermost[0]
-  if (!first) {
-    return []
+  refuseUnresolvedOwner(innermost.map(({ row }) => row))
+  const callerIds = callerIdsOf(caller)
+  const own = innermost.find(({ row }) => callerIds.includes(row.id))
+  if (own) {
+    return [own.row]
   }
   const owners = new Map<string, CatalogRow>()
-  for (const { row, comparisonPath } of innermost) {
-    // Only the reserved same-checkout ownership tie changes; project classes remain separate.
-    if (
-      comparisonPath === first.comparisonPath &&
-      row.repoId === first.row.repoId &&
-      (row.hostId ?? LOCAL_EXECUTION_HOST_ID) === (first.row.hostId ?? LOCAL_EXECUTION_HOST_ID)
-    ) {
-      const key = JSON.stringify([row.hostId ?? LOCAL_EXECUTION_HOST_ID, row.id])
-      if (!owners.has(key)) {
-        owners.set(key, row)
-      }
+  for (const { row } of innermost) {
+    // Duplicate registrations of one row collapse; every other owner is a distinct choice.
+    const key = JSON.stringify([row.hostId ?? LOCAL_EXECUTION_HOST_ID, row.id])
+    if (!owners.has(key)) {
+      owners.set(key, row)
     }
   }
   return [...owners.values()]
-}
-
-export function hasEnclosingWorktreeOnHost(
-  catalog: readonly CatalogRow[],
-  cwd: string,
-  hostId: ExecutionHostId
-): boolean {
-  return enclosingCandidatesOnHost(catalog, cwd, hostId).length > 0
 }
 
 /** Workspace ownership stays separate from project inference: siblings can share a checkout. */
@@ -136,10 +137,10 @@ export function selectEnclosingWorktreeSelectionOnHost(
   catalog: readonly CatalogRow[],
   cwd: string,
   hostId: ExecutionHostId,
-  callerWorktreeId?: string,
+  caller?: CallerWorkspace,
   purpose: WorkspaceSelectionPurpose = 'worktree'
 ): HostScopedWorktreeSelection | undefined {
-  const owners = enclosingWorkspaceOwners(catalog, cwd, hostId, callerWorktreeId)
+  const owners = enclosingWorkspaceOwners(catalog, cwd, hostId, caller)
   const selections = worktreeSelections(owners, catalog)
   if (owners.length > 1) {
     const choices = selections.map(({ selector }) => selector)
@@ -160,6 +161,7 @@ export function selectEnclosingWorktreeSelectionOnHost(
       `${action}More than one Orca workspace matched the current directory. Choose an exact ${purpose === 'parent' ? 'parent workspace' : 'workspace'}.`,
       {
         workspaces: owners.map((row, index) => ({
+          kind: isFolderRow(row) ? 'folder workspace' : 'worktree',
           id: row.id,
           path: row.path,
           hostId: row.hostId ?? LOCAL_EXECUTION_HOST_ID,
@@ -186,14 +188,14 @@ export function selectEnclosingWorktreeSelectionOnHost(
 }
 
 export function selectEnclosingRepoOnHost(
-  catalog: readonly (CatalogRow & Pick<RuntimeWorktreeRecord, 'repoId'>)[],
+  catalog: readonly CatalogRow[],
   cwd: string,
   hostId: ExecutionHostId,
   callerWorktreeId?: string
 ): string | undefined {
   const currentPath = resolvePath(cwd)
   const enclosing = enclosingCandidatesOnHost(
-    catalog.filter((row) => !projectGroupIdFromRepoId(row.repoId)),
+    catalog.filter((row) => !isFolderRow(row) && !projectGroupIdFromRepoId(row.repoId)),
     cwd,
     hostId
   )
@@ -232,7 +234,7 @@ export function selectEnclosingRepoOnHost(
 }
 
 export function selectWorktreeCreateCwdContext(
-  catalog: RuntimeWorktreeListResult['worktrees'],
+  catalog: readonly CatalogRow[],
   cwd: string,
   inferRepo: boolean,
   inferParent = true
@@ -242,7 +244,7 @@ export function selectWorktreeCreateCwdContext(
     ? selectEnclosingRepoOnHost(catalog, cwd, hostId, process.env.ORCA_WORKTREE_ID)
     : undefined
   const owners = inferParent
-    ? enclosingWorkspaceOwners(catalog, cwd, hostId, process.env.ORCA_WORKTREE_ID)
+    ? enclosingWorkspaceOwners(catalog, cwd, hostId, getCallerWorkspaceIds())
     : []
   const selections = owners.length ? worktreeSelections(owners.slice(0, 1), catalog) : []
   return {
@@ -268,6 +270,29 @@ export function selectWorktreeIdOnHost(
 ): string | undefined {
   const match = catalog.find((row) => row.id === worktreeId && isOnCallerHost(row, hostId))
   return match ? worktreeSelections([match], catalog)[0]!.selector : undefined
+}
+
+/** The workspace this Orca terminal names; native folders and the floating terminal have no catalog row. */
+export function selectCallerTerminalWorkspace(
+  catalog: readonly CatalogRow[],
+  hostId: ExecutionHostId
+): string | undefined {
+  const worktreeId = process.env.ORCA_WORKTREE_ID
+  const trimmed = worktreeId?.trim()
+  if (isFloatingWorkspaceId(worktreeId)) {
+    return undefined
+  }
+  if (worktreeId && trimmed && !trimmed.startsWith('folder:')) {
+    const scoped = selectWorktreeIdOnHost(catalog, worktreeId, hostId)
+    if (!scoped) {
+      throw new RuntimeClientError(
+        'selector_not_found',
+        `This terminal's workspace ${worktreeId} is not listed by Orca on this host. Run the command from a workspace directory or pass --worktree <selector> (or all) where the command accepts it.`
+      )
+    }
+    return scoped
+  }
+  return [trimmed, process.env.ORCA_WORKSPACE_ID?.trim()].find((id) => id?.startsWith('folder:'))
 }
 
 export async function resolveCallerPaneWorktreeSelector(

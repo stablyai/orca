@@ -1,22 +1,27 @@
-import { useMemo } from 'react'
+import { useMemo, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
-import { usePluginCommands } from '@/store/plugin-panels'
-import { usePluginNewFiles } from '@/store/plugin-new-files'
+import { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
+import { usePluginNewFiles } from '@/store/plugins/file-creation/plugin-new-files'
 import { useSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
-import { dedupePaletteWorktrees } from '@/lib/palette-repo-resolution'
+import { dedupePaletteWorktrees } from '@/lib/workspace/search/palette-repo-resolution'
+import {
+  readHiddenVmCheckouts,
+  subscribeHiddenVmCheckouts,
+  withoutHiddenVmWorktreesByRepo
+} from '@/runtime/ephemeral-vm/vm-create-hidden-checkouts'
 import {
   selectPaletteIndexStatusSnapshot,
   selectPaletteStatusInputs
 } from './worktree-jump-palette-status-inputs'
 import { selectWorktreePaletteCacheInputs } from '@/components/cmd-j/worktree-palette-cache-inputs'
+import { resolveQualifiedIndexedFolderWorkspace } from '@/store/folder-workspaces/folder-workspace-record-index'
 import {
-  resolveQualifiedIndexedFolderWorkspace,
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import { getFolderWorkspaceWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 
 export function useWorktreeJumpPaletteStoreState({
@@ -36,7 +41,13 @@ export function useWorktreeJumpPaletteStoreState({
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
   const revealSidebarRow = useAppStore((state) => state.revealSidebarRow)
-  const worktreesByRepo = useAppStore((state) => selectWorktreesByRepo(state))
+  const storedWorktreesByRepo = useAppStore((state) => selectWorktreesByRepo(state))
+  const hiddenVmCheckouts = useSyncExternalStore(subscribeHiddenVmCheckouts, readHiddenVmCheckouts)
+  // Why: a VM create's checkout is not a workspace until the create adopts it.
+  const worktreesByRepo = useMemo(
+    () => withoutHiddenVmWorktreesByRepo(storedWorktreesByRepo, hiddenVmCheckouts),
+    [storedWorktreesByRepo, hiddenVmCheckouts]
+  )
   const folderWorkspaces = useAppStore((state) => selectFolderWorkspaces(state))
   const repos = useAppStore((state) => state.repos)
   const projectGroups = useAppStore((state) => state.projectGroups)
@@ -154,6 +165,7 @@ export function useWorktreeJumpPaletteStoreState({
     recordFeatureInteraction,
     revealSidebarRow,
     worktreesByRepo,
+    pendingVmRepoIds: hiddenVmCheckouts.repoIds,
     workspaces,
     repos,
     projectGroups,

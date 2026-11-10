@@ -8,11 +8,6 @@ import {
   buildAddProjectFromFolderModalData,
   canShowAddAsProjectAction
 } from '../navigation/file-explorer-add-project-action'
-import {
-  isRenameHotspotTarget,
-  resolveDirToggleTiming,
-  type DirToggleTiming
-} from '../tree/file-explorer-dir-toggle-timing'
 import type { FileExplorerRowProjection } from '../tree/file-explorer-row-projection'
 import type { FileExplorerSelectionMode } from '../selection/file-explorer-selection'
 import { folderRelativePathToIncludeGlob } from '../content-search/file-search-include-pattern'
@@ -20,7 +15,7 @@ import type { InlineInput } from './file-explorer-inline-input-row'
 import type { TreeNode } from '../tree/file-explorer-types'
 import { useFileDuplicate } from './useFileDuplicate'
 import { useFileExplorerKeys } from '../selection/useFileExplorerKeys'
-import type { LocalPathOpenOwner } from '@/lib/local-path-open-guard'
+import type { LocalPathOpenOwner } from '@/lib/files/os-open/local-path-open-guard'
 
 type UseFileExplorerNodeCommandsParams = {
   activeWorktreeId: string | null
@@ -42,7 +37,7 @@ type UseFileExplorerNodeCommandsParams = {
   requestDelete: (node: TreeNode) => void
   requestDeleteAll: (nodes: TreeNode[]) => void
   refreshDir: (dirPath: string) => Promise<void>
-  handleClick: (node: TreeNode, dirToggle?: DirToggleTiming) => void
+  handleClick: (node: TreeNode) => void
   toggleDir: (worktreeId: string, dirPath: string) => void
   scrollToIndex: (index: number) => void
   pathOwner: LocalPathOpenOwner
@@ -130,11 +125,7 @@ export function useFileExplorerNodeCommands({
   const handleDuplicate = useFileDuplicate({ activeWorktreeId, worktreePath, refreshDir })
   const handleRowClick = useCallback(
     (node: TreeNode, event: React.MouseEvent<HTMLButtonElement>) => {
-      const dirToggle = resolveDirToggleTiming({
-        fromRenameHotspot: isRenameHotspotTarget(event.target),
-        clickCount: event.detail
-      })
-      selectRowWithModifiers(node, event, (target) => handleClick(target, dirToggle))
+      selectRowWithModifiers(node, event, handleClick)
     },
     [handleClick, selectRowWithModifiers]
   )

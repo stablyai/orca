@@ -5,7 +5,8 @@ import {
 import { useState } from 'react'
 import { ChevronRight, CircleDot, GitMerge, GitPullRequest } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { getReviewStateTone } from '@/components/github/review-state-presentation'
@@ -32,6 +33,7 @@ export function BrowserNewTabWorkspaceCard({
   openServersInPlace: boolean
   onOpenUrl: (url: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [othersOpen, setOthersOpen] = useState(false)
   const own = runtimeTarget ? servers.own : []
   const others = runtimeTarget ? servers.others : []
@@ -73,7 +75,7 @@ export function BrowserNewTabWorkspaceCard({
                 'rotate-90': othersOpen
               })}
             />
-            {translate('browser.newTab.runningElsewhere', '{{count}} running in other workspaces', {
+            {t('browser.newTab.runningElsewhere', '{{count}} running in other workspaces', {
               count: others.length
             })}
           </button>
@@ -95,6 +97,7 @@ function LinkedItemRow({
   row: WorkspaceLinkedItemRow
   onOpenUrl: (url: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const { item, detail, live, url } = row
   const reference = workspaceAttachmentReferenceLabel(item, {
     pr: (number) => `#${number}`,
@@ -103,10 +106,11 @@ function LinkedItemRow({
   })
   const status = live
     ? reviewChecksLabel(
-        live.status ? getProviderChecksOutcome(live.checksSummary, live.status) : undefined
+        live.status ? getProviderChecksOutcome(live.checksSummary, live.status) : undefined,
+        t
       )
-    : linkedTaskState(row)
-  const reviewState = live?.state ? reviewStateLabel(live.state) : undefined
+    : linkedTaskState(row, t)
+  const reviewState = live?.state ? reviewStateLabel(live.state, t) : undefined
   return (
     <BrowserNewTabRow
       icon={<LinkedItemIcon row={row} />}
@@ -166,36 +170,42 @@ function LinkedItemIcon({ row }: { row: WorkspaceLinkedItemRow }): React.JSX.Ele
   )
 }
 
-function reviewStateLabel(state: HostedReviewState): string {
+function reviewStateLabel(state: HostedReviewState, t: Translate = translate): string {
   if (state === 'draft') {
-    return translate('browser.newTab.state.draft', 'Draft')
+    return t('browser.newTab.state.draft', 'Draft')
   }
   if (state === 'merged') {
-    return translate('browser.newTab.state.merged', 'Merged')
+    return t('browser.newTab.state.merged', 'Merged')
   }
   if (state === 'closed') {
-    return translate('browser.newTab.state.closed', 'Closed')
+    return t('browser.newTab.state.closed', 'Closed')
   }
-  return translate('browser.newTab.state.open', 'Open')
+  return t('browser.newTab.state.open', 'Open')
 }
 
-function reviewChecksLabel(status: CheckPresentationOutcome | undefined): string | undefined {
+function reviewChecksLabel(
+  status: CheckPresentationOutcome | undefined,
+  t: Translate = translate
+): string | undefined {
   if (status === 'cancelled') {
-    return translate('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')
+    return t('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')
   }
   if (status === 'success') {
-    return translate('browser.newTab.checks.passing', 'Checks passing')
+    return t('browser.newTab.checks.passing', 'Checks passing')
   }
   if (status === 'failure') {
-    return translate('browser.newTab.checks.failing', 'Checks failing')
+    return t('browser.newTab.checks.failing', 'Checks failing')
   }
   if (status === 'pending') {
-    return translate('browser.newTab.checks.pending', 'Checks pending')
+    return t('browser.newTab.checks.pending', 'Checks pending')
   }
   return undefined
 }
 
-function linkedTaskState(row: WorkspaceLinkedItemRow): string | undefined {
+function linkedTaskState(
+  row: WorkspaceLinkedItemRow,
+  t: Translate = translate
+): string | undefined {
   const { detail, liveTask } = row
   const stateName =
     detail?.stateName ?? (liveTask && 'stateName' in liveTask ? liveTask.stateName : undefined)
@@ -204,10 +214,10 @@ function linkedTaskState(row: WorkspaceLinkedItemRow): string | undefined {
   }
   const issueState = linkedIssueState(row)
   if (issueState === 'open') {
-    return translate('browser.newTab.state.open', 'Open')
+    return t('browser.newTab.state.open', 'Open')
   }
   if (issueState === 'closed') {
-    return translate('browser.newTab.state.closed', 'Closed')
+    return t('browser.newTab.state.closed', 'Closed')
   }
   return undefined
 }

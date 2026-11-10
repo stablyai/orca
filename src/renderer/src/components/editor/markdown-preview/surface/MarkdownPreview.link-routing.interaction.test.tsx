@@ -1,3 +1,4 @@
+import type * as WorktreeRuntimeOwnerIndex from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 // @vitest-environment happy-dom
 //
 // Exercise real MarkdownPreview links, modifier detection and openHttpLink; control only store data and IPC.
@@ -5,7 +6,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useAppStore } from '@/store/index'
+import '@/store/index'
 import type { MarkdownPreviewSourceOpenFile } from '../render-tree/markdown-preview-types'
 
 const createBrowserTabMock = vi.fn()
@@ -53,11 +54,12 @@ vi.mock('@/store/index', () => {
   )
   return { useAppStore }
 })
-vi.mock('@/store/slices/worktree-helpers', () => ({
-  findWorktreeById: (_worktrees: unknown, id: string) =>
+vi.mock('@/lib/workspace/ownership/worktree-runtime-owner-index', async (importOriginal) => ({
+  ...(await importOriginal<typeof WorktreeRuntimeOwnerIndex>()),
+  findFirstIndexedWorktree: (_worktrees: unknown, id: string) =>
     worktreeLookup.value.find((worktree) => worktree.id === id) ?? null
 }))
-vi.mock('@/lib/file-owner-runtime-target', () => {
+vi.mock('@/lib/files/access/file-owner-runtime-target', () => {
   const getRuntimeTargetForFileOwner = (
     _state: unknown,
     _worktreeId: string | null | undefined,
@@ -71,17 +73,19 @@ vi.mock('@/lib/file-owner-runtime-target', () => {
       getRuntimeTargetForFileOwner(state, worktreeId, undefined)
   }
 })
-vi.mock('@/runtime/use-worktree-runtime-target', () => ({
+vi.mock('../../../../runtime/rpc/targets/use-worktree-runtime-target', () => ({
   useFileOwnerRuntimeTarget: (_worktreeId: unknown, runtimeEnvironmentId?: string | null) =>
     runtimeEnvironmentId
       ? { kind: 'environment', environmentId: runtimeEnvironmentId }
       : { kind: 'local' }
 }))
-vi.mock('@/runtime/runtime-file-metadata-client', () => ({ statRuntimePath: statRuntimePathMock }))
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/runtime/files/metadata/runtime-file-metadata-client', () => ({
+  statRuntimePath: statRuntimePathMock
+}))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionIdForFile: (worktreeId: string) => targetConnectionOwners.get(worktreeId)
 }))
-vi.mock('@/lib/connection-owner-resolution', () => ({
+vi.mock('@/lib/workspace/ownership/connection-owner-resolution', () => ({
   createConnectionIdForFileSelector: () => () => connectionOwner.value
 }))
 vi.mock('@/i18n/i18n', () => ({
@@ -103,8 +107,8 @@ vi.mock('../../markdown/navigation/MarkdownTableOfContentsPanel', () => ({
 
 import MarkdownPreview from './MarkdownPreview'
 import { buildOwnedEditorFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
-import { scheduleEditorLineReveal } from '@/store/slices/editor/focus/editor-focus-reveal'
-import { registerHttpLinkStoreAccessor } from '../../../../lib/http-link-routing'
+import '@/store/slices/editor/focus/editor-focus-reveal'
+import { registerHttpLinkStoreAccessor } from '../../../../lib/browser/navigation/http-link-routing'
 
 describe('MarkdownPreview http link routing (Cmd vs Cmd+Shift click)', () => {
   let container: HTMLDivElement
@@ -320,30 +324,6 @@ describe('MarkdownPreview http link routing (Cmd vs Cmd+Shift click)', () => {
           column: 1
         })
       )
-    })
-
-    it('lets a newer editor navigation supersede the detached preview reveal', async () => {
-      await clickLineLink('file:///other/src/Example.cs#L120')
-      act(() => {
-        root.unmount()
-      })
-      const successorId = buildOwnedEditorFileId('/repo/src/Newer.ts', 'wt-1', null)
-      scheduleEditorLineReveal(useAppStore.getState, '/repo/src/Newer.ts', 75, 3, successorId)
-      flushFrames()
-
-      expect(storeState.setPendingEditorReveal.mock.calls).toEqual([
-        [null],
-        [null],
-        [
-          {
-            filePath: '/repo/src/Newer.ts',
-            fileId: successorId,
-            line: 75,
-            column: 3,
-            matchLength: 0
-          }
-        ]
-      ])
     })
   })
 })

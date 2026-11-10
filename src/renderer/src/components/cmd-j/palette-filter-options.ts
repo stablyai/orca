@@ -17,7 +17,7 @@ import type { SidebarHostOption } from '../sidebar/worktree-list/controls/sideba
 import {
   expandEquivalentExecutionHostIds,
   pickerExecutionHosts
-} from '../../../../shared/managed-orcad-execution-host'
+} from '../../../../shared/execution-host/managed-orcad-execution-host'
 import { buildPaletteFilterOptionSearchText } from './palette-filter-option-list'
 
 export type PaletteFilterOption = {

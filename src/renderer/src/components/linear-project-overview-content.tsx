@@ -2,7 +2,7 @@ import React from 'react'
 import { CalendarDays, FileText, FolderKanban, RefreshCw, UserRound } from 'lucide-react'
 
 import { Progress } from '@/components/ui/progress'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type {
   LinearProjectDetail,
   LinearProjectSummary
@@ -34,6 +34,8 @@ export function LinearProjectOverviewContent({
   loading,
   error
 }: LinearProjectOverviewContentProps): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const presentation = project as LinearProjectPresentation | null
   const progress = presentation ? linearProjectProgressPercent(presentation) : null
   const teams = linearProjectMetadataLabels(presentation?.teams, 4)
@@ -75,7 +77,7 @@ export function LinearProjectOverviewContent({
                 </p>
               ) : (
                 <p className="mt-3 text-sm text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.linear.project.view.surfaces.bb5664d456',
                     'No project description.'
                   )}
@@ -87,17 +89,14 @@ export function LinearProjectOverviewContent({
               <section className="rounded-md border border-border/50 bg-muted/20 p-4">
                 <div className="mb-2 flex items-center justify-between text-sm">
                   <span className="font-medium text-foreground">
-                    {translate(
-                      'auto.components.linear.project.view.surfaces.563501f191',
-                      'Progress'
-                    )}
+                    {t('auto.components.linear.project.view.surfaces.563501f191', 'Progress')}
                   </span>
                   <span className="text-muted-foreground">{progress}%</span>
                 </div>
                 <Progress value={Math.max(0, Math.min(100, progress))} />
                 {typeof presentation.scope === 'number' ? (
                   <div className="mt-2 text-xs text-muted-foreground">
-                    {translate(
+                    {t(
                       'auto.components.linear.project.view.surfaces.scopedIssueCount',
                       '{{count}} scoped issues',
                       { count: presentation.scope, defaultValue_one: '{{count}} scoped issue' }
@@ -110,12 +109,12 @@ export function LinearProjectOverviewContent({
             {milestones.length > 0 || resources.length > 0 || latestUpdate ? (
               <section className="rounded-md border border-border/50 bg-muted/20 p-4">
                 <h3 className="text-sm font-medium text-foreground">
-                  {translate('auto.components.linear.project.view.surfaces.5d99315fb8', 'Planning')}
+                  {t('auto.components.linear.project.view.surfaces.5d99315fb8', 'Planning')}
                 </h3>
                 <div className="mt-3 grid gap-3 md:grid-cols-3">
                   <LinearProjectMetadataList
                     icon={<FolderKanban className="size-3.5" />}
-                    label={translate(
+                    label={t(
                       'auto.components.linear.project.view.surfaces.bb1405eff8',
                       'Milestones'
                     )}
@@ -123,7 +122,7 @@ export function LinearProjectOverviewContent({
                   />
                   <LinearProjectMetadataList
                     icon={<FileText className="size-3.5" />}
-                    label={translate(
+                    label={t(
                       'auto.components.linear.project.view.surfaces.c8db98b73b',
                       'Resources'
                     )}
@@ -131,7 +130,7 @@ export function LinearProjectOverviewContent({
                   />
                   <LinearProjectMetadataList
                     icon={<RefreshCw className="size-3.5" />}
-                    label={translate(
+                    label={t(
                       'auto.components.linear.project.view.surfaces.0a6a5a7dd6',
                       'Latest update'
                     )}
@@ -144,55 +143,53 @@ export function LinearProjectOverviewContent({
 
           <aside className="min-w-0 space-y-3">
             <LinearProjectPropertyRow
-              label={translate('auto.components.linear.project.view.surfaces.9ddb58edbd', 'Status')}
-              value={linearProjectUnknownText(presentation.status) ?? linearProjectBacklogLabel()}
+              label={t('auto.components.linear.project.view.surfaces.9ddb58edbd', 'Status')}
+              value={linearProjectUnknownText(presentation.status) ?? linearProjectBacklogLabel(t)}
             />
             <LinearProjectPropertyRow
-              label={translate('auto.components.linear.project.view.surfaces.f5ef24cf46', 'Health')}
-              value={linearProjectUnknownText(presentation.health) ?? linearProjectNoneLabel()}
+              label={t('auto.components.linear.project.view.surfaces.f5ef24cf46', 'Health')}
+              value={linearProjectUnknownText(presentation.health) ?? linearProjectNoneLabel(t)}
             />
             <LinearProjectPropertyRow
-              label={translate(
-                'auto.components.linear.project.view.surfaces.3be47aed6f',
-                'Priority'
+              label={t('auto.components.linear.project.view.surfaces.3be47aed6f', 'Priority')}
+              value={linearProjectPriorityLabel(
+                presentation.priority,
+                presentation.priorityLabel,
+                t
               )}
-              value={linearProjectPriorityLabel(presentation.priority, presentation.priorityLabel)}
             />
             <LinearProjectPropertyRow
-              label={translate('auto.components.linear.project.view.surfaces.111bef9aa8', 'Lead')}
+              label={t('auto.components.linear.project.view.surfaces.111bef9aa8', 'Lead')}
               value={linearProjectUnknownText(presentation.lead) ?? 'Unassigned'}
               icon={<UserRound className="size-3.5" />}
             />
             <LinearProjectPropertyRow
-              label={translate('auto.components.linear.project.view.surfaces.3fb6473111', 'Start')}
-              value={linearProjectDateLabel(presentation.startDate)}
+              label={t('auto.components.linear.project.view.surfaces.3fb6473111', 'Start')}
+              value={linearProjectDateLabel(presentation.startDate, t, intlLocale)}
               icon={<CalendarDays className="size-3.5" />}
             />
             <LinearProjectPropertyRow
-              label={translate('auto.components.linear.project.view.surfaces.25a2196732', 'Target')}
-              value={linearProjectDateLabel(presentation.targetDate)}
+              label={t('auto.components.linear.project.view.surfaces.25a2196732', 'Target')}
+              value={linearProjectDateLabel(presentation.targetDate, t, intlLocale)}
               icon={<CalendarDays className="size-3.5" />}
             />
             <LinearProjectMetadataList
-              label={translate('auto.components.linear.project.view.surfaces.c5f79616c3', 'Teams')}
+              label={t('auto.components.linear.project.view.surfaces.c5f79616c3', 'Teams')}
               items={teams}
             />
             <LinearProjectMetadataList
-              label={translate(
-                'auto.components.linear.project.view.surfaces.65bda65159',
-                'Members'
-              )}
+              label={t('auto.components.linear.project.view.surfaces.65bda65159', 'Members')}
               items={members}
             />
             <LinearProjectMetadataList
-              label={translate('auto.components.linear.project.view.surfaces.1748d3b9af', 'Labels')}
+              label={t('auto.components.linear.project.view.surfaces.1748d3b9af', 'Labels')}
               items={labels}
             />
           </aside>
         </div>
       ) : (
         <div className="px-4 py-10 text-center text-sm text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.linear.project.view.surfaces.e1fa97d21d',
             'Select a project to view its overview.'
           )}

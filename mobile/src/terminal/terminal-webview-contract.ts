@@ -1,5 +1,5 @@
 import type { ParsedFileLinkLocation } from '../../../src/shared/file-links/file-link-location'
-import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
+import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-mobile-session-tab-contracts'
 import type { TerminalOscLinkRange } from '../../../src/shared/terminal/links/terminal-osc-link-ranges'
 import type { StyleProp, ViewStyle } from 'react-native'
 import type { TerminalFitDimensions } from './terminal-grid-fit'
@@ -61,8 +61,6 @@ function toNonNegativeInteger(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0
 }
 
-export type MobileTerminalTheme = RuntimeMobileTerminalTheme
-
 export type TerminalPointerInput = {
   readonly click: boolean
 }
@@ -89,7 +87,7 @@ export type TerminalSelectionEvents = {
 
 export type TerminalWebViewProps = {
   style?: StyleProp<ViewStyle>
-  terminalTheme?: MobileTerminalTheme
+  terminalTheme?: RuntimeMobileTerminalTheme
   // Persistent font-size preset; transient CSS pinch zoom is committed into it on release.
   textScale?: number
   // Only initially shown views build pre-ready engines, limiting WebGL context use.
@@ -114,6 +112,8 @@ export type TerminalWebViewHandle = {
   // iOS can preserve the view but lose document state; await liveness before foreground replay.
   prepareForForegroundRecovery: () => void
   write: (data: string) => void
+  // Only an in-process document has it: `onParsed` runs once xterm has parsed `data`, or once the write is discarded.
+  writeWithParseAck?: (data: string, onParsed: () => void) => void
   init: (init: TerminalInit) => void
   resize: (cols: number, rows: number, frame: TerminalFrame | null) => void
   // Rewrap local scrollback after PTY width changes; alternate screens use full repaints instead.

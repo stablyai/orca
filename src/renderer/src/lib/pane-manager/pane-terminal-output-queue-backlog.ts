@@ -1,4 +1,4 @@
-import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
 import {
   recordTerminalOutputQueueDebugPressure as recordQueueDebugPressure,
   terminalOutputSchedulerDebugEnabled as debugEnabled,

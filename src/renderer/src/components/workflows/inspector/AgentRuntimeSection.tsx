@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react'
 import { useAppStore } from '@/store'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import {
   getAgentSessionOptionLaunchCatalog,
   findCatalogModel,

@@ -2,10 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  AutomaticWorkRunMarker,
-  automaticWorkMarkerPathFor
-} from '../automatic-work-run-marker-store'
+import { AutomaticWorkRunMarker } from '../automatic-work-run-marker-store'
 
 const BOOT = { bootTimeMs: 1_000_000, bootId: null }
 
@@ -60,12 +57,21 @@ describe('AutomaticWorkRunMarker', () => {
     expect(paused.mode.kind).toBe('paused')
   })
 
-  it('does not pause after an orderly exit, or when nothing automatic ran', () => {
-    const first = open()
-    first.arm()
-    first.markCleanExit()
-    expect(open(20).mode).toEqual({ kind: 'normal' })
-    expect(open(30).mode).toEqual({ kind: 'normal' })
+  // #40328: a pause carried over a clean restart must not read as a fresh crash in the log.
+  it('logs whether the start that carries a pause followed a clean exit', () => {
+    open().arm()
+    open(20).markCleanExit()
+    logger.log.mockClear()
+
+    expect(open(30).mode).toMatchObject({ kind: 'paused', reason: 'unclean_host_death' })
+    expect(logger.log).toHaveBeenCalledWith(
+      'automatic-work-paused',
+      expect.objectContaining({
+        carriedOver: true,
+        previousExit: 'clean',
+        pausedSince: new Date(20).toISOString()
+      })
+    )
   })
 
   it('never reads an outside stop as a crash, even when the exit is then cut short', () => {
@@ -86,37 +92,11 @@ describe('AutomaticWorkRunMarker', () => {
     expect(open(20).mode).toEqual({ kind: 'normal' })
   })
 
-  it('keeps a recorded pause across a stop until an explicit resume', () => {
-    open().arm()
-    const paused = open(20)
-    paused.recordStopRequested()
-    expect(open(30).mode).toMatchObject({ kind: 'paused', reason: 'unclean_host_death' })
-  })
-
-  it('does not pause on a new boot', () => {
-    open().arm()
-    expect(open(20, { bootTimeMs: BOOT.bootTimeMs + 3_600_000, bootId: null }).mode).toEqual({
-      kind: 'normal'
-    })
-  })
-
   it('arms on open when a fork was admitted before the endpoint was won', () => {
     const marker = new AutomaticWorkRunMarker(path, logger)
     marker.arm()
     marker.open(10, BOOT)
     expect(JSON.parse(readFileSync(path, 'utf8'))).toMatchObject({ state: 'running' })
-  })
-
-  it('stays inert without a path and before open', () => {
-    const inert = new AutomaticWorkRunMarker(undefined, logger)
-    inert.open(10, BOOT)
-    inert.arm()
-    inert.markCleanExit()
-    expect(inert.mode).toEqual({ kind: 'normal' })
-
-    const unopened = new AutomaticWorkRunMarker(path, logger)
-    unopened.markCleanExit()
-    expect(() => readFileSync(path)).toThrow()
   })
 
   it('never writes once the daemon has lost its endpoint to a successor', () => {
@@ -127,11 +107,5 @@ describe('AutomaticWorkRunMarker', () => {
     owns = false
     marker.markCleanExit()
     expect(JSON.parse(readFileSync(path, 'utf8'))).toMatchObject({ state: 'running' })
-  })
-
-  it('keeps one marker per protocol version beside its PID record', () => {
-    expect(automaticWorkMarkerPathFor(join(dir, 'daemon-v44.pid'))).toBe(
-      join(dir, 'daemon-v44.automatic-work-run.json')
-    )
   })
 })

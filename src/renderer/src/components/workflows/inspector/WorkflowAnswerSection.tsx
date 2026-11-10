@@ -1,7 +1,7 @@
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { WorkflowWorkerAnswer } from '../../../../../shared/workflow/workflow-run-types'
 import { InspectorNote, InspectorSection } from './workflow-inspector-fields'
 

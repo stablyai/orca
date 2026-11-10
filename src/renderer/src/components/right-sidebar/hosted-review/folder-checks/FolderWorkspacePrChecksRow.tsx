@@ -1,9 +1,9 @@
 import { ChevronRight, ExternalLink, GitMerge } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
-import { observeOffscreenAnimation } from '@/lib/offscreen-animation-pause'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { observeOffscreenAnimation } from '@/lib/window-activity/offscreen-animation-pause'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { useTranslate } from '@/i18n/use-translate'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../../shared/github/check-types'
 import {
   CHECK_COLOR,
@@ -27,23 +27,24 @@ export function FolderWorkspacePrChecksRow({
   onToggle,
   onLoadCheckDetails
 }: FolderWorkspacePrChecksRowProps): React.JSX.Element {
+  const t = useTranslate()
   const ReviewIcon = row.provider === 'gitlab' ? GitMerge : PullRequestIcon
   const StatusIcon = CHECK_ICON[row.checkTone] ?? CHECK_ICON.neutral
   const showStatusIcon = row.checkTone !== 'neutral'
   const animateStatusIcon = row.checkTone === 'pending'
   const reviewProviderLabel = row.provider === 'gitlab' ? 'MR' : 'PR'
   const toggleDetailsLabel = expanded
-    ? translate(
+    ? t(
         'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.hideDetails',
         'Hide {{value0}} PR check details',
         { value0: row.worktree.displayName }
       )
-    : translate(
+    : t(
         'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.showDetails',
         'Show {{value0}} PR check details',
         { value0: row.worktree.displayName }
       )
-  const openExternalLabel = translate(
+  const openExternalLabel = t(
     'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.openReviewExternally',
     'Open {{value0}} externally',
     { value0: reviewProviderLabel }

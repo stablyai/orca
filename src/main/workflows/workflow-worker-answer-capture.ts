@@ -1,10 +1,10 @@
 import type { WorkflowWorkerAnswer } from '../../shared/workflow/workflow-run-types'
 import { isWslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { replaceDispatchCapabilities } from '../runtime/orchestration/worker-terminal-redaction'
-import { MAX_WORKER_TRANSCRIPT_MESSAGE_LIMIT } from '../runtime/orchestration/worker-transcript-payload'
-import { readWorkerTranscript } from '../runtime/orchestration/worker-transcript-read'
-import { readStructuredWorkerJournalMessages } from '../runtime/rpc/methods/orchestration-structured-worker-journal-messages'
+import { replaceDispatchCapabilities } from '../runtime/orchestration/terminal-authority/views/worker-terminal-redaction'
+import { MAX_WORKER_TRANSCRIPT_MESSAGE_LIMIT } from '../runtime/orchestration/workers/transcripts/worker-transcript-payload'
+import { readWorkerTranscript } from '../runtime/orchestration/workers/transcripts/worker-transcript-read'
+import { readStructuredWorkerJournalMessages } from '../runtime/rpc/methods/orchestration/structured-workers/orchestration-structured-worker-journal-messages'
 import { record } from './workflow-orca-receipts'
 
 const MAX_ANSWER_CHARS = 64_000

@@ -1,27 +1,29 @@
 import { AlertCircle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
-import { displayIpcErrorMessage } from '@/lib/ipc-error'
-import { isFileTooLargeCodeMessage } from '../../../../shared/file-write-disk-precondition'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { displayIpcErrorMessage } from '@/runtime/errors/ipc-error'
+import { isFileTooLargeCodeMessage } from '../../../../shared/file-write/file-write-disk-precondition'
 import { WORKTREE_HOST_UNRESOLVED_CODE } from './editor-panel-content-types'
 import { useStoppedWslHost } from '../wsl-host-stopped/use-stopped-wsl-host'
 import { WslHostStoppedNotice } from '../wsl-host-stopped/WslHostStoppedNotice'
 
 // Localize by machine code; stored English remains readable for logs without coupling upstream state checks to UI language.
-function localizeFileLoadError(message: string, code: string | undefined): string {
+function localizeFileLoadError(
+  message: string,
+  code: string | undefined,
+  t: Translate = translate
+): string {
   if (code === WORKTREE_HOST_UNRESOLVED_CODE) {
-    return translate(
+    return t(
       'editor.fileLoad.hostUnresolved',
       "The host couldn't find this file's workspace. It may have been removed, or the host may not know about it yet. Retry, or close this tab from the tab strip."
     )
   }
   // Keep IPC wrappers in stored errors for classifiers; strip them only for display.
-  const displayed = displayIpcErrorMessage(message) ?? message
+  const displayed = displayIpcErrorMessage(message, t) ?? message
   if (isFileTooLargeCodeMessage(displayed)) {
-    return translate(
-      'editor.fileLoad.remoteTooLarge',
-      'This file is too large to open from its host.'
-    )
+    return t('editor.fileLoad.remoteTooLarge', 'This file is too large to open from its host.')
   }
   return displayed
 }
@@ -42,6 +44,7 @@ export function EditorFileLoadErrorView({
   /** Reloads after Start without asking to wake again: the click already booted the host. */
   onHostStarted?: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const stoppedWslHost = useStoppedWslHost(worktreeId)
   if (stoppedWslHost) {
     return (
@@ -61,12 +64,12 @@ export function EditorFileLoadErrorView({
         <AlertCircle className="mt-0.5 size-4 flex-shrink-0 text-destructive" />
         <div className="min-w-0">
           <div className="font-medium text-foreground">
-            {translate('auto.components.editor.EditorContent.39f018b052', 'Unable to load file')}
+            {t('auto.components.editor.EditorContent.39f018b052', 'Unable to load file')}
           </div>
-          <div className="mt-1 break-words">{localizeFileLoadError(message, code)}</div>
+          <div className="mt-1 break-words">{localizeFileLoadError(message, code, t)}</div>
           <Button type="button" variant="outline" size="sm" className="mt-3" onClick={onRetry}>
             <RefreshCw className="size-3.5" />
-            {translate('auto.components.editor.EditorContent.2a512bb46a', 'Retry')}
+            {t('auto.components.editor.EditorContent.2a512bb46a', 'Retry')}
           </Button>
         </div>
       </div>

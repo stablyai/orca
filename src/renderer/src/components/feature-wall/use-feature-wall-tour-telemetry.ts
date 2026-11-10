@@ -8,7 +8,7 @@ import type {
   EventProps,
   FeatureWallOpenSourceTelemetry
 } from '../../../../shared/telemetry-events'
-import { track } from '@/lib/telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
 
 export type FeatureWallTourTelemetryState = {
   open: boolean
@@ -78,7 +78,9 @@ export function useFeatureWallTourTelemetry(args: {
 }): { markExitAction: (exitAction: FeatureWallExitAction) => void } {
   const { isOpen, source, getDepthSummary } = args
   const telemetryRef = useRef<FeatureWallTourTelemetryState>(undefined!)
-  telemetryRef.current ??= createFeatureWallTourTelemetryState()
+  if (telemetryRef.current == null) {
+    telemetryRef.current = createFeatureWallTourTelemetryState()
+  }
   const sourceRef = useRef(source)
   const getDepthSummaryRef = useRef(getDepthSummary)
   // Refresh payload refs before open/close effects and unmount cleanup can emit.

@@ -1,4 +1,12 @@
+import { useMemo } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
+import { getSelectedFolderTwinHostId } from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import type { AppState } from '@/store/types'
 import {
   parseExecutionHostId,
@@ -8,13 +16,17 @@ import {
 } from '../../../../../../shared/execution-host'
 import type { HostAuthority } from '../../../../../../shared/host-authority'
 import { translate } from '@/i18n/i18n'
-import { resolveOwner, runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
-import { getConnectionIdFromState } from '@/lib/connection-context'
+import {
+  resolveOwner,
+  runtimeEnvironmentIdForWorkspaceOwner
+} from '@/lib/workspace/ownership/resolve-owner'
+import '@/lib/workspace/ownership/connection-context'
+import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { FileExplorerOperationOwner } from '../tree/file-explorer-types'
-import type { WorktreeOperationRoute } from '@/lib/worktree-operation-route'
-import { captureWorktreeOperationGenerationGuard } from '@/lib/worktree-operation-generation'
+import type { WorktreeOperationRoute } from '@/lib/workspace/ownership/worktree-operation-route'
+import { captureWorktreeOperationGenerationGuard } from '@/lib/workspace/ownership/worktree-operation-generation'
 
 const ownerUnresolved = (): Error => new Error(getFileExplorerOwnerUnresolvedMessage())
 
@@ -46,12 +58,14 @@ export type FileExplorerOwnerState = Pick<
 /** Use strict read/write ownership; refuse ambiguous twins and ignore focus, resolving app-owned folders through repos. */
 export function getFileExplorerOperationOwnerFromState(
   state: FileExplorerOwnerState,
-  worktreeId: string | null | undefined
+  worktreeId: string | null | undefined,
+  /** Names a twin's host when `state` omits the selection that would. */
+  hostId?: ExecutionHostId
 ): FileExplorerOperationOwner {
   if (!worktreeId) {
     return { kind: 'local' }
   }
-  const match = resolveOwner(state, { workspaceId: worktreeId })
+  const match = resolveOwner(state, { workspaceId: worktreeId, ...(hostId ? { hostId } : {}) })
   if (match.kind === 'ambiguous') {
     return { kind: 'unresolved' }
   }
@@ -64,6 +78,26 @@ export function getFileExplorerOperationOwnerFromState(
     return operationOwnerFromAuthority(match.owner)
   }
   return thisAppFolderOwner(state, worktreeId)
+}
+
+/** The file list's owner: host-less for a git id, the selected copy for a folder twin. */
+export function useFileListOperationOwner(worktreeId: string | null): FileExplorerOperationOwner {
+  const state = useAppStore(
+    useShallow((s) => ({
+      settings: s.settings,
+      repos: s.repos,
+      worktreesByRepo: selectWorktreesByRepo(s),
+      detectedWorktreesByRepo: selectDetectedWorktreesByRepo(s),
+      folderWorkspaces: selectFolderWorkspaces(s),
+      projectGroups: s.projectGroups,
+      restoredRuntimeHostIdByWorkspaceSessionKey: s.restoredRuntimeHostIdByWorkspaceSessionKey
+    }))
+  )
+  const hostId = useAppStore((s) => getSelectedFolderTwinHostId(s, worktreeId))
+  return useMemo(
+    () => getFileExplorerOperationOwnerFromState(state, worktreeId, hostId),
+    [hostId, state, worktreeId]
+  )
 }
 
 /** Unstamped folders inherit repo ownership; the restoring server wins until its folder catalog arrives. */

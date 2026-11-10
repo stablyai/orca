@@ -1,14 +1,16 @@
+import { stopHelperAfterStart } from './worker-stop'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { z } from 'zod'
-import { defineMethod, type RpcContext } from '../../../core'
-import { startFederatedWorker } from '../federation/federated-worker-start'
+import type { RpcContext } from '../../../core'
+import { defineOrchestrationMethod } from '../access/orchestration-method-access'
+import { startFederatedWorker } from '../../../../orchestration/legacy-remote-home/legacy-remote-home'
 import { startLocalWorker } from './local-worker-start'
 import type { WorkerFollowUp } from './worker-follow-up-placement'
 import { withWorkerStartNext } from '../receipt-next'
 import {
   decideWorkerStartMode,
   readWorkerStartModeSettings
-} from '../../orchestration-worker-start-mode'
+} from '../structured-workers/orchestration-worker-start-mode'
 import { resolveOrchestrationCaller } from '../runs/run-scope'
 import {
   assertHelperStartScope,
@@ -20,11 +22,11 @@ import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchest
 import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartReadinessTimeoutMs
-} from '../../../../../../shared/orchestration-timing-budgets'
-import { buildOrchestrationTaskDisplayMetadata } from '../../../../../../shared/orchestration-task-display'
+} from '../../../../../../shared/orchestration/orchestration-timing-budgets'
+import { buildOrchestrationTaskDisplayMetadata } from '../../../../../../shared/orchestration/orchestration-task-display'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from './worker-start-prompt-budget'
-import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/orca-session-address'
-import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as SESSION_CODES } from '../../../../../../shared/orchestration-session-caller-codes'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/orca-session-address-prefix'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as SESSION_CODES } from '../../../../../../shared/orchestration/orchestration-session-caller-codes'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
 
 type WorkerStartContext = Pick<
@@ -33,8 +35,20 @@ type WorkerStartContext = Pick<
 >
 
 export const ORCHESTRATION_WORKER_START_METHODS = [
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.workerStart',
+    access: {
+      kind: 'writes',
+      caller: 'from',
+      targets: {
+        task: 'task',
+        parent: 'task',
+        deps: 'task',
+        run: 'run',
+        retryOf: 'dispatch',
+        terminal: 'worker'
+      }
+    },
     requires: ['accounts'],
     permission: 'workspace',
     params: WorkerStartParams,
@@ -180,6 +194,7 @@ export async function startWorker(
       orchestrationMutation,
       callerSession: orchestrationCaller
     })
+    await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
     return withRun(receipt && typeof receipt === 'object' ? { ...receipt, mode } : receipt)
   }
   const receipt = await startLocalWorker({
@@ -196,5 +211,6 @@ export async function startWorker(
     helperCreator,
     followUp
   })
+  await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
   return withRun(withWorkerStartNext(receipt))
 }

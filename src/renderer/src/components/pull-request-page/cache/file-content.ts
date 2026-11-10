@@ -3,14 +3,14 @@ import type {
   GitHubPRFile,
   GitHubPRFileContents
 } from '../../../../../shared/github/pull-request-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
-import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
+import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeHost
-} from '@/lib/github-source-runtime-context'
+} from '@/lib/work-items/github/github-source-runtime-context'
 import {
   PR_FILE_CONTENT_CACHE_MAX_BYTES,
   getRetainedPRFileContentsByteCount

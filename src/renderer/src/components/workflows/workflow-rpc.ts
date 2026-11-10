@@ -1,4 +1,4 @@
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { WorkflowPreset } from '../../../../shared/workflow/workflow-definition-schema'
 import type { WorkflowRun, WorkflowRunStatus } from '../../../../shared/workflow/workflow-run-types'

@@ -7,7 +7,7 @@ import {
   useStore,
   type EdgeProps
 } from '@xyflow/react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { WorkflowFlowEdge } from './workflow-flow-mapping'
 import { useWorkflowEditorStore } from './workflow-editor-store'
 import { useWorkflowRunViewStore, WORKFLOW_EDGE_ACTIVITY_MS } from './workflow-run-view-store'

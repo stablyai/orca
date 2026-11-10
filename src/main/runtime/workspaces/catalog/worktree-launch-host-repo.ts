@@ -2,7 +2,7 @@ import {
   createRepoRowExecutionHostLookup,
   resolveWorktreeExecutionHost,
   type ExecutionHostOwnerRow
-} from '../../../../shared/worktree-execution-host-resolution'
+} from '../../../../shared/execution-host/worktree-execution-host-resolution'
 import {
   getSshTargetIdForExecutionHost,
   type ExecutionHostId

@@ -1,6 +1,7 @@
+import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
@@ -16,7 +17,7 @@ import {
   isPRCommentGroupQueueableForAI,
   partitionPRCommentGroupsForTriage,
   sortPRCommentGroupsByRecency
-} from '@/lib/pr-comment-action-state'
+} from '@/lib/source-control/review/comments/pr-comment-action-state'
 import { getPRCommentPresentationClasses } from './pr-comment-presentation'
 import type {
   GitHubReactionContent,
@@ -30,21 +31,27 @@ import {
   usePRCommentsListSelection,
   type PRCommentsListSelectionClearRequest
 } from './pr-comments-list-selection'
-import { usePRBotAuthorOverrides } from '@/lib/pr-bot-author-overrides'
+import { usePRBotAuthorOverrides } from '@/lib/source-control/review/pr-bot-author-overrides'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { PRCommentGroupView } from './comment-group'
 import { useNow } from '@/hooks/use-now'
 import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
 
 export type PRCommentsListDisplayMode = 'triage' | 'timeline'
 export const PR_COMMENT_LIST_DISPLAY_MODES: PRCommentsListDisplayMode[] = ['triage', 'timeline']
-export function getPRCommentsListDisplayModeLabel(mode: PRCommentsListDisplayMode): string {
+export function getPRCommentsListDisplayModeLabel(
+  mode: PRCommentsListDisplayMode,
+  t: Translate = translate
+): string {
   return mode === 'triage'
-    ? translate('auto.components.right.sidebar.checks.panel.content.8a621a2c4f', 'Grouped')
-    : translate('auto.components.right.sidebar.checks.panel.content.b13f85d75c', 'Timeline')
+    ? t('auto.components.right.sidebar.checks.panel.content.8a621a2c4f', 'Grouped')
+    : t('auto.components.right.sidebar.checks.panel.content.b13f85d75c', 'Timeline')
 }
 
 export type PRCommentsListProps = {
+  imageUploadAddress?: GitHubImageIntake['address']
+  editImageUploadAddress?: GitHubImageIntake['address']
   comments: PRComment[]
   /** Set when the last read failed; replaces the empty-list copy. */
   commentsError?: string | null
@@ -71,6 +78,8 @@ export type PRCommentsListProps = {
 }
 
 export function useCommentsListState({
+  imageUploadAddress,
+  editImageUploadAddress,
   comments,
   commentsDisabled,
   commentsDisabledReason,
@@ -85,6 +94,7 @@ export function useCommentsListState({
   onResolveSelectedCommentsWithAI,
   onOpenLocation
 }: PRCommentsListProps) {
+  const t = useTranslate()
   function findVerticalScrollParent(element: HTMLElement): HTMLElement | null {
     let parent = element.parentElement
     while (parent) {
@@ -208,7 +218,7 @@ export function useCommentsListState({
     const checked = selectedGroupIds.has(groupId)
     return (
       <Checkbox
-        aria-label={translate(
+        aria-label={t(
           'auto.components.right.sidebar.checks.panel.content.5dc3af25c0',
           'Select comment'
         )}
@@ -231,6 +241,8 @@ export function useCommentsListState({
       !isSelectingForAI
     return (
       <PRCommentGroupView
+        imageUploadAddress={imageUploadAddress}
+        editImageUploadAddress={editImageUploadAddress}
         key={groupId}
         group={group}
         botAuthorOverrides={botAuthorOverrides}
@@ -262,21 +274,16 @@ export function useCommentsListState({
       className={cn(empty ? 'px-3 py-2' : 'border-t border-border px-3 py-2')}
     >
       <RightPanelCommentComposer
+        imageUploadAddress={imageUploadAddress}
         placeholder={
           empty
-            ? translate(
+            ? t(
                 'auto.components.right.sidebar.checks.panel.content.ea9fd5ed6a',
                 'Start conversation...'
               )
-            : translate(
-                'auto.components.right.sidebar.checks.panel.content.3fff651d32',
-                'Add a PR comment'
-              )
+            : t('auto.components.right.sidebar.checks.panel.content.3fff651d32', 'Add a PR comment')
         }
-        submitLabel={translate(
-          'auto.components.right.sidebar.checks.panel.content.sendComment',
-          'Send'
-        )}
+        submitLabel={t('auto.components.right.sidebar.checks.panel.content.sendComment', 'Send')}
         autoFocus
         disabled={commentsDisabled}
         disabledReason={commentsDisabledReason}
@@ -285,7 +292,7 @@ export function useCommentsListState({
           onAddComment ??
           (async () => ({
             ok: false,
-            error: translate(
+            error: t(
               'auto.components.right.sidebar.checks.panel.content.b37ebdc51c',
               'Commenting unavailable.'
             )

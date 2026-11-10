@@ -3,19 +3,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeProjectGroup, makeFolderWorkspace } from './folder-workspace-composer-submit-fixtures'
 
-import type * as NewWorkspaceModule from '@/lib/new-workspace'
+import type * as NewWorkspaceModule from '@/lib/workspace/creation/new-workspace'
 
 const mocks = vi.hoisted(() => ({
   activateAndRevealFolderWorkspace: vi.fn(),
   ensureAgentStartupInTerminal: vi.fn()
 }))
 
-vi.mock('@/lib/worktree-activation', async (importOriginal) => {
+vi.mock('@/lib/workspace/activation/worktree-activation', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return { ...actual, activateAndRevealFolderWorkspace: mocks.activateAndRevealFolderWorkspace }
 })
 
-vi.mock('@/lib/new-workspace', async (importOriginal) => {
+vi.mock('@/lib/workspace/creation/new-workspace', async (importOriginal) => {
   const actual = await importOriginal<typeof NewWorkspaceModule>()
   return {
     ...actual,

@@ -3,10 +3,11 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/orchestration/orchestration-runtime-capabilities'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { OrchestrationDb } from '../runtime/orchestration/db'
+import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
+import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
 import { authenticationFeatureTemplate } from '../../shared/workflow/workflow-templates-team'
 import { currentWorkflowTask } from '../../shared/workflow/workflow-run-state'
 import type { WorkflowRun } from '../../shared/workflow/workflow-run-types'
@@ -41,7 +42,7 @@ function createRig(): Rig {
   vi.spyOn(runtime, 'getLiveTerminalPaneKey').mockImplementation(
     (handle) => panes.get(handle) ?? null
   )
-  const dispatcher = new RpcDispatcher({ runtime })
+  const dispatcher = new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS })
   const send: Rig['send'] = async (method, params) => {
     requestCounter += 1
     const id = `test-${requestCounter}`

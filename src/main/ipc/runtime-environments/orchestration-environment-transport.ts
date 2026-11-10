@@ -1,10 +1,13 @@
 import { getAppEnvironment } from '../../../shared/app-environment'
 import { getPreferredPairedRuntimeConnection } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import {
+  listEnvironments,
+  resolveEnvironment
+} from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   pairedOrchestrationPeers,
   type OrchestrationEnvironmentTransport
-} from '../../runtime/orchestration/environment-transport'
+} from '../../runtime/orchestration/federation/environment-transport'
 
 /** Dials this host's paired servers for cross-server orchestration; host-free, so desktop and orcad share it. */
 export function createOrchestrationEnvironmentTransport(): OrchestrationEnvironmentTransport {
@@ -21,8 +24,10 @@ export function createOrchestrationEnvironmentTransport(): OrchestrationEnvironm
         pairingRevision: environment.pairingRevision ?? environment.createdAt
       }
     },
+    hasEnvironment: (environmentId) =>
+      listEnvironments(registryRoot()).some((environment) => environment.id === environmentId),
     // Loaded on first dial: the routing graph is large and most hosts never place remote workers.
-    call: async (selector, method, params, timeoutMs, envelope, expectedPairingRevision) =>
+    call: async (selector, method, params, timeoutMs, envelope, expectedPairingRevision, send) =>
       (await import('./runtime-environment-transport-routing')).callRuntimeEnvironment(
         registryRoot(),
         selector,
@@ -30,7 +35,13 @@ export function createOrchestrationEnvironmentTransport(): OrchestrationEnvironm
         params,
         timeoutMs,
         expectedPairingRevision,
-        envelope
+        envelope,
+        send && {
+          ...(send.prepareRequest ? { prepareRequest: send.prepareRequest } : {}),
+          ...(send.expectedRuntimeId === undefined
+            ? {}
+            : { expectedEnvironmentRuntimeId: send.expectedRuntimeId })
+        }
       )
   }
 }

@@ -2,8 +2,8 @@ import React from 'react'
 import { Check, RotateCcw, SquareTerminal, X } from 'lucide-react'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
-import { revealTerminalPane } from '@/lib/reveal-terminal-pane'
+import { cn } from '@/lib/class-names'
+import { revealTerminalPane } from '@/lib/workspace/activation/reveal-terminal-pane'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type {
   WorkflowDispatch,

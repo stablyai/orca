@@ -1,46 +1,42 @@
+import { useRef, type ReactNode } from 'react'
 import { View } from 'react-native'
 import { Keyboard as KeyboardIcon } from 'lucide-react-native'
 import { composerInputStyles as inputStyles } from '../components/composer-input/composer-input-styles'
 import { TextField } from '../components/composer-input/TextField'
-import { MobileTerminalLiveInputStatus } from './MobileTerminalLiveInputStatus'
-import { MobileTerminalInputActions } from './MobileTerminalInputActions'
-import { MobileSessionAccessoryKeys } from './MobileSessionAccessoryKeys'
-import { MobileTerminalMoreKeysSheet } from './MobileTerminalMoreKeysSheet'
+import { MobileTerminalLiveInputStatus } from '../terminal/session/MobileTerminalLiveInputStatus'
+import { MobileTerminalInputActions } from '../terminal/session/MobileTerminalInputActions'
+import { MobileSessionAccessoryKeys } from '../terminal/session/MobileSessionAccessoryKeys'
+import { MobileTerminalMoreKeysSheet } from '../terminal/session/MobileTerminalMoreKeysSheet'
 import { sessionCommandDockShown } from './mobile-session-command-dock-shown'
-import { useSessionTerminalKeyRail } from './use-session-terminal-key-rail'
-import { terminalDockStyles as dockStyles } from './terminal-dock-styles'
+import { useSessionTerminalKeyRail } from '../terminal/session/use-session-terminal-key-rail'
+import { terminalDockStyles as dockStyles } from '../terminal/session/terminal-dock-styles'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
+import { useMobileSessionKeyboardLift } from '../terminal/session/use-mobile-session-keyboard-lift'
+import { useLiveInputCaptureText } from '../terminal/session/live-input-capture'
 
 // The key row above one live field: every letter typed goes straight to the terminal, shell or agent.
 export function MobileSessionCommandDock({ controller }: { controller: MobileSessionController }) {
   useMobileColorScheme()
-  const t = useMobileTranslation()
   const rail = useSessionTerminalKeyRail(controller)
+  const keyboardLift = useMobileSessionKeyboardLift(controller.dockBottomInset)
+  // The field's ✕, which the held mic may be released over.
+  const dictationCancelRef = useRef<View>(null)
   const {
     insets,
-    liveInputCapture,
     dictationMode,
     dictationEnabled,
-    handleLiveInputChange,
-    handleLiveInputKeyPress,
-    bindLiveInputField,
-    liveInputRef,
-    submitLiveInput,
     canSend,
     dictation,
     liveDictationText,
-    dockKeys,
     cancelDictation,
     handleDictationToggle,
     handleDictationPressIn,
     handleDictationPressOut,
     isAttaching,
-    attachImage,
-    keyboardLift
+    attachImage
   } = controller
   if (!sessionCommandDockShown(controller)) {
     return null
@@ -62,55 +58,17 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
         <MobileSessionAccessoryKeys controller={controller} />
       )}
       <View style={dockStyles.inputBar}>
-        <TextField
-          inputRef={bindLiveInputField}
-          monospace
-          style={dockStyles.liveField}
-          leading={<KeyboardIcon size={17} color={colors.textSecondary} strokeWidth={2} />}
-          label={t('session.terminalLiveInputStatus.liveInput', 'Live input')}
+        <LiveInputField
+          controller={controller}
           trailing={
             <MobileTerminalLiveInputStatus
               dictation={dictation}
+              cancelRef={dictationCancelRef}
               dictationMode={dictationMode}
               heard={liveDictationText}
               isAttaching={isAttaching}
             />
           }
-          value={liveInputCapture}
-          onChange={(event) => {
-            // A ctrl/alt/shift held on the Duo rail turns the next typed letter into a combo, while the rail shows it.
-            if (
-              !rail.keysInRail ||
-              !dockKeys.interceptTypedCharacter(
-                liveInputCapture,
-                event.nativeEvent.text,
-                liveInputRef
-              )
-            ) {
-              handleLiveInputChange(event)
-            }
-          }}
-          onKeyPress={handleLiveInputKeyPress}
-          onSubmitEditing={submitLiveInput}
-          placeholder={t('session.commandDock.tapToShowKeyboard', 'Tap to show keyboard')}
-          accessibilityLabel={t('session.commandDock.liveInputLabel', 'Live terminal input')}
-          accessibilityHint={t(
-            'session.commandDock.liveInputHint',
-            'Typed text is sent directly to the active terminal'
-          )}
-          showSoftInputOnFocus
-          autoCapitalize="none"
-          autoCorrect={false}
-          spellCheck={false}
-          smartInsertDelete={false}
-          // Why: iOS textContentType overrides autoComplete and can narrow the keyboard; keep IME switching available.
-          autoComplete="off"
-          // Why: ASCII-only keyboard types hide non-Latin IMEs.
-          keyboardType="default"
-          returnKeyType="default"
-          blurOnSubmit={false}
-          editable={canSend}
-          importantForAutofill="no"
         />
         <MobileTerminalInputActions
           canSend={canSend}
@@ -119,7 +77,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           dictationMode={dictationMode}
           dictationEnabled={dictationEnabled}
           buttonStyle={inputStyles.controlButton}
-          activeButtonStyle={styles.dictationButtonActive}
+          dictationCancelRef={dictationCancelRef}
           disabledButtonStyle={inputStyles.disabled}
           onAttachImage={() => void attachImage('library')}
           onAttachFile={() => void attachImage('files')}
@@ -130,5 +88,65 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
         />
       </View>
     </View>
+  )
+}
+
+// Only this field reads the typed text, so a keystroke re-renders it and not the dock or session.
+function LiveInputField({
+  controller,
+  trailing
+}: {
+  controller: MobileSessionController
+  trailing: ReactNode
+}) {
+  const t = useMobileTranslation()
+  const {
+    liveInputCapture,
+    handleLiveInputChange,
+    handleLiveInputKeyPress,
+    bindLiveInputField,
+    liveInputRef,
+    submitLiveInput,
+    canSend,
+    dockKeys
+  } = controller
+  const text = useLiveInputCaptureText(liveInputCapture)
+  return (
+    <TextField
+      inputRef={bindLiveInputField}
+      monospace
+      style={dockStyles.liveField}
+      leading={<KeyboardIcon size={17} color={colors.textSecondary} strokeWidth={2} />}
+      label={t('session.terminalLiveInputStatus.liveInput', 'Live input')}
+      trailing={trailing}
+      value={text}
+      onChange={(event) => {
+        // A held Shift, Ctrl or Alt on the key row or the Duo rail turns the next typed letter into a combo.
+        if (!dockKeys.interceptTypedCharacter(text, event.nativeEvent.text, liveInputRef)) {
+          handleLiveInputChange(event)
+        }
+      }}
+      onKeyPress={handleLiveInputKeyPress}
+      onSubmitEditing={submitLiveInput}
+      placeholder={t('session.commandDock.tapToShowKeyboard', 'Tap to show keyboard')}
+      accessibilityLabel={t('session.commandDock.liveInputLabel', 'Live terminal input')}
+      accessibilityHint={t(
+        'session.commandDock.liveInputHint',
+        'Typed text is sent directly to the active terminal'
+      )}
+      showSoftInputOnFocus
+      autoCapitalize="none"
+      autoCorrect={false}
+      spellCheck={false}
+      smartInsertDelete={false}
+      // Why: iOS textContentType overrides autoComplete and can narrow the keyboard; keep IME switching available.
+      autoComplete="off"
+      // Why: ASCII-only keyboard types hide non-Latin IMEs.
+      keyboardType="default"
+      returnKeyType="default"
+      blurOnSubmit={false}
+      editable={canSend}
+      importantForAutofill="no"
+    />
   )
 }

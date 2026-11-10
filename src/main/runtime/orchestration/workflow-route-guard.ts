@@ -1,5 +1,5 @@
 import { OrchestrationError } from './orchestration-error'
-import type { MessageType } from './types'
+import type { MessageType } from './db/orchestration-records'
 
 export const WORKFLOW_ROUTE_REFUSED_CODE = 'workflow_route_refused'
 

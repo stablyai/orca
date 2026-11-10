@@ -1,5 +1,5 @@
-import type { PRCommentGroupActionState } from '@/lib/pr-comment-action-state'
-import { cn } from '@/lib/utils'
+import type { PRCommentGroupActionState } from '@/lib/source-control/review/comments/pr-comment-action-state'
+import { cn } from '@/lib/class-names'
 
 /** PR comment sidebar typography and layout variants. */
 export type PRCommentPresentationVariant = 'flat' | 'cards' | 'focus'

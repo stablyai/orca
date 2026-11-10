@@ -1,13 +1,13 @@
 import type React from 'react'
 import { useEffect, useRef, type RefObject } from 'react'
 import { ChevronRight, LoaderCircle } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { FileTypeIcon, FolderIcon } from '@/components/FileTypeIcon'
 import './remote-file-browser-entry-actions'
 import type { DirEntry } from './remote-file-browser-entry-actions'
-import { shouldHandleTextControlPaste as isRemoteFileBrowserPathResolveTextTooLarge } from '../../../lib/text-control-paste'
+import { shouldHandleTextControlPaste as isRemoteFileBrowserPathResolveTextTooLarge } from '../../../lib/text-input/paste/text-control-paste'
 import type { PreviewState } from './remote-file-browser-path-preview-resolver'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type RemoteFileBrowserEntryListProps = {
   loading: boolean
@@ -38,6 +38,7 @@ export function RemoteFileBrowserEntryList({
   handleRowClick,
   handleRowDoubleClick
 }: RemoteFileBrowserEntryListProps): React.JSX.Element {
+  const t = useTranslate()
   const scrollRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (activeIndex < 0) {
@@ -51,15 +52,13 @@ export function RemoteFileBrowserEntryList({
 
   const noMatchesFilter = isPreviewActive ? preview!.filter : filter
   const displayNoMatchesCopy = isRemoteFileBrowserPathResolveTextTooLarge(noMatchesFilter)
-    ? translate(
+    ? t(
         'auto.components.sidebar.RemoteFileBrowser.largeInputNoMatches',
         'No matches for this long input'
       )
-    : translate(
-        'auto.components.sidebar.RemoteFileBrowser.00c4235c10',
-        "No matches for '{{value0}}'",
-        { value0: noMatchesFilter }
-      )
+    : t('auto.components.sidebar.RemoteFileBrowser.00c4235c10', "No matches for '{{value0}}'", {
+        value0: noMatchesFilter
+      })
 
   return (
     <div className="border border-border rounded-md overflow-hidden bg-background">
@@ -67,10 +66,7 @@ export function RemoteFileBrowserEntryList({
         ref={scrollRef}
         id={listboxId}
         role="listbox"
-        aria-label={translate(
-          'auto.components.sidebar.RemoteFileBrowser.entriesLabel',
-          'Folder entries'
-        )}
+        aria-label={t('auto.components.sidebar.RemoteFileBrowser.entriesLabel', 'Folder entries')}
         className="h-[240px] overflow-y-auto scrollbar-sleek"
       >
         {loading ? (
@@ -87,7 +83,7 @@ export function RemoteFileBrowserEntryList({
           !preview!.loading ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.sidebar.RemoteFileBrowserEntryList.pathEmpty',
                 '{{path}} is empty',
                 { path: preview!.resolvedPath }
@@ -97,7 +93,7 @@ export function RemoteFileBrowserEntryList({
         ) : !isPreviewActive && entries.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-xs text-muted-foreground">
-              {translate('auto.components.sidebar.RemoteFileBrowser.51001182e3', 'Empty directory')}
+              {t('auto.components.sidebar.RemoteFileBrowser.51001182e3', 'Empty directory')}
             </p>
           </div>
         ) : displayEntries.length === 0 && !preview?.error ? (

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getLinkSourceLocalOpenOwner } from './link-source-local-open-owner'
-import { isLocalPathOpenBlocked } from './local-path-open-guard'
+import { isLocalPathOpenBlocked } from './files/os-open/local-path-open-guard'
 
 const WORKTREE_ID = 'repo-1::/srv/worktree'
 

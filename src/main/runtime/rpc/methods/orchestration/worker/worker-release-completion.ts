@@ -1,24 +1,25 @@
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type {
   WorkerTerminalArchiveKind,
   WorkerTerminalArchiveStatus,
   WorkerTerminalResourceRow,
   WorkerTerminalRetainedReason
-} from '../../../../orchestration/worker-terminal-ownership'
-import { summarizeWorkerOutputArchive } from '../../../../orchestration/worker-output-archive'
-import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/worker-terminal-release-runtime'
+} from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
+import { summarizeWorkerOutputArchive } from '../../../../orchestration/workers/archives/worker-output-archive'
+import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
 import { describeUnconfirmedAgentStop } from '../../../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { inspectWorkerTerminal } from './worker-observation'
 import { orchestrationTimestampToMs } from './worker-output'
 import { archiveSummary } from './worker-terminal-resource-presentation'
 import { classifyWorkerTerminalCloseError } from './worker-release-close-error'
 import { workerTerminalLeaseIsCurrent } from './worker-terminal-release-lease'
-import { resolveStructuredWorkerForDispatch } from '../../orchestration-structured-worker-lifecycle'
+import { resolveStructuredWorkerForDispatch } from '../structured-workers/orchestration-structured-worker-lifecycle'
 import { stopStructuredWorkerForRelease } from './structured-worker-release-stop'
-import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
+import { isStructuredWorkerHandle } from '../../../../../../shared/orchestration/workers/structured-worker-handle'
 import { captureWorkerReleaseArchive } from './worker-release-archive-capture'
 import { WorkerTerminalReleaseSingleFlight } from './worker-terminal-release-single-flight'
-import { yieldAutoReleaseToWorkingAgent } from '../../../../orchestration/worker-terminal-auto-release-working-yield'
+import { releaseUnknownRecovery } from './worker-release-unknown-recovery'
+import { yieldAutoReleaseToWorkingAgent } from '../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-working-yield'
 
 export type WorkerReleaseReceipt = {
   dispatchId: string
@@ -265,10 +266,6 @@ async function completeWorkerTerminalReleaseOnce(
       observation.status === 'exited' ? 'closed_exited_terminal' : 'closed_agent_terminal',
     archive: archiveSummary(released)
   }
-}
-
-export function releaseUnknownRecovery(dispatchId: string): string {
-  return `Inspect with: orca orchestration worker-show --dispatch ${dispatchId} --json — then retry worker-release with a fresh request ID (omit --retry-request to let the CLI generate one). Reusing the prior request ID only replays this release_unknown receipt. Never substitute a broad terminal close.`
 }
 
 function retainedReason(resource: WorkerTerminalResourceRow): WorkerTerminalRetainedReason {

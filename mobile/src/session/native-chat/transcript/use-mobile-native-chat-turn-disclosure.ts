@@ -23,7 +23,7 @@ import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../../../src/shar
 import { NATIVE_CHAT_STREAMING_ID } from '../../../../../src/shared/native-chat/native-chat-streaming'
 import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat/native-chat-resolution-receipt'
 import { useMobileNativeChatTranscriptRows } from './use-mobile-native-chat-transcript-rows'
-import type { MobileNativeChatRunPresentation } from '../mobile-native-chat-run-descriptors'
+import type { MobileNativeChatRunPresentation } from './mobile-native-chat-run-descriptors'
 import {
   nativeChatRowsInDrawOrder,
   nativeChatTurnBarRows
@@ -224,6 +224,7 @@ export function useMobileNativeChatTurnDisclosure({
         turnExpanded: turnKey ? expandedTurnIds.has(turnKey) : false,
         // Pass row keys to one stable handler; per-row closures defeat memoization and render-time ref caches can leak discarded state.
         turnKey: turnKey && fold.foldableTurnKeys.has(turnKey) ? turnKey : undefined,
+        ...(turnKey === message.id ? { opensTurn: true as const } : {}),
         ...(fold.foldedRows.has(index) ? { foldedAway: true } : {}),
         // Without a user boundary, session working state remains authoritative; bridge chat knows only its synthetic stream row is live.
         activeTurnIsWorking: enabled

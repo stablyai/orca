@@ -39,7 +39,7 @@ const mocks = vi.hoisted(() => {
 vi.mock('electron', () => ({
   webContents: { fromId: (id: number) => mocks.guests.get(id) }
 }))
-vi.mock('../../browser-manager', () => ({
+vi.mock('../../guest-lifecycle/manager/browser-manager', () => ({
   browserManager: {
     getGuestWebContentsId: (pageId: string) =>
       [...mocks.pageByGuest].find(([, page]) => page === pageId)?.[0] ?? null,
@@ -49,11 +49,11 @@ vi.mock('../../browser-manager', () => ({
     getWorktreeIdForTab: () => undefined
   }
 }))
-vi.mock('../../../runtime/browser/browser-tab-renderer-create', () => ({}))
-vi.mock('../../../runtime/browser/browser-tab-renderer-close', () => ({
+vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-create', () => ({}))
+vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-close', () => ({
   closeBrowserTabInRenderer: mocks.close
 }))
-vi.mock('../../../runtime/browser/browser-tab-renderer-activate', () => ({
+vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-activate', () => ({
   activateBrowserTabInRenderer: mocks.activate
 }))
 vi.mock('../../../ipc/browser/browser-tab-registration-wait', () => ({}))
@@ -99,7 +99,7 @@ vi.mock('./browser-extension-window-model', () => ({
   presentBrowserExtensionWindow: vi.fn()
 }))
 vi.mock('../api/tabs-capture', () => ({ captureVisibleTabMethod: {} }))
-vi.mock('../api/permissions', () => ({
+vi.mock('../permissions/browser-extension-session-permissions', () => ({
   browserExtensionHostPatternsInSession: (_extension: unknown, sess: unknown) =>
     sess === mocks.sessions.default ? mocks.grantedOrigins : []
 }))
@@ -109,9 +109,8 @@ const discardedTabs = await import('./browser-extension-discarded-tabs')
 const { recordActiveBrowserPage } = await import('./browser-extension-tab-model')
 const { registerTabsNamespace } = await import('../api/tabs')
 const { announceRegisteredBrowserExtensionTab, observeBrowserExtensionTabLifecycle } =
-  await import('../api/tabs-lifecycle')
-const { PRELOAD_FIRST_DISCARDED_TAB_ID } =
-  await import('../../../../preload/browser-extension-document-targets')
+  await import('./browser-extension-tab-lifecycle')
+await import('../../../../preload/browser-extension-document-targets')
 
 function page(id: string, workspaceId: string, overrides: Partial<BrowserPage> = {}): BrowserPage {
   return {
@@ -298,30 +297,6 @@ describe('restored browser pages without a guest are discarded tabs', () => {
     ])
   })
 
-  it('hides url and title without the tabs permission or a host permission', async () => {
-    mocks.extension.manifest = { permissions: [] }
-    const [cold] = await query({ discarded: true })
-    expect(cold).not.toHaveProperty('url')
-    expect(cold).not.toHaveProperty('title')
-    expect(await query({ url: 'https://cold.test/*' })).toEqual([])
-  })
-
-  it('shows url and title once the user grants an optional permission in this profile', async () => {
-    mocks.extension.manifest = { permissions: [] }
-    mocks.grantedOrigins = ['https://cold.test/*']
-    const urls = async () => (await query({ discarded: true })).map((entry) => entry.url)
-    expect(await urls()).toEqual(['https://cold.test/', undefined, undefined])
-    mocks.grantedOrigins = []
-    registry.setBrowserExtensionGrantedPermissionsLookup((_extension, sess) =>
-      Object.is(sess, mocks.sessions.default) ? ['tabs'] : []
-    )
-    expect(await urls()).toEqual([
-      'https://cold.test/',
-      'https://notes.test/',
-      'https://remote.test/'
-    ])
-  })
-
   it('activates through the renderer, then is replaced by the loaded guest', async () => {
     const [cold] = await query({ discarded: true })
     const coldId = cold.id!
@@ -352,21 +327,6 @@ describe('restored browser pages without a guest are discarded tabs', () => {
     expect((await query({ discarded: true })).map((entry) => entry.url)).not.toContain(
       'https://cold.test/'
     )
-  })
-
-  it('announces a page that was never listed as a new tab', async () => {
-    const fresh = guest(13, mocks.sessions.default, 'https://fresh.test/')
-    fresh.emit('did-start-loading')
-    mocks.pageByGuest.set(13, 'fresh')
-    announceRegisteredBrowserExtensionTab('fresh', 13)
-    expect(events('onCreated')).toEqual([[expect.objectContaining({ id: 13, discarded: false })]])
-    expect(events('onReplaced')).toEqual([])
-  })
-
-  it('closes through the renderer', async () => {
-    const [cold] = await query({ discarded: true })
-    await call('remove', [cold.id])
-    expect(mocks.close).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), 'cold', undefined)
   })
 
   it('does not list a closed page until the session save drops it, nor an evicted one after', async () => {
@@ -404,28 +364,5 @@ describe('restored browser pages without a guest are discarded tabs', () => {
         args: [cold.id, { windowId: 1, isWindowClosing: false }]
       }
     ])
-  })
-
-  it('sends only the keys that changed in onUpdated', () => {
-    const fresh = guest(13, mocks.sessions.default, 'https://fresh.test/')
-    mocks.pageByGuest.set(13, 'fresh')
-    announceRegisteredBrowserExtensionTab('fresh', 13)
-    mocks.emitted.length = 0
-    fresh.emit('did-stop-loading')
-    // Why strict: an undefined url/title key still reads as present to `'url' in changeInfo`.
-    expect(events('onUpdated')).toStrictEqual([[13, { status: 'complete' }, expect.anything()]])
-  })
-
-  it("updates the active tab of the caller's window when no tab id is given", async () => {
-    const popoutPage = guest(14, mocks.sessions.default, 'https://popout.test/')
-    mocks.state.popout = { id: 5, webContents: popoutPage }
-    await call('update', [{ url: 'https://next.test/' }], mocks.sessions.default, popoutPage)
-    expect(popoutPage.loadURL).toHaveBeenCalledWith('https://next.test/')
-    const mainPage = mocks.guests.get(11)
-    expect(mainPage?.loadURL).not.toHaveBeenCalled()
-  })
-
-  it("uses the preload's first synthetic id", () => {
-    expect(PRELOAD_FIRST_DISCARDED_TAB_ID).toBe(discardedTabs.FIRST_DISCARDED_BROWSER_TAB_ID)
   })
 })

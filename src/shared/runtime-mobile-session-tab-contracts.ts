@@ -15,6 +15,8 @@ export type RuntimeMobileSessionTerminalTab = {
   quickCommandLabel?: string | null
   /** Window-to-main names ranked above live titles; generatedTitle is sent only when enabled. */
   aiVaultTitle?: TerminalTab['aiVaultTitle']
+  /** The publishing window resolves this surface's session name, so aiVaultTitle (null clears) is authoritative. Headless and older hosts omit it; their saved names are only cache. */
+  resolvesSessionTitle?: true
   generatedTitle?: string | null
   parentTabId: string
   leafId: string
@@ -26,6 +28,8 @@ export type RuntimeMobileSessionTerminalTab = {
   /** Event-only lead-turn end time for paired clients; never persisted in AgentStatusEntry. */
   turnCompletedAt?: number
   launchAgent?: TuiAgent
+  /** Whether the host's launch owner attests that the Orca launch it admitted still runs here; older hosts omit it. */
+  launchAttested?: boolean
   startupCwd?: string
   parentLayout?: TerminalLayoutSnapshot
   color?: string | null
@@ -96,6 +100,8 @@ export type RuntimeMobileSessionBrowserTab = {
   loading: boolean
   canGoBack: boolean
   canGoForward: boolean
+  /** From `remoteTabFaviconUrl`; null clears it. Old hosts omit it, so clients keep what they have. */
+  faviconUrl?: string | null
   loadError?: BrowserLoadError | null
   certificateFailure?: BrowserCertificateFailure | null
   color?: string | null

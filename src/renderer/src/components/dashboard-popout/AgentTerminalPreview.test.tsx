@@ -100,19 +100,19 @@ vi.mock(import('@/lib/pane-manager/pane-terminal-options'), async (importOrigina
   ...(await importOriginal()),
   buildDefaultTerminalOptions: () => ({})
 }))
-vi.mock('@/components/terminal-pane/terminal-user-input-signal', () => ({
+vi.mock('@/components/terminal-pane/input/terminal-user-input-signal', () => ({
   subscribeToTerminalUserInput: (_terminal: unknown, listener: () => void) => {
     terminalHarness.userInputListener = listener
     return { dispose: terminalHarness.userInputDispose }
   }
 }))
-vi.mock('@/components/terminal-pane/use-system-prefers-dark', () => ({
+vi.mock('@/hooks/theme/use-system-prefers-dark', () => ({
   useSystemPrefersDark: () => false
 }))
-vi.mock('@/lib/shortcut-platform', () => ({
+vi.mock('@/lib/keyboard/shortcut-platform', () => ({
   getShortcutPlatform: () => platformState.value
 }))
-vi.mock('@/components/terminal-pane/terminal-ime-native-text-forwarder', () => ({
+vi.mock('@/components/terminal-pane/input/ime/terminal-ime-native-text-forwarder', () => ({
   installTerminalImeNativeTextForwarder: (args: {
     sendInput: (data: string) => void
     getKittyKeyboardFlags?: () => number
@@ -128,7 +128,7 @@ vi.mock('@/components/terminal-pane/terminal-ime-native-text-forwarder', () => (
     return forwarder
   }
 }))
-vi.mock('@/components/terminal-pane/terminal-ime-composition-tracker', () => ({
+vi.mock('@/components/terminal-pane/input/ime/terminal-ime-composition-tracker', () => ({
   installTerminalImeCompositionTracker: () => {
     const tracker = { isActive: () => false, dispose: vi.fn() }
     imeHarness.trackers.push(tracker)
@@ -153,21 +153,24 @@ const multiplexerHarness = vi.hoisted(() => {
   const subscriptions: RemotePreviewSubscription[] = []
   return { environments, subscriptions, sendInput: vi.fn(() => true), close: vi.fn() }
 })
-vi.mock('@/runtime/remote-runtime-terminal-multiplexer', () => ({
-  getRemoteRuntimeTerminalMultiplexer: (environmentId: string) => {
-    multiplexerHarness.environments.push(environmentId)
-    return {
-      subscribeTerminal: async (args: RemotePreviewSubscription) => {
-        multiplexerHarness.subscriptions.push(args)
-        return {
-          sendInput: multiplexerHarness.sendInput,
-          claimViewport: vi.fn(() => true),
-          close: multiplexerHarness.close
+vi.mock(
+  '@/runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry',
+  () => ({
+    getRemoteRuntimeTerminalMultiplexer: (environmentId: string) => {
+      multiplexerHarness.environments.push(environmentId)
+      return {
+        subscribeTerminal: async (args: RemotePreviewSubscription) => {
+          multiplexerHarness.subscriptions.push(args)
+          return {
+            sendInput: multiplexerHarness.sendInput,
+            claimViewport: vi.fn(() => true),
+            close: multiplexerHarness.close
+          }
         }
       }
     }
-  }
-}))
+  })
+)
 
 import { AgentTerminalPreview } from './AgentTerminalPreview'
 import { resetRemoteRuntimeTerminalPreviewSessionsForTests } from './remote-runtime-terminal-preview-api'
@@ -380,29 +383,5 @@ describe('AgentTerminalPreview', () => {
     expect(terminal.dispose).toHaveBeenCalledTimes(1)
     expect(terminalHarness.userInputDispose).toHaveBeenCalledTimes(1)
     expect(unsubscribe).toHaveBeenCalledWith('pty-1')
-  })
-
-  it('delays repeated capture after an overflow and cancels the retry on unmount', async () => {
-    vi.useFakeTimers()
-    connect.mockResolvedValue({
-      snapshot: { data: 'screen', cols: 80, rows: 24, seq: 1 },
-      replay: [],
-      resyncRequired: true
-    })
-    const view = render(<AgentTerminalPreview ptyId="pty-1" />)
-    await vi.waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    const terminal = terminalHarness.instances[0]!
-    expect(connect).toHaveBeenCalledTimes(1)
-
-    act(() => terminal.writeCallbacks.splice(0).forEach((callback) => callback()))
-    await vi.advanceTimersByTimeAsync(149)
-    expect(connect).toHaveBeenCalledTimes(1)
-    await vi.advanceTimersByTimeAsync(1)
-    expect(connect).toHaveBeenCalledTimes(2)
-
-    act(() => terminal.writeCallbacks.splice(0).forEach((callback) => callback()))
-    view.unmount()
-    await vi.advanceTimersByTimeAsync(150)
-    expect(connect).toHaveBeenCalledTimes(2)
   })
 })

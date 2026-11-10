@@ -6,7 +6,7 @@ import {
   type NativeChatTurnDiff,
   type NativeChatTurnDiffFile
 } from '../../../../../src/shared/native-chat/tools/native-chat-turn-diffs'
-import { MobileNativeChatDiffCard } from '../MobileNativeChatDiffCard'
+import { MobileNativeChatDiffCard } from './MobileNativeChatDiffCard'
 import { useMobileNativeChatDisclosure } from './mobile-native-chat-disclosure-store'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
@@ -17,12 +17,10 @@ import { nativeChatEditFileBaseName } from '../../../../../src/shared/native-cha
 
 function FileRow({
   file,
-  fontScale,
-  onOpenFile
+  fontScale
 }: {
   file: NativeChatTurnDiffFile
   fontScale: number
-  onOpenFile?: (path: string) => void
 }): React.JSX.Element {
   const [open, setOpen] = useMobileNativeChatDisclosure(
     `turn-diff:${file.edits[0]?.target.messageId}:${file.path}`,
@@ -65,7 +63,6 @@ function FileRow({
                 initialOpen
                 disclosureKey={key}
                 rootIdentity={key}
-                onOpenFile={onOpenFile}
               />
             ) : null
           })
@@ -76,12 +73,10 @@ function FileRow({
 
 export function MobileNativeChatTurnDiffRollup({
   diff,
-  fontScale,
-  onOpenFile
+  fontScale
 }: {
   diff: NativeChatTurnDiff
   fontScale: number
-  onOpenFile?: (path: string) => void
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -110,7 +105,7 @@ export function MobileNativeChatTurnDiffRollup({
         ) : null}
       </View>
       {files.map((file) => (
-        <FileRow key={file.path} file={file} fontScale={fontScale} onOpenFile={onOpenFile} />
+        <FileRow key={file.path} file={file} fontScale={fontScale} />
       ))}
       {remaining > 0 ? (
         <Pressable

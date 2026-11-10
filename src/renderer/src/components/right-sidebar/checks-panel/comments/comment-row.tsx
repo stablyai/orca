@@ -1,6 +1,11 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import { GitHubImageTextarea } from '@/components/github/GitHubImageTextarea'
+import {
+  useGitHubImagePending,
+  type GitHubImageIntake
+} from '@/components/github/use-github-image-uploads'
+import React, { useCallback, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { reviewCommentMarkdown } from './review-comment-markdown'
 import { CommentReactions } from '@/components/github/CommentReactions'
@@ -9,10 +14,10 @@ import type {
   GitHubReactionContent,
   PRComment
 } from '../../../../../../shared/github/comment-types'
-import type { PRCommentGroupActionState } from '@/lib/pr-comment-action-state'
+import type { PRCommentGroupActionState } from '@/lib/source-control/review/comments/pr-comment-action-state'
 import type { PRCommentPresentationClasses } from './pr-comment-presentation'
 import { formatPrCommentRelativeTime } from '../../../../../../shared/source-control/review-comments/pr-comment-time'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   buildCopyText,
   CommentLocationLabel,
@@ -25,6 +30,7 @@ import {
 import { isMutablePRConversationComment } from '../../../../../../shared/github/pr-comment-mutability'
 
 export function CommentRow({
+  imageUploadAddress,
   comment,
   botAuthorOverrides,
   isReply,
@@ -45,6 +51,7 @@ export function CommentRow({
   onQueueForAgent,
   onOpenLocation
 }: {
+  imageUploadAddress?: GitHubImageIntake['address']
   comment: PRComment
   botAuthorOverrides: ReadonlySet<string>
   isReply: boolean
@@ -69,17 +76,13 @@ export function CommentRow({
   onQueueForAgent?: () => void
   onOpenLocation?: (path: string, line: number) => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  const images = useGitHubImagePending()
   const automated = isBotPRComment(comment, botAuthorOverrides)
   const canMutateComment = isMutablePRConversationComment(comment)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(comment.body)
   const [submittingEdit, setSubmittingEdit] = useState(false)
-
-  useEffect(() => {
-    if (!editing) {
-      setDraft(comment.body)
-    }
-  }, [comment.body, editing])
 
   const handleStartEdit = useCallback((): void => {
     setDraft(comment.body)
@@ -98,6 +101,9 @@ export function CommentRow({
   const handleSaveEdit = useCallback(
     async (event: React.MouseEvent): Promise<void> => {
       event.stopPropagation()
+      if (images.pendingRef.current) {
+        return
+      }
       const trimmedDraft = draft.trim()
       if (!onEditComment || !trimmedDraft || trimmedDraft === comment.body) {
         setEditing(false)
@@ -113,7 +119,7 @@ export function CommentRow({
         setSubmittingEdit(false)
       }
     },
-    [comment, draft, onEditComment]
+    [comment, draft, images.pendingRef, onEditComment]
   )
 
   const handleDelete = useCallback((): void => {
@@ -121,7 +127,8 @@ export function CommentRow({
   }, [comment, onDeleteComment])
 
   const trimmedDraft = draft.trim()
-  const canSaveEdit = !submittingEdit && trimmedDraft.length > 0 && trimmedDraft !== comment.body
+  const canSaveEdit =
+    !images.pending && !submittingEdit && trimmedDraft.length > 0 && trimmedDraft !== comment.body
   const relativeTime = formatPrCommentRelativeTime(comment.createdAt, now)
 
   const authorAvatar = comment.authorAvatarUrl ? (
@@ -160,7 +167,7 @@ export function CommentRow({
           title={
             replyDisabled
               ? replyDisabledReason
-              : translate('auto.components.right.sidebar.checks.panel.content.c1f6fc006a', 'Reply')
+              : t('auto.components.right.sidebar.checks.panel.content.c1f6fc006a', 'Reply')
           }
           disabled={replyDisabled}
           onClick={(event) => {
@@ -168,7 +175,7 @@ export function CommentRow({
             onReply(comment)
           }}
         >
-          {translate('auto.components.right.sidebar.checks.panel.content.c1f6fc006a', 'Reply')}
+          {t('auto.components.right.sidebar.checks.panel.content.c1f6fc006a', 'Reply')}
         </button>
       )}
       <CopyButton text={buildCopyText(comment)} />
@@ -201,7 +208,7 @@ export function CommentRow({
         {relativeTime ? <span>{relativeTime}</span> : null}
         {automated ? (
           <span className={presentation.botBadge}>
-            {translate('auto.components.right.sidebar.checks.panel.content.2ba0a32bdd', 'bot')}
+            {t('auto.components.right.sidebar.checks.panel.content.2ba0a32bdd', 'bot')}
           </span>
         ) : null}
         <CommentLocationLabel
@@ -246,7 +253,7 @@ export function CommentRow({
         ) : null}
         {automated && (
           <span className={presentation.botBadge}>
-            {translate('auto.components.right.sidebar.checks.panel.content.2ba0a32bdd', 'bot')}
+            {t('auto.components.right.sidebar.checks.panel.content.2ba0a32bdd', 'bot')}
           </span>
         )}
         {!isReply && (
@@ -294,10 +301,15 @@ export function CommentRow({
               presentation.useCardLayout ? 'px-3 pb-3' : isReply ? 'pl-5' : 'pl-[22px]'
             )}
           >
-            <textarea
+            <GitHubImageTextarea
+              imageUpload={
+                imageUploadAddress
+                  ? { address: imageUploadAddress, onPending: images.onPending }
+                  : undefined
+              }
               autoFocus
               value={draft}
-              onChange={(event) => setDraft(event.target.value)}
+              onValueChange={setDraft}
               onClick={(event) => event.stopPropagation()}
               className="min-h-[60px] w-full resize-y rounded-md border border-border bg-background px-2 py-1.5 text-[11px] leading-snug text-foreground"
             />
@@ -309,10 +321,7 @@ export function CommentRow({
                 disabled={submittingEdit}
                 onClick={handleCancelEdit}
               >
-                {translate(
-                  'auto.components.right.sidebar.checks.panel.content.b062f55f29',
-                  'Cancel'
-                )}
+                {t('auto.components.right.sidebar.checks.panel.content.b062f55f29', 'Cancel')}
               </Button>
               <Button
                 type="button"
@@ -320,7 +329,7 @@ export function CommentRow({
                 disabled={!canSaveEdit}
                 onClick={(event) => void handleSaveEdit(event)}
               >
-                {translate('auto.components.right.sidebar.checks.panel.content.f6a40263ff', 'Save')}
+                {t('auto.components.right.sidebar.checks.panel.content.f6a40263ff', 'Save')}
               </Button>
             </div>
           </div>

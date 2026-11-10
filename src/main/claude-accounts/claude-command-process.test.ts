@@ -34,12 +34,31 @@ import { runClaudeCommandProcess } from './claude-command-process'
 
 const originalPlatform = process.platform
 afterEach(() => {
+  vi.unstubAllEnvs()
   spawned.specs.length = 0
   spawned.stdins.length = 0
   Object.defineProperty(process, 'platform', { value: originalPlatform })
 })
 
 describe('runClaudeCommandProcess', () => {
+  it('uses the selected account without the launching Claude session identity', async () => {
+    vi.stubEnv('CLAUDE_CODE_MESSAGING_SOCKET', 'parent-socket')
+    vi.stubEnv('CLAUDE_CODE_MESSAGING_TOKEN', 'parent-token')
+    vi.stubEnv('CLAUDE_AGENT_SDK_VERSION', 'parent-sdk')
+    vi.stubEnv('CLAUDE_CODE_HTTP_PROXY', 'http://user-proxy')
+    await runClaudeCommandProcess(
+      ['auth', 'status'],
+      { windowsPath: '/chosen/claude', linuxPath: null, wslDistro: null },
+      1000
+    )
+    const env = spawned.specs[0]?.env
+    expect(env?.CLAUDE_CODE_MESSAGING_SOCKET).toBeUndefined()
+    expect(env?.CLAUDE_CODE_MESSAGING_TOKEN).toBeUndefined()
+    expect(env?.CLAUDE_AGENT_SDK_VERSION).toBeUndefined()
+    expect(env?.CLAUDE_CODE_HTTP_PROXY).toBe('http://user-proxy')
+    expect(env?.CLAUDE_CONFIG_DIR).toBe('/chosen/claude')
+  })
+
   it('survives a pasted code that reaches Claude just as it exits (EPIPE)', async () => {
     Object.defineProperty(process, 'platform', { value: 'linux' })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})

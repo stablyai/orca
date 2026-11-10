@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { Loader2, Play } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { tryRuntimeTargetForWorktreeOwner } from '@/store/slices/worktrees/listing/worktree-owner-target'
 import { Button } from '@/components/ui/button'
 import {

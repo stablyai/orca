@@ -1,6 +1,6 @@
 import type { DraggedWorktreeCopies } from '../drag/dragged-worktree-copies'
 import React from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { Worktree } from '../../../../../../shared/worktree/types'
@@ -30,7 +30,7 @@ export type WorktreeItemRowContext = {
   groupIndexByRowKey: ReadonlyMap<string, number>
   agentSendTargetWorktreeId: string | null
   worktreeDragState: WorktreeRowDragState
-  nativeLineageDropTargetId: string | null
+  nativeLineageDropTargetIdentity: string | null
   activeWorktreeId: string | null
   activeWorkspaceExecutionHostId: ExecutionHostId | null
   currentWorktreeId: string | null
@@ -100,8 +100,8 @@ export function renderWorktreeItemRow(
   const isMultiSelected = ctx.selectedWorktreeIds.has(worktreeIdentity)
   const isLineageDropTarget =
     ctx.worktreeDragState.draggingWorktreeId &&
-    (ctx.worktreeDragState.lineageDropTargetId === itemRow.worktree.id ||
-      ctx.nativeLineageDropTargetId === itemRow.worktree.id)
+    (ctx.worktreeDragState.lineageDropTargetIdentity === worktreeIdentity ||
+      ctx.nativeLineageDropTargetIdentity === worktreeIdentity)
   const isActiveWorktree = isActiveSidebarWorkspace(itemRow.worktree, {
     worktreeId: ctx.activeWorktreeId,
     hostId: ctx.activeWorkspaceExecutionHostId ?? null
@@ -200,7 +200,7 @@ export function renderWorktreeItemRow(
 // Rebuild the visible lineage subtree so each card renders its own children inline.
 export function renderWorktreeLineageDescendants(
   ctx: WorktreeItemRowContext,
-  parent: WorktreeItemRow,
+  parent: { depth: number },
   descendants: readonly WorktreeItemRow[]
 ): React.ReactNode | undefined {
   const childNodes: React.ReactNode[] = []

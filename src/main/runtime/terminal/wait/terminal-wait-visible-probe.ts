@@ -1,13 +1,8 @@
 import { OrcaRuntimeWithCreateAgentPromptRenderGate } from '../input/terminal-agent-prompt-render'
-import type {
-  RuntimeProviderSnapshotReadOptions,
-  TerminalWaiter
-} from '../../runtime-terminal-contracts'
-import {
-  TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS,
-  VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS
-} from '../../orca-runtime-postlude'
-import { withTimeout } from '../../runtime-async-boundaries'
+import type { RuntimeProviderSnapshotReadOptions } from '../output/provider-snapshot-read-options'
+import type { TerminalWaiter } from './terminal-waiter'
+import { VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from '../output/provider-snapshot-budget'
+import { withTimeout } from '../../../../shared/promise-timeout-fallback'
 import {
   detectTerminalWaitBlockedReason,
   isKnownReadyPromptBody,
@@ -24,8 +19,9 @@ import {
   buildPtyTerminalWaitResult
 } from './terminal-wait-results'
 import { outputClockOf } from './tui-idle-evidence-source'
-import { createSetupCompletionScanner } from '../../orchestration/setup-completion-signal'
+import { createSetupCompletionScanner } from '../../orchestration/workers/launch/setup-completion-signal'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+const TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS = 10
 
 export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWithCreateAgentPromptRenderGate {
   /** One bounded readiness read for adopted PTYs with lost metadata; later working-to-idle transitions belong to the poll. */

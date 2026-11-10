@@ -3,9 +3,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { eraseRpcMethods, type RpcContext, type RpcMethod } from '../rpc/core'
-import { NOTIFICATION_METHODS } from '../rpc/methods/notifications'
-import { DeviceRegistry } from '../device-registry'
-import { OrcaRuntimeRpcServer } from '../runtime-rpc'
+import { NOTIFICATION_METHODS } from '../rpc/methods/notifications/notifications'
+import { DeviceRegistry } from '../rpc/server/pairing/device-registry'
+import { OrcaRuntimeRpcServer } from '../rpc/server/runtime-rpc'
 import { OrcaRuntimeService } from '../orca-runtime'
 
 function method(name: string): RpcMethod {

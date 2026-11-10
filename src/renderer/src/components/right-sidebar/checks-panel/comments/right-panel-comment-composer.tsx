@@ -1,27 +1,34 @@
-import { ImeTextarea } from '@/lib/ime-text-field'
+import { useGitHubTextareaImages } from '@/components/github/use-github-textarea-images'
+import {
+  useGitHubImagePending,
+  type GitHubImageIntake
+} from '@/components/github/use-github-image-uploads'
+import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Bold, Code2, Italic, List, Quote } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
-import { cn } from '@/lib/utils'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
+import { cn } from '@/lib/class-names'
+import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
-} from '@/lib/comment-body-submit-state'
+} from '@/lib/source-control/review/comments/comment-body-submit-state'
 import {
   clearRightPanelCommentFocusTimer,
   scheduleRightPanelCommentFocusTimer
 } from './right-panel-comment-focus-timers'
 import { translate } from '@/i18n/i18n'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { useTranslate } from '@/i18n/use-translate'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 export type RightPanelCommentSubmitResult = { ok: true } | { ok: false; error: string }
 
 type MarkdownAction = 'bold' | 'italic' | 'code' | 'quote' | 'list'
 
 type RightPanelCommentComposerProps = {
+  imageUploadAddress?: GitHubImageIntake['address']
   placeholder: string
   submitLabel: string
   onSubmit: (body: string) => Promise<RightPanelCommentSubmitResult>
@@ -73,6 +80,7 @@ function applyMarkdownAction(value: string, start: number, end: number, action: 
 }
 
 export function RightPanelCommentComposer({
+  imageUploadAddress,
   placeholder,
   submitLabel,
   onSubmit,
@@ -82,10 +90,17 @@ export function RightPanelCommentComposer({
   className,
   onCancel
 }: RightPanelCommentComposerProps): React.JSX.Element {
+  const t = useTranslate()
   const [body, setBody] = useState('')
+  const imagePending = useGitHubImagePending()
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const images = useGitHubTextareaImages(textareaRef, body, setBody, {
+    address: imageUploadAddress,
+    onPending: imagePending.onPending,
+    enabled: !!imageUploadAddress && !disabled && !submitting
+  })
   const autoFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const selectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isMac = navigator.userAgent.includes('Mac')
@@ -108,13 +123,23 @@ export function RightPanelCommentComposer({
     return () => clearRightPanelCommentFocusTimer(autoFocusTimerRef)
   }, [autoFocus])
 
-  const setTextareaRef = useCallback((node: HTMLTextAreaElement | null) => {
-    textareaRef.current = node
-    if (node === null) {
-      // Cancel selection restoration on unmount so toolbar callbacks cannot focus a stale textarea.
-      clearRightPanelCommentFocusTimer(selectionTimerRef)
-    }
-  }, [])
+  const { attachDrop, change: changeImageBody, value: imageDisplayValue } = images
+  const { pendingRef: imagePendingRef } = imagePending
+  const hasImageUpload = !!imageUploadAddress
+  const setTextareaRef = useCallback(
+    (node: HTMLTextAreaElement | null) => {
+      if (hasImageUpload) {
+        attachDrop(node)
+      } else {
+        textareaRef.current = node
+      }
+      if (node === null) {
+        // Cancel selection restoration on unmount so toolbar callbacks cannot focus a stale textarea.
+        clearRightPanelCommentFocusTimer(selectionTimerRef)
+      }
+    },
+    [attachDrop, hasImageUpload]
+  )
 
   const stopPropagation = useCallback((event: React.SyntheticEvent) => {
     event.stopPropagation()
@@ -126,8 +151,13 @@ export function RightPanelCommentComposer({
       if (!textarea) {
         return
       }
-      const next = applyMarkdownAction(body, textarea.selectionStart, textarea.selectionEnd, action)
-      setBody(next.value)
+      const next = applyMarkdownAction(
+        imageDisplayValue,
+        textarea.selectionStart,
+        textarea.selectionEnd,
+        action
+      )
+      changeImageBody(next.value)
       scheduleRightPanelCommentFocusTimer(selectionTimerRef, () => {
         if (!textarea.isConnected) {
           return
@@ -136,12 +166,12 @@ export function RightPanelCommentComposer({
         textarea.setSelectionRange(next.selectionStart, next.selectionEnd)
       })
     },
-    [body]
+    [imageDisplayValue, changeImageBody]
   )
 
   const submit = useCallback(async () => {
     const bodyState = getCommentBodySubmitState(body)
-    if (bodyState.status === 'empty' || submitting || disabled) {
+    if (bodyState.status === 'empty' || submitting || disabled || imagePendingRef.current) {
       return
     }
     if (bodyState.status === 'too-large-leading-whitespace') {
@@ -168,7 +198,7 @@ export function RightPanelCommentComposer({
     } finally {
       setSubmitting(false)
     }
-  }, [body, disabled, onCancel, onSubmit, submitting])
+  }, [body, disabled, onCancel, onSubmit, submitting, imagePendingRef])
   const canSubmitComment = hasBoundedCommentBodyText(body)
 
   const handleKeyDown = useCallback(
@@ -189,42 +219,27 @@ export function RightPanelCommentComposer({
   const toolbar = [
     {
       action: 'bold' as const,
-      label: translate(
-        'auto.components.right.sidebar.right.panel.comment.composer.256300f8ea',
-        'Bold'
-      ),
+      label: t('auto.components.right.sidebar.right.panel.comment.composer.256300f8ea', 'Bold'),
       icon: Bold
     },
     {
       action: 'italic' as const,
-      label: translate(
-        'auto.components.right.sidebar.right.panel.comment.composer.542bf6a7e2',
-        'Italic'
-      ),
+      label: t('auto.components.right.sidebar.right.panel.comment.composer.542bf6a7e2', 'Italic'),
       icon: Italic
     },
     {
       action: 'code' as const,
-      label: translate(
-        'auto.components.right.sidebar.right.panel.comment.composer.f49e0a21e0',
-        'Code'
-      ),
+      label: t('auto.components.right.sidebar.right.panel.comment.composer.f49e0a21e0', 'Code'),
       icon: Code2
     },
     {
       action: 'quote' as const,
-      label: translate(
-        'auto.components.right.sidebar.right.panel.comment.composer.d6d9c3c947',
-        'Quote'
-      ),
+      label: t('auto.components.right.sidebar.right.panel.comment.composer.d6d9c3c947', 'Quote'),
       icon: Quote
     },
     {
       action: 'list' as const,
-      label: translate(
-        'auto.components.right.sidebar.right.panel.comment.composer.cf5a7aba6f',
-        'List'
-      ),
+      label: t('auto.components.right.sidebar.right.panel.comment.composer.cf5a7aba6f', 'List'),
       icon: List
     }
   ]
@@ -240,14 +255,16 @@ export function RightPanelCommentComposer({
     >
       <ImeTextarea
         ref={setTextareaRef}
-        value={body}
+        value={imageDisplayValue}
+        onPaste={images.onPaste}
+        onBeforeInput={images.onBeforeInput}
         rows={3}
         className="block max-h-44 min-h-20 w-full min-w-0 resize-none bg-transparent px-2.5 py-2 text-[12px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60"
         placeholder={placeholder}
         disabled={disabled || submitting}
         aria-invalid={Boolean(error)}
         title={disabled ? disabledReason : undefined}
-        onChange={(event) => setBody(event.target.value)}
+        onChange={(event) => changeImageBody(event.target.value)}
         onKeyDown={handleKeyDown}
         onClick={stopPropagation}
       />
@@ -280,10 +297,7 @@ export function RightPanelCommentComposer({
       <div className="flex min-w-0 items-center justify-end gap-1 border-t border-border px-2 py-1.5">
         {onCancel && (
           <Button type="button" variant="ghost" size="xs" disabled={submitting} onClick={onCancel}>
-            {translate(
-              'auto.components.right.sidebar.right.panel.comment.composer.9bca633dee',
-              'Cancel'
-            )}
+            {t('auto.components.right.sidebar.right.panel.comment.composer.9bca633dee', 'Cancel')}
           </Button>
         )}
         <Tooltip>
@@ -292,11 +306,11 @@ export function RightPanelCommentComposer({
               type="button"
               size="xs"
               aria-label={submitLabel}
-              disabled={disabled || submitting || !canSubmitComment}
+              disabled={disabled || submitting || imagePending.pending || !canSubmitComment}
               onClick={() => void submit()}
             >
               {submitting
-                ? translate(
+                ? t(
                     'auto.components.right.sidebar.right.panel.comment.composer.87aff03d63',
                     'Sending...'
                   )

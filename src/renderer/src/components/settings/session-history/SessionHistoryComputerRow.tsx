@@ -1,8 +1,8 @@
 import { Laptop, Server } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
-import { SettingsSwitch } from '../form-controls/SettingsFormControls'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
+import { Switch } from '@/components/ui/switch'
 
 const NO_DETAILS: readonly string[] = []
 
@@ -33,10 +33,12 @@ export function SessionHistoryComputerRow({
   onToggle,
   action = null
 }: SessionHistoryComputerRowProps): React.JSX.Element {
+  const t = useTranslate()
   const Icon = kind === 'local' ? Laptop : Server
   return (
     <div
-      className={cn('flex items-center gap-3 border-t border-border py-3', dimmed && 'opacity-60')}
+      data-settings-row=""
+      className={cn('flex items-center gap-3 py-3', dimmed && 'opacity-60')}
     >
       <Icon className="size-4 shrink-0 text-muted-foreground" />
       <div className="min-w-0 flex-1 space-y-1">
@@ -44,7 +46,7 @@ export function SessionHistoryComputerRow({
           <span className="truncate text-sm font-medium">{name}</span>
           {version ? (
             <span className="shrink-0 text-[11px] text-muted-foreground">
-              {translate('sessionHistory.settings.serverVersion', 'Orca v{{version}}', { version })}
+              {t('sessionHistory.settings.serverVersion', 'Orca v{{version}}', { version })}
             </span>
           ) : null}
         </div>
@@ -71,17 +73,13 @@ export function SessionHistoryComputerRow({
         ))}
       </div>
       <div className="shrink-0">
-        <SettingsSwitch
+        <Switch
           checked={checked}
           disabled={disabled}
-          onChange={onToggle}
-          ariaLabel={translate(
-            'sessionHistory.settings.rowSwitchLabel',
-            'Search sessions on {{host}}',
-            {
-              host: name
-            }
-          )}
+          onCheckedChange={onToggle}
+          aria-label={t('sessionHistory.settings.rowSwitchLabel', 'Search sessions on {{host}}', {
+            host: name
+          })}
         />
       </div>
     </div>

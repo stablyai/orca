@@ -4,8 +4,8 @@ import type { structuredHostStub } from './structured-agent-session-host-fixture
 import { AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-runtime-capabilities'
 import type { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
 import type { StructuredSessionSurfaceRuntime } from '../../../src/main/runtime/agent-session/structured-agent-session-close'
-import { RuntimeSubscriptionRegistry } from '../../../src/main/runtime/runtime-subscription-registry'
-import { resetStructuredAgentSessionClosesBeforeCreateForTests } from '../../../src/main/runtime/rpc/methods/structured-agent-session-close-before-create'
+import { RuntimeSubscriptionRegistry } from '../../../src/main/runtime/client/runtime-subscription-registry'
+import { resetStructuredAgentSessionClosesBeforeCreateForTests } from '../../../src/main/runtime/rpc/methods/structured-sessions/creation/structured-agent-session-close-before-create'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-create-capabilities'
 import {
   attachParams,

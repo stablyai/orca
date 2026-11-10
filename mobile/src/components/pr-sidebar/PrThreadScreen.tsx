@@ -7,9 +7,9 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { openExternalLink } from '../../platform/external-link'
 import { useKeyboardOcclusion } from '../../platform/keyboard-occlusion'
-import { isResolvableComment } from '../../session/pr-comment-actions'
+import { isResolvableComment } from '../../source-control/review/pr-comment-actions'
 import { MobileStateView } from '../MobileStateView'
-import { CommentMarkdown } from './CommentMarkdown'
+import { PrMarkdown } from './PrMarkdown'
 import { PRCommentComposer } from './PRCommentComposer'
 import { PrCommentAvatar } from './PrCommentAvatar'
 import { PrMiniButton } from './PrMiniButton'
@@ -114,6 +114,7 @@ export function PrThreadScreen({
               placeholder={t('pullRequest.screens.replyPlaceholder', 'Reply…')}
               submitLabel={t('pullRequest.commentCard.reply', 'Reply')}
               submitting={actions.isReplyBusy(root.id)}
+              draftKey={actions.draftKey(root.id)}
               onSubmit={(body) => actions.reply(root, body)}
               autoFocus={focusReply}
               inline
@@ -152,7 +153,7 @@ export function PrThreadScreen({
               <Text style={styles.time}>{commentRelativeTime(comment.createdAt, now, t)}</Text>
             </View>
             <View style={styles.body}>
-              <CommentMarkdown content={comment.body} />
+              <PrMarkdown content={comment.body} url={comment.url} />
             </View>
           </View>
         ))}

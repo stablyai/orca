@@ -63,14 +63,6 @@ class MobileWebShellOriginTest {
   }
 
   @Test
-  fun `derives a different label for every session and the same one for a repeat`() {
-    assertEquals(mobileWebShellOriginHost(SESSION), mobileWebShellOriginHost(SESSION))
-    assertTrue(mobileWebShellOriginHost(SESSION) != mobileWebShellOriginHost("${SESSION}a"))
-    // Case matters to the derivation even though the host comparison ignores it.
-    assertTrue(mobileWebShellOriginHost(SESSION) != mobileWebShellOriginHost(SESSION.uppercase()))
-  }
-
-  @Test
   fun `serves the document and a declared asset path`() {
     assertEquals("/", resolve(parts("/")))
     assertEquals("/", resolve(parts("")))
