@@ -32,8 +32,24 @@ export function measureTerminalContentInset(anchor: HTMLElement): TerminalConten
   }
   const box = anchor.getBoundingClientRect()
   const content = terminal.getBoundingClientRect()
+  // The pane's header icons (split, close) are drawn over the terminal's top edge: start below them.
+  let top = content.top
+  for (const element of Array.from(
+    scope.querySelectorAll('.pane-title-actions, .pane-title-bar')
+  )) {
+    const icons = element.getBoundingClientRect()
+    const overlaps =
+      icons.width > 0 &&
+      icons.left < content.right &&
+      icons.right > content.left &&
+      icons.bottom > content.top &&
+      icons.top < content.top + content.height / 2
+    if (overlaps) {
+      top = Math.max(top, icons.bottom)
+    }
+  }
   return {
-    top: Math.max(0, Math.round(content.top - box.top)) + TERMINAL_CONTENT_INSET_PX,
+    top: Math.max(0, Math.round(top - box.top)) + TERMINAL_CONTENT_INSET_PX,
     right: Math.max(0, Math.round(box.right - content.right)) + TERMINAL_CONTENT_INSET_PX
   }
 }

@@ -7,7 +7,9 @@ import {
   SLEEP_COOLDOWN_MS,
   UNOPENED_HOLD_MS,
   WEAK_TRIGGER_MIN_GAP_MS,
-  createPredictiveWakeController
+  createPredictiveWakeController,
+  predictiveWakeStartedAt,
+  setPredictiveWakeController
 } from './cloud-predictive-wake'
 
 function harness(
@@ -275,5 +277,29 @@ describe('predictive wake', () => {
     h.controller.hoverStart('ws-a')
     await h.advance(HOVER_DWELL_MS)
     expect(h.woken).toEqual(['ws-a', 'ws-a'])
+  })
+
+  it('a wake started on intent counts from the intent, not from the resume after its checks', async () => {
+    const h = harness({ preflight: async () => true })
+    setPredictiveWakeController(h.controller)
+    h.controller.hoverStart('ws-a')
+    await h.advance(HOVER_DWELL_MS)
+    const intent = h.controller.intentStartedAt('ws-a')!
+    expect(intent).toBeDefined()
+    // Main began resuming 600 ms later (the server checks): the pill counts from the intent.
+    expect(predictiveWakeStartedAt('ws-a', intent + 600)).toBe(intent)
+    // Another workspace, or a wake long after, keeps its own start.
+    expect(predictiveWakeStartedAt('ws-b', intent + 600)).toBe(intent + 600)
+    expect(predictiveWakeStartedAt('ws-a', intent + 60_000)).toBe(intent + 60_000)
+    setPredictiveWakeController(null)
+  })
+
+  it('an intent that woke nothing is forgotten, so a later ordinary wake counts from itself', async () => {
+    const h = harness({ preflight: async () => false })
+    setPredictiveWakeController(h.controller)
+    h.controller.hoverStart('ws-a')
+    await h.advance(HOVER_DWELL_MS)
+    expect(h.controller.intentStartedAt('ws-a')).toBeUndefined()
+    setPredictiveWakeController(null)
   })
 })
