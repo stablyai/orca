@@ -15,9 +15,6 @@ type Track = {
   held: CloudWakeProgressEvent | undefined
 }
 
-const isInFlight = (wake: CloudWakeProgressEvent | undefined): wake is CloudWakeProgressEvent =>
-  wake?.phase === 'waking' || wake?.phase === 'connecting'
-
 /**
  * A wake reports ready once the server answers; the pane in front re-attaches to its terminal a
  * moment later. Until it has, this returns the wake as still `connecting` (same start time and
@@ -32,7 +29,7 @@ export function useWakeAttachHold(
   const [track, setTrack] = useState<Track>({ last: undefined, held: undefined })
 
   // Adjusted during render (not in an effect), so the pill never shows a stale frame.
-  if (isInFlight(wake)) {
+  if (wake && (wake.phase === 'waking' || wake.phase === 'connecting')) {
     const last = track.last
     if (!last || last.startedAt !== wake.startedAt || last.phase !== wake.phase || track.held) {
       setTrack({ last: wake, held: undefined })
