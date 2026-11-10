@@ -26709,6 +26709,18 @@
     "failedLocalNext": "Use Move again from the sandbox panel to bring them over. Your files are safe in the cloud workspace.",
     "conflicts": "Changed here since: {{files}}",
     "failedLocalReapply": "Apply changes again to bring them over. Nothing you changed here is overwritten, and your files are safe in the cloud workspace.",
-    "reapply": "Apply changes again"
+    "reapply": "Apply changes again",
+    "pending": {
+      "title": "Some changes from a move weren’t applied",
+      "detail": "They are saved on this computer. Nothing you changed here is overwritten.",
+      "stillLeft": "Some changes still conflict with edits made here. They stay saved.",
+      "done": "All changes applied"
+    }
+  },
+  "orcaCloud": {
+    "continueOffer": {
+      "title": "An agent was interrupted by the restart",
+      "action": "Continue"
+    }
   }
 }

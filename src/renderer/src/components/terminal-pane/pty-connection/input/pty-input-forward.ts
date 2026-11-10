@@ -186,7 +186,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     session.pane.terminal,
     (data, wasUserInput) => {
       if (wasUserInput) {
-        noteUserInputForPane(wakeInputKey)
+        noteUserInputForPane(wakeInputKey, Date.now(), session.deps.worktreeId)
       }
       // Typing into a workspace whose server is waking is accepted now and delivered, in order,
       // once this pane is attached to the woken terminal.

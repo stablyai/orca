@@ -44,7 +44,12 @@ export async function loadPersistedTransfer(dir: string): Promise<Prepared | nul
       JSON.parse(await readFile(join(dir, TRANSFER_STATE_FILE), 'utf8'))
     )
     return parsed.success
-      ? { dir, manifest: parsed.data.manifest, repoPath: parsed.data.repoPath, workspaceId: parsed.data.workspaceId }
+      ? {
+          dir,
+          manifest: parsed.data.manifest,
+          repoPath: parsed.data.repoPath,
+          workspaceId: parsed.data.workspaceId
+        }
       : null
   } catch {
     return null
@@ -68,9 +73,10 @@ export function conflictPathsFromGitApply(stderr: string): string[] {
   const paths = new Set<string>()
   for (const line of stderr.split('\n')) {
     const failed = /^error: patch failed: (.+?):\d+$/.exec(line.trim())
-    const other = /^error: (.+?): (?:does not exist in (?:index|working directory)|already exists in (?:index|working directory)|patch does not apply)$/.exec(
-      line.trim()
-    )
+    const other =
+      /^error: (.+?): (?:does not exist in (?:index|working directory)|already exists in (?:index|working directory)|patch does not apply|does not match index)$/.exec(
+        line.trim()
+      )
     const path = failed?.[1] ?? other?.[1]
     if (path) {
       paths.add(path.slice(0, 1024))
@@ -94,7 +100,10 @@ export async function applyPatchIdempotent(
   }
   const flags = ['--whitespace=nowarn', ...(index ? ['--index'] : [])]
   const saved = join(leftovers, patch.split('/').at(-1)!)
-  if ((await gitOk(worktreePath, ['apply', '--check', '-R', ...flags, patch])).ok) {
+  // "Already applied" for the staged patch is judged on the index alone (--cached): the worktree may
+  // also carry the unstaged patch on the same files, which --index would read as "does not match".
+  const reverse = ['--whitespace=nowarn', ...(index ? ['--cached'] : [])]
+  if ((await gitOk(worktreePath, ['apply', '--check', '-R', ...reverse, patch])).ok) {
     await rm(saved, { force: true })
     return { outcome: 'already', conflicts: [] }
   }
@@ -117,8 +126,18 @@ export async function applyTransferToWorktree(
 ): Promise<CloudTransferFinished> {
   await persistTransfer(entry, worktreePath)
   const leftovers = join(entry.dir, 'unapplied')
-  const staged = await applyPatchIdempotent(worktreePath, join(entry.dir, 'staged.patch'), true, leftovers)
-  const unstaged = await applyPatchIdempotent(worktreePath, join(entry.dir, 'unstaged.patch'), false, leftovers)
+  const staged = await applyPatchIdempotent(
+    worktreePath,
+    join(entry.dir, 'staged.patch'),
+    true,
+    leftovers
+  )
+  const unstaged = await applyPatchIdempotent(
+    worktreePath,
+    join(entry.dir, 'unstaged.patch'),
+    false,
+    leftovers
+  )
   let skippedUntracked: string[] = []
   if ((await fileSize(join(entry.dir, 'untracked.tgz'))) > 0) {
     // Inflate with a cap (no gzip bombs), then extract without clobbering anything already there.
@@ -128,8 +147,21 @@ export async function applyTransferToWorktree(
       maxBytes: CLOUD_TRANSFER_MAX_BYTES,
       noClobber: true
     })
-    skippedUntracked = extracted.skipped.slice(0, 200)
     await rm(untrackedTar, { force: true })
+    // Files that differ from what is here were not written: keep the archive and name them, so
+    // nothing is lost and the folder (and "Apply changes again") stays.
+    skippedUntracked = [...extracted.existing, ...extracted.skipped].slice(0, 200)
+    if (extracted.existing.length > 0) {
+      await mkdir(leftovers, { recursive: true })
+      await cp(join(entry.dir, 'untracked.tgz'), join(leftovers, 'untracked.tgz'))
+      await writeFile(
+        join(leftovers, 'untracked-not-written.txt'),
+        `${extracted.existing.join('\n')}\n`
+      )
+    } else {
+      await rm(join(leftovers, 'untracked.tgz'), { force: true })
+      await rm(join(leftovers, 'untracked-not-written.txt'), { force: true })
+    }
   }
   const claudeSessions = await installSessions(
     join(entry.dir, 'claude'),

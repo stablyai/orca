@@ -145,25 +145,98 @@ describe('interrupted turn continue', () => {
     expect(await continueInterruptedTurns('ws', never.deps)).toBe(0)
   })
 
-  it('waits for a closed pane to be reopened (agent view reopened after the restart), then continues', async () => {
-    state.agentStatusByPaneKey = { 'tab-a:1': working('tab-a:1', 'claude') }
+  /** The pane opens 10 min after the restart; then the relaunched agent reports `report`. */
+  async function lateReopen(report: Record<string, unknown>, extra: Record<string, unknown> = {}) {
+    state.agentStatusByPaneKey = {
+      'tab-a:1': working('tab-a:1', 'claude', {
+        providerSession: { id: 'sess-1' },
+        terminalHandle: 'old'
+      })
+    }
     armInterruptedTurnsForHostRestart('ws', NOW)
-    // The pane is closed for 10 minutes (well past the 90s relaunch window), then reopened.
     let clock = NOW
-    const send = vi.fn(async (_args: { ptyId: string; prompt: string }) => true)
+    const reopenAt = NOW + 10 * 60_000
+    const submit = vi.fn(async (_args: { ptyId: string; content: string }) => true)
+    const offer = vi.fn()
     const sent = await continueInterruptedTurns('ws', {
       now: () => clock,
       sleep: async (ms: number) => {
         clock += ms
+        if (clock >= reopenAt + 3_000) {
+          state.agentStatusByPaneKey = {
+            'tab-a:1': working('tab-a:1', 'claude', {
+              updatedAt: reopenAt + 1_000,
+              terminalHandle: 'new',
+              ...report
+            })
+          }
+        }
       },
-      ptyIdFor: () => (clock - NOW >= 10 * 60_000 ? 'pty-reopened' : null),
+      ptyIdFor: () => (clock >= reopenAt ? 'pty-reopened' : null),
+      send: vi.fn(async () => false),
+      submit,
+      agentInForeground: async () => true,
+      offer,
+      ...extra
+    })
+    return { sent, submit, offer }
+  }
+
+  it('continues a pane reopened long after the restart when the same session came back', async () => {
+    const { sent, submit, offer } = await lateReopen({
+      providerSession: { id: 'sess-1' },
+      state: 'done'
+    })
+    expect(sent).toBe(1)
+    expect(submit).toHaveBeenCalledTimes(1)
+    expect(submit.mock.calls[0]![0]).toMatchObject({ ptyId: 'pty-reopened', content: 'continue' })
+    expect(offer).not.toHaveBeenCalled()
+  })
+
+  it('offers Continue instead of typing when a late reopen shows a different session', async () => {
+    const { sent, submit, offer } = await lateReopen({
+      providerSession: { id: 'sess-NEW' },
+      state: 'done'
+    })
+    expect(sent).toBe(0)
+    expect(submit).not.toHaveBeenCalled()
+    expect(offer).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers Continue instead of typing when the person was active in the workspace since', async () => {
+    const { noteUserInputForPane } =
+      await import('@/components/terminal-pane/input/wake-input-buffer')
+    noteUserInputForPane('some-other-pane', NOW + 60_000, 'ws')
+    const { sent, submit, offer } = await lateReopen({
+      providerSession: { id: 'sess-1' },
+      state: 'done'
+    })
+    expect(sent).toBe(0)
+    expect(submit).not.toHaveBeenCalled()
+    expect(offer).toHaveBeenCalledTimes(1)
+  })
+
+  it('a re-arm stops the older wait loop, so continue is never sent twice', async () => {
+    state.agentStatusByPaneKey = { 'tab-a:1': working('tab-a:1', 'claude') }
+    armInterruptedTurnsForHostRestart('ws', NOW)
+    let clock = NOW
+    const send = vi.fn(async () => true)
+    const first = continueInterruptedTurns('ws', {
+      now: () => clock,
+      sleep: async (ms: number) => {
+        clock += ms
+        // A second restart arms the pane again while the first loop is still waiting.
+        if (clock === NOW + 5_000) {
+          armInterruptedTurnsForHostRestart('ws', clock)
+        }
+      },
+      ptyIdFor: () => (clock >= NOW + 20_000 ? 'pty' : null),
       send,
       submit: vi.fn(async () => true),
       agentInForeground: async () => true
     })
-    expect(sent).toBe(1)
-    expect(send).toHaveBeenCalledTimes(1)
-    expect(send.mock.calls[0]![0]).toMatchObject({ ptyId: 'pty-reopened', prompt: 'continue' })
+    expect(await first).toBe(0)
+    expect(send).not.toHaveBeenCalled()
   })
 
   it('gives up on a pane that is never reopened while the turn is fresh', async () => {

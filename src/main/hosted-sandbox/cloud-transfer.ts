@@ -3,7 +3,7 @@
 // in the VM, downloads and imports the branch; finish (after the window created the local worktree
 // through its ordinary create path) applies changes and installs remapped agent sessions.
 import { randomUUID } from 'node:crypto'
-import { mkdir, readdir, readFile, rm, stat } from 'node:fs/promises'
+import { mkdir, rm, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { ipcMain, type BrowserWindow } from 'electron'
@@ -14,15 +14,19 @@ import {
 } from '../../shared/hosted-sandbox/cloud-transfer-pack'
 import { safeExtractTar } from './cloud-transfer-tar'
 import {
-  PersistedTransferSchema,
-  TRANSFER_STATE_FILE,
   applyTransferToWorktree,
   loadPersistedTransfer,
   persistTransfer
 } from './cloud-transfer-apply'
 import {
+  listPendingCloudTransfers,
+  persistedWorktreePath,
+  sweepCloudTransfers
+} from './cloud-transfer-pending'
+import {
   ORCA_CLOUD_TRANSFER_CHANNELS as CH,
   type CloudTransferFinished,
+  type CloudTransferPending,
   type CloudTransferPhase,
   type CloudTransferPrepared,
   type CloudTransferProgressEvent,
@@ -41,6 +45,7 @@ import { createHostedRuntimeEnvironmentCall } from './hosted-runtime-environment
 import { findCloudRuntime } from './hosted-workspace-service'
 
 export { importBundle, installSessions, pickCloudWorktree } from './cloud-transfer-steps'
+export { listPendingCloudTransfers, sweepCloudTransfers } from './cloud-transfer-pending'
 
 export function installCloudTransferHandlers(deps: {
   userDataPath: string
@@ -50,6 +55,13 @@ export function installCloudTransferHandlers(deps: {
   codexHome?: string
 }): () => void {
   const prepared = new Map<string, Prepared>()
+  // One apply at a time per transfer (finish and "Apply changes again" share it).
+  const applying = new Set<string>()
+  const busy = <T>(): CloudTransferResult<T> => ({
+    ok: false,
+    code: 'busy',
+    message: 'Changes from this move are already being applied.'
+  })
   const claudeHome = deps.claudeHome ?? process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), '.claude')
   const codexHome = deps.codexHome ?? process.env.CODEX_HOME ?? join(homedir(), '.codex')
   const emit = (event: Omit<CloudTransferProgressEvent, 'at'>): void => {
@@ -78,6 +90,7 @@ export function installCloudTransferHandlers(deps: {
   ipcMain.removeHandler(CH.prepare)
   ipcMain.removeHandler(CH.finish)
   ipcMain.removeHandler(CH.reapply)
+  ipcMain.removeHandler(CH.listPending)
   ipcMain.handle(
     CH.prepare,
     async (
@@ -191,9 +204,16 @@ export function installCloudTransferHandlers(deps: {
       }
       const step = (phase: CloudTransferPhase): void =>
         emit({ workspaceId: entry.workspaceId, transferId: args.transferId, phase })
+      if (applying.has(args.transferId)) {
+        return busy()
+      }
+      applying.add(args.transferId)
       try {
         step('applying')
-        const finished = await applyTransferToWorktree(entry, args.worktreePath, { claudeHome, codexHome })
+        const finished = await applyTransferToWorktree(entry, args.worktreePath, {
+          claudeHome,
+          codexHome
+        })
         // Kept in memory while something is left to apply, so "Apply changes again" can retry.
         if (!finished.leftoverPatchDir) {
           prepared.delete(args.transferId)
@@ -202,6 +222,8 @@ export function installCloudTransferHandlers(deps: {
         return { ok: true, value: finished }
       } catch (error) {
         return fail(entry.workspaceId, args.transferId, error)
+      } finally {
+        applying.delete(args.transferId)
       }
     }
   )
@@ -216,16 +238,27 @@ export function installCloudTransferHandlers(deps: {
       if (!/^[0-9a-f-]{36}$/i.test(args.transferId)) {
         return { ok: false, code: 'not_found', message: 'That transfer is no longer available.' }
       }
-      const entry =
-        prepared.get(args.transferId) ??
-        (await loadPersistedTransfer(join(deps.userDataPath, 'cloud-transfers', args.transferId)))
-      const worktreeOk = await stat(args.worktreePath).then((s) => s.isDirectory(), () => false)
-      if (!entry || !worktreeOk) {
+      const dir = join(deps.userDataPath, 'cloud-transfers', args.transferId)
+      const entry = prepared.get(args.transferId) ?? (await loadPersistedTransfer(dir))
+      const recorded = await persistedWorktreePath(dir)
+      const worktreeOk = await stat(args.worktreePath).then(
+        (s) => s.isDirectory(),
+        () => false
+      )
+      // Only the worktree this transfer was first applied to: never another one the window names.
+      if (!entry || !worktreeOk || (recorded !== null && recorded !== args.worktreePath)) {
         return { ok: false, code: 'not_found', message: 'That transfer is no longer available.' }
       }
+      if (applying.has(args.transferId)) {
+        return busy()
+      }
+      applying.add(args.transferId)
       try {
         emit({ workspaceId: entry.workspaceId, transferId: args.transferId, phase: 'applying' })
-        const finished = await applyTransferToWorktree(entry, args.worktreePath, { claudeHome, codexHome })
+        const finished = await applyTransferToWorktree(entry, args.worktreePath, {
+          claudeHome,
+          codexHome
+        })
         if (finished.leftoverPatchDir) {
           prepared.set(args.transferId, entry)
         } else {
@@ -235,54 +268,18 @@ export function installCloudTransferHandlers(deps: {
         return { ok: true, value: finished }
       } catch (error) {
         return fail(entry.workspaceId, args.transferId, error)
+      } finally {
+        applying.delete(args.transferId)
       }
     }
+  )
+  ipcMain.handle(CH.listPending, async (): Promise<CloudTransferPending[]> =>
+    listPendingCloudTransfers(join(deps.userDataPath, 'cloud-transfers'))
   )
   return () => {
     ipcMain.removeHandler(CH.prepare)
     ipcMain.removeHandler(CH.finish)
     ipcMain.removeHandler(CH.reapply)
-  }
-}
-
-const LEFTOVER_TTL_MS = 30 * 86_400_000
-
-/**
- * Prepared transfers live only in memory, so anything on disk at startup is abandoned: removed,
- * except saved patches that did not apply (the user's work), which are kept for 30 days.
- */
-export async function sweepCloudTransfers(root: string, now: number): Promise<number> {
-  let removed = 0
-  for (const entry of await readdir(root, { withFileTypes: true }).catch(() => [])) {
-    if (!entry.isDirectory()) {
-      continue
-    }
-    const dir = join(root, entry.name)
-    const leftovers = await stat(join(dir, 'unapplied')).catch(() => null)
-    if (leftovers && now - leftovers.mtimeMs < LEFTOVER_TTL_MS) {
-      continue
-    }
-    // An apply was attempted but did not finish: keep it so "Apply changes again" still works.
-    if (await appliedAttemptWithin(dir, now)) {
-      continue
-    }
-    await rm(dir, { recursive: true, force: true })
-    removed++
-  }
-  return removed
-}
-
-async function appliedAttemptWithin(dir: string, now: number): Promise<boolean> {
-  const info = await stat(join(dir, TRANSFER_STATE_FILE)).catch(() => null)
-  if (!info || now - info.mtimeMs >= LEFTOVER_TTL_MS) {
-    return false
-  }
-  try {
-    const parsed = PersistedTransferSchema.safeParse(
-      JSON.parse(await readFile(join(dir, TRANSFER_STATE_FILE), 'utf8'))
-    )
-    return parsed.success && parsed.data.worktreePath !== undefined
-  } catch {
-    return false
+    ipcMain.removeHandler(CH.listPending)
   }
 }

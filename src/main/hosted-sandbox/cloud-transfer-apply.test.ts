@@ -11,7 +11,7 @@ import {
   loadPersistedTransfer,
   persistTransfer
 } from './cloud-transfer-apply'
-import { sweepCloudTransfers } from './cloud-transfer'
+import { listPendingCloudTransfers, sweepCloudTransfers } from './cloud-transfer'
 
 const git = (cwd: string, ...args: string[]) =>
   execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', ...args], {
@@ -91,9 +91,13 @@ describe('Apply changes again', () => {
 
   it('reports none for an empty patch and parses git apply conflict paths', async () => {
     const { repo, dir } = setup()
-    expect((await applyPatchIdempotent(repo, join(dir, 'staged.patch'), true, join(dir, 'u'))).outcome).toBe('none')
     expect(
-      conflictPathsFromGitApply('error: patch failed: src/x.ts:12\nerror: src/x.ts: patch does not apply\nerror: gone.txt: does not exist in working directory\n')
+      (await applyPatchIdempotent(repo, join(dir, 'staged.patch'), true, join(dir, 'u'))).outcome
+    ).toBe('none')
+    expect(
+      conflictPathsFromGitApply(
+        'error: patch failed: src/x.ts:12\nerror: src/x.ts: patch does not apply\nerror: gone.txt: does not exist in working directory\n'
+      )
     ).toEqual(['src/x.ts', 'gone.txt'])
   })
 
@@ -106,5 +110,85 @@ describe('Apply changes again', () => {
     expect(await sweepCloudTransfers(root, at)).toBe(1) // the bare repo dir goes, transfer stays
     expect(existsSync(entry.dir)).toBe(true)
     expect(await loadPersistedTransfer(join(root, 'nope'))).toBeNull()
+  })
+
+  it('re-applies safely when staged and unstaged changes touch the same file', async () => {
+    const { repo, dir, entry, homes } = setup()
+    // Cloud side: a.txt staged as "one staged", then edited further (unstaged) to "one staged + more".
+    writeFileSync(join(repo, 'a.txt'), 'one staged\n')
+    git(repo, 'add', 'a.txt')
+    writeFileSync(join(dir, 'staged.patch'), git(repo, 'diff', '--cached', '--binary'))
+    writeFileSync(join(repo, 'a.txt'), 'one staged\nmore\n')
+    writeFileSync(join(dir, 'unstaged.patch'), git(repo, 'diff', '--binary'))
+    git(repo, 'reset', '-q', '--hard')
+    const first = await applyTransferToWorktree(entry, repo, homes)
+    expect(first).toMatchObject({
+      appliedStaged: true,
+      appliedUnstaged: true,
+      leftoverPatchDir: null
+    })
+    expect(readFileSync(join(repo, 'a.txt'), 'utf8')).toBe('one staged\nmore\n')
+    // A retry (lost reply, or "Apply changes again") must recognise both as already there.
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'staged.patch'), git(repo, 'diff', '--cached', '--binary'))
+    writeFileSync(join(dir, 'unstaged.patch'), git(repo, 'diff', '--binary'))
+    const again = await applyTransferToWorktree(entry, repo, homes)
+    expect(again).toMatchObject({
+      appliedStaged: true,
+      appliedUnstaged: true,
+      leftoverPatchDir: null,
+      conflicts: []
+    })
+    expect(git(repo, 'diff', '--cached', '--name-only').trim()).toBe('a.txt')
+    expect(readFileSync(join(repo, 'a.txt'), 'utf8')).toBe('one staged\nmore\n')
+  })
+
+  it('keeps untracked files it could not write (a different file is here) and names them', async () => {
+    const { root, repo, dir, entry, homes } = setup()
+    const src = join(root, 'untracked-src')
+    mkdirSync(join(src, 'notes'), { recursive: true })
+    writeFileSync(join(src, 'notes', 'todo.md'), 'cloud todo\n')
+    writeFileSync(join(src, 'new.txt'), 'cloud new\n')
+    execFileSync('tar', ['-czf', join(dir, 'untracked.tgz'), '-C', src, 'notes', 'new.txt'], {
+      env: { ...process.env, COPYFILE_DISABLE: '1' }
+    })
+    mkdirSync(join(repo, 'notes'))
+    writeFileSync(join(repo, 'notes', 'todo.md'), 'my local todo\n')
+    const result = await applyTransferToWorktree(entry, repo, homes)
+    expect(readFileSync(join(repo, 'notes', 'todo.md'), 'utf8')).toBe('my local todo\n')
+    expect(readFileSync(join(repo, 'new.txt'), 'utf8')).toBe('cloud new\n')
+    expect(result.skippedUntracked).toEqual(['notes/todo.md'])
+    expect(result.leftoverPatchDir).toBe(join(dir, 'unapplied'))
+    expect(readFileSync(join(dir, 'unapplied', 'untracked-not-written.txt'), 'utf8')).toBe(
+      'notes/todo.md\n'
+    )
+    expect(existsSync(join(dir, 'unapplied', 'untracked.tgz'))).toBe(true)
+    // No temp files left behind next to the written ones.
+    expect(execFileSync('ls', ['-A', join(repo, 'notes')], { encoding: 'utf8' }).trim()).toBe(
+      'todo.md'
+    )
+    // Once the local file is moved aside, Apply changes again writes it; identical files count as done.
+    writeFileSync(join(repo, 'notes', 'todo.md'), 'cloud todo\n')
+    const again = await applyTransferToWorktree(entry, repo, homes)
+    expect(again.skippedUntracked).toEqual([])
+    expect(again.leftoverPatchDir).toBeNull()
+  })
+
+  it('lists transfers left part-applied, for the after-restart offer', async () => {
+    const { root, repo, entry } = setup()
+    const transfers = join(root, 'transfers')
+    const id = '11111111-2222-3333-4444-555555555555'
+    const dir = join(transfers, id)
+    mkdirSync(dir, { recursive: true })
+    await persistTransfer({ ...entry, dir }, repo)
+    mkdirSync(join(transfers, 'not-a-transfer'))
+    expect(await listPendingCloudTransfers(transfers)).toEqual([
+      {
+        transferId: id,
+        workspaceId: 'ws-1',
+        worktreePath: repo,
+        leftoverDir: join(dir, 'unapplied')
+      }
+    ])
   })
 })

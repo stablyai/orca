@@ -52,6 +52,16 @@ export type CloudTransferFinished = {
   skippedUntracked?: string[]
 }
 
+/** A move whose changes were not all applied; kept on disk so "Apply changes again" can retry. */
+export type CloudTransferPending = {
+  transferId: string
+  /** The cloud workspace it was moved from. */
+  workspaceId: string
+  /** The local worktree it was applied to. */
+  worktreePath: string
+  leftoverDir: string
+}
+
 export type CloudTransferResult<T> =
   | { ok: true; value: T }
   | { ok: false; code: string; message: string }
@@ -70,6 +80,8 @@ export type OrcaCloudTransferApi = {
     transferId: string
     worktreePath: string
   }) => Promise<CloudTransferResult<CloudTransferFinished>>
+  /** Moves with changes still to apply, kept across app restarts. */
+  listPendingTransfers: () => Promise<CloudTransferPending[]>
   onTransferProgress: (callback: (event: CloudTransferProgressEvent) => void) => () => void
 }
 
@@ -77,5 +89,6 @@ export const ORCA_CLOUD_TRANSFER_CHANNELS = {
   prepare: 'orcaCloudWorkspace:prepareTransferToLocal',
   finish: 'orcaCloudWorkspace:finishTransferToLocal',
   reapply: 'orcaCloudWorkspace:reapplyTransferToLocal',
+  listPending: 'orcaCloudWorkspace:listPendingTransfers',
   progress: 'orcaCloudWorkspace:transferProgress'
 } as const

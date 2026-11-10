@@ -83,7 +83,8 @@ export function CloudMoveToComputerView({
             },
             {
               key: 'changes',
-              node: known
+              node:
+                known && known.uncommittedChanges > 0
                 ? t(
                     'orcaCloudMove.confirm.changesCount',
                     '{{count}} uncommitted changes, plus untracked files',
