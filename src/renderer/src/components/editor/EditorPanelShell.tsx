@@ -96,10 +96,12 @@ export function EditorPanelShell({
   markdownAnnotationsEnabled
 }: EditorPanelShellProps): JSX.Element {
   return (
-    <div ref={panelRef} className="flex flex-col flex-1 min-w-0 min-h-0">
+    <div data-editor-panel ref={panelRef} className="flex flex-col flex-1 min-w-0 min-h-0">
       {shouldShowEditorPanelHeader(activeFile, model.isCombinedDiff) && (
         <EditorPanelHeader
           activeFile={activeFile}
+          diffContent={diffContents[activeFile.id]}
+          activeViewStateId={activeViewStateId}
           copiedPathVisible={copiedPathVisible}
           isSingleDiff={model.isSingleDiff}
           isDiffSurface={model.isDiffSurface}

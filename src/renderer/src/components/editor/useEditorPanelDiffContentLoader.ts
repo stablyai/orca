@@ -13,6 +13,10 @@ import { canUseChangesModeForFile } from './view-mode/editor-panel-file-mode'
 import type { EditorPanelContentLoadOptions } from './external-changes/useEditorPanelExternalContentEvents'
 import { stampCleanTabDiskBaseline } from './external-changes/editor-clean-tab-disk-baseline'
 import { translate } from '@/i18n/i18n'
+import {
+  statRuntimePath,
+  isMissingRuntimePathError
+} from '@/runtime/files/metadata/runtime-file-metadata-client'
 import { isWslDistroNotRunningRefusal } from '../../../../shared/wsl-distro-not-running-refusal'
 
 const inFlightDiffReads = new Map<string, InFlightContentRead<DiffContent>>()
@@ -161,6 +165,13 @@ export function useEditorPanelDiffContentLoader({
             }
           })
         }
+        const reviewMetadata = statRuntimePath(
+          { target: fileTarget, worktreeId: file.worktreeId, worktreePath, connectionId },
+          file.filePath
+        ).then(
+          (stat) => stat.mtime,
+          (error: unknown) => (isMissingRuntimePathError(error) ? null : undefined)
+        )
         const result = await pending.promise
         if (diffReadGenerationRef.current[file.id] !== generation) {
           return
@@ -173,6 +184,14 @@ export function useEditorPanelDiffContentLoader({
           result.largeDiffRenderLimit === undefined
         ) {
           stampCleanTabDiskBaseline(file.id, { content: result.modifiedContent, isBinary: false })
+        }
+        const reviewModifiedTime = await reviewMetadata
+        if (diffReadGenerationRef.current[file.id] === generation) {
+          setDiffContents((prev) =>
+            prev[file.id] === result
+              ? { ...prev, [file.id]: { ...result, reviewModifiedTime } }
+              : prev
+          )
         }
       } catch (err) {
         if (diffReadGenerationRef.current[file.id] !== generation) {
@@ -187,6 +206,7 @@ export function useEditorPanelDiffContentLoader({
             ...prev,
             [file.id]: {
               kind: 'text',
+              loadError: true,
               originalContent: '',
               modifiedContent: translate(
                 'auto.components.editor.EditorPanel.diffLoadError',
