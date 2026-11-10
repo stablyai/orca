@@ -297,4 +297,17 @@ describe('Store', () => {
       'fw-1': [editedNote]
     })
   })
+  it('drops the saved note map when the last note is cleared', async () => {
+    writeFolderWorkspaceProfile({
+      workspaces: [folderWorkspaceRecord()],
+      diffCommentsMap: { 'fw-1': [makeFolderNote('note-1', 'Old note')] }
+    })
+
+    const store = await createStore()
+    store.updateFolderWorkspace('fw-1', { diffComments: [] })
+    store.flush()
+
+    expect((readDataFile() as PersistedState).folderWorkspaceDiffComments).toBeUndefined()
+    expect((await createStore()).getFolderWorkspace('fw-1')?.diffComments ?? []).toEqual([])
+  })
 })

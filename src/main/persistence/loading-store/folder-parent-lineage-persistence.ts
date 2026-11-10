@@ -1,4 +1,5 @@
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
+import { WORKSPACE_LINEAGE_DOMAINS } from '../profile-save-domains'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
 import { ownsRawIdBucket } from './metadata-lineage-operations'
@@ -33,7 +34,7 @@ export class FolderParentLineagePersistence {
     delete state.worktreeLineageById[target.id]
     delete state.crossStoreLineageByChildKey?.[worktreeWorkspaceKey(target.id)]
     state.workspaceLineageByChildKey[worktreeWorkspaceKey(target.id)] = lineage
-    scheduleSave(this[folderParentLineageContext].scheduling)
+    scheduleSave(this[folderParentLineageContext].scheduling, WORKSPACE_LINEAGE_DOMAINS)
     return lineage
   }
 }

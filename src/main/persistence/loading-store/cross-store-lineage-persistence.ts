@@ -1,4 +1,5 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
+import { WORKSPACE_LINEAGE_DOMAINS } from '../profile-save-domains'
 import type { WorkspaceKey } from '../../../shared/workspace-scope'
 import type { CrossStoreWorkspaceLineage } from '../../../shared/worktree/lineage-types'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
@@ -61,7 +62,7 @@ export class CrossStoreLineagePersistence {
     delete state.workspaceLineageByChildKey[lineage.childWorkspaceKey]
     state.crossStoreLineageByChildKey ??= {}
     state.crossStoreLineageByChildKey[lineage.childWorkspaceKey] = lineage
-    scheduleSave(this[crossStoreLineagePersistenceContext].scheduling)
+    scheduleSave(this[crossStoreLineagePersistenceContext].scheduling, WORKSPACE_LINEAGE_DOMAINS)
     return lineage
   }
 }

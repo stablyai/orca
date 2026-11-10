@@ -9,6 +9,7 @@ import {
 } from './workspace-session-write-listeners'
 import { ptyBindingGenerationOf } from './pty-binding-generations'
 import type { PartitionEditorViews } from './layout-editor-views'
+import type { ProfileSaveDomains } from '../profile-save-domains'
 
 /** Undefined means any domain may have changed. */
 export type StateWriteListener = (dirtyDomains: readonly string[] | undefined) => void
@@ -92,10 +93,11 @@ export class WriteSchedulingOperations {
 
 export function scheduleSave(
   owner: WriteSchedulingOperations,
-  dirtyDomains?: readonly string[],
+  domains: ProfileSaveDomains,
   writtenHostId?: ExecutionHostId
 ): void {
   const { runtime, writes } = owner[writeSchedulingOperationsContext]
+  const dirtyDomains = domains === 'whole' ? undefined : domains
   notifyWorkspaceSessionWritten(runtime, dirtyDomains, writtenHostId)
   for (const listener of runtime.stateWriteListeners) {
     listener(dirtyDomains)

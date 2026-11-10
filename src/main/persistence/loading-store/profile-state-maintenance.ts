@@ -66,7 +66,7 @@ export function beginProfileStateMaintenance(
     runtime.profileMaintenancePending = false
     runtime.pendingProfileMaintenance = null
     resumePreference()
-    scheduleSave(domains.scheduling)
+    scheduleSave(domains.scheduling, 'whole')
     // Updates admitted while paused (or a retry it skipped) resume their routine save.
     persistGithubCache(runtime, 'routine')
   }

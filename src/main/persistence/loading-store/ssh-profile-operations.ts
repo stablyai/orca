@@ -75,7 +75,7 @@ export class SshProfileOperations {
   allocateSshTargetGeneration(): number {
     const context = this[sshProfileOperationsContext]
     return allocateSshTargetGenerationOperation(context.runtime.state, () =>
-      scheduleSave(context.scheduling)
+      scheduleSave(context.scheduling, ['sshTargetGenerationCounter'])
     )
   }
 
@@ -117,7 +117,7 @@ export class SshProfileOperations {
       protectedSecrets: this[sshProfileOperationsContext].runtime.protectedSecrets,
       syncProjectHostSetupCompatibilityState: () =>
         syncProjectHostSetupCompatibilityState(this[sshProfileOperationsContext].repos),
-      scheduleSave: () => scheduleSave(this[sshProfileOperationsContext].scheduling)
+      scheduleSave: () => scheduleSave(this[sshProfileOperationsContext].scheduling, 'whole')
     }
     return reassignSshTargetIdOperation(operations, oldTargetId, newTargetId)
   }
@@ -127,6 +127,6 @@ export function getSshTargetStateOperations(owner: SshProfileOperations): SshTar
   return {
     state: owner[sshProfileOperationsContext].runtime.state,
     protectedSecrets: owner[sshProfileOperationsContext].runtime.protectedSecrets,
-    scheduleSave: () => scheduleSave(owner[sshProfileOperationsContext].scheduling)
+    scheduleSave: (domains) => scheduleSave(owner[sshProfileOperationsContext].scheduling, domains)
   }
 }

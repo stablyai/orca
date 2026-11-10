@@ -80,7 +80,7 @@ export class RepoLifecycleOperations {
     getRepoOrderOperations(this).addRepo(repo)
     const context = this[repoLifecycleOperationsContext]
     if (applyNewWindowsDriveProjectDefault(context.runtime.state, repo)) {
-      scheduleSave(context.scheduling)
+      scheduleSave(context.scheduling, ['projects'])
     }
   }
 
@@ -138,7 +138,7 @@ export class RepoLifecycleOperations {
         }
       }
     }
-    scheduleSave(this[repoLifecycleOperationsContext].scheduling)
+    scheduleSave(this[repoLifecycleOperationsContext].scheduling, 'whole')
   }
 
   /** Sweep unregistered local repos at load; unpaired remote absence cannot prove deletion. */
@@ -219,6 +219,9 @@ function dropRepoRestoreHints(owner: RepoLifecycleOperations, repoId: string): v
   )
 }
 
+/** Repo writes also re-derive the project catalog compatibility rows. */
+const REPO_CATALOG_DOMAINS = ['repos', 'projects', 'projectHostSetups']
+
 export function getRepoOrderOperations(
   owner: RepoLifecycleOperations
 ): RepoOrderPersistenceOperations {
@@ -226,7 +229,8 @@ export function getRepoOrderOperations(
     new RepoOrderPersistenceOperations({
       state: owner[repoLifecycleOperationsContext].runtime.state,
       syncProjectHostSetupCompatibilityState: () => syncProjectHostSetupCompatibilityState(owner),
-      scheduleSave: () => scheduleSave(owner[repoLifecycleOperationsContext].scheduling)
+      scheduleSave: () =>
+        scheduleSave(owner[repoLifecycleOperationsContext].scheduling, REPO_CATALOG_DOMAINS)
     })
   return owner[repoLifecycleOperationsContext].runtime.repoOrderOperations
 }
@@ -272,7 +276,8 @@ export function getRepoUpdateOperations(
       state: owner[repoLifecycleOperationsContext].runtime.state,
       bumpLocalWorktreeScanGeneration,
       syncProjectHostSetupCompatibilityState: () => syncProjectHostSetupCompatibilityState(owner),
-      scheduleSave: () => scheduleSave(owner[repoLifecycleOperationsContext].scheduling),
+      scheduleSave: () =>
+        scheduleSave(owner[repoLifecycleOperationsContext].scheduling, REPO_CATALOG_DOMAINS),
       hydrateRepo: (repo) => hydrateRepo(owner, repo)
     })
   return owner[repoLifecycleOperationsContext].runtime.repoUpdateOperations
@@ -295,7 +300,8 @@ export function getProjectHostSetupOperations(
     new ProjectHostSetupPersistenceOperations({
       state: owner[repoLifecycleOperationsContext].runtime.state,
       updateRepo: (target, updates) => owner.updateRepo(target, updates),
-      scheduleSave: () => scheduleSave(owner[repoLifecycleOperationsContext].scheduling)
+      scheduleSave: () =>
+        scheduleSave(owner[repoLifecycleOperationsContext].scheduling, ['projectHostSetups'])
     })
   return owner[repoLifecycleOperationsContext].runtime.projectHostSetupOperations
 }

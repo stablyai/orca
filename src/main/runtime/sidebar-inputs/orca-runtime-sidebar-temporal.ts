@@ -29,7 +29,7 @@ import {
 } from '../../../shared/worktree/host-qualified-identity'
 import { anySleepKeyNames } from '../terminal/stop/worktree-terminal-sleep-key'
 import { resolveAgentWorkspaceExecutionHostId } from '../../agent-hooks/observations/restored-status-dead-terminal-sweep'
-import { WORKTREE_METADATA_DOMAINS } from '../../persistence/loading-store/worktree-identity-metadata'
+import { WORKTREE_METADATA_DOMAINS } from '../../persistence/profile-save-domains'
 import {
   isWslMoveProjectBlocked,
   wslMoveProjectRefForWorkspace

@@ -90,7 +90,7 @@ export class OrcadCatalogImportPersistence {
     const context = this[orcadCatalogImportContext]
     const now = options.now ?? (() => new Date())
     if (expireOrcadMigrationStages(context.runtime.state, now().getTime())) {
-      scheduleSave(context.scheduling)
+      scheduleSave(context.scheduling, ['orcadMigrationStagedCatalogs'])
     }
     pruneOrcadMigrationSnapshotStaging(
       stagedManifests(context.runtime.state),
@@ -122,7 +122,7 @@ export class OrcadCatalogImportPersistence {
         stagedAt
       }
     ]
-    scheduleSave(context.scheduling)
+    scheduleSave(context.scheduling, ['orcadMigrationStagedCatalogs'])
     return stagedCatalogState(manifest, stagedAt, context.runtime)
   }
 
@@ -182,7 +182,7 @@ export class OrcadCatalogImportPersistence {
     commitOrcadMigrationBlobs(manifest, blobRoot)
     const receipt = commitPreparedCatalog(context, manifest, prepared, options.now)
     const generationBefore = context.runtime.writeGeneration
-    scheduleSave(context.scheduling)
+    scheduleSave(context.scheduling, 'whole')
     recordOrcadMigrationCommitWriteGeneration(context.runtime, manifest, generationBefore)
     return committedCatalogState(receipt)
   }
@@ -201,7 +201,7 @@ export class OrcadCatalogImportPersistence {
     ).filter((entry) => entry.manifest.migrationId !== manifest.migrationId)
     abortOrcadMigrationSnapshots(manifest, context.runtime.terminalScrollbackSnapshotStorage)
     abortOrcadMigrationBlobs(manifest, context.runtime.orcadMigrationBlobRoot)
-    scheduleSave(context.scheduling)
+    scheduleSave(context.scheduling, ['orcadMigrationStagedCatalogs'])
     return { ...absentCatalogState(manifest), aborted: true }
   }
 

@@ -1,3 +1,4 @@
+import { WORKSPACE_SESSION_DOMAINS } from '../workspace-session-domains'
 import type { SshPendingPtyKill } from '../../../shared/ssh-pending-pty-kill'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
 import type { PtyRetirementEvidence } from '../../pty/process-retirement/pty-exit-proof'
@@ -89,7 +90,8 @@ function getSshPtyBindingCleanupOperations(
         targetId,
         ptyId
       ),
-    scheduleSave: () => scheduleSave(owner[sshLeaseRecoveryOperationsContext].scheduling)
+    scheduleSave: () =>
+      scheduleSave(owner[sshLeaseRecoveryOperationsContext].scheduling, WORKSPACE_SESSION_DOMAINS)
   }
 }
 

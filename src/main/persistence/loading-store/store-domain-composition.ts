@@ -186,7 +186,7 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
       runtime,
       sessions,
       // Retry persistence for terminal closes retained after failed writes.
-      ORCA_LAYOUT_OWNER_IS_MAIN ? () => scheduleSave(scheduling) : undefined
+      ORCA_LAYOUT_OWNER_IS_MAIN ? () => scheduleSave(scheduling, 'whole') : undefined
     ),
     sshProfiles,
     retiredWorktreeNames,
