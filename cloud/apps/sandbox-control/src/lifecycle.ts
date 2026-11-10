@@ -43,6 +43,7 @@ import {
   type SandboxRow,
   type SessionFields
 } from './store'
+import { recordSessionEnd } from './session-cpu'
 import { flushUsage, queueUsage } from './usage'
 import { SANDBOX_VCPUS } from './machine-size'
 import { isRegionalFailure } from './regions'
@@ -674,15 +675,21 @@ export async function stopForSuspend(
     if (stopped.snapshotId) {
       await recordSnapshots(deps.db, row.id, [stopped.snapshotId], deps.now())
     }
+    await queueUsage(deps.db, row, deps.now())
+    // Internal CPU review (U22): never throws, never touches the meter.
+    await recordSessionEnd(deps.db, row, deps.now(), stopped.usage, deps.now())
+  } else {
+    await queueUsage(deps.db, row, deps.now())
   }
-  await queueUsage(deps.db, row, deps.now())
   await deps.hooks?.afterStop?.(row).catch(() => undefined)
   return claim(deps, row, { status: 'suspended', ...NO_SESSION })
 }
 
 /** The provider ended the session on its own (lease lapsed): bill up to when it stopped. */
 export async function markProviderStopped(deps: LifecycleDeps, row: SandboxRow): Promise<SandboxRow> {
-  await queueUsage(deps.db, row, Math.min(deps.now(), row.lease_expires_at ?? deps.now()))
+  const endedAt = Math.min(deps.now(), row.lease_expires_at ?? deps.now())
+  await queueUsage(deps.db, row, endedAt)
+  await recordSessionEnd(deps.db, row, endedAt, null, deps.now())
   await deps.hooks?.afterStop?.(row).catch(() => undefined)
   return claim(deps, row, { status: 'suspended', ...NO_SESSION })
 }
@@ -809,6 +816,8 @@ export async function destroySandbox(deps: LifecycleDeps, row: SandboxRow): Prom
   }
   let destroying = row.status === 'destroying' ? row : await claim(deps, row, { status: 'destroying' })
   const settled = await queueUsage(deps.db, destroying, deps.now())
+  // A live session ends with the delete (no-op once suspended: the row has no session then).
+  await recordSessionEnd(deps.db, destroying, deps.now(), null, deps.now())
   if (settled !== destroying.usage_settled_at) {
     destroying = await claim(deps, destroying, { usage_settled_at: settled })
   }
