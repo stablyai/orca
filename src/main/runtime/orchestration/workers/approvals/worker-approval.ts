@@ -89,7 +89,7 @@ export function workerApprovalPayload(input: {
     state: outcome ? (outcome.decision === null ? 'expired' : 'answered') : 'open',
     worker: input.worker,
     summary: {
-      title: item.displayName ?? item.title,
+      title: item.displayName ? `Allow ${item.displayName}?` : item.title,
       detail,
       reason: item.decisionReason ?? null
     },

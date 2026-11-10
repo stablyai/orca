@@ -4,7 +4,7 @@ import { codexApprovalItem } from '../../../../codex/structured/prompts/codex-st
 import { CODEX_MCP_ELICITATION_METHOD } from '../../../../codex/structured/prompts/codex-prompt-registry'
 import { claudeApprovalItem } from '../../../../claude/structured/journal/claude-structured-prompt-items'
 import type { AgentJournalPromptOption } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { chatAnswerOutcome, workerApprovalOption } from './worker-approval'
+import { chatAnswerOutcome, workerApprovalOption, workerApprovalPayload } from './worker-approval'
 
 function acpOptions(kinds: string[]): AgentJournalPromptOption[] {
   const body = acpPermissionPresentation({
@@ -87,5 +87,35 @@ describe('chat answer outcome', () => {
       reason: 'use a script file',
       reasonDelivered: false
     })
+  })
+})
+
+describe('worker approval title', () => {
+  const claude = (extra: { displayName?: string; title?: string }) =>
+    claudeApprovalItem({
+      requestId: 'r',
+      promptKey: 'p',
+      toolUseId: 't',
+      toolName: 'Bash',
+      kind: 'approval',
+      input: { command: 'ls' },
+      suggestions: [],
+      questionIds: [],
+      settle: () => {},
+      ...extra
+    })
+  const title = (item: ReturnType<typeof claude>) =>
+    workerApprovalPayload({
+      approvalId: 'a',
+      item,
+      worker: { handle: 'h', dispatchId: 'd', taskId: 't' }
+    }).summary.title
+
+  it("asks to allow the tool by Claude's display name, as the terminal card does", () => {
+    expect(title(claude({ displayName: 'Bash' }))).toBe('Allow Bash?')
+  })
+
+  it("keeps Claude's own title when it gives no display name", () => {
+    expect(title(claude({ title: 'Review proposed plan' }))).toBe('Review proposed plan')
   })
 })
