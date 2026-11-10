@@ -186,6 +186,7 @@ export function renderWorktreeItemRow(
         renameRowKey={itemRow.rowKey}
         lineageChildCount={itemRow.lineageChildCount}
         lineageChildWorktreeIds={itemRow.lineageChildWorktreeIds}
+        lineageHiddenUnreadCount={itemRow.lineageHiddenUnreadCount}
         lineageCollapsed={itemRow.lineageCollapsed}
         lineageChildren={lineageChildren}
         lineageChildrenStyle={lineageChildrenStyle}

@@ -88,6 +88,11 @@ export function appendWorktreeRows(
       childIdsByParent.set(occurrence.parent.key, children)
     }
   }
+  // Match each hidden card's own unread dot: folder rows read the folder workspace's flag.
+  const unreadDescendantsByKey = countUnreadDescendants(sectionOccurrences, (worktree) => {
+    const folderPair = options.folderPairByIdentity?.get(getWorktreeHostIdentity(worktree))
+    return folderPair ? folderPair.folderWorkspace.isUnread : worktree.isUnread
+  })
   const occurrences = getExpandedWorktreeOccurrences(sectionOccurrences, (worktree) =>
     options.collapsedGroups.has(getWorktreeLineageGroupKey(worktree))
   )
@@ -99,6 +104,7 @@ export function appendWorktreeRows(
         buildFolderWorkspaceRow(folderPair, options.groupDepth, occurrence, {
           collapsedGroups: options.collapsedGroups,
           childWorktreeIds: childIdsByParent.get(occurrence.key),
+          unreadDescendantCount: unreadDescendantsByKey.get(occurrence.key),
           hostContextLabel: options.hostContextLabelByWorktreeIdentity?.get(
             getWorktreeHostIdentity(worktree)
           )
@@ -106,6 +112,11 @@ export function appendWorktreeRows(
       )
       continue
     }
+    const lineageCollapsed =
+      occurrence.childCount > 0 && options.collapsedGroups.has(getWorktreeLineageGroupKey(worktree))
+    const hiddenUnreadCount = lineageCollapsed
+      ? unreadDescendantsByKey.get(occurrence.key)
+      : undefined
     result.push({
       type: 'item',
       occurrence,
@@ -125,11 +136,29 @@ export function appendWorktreeRows(
       ...(occurrence.childCount > 0
         ? {
             lineageGroupKey: getWorktreeLineageGroupKey(worktree),
-            lineageCollapsed: options.collapsedGroups.has(getWorktreeLineageGroupKey(worktree))
+            lineageCollapsed
           }
-        : {})
+        : {}),
+      ...(hiddenUnreadCount ? { lineageHiddenUnreadCount: hiddenUnreadCount } : {})
     })
   }
+}
+
+/** Unread descendants per occurrence key; collapsing a lineage hides every one of them. */
+function countUnreadDescendants(
+  occurrences: readonly WorktreeOccurrence<Worktree>[],
+  isUnread: (worktree: Worktree) => boolean
+): Map<string, number> {
+  const counts = new Map<string, number>()
+  for (const occurrence of occurrences) {
+    if (!isUnread(occurrence.row)) {
+      continue
+    }
+    for (let ancestor = occurrence.parent; ancestor; ancestor = ancestor.parent) {
+      counts.set(ancestor.key, (counts.get(ancestor.key) ?? 0) + 1)
+    }
+  }
+  return counts
 }
 
 /** One host-keyed folder row constructor for all emitters; IDs can collide across hosts. */
@@ -140,11 +169,15 @@ export function buildFolderWorkspaceRow(
   options?: {
     collapsedGroups: ReadonlySet<string>
     childWorktreeIds?: readonly string[]
+    unreadDescendantCount?: number
     hostContextLabel?: string
   }
 ): FolderWorkspaceRow {
   const lineageGroupKey =
     occurrence && occurrence.childCount > 0 ? getWorktreeLineageGroupKey(occurrence.row) : undefined
+  const lineageCollapsed =
+    lineageGroupKey !== undefined && options?.collapsedGroups.has(lineageGroupKey) === true
+  const hiddenUnreadCount = lineageCollapsed ? options?.unreadDescendantCount : undefined
   return {
     type: 'folder-workspace',
     key: `folder-workspace:${getFolderWorkspaceHostIdentity(pair.folderWorkspace)}`,
@@ -158,7 +191,8 @@ export function buildFolderWorkspaceRow(
           lineageChildCount: occurrence.childCount,
           lineageChildWorktreeIds: options?.childWorktreeIds,
           lineageGroupKey,
-          lineageCollapsed: options?.collapsedGroups.has(lineageGroupKey) === true
+          lineageCollapsed,
+          ...(hiddenUnreadCount ? { lineageHiddenUnreadCount: hiddenUnreadCount } : {})
         }
       : {})
   }

@@ -22203,6 +22203,8 @@
       "permission": "Genehmigung erforderlich",
       "unconfirmed": "Bestätigung nicht möglich",
       "unreadLabel": "{{status}} · ungelesen",
+      "hiddenUnread_one": "{{count}} ungelesen",
+      "hiddenUnread_other": "{{count}} ungelesen",
       "working": "In Arbeit"
     },
     "reviewStatus": {

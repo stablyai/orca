@@ -125,4 +125,97 @@ describe('buildRows workspace lineage nesting', () => {
       [child.id, 1]
     ])
   })
+
+  describe('hidden unread count', () => {
+    const unreadChild: Worktree = { ...child, isUnread: true }
+    const readSibling: Worktree = {
+      ...worktree,
+      id: 'wt-sibling',
+      instanceId: 'sibling-instance',
+      displayName: 'reviewer'
+    }
+    const unreadGrandchild: Worktree = {
+      ...worktree,
+      id: 'wt-grandchild',
+      instanceId: 'grandchild-instance',
+      displayName: 'helper',
+      isUnread: true
+    }
+    const lineageById: Record<string, WorktreeLineage> = {
+      [child.id]: lineage,
+      [readSibling.id]: {
+        ...lineage,
+        worktreeId: readSibling.id,
+        worktreeInstanceId: 'sibling-instance'
+      },
+      [unreadGrandchild.id]: {
+        ...lineage,
+        worktreeId: unreadGrandchild.id,
+        worktreeInstanceId: 'grandchild-instance',
+        parentWorktreeId: child.id,
+        parentWorktreeInstanceId: 'child-instance'
+      }
+    }
+
+    function hiddenUnreadByWorktree(
+      worktrees: Worktree[],
+      collapsed: readonly Worktree[]
+    ): [string, boolean | undefined, number | undefined][] {
+      const rows = buildRows(
+        'none',
+        worktrees,
+        repoMap,
+        null,
+        new Set(collapsed.map(getWorktreeLineageGroupKey)),
+        undefined,
+        undefined,
+        undefined,
+        lineageById,
+        new Map(worktrees.map((entry) => [entry.id, entry])),
+        true
+      )
+      return rows.flatMap((row) =>
+        row.type === 'item'
+          ? [[row.worktree.id, row.lineageCollapsed, row.lineageHiddenUnreadCount]]
+          : []
+      )
+    }
+
+    it('counts every unread workspace a collapsed lineage hides, grandchildren included', () => {
+      expect(
+        hiddenUnreadByWorktree([parent, unreadChild, readSibling, unreadGrandchild], [parent])
+      ).toEqual([[parent.id, true, 2]])
+    })
+
+    it('does not count the collapsed parent itself', () => {
+      const unreadParent: Worktree = { ...parent, isUnread: true }
+      expect(hiddenUnreadByWorktree([unreadParent, child, readSibling], [unreadParent])).toEqual([
+        [parent.id, true, undefined]
+      ])
+    })
+
+    it('counts only below the collapsed level of an expanded parent', () => {
+      expect(
+        hiddenUnreadByWorktree([parent, unreadChild, readSibling, unreadGrandchild], [unreadChild])
+      ).toEqual([
+        [parent.id, false, undefined],
+        [unreadChild.id, true, 1],
+        [readSibling.id, undefined, undefined]
+      ])
+    })
+
+    it('leaves expanded lineages and read children without a count', () => {
+      expect(
+        hiddenUnreadByWorktree([parent, unreadChild, readSibling, unreadGrandchild], [])
+      ).toEqual([
+        [parent.id, false, undefined],
+        [unreadChild.id, false, undefined],
+        [unreadGrandchild.id, undefined, undefined],
+        [readSibling.id, undefined, undefined]
+      ])
+      expect(hiddenUnreadByWorktree([parent, child, readSibling], [parent])).toEqual([
+        [parent.id, true, undefined]
+      ])
+    })
+  })
 })

@@ -63,6 +63,8 @@ export type WorktreeRow = {
   isLastLineageChild: boolean
   lineageChildCount: number
   lineageChildWorktreeIds?: readonly string[]
+  /** Unread workspaces anywhere under a collapsed lineage; set only when collapsed and non-zero. */
+  lineageHiddenUnreadCount?: number
   lineageGroupKey?: string
   lineageCollapsed?: boolean
   hostContextLabel?: string
@@ -123,6 +125,8 @@ export type FolderWorkspaceRow = {
   /** Workspaces nested under this folder; set only when it has any. */
   lineageChildCount?: number
   lineageChildWorktreeIds?: readonly string[]
+  /** Unread workspaces anywhere under a collapsed lineage; set only when collapsed and non-zero. */
+  lineageHiddenUnreadCount?: number
   lineageGroupKey?: string
   lineageCollapsed?: boolean
 }

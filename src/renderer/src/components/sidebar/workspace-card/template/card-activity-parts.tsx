@@ -80,6 +80,7 @@ export const CARD_ACTIVITY_PARTS = {
   ChildToggle: part([], (_props, _children, card) => (
     <WorktreeLineageToggle
       childWorktreeIds={card.lineageChildWorktreeIds}
+      hiddenUnreadCount={card.lineageHiddenUnreadCount}
       collapsed={card.lineageCollapsed}
       ariaLabel={card.lineageChildAriaLabel}
       label={card.childWorkspaceShortLabel}
