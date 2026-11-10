@@ -57,6 +57,8 @@ export async function readResumableTranscript(
   const resume = args.resume
   const canResume =
     resume !== null &&
+    // Compressed transcripts are immutable archives; offsets into them are meaningless.
+    !file.path.endsWith('.zst') &&
     typeof file.sizeBytes === 'number' &&
     file.sizeBytes >= resume.byteOffset &&
     file.mtimeMs >= resume.mtimeMs &&

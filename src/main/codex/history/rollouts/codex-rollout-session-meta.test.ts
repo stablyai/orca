@@ -1,6 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { zstdCompressSync } from 'node:zlib'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as WslFsAccessModule from '../../../native-chat/wsl-transcript-fs-access'
 import { readCodexRolloutSessionMetaId } from './codex-rollout-session-meta'
@@ -42,6 +43,22 @@ describe('readCodexRolloutSessionMetaId', () => {
 
     await expect(readCodexRolloutSessionMetaId(join(root, 'missing.jsonl'))).resolves.toBeNull()
     await expect(readCodexRolloutSessionMetaId(malformed)).resolves.toBeNull()
+  })
+
+  it('reads the session id from a compressed rollout', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-codex-session-meta-'))
+    tempRoots.push(root)
+    const rollout = join(root, 'rollout.jsonl.zst')
+    await writeFile(
+      rollout,
+      zstdCompressSync(
+        Buffer.from(
+          `${JSON.stringify({ type: 'session_meta', payload: { id: 'archived-id' } })}\nignored\n`
+        )
+      )
+    )
+
+    await expect(readCodexRolloutSessionMetaId(rollout)).resolves.toBe('archived-id')
   })
 
   it('surfaces an aborted read instead of reporting an unprovable rollout', async () => {

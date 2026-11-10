@@ -8,7 +8,7 @@ import { sessionSortTime } from '../../session-scanner-accumulator'
 // Bridging and backfill expose one rollout through multiple roots; list only its canonical alias (#7521).
 
 // Rollout names narrow candidates; inode or parsed session ID must still prove identity.
-const CODEX_ROLLOUT_FILE_NAME_PATTERN = /^rollout-.+\.jsonl$/
+const CODEX_ROLLOUT_FILE_NAME_PATTERN = /^rollout-.+\.jsonl(?:\.zst)?$/
 
 // Hosts can scan foreign-platform paths, so handle both separators independently of node:path.
 function lastPathSegment(filePath: string): string {
@@ -105,8 +105,39 @@ export async function dedupeCodexRolloutAliases<T>(
   readSessionMetaId: (filePath: string) => Promise<string | null>,
   signal?: AbortSignal
 ): Promise<T[]> {
-  const hardlinkDeduped = dedupeCodexRolloutFileAliases(candidates, accessors)
+  const twinDeduped = dropCompressedCodexRolloutTwins(candidates, accessors)
+  const hardlinkDeduped = dedupeCodexRolloutFileAliases(twinDeduped, accessors)
   return dedupeCodexRolloutCopyAliases(hardlinkDeduped, accessors, readSessionMetaId, signal)
+}
+
+/** Codex decompresses a rollout back to .jsonl when it resumes it; list only the live plain file. */
+export function dropCompressedCodexRolloutTwins<T>(
+  candidates: readonly T[],
+  accessors: {
+    isCodex: (candidate: T) => boolean
+    getFilePath: (candidate: T) => string
+  }
+): T[] {
+  const plainTwinPaths = new Set<string>()
+  for (const candidate of candidates) {
+    if (!accessors.isCodex(candidate)) {
+      continue
+    }
+    const filePath = accessors.getFilePath(candidate)
+    if (
+      CODEX_ROLLOUT_FILE_NAME_PATTERN.test(lastPathSegment(filePath)) &&
+      !filePath.endsWith('.zst')
+    ) {
+      plainTwinPaths.add(filePath)
+    }
+  }
+  return candidates.filter((candidate) => {
+    if (!accessors.isCodex(candidate)) {
+      return true
+    }
+    const filePath = accessors.getFilePath(candidate)
+    return !filePath.endsWith('.zst') || !plainTwinPaths.has(filePath.slice(0, -'.zst'.length))
+  })
 }
 
 // Match parse batch width; the WSL transcript gate separately serializes UNC reads.

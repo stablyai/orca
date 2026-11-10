@@ -124,7 +124,8 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
         ...wslHomeSessionDirs('codex', wslHomeDirs),
         ...(options.additionalCodexSessionsDirs ?? [])
       ]),
-    extensions: ['.jsonl']
+    // Codex archives rollouts idle 7+ days as .jsonl.zst (#40312).
+    extensions: ['.jsonl', '.zst']
   },
   gemini: {
     rootDirs: (options, wslHomeDirs) =>
