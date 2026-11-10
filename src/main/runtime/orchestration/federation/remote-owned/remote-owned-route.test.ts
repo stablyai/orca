@@ -242,9 +242,8 @@ describe('commands about a worker a paired server owns', () => {
 
   it("answers in the caller's terms: its own request ID and its own Run, never the server's", async () => {
     const receipt = await startOnB()
-    answers['orchestration.workerShow'] = []
     const key = () =>
-      sent.filter((s) => s.method === 'orchestration.workerRelease').at(-1)?.envelope
+      sent.findLast((s) => s.method === 'orchestration.workerRelease')?.envelope
         ?.orchestrationRequestId
     answers['orchestration.workerRelease'] = [{ result: { state: 'released' } }]
     await call('orchestration.workerRelease', { dispatch: 'ctx_b1' }, { requestId: REQUEST })
