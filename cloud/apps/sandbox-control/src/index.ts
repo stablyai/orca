@@ -201,7 +201,9 @@ function workspaceConfig(env: Env, deps: Deps): WorkspaceConfig {
   } catch {
     centsPerHour = undefined
   }
+  const idle = Number(env.IDLE_SLEEP_MINUTES)
   return {
+    idleSleepMinutes: Number.isInteger(idle) && idle >= 1 && idle <= 24 * 60 ? idle : undefined,
     archiveTtlMs: Number.isFinite(days) && days >= 1 ? Math.floor(days) * 86_400_000 : undefined,
     centsPerHour,
     background: deps.waitUntil,
@@ -812,7 +814,7 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       // Public product constants (no auth): every client reads these instead of hardcoding them.
       const createTiming = await cachedCreateTiming(env.SANDBOX_DB, (deps.now ?? Date.now)())
       return Response.json(
-        { idleSleepMinutes: ORCA_CLOUD_IDLE_SLEEP_MINUTES, ...(createTiming ? { createTiming } : {}) },
+        { idleSleepMinutes: workspaceConfig(env, deps).idleSleepMinutes ?? ORCA_CLOUD_IDLE_SLEEP_MINUTES, ...(createTiming ? { createTiming } : {}) },
         { headers: { 'cache-control': 'public, max-age=300' } }
       )
     }
@@ -1047,7 +1049,10 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       return fail('not_configured', 503)
     }
     const [, id, action] = match
-    const archivedAware = (request.headers.get(FEATURES_HEADER) ?? '').split(',').map((f) => f.trim()).includes('archive')
+    const features = (request.headers.get(FEATURES_HEADER) ?? '').split(',').map((f) => f.trim())
+    const archivedAware = features.includes('archive')
+    // Older desktops parse status strictly: the new field only goes to clients that ask for it.
+    const idleMinutesAware = features.includes('idle-minutes')
     const view = (row: SandboxRow) => sandboxView(row, archivedAware)
     if (!id) {
       if (request.method === 'GET') {
@@ -1117,7 +1122,10 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         return json(readyView(ready.row, ready.connection))
       }
       case 'GET status':
-        return json({ sandbox: view(row), status: await workspaceStatus(life, row, workspaceConfig(env, deps)) })
+      {
+        const { idleSleepMinutes, ...status } = await workspaceStatus(life, row, workspaceConfig(env, deps))
+        return json({ sandbox: view(row), status: idleMinutesAware ? { ...status, idleSleepMinutes } : status })
+      }
       case 'POST archive': {
         const body = ArchiveRequestSchema.safeParse(await readJson(request, MAX_ARCHIVE_JSON_BYTES))
         if (!body.success) {

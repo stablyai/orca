@@ -2190,13 +2190,6 @@
         "busyInUseHere": "localhost:{{value0}} in use on this computer",
         "listenFailedRetry": "Couldn't listen on this computer. Retry or pick another port"
       },
-      "orcaCloudTransfer": {
-        "waking": "Waking the workspace…",
-        "done": "Moved to this computer",
-        "leftovers": "Some changes did not apply cleanly; they were saved to {{dir}}.",
-        "summary": "Branch {{branch}} with your uncommitted changes and agent chats ({{count}}). The cloud workspace is unchanged.",
-        "failed": "Could not move the workspace"
-      },
       "orcaCloud": {
         "workspaceActions": {
           "unavailable": "Orca Cloud is unavailable."
@@ -22939,7 +22932,7 @@
         "composerPlaceholder": "Message the agent",
         "composerLabel": "Message to queue",
         "sendAndWake": "Send and wake",
-        "region": "Sleeping workspace (read-only)",
+        "region": "Asleep workspace (read-only)",
         "wake": "Wake",
         "emptyBody": "Orca keeps a copy of chats, terminals and changes once you have used this workspace while it was awake.",
         "tabChat": "Chat",
@@ -25743,7 +25736,7 @@
       "cleanupStopped": "Cleanup stopped by user.",
       "cleanupInterrupted": "Cleanup was interrupted. Retry cleanup to continue.",
       "sshTargetRemoveFailed": "Failed to remove the hidden SSH target.",
-      "cloudPlanRequired": "Orca Cloud workspaces need a plan with cloud hours. Open Plan & billing to choose one.",
+      "cloudPlanRequired": "Orca Cloud needs a Team plan. Open Plan & billing to choose one.",
       "cloudSignInRequired": "Sign in to Orca to use Orca Cloud workspaces.",
       "cloudUnavailable": "Orca Cloud is unavailable right now. Try again in a moment.",
       "cloudGithubNotConnected": "Connect GitHub to your Orca account so Orca Cloud can clone this repository.",
@@ -25756,7 +25749,7 @@
       "resumeExitedWithoutCode": "Resume exited without an exit code.",
       "recipeTimedOut": "The recipe {{mode}} step did not finish within {{timeout}}, so Orca stopped it. Check the recipe output, or raise timeoutSeconds in orca.yaml if it needs longer.",
       "provisionInterrupted": "Orca stopped while this VM was being created. Destroy it to release any provider resources.",
-      "cloudConcurrencyLimit": "You already have as many Orca Cloud workspaces running as your plan allows. Sleep or delete one, then try again."
+      "cloudConcurrencyLimit": "You’re at your team’s limit of running sandboxes. Put one to sleep or delete it, then try again."
     }
   },
   "installDirAcl": {
@@ -26334,11 +26327,17 @@
       "hours": "{{value}} h"
     },
     "sandboxHoursValue": "{{value}} sandbox hours",
-    "idleSleptMinutes": "{{name}} slept after {{count}} minutes idle",
     "idleSleptNoTime": "{{name}} went to sleep while idle",
     "idleSleptDetail": "Files and chats are saved. It uses no sandbox hours until you open it.",
     "typedWhileWaking": "What you typed is on the prompt. Press Enter to run it.",
-    "typingNotSent": "Your typing wasn’t sent."
+    "typingNotSent": "Your typing wasn’t sent.",
+    "idleSleptMinutes_one": "{{name}} slept after {{count}} minute idle",
+    "idleSleptMinutes_other": "{{name}} slept after {{count}} minutes idle",
+    "moveToComputer": "Move to this computer",
+    "moveHere": "Move here",
+    "openLocal": "Open local workspace",
+    "copiedOn": "Moved to this computer · {{date}}",
+    "moveAgain": "Move again"
   },
   "cloudAgentSetup": {
     "loading": "Checking what agents can use…",
@@ -26616,5 +26615,89 @@
     "syncingShort": "Syncing…",
     "title": "MCP servers",
     "toggleServer": "Sync {{name}} ({{agent}}) to cloud workspaces"
+  },
+  "orcaCloudMove": {
+    "step": {
+      "waking": "Waking",
+      "packing": "Packing",
+      "downloading": "Downloading",
+      "creating": "Creating workspace",
+      "applying": "Applying changes"
+    },
+    "confirm": {
+      "intro": "This creates a local workspace from {{name}}:",
+      "branch": "The branch and its commits",
+      "changes": "Uncommitted changes and untracked files",
+      "chats": "Claude and Codex chats, so agents can resume here",
+      "branchTaken": "{{branch}} is already checked out on this computer",
+      "branchTakenDetail": "It will be {{newName}}. Chats already on this computer are kept.",
+      "action": "Move to this computer",
+      "branchNamed": "Branch {{branch}} and its commits",
+      "changesCount_one": "{{count}} uncommitted change, plus untracked files",
+      "changesCount_other": "{{count}} uncommitted changes, plus untracked files",
+      "chatsCount_one": "{{count}} agent chat, so the agent can resume here",
+      "chatsCount_other": "{{count}} agent chats, so agents can resume here",
+      "archiveAfter": "Archive the cloud workspace afterwards",
+      "stopsAgents_one": "Stops {{count}} running agent",
+      "stopsAgents_other": "Stops {{count}} running agents"
+    },
+    "cancel": "Cancel",
+    "steps": "Steps",
+    "bytesOf": "{{done}} of {{total}}",
+    "elapsed": "{{elapsed}} elapsed",
+    "failedDetail": "Your files are safe in the cloud workspace. Nothing changed on this computer.",
+    "retry": "Try again",
+    "close": "Close",
+    "done": {
+      "branch": "Branch {{branch}}",
+      "branchRenamed": "Branch {{branch}} (renamed from {{cloud}})",
+      "changes": "Uncommitted changes",
+      "untracked_one": "{{count}} untracked file",
+      "untracked_other": "{{count}} untracked files",
+      "chats_one": "{{count}} agent chat",
+      "chats_other": "{{count}} agent chats",
+      "archive": "Archive cloud workspace",
+      "changesPartial": "Uncommitted changes, partly",
+      "archived": "The cloud workspace is archived. Unarchive it any time.",
+      "stillRunning": "The cloud workspace is still running and using sandbox hours. Archive it to stop that; you can unarchive later.",
+      "open": "Open workspace"
+    },
+    "partialDetail": "Some changes didn’t apply cleanly. They were saved here, so nothing is lost:",
+    "title": {
+      "running": "Moving {{name}} to this computer",
+      "done": "Moved to this computer",
+      "failed": "Couldn’t move {{name}}",
+      "confirm": "Move to this computer"
+    },
+    "description": "Copy this cloud workspace to a local workspace.",
+    "hide": "Hide",
+    "failedLocalDetail": "The local workspace was created, but the changes didn’t apply. Your files are safe in the cloud workspace.",
+    "show": "Show",
+    "stepState": {
+      "active": "in progress",
+      "done": "done",
+      "pending": "not started"
+    },
+    "background": "You can keep working; this finishes in the background.",
+    "cause": {
+      "waking": "The sandbox didn’t wake up.",
+      "packing": "The workspace couldn’t be packed in the sandbox.",
+      "downloading": "The download from the sandbox didn’t finish.",
+      "creating": "The local workspace couldn’t be created.",
+      "applying": "The changes couldn’t be applied to the local workspace."
+    },
+    "notice": {
+      "done": "{{name}} is on this computer",
+      "lateDone": "{{name}} finished moving to this computer"
+    },
+    "showDetails": "Show details",
+    "timeout": {
+      "waking": "Waking the sandbox is taking too long, so Orca stopped waiting. Your files are safe; try again.",
+      "packing": "Packing the workspace is taking too long, so Orca stopped waiting. Your files are safe; try again.",
+      "downloading": "The download is taking too long, so Orca stopped waiting. Your files are safe; try again.",
+      "creating": "Creating the local workspace is taking too long, so Orca stopped waiting.",
+      "applying": "Applying the changes is taking too long, so Orca stopped waiting."
+    },
+    "openFolder": "Open folder"
   }
 }

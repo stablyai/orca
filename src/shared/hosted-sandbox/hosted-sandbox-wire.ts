@@ -229,14 +229,17 @@ export const HostedWorkspaceStatusSchema = z
       })
       .strict(),
     archive: z.object({ archivedAt: Millis, expiresAt: Millis.nullable() }).strict().nullable(),
+    // Optional: older control planes omit it; the desktop then uses its 15 min fallback.
+    idleSleepMinutes: z.number().int().positive().max(1440).optional(),
     checkedAt: Millis
   })
-  .strict()
+  // Strip, not strict: a newer control plane may add fields; this desktop ignores them.
+  .strip()
 export type HostedWorkspaceStatus = z.infer<typeof HostedWorkspaceStatusSchema>
 
 export const HostedWorkspaceStatusResponseSchema = z
   .object({ sandbox: HostedSandboxViewSchema, status: HostedWorkspaceStatusSchema })
-  .strict()
+  .strip()
 
 const ArchiveCommit = z
   .object({

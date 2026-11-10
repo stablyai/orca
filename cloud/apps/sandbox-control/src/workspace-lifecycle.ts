@@ -2,6 +2,7 @@
 // open, message, SSH, preview — goes through it), Restart for unresponsive VMs, archive/unarchive
 // with a snapshot TTL, and the status panel's live view (state, metrics, uptime, cost so far).
 import type { MachineSize } from './entitlements'
+import { ORCA_CLOUD_IDLE_SLEEP_MINUTES } from '../../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
 import { GuardrailError, killSwitchOn } from './guardrails'
 import {
   DEFAULT_SNAPSHOT_EXPIRATION_MS,
@@ -46,9 +47,16 @@ const WAKE_STALE_MS = 4 * 60_000
 const WAKE_FAILURE_HOLD_MS = 60_000
 /** Archive gives orcad this long to write durable offers (the desktop already ran its Sleep). */
 const ARCHIVE_DRAIN_SECONDS = 60
+/**
+ * Minutes without clients, agents or terminal input before a sandbox sleeps. One value for every
+ * surface (scheduler, toasts, plans); must equal billing's plan `idleSleepMinutes` (test-enforced).
+ */
+export const DEFAULT_IDLE_SLEEP_MINUTES = ORCA_CLOUD_IDLE_SLEEP_MINUTES
 export const DEFAULT_CENTS_PER_HOUR: Record<MachineSize, number> = { standard: 75, large: 150 }
 
 export type WorkspaceConfig = {
+  /** IDLE_SLEEP_MINUTES; DEFAULT_IDLE_SLEEP_MINUTES when unset. */
+  idleSleepMinutes?: number
   archiveTtlMs?: number
   centsPerHour?: Partial<Record<MachineSize, number>>
   /** Keeps a wake running after the response (Worker ctx.waitUntil); tests omit it. */
@@ -326,6 +334,8 @@ export type WorkspaceStatus = {
   uptimeMs: number | null
   usage: { totalMs: number; centsPerHour: number; costCents: number }
   archive: { archivedAt: number; expiresAt: number | null } | null
+  /** How long this sandbox may sit idle before it sleeps (the desktop's idle stop and every "Sleeps after" line). */
+  idleSleepMinutes: number
   checkedAt: number
 }
 
@@ -364,6 +374,7 @@ export async function workspaceStatus(deps: LifecycleDeps, input: SandboxRow, co
     uptimeMs: row.status === 'running' && row.ready_at !== null ? Math.max(0, now - row.ready_at) : null,
     usage: { totalMs, centsPerHour, costCents: Math.round((totalMs / 3_600_000) * centsPerHour) },
     archive: row.archived_at !== null ? { archivedAt: row.archived_at, expiresAt: row.archive_expires_at } : null,
+    idleSleepMinutes: config.idleSleepMinutes ?? DEFAULT_IDLE_SLEEP_MINUTES,
     checkedAt: now
   }
 }
