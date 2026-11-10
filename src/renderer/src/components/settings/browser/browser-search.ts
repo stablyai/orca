@@ -32,7 +32,7 @@ export function getBrowserPaneSearchEntries(
   const translateSearchKeyword = searchKeywordTranslator(t)
   return [
     {
-      title: t('auto.components.settings.browser.search.c3903322d2', 'Default Home Page'),
+      title: t('auto.components.settings.browser.search.1c2aff8f82', 'Default home page'),
       description: t(
         'auto.components.settings.browser.search.a942905148',
         'URL opened when creating a new browser tab. Leave empty to open a blank tab.'
@@ -49,7 +49,7 @@ export function getBrowserPaneSearchEntries(
       ]
     },
     {
-      title: t('auto.components.settings.browser.search.5e755920c9', 'Default Search Engine'),
+      title: t('auto.components.settings.browser.search.5a70844e54', 'Default search engine'),
       description: t(
         'auto.components.settings.browser.search.0628d5943b',
         'Search engine used when typing non-URL text in the address bar.'
@@ -73,7 +73,7 @@ export function getBrowserPaneSearchEntries(
       ]
     },
     {
-      title: t('auto.components.settings.browser.search.072b7f5c1f', 'Default Zoom'),
+      title: t('auto.components.settings.browser.search.f6de9e25a0', 'Default zoom'),
       description: t(
         'auto.components.settings.browser.search.c3d89ed4d0',
         'Zoom level applied to newly opened browser tabs.'
@@ -95,7 +95,7 @@ export function getBrowserPaneSearchEntries(
       ]
     },
     {
-      title: t('auto.components.settings.browser.search.5cb082b3e3', 'Link Routing'),
+      title: t('auto.components.settings.browser.search.f0eb09ce09', 'Link routing'),
       description: getBrowserLinkRoutingDescription(platform, undefined, t),
       keywords: [
         ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser'),
@@ -159,7 +159,7 @@ export function getBrowserPaneSearchEntries(
       keywords: getTerminalLinkActionSearchKeywords(platform, t)
     },
     {
-      title: t('auto.components.settings.browser.search.19ea5607cf', 'Localhost Worktree Labels'),
+      title: t('auto.components.settings.browser.search.e2e32ba6da', 'Localhost worktree labels'),
       description: t(
         'auto.components.settings.browser.search.4e0fdf0a3f',
         'Open workspace ports as worktree-specific Orca localhost URLs so browser tabs are easier to tell apart.'
@@ -178,7 +178,7 @@ export function getBrowserPaneSearchEntries(
       ]
     },
     {
-      title: t('auto.components.settings.browser.search.96afedcb5c', 'Session & Cookies'),
+      title: t('auto.components.settings.browser.search.f1da035bcb', 'Session & cookies'),
       description: t(
         'auto.components.settings.browser.search.060ac1fcba',
         'Import cookies from Chrome, Edge, or other browsers to use existing logins inside Orca.'

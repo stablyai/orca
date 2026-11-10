@@ -1,3 +1,4 @@
+import './session-search-worker.test-fixture'
 import { mkdir, mkdtemp, rename, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'

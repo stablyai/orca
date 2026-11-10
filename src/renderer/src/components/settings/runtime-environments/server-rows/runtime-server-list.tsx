@@ -14,7 +14,7 @@ import { Button } from '../../../ui/button'
 import { migrationPhaseLabel } from '../managed-servers/managed-server-copy'
 import type { RuntimeHostDetails } from '../catalog/runtime-environment-host-details'
 import { RuntimeServerRow } from './runtime-server-row'
-import { ServerListRow } from './runtime-server-list-row'
+import { ServerListRow } from '../../host-rows/ServerListRow'
 import type { ManagedServerCatalog } from '../managed-servers/use-managed-server-catalog'
 import { useManagedServerLifecycle } from '../managed-servers/use-managed-server-lifecycle'
 

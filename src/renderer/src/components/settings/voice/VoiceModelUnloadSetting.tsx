@@ -45,12 +45,12 @@ export function VoiceModelUnloadSetting({
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const labelId = useId()
-  const isCloudModel = selectedModel?.provider === 'openai'
+  const isCloudModel = selectedModel !== undefined && selectedModel.provider !== 'local'
   const current = unloadModelAfterMinutes(voiceSettings)
 
   return (
     <SettingsRow
-      label={t('components.settings.voice.modelUnload.title', 'Unload Speech Model')}
+      label={t('components.settings.voice.modelUnload.94afd37271', 'Unload speech model')}
       description={
         isCloudModel
           ? t(

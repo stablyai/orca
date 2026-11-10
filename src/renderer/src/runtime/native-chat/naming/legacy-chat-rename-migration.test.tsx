@@ -38,7 +38,7 @@ import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-t
 import { fetchWorkspaceSessionWithRuntimeHostOwners } from '@/lib/workspace/persistence/workspace-session-host-hydration'
 import { buildPersistedUnifiedTabSessionData } from '@/lib/workspace/persistence/workspace-session-unified-tabs'
 import { persistWorkspaceSessionByHost } from '@/lib/workspace/persistence/workspace-session-host-persistence'
-import { sendMessageToAgent } from '@/lib/agent-message-send'
+import { sendMessageToAgent } from '@/lib/agent-session/messaging/agent-message-send'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 
 import '../../web-session-tabs-sync/snapshot-api'

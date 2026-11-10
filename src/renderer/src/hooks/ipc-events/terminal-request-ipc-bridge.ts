@@ -2,7 +2,7 @@ import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/ba
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import { insertUnifiedTabAfterAnchor } from '@/lib/unified-tab-anchor-insertion'
 import { translate } from '@/i18n/i18n'
-import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
+import { revealWorkspaceSurface } from '@/lib/workspace/activation/workspace-surface-reveal'
 import { useAppStore } from '../../store'
 import { focusTerminalInitiatedTab, resolveTerminalPresentation } from './terminal-command-state'
 

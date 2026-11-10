@@ -119,7 +119,7 @@ export function UpdateDelaySetting(): React.JSX.Element {
               <Button
                 variant="ghost"
                 size="icon-xs"
-                aria-label={t('settings.updateDelay.info', 'About Update Delay')}
+                aria-label={t('settings.updateDelay.ab7e864374', 'About update delay')}
               >
                 <Info className="size-3.5" />
               </Button>
@@ -234,7 +234,7 @@ export function DelayedUpdatePanel({
               )}
             >
               {checking ? <Loader2 className="animate-spin" /> : null}
-              {t('settings.updateDelay.skipDelayOnce', 'Skip Delay Once')}
+              {t('settings.updateDelay.ee1d96f74a', 'Skip delay once')}
             </Button>
           )}
           <a

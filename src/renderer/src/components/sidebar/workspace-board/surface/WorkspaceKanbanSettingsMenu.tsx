@@ -1,4 +1,4 @@
-import { ImeInput } from '@/lib/ime-text-field'
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import React from 'react'
 import { ArrowDown, ArrowUp, Plus, Settings, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { SettingsSwitch } from '../../../settings/form-controls/SettingsFormControls'
+import { Switch } from '@/components/ui/switch'
 import type { WorkspaceStatusDefinition } from '../../../../../../shared/worktree/types'
 import { getWorkspaceStatusVisualMeta } from '../../workspace-status/presentation/workspace-status'
 import WorkspaceStatusAppearancePopover from '../../workspace-status/presentation/WorkspaceStatusAppearancePopover'
@@ -94,12 +94,12 @@ export default function WorkspaceKanbanSettingsMenu({
                 )}
               </span>
             </span>
-            <SettingsSwitch
+            <Switch
               checked={syncTaskStatusFromWorkspaceBoard}
-              onChange={() =>
+              onCheckedChange={() =>
                 onSyncTaskStatusFromWorkspaceBoardChange(!syncTaskStatusFromWorkspaceBoard)
               }
-              ariaLabel={t(
+              aria-label={t(
                 'auto.components.sidebar.WorkspaceKanbanSettingsMenu.87d24a0c2f',
                 'Sync board and issue status'
               )}

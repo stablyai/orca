@@ -19,7 +19,7 @@ export type QuickSubmitPreparationInput = Pick<
   | 'selectedRepoExecutionHostId'
   | 'selectedRepoHookContextKey'
   | 'selectedRepoIsGit'
-  | 'setAdvancedOpen'
+  | 'revealSetupChoice'
   | 'settings'
   | 'setupConfig'
   | 'setupDecision'

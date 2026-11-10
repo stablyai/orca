@@ -107,7 +107,7 @@ export function QuickCommandsToolbar({
         className="ml-auto"
       >
         <Plus />
-        {t('auto.components.settings.QuickCommandsPane.5aacc8f7dc', 'Add Command')}
+        {t('auto.components.settings.QuickCommandsPane.f8cf6fc086', 'Add command')}
       </Button>
     </div>
   )

@@ -8,7 +8,8 @@ import {
   isDesktopBrowserBridgeMethod
 } from '../../../shared/desktop-browser-bridge-protocol'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
-import { subscribeRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
+import '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from '../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   getOrcadSshDeployment,
@@ -16,7 +17,7 @@ import {
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
 import { isRemoteCliControlAllowed } from '../../../shared/ssh-remote-cli-control'
-import { browserManager } from '../../browser/browser-manager'
+import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import {
   DesktopBrowserBridgeManager,
   type DesktopBrowserBridgeCandidate
@@ -137,7 +138,7 @@ export function installDesktopBrowserBridge(options: {
       const connection = getPreferredPairedRuntimeConnection(
         resolveEnvironment(userDataPath, environmentId)
       )
-      return subscribeRemoteRuntimeRequest(
+      return subscribeRemoteRuntimeTransport(
         connection,
         'desktopBrowserBridge.attach',
         { bridgeClientId: BRIDGE_CLIENT_ID },

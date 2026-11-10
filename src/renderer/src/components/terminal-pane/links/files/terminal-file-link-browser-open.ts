@@ -4,13 +4,16 @@ import { useAppStore } from '@/store/index'
 import {
   openPlannedFileBrowserLink,
   type FileBrowserLinkTarget
-} from '@/lib/file-preview-link-open'
+} from '@/lib/browser/documents/file-preview-link-open'
 import type {
   BrowserLinkOpenContext,
   BrowserOpenOutcome
 } from '@/lib/browser/navigation/browser-link-destination'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
-import { getWorkspaceFilePreviewPlan, openFileInBrowserTab } from '@/lib/file-preview'
+import {
+  getWorkspaceFilePreviewPlan,
+  openFileInBrowserTab
+} from '@/lib/browser/documents/file-preview'
 
 export async function openResolvedHtmlFileInBrowser(
   params: FileBrowserLinkTarget & {

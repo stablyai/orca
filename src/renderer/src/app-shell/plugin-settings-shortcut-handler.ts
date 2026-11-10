@@ -1,5 +1,5 @@
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
-import { isEditableTarget, isNativeChatPromptTarget } from '@/lib/editable-target'
+import { isEditableTarget, isNativeChatPromptTarget } from '@/lib/text-input/focus/editable-target'
 
 export function createPluginsSettingsShortcutHandler(
   target: EventTarget | null | undefined,

@@ -1,4 +1,4 @@
-import { ImeTextarea } from '@/lib/ime-text-field'
+import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import { useState } from 'react'
 import {
   ChevronDown,
@@ -25,7 +25,7 @@ import {
   GRAB_BUDGET,
   type BrowserAnnotationIntent,
   type BrowserPageAnnotation
-} from '../../../../../shared/browser-grab-types'
+} from '../../../../../shared/browser/element-grab/browser-grab-types'
 import { BROWSER_ANNOTATION_INTENT_OPTIONS } from '../describe-page/browser-annotation-geometry'
 import {
   BrowserAnnotationSendMenuContent,

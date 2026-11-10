@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import type { BundledSkillTarget } from '@/lib/bundled-skill-target'
+import type { BundledSkillTarget } from '@/lib/skills/runtime/bundled-skill-target'
 import { ManageInstalledSkillsButton } from './ManageInstalledSkillsButton'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -12,7 +12,7 @@ const runtime = vi.hoisted(() => ({
   manager: ((): RuntimeClientTarget | null => ({ kind: 'local' }))(),
   target: ((): BundledSkillTarget | null => ({ kind: 'local' }))()
 }))
-vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
+vi.mock('@/hooks/skills/runtime/useActiveProjectSkillRuntime', () => ({
   useActiveProjectSkillRuntime: () => ({
     bundledSkillTarget: runtime.target,
     managerRuntimeTarget: runtime.manager

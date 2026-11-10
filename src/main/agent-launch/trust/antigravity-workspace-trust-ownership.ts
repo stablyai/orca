@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { writeFileAtomically } from '../../codex-accounts/fs-utils'
+import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
 import { createAgentTrustOwnershipLedger } from './agent-trust-ownership-ledger'
 
 // Why resolve, not realpath: removal runs after the worktree directory is gone.

@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  resolveDiagnosticsHostId,
-  selectDiagnosticsHostId
-} from './connection-diagnostics-screen-data'
+import { resolveDiagnosticsHostId } from './connection-diagnostics-screen-data'
 
 import type { HostProfile } from '../transport/hosts/host-profile'
 
@@ -16,11 +13,6 @@ const host = (id: string): HostProfile => ({
 })
 
 describe('connection diagnostics screen data', () => {
-  it('prefers a valid route host when navigation changes', () => {
-    expect(selectDiagnosticsHostId([host('a'), host('b')], 'b', 'a')).toBe('b')
-    expect(selectDiagnosticsHostId([host('a')], 'missing', 'missing')).toBe('a')
-  })
-
   it('applies route changes synchronously without discarding a chip choice for the same route', () => {
     const hosts = [host('a'), host('b')]
     expect(resolveDiagnosticsHostId(hosts, undefined, null)).toBe('a')

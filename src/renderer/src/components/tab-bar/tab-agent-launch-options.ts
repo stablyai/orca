@@ -6,7 +6,7 @@ import type {
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { AgentPickerSetupIdentity } from '../agent/agent-launch-picker-drafts'
 import { rowLabel, rowId, chatUnavailableLabel } from './tab-agent-row-presentation'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import {
   orderAgentLaunchPickerAgents,
   type NewTabAgentMenuRow
@@ -14,6 +14,7 @@ import {
 import { normalizeMatchQuery, tokenizeMatchValue } from './query-token-match'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { Translate } from '@/i18n/use-translate'
+import type { ActiveOption } from './tab-create-entry-active-option'
 
 export type TabAgentLaunchOption = {
   agent: TuiAgent
@@ -222,6 +223,18 @@ export function configuredAgentPickerLaunchOption(
     },
     terminalPending
   )
+}
+
+/** The omnibox result a setup panel launches, configured from its draft. */
+export function agentResultSetupOption(
+  option: Extract<ActiveOption, { kind: 'agent' }>,
+  draft: AgentPickerDraft,
+  terminalPending: boolean | undefined
+): ActiveOption {
+  return {
+    kind: 'agent',
+    option: configuredAgentPickerLaunchOption(option.option, draft, terminalPending)
+  }
 }
 
 function terminalReadyOption(

@@ -17,6 +17,7 @@ import { isPathInsideOrEqual } from '../../../../../../shared/cross-platform-pat
 import { RemovalUnsavedFilesNotice } from './RemovalUnsavedFilesNotice'
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { useAppStore } from '@/store'
+import { previewNestedWorktreeRemoval } from '@/store/slices/worktrees/teardown/preview-nested-worktree-removal'
 import { useTranslate } from '@/i18n/use-translate'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import type { GitWorktreeInfo } from '../../../../../../shared/worktree/types'
@@ -62,19 +63,13 @@ export function DeleteNestedWorktreesDialog({
     setPlan(null)
     setError(null)
     try {
-      const preview = window.api.worktrees.previewNestedRemoval
-      if (!preview) {
-        throw new Error(
-          t(
-            'auto.components.sidebar.DeleteNestedWorktreesDialog.unsupportedHost',
-            'This host does not support nested worktree deletion.'
-          )
+      const result = await previewNestedWorktreeRemoval(
+        target,
+        t(
+          'auto.components.sidebar.DeleteNestedWorktreesDialog.unsupportedHost',
+          'This host does not support nested worktree deletion.'
         )
-      }
-      const result = await preview({
-        worktreeId: target.id,
-        hostId: target.executionHostId ?? undefined
-      })
+      )
       if (generation === request.current) {
         setPlan(result)
       }

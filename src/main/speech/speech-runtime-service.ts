@@ -12,7 +12,8 @@ type SpeechSettingsStore = {
 
 export type SpeechServiceFactories = {
   createModelManager(customModelsDir: string | undefined): ModelManager
-  createSttService(models: ModelManager): SttService
+  /** `gpuEnabled` reads the user's Voice setting at each recognizer start. */
+  createSttService(models: ModelManager, gpuEnabled: () => boolean): SttService
 }
 
 let factories: SpeechServiceFactories | null = null
@@ -43,7 +44,10 @@ export function getSpeechModelManager(store: SpeechSettingsStore): ModelManager 
 
 export function getSpeechSttService(store: SpeechSettingsStore): SttService {
   if (!sttService) {
-    sttService = requireFactories().createSttService(getSpeechModelManager(store))
+    sttService = requireFactories().createSttService(
+      getSpeechModelManager(store),
+      () => store.getSettings().voice?.speechGpu !== 'off'
+    )
   }
   return sttService
 }

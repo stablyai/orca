@@ -1,28 +1,31 @@
 import { bundledSkillSetupActionLabel } from './bundled-skill-setup-copy'
-import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActiveProjectSkillRuntime'
 import { WslLinearAgentSkillInstallCta } from './WslLinearAgentSkillInstallCta'
 import { useCallback, useMemo } from 'react'
 import { Download, Loader2, RefreshCw } from 'lucide-react'
 import { IntegrationStatusPill } from '@/components/integration-status-pill'
-import { SkillUnsupportedStatusPill } from '../SkillFreshnessStatusPill'
+import { SkillUnsupportedStatusPill } from '../freshness/SkillFreshnessStatusPill'
 import { Button } from '@/components/ui/button'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkillNames
-} from '@/hooks/useInstalledAgentSkills'
-import { useBundledSkillInstallAction } from '@/hooks/use-bundled-skill-install-action'
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
+import { useBundledSkillInstallAction } from '@/hooks/skills/installation/use-bundled-skill-install-action'
 import {
   bundledSkillInstallNeedsAttention,
   useBundledSkillInstall
-} from '@/hooks/use-bundled-skill-install'
-import { LINEAR_AGENT_SKILL_NAMES, ORCA_LINEAR_SKILL_NAME } from '@/lib/agent-feature-skill-names'
-import { getLinearAgentSkillUpdateTarget } from '@/lib/linear-agent-skill-update-target'
+} from '@/hooks/skills/installation/use-bundled-skill-install'
+import {
+  LINEAR_AGENT_SKILL_NAMES,
+  ORCA_LINEAR_SKILL_NAME
+} from '@/lib/skills/installation/agent-feature-skill-names'
+import { getLinearAgentSkillUpdateTarget } from '@/lib/skills/installation/linear-agent-skill-update-target'
 import { cn } from '@/lib/utils'
 import { getLinearAgentSkillSetupInlineRuntimeCopy } from '../../sidebar/linear-agent-skill-setup-copy'
 import type { LinearAgentSkillPromptSettings } from '../../sidebar/linear-agent-skill-runtime'
 import { useIntegrationSubordinateRowClass } from '../../integrations/presentation/integration-card-presentation'
 import { BundledSkillInstallStatus } from './BundledSkillInstallStatus'
-import { recheckSurfacesAfterAgentSkillInstall } from '../../../hooks/agent-skill-recheck-surface-sync'
+import { recheckSurfacesAfterAgentSkillInstall } from './agent-skill-recheck-surface-sync'
 import { useTranslate } from '@/i18n/use-translate'
 
 type LinearAgentSkillInstallCtaProps = {

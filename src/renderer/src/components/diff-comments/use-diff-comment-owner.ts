@@ -10,7 +10,7 @@ import {
   type DiffCommentOwner,
   type DiffCommentView
 } from '@/store/slices/diff-comments/diff-comment-owner'
-import type { WorkspaceCopySource } from '@/lib/workspace-copy-owner'
+import type { WorkspaceCopySource } from '@/lib/workspace/ownership/workspace-copy-owner'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 
 /**

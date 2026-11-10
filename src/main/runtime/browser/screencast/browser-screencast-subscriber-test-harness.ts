@@ -1,6 +1,6 @@
 import { expect, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
-import type { RuntimeBrowserDriverState } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
 
 export const HARNESS_WORKTREE_ID = 'repo-1::/tmp/worktree-a'
 export const HARNESS_PAGE_ID = 'page-1'
@@ -48,7 +48,7 @@ export type ScreencastHarness = {
     connectionId: string
     clientKind?: 'mobile' | 'runtime'
   }) => ScreencastSubscriber
-  driver: () => RuntimeBrowserDriverState | undefined
+  driver: () => RuntimeTerminalDriverState | undefined
 }
 
 /** Drive production subscription state with fake Chromium sessions. */

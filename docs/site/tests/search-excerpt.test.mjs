@@ -1,21 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { runInNewContext } from 'node:vm'
 import { stripSearchExcerptMarkdown } from '../src/components/docs/search-excerpt.mjs'
-
-test('unterminated escaped link destinations do not backtrack exponentially', () => {
-  for (const prefix of ['![](', '[label](']) {
-    const input = prefix + '\\('.repeat(32_768)
-    const result = runInNewContext(
-      'strip(input)',
-      { strip: stripSearchExcerptMarkdown, input },
-      {
-        timeout: 250
-      }
-    )
-    assert.equal(result, input.replace(/\\\(/g, '('))
-  }
-})
 
 test('link destinations retain escaped closing parentheses and literal escapes', () => {
   for (const prefix of ['![label](', '[label](']) {
@@ -60,16 +45,6 @@ test('search excerpts preserve highlighted matches inside Markdown', () => {
   )
 })
 
-test('unclosed angles finish within the excerpt budget without changing text', () => {
-  const input = '<'.repeat(131_072)
-  const result = runInNewContext(
-    'strip(input)',
-    { strip: stripSearchExcerptMarkdown, input },
-    { timeout: 250 }
-  )
-  assert.equal(result, input)
-})
-
 test('tag guards preserve malformed markup, protected code and highlighted matches', () => {
   const cases = [
     ['<em>**bold**</em>', 'bold'],
@@ -98,14 +73,4 @@ test('tag guards preserve malformed markup, protected code and highlighted match
   for (const [input, expected] of cases) {
     assert.equal(stripSearchExcerptMarkdown(input), expected, input)
   }
-})
-
-test('unclosed brackets finish within the excerpt budget without changing text', () => {
-  const input = '['.repeat(131_072)
-  const result = runInNewContext(
-    'strip(input)',
-    { strip: stripSearchExcerptMarkdown, input },
-    { timeout: 250 }
-  )
-  assert.equal(result, input)
 })

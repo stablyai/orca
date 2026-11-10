@@ -14,8 +14,14 @@ import { recordReceiptBeforeNudge, replayMutationNudge } from './mutation-replay
 import { resolveReplyRecipient } from './recipient-routing'
 import { helperQuestionAnswerer } from './helper-question-answerer'
 import { replyToRemoteRunHome } from './reply-remote'
+import { replyOverPeerMail } from './peer-mail-reply'
 import { withAnswerNext } from '../receipt-next'
 import { ReplyParams } from '../../../../../../shared/rpc-contract/orchestration-params'
+import {
+  completionReportDispatchId,
+  reportFollowUpAction
+} from '../../../../orchestration/workers/reports/report-follow-up-action'
+import { formatFinishedReportReplyRefusal } from '../../../../../../shared/orchestration/mailbox/orchestration-report-follow-up'
 
 export const ORCHESTRATION_REPLY_METHOD = defineMethod({
   name: 'orchestration.reply',
@@ -30,6 +36,7 @@ export const ORCHESTRATION_REPLY_METHOD = defineMethod({
       legacyCoordinatorRunId,
       recordMutationReceipt,
       replayedMutationReceipt,
+      orchestrationMutation,
       signal
     }
   ) => {
@@ -152,8 +159,37 @@ export const ORCHESTRATION_REPLY_METHOD = defineMethod({
       )
     }
 
+    const peerRoute = db.getPeerMailMessage(original.id)
+    if (peerRoute) {
+      return await replyOverPeerMail({
+        runtime,
+        original,
+        route: peerRoute,
+        params,
+        orchestrationCaller,
+        orchestrationMutation,
+        recordMutationReceipt
+      })
+    }
+    if (params.on !== undefined) {
+      throw new OrchestrationError(
+        'invalid_argument',
+        `${params.id} did not come from another server, so its reply stays on this Orca. Drop --on. No reply was sent.`,
+        { effectsApplied: false }
+      )
+    }
     if (db.getRun(original.run_id)?.home_database === 'remote') {
       return await replyToRemoteRunHome({ runtime, db, original, params, signal })
+    }
+    // A finished task's worker never reads a reply to its report; refuse before marking or storing anything.
+    const reportDispatchId = completionReportDispatchId(db, original)
+    const followUp = reportDispatchId ? reportFollowUpAction(db, reportDispatchId) : undefined
+    if (reportDispatchId && followUp) {
+      throw new OrchestrationError(
+        'dispatch_inactive',
+        formatFinishedReportReplyRefusal(reportDispatchId, followUp),
+        { effectsApplied: false, followUp }
+      )
     }
     const recipient = resolveReplyRecipient({
       runtime,
@@ -171,7 +207,10 @@ export const ORCHESTRATION_REPLY_METHOD = defineMethod({
       runId: recipient.runId
     })
 
-    const receipt = { message: exposeMessage(reply) }
+    const receipt = {
+      message: exposeMessage(reply),
+      ...(recipient.warning ? { warnings: [recipient.warning] } : {})
+    }
     return recordReceiptBeforeNudge(recordMutationReceipt, receipt, () =>
       runtime.notifyMessageArrived(reply.to_handle, reply.type)
     )

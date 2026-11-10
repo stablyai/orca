@@ -12,7 +12,7 @@ import { isArchiveHookRemovalError } from '../../../../../../shared/worktree/arc
 import {
   resolveWorktreeOperationRouteResult,
   resolveWorktreeOperationRouteResultForHost
-} from '@/lib/worktree-operation-route'
+} from '@/lib/workspace/ownership/worktree-operation-route'
 import {
   beginHostQualifiedRemoval,
   completeSameIdHostScopedRemoval,

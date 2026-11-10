@@ -1,9 +1,12 @@
 import { BookOpen } from 'lucide-react'
 import { isRuntimeHostContactRevoked } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { useAppStore } from '@/store/index'
-import { translate } from '@/i18n/i18n'
-import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
-import { bundledSkillTargetKey, type BundledSkillTarget } from '@/lib/bundled-skill-target'
+import { useTranslate } from '@/i18n/use-translate'
+import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActiveProjectSkillRuntime'
+import {
+  bundledSkillTargetKey,
+  type BundledSkillTarget
+} from '@/lib/skills/runtime/bundled-skill-target'
 import { Button } from '../../ui/button'
 
 export function ManageInstalledSkillsButton({
@@ -11,6 +14,7 @@ export function ManageInstalledSkillsButton({
 }: {
   target?: BundledSkillTarget | null
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const openSkillsPage = useAppStore((state) => state.openSkillsPage)
   const closeModal = useAppStore((state) => state.closeModal)
   const { bundledSkillTarget: active, managerRuntimeTarget: manager } =
@@ -45,7 +49,7 @@ export function ManageInstalledSkillsButton({
       }}
     >
       <BookOpen className="size-3.5" />
-      {translate('auto.components.settings.shareSkills.openSkills', 'Open Skills')}
+      {t('auto.components.settings.shareSkills.openSkills', 'Open Skills')}
     </Button>
   )
 }

@@ -160,36 +160,29 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     renderer = null
   })
 
-  it('omits interaction mode from the drawer and model summary', async () => {
-    mount(
-      [
-        MODEL_DESCRIPTOR,
-        {
-          id: 'interactionMode',
-          label: 'Mode',
-          category: 'mode',
-          kind: {
-            type: 'select',
-            currentValue: 'default',
-            choices: [
-              { value: 'default', label: 'Build' },
-              { value: 'plan', label: 'Plan' }
-            ]
-          },
-          valueSource: 'dispatched',
-          transport: 'agent-session',
-          settable: true
-        }
-      ],
-      true,
-      'interactionMode'
+  it('toggles a Fast-only Codex speed on the same Fast mode switch as Claude', async () => {
+    const speed: SessionOptionDescriptor = {
+      id: 'serviceTier',
+      label: 'Speed',
+      kind: {
+        type: 'select',
+        currentValue: 'default',
+        choices: [
+          { value: 'default', label: 'Standard' },
+          { value: 'priority', label: 'Fast' }
+        ]
+      },
+      valueSource: 'reported',
+      transport: 'catalog',
+      settable: true
+    }
+    mount([MODEL_DESCRIPTOR, speed], false, 'model')
+    const toggle = findAllByHostType(renderer!.root, 'Switch').find(
+      (node) => node.props.accessibilityLabel === 'Fast mode'
     )
-    expect(findAllByHostType(renderer!.root, 'BottomDrawer')).toHaveLength(0)
-    expect(pill('Model').props.accessibilityLabel).not.toMatch(/Build|Plan/)
-    act(() => pill('Model').props.onPress())
-    expect(() => rowByText('Build')).toThrow('No row labeled Build')
-    expect(() => rowByText('Plan')).toThrow('No row labeled Plan')
-    expect(setOption).not.toHaveBeenCalled()
+    expect(toggle?.props.value).toBe(false)
+    await act(async () => toggle!.props.onValueChange(true))
+    expect(setOption).toHaveBeenCalledWith('serviceTier', 'priority')
   })
 
   it('consumes a refused page without replay, then permits a fresh open and permission pick', async () => {

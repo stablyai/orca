@@ -5,9 +5,9 @@ import { Button } from '@/components/ui/button'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkillNames
-} from '@/hooks/useInstalledAgentSkills'
-import { LINEAR_AGENT_SKILL_NAMES } from '@/lib/agent-feature-skill-names'
-import { getLinearAgentSkillUpdateTarget } from '@/lib/linear-agent-skill-update-target'
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
+import { LINEAR_AGENT_SKILL_NAMES } from '@/lib/skills/installation/agent-feature-skill-names'
+import { getLinearAgentSkillUpdateTarget } from '@/lib/skills/installation/linear-agent-skill-update-target'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import { cn } from '@/lib/utils'
 import {

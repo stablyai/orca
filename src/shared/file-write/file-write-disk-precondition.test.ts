@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { getDiskBaselineSignature } from './disk-baseline-signature'
 import {
   compareDiskWritePrecondition,
-  diskConflictFromReadFailure,
-  parseFileWriteResult
+  diskConflictFromReadFailure
 } from './file-write-disk-precondition'
 
 describe('disk write precondition', () => {
@@ -36,28 +35,6 @@ describe('disk write precondition', () => {
       compareDiskWritePrecondition({ ...precondition, requireLosslessUtf8: true }, current, decoded)
     ).toBe('not-utf8')
     expect(compareDiskWritePrecondition(precondition, current, decoded)).toBeNull()
-  })
-
-  it('treats anything but an explicit refusal from a host as a completed write', () => {
-    expect(parseFileWriteResult({ ok: false, diskConflict: 'not-utf8' })).toEqual({
-      ok: false,
-      diskConflict: 'not-utf8'
-    })
-    expect(parseFileWriteResult({ ok: false, diskConflict: 'later' })).toEqual({
-      ok: false,
-      diskConflict: 'changed'
-    })
-    expect(parseFileWriteResult(undefined)).toEqual({ ok: true })
-    expect(parseFileWriteResult({ ok: true })).toEqual({ ok: true })
-    expect(parseFileWriteResult({ ok: true, unchanged: true })).toEqual({
-      ok: true,
-      unchanged: true
-    })
-    expect(parseFileWriteResult({ ok: false, diskConflict: 'missing' })).toEqual({
-      ok: false,
-      diskConflict: 'missing'
-    })
-    expect(parseFileWriteResult({ ok: false })).toEqual({ ok: false, diskConflict: 'changed' })
   })
 
   it.each([

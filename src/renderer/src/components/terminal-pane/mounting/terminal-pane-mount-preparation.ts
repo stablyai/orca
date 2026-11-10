@@ -1,7 +1,7 @@
 import type { HttpLinkActionDestinations as TerminalHttpLinkActionDestinations } from '@/lib/browser/navigation/http-link-destinations'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store/index'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { httpLinkActionDestinationsFor } from '@/lib/browser/navigation/http-link-destinations'
 import '@/lib/browser/workspace/workspace-browser-tab-open'
 import {

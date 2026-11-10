@@ -96,6 +96,9 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
     }
   }
 
+  captureConversationTitleOwner: NonNullable<Adapter['captureConversationTitleOwner']> = (record) =>
+    this.liveOwnerOrNull(record.sessionId)?.captureConversationTitleOwner?.(record) ?? null
+
   renameProviderSession: NonNullable<Adapter['renameProviderSession']> = (input) =>
     this.capabilityOwner(
       input.record.sessionId,
@@ -231,17 +234,17 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
     return adapter.copyConversation(input)
   }
 
-  closeSession: NonNullable<Adapter['closeSession']> = (sessionId, observeClose) =>
-    this.stopSession(sessionId, (adapter) => adapter.closeSession?.(sessionId, observeClose))
+  closeSession: NonNullable<Adapter['closeSession']> = (...args) =>
+    this.stopSession(args[0], (adapter) => adapter.closeSession?.(...args))
 
   forceCloseSession = (sessionId: string): Promise<boolean> =>
     this.stopSession(sessionId, (adapter) =>
       (adapter.forceCloseSession ?? adapter.closeSession)?.call(adapter, sessionId)
     )
 
-  disposeSession: NonNullable<Adapter['disposeSession']> = (sessionId, observeClose) =>
-    this.stopSession(sessionId, (adapter) =>
-      (adapter.disposeSession ?? adapter.closeSession)?.call(adapter, sessionId, observeClose)
+  disposeSession: NonNullable<Adapter['disposeSession']> = (...args) =>
+    this.stopSession(args[0], (adapter) =>
+      (adapter.disposeSession ?? adapter.closeSession)?.call(adapter, ...args)
     )
 
   private async stopSession(

@@ -1,4 +1,5 @@
 import { withProfileStateWriteTransaction } from './profile-state-write-transaction'
+import { ensureProfileStateDocumentPartsTables } from './profile-state-document-parts'
 import { hasProfileStateAuthorityMarker } from './profile-state-authority-marker'
 import Database, { isSqliteAvailable } from '../../sqlite/sync-database'
 import { migrateAutomationRunsStorage } from './profile-state-automation-runs-migration'
@@ -113,6 +114,8 @@ export function openProfileStateDatabase(
     // journal_mode can change the header even without row writes; validate everything first.
     migrateProfileStateSchema(probe, storedVersion, profileId)
     configureProfileStatePragmas(probe)
+    // Additive tables older v3 builds ignore (no schema bump); after busy_timeout is set.
+    ensureProfileStateDocumentPartsTables(probe)
     hardenSqliteDatabaseFiles(dbPath)
     transferred = true
     return { db: probe, readOnly: false, profileId }
@@ -210,6 +213,8 @@ function configureProfileStatePragmas(db: Database.Database): void {
   // User state needs FULL durability; macOS checkpoints also need F_FULLFSYNC to flush drive caches.
   db.pragma('synchronous = FULL')
   db.pragma('checkpoint_fullfsync = ON')
+  // Without a limit the WAL keeps the size of the largest transaction ever written.
+  db.pragma('journal_size_limit = 8388608')
 }
 
 function migrateProfileStateSchema(
