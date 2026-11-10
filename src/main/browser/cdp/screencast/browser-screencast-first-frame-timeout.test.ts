@@ -24,6 +24,7 @@ function startOptions(viewport: boolean) {
     maxHeight: 1200,
     everyNthFrame: 2,
     minFrameIntervalMs: 0,
+    holdPaint: () => () => {},
     ...(viewport ? { viewportWidth: 390, viewportHeight: 844 } : {}),
     onFrame: vi.fn(() => true),
     onError: vi.fn()
@@ -57,6 +58,41 @@ describe('browser screencast first-frame deadline', () => {
     // The stop queues behind the capture: capturePage's 10 s bound, then the fallback's 8 s.
     await vi.advanceTimersByTimeAsync(8_000)
     await session.done
+  })
+
+  it('keeps the page drawable until Chromium answers the captures the stream gave up on', async () => {
+    let settleCapture!: (image: unknown) => void
+    const webContents = Object.assign(createMockScreencastWebContents(), {
+      capturePage: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            settleCapture = resolve
+          })
+      )
+    })
+    let settleScreenshot!: (result: unknown) => void
+    webContents.debugger.sendCommand.mockImplementation(async (method: string) =>
+      method === 'Page.captureScreenshot'
+        ? new Promise((resolve) => {
+            settleScreenshot = resolve
+          })
+        : {}
+    )
+    const releasePaint = vi.fn()
+    const options = { ...startOptions(true), holdPaint: vi.fn(() => releasePaint) }
+    const session = await start(webContents, options)
+
+    // capturePage's 10 s bound, then the CDP fallback's 8 s.
+    await vi.advanceTimersByTimeAsync(18_000)
+    session.stop()
+    await session.done
+    expect(options.holdPaint).toHaveBeenCalledTimes(2)
+    expect(releasePaint).not.toHaveBeenCalled()
+
+    settleCapture({ getSize: () => ({ width: 0, height: 0 }) })
+    settleScreenshot({})
+    await vi.advanceTimersByTimeAsync(0)
+    expect(releasePaint).toHaveBeenCalledTimes(2)
   })
 
   it('drops a capture that settles after the limit', async () => {
