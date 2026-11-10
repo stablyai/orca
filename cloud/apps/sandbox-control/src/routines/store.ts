@@ -103,7 +103,7 @@ export function triggerConfig(row: Pick<RoutineRow, 'trigger_kind' | 'trigger_co
   return { kind: row.trigger_kind, ...config } as TriggerConfig
 }
 
-export function routineView(row: RoutineRecord) {
+export function routineView(row: RoutineRecord, names: ReadonlyMap<string, string> = new Map()) {
   const trigger = triggerConfig(row)
   return {
     id: row.id,
@@ -120,6 +120,7 @@ export function routineView(row: RoutineRecord) {
     nextRunAt: row.enabled === 1 && row.trigger_kind === 'schedule' ? row.next_run_at : null,
     lastRun: row.last_run_id ? { id: row.last_run_id, status: row.last_run_status, finishedAt: row.last_run_finished_at } : null,
     createdBy: row.created_by,
+    createdByName: names.get(row.created_by) ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   }
