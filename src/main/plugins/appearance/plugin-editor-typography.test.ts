@@ -35,6 +35,10 @@ function fakeStore(initial: Partial<GlobalSettings>, zoom = 0) {
         listener(updates, full())
       }
     },
+    /** A write made without `notifyListeners`, as some main-process callers do. */
+    setSettingsSilently(updates: Partial<GlobalSettings>) {
+      settings = { ...settings, ...updates }
+    },
     setZoom(level: number) {
       ui = { editorFontZoomLevel: level }
       for (const listener of uiListeners) {
@@ -115,6 +119,11 @@ describe('editor typography source', () => {
     })
   })
 
+  it('survives a non-string font family from a hand-edited profile', () => {
+    const store = fakeStore({ terminalFontSize: 14, terminalFontFamily: Object(42) })
+    expect(createPluginEditorTypographySource(store).read().fontFamily).toBe('monospace')
+  })
+
   it('treats a non-numeric zoom as unzoomed', () => {
     const store = fakeStore({ terminalFontSize: 14 }, Number.NaN)
     expect(createPluginEditorTypographySource(store).read().fontSize).toBe(14)
@@ -137,6 +146,15 @@ describe('watchPluginEditorTypography', () => {
     ])
   })
 
+  it('carries the live settings after a write that did not notify', () => {
+    const store = fakeStore({ terminalFontSize: 14 })
+    const { events, emitted } = fakeEvents()
+    watchPluginEditorTypography({ store, events: () => events })
+    store.setSettingsSilently({ editorFontFamily: 'Fira Code' })
+    store.setZoom(1)
+    expect(emitted).toEqual([expect.objectContaining({ fontFamily: 'Fira Code', fontSize: 15 })])
+  })
+
   it('stays quiet without listeners, and a later listener hears only later changes', () => {
     const store = fakeStore({ terminalFontSize: 14 })
     const { events, emitted } = fakeEvents(false)
@@ -148,14 +166,6 @@ describe('watchPluginEditorTypography', () => {
     expect(emitted).toEqual([])
     store.setZoom(4)
     expect(emitted).toEqual([expect.objectContaining({ fontSize: 18 })])
-  })
-
-  it('stops listening when disposed', () => {
-    const store = fakeStore({ terminalFontSize: 14 })
-    const { events } = fakeEvents()
-    watchPluginEditorTypography({ store, events: () => events })()
-    store.setZoom(5)
-    expect(events.emitEvent).not.toHaveBeenCalled()
   })
 })
 

@@ -59,7 +59,7 @@ const DEFAULT_RESULTS: Record<string, unknown> = {
   'shell.openExternal': { opened: true },
   'files.saveAs': { status: 'saved' },
   'agents.list': { agents: [] },
-  // Orca's defaults: the editor follows a 14 px terminal font, unzoomed.
+  // Orca's default size: the editor follows a 14 px terminal font, unzoomed (the family is platform-specific).
   'editor.readTypography': resolvePluginEditorTypography({ terminalFontSize: 14 }, 0)
 }
 

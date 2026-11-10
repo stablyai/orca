@@ -44,8 +44,9 @@ export function resolvePluginEditorTypography(
       : 0
   const typography = resolveEditorTypography(settings, zoom, 'editor')
   return {
-    fontFamily: typography.fontFamily,
-    cssFontFamily: typography.cssFontFamily,
+    // Why cut, not refuse: an unbounded setting must not make every read fail its schema.
+    fontFamily: typography.fontFamily.slice(0, FONT_FAMILY_MAX),
+    cssFontFamily: typography.cssFontFamily.slice(0, FONT_FAMILY_MAX),
     fontSize: typography.fontSize,
     fontWeight: typography.fontWeight,
     lineHeight: typography.lineHeight,

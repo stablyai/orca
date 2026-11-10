@@ -119,7 +119,7 @@ function skipError(
     case 'not-granted':
       return new PluginCliError(
         'invalid_argument',
-        `${key} was not granted ${PLUGIN_EVENT_CAPABILITY[event]}, which ${event} needs.`,
+        `${key} was not granted ${PLUGIN_EVENT_CAPABILITY[event] ?? 'approval'}, which ${event} needs.`,
         { nextSteps: ['Add the capability, then reload with `orca plugin dev reload <dir>`.'] }
       )
   }

@@ -39,12 +39,26 @@ export type EditorTypography = {
  * keep falling back to the terminal font exactly as before the setting existed.
  */
 export function resolveEditorFontFamily(settings?: EditorTypographyInputs | null): string {
-  return settings?.editorFontFamily?.trim() || settings?.terminalFontFamily || 'monospace'
+  return (
+    trimmedText(settings?.editorFontFamily) ||
+    textOrEmpty(settings?.terminalFontFamily) ||
+    'monospace'
+  )
+}
+
+// Why: hand-edited profiles can hold a non-string font, which must not throw in main or the editor.
+function textOrEmpty(value: unknown): string {
+  return typeof value === 'string' ? value : ''
+}
+
+function trimmedText(value: unknown): string {
+  return textOrEmpty(value).trim()
 }
 
 /** Monaco adds fallback fonts itself; other code surfaces need an explicit stack or unknown names can fall back to serif. */
 export function resolveEditorFontStack(settings?: EditorTypographyInputs | null): string {
-  const family = settings?.editorFontFamily?.trim() || settings?.terminalFontFamily?.trim() || ''
+  const family =
+    trimmedText(settings?.editorFontFamily) || trimmedText(settings?.terminalFontFamily)
   // A comma list is already a CSS stack; quoting it would make it one unknown family name.
   return family.includes(',') ? family : buildFontFamily(family)
 }

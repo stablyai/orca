@@ -54,25 +54,33 @@ export function watchPluginEditorTypography(input: {
   events: () => PluginEvents | null
 }): () => void {
   const { store } = input
-  let settings = store.getSettings()
+  const source = createPluginEditorTypographySource(store)
   let zoom = store.getUI().editorFontZoomLevel
-  let last = JSON.stringify(resolvePluginEditorTypography(settings, zoom))
-  const check = (): void => {
-    const typography = resolvePluginEditorTypography(settings, zoom)
-    const signature = JSON.stringify(typography)
-    if (signature === last) {
-      return
-    }
-    last = signature
-    const events = input.events()
-    if (events?.wantsEvent('editor.typography.changed')) {
-      events.emitEvent('editor.typography.changed', typography)
+  let last: string | null = null
+  // Why guarded: these run inside settings and startup paths that must never fail for a plugin event.
+  const resolve = (): { typography: PluginEditorTypography; signature: string } | null => {
+    try {
+      const typography = source.read()
+      return { typography, signature: JSON.stringify(typography) }
+    } catch (error) {
+      console.warn('[plugins] failed to resolve editor typography:', error)
+      return null
     }
   }
-  const stopSettings = store.onSettingsChanged((_updates, next) => {
-    settings = next
-    check()
-  })
+  last = resolve()?.signature ?? null
+  // Why read live, not from the listener: silent settings writes must not leave the payload stale.
+  const check = (): void => {
+    const next = resolve()
+    if (!next || next.signature === last) {
+      return
+    }
+    last = next.signature
+    const events = input.events()
+    if (events?.wantsEvent('editor.typography.changed')) {
+      events.emitEvent('editor.typography.changed', next.typography)
+    }
+  }
+  const stopSettings = store.onSettingsChanged(() => check())
   // Why compare the zoom first: UI writes (sidebar widths, focus) are frequent and rarely zoom.
   const stopUI = store.onUIChanged((ui) => {
     if (Object.is(ui.editorFontZoomLevel, zoom)) {
