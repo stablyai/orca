@@ -1,6 +1,7 @@
 import { NativeChatCliForkMenuItems } from '../../../tab-bar/NativeChatCliForkMenuItems'
 import { AgentSessionContextCopyMenuItem } from '../../../terminal-pane/clipboard/AgentSessionContextCopyMenuItem'
 import { useNativeChatQuickCommandsMenu } from './use-native-chat-quick-commands-menu'
+import { NativeChatRestartAgentMenuItem } from './NativeChatRestartAgentMenuItem'
 import {
   useNativeChatSessionContextActions,
   type NativeChatSessionMenuSource
@@ -32,6 +33,7 @@ export function useNativeChatStandaloneMenu({
             menuKind="dropdown"
             onComplete={close}
           />
+          <NativeChatRestartAgentMenuItem target={source.target} sessionId={source.sessionId} />
         </>
       ) : null,
     dialogs: quickCommands.dialog

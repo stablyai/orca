@@ -18518,7 +18518,15 @@
         "copyOrcaSessionId": "Orca セッション ID をコピー",
         "orcaSessionIdCopied": "Orca セッション ID をコピーしました",
         "orcaSessionIdCopyFailed": "Orca セッション ID をコピーできませんでした",
-        "orcaSessionIdTooltip": "このチャットに対する Orca の ID です。Agent CLI 独自のセッション ID とは別のものです。Agent は Orca を通じて互いを指すときにこれを使います。"
+        "orcaSessionIdTooltip": "このチャットに対する Orca の ID です。Agent CLI 独自のセッション ID とは別のものです。Agent は Orca を通じて互いを指すときにこれを使います。",
+        "restartAgent": "Agent を再起動",
+        "restartAgentTooltip": "このチャットの Agent を停止します。次のメッセージで現在のアカウントと設定で再起動し、会話は続きます。",
+        "restartAgentFailed": "Agent を再起動できませんでした。",
+        "restartAgentDone": "Agent を停止しました。次のメッセージで現在のアカウントで起動します。",
+        "restartAgentNotRunning": "Agent は実行されていません。次のメッセージで現在のアカウントで起動します。",
+        "restartAgentBusy": "Agent が作業中です。先にターンを停止するか、質問に答えてください。",
+        "restartAgentBackgroundWork": "Agent にはまだバックグラウンドタスクがあります。再起動するとそれらは停止します。",
+        "restartAgentForce": "それでも再起動"
       },
       "failureWords": {
         "theAgent": "Agent",

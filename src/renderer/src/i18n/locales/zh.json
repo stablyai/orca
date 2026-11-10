@@ -18458,7 +18458,15 @@
         "copyOrcaSessionId": "复制 Orca 会话 ID",
         "orcaSessionIdCopied": "已复制 Orca 会话 ID",
         "orcaSessionIdCopyFailed": "无法复制 Orca 会话 ID",
-        "orcaSessionIdTooltip": "Orca 为此聊天分配的 ID，独立于智能体 CLI 自身的会话 ID。智能体通过 Orca 用它来相互指代。"
+        "orcaSessionIdTooltip": "Orca 为此聊天分配的 ID，独立于智能体 CLI 自身的会话 ID。智能体通过 Orca 用它来相互指代。",
+        "restartAgent": "重启智能体",
+        "restartAgentTooltip": "停止此聊天的智能体。下一条消息会用当前账户和设置重新启动它，对话继续。",
+        "restartAgentFailed": "无法重启智能体。",
+        "restartAgentDone": "智能体已停止。下一条消息会用当前账户启动它。",
+        "restartAgentNotRunning": "智能体未在运行。下一条消息会用当前账户启动它。",
+        "restartAgentBusy": "智能体正在工作。请先停止当前回合或回答它的问题。",
+        "restartAgentBackgroundWork": "智能体仍有后台任务，重启会停止它们。",
+        "restartAgentForce": "仍然重启"
       },
       "failureWords": {
         "theAgent": "智能体",

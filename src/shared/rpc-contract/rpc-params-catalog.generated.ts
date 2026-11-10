@@ -2,6 +2,7 @@
 // run `pnpm run generate:rpc-params-catalog`.
 import type { z } from 'zod'
 import { HostAccountLaunchEnvParams } from '../agent-launch/startup/host-account-launch-env'
+import { RestartAgentParams } from '../agent-session/agent-session-restart-agent'
 import { AgentSkillShareRequestSchema } from '../agent-skill-sharing-contract'
 import {
   AiVaultSearchRequestSchema,
@@ -856,6 +857,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.rename': RenameParams,
   'agentSession.respondToApproval': RespondParams,
   'agentSession.respondToQuestion': RespondToQuestionParams,
+  'agentSession.restartAgent': RestartAgentParams,
   'agentSession.restartContinue': RestartResumeParams,
   'agentSession.restartResumable': RestartResumableParams,
   'agentSession.restartResumableDismiss': RestartResumableParams,

@@ -20906,7 +20906,15 @@
         "copyOrcaSessionId": "Copiar ID de sessão do Orca",
         "orcaSessionIdCopied": "ID de sessão do Orca copiado",
         "orcaSessionIdCopyFailed": "Não foi possível copiar o ID de sessão do Orca",
-        "orcaSessionIdTooltip": "ID deste chat no Orca, separado do ID de sessão da CLI do agente. Os agentes o usam para se referir uns aos outros pelo Orca."
+        "orcaSessionIdTooltip": "ID deste chat no Orca, separado do ID de sessão da CLI do agente. Os agentes o usam para se referir uns aos outros pelo Orca.",
+        "restartAgent": "Reiniciar agente",
+        "restartAgentTooltip": "Interrompe o agente deste chat. Sua próxima mensagem o inicia novamente com a conta e as configurações atuais, e a conversa continua.",
+        "restartAgentFailed": "Não foi possível reiniciar o agente.",
+        "restartAgentDone": "Agente interrompido. Sua próxima mensagem o inicia com a conta atual.",
+        "restartAgentNotRunning": "O agente não está em execução. Sua próxima mensagem o inicia com a conta atual.",
+        "restartAgentBusy": "O agente está trabalhando. Interrompa o turno ou responda à pergunta dele primeiro.",
+        "restartAgentBackgroundWork": "O agente ainda tem tarefas em segundo plano. Reiniciar as interrompe.",
+        "restartAgentForce": "Reiniciar mesmo assim"
       },
       "dismissDeliveryNotice": "Dispensar",
       "addSelectionToChat": "Adicionar ao chat",
