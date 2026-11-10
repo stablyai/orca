@@ -8,7 +8,7 @@ import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/us
 import {
   AgentLaunchChoiceCancelled,
   acquireAgentLaunchChoices
-} from '@/lib/host-chat-program-acquisition'
+} from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -35,7 +35,7 @@ import {
 import type { SourceControlLaunchActionId } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { buildSourceControlRecoveryAgentCommandInput } from '../../../../../../shared/source-control/recovery/source-control-recovery-agent-command'
 import { translate } from '@/i18n/i18n'
-import { agentChoiceMayOpenAsChat } from '@/lib/host-chat-program'
+import { agentChoiceMayOpenAsChat } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 
 type SourceControlAiLaunchStoreSnapshot = Pick<AppState, 'settings'> & WorktreeAgentInventoryState

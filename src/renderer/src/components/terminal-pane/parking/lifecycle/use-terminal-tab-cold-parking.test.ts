@@ -20,8 +20,6 @@ const mocks = vi.hoisted(() => ({
     >
   },
   exemptTabIds: new Set<string>(),
-  exemptSelectCalls: 0,
-  coldParkSelectCalls: 0,
   /** Toggled to churn the park verdict the way the crash cluster does. */
   watcherCoverage: true
 }))
@@ -33,35 +31,10 @@ vi.mock('../../../../store/index', () => ({
   )
 }))
 
-vi.mock('../retention/terminal-hidden-view-parking', async (importOriginal) => {
-  const actual = await importOriginal<{
-    selectColdParkedTerminalTabs: typeof selectColdParkedTerminalTabs
-  }>()
-  return {
-    ...actual,
-    selectColdParkedTerminalTabs: (
-      args: Parameters<typeof actual.selectColdParkedTerminalTabs>[0]
-    ) => {
-      mocks.coldParkSelectCalls += 1
-      return actual.selectColdParkedTerminalTabs(args)
-    }
-  }
-})
-
 vi.mock('../retention/terminal-eviction-exempt-tabs', () => ({
   selectEvictionExemptTerminalTabIds: (_worktreeId: string, tabs: readonly { id: string }[]) => {
-    mocks.exemptSelectCalls += 1
     return new Set(tabs.filter((tab) => mocks.exemptTabIds.has(tab.id)).map((tab) => tab.id))
-  },
-  selectEvictionExemptTerminalTabLayoutKey: (
-    state: typeof mocks.storeState,
-    tabs: readonly { id: string }[]
-  ) =>
-    tabs
-      .map(
-        (tab) => `${tab.id}=${JSON.stringify(state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId)}`
-      )
-      .join('|')
+  }
 }))
 
 vi.mock('../output-watchers/terminal-parked-tab-watchers', () => ({
@@ -79,7 +52,6 @@ vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
 }))
 
 import {
-  type selectColdParkedTerminalTabs,
   TERMINAL_TAB_COLD_PARK_DELAY_MS,
   TERMINAL_TAB_HOT_RETAIN_MS
 } from '../retention/terminal-hidden-view-parking'
@@ -91,6 +63,7 @@ import {
 import { BACKGROUND_WORKTREE_MEASURE_WINDOW_MS } from '../../../terminal/background-terminal-worktree-visibility'
 import { queueTerminalPaneSplitRequest } from '../../layout/split/terminal-pane-split-request-routing'
 import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
+import { invalidateTerminalParkingInputs } from '../terminal-parking-input-events'
 
 const WORKTREE_ID = 'wt-1'
 
@@ -116,13 +89,11 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000_000)
-    mocks.coldParkSelectCalls = 0
   })
 
   afterEach(() => {
     vi.useRealTimers()
     mocks.exemptTabIds = new Set()
-    mocks.exemptSelectCalls = 0
     mocks.watcherCoverage = true
     mocks.storeState.terminalLayoutsByTabId = {}
     mocks.storeState.sleepingAgentSessionsByPaneKey = {}
@@ -337,6 +308,7 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
       'tab-1': { ptyIdsByLeafId: { 'leaf-2': 'pty-local-detached' } }
     }
     act(() => {
+      invalidateTerminalParkingInputs(WORKTREE_ID)
       rerender(stableArgs)
     })
     expect(result.current).toEqual(new Set(['tab-2']))
