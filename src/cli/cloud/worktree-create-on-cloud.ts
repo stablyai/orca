@@ -11,6 +11,7 @@ import type { HandlerContext } from '../dispatch'
 import { getOptionalStringFlag } from '../flags'
 import { RuntimeClientError } from '../runtime/types'
 import { formatCloudWorkspace, printCloudResult } from './cloud-format'
+import { cloudProgress, readCloudProgressMode } from './cloud-progress'
 import {
   CLOUD_AGENTS,
   cloudClient,
@@ -154,16 +155,7 @@ export async function createWorktreeOnCloud(
       field: 'agent'
     })
   }
-  const progress = flags.get('progress') ?? (json ? 'none' : 'text')
-  if (progress !== 'text' && progress !== 'json' && progress !== 'none') {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      '--progress must be one of: text, json, none',
-      {
-        field: 'progress'
-      }
-    )
-  }
+  const progress = readCloudProgressMode(flags, json)
   const deps = getDeps()
   const machineSize = getSizeFlag(flags)
   const ref = getOptionalStringFlag(flags, 'base-branch')
@@ -195,16 +187,20 @@ export async function createWorktreeOnCloud(
     ...(machineSize ? { machineSize } : {}),
     ...(prompt && agent ? { message: { text: prompt, agent } } : {})
   }
-  const phase = (name: string, text: string) => {
-    if (progress === 'json') {
-      process.stderr.write(`${JSON.stringify({ event: 'phase', phase: name, at: deps.now() })}\n`)
-    } else if (progress === 'text') {
-      console.error(`- ${text}`)
-    }
-  }
-  phase('create', `Creating an Orca Cloud workspace${repo ? ` from ${repo.url}` : ''}...`)
-  const created = await createCloudWorkspace(api, input, deps.now)
-  phase('ready', `Workspace ${created.workspace.id} is ${created.workspace.status}.`)
+  const progressLines = cloudProgress(progress)
+  progressLines.phase(
+    'create',
+    `Creating an Orca Cloud workspace${repo ? ` from ${repo.url}` : ''}...`
+  )
+  const created = await progressLines.track(
+    createCloudWorkspace(api, input, deps.now),
+    (s) => `Still starting (${s}s). This is taking longer than usual; your files are safe.`
+  )
+  progressLines.phase(
+    'ready',
+    `Workspace ${created.workspace.id} is ${created.workspace.status} (took ${progressLines.elapsedSeconds()}s).`,
+    { workspaceId: created.workspace.id }
+  )
   printCloudResult(
     {
       ...created,

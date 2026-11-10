@@ -9,6 +9,8 @@ const WORKSPACE_ARG_NOTE =
 const JSON_NOTE =
   '--json prints { ok, schemaVersion: 1, result }; failures print { ok: false, error: { code, message, data } }.'
 
+const PROGRESS_ACTIONS: ReadonlySet<string> = new Set(['sleep', 'wake'])
+
 const lifecycle = (
   action: 'sleep' | 'wake' | 'archive' | 'destroy',
   summary: string,
@@ -16,12 +18,21 @@ const lifecycle = (
 ): CommandSpec => ({
   path: ['cloud', 'workspace', action],
   summary,
-  usage: `orca cloud workspace ${action} <workspace> [--json]`,
-  allowedFlags: [...LOCAL_COMMAND_FLAGS, 'workspace'],
+  usage: `orca cloud workspace ${action} <workspace>${PROGRESS_ACTIONS.has(action) ? ' [--progress text|json|none]' : ''} [--json]`,
+  allowedFlags: [
+    ...LOCAL_COMMAND_FLAGS,
+    'workspace',
+    ...(PROGRESS_ACTIONS.has(action) ? ['progress'] : [])
+  ],
   positionalArgs: ['workspace'],
   ...(action === 'destroy' ? { destructive: true } : {}),
   notes: [
     ...notes,
+    ...(PROGRESS_ACTIONS.has(action)
+      ? [
+          'Progress goes to stderr as "- ..." lines (--progress json: NDJSON phase events; --json defaults to none). stdout carries only the result.'
+        ]
+      : []),
     WORKSPACE_ARG_NOTE,
     'A workspace token cannot sleep, archive or destroy its own workspace.'
   ],
