@@ -329,6 +329,67 @@ describe('terminal worker turn stops', () => {
     expect(ctx.mail().map((m) => m.subject)).toEqual(['Worker stopped without reporting'])
   })
 
+  it('stays quiet after the worker replies to a hold and ends its turn, until the coordinator writes again', async () => {
+    const ctx = setup()
+    const hold = ctx.db.insertMessage({
+      from: 'term_coordinator',
+      to: `dispatch:${ctx.dispatch.id}`,
+      subject: 'HOLD: pause after your current step',
+      runId: ctx.run.id
+    })
+    ctx.db.markAsRead([hold.id])
+    ctx.db.insertMessage({
+      from: HANDLE,
+      senderPaneKey: PANE,
+      to: `run:${ctx.run.id}`,
+      subject: 'Re: HOLD',
+      body: 'Paused. Waiting for your call.',
+      threadId: hold.id,
+      runId: ctx.run.id
+    })
+    const current = { row: hookRow({}) }
+    const stops = terminal(ctx, current)
+    stops.observe(moved('working', 'done'))
+    await settle()
+    expect(ctx.mail()).toHaveLength(0)
+
+    const decision = ctx.db.insertMessage({
+      from: 'term_coordinator',
+      to: `dispatch:${ctx.dispatch.id}`,
+      subject: 'Go ahead',
+      runId: ctx.run.id
+    })
+    ctx.db.markAsRead([decision.id])
+    current.row = hookRow({ stateStartedAt: 300 })
+    stops.observe(moved('working', 'done'))
+    await settle()
+    expect(ctx.mail().map((m) => m.subject)).toEqual(['Worker stopped without reporting'])
+  })
+
+  it('reports a stop after an unprompted progress status', async () => {
+    const ctx = setup()
+    const start = ctx.db.insertMessage({
+      from: 'term_coordinator',
+      to: `dispatch:${ctx.dispatch.id}`,
+      subject: 'Start',
+      runId: ctx.run.id
+    })
+    ctx.db.markAsRead([start.id])
+    ctx.db.insertMessage({
+      from: HANDLE,
+      senderPaneKey: PANE,
+      to: `run:${ctx.run.id}`,
+      subject: 'Progress',
+      body: 'Halfway there.',
+      runId: ctx.run.id
+    })
+    const current = { row: hookRow({}) }
+    const stops = terminal(ctx, current)
+    stops.observe(moved('working', 'done'))
+    await settle()
+    expect(ctx.mail().map((m) => m.subject)).toEqual(['Worker stopped without reporting'])
+  })
+
   it('reports a later stall once new mail reached the worker, though its question is pending', async () => {
     const ctx = setup()
     // Mail stored before the question, even in the same second, does not end the asking turn's mute.
@@ -506,5 +567,48 @@ describe('remote worker turn stops', () => {
     enqueueFederationRelay.mockClear()
     reportWorkerTurnStop(db, target, { ...stop, stopKey: 'k2' }, deps)
     expect(enqueueFederationRelay).not.toHaveBeenCalled()
+  })
+
+  it('stays quiet for a paired worker whose relayed reply answered its latest mail', () => {
+    const db = new OrchestrationDb(':memory:')
+    const run = db.createRun({
+      objective: 'paired',
+      coordinatorHandle: 'term_coordinator',
+      coordinatorPaneKey: makePaneKey('tab-coordinator', '22222222-2222-4222-8222-222222222222')
+    })
+    const hold = db.insertMessage({
+      from: 'term_home',
+      to: 'dispatch:dsp_remote',
+      subject: 'HOLD',
+      runId: run.id
+    })
+    db.db
+      .prepare("UPDATE messages SET created_at = datetime('now', '-1 minute') WHERE id = ?")
+      .run(hold.id)
+    const target = {
+      kind: 'remote' as const,
+      attachment: { dispatch_id: 'dsp_remote', task_id: 'task_remote' }
+    }
+    const deps = { getDb: () => db, isWaitingForMail: () => false, notify: vi.fn() }
+    const stop = { from: HANDLE, stopKey: 'k', reason: 'finished' as const, lastOutput: 'paused' }
+    db.enqueueFederationRelay({
+      dispatchId: 'dsp_remote',
+      direction: 'to_home',
+      kind: 'status',
+      payload: JSON.stringify({ from: HANDLE, subject: 'Re: HOLD', threadId: hold.id })
+    })
+    const enqueueFederationRelay = vi.spyOn(db, 'enqueueFederationRelay')
+    reportWorkerTurnStop(db, target, stop, deps)
+    expect(enqueueFederationRelay).not.toHaveBeenCalled()
+
+    db.enqueueFederationRelay({
+      dispatchId: 'dsp_remote',
+      direction: 'to_home',
+      kind: 'status',
+      payload: JSON.stringify({ from: HANDLE, subject: 'Progress', threadId: null })
+    })
+    enqueueFederationRelay.mockClear()
+    reportWorkerTurnStop(db, target, { ...stop, stopKey: 'k2' }, deps)
+    expect(enqueueFederationRelay.mock.calls[0]?.[0]).toMatchObject({ kind: 'escalation' })
   })
 })

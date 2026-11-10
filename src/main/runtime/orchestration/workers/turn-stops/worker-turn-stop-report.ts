@@ -87,12 +87,12 @@ export function reportWorkerTurnStop(
   deps: WorkerTurnStopReportDeps
 ): void {
   const dispatchId = workerTurnStopDispatchId(target)
-  // Waiting on mail, or a clean finish resting on its own question or helpers, is deliberate; an exit never is.
+  // Waiting on mail, or a clean finish resting on its own question, reply or helpers, is deliberate; an exit never is.
   if (
     stop.reason !== 'exited' &&
     (deps.isWaitingForMail(`dispatch:${dispatchId}`) ||
       (stop.reason === 'finished' &&
-        (db.awaitsAnswerToLatestQuestion(dispatchId) ||
+        (db.awaitsCoordinator(dispatchId) ||
           (target.kind === 'local' && db.hasOpenHelperDispatch(dispatchId)))))
   ) {
     return

@@ -3,6 +3,7 @@ import { OrchestrationError } from '../../orchestration-error'
 import { exposeQuestionTimestamps } from '../utc-timestamp'
 import type { OrchestrationDb } from '../orchestration-db'
 import { handHelperMailToRun } from '../messages/helper-mailbox-hand-back'
+import { isDispatchAssignee } from '../dispatch-context/dispatch-lookup'
 
 export function createQuestion(
   this: OrchestrationDb,
@@ -168,9 +169,14 @@ export function answerQuestion(
   }
 }
 
-/** Whether the Dispatch's last turn ended on its own pending question: no mail has reached it since it asked. */
-export function awaitsAnswerToLatestQuestion(this: OrchestrationDb, dispatchId: string): boolean {
-  const row = this.db
+/** Whether the worker's last turn ended waiting on its coordinator: no mail has reached it since it asked,
+ *  or since it replied to the coordinator's mail (a status like "paused, waiting for your call"). */
+export function awaitsCoordinator(this: OrchestrationDb, dispatchId: string): boolean {
+  return awaitsAnswerToLatestQuestion(this, dispatchId) || repliedSinceLatestMail(this, dispatchId)
+}
+
+function awaitsAnswerToLatestQuestion(db: OrchestrationDb, dispatchId: string): boolean {
+  const row = db.db
     .prepare(
       `SELECT EXISTS (
          SELECT 1 FROM question_threads q JOIN messages asked ON asked.id = q.message_id
@@ -191,6 +197,38 @@ export function awaitsAnswerToLatestQuestion(this: OrchestrationDb, dispatchId: 
     )
     .get(dispatchId, dispatchId)
   return row?.pending === 1
+}
+
+function repliedSinceLatestMail(db: OrchestrationDb, dispatchId: string): boolean {
+  const inbox = `dispatch:${dispatchId}`
+  const dispatch = db.getDispatchContextById(dispatchId)
+  if (!dispatch) {
+    // A paired worker's outgoing mail is in its relay to the Run home, so only timestamps order it here.
+    const last = db.db
+      .prepare(
+        `SELECT json_extract(r.payload, '$.threadId') AS thread_id FROM federation_relay_items r
+          WHERE r.dispatch_id = ? AND r.direction = 'to_home' AND r.kind <> 'heartbeat'
+            AND r.created_at > (SELECT MAX(m.created_at) FROM messages m WHERE m.to_handle = ?)
+          ORDER BY r.sequence DESC LIMIT 1`
+      )
+      .get(dispatchId, inbox)
+    return typeof last?.thread_id === 'string'
+  }
+  const sent = db.db
+    .prepare(
+      `SELECT from_handle, sender_pane_key, thread_id FROM messages
+        WHERE run_id = ? AND to_handle <> ? AND type <> 'heartbeat'
+          AND sequence > (SELECT MAX(sequence) FROM messages WHERE to_handle = ?)
+        ORDER BY sequence DESC`
+    )
+    .all(dispatch.run_id, inbox, inbox)
+  // Only a threaded reply answers the coordinator; an unprompted progress status does not excuse a stop.
+  const last = sent.find((message) => {
+    const from = typeof message.from_handle === 'string' ? message.from_handle : ''
+    const paneKey = typeof message.sender_pane_key === 'string' ? message.sender_pane_key : null
+    return from === inbox || isDispatchAssignee(dispatch, from, paneKey)
+  })
+  return typeof last?.thread_id === 'string'
 }
 
 export function closeQuestionsForDispatch(this: OrchestrationDb, dispatchId: string): string[] {
@@ -215,7 +253,7 @@ export type QuestionThreadsMethods = {
   getQuestion: typeof getQuestion
   getQuestionRaw: typeof getQuestionRaw
   answerQuestion: typeof answerQuestion
-  awaitsAnswerToLatestQuestion: typeof awaitsAnswerToLatestQuestion
+  awaitsCoordinator: typeof awaitsCoordinator
   closeQuestionsForDispatch: typeof closeQuestionsForDispatch
 }
 
@@ -225,7 +263,7 @@ export function attachQuestionThreads(ctor: { prototype: object }): void {
     getQuestion,
     getQuestionRaw,
     answerQuestion,
-    awaitsAnswerToLatestQuestion,
+    awaitsCoordinator,
     closeQuestionsForDispatch
   })
 }
