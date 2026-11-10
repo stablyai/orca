@@ -75,6 +75,13 @@ cd "$P" 2>/dev/null || { code=2; note=no_project; finish; }
 base="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
 start_sha="$(git rev-parse HEAD 2>/dev/null || true)"
 echo "routine: agent=$agent post=$post limit=$limit base=$base"
+# The workspace's orca.yaml setup (src/project-setup.ts) installs what the agent needs: let it finish.
+S="$HOME/.orca-sandbox/project-setup"
+if [ -e "$S/started" ] && [ ! -e "$S/exit" ]; then
+  echo "routine: waiting for orca.yaml setup"
+  while [ ! -e "$S/exit" ] && kill -0 "$(cat "$S/pid" 2>/dev/null || echo 0)" 2>/dev/null; do sleep 2; done
+fi
+[ -e "$S/exit" ] && echo "routine: orca.yaml setup $(cat "$S/exit")"
 case "$agent" in
 claude)
   # The prompt goes in on stdin: as an argv entry, text starting with "-" would parse as a flag.

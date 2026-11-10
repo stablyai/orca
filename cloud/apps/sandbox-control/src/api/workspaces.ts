@@ -6,6 +6,7 @@ import { getSandbox, markUserSlept, type SandboxRow } from '../store'
 import { archiveSandbox, unarchiveSandbox } from '../workspace-lifecycle'
 import { ApiError } from './caller'
 import { randomId } from './keys'
+import { startProjectSetup } from '../project-setup'
 
 export type WorkspaceOrigin = 'desktop' | 'api' | 'mcp' | 'routine' | 'vm'
 
@@ -169,6 +170,14 @@ export async function createWorkspace(
     originRef: input.originRef ?? null,
     hidden: input.hidden ?? false
   })
+  // Agents here work in the primary checkout, which no worktree create sets up: run orca.yaml setup
+  // once. Best effort: a workspace whose setup could not start still opens (the log says why).
+  if (ready.row.session_id) {
+    const setup = await startProjectSetup(life.provider, ready.row.session_id).catch(() => 'failed' as const)
+    if (setup !== 'not_configured') {
+      console.log(JSON.stringify({ event: 'project_setup', sandboxId: ready.row.id, origin: input.origin, state: setup }))
+    }
+  }
   return (await getSandbox(life.db, ready.row.id)) as WorkspaceRow
 }
 

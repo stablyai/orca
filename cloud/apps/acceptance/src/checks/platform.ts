@@ -230,7 +230,7 @@ export const platformChecks: Record<string, Check> = {
         ctx.run.destroyed('other', s.envId)
       }
     }
-    return { status: ok ? 'partial' : 'fail', detail: 'install script ran during the build (marker in env.from-build); per-repo orca.yaml setup on each new workspace runs through the desktop hook runtime (Electron run)' }
+    return { status: ok ? 'partial' : 'fail', detail: 'install script ran during the build (marker in env.from-build); per-repo orca.yaml setup: desktop workspaces run it in orcad's worktree create (setup prompt), API/CLI/phone/routine workspaces once on create (sandbox-control src/project-setup.ts), skipped on environment builds' }
   },
 
   // ---------------- W4 ----------------
