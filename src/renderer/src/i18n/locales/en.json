@@ -6605,7 +6605,8 @@
           "removeWithChildrenGit_one": "Remove <target/> and <descendants>{{count}} child workspace</descendants> from git and delete their workspace folders.",
           "removeWithChildrenGit_other": "Remove <target/> and <descendants>{{count}} child workspaces</descendants> from git and delete their workspace folders.",
           "removeSingleFolderFromOrca": "Removes it from Orca. The folder on disk is kept.",
-          "deleteSingleWorktreeAndBranch": "Deletes the worktree and its branch (kept if unmerged)."
+          "deleteSingleWorktreeAndBranch": "Deletes the worktree and its branch (kept if unmerged).",
+          "cloudSignsAgentsOut": "Signs agents out on the sandbox first."
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "Show loaded paths",
@@ -27095,5 +27096,18 @@
     "tabTitle": "Run: {{name}}",
     "noneTitle": "No run actions for this workspace",
     "noneBody": "Add a command under scripts.run in orca.yaml, for example a dev server on $ORCA_PORT."
+  },
+  "agentHostPanel": {
+    "recipeEnv": "This recipe's create script gets this computer's environment.",
+    "recipeEnvDetail_one": "{{count}} variable, including {{keys}} that look like keys ({{names}}). The recipe decides what reaches the VM.",
+    "recipeEnvDetail_other": "{{count}} variables, including {{keys}} that look like keys ({{names}}). The recipe decides what reaches the VM.",
+    "recipeEnvDetailOneKey_one": "{{count}} variable, including 1 that looks like a key ({{names}}). The recipe decides what reaches the VM.",
+    "recipeEnvDetailOneKey_other": "{{count}} variables, including 1 that looks like a key ({{names}}). The recipe decides what reaches the VM.",
+    "recipeEnvDetailNoKeys_one": "{{count}} variable, none that look like keys. The recipe decides what reaches the VM.",
+    "recipeEnvDetailNoKeys_other": "{{count}} variables, none that look like keys. The recipe decides what reaches the VM.",
+    "recipeEnvReview": "Review",
+    "recipeEnvHide": "Hide",
+    "recipeEnvKeyLike": "Look like keys",
+    "recipeEnvOther": "Other variables"
   }
 }

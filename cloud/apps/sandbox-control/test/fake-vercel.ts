@@ -293,6 +293,10 @@ export function createFakeVercel(now: () => number): FakeVercel {
       if (params.command === 'bash' && params.args?.[1]?.includes('result.json')) {
         return fake.runtimeMissing ? { exitCode: 1, stdout: '', stderr: '' } : { exitCode: 0, stdout: `${fake.buildResult}\n`, stderr: '' }
       }
+      if (params.command === 'bash' && params.args?.[2] === 'orca-agent-signout') {
+        // orca-agent-signout run by source (A9); tests override through commandHandler.
+        return { exitCode: 0, stdout: '{"loggedOut":2,"left":0}\n', stderr: '' }
+      }
       if (params.command === '/opt/orca/bin/orca-image-wipe') {
         return { exitCode: 0, stdout: '{"wiped":true}\n', stderr: '' }
       }

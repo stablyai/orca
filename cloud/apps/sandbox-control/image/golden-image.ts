@@ -11,6 +11,7 @@ export const VM_SCRIPTS = [
   'orca-session-env.sh',
   'orca-egress-probe',
   'orca-image-wipe',
+  'orca-agent-signout',
   'orca-share-proxy',
   'orca-sshd',
   'orca-ssh-keys',
