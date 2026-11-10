@@ -385,7 +385,7 @@ describe('agent mail between paired Orca servers', () => {
     a.db.resetMessages()
     // The ack was lost: the server serves the stored reply again.
     b.db['db'].prepare('UPDATE federation_relay_items SET acked_at = NULL').run()
-    notifyPeerMailQueued(b.db)
+    notifyPeerMailQueued(b.db.db)
 
     await vi.waitFor(() =>
       expect(b.db.listPendingFederationRelay(conversationId!, 'to_home')).toEqual([])

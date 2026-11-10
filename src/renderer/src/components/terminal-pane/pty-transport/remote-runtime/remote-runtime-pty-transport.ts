@@ -4151,6 +4151,8 @@ export function createRemoteRuntimePtyTransport(
       return !destroyed && !terminalEnded && recoveryBlocksIo()
     },
 
+    isHoldingInput: shouldHoldInput,
+
     hasUndeliveredInput() {
       return (
         inputJournal.hasUnacknowledgedInput() ||
