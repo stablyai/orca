@@ -2,7 +2,7 @@ import { memo, useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { Tab, TabGroup } from '../../../../../../shared/tab-types'
 import { useAppStore } from '@/store'
-import { useWindowBackdropActive } from '@/lib/window-backdrop'
+import { useWindowBackdropActive } from '@/app-shell/appearance/window-backdrop'
 import {
   structuredAgentSessionOwnerForTab,
   structuredAgentSessionTargetForHost
