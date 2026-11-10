@@ -24720,7 +24720,8 @@
     "branchCreated": "Created {{branch}} at {{commit}}",
     "branchName": "Branch name",
     "invalidBranchName": "This branch name is invalid. Choose a different name.",
-    "createBranchFailed": "Orca couldn't create the branch. Check this repository in a terminal, then try again."
+    "createBranchFailed": "Orca couldn't create the branch. Check this repository in a terminal, then try again.",
+    "workspaceAgents": "Agents in this workspace"
   },
   "macosUpdateRequirement": {
     "title": "Orca updates now need macOS {{macos}}",
