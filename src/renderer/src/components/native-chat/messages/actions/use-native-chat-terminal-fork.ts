@@ -31,6 +31,23 @@ function terminalForkPoint(message: NativeChatMessage): boolean {
   )
 }
 
+// Module scope: the React Compiler bails out on try/finally inside a hook.
+async function runWhilePending<T>(
+  inFlight: { current: boolean },
+  setPendingItemId: (id: string | null) => void,
+  itemId: string,
+  launch: () => Promise<T>
+): Promise<T> {
+  inFlight.current = true
+  setPendingItemId(itemId)
+  try {
+    return await launch()
+  } finally {
+    inFlight.current = false
+    setPendingItemId(null)
+  }
+}
+
 /** Fork for a terminal Claude chat: the host cuts a copy of its conversation at a reply and Claude
  *  resumes it in a new tab or a new worktree. Absent for other agents or without a transcript. */
 export function useNativeChatTerminalFork(input: {
@@ -55,10 +72,8 @@ export function useNativeChatTerminalFork(input: {
       if (inFlight.current || !source) {
         return undefined
       }
-      inFlight.current = true
-      setPendingItemId(throughItemId)
-      try {
-        return await launchNativeChatTerminalFork({
+      return runWhilePending(inFlight, setPendingItemId, throughItemId, () =>
+        launchNativeChatTerminalFork({
           source,
           // The reply's whole turn, tool work after its last text included.
           throughItemId:
@@ -66,10 +81,7 @@ export function useNativeChatTerminalFork(input: {
           ...(destination ? { destinationWorktreeId: destination.worktreeId } : {}),
           ...(draft ? { draft } : {})
         })
-      } finally {
-        inFlight.current = false
-        setPendingItemId(null)
-      }
+      )
     },
     []
   )
