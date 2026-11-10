@@ -5,7 +5,7 @@ import { BackendPortRpc } from '../../shared/backend-port-rpc'
 import { setAppEnvironment } from '../../shared/app-environment'
 import { agentTokenUsageSchema } from '../../shared/telemetry-agent-token-usage-schema'
 import { backendMessagePort, type BackendNativePort } from './backend-message-port'
-import { createNodeServiceEnvironment } from './node-service-environment'
+import { createDesktopBackendEnvironment } from './node-service-environment'
 import { BackendServiceLifetime, activateBackendServices } from './service-composition'
 import { acquireOrcadInstanceLock } from '../orcad/orcad-instance-lock'
 import { OrcadInstanceLockError } from '../orcad/orcad-data-root-privacy'
@@ -104,12 +104,7 @@ async function bootstrap(raw: unknown, port: BackendNativePort): Promise<void> {
   ) {
     throw new Error('Backend contract is unsupported.')
   }
-  const host = createNodeServiceEnvironment({
-    getPath: (name) => config.paths[name],
-    getAppPath: () => config.appPath,
-    getVersion: () => config.build,
-    isPackaged: () => config.isPackaged
-  })
+  const host = createDesktopBackendEnvironment(config)
   setAppEnvironment(host.environment)
   control = new BackendPortRpc(
     backendMessagePort(port),

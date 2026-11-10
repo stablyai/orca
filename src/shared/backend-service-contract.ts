@@ -1,7 +1,6 @@
 import { z } from 'zod'
 import type { RuntimeRpcResponse } from './runtime-rpc-envelope'
 import type { AutomationRunUsage } from './automations/history/automation-run'
-import type { AppPathName } from './app-environment'
 
 export const BACKEND_PORT_REQUEST = 'backend:connect'
 export const BACKEND_PORT_DELIVERY = 'backend:port'
@@ -34,14 +33,8 @@ export const BackendBootstrapSchema = z
     services: z.tuple([z.literal('usage')]),
     build: z.string().max(256),
     paths: z.object({
-      userData: z.string().min(1),
-      home: z.string().min(1),
-      appData: z.string().min(1),
-      temp: z.string().min(1),
-      downloads: z.string().min(1),
-      logs: z.string().min(1),
-      exe: z.string().min(1)
-    }) satisfies z.ZodType<Record<AppPathName, string>>,
+      userData: z.string().min(1)
+    }),
     appPath: z.string().min(1),
     isPackaged: z.boolean()
   })

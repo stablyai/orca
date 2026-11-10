@@ -1,4 +1,19 @@
 import type { AppEnvironment } from '../../shared/app-environment'
+import type { BackendBootstrap } from '../../shared/backend-service-contract'
+
+export function createDesktopBackendEnvironment(config: BackendBootstrap) {
+  return createNodeServiceEnvironment({
+    getPath(name) {
+      if (name !== 'userData') {
+        throw new Error(`Desktop backend path is unsupported: ${name}`)
+      }
+      return config.paths.userData
+    },
+    getAppPath: () => config.appPath,
+    getVersion: () => config.build,
+    isPackaged: () => config.isPackaged
+  })
+}
 
 export function createNodeServiceEnvironment(
   host: Pick<

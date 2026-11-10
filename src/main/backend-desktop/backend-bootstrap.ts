@@ -11,13 +11,7 @@ export function captureBackendBootstrap(): void {
     services: ['usage'],
     build: app.getVersion(),
     paths: {
-      userData: app.getPath('userData'),
-      home: app.getPath('home'),
-      appData: app.getPath('appData'),
-      temp: app.getPath('temp'),
-      downloads: app.getPath('downloads'),
-      logs: app.getPath('logs'),
-      exe: app.getPath('exe')
+      userData: app.getPath('userData')
     },
     appPath: app.getAppPath(),
     isPackaged: app.isPackaged
