@@ -505,17 +505,10 @@ async function asleepDeleteCheck(step, name, id) {
   const direct = o.kind === 'removed' && !o.rowVisibleAfter
   // Delete Workspace in the dialog went through without any Force delete offer: the VM still must not
   // wake and must be destroyed, but the #149 "offers Force delete" half is not what the UI does.
-  step.status = refused && !woke && forced?.rowGone && !w.timedOut ? 'pass' : direct && !woke && !w.timedOut ? 'partial' : 'fail'
-  step.detail = `before: ${step.before.status}; Delete -> ${o.kind}${o.text ? ` "${o.text}"` : ''}${direct ? ' (dialog "Delete Workspace" deleted it directly; no refusal, no Force delete offer)' : ''}; control plane right after: ${JSON.stringify(states)} (woke: ${woke}); ${forced ? `Force delete via ${step.forceSurface} -> row gone ${forced.rowGone} in ${forced.ms}ms; ` : ''}sandbox ${id} -> ${w.status}${w.timedOut ? ' (timed out)' : ''}; toasts during delete ${JSON.stringify(o.toasts)}`
-  if (step.status === 'partial') {
-    bug(step.id, {
-      title: 'Asleep Orca Cloud Delete from the dialog deletes directly (no wake, destroyed) without the "Use Force delete" refusal #149 describes',
-      expected: 'without force: refusal offering Force delete; Force delete destroys',
-      actual: step.detail,
-      repro: step.id === 'life.delete-asleep-after-move' ? 'Orca Cloud workspace -> Move to this computer -> Delete -> Delete Workspace' : 'Orca Cloud workspace -> Sleep -> Delete -> Delete Workspace',
-      screenshot: step.screenshots.find((x) => x.includes('asleep-confirm'))
-    })
-  }
+  // Delete Workspace in the dialog is itself the confirmed force for an asleep sandbox (intended,
+  // agreed with the coordinator): no separate Force delete offer.
+  step.status = (refused && !woke && forced?.rowGone && !w.timedOut) || (direct && !woke && !w.timedOut) ? 'pass' : 'fail'
+  step.detail = `before: ${step.before.status}; Delete -> ${o.kind}${o.text ? ` "${o.text}"` : ''}${direct ? ' (dialog "Delete Workspace" deleted it directly; no separate Force delete offer, which is intended)' : ''}; control plane right after: ${JSON.stringify(states)} (woke: ${woke}); ${forced ? `Force delete via ${step.forceSurface} -> row gone ${forced.rowGone} in ${forced.ms}ms; ` : ''}sandbox ${id} -> ${w.status}${w.timedOut ? ' (timed out)' : ''}; toasts during delete ${JSON.stringify(o.toasts)}`
   if (step.status === 'fail') {
     bug(step.id, {
       title: 'Asleep Orca Cloud Delete does not follow the #149 flow (refuse without force, no wake, Force delete destroys)',
@@ -669,6 +662,10 @@ async function main() {
   })
 
   if (setup.status === 'fail' || !page) throw new Error(`setup failed: ${setup.detail}`)
+  if (process.env.W9D_MODE === 'targeted') {
+    await targetedFlow()
+    return
+  }
 
   // ---- D-1 / D-4: Orca Cloud create while signed out -> sign-in card, nothing created; sign in -> proceeds.
   let signedOutWs = null
@@ -1326,6 +1323,151 @@ async function main() {
   await oobDeleteStep()
 }
 
+/**
+ * W9D_MODE=targeted: picker sign-in (twice per process: fresh profile, then after a sign-out),
+ * create + keystroke, Move to this computer (Archive afterwards on) then Delete within seconds,
+ * and a normal Delete.
+ */
+async function targetedFlow() {
+  const pickerCheck = (id, label) =>
+    runStep(id, `${label}: Run on -> "Orca Cloud: Sign in" -> signed in and Orca Cloud selected (#157)`, async (step) => {
+      const watched = [USER, 'desktop-dogfood', 'dev-user']
+      const baseline = await sandboxIdsFor(watched)
+      step.authBefore = await authState()
+      const d = await openComposer(step, 'composer')
+      const t0 = Date.now()
+      step.pickRow = await pickOrcaCloud(step, d)
+      let ms = null
+      while (Date.now() - t0 < 15_000) {
+        if (/Orca Cloud/.test((await runOnValue(d)) ?? '') && (await authState()).state === 'connected') {
+          ms = Date.now() - t0
+          break
+        }
+        await sleep(250)
+      }
+      step.timings.pickToSelectedMs = ms
+      step.after = { auth: await authState(), runOn: await runOnValue(d) }
+      await shot(step, 'after-pick')
+      const lists = await sandboxIdsFor(watched)
+      step.createdByPick = Object.fromEntries(watched.map((u) => [u, lists[u].filter((x) => !baseline[u].includes(x))]))
+      const none = Object.values(step.createdByPick).every((x) => x.length === 0)
+      step.status = step.authBefore.state !== 'connected' && ms !== null && none ? 'pass' : 'fail'
+      step.detail = `before: ${step.authBefore.state}; row "${step.pickRow}"; after: auth ${step.after.auth.state} as ${step.after.auth.userId}, Run on "${step.after.runOn}" (${ms === null ? 'NOT selected within 15s' : `selected ${ms}ms after the pick`}); sandboxes created by the pick ${JSON.stringify(step.createdByPick)}`
+      if (step.status === 'fail') {
+        bug(id, { title: 'Picker sign-in does not leave Orca Cloud selected', expected: 'signed in, Run on = Orca Cloud', actual: step.detail, repro: 'Signed out: New workspace -> Run on -> Orca Cloud (Sign in)', screenshot: step.screenshots.at(-1) })
+      }
+      await page.keyboard.press('Escape').catch(() => {})
+      await sleep(400)
+      await page.keyboard.press('Escape').catch(() => {})
+    })
+
+  await pickerCheck('auth.picker-sign-in', 'Fresh profile')
+  await store(() => window.__store.getState().signOutCurrentOrcaProfile())
+  await sleep(2000)
+  await pickerCheck('auth.picker-sign-in-2', 'After signing out again')
+  if ((await authState()).state !== 'connected') await store(() => window.__store.getState().connectCurrentOrcaProfile())
+
+  let ws = null
+  await runStep('cli.desktop', 'Create an Orca Cloud workspace from the composer', async (step) => {
+    const t0 = Date.now()
+    ws = await createExtraWorkspace(step, wsName)
+    step.sandboxId = ws.sandboxId
+    step.timings.createToFirstTerminalOutputMs = step.createdForCheck.createMs
+    await openNewTerminalTab()
+    await page.waitForFunction(() => [...document.querySelectorAll('.xterm-rows')].some((r) => r.getBoundingClientRect().width > 0 && /\$\s*$/.test(r.innerText.trim())), null, { timeout: 60_000 })
+    step.timings.createToShellPromptMs = Date.now() - t0
+    step.prompt = lastLine((await visibleTerminals()).pop() ?? '')
+    await shot(step, 'ready-shell')
+    step.status = /^ubuntu@/.test(step.prompt) ? 'pass' : 'partial'
+    step.detail = `prompt "${step.prompt}"; sandbox ${ws.sandboxId}; create -> workspace ready ${step.createdForCheck.createMs}ms, -> shell prompt ${step.timings.createToShellPromptMs}ms`
+  })
+  if (!ws) return
+
+  await runStep('term.keystroke', `First-keystroke latency in the cloud xterm (n=${KEY_SAMPLES})`, async (step) => {
+    await focusTerminal()
+    const samples = []
+    for (let i = 0; i < KEY_SAMPLES; i++) samples.push(await measureKeystroke(`k${i}${String.fromCharCode(97 + i)}q`))
+    step.timings.keystrokeToEchoMs = stats(samples)
+    step.status = pct(samples, 95) < 250 ? 'pass' : 'partial'
+    step.detail = `keydown -> char in xterm DOM: p50 ${pct(samples, 50)}ms, p95 ${pct(samples, 95)}ms`
+    await shot(step, 'typed')
+  })
+
+  await runStep('life.move-then-delete', 'Move to this computer (Archive afterwards on), then Delete the cloud row within seconds: destroyed, no suspend/archive error toasts (#157)', async (step) => {
+    step.sandboxId = ws.sandboxId
+    await clearToasts()
+    await openRowMenu(ws.name)
+    const t0 = Date.now()
+    await page.getByRole('menuitem', { name: 'Move to this computer' }).click()
+    const dlg = page.getByRole('dialog').filter({ hasText: 'Archive the cloud workspace afterwards' })
+    await dlg.waitFor({ timeout: 15_000 })
+    const box = dlg.getByRole('checkbox').first()
+    const isOn = async () => (await box.getAttribute('aria-checked')) === 'true' || (await box.getAttribute('data-state')) === 'checked'
+    step.archiveAfterDefault = await isOn()
+    if (!step.archiveAfterDefault) await box.click()
+    step.archiveAfter = await isOn()
+    await shot(step, 'move-confirm')
+    await dlg.getByRole('button', { name: /Move to this computer/ }).click()
+    let local = null
+    while (Date.now() - t0 < 180_000) {
+      local = await store((n) => Object.values(window.__store.getState().worktreesByRepo ?? {}).flat().find((w) => !w.path.startsWith('/vercel') && w.path.includes(n)), ws.name)
+      if (local) break
+      await sleep(250)
+    }
+    if (!local) throw new Error('no local worktree within 180s of Move')
+    created.localPaths.push(local.path)
+    step.timings.moveMs = Date.now() - t0
+    await shot(step, 'moved')
+    // Close the move's done dialog, then Delete the cloud row a few seconds after the move.
+    await page.keyboard.press('Escape').catch(() => {})
+    await sleep(1500)
+    const tDel = Date.now()
+    step.statusAtDelete = await sandboxStatus(ws.sandboxId)
+    const o = await uiDelete(step, ws.name, 'delete', 120_000)
+    step.outcome = o
+    step.timings.moveDoneToDeleteMs = tDel - t0 - step.timings.moveMs
+    const w = await waitSandboxStatus(ws.sandboxId, ['destroyed'], 120_000)
+    step.timings.deleteToDestroyedMs = Date.now() - tDel
+    // Watch a while longer for a late archive/suspend error.
+    await sleep(15_000)
+    const all = (await toasts()).map(redact)
+    step.toasts = all
+    const bad = all.filter((t) => /couldn.t be suspended|Couldn.t archive/i.test(t))
+    await shot(step, 'after')
+    step.status = step.archiveAfter && o.kind === 'removed' && !o.rowVisibleAfter && w.status === 'destroyed' && bad.length === 0 ? 'pass' : 'fail'
+    step.detail = `archive afterwards ${step.archiveAfter} (default ${step.archiveAfterDefault}); move ${step.timings.moveMs}ms; sandbox at Delete ${step.statusAtDelete.status}; Delete -> ${o.kind}${o.text ? ` "${o.text}"` : ''} (row gone ${o.ms}ms); sandbox -> ${w.status}; error toasts ${JSON.stringify(bad)}; all toasts ${JSON.stringify(all)}`
+    if (step.status === 'fail') {
+      bug('life.move-then-delete', { title: 'Move to this computer (archive afterwards) then Delete misbehaves', expected: 'destroyed, no "couldn\u2019t be suspended"/"Couldn\u2019t archive" toasts', actual: step.detail, repro: 'Orca Cloud workspace -> Move to this computer (Archive afterwards on) -> Delete the cloud row within seconds', screenshot: step.screenshots.at(-1) })
+    }
+    // Remove the local copy through the UI.
+    for (const n of [local.displayName, path.basename(local.path), ws.name]) {
+      if (await rowShown(n, 'local')) {
+        step.localRow = n
+        break
+      }
+    }
+    step.localRowFound = Boolean(step.localRow)
+    if (step.localRow) {
+      await openRowMenu(step.localRow, 'local')
+      await page.getByRole('menuitem', { name: /^Delete/ }).click()
+      await page.getByRole('dialog').getByRole('button', { name: /^Delete( Workspace)?$/ }).click()
+      await waitRowGone(step.localRow, 'local', 60_000).catch(() => {})
+    }
+  })
+
+  await runStep('life.destroy', 'Normal Delete of an awake cloud workspace reaches destroyed', async (step) => {
+    const w2 = await createExtraWorkspace(step, `${wsName}-del`)
+    const o = await uiDelete(step, w2.name, 'delete', 120_000)
+    step.outcome = o
+    step.timings.uiRowGoneMs = o.kind === 'removed' ? o.ms : null
+    const w = await waitSandboxStatus(w2.sandboxId, ['destroyed'], 120_000)
+    step.timings.deleteToDestroyedMs = w.ms
+    step.sandboxId = w2.sandboxId
+    step.status = o.kind === 'removed' && !o.rowVisibleAfter && !w.timedOut ? 'pass' : 'fail'
+    step.detail = `UI Delete -> ${o.kind}, row gone ${step.timings.uiRowGoneMs}ms; sandbox ${w2.sandboxId} -> ${w.status} ${w.ms}ms after`
+  })
+}
+
 async function cleanup() {
   const c = results.cleanup
   try {
@@ -1371,6 +1513,11 @@ async function cleanup() {
   for (const p of created.localPaths) {
     if (existsSync(p)) {
       c.leftoverLocal = [...(c.leftoverLocal ?? []), p]
+      // A local copy this run made (its folder carries this run's workspace name): remove it.
+      if (path.basename(p).includes(wsName)) {
+        rmSync(p, { recursive: true, force: true })
+        c.leftoverLocalRemoved = [...(c.leftoverLocalRemoved ?? []), p]
+      }
     }
     try {
       rmdirSync(path.dirname(p)) // only succeeds when empty
