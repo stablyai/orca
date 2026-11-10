@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
 import { Progress } from '@/components/ui/progress'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
 import { formatElapsedTime } from '@/components/worktree-creation/worktree-creation-clock'
 import { formatBytes } from '../../../../../../shared/format-bytes'
 import type { RuntimeDownloadErrorCode } from '../../../../../../shared/runtime-downloads/runtime-download-contract'
@@ -53,8 +54,7 @@ export type RuntimeDownloadToastState =
 
 export type RuntimeDownloadToastAction = 'cancel' | 'open' | RuntimeDownloadFailureAction
 
-const countFormat = new Intl.NumberFormat()
-const formatCount = (value: number): string => countFormat.format(value)
+const formatCount = (value: number): string => uiNumberFormat({}).format(value)
 // A time-left estimate from the first second of a transfer swings wildly; wait for the rate to settle.
 const ETA_MIN_RATE_WINDOW_MS = 2_000
 

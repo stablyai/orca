@@ -5,6 +5,7 @@ import type {
   FileArchiveReadResult,
   FileArchiveStartResult
 } from '../../../../shared/rpc-contract/files-archive-params'
+import type { RpcContext } from '../../rpc/core'
 import { planFolderArchive, sanitizeArchiveSegment } from './folder-archive-walk'
 import { FolderArchiveZipStream } from './folder-archive-zip-stream'
 
@@ -197,9 +198,12 @@ function sanitizeArchiveRootName(name: string): string {
     : sanitizeArchiveSegment(cleaned)
 }
 
-const sessionsByRuntime = new WeakMap<object, FolderArchiveSessions>()
+type ArchiveRuntime = RpcContext['runtime']
 
-export function getFolderArchiveSessions(runtime: object): FolderArchiveSessions {
+const sessionsByRuntime = new WeakMap<ArchiveRuntime, FolderArchiveSessions>()
+
+/** One session table per runtime, so archives never outlive the runtime that started them. */
+export function getFolderArchiveSessions(runtime: ArchiveRuntime): FolderArchiveSessions {
   let sessions = sessionsByRuntime.get(runtime)
   if (!sessions) {
     sessions = new FolderArchiveSessions()
