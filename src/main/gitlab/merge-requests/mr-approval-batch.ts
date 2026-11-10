@@ -1,4 +1,7 @@
-import type { HostedReviewApproval, HostedReviewInfo } from '../../../shared/source-control/hosted-review/hosted-review-contracts'
+import type {
+  HostedReviewApproval,
+  HostedReviewInfo
+} from '../../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
