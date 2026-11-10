@@ -20,7 +20,12 @@ import { isCloudWorkspaceArchivedOnControlPlane } from '../hosted-sandbox/hosted
 import { CLOUD_WORKSPACE_ARCHIVED_ERROR } from '../../shared/hosted-sandbox/cloud-workspace-api'
 import { connectRuntimeOwnedSshTarget, refreshRuntimeOwnedSshTarget } from './runtime-ssh'
 import { noteRecipeVmWakePairing } from './recipe-vm-wake-pairings'
-import { applyResumedRuntimePairing } from './runtime-resume-pairing'
+import { applyResumedRuntimePairing, probeSavedPairing } from './runtime-resume-pairing'
+import {
+  preconnectWokenServer,
+  proveSavedPairingViaControl,
+  waitForWokenControl
+} from './woken-server-control'
 import { getRuntimeOwnedSshTargetId } from '../ssh/targets/ssh-target-runtime-ownership'
 import {
   isSshUserDisconnected,
@@ -102,13 +107,33 @@ export async function resumeEphemeralVmWorkspace(
     }
     throw new Error(RECIPE_VM_UNREACHABLE_WITHOUT_RESUME_MESSAGE)
   }
-  const result = await resumeEphemeralVmRuntime({
-    userDataPath,
-    repoPath: recipeContext.repoPath,
-    recipe: recipeContext.recipe,
-    runtimeId: runtime.id
-  })
+  const wakeStartedAt = Date.now()
+  // Hosted VMs keep their server endpoint across a stop, so the control socket can dial from the
+  // saved pairing while the VM boots and connect the moment its server listens.
+  const preconnectEnvironmentId =
+    runtime.recipe?.provider === 'orca-cloud' &&
+    runtime.connectionMode === 'orca-server' &&
+    runtime.runtimeEnvironmentId &&
+    !isRuntimeEnvironmentManuallyDisconnected(runtime.runtimeEnvironmentId)
+      ? runtime.runtimeEnvironmentId
+      : null
+  const stopPreconnect = preconnectEnvironmentId
+    ? preconnectWokenServer(userDataPath, preconnectEnvironmentId)
+    : () => {}
+  let result: Awaited<ReturnType<typeof resumeEphemeralVmRuntime>>
+  try {
+    result = await resumeEphemeralVmRuntime({
+      userDataPath,
+      repoPath: recipeContext.repoPath,
+      recipe: recipeContext.recipe,
+      runtimeId: runtime.id
+    })
+  } catch (error) {
+    stopPreconnect()
+    throw error
+  }
   if (!result.ok) {
+    stopPreconnect()
     restoreAfterFailedRecovery()
     if (archivedCheck && (await archivedCheck)) {
       // Not a failed resume: the workspace is archived. Leave the record as it was.
@@ -146,6 +171,16 @@ export async function resumeEphemeralVmWorkspace(
       // The wake's own reconnect proves the kept token; a separate probe first would put one more
       // connection setup between the click and the terminal.
       confirmInBackground: true,
+      // A pre-connected control socket that authenticated against the woken server already proved
+      // the kept token: one handshake per wake. Only without it does the standalone probe run.
+      ...(preconnectEnvironmentId
+        ? {
+            probeSavedPairing: (pairedConnection) =>
+              proveSavedPairingViaControl(preconnectEnvironmentId, wakeStartedAt, () =>
+                probeSavedPairing(pairedConnection)
+              )
+          }
+        : {}),
       onRepairedInBackground: (repaired) =>
         noteRecipeVmWakePairing(repaired.id, repaired.pairingRevision ?? repaired.createdAt, true)
     })
@@ -159,7 +194,8 @@ export async function resumeEphemeralVmWorkspace(
     reestablishWokenServer(userDataPath, runtime.runtimeEnvironmentId, {
       // A hosted VM always runs a shared-control server, so its control socket can dial alongside
       // the health probe instead of after the probe confirms the capability (one setup saved).
-      preopenSharedControl: runtime.recipe?.provider === 'orca-cloud'
+      preopenSharedControl: runtime.recipe?.provider === 'orca-cloud',
+      wakeStartedAt
     })
   }
   // Suspend tore down the runtime-owned SSH transport, so an SSH VM reconnects even when its
@@ -219,7 +255,7 @@ function isPairedServerContactLost(environmentId: string): boolean {
 function reestablishWokenServer(
   userDataPath: string,
   environmentId: string,
-  options: { preopenSharedControl?: boolean } = {}
+  options: { preopenSharedControl?: boolean; wakeStartedAt?: number } = {}
 ): void {
   setTimeout(() => {
     try {
@@ -233,9 +269,19 @@ function reestablishWokenServer(
         getDiagnostics: () => getRemoteRuntimeSharedControlDiagnostics(environmentId),
         reconnectNow: () => reconnectRemoteRuntimeSharedControlConnection(environmentId)
       })
-      void getRuntimeEnvironmentStatusOwner(userDataPath, environmentId)
-        .refresh({ reconnect: true })
-        .catch(() => {})
+      const refreshStatus = (): void =>
+        void getRuntimeEnvironmentStatusOwner(userDataPath, environmentId)
+          .refresh({ reconnect: true })
+          .catch(() => {})
+      if (options.preopenSharedControl && options.wakeStartedAt !== undefined) {
+        // Ride the control socket once it is up (one handshake) rather than open a second one.
+        void waitForWokenControl(environmentId, options.wakeStartedAt).then(
+          refreshStatus,
+          refreshStatus
+        )
+      } else {
+        refreshStatus()
+      }
     } catch (error) {
       console.warn('[ephemeral-vm] reconnect after wake failed', error)
     }

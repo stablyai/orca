@@ -1,4 +1,9 @@
 import { setTerminalPrewarmWorktrees } from '../../../terminal/terminal-worktree-prewarm'
+import {
+  notePredictiveWakeHoverEnd,
+  notePredictiveWakeHoverStart,
+  notePredictiveWakeSelect
+} from '@/lib/orca-cloud/cloud-predictive-wake'
 
 // Long enough that sweeping or scrolling past rows never mounts them; short enough to finish before a typical press.
 export const HOVER_PREWARM_DWELL_MS = 120
@@ -57,6 +62,8 @@ function installWheelListener(): void {
 }
 
 export function noteWorktreeRowHoverStart(worktreeId: string): void {
+  // A sleeping cloud workspace starts waking on a longer dwell (no-op for everything else).
+  notePredictiveWakeHoverStart(worktreeId)
   installWheelListener()
   if (prewarmedWorktreeId === worktreeId) {
     clearDwell()
@@ -68,12 +75,14 @@ export function noteWorktreeRowHoverStart(worktreeId: string): void {
 
 /** A press is intent enough to skip the hover dwell; the mount still waits a task so it can't delay the press's focus move or drag start. */
 export function noteWorktreeRowPress(worktreeId: string): void {
+  notePredictiveWakeSelect(worktreeId)
   if (prewarmedWorktreeId !== worktreeId) {
     armDwell(worktreeId, 0)
   }
 }
 
 export function noteWorktreeRowHoverEnd(worktreeId: string): void {
+  notePredictiveWakeHoverEnd(worktreeId)
   if (dwellWorktreeId === worktreeId) {
     clearDwell()
   }

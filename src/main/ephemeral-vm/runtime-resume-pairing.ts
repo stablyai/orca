@@ -102,7 +102,8 @@ async function confirmSavedPairing(
   }
 }
 
-async function probeSavedPairing(connection: PairedRuntimeConnection): Promise<void> {
+/** The standalone saved-pairing probe (one connection setup); throws `unauthorized` on a refused token. */
+export async function probeSavedPairing(connection: PairedRuntimeConnection): Promise<void> {
   const response = await sendRemoteRuntimeRequestOnSocket(
     connection,
     'status.get',
