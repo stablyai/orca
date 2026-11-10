@@ -1,6 +1,7 @@
 // Orca Cloud secrets on the sandbox control plane. Write-only for values: requests carry them, no
 // response or error does, and nothing here logs a request body.
 import {
+  CloudAgentSourcesResponseSchema,
   CloudEnvRefreshResponseSchema,
   CloudSecretBatchResponseSchema,
   CloudSecretDeleteResponseSchema,
@@ -12,7 +13,8 @@ import {
   type CloudSecretsErrorCode,
   type CloudSecretTarget,
   type CloudSecretView,
-  type CloudSecretsEffective
+  type CloudSecretsEffective,
+  type CloudWorkspaceSharing
 } from '../../shared/cloud-secrets/cloud-secrets-wire'
 import { isEnvironmentProviderError } from '../environment-providers/environment-provider-driver'
 import {
@@ -30,6 +32,8 @@ export type CloudSecretsClient = {
   ): Promise<CloudSecretBatchResult>
   effective(repo?: string, signal?: AbortSignal): Promise<CloudSecretsEffective>
   refreshEnv(sandboxId: string): Promise<boolean>
+  /** Who owns a sandbox and whether teammates share it (GET /v1/agent-sources?workspaceId=). */
+  workspaceSharing(sandboxId: string): Promise<CloudWorkspaceSharing>
 }
 
 function withRepo(path: string, repo: string | undefined): string {
@@ -94,7 +98,21 @@ export function createCloudSecretsClient(
           CloudEnvRefreshResponseSchema,
           { kind: 'control' }
         )
-      ).applied
+      ).applied,
+    workspaceSharing: async (sandboxId) => {
+      const sources = await call(
+        'GET',
+        `v1/agent-sources?${new URLSearchParams({ workspaceId: sandboxId })}`,
+        CloudAgentSourcesResponseSchema,
+        { kind: 'control' }
+      )
+      const owner = sources.owner ?? null
+      return {
+        shared: sources.sharedWorkspace === true,
+        ownerName: owner && !owner.isCaller ? owner.displayName : null,
+        isOwner: owner === null || owner.isCaller
+      }
+    }
   }
 }
 

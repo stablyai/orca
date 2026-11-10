@@ -27126,5 +27126,114 @@
     "showOutputTooltip": "Show {{name}} output",
     "shortcutRestarts": "{{shortcut}} restarts it",
     "menuRunning": "Run actions, {{count}} running"
+  },
+  "agentHostPanel": {
+    "env": {
+      "add": "Add",
+      "addMine": "Add mine",
+      "missing": "Missing",
+      "valueLabel": "Value for {{name}}",
+      "valuePlaceholder": "Value",
+      "memberHelp": "Saved to your personal Cloud secrets, so only your workspaces get it.",
+      "cancel": "Cancel",
+      "save": "Save",
+      "guestOwner": "Personal values come from {{owner}}, who owns this workspace.",
+      "guest": "Personal values come from the person who owns this workspace.",
+      "empty": "No variables from Cloud secrets yet.",
+      "overrides": "overrides {{scopes}}"
+    },
+    "keys": {
+      "askAdmin": "Ask an owner or admin to add one.",
+      "gateway": "AI Gateway",
+      "other": "Other",
+      "overrides": "{{scope}} · overrides {{others}}",
+      "readOnly": "{{scope}} · only owners and admins can change it",
+      "shadowedLabel": "Keys not used for {{name}}",
+      "editLabel": "Edit {{name}}",
+      "edit": "Edit",
+      "empty": "No agent keys in Cloud secrets."
+    },
+    "section": {
+      "keysCloud": "API keys from Cloud secrets",
+      "env": "Environment"
+    },
+    "help": {
+      "cloudKeys": "From your Orca account and Cloud secrets. Keys only on this computer aren’t sent to Orca Cloud.",
+      "cloudEnv": "From Cloud secrets: Repository, then Personal, then Shared."
+    },
+    "retry": "Try again",
+    "asleepFooter": "Changes reach the sandbox when it wakes.",
+    "loadingSecrets": "Loading Cloud secrets…"
+  },
+  "cloudSecretsAsk": {
+    "scopeLabel": "Scope for {{name}}",
+    "memberRefused": "Only owners and admins can save team or repository values. Choose Personal.",
+    "missing_one": "{{count}} secret missing",
+    "missing_other": "{{count}} secrets missing",
+    "coverage": "The {{environment}} environment uses {{total}}. Your team and this repository provide {{covered}}.",
+    "skipped": "Secrets skipped",
+    "skippedDetail": "Add them later from the workspace’s cloud panel.",
+    "saved": "Secrets saved",
+    "savedDetail": "New terminals and agents in this workspace get them within a few seconds.",
+    "pasteEnv": "Paste .env",
+    "buildTeamOnly": "The environment build only uses team values. Ask an owner or admin to add {{name}} as a team secret.",
+    "pasteLabel": "Paste the contents of a .env file",
+    "pasteFound": "Found {{matched}} of {{count}}. {{ignored}} other lines ignored.",
+    "valuePlaceholder": "Value",
+    "unreachable": "Couldn’t reach Orca Cloud.",
+    "nothingChanged": "Nothing was changed.",
+    "retry": "Try again",
+    "memberFooter": "Saved to your personal Cloud secrets, so only your workspaces get them. To set them for the whole team, ask an owner or admin.",
+    "skip": "Skip",
+    "saveNone": "Save",
+    "save_one": "Save secret",
+    "save_other": "Save {{count}} secrets",
+    "add": "Add",
+    "dismissNotice": "Dismiss secrets missing notice",
+    "loading": "Loading secrets…",
+    "nothingMissing": "Nothing is missing.",
+    "dialogTitle": "Add missing secrets",
+    "dialogDetail": "Values go to your Cloud secrets. New terminals and agents in this workspace get them within a few seconds."
+  },
+  "cloudAgents": {
+    "source": {
+      "shadowedByTeam": "Not used while the team key is set.",
+      "shadowedByRepo": "Not used while the repository key is set."
+    }
+  },
+  "agentSources": {
+    "shared": "Personal accounts aren’t used in shared workspaces."
+  },
+  "secretRequest": {
+    "title": "{{agent}} asked for {{name}}",
+    "titleUnknown": "An agent asked for {{name}}",
+    "showLess": "Show less",
+    "showMore": "Show more",
+    "anAgent": "an agent",
+    "savedAfterExpiry": "Saved. {{agent}} stopped waiting, so tell it the secret is ready.",
+    "theAgent": "The agent",
+    "doneRepo": "{{name}} added to this repository’s secrets.",
+    "done": "{{name}} added to your personal secrets.",
+    "doneDetail": "New shells get it now. {{agent}} was told it’s ready, and it never gets the value from Orca.",
+    "doneDetailExpired": "New shells get it now.",
+    "restartDetail": "Restart {{agent}} to give its own shell the new value.",
+    "restart": "Restart {{agent}}",
+    "dismiss": "Dismiss",
+    "more_one": "{{count}} more request",
+    "more_other": "{{count}} more requests",
+    "from": "from {{agent}}",
+    "expired": "This request expired.",
+    "expiredDetail": "{{agent}} can ask again.",
+    "valueLabel": "Value for {{name}}",
+    "valuePlaceholder": "Value",
+    "scopeLabel": "Scope for {{name}}",
+    "help": "Saved to your Cloud secrets. Commands in this workspace can read it as ${{name}}.",
+    "repoHint": "{{agent}} suggested Repository",
+    "unreachable": "Couldn’t reach Orca Cloud.",
+    "nothingChanged": "Nothing was changed.",
+    "retry": "Try again",
+    "notNow": "Not now",
+    "add": "Add secret",
+    "announce": "{{title}}. Press F6 to answer."
   }
 }

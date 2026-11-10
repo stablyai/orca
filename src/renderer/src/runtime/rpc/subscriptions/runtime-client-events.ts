@@ -9,6 +9,18 @@ import { admitSshConnectionState } from '../../../../../shared/ssh-retained-payl
 import { getRuntimeEnvironmentRevision } from '../environment-revisions/runtime-environment-revision'
 import { subscribeRuntimeEnvironment } from '../environment-revisions/runtime-environment-pairing-refresh'
 import { answerBrowserClientHostRequest } from '../../browser/client-hosting/browser-client-host-request-answer'
+import {
+  SECRETS_REQUEST_SETTLED_EVENT,
+  SECRETS_REQUESTED_EVENT
+} from '../../../../../shared/secret-request-contract'
+import {
+  applySecretRequested,
+  applySecretRequestSettled
+} from '@/lib/secret-requests/secret-request-store'
+import {
+  isSecretRequestedEvent,
+  isSecretRequestSettledEvent
+} from '@/lib/secret-requests/secret-request-event-guards'
 
 export type RuntimeClientEventSubscription = {
   unsubscribe: () => void
@@ -79,6 +91,19 @@ function handleRuntimeClientEventResponse(
   }
   if (message.type === 'browserHostRequested') {
     void answerBrowserClientHostRequest(environmentId, message.requestId)
+    return
+  }
+  // Agent secret requests go to their own store; the pane cards read it (contract §3).
+  if (message.type === SECRETS_REQUESTED_EVENT) {
+    if (isSecretRequestedEvent(message)) {
+      applySecretRequested(environmentId, message)
+    }
+    return
+  }
+  if (message.type === SECRETS_REQUEST_SETTLED_EVENT) {
+    if (isSecretRequestSettledEvent(message)) {
+      applySecretRequestSettled(environmentId, message)
+    }
     return
   }
   if (message.type === 'sshStateChanged') {
