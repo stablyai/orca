@@ -19,6 +19,13 @@ describe('Orca Cloud selection after signing in from the picker', () => {
     expect(takeOrcaCloudSelectionAfterSignIn([local, cloud], 4_000)).toBeNull()
   })
 
+  it('a stale sign-in attempt finishing late does not cancel a newer one', () => {
+    const first = requestOrcaCloudSelectionAfterSignIn(1_000)
+    requestOrcaCloudSelectionAfterSignIn(2_000)
+    cancelOrcaCloudSelectionAfterSignIn(first)
+    expect(takeOrcaCloudSelectionAfterSignIn([cloud], 3_000)).toBe('cloud')
+  })
+
   it('does nothing without a sign-in from the row, after a cancel, or once the intent is stale', () => {
     expect(takeOrcaCloudSelectionAfterSignIn([cloud], 1_000)).toBeNull()
     requestOrcaCloudSelectionAfterSignIn(1_000)

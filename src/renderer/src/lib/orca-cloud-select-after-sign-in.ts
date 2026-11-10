@@ -5,13 +5,19 @@
 const INTENT_TTL_MS = 10 * 60_000
 
 let requestedAt: number | null = null
+let attempt = 0
 
-export function requestOrcaCloudSelectionAfterSignIn(now = Date.now()): void {
+/** Returns this sign-in attempt's token; only that attempt may cancel its own intent. */
+export function requestOrcaCloudSelectionAfterSignIn(now = Date.now()): number {
   requestedAt = now
+  return ++attempt
 }
 
-export function cancelOrcaCloudSelectionAfterSignIn(): void {
-  requestedAt = null
+/** A stale attempt finishing late (timed out, superseded) must not cancel a newer one. */
+export function cancelOrcaCloudSelectionAfterSignIn(token: number = attempt): void {
+  if (token === attempt) {
+    requestedAt = null
+  }
 }
 
 /** The Orca Cloud recipe id to select now, consuming the intent; null when there's nothing to do. */

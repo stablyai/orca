@@ -12,6 +12,10 @@ import {
 } from './host-worktree-removal-state'
 import { worktreeRemovalReplyTimeoutMs } from '../../../../../../shared/worktree/archive-hook-removal-gate'
 import { prepareCloudSandboxDelete } from './cloud-sandbox-delete-guard'
+import {
+  noteCloudWorkspaceDeleteSettled,
+  noteCloudWorkspaceDeleting
+} from '@/lib/orca-cloud/pending-cloud-archive'
 
 /** Carry hostId across every removal transport: repoId::path alone repeats across hosts and cannot identify the confirmed copy (STA-4343). */
 export async function dispatchWorktreeRemoval(args: {
@@ -25,6 +29,7 @@ export async function dispatchWorktreeRemoval(args: {
   /** Re-checks mid-flight ownership immediately before the destructive call. */
   assertCurrent: () => void
 }): Promise<RemoveWorktreeResult> {
+  noteCloudWorkspaceDeleting(args.worktreeId)
   try {
     const options = await prepareCloudSandboxDelete({
       force: args.force,
@@ -40,6 +45,8 @@ export async function dispatchWorktreeRemoval(args: {
     return result
   } catch (error) {
     if (args.options?.mode === 'forget-local' || !isWorktreeRemovalReplyLost(error)) {
+      // The row stays: a later archive of it may report its own failures again.
+      noteCloudWorkspaceDeleteSettled(args.worktreeId)
       throw error
     }
     // Why: the host may still be deleting; its listing answers what the lost reply would have.

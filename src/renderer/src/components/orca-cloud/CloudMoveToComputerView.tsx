@@ -85,15 +85,15 @@ export function CloudMoveToComputerView({
               key: 'changes',
               node:
                 known && known.uncommittedChanges > 0
-                ? t(
-                    'orcaCloudMove.confirm.changesCount',
-                    '{{count}} uncommitted changes, plus untracked files',
-                    {
-                      count: known.uncommittedChanges,
-                      defaultValue_one: '{{count}} uncommitted change, plus untracked files'
-                    }
-                  )
-                : t('orcaCloudMove.confirm.changes', 'Uncommitted changes and untracked files')
+                  ? t(
+                      'orcaCloudMove.confirm.changesCount',
+                      '{{count}} uncommitted changes, plus untracked files',
+                      {
+                        count: known.uncommittedChanges,
+                        defaultValue_one: '{{count}} uncommitted change, plus untracked files'
+                      }
+                    )
+                  : t('orcaCloudMove.confirm.changes', 'Uncommitted changes and untracked files')
             },
             {
               key: 'chats',
@@ -256,14 +256,14 @@ export function CloudMoveToComputerView({
                   'Apply changes again to bring them over. Nothing you changed here is overwritten, and your files are safe in the cloud workspace.'
                 )
               : localStarted
-              ? t(
-                  'orcaCloudMove.failedLocalNext',
-                  'Use Move again from the sandbox panel to bring them over. Your files are safe in the cloud workspace.'
-                )
-              : t(
-                  'orcaCloudMove.failedDetail',
-                  'Your files are safe in the cloud workspace. Nothing changed on this computer.'
-                )
+                ? t(
+                    'orcaCloudMove.failedLocalNext',
+                    'Use Move again from the sandbox panel to bring them over. Your files are safe in the cloud workspace.'
+                  )
+                : t(
+                    'orcaCloudMove.failedDetail',
+                    'Your files are safe in the cloud workspace. Nothing changed on this computer.'
+                  )
           }
         />
         <div className="flex justify-end gap-2">

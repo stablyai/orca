@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
 
-import { act } from 'react'
+import { StrictMode, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useEphemeralVmRecipeOptions } from './useEphemeralVmRecipeOptions'
 import { useAppStore } from '@/store'
+import { requestOrcaCloudSelectionAfterSignIn } from '@/lib/orca-cloud-select-after-sign-in'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -195,6 +196,44 @@ describe('useEphemeralVmRecipeOptions', () => {
 
     await vi.waitFor(() =>
       expect(container.querySelector('[data-testid="recipes"]')?.textContent).toBe('cloud')
+    )
+  })
+
+  it('selects Orca Cloud after signing in from the picker, even under StrictMode', async () => {
+    const listRecipes = vi
+      .fn()
+      .mockResolvedValueOnce({ ...result([]), orcaCloud: 'needs-sign-in' })
+      .mockResolvedValue({
+        ...result([]),
+        recipes: [
+          { id: 'cloud', name: 'Orca Cloud', provider: 'orca-cloud', create: 'orca-cloud create' }
+        ],
+        orcaCloud: 'offered'
+      })
+    installApi(listRecipes)
+    useAppStore.setState({ orcaProfileAuthStatus: null })
+    const { container } = await render(
+      <StrictMode>
+        <Harness repoId="repo-1" customRecipesEnabled={false} />
+      </StrictMode>
+    )
+    await vi.waitFor(() => expect(listRecipes).toHaveBeenCalled())
+    requestOrcaCloudSelectionAfterSignIn()
+
+    await act(async () =>
+      useAppStore.setState({
+        orcaProfileAuthStatus: {
+          activeProfileId: 'p',
+          configured: true,
+          state: 'connected',
+          persistence: 'encrypted',
+          capabilities: { flags: { sandbox: true }, refreshedAt: 1 }
+        }
+      })
+    )
+
+    await vi.waitFor(() =>
+      expect(container.querySelector('[data-testid="selected"]')?.textContent).toBe('cloud')
     )
   })
 
