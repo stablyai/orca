@@ -76,7 +76,12 @@ export abstract class RuntimeWorkspaceMetadata extends RuntimeWorktreeReviewBase
       updates,
       store: this.store,
       ports: {
-        resolveWorktree: (selector) => this.resolveGitWorktreeSelector(selector),
+        resolveWorktree: (selector) =>
+          this.resolveGitWorktreeSelector(
+            selector,
+            undefined,
+            this.store?.getSettings().workspaceLineagePolicy === 'same-project'
+          ),
         resolveParent: (selector, options) => this.worktreeLineage.resolveParent(selector, options),
         validateParent: (worktree, parent) => this.worktreeLineage.validateParent(worktree, parent),
         readStoreInstallationId: () => this.worktreeLineage.readStoreInstallationId(),

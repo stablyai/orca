@@ -54,10 +54,10 @@ export abstract class RuntimeWorkspaceSelectors extends RuntimeProjectLaunchCont
   /** The repo-backed catalog only: project-group folder workspaces never match. Resolve a workspace with resolveWorkspaceSelector. */
   protected async resolveGitWorktreeSelector(
     selector: string,
-    requiredHostId?: ExecutionHostId
+    requiredHostId?: ExecutionHostId,
+    readOnlyAdmission = false
   ): Promise<ResolvedWorktree> {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(selector)
-    const readOnlyAdmission = this.store?.getSettings?.().workspaceLineagePolicy === 'same-project'
     // Only id selectors name a repo; scoping other selectors would hide fleet-wide ambiguity.
     if (!readOnlyAdmission && explicitWorktreeId && !this.hasFreshResolvedWorktreeCache()) {
       const scoped = await (requiredHostId === undefined
@@ -210,12 +210,16 @@ export abstract class RuntimeWorkspaceSelectors extends RuntimeProjectLaunchCont
     if (folders.length === 0) {
       return {
         kind: 'worktree',
-        worktree: await this.resolveGitWorktreeSelector(selector, requiredHostId)
+        worktree: await this.resolveGitWorktreeSelector(
+          selector,
+          requiredHostId,
+          options.readOnlyAdmission
+        )
       }
     }
     const worktrees = this.matchWorktreeCandidates(
       selector,
-      (this.store?.getSettings?.().workspaceLineagePolicy === 'same-project'
+      (options.readOnlyAdmission
         ? (await this.computeResolvedWorktrees(true)).worktrees
         : await this.listResolvedWorktrees()
       ).filter((row) => onHost(row.hostId)),

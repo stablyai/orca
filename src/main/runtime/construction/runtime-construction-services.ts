@@ -283,7 +283,8 @@ export abstract class RuntimeConstructionServices {
   abstract notifyMessageArrived(handle: string, messageType?: string): void
   protected abstract resolveGitWorktreeSelector(
     selector: string,
-    requiredHostId?: ExecutionHostId
+    requiredHostId?: ExecutionHostId,
+    readOnlyAdmission?: boolean
   ): Promise<ResolvedWorktree>
   protected abstract resolveWorkspaceSelector(...args: Calls.SelectorArgs): Calls.SelectorResult
   protected abstract resolveWorkspaceCandidate(...args: Calls.SelectorArgs): Calls.CandidateResult

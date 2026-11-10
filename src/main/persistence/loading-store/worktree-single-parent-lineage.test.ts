@@ -319,15 +319,17 @@ describe('project-scoped persisted lineage', () => {
     expect(SettingsUpdate.safeParse({ workspaceLineagePolicy: 'unknown' }).success).toBe(false)
   })
 
-  it('retains hidden original records during automatic load reconciliation', async () => {
+  it.each([foreign, sibling])('retains folder-defeated original records for %s', async (parent) => {
     seed({
       [child]: {
-        ...edge(child, foreign),
+        ...edge(child, parent),
         origin: 'orchestration',
         capture: { source: 'orchestration-context', confidence: 'inferred' }
       }
     })
     const saved = readPersistedState()
+    const saveProbe = 'repo-a::/workspace/save-probe'
+    saved.worktreeMeta[saveProbe] = { ...saved.worktreeMeta[child], instanceId: saveProbe }
     saved.workspaceLineageByChildKey[`worktree:${child}`] = {
       childWorkspaceKey: `worktree:${child}`,
       childInstanceId: child,
@@ -341,12 +343,16 @@ describe('project-scoped persisted lineage', () => {
     const store = createStore()
     expect(store.getAllWorktreeLineage()).toEqual({})
     store.updateSettings({ workspaceLineagePolicy: 'any-project' })
-    expect(store.getWorktreeLineage(child)).toEqual(saved.worktreeLineageById[child])
+    expect(store.getWorktreeLineage(child)).toBeUndefined()
+    expect(store.getAllWorktreeLineage()).toEqual({})
+    expect(store.getAllWorkspaceLineage()[`worktree:${child}`]).toEqual(
+      saved.workspaceLineageByChildKey[`worktree:${child}`]
+    )
     store.updateSettings({ workspaceLineagePolicy: 'same-project' })
     // Dirty the actual lineage domains, not merely an unrelated settings row.
     store.setWorktreeLineage(
-      hostWorktreeTarget({ id: sibling, hostId: 'local' }),
-      edge(sibling, child)
+      hostWorktreeTarget({ id: saveProbe, hostId: 'local' }),
+      edge(saveProbe, child)
     )
     await store.freezeWritesAsync()
     const after = readPersistedState()
@@ -356,7 +362,7 @@ describe('project-scoped persisted lineage', () => {
     )
     const reloaded = createStore()
     reloaded.updateSettings({ workspaceLineagePolicy: 'any-project' })
-    expect(reloaded.getWorktreeLineage(child)).toEqual(saved.worktreeLineageById[child])
+    expect(reloaded.getWorktreeLineage(child)).toBeUndefined()
   })
 
   it('retains the instance-aware raw cycle guard through an unstamped intermediate host', () => {

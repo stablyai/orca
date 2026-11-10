@@ -6,7 +6,7 @@ import {
   type WorktreeLineageInput,
   type WorktreeLineageResolution
 } from '../lineage/runtime-worktree-lineage-resolution'
-import { RuntimeLineageError, LINEAGE_PARENT_AMBIGUOUS } from '../lineage/runtime-lineage-error'
+import { handleWorktreeCreateLineageError } from '../lineage/runtime-lineage-error'
 import type { Repo } from '../../../../shared/repo-types'
 import { OrcaRuntimeWithGetWorktreeTerminalProvisioningHost } from '../startup/workspace-terminal-provisioning'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
@@ -121,15 +121,14 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     const lineageResolution =
       isFolderRepo(repo) && store.getSettings().workspaceLineagePolicy !== 'same-project'
         ? { kind: 'none' as const, warnings: [] }
-        : await this.resolveLineageForWorktreeCreate(lineageInput, repo).catch((error: unknown) => {
-            if (error instanceof RuntimeLineageError && error.code === LINEAGE_PARENT_AMBIGUOUS) {
-              throw new RuntimeLineageError(
-                error.code,
-                formatAmbiguousCwdParentMessage(args.startupAgent ?? args.createdWithAgent)
+        : await this.resolveLineageForWorktreeCreate(lineageInput, repo).catch((error: unknown) =>
+            handleWorktreeCreateLineageError(error, lineageInput, {
+              rootOnlyFolder: isFolderRepo(repo),
+              ambiguousCwdMessage: formatAmbiguousCwdParentMessage(
+                args.startupAgent ?? args.createdWithAgent
               )
-            }
-            throw error
-          })
+            })
+          )
     const retainedLineage =
       isFolderRepo(repo) && store.getSettings().workspaceLineagePolicy === 'same-project'
         ? rootOnlyFolderLineage(lineageResolution)

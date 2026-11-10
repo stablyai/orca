@@ -289,6 +289,50 @@ describe('native folder IPC project admission', () => {
     expect(store.getWorktreeLineage(result.worktree.id)).toBeUndefined()
   })
 
+  it.each(['any-project', 'same-project'] as const)(
+    'creates a root-only folder despite an ambiguous inferred cwd under %s',
+    async (policy) => {
+      const { store, runtime } = fixture(policy)
+      const result = await runtime.createManagedWorktree({
+        repoSelector: 'id:repo-a',
+        name: 'ambiguous-cwd-root',
+        activate: false,
+        setupOnly: true,
+        comment: 'original ambiguous note',
+        lineage: { cwdParentWorktree: 'id:repo-c::/folders/c', cwdParentAmbiguous: true }
+      })
+      expect(result.worktree.projectId).toBe('github:example/project-a')
+      expect(result.worktree.comment).toMatch(/^original ambiguous note/)
+      expect(result.lineage).toBeUndefined()
+      expect(store.getWorktreeLineage(result.worktree.id)).toBeUndefined()
+      if (policy === 'same-project') {
+        expect(result.warnings).toContainEqual(
+          expect.objectContaining({ code: 'LINEAGE_PARENT_CONTEXT_MISSING' })
+        )
+      }
+    }
+  )
+
+  it('still refuses an ambiguous explicit folder-create parent when cwd is ambiguous too', async () => {
+    const { runtime } = fixture()
+    vi.spyOn(RuntimeWorktreeLineageController.prototype, 'resolveWorktreeParent').mockRejectedValue(
+      new Error('selector_ambiguous')
+    )
+    await expect(
+      runtime.createManagedWorktree({
+        repoSelector: 'id:repo-a',
+        name: 'explicit-ambiguous-parent',
+        activate: false,
+        setupOnly: true,
+        lineage: {
+          parentWorktree: 'name:ambiguous',
+          cwdParentWorktree: 'id:repo-c::/folders/c',
+          cwdParentAmbiguous: true
+        }
+      })
+    ).rejects.toMatchObject({ code: 'LINEAGE_PARENT_AMBIGUOUS' })
+  })
+
   it('omits an inferred cross-store parent without requiring this store identity and retains context', async () => {
     const { store, runtime } = fixture()
     vi.spyOn(

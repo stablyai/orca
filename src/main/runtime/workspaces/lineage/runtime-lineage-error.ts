@@ -1,5 +1,9 @@
 import { WorkspaceSelectorAmbiguousError } from '../catalog/workspace-selector-candidates'
 import { WorktreeIdRequiresFullPathError } from './worktree-id-requires-full-path-error'
+import type {
+  WorktreeLineageInput,
+  WorktreeLineageResolution
+} from './runtime-worktree-lineage-resolution'
 
 export class RuntimeLineageError extends Error {
   constructor(
@@ -12,6 +16,35 @@ export class RuntimeLineageError extends Error {
 }
 
 export const LINEAGE_PARENT_AMBIGUOUS = 'LINEAGE_PARENT_AMBIGUOUS'
+
+export function handleWorktreeCreateLineageError(
+  error: unknown,
+  input: WorktreeLineageInput | undefined,
+  options: { rootOnlyFolder: boolean; ambiguousCwdMessage: string }
+): WorktreeLineageResolution {
+  if (error instanceof RuntimeLineageError && error.code === LINEAGE_PARENT_AMBIGUOUS) {
+    if (
+      options.rootOnlyFolder &&
+      input?.cwdParentAmbiguous &&
+      !input.parentWorkspace &&
+      !input.parentWorktree
+    ) {
+      return {
+        kind: 'none',
+        warnings: [
+          {
+            code: 'LINEAGE_PARENT_CONTEXT_MISSING',
+            message:
+              'Folder creation creates a root workspace; its ambiguous inferred parent was omitted.',
+            details: { cwdParentWorktree: input.cwdParentWorktree }
+          }
+        ]
+      }
+    }
+    throw new RuntimeLineageError(error.code, options.ambiguousCwdMessage)
+  }
+  throw error
+}
 
 const PARENT_NOT_FOUND_NEXT_STEPS = [
   'Pass a valid --parent-worktree selector such as folder:<id>, worktree:<worktreeId>, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<absolute-path>, name:<display-name>, or active/current.',

@@ -206,7 +206,12 @@ export class RuntimeWorktreeLineageController {
     const parsed = parseWorkspaceKey(rawSelector)
     const candidate = await this.deps.resolveWorkspace(
       parsed?.type === 'worktree' ? `id:${parsed.worktreeId}` : selector,
-      { matchFolders: options.matchFolders, anyFolderHost: true }
+      {
+        matchFolders: options.matchFolders,
+        anyFolderHost: true,
+        readOnlyAdmission:
+          getWorkspaceLineagePolicy(this.deps.getStore()?.getSettings?.()) === 'same-project'
+      }
     )
     return candidate.kind === 'worktree'
       ? worktreeParent(candidate.worktree)
@@ -220,7 +225,10 @@ export class RuntimeWorktreeLineageController {
 
   /** Repo-backed only, as older requests meant. */
   async resolveWorktreeParent(selector: string): Promise<ResolvedWorkspaceParent> {
-    const candidate = await this.deps.resolveWorkspace(selector)
+    const candidate = await this.deps.resolveWorkspace(selector, {
+      readOnlyAdmission:
+        getWorkspaceLineagePolicy(this.deps.getStore()?.getSettings?.()) === 'same-project'
+    })
     if (candidate.kind !== 'worktree') {
       throw new Error('selector_not_found')
     }

@@ -27,6 +27,7 @@ export type FolderCatalog = QualifiedFolderHostState<FolderWorkspace> & {
 /** `matchFolders` (a request opt-in) lets path: and name: match folders beside repo-backed rows;
  * `anyFolderHost` accepts a folder whose host is underivable, as parents do. */
 export type WorkspaceSelectorOptions = {
+  readOnlyAdmission?: boolean
   requireUsableFolderPath?: boolean
   requiredHostId?: ExecutionHostId
   matchFolders?: boolean

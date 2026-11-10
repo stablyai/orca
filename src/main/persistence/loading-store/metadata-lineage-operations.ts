@@ -1,5 +1,6 @@
 import {
   removeFolderLineageRows,
+  projectWorktreeLineage,
   projectAllWorktreeLineage,
   projectAllWorkspaceLineage
 } from './workspace-lineage-records'
@@ -230,9 +231,7 @@ export class MetadataLineageOperations {
   }
 
   getWorktreeLineage(worktreeId: string): WorktreeLineage | undefined {
-    const state = this[metadataLineageOperationsContext].runtime.state
-    const row = state.worktreeLineageById[worktreeId]
-    return row && projectLineageAllowed(state, toWorkspaceLineageRow(row)) ? row : undefined
+    return projectWorktreeLineage(this[metadataLineageOperationsContext].runtime.state, worktreeId)
   }
 
   getAllWorktreeLineage(): Record<string, WorktreeLineage> {
