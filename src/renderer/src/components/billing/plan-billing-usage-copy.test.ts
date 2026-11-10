@@ -61,6 +61,19 @@ describe('sandbox hours copy', () => {
     expect(usageWarningLine(team({ usageWarningPercent: 100 }), t)).toBeNull()
   })
 
+  it('states the actual share used, floored, not the level that triggered it', () => {
+    expect(usageWarningLine(team({ usedSeconds: 119 * HOUR, usageWarningPercent: 90 }), t)).toBe(
+      'Your team has used 99% of this month’s sandbox hours.'
+    )
+    expect(usageWarningLine(team({ usedSeconds: 92 * HOUR, usageWarningPercent: 75 }), t)).toBe(
+      'Your team has used 76% of this month’s sandbox hours.'
+    )
+    // Never "100%" while billing still reports hours left.
+    expect(usageWarningLine(team({ usedSeconds: 119.9 * HOUR, usageWarningPercent: 90 }), t)).toBe(
+      'Your team has used 99% of this month’s sandbox hours.'
+    )
+  })
+
   it('turns the hours bar to the warning tone at 90%', () => {
     expect(includedUsageTone(team({ usedSeconds: 107 * HOUR }))).toBe('default')
     expect(includedUsageTone(team({ usedSeconds: 108 * HOUR }))).toBe('warning')

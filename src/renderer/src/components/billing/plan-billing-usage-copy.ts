@@ -56,18 +56,32 @@ export function sandboxHoursOverLine(
 }
 
 /**
- * The early warning at whichever level billing reports (75%, 90%) until the hours run out; at 100%
- * the bar, the hours-left line and the out-of-hours states say it instead.
+ * The share of included hours actually used, floored, for the warning sentence: never below the
+ * level billing reported (its count may be fresher) and never 100 while hours remain.
+ */
+export function usedPercentForWarning(entitlement: OrcaBillingEntitlement): number {
+  const level = entitlement.usageWarningPercent ?? 0
+  const used =
+    entitlement.includedSeconds > 0
+      ? Math.floor((entitlement.usedSeconds / entitlement.includedSeconds) * 100)
+      : level
+  return Math.min(99, Math.max(level, used))
+}
+
+/**
+ * Shown once billing reports a warning level (75%, 90%) until the hours run out; the sentence states
+ * the actual share used, not the level. At 100% the bar, the hours-left line and the out-of-hours
+ * states say it instead.
  */
 export function usageWarningLine(entitlement: OrcaBillingEntitlement, t: Translate): string | null {
-  const percent = entitlement.usageWarningPercent
-  if (percent === null || percent >= 100) {
+  const level = entitlement.usageWarningPercent
+  if (level === null || level >= 100) {
     return null
   }
   return t(
     'auto.components.billing.teamUsedPercent',
     'Your team has used {{percent}}% of this month’s sandbox hours.',
-    { percent: String(percent) }
+    { percent: String(usedPercentForWarning(entitlement)) }
   )
 }
 
