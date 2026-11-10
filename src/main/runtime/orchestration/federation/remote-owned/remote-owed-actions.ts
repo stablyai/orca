@@ -45,7 +45,8 @@ const NO_ANSWER_CODES = new Set([
   'remote_link_closed'
 ])
 
-function serverAnswered(error: unknown): boolean {
+/** Whether the server got the call and answered it, rather than this Orca never reaching it. */
+export function serverAnswered(error: unknown): boolean {
   return error instanceof OrchestrationError && !NO_ANSWER_CODES.has(error.code)
 }
 

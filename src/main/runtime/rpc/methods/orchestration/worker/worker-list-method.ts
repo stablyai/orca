@@ -25,7 +25,7 @@ import {
   WorkerListParams
 } from '../../../../../../shared/rpc-contract/orchestration-worker-release-schemas-params'
 
-const emptyWorkerListPage = (limit: number) => ({
+export const emptyWorkerListPage = (limit: number) => ({
   workers: [],
   counts: {},
   page: { limit, total: 0, hasMore: false, nextCursor: null }
@@ -33,7 +33,7 @@ const emptyWorkerListPage = (limit: number) => ({
 
 export const ORCHESTRATION_WORKER_LIST_METHOD = defineOrchestrationMethod({
   name: 'orchestration.workerList',
-  access: { kind: 'reads', targets: { run: 'run' }, collection: true },
+  access: { kind: 'reads', server: 'on', targets: { run: 'run' }, collection: true },
   permission: 'workspace',
   params: WorkerListParams,
   handler: async (params, { runtime }) => {
