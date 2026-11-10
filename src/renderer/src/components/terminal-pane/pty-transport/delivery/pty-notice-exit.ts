@@ -49,3 +49,18 @@ export function prepareAcceptedTerminalNoticeExit(
   }
   return () => retireTerminalNoticeLifetime(lifetime)
 }
+
+/** Bind buffered-exit delivery to its original admitted contribution. */
+export function captureTerminalNoticeExitHandler(
+  lifetime: TerminalNoticeLifetime | undefined,
+  handler: (code: number) => void
+): (code: number, incarnationId?: string) => void {
+  return (code, incarnationId) => {
+    const finish = prepareTerminalNoticeExit(lifetime, code, incarnationId)
+    try {
+      handler(code)
+    } finally {
+      finish()
+    }
+  }
+}
