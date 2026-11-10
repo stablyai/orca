@@ -425,7 +425,7 @@ export async function handleGitHubReturn(
   now: number
 ): Promise<
   | { redirect: string }
-  | { bound: string[]; denied: number; state: ConnectState }
+  | { bound: string[]; boundIds: { githubOwnerId: number; githubUserId: number }[]; denied: number; state: ConnectState }
   | { requested: { owner: string }; state: ConnectState }
   | { error: string }
   | { userConnect: { a: string; u: string }; code: string }
@@ -495,5 +495,11 @@ export async function handleGitHubReturn(
     )
   }
   console.log(JSON.stringify({ event: 'github_bind', bound: result.allowed.length, denied: result.denied.length }))
-  return { bound: result.allowed.map((i) => i.account.login), denied: result.denied.length, state }
+  return {
+    bound: result.allowed.map((i) => i.account.login),
+    // Numeric GitHub ids for billing's trial abuse keys (per GitHub owner and per GitHub user).
+    boundIds: result.allowed.map((i) => ({ githubOwnerId: i.account.id, githubUserId: i.githubUserId })),
+    denied: result.denied.length,
+    state
+  }
 }

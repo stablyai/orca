@@ -105,6 +105,7 @@ async function setup(options: { publicRepos?: string[] } = {}) {
     log: () => undefined
   })
   const notices: SetupNotice[] = []
+  const trialNotices: unknown[] = []
   const h = await createHarness(
     {
       GITHUB_APP_SLUG: 'orca-cloud-test',
@@ -121,6 +122,9 @@ async function setup(options: { publicRepos?: string[] } = {}) {
       publicRepoCheck: async (url) => (options.publicRepos ?? []).includes(url),
       setupNotifier: async (notice) => {
         notices.push(notice)
+      },
+      trialNotifier: async (notice) => {
+        trialNotices.push(notice)
       }
     }
   )
@@ -147,7 +151,7 @@ async function setup(options: { publicRepos?: string[] } = {}) {
     )
     return { status: response.status, body: (await response.json()) as any }
   }
-  return { h, github, notices, browser, webhook }
+  return { h, github, notices, trialNotices, browser, webhook }
 }
 
 const ACME = { id: 50, login: 'acme', type: 'Organization' as const }
@@ -155,7 +159,7 @@ const stateOf = (url: string) => new URL(url).searchParams.get('state')!
 
 describe('GitHub repo access (cloud-start N2/N3, D2)', () => {
   it('answers missing with an install URL, public, then granted once an admin installs and binds', async () => {
-    const { h, github, notices, browser } = await setup({ publicRepos: ['https://github.com/acme/site'] })
+    const { h, github, notices, trialNotices, browser } = await setup({ publicRepos: ['https://github.com/acme/site'] })
     expect((await h.call('GET', `/v1/github/repo-access?repo=${encodeURIComponent('https://github.com/acme/site')}`)).body).toEqual({
       access: 'public',
       owner: 'acme',
@@ -175,6 +179,8 @@ describe('GitHub repo access (cloud-start N2/N3, D2)', () => {
     expect(callback.status).toBe(302)
     expect(callback.location).toBe(`https://auth.test/cloud/setup/next?session=${SESSION}&from=github`)
     expect(notices).toEqual([{ sessionId: SESSION, accountId: 'user:alice', repo: REPO, state: 'done' }])
+    // Billing's trial abuse keys: numeric GitHub owner and user ids of the bind.
+    expect(trialNotices).toEqual([{ accountId: 'user:alice', githubOwnerId: 50, githubUserId: 3 }])
     expect((await h.call('GET', `/v1/github/repo-access?repo=${encodeURIComponent(REPO)}`)).body).toEqual({ access: 'granted', owner: 'acme', repo: REPO })
     // Another Orca account is not granted by alice's binding.
     expect((await h.call('GET', `/v1/github/repo-access?repo=${encodeURIComponent(REPO)}`, { as: 'bob' })).body.access).toBe('missing')
@@ -199,7 +205,7 @@ describe('GitHub repo access (cloud-start N2/N3, D2)', () => {
   })
 
   it('a member’s request waits for an owner (requested), then the installation webhook binds it and finishes setup', async () => {
-    const { h, github, notices, browser, webhook } = await setup()
+    const { h, github, notices, trialNotices, browser, webhook } = await setup()
     const missing = await h.call('GET', `/v1/github/repo-access?repo=${encodeURIComponent(REPO)}&session=${SESSION}`, { as: 'sam' })
     // GitHub's Request button returns to the setup URL with setup_action=request and no installation.
     const setupPage = await browser(`https://sandbox.test/v1/github/setup?setup_action=request&state=${encodeURIComponent(stateOf(missing.body.installUrl))}`)
@@ -226,6 +232,7 @@ describe('GitHub repo access (cloud-start N2/N3, D2)', () => {
     expect(created.status).toBe(202)
     expect(created.body.installation).toMatchObject({ handled: 'created', bound: 1, notified: 1 })
     expect(notices.at(-1)).toEqual({ sessionId: SESSION, accountId: 'user:sam', repo: REPO, state: 'done' })
+    expect(trialNotices).toEqual([{ accountId: 'user:sam', githubUserId: 2, githubOwnerId: 50 }])
     expect((await h.call('GET', `/v1/github/repo-access?repo=${encodeURIComponent(REPO)}`, { as: 'sam' })).body.access).toBe('granted')
     expect(h.raw.prepare(`SELECT method, bound_by_github_user_id AS gh FROM github_installations WHERE installation_id = 901`).all()).toEqual([
       { method: 'request', gh: 2 }

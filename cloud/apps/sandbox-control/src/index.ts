@@ -95,6 +95,7 @@ import { handleOperator, isOperator } from './operator'
 import {
   RepoAccessError,
   billingSetupNotifier,
+  billingTrialNotifier,
   handleInstallationEvent,
   listAccountRepositories,
   noticeAfterReturn,
@@ -102,7 +103,8 @@ import {
   repoAccessView,
   repoInstallUrl,
   type RepoAccessDeps,
-  type SetupNotifier
+  type SetupNotifier,
+  type TrialGitHubNotifier
 } from './github-repo-access'
 import { DEFAULT_RETENTION, type RetentionConfig } from './retention'
 import { reconcile } from './reconcile'
@@ -238,6 +240,8 @@ export type Deps = {
   shareFetch?: typeof fetch
   /** Billing setup-session notices (tests collect them). */
   setupNotifier?: SetupNotifier
+  /** Billing trial abuse-key notices after a bind (tests collect them). */
+  trialNotifier?: TrialGitHubNotifier
 }
 
 function workspaceConfig(env: Env, deps: Deps): WorkspaceConfig {
@@ -1031,7 +1035,7 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         githubWebhookSecret: env.GITHUB_WEBHOOK_SECRET,
         onInstallationEvent: (eventName, payload) =>
           handleInstallationEvent(
-            { db: env.SANDBOX_DB, now: (deps.now ?? Date.now)(), notify: setupNotifier(env, deps) },
+            { db: env.SANDBOX_DB, now: (deps.now ?? Date.now)(), notify: setupNotifier(env, deps), notifyTrial: trialNotifier(env, deps) },
             eventName,
             payload as Parameters<typeof handleInstallationEvent>[2]
           )
@@ -1636,6 +1640,17 @@ function setupNotifier(env: Env, deps: Deps): SetupNotifier {
   })
 }
 
+function trialNotifier(env: Env, deps: Deps): TrialGitHubNotifier {
+  return (
+    deps.trialNotifier ??
+    billingTrialNotifier({
+      billingUrl: env.BILLING_URL,
+      token: env.CONTROL_PLANE_TOKEN,
+      fetch: env.BILLING ? (input, init) => env.BILLING!.fetch(input, init) : fetch
+    })
+  )
+}
+
 /** Where the browser goes after GitHub when a cloud setup session started the install (auth's setup pages). */
 function cloudSetupNextUrl(origin: string, sessionId: string): string | null {
   try {
@@ -1886,6 +1901,12 @@ async function githubReturn(env: Env, deps: Deps, url: URL): Promise<Response> {
     }
     const esc = (value: string) => value.replace(/[^A-Za-z0-9_.-]/g, '')
     const requested = 'requested' in result
+    if ('boundIds' in result) {
+      const notify = trialNotifier(env, deps)
+      for (const ids of result.boundIds) {
+        await notify({ accountId: result.state.a, ...ids })
+      }
+    }
     // Tell a waiting setup session (the desktop polls it and starts on its own), then go back to it.
     const notice = await noticeAfterReturn(repoAccessDeps(env, deps), result.state, requested).catch(() => null)
     if (notice) {

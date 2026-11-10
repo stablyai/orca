@@ -209,24 +209,40 @@ export async function listAccountRepositories(
 export type SetupNotice = { sessionId?: string; accountId: string; repo: string; state: 'done' | 'pending' }
 export type SetupNotifier = (notice: SetupNotice) => Promise<void>
 
+/** Billing's trial abuse keys: a team's trial is revoked when another team's trial used this GitHub identity. */
+export type TrialGitHubNotice = { accountId: string; githubUserId?: number; githubOwnerId?: number }
+export type TrialGitHubNotifier = (notice: TrialGitHubNotice) => Promise<void>
+
 /** Best effort: the desktop also polls repo-access, so a lost notice only costs a poll interval. */
 export function billingSetupNotifier(config: { billingUrl?: string; token?: string; fetch: typeof fetch }): SetupNotifier {
-  return async (notice) => {
-    if (!config.billingUrl || !config.token) {
-      return
-    }
-    try {
-      const response = await config.fetch(new URL('/v1/internal/cloud-setup/github', config.billingUrl), {
-        method: 'POST',
-        headers: { authorization: `Bearer ${config.token}`, 'content-type': 'application/json' },
-        body: JSON.stringify(notice),
-        redirect: 'manual',
-        signal: AbortSignal.timeout(5_000)
-      })
-      console.log(JSON.stringify({ event: 'cloud_setup_github_notice', state: notice.state, status: response.status }))
-    } catch (error) {
-      console.log(JSON.stringify({ event: 'cloud_setup_github_notice_failed', error: String(error).slice(0, 120) }))
-    }
+  return (notice) => postBilling(config, '/v1/internal/cloud-setup/github', notice, 'cloud_setup_github_notice')
+}
+
+/** POST /v1/internal/trial/github after a bind. Best effort: never blocks the bind; 404 (older billing) is harmless. */
+export function billingTrialNotifier(config: { billingUrl?: string; token?: string; fetch: typeof fetch }): TrialGitHubNotifier {
+  return (notice) => postBilling(config, '/v1/internal/trial/github', notice, 'trial_github_notice')
+}
+
+async function postBilling(
+  config: { billingUrl?: string; token?: string; fetch: typeof fetch },
+  path: string,
+  body: unknown,
+  event: string
+): Promise<void> {
+  if (!config.billingUrl || !config.token) {
+    return
+  }
+  try {
+    const response = await config.fetch(new URL(path, config.billingUrl), {
+      method: 'POST',
+      headers: { authorization: `Bearer ${config.token}`, 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      redirect: 'manual',
+      signal: AbortSignal.timeout(5_000)
+    })
+    console.log(JSON.stringify({ event, status: response.status }))
+  } catch (error) {
+    console.log(JSON.stringify({ event: `${event}_failed`, error: String(error).slice(0, 120) }))
   }
 }
 
@@ -246,7 +262,7 @@ type InstallationPayload = {
  * every binding; `installation_repositories.added` tells waiting setup sessions their repo is in.
  */
 export async function handleInstallationEvent(
-  deps: { db: D1Database; now: number; notify: SetupNotifier },
+  deps: { db: D1Database; now: number; notify: SetupNotifier; notifyTrial?: TrialGitHubNotifier },
   eventName: string,
   payload: InstallationPayload
 ): Promise<{ handled: string; bound?: number; revoked?: number; notified?: number }> {
@@ -271,6 +287,9 @@ export async function handleInstallationEvent(
       requesterId,
       deps.now
     )
+    for (const accountId of new Set(resolved.map((r) => r.account_id))) {
+      await deps.notifyTrial?.({ accountId, githubUserId: requesterId, githubOwnerId: account.id })
+    }
     const covered = new Set((payload.repositories ?? []).map((r) => r.full_name?.toLowerCase()).filter(Boolean))
     let notified = 0
     for (const request of resolved) {
