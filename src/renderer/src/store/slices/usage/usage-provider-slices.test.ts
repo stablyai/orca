@@ -340,7 +340,14 @@ it('shows lost Refresh through read-only recovery and clears it only after a suc
   stop()
 })
 
-it.each(['skip', 'scanning', 'error', 'completed', 'first-completion'] as const)(
+it.each([
+  'skip',
+  'scanning',
+  'error',
+  'completed',
+  'first-completion',
+  'intermediate-scanning'
+] as const)(
   'resolves old Refresh failure only with a newer settled producer result: %s',
   async (outcome) => {
     const { api, store } = fixture()
@@ -361,10 +368,14 @@ it.each(['skip', 'scanning', 'error', 'completed', 'first-completion'] as const)
     api.getSnapshot
       .mockResolvedValueOnce({ ...snapshot, scanState: baseline })
       .mockResolvedValueOnce({ ...snapshot, scanState: final })
-    api.refresh.mockResolvedValueOnce(final)
+    api.refresh.mockResolvedValueOnce(
+      outcome === 'intermediate-scanning' ? { ...final, isScanning: true } : final
+    )
     await store.getState().fetchClaudeUsage()
     expect(store.getState().claudeUsageFailure?.refresh ?? false).toBe(
-      outcome !== 'completed' && outcome !== 'first-completion'
+      outcome !== 'completed' &&
+        outcome !== 'first-completion' &&
+        outcome !== 'intermediate-scanning'
     )
   }
 )

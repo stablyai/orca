@@ -179,10 +179,10 @@ export function createUsageProviderSlice<
                       completed?.enabled &&
                       !completed.isScanning &&
                       !completed.lastScanError &&
-                      refreshed &&
-                      !refreshed.isScanning &&
-                      !refreshed.lastScanError &&
-                      (next === 2 ||
+                      ((next === 2 &&
+                        refreshed &&
+                        !refreshed.isScanning &&
+                        !refreshed.lastScanError) ||
                         (olderFailure === read().failure &&
                           baseline &&
                           completed.lastScanCompletedAt !== null &&
