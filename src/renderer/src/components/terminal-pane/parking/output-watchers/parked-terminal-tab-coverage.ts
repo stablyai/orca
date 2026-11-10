@@ -12,8 +12,10 @@ import {
 } from './terminal-parked-watcher-registry'
 import type { ParkableTerminalTabModel } from './terminal-parked-watcher-reconciliation'
 import '../../layout/terminal-layout-leaf-traversal'
-import { collectLayoutLeafIdsInOrder } from '../../../../../../shared/workspace-layout/terminal-pane-tree'
-import { resolveRootlessTerminalLayoutLeafId } from '../../../../../../shared/workspace-layout/terminal-pane-tree'
+import {
+  collectLayoutLeafIdsInOrder,
+  resolveRootlessTerminalLayoutLeafId
+} from '../../../../../../shared/workspace-layout/terminal-pane-tree'
 import type { ParkedTerminalPaneCapture } from './terminal-parked-watcher-registry'
 import { launchAgentTabIds } from './parked-tab-agent-owner-index'
 

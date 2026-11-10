@@ -3,14 +3,16 @@ import {
   type SetTerminalPaneTitleDetail
 } from '@/constants/terminal'
 import '../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
-import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-pane-tree'
+import {
+  collectLayoutLeafIdsInOrder,
+  resolveRootlessTerminalLayoutLeafId
+} from '../../../../shared/workspace-layout/terminal-pane-tree'
 import { chatWorkspaceByTabId as findTerminalTabWorktreeId } from '@/lib/structured-chat-tab-index'
 import { sendLayoutCommandToOwner } from '@/runtime/workspace-layout/commands/layout-owner-command'
 import { useAppStore } from '../../store'
 import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { resolveRootlessTerminalLayoutLeafId } from '../../../../shared/workspace-layout/terminal-pane-tree'
 
 function showRuntimePaneTitle(tabId: string, leafId: string, title: string | null): void {
   const store = useAppStore.getState()
