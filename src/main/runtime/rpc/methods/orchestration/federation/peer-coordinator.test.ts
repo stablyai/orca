@@ -50,6 +50,7 @@ describe('a paired Orca coordinating its Run on this server', () => {
     db.close()
     rmSync(dir, { recursive: true, force: true })
     vi.restoreAllMocks()
+    vi.useRealTimers()
   })
 
   function peerCall(
@@ -104,6 +105,23 @@ describe('a paired Orca coordinating its Run on this server', () => {
     const localTask = db.createTask({ spec: 'local work', runId: localRun.id })
     const localWork = createRootDispatch(db, localTask.id, 'term_o', OTHER_PANE)
     return { peerWork, localRun, localWork }
+  }
+
+  async function pull(id: string, params: Record<string, unknown> = {}) {
+    const response = await dispatcher.dispatch(
+      {
+        id,
+        authToken: 'token',
+        method: 'orchestration.peerMailPull',
+        params,
+        orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION
+      },
+      PAIRED
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pull's result schema; a refusal reads as an empty page.
+    return (response.ok ? response.result : { items: [] }) as {
+      items: { conversationId: string; kind: string }[]
+    }
   }
 
   function refused(response: RpcResponse): string | undefined {
@@ -302,19 +320,7 @@ describe('a paired Orca coordinating its Run on this server', () => {
     }
     db.insertMessage({ from: 'term_w', to: `run:${otherRun}`, subject: 'done', runId: otherRun })
 
-    const pulled = await dispatcher.dispatch(
-      {
-        id: 'pull',
-        authToken: 'token',
-        method: 'orchestration.peerMailPull',
-        params: {},
-        orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION
-      },
-      PAIRED
-    )
-    const items = (pulled.ok ? pulled.result : { items: [] }) as {
-      items: { conversationId: string; kind: string }[]
-    }
+    const items = await pull('pull')
     expect(items.items.filter((item) => item.conversationId === other)).toEqual([
       expect.objectContaining({ kind: 'worker_mail' })
     ])
@@ -329,20 +335,7 @@ describe('a paired Orca coordinating its Run on this server', () => {
     }
     const seen = new Set<string>()
     for (const id of ['pull_1', 'pull_2']) {
-      const pulled = await dispatcher.dispatch(
-        {
-          id,
-          authToken: 'token',
-          method: 'orchestration.peerMailPull',
-          params: {},
-          orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION
-        },
-        PAIRED
-      )
-      const page = (pulled.ok ? pulled.result : { items: [] }) as {
-        items: { conversationId: string }[]
-      }
-      for (const item of page.items) {
+      for (const item of (await pull(id)).items) {
         seen.add(item.conversationId)
       }
     }
@@ -363,23 +356,12 @@ describe('a paired Orca coordinating its Run on this server', () => {
       direction: 'to_home',
       throughSequence: 1_000
     })
-    const pull = dispatcher.dispatch(
-      {
-        id: 'pull',
-        authToken: 'token',
-        method: 'orchestration.peerMailPull',
-        params: { waitMs: 20_000 },
-        orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION
-      },
-      PAIRED
-    )
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    // The pull's own deadline never passes, so only the state change can answer it.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const waiting = pull('pull', { waitMs: 20_000 })
+    await new Promise((resolve) => setImmediate(resolve))
     db.transitionLifecycle({ entity: 'worker', id: dispatch.id, from: 'starting', to: 'ready' })
 
-    const woke = await Promise.race([
-      pull.then(() => true),
-      new Promise((resolve) => setTimeout(() => resolve(false), 2_000))
-    ])
-    expect(woke).toBe(true)
+    expect((await waiting).items).toEqual([expect.objectContaining({ kind: 'worker_state' })])
   })
 })

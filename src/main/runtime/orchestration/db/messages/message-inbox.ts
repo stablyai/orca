@@ -228,6 +228,7 @@ export function markAsReadAndDelivered(this: OrchestrationDb, ids: string[]): vo
 
 export function getInbox(this: OrchestrationDb, limit = 20, runId?: string): MessageRow[] {
   return exposeMessageListTimestamps(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over messages returns the row shape its schema and MessageRow define, like every row cast in db/.
     this.db
       .prepare(
         'SELECT * FROM messages WHERE (?1 IS NULL OR run_id = ?1) ORDER BY sequence DESC LIMIT ?2'
@@ -247,6 +248,7 @@ export function getAllMessagesForHandle(
   const typed = types && types.length > 0
   const typeFilter = typed ? `AND type IN (${types.map(() => '?').join(',')})` : ''
   return exposeMessageListTimestamps(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over messages returns the row shape its schema and MessageRow define, like every row cast in db/.
     this.db
       .prepare(
         `SELECT * FROM messages WHERE to_handle = ? AND (? IS NULL OR run_id = ?) ${typeFilter}

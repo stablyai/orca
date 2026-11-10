@@ -76,6 +76,7 @@ export function admitPeerRun(
     this.db.exec('ROLLBACK')
     throw error
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the committed transaction above wrote or found this conversation's row.
   return this.getPeerRunForConversation(peerRun.conversationId) as PeerRunRow
 }
 

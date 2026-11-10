@@ -108,9 +108,12 @@ function declaredCaller<P>(
   return field === undefined ? undefined : fieldValue(field, params)
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
 function fieldValue(field: string, params: unknown): string | undefined {
-  const value: unknown =
-    params && typeof params === 'object' ? Reflect.get(params, field) : undefined
+  const value: unknown = isRecord(params) ? params[field] : undefined
   return typeof value === 'string' ? value : undefined
 }
 
