@@ -106,7 +106,7 @@ describe('decideUsageAlert', () => {
 
 describe('notifyUsageAlertIfDue', () => {
   let dir: string
-  let show: ReturnType<typeof vi.fn>
+  let show: ReturnType<typeof vi.fn<UsageAlertDeps['show']>>
   let enabled: boolean
   const deps = (): UsageAlertDeps => ({
     userDataPath: dir,
@@ -117,7 +117,7 @@ describe('notifyUsageAlertIfDue', () => {
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'usage-alerts-'))
-    show = vi.fn()
+    show = vi.fn<UsageAlertDeps['show']>()
     enabled = true
   })
   afterEach(() => {
