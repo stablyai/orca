@@ -165,6 +165,7 @@ import {
   workspaceViews
 } from './workspaces'
 import { rememberCallerName } from './member-names'
+import { sweepSessionCpu } from './session-cpu'
 import type { SandboxCaller } from './auth'
 
 const MAX_JSON_BYTES = 16 * 1024
@@ -1601,6 +1602,11 @@ export default {
           // Counts only; no ids, tokens or pairing material.
           const summary = await reconcile(life)
           console.log(JSON.stringify({ event: 'reconcile', ...summary }))
+          // Internal fair-use review (U22): retry sessions whose CPU the stop couldn't read yet.
+          const cpu = await sweepSessionCpu(life.db, life.provider, life.now())
+          if (cpu.checked > 0) {
+            console.log(JSON.stringify({ event: 'session_cpu_sweep', ...cpu }))
+          }
           const retried = await retryPendingMessages(life).catch(() => -1)
           if (retried !== 0) {
             console.log(JSON.stringify({ event: 'message_retry', retried }))
