@@ -4,7 +4,7 @@ import {
 } from '../../../../../shared/work-items/task-source-context'
 import { getLinearIssueWorkspaceName } from '../../../../../shared/workspace-name'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import {
   buildLinearWorkspaceSource,
   getUsableLinearBranchName

@@ -5,7 +5,7 @@ import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { getScreenSubmitModifierLabel } from '@/lib/screen-submit-shortcut'
-import { resolveProjectCloneUrlPrefill } from '@/lib/project-clone-url-prefill'
+import { resolveProjectCloneUrlPrefill } from '@/lib/workspace/creation/project-clone-url-prefill'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import {
   AddRemoteHostDialog,

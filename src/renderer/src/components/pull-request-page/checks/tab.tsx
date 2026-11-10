@@ -27,7 +27,7 @@ import {
   getGitHubSourceRuntimeHost
 } from '@/lib/work-items/github/github-source-runtime-context'
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
 import { resolveRepoExecutionHostPlatform } from '@/runtime/hosts/platform/execution-host-facts'
 import { resolveSourceControlActionRecipe } from '../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import type {
