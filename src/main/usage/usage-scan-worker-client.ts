@@ -46,6 +46,7 @@ export class UsageScanWorkerClient {
     this.queue = new WorkerThreadRequestQueue({
       factory: () => createUsageScanWorkerTransport(options.workerFactory),
       idleTeardownMs: IDLE_TEARDOWN_MS,
+      awaitRetirement: true,
       maxConsecutiveDeaths: MAX_CONSECUTIVE_DEATHS,
       createUnavailableError: (message) => new UsageScanWorkerUnavailableError(message),
       isProgress: isUsageScanWorkerProgress,
@@ -56,6 +57,11 @@ export class UsageScanWorkerClient {
       onUnavailable: (err) =>
         log(`[usage-scan] worker unavailable; usage scans will report an error. ${message(err)}`)
     })
+  }
+
+  async dispose(): Promise<void> {
+    this.queue.dispose()
+    await this.queue.retired()
   }
 
   /** sourceCache identifies provider records that stay on the worker. */

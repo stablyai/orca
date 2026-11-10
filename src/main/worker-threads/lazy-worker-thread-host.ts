@@ -7,6 +7,7 @@ export class LazyWorkerThreadHost<TResponse> {
   private cleanupListeners: (() => void) | null = null
   private reportedUnavailable = false
   private retiring: Promise<void> | null = null
+  private retirementFailure: unknown
 
   constructor(
     private readonly options: {
@@ -76,8 +77,11 @@ export class LazyWorkerThreadHost<TResponse> {
     this.cleanupListeners?.()
     this.cleanupListeners = null
     worker.removeAllListeners()
-    // A rejected terminate still ends retirement, so it cannot latch spawning off.
-    const exited = worker.terminate().catch(() => undefined)
+    const exited = worker.terminate().catch((error: unknown) => {
+      if (this.options.awaitRetirement) {
+        this.retirementFailure = error
+      }
+    })
     if (this.options.awaitRetirement) {
       this.retiring = exited.then(() => {
         this.retiring = null
@@ -85,8 +89,11 @@ export class LazyWorkerThreadHost<TResponse> {
     }
   }
 
-  retired(): Promise<void> {
-    return this.retiring ?? Promise.resolve()
+  async retired(): Promise<void> {
+    await this.retiring
+    if (this.retirementFailure) {
+      throw this.retirementFailure
+    }
   }
 
   scheduleIdleTeardown(): void {

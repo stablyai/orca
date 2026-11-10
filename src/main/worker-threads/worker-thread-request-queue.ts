@@ -129,6 +129,10 @@ export class WorkerThreadRequestQueue<
     }
   }
 
+  retired(): Promise<void> {
+    return this.host.retired()
+  }
+
   private pump(): void {
     if (this.active || this.queue.length === 0) {
       return

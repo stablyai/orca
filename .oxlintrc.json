@@ -115,6 +115,22 @@
   },
   "overrides": [
     {
+      "files": ["src/main/backend/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["electron", "electron/*"],
+                "message": "Backend services use the typed desktop capability bridge; only the shell imports Electron."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": ["**/*.{js,cjs,mjs,jsx,ts,tsx,mts,cts}"],
       "excludeFiles": [
         "**/*.{test,spec}.{js,cjs,mjs,jsx,ts,tsx,mts,cts}",

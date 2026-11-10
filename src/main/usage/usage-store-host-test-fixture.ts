@@ -1,0 +1,21 @@
+import type { UsageStoreHost, UsageWorktreeCatalog } from './usage-store-host'
+
+export function createTestUsageStoreHost(options: {
+  userDataPath: string
+  catalog?: UsageWorktreeCatalog
+  profileDirs?: string[]
+  telemetryEnabled?: boolean
+  capture?: UsageStoreHost['telemetry']['capture']
+  signal?: AbortSignal
+}): UsageStoreHost {
+  return {
+    userDataPath: options.userDataPath,
+    signal: options.signal ?? new AbortController().signal,
+    readCatalog: async () => options.catalog ?? { repoIds: [], worktreesByRepo: [] },
+    claudeProfileDirs: async () => options.profileDirs ?? [],
+    telemetry: {
+      isEnabled: async () => options.telemetryEnabled ?? false,
+      capture: options.capture ?? (async () => true)
+    }
+  }
+}

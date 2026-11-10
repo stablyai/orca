@@ -25,6 +25,7 @@ export type UsageQueryArgs<Snapshot extends UsageProviderSnapshot> = Pick<
 >
 
 export type UsageProviderApi<Snapshot extends UsageProviderSnapshot, BreakdownKind> = {
+  onConnectionChanged?: (listener: (connected: boolean) => void) => () => void
   getScanState: () => Promise<Snapshot['scanState']>
   setEnabled: (args: { enabled: boolean }) => Promise<Snapshot['scanState']>
   refresh: (args?: { force?: boolean }) => Promise<Snapshot['scanState']>

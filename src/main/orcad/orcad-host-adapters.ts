@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import process from 'node:process'
 import { ORCAD_CLI_PACKAGE_FILENAME } from '../../shared/orcad-artifacts'
 import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
+import { createNodeServiceEnvironment } from '../backend/node-service-environment'
 import { setSecretStore } from '../../shared/secret-store'
 import { resolveOrcadInstallRoot, resolveOrcadPath } from './orcad-app-paths'
 import { getOrcadCliLauncherPath } from './orcad-cli-launcher'
@@ -17,33 +18,15 @@ export function runOrcadQuitHandlers(): void {
 }
 
 function createNodeAppEnvironment(): AppEnvironment {
-  const quitHandlers: (() => void)[] = []
-  // Synchronous quit handlers must not preempt the signal handler’s awaited runtime/browser teardown.
-  quitRegisteredHandlers = (): void => {
-    const errors: unknown[] = []
-    for (const handler of quitHandlers.splice(0)) {
-      try {
-        handler()
-      } catch (error) {
-        errors.push(error)
-      }
-    }
-    // Failed handlers may leave writers running and keep the instance lock held.
-    if (errors.length > 0) {
-      throw new AggregateError(errors, 'orcad_quit_handlers_failed')
-    }
-  }
-  return {
+  const host = createNodeServiceEnvironment({
     getPath: resolveOrcadPath,
     getAppPath: () => resolveOrcadInstallRoot(),
     getVersion: () => process.env.ORCA_VERSION ?? '0.0.0-orcad',
-    // Packaged gates production HTTPS/CLI/PATH policy; layout callers must inspect asar separately.
     isPackaged: () => true,
-    getCliLauncherPath: getOrcadCliLauncherPath,
-    onWillQuit: (handler) => quitHandlers.push(handler),
-    exit: (code = 0) => process.exit(code),
-    getAppMetrics: () => []
-  }
+    getCliLauncherPath: getOrcadCliLauncherPath
+  })
+  quitRegisteredHandlers = host.runQuitHandlers
+  return host.environment
 }
 
 let orcadSecretStore: OrcadSecretStore | null = null

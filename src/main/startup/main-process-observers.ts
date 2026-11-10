@@ -1,3 +1,4 @@
+import { BackendSupervisor } from '../backend-desktop/backend-supervisor'
 import { app, powerMonitor } from 'electron'
 import { join } from 'node:path'
 import { AgentAwakeService } from '../power/agent-awake-service'
@@ -21,10 +22,6 @@ import { initCohortClassifier } from '../telemetry/cohort-classifier'
 import { initOnboardingCohortClassifier } from '../telemetry/onboarding-cohort-classifier'
 import { StatsCollector } from '../stats/collector'
 import { feedAgentSessionStats } from '../stats/agent-session-stats-feed'
-import { ClaudeUsageStore } from '../claude-usage/store'
-import { CodexUsageStore } from '../codex-usage/store'
-import { OpenCodeUsageStore } from '../opencode-usage/store'
-import { MuseUsageStore } from '../muse-usage/store'
 import { installRepoMaintenanceIdleGate } from '../workspaces/catalog/repo-maintenance-idle-gate'
 import { mainProcessState as state } from './main-process-state'
 import { runAfterFirstWindowShown } from './first-window-deferral'
@@ -146,8 +143,7 @@ export function initializeMainProcessObservers(): void {
   initOnboardingCohortClassifier(store)
   state.stats = new StatsCollector()
   feedAgentSessionStats(state.stats, agentHookServer)
-  state.claudeUsage = new ClaudeUsageStore(store)
-  state.codexUsage = new CodexUsageStore(store)
-  state.openCodeUsage = new OpenCodeUsageStore(store)
-  state.museUsage = new MuseUsageStore(store)
+  state.backend = new BackendSupervisor(store)
+  state.claudeUsage = state.backend.automationClient('claudeUsage')
+  state.codexUsage = state.backend.automationClient('codexUsage')
 }

@@ -21,29 +21,7 @@ import type {
 } from '../../../../../shared/muse-usage-types'
 import type { AppState } from '../../types'
 
-type UsageSnapshot = {
-  scanState: {
-    enabled: boolean
-    isScanning: boolean
-    lastScanCompletedAt: number | null
-    lastScanError: string | null
-  }
-  summary: object
-  daily: object[]
-  modelBreakdown: object[]
-  projectBreakdown: object[]
-  recentSessions: object[]
-}
-
-type UsageProviderTypes<
-  Scope extends string,
-  Range extends string,
-  Snapshot extends UsageSnapshot
-> = {
-  scope: Scope
-  range: Range
-  snapshot: Snapshot
-}
+import type { UsageSnapshot, UsageProviderTypes } from './usage-provider-types'
 
 type UsageData<T extends UsageProviderTypes<string, string, UsageSnapshot>> = {
   scope: T['scope']
@@ -57,6 +35,7 @@ type UsageData<T extends UsageProviderTypes<string, string, UsageSnapshot>> = {
 }
 
 type UsageApi<T extends UsageProviderTypes<string, string, UsageSnapshot>> = {
+  onConnectionChanged?: (listener: (connected: boolean) => void) => () => void
   getScanState: () => Promise<T['snapshot']['scanState']>
   setEnabled: (args: { enabled: boolean }) => Promise<T['snapshot']['scanState']>
   refresh: (args?: { force?: boolean }) => Promise<T['snapshot']['scanState']>
@@ -141,6 +120,13 @@ function createUsageProviderSlice<
       set(createUsagePatch(config.prefix, patch))
     const read = (): UsageData<T> => readUsageData<T>(get(), config.prefix)
 
+    const stopLoading = (): void => {
+      const state = read().scanState
+      if (state?.isScanning) {
+        update({ scanState: { ...state, isScanning: false } })
+      }
+    }
+
     const fetchUsage = async (opts?: { forceRefresh?: boolean }): Promise<void> => {
       try {
         const api = config.getApi()
@@ -200,9 +186,24 @@ function createUsageProviderSlice<
           })
         )
       } catch (error) {
+        stopLoading()
         console.error(`Failed to fetch ${config.name} usage:`, error)
       }
     }
+
+    config.getApi()?.onConnectionChanged?.((connected) => {
+      if (read().scanState === null) {
+        return
+      }
+      if (connected) {
+        void fetchUsage()
+      } else {
+        const state = read().scanState
+        if (state) {
+          update({ scanState: { ...state, isScanning: false } })
+        }
+      }
+    })
 
     const setEnabled = async (enabled: boolean): Promise<void> => {
       try {
@@ -231,6 +232,7 @@ function createUsageProviderSlice<
           await fetchUsage({ forceRefresh: true })
         }
       } catch (error) {
+        stopLoading()
         console.error(`Failed to update ${config.name} usage setting:`, error)
       }
     }

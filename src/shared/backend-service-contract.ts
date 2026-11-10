@@ -1,0 +1,73 @@
+import { z } from 'zod'
+import type { RuntimeRpcResponse } from './runtime-rpc-envelope'
+import type { AutomationRunUsage } from './automations/history/automation-run'
+import type { AppPathName } from './app-environment'
+
+export const BACKEND_PORT_REQUEST = 'backend:connect'
+export const BACKEND_PORT_DELIVERY = 'backend:port'
+export const BACKEND_CONNECTION_CHANGED = 'backend:connectionChanged'
+
+export const UsageProviderSchema = z.enum([
+  'claudeUsage',
+  'codexUsage',
+  'openCodeUsage',
+  'museUsage'
+])
+export type UsageProviderKey = z.infer<typeof UsageProviderSchema>
+export const UsageActionSchema = z.enum([
+  'getScanState',
+  'setEnabled',
+  'refresh',
+  'getSnapshot',
+  'getSummary',
+  'getDaily',
+  'getBreakdown',
+  'getRecentSessions'
+])
+export type UsageAction = z.infer<typeof UsageActionSchema>
+export type BackendResponse = RuntimeRpcResponse<unknown>
+
+export const BackendBootstrapSchema = z
+  .object({
+    protocol: z.literal(1),
+    requiredCapabilities: z.array(z.string().max(128)).max(32),
+    services: z.tuple([z.literal('usage')]),
+    build: z.string().max(256),
+    paths: z.object({
+      userData: z.string().min(1),
+      home: z.string().min(1),
+      appData: z.string().min(1),
+      temp: z.string().min(1),
+      downloads: z.string().min(1),
+      logs: z.string().min(1),
+      exe: z.string().min(1)
+    }) satisfies z.ZodType<Record<AppPathName, string>>,
+    appPath: z.string().min(1),
+    isPackaged: z.boolean()
+  })
+  .strip()
+export type BackendBootstrap = z.infer<typeof BackendBootstrapSchema>
+export const BACKEND_CAPABILITIES = [
+  'usage',
+  'usage.catalog',
+  'usage.claudeProfileDirs',
+  'usage.telemetry'
+] as const
+
+export const BackendRequestSchema = z
+  .object({
+    id: z.string().min(1).max(128),
+    method: z.string().min(1).max(128),
+    params: z.unknown().optional()
+  })
+  .strip()
+
+export type AutomationUsageInput = {
+  worktreeId: string | null
+  terminalSessionId: string | null
+  startedAt: number | null
+  completedAt: number | null
+}
+export type AutomationUsageClient = {
+  getAutomationRunUsage(input: AutomationUsageInput): Promise<AutomationRunUsage>
+}

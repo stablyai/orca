@@ -1,53 +1,38 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { createTestUsageStoreHost } from '../usage/usage-store-host-test-fixture'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ClaudeUsagePersistedState } from './types'
-
-const { getPathMock } = vi.hoisted(() => ({
-  getPathMock: vi.fn(() => '/tmp/orca-test-userdata')
-}))
-
-vi.mock('electron', () => ({
-  app: {
-    getPath: getPathMock
-  }
-}))
 
 vi.mock('../usage/usage-scan-worker-spawn', () => ({
   scanClaudeUsageFilesViaWorker: vi.fn(),
   splitUsageCacheFileViaWorker: vi.fn()
 }))
 
-import { ClaudeUsageStore, initClaudeUsagePath } from './store'
+import { ClaudeUsageStore } from './store'
 import { scanClaudeUsageFilesViaWorker } from '../usage/usage-scan-worker-spawn'
 
-function createBackingStore(): ConstructorParameters<typeof ClaudeUsageStore>[0] {
-  return {
-    getRepos: () => [],
-    getAllWorktreeMeta: () => ({})
-  }
-}
-
+let tempUserData: string
 function createStoreWithState(state: Partial<ClaudeUsagePersistedState>): ClaudeUsageStore {
-  const store = new ClaudeUsageStore(createBackingStore())
-
-  ;(store as unknown as { state: ClaudeUsagePersistedState }).state = {
-    schemaVersion: 1,
-    worktreeFingerprint: null,
-    processedFiles: [],
-    sessions: [],
-    dailyAggregates: [],
-    scanState: {
-      enabled: false,
-      lastScanStartedAt: null,
-      lastScanCompletedAt: null,
-      lastScanError: null
-    },
-    ...state
-  }
-
-  return store
+  writeFileSync(
+    join(tempUserData, 'orca-claude-usage.json'),
+    JSON.stringify({
+      schemaVersion: 7,
+      worktreeFingerprint: null,
+      processedFiles: [],
+      sessions: [],
+      dailyAggregates: [],
+      scanState: {
+        enabled: false,
+        lastScanStartedAt: null,
+        lastScanCompletedAt: null,
+        lastScanError: null
+      },
+      ...state
+    })
+  )
+  return new ClaudeUsageStore(createTestUsageStoreHost({ userDataPath: tempUserData }))
 }
 
 function createWorktreeUsageSession(worktreeId: string) {
@@ -87,12 +72,8 @@ function createWorktreeUsageSession(worktreeId: string) {
 }
 
 describe('ClaudeUsageStore', () => {
-  let tempUserData: string
-
   beforeEach(() => {
     tempUserData = mkdtempSync(join(tmpdir(), 'orca-claude-usage-store-'))
-    getPathMock.mockReturnValue(tempUserData)
-    initClaudeUsagePath()
     vi.mocked(scanClaudeUsageFilesViaWorker).mockReset()
     vi.mocked(scanClaudeUsageFilesViaWorker).mockResolvedValue({
       sessions: [],

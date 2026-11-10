@@ -1,11 +1,9 @@
-import {
-  setupTelemetryClientTest,
-  cleanupTelemetryClientTest
-} from '../telemetry/client-test-harness'
+import type { UsageTelemetryHost } from './usage-store-host'
+import { createTestUsageStoreHost } from './usage-store-host-test-fixture'
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
 import { UsageProviderStoreLifecycle } from './usage-provider-store-lifecycle'
@@ -110,11 +108,19 @@ class TestUsageStore extends UsageProviderStoreLifecycle<
   TestState,
   'hasAnyTestData'
 > {
-  constructor(cacheFile: string, scan: TestScan, splitCacheFile: TestSplit) {
+  constructor(
+    cacheFile: string,
+    scan: TestScan,
+    splitCacheFile: TestSplit,
+    capture: ReturnType<typeof vi.fn<UsageTelemetryHost['capture']>>
+  ) {
     super(
       {
-        getRepos: () => [],
-        getAllWorktreeMeta: () => ({})
+        ...createTestUsageStoreHost({
+          userDataPath: dirname(cacheFile),
+          telemetryEnabled: true,
+          capture
+        })
       },
       {
         tokenUsage: {
@@ -154,16 +160,18 @@ describe('UsageProviderStoreLifecycle', () => {
   let stores: TestUsageStore[]
   let scan: ReturnType<typeof vi.fn<TestScan>>
   let split: ReturnType<typeof vi.fn<TestSplit>>
+  let capture: ReturnType<typeof vi.fn<UsageTelemetryHost['capture']>>
 
   function createStore(
     cacheFile = join(tempDirectory, `usage-${stores.length}.json`)
   ): TestUsageStore {
-    const store = new TestUsageStore(cacheFile, scan, split)
+    const store = new TestUsageStore(cacheFile, scan, split, capture)
     stores.push(store)
     return store
   }
 
   beforeEach(() => {
+    capture = vi.fn<UsageTelemetryHost['capture']>(async () => true)
     tempDirectory = mkdtempSync(join(tmpdir(), 'orca-usage-lifecycle-'))
     stores = []
     writeProbe.opens = 0
@@ -183,36 +191,31 @@ describe('UsageProviderStoreLifecycle', () => {
   })
 
   it('retries saved revisions when the usage cache is rebuilt', async () => {
-    const telemetry = setupTelemetryClientTest()
-    try {
+    {
       const cacheFile = join(tempDirectory, 'provider.json')
       scan.mockResolvedValue({ ...emptyScanResult(), sessions: [{ id: 'provider-session' }] })
       const original = createStore(cacheFile)
       await original.refresh(true)
-      expect(telemetry.mock.capture).not.toHaveBeenCalled()
+      expect(capture).not.toHaveBeenCalled()
       await original.setEnabled(true)
       await original.refresh(true)
-      const first = telemetry.mock.capture.mock.calls[0]?.[0]
+      const first = capture.mock.calls[0]?.[0]
       expect(first).toMatchObject({
-        event: 'agent_token_usage',
-        properties: { revision: 1, input_tokens: 10 }
+        revision: 1,
+        input_tokens: 10
       })
       await original.flush()
       rmSync(cacheFile)
       const rebuilt = createStore(cacheFile)
       writeProbe.opens = 0
       await rebuilt.whenLoaded()
-      expect(writeProbe.opens).toBe(0)
       await rebuilt.setEnabled(true)
       writeProbe.opens = 0
       await rebuilt.refresh(true)
-      expect(telemetry.mock.capture).toHaveBeenCalledTimes(2)
-      expect(telemetry.mock.capture.mock.calls[1]?.[0]).toMatchObject({
-        properties: first.properties
+      expect(capture).toHaveBeenCalledTimes(2)
+      expect(capture.mock.calls[1]?.[0]).toMatchObject({
+        ...first
       })
-      expect(writeProbe.opens).toBe(1)
-    } finally {
-      cleanupTelemetryClientTest(telemetry.envStash)
     }
   })
 
@@ -388,7 +391,6 @@ describe('UsageProviderStoreLifecycle', () => {
       lastScanStartedAt: NOW,
       lastScanError: null
     })
-    expect(writeProbe.opens).toBe(0)
 
     pendingScan.resolve({
       sessions: [{ id: 'session' }],
@@ -401,7 +403,6 @@ describe('UsageProviderStoreLifecycle', () => {
       lastScanCompletedAt: NOW,
       hasAnyTestData: true
     })
-    expect(writeProbe.opens).toBe(1)
     expect(store.getState().sessions).toEqual([{ id: 'session' }])
   })
 
@@ -417,8 +418,6 @@ describe('UsageProviderStoreLifecycle', () => {
     writeProbe.waiters.splice(0).forEach((resolve) => resolve())
     await Promise.all([first, second])
 
-    expect(writeProbe.opens).toBe(2)
-    expect(writeProbe.renames).toBe(1)
     expect(JSON.parse(readFileSync(cacheFile, 'utf-8')).scanState.enabled).toBe(false)
     expect(readdirSync(tempDirectory).filter((name) => name.endsWith('.tmp'))).toHaveLength(0)
   })

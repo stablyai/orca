@@ -7,23 +7,13 @@ import {
   setupCodexUsageStoreEnv
 } from './store-test-harness'
 
-const { getPathMock } = vi.hoisted(() => ({
-  getPathMock: vi.fn(() => '/tmp/orca-test-userdata')
-}))
-
-vi.mock('electron', () => ({
-  app: {
-    getPath: getPathMock
-  }
-}))
-
 vi.mock('../usage/usage-scan-worker-spawn', () => ({
   scanCodexUsageFilesViaWorker: vi.fn(),
   splitUsageCacheFileViaWorker: vi.fn()
 }))
 
 describe('CodexUsageStore', () => {
-  setupCodexUsageStoreEnv(getPathMock)
+  setupCodexUsageStoreEnv()
 
   it('joins a scan that is already in flight when the run finished before it started', async () => {
     const worktreeId = 'repo-1::/workspace/repo'

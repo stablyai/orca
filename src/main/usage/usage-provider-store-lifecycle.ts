@@ -1,75 +1,27 @@
 import { readFileSync, statSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { AgentTokenUsageReporter } from './agent-token-usage-reporter'
-import type { AgentTokenSession } from './agent-token-usage'
-import type { AgentTokenUsage } from '../../shared/telemetry-agent-token-usage-schema'
-import { isTelemetryEnabled } from '../telemetry/client'
 import { join, parse } from 'node:path'
 import { AnalyticsSessionIdStore, type AnalyticsSessionId } from './analytics-session-id-store'
-import type { Store } from '../persistence/loading-store/store'
+import type { UsageStoreHost } from './usage-store-host'
 import { UsageCacheSnapshotWriter } from './usage-cache-snapshot-writer'
-import { loadKnownUsageWorktreesByRepo } from './usage-worktree-metadata'
-import type { UsageScanWorktreeRef } from './usage-provider-contract'
 import { createWorktreeRefs, getUsageWorktreeFingerprint } from './usage-worktree-refs'
 import { UsageInlineCachePreservation } from './usage-inline-cache-preservation'
-import {
-  usageSourceCachePath,
-  type UsageCacheSplitRequest,
-  type UsageCacheSplitResult,
-  type UsageSourceCacheRef
-} from './usage-source-cache-file'
+import { usageSourceCachePath } from './usage-source-cache-file'
 
 const STALE_MS = 5 * 60_000
 // Keep large cache parsing on the worker; small reports retain synchronous reads.
 const MAIN_THREAD_PARSE_MAX_BYTES = 8 * 1024 * 1024
 
-type UsageProviderScanState = {
-  enabled: boolean
-  lastScanStartedAt: number | null
-  lastScanCompletedAt: number | null
-  lastScanError: string | null
-}
+import type {
+  UsageProviderStoreLifecycleConfig,
+  UsageProviderStoreState
+} from './usage-provider-store-config'
 
-type UsageProviderStoreState<SourceKey extends string> = {
-  schemaVersion: number
-  worktreeFingerprint: string | null
-  sessions: unknown[]
-  dailyAggregates: unknown[]
-  scanState: UsageProviderScanState
-} & Record<SourceKey, unknown[]>
-
-type UsageProviderStoreLifecycleConfig<
-  SourceKey extends string,
-  State extends UsageProviderStoreState<SourceKey>,
-  DataPresenceKey extends string
-> = {
-  logTag: string
-  resolveCacheFile: () => string
-  createDefaultState: () => State
-  normalizeState: (state: State) => State
-  parseReport?: (
-    text: string,
-    parsed?: State,
-    integrityVerified?: boolean
-  ) => State | Promise<State>
-  serializeReport?: (state: State) => string
-  providerId?: 'claude'
-  sourceKey: SourceKey
-  dataPresenceKey: DataPresenceKey
-  tokenUsage?: {
-    provider: AgentTokenUsage['provider']
-    selectSessions: (state: State) => AgentTokenSession[]
-  }
-  scan: (
-    worktrees: UsageScanWorktreeRef[],
-    sourceCache: UsageSourceCacheRef
-  ) => Promise<Pick<State, 'sessions' | 'dailyAggregates'>>
-  splitCacheFile: (request: UsageCacheSplitRequest) => Promise<UsageCacheSplitResult>
-}
-
-type PublicUsageProviderScanState<DataPresenceKey extends string> = UsageProviderScanState & {
-  isScanning: boolean
-} & Record<DataPresenceKey, boolean>
+type PublicUsageProviderScanState<DataPresenceKey extends string> =
+  UsageProviderStoreState<'sources'>['scanState'] & {
+    isScanning: boolean
+  } & Record<DataPresenceKey, boolean>
 
 export abstract class UsageProviderStoreLifecycle<
   SourceKey extends string,
@@ -81,13 +33,14 @@ export abstract class UsageProviderStoreLifecycle<
   private readonly loaded: Promise<void>
   private readonly schemaVersion: number
   private scanPromise: Promise<void> | null = null
+  private stopping = false
   private tokenReporter: AgentTokenUsageReporter | null = null
   private analyticsSessionIds: AnalyticsSessionIdStore | null = null
   private readonly writer: UsageCacheSnapshotWriter
   private readonly inlineCache = new UsageInlineCachePreservation()
 
   constructor(
-    private readonly store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>,
+    private readonly host: UsageStoreHost,
     private readonly config: UsageProviderStoreLifecycleConfig<SourceKey, State, DataPresenceKey>
   ) {
     this.writer = new UsageCacheSnapshotWriter(config.logTag, config.resolveCacheFile)
@@ -123,6 +76,14 @@ export abstract class UsageProviderStoreLifecycle<
   }
 
   /** Await queued cache writes so quit does not drop the final snapshot. */
+  stopScanAdmission(): void {
+    this.stopping = true
+  }
+
+  async settleScansForShutdown(): Promise<void> {
+    await this.scanPromise
+  }
+
   async flush(): Promise<void> {
     await this.loaded
     await this.inlineCache.settle()
@@ -139,7 +100,7 @@ export abstract class UsageProviderStoreLifecycle<
 
   async refresh(force = false): Promise<PublicUsageProviderScanState<DataPresenceKey>> {
     await this.loaded
-    if (!this.state.scanState.enabled) {
+    if (this.stopping || !this.state.scanState.enabled) {
       return this.getScanState()
     }
     const currentWorktreeFingerprint = await this.getCurrentWorktreeFingerprint()
@@ -148,6 +109,9 @@ export abstract class UsageProviderStoreLifecycle<
       if (ageMs < STALE_MS && this.state.worktreeFingerprint === currentWorktreeFingerprint) {
         return this.getScanState()
       }
+    }
+    if (this.stopping) {
+      return this.getScanState()
     }
     await this.runScan()
     return this.getScanState()
@@ -272,15 +236,22 @@ export abstract class UsageProviderStoreLifecycle<
     // Assign before yielding so concurrent refreshes share one scan.
     this.scanPromise = (async () => {
       try {
-        const repos = this.store.getRepos()
-        const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
+        const { repoIds, worktreesByRepo: entries } = await this.host.readCatalog()
+        this.host.signal.throwIfAborted()
+        const worktreesByRepo = new Map(entries)
         const worktreeFingerprint = getUsageWorktreeFingerprint(worktreesByRepo)
-        const result = await this.config.scan(createWorktreeRefs(repos, worktreesByRepo), {
-          path: usageSourceCachePath(this.config.resolveCacheFile()),
-          schemaVersion: this.schemaVersion,
-          worktreeFingerprint,
-          reuse: this.state.worktreeFingerprint === worktreeFingerprint
-        })
+        const result = await this.config.scan(
+          createWorktreeRefs(
+            repoIds.map((id) => ({ id })),
+            worktreesByRepo
+          ),
+          {
+            path: usageSourceCachePath(this.config.resolveCacheFile()),
+            schemaVersion: this.schemaVersion,
+            worktreeFingerprint,
+            reuse: this.state.worktreeFingerprint === worktreeFingerprint
+          }
+        )
         this.state.sessions = result.sessions
         this.state.dailyAggregates = result.dailyAggregates
         this.state.worktreeFingerprint = worktreeFingerprint
@@ -292,6 +263,9 @@ export abstract class UsageProviderStoreLifecycle<
         await this.writeToDisk().catch(() => {})
         await this.reportTokenUsage()
       } catch (error) {
+        if (this.stopping || this.host.signal.aborted) {
+          return
+        }
         this.state.scanState.lastScanError = error instanceof Error ? error.message : String(error)
         await this.writeToDisk().catch(() => {})
       } finally {
@@ -304,7 +278,7 @@ export abstract class UsageProviderStoreLifecycle<
 
   private async reportTokenUsage(): Promise<void> {
     const config = this.config.tokenUsage
-    if (!config || !isTelemetryEnabled() || !this.state.scanState.enabled) {
+    if (!config || !(await this.host.telemetry.isEnabled()) || !this.state.scanState.enabled) {
       return
     }
     try {
@@ -313,7 +287,8 @@ export abstract class UsageProviderStoreLifecycle<
         this.tokenReporter = new AgentTokenUsageReporter(
           join(dir, `${name}-token-usage.json`),
           config.provider,
-          (ids) => this.getAnalyticsSessionIds(ids)
+          (ids) => this.getAnalyticsSessionIds(ids),
+          this.host.telemetry
         )
       }
       await this.tokenReporter.report(config.selectSessions(this.state))
@@ -326,8 +301,8 @@ export abstract class UsageProviderStoreLifecycle<
   }
 
   private async getCurrentWorktreeFingerprint(): Promise<string> {
-    const repos = this.store.getRepos()
-    return getUsageWorktreeFingerprint(loadKnownUsageWorktreesByRepo(this.store, repos))
+    const { worktreesByRepo } = await this.host.readCatalog()
+    return getUsageWorktreeFingerprint(new Map(worktreesByRepo))
   }
 }
 

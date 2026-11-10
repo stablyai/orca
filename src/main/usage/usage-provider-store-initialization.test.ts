@@ -1,8 +1,10 @@
+import type { UsageStoreHost } from './usage-store-host'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { createTestUsageStoreHost } from './usage-store-host-test-fixture'
 import { UsageProviderStoreLifecycle } from './usage-provider-store-lifecycle'
 import { UsageCacheSnapshotWriter } from './usage-cache-snapshot-writer'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
@@ -59,6 +61,7 @@ type Scan = (
 ) => Promise<ScanProjection>
 type Split = (request: UsageCacheSplitRequest) => Promise<UsageCacheSplitResult>
 type LoadOptions = {
+  host?: UsageStoreHost
   splitCacheFile: Split
   scan?: Scan
   parseReport?: (text: string) => TestState | Promise<TestState>
@@ -107,21 +110,18 @@ class LoadingUsageStore extends UsageProviderStoreLifecycle<
   'hasAnyTestData'
 > {
   constructor(cacheFile: string, options: LoadOptions) {
-    super(
-      { getRepos: () => [], getAllWorktreeMeta: () => ({}) },
-      {
-        logTag: '[test-loading-usage]',
-        resolveCacheFile: () => cacheFile,
-        createDefaultState: defaultState,
-        normalizeState: (state) => state,
-        sourceKey: 'processedSources',
-        dataPresenceKey: 'hasAnyTestData',
-        scan: options.scan ?? (async () => defaultState()),
-        splitCacheFile: options.splitCacheFile,
-        parseReport: options.parseReport,
-        serializeReport: options.serializeReport
-      }
-    )
+    super(options.host ?? createTestUsageStoreHost({ userDataPath: directory }), {
+      logTag: '[test-loading-usage]',
+      resolveCacheFile: () => cacheFile,
+      createDefaultState: defaultState,
+      normalizeState: (state) => state,
+      sourceKey: 'processedSources',
+      dataPresenceKey: 'hasAnyTestData',
+      scan: options.scan ?? (async () => defaultState()),
+      splitCacheFile: options.splitCacheFile,
+      parseReport: options.parseReport,
+      serializeReport: options.serializeReport
+    })
   }
 
   getSnapshot(): TestState {
@@ -329,4 +329,41 @@ it('drains the pending analytics writer after an inline preference write rejects
   })
   expect(writerFlush).toHaveBeenCalledTimes(2)
   expect(store.getSnapshot().processedSources).toEqual([])
+})
+
+it('uses the asynchronous host catalog and stops admission without persisting an abort as a scan failure', async () => {
+  const abort = new AbortController()
+  const host = createTestUsageStoreHost({ userDataPath: directory, signal: abort.signal })
+  const scan = vi
+    .fn<Scan>()
+    .mockResolvedValue({ sessions: [{ id: 'scan-result' }], dailyAggregates: [] })
+  host.readCatalog = async () => ({
+    repoIds: ['repo-1'],
+    worktreesByRepo: [
+      ['repo-1', [{ worktreeId: 'repo-1::/workspace/a', path: '/workspace/a', displayName: 'A' }]]
+    ]
+  })
+  const store = createStore({
+    host,
+    scan,
+    splitCacheFile: async () => ({ reportText: null, migrated: false })
+  })
+  await store.setEnabled(true)
+  await store.refresh(true)
+  expect(scan.mock.calls[0]?.[0]).toEqual([
+    { repoId: 'repo-1', worktreeId: 'repo-1::/workspace/a', path: '/workspace/a', displayName: 'A' }
+  ])
+  const catalog = Promise.withResolvers<Awaited<ReturnType<UsageStoreHost['readCatalog']>>>()
+  host.readCatalog = () => catalog.promise
+  const refresh = store.refresh(true)
+  abort.abort(new Error('Backend stopping'))
+  catalog.resolve({ repoIds: [], worktreesByRepo: [] })
+  await refresh
+  store.stopScanAdmission()
+  await store.refresh(true)
+  await store.flush()
+  expect(JSON.parse(readFileSync(cacheFile, 'utf8'))).toMatchObject({
+    sessions: [{ id: 'scan-result' }],
+    scanState: { enabled: true, lastScanError: null }
+  })
 })

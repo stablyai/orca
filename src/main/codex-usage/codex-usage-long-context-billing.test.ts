@@ -4,16 +4,6 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createStoreWithState, setupCodexUsageStoreEnv } from './store-test-harness'
 
-const { getPathMock } = vi.hoisted(() => ({
-  getPathMock: vi.fn(() => '/tmp/orca-test-userdata')
-}))
-
-vi.mock('electron', () => ({
-  app: {
-    getPath: getPathMock
-  }
-}))
-
 vi.mock('../usage/usage-scan-worker-spawn', () => ({
   scanCodexUsageFilesViaWorker: vi.fn(),
   splitUsageCacheFileViaWorker: vi.fn()
@@ -127,7 +117,7 @@ describe('per-request long-context classification', () => {
 })
 
 describe('long-context cost across rollups', () => {
-  setupCodexUsageStoreEnv(getPathMock)
+  setupCodexUsageStoreEnv()
   let rolloutDir: string | null = null
 
   afterEach(() => {
