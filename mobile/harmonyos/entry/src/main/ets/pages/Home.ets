@@ -18,7 +18,7 @@ import { DesktopConnectionLease, HomeDesktopConnection, reconcileHomeDesktopConn
 import { HomeWorktree, readHomeCatalog } from '../home/HomeCatalog';
 import { AgentDesktop, AgentListRow, HomeAgentEntry, activeAgents, agentPreview, agentRowRevision, agentTimeAgo, agentsNeedingYou } from '../home/AgentListModel';
 import { AgentListRows } from '../home/AgentListRows';
-import { AgentActivityWrites } from '../home/AgentActivityWrites';
+import { AgentActivityBatch, AgentActivityWrites, planAgentActivity } from '../home/AgentActivityWrites';
 import { AgentActions } from '../home/AgentActions';
 import { AgentsTab } from '../home/AgentsTab';
 import { DesktopActions } from '../home/DesktopActions';
@@ -907,40 +907,32 @@ struct Home {
     this.openHostRoute(row.hostId, `/session/${encodeURIComponent(row.entry.worktreeId)}`, params, true);
   }
 
-  private async writeAgentActivity(hostId: string, paneKeys: string[], read?: boolean): Promise<string> {
+  private async writeAgentActivity(batch: AgentActivityBatch, read?: boolean): Promise<string> {
+    let hostId = batch.hostId;
     let runtime = this.runtimes.get(hostId);
     let client = runtime?.client;
     if (!runtime || !runtime.online || !client) { return 'unavailable'; }
     let activeRuntime: HostRuntime = runtime;
     let activeClient: SpikeRpcClient = client;
     let epoch = this.epoch;
-    return this.agentActivityWrites.write(hostId, paneKeys, read, activeClient,
+    return this.agentActivityWrites.write(hostId, batch.paneKeys, read, activeClient,
       (): boolean => this.epoch === epoch && this.runtimes.get(hostId) === activeRuntime
         && activeRuntime.online && activeRuntime.client === activeClient,
-      (): Promise<void> => this.fetchCatalog(activeClient, hostId, epoch, true));
+      (): Promise<void> => this.fetchCatalog(activeClient, hostId, epoch, true), batch.executionHost || undefined);
   }
 
   private async changeAgentActivity(rows: AgentListRow[], read?: boolean, report: boolean = true): Promise<void> {
-    let requests = new Map<string, string[]>();
-    let unavailable = false;
-    rows.forEach((row: AgentListRow): void => {
-      if (row.offline || (read === undefined ? !row.clearable : row.unread === undefined)) { return; }
-      if (row.entry.executionHost || row.entry.executionHostId?.startsWith('runtime:')) { unavailable = true; return; }
-      let keys = requests.get(row.hostId) ?? [];
-      let paneKey = String(row.entry.agent['paneKey']);
-      if (!keys.includes(paneKey)) { keys.push(paneKey); }
-      requests.set(row.hostId, keys);
-    });
-    let outcomes = await Promise.all(Array.from(requests).map(async (entry: [string, string[]]): Promise<string> => {
-      let error = await this.writeAgentActivity(entry[0], entry[1], read);
+    let plan = planAgentActivity(rows, read, (hostId: string): HomeAgentEntry[] => this.agentCatalogs.get(hostId)?.entries ?? []);
+    let outcomes = await Promise.all(plan.batches.map(async (batch: AgentActivityBatch): Promise<string> => {
+      let error = await this.writeAgentActivity(batch, read);
       if (!error) { return ''; }
-      let name = this.hosts.find((host: HostMeta): boolean => host.id === entry[0])?.name ?? '';
-      return error === 'agent_activity_needs_desktop_window' && name
+      let name = this.hosts.find((host: HostMeta): boolean => host.id === batch.hostId)?.name ?? '';
+      return error === 'agent_activity_needs_desktop_window' && name && !batch.executionHost
         ? uiText('无法更新。请在 {{desktop}} 上打开 Orca。', this.uiLocale).replace('{{desktop}}', name)
         : uiText('无法更新智能体列表。', this.uiLocale);
     }));
     let failure = outcomes.find((message: string): boolean => message.length > 0)
-      ?? (unavailable ? uiText('无法更新智能体列表。', this.uiLocale) : '');
+      ?? (plan.unavailable ? uiText('无法更新智能体列表。', this.uiLocale) : '');
     if (report && failure && this.visible) { promptAction.showToast({ message: failure }); }
   }
 

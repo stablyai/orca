@@ -544,21 +544,14 @@ export class SpikeRpcClient {
   }
 
   /** Wire frame in upstream buildDirectRpcWireRequest key order (id, deviceToken, method, params). */
-  buildWire(id: string, method: string, paramsJson: string | null): string {
-    if (paramsJson === null) {
-      let obj: Record<string, Object> = {
-        'id': id,
-        'deviceToken': this.currentDeviceToken,
-        'method': method
-      };
-      return JSON.stringify(obj);
-    }
+  buildWire(id: string, method: string, paramsJson: string | null, executionHost?: string): string {
     let obj: Record<string, Object> = {
       'id': id,
       'deviceToken': this.currentDeviceToken,
-      'method': method,
-      'params': JSON.parse(paramsJson) as Object
+      'method': method
     };
+    if (paramsJson !== null) { obj['params'] = JSON.parse(paramsJson) as Object; }
+    if (executionHost) { obj['executionHost'] = executionHost; }
     return JSON.stringify(obj);
   }
 
@@ -586,10 +579,10 @@ export class SpikeRpcClient {
     });
   }
 
-  request(method: string, params: string | null, timeoutMs: number = this.requestMs): Promise<RpcResponse> {
+  request(method: string, params: string | null, timeoutMs: number = this.requestMs, executionHost?: string): Promise<RpcResponse> {
     this.requestCounter++;
     let id = `rpc-${this.requestCounter}-${Date.now()}`;
-    try { return this.requestRaw(id, this.buildWire(id, method, params), timeoutMs); }
+    try { return this.requestRaw(id, this.buildWire(id, method, params, executionHost), timeoutMs); }
     catch (e) { return Promise.resolve(new RpcFailure(id, 'invalid-params', 'invalid request params')); }
   }
 

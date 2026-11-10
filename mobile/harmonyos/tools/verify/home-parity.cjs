@@ -72,6 +72,69 @@ test('agent activity stays scoped to its desktop and a settled write cannot roll
   assert.equal(queue.snapshot('a')['a:same-pane'], undefined)
 })
 
+test('agent activity sends local and delegated pane changes to their exact owners', async () => {
+  const peer = createRpcPeer()
+  const { AgentActivityWrites, planAgentActivity } = loadArkts(
+    'home/AgentActivityWrites.ets',
+    ['AgentActivityWrites', 'planAgentActivity'],
+    { RpcSuccess: peer.RpcSuccess }
+  )
+  const entry = (paneKey, owner) => ({
+    worktreeId: `workspace-${paneKey}`,
+    executionHostId: owner || 'local',
+    executionHost: owner,
+    agent: { paneKey }
+  })
+  const local = entry('local-pane', '')
+  const delegated = entry('remote-pane', 'runtime:server%2Fone')
+  const duplicate = entry('shared-pane', '')
+  const moved = entry('moved-pane', '')
+  const row = (value) => ({ hostId: 'paired-desktop', unread: true, entry: value })
+  const plan = planAgentActivity([local, delegated, duplicate, moved].map(row), true, () => [
+    local,
+    delegated,
+    duplicate,
+    entry('shared-pane', 'runtime:server%2Fone'),
+    entry('moved-pane', 'runtime:server%2Fone')
+  ])
+  assert.equal(plan.unavailable, true)
+
+  const queue = new AgentActivityWrites(() => {})
+  const client = new peer.SpikeRpcClient()
+  await client.connect('ws://127.0.0.1:6768', 'token', 'key')
+  try {
+    const run = (batch) =>
+      queue.write(
+        batch.hostId,
+        batch.paneKeys,
+        true,
+        client,
+        () => true,
+        async () => {},
+        batch.executionHost || undefined
+      )
+    const writes = Array.from(plan.batches, run)
+    const sent = () =>
+      peer.sent
+        .map((frame) => JSON.parse(frame))
+        .filter((frame) => frame.method === 'agentActivity.setRead')
+    for (const [index, paneKey, executionHost] of [
+      [0, 'local-pane', undefined],
+      [1, 'remote-pane', 'runtime:server%2Fone']
+    ]) {
+      await new Promise(setImmediate)
+      const request = sent()[index]
+      assert.deepEqual(request.params, { paneKeys: [paneKey], read: true })
+      assert.equal(request.executionHost, executionHost)
+      peer.receiveText(JSON.stringify({ id: request.id, ok: true, result: { applied: true } }))
+    }
+    assert.deepEqual(await Promise.all(writes), ['', ''])
+    assert.equal(sent().length, 2)
+  } finally {
+    client.close()
+  }
+})
+
 test('agents in matching local and SSH workspaces remain in separate workspace and project groups', () => {
   const catalog = readHomeCatalog(
     JSON.stringify({
