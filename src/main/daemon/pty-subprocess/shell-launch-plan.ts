@@ -195,7 +195,7 @@ export async function createPtyShellLaunchPlan(
   } else {
     rescrubDaemonPtyEnvironment(env, opts)
     // Resolving a bare pwsh is not a fallback: no warning, and SHELL stays the user's login shell.
-    const preferredShellPath = await resolvePosixPaneShellPath(shellPath, env.PATH, spawnCwd)
+    const preferredShellPath = await resolvePosixPaneShellPath(shellPath, env.PATH)
     shellPath = preferredShellPath
     shellPath = resolveUnixShellPath(shellPath)
     if (shellPath !== preferredShellPath) {

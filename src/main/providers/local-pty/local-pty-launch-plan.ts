@@ -263,7 +263,7 @@ export function createLocalPtyLaunchPlan(
     })
   return needsPosixPaneShellResolution(requestedShellPath)
     ? new DeferredLocalPtyLaunchPlan(
-        resolvePosixPaneShellPath(requestedShellPath, args.env?.PATH, cwd),
+        resolvePosixPaneShellPath(requestedShellPath, args.env?.PATH),
         finish
       )
     : finish(requestedShellPath)
