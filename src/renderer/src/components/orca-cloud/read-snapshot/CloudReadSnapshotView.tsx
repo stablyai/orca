@@ -1,5 +1,5 @@
 import React from 'react'
-import { Loader2, Moon, Play } from 'lucide-react'
+import { Cloud, Loader2, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -143,7 +143,7 @@ export function CloudReadSnapshotView(props: CloudReadSnapshotViewProps): React.
       data-cloud-read-view={state.kind}
     >
       <CloudWorkspaceHeader
-        icon={Moon}
+        icon={Cloud}
         title={props.title}
         state={waking ? 'waking' : 'sleeping'}
         stateLine={

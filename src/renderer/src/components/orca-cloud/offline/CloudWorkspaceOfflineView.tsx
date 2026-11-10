@@ -1,5 +1,5 @@
 import React from 'react'
-import { Moon, Play, SquareTerminal } from 'lucide-react'
+import { Cloud, Play, SquareTerminal } from 'lucide-react'
 import type {
   CloudOfflineSnapshot,
   CloudQueuedPrompt
@@ -57,7 +57,7 @@ export function CloudWorkspaceOfflineView(props: CloudOfflineViewProps): React.J
       data-cloud-offline-view=""
     >
       <CloudWorkspaceHeader
-        icon={Moon}
+        icon={Cloud}
         title={props.workspaceName ?? t('orcaCloudWorkspace.thisWorkspaceTitle', 'This workspace')}
         state="sleeping"
         stateLine={stateLine}
