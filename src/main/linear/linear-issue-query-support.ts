@@ -16,6 +16,7 @@ import {
 } from './linear-issue-query-documents'
 import type { LinearClientForWorkspace } from './client'
 import type { LinearListFilter } from './linear-issue-listing'
+import { linearConnectionHasNextPage } from './issue-context/pagination'
 
 export async function mapIssueForWorkspace(
   entry: LinearClientForWorkspace,
@@ -109,7 +110,7 @@ export async function readIssueConnectionPages(
     const connection = await loadConnection(after ? { first, after } : { first })
     const nodes = connection?.nodes ?? []
     items.push(...nodes.map((issue) => mapRawIssueForWorkspace(entry, issue)))
-    hasMore = Boolean(connection?.pageInfo?.hasNextPage)
+    hasMore = linearConnectionHasNextPage(connection)
 
     const nextCursor = connection?.pageInfo?.endCursor ?? undefined
     if (!hasMore || !nextCursor || nextCursor === after || nodes.length === 0) {
