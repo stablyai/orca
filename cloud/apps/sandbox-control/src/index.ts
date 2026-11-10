@@ -44,6 +44,7 @@ import { revokeWorkspaceTokens } from './api/keys'
 import { provisionWorkspaceToken } from './api/settings'
 import { docsPage, openApiDocument } from './api/openapi'
 import { handleDeviceSessionsRoute } from './device-sessions'
+import { removeMember } from './member-removal'
 import { createRoutinesApi } from './routines/api'
 import { handleRoutineHook, isRoutineHookPath } from './routines/hooks'
 import { tickRoutines } from './routines/runs'
@@ -120,7 +121,6 @@ import {
   recordOwnerDeviceAndSync,
   revokeForAccessChange,
   revokeGrantsForDeviceSession,
-  revokeGrantsForMember,
   revokeOne
 } from './grants'
 import { getOrgPrompts, putOrgPrompts } from './org-prompts'
@@ -795,12 +795,14 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         return json({ stored: true, expiresAt: minted.expiresAt })
       }
       if (url.pathname === '/v1/internal/org-members/removed' && request.method === 'POST') {
-        // Auth pushes this when a member leaves or is removed: every device they paired is revoked.
+        // Auth pushes this when a member leaves or is removed: everything of theirs stops acting for them.
         const body = MemberRemovedSchema.safeParse(await readJson(request))
         if (!body.success) {
           return fail('invalid_request', 400)
         }
-        return json(await revokeGrantsForMember(life, body.data.accountId, body.data.userId))
+        // Same cleanup as /v1/internal/members/removed: keys, phones, workspace grants and routines.
+        const removal = await removeMember(life, body.data.accountId, body.data.userId, life.now(), body.data.changedAt)
+        return json({ revoked: removal.grantsRevoked, queued: removal.grantsQueued, ...removal })
       }
       return (
         (await handleOperator(request, url.pathname, {
@@ -1221,7 +1223,9 @@ const DevMemberGitHubSchema = z
 const MemberRemovedSchema = z
   .object({
     accountId: z.string().min(1).max(160).regex(/^(org|dev:org):[A-Za-z0-9_.:-]+$/),
-    userId: z.string().min(1).max(128).regex(/^[A-Za-z0-9_.:-]+$/)
+    userId: z.string().min(1).max(128).regex(/^[A-Za-z0-9_.:-]+$/),
+    /** Auth's time of the removal (ms); tokens issued up to then stop working. */
+    changedAt: z.number().int().positive().optional()
   })
   .strict()
 

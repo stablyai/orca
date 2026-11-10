@@ -249,3 +249,17 @@ export async function renameCloudWorkspace(
     }
   ).catch(() => undefined)
 }
+
+export type CloudRole = 'owner' | 'admin' | 'member'
+
+const MeSchema = z.object({ role: z.enum(['owner', 'admin', 'member']) }).passthrough()
+
+/** This phone's team role (a personal account is its own owner); picks who an error sends you to. */
+export async function readCloudRole(
+  plane: CloudControlPlane,
+  signal?: AbortSignal
+): Promise<CloudRole> {
+  // Short: the denial is already known and unknown falls back to member copy, so never hold it up.
+  const me = await request(plane, 'GET', '/v1/me', MeSchema, { timeoutMs: 3_000, signal })
+  return me.role
+}

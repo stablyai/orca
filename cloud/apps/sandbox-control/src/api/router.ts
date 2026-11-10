@@ -148,7 +148,11 @@ export async function handleApi(request: Request, url: URL, env: Parameters<type
   if (caller.via === 'session' || caller.via === 'device') {
     // Labels for teammates, and the live role capping this member's keys and grants. Best effort.
     await rememberCallerName(ctx.db, caller, ctx.now()).catch(() => undefined)
-    await syncRoleFromSession(ctx.db, caller, ctx.now()).catch(() => undefined)
+    // Only a live session carries the live role; a phone's role is a stored snapshot, and syncing
+    // from it would hand a demoted member's keys their old role back.
+    if (caller.via === 'session') {
+      await syncRoleFromSession(ctx.db, caller, ctx.now()).catch(() => undefined)
+    }
   }
   return handleApiAs(caller, request, url, ctx)
 }

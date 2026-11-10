@@ -13,6 +13,16 @@ import type { HostedSandboxConfig } from './hosted-sandbox-config'
 
 const EnrollResponseSchema = z.object({ deviceSession: OrcaCloudDeviceSessionSchema })
 
+const StaleTokenSchema = z.object({ error: z.literal('stale_token') })
+
+async function isStaleToken(response: Response): Promise<boolean> {
+  const body: unknown = await response
+    .clone()
+    .json()
+    .catch(() => null)
+  return StaleTokenSchema.safeParse(body).success
+}
+
 export function createHostedSandboxDeviceEnroller(
   config: HostedSandboxConfig,
   fetchImpl: typeof fetch = fetch
@@ -40,7 +50,16 @@ export function createHostedSandboxDeviceEnroller(
   }
   return {
     enroll: async (params) => {
-      const response = await send('POST', '/v1/device-sessions', params)
+      let response = await send('POST', '/v1/device-sessions', params)
+      // Our cached token predates a role change for this user: mint a fresh one and ask once more.
+      if (
+        response?.status === 403 &&
+        config.invalidateAccessToken &&
+        (await isStaleToken(response))
+      ) {
+        config.invalidateAccessToken()
+        response = await send('POST', '/v1/device-sessions', params)
+      }
       if (response?.status === 401) {
         throw new Error(ORCA_CLOUD_ENROLLMENT_SIGNED_OUT)
       }

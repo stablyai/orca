@@ -9,6 +9,7 @@
 import { decodeProtectedHeader, importJWK, jwtVerify } from 'jose'
 import { z } from 'zod'
 import type { OrgRole, SandboxCaller } from './auth'
+import { tokenPredatesMemberChange } from './member-changes'
 
 export const DEVICE_TOKEN_ISSUER = 'orca-device'
 const SESSION_ID = /^ds_[A-Za-z0-9_-]{22}$/
@@ -66,7 +67,7 @@ export const EnrollRequestSchema = z
 
 export class DeviceSessionError extends Error {
   constructor(
-    readonly code: 'forbidden' | 'not_found' | 'limit_reached' | 'conflict' | 'key_revoked',
+    readonly code: 'forbidden' | 'not_found' | 'limit_reached' | 'conflict' | 'key_revoked' | 'stale_token',
     readonly status: number
   ) {
     super(code)
@@ -103,6 +104,12 @@ function isLive(row: DeviceSessionRow, now: number): boolean {
   return row.revoked_at === null && row.expires_at > now && row.refreshed_at + MAX_UNREFRESHED_MS > now
 }
 
+/** For checks after a slow step: is the phone that started it still allowed in? */
+export async function isDeviceSessionLive(db: D1Database, id: string, now: number): Promise<boolean> {
+  const row = await getRow(db, id)
+  return row !== null && isLive(row, now)
+}
+
 /** Dev operator tokens share `sub` values with real users; their devices live in a separate namespace. */
 function ownsRow(caller: SandboxCaller, row: DeviceSessionRow): boolean {
   return row.user_id === caller.userId && row.dev === (caller.dev ? 1 : 0)
@@ -129,6 +136,11 @@ export async function enrollDeviceSession(
   if (caller.deviceSessionId) {
     // A phone must not mint more phones: enrollment needs the user's own signed-in desktop.
     throw new DeviceSessionError('forbidden', 403)
+  }
+  if (await tokenPredatesMemberChange(db, caller)) {
+    // Minted before auth's last role change or removal for this member: its role or membership is
+    // stale, so it may neither vouch for a new phone nor refresh an existing one's snapshot.
+    throw new DeviceSessionError('stale_token', 403)
   }
   const { results: sameKey } = await db
     .prepare('SELECT * FROM device_sessions WHERE public_key = ?')
@@ -197,6 +209,36 @@ export async function revokeDeviceSession(db: D1Database, caller: SandboxCaller,
     .run()
   console.log(JSON.stringify({ event: 'device_session_revoked', id, by: caller.deviceSessionId ? 'device' : 'user' }))
   return (await getRow(db, id))!
+}
+
+/**
+ * A member left or was removed from the account: every phone they enrolled there stops at once
+ * (the 14-day re-vouch is only the backstop). Their workspace grants are revoked separately.
+ */
+export async function revokeMemberDeviceSessions(db: D1Database, accountId: string, userId: string, now: number): Promise<number> {
+  const result = await db
+    .prepare(`UPDATE device_sessions SET revoked_at = ?, revoked_by = 'system:member_removed' WHERE account_id = ? AND user_id = ? AND revoked_at IS NULL`)
+    .bind(now, accountId, userId)
+    .run()
+  if (result.meta.changes > 0) {
+    console.log(JSON.stringify({ event: 'device_sessions_revoked_member_removed', count: result.meta.changes }))
+  }
+  return result.meta.changes
+}
+
+/**
+ * The member's role changed: their phones act with the new role from the next request (the stored
+ * snapshot is what a device token authenticates as), so a demotion takes effect on phones too.
+ */
+export async function syncDeviceSessionRole(db: D1Database, accountId: string, userId: string, role: OrgRole): Promise<number> {
+  const result = await db
+    .prepare(
+      `UPDATE device_sessions SET org_role = ?
+       WHERE account_id = ? AND user_id = ? AND org_id IS NOT NULL AND revoked_at IS NULL AND (org_role IS NULL OR org_role <> ?)`
+    )
+    .bind(role, accountId, userId, role)
+    .run()
+  return result.meta.changes
 }
 
 /** True when the bearer looks like a device-signed token (cheap header check, no verification). */

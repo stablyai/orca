@@ -38,6 +38,7 @@ import {
   useSeedCloudWorkspace
 } from './use-cloud-workspaces'
 import { nextCloudWorkspaceTitle } from './cloud-workspace-display'
+import { roleForCloudError } from './cloud-entitlement-copy'
 import { createErrorMessage } from './cloud-workspace-copy'
 
 type Size = 'standard' | 'large'
@@ -114,9 +115,13 @@ export function NewCloudWorkspaceScreen() {
         return
       }
       await forgetRevokedCloudSession(failure, removal)
+      const role = await roleForCloudError(failure, plane)
       creatingRef.current = false
+      if (!mountedRef.current) {
+        return
+      }
       setStartedAt(null)
-      setError(createErrorMessage(failure, t))
+      setError(createErrorMessage(failure, t, role))
       return
     }
     // The sandbox exists from here on: nothing below may report "couldn't create" or create again.

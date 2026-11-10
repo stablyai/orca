@@ -4963,9 +4963,7 @@
       "pairing": "The workspace is running, but this phone couldn’t connect to it. Your files are safe.",
       "failed": "The workspace couldn’t start. Try again, or open it on your desktop.",
       "revoked": "This phone’s Orca Cloud access ended. Connect it again from Home.",
-      "entitlement": "Out of sandbox hours. Ask an owner or admin to add hours, then try again.",
       "network": "Couldn’t reach Orca Cloud. Check your connection and try again.",
-      "concurrency": "You’re at your team’s limit of running sandboxes. Put one to sleep or delete it, then try again.",
       "clone": "Couldn’t clone the repository. Check the name and that the Orca Cloud GitHub app can see it. Nothing was created, and you weren’t charged.",
       "createUnknown": "Lost the connection while starting it. It may still appear in your list. Try again to pick it up.",
       "rateLimited": "Too many new workspaces at once. Wait a minute, then try again.",
@@ -5047,6 +5045,33 @@
       "subtitle": "Open cloud workspaces from this phone, even when {{desktop}} is off. Uses its Orca sign-in once.",
       "noDesktop": "Open Orca on a computer you’re signed in to, then connect from here.",
       "title": "Connect Orca Cloud"
+    },
+    "denied": {
+      "hours": "Out of sandbox hours.",
+      "cap": "Spend cap reached.",
+      "payment": "Payment failed, so new sandboxes can’t start.",
+      "plan": "Orca Cloud needs a Team plan.",
+      "teamLimit": "Your team is at its limit of running sandboxes (3 per seat).",
+      "memberLimit": "You’re at your limit of running sandboxes.",
+      "other": "Your team’s plan doesn’t allow this right now.",
+      "next": {
+        "limit": "Put one to sleep or delete it, then try again.",
+        "hoursAdmin": "Turn on overage in Orca on your computer, then try again.",
+        "hoursMember": "Ask an owner or admin to add hours.",
+        "capAdmin": "Raise the spend cap in Orca on your computer, then try again.",
+        "capMember": "Ask an owner or admin to raise the spend cap.",
+        "paymentAdmin": "Update the payment method in Orca on your computer.",
+        "paymentMember": "Ask an owner or admin to update the payment method.",
+        "planAdmin": "Choose a plan in Orca on your computer.",
+        "planMember": "Ask an owner or admin to choose a plan.",
+        "otherAdmin": "Check billing in Orca on your computer.",
+        "otherMember": "Ask an owner or admin to check billing."
+      },
+      "message": "{{problem}} {{safety}} {{next}}",
+      "safety": {
+        "create": "Nothing was created, and you weren’t charged.",
+        "existing": "Your files are safe."
+      }
     }
   }
 }

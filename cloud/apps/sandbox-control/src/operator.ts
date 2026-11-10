@@ -6,7 +6,7 @@
 //   POST   /v1/internal/github/bindings {installationId, accountId}   support binding (audited as `operator`)
 //   DELETE /v1/internal/github/bindings {installationId, accountId?}
 //   POST   /v1/internal/members/role-changed {accountId, userId, role}   re-cap their keys and MCP grants (auth calls this)
-//   POST   /v1/internal/members/removed {accountId, userId}   revoke a departed member's API keys, disable their routines (auth calls this)
+//   POST   /v1/internal/members/removed {accountId, userId}   revoke a departed member's keys, phones and workspace grants, disable their routines (auth calls this)
 import { z } from 'zod'
 import { audit } from './api/audit'
 import { syncMemberRole } from './api/member-role-sync'
@@ -16,7 +16,8 @@ import { bindInstallation, revokeInstallation, timingSafeEqual } from './github-
 import { countAllActive, getControlState, killSwitchOn, setKillSwitch } from './guardrails'
 import { guardrails, type LifecycleDeps } from './lifecycle'
 import { drainAll, housekeeping } from './retention'
-import { disableMemberRoutines } from './routines/runs'
+import { memberChangeTime, recordMemberChange } from './member-changes'
+import { removeMember } from './member-removal'
 import { listByStatus } from './store'
 
 const KillSwitchBody = z.object({ enabled: z.boolean(), drain: z.boolean().optional() }).strict()
@@ -30,8 +31,10 @@ const BindingBody = z
   })
   .strict()
   .refine((body) => (body.installationId === undefined) !== (body.repoUrl === undefined))
-const MemberRemovedBody = z.object({ accountId: AccountId, userId: z.string().min(1).max(128) }).strict()
-const RoleChangedBody = z.object({ accountId: AccountId, userId: z.string().min(1).max(128), role: z.enum(['owner', 'admin', 'member']) }).strict()
+// `changedAt`: auth's time of the change (ms), so tokens auth issued up to then count as stale.
+const ChangedAt = z.number().int().positive().optional()
+const MemberRemovedBody = z.object({ accountId: AccountId, userId: z.string().min(1).max(128), changedAt: ChangedAt }).strict()
+const RoleChangedBody = z.object({ accountId: AccountId, userId: z.string().min(1).max(128), role: z.enum(['owner', 'admin', 'member']), changedAt: ChangedAt }).strict()
 const UnbindBody = z.object({ installationId: z.number().int().positive(), accountId: AccountId.optional() }).strict()
 
 async function digest(value: string): Promise<Uint8Array> {
@@ -123,6 +126,8 @@ export async function handleOperator(
       if (!body.success) {
         return Response.json({ error: 'invalid_request' }, { status: 400 })
       }
+      // First, so a desktop token minted before the change can't sync the old role back.
+      await recordMemberChange(life.db, body.data.accountId, body.data.userId, 'role', memberChangeTime(now, body.data.changedAt))
       const updated = await syncMemberRole(life.db, body.data.accountId, body.data.userId, body.data.role)
       await audit(life.db, { accountId: body.data.accountId, type: 'system', id: 'auth', userId: body.data.userId }, { action: 'member.role_changed', detail: { role: body.data.role, keysUpdated: updated } }, now)
       return Response.json({ updated })
@@ -132,20 +137,9 @@ export async function handleOperator(
       if (!body.success) {
         return Response.json({ error: 'invalid_request' }, { status: 400 })
       }
-      // A key acts as the person who made it: once they leave the org, none of theirs may work.
-      const result = await life.db
-        .prepare(`UPDATE api_keys SET revoked_at = ?, revoked_by = 'system:member_removed' WHERE account_id = ? AND created_by = ? AND revoked_at IS NULL`)
-        .bind(now, body.data.accountId, body.data.userId)
-        .run()
-      // MCP OAuth tokens are api_keys rows (revoked above); pending codes and approvals die too.
-      await life.db.batch([
-        life.db.prepare('UPDATE oauth_codes SET consumed_at = ? WHERE account_id = ? AND user_id = ? AND consumed_at IS NULL').bind(now, body.data.accountId, body.data.userId),
-        life.db.prepare('UPDATE oauth_approvals SET consumed_at = ? WHERE account_id = ? AND user_id = ? AND consumed_at IS NULL').bind(now, body.data.accountId, body.data.userId)
-      ])
-      // Routines run with their creator's secrets: a departed member's stop, and nothing of theirs keeps running.
-      const routines = await disableMemberRoutines({ life }, body.data.accountId, body.data.userId)
-      await audit(life.db, { accountId: body.data.accountId, type: 'system', id: 'auth', userId: body.data.userId }, { action: 'member.removed', detail: { keysRevoked: result.meta.changes, routinesDisabled: routines.disabled, runsCancelled: routines.cancelled } }, now)
-      return Response.json({ revoked: result.meta.changes, routinesDisabled: routines.disabled })
+      // Same cleanup as /v1/internal/org-members/removed: whichever auth calls, nothing of theirs survives.
+      const removal = await removeMember(life, body.data.accountId, body.data.userId, now, body.data.changedAt)
+      return Response.json({ revoked: removal.keysRevoked, ...removal })
     }
     default:
       return null

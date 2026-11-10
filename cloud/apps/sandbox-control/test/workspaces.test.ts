@@ -232,7 +232,27 @@ describe('workspace grants (E2EE pairing through the control plane)', () => {
     await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })
     await t.req(t.bob, 'POST', `/v1/team/workspaces/${t.id}/grants`, { recipientPublicKeyB64: generateGrantRecipientKey().publicKeyB64, deviceLabel: 'b', deviceKind: 'desktop' })
     const res = await t.h.call('POST', '/v1/internal/org-members/removed', { bearer: 'o'.repeat(40), body: { accountId: 'org:acme', userId: 'bob' } })
-    expect(res.body).toEqual({ revoked: 1, queued: 0 })
+    expect(res.body).toEqual({ revoked: 1, queued: 0, keysRevoked: 0, devicesRevoked: 0, grantsRevoked: 1, grantsQueued: 0, routinesDisabled: 0 })
+  })
+})
+
+describe('grant races', () => {
+  it('a removal that lands while the grant is being issued wins: the new device is killed, not activated', async () => {
+    const t = await team()
+    await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })
+    const box = [...t.h.vercel.boxes.values()][0]!
+    t.h.vercel.commandHandler = (params) => {
+      if (params.command === GRANT_COMMAND) {
+        // The concurrent revoke sees an `issuing` row with no device id yet: nothing to kill on the VM.
+        t.h.raw.prepare(`UPDATE workspace_grants SET status = 'revoked', revoked_by = 'system', revoke_reason = 'member_removed' WHERE status = 'issuing'`).run()
+      }
+      return undefined
+    }
+    const res = await t.req(t.bob, 'POST', `/v1/team/workspaces/${t.id}/grants`, { recipientPublicKeyB64: generateGrantRecipientKey().publicKeyB64, deviceLabel: 'b', deviceKind: 'desktop' })
+    expect(res.status).toBe(404)
+    const rows = t.h.raw.prepare(`SELECT status, revoke_reason, orcad_device_id FROM workspace_grants WHERE user_id = 'bob'`).all() as { status: string; revoke_reason: string; orcad_device_id: string }[]
+    expect(rows).toEqual([{ status: 'revoked', revoke_reason: 'member_removed', orcad_device_id: expect.stringMatching(/^dev-grant/) }])
+    expect(box.devices).not.toContain(rows[0]!.orcad_device_id)
   })
 })
 

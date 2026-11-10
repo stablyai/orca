@@ -18,6 +18,8 @@ import { EnvironmentProviderError } from '../environment-providers/environment-p
 export type HostedSandboxConfig = {
   controlPlaneUrl: string
   getAccessToken: (signal?: AbortSignal) => Promise<string>
+  /** Drops the cached token so the next call mints one (the control plane said it predates a role change). */
+  invalidateAccessToken?: () => void
 }
 
 const SandboxTokenBody = z.object({
@@ -117,6 +119,10 @@ export function getHostedSandboxConfig(
         cached = { ...minted, identity, generation }
         return minted.token
       }
+    },
+    invalidateAccessToken: () => {
+      // A fresh mint on the next call; one already in flight is fresh anyway.
+      cached = null
     }
   }
 }

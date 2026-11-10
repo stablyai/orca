@@ -189,7 +189,7 @@ describe('member removal', () => {
     const { secret } = (await h.call('POST', '/v1/api-keys', { bearer: member, body: { name: 'bob ci', scopes: ['workspaces:read'] } })).body
     expect((await h.call('GET', '/v1/me', { bearer: secret })).status).toBe(200)
     const removed = await h.call('POST', '/v1/internal/members/removed', { bearer: 'o'.repeat(40), body: { accountId: 'org:acme', userId: 'bob' } })
-    expect(removed.body).toEqual({ revoked: 1, routinesDisabled: 0 })
+    expect(removed.body).toEqual({ revoked: 1, keysRevoked: 1, devicesRevoked: 0, grantsRevoked: 0, grantsQueued: 0, routinesDisabled: 0 })
     expect((await h.call('GET', '/v1/me', { bearer: secret })).status).toBe(401)
   })
 })

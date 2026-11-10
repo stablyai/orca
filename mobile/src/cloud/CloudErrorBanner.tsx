@@ -10,7 +10,8 @@ export function CloudErrorBanner(props: { message: string; onRetry: (() => void)
   useMobileColorScheme()
   const t = useMobileTranslation()
   return (
-    <View style={styles.errorBanner} accessibilityRole="alert">
+    // Android announces a live region, not the alert role alone.
+    <View style={styles.errorBanner} accessibilityRole="alert" accessibilityLiveRegion="assertive">
       <CircleAlert size={18} color={colors.statusRed} strokeWidth={2} />
       <Text style={styles.errorText}>{props.message}</Text>
       {props.onRetry ? (

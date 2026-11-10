@@ -1,13 +1,19 @@
 import type { Translate } from '../i18n/mobile-i18n'
 import { isRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
-import type { CloudWorkspace } from './cloud-control-plane-client'
+import type { CloudRole, CloudWorkspace } from './cloud-control-plane-client'
 import { CloudRequestError } from './cloud-control-plane-request'
 import { CloudAttachError, type CloudAttachPhase } from './cloud-workspace-attach'
+import { entitlementDeniedMessage } from './cloud-entitlement-copy'
 import { formatElapsed } from './cloud-workspace-display'
 
 // What the cloud workspace screen says about each state and failure.
 
-export function attachErrorMessage(error: unknown, t: Translate): string {
+/** `role` (read only for plan denials) picks the next step: fix it yourself, or ask an owner or admin. */
+export function attachErrorMessage(
+  error: unknown,
+  t: Translate,
+  role: CloudRole | null = null
+): string {
   if (error instanceof CloudAttachError) {
     switch (error.code) {
       case 'archived':
@@ -45,10 +51,7 @@ export function attachErrorMessage(error: unknown, t: Translate): string {
       )
     }
     if (error.code === 'entitlement_denied') {
-      return t(
-        'cloud.error.entitlement',
-        'Out of sandbox hours. Ask an owner or admin to add hours, then try again.'
-      )
+      return entitlementDeniedMessage(error, role, 'existing', t)
     }
     if (error.code === 'network_error' || error.code === 'timeout') {
       return t(
@@ -129,7 +132,11 @@ export function cloudPromptErrorMessage(code: string | undefined, t: Translate):
   }
 }
 
-export function createErrorMessage(error: unknown, t: Translate): string {
+export function createErrorMessage(
+  error: unknown,
+  t: Translate,
+  role: CloudRole | null = null
+): string {
   if (error instanceof CloudRequestError) {
     if (error.status === 401) {
       return t(
@@ -138,15 +145,7 @@ export function createErrorMessage(error: unknown, t: Translate): string {
       )
     }
     if (error.code === 'entitlement_denied') {
-      return error.reason === 'concurrency_limit'
-        ? t(
-            'cloud.error.concurrency',
-            'You’re at your team’s limit of running sandboxes. Put one to sleep or delete it, then try again.'
-          )
-        : t(
-            'cloud.error.entitlement',
-            'Out of sandbox hours. Ask an owner or admin to add hours, then try again.'
-          )
+      return entitlementDeniedMessage(error, role, 'create', t)
     }
     if (error.code === 'provider_unavailable' && error.reason === 'orcad_start_failed') {
       return t(
