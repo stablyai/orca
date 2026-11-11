@@ -81,6 +81,26 @@ function SavedChanges({
   now: number
 }): React.JSX.Element {
   const t = useTranslate()
+  const time = at
+    ? t('orcaCloudWorkspace.ago', '{{ago}} ago', { ago: formatElapsedTime(Math.max(0, now - at)) })
+    : null
+  // A clean tree has nothing to list: say so rather than a "Changed files" heading over none.
+  if (git.changes.length === 0 && git.changeCount === 0) {
+    return (
+      <p className="text-muted-foreground">
+        {time
+          ? t(
+              'orcaCloudWorkspace.files.noChangesAtSleep',
+              'No files had changed when this workspace went to sleep · {{time}}',
+              { time }
+            )
+          : t(
+              'orcaCloudWorkspace.files.noChangesAtSleepNoTime',
+              'No files had changed when this workspace went to sleep'
+            )}
+      </p>
+    )
+  }
   return (
     <section className="flex flex-col gap-1.5">
       <h3 className="font-medium text-foreground">

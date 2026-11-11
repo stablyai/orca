@@ -1,0 +1,76 @@
+// @vitest-environment happy-dom
+
+import { cleanup, render } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { seedCloudWorkspaceSnapshot } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import type { HostedWorkspaceStatus } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
+import { RUNTIME_ENVIRONMENT_ASLEEP_MESSAGE } from '../../../../shared/remote-runtime/recipe-vm-wake'
+import { TerminalErrorToast } from '../terminal-pane/errors/TerminalErrorToast'
+
+vi.mock('@/components/sidebar/workspace-actions/sleep/use-worktree-sleep-state', () => ({
+  useIsSleepingWorktree: () => false
+}))
+
+const status = (state: HostedWorkspaceStatus['state']): HostedWorkspaceStatus => ({
+  state,
+  metrics: null,
+  uptimeMs: null,
+  usage: { totalMs: 0, centsPerHour: 100, costCents: 0 },
+  archive: null,
+  checkedAt: Date.now()
+})
+
+function seed(state: HostedWorkspaceStatus['state']): void {
+  seedCloudWorkspaceSnapshot({
+    ids: new Set(['ws']),
+    idsLoaded: true,
+    status: { ws: { status: status(state), loading: false, error: null, fetchedAt: Date.now() } }
+  })
+}
+
+const toast = (worktreeId: string, error: string) => (
+  <TerminalErrorToast
+    worktreeId={worktreeId}
+    error={error}
+    paneOnClient={false}
+    onDismiss={() => {}}
+  />
+)
+
+afterEach(() => {
+  cleanup()
+  seedCloudWorkspaceSnapshot({})
+})
+
+describe('terminal error toast on an Orca Cloud workspace that sleeps', () => {
+  it('shows nothing while it wakes: the waking pill owns that state', () => {
+    seed('waking')
+    const { container } = render(toast('ws', RUNTIME_ENVIRONMENT_ASLEEP_MESSAGE))
+    expect(container.textContent).toBe('')
+  })
+
+  it('asleep: a neutral line, no red error and no "file an issue" (also for the old "VM" wording)', () => {
+    seed('sleeping')
+    for (const error of [
+      RUNTIME_ENVIRONMENT_ASLEEP_MESSAGE,
+      "This workspace's VM is asleep. Open the workspace to wake it."
+    ]) {
+      const { container, unmount } = render(toast('ws', error))
+      expect(container.querySelector('[data-cloud-asleep-terminal-notice]')?.textContent).toBe(
+        'This workspace is asleep. Open it to wake it.'
+      )
+      expect(container.textContent).not.toContain('file an issue')
+      expect(container.querySelector('[data-terminal-error-toast]')).toBeNull()
+      unmount()
+    }
+  })
+
+  it('leaves other workspaces and other errors to the regular toast', () => {
+    seed('sleeping')
+    const other = render(toast('local-ws', RUNTIME_ENVIRONMENT_ASLEEP_MESSAGE))
+    expect(other.container.querySelector('[data-terminal-error-toast]')).not.toBeNull()
+    other.unmount()
+    const unrelated = render(toast('ws', 'spawn failed: ENOENT'))
+    expect(unrelated.container.querySelector('[data-terminal-error-toast]')).not.toBeNull()
+  })
+})

@@ -27017,7 +27017,13 @@
       "asleep": "Files aren’t available while the workspace is asleep.",
       "changedAtSleep": "Changed files when this workspace went to sleep · {{time}}",
       "changedAtSleepNoTime": "Changed files when this workspace went to sleep",
-      "waking": "Waking… the files show when it’s up."
+      "waking": "Waking… the files show when it’s up.",
+      "noChangesAtSleep": "No files had changed when this workspace went to sleep · {{time}}",
+      "noChangesAtSleepNoTime": "No files had changed when this workspace went to sleep"
+    },
+    "terminal": {
+      "asleepNamed": "{{name}} is asleep. Open it to wake it.",
+      "asleep": "This workspace is asleep. Open it to wake it."
     }
   },
   "cloudAgentSetup": {
