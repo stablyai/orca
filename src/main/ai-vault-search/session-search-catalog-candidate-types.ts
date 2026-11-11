@@ -1,8 +1,12 @@
 import type { SessionSearchContainerRemoval } from './session-search-container-transition'
 import type { SessionSearchRemovalReceipt } from './session-search-observation-authority'
 import type { SessionSearchSnapshotRow } from './worker/session-search-worker-protocol'
-import type { SessionSearchWorkResult } from './session-search-work-queue'
+import type { SessionSearchWorkResult, SessionSearchWorkReceipt } from './session-search-work-queue'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
+import type {
+  SessionSearchPreparedObservation,
+  SessionSearchObservationInput
+} from './session-search-observation-types'
 import type {
   SessionSearchPublicationCommand,
   SessionSearchPublicationResult
@@ -35,6 +39,13 @@ export type SessionSearchDiscoveryTransfer = {
   recent: boolean
   recovering: boolean
 }
+export type SessionSearchReadPreparation = {
+  root?: string
+  revision?: number
+  version: number
+  receipt?: SessionSearchWorkReceipt
+  observation?: { scope: string; generation: number; input: SessionSearchObservationInput }
+}
 
 export type SessionSearchCandidateCommand =
   | { kind: 'publication-step' }
@@ -63,7 +74,12 @@ export type SessionSearchCandidateCommand =
       }[]
     }
   | { kind: 'unowned-page'; rows: { path: string; agent?: string | null }[] }
-  | { kind: 'path'; path: string; agent?: string | null; read?: boolean }
+  | {
+      kind: 'path'
+      path: string
+      agent?: string | null
+      read?: boolean | SessionSearchReadPreparation
+    }
   | { kind: 'group'; group: string; after?: string }
   | { kind: 'changes'; after?: string; root?: string; agent?: string }
   | { kind: 'rerank'; root: string; agent: string; order: [string, number][]; after?: string }
@@ -91,4 +107,6 @@ export type SessionSearchCandidateResult = SessionSearchPublicationResult & {
   work?: SessionSearchWorkResult
   unowned?: string[]
   scopeCounts?: [string, number, number][]
+  readRoot?: string
+  preparedRead?: SessionSearchPreparedObservation
 }

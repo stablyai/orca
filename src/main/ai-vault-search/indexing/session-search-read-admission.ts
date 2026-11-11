@@ -6,7 +6,24 @@ export async function admitSessionSearchRead(
   work: SessionSearchWork
 ): Promise<SessionSearchWork | undefined> {
   const { state, signal } = args
-  const admission = await state.candidates.readAdmission(work.candidate)
+  const preparation =
+    work.root === undefined
+      ? undefined
+      : state.discovery.readPreparation(
+          work.candidate,
+          work.root,
+          args.roots,
+          !!work.metadata && !work.force,
+          work.metadata
+        )
+  const admission = await state.candidates.readAdmission(work.candidate, {
+    root: work.root,
+    revision: state.queue.selectionRevision,
+    version: work.version,
+    receipt: work.receipt,
+    observation: preparation
+  })
+  state.discovery.acceptReadCounts(admission.scopeCounts)
   if (!state.queue.selectionCurrent(admission.work)) {
     return undefined
   }
@@ -26,7 +43,8 @@ export async function admitSessionSearchRead(
     rootDir,
     args.roots,
     !!work.metadata && !work.force,
-    work.metadata
+    work.metadata,
+    admission.prepared
   )
   if (observation === null) {
     return work

@@ -103,6 +103,13 @@ export class SessionSearchInventoryStorage extends SessionSearchInventoryMutatio
   }
   loadValue(owner: SessionSearchInventoryOwner, key: string): SessionSearchValueRow | undefined {
     const relation = sessionSearchInventoryRelation(owner.member)
+    if (
+      this.page &&
+      (relation.table === 'search_inventory_entries' ||
+        relation.table === 'search_inventory_activity')
+    ) {
+      return this.page.readValue(owner.source, owner.member, key, relation.table)
+    }
     const keyColumn = owner.member === 'observation-epochs' ? 'revision' : relation.key
     const raw = this.db.prepare(`${this.select(owner)} AND ${keyColumn}=?`).get(owner.source, key)
     return raw ? decodeSessionSearchInventoryValue(owner.member, raw) : undefined

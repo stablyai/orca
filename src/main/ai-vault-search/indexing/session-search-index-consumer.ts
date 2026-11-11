@@ -119,7 +119,8 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
             start.identity,
             start.indexing,
             signal,
-            start.metadataOnly
+            start.metadataOnly,
+            start.indexing ? start.searchWork : undefined
           )
         : this.store.beginWrite(
             candidate,
@@ -128,7 +129,8 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
             start.identity,
             start.indexing,
             signal,
-            start.metadataOnly
+            start.metadataOnly,
+            start.indexing ? start.searchWork : undefined
           )
     if (!write) {
       publication?.release()
@@ -234,7 +236,9 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
       this.write.discard()
     }
     if (committed) {
-      this.store.writeCommitted(candidate)
+      if (!this.start.searchWork?.settlement) {
+        this.store.writeCommitted(candidate)
+      }
       const acknowledge = (accepted: boolean) => {
         if (accepted && this.publication?.valid() !== false) {
           this.publication?.committed()

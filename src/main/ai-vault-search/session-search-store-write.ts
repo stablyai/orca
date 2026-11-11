@@ -1,3 +1,10 @@
+import type { SessionSearchReadContext } from './session-search-work-queue'
+import type { SessionSearchStore } from './storage/session-search-store'
+import {
+  bindSessionSearchReadSettlement,
+  invalidateSessionSearchAcceptedContent,
+  settleSessionSearchContent
+} from './session-search-content-settlement'
 import { initializeSessionSearchStorage } from './session-search-storage-bootstrap'
 import type { SessionSearchCatalogCandidates } from './session-search-catalog-candidates'
 import type {
@@ -98,8 +105,22 @@ export function admitSessionSearchStoreWrite(
   identity: (() => TranscriptSessionIdentity | null) | undefined,
   metadataOnly: boolean,
   row: () => SessionSearchFileRow | undefined,
-  closed: () => boolean
+  closed: () => boolean,
+  onContentAccepted?: (revision: string) => void,
+  context?: { read: SessionSearchReadContext; store: SessionSearchStore }
 ): SessionSearchFileWrite | null {
+  if (
+    context &&
+    !context.store.catalogWork.matches({
+      candidate,
+      version: context.read.receipt.version,
+      force: context.read.receipt.force,
+      metadata: context.read.receipt.metadata,
+      receipt: context.read.receipt
+    })
+  ) {
+    return null
+  }
   const admission = candidates?.admission(candidate)
   if (admission?.allowed === false || (metadataOnly && admission?.contentRequired)) {
     return null
@@ -115,10 +136,18 @@ export function admitSessionSearchStoreWrite(
     original,
     metadataOnly
   )
+  let reason: string | undefined
+  const onAccepted =
+    onContentAccepted ??
+    (context
+      ? (revision: string) => {
+          reason = revision
+        }
+      : undefined)
   const valid = () =>
     !closed() &&
     (!candidates || candidates.admission(candidate).revision === (admission?.revision ?? ''))
-  return {
+  const handle: SessionSearchFileWrite = {
     ...write,
     cancelled: () => !valid() || (write.cancelled?.() ?? false),
     add: (message) => {
@@ -138,15 +167,36 @@ export function admitSessionSearchStoreWrite(
       }
       const accepted = write.commit(outcome)
       if (accepted && admission) {
-        candidates?.execute({
-          kind: 'acknowledge',
-          path: candidate.file.path,
-          agent: candidate.agent,
-          revision: admission.revision,
-          metadataOnly
-        })
+        if (onAccepted) {
+          onAccepted(admission.revision)
+        } else {
+          candidates?.execute({
+            kind: 'acknowledge',
+            path: candidate.file.path,
+            agent: candidate.agent,
+            revision: admission.revision,
+            metadataOnly
+          })
+        }
       }
       return accepted
     }
   }
+  return context && !onContentAccepted
+    ? bindSessionSearchReadSettlement(
+        handle,
+        context.read,
+        () =>
+          reason === undefined
+            ? undefined
+            : settleSessionSearchContent(
+                context.store,
+                candidate,
+                reason,
+                metadataOnly,
+                context.read.receipt
+              ),
+        () => invalidateSessionSearchAcceptedContent(context.store, candidate.file.path)
+      )
+    : handle
 }

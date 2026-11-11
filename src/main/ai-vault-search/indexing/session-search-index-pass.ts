@@ -17,7 +17,11 @@ import {
   SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT
 } from './session-search-read-decision'
 import type { SessionSearchIndexStore } from '../storage/session-search-store-types'
-import type { SessionSearchWork, SessionSearchWorkQueue } from '../session-search-work-queue'
+import type {
+  SessionSearchReadContext,
+  SessionSearchWork,
+  SessionSearchWorkQueue
+} from '../session-search-work-queue'
 
 export async function runSessionSearchIndexPass(
   store: SessionSearchIndexStore,
@@ -52,6 +56,9 @@ export async function runSessionSearchIndexPass(
         continue
       }
     }
+    const read: SessionSearchReadContext | undefined = work.receipt
+      ? { receipt: work.receipt }
+      : undefined
     const { candidate } = work
     const path = candidate.file.path
     if (!options.admit || !store.coverageKnown?.(path)) {
@@ -83,7 +90,8 @@ export async function runSessionSearchIndexPass(
         stats,
         undefined,
         options.signal,
-        true
+        true,
+        read
       )
       let published: SessionSearchFileWrite | undefined
       const consumer = new SessionSearchIndexConsumer(
@@ -98,6 +106,7 @@ export async function runSessionSearchIndexPass(
         previousByteOffset: row.byteOffset,
         indexing: true,
         metadataOnly: true,
+        searchWork: read,
         signal: options.signal
       })
       if (consumer) {
@@ -107,17 +116,21 @@ export async function runSessionSearchIndexPass(
           prefixHash: row.prefixHash ?? undefined,
           incomplete: false
         })
-        await store.flush?.()
-        if (
-          published &&
-          !published.failed?.() &&
-          !published.cancelled?.() &&
-          store.fileRow(path)?.state === 'current'
-        ) {
-          await queue.acknowledge(work, false)
-          consumed++
-          continue
-        }
+      }
+      await store.flush?.()
+      if (await acceptReadSettlement(read, queue)) {
+        consumed++
+        continue
+      }
+      if (
+        published &&
+        !published.failed?.() &&
+        !published.cancelled?.() &&
+        store.fileRow(path)?.state === 'current'
+      ) {
+        await queue.acknowledge(work, false)
+        consumed++
+        continue
       }
       const failed = store.fileRow(path)
       await queue.acknowledge(
@@ -167,7 +180,8 @@ export async function runSessionSearchIndexPass(
         stats,
         decision,
         options.signal,
-        true
+        true,
+        read
       )
       await store.flush?.()
     } catch (error) {
@@ -187,6 +201,9 @@ export async function runSessionSearchIndexPass(
       }
       await store.flush?.()
     }
+    if (await acceptReadSettlement(read, queue)) {
+      continue
+    }
     const committed = store.fileRow(path)
     const remaining = sessionSearchReadDecision({
       candidate,
@@ -195,7 +212,20 @@ export async function runSessionSearchIndexPass(
       cutoffMs: store.retentionCutoff
     })
     await queue.acknowledge(work, remaining !== 'skip')
-    await queue.rowChanged(path, committed)
   }
   return { stats, outOfTime, left: queue.left }
+}
+
+async function acceptReadSettlement(
+  read: SessionSearchReadContext | undefined,
+  queue: SessionSearchWorkQueue
+): Promise<boolean> {
+  const result = await read?.settlement
+  if (!result) {
+    return false
+  }
+  if (result.work) {
+    queue.update(result.work)
+  }
+  return true
 }

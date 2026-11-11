@@ -15,6 +15,7 @@ import {
   type SessionSearchIndexFile
 } from './session-search-index-test-fixture'
 import { SessionSearchStore } from './session-search-store'
+import { SessionSearchWorkQueue, type SessionSearchReadContext } from '../session-search-work-queue'
 
 // Read through a second connection to verify only committed transactions become visible.
 
@@ -56,6 +57,43 @@ function counts(db: SyncDatabase): Record<string, number> {
     full: one('SELECT count(*) AS n FROM messages_fts')
   }
 }
+
+it('declines superseded direct read work while accepting its current replacement', async () => {
+  const queue = new SessionSearchWorkQueue()
+  const original = syntheticCandidate()
+  await queue.enqueue(original, store)
+  queue.beginPass()
+  const first = (await queue.next())!
+  const replacement = syntheticCandidate({ mtimeMs: original.file.mtimeMs + 1000 })
+  await queue.enqueue(replacement, store)
+  const stale = store.beginWrite(original, 'replace', 0, undefined, true, undefined, false, {
+    receipt: first.receipt!
+  })
+  stale?.add({ role: 'user', text: 'supersededtextneedle', timestamp: null })
+  stale?.commit({ session: syntheticSession(), byteOffset: 4096, incomplete: false })
+  expect(stale).toBeNull()
+  await queue.acknowledge(first, false)
+  queue.beginPass()
+  const current = (await queue.next())!
+  const read: SessionSearchReadContext = { receipt: current.receipt! }
+  const write = store.beginWrite(
+    current.candidate,
+    'replace',
+    0,
+    undefined,
+    true,
+    undefined,
+    false,
+    read
+  )!
+  write.add({ role: 'user', text: 'replacementtextneedle', timestamp: null })
+  expect(write.commit({ session: syntheticSession(), byteOffset: 4096, incomplete: false })).toBe(
+    true
+  )
+  expect((await read.settlement)?.disposition).toBe('settled')
+  expect(matches(index.db, 'messages_fts', 'supersededtextneedle')).toBe(0)
+  expect(matches(index.db, 'messages_fts', 'replacementtextneedle')).toBe(1)
+})
 
 it('shows a reader on another handle one generation or the other, never a mixture', async () => {
   replayTranscriptRead({

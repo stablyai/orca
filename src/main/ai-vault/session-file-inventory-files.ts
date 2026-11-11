@@ -150,6 +150,66 @@ export class SessionInventoryFiles {
     this.pending = { outcomes, generation: this.failures.epoch }
     return this.resume(limit)
   }
+  readPreparation(
+    path: string,
+    metadataOnly: boolean,
+    metadataOwed: boolean,
+    dependencyOwners: { scope: string; key: string }[]
+  ) {
+    return {
+      scope: this.scope,
+      generation: this.failures.epoch,
+      input: {
+        path,
+        force: false,
+        readOwed: !metadataOnly,
+        metadataOwed: metadataOnly || metadataOwed,
+        requireMembership: true,
+        dependencyOwners
+      }
+    }
+  }
+  async readForIndex(
+    path: string,
+    args: DiscoverSessionFilesArgs,
+    limit: number,
+    metadataOnly: boolean,
+    metadataOwed: boolean,
+    dependencyOwners?: { scope: string; key: string }[],
+    prepared?: SessionSearchPreparedObservation
+  ) {
+    const observed = prepared
+      ? await this.readPrepared(prepared, args, limit)
+      : await this.observe(path, args, false, limit, !metadataOnly, metadataOnly || metadataOwed, {
+          requireMembership: true,
+          dependencyOwners
+        })
+    const change = this.changes.get(path)
+    this.changes.delete(path)
+    const { file, delivery } = observed ?? {}
+    return file
+      ? {
+          file,
+          force: change?.force || delivery?.force || false,
+          metadata: change?.metadata || delivery?.metadata,
+          changed: change !== undefined || !!delivery,
+          receipt: delivery ? { scope: this.scope, path, revision: delivery.revision } : undefined
+        }
+      : {
+          handoff: this.handoffs.has(path)
+            ? { scope: this.scope, revision: this.handoffs.get(path)! }
+            : undefined
+        }
+  }
+  async readPrepared(
+    prepared: SessionSearchPreparedObservation,
+    args: DiscoverSessionFilesArgs,
+    limit: number
+  ): Promise<ReadableObservation | undefined> {
+    this.handoffs.clear()
+    await this.resume(limit)
+    return (await this.observePrepared([prepared], args, limit)).get(prepared.path)
+  }
   get applying(): boolean {
     return !!this.pending
   }

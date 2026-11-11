@@ -143,6 +143,7 @@ export abstract class SessionSearchInventoryMutations {
         .map((column) => `${column}=excluded.${column}`)
         .join(',')}`)
       .run(...values)
+    this.page?.patch(relation.table, owner.source, path, { parent, ...fields })
   }
   delete(owner: SessionSearchInventoryOwner, key: string): boolean {
     const previous = this.getValue(owner, key)
@@ -211,6 +212,12 @@ export abstract class SessionSearchInventoryMutations {
       this.db
         .prepare(`DELETE FROM temp.${relation.table} WHERE source=? AND path=? AND ${empty}`)
         .run(owner.source, path)
+      this.page?.patch(
+        relation.table,
+        owner.source,
+        path,
+        Object.fromEntries(fields.map((column) => [column, column === 'directory' ? 0 : null]))
+      )
     }
     return true
   }

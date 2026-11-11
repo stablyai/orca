@@ -1,7 +1,12 @@
+import {
+  sessionSearchWorkerCandidates,
+  validateSessionSearchReadReceipt
+} from '../session-search-worker-candidates'
 import { listenForSessionSearchRequests } from '../session-search-worker-requests'
 import {
   readSessionSearchSnapshotRows,
-  applySessionSearchFileCountDelta
+  applySessionSearchFileCountDelta,
+  sessionSearchWorkerDelta
 } from '../session-search-snapshot-rows'
 import { SessionSearchForegroundWrite } from '../session-search-foreground-write'
 import { SessionSearchToolPurge } from '../storage/session-search-tool-purge'
@@ -15,6 +20,9 @@ import { SessionSearchEngine } from '../query/session-search-engine'
 import { createSessionSearchService } from '../session-search-service'
 import {
   beginSessionSearchWorkerWrite,
+  finishSessionSearchWorkerWrite,
+  validSessionSearchWorkerRead,
+  sessionSearchWorkEpoch,
   type SessionSearchPreparedWorkerWrite
 } from '../session-search-worker-write'
 import type {
@@ -55,12 +63,12 @@ function resetCoverage(): void {
   counts = store.stateCounts()
   dataVersion = store.connection.pragma('data_version', { simple: true })
 }
-function delta(path: string, previous: SessionSearchSnapshotRow | undefined) {
-  const row = rows(path)[0] ?? null
-  applySessionSearchFileCountDelta(counts, row, previous)
-  candidates?.rowChanged(path)
-  return { path, row }
-}
+const delta = (
+  path: string,
+  previous: SessionSearchSnapshotRow | undefined,
+  final?: { row: SessionSearchSnapshotRow | undefined }
+) => sessionSearchWorkerDelta(store!, counts, path, previous, final)
+
 async function execute({ id, command: c }: SearchWorkerRequest): Promise<SearchWorkerResponse> {
   if (c.op === 'open') {
     if (c.reader) {
@@ -127,6 +135,7 @@ async function execute({ id, command: c }: SearchWorkerRequest): Promise<SearchW
     }
     pageSequence = c.catalogPage.pageSequence
   }
+  validateSessionSearchReadReceipt(c, runtimeEpoch)
   let reset = false
   // Why: SQLite data_version changes only for foreign commits, including legacy writers' generation bumps.
   if (dataVersion !== store.connection.pragma('data_version', { simple: true })) {
@@ -148,8 +157,13 @@ async function execute({ id, command: c }: SearchWorkerRequest): Promise<SearchW
   const previous = changedPath ? rows(changedPath)[0] : undefined
   let path: string | undefined
   let accepted = true
+  let settled: { row: SessionSearchSnapshotRow | undefined } | undefined
+  let settlement: SearchWorkerResponse['settlement']
   switch (c.op) {
     case 'begin': {
+      if (!validSessionSearchWorkerRead(store, c, runtimeEpoch)) {
+        return { id, accepted: false, counts }
+      }
       handlePaths.set(c.handle, c.candidate.file.path)
       if (c.unprepared) {
         const write = new SessionSearchForegroundWrite(
@@ -200,16 +214,16 @@ async function execute({ id, command: c }: SearchWorkerRequest): Promise<SearchW
         }
         break
       }
-      const entry = writes.get(c.handle)
-      entry?.write.addPrepared!([], c.hash)
-      accepted = !!entry && entry.write.commit(c.outcome)
+      const result = finishSessionSearchWorkerWrite(
+        store,
+        writes.get(c.handle),
+        c,
+        handlePaths.get(c.handle)
+      )
       writes.delete(c.handle)
-      if (accepted) {
-        const path = handlePaths.get(c.handle)
-        if (path) {
-          store.setFileState(path, 'current')
-        }
-      }
+      accepted = result.accepted
+      settled = result.settled
+      settlement = result.settlement
       break
     }
     case 'discard':
@@ -244,24 +258,15 @@ async function execute({ id, command: c }: SearchWorkerRequest): Promise<SearchW
       return { id, reset, coverage: c.paths.flatMap((path) => rows(path)), counts }
     case 'file-page':
       return { id, reset, filePage: rows(undefined, c.after), counts }
-    case 'candidates': {
-      const path = c.command.kind === 'withdraw' ? c.command.path : undefined
-      const previous = path ? rows(path)[0] : undefined
-      const result = await store.candidates(c.command)
+    case 'candidates':
+      return sessionSearchWorkerCandidates(store, counts, c, id, reset, runtimeEpoch)
+    case 'work':
       return {
         id,
         reset,
-        candidates: result,
-        coverage: c.command.kind === 'path' && c.command.read ? rows(c.command.path) : undefined,
-        deltas: path
-          ? [delta(path, previous)]
-          : result.withdrawn?.map((row) => delta(row.path, row)),
-        counts,
-        generation: readIndexGeneration(store.connection)
+        work: sessionSearchWorkEpoch(await store.work(c.command), runtimeEpoch),
+        counts
       }
-    }
-    case 'work':
-      return { id, reset, work: await store.work(c.command), counts }
     case 'catalog':
       return { id, reset, catalog: await store.catalog(c.command), counts }
     case 'sync':
@@ -271,17 +276,15 @@ async function execute({ id, command: c }: SearchWorkerRequest): Promise<SearchW
     // A named chunk can commit before EOF; publish its partial cursor immediately.
     path = handlePaths.get(c.handle)
   }
-  if (c.op === 'begin') {
-    handlePaths.set(c.handle, c.candidate.file.path)
-  }
   if (c.op === 'finish' || c.op === 'discard') {
     handlePaths.delete(c.handle)
   }
   return {
     id,
     accepted,
+    settlement,
     reset,
-    deltas: path ? [delta(path, previous)] : undefined,
+    deltas: path ? [delta(path, previous, settled)] : undefined,
     counts,
     generation: readIndexGeneration(store.connection)
   }

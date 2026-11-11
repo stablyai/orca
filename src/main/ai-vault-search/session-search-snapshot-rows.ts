@@ -63,3 +63,18 @@ export function applySessionSearchFileCountDelta(
     }
   }
 }
+
+export function sessionSearchWorkerDelta(
+  store: SessionSearchStore,
+  counts: SessionSearchStateCounts,
+  path: string,
+  previous: SessionSearchSnapshotRow | undefined,
+  final?: { row: SessionSearchSnapshotRow | undefined }
+) {
+  const row = (final ? final.row : readSessionSearchSnapshotRows(store, path)[0]) ?? null
+  applySessionSearchFileCountDelta(counts, row, previous)
+  if (!final) {
+    store.catalogCandidates.rowChanged(path)
+  }
+  return { path, row }
+}

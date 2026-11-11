@@ -1,3 +1,4 @@
+import type { SessionSearchPreparedObservation } from './session-search-observation-types'
 import type { SessionSearchRemovalReceipt } from './session-search-observation-authority'
 import type { SessionSearchCandidateInput } from './session-search-catalog-candidate-types'
 import {
@@ -194,7 +195,8 @@ export class SessionSearchDiscoverySources {
     logicalRoot: string,
     roots: SessionSearchScanRoots,
     metadataOnly = false,
-    metadataOwed = false
+    metadataOwed = false,
+    prepared?: SessionSearchPreparedObservation
   ) {
     const root = this.fileOwner(candidate, logicalRoot, roots)
     if (!root) {
@@ -210,7 +212,8 @@ export class SessionSearchDiscoverySources {
       [...root.dependencies.values()].flatMap((observer) => {
         const owner = observer.fileOwner(path)
         return owner ? [owner] : []
-      })
+      }),
+      prepared
     )
     if (change.file === undefined) {
       return change
@@ -224,6 +227,24 @@ export class SessionSearchDiscoverySources {
         change.file.dev !== candidate.file.dev ||
         change.file.ino !== candidate.file.ino
     }
+  }
+  readPreparation(
+    candidate: SessionFileCandidate,
+    logicalRoot: string,
+    roots: SessionSearchScanRoots,
+    metadataOnly: boolean,
+    metadataOwed: boolean
+  ) {
+    const root = this.fileOwner(candidate, logicalRoot, roots)
+    return root?.inventory.readPreparation(
+      candidate.file.path,
+      metadataOnly,
+      metadataOwed,
+      [...root.dependencies.values()].flatMap((observer) => {
+        const owner = observer.fileOwner(candidate.file.path)
+        return owner ? [owner] : []
+      })
+    )
   }
 
   acceptReadCounts(scopeCounts: [string, number, number][] | undefined): void {

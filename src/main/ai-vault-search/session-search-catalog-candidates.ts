@@ -3,7 +3,10 @@ import { selectSessionSearchCandidates } from './session-search-catalog-selectio
 import { SessionSearchCatalogPublications } from './session-search-catalog-publications'
 import type SyncDatabase from '../sqlite/sync-database'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
-import { sessionSearchCandidateAdmission } from './session-search-candidate-admission'
+import {
+  sessionSearchCandidateAdmission,
+  sessionSearchPathAdmission
+} from './session-search-candidate-admission'
 import { readSessionSearchCandidateRows } from './session-search-candidate-rows'
 import { boundedSessionSearchPage } from './session-search-catalog-pages'
 import { putSessionSearchCandidate } from './session-search-candidate-entry'
@@ -157,18 +160,7 @@ export class SessionSearchCatalogCandidates {
         this.require(command.path, command.reason, command.delivered)
         return this.result([])
       case 'acknowledge': {
-        const row = this.read('WHERE path = ? AND agent = ? LIMIT 1', [
-          command.path,
-          command.agent
-        ])[0]
-        if (row && this.admission(row.candidate).revision === command.revision) {
-          this.db
-            .prepare(
-              `UPDATE temp.search_candidates SET required = ${command.metadataOnly ? 'force_read' : '0'},force_read=${command.metadataOnly ? 'force_read' : '0'},metadata=0 WHERE path = ? AND agent = ? AND selected = 1`
-            )
-            .run(command.path, command.agent)
-          this.rowChanged(command.path)
-        }
+        this.acknowledge(command.path, command.agent, command.revision, !!command.metadataOnly)
         return this.result([])
       }
       case 'remove': {
@@ -204,6 +196,26 @@ export class SessionSearchCatalogCandidates {
 
   admission(candidate: SessionFileCandidate) {
     return sessionSearchCandidateAdmission(this.db, candidate)
+  }
+  acknowledge(
+    path: string,
+    agent: string,
+    revision: string,
+    metadataOnly: boolean,
+    publish = true
+  ): void {
+    const admission = sessionSearchPathAdmission(this.db, path, agent)
+    if (revision === '' || admission.revision !== revision) {
+      return
+    }
+    this.db
+      .prepare(
+        `UPDATE temp.search_candidates SET required=${metadataOnly ? 'force_read' : '0'},force_read=${metadataOnly ? 'force_read' : '0'},metadata=0 WHERE path=? AND agent=? AND selected=1`
+      )
+      .run(path, agent)
+    if (publish) {
+      this.rowChanged(path)
+    }
   }
 
   entry(key: string): SessionSearchCandidateRow | undefined {

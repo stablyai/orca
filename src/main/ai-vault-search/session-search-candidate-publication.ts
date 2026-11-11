@@ -8,6 +8,7 @@ import type {
   SessionSearchCandidateCommand,
   SessionSearchCandidateResult
 } from './session-search-catalog-candidates'
+import type { SessionSearchReadPreparation } from './session-search-catalog-candidate-types'
 
 export type SessionSearchPublicationLease = {
   signal: AbortSignal
@@ -35,14 +36,19 @@ export abstract class SessionSearchCandidatePublications {
       return result
     }
   }
-  async readAdmission(candidate: SessionFileCandidate) {
+  async readAdmission(candidate: SessionFileCandidate, preparation?: SessionSearchReadPreparation) {
     const result = await this.request!({
       kind: 'path',
       path: candidate.file.path,
       agent: candidate.agent,
-      read: true
+      read: preparation ?? true
     })
-    return { root: result.rows.find((row) => row.selected)?.root, work: result.work! }
+    return {
+      root: result.readRoot ?? result.rows.find((row) => row.selected)?.root,
+      work: result.work!,
+      prepared: result.preparedRead,
+      scopeCounts: result.scopeCounts
+    }
   }
   async has(path: string, agent?: string | null): Promise<boolean> {
     return (await this.request!({ kind: 'path', path, agent })).rows.length > 0

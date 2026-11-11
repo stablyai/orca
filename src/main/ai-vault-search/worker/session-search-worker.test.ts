@@ -2,11 +2,16 @@ import './session-search-worker.test-fixture'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
+import { SessionSearchWorkQueue, type SessionSearchReadContext } from '../session-search-work-queue'
+import {
+  SessionSearchWorkerClient,
+  SessionSearchOperationError
+} from './session-search-worker-client'
 import { SessionSearchWorkerStore } from './session-search-worker-store'
 import { SessionSearchReaders } from './session-search-readers'
 import '../indexing/session-search-index-consumer'
-import { syntheticCandidate } from '../storage/session-search-index-test-fixture'
+import { syntheticCandidate, syntheticSession } from '../storage/session-search-index-test-fixture'
 import '../../ai-vault/transcripts/session-transcript-reader'
 import { resetTranscriptConsumersForTests } from '../../ai-vault/transcripts/session-transcript-consumers'
 import 'node:crypto'
@@ -26,6 +31,60 @@ afterEach(async () => {
 })
 
 // Real workers import the parser graph; allow cold module loading plus SQLite publication.
+
+it('retains retry fairness through a lost finish reply and a new queue owner', async () => {
+  root = await mkdtemp(join(tmpdir(), 'ss-finish-retry-'))
+  store = new SessionSearchWorkerStore(join(root, 'index.sqlite'), () => undefined)
+  await store.prepare()
+  const queue = new SessionSearchWorkQueue()
+  const changed = syntheticCandidate({ path: join(root, 'changed.jsonl'), sizeBytes: 1024 })
+  const backlog = syntheticCandidate({ path: join(root, 'backlog.jsonl'), sizeBytes: 4096 })
+  const newer = syntheticCandidate({ path: join(root, 'newer.jsonl'), sizeBytes: 4096 })
+  await queue.enqueue(changed, store)
+  await queue.enqueue(backlog, store, false, false)
+  await queue.enqueue(newer, store)
+  queue.beginPass()
+  const work = (await queue.next())!
+  expect(work.candidate.file.path).toBe(changed.file.path)
+  const read: SessionSearchReadContext = { receipt: work.receipt! }
+  const request = SessionSearchWorkerClient.prototype.request
+  let lost = false
+  const traffic = vi
+    .spyOn(SessionSearchWorkerClient.prototype, 'request')
+    .mockImplementation(async function (this: SessionSearchWorkerClient, command) {
+      const response = await request.call(this, command)
+      if (command.op === 'finish' && !lost) {
+        lost = true
+        throw new SessionSearchOperationError('fixture lost finish reply')
+      }
+      return response
+    })
+  try {
+    const write = store.beginWrite(changed, 'replace', 0, undefined, true, undefined, false, read)!
+    write.add({ role: 'user', text: 'acceptedretryneedle', timestamp: null })
+    write.commit({
+      session: syntheticSession({ filePath: changed.file.path }),
+      byteOffset: 4096,
+      incomplete: false
+    })
+    await store.flush()
+    expect(lost).toBe(true)
+    expect(await read.settlement).toBeUndefined()
+    await queue.acknowledge(work, true)
+    const successor = new SessionSearchWorkQueue()
+    successor.attach(store)
+    successor.beginPass()
+    const next = (await successor.next())!
+    expect(next.candidate.file.path).toBe(backlog.file.path)
+    await successor.acknowledge(next, false)
+    const nextChange = (await successor.next())!
+    expect(nextChange.candidate.file.path).toBe(newer.file.path)
+    await successor.acknowledge(nextChange, false)
+    expect((await successor.next())?.candidate.file.path).toBe(changed.file.path)
+  } finally {
+    traffic.mockRestore()
+  }
+})
 
 it('commits the original-message digest when a drained conversation ends with only tool rows', async () => {
   root = await mkdtemp(join(tmpdir(), 'ss-worker-hash-tail-'))

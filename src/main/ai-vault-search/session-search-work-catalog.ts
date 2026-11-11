@@ -11,12 +11,15 @@ import {
 import type { SessionSearchFileRow } from './storage/session-search-store-types'
 import type { SessionSearchStore } from './storage/session-search-store'
 import { recordSessionSearchPrimaryFailure } from './session-search-primary-retries'
+import type { SessionSearchWorkReceipt } from './session-search-work-queue'
 
 export type SessionSearchWork = {
   candidate: SessionFileCandidate
   force: boolean
   version: number
   metadata: boolean
+  root?: string
+  receipt?: SessionSearchWorkReceipt
 }
 
 /** Work and selection own independent immutable snapshots, including undiscovered foreground input. */
@@ -56,11 +59,28 @@ export class SessionSearchWorkCatalog {
     return { id: Number(row.fact_id), revision: Number(row.fact_revision) }
   }
   private project(row: Record<string, unknown>): SessionSearchWork {
+    const candidate = sessionSearchCandidateFacts(this.db).get(this.reference(row))
+    const root = this.db
+      .prepare(
+        'SELECT root FROM temp.search_candidates WHERE path=? AND agent=? AND selected=1 ORDER BY key LIMIT 1'
+      )
+      .get(candidate.file.path, candidate.agent)?.root
     return {
-      candidate: sessionSearchCandidateFacts(this.db).get(this.reference(row)),
+      candidate,
       version: Number(row.version),
       force: row.force_read === 1,
-      metadata: row.metadata === 1
+      metadata: row.metadata === 1,
+      root: root === undefined ? undefined : String(root),
+      receipt: {
+        path: String(row.path),
+        version: Number(row.version),
+        fact: Number(row.fact_id),
+        factRevision: Number(row.fact_revision),
+        ordering: Number(row.ordering),
+        deferred: row.deferred === 1,
+        force: row.force_read === 1,
+        metadata: row.metadata === 1
+      }
     }
   }
   enqueue(
@@ -173,13 +193,33 @@ export class SessionSearchWorkCatalog {
     return row && this.project(row)
   }
   async acknowledge(work: SessionSearchWork, retry: boolean): Promise<void> {
+    this.acknowledgeAccepted(work, retry)
+  }
+  matches(work: SessionSearchWork): boolean {
+    const entry = this.entry(work.candidate.file.path)
+    return !!entry && this.matchesEntry(work, entry)
+  }
+  private matchesEntry(work: SessionSearchWork, entry: Record<string, unknown>): boolean {
+    const receipt = work.receipt
+    return (
+      Number(entry.version) === work.version &&
+      (!receipt ||
+        (receipt.path === entry.path &&
+          receipt.version === work.version &&
+          receipt.fact === Number(entry.fact_id) &&
+          receipt.factRevision === Number(entry.fact_revision) &&
+          receipt.ordering === Number(entry.ordering) &&
+          receipt.deferred === (entry.deferred === 1)))
+    )
+  }
+  acknowledgeAccepted(work: SessionSearchWork, retry: boolean): void {
     this.accept(() => {
       const path = work.candidate.file.path
       const entry = this.entry(path)
-      if (!entry || Number(entry.version) !== work.version) {
+      if (!entry || !this.matchesEntry(work, entry)) {
         return
       }
-      this.project(entry)
+      sessionSearchCandidateFacts(this.db).verify(this.reference(entry))
       this.chooseChanged = !this.chooseChanged
       if (retry) {
         const order = ++this.order
@@ -224,6 +264,9 @@ export class SessionSearchWorkCatalog {
     this.accept(() => this.removeNow(path, true))
   }
   async rowChanged(path: string, row: SessionSearchFileRow | undefined): Promise<void> {
+    this.rowChangedAccepted(path, row)
+  }
+  rowChangedAccepted(path: string, row: SessionSearchFileRow | undefined): void {
     this.accept(() => {
       const entry = this.entry(path)
       const due = row?.state === 'due'

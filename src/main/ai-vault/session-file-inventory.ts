@@ -3,7 +3,8 @@ import type { SessionSearchRemovalReceipt } from '../ai-vault-search/session-sea
 import { SessionInventoryDirtyInputs } from './session-file-inventory-dirty'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import type { DiscoverSessionFilesArgs } from './session-scanner-discovery'
-import type { SessionFileChange } from './session-file-inventory-files'
+import type { SessionInventoryFiles, SessionFileChange } from './session-file-inventory-files'
+import type { SessionSearchPreparedObservation } from '../ai-vault-search/session-search-observation-types'
 export type { SessionFileChange } from './session-file-inventory-files'
 
 /** The writer retains queued directories, observations and membership across bounded passes. */
@@ -160,33 +161,22 @@ export class SessionFileInventory extends SessionInventoryDirtyInputs {
     limit: number,
     metadataOnly = false,
     metadataOwed = false,
-    dependencyOwners?: { scope: string; key: string }[]
+    dependencyOwners?: { scope: string; key: string }[],
+    prepared?: SessionSearchPreparedObservation
   ) {
-    const observed = await this.observations.observe(
+    return this.observations.readForIndex(
       path,
       args,
-      false,
       limit,
-      !metadataOnly,
-      metadataOnly || metadataOwed,
-      { requireMembership: true, dependencyOwners }
+      metadataOnly,
+      metadataOwed,
+      dependencyOwners,
+      prepared
     )
-    const change = this.observations.changes.get(path)
-    this.observations.changes.delete(path)
-    const { file, delivery } = observed ?? {}
-    return file
-      ? {
-          file,
-          force: change?.force || delivery?.force || false,
-          metadata: change?.metadata || delivery?.metadata,
-          changed: change !== undefined || !!delivery,
-          receipt: delivery ? { scope: this.scope, path, revision: delivery.revision } : undefined
-        }
-      : {
-          handoff: this.observations.handoffs.has(path)
-            ? { scope: this.scope, revision: this.observations.handoffs.get(path)! }
-            : undefined
-        }
+  }
+
+  readPreparation(...args: Parameters<SessionInventoryFiles['readPreparation']>) {
+    return this.observations.readPreparation(...args)
   }
   async drain(
     args: DiscoverSessionFilesArgs,

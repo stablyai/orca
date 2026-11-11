@@ -32,6 +32,65 @@ import {
 
 vi.mock('./session-search-filesystem', () => ({ sessionSearchRequiresPolling: async () => false }))
 
+it('keeps accepted searchable content and retries bookkeeping without charging a read failure', async () => {
+  const harness = await openSessionSearchIndexerHarness('ss-content-settlement')
+  const path = join(harness.claudeProjectDir, 'session.jsonl')
+  const signal = new Int32Array(new SharedArrayBuffer(4))
+  Atomics.store(signal, 0, 1)
+  configureSessionSearchWorkerFixture({
+    data: { path, signal: signal.buffer },
+    prelude: `
+      const { workerData } = require('node:worker_threads');
+      const { SessionSearchStore } = require(${JSON.stringify(resolve('src/main/ai-vault-search/storage/session-search-store.ts'))});
+      const { SessionSearchCatalogCandidates } = require(${JSON.stringify(resolve('src/main/ai-vault-search/session-search-catalog-candidates.ts'))});
+      const rowChanged = SessionSearchCatalogCandidates.prototype.rowChanged;
+      SessionSearchCatalogCandidates.prototype.rowChanged = function(path) {
+        if (path === workerData.path && Atomics.compareExchange(new Int32Array(workerData.signal), 0, 2, 0) === 2) throw new Error('fixture post-content invalidation refusal');
+        return rowChanged.call(this, path);
+      };
+      const settle = SessionSearchStore.prototype.settleAcceptedFile;
+      SessionSearchStore.prototype.settleAcceptedFile = function(path) {
+        settle.call(this, path);
+        if (path === workerData.path && Atomics.compareExchange(new Int32Array(workerData.signal), 0, 1, 2) === 1) throw new Error('fixture post-content settlement refusal');
+      };
+    `,
+    onResponse: () => undefined
+  })
+  const errors: unknown[] = []
+  const subject = new SessionSearchIndexer({
+    databasePath: harness.databasePath,
+    roots: harness.roots,
+    historyDays: null,
+    clock: new FakeSessionSearchClock(),
+    onError: (error) => errors.push(error)
+  })
+  const hits = () =>
+    harness.read((db) =>
+      db
+        .prepare(
+          "SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'acceptedcontentneedle'"
+        )
+        .get()
+    )
+  try {
+    await writeClaudeTranscript(path, ['acceptedcontentneedle'], 'accepted-content')
+    await subject.start()
+    expect(Atomics.load(signal, 0)).toBe(0)
+    expect(hits()).toEqual({ n: 2 })
+    expect(subject.status().filesFailed).toBe(0)
+    expect(subject.status().phase).not.toBe('current')
+    expect(errors).toEqual([])
+    await subject.reconcile()
+    expect(hits()).toEqual({ n: 2 })
+    expect(subject.status().filesFailed).toBe(0)
+    expect(subject.status().phase).toBe('current')
+  } finally {
+    await subject.close()
+    configureSessionSearchWorkerFixture()
+    await harness.cleanup()
+  }
+})
+
 it('finishes the first conversation after its discovery transfer rolls back internally', async () => {
   const harness = await openSessionSearchIndexerHarness('ss-first-transfer-rollback')
   const path = join(harness.claudeProjectDir, 'session.jsonl')

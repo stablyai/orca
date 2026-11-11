@@ -1,3 +1,4 @@
+import type { SessionSearchReadContext } from '../session-search-work-queue'
 import { sessionSearchForegroundTransfer } from '../session-search-foreground-transfer'
 import { SELF_CONTAINED_TRANSCRIPT_AGENTS } from '../indexing/session-search-index-consumer'
 import { ownRetainedString } from '../../../shared/own-retained-string'
@@ -70,7 +71,8 @@ export class SessionSearchWorkerStore extends SessionSearchWorkerStoreBase {
     identity?: () => TranscriptSessionIdentity | null,
     indexing = false,
     signal?: AbortSignal,
-    metadataOnly = false
+    metadataOnly = false,
+    read?: SessionSearchReadContext
   ): SessionSearchFileWrite | null {
     if (
       !this.acceptingReads ||
@@ -129,7 +131,15 @@ export class SessionSearchWorkerStore extends SessionSearchWorkerStoreBase {
           return { id: 0, accepted: false }
         })
     }
-    void post({ op: 'begin', metadataOnly, handle, candidate, mode, offset })
+    void post({
+      op: 'begin',
+      metadataOnly,
+      handle,
+      candidate,
+      mode,
+      offset,
+      work: indexing ? read?.receipt : undefined
+    })
     const discard = () => {
       cancelled = true
       this.bytes -= size
@@ -230,7 +240,11 @@ export class SessionSearchWorkerStore extends SessionSearchWorkerStoreBase {
           contentHash: hash
         }
         this.speculative.set(candidate.file.path, speculative)
-        settlement = post({ op: 'finish', handle, outcome, hash })
+        const finished = post({ op: 'finish', handle, outcome, hash })
+        if (indexing && read) {
+          read.settlement = finished.then((response) => response.settlement)
+        }
+        settlement = finished
           .then((response) => {
             const accepted =
               response.accepted === true &&

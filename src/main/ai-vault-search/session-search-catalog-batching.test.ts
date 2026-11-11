@@ -548,7 +548,7 @@ it.each([40, 400])(
       })
       expect((await queue.get(candidates[0].file.path))?.candidate).toEqual(candidates[0])
       queue.beginPass()
-      expect(await queue.next()).toEqual(first)
+      expect(await queue.next()).toEqual({ ...first, root: prefix })
       await queue.acknowledge(first!, true)
       const observed: string[] = []
       for (let index = 1; index < population; index++) {

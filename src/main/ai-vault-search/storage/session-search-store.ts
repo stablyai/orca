@@ -1,7 +1,7 @@
 import { SessionSearchTransactionEffects } from '../session-search-transaction-effects'
 import { initializeSessionSearchStorage } from '../session-search-storage-bootstrap'
-import { recordSessionSearchPrimaryFailure } from '../session-search-primary-retries'
 import { admitSessionSearchStoreWrite } from '../session-search-store-write'
+import { applySessionSearchFileState } from '../session-search-file-state'
 import {
   validSessionSearchRemoval,
   type SessionSearchRemovalReceipt
@@ -13,6 +13,7 @@ import {
 } from '../session-search-store-transitions'
 import { SessionSearchWorkCatalog } from '../session-search-work-catalog'
 import type {
+  SessionSearchReadContext,
   SessionSearchWorkCommand,
   SessionSearchWorkResult
 } from '../session-search-work-queue'
@@ -214,7 +215,9 @@ export class SessionSearchStore {
     identity?: () => TranscriptSessionIdentity | null,
     _indexing?: boolean,
     _signal?: AbortSignal,
-    metadataOnly = false
+    metadataOnly = false,
+    read?: SessionSearchReadContext,
+    onContentAccepted?: (revision: string) => void
   ): SessionSearchFileWrite | null {
     if (
       this.closed ||
@@ -233,7 +236,9 @@ export class SessionSearchStore {
         identity,
         metadataOnly,
         () => this.fileRow(candidate.file.path),
-        () => this.closed
+        () => this.closed,
+        onContentAccepted,
+        read ? { read, store: this } : undefined
       )
     } catch (error) {
       this.reportWriteFailure(error)
@@ -254,35 +259,29 @@ export class SessionSearchStore {
     return readSessionSearchFileRows(this.db)
   }
 
-  setFileState(path: string, state: SessionSearchFileState, atMtimeMs?: number): void {
+  setFileState(
+    path: string,
+    state: SessionSearchFileState,
+    atMtimeMs?: number,
+    publish = true
+  ): void {
     try {
-      this.candidateCatalog?.rowChanged(path)
-      if (state === 'failed') {
-        // Persist initial failures too, or unreadable new files retry forever.
-        this.db
-          .prepare(
-            `INSERT INTO files(path, byte_offset, mtime_ms, state, fail_count, failed_mtime_ms)
-             VALUES (?, 0, ?, 'failed', 1, ?)
-             ON CONFLICT(path) DO UPDATE SET
-               state = 'failed',
-               fail_count = files.fail_count + 1,
-               failed_mtime_ms = excluded.failed_mtime_ms`
-          )
-          .run(path, atMtimeMs ?? 0, atMtimeMs ?? null)
-        recordSessionSearchPrimaryFailure(this.catalogStorage, path, true)
-        return
+      if (publish) {
+        this.candidateCatalog?.rowChanged(path)
       }
-      this.db
-        .prepare(
-          'UPDATE files SET state = ?, fail_count = 0, failed_mtime_ms = NULL WHERE path = ?'
-        )
-        .run(state, path)
-      if (this.scratch) {
-        recordSessionSearchPrimaryFailure(this.scratch, path, false)
-      }
+      applySessionSearchFileState(
+        this.db,
+        path,
+        state,
+        atMtimeMs,
+        state === 'failed' ? this.catalogStorage : this.scratch
+      )
     } catch (error) {
       this.onError(error)
     }
+  }
+  settleAcceptedFile(path: string): void {
+    applySessionSearchFileState(this.db, path, 'current', undefined, this.scratch)
   }
 
   stateCounts(): SessionSearchStateCounts {

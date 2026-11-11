@@ -58,6 +58,15 @@ export class SessionSearchCandidateFacts {
     }
     return sessionSearchStoredCandidate(row)
   }
+  verify(reference: SessionSearchFactReference): void {
+    if (
+      !this.db
+        .prepare('SELECT 1 FROM temp.search_candidate_facts WHERE id=? AND snapshot_revision=?')
+        .get(reference.id, reference.revision)
+    ) {
+      throw new Error('Session work candidate snapshot is unavailable')
+    }
+  }
   acquire(
     candidate: SessionFileCandidate,
     references: SessionSearchFactReference[] = [],

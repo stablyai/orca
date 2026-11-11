@@ -6,6 +6,26 @@ import type {
 export type { SessionSearchWork } from './session-search-work-catalog'
 import type { SessionSearchWork } from './session-search-work-catalog'
 
+export type SessionSearchWorkReceipt = {
+  path: string
+  version: number
+  fact: number
+  factRevision: number
+  ordering: number
+  deferred: boolean
+  force: boolean
+  metadata: boolean
+  runtimeEpoch?: number
+}
+export type SessionSearchReadSettlement = {
+  disposition: 'settled' | 'content-accepted/settlement-rejected'
+  work?: SessionSearchWorkResult
+}
+export type SessionSearchReadContext = {
+  receipt: SessionSearchWorkReceipt
+  settlement?: Promise<SessionSearchReadSettlement | undefined>
+}
+
 export type SessionSearchWorkCommand =
   | {
       kind: 'enqueue'
@@ -22,6 +42,7 @@ export type SessionSearchWorkCommand =
       work: SessionSearchWork
       retry: boolean
       handoff?: { scope: string; revision: number }
+      reconcile?: boolean
     }
   | { kind: 'remove'; path: string }
   | { kind: 'row'; path: string; row?: SessionSearchFileRow }
@@ -60,6 +81,9 @@ export class SessionSearchWorkQueue {
   }
   get left(): number {
     return this.remaining
+  }
+  get selectionRevision(): number | undefined {
+    return this.selectedRevision
   }
   update(result: SessionSearchWorkResult): void {
     if (this.revision !== result.revision) {
@@ -105,7 +129,7 @@ export class SessionSearchWorkQueue {
     retry: boolean,
     handoff?: { scope: string; revision: number }
   ): Promise<void> {
-    await this.request({ kind: 'acknowledge', work, retry, handoff })
+    await this.request({ kind: 'acknowledge', work, retry, handoff, reconcile: true })
   }
   async remove(path: string): Promise<void> {
     await this.request({ kind: 'remove', path })

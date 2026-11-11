@@ -3,6 +3,10 @@ import type {
   SessionSearchWorkResult
 } from '../session-search-work-queue'
 import type {
+  SessionSearchWorkReceipt,
+  SessionSearchReadSettlement
+} from '../session-search-work-queue'
+import type {
   SessionSearchCandidateCommand,
   SessionSearchCandidateResult
 } from '../session-search-catalog-candidates'
@@ -46,6 +50,7 @@ export type SearchWorkerCommand =
   | {
       op: 'begin'
       metadataOnly?: boolean
+      work?: SessionSearchWorkReceipt
       handle: number
       candidate: SessionFileCandidate
       mode: 'append' | 'replace'
@@ -103,6 +108,7 @@ export type SearchWorkerResponse = {
   generation?: number
   candidates?: SessionSearchCandidateResult
   work?: SessionSearchWorkResult
+  settlement?: SessionSearchReadSettlement
   catalog?: SessionSearchCatalogResult
   result?: AiVaultSearchResponse
 }
