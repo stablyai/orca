@@ -24,7 +24,7 @@ import {
   syncSurfacesAfterAgentSkillRecheck
 } from './agent-skill-recheck-surface-sync'
 import { useBundledSkillInstallAction } from '@/hooks/skills/installation/use-bundled-skill-install-action'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 
 function BundledAgentSkillSetupPanel({

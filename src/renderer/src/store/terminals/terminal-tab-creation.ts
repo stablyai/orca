@@ -1,7 +1,6 @@
 import { resolveTerminalCreatedShell } from './terminal-created-shell'
 import { warnIfZCodeCannotOpenSession } from '@/components/terminal-pane/provider-notices/zcode-capability/zcode-missing-tui-notice'
-import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
-import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import { clearWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-intent'
 import {
   isValidHostTerminalTabId,
   isValidMirroredHostTerminalTabId
@@ -23,17 +22,18 @@ import { dedupeTabOrder } from '../../../../shared/workspace-layout/tab-order'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import { emptySplitGroup, splitGroupEntries } from '../slices/tabs/tabs-group-actions'
 import { ownsGlobalSelection } from '../workspaces/selection/global-selection-owner'
-import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
   recordCreatedTerminalTabInLayoutOwner,
   terminalTabCreateCommand,
   withMainTerminalFacts
 } from './terminal-tab-create-through-layout-owner'
-import type { AppState } from '../types'
 import { normalizeTabStartupCommand } from './terminal-startup-queues'
 import { replaceRecordEntries, replaceTabBuckets } from '../keyed-record-transitions'
 import { applyRecordOperations } from './terminal-companion-record-operations'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
+import type { AppState } from '../types'
 
 export function createTerminalTabCreationActions(
   set: TerminalStoreSet,

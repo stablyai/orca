@@ -32,6 +32,21 @@ describe('registerRuntimeHandlers', () => {
     fromWebContentsMock.mockReset()
   })
 
+  it("passes the orchestration contract fence for the window's own mutations", async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fence answers before any other runtime member is read.
+    registerRuntimeHandlers({ getRuntimeId: () => 'runtime-1' } as never)
+    const registration = handleMock.mock.calls.find(([channel]) => channel === 'runtime:call')
+    const frame = {}
+    const response = await registration![1](
+      { senderFrame: frame, sender: { mainFrame: frame, id: 1, once: vi.fn(), on: vi.fn() } },
+      {
+        method: 'orchestration.approvalAnswer',
+        params: { dispatch: 'ctx_1', prompt: 'apr_1', decision: 'deny', reason: 'no' }
+      }
+    )
+    expect(response.error?.code).not.toBe('orchestration_migration_required')
+  })
+
   // #36923: the window's wake shares the runtime's one VM wake path with its sleep's suspend.
   it("routes the window's recipe VM wake through the runtime", async () => {
     const record = { id: 'vm-1', status: 'running' }

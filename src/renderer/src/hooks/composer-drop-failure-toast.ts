@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { compactIpcErrorMessage } from '@/lib/ipc-error'
+import { compactIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import type { ComposerDropFailure } from './composer-drop-result'
 import { describeDropSkipReason } from '@/lib/files/drop/drop-skip-reason-copy'
 

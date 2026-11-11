@@ -5,10 +5,11 @@ import { BrowserManagerGuestCleanup } from './browser-manager-guest-cleanup'
 import { allowPageUnload } from '../../navigation/browser-guest-unload-policy'
 import {
   installDocPreviewGuestPolicy,
-  readDocPreviewGuestBoundGrantId
+  readDocPreviewGuestBoundPageId
 } from '../../../document-preview/doc-preview-guest-policy'
-import { getDocPreviewGrant } from '../../../document-preview/doc-preview-grant-registry'
 import { setupGuestEscapeForwarding } from '../../input/shortcuts/browser-guest-escape-forwarding'
+import { setupGuestShortcutForwarding } from '../../input/shortcuts/browser-guest-shortcut-forwarding'
+import { forwardGuestMousePress } from '../../input/browser-guest-mouse-press'
 import { installGuestDevToolsCloseShortcut } from '../../devtools/browser-guest-devtools-close-shortcut'
 
 export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestCleanup {
@@ -92,15 +93,37 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     host: Electron.WebContents
   ): void {
     const disposeDocPolicy = installDocPreviewGuestPolicy(guest, host)
+    const resolveHost = (): Electron.WebContents | null => (host.isDestroyed() ? null : host)
     const disposeEscapeForwarding = setupGuestEscapeForwarding({
       guest,
       resolveTarget: () => {
-        const grantId = readDocPreviewGuestBoundGrantId(guest)
-        const browserPageId = grantId ? getDocPreviewGrant(grantId)?.browserPageId : undefined
+        const browserPageId = readDocPreviewGuestBoundPageId(guest)
         return browserPageId ? { browserPageId, renderer: host } : null
       },
       hasActiveGrabOp: (browserPageId) => this.hasActiveGrabOp(browserPageId)
     })
+    // Why: a focused preview swallows keys, so Orca's window shortcuts (Ctrl+Tab, close tab) are
+    // forwarded to its own host as for plugin frames; browser-page chords stay with the document.
+    const disposeShortcutForwarding = setupGuestShortcutForwarding({
+      browserTabId: `workspace-doc:${guest.id}`,
+      guest,
+      resolveRenderer: resolveHost,
+      getKeybindings: () => this.settingsResolver?.().keybindings,
+      browserPage: false
+    })
+    // Why: a press in the preview never reaches the host DOM, so its split stays inactive and
+    // forwarded shortcuts like Close would act on another split (#22144). Presses only: previews
+    // have no history listener for the side buttons a release would send.
+    const reportPress = (_event: Electron.Event, mouse: Electron.MouseInputEvent): void => {
+      if (mouse.type !== 'mouseDown') {
+        return
+      }
+      const browserPageId = readDocPreviewGuestBoundPageId(guest)
+      if (browserPageId) {
+        forwardGuestMousePress(guest, browserPageId, resolveHost, mouse)
+      }
+    }
+    guest.on('before-mouse-event', reportPress)
     const handleDestroyed = (): void => {
       this.cleanupGuestPolicyAttachment(guest.id)
     }
@@ -109,9 +132,11 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     this.policyCleanupByGuestId.set(guest.id, () => {
       disposeDocPolicy()
       disposeEscapeForwarding()
+      disposeShortcutForwarding()
       try {
         guest.off('destroyed', handleDestroyed)
         guest.off('will-prevent-unload', allowPageUnload)
+        guest.off('before-mouse-event', reportPress)
       } catch {
         // guest may already be destroyed
       }

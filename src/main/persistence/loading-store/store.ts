@@ -23,7 +23,7 @@ import {
   bindPersistedTabTerminalPanes,
   sweepPersistedUnattachedTerminalRows
 } from '../restoring-sessions/tab-terminal-pane-binding-repair'
-import { scheduleSave } from './write-scheduling'
+import { scheduleFullProfileSave, scheduleSave } from './write-scheduling'
 import {
   migrateLegacyOpenCodeGoApiKey,
   type OpenCodeGoApiKeyTarget
@@ -177,7 +177,7 @@ export class Store {
         adaptedProjectGroups ||
         sweptRepoIds.length > 0
       ) {
-        scheduleSave(this.domains.scheduling)
+        scheduleFullProfileSave(this.domains.scheduling)
       }
     }
   }
@@ -185,7 +185,7 @@ export class Store {
   /** Retain the legacy settings key until migration to the main-owned store succeeds. */
   migrateLegacyOpenCodeGoApiKey(target: OpenCodeGoApiKeyTarget): void {
     if (migrateLegacyOpenCodeGoApiKey(this.runtime.protectedSecrets, target)) {
-      scheduleSave(this.domains.scheduling)
+      scheduleSave(this.domains.scheduling, ['settings'])
     }
   }
 

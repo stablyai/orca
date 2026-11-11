@@ -8,7 +8,7 @@ import type { OrcadMigrationTerminalScrollbackSnapshot } from '../../../shared/o
 import {
   extractSessionOwnersForTransfer,
   hasTransferredSessionState
-} from '../../orca-profiles/profile-session-owner-transfer'
+} from '../../orca-profiles/project-transfer/profile-session-owner-transfer'
 import type { TerminalScrollbackSnapshotStorage } from '../../pty/scrollback/terminal-scrollback-snapshots'
 import {
   createOrcadMigrationExportScope,

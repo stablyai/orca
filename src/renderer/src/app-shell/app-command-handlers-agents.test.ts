@@ -12,7 +12,7 @@ vi.mock('@/components/floating-terminal/floating-workspace-terminal-actions', ()
   isFloatingWorkspacePanelFocused: () => false
 }))
 
-vi.mock('@/lib/terminal-shortcut-capture-notification', () => ({
+vi.mock('@/lib/notifications/terminal-shortcut-capture-notification', () => ({
   showTerminalShortcutCaptureNotification: vi.fn()
 }))
 

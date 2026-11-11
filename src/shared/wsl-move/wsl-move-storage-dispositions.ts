@@ -1,8 +1,5 @@
-import {
-  moveDisposition,
-  notApplicableDisposition,
-  type WslMoveFieldDisposition
-} from './wsl-move-dispositions'
+import { moveDisposition, notApplicableDisposition } from './wsl-move-dispositions'
+import type { WslMoveFieldDisposition } from './wsl-move-dispositions'
 
 /** Census tests require a disposition for each renderer module using localStorage. */
 export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> = {
@@ -40,10 +37,11 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       62,
       "A Windows-drive conversion's own record of which renderer rewrites landed; keyed by its id."
     ),
-  'src/renderer/src/lib/desktop-created-server-tabs.ts': notApplicableDisposition(
-    60,
-    'Tabs this desktop created in a paired server workspace, keyed by that server; a local or WSL project has none.'
-  ),
+  'src/renderer/src/store/workspace-layout/frames/desktop-created-server-tabs.ts':
+    notApplicableDisposition(
+      60,
+      'Tabs this desktop created in a paired server workspace, keyed by that server; a local or WSL project has none.'
+    ),
   'src/renderer/src/store/slices/worktrees/session/worktree-visit-recency.ts':
     notApplicableDisposition(
       32,
@@ -85,9 +83,9 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       'src/renderer/src/components/terminal-pane/diagnostics/startup/terminal-startup-timing.ts',
       'src/renderer/src/components/UnexpectedSignoutCard.tsx',
       'src/renderer/src/lib/document-theme.ts',
-      'src/renderer/src/lib/feature-education-telemetry.ts',
-      'src/renderer/src/lib/orchestration-setup-state.ts',
-      'src/renderer/src/lib/terminal-shortcut-capture-notification.tsx',
+      'src/renderer/src/diagnostics/telemetry/feature-education-telemetry.ts',
+      'src/renderer/src/components/orchestration/setup/orchestration-setup-state.ts',
+      'src/renderer/src/lib/notifications/terminal-shortcut-capture-notification.tsx',
       'src/renderer/src/web/preload-api/web-keybindings-api.ts',
       'src/renderer/src/web/preload-api/web-onboarding-api.ts',
       'src/renderer/src/web/preload-api/web-preferences-store.ts',
@@ -107,9 +105,9 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
 
 /** The database each schema file creates tables in; a new schema file fails the census. */
 export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
-  'src/main/ai-vault-search/session-search-query-schema.ts': 'ai-vault-search',
-  'src/main/ai-vault-search/session-search-schema.ts': 'ai-vault-search',
-  'src/main/ai-vault-search/session-search-write-buffer.ts': 'ai-vault-search-staging',
+  'src/main/ai-vault-search/storage/session-search-query-schema.ts': 'ai-vault-search',
+  'src/main/ai-vault-search/storage/session-search-schema.ts': 'ai-vault-search',
+  'src/main/ai-vault-search/storage/session-search-write-buffer.ts': 'ai-vault-search-staging',
   'src/main/ai-vault/parse-cache/session-parse-cache-database.ts': 'ai-vault-parse-cache',
   'src/main/ai-vault/parse-cache/session-scope-cwds-table.ts': 'ai-vault-parse-cache',
   'src/main/browser/cookies/staging/browser-cookie-staged-import.ts': 'browser-cookie-import',

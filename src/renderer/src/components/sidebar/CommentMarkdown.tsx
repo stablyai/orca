@@ -17,7 +17,7 @@ import remarkCjkFriendly from 'remark-cjk-friendly/parseOnly'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from 'rehype-sanitize'
 import remend from 'remend'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   selectCommentMarkdownComponents,
   isTrustedCompactImageSrc,

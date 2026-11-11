@@ -1,3 +1,5 @@
+import { CLAUDE_ENTRYPOINT_ENV } from './claude-chat-entrypoint'
+
 // A launching Claude's identity and messaging access do not belong to independent processes.
 export const CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS = [
   'CLAUDECODE',
@@ -9,7 +11,7 @@ export const CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS = [
   'CLAUDE_CODE_MESSAGING_SOCKET',
   'CLAUDE_CODE_MESSAGING_TOKEN',
   'CLAUDE_CODE_EXECPATH',
-  'CLAUDE_CODE_ENTRYPOINT',
+  CLAUDE_ENTRYPOINT_ENV,
   'CLAUDE_CODE_DESKTOP_APP_VERSION',
   'CLAUDE_EFFORT',
   'CLAUDE_PID',

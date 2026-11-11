@@ -2,23 +2,7 @@ import type { CSSProperties } from 'react'
 import type { editor } from 'monaco-editor'
 import type { EditorTypography } from '../../../../../shared/editor/editor-typography'
 
-// Why shared: main resolves the same typography for plugins, so the rules live in one place.
-export {
-  EDITOR_FONT_SIZE_MAX,
-  EDITOR_FONT_SIZE_MIN,
-  EDITOR_LINE_HEIGHT_MAX,
-  EDITOR_LINE_HEIGHT_MIN,
-  EDITOR_REGULAR_FONT_WEIGHT,
-  resolveEditorBaseFontSize,
-  resolveEditorFontFamily,
-  resolveEditorFontStack,
-  resolveEditorLigaturesMode,
-  resolveEditorTypography,
-  type EditorLigaturesMode,
-  type EditorTypography,
-  type EditorTypographyInputs,
-  type EditorTypographySurface
-} from '../../../../../shared/editor/editor-typography'
+import '../../../../../shared/editor/editor-typography'
 
 /** Marks DOM code surfaces so opt-in font smoothing reaches them like Monaco. */
 export const EDITOR_TYPOGRAPHY_SURFACE_CLASS = 'editor-typography-surface'

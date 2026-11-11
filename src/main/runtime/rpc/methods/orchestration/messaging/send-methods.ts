@@ -27,6 +27,7 @@ import { orchestrationCallerIdentity } from '../runs/run-scope'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 import { planWorkerFollowUp, startWorkerFollowUp } from './worker-follow-up'
 import { finishedWorkerSend, refuseFinishedRemoteWorker } from './finished-worker-mail'
+import { relayedDeliveryUnknownWarning, withDeliveryHoldWarning } from './send-delivery-hold'
 import {
   followThroughWorkerReport,
   passHeldWorkerMail,
@@ -39,6 +40,8 @@ export const ORCHESTRATION_SEND_METHODS = [
     access: {
       kind: 'writes',
       caller: 'from',
+      callerPane: 'senderPaneKey',
+      server: 'on',
       targets: { to: 'party', threadId: 'message', run: 'run', payload: 'dispatch' }
     },
     permission: 'workspace',
@@ -172,6 +175,17 @@ export const ORCHESTRATION_SEND_METHODS = [
           if (!recipient.ok) {
             throw new OrchestrationError(recipient.code, recipient.message)
           }
+          // A paired Orca's former worker may since have taken up local work; it is no longer its to reach.
+          if (
+            orchestrationCaller?.kind === 'peer' &&
+            recipient.runId !== orchestrationCaller.peerRun.run_id
+          ) {
+            throw new OrchestrationError(
+              'forbidden',
+              `${params.to} now works outside the Run ${orchestrationCaller.peerRun.home_label} coordinates here. No effects were applied.`,
+              { effectsApplied: false }
+            )
+          }
           to = recipient.to
           messageRunId = recipient.runId
           if (recipient.warning) {
@@ -210,7 +224,7 @@ export const ORCHESTRATION_SEND_METHODS = [
                     message: params
                   })
                 : plan
-            // A dispatch: address carries no recipient warnings, so `next` stays last.
+            // The mail started the worker's next turn itself, so nothing holds it; `next` stays last.
             if (followUp?.kind === 'started') {
               if (typeof followUp.receipt.dispatchId === 'string') {
                 passHeldWorkerMail(runtime, db, followUp.receipt.dispatchId)
@@ -233,6 +247,9 @@ export const ORCHESTRATION_SEND_METHODS = [
               messageRunId = runBound.runId
               sendWarnings.push(runBound.warning)
             }
+          }
+          if (federatedTarget) {
+            sendWarnings.push(relayedDeliveryUnknownWarning(to))
           }
           const federatedControl = sendFederatedControlMail({
             params,
@@ -270,7 +287,10 @@ export const ORCHESTRATION_SEND_METHODS = [
             db,
             params.type === 'worker_done' ? settledDispatchId(sent) : undefined
           )
-          return sent
+          // Read only once the mail is stored: an await before it could let the worker settle and miss it.
+          return federatedTarget || params.type === 'worker_done' || params.type === 'heartbeat'
+            ? sent
+            : withDeliveryHoldWarning(sent, runtime, db, to)
         }
         return sendGroupMessage({
           params,
