@@ -11,7 +11,8 @@ async function buildNarrowRightColumns(page: Page, worktreeId: string): Promise<
       throw new Error('window.__store is not available')
     }
     state.setSidebarOpen(false)
-    state.setRightSidebarOpen(false)
+    // Open so the right column reserves no window-controls space, which differs per platform.
+    state.setRightSidebarOpen(true)
     const leftGroupId = state.activeGroupIdByWorktree[id] ?? state.groupsByWorktree[id]?.[0]?.id
     if (!leftGroupId) {
       throw new Error('No root tab group')
@@ -26,7 +27,7 @@ async function buildNarrowRightColumns(page: Page, worktreeId: string): Promise<
       throw new Error('Right split was not created')
     }
     const rightTab = state.createTab(id, rightGroupId, undefined, { activate: true })
-    // Root 80/20 of 1280px, then 60/40 inside it: the right column is ~100px wide.
+    // Root 80/20, then 60/40 inside it: the right column is under 120px wide.
     state.setTabGroupSplitRatio(id, '', 0.8)
     state.setTabGroupSplitRatio(id, 'second', 0.6)
     const rightTabId =
