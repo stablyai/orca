@@ -5,7 +5,9 @@ import { createPushServerHarness, notification } from './push-server-harness.tes
 
 const cleanups: (() => Promise<void>)[] = []
 afterEach(async () => {
-  for (const cleanup of cleanups.splice(0)) await cleanup()
+  for (const cleanup of cleanups.splice(0)) {
+    await cleanup()
+  }
   vi.useRealTimers()
   vi.restoreAllMocks()
 })

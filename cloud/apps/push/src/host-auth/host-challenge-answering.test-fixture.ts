@@ -131,8 +131,9 @@ export function answerPushHostChallenge(
   const gatewayKey = decodeCanonicalBase64(challenge.gatewayEphemeralPublicKeyB64, 32)
   const nonce = decodeCanonicalBase64(challenge.nonceB64, 24)
   const ciphertext = Buffer.from(challenge.ciphertextB64, 'base64')
-  if (!gatewayKey || !nonce || ciphertext.toString('base64') !== challenge.ciphertextB64)
+  if (!gatewayKey || !nonce || ciphertext.toString('base64') !== challenge.ciphertextB64) {
     return null
+  }
   const plaintext = nacl.box.open(ciphertext, nonce, gatewayKey, context.keypair.secretKey)
   if (!plaintext) {
     context.onInvalid?.('challenge-box-open')
