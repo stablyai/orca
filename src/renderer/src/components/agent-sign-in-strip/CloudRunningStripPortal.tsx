@@ -19,6 +19,7 @@ import { isOrcaCloudEnvironmentId } from '@/lib/orca-cloud/orca-cloud-environmen
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import {
   clearCloudRunningSignout,
+  forceCloudAgentRestart,
   cloudRunningStrip,
   useCloudRunningAccountReads,
   useCloudRunningSignoutVersion,
@@ -105,6 +106,7 @@ export function CloudRunningStripPortal({
         openAccounts()
       } else if (action.kind === 'restart' && ptyId) {
         // Never automatic: the person asked. The pane's own session resumes when it has one.
+        forceCloudAgentRestart(ptyId)
         useAppStore.getState().queuePaneAccountRestarts([ptyId], strip.agent)
         clearCloudRunningSignout(paneKey)
       }
