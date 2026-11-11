@@ -17843,6 +17843,12 @@
           "remotePathIsDirectory": "Remote path is a directory",
           "remotePagedReadUnsupported": "Remote file is larger than the 512 KB this Orca server can send. Update the server to open it.",
           "remoteFileTooLarge": "Remote file is too large to open in the editor ({{bytes}} bytes)"
+        },
+        "BinaryFileDefaultAppButton": {
+          "downloadFailed": "Failed to download '{{value0}}'.",
+          "open": "Open with default app",
+          "downloadOpen": "Download & open with default app",
+          "openFailed": "No app on this computer opened this file."
         }
       },
       "diff": {
