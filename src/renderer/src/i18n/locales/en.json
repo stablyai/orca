@@ -4240,7 +4240,8 @@
             "cloneDownload": "Downloading history…",
             "cloneCounting": "Counting objects…",
             "updateCloud": "Update repository",
-            "updateFetching": "Fetching changes…"
+            "updateFetching": "Fetching changes…",
+            "repositoryPending": "Repository"
           },
           "VmBuildFailureCard": {
             "createFailedTitle": "Couldn’t create workspace",
