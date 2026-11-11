@@ -6,8 +6,8 @@ import type {
   AgentSessionOptionCatalog,
   CatalogModel
 } from '../../../../../shared/agent-session/options/agent-session-option-catalog-types'
-import { getConnectionIdFromState } from '@/lib/connection-context'
-import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
+import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
+import { runtimeTargetForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 import { discoverRuntimeCommitMessageModels } from '@/runtime/source-control/git/runtime-git-generation-client'
 import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import { useAppStore } from '@/store'

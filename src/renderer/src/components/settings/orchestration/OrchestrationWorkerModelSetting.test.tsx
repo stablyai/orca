@@ -19,7 +19,7 @@ vi.mock('@/runtime/source-control/git/runtime-git-generation-client', () => ({
 }))
 
 // Discovery now asks the workspace's owner, which the bare test store cannot name.
-vi.mock('@/lib/resolve-owner', () => ({
+vi.mock('@/lib/workspace/ownership/resolve-owner', () => ({
   runtimeTargetForWorkspaceOwner: () => ({ kind: 'local' }) as const
 }))
 
