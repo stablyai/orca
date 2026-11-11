@@ -1,0 +1,9 @@
+[
+  { "path": "src/renderer/src/components/cloud-environment/EnvironmentForm.tsx", "line": 127, "term": "container", "reason": "\"dev container\" is the Dev Containers spec name (an import source), not the sandbox." },
+  { "path": "src/renderer/src/components/settings/virtual-machines/runtimes/CloudVmSetupGuide.tsx", "line": 20, "term": "VM", "reason": "BYOC / recipe-VM settings (Custom environments), where the glossary allows VM." },
+  { "path": "src/renderer/src/components/worktree-creation/VmBuildFailureActions.tsx", "line": 365, "term": "VM", "reason": "Recipe-VM branch; the Orca Cloud branch says \"Delete sandbox\"." },
+  { "path": "src/renderer/src/components/worktree-creation/VmBuildFailureCard.tsx", "line": 143, "term": "VM", "reason": "Recipe-VM branch; Orca Cloud renders BlockedSandboxHoursNote instead." },
+  { "path": "src/renderer/src/components/worktree-creation/VmDeleteConfirmDialog.tsx", "line": 38, "term": "VM", "reason": "Recipe-VM branch; the Orca Cloud branch says \"Delete this sandbox?\"." },
+  { "path": "src/renderer/src/components/worktree-creation/VmDeleteConfirmDialog.tsx", "line": 49, "term": "VM", "reason": "Recipe-VM branch; the Orca Cloud branch says the sandbox is deleted." },
+  { "path": "src/renderer/src/components/worktree-creation/VmDeleteConfirmDialog.tsx", "line": 63, "term": "VM", "reason": "Recipe-VM branch; the Orca Cloud branch says \"Delete sandbox\"." }
+]

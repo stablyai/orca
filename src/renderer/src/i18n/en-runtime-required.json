@@ -1525,6 +1525,7 @@
       "found": "{{count}} found",
       "found_one": "{{count}} found",
       "found_other": "{{count}} found",
+      "none": "None found in Claude Code or Codex on this computer. Servers you add there show up here.",
       "notSynced": "{{count}} found, not synced yet",
       "notSynced_one": "{{count}} found, not synced yet",
       "notSynced_other": "{{count}} found, not synced yet",
