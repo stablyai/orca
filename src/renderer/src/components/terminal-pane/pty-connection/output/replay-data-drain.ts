@@ -1,6 +1,10 @@
 import { RELEASE_SYNCHRONIZED_OUTPUT } from '../../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { syncTerminalScrollIntentFromViewport } from '@/lib/pane-manager/terminal-scroll-intent'
 import {
+  beginTerminalScrollIntentBufferRebuild,
+  endTerminalScrollIntentBufferRebuild
+} from '@/lib/pane-manager/terminal-scroll-intent-rebuild'
+import {
   cancelDeferredScrollRestore,
   cancelPendingFitScrollRestore
 } from '@/lib/pane-manager/pane-scroll'
@@ -199,18 +203,26 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
         continue
       }
       if (preSleep) {
+        const terminal = session.pane.terminal
         await finishWakeScrollbackRestore(
           preSleep,
-          session.pane.terminal,
-          session.writeReplayDataAsync
+          terminal,
+          session.writeReplayDataAsync,
+          (line) => {
+            // The person's place wins: drop restores captured before it (a remount's first fit, at
+            // the bottom), scroll with intent enforcement paused (its synchronous "follow output"
+            // would snap back), then record the place as a pin for the fits still to come.
+            cancelDeferredScrollRestore(terminal)
+            cancelPendingFitScrollRestore(terminal)
+            beginTerminalScrollIntentBufferRebuild(terminal)
+            try {
+              terminal.scrollToLine(line)
+            } finally {
+              endTerminalScrollIntentBufferRebuild(terminal)
+            }
+            syncTerminalScrollIntentFromViewport(terminal, { allowBufferShrink: true })
+          }
         )
-        if (preSleep.scrolledTo !== null) {
-          // The person's place wins: drop restores captured before it (a remount's first fit, at the
-          // bottom, waiting for a later fit) and record it as a pin for the fits still to come.
-          cancelDeferredScrollRestore(session.pane.terminal)
-          cancelPendingFitScrollRestore(session.pane.terminal)
-          syncTerminalScrollIntentFromViewport(session.pane.terminal, { allowBufferShrink: true })
-        }
         if (!isCurrentPayload()) {
           continue
         }
