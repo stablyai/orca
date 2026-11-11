@@ -320,6 +320,10 @@
       "sendQueueHint": "Geçerli tur bittikten sonra çalışır",
       "sendSteerHint": "Ajanın şu anda yaptığı işe katılır"
     },
+    "claudeSessionStatus": {
+      "awaitingNextReply": "bağlam sonraki yanıttan sonra güncellenir",
+      "compacted": "{{times}}× sıkıştırıldı"
+    },
     "contextUsage": {
       "title": "Bağlam"
     },

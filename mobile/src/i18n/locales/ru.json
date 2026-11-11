@@ -334,6 +334,10 @@
       "sendQueueHint": "Выполнится после текущего хода",
       "sendSteerHint": "Попадёт в то, что агент делает сейчас"
     },
+    "claudeSessionStatus": {
+      "awaitingNextReply": "контекст обновится после следующего ответа",
+      "compacted": "сжатий: {{times}}"
+    },
     "contextUsage": {
       "title": "Контекст"
     },
