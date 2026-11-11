@@ -8,7 +8,7 @@ import { mergeWorktreeMetaForWrite } from '../loading-store/worktree-metadata/wo
 import { wslMoveCutoverFixture as cutover } from '../__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from '../__fixtures__/wsl-mover/wsl-move-journal-seeding'
 import { loadWslMoveFence, resetWslMoveFenceForTests } from './wsl-move-scope-guard'
-import type * as LinearCurrentIssueContext from '../../linear/issue-context/current'
+import type * as LinearCurrentIssueContext from '../../linear/issues/context/worktree-current-issue'
 import type { ResolvedWorktree } from '../../runtime/workspaces/catalog/runtime-worktree-path-identity'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({ gitExecFileAsyncMock: vi.fn() }))
@@ -16,7 +16,7 @@ vi.mock('../../git/command-runner/git-exec-file', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
-vi.mock('../../linear/issue-context/current', async (importOriginal) => ({
+vi.mock('../../linear/issues/context/worktree-current-issue', async (importOriginal) => ({
   ...(await importOriginal<typeof LinearCurrentIssueContext>()),
   resolveLegacyLinearLinkWorkspace: () => ({ workspaceId: 'ws-1', organizationUrlKey: 'acme' })
 }))

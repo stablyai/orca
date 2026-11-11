@@ -5,9 +5,9 @@ import { requireRepoLocalGitRoute } from '../../../workspaces/execution-host/rep
 import { fetchCompareBaseRefWithLocalFallback } from '../../../git/compare-base-ref-fetch'
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 import { REVIEW_HEAD_FETCH_TIMEOUT_MS } from '../../../../shared/review-head-tracking-ref'
-import { getProjectRefForRemote } from '../../../gitlab/gitlab-project-ref-resolution'
-import { getWorkItemByProjectRef } from '../../../gitlab/work-item-queries'
-import { getGlabKnownHosts } from '../../../gitlab/gitlab-known-host-probe'
+import { getProjectRefForRemote } from '../../../gitlab/projects/gitlab-project-ref-resolution'
+import { getWorkItemByProjectRef } from '../../../gitlab/work-items/work-item-queries'
+import { getGlabKnownHosts } from '../../../gitlab/projects/gitlab-known-host-probe'
 import {
   getLocalProjectGitExecOptions,
   getLocalProjectWorktreeGitOptions
