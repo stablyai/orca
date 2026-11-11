@@ -19,8 +19,8 @@ export class SessionFileInventory extends SessionInventoryDirtyInputs {
   get fileCount(): number {
     return this.observations.count
   }
-  async has(path: string): Promise<boolean> {
-    return (await this.observations.files.get(path)) !== undefined
+  get empty(): boolean {
+    return this.initialized && !this.pending && !this.refused && !this.hasMembership
   }
   async releasePage(): Promise<boolean> {
     return (await this.request({ kind: 'release-scopes-page', scope: this.scope })).count === 0
@@ -241,8 +241,12 @@ export class SessionFileInventory extends SessionInventoryDirtyInputs {
         await this.reconcile()
       }
     }
-    await this.request({ kind: 'authority-cleanup', scope: this.scope })
-    const page = await this.observations.delivery.page()
+    if (this.authority.readySize || this.garbage.size) {
+      await this.request({ kind: 'authority-cleanup', scope: this.scope })
+    }
+    const page = this.observations.delivery.size
+      ? await this.observations.delivery.page()
+      : { rows: [] }
     const result = {
       changes: page.rows.flatMap(({ value }) =>
         value.file
@@ -276,13 +280,19 @@ export class SessionFileInventory extends SessionInventoryDirtyInputs {
     return this.observations.acknowledge(receipts)
   }
   async retryFailures(primary = true): Promise<void> {
-    await this.request({
-      kind: 'retry-admit',
-      primary,
-      scope: this.scope,
-      root: this.root,
-      generation: this.failures.epoch
-    })
+    if (
+      (primary && this.primaryWakes.size) ||
+      this.failures.pending ||
+      this.observations.failures.pending
+    ) {
+      await this.request({
+        kind: 'retry-admit',
+        primary,
+        scope: this.scope,
+        root: this.root,
+        generation: this.failures.epoch
+      })
+    }
     if (!this.primaryWakes.size && !this.walks.size && !this.cancellations.size) {
       this.reconciling = false
       if (this.reconcileAgain) {

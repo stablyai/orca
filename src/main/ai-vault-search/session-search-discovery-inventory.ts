@@ -65,7 +65,10 @@ export class SessionSearchDiscoveryInventory
       )
       if (!watch) {
         root.unwatched = true
-        if (!root.inventory.walking) {
+        if (
+          !root.inventory.walking &&
+          !(this.watchers.isMissing(args.rootDir) && root.inventory.empty)
+        ) {
           await root.inventory.reconcile()
         }
       } else {
@@ -139,7 +142,12 @@ export class SessionSearchDiscoveryInventory
         this.force || this.maintenance || !!(auxiliary?.reconcile && !auxiliary.failed),
         args
       )
-      await observer.stageChanges(auxiliary, args, this.overdue)
+      await observer.stageChanges(
+        auxiliary,
+        args,
+        this.overdue,
+        this.watchers.isMissing(observer.dependency.path, observer.dependency.mode)
+      )
       auxiliary?.acknowledge()
       await observer.settleDelivered(root.inventory.scope, this.overdue)
     }

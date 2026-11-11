@@ -1,3 +1,4 @@
+import { isMissingTranscriptPathError } from '../ai-vault/session-scanner-discovery'
 import { sessionSearchRequiresPolling } from './session-search-filesystem'
 import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import { WatcherProcessSupervisor } from '../ipc/filesystem/watcher-process/parcel-watcher-process-supervisor'
@@ -23,6 +24,10 @@ export class SessionSearchRootWatchers {
   private readonly owner = new AbortController()
   private readonly supervisor: WatcherProcessSupervisor
   private sequence = 0
+  private readonly missing = new Set<string>()
+  isMissing(path: string, mode: 'recursive' | 'shallow' = 'recursive'): boolean {
+    return this.missing.has(`${mode}:${path}`)
+  }
   private readonly consumers = new Map<string, Map<string, SessionSearchWatchDelivery>>()
   private seen = new Set<string>()
   get pending(): boolean {
@@ -36,6 +41,7 @@ export class SessionSearchRootWatchers {
   }
   begin(): void {
     this.probes = new Map()
+    this.missing.clear()
     this.seen.clear()
   }
   async end(): Promise<void> {
@@ -115,13 +121,17 @@ export class SessionSearchRootWatchers {
     try {
       const stat = await wslGatedStat(path, 'scan', signal)
       if (!stat.isDirectory()) {
+        this.missing.add(key)
         this.watches.delete(key)
         await previous?.subscription?.unsubscribe()
         return undefined
       }
       identity = `${stat.dev}:${stat.ino}:${stat.birthtimeMs}`
-    } catch {
+    } catch (error) {
       throwIfAiVaultScanCancelled(signal)
+      if (isMissingTranscriptPathError(error)) {
+        this.missing.add(key)
+      }
       if (previous) {
         for (const target of this.consumers.get(key)?.values() ?? []) {
           target.stage(previous)

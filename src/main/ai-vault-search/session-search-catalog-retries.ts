@@ -1,3 +1,4 @@
+import type { SessionSearchInputReceipt } from './session-search-catalog-types'
 import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { SESSION_INPUT_FAILURES_BEFORE_HELD_OUT } from '../ai-vault/session-observation-retries'
 import { recordSessionScanIssue, SCAN_ISSUE_LIMIT } from '../ai-vault/session-scan-issues'
@@ -41,14 +42,20 @@ export class SessionSearchCatalogRetries {
     const debt = await this.catalog.get(path)
     return !debt || (!this.held(debt) && debt.attempted !== this.generation)
   }
-  async fail(path: string, force = false, issue?: AiVaultScanIssue): Promise<void> {
+  async fail(
+    path: string,
+    force = false,
+    issue?: AiVaultScanIssue,
+    attempt?: { generation: number; receipt: SessionSearchInputReceipt }
+  ): Promise<void> {
     await this.catalog.transition({
       kind: 'retry-fail',
       scope: this.catalog.scope,
       path,
       force,
       issue,
-      generation: this.generation
+      generation: attempt?.generation ?? this.generation,
+      receipt: attempt?.receipt
     })
   }
   async wake(path?: string): Promise<void> {
@@ -61,6 +68,9 @@ export class SessionSearchCatalogRetries {
     await this.catalog.transition({ kind: 'retry-remove', scope: this.catalog.scope, path })
   }
   async report(issues: AiVaultScanIssue[]): Promise<void> {
+    if (!this.catalog.size) {
+      return
+    }
     let after: string | undefined
     while (issues.length < SCAN_ISSUE_LIMIT) {
       const page = await this.catalog.page({

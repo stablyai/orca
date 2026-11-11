@@ -62,6 +62,9 @@ export class SessionSearchDependencyInventory {
     await this.inventory?.begin(wake, args)
   }
   async settleDelivered(physical: string, overdue: () => boolean): Promise<void> {
+    if (!this.delivered.size && this.deliveryAfter === undefined) {
+      return
+    }
     do {
       const result = await this.delivered.transition({
         kind: 'dependency-fanout',
@@ -93,10 +96,11 @@ export class SessionSearchDependencyInventory {
   async stageChanges(
     watch: SessionSearchRootWatch | undefined,
     args: DiscoverSessionFilesArgs,
-    overdue: () => boolean
+    overdue: () => boolean,
+    missing = false
   ): Promise<void> {
     this.staging ??= {
-      iterator: this.changedKeys(watch, args, overdue),
+      iterator: this.changedKeys(watch, args, overdue, missing),
       keys: [],
       serial: ++this.stagingSequence,
       done: false
@@ -119,7 +123,7 @@ export class SessionSearchDependencyInventory {
       if (pending.done) {
         break
       }
-      pending.iterator ??= this.changedKeys(watch, args, overdue)
+      pending.iterator ??= this.changedKeys(watch, args, overdue, missing)
       try {
         const next = await pending.iterator.next()
         if (next.done) {
@@ -162,7 +166,8 @@ export class SessionSearchDependencyInventory {
   async *changedKeys(
     watch: SessionSearchRootWatch | undefined,
     args: DiscoverSessionFilesArgs,
-    overdue: () => boolean
+    overdue: () => boolean,
+    missing = false
   ): AsyncGenerator<string> {
     if (this.inventoryAck) {
       await this.inventory!.acknowledge(this.inventoryAck)
@@ -213,7 +218,11 @@ export class SessionSearchDependencyInventory {
     }
     const keys = new Set<string>()
     const inventory = this.inventory!
-    if ((!watch || watch.failed || watch.reconcile) && !inventory.walking) {
+    if (
+      (!watch || watch.failed || watch.reconcile) &&
+      !inventory.walking &&
+      !(missing && !watch && inventory.empty)
+    ) {
       await inventory.reconcile(watch?.receipt('reconcile'))
       if (watch) {
         watch.reconcile = false

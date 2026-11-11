@@ -1,9 +1,26 @@
+import type { SearchWorkerResponse } from './session-search-worker-protocol'
 // @orca-isolated-worker -- Its worker factory mock must be installed in each importing module graph.
 import type * as WorkerClient from './session-search-worker-client'
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { vi } from 'vitest'
 import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
+
+const control = vi.hoisted(() => ({
+  prelude: '',
+  data: undefined as unknown,
+  onResponse: undefined as ((response: SearchWorkerResponse) => void) | undefined
+}))
+
+export function configureSessionSearchWorkerFixture(options?: {
+  prelude: string
+  data: unknown
+  onResponse: (response: SearchWorkerResponse) => void
+}): void {
+  control.prelude = options?.prelude ?? ''
+  control.data = options?.data
+  control.onResponse = options?.onResponse
+}
 
 vi.mock('./session-search-worker-client', async (importOriginal) => {
   const actual = await importOriginal<typeof WorkerClient>()
@@ -14,14 +31,20 @@ vi.mock('./session-search-worker-client', async (importOriginal) => {
     ...actual,
     SessionSearchWorkerClient: class extends actual.SessionSearchWorkerClient {
       constructor(onChange?: ConstructorParameters<typeof actual.SessionSearchWorkerClient>[0]) {
-        super(onChange, () =>
-          spawnWorkerThread(
-            `require(${JSON.stringify(loader)}); require(${JSON.stringify(entry)})`,
-            {
-              eval: true,
-              execArgv: ['--conditions=orca-source']
-            }
-          )
+        super(
+          (response) => {
+            control.onResponse?.(response)
+            onChange?.(response)
+          },
+          () =>
+            spawnWorkerThread(
+              `require(${JSON.stringify(loader)}); ${control.prelude}; require(${JSON.stringify(entry)})`,
+              {
+                eval: true,
+                workerData: control.data,
+                execArgv: ['--conditions=orca-source']
+              }
+            )
         )
       }
     }

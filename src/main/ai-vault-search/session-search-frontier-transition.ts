@@ -24,8 +24,7 @@ export function transitionSessionSearchFrontier(
     return { revision: catalog.nextRevision() }
   }
   if (command.kind === 'frontier-settle') {
-    catalog.connection.exec('SAVEPOINT search_frontier_settle')
-    try {
+    return catalog.transaction('search_frontier_settle', () => {
       for (const item of command.rows) {
         const { key } = item
         const current = catalog.execute({ kind: 'get', scope: command.scope, key }).rows?.[0]
@@ -55,12 +54,8 @@ export function transitionSessionSearchFrontier(
           catalog.execute({ kind: 'delete', scope: command.scope, key })
         }
       }
-      catalog.connection.exec('RELEASE search_frontier_settle')
       return {}
-    } catch (error) {
-      catalog.connection.exec('ROLLBACK TO search_frontier_settle; RELEASE search_frontier_settle')
-      throw error
-    }
+    })
   }
   const wakeScope = `${command.scope}:wake`
   if (command.kind === 'ack-values' || command.kind === 'frontier-ack') {

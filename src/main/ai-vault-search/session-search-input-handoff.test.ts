@@ -1,15 +1,20 @@
 import './session-search-watcher.test-fixture'
 import './session-search-worker.test-fixture'
 import { join } from 'node:path'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
+import * as filesystem from '../native-chat/wsl-transcript-fs-access'
 import { expect, it, vi } from 'vitest'
 import { SessionSearchIndexer } from './session-search-indexer'
-import { SessionSearchWorkerClient } from './session-search-worker-client'
+import {
+  SessionSearchOperationError,
+  SessionSearchWorkerClient
+} from './session-search-worker-client'
 import {
   notifySessionSearchFileChange,
   notifySessionSearchOverflow
 } from './session-search-watcher.test-fixture'
 import {
+  claudeLines,
   FakeSessionSearchClock,
   openSessionSearchIndexerHarness,
   writeClaudeTranscript
@@ -22,6 +27,8 @@ it.each([
   'event-after',
   'prepare-before',
   'prepare-after',
+  'apply-before',
+  'apply-after',
   'directory-schedule'
 ] as const)(
   'retains a delivered new conversation across %s rejection without a second notice',
@@ -57,6 +64,9 @@ it.each([
             (failure.startsWith('prepare-') &&
               command.command.kind === 'observe-prepare' &&
               command.command.inputs.some((input) => input.path === second)) ||
+            (failure.startsWith('apply-') &&
+              command.command.kind === 'observe-apply' &&
+              command.command.outcomes.some((input) => input.path === second)) ||
             (failure === 'directory-schedule' &&
               command.command.kind === 'directory-schedule' &&
               command.command.path === directory))
@@ -65,7 +75,7 @@ it.each([
           if (failure.endsWith('after')) {
             await request.call(this, command)
           }
-          throw new Error('fixture catalog handoff rejected')
+          throw new SessionSearchOperationError('fixture catalog handoff rejected')
         }
         return request.call(this, command)
       })
@@ -88,7 +98,7 @@ it.each([
       armed = true
       await subject.reconcile()
       expect(rejected).toBe(true)
-      expect(errors).toHaveLength(1)
+      expect(errors.some((error) => error instanceof SessionSearchOperationError)).toBe(true)
       // Only resume the failed boundary; no new notification, full refresh or maintenance tick.
       await subject.reconcile()
       expect(hits()).toEqual({ n: 4 })
@@ -131,7 +141,7 @@ it.each(['before', 'after'] as const)(
           if (completion === 'after') {
             await request.call(this, command)
           }
-          throw new Error('fixture native recovery rejected')
+          throw new SessionSearchOperationError('fixture native recovery rejected')
         }
         return request.call(this, command)
       })
@@ -169,6 +179,105 @@ it.each(['before', 'after'] as const)(
       expect(subject.status().phase).toBe('current')
     } finally {
       gate.mockRestore()
+      await subject.close()
+      await harness.cleanup()
+    }
+  }
+)
+
+it.each(['acknowledgement', 'accepted-refusal'] as const)(
+  'charges a directory refusal only for an actual failed inspection across %s rejection',
+  async (failure) => {
+    const harness = await openSessionSearchIndexerHarness('ss-probe-refusal-handoff')
+    const directory = join(harness.roots.claudeProjectsDir!, 'unreadable')
+    const path = join(directory, 'session.jsonl')
+    const clock = new FakeSessionSearchClock()
+    const subject = new SessionSearchIndexer({
+      databasePath: harness.databasePath,
+      roots: harness.roots,
+      historyDays: null,
+      clock,
+      onError: () => undefined
+    })
+    const request = SessionSearchWorkerClient.prototype.request
+    const stat = filesystem.wslGatedStat
+    let refusing = true,
+      rejected = 0,
+      attempts = 0
+    const probe = vi.spyOn(filesystem, 'wslGatedStat').mockImplementation((input, ...rest) => {
+      if (refusing && input === directory) {
+        attempts++
+        return Promise.reject(
+          Object.assign(new Error('fixture directory inspection refused'), { code: 'EIO' })
+        )
+      }
+      return stat(input, ...rest)
+    })
+    const readdir = filesystem.wslGatedReaddir
+    const listing = vi.spyOn(filesystem, 'wslGatedReaddir').mockImplementation((input, ...rest) => {
+      if (refusing && input === directory) {
+        attempts++
+        return Promise.reject(
+          Object.assign(new Error('fixture directory inspection refused'), { code: 'EIO' })
+        )
+      }
+      return readdir(input, ...rest)
+    })
+    const gate = vi
+      .spyOn(SessionSearchWorkerClient.prototype, 'request')
+      .mockImplementation(async function (this: SessionSearchWorkerClient, command) {
+        if (
+          rejected < 2 &&
+          attempts === 1 &&
+          command.op === 'catalog' &&
+          'path' in command.command &&
+          command.command.path === directory &&
+          command.command.kind === (failure === 'acknowledgement' ? 'dirty-ack' : 'retry-fail')
+        ) {
+          rejected++
+          if (failure === 'accepted-refusal') {
+            await request.call(this, command)
+          }
+          throw new SessionSearchOperationError('fixture refusal acknowledgement rejected')
+        }
+        return request.call(this, command)
+      })
+    try {
+      await mkdir(harness.claudeProjectDir, { recursive: true })
+      await subject.start()
+      await mkdir(directory)
+      await writeFile(
+        path,
+        `${claudeLines(['proberecoveryneedle'], 'probe-refusal', 0).join('\n')}\n`
+      )
+      notifySessionSearchFileChange(directory)
+      await subject.reconcile()
+      expect(rejected).toBe(1)
+      // Three actual inspections own the holdout, not the replay of an accepted refusal.
+      for (let cycle = 0; cycle < 4; cycle++) {
+        clock.advance(20_000)
+        await subject.settled()
+      }
+      expect(attempts).toBe(3)
+      expect(subject.status().phase).toBe('current')
+      refusing = false
+      notifySessionSearchFileChange(directory)
+      await subject.reconcile()
+      await subject.reconcile()
+      expect(
+        harness.read((db) =>
+          db
+            .prepare(
+              "SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'proberecoveryneedle'"
+            )
+            .get()
+        )
+      ).toEqual({ n: 2 })
+      expect(subject.status().phase).toBe('current')
+    } finally {
+      gate.mockRestore()
+      probe.mockRestore()
+      listing.mockRestore()
       await subject.close()
       await harness.cleanup()
     }

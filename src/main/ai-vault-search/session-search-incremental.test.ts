@@ -1,3 +1,4 @@
+import './session-search-watcher.test-fixture'
 import './session-search-worker.test-fixture'
 import { notifySessionSearchFileChange } from './session-search-watcher.test-fixture'
 import { appendFile, mkdir, readFile, stat, utimes, writeFile } from 'node:fs/promises'
@@ -17,6 +18,8 @@ import {
   writeClaudeTranscript,
   claudeLines
 } from './session-search-indexer-test-fixture'
+
+vi.mock('./session-search-filesystem', () => ({ sessionSearchRequiresPolling: async () => false }))
 
 it.each([40, 400])(
   'bounds idle and one-file work independently of %s archived transcripts',
@@ -84,6 +87,14 @@ it.each([40, 400])(
       // Only bounded empty refusal/ready probes are required for an unchanged known root.
       expect(catalogTraffic().length).toBeLessThanOrEqual(15 * 8)
       expect(catalogRows()).toBe(0)
+      const missingRoot = harness.roots.codexSessionsDir!
+      expect(stat.mock.calls.filter(([path]) => path === missingRoot)).toHaveLength(15)
+      expect(readdir.mock.calls.filter(([path]) => path === missingRoot)).toHaveLength(0)
+      expect(
+        traffic.mock.calls.filter(
+          ([command]) => command.op === 'catalog' && command.command.scope.includes(missingRoot)
+        )
+      ).toHaveLength(0)
       stat.mockClear()
       readdir.mockClear()
       traffic.mockClear()
@@ -113,6 +124,20 @@ it.each([40, 400])(
             .get()
         )
       ).toEqual({ n: 2 })
+      const created = codexFixture()
+      await mkdir(missingRoot, { recursive: true })
+      await writeFile(join(missingRoot, created.fileName), `${created.seedLines.join('\n')}\n`)
+      clock.advance(20_000)
+      await subject.settled()
+      expect(
+        harness.read((db) =>
+          db
+            .prepare(
+              `SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH '"codex seed question"'`
+            )
+            .get()
+        )
+      ).toEqual({ n: 1 })
     } finally {
       await subject.close()
       stat.mockRestore()
@@ -204,9 +229,8 @@ it('preserves delivered equal-stat rewrites while Claude and Codex roots drain t
         const result = await request.call(this, command)
         if (
           command.op === 'catalog' &&
-          command.command.scope.includes(harness.roots.claudeProjectsDir!) &&
-          command.command.kind === 'page' &&
-          command.command.scope.endsWith(':refusals')
+          command.command.kind === 'input-invalidate' &&
+          command.command.path === path
         ) {
           blockedClaude = true
           await acceptingA.promise

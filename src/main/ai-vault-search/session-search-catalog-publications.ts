@@ -42,6 +42,14 @@ export class SessionSearchCatalogPublications {
     CREATE INDEX temp.search_publication_ready ON search_publications(dirty,group_key);
     CREATE INDEX temp.search_publication_failures ON search_publications(failures,dirty,group_key);`)
   }
+  rollbackPoint(): () => void {
+    const pending = this.pending,
+      retryCount = this.retryCount
+    return () => {
+      this.pending = pending
+      this.retryCount = retryCount
+    }
+  }
   execute(command: SessionSearchPublicationCommand): SessionSearchPublicationResult {
     switch (command.kind) {
       case 'publication-begin':

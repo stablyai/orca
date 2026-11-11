@@ -1,6 +1,7 @@
 import {
   SessionSearchCatalogClient,
   recordSessionSearchCatalogCounts,
+  shareSessionSearchCatalogCounts,
   type SessionSearchCatalogRequest
 } from '../ai-vault-search/session-search-catalog-client'
 import { SessionSearchCatalogFrontier } from '../ai-vault-search/session-search-catalog-frontier'
@@ -14,6 +15,7 @@ import {
 } from './session-scanner-discovery'
 import { isDiscoverableSessionFile, isInsideSessionRoot } from './session-file-discovery'
 import { recordSessionScanIssue, scanIssueTextFromError } from './session-scan-issues'
+import type { SessionSearchInputReceipt } from '../ai-vault-search/session-search-catalog-types'
 import { SessionInventoryFiles } from './session-file-inventory-files'
 
 type Walk = {
@@ -53,6 +55,7 @@ export class SessionInventoryDirectoryWalks {
       recordSessionSearchCatalogCounts(this.request, result)
       return result
     }
+    shareSessionSearchCatalogCounts(this.request, request)
     this.authority = new SessionSearchCatalogClient(`${scope}:authority`, this.request)
     this.primaryWakes = new SessionSearchCatalogClient(`${scope}:primary-wakes`, this.request)
     this.garbage = new SessionSearchCatalogClient(`${scope}:authority-garbage`, this.request)
@@ -72,6 +75,20 @@ export class SessionInventoryDirectoryWalks {
     this.observations = new SessionInventoryFiles(scope, this.request, (path) =>
       this.schedule(path)
     )
+  }
+  protected get hasMembership(): boolean {
+    return (
+      this.observations.count > 0 ||
+      this.directories.size > 0 ||
+      this.entries.size > 0 ||
+      this.trailing.size > 0 ||
+      ['observing', 'observation-epochs', 'dirty-expansion'].some(
+        (suffix) => new SessionSearchCatalogClient(`${this.scope}:${suffix}`, this.request).size > 0
+      )
+    )
+  }
+  async has(path: string): Promise<boolean> {
+    return (await this.observations.files.get(path)) !== undefined
   }
   get catalogRequest(): SessionSearchCatalogRequest {
     return this.request
@@ -93,7 +110,8 @@ export class SessionInventoryDirectoryWalks {
     path: string,
     reconcile = false,
     remove = false,
-    cutoff?: number
+    cutoff?: number,
+    receipt?: SessionSearchInputReceipt
   ): Promise<void> {
     if (!isInsideSessionRoot(this.root, path)) {
       return
@@ -106,7 +124,8 @@ export class SessionInventoryDirectoryWalks {
       depth: rel ? rel.split(/[\\/]/).length : 0,
       reconcile,
       remove,
-      cutoff
+      cutoff,
+      receipt
     })
   }
 
@@ -243,11 +262,12 @@ export class SessionInventoryDirectoryWalks {
   protected async issue(
     path: string,
     error: unknown,
-    args: DiscoverSessionFilesArgs
+    args: DiscoverSessionFilesArgs,
+    attempt?: { generation: number; receipt: SessionSearchInputReceipt }
   ): Promise<void> {
     const issue = { agent: args.agent, path, ...scanIssueTextFromError(error) }
     await this.addDirectory(path)
-    await this.failures.fail(path, false, issue)
+    await this.failures.fail(path, false, issue, attempt)
     recordSessionScanIssue(args.issues, issue)
   }
 }

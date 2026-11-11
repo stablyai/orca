@@ -1,3 +1,4 @@
+import { SessionSearchTransactionEffects } from './session-search-transaction-effects'
 import { initializeSessionSearchStorage } from './session-search-storage-bootstrap'
 import { recordSessionSearchPrimaryFailure } from './session-search-primary-retries'
 import { admitSessionSearchStoreWrite } from './session-search-store-write'
@@ -61,6 +62,7 @@ export class SessionSearchStore {
   private readonly writer: SessionSearchIndexWriter
   private candidateCatalog: SessionSearchCatalogCandidates | undefined
   private scratch: SessionSearchCatalog | undefined
+  private readonly effects: SessionSearchTransactionEffects
   private workCatalog: SessionSearchWorkCatalog | undefined
   private closed = false
   private retentionCutoffMs: number | null = null
@@ -76,11 +78,14 @@ export class SessionSearchStore {
         error instanceof Error ? error.name : 'IndexError'
       ),
     private readonly onMessagesChanged: (delta: number) => void = () => undefined,
-    readonly onSourceWake: (
-      previous: SessionSearchFileRow,
-      row: SessionSearchFileRow
-    ) => void = () => undefined
+    publishSourceWake: (previous: SessionSearchFileRow, row: SessionSearchFileRow) => void = () =>
+      undefined
   ) {
+    this.effects = new SessionSearchTransactionEffects(
+      () => this.catalogCandidates.rollbackPoint(),
+      (path) => this.fileRow(path),
+      publishSourceWake
+    )
     this.db = openSessionSearchDatabase(path)
     initializeSessionSearchStorage(this.db)
     ensureSessionSearchQuerySchema(this.db)
@@ -147,9 +152,14 @@ export class SessionSearchStore {
     this.workCatalog ??= new SessionSearchWorkCatalog()
     return transitionSessionSearchWork(this, this.workCatalog, command)
   }
+  onSourceWake(previous: SessionSearchFileRow, row: SessionSearchFileRow): void {
+    this.effects.wake(previous, row)
+  }
   get catalogStorage(): SessionSearchCatalog {
-    this.scratch ??= new SessionSearchCatalog(this.db, (path, reason) =>
-      requireSessionSearchCandidateReason(this, path, reason)
+    this.scratch ??= new SessionSearchCatalog(
+      this.db,
+      (path, reason) => requireSessionSearchCandidateReason(this, path, reason),
+      this.effects
     )
     return this.scratch
   }

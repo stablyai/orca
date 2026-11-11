@@ -10,11 +10,7 @@ import type {
   SessionSearchCatalogResult,
   SessionSearchCatalogRow
 } from './session-search-catalog-types'
-export type {
-  SessionSearchCatalogCommand,
-  SessionSearchCatalogResult,
-  SessionSearchCatalogRow
-} from './session-search-catalog-types'
+export type { SessionSearchCatalogCommand, SessionSearchCatalogResult, SessionSearchCatalogRow }
 
 /** Inactive observations and obligations spill to this connection's private scratch catalog. */
 export class SessionSearchCatalog extends SessionSearchCatalogStorage {
@@ -22,7 +18,8 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
   private revision = 0
   constructor(
     db: SyncDatabase,
-    readonly requireReason?: (path: string, reason: 'force' | 'metadata') => boolean
+    readonly requireReason?: (path: string, reason: 'force' | 'metadata') => boolean,
+    private readonly effects?: { begin: () => { commit: () => void; rollback: () => void } }
   ) {
     super(db)
   }
@@ -30,14 +27,37 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
     return ++this.revision
   }
 
+  transaction<T>(name: string, run: () => T): T {
+    const effects = this.effects?.begin()
+    let result: T,
+      opened = false
+    try {
+      this.db.exec(`SAVEPOINT ${name}`)
+      opened = true
+      result = run()
+      this.db.exec(`RELEASE ${name}`)
+    } catch (error) {
+      try {
+        if (opened) {
+          this.db.exec(`ROLLBACK TO ${name}; RELEASE ${name}`)
+        }
+      } finally {
+        effects?.rollback()
+      }
+      throw error
+    }
+    effects?.commit()
+    return result
+  }
   execute(command: SessionSearchCatalogCommand): SessionSearchCatalogResult {
     this.touched.add(command.scope)
-    if (!command.receipt) {
+    const receipt = command.receipt
+    if (!receipt) {
       return this.apply(command)
     }
     const scope = `${command.scope}:input-receipts`
-    const previous = this.execute({ kind: 'get', scope, key: command.receipt.consumer }).rows?.[0]
-    if (previous && previous.rank >= command.receipt.revision) {
+    const previous = this.execute({ kind: 'get', scope, key: receipt.consumer }).rows?.[0]
+    if (previous && previous.rank >= receipt.revision) {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only this receipt owner encodes the accepted response.
       const accepted = JSON.parse(previous.value) as {
         result: SessionSearchCatalogResult
@@ -48,29 +68,24 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
       }
       return accepted.result
     }
-    this.db.exec('SAVEPOINT search_input_receipt')
-    try {
+    return this.transaction('search_input_receipt', () => {
       const result = this.apply({ ...command, receipt: undefined })
       this.execute({
         kind: 'put',
         scope,
         rows: [
           {
-            key: command.receipt.consumer,
+            key: receipt.consumer,
             value: JSON.stringify({ result, scopes: [...this.touched] }),
             parent: '',
             group: '',
-            rank: command.receipt.revision,
+            rank: receipt.revision,
             ready: 0
           }
         ]
       })
-      this.db.exec('RELEASE search_input_receipt')
       return result
-    } catch (error) {
-      this.db.exec('ROLLBACK TO search_input_receipt; RELEASE search_input_receipt')
-      throw error
-    }
+    })
   }
   response(command: SessionSearchCatalogCommand): SessionSearchCatalogResult {
     const records =
@@ -154,8 +169,7 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
         if (command.rows.length > 1 && bytes > SESSION_SEARCH_CATALOG_PAGE_BYTES) {
           throw new Error('Session catalog batch exceeds byte budget')
         }
-        this.db.exec('SAVEPOINT search_catalog_batch')
-        try {
+        this.transaction('search_catalog_batch', () => {
           const insert = this.db.prepare(`INSERT INTO temp.search_catalog
             (scope,key,value,parent,group_key,rank,ready,tie) VALUES (?,?,?,?,?,?,?,?)
             ON CONFLICT(scope,key) DO UPDATE SET value=excluded.value,
@@ -173,11 +187,7 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
               row.tie ?? 0
             )
           }
-          this.db.exec('RELEASE search_catalog_batch')
-        } catch (error) {
-          this.db.exec('ROLLBACK TO search_catalog_batch; RELEASE search_catalog_batch')
-          throw error
-        }
+        })
         return {}
       }
       case 'delete-page':

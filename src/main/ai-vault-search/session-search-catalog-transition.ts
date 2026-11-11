@@ -43,17 +43,9 @@ export function transitionSessionSearchCatalog(
     case 'input-invalidate':
     case 'dirty-page':
     case 'dirty-ack': {
-      catalog.connection.exec('SAVEPOINT search_dirty_transition')
-      try {
-        const result = transitionSessionSearchDirty(catalog, command)
-        catalog.connection.exec('RELEASE search_dirty_transition')
-        return result
-      } catch (error) {
-        catalog.connection.exec(
-          'ROLLBACK TO search_dirty_transition; RELEASE search_dirty_transition'
-        )
-        throw error
-      }
+      return catalog.transaction('search_dirty_transition', () =>
+        transitionSessionSearchDirty(catalog, command)
+      )
     }
     case 'dependency-remove':
     case 'dependency-deliver':
@@ -94,17 +86,9 @@ export function transitionSessionSearchCatalog(
       ) {
         throw new Error('Session observation exceeds page budget')
       }
-      catalog.connection.exec('SAVEPOINT search_inventory_transition')
-      try {
-        const result = transitionSessionSearchInventory(catalog, command)
-        catalog.connection.exec('RELEASE search_inventory_transition')
-        return result
-      } catch (error) {
-        catalog.connection.exec(
-          'ROLLBACK TO search_inventory_transition; RELEASE search_inventory_transition'
-        )
-        throw error
-      }
+      return catalog.transaction('search_inventory_transition', () =>
+        transitionSessionSearchInventory(catalog, command)
+      )
     }
     default:
       return undefined

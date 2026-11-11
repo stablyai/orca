@@ -12,6 +12,7 @@ type DirtyInput = { path: string; force: boolean; dirtyRevision: number }
 type Probe = {
   input: DirtyInput
   serial: number
+  generation?: number
   revision?: number
   result?: { directory: boolean } | { error: unknown }
   phase: number
@@ -74,6 +75,7 @@ export class SessionInventoryDirtyInputs extends SessionInventoryDirectoryWalks 
       ).observationEpoch!
     }
     if (!probe.result) {
+      probe.generation = this.failures.epoch
       try {
         const stat = await wslGatedStat(path, 'scan', args.signal)
         probe.result = { directory: stat.isDirectory() }
@@ -97,19 +99,26 @@ export class SessionInventoryDirtyInputs extends SessionInventoryDirectoryWalks 
       if ('error' in probe.result) {
         if (isMissingTranscriptPathError(probe.result.error)) {
           if (probe.phase === 0) {
-            await this.schedule(path, false, true, probe.revision)
+            await this.schedule(path, false, true, probe.revision, receipt('missing'))
             probe.phase = 1
           }
-          await this.schedule(dirname(path))
-        } else {
-          await this.issue(path, probe.result.error, args)
+          if (probe.phase === 1) {
+            await this.schedule(dirname(path), false, false, undefined, receipt('parent'))
+            probe.phase = 2
+          }
+        } else if (probe.phase === 0) {
+          await this.issue(path, probe.result.error, args, {
+            generation: probe.generation!,
+            receipt: receipt('issue')
+          })
+          probe.phase = 2
         }
       } else {
         if (probe.phase === 0) {
           await this.failures.delete(path)
           probe.phase = 1
         }
-        if (probe.result.directory) {
+        if (probe.phase === 1 && probe.result.directory) {
           await this.request({
             kind: 'directory-schedule',
             scope: this.scope,
@@ -119,8 +128,12 @@ export class SessionInventoryDirtyInputs extends SessionInventoryDirectoryWalks 
             trailing: true,
             receipt: receipt('schedule')
           })
-        } else if (await this.directories.get(path)) {
-          await this.schedule(dirname(path))
+          probe.phase = 2
+        } else if (probe.phase === 1) {
+          if (await this.directories.get(path)) {
+            await this.schedule(dirname(path), false, false, undefined, receipt('parent'))
+          }
+          probe.phase = 2
         }
       }
     }

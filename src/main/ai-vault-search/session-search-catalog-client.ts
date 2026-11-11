@@ -18,6 +18,15 @@ const counts = new WeakMap<
   Map<string, { count: number; runnable: number }>
 >()
 
+export function shareSessionSearchCatalogCounts(
+  target: SessionSearchCatalogRequest,
+  source: SessionSearchCatalogRequest
+): void {
+  const shared = counts.get(source) ?? new Map<string, { count: number; runnable: number }>()
+  counts.set(source, shared)
+  counts.set(target, shared)
+}
+
 export function recordSessionSearchCatalogCounts(
   send: SessionSearchCatalogRequest,
   result: SessionSearchCatalogResult
