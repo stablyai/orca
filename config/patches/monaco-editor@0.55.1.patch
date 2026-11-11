@@ -18,3 +18,948 @@ index cbe9bb8e8bb97ca69e1026d2335857ec7ae32a16..86c4f393b76a4d433be297833188058c
          this._domNode.className = 'gutter monaco-editor';
          const scrollDecoration = this._domNode.appendChild(h('div.scroll-decoration', { role: 'presentation', ariaHidden: 'true', style: { width: '100%' } })
              .root);
+diff --git a/esm/vs/editor/browser/controller/dragScrolling.js b/esm/vs/editor/browser/controller/dragScrolling.js
+--- a/esm/vs/editor/browser/controller/dragScrolling.js
++++ b/esm/vs/editor/browser/controller/dragScrolling.js
+@@ -46,9 +46,11 @@
+         this._position = position;
+         this._mouseEvent = mouseEvent;
+         this._lastTime = Date.now();
++        this._isStopped = false;
+         this._animationFrameDisposable = scheduleAtNextAnimationFrame(getWindow(mouseEvent.browserEvent), () => this._execute());
+     }
+     dispose() {
++        this._isStopped = true;
+         this._animationFrameDisposable.dispose();
+         super.dispose();
+     }
+@@ -93,7 +95,12 @@
+         const elapsed = this._tick();
+         const scrollInPixels = scrollSpeedInLines * (elapsed / 1000) * lineHeight;
+         const scrollValue = (this._position.outsidePosition === 'above' ? -scrollInPixels : scrollInPixels);
+-        this._context.viewModel.viewLayout.deltaScrollNow(0, scrollValue);
++        if (!this._context.viewModel.requestVerticalSelectionDrag(scrollValue)) {
++            this._context.viewModel.viewLayout.deltaScrollNow(0, scrollValue);
++        }
++        if (this._isStopped) {
++            return;
++        }
+         this._viewHelper.renderNow();
+         const viewportData = this._context.viewLayout.getLinesViewportData();
+         const edgeLineNumber = (this._position.outsidePosition === 'above' ? viewportData.startLineNumber : viewportData.endLineNumber);
+@@ -115,6 +122,9 @@
+             }
+         }
+         this._dispatchMouse(mouseTarget, true, 2 /* NavigationCommandRevealType.None */);
++        if (this._isStopped) {
++            return;
++        }
+         this._animationFrameDisposable = scheduleAtNextAnimationFrame(getWindow(mouseTarget.element), () => this._execute());
+     }
+ }
+diff --git a/esm/vs/editor/browser/controller/mouseHandler.js b/esm/vs/editor/browser/controller/mouseHandler.js
+--- a/esm/vs/editor/browser/controller/mouseHandler.js
++++ b/esm/vs/editor/browser/controller/mouseHandler.js
+@@ -67,6 +67,9 @@
+         this._setupMouseWheelZoomListener();
+         this._context.addEventHandler(this);
+     }
++    stopSelectionDrag() {
++        this._mouseDownOperation.stop();
++    }
+     _setupMouseWheelZoomListener() {
+         const classifier = MouseWheelClassifier.INSTANCE;
+         let prevMouseWheelTime = 0;
+@@ -361,6 +364,10 @@
+         this._isActive = false;
+         this._topBottomDragScrolling.stop();
+         this._leftRightDragScrolling.stop();
++    }
++    stop() {
++        this._mouseMoveMonitor.stopMonitoring();
++        this._stop();
+     }
+     onHeightChanged() {
+         this._mouseMoveMonitor.stopMonitoring();
+diff --git a/esm/vs/editor/browser/controller/pointerHandler.js b/esm/vs/editor/browser/controller/pointerHandler.js
+--- a/esm/vs/editor/browser/controller/pointerHandler.js
++++ b/esm/vs/editor/browser/controller/pointerHandler.js
+@@ -124,6 +124,9 @@
+             this.handler = this._register(new MouseHandler(context, viewController, viewHelper));
+         }
+     }
++    stopSelectionDrag() {
++        this.handler.stopSelectionDrag();
++    }
+     getTargetAtClientPoint(clientX, clientY) {
+         return this.handler.getTargetAtClientPoint(clientX, clientY);
+     }
+diff --git a/esm/vs/editor/browser/view.js b/esm/vs/editor/browser/view.js
+--- a/esm/vs/editor/browser/view.js
++++ b/esm/vs/editor/browser/view.js
+@@ -517,6 +517,12 @@
+     createOverviewRuler(cssClassName) {
+         return new OverviewRuler(this._context, cssClassName);
+     }
++    getViewZoneBounds(id) {
++        return this._viewZones.getViewZoneBounds(id);
++    }
++    stopSelectionDrag() {
++        this._pointerHandler.stopSelectionDrag();
++    }
+     change(callback) {
+         this._viewZones.changeViewZones(callback);
+         this._scheduleRender();
+diff --git a/esm/vs/editor/browser/viewParts/viewLines/viewLines.js b/esm/vs/editor/browser/viewParts/viewLines/viewLines.js
+--- a/esm/vs/editor/browser/viewParts/viewLines/viewLines.js
++++ b/esm/vs/editor/browser/viewParts/viewLines/viewLines.js
+@@ -190,6 +190,7 @@
+         return this._visibleLines.onLinesInserted(e);
+     }
+     onRevealRangeRequest(e) {
++        this._context.viewModel.requestSemanticReveal(e);
+         // Using the future viewport here in order to handle multiple
+         // incoming reveal range requests that might all desire to be animated
+         const desiredScrollTop = this._computeScrollTopToRevealRange(this._context.viewLayout.getFutureViewport(), e.source, e.minimalReveal, e.range, e.selections, e.verticalType);
+diff --git a/esm/vs/editor/browser/viewParts/viewZones/viewZones.js b/esm/vs/editor/browser/viewParts/viewZones/viewZones.js
+--- a/esm/vs/editor/browser/viewParts/viewZones/viewZones.js
++++ b/esm/vs/editor/browser/viewParts/viewZones/viewZones.js
+@@ -137,6 +137,14 @@
+             minWidthInPx: this._minWidthInPixels(zone)
+         };
+     }
++    getViewZoneBounds(id) {
++        const zone = this._zones[id];
++        if (!zone) {
++            return null;
++        }
++        const bounds = this._context.viewLayout.getWhitespaceBounds(id);
++        return bounds ? Object.freeze({ ...bounds, hidden: zone.isInHiddenArea }) : null;
++    }
+     changeViewZones(callback) {
+         let zonesHaveChanged = false;
+         this._context.viewModel.changeWhitespace((whitespaceAccessor) => {
+diff --git a/esm/vs/editor/browser/widget/codeEditor/codeEditorWidget.js b/esm/vs/editor/browser/widget/codeEditor/codeEditorWidget.js
+--- a/esm/vs/editor/browser/widget/codeEditor/codeEditorWidget.js
++++ b/esm/vs/editor/browser/widget/codeEditor/codeEditorWidget.js
+@@ -2,7 +2,7 @@
+ import { DragAndDropObserver, getWindow, scheduleAtNextAnimationFrame } from '../../../../base/browser/dom.js';
+ import { onUnexpectedError } from '../../../../base/common/errors.js';
+ import { createEventDeliveryQueue, Emitter } from '../../../../base/common/event.js';
+-import { Disposable, dispose } from '../../../../base/common/lifecycle.js';
++import { Disposable, dispose, toDisposable } from '../../../../base/common/lifecycle.js';
+ import { Schemas } from '../../../../base/common/network.js';
+ import './editor.css';
+ import { applyFontInfo } from '../../config/domFontInfo.js';
+@@ -164,6 +164,14 @@
+         this.onDidScrollChange = this._onDidScrollChange.event;
+         this._onDidChangeViewZones = this._register(new Emitter({ deliveryQueue: this._deliveryQueue }));
+         this.onDidChangeViewZones = this._onDidChangeViewZones.event;
++        this._onDidRequestSemanticReveal = this._register(new Emitter());
++        this.onDidRequestSemanticReveal = this._onDidRequestSemanticReveal.event;
++        this._onDidChangeFindWidgetGeometry = this._register(new Emitter());
++        this.onDidChangeFindWidgetGeometry = this._onDidChangeFindWidgetGeometry.event;
++        this._onDidChangeFindWidgetGeometryDelegate = this._register(new Emitter());
++        this.onDidChangeFindWidgetGeometryDelegate = this._onDidChangeFindWidgetGeometryDelegate.event;
++        this._onDidRequestFindWidgetLayout = this._register(new Emitter());
++        this.onDidRequestFindWidgetLayout = this._onDidRequestFindWidgetLayout.event;
+         this._onDidChangeHiddenAreas = this._register(new Emitter({ deliveryQueue: this._deliveryQueue }));
+         this.onDidChangeHiddenAreas = this._onDidChangeHiddenAreas.event;
+         this._updateCounter = 0;
+@@ -359,6 +367,9 @@
+                 // Current model is the new model
+                 return;
+             }
++            if (this._verticalSelectionDragDelegate) {
++                this.stopSelectionDrag();
++            }
+             const e = {
+                 oldModelUrl: this._modelData?.model.uri || null,
+                 newModelUrl: model?.uri || null
+@@ -431,6 +442,19 @@
+             return -1;
+         }
+         return CodeEditorWidget_1._getVerticalOffsetForPosition(this._modelData, lineNumber, 1, includeViewZones);
++    }
++    getPositionAtVerticalOffset(offset, affinity) {
++        const viewModel = this._modelData?.viewModel;
++        if (!viewModel) {
++            return null;
++        }
++        let viewLineNumber = viewModel.viewLayout.getLineNumberAtVerticalOffset(offset);
++        if (affinity === 'before' && viewLineNumber > 1
++            && offset <= viewModel.viewLayout.getVerticalOffsetForLineNumber(viewLineNumber)) {
++            viewLineNumber--;
++        }
++        return viewModel.coordinatesConverter.convertViewPositionToModelPosition(
++            new Position(viewLineNumber, viewModel.getLineMinColumn(viewLineNumber)));
+     }
+     getTopForPosition(lineNumber, column) {
+         if (!this._modelData) {
+@@ -1179,6 +1203,45 @@
+             }
+         }
+     }
++    getViewZoneBounds(id) {
++        return this._modelData?.hasRealView ? this._modelData.view.getViewZoneBounds(id) : null;
++    }
++    setVerticalSelectionDragDelegate(callback) {
++        this.stopSelectionDrag();
++        const entry = { callback };
++        this._verticalSelectionDragDelegate = entry;
++        return toDisposable(() => {
++            if (this._verticalSelectionDragDelegate === entry) {
++                this.stopSelectionDrag();
++                this._verticalSelectionDragDelegate = undefined;
++            }
++        });
++    }
++    stopSelectionDrag() {
++        if (this._modelData?.hasRealView) {
++            this._modelData.view.stopSelectionDrag();
++        }
++    }
++    setFindWidgetGeometryDelegate(delegate) {
++        const entry = { delegate };
++        this._findWidgetGeometryDelegate = entry;
++        this._onDidChangeFindWidgetGeometryDelegate.fire();
++        return toDisposable(() => {
++            if (this._findWidgetGeometryDelegate === entry) {
++                this._findWidgetGeometryDelegate = undefined;
++                this._onDidChangeFindWidgetGeometryDelegate.fire();
++            }
++        });
++    }
++    layoutFindWidget() {
++        this._onDidRequestFindWidgetLayout.fire();
++    }
++    _getFindWidgetGeometryDelegate() {
++        return this._findWidgetGeometryDelegate?.delegate;
++    }
++    _reportFindWidgetGeometry(domNode, visible) {
++        this._onDidChangeFindWidgetGeometry.fire(Object.freeze({ model: this.getModel(), domNode, visible }));
++    }
+     changeViewZones(callback) {
+         if (!this._modelData || !this._modelData.hasRealView) {
+             return;
+@@ -1251,6 +1314,16 @@
+         this._configuration.setModelLineCount(model.getLineCount());
+         const attachedView = model.onBeforeAttached();
+         const viewModel = new ViewModel(this._id, this._configuration, model, DOMLineBreaksComputerFactory.create(getWindow(this._domElement)), MonospaceLineBreaksComputerFactory.create(this._configuration.options), (callback) => scheduleAtNextAnimationFrame(getWindow(this._domElement), callback), this.languageConfigurationService, this._themeService, attachedView, {
++            hasSemanticRevealListeners: () => this._onDidRequestSemanticReveal.hasListeners(),
++            requestSemanticReveal: (event) => this._onDidRequestSemanticReveal.fire(event),
++            requestVerticalSelectionDrag: (deltaY) => {
++                const entry = this._verticalSelectionDragDelegate;
++                if (!entry) {
++                    return false;
++                }
++                entry.callback(Object.freeze({ model, deltaY }));
++                return true;
++            },
+             batchChanges: (cb) => {
+                 try {
+                     this._beginUpdate();
+diff --git a/esm/vs/editor/browser/widget/diffEditor/components/diffEditorViewZones/diffEditorViewZones.js b/esm/vs/editor/browser/widget/diffEditor/components/diffEditorViewZones/diffEditorViewZones.js
+--- a/esm/vs/editor/browser/widget/diffEditor/components/diffEditorViewZones/diffEditorViewZones.js
++++ b/esm/vs/editor/browser/widget/diffEditor/components/diffEditorViewZones/diffEditorViewZones.js
+@@ -64,7 +64,7 @@
+         this._modifiedScrollOffsetAnimated = animatedObservable(this._targetWindow, this._modifiedScrollOffset, this._store);
+         const state = observableValue('invalidateAlignmentsState', 0);
+         const updateImmediately = this._register(new RunOnceScheduler(() => {
+-            state.set(state.get() + 1, undefined);
++            this._diffEditorWidget.runGeometryChange(() => state.set(state.get() + 1, undefined));
+         }, 0));
+         this._register(this._editors.original.onDidChangeViewZones((_args) => { if (!this._canIgnoreViewZoneUpdateEvent()) {
+             updateImmediately.schedule();
+@@ -371,6 +371,10 @@
+             }
+         }));
+     }
++    getScrollTopOffset() {
++        return (this._modifiedScrollOffsetAnimated.read(undefined) + this._modifiedTopPadding.read(undefined))
++            - (this._originalScrollOffsetAnimated.read(undefined) + this._originalTopPadding.read(undefined));
++    }
+ };
+ DiffEditorViewZones = __decorate([
+     __param(8, IClipboardService),
+diff --git a/esm/vs/editor/browser/widget/diffEditor/diffEditorViewModel.js b/esm/vs/editor/browser/widget/diffEditor/diffEditorViewModel.js
+--- a/esm/vs/editor/browser/widget/diffEditor/diffEditorViewModel.js
++++ b/esm/vs/editor/browser/widget/diffEditor/diffEditorViewModel.js
+@@ -1,4 +1,5 @@
+ import { RunOnceScheduler } from '../../../../base/common/async.js';
++import { Event } from '../../../../base/common/event.js';
+ import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
+ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+ import '../../../../base/common/observableInternal/index.js';
+@@ -39,6 +40,18 @@
+     return function (target, key) { decorator(target, key, paramIndex); }
+ };
+ let DiffEditorViewModel = class DiffEditorViewModel extends Disposable {
++    getDiffState() {
++        return Object.freeze({
++            isDiffUpToDate: this._isDiffUpToDate.get(),
++            hasResult: this._diff.get() !== undefined,
++            hasChanges: (this._diff.get()?.mappings.length ?? 0) > 0,
++            hasUnchangedRegions: this._options.hideUnchangedRegions.get() && (this._unchangedRegions.get()?.regions.length ?? 0) > 0,
++        });
++    }
++    updateOptions(options, width) {
++        this._options.updateOptions(options);
++        this._options.setWidth(width);
++    }
+     setActiveMovedText(movedText) {
+         this._activeMovedText.set(movedText, undefined);
+     }
+@@ -52,6 +65,12 @@
+         this._diff = observableValue(this, undefined);
+         this.diff = this._diff;
+         this._unchangedRegions = observableValue(this, undefined);
++        this.onDidChangeDiffState = Event.fromObservableLight(derived(this, reader => ({
++            isDiffUpToDate: this._isDiffUpToDate.read(reader),
++            diff: this._diff.read(reader),
++            regions: this._unchangedRegions.read(reader),
++            hideUnchangedRegions: this._options.hideUnchangedRegions.read(reader),
++        })));
+         this.unchangedRegions = derived(this, r => {
+             if (this._options.hideUnchangedRegions.read(r)) {
+                 return this._unchangedRegions.read(r)?.regions ?? [];
+diff --git a/esm/vs/editor/browser/widget/diffEditor/diffEditorWidget.js b/esm/vs/editor/browser/widget/diffEditor/diffEditorWidget.js
+--- a/esm/vs/editor/browser/widget/diffEditor/diffEditorWidget.js
++++ b/esm/vs/editor/browser/widget/diffEditor/diffEditorWidget.js
+@@ -162,12 +162,12 @@
+             this.elements.root.classList.toggle('side-by-side', showSash);
+             return !showSash ? undefined : new DiffEditorSash(this.elements.root, dimensions, this._options.enableSplitViewResizing, this._boundarySashes, this._sashLayout.sashLeft, () => this._sashLayout.resetSash());
+         }).recomputeInitiallyAndOnChange(this._store);
+-        const unchangedRangesFeature = derivedDisposable(this, reader => /** @description UnchangedRangesFeature */ this._instantiationService.createInstance(readHotReloadableExport(HideUnchangedRegionsFeature), this._editors, this._diffModel, this._options)).recomputeInitiallyAndOnChange(this._store);
++        const unchangedRangesFeature = derivedDisposable(this, reader => /** @description UnchangedRangesFeature */ this._instantiationService.createInstance(readHotReloadableExport(HideUnchangedRegionsFeature), this._editors, this._diffModel, this._options, (editor, lineNumber, update) => this._runWithScrollAnchor(editor, lineNumber, update))).recomputeInitiallyAndOnChange(this._store);
+         derivedDisposable(this, reader => /** @description DiffEditorDecorations */ this._instantiationService.createInstance(readHotReloadableExport(DiffEditorDecorations), this._editors, this._diffModel, this._options, this)).recomputeInitiallyAndOnChange(this._store);
+         const origViewZoneIdsToIgnore = new Set();
+         const modViewZoneIdsToIgnore = new Set();
+         let isUpdatingViewZones = false;
+-        const viewZoneManager = derivedDisposable(this, reader => /** @description ViewZoneManager */ this._instantiationService.createInstance(readHotReloadableExport(DiffEditorViewZones), getWindow(this._domElement), this._editors, this._diffModel, this._options, this, () => isUpdatingViewZones || unchangedRangesFeature.read(undefined).isUpdatingHiddenAreas, origViewZoneIdsToIgnore, modViewZoneIdsToIgnore)).recomputeInitiallyAndOnChange(this._store);
++        const viewZoneManager = this._viewZoneManager = derivedDisposable(this, reader => /** @description ViewZoneManager */ this._instantiationService.createInstance(readHotReloadableExport(DiffEditorViewZones), getWindow(this._domElement), this._editors, this._diffModel, this._options, this, () => isUpdatingViewZones || unchangedRangesFeature.read(undefined).isUpdatingHiddenAreas, origViewZoneIdsToIgnore, modViewZoneIdsToIgnore)).recomputeInitiallyAndOnChange(this._store);
+         const originalViewZones = derived(this, (reader) => {
+             const orig = viewZoneManager.read(reader).viewZones.read(reader).orig;
+             const orig2 = unchangedRangesFeature.read(reader).viewZones.read(reader).origViewZones;
+@@ -180,6 +180,9 @@
+         });
+         this._register(applyViewZones(this._editors.original, originalViewZones, isUpdatingOrigViewZones => {
+             isUpdatingViewZones = isUpdatingOrigViewZones;
++            if (!isUpdatingViewZones) {
++                this.invalidateGeometry();
++            }
+         }, origViewZoneIdsToIgnore));
+         let scrollState;
+         this._register(applyViewZones(this._editors.modified, modifiedViewZones, isUpdatingModViewZones => {
+@@ -190,6 +193,7 @@
+             else {
+                 scrollState?.restore(this._editors.modified);
+                 scrollState = undefined;
++                this.invalidateGeometry();
+             }
+         }, modViewZoneIdsToIgnore));
+         this._accessibleDiffViewer = derivedDisposable(this, reader => this._instantiationService.createInstance(readHotReloadableExport(AccessibleDiffViewer), this.elements.accessibleDiffViewer, this._accessibleDiffViewerVisible, (visible, tx) => this._accessibleDiffViewerShouldBeVisible.set(visible, tx), this._options.onlyShowAccessibleDiffViewer.map(v => !v), this._rootSizeObserver.width, this._rootSizeObserver.height, this._diffModel.map((m, r) => m?.diff.read(r)?.mappings.map(m => m.lineRangeMapping)), new AccessibleDiffViewerModelFromEditors(this._editors))).recomputeInitiallyAndOnChange(this._store);
+@@ -290,6 +294,54 @@
+     handleInitialized() {
+         this._editors.original.handleInitialized();
+         this._editors.modified.handleInitialized();
++    }
++    getScrollTopOffset() {
++        return this._viewZoneManager.get().getScrollTopOffset();
++    }
++    setGeometryDelegate(delegate) {
++        const entry = { delegate };
++        this._geometryDelegate = entry;
++        return toDisposable(() => {
++            if (this._geometryDelegate === entry) {
++                this._geometryDelegate = undefined;
++            }
++        });
++    }
++    invalidateGeometry() {
++        this._geometryDelegate?.delegate.onDidInvalidateGeometry();
++    }
++    runGeometryChange(update) {
++        try {
++            update();
++        }
++        finally {
++            this.invalidateGeometry();
++        }
++    }
++    _runWithScrollAnchor(editor, lineNumber, update) {
++        const entry = this._geometryDelegate;
++        const model = editor.getModel();
++        if (!entry || !model) {
++            return false;
++        }
++        try {
++            entry.delegate.runWithScrollAnchor(Object.freeze({
++                pane: editor === this._editors.original ? 'original' : 'modified',
++                model,
++                lineNumber,
++            }), update);
++        }
++        finally {
++            this.invalidateGeometry();
++        }
++        return true;
++    }
++    createIndependentViewModel(model, options, width) {
++        const itemOptions = this._instantiationService.createInstance(DiffEditorOptions, options);
++        itemOptions.setWidth(width);
++        const viewModel = this._instantiationService.createInstance(DiffEditorViewModel, model, itemOptions);
++        itemOptions.setModel(viewModel);
++        return viewModel;
+     }
+     createViewModel(model) {
+         return this._instantiationService.createInstance(DiffEditorViewModel, model, this._options);
+diff --git a/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegionsFeature.js b/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegionsFeature.js
+--- a/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegionsFeature.js
++++ b/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegionsFeature.js
+@@ -49,7 +49,7 @@
+         this._breadcrumbsSourceFactory.set(factory, undefined);
+     }
+     get isUpdatingHiddenAreas() { return this._isUpdatingHiddenAreas; }
+-    constructor(_editors, _diffModel, _options, _instantiationService) {
++    constructor(_editors, _diffModel, _options, _runWithScrollAnchor, _instantiationService) {
+         super();
+         this._editors = _editors;
+         this._diffModel = _diffModel;
+@@ -130,13 +130,13 @@
+                         const d = derived(this, reader => /** @description hiddenOriginalRangeStart */ r.getHiddenOriginalRange(reader).startLineNumber - 1);
+                         const origVz = new PlaceholderViewZone(d, 24);
+                         origViewZones.push(origVz);
+-                        reader.store.add(new CollapsedCodeOverlayWidget(this._editors.original, origVz, r, r.originalUnchangedRange, !sideBySide, modifiedOutlineSource, l => this._diffModel.get().ensureModifiedLineIsVisible(l, 2 /* RevealPreference.FromBottom */, undefined), this._options));
++                        reader.store.add(new CollapsedCodeOverlayWidget(this._editors.original, origVz, r, r.originalUnchangedRange, !sideBySide, modifiedOutlineSource, l => this._diffModel.get().ensureModifiedLineIsVisible(l, 2 /* RevealPreference.FromBottom */, undefined), this._options, _runWithScrollAnchor));
+                     }
+                     {
+                         const d = derived(this, reader => /** @description hiddenModifiedRangeStart */ r.getHiddenModifiedRange(reader).startLineNumber - 1);
+                         const modViewZone = new PlaceholderViewZone(d, 24);
+                         modViewZones.push(modViewZone);
+-                        reader.store.add(new CollapsedCodeOverlayWidget(this._editors.modified, modViewZone, r, r.modifiedUnchangedRange, false, modifiedOutlineSource, l => this._diffModel.get().ensureModifiedLineIsVisible(l, 2 /* RevealPreference.FromBottom */, undefined), this._options));
++                        reader.store.add(new CollapsedCodeOverlayWidget(this._editors.modified, modViewZone, r, r.modifiedUnchangedRange, false, modifiedOutlineSource, l => this._diffModel.get().ensureModifiedLineIsVisible(l, 2 /* RevealPreference.FromBottom */, undefined), this._options, _runWithScrollAnchor));
+                     }
+                 }
+             }
+@@ -235,7 +235,7 @@
+     }
+ };
+ HideUnchangedRegionsFeature = HideUnchangedRegionsFeature_1 = __decorate([
+-    __param(3, IInstantiationService)
++    __param(4, IInstantiationService)
+ ], HideUnchangedRegionsFeature);
+ class CompactCollapsedCodeOverlayWidget extends ViewZoneOverlayWidget {
+     constructor(editor, _viewZone, _unchangedRegion, _hide = false) {
+@@ -263,7 +263,7 @@
+     }
+ }
+ class CollapsedCodeOverlayWidget extends ViewZoneOverlayWidget {
+-    constructor(_editor, _viewZone, _unchangedRegion, _unchangedRegionRange, _hide, _modifiedOutlineSource, _revealModifiedHiddenLine, _options) {
++    constructor(_editor, _viewZone, _unchangedRegion, _unchangedRegionRange, _hide, _modifiedOutlineSource, _revealModifiedHiddenLine, _options, _runWithScrollAnchor) {
+         const root = h('div.diff-hidden-lines-widget');
+         super(_editor, _viewZone, root.root);
+         this._editor = _editor;
+@@ -272,6 +272,7 @@
+         this._hide = _hide;
+         this._modifiedOutlineSource = _modifiedOutlineSource;
+         this._revealModifiedHiddenLine = _revealModifiedHiddenLine;
++        this._runWithScrollAnchor = _runWithScrollAnchor;
+         this._options = _options;
+         this._nodes = h('div.diff-hidden-lines', [
+             h('div.top@top', { title: localize(126, 'Click or drag to show more above') }),
+@@ -363,22 +364,12 @@
+                 didMove = didMove || Math.abs(delta) > 2;
+                 const lineDelta = Math.round(delta / editor.getOption(75 /* EditorOption.lineHeight */));
+                 const newVal = Math.max(0, Math.min(cur - lineDelta, this._unchangedRegion.getMaxVisibleLineCountBottom()));
+-                const top = this._unchangedRegionRange.endLineNumberExclusive > editor.getModel().getLineCount()
+-                    ? editor.getContentHeight()
+-                    : editor.getTopForLineNumber(this._unchangedRegionRange.endLineNumberExclusive);
+-                this._unchangedRegion.visibleLineCountBottom.set(newVal, undefined);
+-                const top2 = this._unchangedRegionRange.endLineNumberExclusive > editor.getModel().getLineCount()
+-                    ? editor.getContentHeight()
+-                    : editor.getTopForLineNumber(this._unchangedRegionRange.endLineNumberExclusive);
+-                editor.setScrollTop(editor.getScrollTop() + (top2 - top));
++                this._runWithLowerScrollAnchor(() => this._unchangedRegion.visibleLineCountBottom.set(newVal, undefined), true);
+             });
+             const mouseUpListener = addDisposableListener(window, 'mouseup', e => {
+                 this._unchangedRegion.isDragged.set(undefined, undefined);
+                 if (!didMove) {
+-                    const top = editor.getTopForLineNumber(this._unchangedRegionRange.endLineNumberExclusive);
+-                    this._unchangedRegion.showMoreBelow(this._options.hideUnchangedRegionsRevealLineCount.get(), undefined);
+-                    const top2 = editor.getTopForLineNumber(this._unchangedRegionRange.endLineNumberExclusive);
+-                    editor.setScrollTop(editor.getScrollTop() + (top2 - top));
++                    this._runWithLowerScrollAnchor(() => this._unchangedRegion.showMoreBelow(this._options.hideUnchangedRegionsRevealLineCount.get(), undefined));
+                 }
+                 this._nodes.bottom.classList.toggle('dragging', false);
+                 this._nodes.root.classList.toggle('dragging', false);
+@@ -428,6 +419,21 @@
+             reset(this._nodes.others, ...children);
+         }));
+     }
++    _runWithLowerScrollAnchor(update, useContentEnd = false) {
++        const lineNumber = this._unchangedRegionRange.endLineNumberExclusive;
++        if (this._runWithScrollAnchor(this._editor, lineNumber, update)) {
++            return;
++        }
++        const top = this._getTopForLineNumber(lineNumber, useContentEnd);
++        update();
++        const top2 = this._getTopForLineNumber(lineNumber, useContentEnd);
++        this._editor.setScrollTop(this._editor.getScrollTop() + (top2 - top));
++    }
++    _getTopForLineNumber(lineNumber, useContentEnd) {
++        return useContentEnd && lineNumber > this._editor.getModel().getLineCount()
++            ? this._editor.getContentHeight()
++            : this._editor.getTopForLineNumber(lineNumber);
++    }
+ }
+ 
+ export { HideUnchangedRegionsFeature };
+diff --git a/esm/vs/editor/common/viewLayout/linesLayout.js b/esm/vs/editor/common/viewLayout/linesLayout.js
+--- a/esm/vs/editor/common/viewLayout/linesLayout.js
++++ b/esm/vs/editor/common/viewLayout/linesLayout.js
+@@ -718,6 +718,17 @@
+         }
+         return result;
+     }
++    getWhitespaceBounds(id) {
++        const index = this._findWhitespaceIndex(id);
++        if (index < 0) {
++            return null;
++        }
++        return Object.freeze({
++            id,
++            top: this.getVerticalOffsetForWhitespaceIndex(index),
++            height: this.getHeightForWhitespaceIndex(index),
++        });
++    }
+     /**
+      * Get all whitespaces.
+      */
+diff --git a/esm/vs/editor/common/viewLayout/viewLayout.js b/esm/vs/editor/common/viewLayout/viewLayout.js
+--- a/esm/vs/editor/common/viewLayout/viewLayout.js
++++ b/esm/vs/editor/common/viewLayout/viewLayout.js
+@@ -314,6 +314,9 @@
+         const visibleBox = this.getCurrentViewport();
+         return this._linesLayout.getWhitespaceViewportData(visibleBox.top, visibleBox.top + visibleBox.height);
+     }
++    getWhitespaceBounds(id) {
++        return this._linesLayout.getWhitespaceBounds(id);
++    }
+     getWhitespaces() {
+         return this._linesLayout.getWhitespaces();
+     }
+diff --git a/esm/vs/editor/common/viewModel/viewModelImpl.js b/esm/vs/editor/common/viewModel/viewModelImpl.js
+--- a/esm/vs/editor/common/viewModel/viewModelImpl.js
++++ b/esm/vs/editor/common/viewModel/viewModelImpl.js
+@@ -10,6 +10,7 @@
+ import { CursorConfiguration } from '../cursorCommon.js';
+ import { Position } from '../core/position.js';
+ import { Range } from '../core/range.js';
++import { Selection } from '../core/selection.js';
+ import { TextDirection } from '../model.js';
+ import { InternalModelContentChangeEvent, ModelLineHeightChangedEvent as ModelLineHeightChangedEvent$1, ModelFontChangedEvent as ModelFontChangedEvent$1 } from '../textModelEvents.js';
+ import { TokenizationRegistry } from '../languages.js';
+@@ -949,6 +950,31 @@
+     executeCommands(commands, source) {
+         this._executeCursorEdit(eventsCollector => this._cursor.executeCommands(eventsCollector, commands, source));
+     }
++    requestSemanticReveal(event) {
++        if (!this._transactionalTarget.hasSemanticRevealListeners()) {
++            return;
++        }
++        const converter = this.coordinatesConverter;
++        const range = event.range ? Object.freeze(converter.convertViewRangeToModelRange(event.range)) : null;
++        const selections = event.selections ? Object.freeze(event.selections.map(selection => {
++            const anchor = converter.convertViewPositionToModelPosition(new Position(selection.selectionStartLineNumber, selection.selectionStartColumn));
++            const active = converter.convertViewPositionToModelPosition(new Position(selection.positionLineNumber, selection.positionColumn));
++            return Object.freeze(new Selection(anchor.lineNumber, anchor.column, active.lineNumber, active.column));
++        })) : null;
++        this._transactionalTarget.requestSemanticReveal(Object.freeze({
++            model: this.model,
++            range,
++            selections,
++            source: event.source,
++            minimalReveal: event.minimalReveal,
++            verticalType: event.verticalType,
++            revealHorizontal: event.revealHorizontal,
++            scrollType: event.scrollType,
++        }));
++    }
++    requestVerticalSelectionDrag(deltaY) {
++        return this._transactionalTarget.requestVerticalSelectionDrag(deltaY);
++    }
+     revealAllCursors(source, revealHorizontal, minimalReveal = false) {
+         this._withViewEventsCollector(eventsCollector => this._cursor.revealAll(eventsCollector, source, minimalReveal, 0 /* viewEvents.VerticalRevealType.Simple */, revealHorizontal, 0 /* ScrollType.Smooth */));
+     }
+diff --git a/esm/vs/editor/contrib/find/browser/findWidget.js b/esm/vs/editor/contrib/find/browser/findWidget.js
+--- a/esm/vs/editor/contrib/find/browser/findWidget.js
++++ b/esm/vs/editor/contrib/find/browser/findWidget.js
+@@ -174,11 +174,17 @@
+         this._register(this._replaceFocusTracker.onDidBlur(() => {
+             this._replaceInputFocused.set(false);
+         }));
++        this._geometryDelegate = this._codeEditor._getFindWidgetGeometryDelegate();
+         this._codeEditor.addOverlayWidget(this);
++        this._register(this._codeEditor.onDidChangeFindWidgetGeometryDelegate(() => this._syncGeometryDelegate()));
++        this._register(this._codeEditor.onDidRequestFindWidgetLayout(() => this._codeEditor.layoutOverlayWidget(this)));
+         if (this._codeEditor.getOption(50 /* EditorOption.find */).addExtraSpaceOnTop) {
+             this._viewZone = new FindWidgetViewZone(0); // Put it before the first line then users can scroll beyond the first line.
+         }
+         this._register(this._codeEditor.onDidChangeModel(() => {
++            if (this._geometryDelegate) {
++                this._closeForGeometryBinding();
++            }
+             if (!this._isVisible) {
+                 return;
+             }
+@@ -195,6 +201,35 @@
+             }, 0);
+         }));
+     }
++    get allowEditorOverflow() {
++        return !!this._codeEditor._getFindWidgetGeometryDelegate();
++    }
++    _reportGeometry() {
++        this._codeEditor._reportFindWidgetGeometry(this._domNode, this._isVisible);
++    }
++    _layoutDelegatedGeometry() {
++        if (this._codeEditor._getFindWidgetGeometryDelegate()) {
++            this._codeEditor.layoutOverlayWidget(this);
++        }
++        this._reportGeometry();
++    }
++    _closeForGeometryBinding() {
++        this._hide(false);
++        this._state.change({ isRevealed: false, searchScope: null }, false);
++    }
++    _syncGeometryDelegate() {
++        if (this._geometryDelegate && this._geometryDelegate !== this._codeEditor._getFindWidgetGeometryDelegate()) {
++            this._closeForGeometryBinding();
++        }
++        this._geometryDelegate = this._codeEditor._getFindWidgetGeometryDelegate();
++        this._codeEditor.removeOverlayWidget(this);
++        for (const property of ['top', 'left', 'right', 'position']) {
++            this._domNode.style[property] = '';
++        }
++        this._codeEditor.addOverlayWidget(this);
++        this._codeEditor.layoutOverlayWidget(this);
++        this._reportGeometry();
++    }
+     // ----- IOverlayWidget API
+     getId() {
+         return FindWidget.ID;
+@@ -204,6 +239,10 @@
+     }
+     getPosition() {
+         if (this._isVisible) {
++            const delegate = this._codeEditor._getFindWidgetGeometryDelegate();
++            if (delegate) {
++                return { preference: delegate.getPosition(Object.freeze({ model: this._codeEditor.getModel(), domNode: this._domNode })) };
++            }
+             return {
+                 preference: 0 /* OverlayWidgetPositionPreference.TOP_RIGHT_CORNER */
+             };
+@@ -406,6 +445,7 @@
+             this._revealTimeouts.push(setTimeout(() => {
+                 this._domNode.classList.add('visible');
+                 this._domNode.setAttribute('aria-hidden', 'false');
++                this._layoutDelegatedGeometry();
+             }, 0));
+             // validate query again as it's being dismissed when we hide the find widget.
+             this._revealTimeouts.push(setTimeout(() => {
+@@ -437,6 +477,7 @@
+                 }
+             }
+             this._showViewZone(adjustEditorScrollTop);
++            this._reportGeometry();
+         }
+     }
+     _hide(focusTheEditor) {
+@@ -455,6 +496,7 @@
+             }
+             this._codeEditor.layoutOverlayWidget(this);
+             this._removeViewZone();
++            this._reportGeometry();
+         }
+     }
+     _layoutViewZone(targetScrollTop) {
+@@ -532,6 +574,10 @@
+         });
+     }
+     _tryUpdateWidgetWidth() {
++        this._updateWidgetWidth();
++        this._layoutDelegatedGeometry();
++    }
++    _updateWidgetWidth() {
+         if (!this._isVisible) {
+             return;
+         }
+@@ -612,6 +658,7 @@
+         }
+         this._cachedHeight = totalHeight;
+         this._domNode.style.height = `${totalHeight}px`;
++        this._layoutDelegatedGeometry();
+         return true;
+     }
+     // ----- Public
+@@ -1030,6 +1077,7 @@
+                 return;
+             }
+             this._domNode.style.width = `${width}px`;
++            this._layoutDelegatedGeometry();
+             if (this._isReplaceVisible) {
+                 this._replaceInput.width = getTotalWidth(this._findInput.domNode);
+             }
+@@ -1052,6 +1100,7 @@
+                 this._resized = true;
+             }
+             this._domNode.style.width = `${width}px`;
++            this._layoutDelegatedGeometry();
+             if (this._isReplaceVisible) {
+                 this._replaceInput.width = getTotalWidth(this._findInput.domNode);
+             }
+diff --git a/esm/vs/editor/editor.api.d.ts b/esm/vs/editor/editor.api.d.ts
+--- a/esm/vs/editor/editor.api.d.ts
++++ b/esm/vs/editor/editor.api.d.ts
+@@ -2562,9 +2562,77 @@
+ 		modified: ITextModel;
+ 	}
+ 
++
++	export interface IViewZoneBounds {
++		readonly id: string;
++		readonly top: number;
++		readonly height: number;
++		readonly hidden: boolean;
++	}
++
++	export interface ISemanticViewRevealRequest {
++		readonly model: ITextModel;
++		readonly source: string | null | undefined;
++		readonly range: Readonly<IRange> | null;
++		readonly selections: readonly Readonly<ISelection>[] | null;
++		readonly minimalReveal: boolean;
++		/** Native Simple, Center, CenterIfOutsideViewport, Top, Bottom, NearTop, NearTopIfOutsideViewport. */
++		readonly verticalType: 0 | 1 | 2 | 3 | 4 | 5 | 6;
++		readonly revealHorizontal: boolean;
++		readonly scrollType: ScrollType;
++	}
++
++	export interface IVerticalSelectionDragRequest {
++		readonly model: ITextModel;
++		readonly deltaY: number;
++	}
++
++	export interface IFindWidgetGeometryTarget {
++		readonly model: ITextModel | null;
++		readonly domNode: HTMLElement;
++	}
++
++	export interface IFindWidgetGeometryEvent extends IFindWidgetGeometryTarget {
++		readonly visible: boolean;
++	}
++
++	export interface IFindWidgetGeometryDelegate {
++		/** Pure query: editor-local coordinates; use fixedOverflowWidgets and an external overflow host. */
++		getPosition(target: IFindWidgetGeometryTarget): { top: number; left: number };
++	}
++
++	export interface IDiffEditorScrollAnchor {
++		readonly pane: 'original' | 'modified';
++		readonly model: ITextModel;
++		/** May be lineCount + 1: resolve that boundary as native content end. */
++		readonly lineNumber: number;
++	}
++
++	export interface IDiffEditorGeometryDelegate {
++		/** Execute update synchronously, retaining semantic identity rather than native pixels. */
++		runWithScrollAnchor(anchor: IDiffEditorScrollAnchor, update: () => void): void;
++		/** Invalidation only; enclosing synchronous native reactions may still be running. */
++		onDidInvalidateGeometry(): void;
++	}
++
++	export interface IDiffEditorReadiness {
++		readonly isDiffUpToDate: boolean;
++		readonly hasResult: boolean;
++		readonly hasChanges: boolean;
++		readonly hasUnchangedRegions: boolean;
++	}
++
++	export interface IIndependentDiffEditorViewModel extends IDiffEditorViewModel {
++		/** Update this item's independent options and effective diff-editor width. */
++		updateOptions(options: IDiffEditorOptions, width: number): void;
++	}
++
+ 	export interface IDiffEditorViewModel extends IDisposable {
+ 		readonly model: IDiffEditorModel;
+ 		waitForDiff(): Promise<void>;
++		getDiffState(): IDiffEditorReadiness;
++		/** Invalidation, not a geometry-commit notification. */
++		readonly onDidChangeDiffState: IEvent<void>;
+ 	}
+ 
+ 	/**
+@@ -5968,6 +6036,27 @@
+ 	 * A rich code editor.
+ 	 */
+ 	export interface ICodeEditor extends IEditor {
++
++		/** Current native offset to a real view-line start converted to model coordinates.
++		 * Before selects the preceding line at an exact start or spacer gap; after selects the native containing/following line.
++		 * Consume synchronously with getTopForPosition; returns null without a model.
++		 */
++		getPositionAtVerticalOffset(offset: number, affinity: 'before' | 'after'): IPosition | null;
++		/** Logical geometry only; consume synchronously after native reactions have drained. */
++		getViewZoneBounds(id: string): IViewZoneBounds | null;
++		readonly onDidChangeViewZones: IEvent<void>;
++		/** Immediate semantic notification before native local reveal, including no-op requests. */
++		readonly onDidRequestSemanticReveal: IEvent<ISemanticViewRevealRequest>;
++		/** Synchronous explicit vertical input, before native drag rendering/hit testing. */
++		setVerticalSelectionDragDelegate(callback: (request: IVerticalSelectionDragRequest) => void): IDisposable;
++		stopSelectionDrag(): void;
++		/** Visibility/size invalidation; retain identities, not numeric target snapshots. */
++		readonly onDidChangeFindWidgetGeometry: IEvent<IFindWidgetGeometryEvent>;
++		/** Disposal hides delegated find and returns it to native placement. */
++		setFindWidgetGeometryDelegate(delegate: IFindWidgetGeometryDelegate): IDisposable;
++		/** Re-query the native widget's delegated position after owner viewport layout. */
++		layoutFindWidget(): void;
++
+ 		/**
+ 		 * An event emitted when the content of the current model has changed.
+ 		 * @event
+@@ -6435,6 +6524,12 @@
+ 		 */
+ 		getModel(): IDiffEditorModel | null;
+ 		createViewModel(model: IDiffEditorModel): IDiffEditorViewModel;
++		/** Current original-to-modified scroll transform, including animated offsets and top padding; consume synchronously. */
++		getScrollTopOffset(): number;
++		/** Item-owned options/VM, independent of this widget's lifetime and later options. */
++		createIndependentViewModel(model: IDiffEditorModel, options: IDiffEditorOptions, width: number): IIndependentDiffEditorViewModel;
++		/** Binding-scoped, opt-in invalidation/lower-boundary preservation. */
++		setGeometryDelegate(delegate: IDiffEditorGeometryDelegate): IDisposable;
+ 		/**
+ 		 * Sets the current model attached to this editor.
+ 		 * If the previous model was created by the editor via the value key in the options
+diff --git a/monaco.d.ts b/monaco.d.ts
+--- a/monaco.d.ts
++++ b/monaco.d.ts
+@@ -2562,9 +2562,77 @@
+ 		modified: ITextModel;
+ 	}
+ 
++
++	export interface IViewZoneBounds {
++		readonly id: string;
++		readonly top: number;
++		readonly height: number;
++		readonly hidden: boolean;
++	}
++
++	export interface ISemanticViewRevealRequest {
++		readonly model: ITextModel;
++		readonly source: string | null | undefined;
++		readonly range: Readonly<IRange> | null;
++		readonly selections: readonly Readonly<ISelection>[] | null;
++		readonly minimalReveal: boolean;
++		/** Native Simple, Center, CenterIfOutsideViewport, Top, Bottom, NearTop, NearTopIfOutsideViewport. */
++		readonly verticalType: 0 | 1 | 2 | 3 | 4 | 5 | 6;
++		readonly revealHorizontal: boolean;
++		readonly scrollType: ScrollType;
++	}
++
++	export interface IVerticalSelectionDragRequest {
++		readonly model: ITextModel;
++		readonly deltaY: number;
++	}
++
++	export interface IFindWidgetGeometryTarget {
++		readonly model: ITextModel | null;
++		readonly domNode: HTMLElement;
++	}
++
++	export interface IFindWidgetGeometryEvent extends IFindWidgetGeometryTarget {
++		readonly visible: boolean;
++	}
++
++	export interface IFindWidgetGeometryDelegate {
++		/** Pure query: editor-local coordinates; use fixedOverflowWidgets and an external overflow host. */
++		getPosition(target: IFindWidgetGeometryTarget): { top: number; left: number };
++	}
++
++	export interface IDiffEditorScrollAnchor {
++		readonly pane: 'original' | 'modified';
++		readonly model: ITextModel;
++		/** May be lineCount + 1: resolve that boundary as native content end. */
++		readonly lineNumber: number;
++	}
++
++	export interface IDiffEditorGeometryDelegate {
++		/** Execute update synchronously, retaining semantic identity rather than native pixels. */
++		runWithScrollAnchor(anchor: IDiffEditorScrollAnchor, update: () => void): void;
++		/** Invalidation only; enclosing synchronous native reactions may still be running. */
++		onDidInvalidateGeometry(): void;
++	}
++
++	export interface IDiffEditorReadiness {
++		readonly isDiffUpToDate: boolean;
++		readonly hasResult: boolean;
++		readonly hasChanges: boolean;
++		readonly hasUnchangedRegions: boolean;
++	}
++
++	export interface IIndependentDiffEditorViewModel extends IDiffEditorViewModel {
++		/** Update this item's independent options and effective diff-editor width. */
++		updateOptions(options: IDiffEditorOptions, width: number): void;
++	}
++
+ 	export interface IDiffEditorViewModel extends IDisposable$2 {
+ 		readonly model: IDiffEditorModel;
+ 		waitForDiff(): Promise<void>;
++		getDiffState(): IDiffEditorReadiness;
++		/** Invalidation, not a geometry-commit notification. */
++		readonly onDidChangeDiffState: IEvent$1<void>;
+ 	}
+ 
+ 	/**
+@@ -5968,6 +6036,27 @@
+ 	 * A rich code editor.
+ 	 */
+ 	export interface ICodeEditor extends IEditor {
++
++		/** Current native offset to a real view-line start converted to model coordinates.
++		 * Before selects the preceding line at an exact start or spacer gap; after selects the native containing/following line.
++		 * Consume synchronously with getTopForPosition; returns null without a model.
++		 */
++		getPositionAtVerticalOffset(offset: number, affinity: 'before' | 'after'): IPosition | null;
++		/** Logical geometry only; consume synchronously after native reactions have drained. */
++		getViewZoneBounds(id: string): IViewZoneBounds | null;
++		readonly onDidChangeViewZones: IEvent$1<void>;
++		/** Immediate semantic notification before native local reveal, including no-op requests. */
++		readonly onDidRequestSemanticReveal: IEvent$1<ISemanticViewRevealRequest>;
++		/** Synchronous explicit vertical input, before native drag rendering/hit testing. */
++		setVerticalSelectionDragDelegate(callback: (request: IVerticalSelectionDragRequest) => void): IDisposable$2;
++		stopSelectionDrag(): void;
++		/** Visibility/size invalidation; retain identities, not numeric target snapshots. */
++		readonly onDidChangeFindWidgetGeometry: IEvent$1<IFindWidgetGeometryEvent>;
++		/** Disposal hides delegated find and returns it to native placement. */
++		setFindWidgetGeometryDelegate(delegate: IFindWidgetGeometryDelegate): IDisposable$2;
++		/** Re-query the native widget's delegated position after owner viewport layout. */
++		layoutFindWidget(): void;
++
+ 		/**
+ 		 * An event emitted when the content of the current model has changed.
+ 		 * @event
+@@ -6435,6 +6524,12 @@
+ 		 */
+ 		getModel(): IDiffEditorModel | null;
+ 		createViewModel(model: IDiffEditorModel): IDiffEditorViewModel;
++		/** Current original-to-modified scroll transform, including animated offsets and top padding; consume synchronously. */
++		getScrollTopOffset(): number;
++		/** Item-owned options/VM, independent of this widget's lifetime and later options. */
++		createIndependentViewModel(model: IDiffEditorModel, options: IDiffEditorOptions, width: number): IIndependentDiffEditorViewModel;
++		/** Binding-scoped, opt-in invalidation/lower-boundary preservation. */
++		setGeometryDelegate(delegate: IDiffEditorGeometryDelegate): IDisposable$2;
+ 		/**
+ 		 * Sets the current model attached to this editor.
+ 		 * If the previous model was created by the editor via the value key in the options

@@ -1,5 +1,9 @@
 import type { editor as monacoEditor } from 'monaco-editor'
 import type { Root } from 'react-dom/client'
+import {
+  invalidateCombinedEditorGeometry,
+  measureCombinedCommentZone
+} from '../editor/combined-diff/scroll-viewport/combined-diff-editor-geometry'
 
 export type ZoneEntry = {
   zoneId: string
@@ -7,9 +11,10 @@ export type ZoneEntry = {
   // Retain the delegate because Monaco re-reads its mutated heightInPx on layoutZone.
   delegate: monacoEditor.IViewZone
   root: Root
+  lifetime: AbortController
   disposeMouseDownStopper: () => void
   lastRenderSignature: string
-  // Use the first onDomNodeTop as the layout signal for scroll-to-note instead of polling.
+  // Single-file layout signal; combined reveals wait for intrinsic reservation measurement.
   laidOut: boolean
 }
 
@@ -20,6 +25,7 @@ export type DraftZoneEntry = {
   marginDomNode: HTMLElement
   delegate: monacoEditor.IViewZone
   root: Root
+  lifetime: AbortController
   draft: { lineNumber: number; startLine?: number }
   body: string
   createComment: (args: {
@@ -48,24 +54,27 @@ export type ResizableZoneEntry = {
 export function resizeDiffCommentZone(
   editor: monacoEditor.ICodeEditor,
   entry: ResizableZoneEntry
-): void {
-  const child = entry.domNode.firstElementChild
-  const wrapperStyle = window.getComputedStyle(entry.domNode)
-  const verticalPadding =
-    Number.parseFloat(wrapperStyle.paddingTop) + Number.parseFloat(wrapperStyle.paddingBottom)
-  // Monaco pins the zone’s old height, so scrollHeight cannot detect shrinking; measure the card plus padding.
-  const childHeight = child?.getBoundingClientRect().height ?? 0
-  // Detached zones cannot be measured; retain the initial estimate until the observer sees the card.
-  if (childHeight <= 0) {
-    return
-  }
-  const measured = Math.ceil(childHeight + verticalPadding)
-  if (entry.delegate.heightInPx === measured) {
-    return
-  }
-  entry.delegate.heightInPx = measured
-  editor.changeViewZones((acc) => {
-    acc.layoutZone(entry.zoneId)
+): boolean {
+  return measureCombinedCommentZone(editor, entry.zoneId, entry.domNode, () => {
+    const child = entry.domNode.firstElementChild
+    const wrapperStyle = window.getComputedStyle(entry.domNode)
+    const verticalPadding =
+      Number.parseFloat(wrapperStyle.paddingTop) + Number.parseFloat(wrapperStyle.paddingBottom)
+    // Monaco pins the old zone height; measure intrinsic card height plus wrapper padding.
+    const childHeight = child?.getBoundingClientRect().height ?? 0
+    if (childHeight <= 0) {
+      return false
+    }
+    const measured = Math.ceil(childHeight + verticalPadding)
+    if (entry.delegate.heightInPx === measured) {
+      return true
+    }
+    entry.delegate.heightInPx = measured
+    editor.changeViewZones((acc) => {
+      acc.layoutZone(entry.zoneId)
+    })
+    invalidateCombinedEditorGeometry(editor)
+    return true
   })
 }
 
@@ -73,7 +82,8 @@ export type CarriedDiffCommentDraft = Pick<DraftZoneEntry, 'draft' | 'body' | 'c
 export type OpenDiffCommentDraft = (
   draft: DraftZoneEntry['draft'],
   initialBody?: string,
-  createComment?: DraftZoneEntry['createComment']
+  createComment?: DraftZoneEntry['createComment'],
+  focusOnOpen?: boolean
 ) => boolean
 
 export function snapshotDiffCommentDraft(entry: DraftZoneEntry): CarriedDiffCommentDraft {
@@ -85,3 +95,16 @@ export type RestoreDiffCommentDraft = (
   body: string,
   createComment: DraftZoneEntry['createComment']
 ) => void
+
+export function disposeDiffCommentDraftZone(entry: DraftZoneEntry, focusEditor: boolean): void {
+  entry.lifetime.abort()
+  if (entry.editor.getModel()) {
+    entry.editor.changeViewZones((accessor) => accessor.removeZone(entry.zoneId))
+    invalidateCombinedEditorGeometry(entry.editor)
+  }
+  entry.disposeMouseDownStopper()
+  queueMicrotask(() => entry.root.unmount())
+  if (focusEditor) {
+    entry.editor.focus()
+  }
+}

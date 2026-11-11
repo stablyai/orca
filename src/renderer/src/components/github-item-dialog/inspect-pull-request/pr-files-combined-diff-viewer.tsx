@@ -1,10 +1,9 @@
 import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useVirtualizer } from '@tanstack/react-virtual'
+import { useCombinedDiffViewport } from '@/components/editor/combined-diff/scroll-viewport/CombinedDiffViewport'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { useCombinedDiffSectionIndexMap } from '../../editor/combined-diff/resolve-changes/use-combined-diff-section-index-map'
 import { handleCombinedDiffFileTreeNavigation } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-navigation'
-import { getDiffSectionRowEstimatedHeight } from '@/components/editor/diff/sections/diff-section-layout'
 import type { DiffSection } from '@/components/editor/diff/sections/diff-section-types'
 import { getCombinedDiffBranchEntriesInTreeOrder } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-filter'
 import type { CombinedDiffFileTreeEntry } from '../../editor/combined-diff/resolve-changes/combined-diff-section-identity'
@@ -12,7 +11,6 @@ import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import type { GitBranchChangeEntry } from '../../../../../shared/git/diff/git-diff-compare-types'
 import { isPRFileViewed } from '@/components/github/pr-file-content-size'
 import {
-  PR_DIFF_OVERSCAN,
   getPRFileSectionKey,
   gitHubPRFileToBranchEntry,
   type PRFilesCombinedDiffViewerProps
@@ -127,7 +125,6 @@ function PRFilesCombinedDiffSections({
   )
   const [sectionHeights, setSectionHeights] = useState<Record<number, number>>({})
   const [activeTreeSectionKey, setActiveTreeSectionKey] = useState<string | null>(null)
-  const scrollContainerRef = useRef<HTMLDivElement>(null)
   const loadedIndicesRef = useRef<Set<number>>(new Set())
   const loadingIndicesRef = useRef<Set<number>>(new Set())
   const sectionsRef = useRef<DiffSection[]>(sections)
@@ -205,26 +202,7 @@ function PRFilesCombinedDiffSections({
     [files]
   )
 
-  const virtualizer = useVirtualizer({
-    count: sections.length,
-    getScrollElement: () => scrollContainerRef.current,
-    estimateSize: (index) => {
-      const section = sections[index]
-      if (!section) {
-        return 88
-      }
-      return getDiffSectionRowEstimatedHeight(section, sectionHeights[index])
-    },
-    overscan: PR_DIFF_OVERSCAN,
-    getItemKey: (index) => {
-      const section = sections[index]
-      return section ? `${section.key}:${section.collapsed ? 'collapsed' : 'expanded'}` : `${index}`
-    }
-  })
-
-  useLayoutEffect(() => {
-    virtualizer.measure()
-  }, [sideBySide, virtualizer])
+  const viewport = useCombinedDiffViewport({ sections, sectionHeights })
 
   const handleTreeNavigate = useCallback(
     (entry: CombinedDiffFileTreeEntry) => {
@@ -234,13 +212,13 @@ function PRFilesCombinedDiffSections({
         sections: sectionsRef.current,
         sectionIndexByKey,
         toggleSection,
-        scrollToIndex: (index) => virtualizer.scrollToIndex(index, { align: 'start' })
+        scrollToIndex: (index) => viewport.navigate(index)
       })
       if (navigatedIndex !== null) {
         setActiveTreeSectionKey(sectionsRef.current[navigatedIndex]?.key ?? null)
       }
     },
-    [sectionIndexByKey, toggleSection, virtualizer]
+    [sectionIndexByKey, toggleSection, viewport]
   )
 
   const openFilesOnGitHub = useCallback(() => {
@@ -320,8 +298,7 @@ function PRFilesCombinedDiffSections({
       activeTreeSectionKey={activeTreeSectionKey}
       viewedSectionKeys={viewedSectionKeys}
       handleTreeNavigate={handleTreeNavigate}
-      scrollContainerRef={scrollContainerRef}
-      virtualizer={virtualizer}
+      viewport={viewport}
       sections={sections}
       isDark={isDark}
       sectionHeights={sectionHeights}

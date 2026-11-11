@@ -1,10 +1,10 @@
 import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
-import {
-  combinedDiffViewportAttributes,
-  combinedDiffRowAttributes
-} from '@/components/editor/combined-diff/scroll-viewport/combined-diff-viewport'
+import type { DiffReadingAnchor } from '@/components/editor/combined-diff/scroll-viewport/combined-diff-layout'
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useVirtualizer } from '@tanstack/react-virtual'
+import {
+  CombinedDiffViewport,
+  useCombinedDiffViewport
+} from '@/components/editor/combined-diff/scroll-viewport/CombinedDiffViewport'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { useTranslate } from '@/i18n/use-translate'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
@@ -12,21 +12,19 @@ import { DiffSectionItem } from '@/components/editor/diff/sections/DiffSectionIt
 import { CombinedDiffFileTree } from '../../editor/combined-diff/browse-files/combined-diff-file-tree'
 import { useCombinedDiffSectionIndexMap } from '../../editor/combined-diff/resolve-changes/use-combined-diff-section-index-map'
 import { handleCombinedDiffFileTreeNavigation } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-navigation'
-import { getDiffSectionRowEstimatedHeight } from '@/components/editor/diff/sections/diff-section-layout'
 import type { DiffSection } from '@/components/editor/diff/sections/diff-section-types'
 import { getCombinedDiffBranchEntriesInTreeOrder } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-filter'
 import type { CombinedDiffFileTreeEntry } from '../../editor/combined-diff/resolve-changes/combined-diff-section-identity'
 import { PRViewedCheckbox } from '@/components/github/PRViewedCheckbox'
 import { isPRFileViewed } from '@/components/github/pr-file-content-size'
 import {
-  PR_DIFF_OVERSCAN,
   getPRFileSectionKey,
   gitHubPRFileToBranchEntry,
   type PRFilesCombinedDiffViewerProps
 } from '@/components/github/pr-file-diff-mapping'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
-import { prFilesDiffScrollTopCache, prFilesDiffViewStateCache } from '../cache/files-diff-view'
+import { prFilesDiffViewStateCache } from '../cache/files-diff-view'
 import { PRFilesDiffToolbar } from './toolbar'
 import { addPullRequestLineComment } from './line-comment'
 import { usePRFileSectionLoader } from './section-loader'
@@ -111,10 +109,7 @@ export function PRFilesCombinedDiffViewer({
   const [fileTreeCollapsed, setFileTreeCollapsed] = useState(false)
   const [sectionHeights, setSectionHeights] = usePRFileSectionHeights(entrySignature)
   const [activeTreeSectionKey, setActiveTreeSectionKey] = usePRFileActiveSection(entrySignature)
-  // Why: short virtualizer-key token; entrySignature serializes every file and would be copied into every item key.
-  const [entryRevision, setEntryRevision] = useState(0)
-  const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const pendingRestoreScrollTopRef = useRef<number | null>(null)
+  const pendingRestoreAnchorRef = useRef<{ anchor: DiffReadingAnchor | null } | null>(null)
   const loadedIndicesRef = useRef<Set<number>>(new Set())
   const loadingIndicesRef = useRef<Set<number>>(new Set())
   const sectionsRef = useRef<DiffSection[]>([])
@@ -129,7 +124,6 @@ export function PRFilesCombinedDiffViewer({
   useEffect(() => {
     // Why: bump generation so stale async diff loads from the previous view can't patch the restored sections.
     generationRef.current += 1
-    setEntryRevision((revision) => revision + 1)
     const cached = prFilesDiffViewStateCache.get(viewStateKey)
     if (cached && cached.entrySignature === entrySignature) {
       const restoredSections = cached.sections
@@ -138,18 +132,25 @@ export function PRFilesCombinedDiffViewer({
       )
       loadingIndicesRef.current.clear()
       setSections(restoredSections)
-      setSectionHeights(cached.sectionHeights)
+      setSectionHeights(
+        Object.fromEntries(
+          restoredSections.flatMap((section, index) =>
+            cached.sectionHeights[section.key] === undefined
+              ? []
+              : [[index, cached.sectionHeights[section.key]]]
+          )
+        )
+      )
       setSideBySide(cached.sideBySide)
       setFileTreeCollapsed(cached.fileTreeCollapsed)
       setActiveTreeSectionKey(cached.activeTreeSectionKey)
-      pendingRestoreScrollTopRef.current =
-        prFilesDiffScrollTopCache.get(viewStateKey) ?? cached.scrollTop
+      pendingRestoreAnchorRef.current = { anchor: cached.scrollAnchor }
       return
     }
 
     loadedIndicesRef.current.clear()
     loadingIndicesRef.current.clear()
-    pendingRestoreScrollTopRef.current = prFilesDiffScrollTopCache.get(viewStateKey) ?? null
+    pendingRestoreAnchorRef.current = { anchor: null }
     setSections(
       entries.map((entry) => ({
         key: getPRFileSectionKey(entry.path),
@@ -199,28 +200,7 @@ export function PRFilesCombinedDiffViewer({
     [files]
   )
 
-  const virtualizer = useVirtualizer({
-    count: sections.length,
-    getScrollElement: () => scrollContainerRef.current,
-    estimateSize: (index) => {
-      const section = sections[index]
-      if (!section) {
-        return 88
-      }
-      return getDiffSectionRowEstimatedHeight(section, sectionHeights[index])
-    },
-    overscan: PR_DIFF_OVERSCAN,
-    getItemKey: (index) => {
-      const section = sections[index]
-      return section
-        ? `${section.key}:${section.collapsed ? 'collapsed' : 'expanded'}:${entryRevision}`
-        : `${index}:${entryRevision}`
-    }
-  })
-
-  useLayoutEffect(() => {
-    virtualizer.measure()
-  }, [sideBySide, virtualizer])
+  const viewport = useCombinedDiffViewport({ sections, sectionHeights })
 
   usePRFilesDiffViewPersistence({
     sections,
@@ -232,8 +212,8 @@ export function PRFilesCombinedDiffViewer({
     fileTreeCollapsed,
     activeTreeSectionKey: visibleActiveTreeSectionKey,
     loadedIndicesRef,
-    scrollContainerRef,
-    pendingRestoreScrollTopRef
+    viewport,
+    pendingRestoreAnchorRef
   })
 
   const handleTreeNavigate = useCallback(
@@ -244,13 +224,13 @@ export function PRFilesCombinedDiffViewer({
         sections: sectionsRef.current,
         sectionIndexByKey,
         toggleSection,
-        scrollToIndex: (index) => virtualizer.scrollToIndex(index, { align: 'start' })
+        scrollToIndex: (index) => viewport.navigate(index)
       })
       if (navigatedIndex !== null) {
         setActiveTreeSectionKey(sectionsRef.current[navigatedIndex]?.key ?? null)
       }
     },
-    [sectionIndexByKey, setActiveTreeSectionKey, toggleSection, virtualizer]
+    [sectionIndexByKey, setActiveTreeSectionKey, toggleSection, viewport]
   )
 
   const openFilesOnGitHub = useCallback(() => {
@@ -333,73 +313,55 @@ export function PRFilesCombinedDiffViewer({
           onCollapsedChange={setFileTreeCollapsed}
           onNavigate={handleTreeNavigate}
         />
-        <div
-          {...combinedDiffViewportAttributes}
-          ref={scrollContainerRef}
-          className="min-w-0 flex-1 overflow-auto scrollbar-editor"
-        >
-          <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
-            {virtualizer.getVirtualItems().map((virtualItem) => {
-              const section = sections[virtualItem.index]
-              if (!section) {
-                return null
-              }
-              return (
-                <div
-                  key={virtualItem.key}
-                  {...combinedDiffRowAttributes}
-                  data-index={virtualItem.index}
-                  ref={virtualizer.measureElement}
-                  className="absolute left-0 top-0 w-full"
-                  style={{ top: `${virtualItem.start}px` }}
-                >
-                  <DiffSectionItem
-                    section={section}
-                    index={virtualItem.index}
-                    isBranchMode={false}
-                    sideBySide={sideBySide}
-                    isDark={isDark}
-                    sectionHeight={sectionHeights[virtualItem.index]}
-                    worktreeId={`github-pr:${repoId}:${prNumber}`}
-                    inlineComments={inlineReviewComments}
-                    loadSection={loadSection}
-                    retrySection={retrySection}
-                    toggleSection={toggleSection}
-                    openSection={openFilesOnGitHub}
-                    openSectionTitle={t(
-                      'auto.components.GitHubItemDialog.85a2b66f54',
-                      'Open files on GitHub'
-                    )}
-                    renderHeaderTrailingContent={renderViewedCheckbox}
-                    imageUploadAddress={() =>
-                      githubCommentImageUploadAddress({
-                        repoPath,
-                        repoId,
-                        sourceContext,
-                        type: 'pr',
-                        prRepo
-                      })
-                    }
-                    onAddLineComment={handleAddLineComment}
-                    addLineCommentLabel={t(
-                      'auto.components.GitHubItemDialog.bf43425540',
-                      'Comment'
-                    )}
-                    addLineCommentPlaceholder={t(
-                      'auto.components.GitHubItemDialog.86d84a17ca',
-                      'Add a review comment'
-                    )}
-                    getCommentableLineNumbers={getCommentableLineNumbers}
-                    setSectionHeights={setSectionHeights}
-                    setSections={setSections}
-                    modifiedEditorsRef={modifiedEditorsRef}
-                    handleSectionSaveRef={handleSectionSaveRef}
-                  />
-                </div>
-              )
-            })}
-          </div>
-        </div>
+        <CombinedDiffViewport owner={viewport}>
+          {(index) => {
+            const section = sections[index]
+            if (!section) {
+              return null
+            }
+            return (
+              <DiffSectionItem
+                section={section}
+                index={index}
+                isBranchMode={false}
+                sideBySide={sideBySide}
+                isDark={isDark}
+                sectionHeight={sectionHeights[index]}
+                worktreeId={`github-pr:${repoId}:${prNumber}`}
+                inlineComments={inlineReviewComments}
+                loadSection={loadSection}
+                retrySection={retrySection}
+                toggleSection={toggleSection}
+                openSection={openFilesOnGitHub}
+                openSectionTitle={t(
+                  'auto.components.GitHubItemDialog.85a2b66f54',
+                  'Open files on GitHub'
+                )}
+                renderHeaderTrailingContent={renderViewedCheckbox}
+                imageUploadAddress={() =>
+                  githubCommentImageUploadAddress({
+                    repoPath,
+                    repoId,
+                    sourceContext,
+                    type: 'pr',
+                    prRepo
+                  })
+                }
+                onAddLineComment={handleAddLineComment}
+                addLineCommentLabel={t('auto.components.GitHubItemDialog.bf43425540', 'Comment')}
+                addLineCommentPlaceholder={t(
+                  'auto.components.GitHubItemDialog.86d84a17ca',
+                  'Add a review comment'
+                )}
+                getCommentableLineNumbers={getCommentableLineNumbers}
+                setSectionHeights={setSectionHeights}
+                setSections={setSections}
+                modifiedEditorsRef={modifiedEditorsRef}
+                handleSectionSaveRef={handleSectionSaveRef}
+              />
+            )
+          }}
+        </CombinedDiffViewport>
       </div>
     </div>
   )

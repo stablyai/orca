@@ -7,7 +7,7 @@ import {
 } from '../../../../../../shared/large-diff-render-limit'
 
 const DIFF_LINE_HEIGHT = 19
-const DIFF_SECTION_PADDING_HEIGHT = 19
+export const DIFF_SECTION_PADDING_HEIGHT = 19
 const MIN_DIFF_SECTION_BODY_HEIGHT = 60
 const DIFF_SECTION_HEADER_HEIGHT = 28
 const DIFF_UNCHANGED_CONTEXT_LINE_ESTIMATE = 12

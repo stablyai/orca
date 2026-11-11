@@ -1,7 +1,6 @@
 import { editorViewPlacement } from '@/store/slices/editor/tabs/editor-view-placement'
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useState } from 'react'
 import { useAppStore } from '@/store'
-import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
 import { useWorkspaceFileBrowserActionPredicate } from '@/lib/browser/documents/file-preview'
 import { useVisibleWorktreeDiffComments } from '../../diff-comments/use-visible-worktree-diff-comments'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
@@ -13,7 +12,6 @@ import {
   useCombinedDiffEntrySet
 } from './resolve-changes/use-combined-diff-entry-set'
 import { useCombinedDiffSectionIndexMap } from './resolve-changes/use-combined-diff-section-index-map'
-import { useCombinedDiffSectionRowKeys } from './resolve-changes/use-combined-diff-section-row-keys'
 import { useCombinedDiffSectionLoadRegistry } from './load-sections/combined-diff-section-load-registry'
 import { useCombinedDiffSectionLoader } from './load-sections/use-combined-diff-section-loader'
 import { useCombinedDiffSectionRetry } from './load-sections/use-combined-diff-section-retry'
@@ -21,11 +19,8 @@ import { useCombinedDiffSectionRevalidation } from './load-sections/use-combined
 import { useCombinedDiffViewPersist } from './remember-view/use-combined-diff-view-persist'
 import { useCombinedDiffViewRestore } from './remember-view/use-combined-diff-view-restore'
 import { buildCombinedDiffViewTabSuccession } from './remember-view/combined-diff-view-tab-scope'
-import { useCombinedDiffDirectScrollInput } from './scroll-viewport/use-combined-diff-direct-scroll-input'
-import { useCombinedDiffScrollAnchors } from './scroll-viewport/use-combined-diff-scroll-anchors'
-import { useCombinedDiffScrollPersistence } from './scroll-viewport/use-combined-diff-scroll-persistence'
-import { useCombinedDiffScrollbar } from './scroll-viewport/use-combined-diff-scrollbar'
-import { useCombinedDiffVirtualizer } from './scroll-viewport/use-combined-diff-virtualizer'
+import { useCombinedDiffViewport } from './scroll-viewport/CombinedDiffViewport'
+import { useCombinedDiffOwnerMemory } from './remember-view/use-combined-diff-owner-memory'
 import { CombinedDiffSectionList } from './scroll-viewport/combined-diff-section-list'
 import { CombinedDiffFileTree } from './browse-files/combined-diff-file-tree'
 import { useCombinedDiffTreeNavigation } from './browse-files/use-combined-diff-tree-navigation'
@@ -76,10 +71,6 @@ export default function CombinedDiffViewer({
   const [sections, setSections] = useState<DiffSection[]>([])
   const [sectionHeights, setSectionHeights] = useState<Record<number, number>>({})
   const [generation, setGeneration] = useState(0)
-  // Why: a browser scroll clamp must re-pin the restore without being recorded as user intent.
-  const [clampRestoreCount, setClampRestoreCount] = useState(0)
-  const [programmaticScrollMarks] = useState(createProgrammaticScrollMarks)
-  const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   const registry = useCombinedDiffSectionLoadRegistry(sections)
   const entrySet = useCombinedDiffEntrySet({
@@ -130,44 +121,24 @@ export default function CombinedDiffViewer({
     setSections
   })
 
-  // Share one incremental scan across virtualizer keys, restore signals and toolbar collapse state.
-  const sectionRowKeys = useCombinedDiffSectionRowKeys({ generation, sections })
   const sectionIndexByKey = useCombinedDiffSectionIndexMap({
     entrySignature: entrySet.entrySignature,
     sections
   })
-  const { hasDirectScrollInput, markDirectScrollInput } = useCombinedDiffDirectScrollInput()
-  const { cleanupActiveScrollbarDrag, handleScrollbarPointerDown, scrollThumb, updateScrollbar } =
-    useCombinedDiffScrollbar({ markDirectScrollInput, scrollContainerRef })
-  const virtualizer = useCombinedDiffVirtualizer({
-    generation,
-    programmaticScrollMarks,
-    renderedIndicesRef: registry.renderedIndicesRef,
-    rowKeys: sectionRowKeys.rowKeys,
-    scrollContainerRef,
-    scrollOffsetRef: restore.scrollOffsetRef,
+  const viewport = useCombinedDiffViewport({
+    sections,
     sectionHeights,
-    sections,
-    sideBySide: preferences.sideBySide
+    prefix: (file.skippedConflicts?.length ?? 0) > 0,
+    renderedIndicesRef: registry.renderedIndicesRef
   })
-  const anchors = useCombinedDiffScrollAnchors({
-    clampRestoreCount,
-    generation,
-    hasDirectScrollInput,
-    latestDomScrollAnchorRef: restore.latestDomScrollAnchorRef,
-    programmaticScrollMarks,
-    scrollAnchorRef: restore.scrollAnchorRef,
-    scrollContainerRef,
-    scrollOffsetRef: restore.scrollOffsetRef,
-    sectionIndexByKey,
-    sections,
-    sectionsRef: registry.sectionsRef,
-    sideBySide: preferences.sideBySide,
-    structureRevision: sectionRowKeys.structureRevision,
-    totalSize: virtualizer.getTotalSize(),
-    memoryLeaseRef: restore.memoryLeaseRef,
-    virtualizer
+  useCombinedDiffOwnerMemory({
+    owner: viewport,
+    restore,
+    entrySignature: entrySet.entrySignature,
+    viewStateKey
   })
+  const markDirectScrollInput = useCallback(() => viewport.cancelNavigation(), [viewport])
+  const scrollToSectionIndex = useCallback((index: number) => viewport.navigate(index), [viewport])
 
   const toggleSection = useCallback(
     (index: number) => {
@@ -192,7 +163,7 @@ export default function CombinedDiffViewer({
     ensureSectionLoaded,
     entrySignature: entrySet.entrySignature,
     markDirectScrollInput,
-    scrollToIndex: anchors.scrollToSectionIndex,
+    scrollToIndex: scrollToSectionIndex,
     sectionIndexByKey,
     sections,
     sectionsRef: registry.sectionsRef,
@@ -238,41 +209,13 @@ export default function CombinedDiffViewer({
     entrySignature: entrySet.entrySignature,
     loadedIndicesRef: registry.loadedIndicesRef,
     memoryLeaseRef: restore.memoryLeaseRef,
-    scrollContainerRef,
     sectionHeights,
-    sections,
-    viewStateKey
+    sections
   })
-  useCombinedDiffScrollPersistence({
-    anchors,
-    entrySignature: entrySet.entrySignature,
-    hasDirectScrollInput,
-    latestDomScrollAnchorRef: restore.latestDomScrollAnchorRef,
-    memoryLeaseRef: restore.memoryLeaseRef,
-    programmaticScrollMarks,
-    scrollAnchorRef: restore.scrollAnchorRef,
-    scrollContainerRef,
-    scrollOffsetRef: restore.scrollOffsetRef,
-    sectionCount: sections.length,
-    sectionHeights,
-    sections,
-    setClampRestoreCount,
-    updateScrollbar,
-    viewStateKey
-  })
-
   const { setScrollSurfaceMounted } = notes
   const setScrollContainerRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      scrollContainerRef.current = node
-      setScrollSurfaceMounted(node !== null)
-      if (node === null) {
-        cleanupActiveScrollbarDrag()
-        return
-      }
-      window.requestAnimationFrame(updateScrollbar)
-    },
-    [cleanupActiveScrollbarDrag, setScrollSurfaceMounted, updateScrollbar]
+    (node: HTMLDivElement | null) => setScrollSurfaceMounted(node !== null),
+    [setScrollSurfaceMounted]
   )
 
   const skippedConflicts = file.skippedConflicts
@@ -315,7 +258,7 @@ export default function CombinedDiffViewer({
         skippedConflicts={skippedConflicts!}
       />
     ) : null
-  const allSectionsCollapsed = sectionRowKeys.allSectionsCollapsed
+  const allSectionsCollapsed = sections.every((section) => section.collapsed)
 
   return (
     <>
@@ -376,22 +319,19 @@ export default function CombinedDiffViewer({
             isDark={isDark}
             loadSection={loadSection}
             loadDeferredSection={loadDeferredSection}
-            markDirectScrollInput={markDirectScrollInput}
             modifiedEditorsRef={modifiedEditorsRef}
-            onScrollbarPointerDown={handleScrollbarPointerDown}
             openSection={openSection}
             openSectionPreview={openSectionPreview}
             retrySection={retrySection}
-            scrollThumb={scrollThumb}
             sectionHeights={sectionHeights}
-            sections={sections}
             setScrollContainerRef={setScrollContainerRef}
+            sections={sections}
             setSectionHeights={setSectionHeights}
             setSections={setSections}
             sideBySide={preferences.sideBySide}
             skippedConflictNotice={skippedConflictNotice}
             toggleSection={toggleSection}
-            virtualizer={virtualizer}
+            viewport={viewport}
           />
         </div>
       </div>

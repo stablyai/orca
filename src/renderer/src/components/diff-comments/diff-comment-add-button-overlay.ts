@@ -1,6 +1,7 @@
 import * as monaco from 'monaco-editor'
 import type { editor as monacoEditor } from 'monaco-editor'
 import type { RefObject } from 'react'
+import { scrollCombinedEditorBy } from '../editor/combined-diff/scroll-viewport/combined-diff-editor-geometry'
 import { getDiffCommentPopoverTop } from './diff-comment-popover-position'
 import { toDiffCommentLineTarget } from './diff-comment-line-range'
 import {
@@ -56,6 +57,7 @@ export function installDiffCommentAddButtonOverlay({
   let lastTop: number | null = null
   let lastDisplay: string | null = null
   let dragging = false
+  let disposed = false
 
   const setDisplay = (value: string): void => {
     if (lastDisplay === value) {
@@ -86,6 +88,15 @@ export function installDiffCommentAddButtonOverlay({
     editor,
     editorDomNode,
     commentableLineSet,
+    scrollBy: (delta) => {
+      if (!scrollCombinedEditorBy(editor, delta)) {
+        return false
+      }
+      if (!disposed) {
+        editor.render()
+      }
+      return true
+    },
     // Presses on the overlay have no Monaco gutter position; use its parked line.
     resolvePressLine: (event) =>
       event.target instanceof Node && plus.contains(event.target)
@@ -144,6 +155,7 @@ export function installDiffCommentAddButtonOverlay({
 
   return {
     dispose: () => {
+      disposed = true
       for (const d of disposables) {
         d.dispose()
       }

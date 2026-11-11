@@ -6,6 +6,11 @@ import {
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { createRoot, type Root } from 'react-dom/client'
+import {
+  invalidateCombinedEditorGeometry,
+  isCombinedEditorBindingCurrent,
+  onCombinedEditorUnbind
+} from '../editor/combined-diff/scroll-viewport/combined-diff-editor-geometry'
 import { getCommentBodyLayoutLineCount } from '@/lib/source-control/review/comments/comment-body-line-count'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -15,10 +20,15 @@ import {
 } from './diff-comment-add-button-overlay'
 import { installDiffCommentAddNoteShortcut } from './diff-comment-add-note-shortcut'
 import { installDiffCommentZoneMouseDownStopper } from './diff-comment-zone-mouse-events'
+import { untilDiffCommentZoneRemoved } from './diff-comment-zone-lifetime'
+import {
+  createDiffCommentZoneNavigation,
+  registerDiffCommentZoneReading,
+  usePendingDiffCommentZoneReveal
+} from './diff-comment-zone-geometry'
 import { getRenderSignature, renderDiffCommentZoneCard } from './diff-comment-zone-card'
 import type { DecoratedDiffComment } from './decorated-diff-comment'
 import {
-  resizeDiffCommentZone,
   ZONE_CHROME_PX,
   ZONE_LINE_PX,
   ZONE_MIN_PX,
@@ -108,6 +118,7 @@ export function useDiffCommentDecorator({
   // Stash the diff-zones effect's scrollToZone closure so the request-effect can invoke the latest version.
   const scrollToZoneRef = useRef<((commentId: string) => void) | null>(null)
   const scrollToZoneFrameRef = useRef<number | null>(null)
+  const combinedScrollRequestRef = useRef<object | null>(null)
 
   // Read current inline callbacks without tearing down zones on every parent render.
   const onDeleteCommentRef = useRef(onDeleteComment)
@@ -150,7 +161,7 @@ export function useDiffCommentDecorator({
 
   // Overlay labels and line sets require rebuilds independently of the zone lifecycle below.
   useEffect(() => {
-    if (!editor) {
+    if (!editor || !isCombinedEditorBindingCurrent(editor, monacoModelIdentity)) {
       return
     }
 
@@ -169,10 +180,12 @@ export function useDiffCommentDecorator({
     })
     overlayRef.current = overlay
     overlay.setPendingRange(pendingCommentRangeRef.current)
-    return () => {
-      overlayRef.current = null
+    return onCombinedEditorUnbind(editor, () => {
+      if (overlayRef.current === overlay) {
+        overlayRef.current = null
+      }
       overlay.dispose()
-    }
+    })
   }, [addButtonLabel, commentableLineSet, editor, monacoModelIdentity, onAddCommentClickRef])
 
   const pendingLineNumber = pendingCommentTarget?.lineNumber ?? null
@@ -187,10 +200,14 @@ export function useDiffCommentDecorator({
 
   const hasDraftComposer = onCreateComment !== undefined
   useEffect(() => {
-    if (!editor || !addNoteShortcutEnabled) {
+    if (
+      !editor ||
+      !isCombinedEditorBindingCurrent(editor, monacoModelIdentity) ||
+      !addNoteShortcutEnabled
+    ) {
       return
     }
-    return installDiffCommentAddNoteShortcut({
+    const dispose = installDiffCommentAddNoteShortcut({
       editor,
       commentableLineSet,
       // Open composers and live drags own the chord; reopening at the editor selection would move the draft. Synchronous draft mounting also claims same-turn repeats.
@@ -209,6 +226,7 @@ export function useDiffCommentDecorator({
         onAddCommentClickRef.current(args)
       }
     })
+    return onCombinedEditorUnbind(editor, dispose)
   }, [
     addNoteShortcutEnabled,
     commentableLineSet,
@@ -222,15 +240,17 @@ export function useDiffCommentDecorator({
 
   // Deps must stay a subset of the zone-creating effect's, or a teardown here is never followed by a rebuild.
   useEffect(() => {
-    if (!editor) {
+    if (!editor || !isCombinedEditorBindingCurrent(editor, monacoModelIdentity)) {
       return
     }
 
-    const zones = zonesRef.current
+    const zones = new Map<string, ZoneEntry>()
+    zonesRef.current = zones
 
-    return () => {
+    return onCombinedEditorUnbind(editor, () => {
       // Clear zones synchronously; defer root unmounts until after React 19’s commit to avoid unmount-while-rendering warnings.
       const rootsToUnmount = Array.from(zones.values(), (z) => {
+        z.lifetime.abort()
         z.disposeMouseDownStopper()
         return z.root
       })
@@ -244,6 +264,7 @@ export function useDiffCommentDecorator({
         })
       }
       zones.clear()
+      invalidateCombinedEditorGeometry(editor)
       if (rootsToUnmount.length > 0) {
         queueMicrotask(() => {
           for (const root of rootsToUnmount) {
@@ -253,12 +274,13 @@ export function useDiffCommentDecorator({
       }
       cancelScrollToZoneFrame()
       pendingScrollRef.current = null
+      combinedScrollRequestRef.current = null
       scrollToZoneRef.current = null
-    }
+    })
   }, [cancelScrollToZoneFrame, editor, monacoModelIdentity, ownerKey])
 
   useEffect(() => {
-    if (!editor) {
+    if (!editor || !isCombinedEditorBindingCurrent(editor, monacoModelIdentity)) {
       return
     }
 
@@ -266,36 +288,21 @@ export function useDiffCommentDecorator({
     const relevantMap = new Map(relevant.map((c) => [c.id, c] as const))
 
     const zones = zonesRef.current
+    const combined = !isCombinedEditorBindingCurrent(editor)
     // Unmounting a root inside changeViewZones races Monaco's zone bookkeeping; collect roots and unmount after the batch.
     const rootsToUnmount: Root[] = []
 
-    const resizeZone = (commentId: string): void => {
-      const entry = zones.get(commentId)
-      if (!entry) {
-        return
-      }
-      resizeDiffCommentZone(editor, entry)
-    }
-
-    // Center on the line/card pair with includeZones=true; defer past DiffViewer’s restore frame so cached scroll cannot override this request.
-    const scrollToZone = (commentId: string): void => {
-      cancelScrollToZoneFrame()
-      scrollToZoneFrameRef.current = requestAnimationFrame(() => {
-        scrollToZoneFrameRef.current = null
-        const entry = zones.get(commentId)
-        if (!entry || !editor.getModel()) {
-          return
-        }
-        if (pendingScrollRef.current !== commentId) {
-          return
-        }
-        const top = editor.getTopForLineNumber(entry.delegate.afterLineNumber, true)
-        const editorHeight = editor.getLayoutInfo().height
-        editor.setScrollTop(Math.max(0, top - editorHeight / 2))
-        pendingScrollRef.current = null
-        onPendingScrollConsumedRef.current?.()
-      })
-    }
+    const { resizeZone, scrollToZone } = createDiffCommentZoneNavigation({
+      editor,
+      monacoModelIdentity,
+      zones,
+      combined,
+      pendingScrollRef,
+      combinedScrollRequestRef,
+      scrollToZoneFrameRef,
+      onPendingScrollConsumedRef,
+      cancelScrollToZoneFrame
+    })
     scrollToZoneRef.current = scrollToZone
 
     const renderCard = (root: Root, comment: DecoratedDiffComment): void => {
@@ -306,6 +313,8 @@ export function useDiffCommentDecorator({
         activeGroupId,
         formatCommentPrompt,
         resizeZone,
+        lifetime: zones.get(comment.id)?.lifetime.signal,
+        preventScrollOnFocus: combined,
         onDeleteCommentRef,
         onUpdateCommentRef,
         clearDeliveredDiffComments
@@ -316,6 +325,7 @@ export function useDiffCommentDecorator({
       // Keep surviving zones to preserve focus and selection.
       for (const [commentId, entry] of zones) {
         if (!relevantMap.has(commentId)) {
+          entry.lifetime.abort()
           accessor.removeZone(entry.zoneId)
           entry.disposeMouseDownStopper()
           rootsToUnmount.push(entry.root)
@@ -323,6 +333,7 @@ export function useDiffCommentDecorator({
           // Deleted notes must not leave scroll requests for a reused ID.
           if (pendingScrollRef.current === commentId) {
             pendingScrollRef.current = null
+            combinedScrollRequestRef.current = null
           }
         }
       }
@@ -349,8 +360,11 @@ export function useDiffCommentDecorator({
           heightInPx,
           domNode: dom,
           suppressMouseDown: false,
-          // The first layout callback resolves waiting scroll requests without polling.
+          // Combined readiness comes from card measurement, not native DOM translation.
           onDomNodeTop: () => {
+            if (combined) {
+              return
+            }
             const entry = zones.get(commentId)
             if (!entry) {
               return
@@ -363,15 +377,23 @@ export function useDiffCommentDecorator({
           }
         }
         const zoneId = accessor.addZone(delegate)
-        zones.set(c.id, {
+        const lifetime = new AbortController()
+        const entry: ZoneEntry = {
           zoneId,
           domNode: dom,
           delegate,
           root,
+          lifetime,
           disposeMouseDownStopper,
           lastRenderSignature: getRenderSignature(c, formatCommentPrompt),
           laidOut: false
-        })
+        }
+        zones.set(c.id, entry)
+        registerDiffCommentZoneReading(editor, monacoModelIdentity, zones, commentId, entry)
+        if (combined) {
+          const layout = editor.onDidLayoutChange(() => resizeZone(commentId))
+          untilDiffCommentZoneRemoved(lifetime.signal, () => layout.dispose())
+        }
         renderCard(root, c)
       }
 
@@ -388,6 +410,7 @@ export function useDiffCommentDecorator({
         renderCard(entry.root, c)
       }
     })
+    invalidateCombinedEditorGeometry(editor)
 
     if (rootsToUnmount.length > 0) {
       queueMicrotask(() => {
@@ -411,39 +434,17 @@ export function useDiffCommentDecorator({
     worktreeId
   ])
 
-  // Resolve scroll requests here after layout or in onDomNodeTop before layout, sharing pendingScrollRef.
-  useEffect(() => {
-    if (!editor) {
-      return
-    }
-    // Cancel cleared requests so late layout callbacks cannot snap-scroll.
-    if (!pendingScrollCommentId) {
-      cancelScrollToZoneFrame()
-      pendingScrollRef.current = null
-      return
-    }
-    const target = comments.find(
-      (c) =>
-        c.id === pendingScrollCommentId && c.filePath === filePath && c.worktreeId === worktreeId
-    )
-    if (!target) {
-      // Drop foreign requests so late layout cannot acknowledge another surface’s note.
-      cancelScrollToZoneFrame()
-      pendingScrollRef.current = null
-      return
-    }
-    pendingScrollRef.current = pendingScrollCommentId
-    const entry = zonesRef.current.get(pendingScrollCommentId)
-    if (entry?.laidOut) {
-      scrollToZoneRef.current?.(pendingScrollCommentId)
-    }
-  }, [
-    cancelScrollToZoneFrame,
+  usePendingDiffCommentZoneReveal({
     editor,
-    comments,
-    pendingScrollCommentId,
-    filePath,
     monacoModelIdentity,
-    worktreeId
-  ])
+    comments,
+    filePath,
+    worktreeId,
+    pendingScrollCommentId,
+    pendingScrollRef,
+    combinedScrollRequestRef,
+    zonesRef,
+    scrollToZoneRef,
+    cancelScrollToZoneFrame
+  })
 }

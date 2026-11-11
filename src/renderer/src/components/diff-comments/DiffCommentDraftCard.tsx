@@ -13,6 +13,7 @@ import {
 } from '@/lib/source-control/review/comments/comment-body-submit-state'
 import { toast } from 'sonner'
 import { installOpenDraftAddReviewNoteGuard } from '../editor/editor-shortcuts'
+import { untilDiffCommentZoneRemoved } from './diff-comment-zone-lifetime'
 
 export type DiffCommentDraftCardProps = {
   lineNumber: number
@@ -26,6 +27,8 @@ export type DiffCommentDraftCardProps = {
   onCancel: () => void
   onSubmit: (body: string) => Promise<boolean>
   onContentResize?: () => void
+  autoFocus?: boolean
+  lifetime?: AbortSignal
 }
 
 function resizeDraftTextarea(textarea: HTMLTextAreaElement): boolean {
@@ -46,7 +49,9 @@ export function DiffCommentDraftCard({
   onSubmit,
   onContentResize,
   initialBody = '',
-  onBodyChange
+  onBodyChange,
+  autoFocus = true,
+  lifetime
 }: DiffCommentDraftCardProps): React.JSX.Element {
   const t = useTranslate()
   const [body, setBody] = useState(initialBody)
@@ -59,6 +64,9 @@ export function DiffCommentDraftCard({
     textareaRef,
     body,
     (next) => {
+      if (lifetime?.aborted) {
+        return
+      }
       setBody(next)
       onBodyChange?.(next)
     },
@@ -95,29 +103,44 @@ export function DiffCommentDraftCard({
   const hasImageUpload = !!imageUploadAddress
   const focusTextareaRef = useCallback(
     (textarea: HTMLTextAreaElement | null): void => {
+      if (lifetime?.aborted) {
+        textarea = null
+      }
       if (hasImageUpload) {
         attachDrop(textarea)
       } else {
         textareaRef.current = textarea
       }
-      textarea?.focus()
+      if (autoFocus) {
+        textarea?.focus()
+      }
     },
-    [attachDrop, hasImageUpload]
+    [attachDrop, autoFocus, hasImageUpload, lifetime]
   )
 
+  useLayoutEffect(() => {
+    return untilDiffCommentZoneRemoved(lifetime, () => {
+      attachDrop(null)
+      textareaRef.current = null
+    })
+  }, [attachDrop, lifetime])
+
   useEffect(() => {
+    if (!autoFocus || lifetime?.aborted) {
+      return
+    }
     const focusTextarea = (): void => textareaRef.current?.focus()
     focusTextarea()
     if (typeof requestAnimationFrame !== 'function') {
       return
     }
     const frame = requestAnimationFrame(focusTextarea)
-    return () => cancelAnimationFrame(frame)
-  }, [])
+    return untilDiffCommentZoneRemoved(lifetime, () => cancelAnimationFrame(frame))
+  }, [autoFocus, lifetime])
 
   useLayoutEffect(() => {
     const card = cardRef.current
-    if (!card || !onContentResizeRef.current) {
+    if (!card || lifetime?.aborted || !onContentResizeRef.current) {
       return
     }
     const textarea = textareaRef.current
@@ -132,18 +155,21 @@ export function DiffCommentDraftCard({
       onContentResizeRef.current?.()
     })
     observer.observe(card)
-    return () => observer.disconnect()
-  }, [])
+    return untilDiffCommentZoneRemoved(lifetime, () => observer.disconnect())
+  }, [lifetime])
 
   useEffect(() => {
     const card = cardRef.current
-    if (!card) {
+    if (!card || lifetime?.aborted) {
       return
     }
-    return installOpenDraftAddReviewNoteGuard(card)
-  }, [])
+    return untilDiffCommentZoneRemoved(lifetime, installOpenDraftAddReviewNoteGuard(card))
+  }, [lifetime])
 
   useEffect(() => {
+    if (lifetime?.aborted) {
+      return
+    }
     const onDocumentMouseDown = (event: MouseEvent): void => {
       const card = cardRef.current
       const target = event.target
@@ -157,11 +183,13 @@ export function DiffCommentDraftCard({
       onCancel()
     }
     document.addEventListener('mousedown', onDocumentMouseDown)
-    return () => document.removeEventListener('mousedown', onDocumentMouseDown)
-  }, [onCancel])
+    return untilDiffCommentZoneRemoved(lifetime, () =>
+      document.removeEventListener('mousedown', onDocumentMouseDown)
+    )
+  }, [lifetime, onCancel])
 
   const handleSubmit = async (): Promise<void> => {
-    if (submitting || imagePending.pendingRef.current) {
+    if (lifetime?.aborted || submitting || imagePending.pendingRef.current) {
       return
     }
     const bodyState = getCommentBodySubmitState(body)
@@ -178,18 +206,18 @@ export function DiffCommentDraftCard({
       return
     }
     // Park focus before disabling the button; the zone restores Monaco focus only while its card owns focus.
-    textareaRef.current?.focus()
+    textareaRef.current?.focus(autoFocus ? undefined : { preventScroll: true })
     setSubmitting(true)
     try {
       const result = await onSubmit(bodyState.body)
-      if (result === false && mountedRef.current) {
+      if (result === false && mountedRef.current && !lifetime?.aborted) {
         setSubmitting(false)
       }
     } catch (err) {
       console.error('Failed to submit diff comment draft:', err)
       // A rejected save never reaches the caller's own failure toast, so report it here.
       toast.error(t('auto.components.editor.diffCommentSaveFailed', 'Failed to save comment'))
-      if (mountedRef.current) {
+      if (mountedRef.current && !lifetime?.aborted) {
         setSubmitting(false)
       }
     }
