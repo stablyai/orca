@@ -15,7 +15,7 @@ import {
   applyDocumentTheme,
   readCachedPluginAppTheme
 } from './app-shell/appearance/document-theme'
-import { installTypingLatencyDiagnostic } from './lib/typing-latency/diagnostic'
+import { installTypingLatencyDiagnostic } from './diagnostics/typing-latency/diagnostic'
 import { installAppKeyboardRouter } from './lib/keyboard/app-keyboard-router'
 import { shouldEnableReactGrab } from './diagnostics/react-commits/react-grab-dev-gate'
 import { I18nProvider } from './i18n/I18nProvider'
