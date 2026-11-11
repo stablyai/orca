@@ -10,7 +10,7 @@ import {
 } from './terminal-wait-detection'
 import { readsTrustedScreen } from '../../agent-state-rules/agent-state-rules-engine'
 import { restoreProjectedComposerDraft } from '../view/orca-runtime-terminal-projection'
-import { isBodyReadinessAgent } from './tui-idle-evidence'
+import { isBodyReadinessAgent, hasFreshWorkingFirstPartyStatus } from './tui-idle-evidence'
 import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitBlockedReason
@@ -31,7 +31,12 @@ export function visibleProbeReady(args: {
   snapshotText: string
   restoredLines: readonly string[]
   hasOutputClock: boolean
+  /** First-party or title evidence that a turn is still open; body-read agents rank it above the composer. */
+  working: boolean
 }): boolean {
+  if (isBodyReadinessAgent(args.agent) && args.working) {
+    return false
+  }
   return args.screenRule || isBodyReadinessAgent(args.agent)
     ? isKnownReadyPromptBody(
         args.snapshotText,
@@ -40,6 +45,11 @@ export function visibleProbeReady(args: {
         args.hasOutputClock
       )
     : isKnownReadyPromptSettled(args.snapshotText)
+}
+
+/** A body-read agent needs a real screen: its composer rule cannot judge a stream tail. */
+export function visibleProbeReadsScreen(agent: TuiAgent | null, screenRule: boolean): boolean {
+  return screenRule || isBodyReadinessAgent(agent)
 }
 
 export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWithCreateAgentPromptRenderGate {
@@ -66,13 +76,17 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
     }
     const screenRule = readsTrustedScreen(agent)
     void withTimeout(
-      this.readTerminal(waiter.handle, screenRule ? { screen: true } : {}, {
-        timeoutMs: providerTimeoutMs,
-        retireOnTimeout: true,
-        // Why: the ready banner stays in scrollback for the whole session, so
-        // classifying history would call a working agent idle (#15569 review).
-        visibleScreenOnly: true
-      } satisfies RuntimeProviderSnapshotReadOptions),
+      this.readTerminal(
+        waiter.handle,
+        visibleProbeReadsScreen(agent, screenRule) ? { screen: true } : {},
+        {
+          timeoutMs: providerTimeoutMs,
+          retireOnTimeout: true,
+          // Why: the ready banner stays in scrollback for the whole session, so
+          // classifying history would call a working agent idle (#15569 review).
+          visibleScreenOnly: true
+        } satisfies RuntimeProviderSnapshotReadOptions
+      ),
       probeTimeoutMs,
       null
     )
@@ -94,7 +108,12 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
           snapshotText,
           restoredLines: restoreProjectedComposerDraft(projection.tail, projection.draft),
           // Why read now: output since the probe started makes the pane clocked.
-          hasOutputClock: outputClockOf(this.tuiIdleEvidenceSource, pty) !== null
+          hasOutputClock: outputClockOf(this.tuiIdleEvidenceSource, pty) !== null,
+          working:
+            pty.lastAgentStatus === 'working' ||
+            hasFreshWorkingFirstPartyStatus(
+              this.tuiIdleEvidenceSource.getFirstPartyAgentStatus(pty.ptyId)
+            )
         })
         if (!blockedReason && !ready) {
           return
