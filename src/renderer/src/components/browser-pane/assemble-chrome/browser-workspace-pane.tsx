@@ -11,8 +11,8 @@ import {
   IDLE_BROWSER_DRIVER,
   useBrowserDriverForPage,
   useBrowserMobileDrivenPageIds
-} from '@/lib/pane-manager/browser-mobile-driver-state'
-import { useBrowserRemotelyViewedPageIds } from '@/lib/pane-manager/browser-remote-viewer-state'
+} from '@/runtime/browser/ownership/browser-mobile-driver-state'
+import { useBrowserRemotelyViewedPageIds } from '@/runtime/browser/ownership/browser-remote-viewer-state'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { getBrowserPageRuntimeEnvironmentId } from '../../../../../shared/browser/browser-page-runtime-owner'
 import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'

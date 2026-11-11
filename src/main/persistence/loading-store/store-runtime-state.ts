@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { removeStaleDurableWriteTempFiles } from '../../filesystem/durable-file-write'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -6,7 +7,7 @@ import type {
   WorkspaceSessionWriteListener
 } from './workspace-session-write-listeners'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { StateWriteListener } from './write-scheduling'
+import type { StateWriteListener, WorktreeMetaWriteListener } from './write-scheduling'
 import type { PartitionEditorViews } from './layout-editor-views'
 import type { ActiveViewPreference } from '../preferences/active-view-preference'
 import {
@@ -114,6 +115,9 @@ export class StoreRuntimeState {
   /** In-memory editor views by partition; layout-owner builds only. */
   readonly layoutEditorViews = new Map<ExecutionHostId, PartitionEditorViews>()
   readonly stateWriteListeners = new Set<StateWriteListener>()
+  readonly worktreeMetaWriteListeners = new Set<WorktreeMetaWriteListener>()
+  // This store's workspaceMetadata position: a new epoch per process, one seq per published record.
+  readonly workspaceMetadataCursor = { epoch: randomUUID(), seq: 0 }
   projectHostOperations: ProjectHostPersistenceOperations | null = null
   projectGroupOperations: ProjectGroupPersistenceOperations | null = null
   folderWorkspaceOperations: FolderWorkspacePersistenceOperations | null = null

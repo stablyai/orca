@@ -39,7 +39,9 @@ export function AutomationHostLabel({
   showAuthority = false,
   className
 }: AutomationHostLabelProps): React.JSX.Element {
-  const accessibleName = showAuthority ? `${entry.authorityLabel} · ${entry.label}` : entry.label
+  const label = entry.label
+  const authorityLabel = entry.authorityLabel
+  const accessibleName = showAuthority ? `${authorityLabel} · ${label}` : label
 
   return (
     <Tooltip>
@@ -51,7 +53,7 @@ export function AutomationHostLabel({
           data-host-stable-key={entry.stableKey}
         >
           <RepoBadgeLabel
-            name={entry.label}
+            name={label}
             color={color ?? 'var(--muted-foreground)'}
             className="max-w-full"
           />

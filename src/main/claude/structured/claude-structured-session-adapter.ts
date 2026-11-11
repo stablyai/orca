@@ -18,6 +18,7 @@ import { supportsClaudeStructuredLocation } from './launch/claude-structured-loc
 import * as claudeOptions from './launch/claude-structured-options'
 import { dispatchClaudeMessage } from './launch/claude-structured-message-options'
 import { readClaudeStructuredSessionOptions } from './launch/claude-structured-session-options'
+import { noteClaudeModelPick } from './claude-structured-execution-observations'
 import {
   ClaudeAcquisitionRegistry,
   type ClaudeSession,
@@ -231,6 +232,12 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       deps: this.deps,
       emit: (session, event) => this.emit(session, event)
     })
+  noteOptionPick: NonNullable<StructuredAgentSessionAdapter['noteOptionPick']> = (input) => {
+    const session = this.sessions.get(input.sessionId)
+    if (session?.fence === input.fence && input.key === 'model' && input.value) {
+      noteClaudeModelPick(session, input.value)
+    }
+  }
   readOptions = (input: { sessionId: string; fence: number }) =>
     readClaudeStructuredSessionOptions(this.session(input.sessionId))
   releaseAcquisition = (input: ClaudeReleaseRequest): Promise<boolean> => {

@@ -9,22 +9,22 @@ import {
 } from '@/lib/terminal/appearance/terminal-theme'
 import { buildFontFamily } from '../../../../../shared/monospace-font-family'
 import { pluginFontFamilyWhenLoaded } from '@/store/plugins/appearance/plugin-fonts'
-import '@/lib/pane-manager/pane-tree-ops'
-import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-fit'
+import '@/lib/pane-manager/pane-layout/pane-tree-ops'
+import { safeFit, safeFitAndThen } from '@/lib/pane-manager/terminal-fit/pane-fit'
 
-import { canApplyPaneMetricOptions } from '@/lib/pane-manager/pane-fit-measurability'
+import { canApplyPaneMetricOptions } from '@/lib/pane-manager/terminal-fit/pane-fit-measurability'
 import {
   applyOrDeferPaneMetricOptions,
   paneMetricOptionsAlreadySettled
-} from '@/lib/pane-manager/pane-metric-options-deferral'
+} from '@/lib/pane-manager/terminal-fit/pane-metric-options-deferral'
 import {
   normalizeTerminalFastScrollSensitivity,
   normalizeTerminalScrollSensitivity,
   resolveTerminalCursorInactiveStyle,
   resolveTerminalScrollOnUserInput
 } from '@/lib/pane-manager/pane-terminal-options'
-import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
-import { setTerminalCursorBlinkOption } from '@/lib/pane-manager/pane-cursor-blink-suspension'
+import { getFitOverrideForPty } from '@/lib/pane-manager/terminal-fit/mobile-fit-overrides'
+import { setTerminalCursorBlinkOption } from '@/lib/pane-manager/pane-focus/pane-cursor-blink-suspension'
 import type { PtyTransport } from '../pty-transport/pty-transport-types'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
 import { HEX_COLOR_RE } from '../../../../../shared/color-validation'

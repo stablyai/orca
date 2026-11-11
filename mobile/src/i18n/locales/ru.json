@@ -2594,7 +2594,8 @@
     "tabStrip": {
       "checkingCapabilities": "Проверяем возможности Orca на компьютере — повторите попытку чуть позже",
       "newTab": "Новая вкладка",
-      "quickCommandsUpdateRequired": "Для быстрых команд обновите Orca на компьютере"
+      "quickCommandsUpdateRequired": "Для быстрых команд обновите Orca на компьютере",
+      "tabStatus": "{{title}}, {{status}}"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Очистить терминал",
@@ -3540,6 +3541,12 @@
   },
   "tasks": {
     "hostedMerge": {
+      "confirmGitHubMerge": "Слить PR #{{number}}?",
+      "confirmGitHubSquash": "Объединить коммиты и слить PR #{{number}}?",
+      "confirmGitHubRebase": "Выполнить rebase и слить PR #{{number}}?",
+      "confirmGitLabMerge": "Слить запрос на слияние #{{number}}?",
+      "confirmGitLabSquash": "Объединить коммиты и слить запрос на слияние #{{number}}?",
+      "confirmGitLabRebase": "Выполнить rebase и слить запрос на слияние #{{number}}?",
       "merged": "Слито",
       "closed": "Закрыто",
       "conflicts": "Конфликты",

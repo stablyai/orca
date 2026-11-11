@@ -27,7 +27,7 @@
 10 src/main/persistence/loading-store/repo-lifecycle-operations.ts
 10 src/main/persistence/loading-store/session-host-partitions.ts
 9 src/main/persistence/loading-store/session-snapshot-operations.ts
-3 src/main/persistence/loading-store/state-serialization-secret-handling.ts
+2 src/main/persistence/loading-store/state-serialization-secret-handling.ts
 4 src/main/persistence/loading-store/workspace-session-snapshot-publication.ts
 4 src/main/persistence/loading-store/workspace-session-terminal-binding-replay.ts
 2 src/main/persistence/migrating-orcad-catalog/orcad-destination-client-state.ts

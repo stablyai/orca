@@ -26,3 +26,9 @@ export function getRevealAncestorDirs(worktreePath: string, filePath: string): s
 
   return ancestorDirs
 }
+
+/** Rows join on the root's separators, so a reveal target spelled another way must be re-spelled to match. */
+export function getRevealTargetPath(rootPath: string, filePath: string): string {
+  const relativePath = relativePathInsideRoot(rootPath, filePath)
+  return relativePath === null ? filePath : joinPath(rootPath, relativePath)
+}

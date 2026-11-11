@@ -7,7 +7,7 @@ import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { activateAndRevealWorkspace } from '../../activation/worktree-activation'
 import { activateStructuredAgentSessionTab } from '../../../agent-session/structured-agent-session-tab-activation'
-import { clearClientHostedBrowserRowSelection } from '../../../pane-manager/client-hosted-browser-row-state'
+import { clearClientHostedBrowserRowSelection } from '../../../../runtime/browser/client-hosting/client-hosted-browser-row-state'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import {
   findAmbiguousWorktreeIds,

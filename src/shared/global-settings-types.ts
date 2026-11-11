@@ -251,7 +251,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   showAutomationsButton?: boolean
   /** Deprecated: Artifacts are always available. Use showArtifactsButton for sidebar visibility. */
   artifactsEnabled?: boolean
-  /** Capability gate for agent-driven publishing; off until granted, enforced in main, not just the UI. */
+  /** Capability gate for public artifact publishing; on for new profiles, enforced in main, not just the UI. */
   artifactSharingEnabled?: boolean
   /** Capability gate for agent/CLI skill publishing; manual reviewed publishing remains available. */
   agentSkillSharingEnabled?: boolean
