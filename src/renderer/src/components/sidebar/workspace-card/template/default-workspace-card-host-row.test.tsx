@@ -11,18 +11,18 @@ const probe = compileCardTemplate(
     defs: undefined,
     root: {
       el: 'Probe',
-      props: { host: '=vars.hostLabel', identity: '=vars.identityInMeta' }
+      props: { host: '=vars.hostLabel', identity: '=vars.identityInMeta', branch: '=vars.branch' }
     }
   },
   {
     ...CARD_PRIMITIVES,
-    Probe: cardElement<null>(['host', 'identity'], (props) => (
-      <i>{`${String(props.host)}|${String(props.identity)}`}</i>
+    Probe: cardElement<null>(['host', 'identity', 'branch'], (props) => (
+      <i>{`${String(props.host)}|${String(props.identity)}|${String(props.branch)}`}</i>
     ))
   }
 )
 
-function facts(host: { kind: string; contextLabel: string | null }, title: string) {
+function facts(host: { kind: string; contextLabel: string | null }, title: string, style = 'new') {
   return {
     ws: {
       id: 'w',
@@ -54,7 +54,7 @@ function facts(host: { kind: string; contextLabel: string | null }, title: strin
       deleteQuickAction: false
     },
     options: {
-      style: 'new',
+      style,
       show: {
         host: true,
         branch: true,
@@ -88,10 +88,17 @@ describe('default workspace card host row (JA-13)', () => {
 
   it('does not repeat the name as the branch line', () => {
     expect(read(facts({ kind: 'runtime', contextLabel: 'Orca Cloud' }, 'ja-hello'))).toContain(
-      '|false'
+      '|false|'
     )
     expect(read(facts({ kind: 'runtime', contextLabel: 'Orca Cloud' }, 'Fix login'))).toContain(
-      '|true'
+      '|true|'
     )
+  })
+
+  it('classic cards drop the branch line when it is the name too', () => {
+    const classic = (title: string): string =>
+      read(facts({ kind: 'runtime', contextLabel: 'Orca Cloud' }, title, 'classic'))
+    expect(classic('ja-hello')).toMatch(/\|false<\/i>$/)
+    expect(classic('Fix login')).toMatch(/\|true<\/i>$/)
   })
 })

@@ -13,7 +13,7 @@
     "hostBadge": "vars.hostLabel != null && (!vars.compact || place.showProjectName)",
     "metaRow": "!vars.compact",
     "detachedInMeta": "vars.metaRow && !vars.folder && ws.detachedHead",
-    "branch": "!vars.folder && len(ws.branch) > 0 && !vars.newStyle && (!vars.compact || ws.branch != ws.name)",
+    "branch": "!vars.folder && len(ws.branch) > 0 && !vars.newStyle && ws.branch != ws.name && ws.branch != trim(ws.title)",
     "identityInMeta": "vars.newStyle && options.show.branch && ws.identity != null && ws.identity != trim(ws.title)",
     "folderInMeta": "vars.newStyle ? options.show.branch && vars.folder && ws.identity != null : vars.folder",
     "conflict": "git.conflictOperation == 'cherry-pick'",
