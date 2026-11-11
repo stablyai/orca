@@ -2139,35 +2139,19 @@ html.native-shell .app-layout {
   }
 }
 
-/* Search and deep-link target: tint out to the enclosing card's edges plus a left bar.
+/* Search and deep-link target: a tint out to the enclosing card's edges that fades.
    The bleed vars are measured per target, since settings cards pad differently. */
 .settings-target-highlight {
   --settings-target-tint: color-mix(in srgb, var(--foreground) 8%, transparent);
-  position: relative;
   background: var(--settings-target-tint);
   box-shadow:
     calc(-1 * var(--settings-target-bleed-left, 0px)) 0 0 var(--settings-target-tint),
     var(--settings-target-bleed-right, 0px) 0 0 var(--settings-target-tint);
 }
 
-.settings-target-highlight::before {
-  content: '';
-  position: absolute;
-  inset-block: 0;
-  left: calc(-1 * var(--settings-target-bleed-left, 0px));
-  width: 3px;
-  background: var(--foreground);
-  opacity: 0.7;
-  pointer-events: none;
-}
-
 @media (prefers-reduced-motion: no-preference) {
   .settings-target-highlight {
     animation: settings-target-highlight-fade 3s ease-out forwards;
-  }
-
-  .settings-target-highlight::before {
-    animation: settings-target-highlight-bar-fade 3s ease-out forwards;
   }
 }
 
@@ -2183,15 +2167,6 @@ html.native-shell .app-layout {
     box-shadow:
       calc(-1 * var(--settings-target-bleed-left, 0px)) 0 0 transparent,
       var(--settings-target-bleed-right, 0px) 0 0 transparent;
-  }
-}
-
-@keyframes settings-target-highlight-bar-fade {
-  60% {
-    opacity: 0.7;
-  }
-  100% {
-    opacity: 0;
   }
 }
 
