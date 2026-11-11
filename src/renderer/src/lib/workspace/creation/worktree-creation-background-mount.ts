@@ -1,4 +1,5 @@
-import { launchAgentInWebHostTab } from '@/lib/agent-session/launch/new-tab/launch-agent-web-host-tab'
+// PC-3b: every host-tab agent launch holds on Orca Cloud when the account isn't set up or expired.
+import { launchAgentInWebHostTabWithCloudHold as launchAgentInWebHostTab } from '@/lib/orca-cloud/cloud-web-host-launch-hold'
 import type { StructuredLaunchTerminal } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
 import { buildWorktreeCreationStartupOpt } from '@/lib/workspace/creation/worktree-creation-flow-startup'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/workspace/activation/initial-surface/worktree-initial-terminal-seeding'
