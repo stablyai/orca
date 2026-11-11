@@ -194,6 +194,33 @@ export function workspaceUsesAccount(view: AgentSourcesView, agent: HostAgentSig
  * The pane's workspace Source for the agent, read once per workspace (cached 10 min) and only while
  * `wanted` (the account just went expired). Never polled; a failed read stays null (no strip).
  */
+// RA-11b: main learns a sandbox (its record, which the Source read resolves through) only after a wake
+// or app start has reattached it; a read before that answers not_found. Retry the failed reads when
+// main's sandbox records change, not on the next minute's account read.
+let runtimesRevision = 0
+const runtimesListeners = new Set<() => void>()
+let stopRuntimesWatch: (() => void) | null = null
+
+function subscribeRuntimes(listener: () => void): () => void {
+  runtimesListeners.add(listener)
+  if (runtimesListeners.size === 1) {
+    stopRuntimesWatch =
+      window.api.ephemeralVm?.onRuntimesChanged?.(() => {
+        runtimesRevision += 1
+        for (const each of runtimesListeners) {
+          each()
+        }
+      }) ?? null
+  }
+  return () => {
+    runtimesListeners.delete(listener)
+    if (runtimesListeners.size === 0) {
+      stopRuntimesWatch?.()
+      stopRuntimesWatch = null
+    }
+  }
+}
+
 export function useWorkspaceUsesAccount(
   runtimeEnvironmentId: string | null,
   agent: HostAgentSignInAgent | null,
@@ -209,13 +236,19 @@ export function useWorkspaceUsesAccount(
     () => readUsesAccount(key),
     () => null
   )
+  // Changes when main's sandbox records do (a wake or start reattached one): a failed read retries.
+  const sandboxRecords = useSyncExternalStore(
+    subscribeRuntimes,
+    () => runtimesRevision,
+    () => 0
+  )
   useEffect(() => {
     if (!wanted || !key || !runtimeEnvironmentId || !agent) {
       return
     }
     const read = sourceReads.get(key)
     // A good answer holds for 10 min; a failed one (e.g. right after start, before main knows the
-    // sandbox) is retried on the next account read.
+    // sandbox) is retried when main's sandbox records change, or on the next account read.
     if (
       read === 'pending' ||
       (read && read.usesAccount !== null && Date.now() - read.at < SOURCE_READ_MS)
@@ -235,7 +268,7 @@ export function useWorkspaceUsesAccount(
       .workspaceSources({ runtimeEnvironmentId })
       .then((result) => settle(result.ok ? workspaceUsesAccount(result.value, agent) : null))
       .catch(() => settle(null))
-  }, [wanted, key, runtimeEnvironmentId, agent, retryToken])
+  }, [wanted, key, runtimeEnvironmentId, agent, retryToken, sandboxRecords])
   return usesAccount
 }
 
