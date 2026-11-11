@@ -88,3 +88,10 @@ export function useCloudSetupNoticesSnapshot(): Snapshot {
 export function resetCloudSetupNotices(): void {
   emit({ records: {}, dismissed: new Set() })
 }
+
+// Dev builds: drive the notices from CDP (as `__store` is), e.g. to show one a repo can't produce.
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  Object.assign(window, {
+    __cloudSetupNotices: { get: getCloudSetupNoticesRecord, set: setCloudSetupNotices }
+  })
+}

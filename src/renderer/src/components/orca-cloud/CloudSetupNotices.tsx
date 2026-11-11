@@ -79,7 +79,10 @@ export function cloudSetupNoticeLine(
 }
 
 /** Polls repo access after Install until the push works, GitHub refuses it, or it gives up. */
-function usePushRecheck(environmentId: string | undefined, hasPush: boolean): {
+function usePushRecheck(
+  environmentId: string | undefined,
+  hasPush: boolean
+): {
   installing: boolean
   startInstall: (repoUrl: string) => void
 } {
@@ -226,21 +229,23 @@ export function CloudSetupNoticesView({
                 aria-hidden
                 className="mt-0.5 size-3.5 shrink-0 text-status-warning-text"
               />
-              <p className="min-w-0 flex-1 text-xs leading-5 text-foreground">{line.text}</p>
-              {line.action ? (
-                <Button
-                  type="button"
-                  size="xs"
-                  variant="outline"
-                  className="shrink-0"
-                  onClick={line.action.pending ? undefined : line.action.run}
-                  aria-disabled={line.action.pending || undefined}
-                  aria-busy={line.action.pending || undefined}
-                >
-                  {line.action.icon}
-                  {line.action.label}
-                </Button>
-              ) : null}
+              {/* The sentence reads first; its one action sits under it so neither gets squeezed. */}
+              <div className="flex min-w-0 flex-1 flex-col items-start gap-2">
+                <p className="text-xs leading-5 text-foreground">{line.text}</p>
+                {line.action ? (
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="outline"
+                    onClick={line.action.pending ? undefined : line.action.run}
+                    aria-disabled={line.action.pending || undefined}
+                    aria-busy={line.action.pending || undefined}
+                  >
+                    {line.action.icon}
+                    {line.action.label}
+                  </Button>
+                ) : null}
+              </div>
               <Button
                 type="button"
                 size="icon-xs"
