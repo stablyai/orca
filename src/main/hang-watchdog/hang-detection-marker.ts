@@ -59,7 +59,9 @@ export function readAvailableHangDetectionMarker(
     }
     raw = readFileSync(markerPath, 'utf8')
   } catch (error) {
-    return (error as NodeJS.ErrnoException).code === 'ENOENT' ? null : undefined
+    return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
+      ? null
+      : undefined
   }
   try {
     const parsed: unknown = JSON.parse(raw)

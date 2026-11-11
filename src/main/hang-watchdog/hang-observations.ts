@@ -19,6 +19,7 @@ export type {
 } from './hang-observation-schema'
 
 function object(value: unknown): Record<string, unknown> | null {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the branch excludes null, primitives and arrays before reading unknown properties.
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null
@@ -34,6 +35,7 @@ function numericFields<K extends string>(
   if (!data) {
     return null
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every supplied key is emitted once with a finite number or null.
   return Object.fromEntries(
     keys.map((key) => [key, finite(data[key]) ? data[key] : null])
   ) as Record<K, number | null>
@@ -49,6 +51,7 @@ export function parsePowerReceipt(value: unknown): HangPowerReceipt | null {
     return null
   }
   return {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixed event allowlist above validates this string union.
     event: data.event as HangPowerReceipt['event'],
     observedAt: data.observedAt,
     receivedAt: data.receivedAt
@@ -111,6 +114,7 @@ function parseObservation(value: unknown): HangObservation | null {
   const gap = object(data.watchdogGap)
   return {
     id: data.id,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixed observation-kind allowlist above validates this string union.
     kind: data.kind as HangObservation['kind'],
     detectedAt: data.detectedAt,
     parentPid: data.parentPid,

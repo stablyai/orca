@@ -10,8 +10,10 @@ import { consumeHangDetectionMarker, writeHangDetectionMarker } from './hang-det
 import { runWatchdog } from './main-thread-hang-watchdog-entry'
 import { preservePreviousHangDetection } from './previous-hang-detection'
 
-const probes = vi.hoisted(() => ({ pending: [] as ((value: HangMachineSnapshot) => void)[] }))
-const files = vi.hoisted(() => ({ unavailablePath: null as string | null }))
+const probes = vi.hoisted<{ pending: ((value: HangMachineSnapshot) => void)[] }>(() => ({
+  pending: []
+}))
+const files = vi.hoisted<{ unavailablePath: string | null }>(() => ({ unavailablePath: null }))
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof FileSystem>()
   return {

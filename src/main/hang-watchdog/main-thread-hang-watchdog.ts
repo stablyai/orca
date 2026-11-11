@@ -67,17 +67,18 @@ export function installMainThreadHangWatchdog(options: {
       // The worker already exited.
     }
   }
+  const powerEvents: NodeJS.EventEmitter = powerMonitor
   const powerListeners = (['suspend', 'resume', 'lock-screen', 'unlock-screen'] as const).map(
     (event) => {
       const listener = (): void =>
         postMessage({ type: 'power-event', event, observedAt: Date.now() })
-      powerMonitor.on(event, listener)
+      powerEvents.on(event, listener)
       return { event, listener }
     }
   )
   const removePowerListeners = (): void => {
     for (const { event, listener } of powerListeners) {
-      powerMonitor.off(event, listener)
+      powerEvents.off(event, listener)
     }
   }
   const heartbeatTimer = setInterval(() => {
