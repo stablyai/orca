@@ -252,38 +252,6 @@ describe('session parse cache persistence', () => {
     }
   })
 
-  it('adopts a pre-versioning file on this schema without disturbing a build still using it', async () => {
-    const root = await makeTempDir()
-    const cacheFile = join(root, 'session-parse-cache.json')
-    const transcript = await writeTranscript(root)
-    const candidate = await claudeCandidate(transcript)
-    const session = await parseAgentSessionFileCached(candidate, process.platform)
-    const unversioned = new SessionParseCacheDatabase(join(root, 'session-parse-cache.sqlite'))
-    unversioned.write(
-      [
-        [
-          transcript,
-          {
-            mtimeMs: candidate.file.mtimeMs,
-            sizeBytes: candidate.file.sizeBytes ?? null,
-            platform: process.platform,
-            session
-          }
-        ]
-      ],
-      // ast-grep-ignore: test-no-wall-clock -- Real database expiry uses current time for persisted row ages.
-      Date.now()
-    )
-
-    try {
-      simulateRestart(cacheFile)
-      expect(await parse(transcript)).toMatchObject({ reused: 1, fullParses: 0 })
-      expect(unversioned.read(transcript)).toBeDefined()
-    } finally {
-      unversioned.close()
-    }
-  })
-
   it('scanAiVaultSessions reads the database and writes after parsing', async () => {
     const root = await makeTempDir()
     const cacheFile = join(root, 'session-parse-cache.json')

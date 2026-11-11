@@ -126,20 +126,14 @@ export function removeVersionedCacheDatabase(
   }
 }
 
-/** Null is a fresh database with no meta table; a missing or unparseable version row is NaN. */
-export function storedCacheSchemaVersion(db: SyncDatabase): number | null {
+/** No meta table is a fresh database; missing/unparseable version rows in existing meta indicate stale data and must rebuild rather than seed over it. */
+function isStaleSchema(db: SyncDatabase, version: number): boolean {
   const table = db
     .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'meta'")
     .get()
   if (!table) {
-    return null
+    return false
   }
   const row = db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get()
-  return typeof row?.value === 'string' ? Number(row.value) : Number.NaN
-}
-
-/** Missing/unparseable version rows in existing meta indicate stale data and must rebuild rather than seed over it. */
-function isStaleSchema(db: SyncDatabase, version: number): boolean {
-  const stored = storedCacheSchemaVersion(db)
-  return stored !== null && stored !== version
+  return (typeof row?.value === 'string' ? Number(row.value) : Number.NaN) !== version
 }

@@ -16,7 +16,7 @@
 1 src/main/agent-launch/trust/execution-host-workspace-trust.ts
 1 src/main/ai-vault-search/worker/session-search-worker-client.ts
 4 src/main/ai-vault/parse-cache/session-parse-cache-legacy-json.ts
-7 src/main/ai-vault/parse-cache/session-parse-cache-version-files.ts # once per scanner-child database open, beside the legacy JSON import; not Electron main
+2 src/main/ai-vault/parse-cache/session-parse-cache-version-files.ts # once per scanner-child database open: list and stat the few cache files; not Electron main
 2 src/main/ai-vault/scan-service/session-scanner-service-entry-path.ts
 1 src/main/ai-vault/scan-service/session-scanner-service-spawn.ts
 3 src/main/ai-vault/scanners/omp/omp-session-root.ts # small fixed profile-dir probes mirroring OMP dirs.ts; one readdir + per-profile candidate checks, not a per-file sweep

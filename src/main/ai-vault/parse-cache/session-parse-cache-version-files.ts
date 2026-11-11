@@ -1,15 +1,11 @@
-import { existsSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs'
+import { readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { isTransientSqliteContention } from '../../sqlite/sqlite-read-failure'
 import SyncDatabase from '../../sqlite/sync-database'
-import {
-  removeVersionedCacheDatabase,
-  storedCacheSchemaVersion
-} from '../../sqlite/versioned-cache-database'
+import { removeVersionedCacheDatabase } from '../../sqlite/versioned-cache-database'
 import { SESSION_PARSE_CACHE_SCHEMA_VERSION } from './session-parse-cache-database'
 
-// The name before per-version files; older builds still write it.
-const UNVERSIONED_NAME = 'session-parse-cache.sqlite'
+// Without a version: the name before per-version files, which older builds still write.
 const CACHE_FILE_NAME = /^session-parse-cache(?:\.v\d+)?\.sqlite$/
 // Builds on other schema versions (a downgrade, or dev and installed builds) share userData; keep the latest one warm.
 const RETAINED_OTHER_VERSIONS = 1
@@ -17,31 +13,6 @@ const RETAINED_OTHER_VERSIONS = 1
 /** One file per schema version, so opening another build never discards this build's rows. */
 export function sessionParseCacheDatabasePath(directory: string): string {
   return join(directory, `session-parse-cache.v${SESSION_PARSE_CACHE_SCHEMA_VERSION}.sqlite`)
-}
-
-/** Copy a pre-versioning file that is already on this schema, so upgrading reparses nothing. */
-export function adoptUnversionedSessionParseCache(directory: string, path: string): void {
-  const unversioned = join(directory, UNVERSIONED_NAME)
-  if (existsSync(path) || !existsSync(unversioned)) {
-    return
-  }
-  // Snapshot into a private file first: a build still using the old file keeps it untouched.
-  const staging = `${path}.adopting`
-  try {
-    rmSync(staging, { force: true })
-    const db = new SyncDatabase(unversioned, { readonly: true })
-    try {
-      if (storedCacheSchemaVersion(db) === SESSION_PARSE_CACHE_SCHEMA_VERSION) {
-        db.prepare('VACUUM INTO ?').run(staging)
-        renameSync(staging, path)
-      }
-    } finally {
-      db.close()
-    }
-  } catch {
-    // Unreadable or busy: this version starts cold and the old file is pruned like any other.
-    rmSync(staging, { force: true })
-  }
 }
 
 /** Keep this version and the most recently used other one; the rest only cost disk. */

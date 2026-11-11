@@ -6,7 +6,6 @@ import { splitOpenCodeSqliteCandidate } from '../../../shared/opencode-sqlite-se
 import { SessionParseCacheDatabase } from './session-parse-cache-database'
 import { importLegacySessionParseCacheJson } from './session-parse-cache-legacy-json'
 import {
-  adoptUnversionedSessionParseCache,
   pruneOtherSessionParseCacheVersions,
   sessionParseCacheDatabasePath
 } from './session-parse-cache-version-files'
@@ -119,7 +118,6 @@ function openedDatabase(): SessionParseCacheDatabase | null {
   try {
     const directory = dirname(options.filePath)
     const path = sessionParseCacheDatabasePath(directory)
-    adoptUnversionedSessionParseCache(directory, path)
     database = new SessionParseCacheDatabase(path)
     importLegacySessionParseCacheJson(options.filePath, database, Date.now())
     pruneOtherSessionParseCacheVersions(directory, path)
