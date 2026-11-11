@@ -33,7 +33,7 @@ export function OrcaCloudSignInSheetView({
   const t = useTranslate()
   const titleId = React.useId()
   return (
-    <SheetContent side="right" className="w-[460px] sm:max-w-[460px]" aria-labelledby={titleId}>
+    <SheetContent side="right" className="w-[600px] sm:max-w-[600px]" aria-labelledby={titleId}>
       <div className="border-b border-border pe-8">
         <SheetHeader>
           <SheetTitle id={titleId}>
