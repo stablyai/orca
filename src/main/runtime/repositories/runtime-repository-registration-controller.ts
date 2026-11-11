@@ -27,6 +27,7 @@ import {
   type WslHostWindowsDriveRefusal
 } from '../../../shared/wsl-host-windows-drive-refusal'
 import { describeWslUncAccessDenied } from '../../wsl/filesystem/wsl-unc-access-denied'
+import { resolveWslMappedDrivePath } from '../../wsl/filesystem/wsl-mapped-drive-path'
 import { getResolvedFolderWorkspacePathStatus } from '../../project-groups/folder-workspace-path-status'
 import { runAsWslUserAct, wslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 import { repoCreateFailure, type RepoCreateFailure } from '../../../shared/repo-create-failure-copy'
@@ -73,6 +74,7 @@ export class RuntimeRepositoryRegistrationController {
       })
     }
     if (kind === 'git') {
+      path = await resolveWslMappedDrivePath(path)
       await awaitWindowsHostGitEnvironmentReady({ cwd: path })
     }
     const gitInfo = kind === 'git' ? await inspectGitRepoForRegistrationAsync(path) : null

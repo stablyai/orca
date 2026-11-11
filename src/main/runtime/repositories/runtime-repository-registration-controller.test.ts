@@ -7,6 +7,9 @@ import { normalizeRuntimePathForComparison } from '../../../shared/cross-platfor
 import type { Repo } from '../../../shared/repo-types'
 import { RuntimeRepositoryRegistrationController } from './runtime-repository-registration-controller'
 import { partialRuntimeStore } from '../orca-runtime-tests/runtime-store-partial-fixture'
+import { resolveWslMappedDrivePath } from '../../wsl/filesystem/wsl-mapped-drive-path'
+
+vi.mock('../../wsl/filesystem/wsl-mapped-drive-path', { spy: true })
 
 vi.mock('../../repository-icons/repo-icon-autodetect', () => ({
   detectRepoIconAndUpstream: vi.fn().mockResolvedValue({})
@@ -74,6 +77,20 @@ describe('RuntimeRepositoryRegistrationController.add through a symlink alias', 
 
     expect(second.id).toBe(first.id)
     expect(repos).toHaveLength(1)
+  })
+
+  it('registers a paired-client project at the resolved mapped-drive target', async () => {
+    const repoPath = join(root, 'repo')
+    await mkdir(repoPath)
+    gitInit(repoPath)
+    vi.mocked(resolveWslMappedDrivePath).mockResolvedValueOnce(repoPath)
+    const { controller } = createController()
+
+    const added = await controller.add(join(root, 'mapped-drive'), 'git')
+
+    expect(normalizeRuntimePathForComparison(added.path)).toBe(
+      normalizeRuntimePathForComparison(repoPath)
+    )
   })
 
   it('dedupes a folder workspace added through an alias', async () => {
