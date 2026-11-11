@@ -77,7 +77,7 @@ on:
   workflow_dispatch:
     inputs:
       cells:
-        description: Comma-separated cell ids from src/main/ssh/hostile-host-test-support/ssh-windows-host-cells.ts; empty runs the default set (orcad-cli-* cells run only when named).
+        description: Comma-separated cells orcad-cmd, orcad-powershell, or orcad-cli-managed; empty runs the two shell cells.
         required: false
         default: ''
       preparation_mode:
