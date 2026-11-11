@@ -14,6 +14,7 @@ import type { Translate } from '@/i18n/use-translate'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
 import { Boxes, CreditCard, KeySquare, LockKeyhole, Plug, Users, Workflow } from 'lucide-react'
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
+import { CLOUD_ROUTINES_UI_ENABLED } from '../../../shared/cloud-api/cloud-routines-ui'
 
 /** One home for everything Orca Cloud; only builds with a control plane show it. */
 export function buildOrcaCloudSettingsSections(
@@ -91,6 +92,16 @@ export function buildOrcaCloudSettingsSections(
       searchEntries: getCloudApiKeysSearchEntries(),
       group
     },
+    // Parked until Routines join Automations (one flag, cloud-routines-ui.ts).
+    ...cloudRoutinesSection(t, group)
+  ]
+}
+
+function cloudRoutinesSection(t: Translate, group: string): SettingsNavSection[] {
+  if (!CLOUD_ROUTINES_UI_ENABLED) {
+    return []
+  }
+  return [
     {
       id: 'cloud-routines',
       title: t('auto.components.settings.cloudRoutines.sectionTitle', 'Routines'),

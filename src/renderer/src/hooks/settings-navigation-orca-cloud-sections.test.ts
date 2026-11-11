@@ -30,9 +30,14 @@ describe('Orca Cloud settings group', () => {
       'cloud-secrets',
       'cloud-environments',
       'cloud-mcp',
-      'cloud-api-keys',
-      'cloud-routines'
+      'cloud-api-keys'
     ])
+    // Routines are parked until they join Automations (cloud-routines-ui.ts): no section, no search.
+    expect(
+      sections
+        .flatMap((section) => section.searchEntries ?? [])
+        .some((e) => /routine/i.test(e.title))
+    ).toBe(false)
     expect(new Set(sections.map((section) => section.group))).toEqual(new Set(['orca-cloud']))
   })
 
