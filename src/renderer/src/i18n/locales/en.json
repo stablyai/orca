@@ -28309,5 +28309,12 @@
       "pending": "Not synced yet",
       "skipped": "Not synced"
     }
+  },
+  "orcaCloudAgentPicker": {
+    "status": {
+      "notSetUp": "Not set up",
+      "perWorkspace": "Signs in per workspace",
+      "notAvailable": "Not available in cloud"
+    }
   }
 }
