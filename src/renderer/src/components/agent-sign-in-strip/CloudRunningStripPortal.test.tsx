@@ -6,6 +6,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 
 const stub = vi.hoisted(() => {
   const state: {
@@ -74,11 +75,11 @@ const { CloudRunningStripPortal } = await import('./CloudRunningStripPortal')
 function mount(): void {
   const container = document.createElement('div')
   document.body.appendChild(container)
-  const pane: Pick<ManagedPane, 'id' | 'leafId' | 'container'> = {
-    id: 1,
-    leafId: '11111111-1111-4111-8111-111111111111',
-    container
+  const leafId = '11111111-1111-4111-8111-111111111111'
+  if (!isTerminalLeafId(leafId)) {
+    throw new Error('test leaf id must be a terminal leaf id')
   }
+  const pane: Pick<ManagedPane, 'id' | 'leafId' | 'container'> = { id: 1, leafId, container }
   render(
     <TooltipProvider>
       {/* oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the portal reads only id, leafId and container from the pane. */}
