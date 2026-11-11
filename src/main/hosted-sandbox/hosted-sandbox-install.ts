@@ -50,6 +50,7 @@ import {
 } from '../ipc/cloud-environments/orca-cloud-environment-handlers'
 import { installCloudTransferHandlers } from './cloud-transfer'
 import { installCloudOfflineService, setCloudOfflineService } from './cloud-offline-service'
+import { getCloudSyncService, installCloudSync } from '../cloud-sync/cloud-sync-ipc'
 import {
   findCloudRuntime,
   isArchivedOnControlPlane,
@@ -163,6 +164,7 @@ export function installHostedSandbox(
     onConnected: (runtimeEnvironmentId) => {
       void mcpSync.sync(runtimeEnvironmentId, 'connect')
       void agentConfigSync.sync(runtimeEnvironmentId, 'connect')
+      getCloudSyncService()?.noteConnected(runtimeEnvironmentId)
     },
     onRunningChange: (anyRunning) => usageRefresh.setRunning(anyRunning),
     activeAccountId
@@ -221,6 +223,7 @@ export function installHostedSandbox(
     }
   })
   setCloudOfflineService(offline)
+  installCloudSync(userDataPath)
   // Records land after the step answers and wakes can come from any path, so reconcile on a slow beat too.
   let beat: ReturnType<typeof setTimeout> | null = null
   let beats = 0

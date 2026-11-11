@@ -916,6 +916,8 @@
     "localCommands.settings.workspacesTitle",
     "localCommands.text.tab",
     "localCommands.text.trailingSpace",
+    "orcaCloudSync.removal",
+    "orcaCloudSync.removalEdited",
     "plugins.frameOpenExternal.alwaysAllow",
     "plugins.frameOpenExternal.cancel",
     "plugins.frameOpenExternal.message",

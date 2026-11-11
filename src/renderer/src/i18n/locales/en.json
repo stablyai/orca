@@ -27142,7 +27142,10 @@
       "rerun": "Rerun {{command}}",
       "rerunLabel": "Rerun",
       "wokeProcessesStopped": "Woke up · processes stopped while asleep"
-    }
+    },
+    "archivedDetailLocalEdits_one": "It goes to sleep and stays browsable: PRs, last changes and files. {{count}} changed file on this computer will be removed.",
+    "archivedDetailLocalEdits_other": "It goes to sleep and stays browsable: PRs, last changes and files. {{count}} changed files on this computer will be removed.",
+    "archivedDetailLocalCopy": "It goes to sleep and stays browsable: PRs, last changes and files. The copy on this computer is removed too."
   },
   "cloudAgentSetup": {
     "loading": "Checking what agents can use…",
@@ -28425,5 +28428,42 @@
       "title": "Run a command on this computer?",
       "body": "An agent in {{workspace}} is waiting for your approval."
     }
+  },
+  "orcaCloudSync": {
+    "menuItem": "Mirror to this computer…",
+    "gb": "{{value}} GB",
+    "mb": "{{value}} MB",
+    "kb": "{{value}} KB",
+    "justNow": "just now",
+    "minutesAgo": "{{count}} min ago",
+    "hoursAgo": "{{count}} h ago",
+    "copying": "Copying {{done}} of {{total}} files…",
+    "waitingSynced": "Waits until the workspace wakes · synced {{ago}}",
+    "waiting": "Waits until the workspace wakes",
+    "syncing": "Syncing…",
+    "fileCount_one": "{{n}} file",
+    "fileCount_other": "{{n}} files",
+    "syncedToLimit": "Synced up to the limit · {{files}} · {{size}} · {{ago}}",
+    "synced": "Synced · {{files}} · {{size}} · {{ago}}",
+    "announceSynced": "Files synced to this computer",
+    "error": "Couldn’t sync files. Your files in the cloud are safe.",
+    "removeConfirmTitle": "Remove the copy on this computer?",
+    "removalEdited_one": "{{count}} changed file on this computer will be removed.",
+    "removalEdited_other": "{{count}} changed files on this computer will be removed.",
+    "removeCopy": "Remove copy",
+    "title": "On this computer",
+    "contextLabel": ".context folder",
+    "contextDescription": "Plans and screenshots from this workspace",
+    "mirrorLabel": "Mirror to this computer",
+    "mirrorDescription": "A read-only copy of the workspace files, kept up to date while it runs. Skips files in .gitignore.",
+    "openFolder": "Open folder",
+    "copied": "Copied",
+    "copyPath": "Copy path",
+    "tryAgain": "Try again",
+    "editedHere_one": "{{count}} file changed on this computer. Edits here don’t sync back. The cloud copy replaces it when it changes.",
+    "editedHere_other": "{{count}} files changed on this computer. Edits here don’t sync back. The cloud copy replaces them when it changes.",
+    "overLimit": "The mirror is limited to {{size}}. Larger files and anything past the limit aren’t copied.",
+    "tooLarge": "Files over {{size}} aren’t copied.",
+    "removal": "The copy on this computer is removed too."
   }
 }

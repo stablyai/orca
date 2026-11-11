@@ -2,7 +2,9 @@
 // Archive instead, and deletes an asleep sandbox without waking it or a Force step (this dialog is
 // the confirmation that its uncommitted changes go with it).
 import type React from 'react'
+import { useEffect, useState } from 'react'
 import { Archive, Loader2, Trash2 } from 'lucide-react'
+import { cloudSyncRemovalPreview } from '@/lib/orca-cloud/cloud-sync-store'
 import { Button } from '@/components/ui/button'
 import { DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { useTranslate } from '@/i18n/use-translate'
@@ -35,6 +37,7 @@ export function DeleteCloudWorkspaceHeader({
     .filter(Boolean)
     .join(' · ')
   const running = view.state === 'running'
+  const localCopy = useCloudSyncRemovalPreview(worktree.id)
   return (
     <>
       <DialogTitle className="text-sm">
@@ -68,10 +71,41 @@ export function DeleteCloudWorkspaceHeader({
             )}
           </div>
         ) : null}
+        {localCopy?.hasLocalCopy ? (
+          <div className="mt-0.5 text-muted-foreground" data-cloud-sync-removal>
+            {localCopy.editedHere > 0
+              ? t(
+                  'orcaCloudSync.removalEdited',
+                  '{{count}} changed files on this computer will be removed.',
+                  {
+                    count: localCopy.editedHere,
+                    defaultValue_one: '{{count}} changed file on this computer will be removed.'
+                  }
+                )
+              : t('orcaCloudSync.removal', 'The copy on this computer is removed too.')}
+          </div>
+        ) : null}
       </div>
       <DeleteCloudSandboxAgentsNote worktree={worktree} />
     </>
   )
+}
+
+/** What this computer synced from the workspace, for the line that says it goes too. */
+function useCloudSyncRemovalPreview(
+  workspaceId: string
+): { hasLocalCopy: boolean; editedHere: number } | null {
+  const [preview, setPreview] = useState<{ hasLocalCopy: boolean; editedHere: number } | null>(null)
+  useEffect(() => {
+    let live = true
+    void cloudSyncRemovalPreview(workspaceId)
+      .then((next) => live && setPreview(next))
+      .catch(() => undefined)
+    return () => {
+      live = false
+    }
+  }, [workspaceId])
+  return preview
 }
 
 export function DeleteCloudWorkspaceFooter({

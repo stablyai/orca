@@ -2375,6 +2375,14 @@
       "untracked_other": "{{count}} untracked files"
     }
   },
+  "orcaCloudSync": {
+    "editedHere_one": "{{count}} file changed on this computer. Edits here don’t sync back. The cloud copy replaces it when it changes.",
+    "editedHere_other": "{{count}} files changed on this computer. Edits here don’t sync back. The cloud copy replaces them when it changes.",
+    "fileCount_one": "{{n}} file",
+    "fileCount_other": "{{n}} files",
+    "removalEdited_one": "{{count}} changed file on this computer will be removed.",
+    "removalEdited_other": "{{count}} changed files on this computer will be removed."
+  },
   "orcaCloudWorkspace": {
     "archived": {
       "files": "{{count}} files",
@@ -2383,6 +2391,8 @@
       "moreFiles_one": "{{count}} more file not shown",
       "moreFiles_other": "{{count}} more files not shown"
     },
+    "archivedDetailLocalEdits_one": "It goes to sleep and stays browsable: PRs, last changes and files. {{count}} changed file on this computer will be removed.",
+    "archivedDetailLocalEdits_other": "It goes to sleep and stays browsable: PRs, last changes and files. {{count}} changed files on this computer will be removed.",
     "detail": {
       "sleepsWhenIdleMinutes_one": "Sleeps in {{count}} minute if idle",
       "sleepsWhenIdleMinutes_other": "Sleeps in {{count}} minutes if idle"

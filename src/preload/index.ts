@@ -92,6 +92,7 @@ import { cursorAccountsApi } from './api/cursor-accounts-bridge'
 import { sshApi } from './api/ssh-bridge'
 import { plainSshTerminalApi } from './api/plain-ssh-terminal-bridge'
 import { runtimeDownloadsApi } from './api/runtime-downloads-bridge'
+import { cloudSyncApi } from './api/cloud-sync-bridge'
 import { agentApiKeysApi } from './api/agent-api-keys-bridge'
 import { cloudApiBridge } from './api/cloud-api-bridge'
 import { cloudSecretsApi } from './api/cloud-secrets-bridge'
@@ -210,6 +211,7 @@ const api = {
   ssh: sshApi,
   plainSsh: plainSshTerminalApi,
   runtimeDownloads: runtimeDownloadsApi,
+  cloudSync: cloudSyncApi,
   agentApiKeys: agentApiKeysApi,
   cloudApi: cloudApiBridge,
   cloudSecrets: cloudSecretsApi,
