@@ -26,10 +26,11 @@ import {
 } from './cloud-workspace-prefs'
 import type { GroupDrag } from './CloudWorkspaceGroup'
 import type { RowArrangement } from './CloudWorkspaceRowMenu'
+import { cloudWorkspaceTitle } from './open-cloud-workspace'
 
 /** How a screen reader hears a workspace in move confirmations: its number, else its title. */
 function spoken(w: CloudWorkspace | undefined): string {
-  return w?.number ? formatWorkspaceNumber(w.number) : (w?.title ?? '')
+  return !w ? '' : w.number ? formatWorkspaceNumber(w.number) : cloudWorkspaceTitle(w)
 }
 
 function groupName(group: CloudWorkspaceGroup<CloudWorkspace>): string {
