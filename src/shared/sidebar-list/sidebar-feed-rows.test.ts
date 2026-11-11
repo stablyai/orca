@@ -359,8 +359,13 @@ it('keeps bare storage out of local and paired rows, including parent synthesis'
   const bareId = 'r::/r/.bare'
   const local = buildWorkspaceRows({
     worktrees: [
-      worktree(bareId, { isBare: true, isMainWorktree: true, instanceId: 'bare' }),
-      worktree('r::/r/main', { instanceId: 'main' })
+      worktree(bareId, {
+        hostId: 'local',
+        isBare: true,
+        isMainWorktree: true,
+        instanceId: 'bare'
+      }),
+      worktree('r::/r/main', { hostId: 'local', instanceId: 'main' })
     ],
     folderWorkspaces: [],
     repos,
