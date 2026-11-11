@@ -88,7 +88,8 @@ describe('OrcaCloudQueuedPrompt held copy from the first frame (N-04)', () => {
       keyKinds: { claude: null, codex: null },
       queue: { agents: [], index: 0 }
     })
-    useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the component reads only these fields
+    const pending = {
       pendingWorktreeCreations: {
         c1: {
           status: 'creating',
@@ -106,8 +107,8 @@ describe('OrcaCloudQueuedPrompt held copy from the first frame (N-04)', () => {
           }
         }
       }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the component reads only these fields
-    } as unknown as Partial<ReturnType<typeof useAppStore.getState>>)
+    } as unknown as Partial<ReturnType<typeof useAppStore.getState>>
+    useAppStore.setState(pending)
     const { container } = render(<OrcaCloudQueuedPrompt creationId="c1" />)
     expect(
       container.querySelector('[data-orca-cloud-queued-prompt="editing"]')?.textContent
