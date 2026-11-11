@@ -19,7 +19,9 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   ),
   'stt-worker': resolve('src/main/speech/stt-worker.ts'),
   'warp-theme-parser-worker': resolve('src/main/warp-themes/warp-theme-parser-worker.ts'),
-  'session-search-worker-entry': resolve('src/main/ai-vault-search/session-search-worker-entry.ts'),
+  'session-search-worker-entry': resolve(
+    'src/main/ai-vault-search/worker/session-search-worker-entry.ts'
+  ),
   'foreign-sqlite-reader-entry': resolve(
     'src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry.ts'
   ),
@@ -48,10 +50,10 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
     'src/main/claude-accounts/claude-profile-setup-worker-entry.ts'
   ),
   'profile-state-backup-worker-entry': resolve(
-    'src/main/persistence/profile-state/profile-state-backup-worker-entry.ts'
+    'src/main/persistence/profile-state/backup/profile-state-backup-worker-entry.ts'
   ),
   'profile-state-writer-worker-entry': resolve(
-    'src/main/persistence/profile-state/profile-state-writer-worker-entry.ts'
+    'src/main/persistence/profile-state/writer/profile-state-writer-worker-entry.ts'
   ),
   // Isolate native @parcel/watcher faults from main (#7547).
   'parcel-watcher-process-entry': resolve(

@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { join } from 'node:path'
 import process from 'node:process'
 import { withFileTransactionLock } from '../filesystem/file-transaction-lock'
-import { profileStateAccessMachineIdentity } from '../persistence/profile-state/profile-state-access-identity'
+import { profileStateAccessMachineIdentity } from '../persistence/profile-state/access/profile-state-access-identity'
 import {
   resolveOrcadLegacyKeyringReader,
   type OrcadLegacyKeyringReader

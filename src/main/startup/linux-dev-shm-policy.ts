@@ -1,6 +1,6 @@
 import { statfsSync } from 'node:fs'
 import { app } from 'electron'
-import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
+import { recordCrashBreadcrumb } from '../crash-reporting/breadcrumbs/crash-breadcrumb-store'
 
 const DEV_SHM_PATH = '/dev/shm'
 const DEV_SHM_OVERRIDE_ENV_VAR = 'ORCA_DEV_SHM'

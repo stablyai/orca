@@ -93,7 +93,7 @@ it('settles continuous placement changes and drains the next worktree open', asy
 
 it('checks admission inside the actual profile queue before replacement close effects, and does not freeze later writes', async () => {
   const { fixture } =
-    await import('../../persistence/loading-store/profile-state-delayed-authority-fixture')
+    await import('../../persistence/loading-store/profile-writing/profile-state-delayed-authority-fixture')
   const { applyWindowLayoutCommand } = await import('../terminal/layout/runtime-layout-apply')
   const { store, authority } = await fixture()
   const workspace = 'chat-inner-queue'
@@ -162,7 +162,7 @@ it('checks admission inside the actual profile queue before replacement close ef
 
 it('refuses a captured close when another actual holder now uses that id for a different session', async () => {
   const { fixture } =
-    await import('../../persistence/loading-store/profile-state-delayed-authority-fixture')
+    await import('../../persistence/loading-store/profile-writing/profile-state-delayed-authority-fixture')
   const { withChatTabChanges } = await import('./agent-session-tab-layout')
   const { getDefaultWorkspaceSession } = await import('../../../shared/constants')
   const { applyWindowLayoutCommand } = await import('../terminal/layout/runtime-layout-apply')

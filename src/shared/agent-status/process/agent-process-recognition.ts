@@ -7,6 +7,7 @@ import { EXACT_NODE_ENTRYPOINT_IDENTITIES } from './agent-node-entrypoint-identi
 import { NODE_PACKAGE_SCRIPT_ENTRYPOINTS } from './agent-node-package-entrypoints'
 import type { AgentType } from '../contracts/agent-status-types'
 import type { TerminalAgent } from '../identity/terminal-agent'
+import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 import { filterHeadlessOneShotAgentCommand } from './agent-headless-command'
 import { getFirstCommandToken } from '../../command-token-scanner'
 import {
@@ -199,6 +200,17 @@ export const GENERIC_PROCESS_NAME_AGENTS: ReadonlySet<TerminalAgent> = new Set([
   'continue',
   'mistral-vibe'
 ])
+
+/** Before writing to `agent`: its expectedProcess, or a name it is recognized by (dsh-TUI 0.19 runs as `dsh-tui`, not `dsh`); generic names such as Agent Teams' `orca` launcher prove nothing. */
+export function isAgentForegroundProcess(
+  processName: string | null | undefined,
+  agent: TuiAgent
+): boolean {
+  return (
+    isExpectedAgentProcess(processName, TUI_AGENT_CONFIG[agent].expectedProcess) ||
+    (!GENERIC_PROCESS_NAME_AGENTS.has(agent) && recognizeAgentProcess(processName)?.agent === agent)
+  )
+}
 
 export function recognizeAgentProcess(
   processName: string | null | undefined
