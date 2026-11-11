@@ -16,7 +16,11 @@ const overageOn: OrcaBillingEntitlement = {
 }
 
 function capField(): HTMLInputElement {
-  return screen.getByLabelText('Monthly spend cap') as HTMLInputElement
+  const field = screen.getByLabelText('Monthly spend cap')
+  if (!(field instanceof HTMLInputElement)) {
+    throw new Error('the spend cap is not an input')
+  }
+  return field
 }
 
 describe('spend cap field', () => {
