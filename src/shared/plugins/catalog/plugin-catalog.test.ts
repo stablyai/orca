@@ -42,21 +42,6 @@ describe('plugin catalog', () => {
     }
   )
 
-  it('keeps a valid addedAt and drops a malformed one without losing the entry', () => {
-    const parsed = pluginCatalogSchema.parse(
-      catalog([
-        entry('acme.dated', { addedAt: '2026-11-09T12:47:57+08:00', ownerId: 42 }),
-        entry('acme.day', { addedAt: '2026-11-09' }),
-        entry('acme.bad', { addedAt: 'last week' })
-      ])
-    )
-    expect(parsed.plugins.map((plugin) => [plugin.id, plugin.addedAt])).toEqual([
-      ['acme.dated', '2026-11-09T12:47:57+08:00'],
-      ['acme.day', '2026-11-09'],
-      ['acme.bad', undefined]
-    ])
-  })
-
   it('offers the newest release this Orca can install', () => {
     const releases = [
       release('3.0.0', '2.0.0'),

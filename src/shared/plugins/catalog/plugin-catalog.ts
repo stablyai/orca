@@ -12,11 +12,9 @@ import {
 } from './plugin-marketplace'
 import {
   pluginFieldDoc,
-  PLUGIN_CATALOG_ADDED_AT_SINCE,
   PLUGIN_DERIVED_PUBLISHER_SINCE,
   PLUGIN_MANIFEST_V2_SINCE
 } from '../manifest/plugin-schema-field-docs'
-import { pluginCatalogDateSchema } from './plugin-detail-fields'
 
 /**
  * The plugin catalog (`orca-catalog.json`). The name never changes; `catalogVersion` does, and
@@ -58,16 +56,6 @@ export const pluginCatalogEntrySchema = z
           "GitHub's numeric id of the repository owner, recorded the first time the plugin was listed. Names can be renamed or re-registered; this id cannot. Informational: Orca does not read it yet, and older Orca ignores it.",
           PLUGIN_DERIVED_PUBLISHER_SINCE,
           [1_234_567]
-        )
-      ),
-    addedAt: pluginCatalogDateSchema
-      .optional()
-      .catch(undefined)
-      .meta(
-        pluginFieldDoc(
-          'When the plugin was first listed in this catalog, as an ISO 8601 date or date-time. Written by the catalog, not the author; Orca shows the newest plugins in a Newly added row.',
-          PLUGIN_CATALOG_ADDED_AT_SINCE,
-          ['2026-11-09T12:47:57Z']
         )
       ),
     description: safePluginDisplayText(z.string().min(1).max(4_096))

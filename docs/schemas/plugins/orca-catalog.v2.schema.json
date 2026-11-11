@@ -80,25 +80,6 @@
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991
         },
-        "addedAt": {
-          "description": "When the plugin was first listed in this catalog, as an ISO 8601 date or date-time. Written by the catalog, not the author; Orca shows the newest plugins in a Newly added row.",
-          "x-orca-since": "1.4.256",
-          "examples": [
-            "2026-11-09T12:47:57Z"
-          ],
-          "anyOf": [
-            {
-              "type": "string",
-              "format": "date",
-              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
-            },
-            {
-              "type": "string",
-              "format": "date-time",
-              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
-            }
-          ]
-        },
         "description": {
           "description": "Listing text shown in the catalog.",
           "x-orca-since": "1.4.245",

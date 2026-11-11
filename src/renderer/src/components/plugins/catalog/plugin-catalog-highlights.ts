@@ -1,13 +1,10 @@
 import { needsNewerOrca, type PluginListEntry } from '../list/plugin-list-entries'
 import { pluginFilterKinds } from '../list/plugin-list-filter'
-import { PLUGIN_ADDED_THIS_WEEK_MS, pluginListedAgoMs } from '../list/plugin-listed-at'
-
-const DAY_MS = 24 * 60 * 60 * 1000
+import { pickNewPlugins } from '../../../../../shared/plugins/catalog/plugin-added-at'
+import { pluginListedAt } from '../list/plugin-listed-at'
 
 /** Cards a highlight row offers; the grid shows as many as fit one row (1–4 columns). */
 export const PLUGIN_HIGHLIGHT_ROW_LIMIT = 4
-// Why a window: a catalog that stopped adding plugins shouldn't call months-old ones new.
-const PLUGIN_NEWLY_ADDED_WINDOW_MS = 14 * DAY_MS
 
 /** A plugin someone could install from a highlight row right now. */
 function isOfferable(entry: PluginListEntry, orcaVersion: string | null): boolean {
@@ -55,24 +52,24 @@ export type NewlyAddedPlugins = {
   thisWeek: number
 }
 
-/** Newest listings first. Null hides the row: no catalog dates its entries, or none recently. */
+/**
+ * Newest listings first, inside the website's 30-day window. Null hides the row: no plugin has an
+ * estimated listing date, or none is recent and installable.
+ */
 export function pickNewlyAddedPlugins(
   entries: readonly PluginListEntry[],
   orcaVersion: string | null,
   now: number
 ): NewlyAddedPlugins | null {
-  const recent = entries
-    .flatMap((entry) => {
-      const ago = pluginListedAgoMs(entry, now)
-      return ago !== null && ago <= PLUGIN_NEWLY_ADDED_WINDOW_MS ? [{ entry, ago }] : []
-    })
-    .sort((a, b) => a.ago - b.ago)
-  const rows = recent
-    .filter(({ entry }) => isOfferable(entry, orcaVersion))
-    .slice(0, PLUGIN_HIGHLIGHT_ROW_LIMIT)
-    .map(({ entry }) => entry)
+  // Why the row limit: the row is one grid row (at most four columns), so the site's nine never fit.
+  const rows = pickNewPlugins(
+    entries.filter((entry) => isOfferable(entry, orcaVersion)),
+    pluginListedAt,
+    now,
+    { limit: PLUGIN_HIGHLIGHT_ROW_LIMIT }
+  ).items
   if (rows.length === 0) {
     return null
   }
-  return { rows, thisWeek: recent.filter(({ ago }) => ago <= PLUGIN_ADDED_THIS_WEEK_MS).length }
+  return { rows, thisWeek: pickNewPlugins(entries, pluginListedAt, now).addedThisWeek }
 }

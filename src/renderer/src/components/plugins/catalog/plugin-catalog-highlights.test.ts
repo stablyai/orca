@@ -5,6 +5,8 @@ import { matchesPluginFilter, NO_PLUGIN_LIST_FILTER } from '../list/plugin-list-
 import { pickFeaturedPlugins, pickNewlyAddedPlugins } from './plugin-catalog-highlights'
 
 const NOW = Date.parse('2026-11-09T20:00:00Z')
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rows only check that an installed record exists, never read it.
+const INSTALLED = {} as PluginListEntry['installed']
 
 function entry(
   pluginKey: string,
@@ -50,7 +52,7 @@ describe('pickFeaturedPlugins', () => {
 
   it('skips plugins that cannot be installed from the row', () => {
     const entries = [
-      entry('acme.installed', {}, { installed: {} as PluginListEntry['installed'] }),
+      entry('acme.installed', {}, { installed: INSTALLED }),
       entry('acme.blocked', { blockedByKillList: { reason: 'malware' } }),
       entry('acme.newer', {}, { minimumOrca: '9.0.0' }),
       entry('acme.local', {}, { installCountEligible: false }),
@@ -71,23 +73,20 @@ describe('pickFeaturedPlugins', () => {
 })
 
 describe('pickNewlyAddedPlugins', () => {
-  it('hides the row when no catalog dates its entries', () => {
+  it('hides the row when no plugin has an estimated listing date', () => {
     expect(pickNewlyAddedPlugins([entry('acme.one'), entry('acme.two')], '1.4.256', NOW)).toBeNull()
   })
 
-  it('lists the newest recent plugins first and counts the whole week', () => {
+  it('lists the newest installable plugins first, one row, and counts the whole week', () => {
     const entries = [
-      entry('acme.hour', { addedAt: '2026-11-09T19:00:00Z' }),
-      entry('acme.days', { addedAt: '2026-11-06' }),
-      entry('acme.minutes', { addedAt: '2026-11-09T19:50:00+00:00' }),
-      entry(
-        'acme.installed',
-        { addedAt: '2026-11-09T18:00:00Z' },
-        {
-          installed: {} as PluginListEntry['installed']
-        }
-      ),
-      entry('acme.stale', { addedAt: '2026-09-01' }),
+      entry('acme.hour', { addedAt: '2026-11-09T19:00:00.000Z' }),
+      entry('acme.days', { addedAt: '2026-11-06T00:00:00.000Z' }),
+      entry('acme.minutes', { addedAt: '2026-11-09T19:50:00.000Z' }),
+      entry('acme.installed', { addedAt: '2026-11-09T18:00:00.000Z' }, { installed: INSTALLED }),
+      entry('acme.weeks', { addedAt: '2026-10-25T00:00:00.000Z' }),
+      entry('acme.month', { addedAt: '2026-10-12T00:00:00.000Z' }),
+      entry('acme.stale', { addedAt: '2026-09-01T00:00:00.000Z' }),
+      entry('acme.future', { addedAt: '2026-11-12T00:00:00.000Z' }),
       entry('acme.undated')
     ]
 
@@ -96,14 +95,15 @@ describe('pickNewlyAddedPlugins', () => {
     expect(picked?.rows.map((item) => item.pluginKey)).toEqual([
       'acme.minutes',
       'acme.hour',
-      'acme.days'
+      'acme.days',
+      'acme.weeks'
     ])
     expect(picked?.thisWeek).toBe(4)
   })
 
-  it('hides the row when the newest listing is over two weeks old', () => {
+  it('hides the row when the newest listing is over 30 days old', () => {
     expect(
-      pickNewlyAddedPlugins([entry('acme.old', { addedAt: '2026-10-20' })], null, NOW)
+      pickNewlyAddedPlugins([entry('acme.old', { addedAt: '2026-10-09T00:00:00.000Z' })], null, NOW)
     ).toBeNull()
   })
 })

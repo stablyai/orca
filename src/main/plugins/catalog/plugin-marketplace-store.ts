@@ -32,20 +32,15 @@ const snapshotFields = {
   marketplaceCommit: z.string().regex(PLUGIN_COMMIT_PATTERN),
   fetchedAt: z.number().finite().nonnegative()
 }
-// Why one cache key per shape: older builds parse their own key strictly, so a downgrade must
-// find only data it understands there (v1: no release records, v2: no `addedAt`) and refetch.
+// Why two cache keys: builds that predate release records parse `<id>.json` strictly, so a
+// downgrade must find only v1-shaped data there and refetch rather than fail.
 const legacySnapshotSchema = z.strictObject({
   schemaVersion: z.literal(1),
   ...snapshotFields,
   marketplace: pluginMarketplaceSchema
 })
-const releaseSnapshotSchema = z.strictObject({
-  schemaVersion: z.literal(2),
-  ...snapshotFields,
-  marketplace: pluginMarketplaceListingSchema
-})
 const cachedSnapshotSchema = z.strictObject({
-  schemaVersion: z.literal(3),
+  schemaVersion: z.literal(2),
   ...snapshotFields,
   marketplace: pluginMarketplaceListingSchema
 })
@@ -53,7 +48,6 @@ const cachedSnapshotSchema = z.strictObject({
 export type PluginMarketplaceRegisteredSource = z.infer<typeof registeredSourceSchema>
 export type PluginMarketplaceCachedSnapshot =
   | z.infer<typeof cachedSnapshotSchema>
-  | z.infer<typeof releaseSnapshotSchema>
   | z.infer<typeof legacySnapshotSchema>
 
 // Why a separate file: sources.json is parsed strictly by older builds, so it can't gain fields.
@@ -127,7 +121,6 @@ export class PluginMarketplaceStore {
     if (removed) {
       this.snapshots.delete(parsedId)
       await rm(this.snapshotPath(parsedId), { force: true })
-      await rm(this.releaseSnapshotPath(parsedId), { force: true })
       await rm(this.legacySnapshotPath(parsedId), { force: true })
     }
     return removed
@@ -169,7 +162,7 @@ export class PluginMarketplaceStore {
     marketplace: PluginMarketplace
   }): Promise<PluginMarketplaceCachedSnapshot> {
     const snapshot = cachedSnapshotSchema.parse({
-      schemaVersion: 3,
+      schemaVersion: 2,
       sourceId: input.source.id,
       source: input.source.source,
       marketplaceCommit: input.marketplaceCommit,
@@ -199,11 +192,6 @@ export class PluginMarketplaceStore {
   ): Promise<PluginMarketplaceCachedSnapshot | null> {
     return (
       (await this.readSnapshotFile(this.snapshotPath(sourceId), sourceId, cachedSnapshotSchema)) ??
-      (await this.readSnapshotFile(
-        this.releaseSnapshotPath(sourceId),
-        sourceId,
-        releaseSnapshotSchema
-      )) ??
       (await this.readSnapshotFile(
         this.legacySnapshotPath(sourceId),
         sourceId,
@@ -281,10 +269,6 @@ export class PluginMarketplaceStore {
   }
 
   private snapshotPath(sourceId: string): string {
-    return join(this.snapshotDirectory, `${sourceId}.v3.json`)
-  }
-
-  private releaseSnapshotPath(sourceId: string): string {
     return join(this.snapshotDirectory, `${sourceId}.v2.json`)
   }
 

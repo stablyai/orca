@@ -102,7 +102,8 @@ export type PluginMarketplaceHostListing = {
   official: boolean
   bundled: boolean
   blockedByKillList?: { reason: string; advisoryUrl?: string }
-  /** When the catalog first listed the plugin (ISO 8601); absent when the catalog doesn't say. */
+  /** Estimated listing date (ISO 8601): a community plugin's oldest dated release. Absent for
+   *  official plugins and undated releases. */
   addedAt?: string
   /** The release record a v2 catalog vouches for; absent for v1 catalogs. */
   release?: PluginCatalogRelease

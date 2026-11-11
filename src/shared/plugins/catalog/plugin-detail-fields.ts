@@ -24,8 +24,7 @@ const httpsUrlSchema = z
   .regex(/^https:\/\/\S+$/, 'must be an https URL')
   .refine((value) => URL.canParse(value), 'must be an https URL')
 
-/** An ISO 8601 date ("2026-10-20") or date-time with offset, as catalogs write dates. */
-export const pluginCatalogDateSchema = z.union([z.iso.date(), z.iso.datetime({ offset: true })])
+const releaseDateSchema = z.union([z.iso.date(), z.iso.datetime({ offset: true })])
 
 // Why plain text: the detail page renders it as text, so markup would show literally.
 const changelogSchema = z.string().min(1).max(PLUGIN_CHANGELOG_MAX_LENGTH)
@@ -74,7 +73,7 @@ export const pluginCatalogReleaseDetailFields = {
     .optional()
     .catch(undefined)
     .meta(pluginFieldDoc('Project homepage, https only.', NEXT, ['https://example.com/gleam'])),
-  updatedAt: pluginCatalogDateSchema
+  updatedAt: releaseDateSchema
     .optional()
     .catch(undefined)
     .meta(

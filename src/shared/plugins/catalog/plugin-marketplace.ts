@@ -3,7 +3,6 @@ import { safePluginDisplayText } from '../manifest/plugin-display-text'
 import { isAllowedPluginGitUrl } from '../installation/plugin-install-lockfile'
 import { isQualifiedPluginKey } from '../manifest/plugin-manifest'
 import { pluginCatalogReleaseSchema } from './plugin-catalog-release'
-import { pluginCatalogDateSchema } from './plugin-detail-fields'
 import { pluginFieldDoc, PLUGIN_MANIFEST_V2_SINCE } from '../manifest/plugin-schema-field-docs'
 import {
   isPluginRepositoryPath,
@@ -181,8 +180,7 @@ const pluginMarketplaceListingEntrySchema = z
   .strictObject({
     ...marketplaceEntryFields,
     source: z.strictObject(catalogGitSourceFields),
-    releases: z.array(pluginCatalogReleaseSchema).min(1).optional(),
-    addedAt: pluginCatalogDateSchema.optional()
+    releases: z.array(pluginCatalogReleaseSchema).min(1).optional()
   })
   .superRefine(rejectDuplicateCategories)
 

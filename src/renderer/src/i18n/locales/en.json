@@ -19996,6 +19996,23 @@
         },
         "pluginNameDisambiguation": {
           "nameWithPublisher": "{{value0}} ({{value1}})"
+        },
+        "PluginCatalogHighlights": {
+          "justNow": "just now",
+          "added": "Added {{value0}}",
+          "featured": "Featured",
+          "featuredDetail": "most installed, one per category",
+          "newlyAdded": "Newly added",
+          "newlyAddedDetail": "across your catalogs",
+          "thisWeek": "{{value0}} this week",
+          "seeAll": "See all"
+        },
+        "PluginCard": {
+          "new": "New"
+        },
+        "PluginFilterPopover": {
+          "added": "Added",
+          "thisWeek": "This week"
         }
       },
       "agent-workspace-trust-decision": {
