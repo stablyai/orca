@@ -123,6 +123,14 @@ export function setupFailureCopy(
         ),
         detail: null
       }
+    case 'invalid_code':
+      return {
+        title: t(
+          'agentSignInStrip.setupCodeRejected',
+          'That code didn’t work. Paste the newest code from the sign-in page, or open it again.'
+        ),
+        detail: null
+      }
     case 'not_found':
     case 'not_enabled':
       return {
