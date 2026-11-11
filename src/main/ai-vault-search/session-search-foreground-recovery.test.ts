@@ -37,15 +37,21 @@ it('publishes a cold foreground read and preserves accepted messages across cold
       dev: info.dev,
       ino: info.ino
     })
-    const result = await readResumableTranscript({
-      candidate,
-      platform: process.platform,
-      resume: null,
-      stateFactory: (channel) => createClaudeSessionResumeState(candidate.file, channel)
-    })
-    parsed?.()
-    await store!.flush()
-    return result.session
+    const started = vi.spyOn(store!, 'beginUnpreparedWrite')
+    try {
+      const result = await readResumableTranscript({
+        candidate,
+        platform: process.platform,
+        resume: null,
+        stateFactory: (channel) => createClaudeSessionResumeState(candidate.file, channel)
+      })
+      parsed?.()
+      expect(await started.mock.results[0]?.value?.settled?.()).toBe(true)
+      await store!.flush()
+      return result.session
+    } finally {
+      started.mockRestore()
+    }
   }
   const accepted = () => {
     const db = new SyncDatabase(path, { readonly: true })
