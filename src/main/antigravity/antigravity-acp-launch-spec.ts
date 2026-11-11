@@ -82,8 +82,8 @@ const ANTIGRAVITY_MANAGED_LAUNCH_SPEC = {
 } satisfies AcpLaunchSpec
 
 // An inherited Gemini API key switches agy to key auth, which its models reject (401).
-function scrubAgyHostApiKeys(env: Record<string, string>): string[] {
-  const removed = Object.keys(env).filter((key) => {
+function scrubAgyHostApiKeys(env: Record<string, string>, inherited: NodeJS.ProcessEnv): string[] {
+  const removed = [...new Set([...Object.keys(env), ...Object.keys(inherited)])].filter((key) => {
     const normalized = process.platform === 'win32' ? key.toUpperCase() : key
     return normalized === 'GEMINI_API_KEY' || normalized === 'GOOGLE_API_KEY'
   })

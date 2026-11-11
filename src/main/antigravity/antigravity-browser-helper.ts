@@ -20,9 +20,11 @@ const BROWSER_ARGV = ['/bin/sh', '-c', shell, '--', '%s']
 const WINDOWS_BROWSER_ARGV = [process.execPath, '-e', HELPER_SOURCE, '--', '%s']
 const POSIX_BROWSER_COMMAND = BROWSER_ARGV.map(quotePosixShellDoubleQuotedApostrophe).join(' ')
 const WINDOWS_BROWSER_COMMAND = WINDOWS_BROWSER_ARGV.map(
-  (arg) => `'${arg.replaceAll("'", `"'"'`)}'`
+  (arg) => `'${arg.replaceAll("'", `'"'"'`)}'`
 ).join(' ')
-const usable = !/[\r\n\0]|%s/.test(process.execPath)
+const usable =
+  !/[\r\n\0]|%s/.test(process.execPath) &&
+  (process.platform !== 'win32' || !process.execPath.includes(';'))
 
 export const ANTIGRAVITY_BROWSER_COMMAND =
   process.platform === 'win32' ? WINDOWS_BROWSER_COMMAND : POSIX_BROWSER_COMMAND
@@ -38,7 +40,13 @@ export async function antigravityBrowserHelperWorks(): Promise<boolean> {
     return false
   }
   const [program = '', ...args] = antigravityBrowserArgv(PREFLIGHT_URL)
-  const spec = { program, args, timeoutMs: 5_000, maxOutputBytes: 4_096 }
+  const spec = {
+    program,
+    args,
+    ...(process.platform === 'win32' ? { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } } : {}),
+    timeoutMs: 5_000,
+    maxOutputBytes: 4_096
+  }
   const result = await runProcess(spec).catch(() => null)
   return (
     result?.code === 0 &&
