@@ -1,11 +1,8 @@
+import { SessionSearchAuthorityPage } from './session-search-authority-page'
 import { SESSION_INPUT_FAILURES_BEFORE_HELD_OUT } from '../ai-vault/session-observation-retries'
 import { recordSessionSearchRetry } from './session-search-retry-transition'
 import {
-  recordSessionSearchInput,
   cleanupSessionSearchAuthority,
-  sessionSearchInputAuthority,
-  newerSessionSearchInput,
-  rearmSessionSearchAuthority,
   putAuthorityValue
 } from './session-search-observation-authority'
 import { boundedSessionSearchPage } from './session-search-catalog-pages'
@@ -41,24 +38,17 @@ export function transitionSessionSearchInventory(
 ): SessionSearchInventoryResult {
   const files = `${command.scope}:files`
   const failures = `${command.scope}:file-refusals`
-  const get = (scope: string, key: string) => catalog.execute({ kind: 'get', scope, key }).rows?.[0]
+  const authority = new SessionSearchAuthorityPage(catalog, command.scope)
+  const get = (scope: string, key: string) => authority.get(scope, key)
   const put = (scope: string, key: string, value: unknown, group = '', ready = 0) => {
-    catalog.execute({
-      kind: 'put',
-      scope,
-      rows: [
-        {
-          key,
-          value: JSON.stringify(value),
-          parent: dirname(key),
-          group,
-          rank: 0,
-          ready
-        }
-      ]
-    })
+    const row = { key, value: JSON.stringify(value), parent: dirname(key), group, rank: 0, ready }
+    catalog.execute({ kind: 'put', scope, rows: [row] })
+    authority.changed(scope, key, row)
   }
-  const remove = (scope: string, key: string) => catalog.execute({ kind: 'delete', scope, key })
+  const remove = (scope: string, key: string) => {
+    catalog.execute({ kind: 'delete', scope, key })
+    authority.changed(scope, key)
+  }
   const observing = `${command.scope}:observing`
   const delivery = `${command.scope}:delivery`
   if (command.kind === 'observe-ack') {
@@ -66,16 +56,17 @@ export function transitionSessionSearchInventory(
       const row = get(delivery, receipt.path)
       if (row && JSON.parse(row.value).revision === receipt.revision) {
         remove(delivery, receipt.path)
-        rearmSessionSearchAuthority(catalog, command.scope, receipt.path)
+        authority.settle(receipt.path)
       }
     }
+    authority.flush()
     cleanupSessionSearchAuthority(catalog, command.scope)
     return {}
   }
   const token = (path: string) => [
     get(files, path)?.value ?? '',
     get(`${command.scope}:dirty`, path)?.value ?? '',
-    sessionSearchInputAuthority(catalog, command.scope, path)
+    authority.authority(path)?.self ?? 0
   ]
   if (command.kind === 'observe-prepare') {
     const prepared = boundedSessionSearchPage(command.inputs, (input) => {
@@ -105,7 +96,7 @@ export function transitionSessionSearchInventory(
         })
       }
       if (input.attempt) {
-        recordSessionSearchInput(catalog, command.scope, input.path, input.authority)
+        authority.record(input.path, input.authority, 0)
         input.token = JSON.stringify(token(input.path))
         put(observing, input.path, input.token)
         putAuthorityValue(
@@ -117,6 +108,7 @@ export function transitionSessionSearchInventory(
         )
       }
     }
+    authority.flush()
     return { prepared }
   }
   let filesDelta = 0,
@@ -133,16 +125,17 @@ export function transitionSessionSearchInventory(
     runnableDelta +=
       Number(!!next && next.failures < 3) - Number(!!previous && previous.failures < 3)
     recordSessionSearchRetry(catalog, failures, path, next)
+    authority.forget(failures, path)
   }
   if (command.kind === 'forget-files') {
     const removedFiles: string[] = []
     const cutoff = command.cutoff ?? catalog.nextRevision()
     for (const path of command.paths) {
-      if (newerSessionSearchInput(catalog, command.scope, path, cutoff)) {
+      if (authority.newer(path, cutoff)) {
         continue
       }
       removedFiles.push(path)
-      recordSessionSearchInput(catalog, command.scope, path, cutoff)
+      authority.record(path, cutoff, 0)
       const known = !!get(files, path)
       filesDelta -= Number(known)
       if (known && command.notify !== false) {
@@ -157,110 +150,116 @@ export function transitionSessionSearchInventory(
       remove(observing, path)
       debtChange(path, decode<SessionSearchObservationDebt>(get(failures, path)), undefined)
       remove(`${command.scope}:dirty`, path)
+      authority.settle(path)
     }
+    authority.flush()
     return { filesDelta, failuresDelta, runnableDelta, removedFiles }
   }
   for (const outcome of command.outcomes) {
-    remove(`${command.scope}:observation-epochs`, String(outcome.authority))
-    rearmSessionSearchAuthority(catalog, command.scope, outcome.path)
-    const current = get(files, outcome.path)
-    const expected = JSON.parse(outcome.token)
-    const ownsObservation = decode<string>(get(observing, outcome.path)) === outcome.token
-    if (
-      !ownsObservation ||
-      JSON.stringify(token(outcome.path)) !== JSON.stringify(expected) ||
-      newerSessionSearchInput(catalog, command.scope, outcome.path, outcome.authority)
-    ) {
-      if (ownsObservation) {
-        remove(observing, outcome.path)
-        const debt = decode<SessionSearchObservationDebt>(get(failures, outcome.path))
-        if (debt && debt.failures < SESSION_INPUT_FAILURES_BEFORE_HELD_OUT) {
-          recordSessionSearchRetry(catalog, failures, outcome.path, debt)
+    try {
+      remove(`${command.scope}:observation-epochs`, String(outcome.authority))
+      const current = get(files, outcome.path)
+      const expected = JSON.parse(outcome.token)
+      const ownsObservation = decode<string>(get(observing, outcome.path)) === outcome.token
+      if (
+        !ownsObservation ||
+        JSON.stringify(token(outcome.path)) !== JSON.stringify(expected) ||
+        authority.newer(outcome.path, outcome.authority)
+      ) {
+        if (ownsObservation) {
+          remove(observing, outcome.path)
+          const debt = decode<SessionSearchObservationDebt>(get(failures, outcome.path))
+          if (debt && debt.failures < SESSION_INPUT_FAILURES_BEFORE_HELD_OUT) {
+            recordSessionSearchRetry(catalog, failures, outcome.path, debt)
+          }
         }
+        continue
       }
-      continue
-    }
-    remove(observing, outcome.path)
-    const accepted = decode<SessionSearchObservedFacts>(current)
-    const previous = decode<SessionSearchObservationDebt>(get(failures, outcome.path))
-    if (previous?.attempted === command.generation) {
-      continue
-    }
-    const force = outcome.force || !!previous?.force
-    if (!outcome.observed) {
-      if (outcome.missing && !accepted) {
-        debtChange(outcome.path, previous, undefined)
-      } else {
+      remove(observing, outcome.path)
+      const accepted = decode<SessionSearchObservedFacts>(current)
+      const previous = decode<SessionSearchObservationDebt>(get(failures, outcome.path))
+      if (previous?.attempted === command.generation) {
+        continue
+      }
+      const force = outcome.force || !!previous?.force
+      if (!outcome.observed) {
+        if (outcome.missing && !accepted) {
+          debtChange(outcome.path, previous, undefined)
+        } else {
+          debtChange(outcome.path, previous, {
+            failures: (previous?.failures ?? 0) + 1,
+            attempted: command.generation,
+            force: force || !!outcome.readOwed,
+            metadata: outcome.metadataOwed || previous?.metadata,
+            issue: outcome.issue ?? previous?.issue
+          })
+          if (outcome.missing) {
+            missingParents.push(dirname(outcome.path))
+          }
+        }
+        continue
+      }
+      const facts = { ...outcome.observed.file }
+      const unknown = !outcome.metadataOnly && facts.sidecar === 'unknown'
+      if (unknown) {
         debtChange(outcome.path, previous, {
           failures: (previous?.failures ?? 0) + 1,
           attempted: command.generation,
           force: force || !!outcome.readOwed,
           metadata: outcome.metadataOwed || previous?.metadata,
-          issue: outcome.issue ?? previous?.issue
+          issue: previous?.issue
         })
-        if (outcome.missing) {
-          missingParents.push(dirname(outcome.path))
-        }
+        facts.sidecar = accepted?.file.sidecar ?? 'unknown'
+      } else {
+        debtChange(outcome.path, previous, undefined)
       }
-      continue
-    }
-    const facts = { ...outcome.observed.file }
-    const unknown = !outcome.metadataOnly && facts.sidecar === 'unknown'
-    if (unknown) {
-      debtChange(outcome.path, previous, {
-        failures: (previous?.failures ?? 0) + 1,
-        attempted: command.generation,
-        force: force || !!outcome.readOwed,
-        metadata: outcome.metadataOwed || previous?.metadata,
-        issue: previous?.issue
+      const dependencyChanged =
+        !outcome.metadataOnly &&
+        !!accepted &&
+        facts.sidecar !== 'unknown' &&
+        !sidecarUnchanged(accepted.file.sidecar ?? 'none', facts.sidecar ?? 'none')
+      put(
+        files,
+        outcome.path,
+        {
+          revision: outcome.authority,
+          file: facts,
+          dependency: outcome.metadataOnly ? undefined : outcome.observed.dependency
+        },
+        outcome.metadataOnly ? '' : outcome.observed.dependency
+      )
+      authority.ensureDirectories(outcome.path)
+      filesDelta += Number(!accepted)
+      const old = accepted?.file
+      const same =
+        !!old &&
+        old.mtimeMs === facts.mtimeMs &&
+        old.sizeBytes === facts.sizeBytes &&
+        old.dev === facts.dev &&
+        old.ino === facts.ino
+      const metadata = outcome.metadataOwed || previous?.metadata
+      if (force || !same || dependencyChanged || metadata) {
+        const owed = decode<{ force?: boolean; metadata?: boolean }>(get(delivery, outcome.path))
+        put(delivery, outcome.path, {
+          file: facts,
+          metadata: metadata || owed?.metadata,
+          force: !!owed?.force || dependencyChanged || (force && same),
+          revision: catalog.nextRevision()
+        })
+      }
+      observations.push({
+        path: outcome.path,
+        file: { ...facts, modifiedAt: new Date(facts.mtimeMs).toISOString() },
+        changed: force || !same || dependencyChanged || !!metadata,
+        metadata,
+        force: dependencyChanged || (force && same),
+        readable: !unknown
       })
-      facts.sidecar = accepted?.file.sidecar ?? 'unknown'
-    } else {
-      debtChange(outcome.path, previous, undefined)
+    } finally {
+      authority.settle(outcome.path)
     }
-    const dependencyChanged =
-      !outcome.metadataOnly &&
-      !!accepted &&
-      facts.sidecar !== 'unknown' &&
-      !sidecarUnchanged(accepted.file.sidecar ?? 'none', facts.sidecar ?? 'none')
-    put(
-      files,
-      outcome.path,
-      {
-        revision: outcome.authority,
-        file: facts,
-        dependency: outcome.metadataOnly ? undefined : outcome.observed.dependency
-      },
-      outcome.metadataOnly ? '' : outcome.observed.dependency
-    )
-    recordSessionSearchInput(catalog, command.scope, outcome.path, outcome.authority, true)
-    filesDelta += Number(!accepted)
-    const old = accepted?.file
-    const same =
-      !!old &&
-      old.mtimeMs === facts.mtimeMs &&
-      old.sizeBytes === facts.sizeBytes &&
-      old.dev === facts.dev &&
-      old.ino === facts.ino
-    const metadata = outcome.metadataOwed || previous?.metadata
-    if (force || !same || dependencyChanged || metadata) {
-      const owed = decode<{ force?: boolean; metadata?: boolean }>(get(delivery, outcome.path))
-      put(delivery, outcome.path, {
-        file: facts,
-        metadata: metadata || owed?.metadata,
-        force: !!owed?.force || dependencyChanged || (force && same),
-        revision: catalog.nextRevision()
-      })
-    }
-    observations.push({
-      path: outcome.path,
-      file: { ...facts, modifiedAt: new Date(facts.mtimeMs).toISOString() },
-      changed: force || !same || dependencyChanged || !!metadata,
-      metadata,
-      force: dependencyChanged || (force && same),
-      readable: !unknown
-    })
   }
+  authority.flush()
   cleanupSessionSearchAuthority(catalog, command.scope)
   return { observations, filesDelta, failuresDelta, runnableDelta, missingParents }
 }

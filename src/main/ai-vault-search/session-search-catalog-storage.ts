@@ -1,8 +1,10 @@
+import { initializeSessionSearchStorage } from './session-search-storage-bootstrap'
 import type SyncDatabase from '../sqlite/sync-database'
 import type { SessionSearchCatalogRow } from './session-search-catalog'
 
 export class SessionSearchCatalogStorage {
   constructor(protected readonly db: SyncDatabase) {
+    initializeSessionSearchStorage(db)
     db.exec(`CREATE TEMP TABLE search_catalog (
         scope TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL,
         parent TEXT NOT NULL, group_key TEXT NOT NULL, rank REAL NOT NULL,

@@ -14,9 +14,19 @@ export function transitionSessionSearchFrontier(
 ) {
   const wakeScope = `${command.scope}:wake`
   if (command.kind === 'ack-values' || command.kind === 'frontier-ack') {
-    for (const item of command.kind === 'ack-values' ? command.rows : command.receipts) {
+    const items =
+      command.kind === 'ack-values'
+        ? command.rows.map((item) => ({
+            key: item.key,
+            matches: (row: { value: string; tie?: number }) => row.value === item.value
+          }))
+        : command.receipts.map((item) => ({
+            key: item.key,
+            matches: (row: { value: string; tie?: number }) => row.tie === item.revision
+          }))
+    for (const item of items) {
       const row = catalog.execute({ kind: 'get', scope: command.scope, key: item.key }).rows?.[0]
-      if (row && ('value' in item ? row.value === item.value : row.tie === item.revision)) {
+      if (row && item.matches(row)) {
         catalog.execute({ kind: 'delete', scope: command.scope, key: item.key })
       }
     }

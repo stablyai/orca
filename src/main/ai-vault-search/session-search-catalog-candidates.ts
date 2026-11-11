@@ -18,7 +18,6 @@ export type {
   SessionSearchCandidateResult
 } from './session-search-catalog-candidate-types'
 
-/** Raw alternatives and desired publication remain separate from committed search output. */
 export class SessionSearchCatalogCandidates {
   private pending = 0
   private revision = 0
@@ -27,6 +26,7 @@ export class SessionSearchCatalogCandidates {
     private readonly db: SyncDatabase,
     removeFile: (path: string) => boolean
   ) {
+    this.publications = new SessionSearchCatalogPublications(db, removeFile)
     db.exec(`CREATE TEMP TABLE search_candidates (
       key TEXT PRIMARY KEY, path TEXT NOT NULL, agent TEXT NOT NULL,
       root TEXT NOT NULL, group_key TEXT NOT NULL, alias_key TEXT NOT NULL,
@@ -44,7 +44,6 @@ export class SessionSearchCatalogCandidates {
     CREATE INDEX temp.search_candidate_changes ON search_candidates(changed,mtime DESC,key);
     CREATE INDEX temp.search_candidate_source ON search_candidates(root,agent,group_key);
     `)
-    this.publications = new SessionSearchCatalogPublications(db, removeFile)
   }
 
   get hasPending(): boolean {

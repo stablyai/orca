@@ -92,9 +92,8 @@ export function transitionSessionSearchDirty(
       continue
     }
     const stored = catalog.execute({ kind: 'get', scope: expansion, key: row.key }).rows?.[0]
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this transition writes the continuation and its source revision.
-    const cursor = stored
-      ? (JSON.parse(stored.value) as { revision: number; after?: string })
+    const cursor: { revision: number; after?: string } | undefined = stored
+      ? JSON.parse(stored.value)
       : undefined
     const owners = catalog.execute({
       kind: 'page',

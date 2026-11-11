@@ -1,5 +1,4 @@
-import { dirname } from 'node:path'
-import { isInsideSessionRoot } from '../ai-vault/session-file-discovery'
+import { SessionSearchAuthorityPage } from './session-search-authority-page'
 import type { SessionSearchCatalog, SessionSearchCatalogRow } from './session-search-catalog'
 
 type Authority = { self: number; tree: number }
@@ -27,9 +26,6 @@ export function putAuthorityValue(
     rows: [{ key, value: JSON.stringify(value), parent, group, rank, ready }]
   })
 }
-function root(catalog: SessionSearchCatalog, scope: string): string | undefined {
-  return authorityValue<string>(authorityRow(catalog, `${scope}:authority-root`, 'root'))
-}
 export function sessionSearchInputAuthority(
   catalog: SessionSearchCatalog,
   scope: string,
@@ -44,28 +40,12 @@ export function recordSessionSearchInput(
   revision = catalog.nextRevision(),
   ancestors = false
 ): number {
-  const base = root(catalog, scope)
-  let key = path
-  let direct = true
-  do {
-    const old = authorityValue<Authority>(authorityRow(catalog, `${scope}:authority`, key))
-    putAuthorityValue(
-      catalog,
-      `${scope}:authority`,
-      key,
-      { self: direct ? revision : (old?.self ?? 0), tree: Math.max(revision, old?.tree ?? 0) },
-      Math.max(revision, old?.tree ?? 0),
-      1
-    )
-    if (ancestors && !direct && !authorityRow(catalog, `${scope}:directories`, key)) {
-      putAuthorityValue(catalog, `${scope}:directories`, key, true, 0, 0, dirname(key))
-    }
-    if (!base || key === base || dirname(key) === key) {
-      break
-    }
-    key = dirname(key)
-    direct = false
-  } while (isInsideSessionRoot(base, key))
+  const page = new SessionSearchAuthorityPage(catalog, scope)
+  page.record(path, revision)
+  if (ancestors) {
+    page.ensureDirectories(path)
+  }
+  page.flush()
   return revision
 }
 export function newerSessionSearchInput(
@@ -74,25 +54,9 @@ export function newerSessionSearchInput(
   path: string,
   cutoff: number
 ): boolean {
-  const base = root(catalog, scope)
-  let key = path
-  let direct = true
-  do {
-    const value = authorityValue<Authority>(authorityRow(catalog, `${scope}:authority`, key))
-    if (
-      (direct ? value?.tree : value?.self) !== undefined &&
-      (direct ? value!.tree : value!.self) > cutoff
-    ) {
-      return true
-    }
-    if (!base || key === base || dirname(key) === key) {
-      break
-    }
-    key = dirname(key)
-    direct = false
-  } while (isInsideSessionRoot(base, key))
-  return false
+  return new SessionSearchAuthorityPage(catalog, scope).newer(path, cutoff)
 }
+
 export function rearmSessionSearchAuthority(
   catalog: SessionSearchCatalog,
   scope: string,

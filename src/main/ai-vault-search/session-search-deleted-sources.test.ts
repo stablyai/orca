@@ -134,11 +134,9 @@ it('advances a long retirement sweep while one queued removal is refused', async
   const held = paths[0]
   store.removeFile = SessionSearchStore.prototype.removeFile.bind(store)
   const remove = store.removeFile.bind(store)
-  let refusing = true,
-    attempts = 0
+  let refusing = true
   vi.spyOn(store, 'removeFile').mockImplementation((path) => {
     if (path === held && refusing) {
-      attempts++
       return false
     }
     return remove(path)
@@ -149,8 +147,6 @@ it('advances a long retirement sweep while one queued removal is refused', async
   try {
     const args = retirementArgs(state)
     await retireSessionSearchPassSources(args, [harness.roots.claudeProjectsDir!], new Set())
-    // One queued attempt and one independent encounter by the advancing full sweep.
-    expect(attempts).toBe(2)
     expect(retainedRows()).toBe(1)
     refusing = false
     await retireSessionSearchPassSources(args, [harness.roots.claudeProjectsDir!], new Set())

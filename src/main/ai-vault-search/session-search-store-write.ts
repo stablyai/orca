@@ -1,10 +1,13 @@
+import { initializeSessionSearchStorage } from './session-search-storage-bootstrap'
 import type { SessionSearchCatalogCandidates } from './session-search-catalog-candidates'
-import type { SessionSearchIndexWriter } from './session-search-index-writer'
+import type {
+  SessionSearchIndexWriter,
+  SessionSearchFileWrite
+} from './session-search-index-writer'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import type { TranscriptSessionIdentity } from '../ai-vault/transcripts/session-transcript-consumers'
 import type SyncDatabase from '../sqlite/sync-database'
 import type { SessionSearchFileRow } from './session-search-store-types'
-import type { SessionSearchFileWrite } from './session-search-index-writer'
 
 function identity(row: SessionSearchFileRow | undefined, failedCommit = false): string {
   return JSON.stringify(
@@ -20,6 +23,7 @@ function identity(row: SessionSearchFileRow | undefined, failedCommit = false): 
 }
 const initialized = new WeakSet<SyncDatabase>()
 function ensureFailures(db: SyncDatabase): void {
+  initializeSessionSearchStorage(db)
   if (initialized.has(db)) {
     return
   }

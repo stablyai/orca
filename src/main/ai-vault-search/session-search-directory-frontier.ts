@@ -116,13 +116,8 @@ export function transitionSessionSearchDirectoryFrontier(
       catalog.execute({ kind: 'delete', scope: walks, key: row.key })
       const debt = get(`${command.scope}:refusals`, row.key)
       if (debt?.ready) {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the refusal owner encoded this scratch debt.
-        recordSessionSearchRetry(
-          catalog,
-          `${command.scope}:refusals`,
-          row.key,
-          JSON.parse(debt.value) as SessionSearchRetryDebt
-        )
+        const refusal: SessionSearchRetryDebt = JSON.parse(debt.value)
+        recordSessionSearchRetry(catalog, `${command.scope}:refusals`, row.key, refusal)
       }
     }
   }

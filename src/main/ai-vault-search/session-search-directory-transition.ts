@@ -39,10 +39,9 @@ export function transitionSessionSearchDirectory(
   const get = (scope: string, key: string) => catalog.execute({ kind: 'get', scope, key }).rows?.[0]
   const incoming = (key: string): { file?: boolean; directory?: boolean } => {
     const row = get(entries, key)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: staged directory entries are encoded by the scanner's matching scope.
-    return row?.group === String(command.epoch)
-      ? (JSON.parse(row.value) as { file?: boolean; directory?: boolean })
-      : {}
+    const value: { file?: boolean; directory?: boolean } =
+      row?.group === String(command.epoch) ? JSON.parse(row.value) : {}
+    return value
   }
   if (command.phase === 'files' || command.phase === 'remove-files') {
     const result = page(files)
@@ -102,7 +101,8 @@ export function transitionSessionSearchDirectory(
     if (row.group !== String(command.epoch)) {
       continue
     }
-    const value = incoming(row.key)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this page contains this epoch's staged directory entries.
+    const value = JSON.parse(row.value) as { file?: boolean; directory?: boolean }
     if (value.directory) {
       const known = get(directories, row.key)
       if (!known) {

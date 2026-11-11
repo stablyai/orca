@@ -1,3 +1,4 @@
+import { initializeSessionSearchStorage } from './session-search-storage-bootstrap'
 import { recordSessionSearchPrimaryFailure } from './session-search-primary-retries'
 import { admitSessionSearchStoreWrite } from './session-search-store-write'
 import {
@@ -77,7 +78,7 @@ export class SessionSearchStore {
     private readonly onMessagesChanged: (delta: number) => void = () => undefined
   ) {
     this.db = openSessionSearchDatabase(path)
-    this.db.exec('PRAGMA temp_store = FILE; PRAGMA temp.cache_size = -1024;')
+    initializeSessionSearchStorage(this.db)
     ensureSessionSearchQuerySchema(this.db)
     this.writer = new SessionSearchIndexWriter(
       this.db,

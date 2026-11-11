@@ -1,3 +1,4 @@
+import { initializeSessionSearchStorage } from './session-search-storage-bootstrap'
 import type SyncDatabase from '../sqlite/sync-database'
 
 export type SessionSearchPublicationCommand =
@@ -32,6 +33,7 @@ export class SessionSearchCatalogPublications {
     private readonly db: SyncDatabase,
     private readonly removeFile: (path: string) => boolean
   ) {
+    initializeSessionSearchStorage(db)
     db.exec(`CREATE TEMP TABLE search_publications (
       group_key TEXT PRIMARY KEY, revision INTEGER NOT NULL, frontier INTEGER NOT NULL DEFAULT 0,
       dirty INTEGER NOT NULL DEFAULT 1, phase TEXT NOT NULL DEFAULT 'coverage',

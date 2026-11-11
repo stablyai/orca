@@ -367,7 +367,8 @@ it('retains title-only work through admission refusal and wakes held-out publica
       clock.advance(20_000)
       await subject.settled()
     }
-    expect(subject.status().phase).toBe('current')
+    expect(subject.status().phase).toBe('degraded')
+    expect(subject.status().filesDue).toBe(0)
     expect(title()).toEqual({ title: 'Changed title' })
     harness.write((db) => db.exec('DROP TRIGGER refuse_title'))
     await appendFile(
@@ -527,7 +528,8 @@ it.each(['commit', 'open'] as const)(
           db.prepare('SELECT state,fail_count FROM files WHERE path=?').get(path)
         )
       ).toEqual({ state: 'failed', fail_count: 3 })
-      expect(subject.status().phase).toBe('current')
+      expect(subject.status().phase).toBe('degraded')
+      expect(subject.status().filesDue).toBe(0)
       allow()
       await cycle()
       expect(current()).toEqual({ text: { n: 1 }, title: { title: 'Rewritten title' } })
