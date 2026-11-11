@@ -539,8 +539,8 @@
 1 src/main/updater/linux-package/linux-package-install-command.ts
 1 src/main/updater/linux-package/linux-update-package-type.ts
 6 src/main/updater/serve-update-handoff.ts
-2 src/main/usage/usage-provider-store-lifecycle.ts
-1 src/main/usage/usage-scan-worker-spawn.ts
+2 src/main/usage/provider-lifecycle/usage-provider-store-lifecycle.ts
+1 src/main/usage/scan-worker/usage-scan-worker-spawn.ts
 1 src/main/warp-themes/discovery.ts
 1 src/main/window/desktop-integration/custom-app-icon.ts
 3 src/main/window/desktop-integration/macos-press-and-hold-default.ts
