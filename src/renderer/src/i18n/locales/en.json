@@ -1089,6 +1089,17 @@
       "quickOpen": "quick open",
       "fileExplorer": "file explorer"
     },
+    "fileOpenClickMode": {
+      "keywords": {
+        "fileExplorer": "file explorer",
+        "open": "open",
+        "click": "click"
+      },
+      "title": "Open files with",
+      "description": "Choose how to open files in the file explorer. Single click is the default.",
+      "single": "Single click",
+      "double": "Double click"
+    },
     "followSymlinkedDirectories": "Follow symlinked directories",
     "followSymlinkedDirectoriesDescription": "Search linked folders in Quick Open and expand local linked folders in File Explorer.",
     "accounts": {

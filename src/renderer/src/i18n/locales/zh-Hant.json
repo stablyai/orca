@@ -871,6 +871,17 @@
       "quickOpen": "快速開啟",
       "fileExplorer": "檔案總管"
     },
+    "fileOpenClickMode": {
+      "keywords": {
+        "fileExplorer": "檔案總管",
+        "open": "開啟",
+        "click": "點擊"
+      },
+      "title": "開啟檔案的點擊方式",
+      "description": "選擇在檔案總管中開啟檔案的方式，預設為按一下。",
+      "single": "按一下",
+      "double": "按兩下"
+    },
     "followSymlinkedDirectories": "跟隨符號連結目錄",
     "followSymlinkedDirectoriesDescription": "在快速開啟中搜尋連結資料夾，並在檔案總管中展開本機連結資料夾。",
     "accounts": {
