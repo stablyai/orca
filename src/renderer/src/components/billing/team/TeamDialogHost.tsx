@@ -17,7 +17,14 @@ import { useTeamActions } from './use-team-actions'
 import { openTeammateProfile } from '../../teammates/teammate-profile-store'
 import { ORCA_CLOUD_RECIPE_ID } from '../../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
 
-function TeamPageBody({ arrival }: { arrival: ReturnType<typeof useTeamPageState>['arrival'] }) {
+export function TeamPageBody({
+  arrival,
+  inline
+}: {
+  arrival: ReturnType<typeof useTeamPageState>['arrival']
+  /** Settings → Team: rendered on the page instead of in the dialog (JA-17). */
+  inline?: { onOpenPlanBilling: () => void }
+}): React.JSX.Element {
   const t = useTranslate()
   const confirm = useConfirmationDialog()
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
@@ -217,6 +224,7 @@ function TeamPageBody({ arrival }: { arrival: ReturnType<typeof useTeamPageState
       }}
       onDismissArrival={clearTeamPageArrival}
       onContactSales={(url) => void window.api.shell.openUrl(url)}
+      inline={inline}
     />
   )
 }
