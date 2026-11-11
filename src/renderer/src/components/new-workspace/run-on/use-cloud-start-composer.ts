@@ -28,6 +28,7 @@ import { useRunOnDefault } from './use-run-on-default'
 import { useCloudOnlyCreate, useCloudOnlyRepo } from './use-cloud-only-repo'
 import type { CloudStartView } from './cloud-start-view'
 import { showCloudAgentNotStartedToast } from '@/lib/orca-cloud/cloud-agent-not-started-toast'
+import { orcaCloudWallNotice, useRunOnPreflightEnabled } from '@/lib/orca-cloud/run-on-preflight'
 import { isOrcaCloudAccountAgent } from '../../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
 
 export type { CloudStartView } from './cloud-start-view'
@@ -93,6 +94,11 @@ export function useCloudStartComposer({
   const cloudSelected = selectedRecipeId === ORCA_CLOUD_RECIPE_ID
   const fetched = useOrcaCloudRunTargetAccess(segment === 'enabled' && !accessOverride)
   const access = accessOverride ?? fetched
+  const preflight = useRunOnPreflightEnabled()
+  const wall = useMemo(
+    () => (cloudSelected && preflight ? orcaCloudWallNotice(access) : null),
+    [access, cloudSelected, preflight]
+  )
   const cloudOnly = useCloudOnlyRepo({
     repoId,
     cloudSelected,
@@ -215,9 +221,10 @@ export function useCloudStartComposer({
             onSelectOrcaCloud,
             onUserPick: markTouched,
             cloudOnly,
-            folderProject: cloudOnly.folderProject
+            folderProject: cloudOnly.folderProject,
+            wall
           },
-    [cloudOnly, markTouched, onSelectOrcaCloud, segment]
+    [cloudOnly, markTouched, onSelectOrcaCloud, segment, wall]
   )
   if (!view || !cloudSelected) {
     return { view, onPrimary: null, recordCreated }
