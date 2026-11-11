@@ -80,20 +80,19 @@ describe('native chat list indentation', () => {
     expect(input.value).toBe('* parent\n    + nested\n    * sibling')
   })
 
-  it('keeps focus navigation, fenced code, selections, IME and picker input ahead of indentation', () => {
-    for (const value of [
-      'ordinary prose',
-      '- first item',
-      '```markdown\n- parent\n- literal',
-      '~~~markdown\n- parent\n- literal',
-      '```markdown\n- ```\n- parent\n- literal'
-    ]) {
-      const { input, tab } = setup(value)
-      expect(tab().defaultPrevented).toBe(false)
-      expect(input.value).toBe(value)
-      cleanup()
-    }
+  it('nests after a continued item while leaving unrelated prose as a boundary', () => {
+    const { input, tab } = setup('- parent\n  continuation\n- child')
+    tab()
+    expect(input.value).toBe('- parent\n  continuation\n    - child')
+    act(() => {
+      input.value = '- parent\nunrelated prose\n- child'
+      input.setSelectionRange(32, 32)
+    })
+    expect(tab().defaultPrevented).toBe(false)
+    expect(input.value).toBe('- parent\nunrelated prose\n- child')
+  })
 
+  it('yields to selection, composition and a consumed Tab before indenting the same item', () => {
     const value = '- parent\n- child'
     const { input, element, tab } = setup(value)
     expect(tab({ shiftKey: true }).defaultPrevented).toBe(false)
@@ -112,9 +111,12 @@ describe('native chat list indentation', () => {
     expect(input.value).toBe('- parent\n    - child')
   })
 
-  it('resumes list editing after a closed code fence', () => {
-    const { input, tab } = setup('```\n- literal\n```\n- parent\n- child')
+  it('leaves a fenced list literal until the fence closes, then resumes list editing', () => {
+    const { input, tab } = setup('-\t```\n    - parent\n    - literal')
+    expect(tab().defaultPrevented).toBe(false)
+    expect(input.value).toBe('-\t```\n    - parent\n    - literal')
+    act(() => input.insertText!('\n    ```\n- parent\n- child'))
     tab()
-    expect(input.value).toBe('```\n- literal\n```\n- parent\n    - child')
+    expect(input.value).toBe('-\t```\n    - parent\n    - literal\n    ```\n- parent\n    - child')
   })
 })

@@ -6,6 +6,7 @@ import { Plugin } from '@tiptap/pm/state'
 const LIST_ITEM = /^([ \t]*)(?:[-+*]|\d{1,9}[.)])[ \t]+/
 
 function positionLeafText(node: ProseMirrorNode): string {
+  // Chips occupy one document position; their serialized tokens would shift the calculated line start.
   return node.type.name === 'hardBreak' ? '\n' : '\ufffc'
 }
 
@@ -29,17 +30,27 @@ function isInsideCodeFence(lines: readonly string[]): boolean {
 }
 
 function previousListItem(lines: readonly string[], indent: number): RegExpExecArray | null {
+  let continuationIndent = Infinity
   for (let index = lines.length - 1; index >= 0; index--) {
     if (lines[index].trim() === '') {
       continue
     }
     const match = LIST_ITEM.exec(lines[index])
     if (!match) {
+      const leading = /^ +/.exec(lines[index])
+      if (leading) {
+        continuationIndent = Math.min(continuationIndent, leading[0].length)
+        continue
+      }
+      return null
+    }
+    if (match[0].includes('\t') || match[0].length > continuationIndent) {
       return null
     }
     if (match[1].length <= indent) {
       return match
     }
+    continuationIndent = Infinity
   }
   return null
 }
@@ -80,7 +91,7 @@ export const NativeChatListIndentation = Extension.create({
             )
             const line = before.slice(before.lastIndexOf('\n') + 1) + after.split('\n')[0]
             const item = LIST_ITEM.exec(line)
-            if (!item) {
+            if (!item || item[0].includes('\t')) {
               return false
             }
             const previousLines = doc.textBetween(0, lineStart, '\n', positionLeafText).split('\n')
@@ -89,6 +100,7 @@ export const NativeChatListIndentation = Extension.create({
             }
             const indent = item[1].length
             const previous = previousListItem(previousLines, event.shiftKey ? indent - 1 : indent)
+            // Keep indentation separate from text typed immediately before or after it in undo history.
             const tr = closeHistory(state.tr)
             if (event.shiftKey) {
               if (indent === 0) {
