@@ -224,12 +224,32 @@ export async function getEnterpriseGitHubRepoSlugForRemote(
   if (requireVerifiedSshProbe && !remoteUrl) {
     requireReachableGitRoute(getConnectionExecutionHostId(connectionId))
   }
-  const identity = remoteUrl ? parseGitHubRemoteIdentity(remoteUrl) : null
+  return remoteUrl
+    ? getEnterpriseGitHubRepoSlugForRemoteUrl(
+        repoPath,
+        remoteUrl,
+        connectionId,
+        localGitOptions,
+        requireVerifiedSshProbe
+      )
+    : null
+}
+
+/** The authenticated custom GitHub host a remote URL names, such as a separate `pushurl`. */
+export async function getEnterpriseGitHubRepoSlugForRemoteUrl(
+  repoPath: string,
+  remoteUrl: string,
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {},
+  requireVerifiedSshProbe = false
+): Promise<GitHubEnterpriseRepoSlug | null | undefined> {
+  const context = githubRepoContext(repoPath, connectionId, localGitOptions)
+  const identity = parseGitHubRemoteIdentity(remoteUrl)
   if (!identity) {
     return null
   }
   let effectiveHost = identity.host
-  const aliasHost = remoteUrl ? gitHubSshConfigHostAlias(remoteUrl) : null
+  const aliasHost = gitHubSshConfigHostAlias(remoteUrl)
   if (aliasHost) {
     const { hostname, resolved } = await resolveSshConfigHostname(aliasHost, context)
     if (!resolved || !hostname) {

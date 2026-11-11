@@ -9,8 +9,10 @@ import { shouldProbeGitRemote } from '../../git/remotes/remote-name-listing'
 
 import {
   getEnterpriseGitHubRepoSlug,
-  getEnterpriseGitHubRepoSlugForRemote
+  getEnterpriseGitHubRepoSlugForRemote,
+  getEnterpriseGitHubRepoSlugForRemoteUrl
 } from './github-enterprise-repository'
+import { classifyGitHubOwnerRepoFromRemoteUrl } from './github-ssh-host-alias-resolution'
 import {
   githubApiRepositoryProbeCacheKey,
   resolveGitHubApiRepositoryProbe
@@ -134,4 +136,32 @@ export async function getOriginGitHubApiRepository(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubApiRepository | null> {
   return getGitHubApiRepositoryForRemote(repoPath, 'origin', connectionId, localGitOptions)
+}
+
+/** A remote URL's repository, for URLs no remote name resolves to (a separate `pushurl`). */
+export async function getGitHubApiRepositoryForRemoteUrl(
+  repoPath: string,
+  remoteUrl: string,
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<GitHubApiRepository | null> {
+  const github = await classifyGitHubOwnerRepoFromRemoteUrl(remoteUrl, {
+    repoPath,
+    connectionId,
+    ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
+  })
+  if (github.kind === 'github') {
+    return { ...github.ownerRepo, host: 'github.com' }
+  }
+  if (github.kind === 'indeterminate') {
+    return null
+  }
+  return (
+    (await getEnterpriseGitHubRepoSlugForRemoteUrl(
+      repoPath,
+      remoteUrl,
+      connectionId,
+      localGitOptions
+    )) ?? null
+  )
 }

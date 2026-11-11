@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
 import { codeHostReadExecutionScope as githubReadExecutionScope } from '../../../source-control/code-host-read-execution-scope'
 import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from '../../api/rate-limit'
@@ -72,7 +73,7 @@ export async function isCommitPartOfMergedPR(args: {
           return 'contained'
         }
         if (entries.length < COMMIT_PULLS_PAGE_SIZE) {
-          return 'not-contained'
+          return await wasForcePushedAwayFromPR(args.ownerRepo, args.prNumber, oid, ghOptions)
         }
       }
       return 'unknown'
@@ -81,4 +82,63 @@ export async function isCommitPartOfMergedPR(args: {
       return 'unknown'
     }
   })
+}
+
+const FORCE_PUSH_EVENTS_LIMIT = 100
+
+const forcePushTimelineSchema = z.object({
+  data: z.object({
+    repository: z
+      .object({
+        pullRequest: z
+          .object({
+            timelineItems: z.object({
+              totalCount: z.number(),
+              nodes: z.array(
+                z.object({ beforeCommit: z.object({ oid: z.string() }).nullish() }).nullable()
+              )
+            })
+          })
+          .nullable()
+      })
+      .nullable()
+  })
+})
+
+// A rebase pushed from another checkout drops this commit's PR association; the PR's force-push
+// history still names it, so the checkout provably held this PR's head.
+async function wasForcePushedAwayFromPR(
+  ownerRepo: OwnerRepo,
+  prNumber: number,
+  oid: string,
+  ghOptions: GitHubRepoExecOptions
+): Promise<MergedPRCommitMembership> {
+  if (repositoryRateLimitGuard(ownerRepo, 'graphql', ghOptions).blocked) {
+    return 'unknown'
+  }
+  noteRepositoryRateLimitSpend(ownerRepo, 'graphql', 1, ghOptions)
+  const { stdout } = await ghExecFileAsync(
+    [
+      'api',
+      'graphql',
+      '-f',
+      `query=query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { pullRequest(number: $number) { timelineItems(itemTypes: [HEAD_REF_FORCE_PUSHED_EVENT], last: ${FORCE_PUSH_EVENTS_LIMIT}) { totalCount nodes { ... on HeadRefForcePushedEvent { beforeCommit { oid } } } } } } }`,
+      '-f',
+      `owner=${ownerRepo.owner}`,
+      '-f',
+      `repo=${ownerRepo.repo}`,
+      '-F',
+      `number=${prNumber}`
+    ],
+    ghOptions
+  )
+  const parsed = forcePushTimelineSchema.safeParse(JSON.parse(stdout))
+  const timeline = parsed.success ? parsed.data.data.repository?.pullRequest?.timelineItems : null
+  if (!timeline) {
+    return 'unknown'
+  }
+  if (timeline.nodes.some((node) => node?.beforeCommit?.oid.toLowerCase().startsWith(oid))) {
+    return 'contained'
+  }
+  return timeline.totalCount > timeline.nodes.length ? 'unknown' : 'not-contained'
 }

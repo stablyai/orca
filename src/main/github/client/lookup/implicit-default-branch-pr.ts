@@ -10,7 +10,7 @@ import {
   ownerRepoFromPullRequestUrl
 } from './../github-exec-scope'
 
-import type { TrackedUpstreamBranch } from './tracked-upstream-cache'
+import type { BranchHead } from './branch-review-heads'
 import {
   pullRequestHeadRepository,
   pullRequestMatchesHeadRepository,
@@ -21,7 +21,8 @@ import { getRestPRByNumber } from './pr-number-lookup'
 
 export type ImplicitDefaultBranchPRContext = {
   originHeadRepo: OwnerRepo | null
-  trackedUpstream: { branch: TrackedUpstreamBranch; headRepo: OwnerRepo } | null
+  /** Heads beyond origin's same-named branch: the tracked upstream, then the configured push head. */
+  secondaryHeads: BranchHead[]
   branchName: string
   linkedPRNumber?: number | null
   repoPath: string
@@ -74,9 +75,10 @@ function isForeignSameNamedHead(
   data: PullRequestLookupData,
   prRepo: OwnerRepo | null
 ): boolean {
-  const expectedHeads = [context.originHeadRepo, context.trackedUpstream?.headRepo].filter(
-    (head) => head != null
-  )
+  const expectedHeads = [
+    context.originHeadRepo,
+    ...context.secondaryHeads.map((head) => head.headRepo)
+  ].filter((head) => head != null)
   if (data.headRefName !== context.branchName) {
     return false
   }
@@ -107,11 +109,11 @@ async function shouldHideImplicitDefaultBranchPR(
   }
   const headRepoKey = githubRepoIdentityKey(headRepo)
   const remoteName =
-    input.trackedUpstream && githubRepoIdentityKey(input.trackedUpstream.headRepo) === headRepoKey
-      ? input.trackedUpstream.branch.remoteName
-      : input.originHeadRepo && githubRepoIdentityKey(input.originHeadRepo) === headRepoKey
-        ? 'origin'
-        : null
+    input.secondaryHeads.find((head) => githubRepoIdentityKey(head.headRepo) === headRepoKey)
+      ?.branch.remoteName ??
+    (input.originHeadRepo && githubRepoIdentityKey(input.originHeadRepo) === headRepoKey
+      ? 'origin'
+      : null)
   if (!remoteName) {
     try {
       // Removed tracking can leave a cached integration PR without a matching remote.

@@ -91,7 +91,7 @@ describe('sidebar PR query', () => {
     )
     const policy = createImplicitDefaultBranchPRPolicy({
       originHeadRepo: null,
-      trackedUpstream: null,
+      secondaryHeads: [],
       branchName: fields.headRefName,
       repoPath: '/folder-workspace',
       localGitOptions: {},
