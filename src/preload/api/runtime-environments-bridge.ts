@@ -38,6 +38,12 @@ import type {
 } from '../../shared/auth-callback-forward'
 import type { McpSyncStatus } from '../../shared/agent-mcp-sync/mcp-sync-contract'
 import type { CloudMcpSyncPreferences } from '../../shared/agent-mcp-sync/mcp-sync-preferences'
+import {
+  CLOUD_AGENT_CONFIG_SYNC_CHANGED_CHANNEL,
+  CLOUD_AGENT_CONFIG_SYNC_PREFERENCES_CHANNEL,
+  type AgentConfigSyncStatus,
+  type CloudAgentConfigSyncPreferences
+} from '../../shared/agent-config-sync/agent-config-sync-contract'
 import { managedOrcadApi } from './managed-orcad-api'
 import { getWslHostsApi } from './wsl-hosts-api'
 
@@ -88,6 +94,37 @@ export const runtimeEnvironmentsApi = {
       callback(status)
     ipcRenderer.on(CLOUD_MCP_SYNC_CHANGED_CHANNEL, listener)
     return () => ipcRenderer.removeListener(CLOUD_MCP_SYNC_CHANGED_CHANNEL, listener)
+  },
+  getAgentConfigSyncStatus: (environmentId: string): Promise<AgentConfigSyncStatus | null> =>
+    ipcRenderer.invoke('cloudAgentConfigSync:getStatus', environmentId),
+  syncAgentConfigNow: (environmentId: string): Promise<AgentConfigSyncStatus | null> =>
+    ipcRenderer.invoke('cloudAgentConfigSync:syncNow', environmentId),
+  getAgentConfigSyncPreferences: (): Promise<CloudAgentConfigSyncPreferences | null> =>
+    ipcRenderer.invoke('cloudAgentConfigSync:getPreferences'),
+  setAgentConfigSyncPreferences: (
+    preferences: Partial<Omit<CloudAgentConfigSyncPreferences, 'excluded'>>
+  ): Promise<CloudAgentConfigSyncPreferences | null> =>
+    ipcRenderer.invoke('cloudAgentConfigSync:setPreferences', preferences),
+  setAgentConfigItemIncluded: (
+    key: string,
+    included: boolean
+  ): Promise<CloudAgentConfigSyncPreferences | null> =>
+    ipcRenderer.invoke('cloudAgentConfigSync:setItemIncluded', key, included),
+  onAgentConfigSyncChanged: (callback: (status: AgentConfigSyncStatus) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, status: AgentConfigSyncStatus): void =>
+      callback(status)
+    ipcRenderer.on(CLOUD_AGENT_CONFIG_SYNC_CHANGED_CHANNEL, listener)
+    return () => ipcRenderer.removeListener(CLOUD_AGENT_CONFIG_SYNC_CHANGED_CHANNEL, listener)
+  },
+  onAgentConfigSyncPreferencesChanged: (
+    callback: (preferences: CloudAgentConfigSyncPreferences) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      preferences: CloudAgentConfigSyncPreferences
+    ): void => callback(preferences)
+    ipcRenderer.on(CLOUD_AGENT_CONFIG_SYNC_PREFERENCES_CHANNEL, listener)
+    return () => ipcRenderer.removeListener(CLOUD_AGENT_CONFIG_SYNC_PREFERENCES_CHANNEL, listener)
   },
   getStatusSnapshots: (): Promise<RuntimeHostStatusSnapshot[]> =>
     ipcRenderer.invoke('runtimeEnvironments:getStatusSnapshots'),

@@ -1361,7 +1361,7 @@
         "keywordSync": "sync",
         "keywordCloud": "cloud",
         "openFor": "MCP servers for {{name}}",
-        "description": "MCP servers from Claude Code and Codex on this computer, synced to your cloud workspaces."
+        "description": "MCP servers from Claude and Codex on this computer, synced to your cloud workspaces."
       },
       "environments": {
         "title": "Cloud environments",
@@ -1391,6 +1391,13 @@
         "keywordUsage": "usage",
         "keywordOverage": "overage",
         "description": "Your Orca Cloud plan, sandbox hours and payment."
+      },
+      "skills": {
+        "searchDescription": "Sync Claude and Codex skills and slash commands from this computer to your cloud workspaces.",
+        "keywordSkills": "skills",
+        "keywordCommands": "slash commands",
+        "keywordPrompts": "prompts",
+        "description": "Skills and slash commands from Claude and Codex on this computer, synced to your cloud workspaces."
       }
     },
     "groups": {
@@ -4253,7 +4260,6 @@
             "unavailableTitle": "Orca Cloud is unavailable right now",
             "networkTitle": "Couldn’t reach Orca Cloud",
             "snapshotTitle": "This project’s saved environment is missing",
-            "stillRunningLocal": "The VM is running and using hours until you choose.",
             "tryAgain": "Try again",
             "signIn": "Sign in",
             "more": "More",
@@ -4316,7 +4322,8 @@
             "startAgain": "Start again",
             "cloudUnusableTitle": "This sandbox can’t open your workspace",
             "cloudUnusableDeletedBody": "The sandbox was deleted. Start again to try a new one.",
-            "cloudUnusableBody": "Start again on a new sandbox, or delete this one."
+            "cloudUnusableBody": "Start again on a new sandbox, or delete this one.",
+            "stillRunningLocal2": "The VM is running until you choose."
           },
           "VmBuildLog": {
             "jumpToError": "Jump to first error",
@@ -14406,6 +14413,7 @@
           "description_other": "Starts waking a sleeping sandbox when you point at its workspace or come back to Orca, so it's ready sooner. If you don't open it, it goes back to sleep after {{count}} minutes idle. Early wakes count toward your sandbox hours."
         },
         "cloudApi": {
+          "formerMember": "Former member",
           "keys": {
             "createdMine": "Created {{time}}",
             "createdByPerson": "Created by <person></person> {{time}}",
@@ -20572,7 +20580,6 @@
         "renewsOn": "Renews {{value0}}",
         "continueInBrowser": "Continue in your browser. This updates when you come back.",
         "title": "Plan & billing",
-        "refresh": "Refresh plan",
         "menuItem": "Plan & billing",
         "statusActive": "Active",
         "statusTrial": "Trial",
@@ -20582,7 +20589,6 @@
         "overageNoPlan": "Overage needs an active plan.",
         "resets": "Hours reset {{value0}}",
         "overageTitle": "Overage",
-        "overageToggle": "Allow overage",
         "overageSpent": "{{value0}} of {{value1}} monthly cap spent",
         "saveCap": "Save",
         "monthly": "Monthly",
@@ -20841,10 +20847,6 @@
         "openForbidden2": "Only an owner or admin can manage billing.",
         "openTeamRequired": "Plans belong to a team. Create a team, then choose a plan.",
         "openSignedOut2": "Sign in to Orca again to manage your team.",
-        "overageDescription7": "Optional overage at {{rate}} per sandbox hour, billed by the minute, up to a monthly spend cap you set ({{cap}} by default).",
-        "overageMemberHint": "Owners and admins can change overage.",
-        "overageOffRead": "Off",
-        "overageOnRead": "On",
         "overagePaymentFailed": "Update the payment method before changing overage.",
         "paymentAsleepBody": "New sandboxes can’t start and running sandboxes are asleep. They can wake again once the payment goes through. Your files are safe.",
         "paymentGraceBody2": "New sandboxes can’t start. Running sandboxes go to sleep on {{value0}} unless the payment goes through.",
@@ -20857,7 +20859,6 @@
         "resetsEnds": "Hours reset {{value0}} · Plan ends {{value1}}",
         "resetsRenews": "Hours reset {{value0}} · Renews {{value1}}",
         "sandboxHoursUsedMonth": "{{value0}} of {{value1}} sandbox hours used this month",
-        "overageDescriptionOn4": "Optional overage at {{rate}} per sandbox hour, billed by the minute, up to a monthly spend cap you set.",
         "reasonCapMember4": "Spend cap reached. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Ask an owner or admin to raise the spend cap.",
         "reasonGraceExpired3": "Payment failed. New sandboxes can’t start and running sandboxes are asleep. Update your payment method. Your files are safe.",
         "reasonGraceExpiredMember2": "Payment failed. New sandboxes can’t start and running sandboxes are asleep. Ask an owner or admin to update the payment method. Your files are safe.",
@@ -20892,7 +20893,43 @@
         "trialProduct": "Orca Cloud",
         "trialRowChoosePlan": "{{trial}}. Choose plan",
         "trialUsedUpTitle": "Your trial is used up",
-        "unconfigured": "Billing isn’t available in this build of Orca."
+        "unconfigured": "Billing isn’t available in this build of Orca.",
+        "teamPlanTitle": "{{team}} · {{plan}} plan",
+        "planTitle": "{{plan}} plan",
+        "overage": {
+          "capHint": "{{rate}} per sandbox hour after your included hours, billed by the minute. $0 keeps overage off.",
+          "memberOn": "On, up to {{cap}} a month.",
+          "memberOff2": "Off. Ask an owner or admin to turn it on.",
+          "turnOn": "Turn on with a {{cap}} cap"
+        },
+        "usage": {
+          "title": "Last 30 days",
+          "loadFailed": "Couldn’t load your usage history",
+          "loading": "Loading your usage history…",
+          "empty": "No sandbox hours yet. Usage shows here once your team runs cloud workspaces.",
+          "topWorkspaces": "Top workspaces",
+          "topMembers": "Top members",
+          "hoursColumn": "Sandbox hours",
+          "chartLabel": "Sandbox hours per day, last 30 days. Use the arrow keys to read each day.",
+          "today": "Today",
+          "tableCaption": "Sandbox hours per day",
+          "you": "You",
+          "otherMembers_one": "{{count}} other",
+          "otherMembers_other": "{{count}} others",
+          "unattributed": "Not attributed to a member",
+          "otherWorkspaces_one": "{{count}} other workspace",
+          "otherWorkspaces_other": "{{count}} other workspaces",
+          "windowTotal_one": "{{value}} sandbox hour in 30 days",
+          "windowTotal_other": "{{value}} sandbox hours in 30 days",
+          "total_one": "{{value}} sandbox hour",
+          "total_other": "{{value}} sandbox hours",
+          "yours": "You used {{yours}} of your team’s {{total}} sandbox hours.",
+          "dayLine": "{{date}} · {{hours}}",
+          "formerMembers_one": "Former member",
+          "formerMembers_other": "{{count}} former members",
+          "deletedWorkspaces_one": "Deleted workspace",
+          "deletedWorkspaces_other": "{{count}} deleted workspaces"
+        }
       },
       "ports": {
         "RuntimePortAutoForwarder": {
@@ -23647,6 +23684,12 @@
     "cloudWorkspaces": {
       "emptyMineStartBody": "Start one and it keeps running while your laptop sleeps.",
       "newCloudWorkspace": "New cloud workspace"
+    },
+    "worktreeCreation": {
+      "pendingNativeChat": {
+        "sendBlockedFailedCloud": "Retry creating the workspace to send",
+        "sendBlockedHeldCloud": "Sends when the workspace is ready"
+      }
     }
   },
   "dashboardPopout": {
@@ -26758,7 +26801,7 @@
     "form": {
       "script": "Install script",
       "import": "Import from repo",
-      "importHint": "Reads Conductor and dev container setup from a local project.",
+      "importHint": "Reads Conductor and Dev Container setup from a local project.",
       "create": "Create and build",
       "save": "Save changes",
       "discard": "Discard",
@@ -27344,7 +27387,7 @@
     },
     "summary": {
       "found": "{{count}} found",
-      "none": "None found in Claude Code or Codex on this computer. Servers you add there show up here.",
+      "none": "None found in Claude or Codex on this computer. Servers you add there show up here.",
       "notSynced": "{{count}} found, not synced yet",
       "pair": "{{synced}}, {{skipped}}",
       "skipped": "{{count}} skipped",
@@ -28189,6 +28232,72 @@
     "description": "Set up Claude and Codex once. Every cloud workspace uses them, including new, cloned and restarted ones.",
     "footerLabel": "Related settings",
     "allAccounts": "All agent accounts"
+  },
+  "cloudSkillsSync": {
+    "title": "Skills & commands",
+    "appliesEverywhere": "Applies to every cloud workspace",
+    "toggleItem": "Sync {{name}} ({{kind}}) to cloud workspaces",
+    "loading": "Loading skills and commands…",
+    "syncedAgo": "synced {{time}}",
+    "syncing": "Syncing skills and commands…",
+    "syncingShort": "Syncing…",
+    "syncNow": "Sync now",
+    "syncAgain": "Sync again",
+    "manualOnly": "Not synced automatically. Sync now copies them once.",
+    "group": {
+      "synced": "Synced",
+      "pending": "Not synced yet",
+      "notSynced": "Not synced"
+    },
+    "autoSync": "Sync when a workspace starts or wakes",
+    "autoSyncHint": "Copies your Claude and Codex skills and slash commands into each cloud workspace. Anything that looks like a key stays on this computer, and nothing made in the sandbox is overwritten.",
+    "shareAcrossAgents": "Share between Claude and Codex",
+    "shareAcrossAgentsHint": "In cloud workspaces, Codex also gets your Claude skills and commands, and Claude gets your Codex skills and prompts. An agent keeps its own if it has one with that name.",
+    "startFailed": "Couldn’t start the sync.",
+    "saveFailed": "Couldn’t save the change.",
+    "emptyBody": "Skills and commands sync to a cloud workspace while it runs. Start or wake one to see what it gets.",
+    "workspaceLabel": "Skills and commands in {{name}}",
+    "unavailable": "Skill sync isn’t available in this build.",
+    "kind": {
+      "skill": "{{agent}} skill",
+      "prompt": "Codex prompt",
+      "command": "{{agent}} command",
+      "project": "{{kind}}, this project"
+    },
+    "summary": {
+      "none": "None found in Claude or Codex on this computer",
+      "notSynced_one": "{{count}} found, not synced yet",
+      "notSynced_other": "{{count}} found, not synced yet",
+      "synced_one": "{{count}} synced",
+      "synced_other": "{{count}} synced",
+      "skipped_one": "{{count}} not synced",
+      "skipped_other": "{{count}} not synced",
+      "pair": "{{synced}}, {{skipped}}"
+    },
+    "error": {
+      "hostOutdated": "This workspace was created before skills sync. Create a new workspace to use it.",
+      "hostUnreachable": "Couldn’t reach the sandbox. Skills already there still work.",
+      "failed": "The last sync didn’t finish. Skills already in the sandbox still work."
+    },
+    "row": {
+      "withheld_one": "Synced without 1 file that looks like a key or credential",
+      "withheld_other": "Synced without {{count}} files that look like keys or credentials",
+      "converted": "Copied from {{agent}} so both agents have it",
+      "turnedOff": "Turned off",
+      "inRepo": "Committed to the repo, so the sandbox already has it",
+      "tooLarge": "Too large to sync (256 KB a file, 512 KB a skill)",
+      "overLimit": "Over the 8 MB a workspace can receive",
+      "secret": "Looks like it contains a key or token, so it stays on this computer",
+      "invalid": "Its name or files can’t be copied",
+      "keptHost": "The sandbox has its own {{name}}, so it’s left alone",
+      "noProject": "The sandbox has no project checkout for it",
+      "failed": "Couldn’t write it in the sandbox"
+    },
+    "state": {
+      "synced": "Synced",
+      "pending": "Not synced yet",
+      "skipped": "Not synced"
+    }
   },
   "orcaCloudAgentPicker": {
     "status": {

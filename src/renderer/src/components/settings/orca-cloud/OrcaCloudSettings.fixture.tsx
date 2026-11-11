@@ -99,7 +99,7 @@ function mcpPage(workspaces: OrcaCloudMcpWorkspace[] | null | 'failed'): React.J
     <Page
       id="cloud-mcp"
       title="MCP servers"
-      description="MCP servers from Claude Code and Codex on this computer, synced to your cloud workspaces."
+      description="MCP servers from Claude and Codex on this computer, synced to your cloud workspaces."
     >
       <OrcaCloudMcpServersView
         workspaces={workspaces}
