@@ -3,6 +3,8 @@ import {
   captureWakeProcessHint,
   detectForegroundCommand,
   dismissWakeProcessHint,
+  endsAtShellPrompt,
+  getWakeCaptureTime,
   getWakeProcessHint,
   historyEndRow,
   wakeHintForPane,
@@ -148,6 +150,21 @@ describe('wake process hints', () => {
     expect(historyEndRow(screen(['$ python3 -m http.server', 'Serving…', '', ''], 4))).toBe(2)
     expect(historyEndRow(screen(['a', 'b', 'c', 'd'], 4))).toBeNull()
     expect(historyEndRow(screen(['', '', ''], 3))).toBeNull()
+  })
+
+  it('records when a hinted pane was captured (agent evidence after it means a relaunch)', () => {
+    captureWakeProcessHint('leaf-1', running, {}, 1234)
+    captureWakeProcessHint('leaf-idle', ['$ '], {}, 1234)
+    expect(getWakeCaptureTime('leaf-1')).toBe(1234)
+    expect(getWakeCaptureTime('leaf-idle')).toBeNull()
+    dismissWakeProcessHint('leaf-1')
+    expect(getWakeCaptureTime('leaf-1')).toBeNull()
+  })
+
+  it('tells a bare shell prompt from a screen that is still running something', () => {
+    expect(endsAtShellPrompt(['No conversation found', 'ubuntu@sbx:~$ ', ''])).toBe(true)
+    expect(endsAtShellPrompt(['> Try "fix lint"', '  ? for shortcuts'])).toBe(false)
+    expect(endsAtShellPrompt([])).toBe(false)
   })
 
   it('reads the tail of an xterm buffer', () => {

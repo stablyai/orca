@@ -1,13 +1,22 @@
 // Terminal panes around a sleep (JA-15): the pre-sleep scrollback greyed behind "Asleep since",
 // and after the wake, the one-line "processes stopped" note. The woke fixtures run the real hint
-// rule on the pre-sleep tail: a shell pane offers Rerun with its command, a Claude pane offers
-// Restart Claude (never its input placeholder as a command).
+// rule on the pre-sleep tail: a shell pane offers Rerun with its command. A Claude pane shows no
+// strip once the host relaunched Claude (WAKE-1), and Restart Claude only when, after the grace,
+// the pane sits at a bare shell (never its input placeholder as a command).
 import React from 'react'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { CloudAsleepTerminalNotice } from './CloudAsleepTerminalNotice'
 import { CloudWokeProcessesNotice } from './CloudWokeProcessesNotice'
-import { wakeHintForPane, type WakePaneFacts } from '@/lib/orca-cloud/cloud-wake-process-hints'
+import {
+  endsAtShellPrompt,
+  wakeHintForPane,
+  type WakePaneFacts
+} from '@/lib/orca-cloud/cloud-wake-process-hints'
 import { cloudWokeActionFor } from '@/lib/orca-cloud/cloud-wake-hint-action'
+import {
+  AGENT_RELAUNCH_GRACE_MS,
+  wokeAgentStripState
+} from '@/lib/orca-cloud/cloud-woke-agent-strip'
 
 const noop = (): void => {}
 
@@ -50,17 +59,36 @@ export const asleepTerminalHistory = defineFixture({
   )
 })
 
+const ASLEEP_AT = Date.UTC(2026, 10, 10, 15, 10)
+const BARE_SHELL = ['ubuntu@sbx:~/hello-world$ ']
+
 function WokePane({
   beforeSleepTail,
-  facts
+  afterWake = BARE_SHELL,
+  facts,
+  relaunchedAt = null
 }: {
   beforeSleepTail: string[]
+  /** The pane after the wake, 15 s in. */
+  afterWake?: string[]
   facts?: WakePaneFacts
+  /** When the relaunched agent reported in, or null when it never did. */
+  relaunchedAt?: number | null
 }): React.JSX.Element {
   const hint = wakeHintForPane(beforeSleepTail, facts)
+  const agentState =
+    hint && 'restartAgent' in hint
+      ? wokeAgentStripState({
+          capturedAt: ASLEEP_AT,
+          evidenceAt: relaunchedAt,
+          sinceLiveMs: AGENT_RELAUNCH_GRACE_MS,
+          paneAtShellPrompt: () => endsAtShellPrompt(afterWake)
+        })
+      : null
+  const show = hint !== null && (agentState === null || agentState === 'restart')
   return (
-    <Pane lines={['ubuntu@sbx:~/hello-world$ ']}>
-      {hint ? (
+    <Pane lines={afterWake}>
+      {show ? (
         <CloudWokeProcessesNotice
           action={cloudWokeActionFor(hint)}
           onAction={noop}
@@ -76,18 +104,35 @@ export const wokeProcessesStopped = defineFixture({
   render: () => <WokePane beforeSleepTail={beforeSleep} />
 })
 
-// JA-15 P2: Claude was waiting at its input box; its placeholder is not a command to rerun.
-export const wokeClaudePaneRestart = defineFixture({
+// Claude was waiting at its input box when the workspace went to sleep.
+const claudeAtInput = [
+  'ubuntu@sbx:~/hello-world$ . /tmp/orca-launch-3f9a.sh',
+  '────────────────────────────────────────────────',
+  '> Try "create a util logging.py that..."',
+  '────────────────────────────────────────────────',
+  '  ? for shortcuts'
+]
+
+// RA-WAKE: the host relaunched Claude (it reported in after the wake); no strip over it.
+export const wokeClaudeRelaunched = defineFixture({
   width: 640,
   render: () => (
     <WokePane
-      beforeSleepTail={[
-        'ubuntu@sbx:~/hello-world$ . /tmp/orca-launch-3f9a.sh',
-        '────────────────────────────────────────────────',
-        '> Try "create a util logging.py that..."',
-        '────────────────────────────────────────────────',
-        '  ? for shortcuts'
-      ]}
+      beforeSleepTail={claudeAtInput}
+      afterWake={claudeAtInput.slice(1)}
+      facts={{ agentType: 'claude' }}
+      relaunchedAt={ASLEEP_AT + 120_000}
+    />
+  )
+})
+
+// Fallback: 15 s after the wake, Claude never came back and the pane is a bare shell.
+export const wokeClaudeNotRelaunched = defineFixture({
+  width: 640,
+  render: () => (
+    <WokePane
+      beforeSleepTail={claudeAtInput}
+      afterWake={['No conversation found with session ID: 9b1f…', 'ubuntu@sbx:~/hello-world$ ']}
       facts={{ agentType: 'claude' }}
     />
   )

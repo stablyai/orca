@@ -21,9 +21,12 @@ import { useAppStore } from '@/store/index'
 import { useCloudRecoveryContext } from '@/lib/orca-cloud/use-cloud-recovery-context'
 import { CloudAsleepTerminalNotice } from '@/components/orca-cloud/offline/CloudAsleepTerminalNotice'
 import { CloudWokeProcessesNotice } from '@/components/orca-cloud/offline/CloudWokeProcessesNotice'
+import { CloudWokeAgentNotice } from '@/components/orca-cloud/offline/CloudWokeAgentNotice'
 import {
   captureWakeProcessHint,
   dismissWakeProcessHint,
+  endsAtShellPrompt,
+  getWakeCaptureTime,
   getWakeProcessHint,
   historyEndOffsetPx,
   readTerminalTail,
@@ -262,6 +265,35 @@ export function TerminalPaneRecoveryPortals({
         }
         // Up again after a sleep: the process that was running is gone; say so once, never rerun it.
         const wokeHint = cloudAwake ? getWakeProcessHint(pane.leafId) : null
+        // An agent pane: the host relaunches its agent; Restart only if that never comes (RA-WAKE).
+        if (wokeHint && 'restartAgent' in wokeHint) {
+          const wokeAction = cloudWokeActionFor(wokeHint)
+          return createPortal(
+            <CloudWokeAgentNotice
+              paneKey={makePaneKey(tabId, pane.leafId)}
+              paneLeafId={pane.leafId}
+              agentName={wokeAction.kind === 'restart' ? wokeAction.agent : ''}
+              capturedAt={getWakeCaptureTime(pane.leafId) ?? 0}
+              paneAtShellPrompt={() => endsAtShellPrompt(readTerminalTail(pane.terminal, 40))}
+              subscribeScreen={(onChange) => {
+                const subscription = pane.terminal.onWriteParsed(onChange)
+                return () => subscription.dispose()
+              }}
+              onRestart={() => {
+                dismissWakeProcessHint(pane.leafId)
+                runCloudWokeAction(wokeHint, {
+                  tabId,
+                  leafId: pane.leafId,
+                  worktreeId: controller.worktreeId,
+                  sendInput: () => undefined
+                })
+              }}
+              onDismiss={() => dismissWakeProcessHint(pane.leafId)}
+            />,
+            pane.container,
+            `cloud-woke-${pane.id}`
+          )
+        }
         if (wokeHint) {
           return createPortal(
             <CloudWokeProcessesNotice
