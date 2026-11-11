@@ -12,7 +12,8 @@ import {
 } from '../../../shared/sidebar-list/workspace-activity-facts'
 
 type TerminalLikeTab = Pick<TerminalTab, 'id'>
-type BrowserLikeTab = { id: string }
+/** `sleptAt`: Sleep kept the tab but dropped its page; it is not activity until reopened. */
+type BrowserLikeTab = { id: string; sleptAt?: number | null }
 
 type TabsByWorktree = Record<string, readonly TerminalLikeTab[]>
 type PtyIdsByTabId = Record<string, string[]>
@@ -81,7 +82,7 @@ export function hasActiveWorkspaceActivity(
   const tabs = tabsByWorktree?.[worktreeId] ?? []
   const hasLiveTerminal =
     ptyIdsByTabId != null && tabs.some((tab) => tabHasLivePty(ptyIdsByTabId, tab.id))
-  const hasBrowser = (browserTabsByWorktree?.[worktreeId] ?? []).length > 0
+  const hasBrowser = (browserTabsByWorktree?.[worktreeId] ?? []).some((tab) => !tab.sleptAt)
   // Why: a running agent keeps the workspace visible through brief PTY gaps
   // such as an SSH reconnect or an unmounted remote pane. #7197
   const hasLiveAgent = worktreeIdsWithLiveAgent.has(worktreeId)
