@@ -63,6 +63,26 @@ describe('structured OpenCode account binding', () => {
     ).toThrow('Managed account not found.')
   })
 
+  it("passes the user's inline credentials, relative paths and database through unchanged", () => {
+    const accounts = managedAccounts()
+    accounts.select(null)
+    const baseEnvironment = {
+      PATH: '/bin',
+      HOME: 'relative/home',
+      XDG_DATA_HOME: 'relative/data',
+      XDG_STATE_HOME: 'relative/state',
+      OPENCODE_DB: 'custom.db',
+      OPENCODE_AUTH_CONTENT: '{"provider":{"type":"api","key":"inline"}}'
+    }
+    const binding = resolveStructuredOpenCodeAccountHome({ managedAccounts: accounts })
+    expect(
+      environmentForStructuredOpenCodeAccountHome(binding, {
+        managedAccounts: accounts,
+        baseEnvironment
+      })
+    ).toEqual(baseEnvironment)
+  })
+
   it("undoes Orca's inherited managed overlay before passing the environment through", () => {
     const accounts = managedAccounts()
     accounts.select(null)
