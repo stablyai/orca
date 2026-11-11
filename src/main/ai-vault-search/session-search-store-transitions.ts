@@ -1,10 +1,9 @@
 export { requireSessionSearchCandidateReason } from './session-search-candidate-reason'
-import type { SessionSearchFileRow } from './storage/session-search-store-types'
 import { acceptSessionSearchDiscoveryPage } from './session-search-discovery-acceptance'
 import { prepareSessionSearchRead } from './session-search-read-preparation'
 import { admitSessionSearchCandidatePage } from './session-search-candidate-admission-page'
 import { validSessionSearchContainerRemoval } from './session-search-container-transition'
-import { SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT } from './indexing/session-search-read-decision'
+import { applySessionSearchWorkAcknowledgement } from './session-search-content-settlement'
 import { stepSessionSearchPublication } from './session-search-publication-step'
 import type { SessionSearchWorkCatalog } from './session-search-work-catalog'
 import type { SessionSearchWorkCommand, SessionSearchWorkResult } from './session-search-work-queue'
@@ -134,62 +133,6 @@ export async function transitionSessionSearchWork(
     eligibleThrough,
     revision: queue.revision
   }
-}
-
-export function applySessionSearchWorkAcknowledgement(
-  store: SessionSearchStore,
-  queue: SessionSearchWorkCatalog,
-  command: Extract<SessionSearchWorkCommand, { kind: 'acknowledge' }>,
-  known?: {
-    row: SessionSearchFileRow | undefined
-    admission: ReturnType<SessionSearchStore['catalogCandidates']['admission']>
-  }
-): boolean {
-  if (!queue.matches(command.work)) {
-    return false
-  }
-  const row = known ? known.row : store.fileRow(command.work.candidate.file.path)
-  const admission = known
-    ? known.admission
-    : store.catalogCandidates.admission(command.work.candidate)
-  const required = admission.contentRequired
-  const handoff = command.handoff
-  const refusal = handoff?.scope.startsWith(`physical:${command.work.candidate.agent}:`)
-    ? store.catalogStorage.execute({
-        kind: 'get',
-        scope: `${handoff.scope}:file-refusals`,
-        key: command.work.candidate.file.path
-      }).rows?.[0]
-    : undefined
-  const debt: { force?: boolean; metadata?: boolean } | undefined = refusal
-    ? JSON.parse(refusal.value)
-    : undefined
-  const transferred =
-    handoff &&
-    refusal?.tie === handoff.revision &&
-    (!required || debt?.force) &&
-    (!command.work.metadata || debt?.metadata)
-  const held =
-    row?.state === 'failed' &&
-    row.failCount >= SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT &&
-    row.failedMtimeMs === command.work.candidate.file.mtimeMs
-  const expired =
-    store.retentionCutoff !== null && command.work.candidate.file.mtimeMs < store.retentionCutoff
-  queue.acknowledgeAccepted(
-    { ...command.work, force: required || (command.work.force && command.retry) },
-    transferred || !admission.allowed
-      ? false
-      : command.handoff
-        ? admission.required
-        : required
-          ? !held && !expired
-          : command.retry
-  )
-
-  if (command.reconcile) {
-    queue.rowChangedAccepted(command.work.candidate.file.path, row)
-  }
-  return true
 }
 
 export function acknowledgeSessionSearchWork(

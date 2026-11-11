@@ -1,10 +1,8 @@
 import type {
+  SessionSearchWorkReceipt,
+  SessionSearchReadSettlement,
   SessionSearchWorkCommand,
   SessionSearchWorkResult
-} from '../session-search-work-queue'
-import type {
-  SessionSearchWorkReceipt,
-  SessionSearchReadSettlement
 } from '../session-search-work-queue'
 import type {
   SessionSearchCandidateCommand,
