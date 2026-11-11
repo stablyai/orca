@@ -238,7 +238,9 @@ export async function runSessionSearchPass(
       recordSessionScanIssue(issues, { agent: 'cursor', path: refusal.chatsRoot, ...refusal.text })
     }
     const unlistable = await unreadableRoots(
-      roots.filter((root) => !rootsWithFiles.has(root)),
+      listings
+        .filter(({ root, absent }) => !absent && !rootsWithFiles.has(root))
+        .map(({ root }) => root),
       args.listings,
       signal
     )

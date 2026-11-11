@@ -33,7 +33,9 @@ export class SessionSearchDiscoveryInventory
     await root.inventory.begin(this.force || this.maintenance, args)
     const wake = this.primaryWake !== undefined && root.wake !== this.primaryWake
     if (wake) {
-      await root.inventory.wakeFailures()
+      if (!root.inventory.empty) {
+        await root.inventory.wakeFailures()
+      }
       root.wake = this.primaryWake
     }
     const admitPrimary = async () => {

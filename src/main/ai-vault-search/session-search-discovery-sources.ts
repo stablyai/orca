@@ -124,10 +124,11 @@ export class SessionSearchDiscoverySources {
     return false
   }
 
-  listings(): { root: string; files: number }[] {
+  listings(): { root: string; files: number; absent: boolean }[] {
     return [...this.roots.values()].map((root) => ({
       root: root.inventory.root,
-      files: root.inventory.fileCount
+      files: root.inventory.fileCount,
+      absent: this.watchers.isMissing(root.inventory.root) && root.inventory.empty
     }))
   }
 

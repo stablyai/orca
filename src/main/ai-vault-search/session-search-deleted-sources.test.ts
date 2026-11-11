@@ -190,7 +190,7 @@ it('progresses a queued tail and the full sweep while an earlier page stays refu
   }
 })
 
-it('continues a finite parked-retirement wake across passes without waking its new failures', async () => {
+it('continues an interrupted parked-retirement wake without consuming newer receipts', async () => {
   const paths = seedSearchableRows(300)
   store.removeFile = SessionSearchStore.prototype.removeFile.bind(store)
   const state = new SessionSearchPassState()
@@ -200,6 +200,15 @@ it('continues a finite parked-retirement wake across passes without waking its n
   const args = retirementArgs(state)
   const roots = [harness.roots.claudeProjectsDir!]
   const goodListings = args.listings
+  const request = store.catalog.bind(store)
+  let refuseTransfer = false
+  const transfer = vi.spyOn(store, 'catalog').mockImplementation((command) => {
+    if (refuseTransfer && command.kind === 'frontier-move') {
+      refuseTransfer = false
+      return Promise.reject(new Error('fixture interrupted retirement wake'))
+    }
+    return request(command)
+  })
   try {
     // The first wake page is transferred; its removals refuse and return to parked state.
     await wakeSessionSearchPassRetirements({ ...args, full: true, discoveryOverdue: () => true })
@@ -218,20 +227,28 @@ it('continues a finite parked-retirement wake across passes without waking its n
       new Set()
     )
     expect(retainedRows()).toBe(300)
+    const newer = paths.at(-1)!
+    await state.parkedRetire.set(newer, newer)
+    refuseTransfer = true
+    await expect(wakeSessionSearchPassRetirements(args)).rejects.toThrow(
+      'fixture interrupted retirement wake'
+    )
     // An ordinary pass must carry the original wake through its remaining tail.
     await wakeSessionSearchPassRetirements(args)
     await retireSessionSearchPassSources({ ...args, listings: goodListings }, roots, new Set())
-    expect(retainedRows()).toBe(256)
+    expect(retainedRows()).toBe(257)
+    expect(store.fileRow(newer)).toBeDefined()
     expect(state.pending).toBe(false)
     await wakeSessionSearchPassRetirements(args)
     await retireSessionSearchPassSources(args, roots, new Set())
-    expect(retainedRows()).toBe(256)
+    expect(retainedRows()).toBe(257)
     // A new explicit wake can now retry the protected earlier page.
     await wakeSessionSearchPassRetirements({ ...args, full: true })
     await retireSessionSearchPassSources(args, roots, new Set())
     expect(retainedRows()).toBe(0)
     expect(state.pending).toBe(false)
   } finally {
+    transfer.mockRestore()
     await state.close()
   }
 })

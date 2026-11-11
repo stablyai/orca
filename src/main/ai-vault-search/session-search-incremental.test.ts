@@ -11,7 +11,10 @@ import {
 } from '../ai-vault/scanners/codex/session-scanner-codex-fixtures'
 import { subagentTranscriptsDirFor } from '../ai-vault/scanners/claude/session-scanner-subagent-transcripts'
 import { SessionSearchIndexer } from './session-search-indexer'
-import { SessionSearchWorkerClient } from './session-search-worker-client'
+import {
+  SessionSearchWorkerClient,
+  SessionSearchOperationError
+} from './session-search-worker-client'
 import {
   FakeSessionSearchClock,
   openSessionSearchIndexerHarness,
@@ -20,6 +23,97 @@ import {
 } from './session-search-indexer-test-fixture'
 
 vi.mock('./session-search-filesystem', () => ({ sessionSearchRequiresPolling: async () => false }))
+
+it('resumes an interrupted multi-page recovery without retrying accepted files', async () => {
+  const harness = await openSessionSearchIndexerHarness('ss-primary-recovery-pages')
+  const root = harness.roots.claudeProjectsDir!
+  const clock = new FakeSessionSearchClock()
+  const subject = new SessionSearchIndexer({
+    databasePath: harness.databasePath,
+    roots: harness.roots,
+    historyDays: null,
+    clock,
+    onError: () => undefined
+  })
+  const open = filesystem.openTranscriptReadStream
+  let refusing = true
+  const primary = vi
+    .spyOn(filesystem, 'openTranscriptReadStream')
+    .mockImplementation((path, ...args) => {
+      if (refusing && path.startsWith(root)) {
+        throw Object.assign(new Error('fixture inaccessible transcript'), { code: 'EACCES' })
+      }
+      return open(path, ...args)
+    })
+  const request = SessionSearchWorkerClient.prototype.request
+  let armed = false,
+    rejected = false,
+    pages = 0
+  const handoff = vi
+    .spyOn(SessionSearchWorkerClient.prototype, 'request')
+    .mockImplementation(async function (this: SessionSearchWorkerClient, command) {
+      if (
+        armed &&
+        command.op === 'catalog' &&
+        command.command.kind === 'retry-admit' &&
+        command.command.primary &&
+        command.command.scope === `physical:claude:${root}`
+      ) {
+        pages++
+        if (pages === 2) {
+          rejected = true
+          throw new SessionSearchOperationError('fixture interrupted second wake page')
+        }
+      }
+      return request.call(this, command)
+    })
+  try {
+    for (let index = 0; index < 65; index++) {
+      await writeClaudeTranscript(
+        join(harness.claudeProjectDir, `${index}.jsonl`),
+        ['recoveredpagesneedle'],
+        `${index}`
+      )
+    }
+    await subject.start()
+    for (let attempt = 0; attempt < 2; attempt++) {
+      clock.advance(20_000)
+      await subject.settled()
+    }
+    expect(
+      harness.read((db) =>
+        db.prepare("SELECT count(*) AS n FROM files WHERE state='failed' AND fail_count=3").get()
+      )
+    ).toEqual({ n: 65 })
+    expect(subject.status().filesDue).toBe(0)
+    refusing = false
+    armed = true
+    await subject.reconcile({ full: true })
+    expect(rejected).toBe(true)
+    clock.advance(20_000)
+    await subject.settled()
+    expect(
+      harness.read((db) =>
+        db
+          .prepare(
+            "SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'recoveredpagesneedle'"
+          )
+          .get()
+      )
+    ).toEqual({ n: 130 })
+    expect(
+      harness.read((db) =>
+        db.prepare("SELECT count(*) AS n FROM files WHERE state='current' AND fail_count=0").get()
+      )
+    ).toEqual({ n: 65 })
+    expect(subject.status().phase).toBe('current')
+  } finally {
+    handoff.mockRestore()
+    primary.mockRestore()
+    await subject.close()
+    await harness.cleanup()
+  }
+})
 
 it.each([40, 400])(
   'bounds idle and one-file work independently of %s archived transcripts',

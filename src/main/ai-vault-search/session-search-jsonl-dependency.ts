@@ -20,9 +20,13 @@ export function createSessionSearchJsonlDependency(
 ): SessionDiscoveryDependencyObserver {
   const staging = new SessionSearchCatalogClient<string>(`${owner.scope}:staging`, owner.request)
   const changed = new SessionSearchCatalogClient<true>(`${owner.scope}:changed`, owner.request)
+  const accepted = new SessionSearchCatalogClient<string>(`${owner.scope}:accepted`, owner.request)
   let cursor: SessionIndexJsonlCursor | undefined
   let signature: string | undefined
   const transition = async (phase: 'install' | 'remove') => {
+    if (!(phase === 'install' ? staging.size : accepted.size)) {
+      return
+    }
     let after: string | undefined
     do {
       after = (
@@ -51,7 +55,9 @@ export function createSessionSearchJsonlDependency(
       if (!isMissingTranscriptPathError(error)) {
         throw error
       }
-      await staging.release()
+      if (staging.size) {
+        await staging.release()
+      }
       await transition('remove')
       cursor = undefined
       signature = undefined

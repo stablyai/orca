@@ -29,87 +29,98 @@ it.each([
   'prepare-after',
   'apply-before',
   'apply-after',
+  'apply-newer',
   'directory-schedule'
-] as const)(
-  'retains a delivered new conversation across %s rejection without a second notice',
-  async (failure) => {
-    const harness = await openSessionSearchIndexerHarness('ss-input-handoff')
-    const root = harness.roots.claudeProjectsDir!
-    const directory = join(root, 'new-project')
-    const first = join(harness.claudeProjectDir, 'first.jsonl')
-    const second = join(
-      failure === 'directory-schedule' ? directory : harness.claudeProjectDir,
-      'second.jsonl'
-    )
-    const clock = new FakeSessionSearchClock()
-    const errors: unknown[] = []
-    const subject = new SessionSearchIndexer({
-      databasePath: harness.databasePath,
-      roots: harness.roots,
-      historyDays: null,
-      clock,
-      onError: (error) => errors.push(error)
-    })
-    const request = SessionSearchWorkerClient.prototype.request
-    let armed = false,
-      rejected = false
-    const gate = vi
-      .spyOn(SessionSearchWorkerClient.prototype, 'request')
-      .mockImplementation(async function (this: SessionSearchWorkerClient, command) {
-        const target =
-          command.op === 'catalog' &&
-          ((failure.startsWith('event-') &&
-            command.command.kind === 'input-invalidate' &&
-            command.command.path === second) ||
-            (failure.startsWith('prepare-') &&
-              command.command.kind === 'observe-prepare' &&
-              command.command.inputs.some((input) => input.path === second)) ||
-            (failure.startsWith('apply-') &&
-              command.command.kind === 'observe-apply' &&
-              command.command.outcomes.some((input) => input.path === second)) ||
-            (failure === 'directory-schedule' &&
-              command.command.kind === 'directory-schedule' &&
-              command.command.path === directory))
-        if (armed && !rejected && target) {
-          rejected = true
-          if (failure.endsWith('after')) {
-            await request.call(this, command)
-          }
-          throw new SessionSearchOperationError('fixture catalog handoff rejected')
+] as const)('retains a delivered new conversation across %s rejection', async (failure) => {
+  const harness = await openSessionSearchIndexerHarness('ss-input-handoff')
+  const root = harness.roots.claudeProjectsDir!
+  const directory = join(root, 'new-project')
+  const first = join(harness.claudeProjectDir, 'first.jsonl')
+  const second = join(
+    failure === 'directory-schedule' ? directory : harness.claudeProjectDir,
+    'second.jsonl'
+  )
+  const clock = new FakeSessionSearchClock()
+  const errors: unknown[] = []
+  const subject = new SessionSearchIndexer({
+    databasePath: harness.databasePath,
+    roots: harness.roots,
+    historyDays: null,
+    clock,
+    onError: (error) => errors.push(error)
+  })
+  const request = SessionSearchWorkerClient.prototype.request
+  let armed = false,
+    rejected = false
+  const gate = vi
+    .spyOn(SessionSearchWorkerClient.prototype, 'request')
+    .mockImplementation(async function (this: SessionSearchWorkerClient, command) {
+      const target =
+        command.op === 'catalog' &&
+        ((failure.startsWith('event-') &&
+          command.command.kind === 'input-invalidate' &&
+          command.command.path === second) ||
+          (failure.startsWith('prepare-') &&
+            command.command.kind === 'observe-prepare' &&
+            command.command.inputs.some((input) => input.path === second)) ||
+          (failure.startsWith('apply-') &&
+            command.command.kind === 'observe-apply' &&
+            command.command.outcomes.some((input) => input.path === second)) ||
+          (failure === 'directory-schedule' &&
+            command.command.kind === 'directory-schedule' &&
+            command.command.path === directory))
+      if (armed && !rejected && target) {
+        rejected = true
+        if (failure.endsWith('after')) {
+          await request.call(this, command)
         }
-        return request.call(this, command)
-      })
-    const hits = () =>
-      harness.read((db) =>
-        db
-          .prepare(
-            "SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'handoffneedle'"
-          )
-          .get()
-      )
-    try {
-      await mkdir(harness.claudeProjectDir, { recursive: true })
-      await subject.start()
-      await writeClaudeTranscript(first, ['handoffneedle'], 'handoff-first')
-      await writeClaudeTranscript(second, ['handoffneedle'], 'handoff-second')
-      if (failure === 'directory-schedule') {
-        notifySessionSearchFileChange(directory)
+        throw new SessionSearchOperationError('fixture catalog handoff rejected')
       }
-      armed = true
-      await subject.reconcile()
-      expect(rejected).toBe(true)
-      expect(errors.some((error) => error instanceof SessionSearchOperationError)).toBe(true)
-      // Only resume the failed boundary; no new notification, full refresh or maintenance tick.
-      await subject.reconcile()
-      expect(hits()).toEqual({ n: 4 })
-      expect(subject.status().phase).toBe('current')
-    } finally {
-      gate.mockRestore()
-      await subject.close()
-      await harness.cleanup()
+      return request.call(this, command)
+    })
+  const hits = () =>
+    harness.read((db) =>
+      db
+        .prepare("SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'handoffneedle'")
+        .get()
+    )
+  try {
+    await mkdir(harness.claudeProjectDir, { recursive: true })
+    await subject.start()
+    await writeClaudeTranscript(first, ['handoffneedle'], 'handoff-first')
+    await writeClaudeTranscript(second, ['handoffneedle'], 'handoff-second')
+    if (failure === 'directory-schedule') {
+      notifySessionSearchFileChange(directory)
     }
+    armed = true
+    await subject.reconcile()
+    expect(rejected).toBe(true)
+    expect(errors.some((error) => error instanceof SessionSearchOperationError)).toBe(true)
+    if (failure === 'apply-newer') {
+      await writeClaudeTranscript(second, ['supersedingneedle'], 'handoff-second')
+      notifySessionSearchFileChange(second)
+    }
+    // Resume retained work without a full refresh or maintenance tick.
+    await subject.reconcile()
+    expect(hits()).toEqual({ n: failure === 'apply-newer' ? 2 : 4 })
+    if (failure === 'apply-newer') {
+      expect(
+        harness.read((db) =>
+          db
+            .prepare(
+              "SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'supersedingneedle'"
+            )
+            .get()
+        )
+      ).toEqual({ n: 2 })
+    }
+    expect(subject.status().phase).toBe('current')
+  } finally {
+    gate.mockRestore()
+    await subject.close()
+    await harness.cleanup()
   }
-)
+})
 
 it.each(['before', 'after'] as const)(
   'retains native recovery across an accepted-result %s rejection',
