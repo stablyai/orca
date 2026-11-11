@@ -73,7 +73,8 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     ],
     identityFlagRoles: { from: 'caller' },
     notes: [
-      'Valid --type values: status, dispatch, worker_done, merge_ready, escalation, handoff, decision_gate, question, heartbeat.',
+      'To another agent: --type notice (information, no reply expected), question (answer me) or handoff (this job is yours); a worker takes new work as --type dispatch. With --to and no --type, the message is a notice; without --to, it is a status report to your coordinator.',
+      'Valid --type values: notice, status, dispatch, worker_done, merge_ready, escalation, handoff, decision_gate, question, heartbeat.',
       'To answer a worker question, use orchestration reply --id <msg_id> --body <text> with the same Orca CLI executable.',
       'Group addresses (@all, @idle, @codex, ...) reach the live Dispatches of your own Run; a sender in no Run must use run:<id> or dispatch:<id>. @worktree:<id> names one workspace.',
       'Run groups exclude their owning coordinator; send to run:<id> to raise something with yours. Nested coordinators receive group mail in their child Run mailbox; @worktree:<id> includes workspace coordinators.',

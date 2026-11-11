@@ -195,7 +195,7 @@ describe('a chat as the assignee of orchestration dispatch', () => {
 
     await vi.waitFor(() => expect(worker.turns).toHaveLength(1), WAIT)
     expect(turnText(worker.turns[0]!)).toMatch(
-      /Subject: also check the tests\n\[Reply: orca(-dev)? orchestration reply --id msg_\w+ --body "\.\.\."\]/
+      /\(notice\) ─+\nSubject: also check the tests\n\[For your information: no reply needed\.\]/
     )
     expect(await queuedCardTexts(PEER_CHAT)).toEqual([])
     await settleTurn(PEER_CHAT, 0)

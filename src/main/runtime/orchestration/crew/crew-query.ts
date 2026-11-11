@@ -97,7 +97,7 @@ export type CrewTraffic = z.infer<typeof Traffic>
 // receipts and rejected lifecycle rewrites carry IDs or nothing. Heartbeat stays its own term so the
 // partial message indexes still match; octet_length avoids reading long bodies.
 const ADMITTED_TRAFFIC = `type <> 'heartbeat'
-  AND type IN ('status', 'dispatch', 'worker_done', 'merge_ready', 'handoff', 'decision_gate', 'question')
+  AND type IN ('notice', 'status', 'dispatch', 'worker_done', 'merge_ready', 'handoff', 'decision_gate', 'question')
   AND octet_length(body) > 0
   AND NOT (payload IS NOT NULL AND json_valid(payload)
     AND json_type(payload, '$._orcaLifecycleRejection.code') IS 'text'

@@ -179,6 +179,8 @@ function formatLegacyAwareCheckMessages(
       }
       if (!legacyReadOnly && message.follow_up) {
         lines.push(`[${formatReportFollowUpLine(message.follow_up)}]`)
+      } else if (!legacyReadOnly && message.type === 'notice') {
+        lines.push('[For your information: no reply needed.]')
       } else if (!legacyReadOnly) {
         const replyTarget = message.to_handle ?? checkedTerminal
         const replyFrom =

@@ -47,7 +47,7 @@ export function assertDispatchMailboxDeliverable(
       followUp
         ? ` ${formatReportFollowUpNext(followUp)}${
             followUp.kind === 'send' && !followUp.active
-              ? ' Only --type status, dispatch or handoff continues a worker; status is the default.'
+              ? ' Only --type notice, dispatch or handoff continues a worker; notice is the default.'
               : ''
           }`
         : ''

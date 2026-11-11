@@ -1,7 +1,7 @@
 import type Database from '../../sqlite/sync-database'
 import type { CheckOutcome } from '../../../shared/source-control/checks/provider-check-summary'
 import type { PRCheckContextState } from './pr-check-occurrence'
-import { numberColumn, textColumn, textColumnValues } from './pr-watch-sqlite-columns'
+import { numberColumn, textColumn, textColumnValues } from '../../sqlite/sqlite-row-columns'
 import { PR_KEY_SQL } from './pr-watch-tables'
 
 // Per-head check memory, pending heads, events and their delivery outbox (tables in pr-watch-tables).

@@ -1,7 +1,7 @@
 import { pullRequestKey } from '../../../shared/native-chat/native-chat-pull-request-event'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type Database from '../../sqlite/sync-database'
-import { numberColumn, textColumn, textColumnValues } from './pr-watch-sqlite-columns'
+import { numberColumn, textColumn, textColumnValues } from '../../sqlite/sqlite-row-columns'
 
 /** Added without a user_version change, so an older build opens the journal and ignores them. */
 export function ensurePRWatchTables(db: Database.Database): void {

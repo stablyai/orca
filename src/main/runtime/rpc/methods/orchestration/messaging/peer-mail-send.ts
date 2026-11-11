@@ -65,11 +65,11 @@ export async function sendPeerMail(args: {
       NOTHING_SENT
     )
   }
-  const type = params.type ?? 'status'
-  if (type !== 'status' && type !== 'handoff') {
+  const type = params.type ?? 'notice'
+  if (type !== 'notice' && type !== 'status' && type !== 'handoff') {
     throw new OrchestrationError(
       'invalid_argument',
-      `--on carries --type status or handoff, not ${type}. Nothing was sent.`,
+      `--on carries --type notice or handoff, not ${type}. Nothing was sent.`,
       NOTHING_SENT
     )
   }
@@ -95,7 +95,8 @@ export async function sendPeerMail(args: {
     senderLabel: peerMailSenderLabel(runtime, caller.address),
     subject: params.subject,
     body: params.body,
-    type,
+    // A notice crosses as status, which the server delivers the same way and every version accepts.
+    type: type === 'handoff' ? 'handoff' : 'status',
     priority: params.priority,
     threadId: params.threadId
   })

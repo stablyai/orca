@@ -180,8 +180,11 @@ export class Coordinator {
         case 'decision_gate':
           openDecisionGateFromMessage(this.db, msg, this.opts.onLog)
           break
+        case 'notice':
         case 'status':
-          this.opts.onLog(`Status from ${msg.from_handle}: ${msg.subject}`)
+          this.opts.onLog(
+            `${msg.type === 'notice' ? 'Notice' : 'Status'} from ${msg.from_handle}: ${msg.subject}`
+          )
           break
         case 'dispatch':
         case 'heartbeat':

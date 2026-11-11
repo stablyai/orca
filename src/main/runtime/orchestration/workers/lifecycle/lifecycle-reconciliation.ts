@@ -105,6 +105,7 @@ export function reconcileLifecycleMessage(
       return reconcileWorkerDoneMessage(db, msg, onLog)
     case 'heartbeat':
       return reconcileHeartbeatMessage(db, msg, onLog)
+    case 'notice':
     case 'status':
     case 'dispatch':
     case 'merge_ready':

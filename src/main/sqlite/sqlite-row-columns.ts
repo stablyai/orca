@@ -1,6 +1,6 @@
-import type { SqliteRow } from '../../sqlite/sqlite-statement'
+import type { SqliteRow } from './sqlite-statement'
 
-// Typed reads of this feature's own columns: a value of another type reads as null.
+// Typed reads of a row's columns: a value of another type reads as null.
 
 export function textColumn(row: SqliteRow, column: string): string | null {
   const value = row[column]

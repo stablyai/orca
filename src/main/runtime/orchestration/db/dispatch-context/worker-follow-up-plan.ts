@@ -3,7 +3,7 @@ import type { MessageType } from '../orchestration-records'
 type Dispatch = { id: string; status: string; follow_up_of_dispatch_id: string | null }
 type Resource = { owner_dispatch_id: string; origin_dispatch_id: string }
 
-export const FOLLOW_UP_MESSAGE_TYPES = ['status', 'dispatch', 'handoff'] as const
+export const FOLLOW_UP_MESSAGE_TYPES = ['notice', 'status', 'dispatch', 'handoff'] as const
 
 export type WorkerLineageFacts<D extends Dispatch, R extends Resource> = {
   dispatch: (id: string) => D | undefined

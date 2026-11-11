@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS messages (
   type          TEXT NOT NULL DEFAULT 'status'
     CHECK(type IN (
       'status', 'dispatch', 'worker_done', 'merge_ready',
-      'escalation', 'handoff', 'decision_gate', 'question', 'heartbeat'
+      'escalation', 'handoff', 'decision_gate', 'question', 'heartbeat', 'notice'
     )),
   priority      TEXT NOT NULL DEFAULT 'normal'
     CHECK(priority IN ('normal', 'high', 'urgent')),

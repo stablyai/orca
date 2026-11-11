@@ -66,7 +66,11 @@ export function finishedWorkerSend<P extends { to?: string; type?: string }>(
   return {
     params: {
       ...params,
-      type: isDispatchMutationMessageType(params.type) ? 'status' : params.type,
+      // To its own Dispatch, any of it is a report to its coordinator, as mail without --to is.
+      type:
+        isDispatchMutationMessageType(params.type) || (ownDispatch && params.type === 'notice')
+          ? 'status'
+          : params.type,
       to: ownDispatch ? dispatchReportMailbox(db, finished) : params.to
     },
     routing: { run: db.getRun(finished.run_id), dispatchId: undefined, dispatch: undefined },

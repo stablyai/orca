@@ -301,9 +301,12 @@ afterEach(async () => {
 // Asynchronous pointer edges need slack under parallel load.
 export const WAIT = { timeout: 10_000, interval: 10 }
 
-/** A chat got the whole orchestration message: its subject and its reply command. */
+/** A chat got the whole orchestration message: its subject and its closing line (a reply command, or a notice's). */
 export function isWholeMail(text: string): boolean {
-  return text.includes('\nSubject: ') && /\[[^\]\n]*: orca(-dev)? orchestration /.test(text)
+  return (
+    text.includes('\nSubject: ') &&
+    /\[[^\]\n]*: orca(-dev)? orchestration |\[For your information: no reply needed\.\]/.test(text)
+  )
 }
 
 export function turnText(turn: { text: string }): string {

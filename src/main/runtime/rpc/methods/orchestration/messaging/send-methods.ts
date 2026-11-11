@@ -2,6 +2,7 @@ import { defineOrchestrationMethod } from '../access/orchestration-method-access
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { isGroupAddress } from '../../../../orchestration/addressing/groups/group-addressing'
 import {
+  defaultSendType,
   dispatchReportMailbox,
   isDispatchReportType
 } from '../../../../orchestration/workers/reports/dispatch-report-mailbox'
@@ -63,6 +64,7 @@ export const ORCHESTRATION_SEND_METHODS = [
           signal
         }
       ) => {
+        params = { ...params, type: params.type ?? defaultSendType(params.to) }
         const db = runtime.getOrchestrationDb()
         const from = params.from ?? 'unknown'
         const attestedCaller =
@@ -206,7 +208,11 @@ export const ORCHESTRATION_SEND_METHODS = [
               : undefined
           // Federated targets perform their own liveness check before relaying.
           if (addressedDispatchId && !federatedTarget) {
-            const plan = planWorkerFollowUp(db, addressedDispatchId, params.type ?? 'status')
+            const plan = planWorkerFollowUp(
+              db,
+              addressedDispatchId,
+              params.type ?? defaultSendType(params.to)
+            )
             // Only a settled worker awaits; mail to a working one stays synchronous until it is inserted.
             const followUp =
               plan?.kind === 'start'

@@ -50,7 +50,8 @@ ORCA orchestration worker-start --spec "<task>" --worktree current --agent codex
   `ORCA orchestration send --to dispatch:<dispatch_id> --subject "<topic>" --body "<message>"`
   in any state: a working worker gets it when its current turn ends; a finished
   or closed one gets it as a follow-up Task and reports with `worker_done`. The
-  receipt says which.
+  receipt says which. With no `--type` it is a notice (information, no reply
+  expected); use `--type question` for an answer, `--type dispatch` for new work.
   Except on a paired server: a finished worker there refuses `send`, so start
   new work there with `worker-start --on <server>` (load
   `references/placement-and-remote.md` first).

@@ -104,6 +104,8 @@ export function formatMessageBannerWithContent(
 
   if (authority === 'current' && options.followUp) {
     lines.push(`[${formatReportFollowUpLine(options.followUp, options.cliCommand ?? 'orca')}]`)
+  } else if (authority === 'current' && msg.type === 'notice') {
+    lines.push('[For your information: no reply needed.]')
   } else if (authority === 'current') {
     const explicitFrom =
       msg.to_handle.startsWith('run:') || msg.to_handle.startsWith('dispatch:')

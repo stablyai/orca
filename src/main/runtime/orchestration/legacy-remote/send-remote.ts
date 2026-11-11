@@ -3,6 +3,7 @@ import type { OrchestrationDb } from '../db/orchestration-db'
 
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationError } from '../orchestration-error'
+import { crossMachineMessageType } from '../federation/cross-machine-message-type'
 import { waitForFederatedLifecycleSettlement } from './federation-lifecycle-settlement'
 import { bindCoordinatorMutationPayload } from '../workers/reports/dispatch-message-binding'
 import { ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
@@ -45,7 +46,7 @@ export async function sendRemoteMessage(args: {
     })
   })
 
-  const type = (params.type ?? 'status') as MessageType
+  const type = crossMachineMessageType((params.type ?? 'status') as MessageType)
   const payload = parseRemoteWorkerPayload(params.payload)
   if (
     typeof payload.dispatchId === 'string' &&

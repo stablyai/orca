@@ -1,7 +1,8 @@
-import type { MessagePriority, MessageType } from '../db/orchestration-records'
+import type { MessagePriority } from '../db/orchestration-records'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationError } from '../orchestration-error'
+import { crossMachineMessageType } from '../federation/cross-machine-message-type'
 import { encodeFederatedControlMessage } from '../legacy-remote/federation-control-message'
 import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { recordReceiptBeforeNudge } from '../../rpc/methods/orchestration/messaging/mutation-replay-nudge'
@@ -73,7 +74,7 @@ export function sendFederatedControlMail(args: {
       from,
       subject: params.subject,
       body: params.body ?? '',
-      type: (params.type ?? 'status') as MessageType,
+      type: crossMachineMessageType(params.type ?? 'notice'),
       priority: (params.priority ?? 'normal') as MessagePriority,
       threadId: params.threadId ?? null,
       payload: params.payload ?? null

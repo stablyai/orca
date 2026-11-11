@@ -1,5 +1,6 @@
 import type Database from '../../../../sqlite/sync-database'
 import { REMOTE_OWNED_WIRE_VERSION } from '../../../../../shared/orchestration/remote-owned-wire'
+import { crossMachineMessageTypeSql } from '../../federation/cross-machine-message-type'
 
 /**
  * A Run here whose coordinator is a paired Orca, keyed by the conversation its queue goes home
@@ -101,7 +102,8 @@ function peerRunMailStatements(row: string): [string, string] {
          'v', ${REMOTE_OWNED_WIRE_VERSION}, 'id', ${row}.id,
          'homeRunId', pr.home_run_id, 'peerRunId', pr.run_id,
          'message', json_object(
-           'from', ${row}.from_handle, 'type', ${row}.type, 'subject', ${row}.subject,
+           'from', ${row}.from_handle, 'type', ${crossMachineMessageTypeSql(`${row}.type`)},
+           'subject', ${row}.subject,
            'body', ${row}.body, 'payload', ${row}.payload, 'priority', ${row}.priority,
            'threadId', ${row}.thread_id
          ),

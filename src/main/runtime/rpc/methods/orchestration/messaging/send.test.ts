@@ -86,6 +86,25 @@ describe('orchestration RPC methods', () => {
       })
     })
 
+    it('defaults addressed mail to a notice and a worker report without --to to status', async () => {
+      setup()
+      const task = db.createTask({ spec: 'reporting worker' })
+      const dispatch = createRootDispatch(db, task.id, 'term_worker', 'tab_worker:leaf_worker')
+      vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+        handle === 'term_worker' ? 'tab_worker:leaf_worker' : coordinatorPaneKey
+      )
+
+      const notice = await call('orchestration.send', {
+        from: 'term_coord',
+        to: `dispatch:${dispatch.id}`,
+        subject: 'Owner context'
+      })
+      const report = await call('orchestration.send', { from: 'term_worker', subject: 'Halfway' })
+
+      expect(notice).toMatchObject({ message: { type: 'notice' } })
+      expect(report).toMatchObject({ message: { type: 'status', to_handle: `run:${activeRunId}` } })
+    })
+
     it('routes Dispatch mail by stable pane identity after worker handle remint', async () => {
       setup()
       const task = db.createTask({ spec: 'controlled worker after restart' })

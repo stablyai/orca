@@ -12,7 +12,7 @@ import {
   pushUpdatesByCall,
   type PRChatOpened
 } from './pr-chat-action-recorder'
-import { numberColumn, textColumn } from './pr-watch-sqlite-columns'
+import { numberColumn, textColumn } from '../../sqlite/sqlite-row-columns'
 import { hasPRChatActionFrom } from './pr-watch-tables'
 
 /** Workspace and repository resolution may still succeed until then. */

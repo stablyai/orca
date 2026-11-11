@@ -116,11 +116,19 @@ export function messagesTypeCheckAllowsQuestion(this: OrchestrationDb): boolean 
   return !!row && row.sql.includes("'question'")
 }
 
+export function messagesTypeCheckAllowsNotice(this: OrchestrationDb): boolean {
+  const row = this.db
+    .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'messages'")
+    .get() as { sql: string } | undefined
+  return !!row && row.sql.includes("'notice'")
+}
+
 export type SchemaColumnProbesMethods = {
   hasColumn: typeof hasColumn
   createMailboxDeliveryIndexesIfPossible: typeof createMailboxDeliveryIndexesIfPossible
   messagesTypeCheckAllowsHeartbeat: typeof messagesTypeCheckAllowsHeartbeat
   messagesTypeCheckAllowsQuestion: typeof messagesTypeCheckAllowsQuestion
+  messagesTypeCheckAllowsNotice: typeof messagesTypeCheckAllowsNotice
 }
 
 export function attachSchemaColumnProbes(ctor: { prototype: object }): void {
@@ -128,6 +136,7 @@ export function attachSchemaColumnProbes(ctor: { prototype: object }): void {
     hasColumn,
     createMailboxDeliveryIndexesIfPossible,
     messagesTypeCheckAllowsHeartbeat,
-    messagesTypeCheckAllowsQuestion
+    messagesTypeCheckAllowsQuestion,
+    messagesTypeCheckAllowsNotice
   })
 }

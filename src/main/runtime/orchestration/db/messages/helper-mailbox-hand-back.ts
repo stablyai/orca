@@ -19,7 +19,7 @@ export function handHelperMailToRun(db: OrchestrationDb, dispatchId: string): vo
       `SELECT id, type FROM messages
        WHERE run_id = ? AND to_handle = ? AND (
          (read = 0 AND delivery_contract = 'current_delivery'
-           AND type IN ('worker_done', 'escalation', 'status'))
+           AND type IN ('worker_done', 'escalation', 'status', 'notice'))
          OR id IN (
            SELECT message_id FROM question_threads WHERE run_id = ? AND status = 'pending'))`
     )
@@ -83,7 +83,7 @@ export function handBackReplayTargets(db: OrchestrationDb, dispatchId: string) {
        WHERE d.id = ? AND m.read = 0 AND m.delivery_contract = 'current_delivery'
          AND EXISTS (SELECT 1 FROM dispatch_contexts AS h
            WHERE h.creator_dispatch_id = d.id AND h.run_id = d.run_id)
-         AND (m.type IN ('worker_done', 'escalation', 'status') OR (m.type = 'question'
+         AND (m.type IN ('worker_done', 'escalation', 'status', 'notice') OR (m.type = 'question'
            AND m.id IN (SELECT message_id FROM question_threads
              WHERE run_id = d.run_id AND status = 'pending')))`
     )
