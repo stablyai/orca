@@ -1,3 +1,5 @@
+import { codeFontFamily } from './mobile-code-font'
+
 // Desktop's main.css tokens per scheme; keep mobile on these instead of introducing inline colors.
 
 export type MobileColorScheme = 'light' | 'dark'
@@ -64,15 +66,16 @@ const darkColors = {
   chatDiffAdded: '#a5ccac',
   chatDiffRemoved: '#d68273',
 
-  // Monaco's `vs-dark`; function and meta come from VS Code Dark+, which Monaco lacks.
-  syntaxComment: '#608b4e',
-  syntaxKeyword: '#569cd6',
-  syntaxString: '#ce9178',
-  syntaxNumber: '#b5cea8',
-  syntaxType: '#3dc9b0',
-  syntaxFunction: '#dcdcaa',
-  syntaxVariable: '#74b0df',
-  syntaxMeta: '#c586c0',
+  // GitHub's Primer dark syntax palette (prettylights); type is its built-in orange, tag covers keys and tag names.
+  syntaxComment: '#8b949e',
+  syntaxKeyword: '#ff7b72',
+  syntaxString: '#a5d6ff',
+  syntaxNumber: '#79c0ff',
+  syntaxType: '#ffa657',
+  syntaxFunction: '#d2a8ff',
+  syntaxVariable: '#ffa657',
+  syntaxMeta: '#79c0ff',
+  syntaxTag: '#7ee787',
 
   // Terminal WebView background (Tokyonight) — separate from app chrome
   terminalBg: '#1a1b26'
@@ -128,15 +131,16 @@ const lightColors: MobilePalette = {
   chatDiffAdded: '#415a0b',
   chatDiffRemoved: '#7c0808',
 
-  // Monaco's `vs`; function and meta from VS Code Light+.
-  syntaxComment: '#008000',
-  syntaxKeyword: '#0000ff',
-  syntaxString: '#a31515',
-  syntaxNumber: '#098658',
-  syntaxType: '#008080',
-  syntaxFunction: '#795e26',
-  syntaxVariable: '#001188',
-  syntaxMeta: '#af00db',
+  // GitHub's Primer light syntax palette (prettylights).
+  syntaxComment: '#59636e',
+  syntaxKeyword: '#cf222e',
+  syntaxString: '#0a3069',
+  syntaxNumber: '#0550ae',
+  syntaxType: '#953800',
+  syntaxFunction: '#8250df',
+  syntaxVariable: '#953800',
+  syntaxMeta: '#0550ae',
+  syntaxTag: '#116329',
 
   terminalBg: '#1a1b26'
 }
@@ -208,7 +212,7 @@ export const typography = {
   titleSize: 18,
   bodySize: 14,
   metaSize: 12,
-  monoFamily: 'monospace' as const
+  monoFamily: codeFontFamily
 } as const
 
 // One press and one disabled look for every control; fills on press use colors.translucentFill.
