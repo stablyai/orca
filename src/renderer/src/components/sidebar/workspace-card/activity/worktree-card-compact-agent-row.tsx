@@ -168,7 +168,9 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const held = heldMessageRef.current
   const stableMessage =
     turnHoldable && !currentMessage && held?.turn === turn ? held.message : undefined
-  const secondary = getCompactAgentSecondary(agent, now, stableMessage, presentation, t)
+  // A sign-in row names its agent by catalog name, never a stale reply or a title like "Claude Code".
+  const secondary =
+    cloudStatus?.agentName ?? getCompactAgentSecondary(agent, now, stableMessage, presentation, t)
   const { leadingText, trailingText } = getCompactAgentLineOrder(
     agent,
     dotState,
@@ -245,7 +247,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
         <>
           {/* Show the actionable disabled reason over every hit area. */}
           {signIn ? (
-            <CloudAgentRowSignInDot status={signIn} tooltipSide="right" size="sm" />
+            <CloudAgentRowSignInDot status={signIn} size="sm" />
           ) : (
             <AgentStateDot
               state={dotState}

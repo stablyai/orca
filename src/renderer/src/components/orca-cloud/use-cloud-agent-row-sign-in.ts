@@ -25,6 +25,8 @@ import {
   readHostAgentSignInReport,
   subscribeHostAgentSignInReports
 } from '@/runtime/provider-accounts/sign-in/host-agent-sign-in-status-client'
+import { cloudAgentAccountActiveSince } from '@/lib/orca-cloud/cloud-agent-account-active-since'
+import { HOST_AGENT_SIGN_IN_AGENT_NAME } from '../../../../shared/host-agent-sign-in-status'
 import { isOrcaCloudRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
 
 const subscribeNothing = (): (() => void) => () => {}
@@ -42,8 +44,8 @@ function orcaCloudEnvironmentIdForWorktree(state: AppState, worktreeId: string):
 }
 
 /**
- * Why a cloud agent row that never ran a turn is not "Done": its agent isn't signed in.
- * Null for local, SSH and paired hosts, and for any row that has finished a turn.
+ * Why a cloud agent row at rest is not "Done" or "Idle": its agent isn't signed in.
+ * Null for local, SSH and paired hosts, and for working or waiting rows.
  */
 export function useCloudAgentRowSignIn(
   agent: Pick<DashboardAgentRow, 'agentType' | 'entry' | 'tab' | 'childRow'>,
@@ -52,7 +54,6 @@ export function useCloudAgentRowSignIn(
   const candidate = isCloudRowSignInCandidate({
     agentType: agent.agentType,
     dotState,
-    entry: agent.entry,
     isChildRow: agent.childRow !== undefined
   })
   const worktreeId = agent.tab.worktreeId
@@ -81,12 +82,17 @@ export function useCloudAgentRowSignIn(
   if (!environmentId || !signInAgent) {
     return null
   }
-  return cloudAgentRowSignIn(signInAgent, accounts, hostAgentSignInEntry(report, signInAgent))
+  return cloudAgentRowSignIn(signInAgent, accounts, hostAgentSignInEntry(report, signInAgent), {
+    turnEndedAt: agent.entry.turnEndedAt,
+    activeSince: cloudAgentAccountActiveSince(signInAgent)
+  })
 }
 
 export type CloudAgentRowStatus = {
   dotState: AgentDotState
   label: string
+  /** The catalog name ("Claude", "Codex"), never a terminal title such as "Claude Code". */
+  agentName: string
   /** Null in send-target mode, which owns row clicks; otherwise the status links to Settings. */
   tooltip: string | null
 }
@@ -100,12 +106,14 @@ export function useCloudAgentRowStatus(
 ): CloudAgentRowStatus | null {
   const t = useTranslate()
   const signIn = useCloudAgentRowSignIn(agent, dotState)
-  if (!signIn) {
+  const signInAgent = cloudRowSignInAgent(agent.agentType)
+  if (!signIn || !signInAgent) {
     return null
   }
   return {
     dotState: 'permission',
     label: cloudAgentRowSignInLabel(signIn, t),
+    agentName: HOST_AGENT_SIGN_IN_AGENT_NAME[signInAgent],
     tooltip: sendTargetStatus ? null : cloudAgentRowSignInTooltip(signIn, t)
   }
 }

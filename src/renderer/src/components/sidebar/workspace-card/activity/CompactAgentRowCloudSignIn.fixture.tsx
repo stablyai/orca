@@ -190,3 +190,33 @@ export const fullClaudeSignInExpiredTooltip = defineFixture({
   ),
   interact: focusStatusText
 })
+
+/** After a restart the pane can fall back to its title-derived row ("Claude Code - Idle"). */
+function titleDerivedRow(): DashboardAgentRow {
+  const base = row('claude', null)
+  return {
+    ...base,
+    state: 'idle',
+    startedAt: 0,
+    entry: {
+      ...base.entry,
+      state: 'working',
+      prompt: 'Claude Code',
+      lastAssistantMessage: 'Idle',
+      stateStartedAt: now,
+      updatedAt: now
+    }
+  }
+}
+
+/** Revoked account, title-derived row after a restart: still "Sign-in expired - Claude". */
+export const claudeRevokedAfterRestart = cloudRowFixture(
+  accounts({ state: 'revoked' }, { state: 'none' }),
+  titleDerivedRow()
+)
+
+export const fullClaudeRevokedAfterRestart = cloudRowFixture(
+  accounts({ state: 'revoked' }, { state: 'none' }),
+  titleDerivedRow(),
+  'full'
+)

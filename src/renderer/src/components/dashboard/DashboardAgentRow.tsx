@@ -423,7 +423,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         expanded={expanded}
         isInterrupted={isInterrupted}
         stoppedByUser={agentMainAgentVerdict(agent.entry) === 'cancellation'}
-        lastAssistantMessage={lastAssistantMessage}
+        lastAssistantMessage={cloudStatus ? '' : lastAssistantMessage}
       />
     </div>
   )
