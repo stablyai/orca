@@ -1,4 +1,3 @@
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import {
   DEFAULT_TERMINAL_FONT_WEIGHT_BOLD,
   TERMINAL_FONT_WEIGHT_MAX,
@@ -17,11 +16,12 @@ import {
   SettingsSegmentedControl
 } from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import { clampNumber } from '@/lib/terminal-theme'
+import { clampNumber } from '@/lib/terminal/appearance/terminal-theme'
 import { useTranslate } from '@/i18n/use-translate'
 import { defaultTerminalFontWeight } from '../../../../../../shared/terminal/appearance/terminal-platform-defaults'
 import { isWindowsDesktopClient } from '@/lib/files/os-open/windows-path-access'
 import { getTerminalAdvancedTypographySearchEntries } from './terminal-typography-search'
+import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 
 type TerminalAdvancedTypographyControlsProps = {
   settings: GlobalSettings

@@ -1,13 +1,10 @@
 import { useCallback } from 'react'
-import type { useAppStore } from '@/store/index'
-import type { Repo } from '../../../../../../shared/repo-types'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
 } from '../../../../../../shared/execution-host'
 import { getRepoWorkspaceCreationTargetHint } from '@/lib/workspace/creation/project-host-workspace-target'
-import { resolveReviewRepository } from '@/lib/review-owner'
-import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
+import { resolveReviewRepository } from '@/lib/source-control/review/review-owner'
 import {
   createWorktreeContextMenuDeleteIntent,
   deferWorktreeContextMenuDeleteIntent
@@ -24,6 +21,9 @@ import {
   planWorkspaceStatusAssignment,
   preserveDeleteSiblingPosition
 } from './worktree-context-menu-policy'
+import type { useAppStore } from '@/store/index'
+import type { Repo } from '../../../../../../shared/repo-types'
+import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 
 function resolveChildWorktreeRepository(repos: readonly Repo[], worktree: Worktree): Repo | null {
   return resolveReviewRepository(repos, {

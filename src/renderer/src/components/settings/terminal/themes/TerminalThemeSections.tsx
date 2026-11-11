@@ -1,21 +1,21 @@
 import { usePluginTerminalThemes } from '@/store/plugins/appearance/plugin-themes'
 import { withTerminalPluginPalettes } from '@/lib/terminal/themes/terminal-plugin-palettes'
-import { useState, type ReactNode } from 'react'
+import { useState } from 'react'
+import type { ReactNode } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { parseCustomTerminalThemeSelection } from '../../../../../../shared/terminal-themes/terminal-custom-themes'
 import {
   terminalCustomThemeRemoval,
-  type TerminalCustomThemeRemoval,
   DEFAULT_TERMINAL_THEME_DARK,
   DEFAULT_TERMINAL_THEME_LIGHT
 } from '../../../../../../shared/terminal-themes/terminal-theme-selection'
+import type { TerminalCustomThemeRemoval } from '../../../../../../shared/terminal-themes/terminal-theme-selection'
 import {
   hasTerminalColorOverrides,
-  TERMINAL_COLOR_OVERRIDES_SETTING,
-  type TerminalThemeSlot
+  TERMINAL_COLOR_OVERRIDES_SETTING
 } from '../../../../../../shared/terminal-themes/terminal-color-overrides'
+import type { TerminalThemeSlot } from '../../../../../../shared/terminal-themes/terminal-color-overrides'
 import {
   ColorField,
   SettingsSegmentedControl,
@@ -27,15 +27,15 @@ import { SettingsGroupSubsection } from '../../section-layout/SettingsGroup'
 import { TerminalSettingsPreview } from '../appearance/TerminalSettingsPreview'
 import { WarpThemeImportButton } from './WarpThemeImportButton'
 import { YamlThemeImportButton } from './YamlThemeImportButton'
-import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
-
 import {
   getAvailableTerminalThemeOptions,
-  resolveEffectiveTerminalAppearance,
-  type TerminalThemeOption
-} from '@/lib/terminal-theme'
+  resolveEffectiveTerminalAppearance
+} from '@/lib/terminal/appearance/terminal-theme'
+import type { TerminalThemeOption } from '@/lib/terminal/appearance/terminal-theme'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
+import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
 
 let lastEditedTerminalThemeTarget: TerminalThemeSlot | null = null
 

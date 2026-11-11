@@ -11,15 +11,18 @@ import {
   usePluginFontReady
 } from '@/store/plugins/appearance/plugin-fonts'
 import { composeActiveTerminalTheme } from '@/components/terminal-pane/appearance/terminal-appearance'
-import { clampNumber, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
+import {
+  clampNumber,
+  resolveEffectiveTerminalAppearance
+} from '@/lib/terminal/appearance/terminal-theme'
 import { resolveTerminalMinimumContrastRatio } from '../../../../../../shared/terminal-themes/terminal-contrast-correction'
 import { resolveTerminalFontWeights } from '../../../../../../shared/terminal/appearance/terminal-fonts'
 import { resolveTerminalLigaturesEnabled } from '../../../../../../shared/terminal/appearance/terminal-ligatures'
 import { normalizeTerminalLineHeight } from '../../../../../../shared/terminal/appearance/terminal-line-height-settings'
 import { PREVIEW_BUFFER } from './terminal-preview-content'
 import { Switch } from '@/components/ui/switch'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { useTranslate } from '@/i18n/use-translate'
+import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 
 // Pin 36 columns for the 32-character sample plus margin; large fonts clip instead of wrapping.
 const PREVIEW_COLS = 36

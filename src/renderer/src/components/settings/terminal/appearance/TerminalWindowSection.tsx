@@ -1,22 +1,21 @@
 import { useState } from 'react'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import {
   TERMINAL_COLOR_OVERRIDES_SETTING,
-  terminalColorOverridesForSlot,
-  type TerminalThemeSlot
+  terminalColorOverridesForSlot
 } from '../../../../../../shared/terminal-themes/terminal-color-overrides'
+import type { TerminalThemeSlot } from '../../../../../../shared/terminal-themes/terminal-color-overrides'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
 import { Switch } from '../../../ui/switch'
 import { ColorField, NumberField } from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { SettingsGroupSubsection } from '../../section-layout/SettingsGroup'
-import { clampNumber } from '@/lib/terminal-theme'
+import { clampNumber } from '@/lib/terminal/appearance/terminal-theme'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { WindowMaterialSetting } from '../../appearance/WindowMaterialSetting'
 import { useTranslate } from '@/i18n/use-translate'
-
 import { COLOR_OVERRIDE_GROUPS } from './terminal-window-color-groups'
+import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 
 type TerminalWindowSectionProps = {
   settings: GlobalSettings

@@ -1052,6 +1052,7 @@
       "defaultSurfaceSetAllChat": "Set all to Chat",
       "defaultSurfaceSetAllTerminal": "Set all to Terminal",
       "sameAsChoice": "Same as {{agent}} · {{choice}}",
+      "modelListFallback": "Built-in list. Orca could not get a model list from this host.",
       "chatUnavailableOnWindows": "{{value0}} Chat isn't available on Windows yet, so {{value0}} opens in a terminal on this host. Chats on a macOS or Linux host still work.",
       "undetectedCommandHint": "If the {{agent}} CLI is installed outside PATH, enter the full path to its executable on this host."
     },
@@ -11768,7 +11769,7 @@
         },
         "agent-workspace-trust-copy": {
           "title": "Trust the folder when Orca starts an agent",
-          "description": "Agents Orca starts can skip their \"Do you trust this folder?\" prompt, so the project's agent hooks and settings run right away. Orca asks once per repository the first time you start an agent there, and you can change the answer in that repository's settings. Turn this off to let agents always ask. An agent that asks while running without you watching, such as an orchestration worker, an automation or an agent started from your phone, waits until you answer in its terminal. Folders already trusted stay trusted."
+          "description": "Agents Orca starts can skip their \"Do you trust this folder?\" prompt, so the project's agent hooks and settings run right away. You can turn this off for one repository in that repository's settings. Turn this off to let agents always ask. An agent that asks while running without you watching, such as an orchestration worker, an automation or an agent started from your phone, waits until you answer in its terminal. Folders already trusted stay trusted."
         },
         "agent-generated-tab-title-copy": {
           "19ad21615a": "Auto-generate tab titles",
@@ -14969,7 +14970,28 @@
                   "titleManualForcePush_other": "Force push {{count}} local commits with lease to update {{upstreamName}}.",
                   "titleUnpublishedForcePushBranch": "Force push this branch with lease and set an upstream if needed.",
                   "titleUnpublishedForcePushCount_one": "Force push {{count}} branch commit with lease and set an upstream if needed.",
-                  "titleUnpublishedForcePushCount_other": "Force push {{count}} branch commits with lease and set an upstream if needed."
+                  "titleUnpublishedForcePushCount_other": "Force push {{count}} branch commits with lease and set an upstream if needed.",
+                  "statusConflicts": "Conflicts",
+                  "statusNothingStaged": "Nothing staged",
+                  "statusNeedsMessage": "Needs message",
+                  "statusNotPublished": "Not published",
+                  "statusNoBranch": "No branch",
+                  "statusUpToDate": "Up to date",
+                  "statusSetsUpstream": "Sets upstream",
+                  "statusMayFail": "May fail",
+                  "statusPublished": "Published",
+                  "statusStashFirst": "Stash first",
+                  "statusReplaces": "Replaces ↓{{behind}}",
+                  "statusCommitFirst": "Commit first",
+                  "statusReviewOpen": "{{shortLabel}} open",
+                  "statusSignIn": "Sign in",
+                  "statusBaseNotOnRemote": "Base not on remote",
+                  "statusDefaultBranch": "Default branch",
+                  "statusForkUnsupported": "Fork unsupported",
+                  "statusPushFirst": "Push first",
+                  "statusForcePushFirst": "Force push first",
+                  "statusSyncFirst": "Sync first",
+                  "statusUnsupported": "Unsupported"
                 }
               },
               "primary": {
@@ -19607,14 +19629,10 @@
         }
       },
       "agent-workspace-trust-decision": {
-        "prompt-title": "Trust {{repo}} for agents?",
-        "prompt-description": "Agents like Claude Code and Codex ask \"Do you trust this folder?\" before they load the project's own agent settings and hooks, which can run commands. Orca can answer yes for you in every worktree of this repository.",
-        "prompt-remembered": "Orca remembers your answer for this repository. You can change it in the repository's settings.",
         "trust-repository": "Trust repository",
         "let-agents-ask": "Let agents ask",
         "setting-title": "Agent Folder Trust",
         "setting-description": "Whether agents Orca starts in this repository's worktrees skip their \"Do you trust this folder?\" prompt and load the project's agent settings and hooks right away.",
-        "setting-undecided": "Not decided yet. Orca will ask the next time you start an agent here.",
         "setting-global-off": "Folder trust is turned off in Agents settings, so agents always ask.",
         "keyword-trust": "trust",
         "keyword-hooks": "hooks"

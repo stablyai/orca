@@ -71,6 +71,24 @@ describe('getEnterpriseGitHubRepoSlug', () => {
   })
 
   it.each([
+    ['https://bitbucket.org/team/orca.git', 'bitbucket.org'],
+    ['ssh://git@altssh.gitlab.com:443/team/orca.git', 'altssh.gitlab.com'],
+    ['https://codeberg.org/team/orca.git', 'codeberg.org']
+  ])('does not promote a foreign public remote from gh inventory: %s', async (url, host) => {
+    mockOriginRemote(url)
+    mockHostAuthenticated(host)
+    await expect(getEnterpriseGitHubRepoSlug('/repo')).resolves.toBeFalsy()
+    await expect(isGitHubHostAuthenticated(host, '/repo')).resolves.toBe(false)
+  })
+
+  it('uses the effective SSH hostname before admitting an Enterprise identity', async () => {
+    mockOriginRemote('git@work-forge:team/orca.git')
+    resolveWithSshGMock.mockResolvedValue({ hostname: 'bitbucket.org' })
+    mockHostAuthenticated('bitbucket.org')
+    await expect(getEnterpriseGitHubRepoSlug('/repo')).resolves.toBeNull()
+  })
+
+  it.each([
     'https://ghe.acme.com:8443/team/orca.git',
     'https://ghe.acme.com:80/team/orca.git',
     'http://ghe.acme.com:443/team/orca.git'

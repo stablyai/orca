@@ -16,6 +16,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { WorkspaceDecisionDetails } from './workspace-space-decision-details'
 import type { WorkspaceGitRefreshState } from './workspace-space-manager-state-types'
 import { WorkspaceSpaceStatusBadge } from './workspace-space-status-badge'
+import { WorkspaceSpaceIssueFreshness } from './workspace-space-issue-freshness'
 import {
   getAgentDecisionLabel,
   getDeleteDecisionLabel,
@@ -81,6 +82,11 @@ export function WorkspaceDecisionHoverCard({
       collisionPadding={12}
       className="max-h-[min(34rem,calc(100vh-1.5rem))] w-[min(24rem,calc(100vw-1.5rem))] overflow-y-auto p-0 scrollbar-sleek"
     >
+      <WorkspaceSpaceIssueFreshness
+        worktreeId={worktree.worktreeId}
+        executionHostId={worktree.executionHostId}
+        issueCacheKey={details.issueCacheKey}
+      />
       <div className="border-b border-border/60 px-4 py-3">
         <div className="flex min-w-0 items-start justify-between gap-3">
           <div className="min-w-0">

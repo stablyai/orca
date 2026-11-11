@@ -256,22 +256,26 @@ export class RpcDispatcher {
       legacyCoordinator?.mutationCallerFingerprint ?? fallbackCallerFingerprint
     const invoke = (mutation?: DurableMutationInvocation) => {
       const legacyCoordinatorRunId = legacyCoordinator?.revalidate()
-      return runWithActiveRpcCaller(context.caller, () =>
-        method.handler(effectiveParams, {
-          ...context,
-          authenticatedCallerFingerprint: mutation?.identity.callerFingerprint ?? callerFingerprint,
-          recordMutationReceipt: mutation?.recordReceipt,
-          markWorkerDoneMutationEffectFree: mutation?.markWorkerDoneEffectFree,
-          markMutationEffectPossible: mutation?.markEffectPossible,
-          orchestrationMutation: mutation?.identity,
-          replayedMutationReceipt: mutation?.replayedReceipt,
-          legacyCoordinatorRunId,
-          legacyCoordinatorAuthority: legacyCoordinator?.authority,
-          revalidateLegacyCoordinator: legacyCoordinator?.revalidate,
-          orchestrationCompatibilityCallerAuthority:
-            compatibility.orchestrationCompatibilityCallerAuthority,
-          orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence
-        })
+      return runWithActiveRpcCaller(
+        context.caller,
+        () =>
+          method.handler(effectiveParams, {
+            ...context,
+            authenticatedCallerFingerprint:
+              mutation?.identity.callerFingerprint ?? callerFingerprint,
+            recordMutationReceipt: mutation?.recordReceipt,
+            markWorkerDoneMutationEffectFree: mutation?.markWorkerDoneEffectFree,
+            markMutationEffectPossible: mutation?.markEffectPossible,
+            orchestrationMutation: mutation?.identity,
+            replayedMutationReceipt: mutation?.replayedReceipt,
+            legacyCoordinatorRunId,
+            legacyCoordinatorAuthority: legacyCoordinator?.authority,
+            revalidateLegacyCoordinator: legacyCoordinator?.revalidate,
+            orchestrationCompatibilityCallerAuthority:
+              compatibility.orchestrationCompatibilityCallerAuthority,
+            orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence
+          }),
+        request.orchestrationCompatibilityEvidence?.agentSessionId
       )
     }
     const result = await orchestrationMutations.run(

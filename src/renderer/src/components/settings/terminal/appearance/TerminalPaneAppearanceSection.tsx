@@ -1,10 +1,10 @@
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY } from '../../../../../../shared/constants'
 import { NumberField } from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { SettingsGroupSubsection } from '../../section-layout/SettingsGroup'
-import { clampNumber, resolvePaneStyleOptions } from '@/lib/terminal-theme'
+import { clampNumber, resolvePaneStyleOptions } from '@/lib/terminal/appearance/terminal-theme'
 import { useTranslate } from '@/i18n/use-translate'
+import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 
 type TerminalPaneAppearanceSectionProps = {
   settings: GlobalSettings
