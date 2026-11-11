@@ -15,7 +15,7 @@ import {
 import { guardrails } from './lifecycle'
 import { killSwitchOn } from './guardrails'
 import { drainAll, housekeeping, openHold, type HousekeepingSummary } from './retention'
-import { listByStatus, transition, type SandboxRow } from './store'
+import { CREATE_ABANDONED_MS, listByStatus, transition, type SandboxRow } from './store'
 import { flushUsage, queueUsage } from './usage'
 import { expiredArchives } from './workspace-lifecycle'
 import { ACTIVITY_CHECK_BEFORE_LAPSE_MS, ACTIVITY_RENEW_MS, decideFromActivity, readVmActivity } from './vm-activity'
@@ -24,9 +24,9 @@ const STUCK_MS = 15 * 60_000
 /**
  * A create's longest legitimate run is a 30 s pooled try, a VM create and the 120 s start command.
  * Past this its Worker was cut off (the desktop gave up or disconnected): fail it and free the VM
- * instead of leaving a billed 'creating' row for the full STUCK_MS.
+ * instead of leaving a billed 'creating' row for the full STUCK_MS. The start gate stops counting it then too.
  */
-export const CREATE_STUCK_MS = 5 * 60_000
+export const CREATE_STUCK_MS = CREATE_ABANDONED_MS
 /** The desktop rolls over at the deadline; the cron steps in only if it did not (provider cap is +10 min). */
 const FORCED_STOP_GRACE_MS = 5 * 60_000
 
