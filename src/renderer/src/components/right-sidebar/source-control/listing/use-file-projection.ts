@@ -1,13 +1,13 @@
 import { useMemo } from 'react'
+import {
+  useSourceControlReview,
+  useRevalidateSourceControlReviews
+} from './use-source-control-review'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
 import { compareFileNames } from '../../../../../../shared/file-listing/file-name-sort'
-import {
-  filterSourceControlPathEntries,
-  getSourceControlFileFilterState,
-  type SourceControlFileFilterState
-} from './file-filter'
+import { filterSourceControlPathEntries, getSourceControlFileFilterState } from './file-filter'
 import {
   applyGitStatusEntryAreasToSourceControlTree,
   buildGitStatusSourceControlTree,
@@ -20,9 +20,7 @@ import {
 import {
   buildSourceControlDisplaySections,
   groupSourceControlEntries,
-  type SourceControlDisplaySection,
   type SourceControlDisplaySectionId,
-  type SourceControlEntryGroups,
   type SourceControlDisplaySectionArea
 } from '../../../../../../shared/source-control/listing/source-control-section-order'
 import {
@@ -38,27 +36,7 @@ import type { GitStatusSourceControlTreeNode } from './directory-action-paths'
 import { getSubmoduleEmptyLabel, getSubmoduleLoadingLabel } from './row-layout'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { useTranslate } from '@/i18n/use-translate'
-
-export type SourceControlFileProjection = {
-  grouped: SourceControlEntryGroups
-  fileFilterState: SourceControlFileFilterState
-  normalizedFilter: string
-  isGitHistoryVisible: boolean
-  displaySections: SourceControlDisplaySection[]
-  unfilteredDisplaySectionsById: ReadonlyMap<
-    SourceControlDisplaySectionId,
-    SourceControlDisplaySection
-  >
-  filteredBranchEntries: GitBranchChangeEntry[]
-  visibleTreeRowsBySection: Partial<
-    Record<SourceControlDisplaySectionId, RenderableSourceControlNode[]>
-  >
-  visibleListRowsBySection: Partial<
-    Record<SourceControlDisplaySectionId, RenderableSubmoduleListItem[]>
-  >
-  visibleBranchTreeRows: readonly SourceControlTreeNode<GitBranchChangeEntry, 'branch'>[]
-  visibleSelectionEntries: FlatEntry[]
-}
+import { entryReviewSource } from '@/lib/editor/diff-reviewed-files'
 
 // Build only the rendered mode; gates and consumers must use the same synchronous mode prop so empty projections cannot appear.
 const EMPTY_TREE_ROOTS_BY_SECTION: Readonly<
@@ -99,8 +77,10 @@ export function useSourceControlFileProjection({
   submoduleStatusByKey: Record<string, SubmoduleStatusState>
   sourceControlViewMode: SourceControlViewMode
   collapsedSections: Set<string>
-}): SourceControlFileProjection {
+}) {
   const t = useTranslate()
+  const review = useSourceControlReview(activeWorktreeId, worktreePath)
+  useRevalidateSourceControlReviews(review, entries, branchEntries)
   const grouped = useMemo(() => groupSourceControlEntries(entries), [entries])
 
   const fileFilterState = useMemo(() => getSourceControlFileFilterState(filterQuery), [filterQuery])
@@ -120,9 +100,16 @@ export function useSourceControlFileProjection({
         .map((section) => ({
           ...section,
           items: filterSourceControlPathEntries(section.items, fileFilterState)
+            .map((entry) => ({
+              entry,
+              viewed:
+                sourceControlViewMode === 'list' && review.isViewed(entry, entryReviewSource(entry))
+            }))
+            .sort((a, b) => Number(a.viewed) - Number(b.viewed))
+            .map(({ entry }) => entry)
         }))
         .filter((section) => section.items.length > 0),
-    [fileFilterState, unfilteredDisplaySections]
+    [fileFilterState, unfilteredDisplaySections, review, sourceControlViewMode]
   )
   const unfilteredDisplaySectionsById = useMemo(
     () => new Map(unfilteredDisplaySections.map((section) => [section.id, section])),
@@ -131,8 +118,18 @@ export function useSourceControlFileProjection({
 
   // Stable sorting commutes with filtering, including ties; sort once to keep collator work off keystrokes.
   const sortedBranchEntries = useMemo(
-    () => [...branchEntries].sort((a, b) => compareFileNames(a.path, b.path)),
-    [branchEntries]
+    () =>
+      branchEntries
+        .map((entry) => ({
+          entry,
+          viewed: sourceControlViewMode === 'list' && review.isViewed(entry, 'branch')
+        }))
+        .sort(
+          (a, b) =>
+            Number(a.viewed) - Number(b.viewed) || compareFileNames(a.entry.path, b.entry.path)
+        )
+        .map(({ entry }) => entry),
+    [branchEntries, review, sourceControlViewMode]
   )
   const filteredBranchEntries = useMemo(
     () => filterSourceControlPathEntries(sortedBranchEntries, fileFilterState),
@@ -259,6 +256,33 @@ export function useSourceControlFileProjection({
     visibleListRowsBySection,
     visibleTreeRowsBySection
   ])
+  const reviewSelectionEntries = useMemo(
+    () =>
+      displaySections.flatMap((section) =>
+        sourceControlViewMode === 'tree'
+          ? flattenSourceControlTree(treeRootsBySection[section.id] ?? [], new Set()).flatMap(
+              (node) =>
+                node.type === 'file'
+                  ? [{ key: node.key, entry: node.entry, area: node.entry.area }]
+                  : []
+            )
+          : section.items.map((entry) => ({
+              key: `${entry.area}::${entry.path}`,
+              entry,
+              area: entry.area
+            }))
+      ),
+    [displaySections, sourceControlViewMode, treeRootsBySection]
+  )
+  const reviewBranchEntries = useMemo(
+    () =>
+      sourceControlViewMode === 'tree'
+        ? flattenSourceControlTree(branchTreeRoots, new Set()).flatMap((node) =>
+            node.type === 'file' ? [node.entry] : []
+          )
+        : filteredBranchEntries,
+    [sourceControlViewMode, branchTreeRoots, filteredBranchEntries]
+  )
   return {
     grouped,
     fileFilterState,
@@ -270,6 +294,10 @@ export function useSourceControlFileProjection({
     visibleTreeRowsBySection,
     visibleListRowsBySection,
     visibleBranchTreeRows,
-    visibleSelectionEntries
+    visibleSelectionEntries,
+    reviewSelectionEntries,
+    reviewBranchEntries
   }
 }
+
+export type SourceControlFileProjection = ReturnType<typeof useSourceControlFileProjection>

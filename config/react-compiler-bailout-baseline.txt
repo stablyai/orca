@@ -90,7 +90,7 @@
 3 src/renderer/src/components/editor/check-details/actions/check-run-details-fix-with-ai.ts
 1 src/renderer/src/components/editor/check-details/reading/use-check-details-reading-position.ts
 3 src/renderer/src/components/editor/combined-diff/CombinedDiffViewer.tsx
-23 src/renderer/src/components/editor/combined-diff/browse-files/use-combined-diff-tree-navigation.ts
+1 src/renderer/src/components/editor/combined-diff/browse-files/use-combined-diff-tree-navigation.ts
 2 src/renderer/src/components/editor/combined-diff/load-sections/combined-diff-section-load-registry.ts
 1 src/renderer/src/components/editor/combined-diff/load-sections/use-combined-diff-section-loader.ts
 2 src/renderer/src/components/editor/combined-diff/load-sections/use-combined-diff-section-retry.ts

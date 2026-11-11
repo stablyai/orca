@@ -7,7 +7,7 @@ import type { DiffSection } from '../../diff/sections/diff-section-types'
 import { buildCombinedGitStatusSignature } from '../resolve-changes/combined-diff-git-status-signature'
 import { combinedDiffSectionsMatchEntryMetadata } from '../resolve-changes/combined-diff-section-cache-match'
 import { getCombinedDiffFileTreeSectionKey } from '../resolve-changes/combined-diff-section-identity'
-import { isCombinedDiffSectionViewed } from '../browse-files/combined-diff-file-tree-filter'
+import { isCombinedDiffSectionLoaded } from '../browse-files/combined-diff-file-tree-filter'
 import {
   collectCountedCombinedDiffPasses,
   getCombinedDiffCountingPassKey,
@@ -212,7 +212,7 @@ export function useCombinedDiffViewRestore({
       loadedIndicesRef.current = new Set(
         cached.loadedIndices.filter((index) => {
           const section = restoredSections[index]
-          return section !== undefined && isCombinedDiffSectionViewed(section)
+          return section !== undefined && isCombinedDiffSectionLoaded(section)
         })
       )
       loadingIndicesRef.current.clear()

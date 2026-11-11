@@ -3,7 +3,15 @@ import {
   sourceControlScopeRuntimeEnvironmentId,
   useSourceControlScope
 } from '../panel/worktree-scope'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
+import { useSourceControlReview } from './use-source-control-review'
+import {
+  diffReviewOwnerKey,
+  diffReviewScope,
+  reviewEntrySignature
+} from '@/lib/editor/diff-reviewed-files'
+import { diffReviewListKey, registerDiffReviewList } from '@/lib/editor/diff-review-navigation'
+import { buildUncommittedReviewEntries } from '../../../editor/diff/review/uncommitted-review-entries'
 import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import { openUncommittedEntry } from './open-uncommitted-entry'
 import { useAppStore } from '@/store'
@@ -27,6 +35,9 @@ export function useSourceControlRowOpening({
   worktreePath,
   visibleSelectionEntries,
   visibleBranchRowKeys,
+  visibleBranchEntries,
+  reviewSelectionEntries,
+  revealReviewPath,
   branchSummary
 }: {
   isMac: boolean
@@ -34,6 +45,9 @@ export function useSourceControlRowOpening({
   worktreePath: string | null
   visibleSelectionEntries: FlatEntry[]
   visibleBranchRowKeys: readonly string[]
+  visibleBranchEntries: readonly GitBranchChangeEntry[]
+  reviewSelectionEntries: readonly FlatEntry[]
+  revealReviewPath: (path: string, area: 'unstaged' | 'staged' | 'branch') => void
   branchSummary: GitBranchCompareSummary | null
 }) {
   const scope = useSourceControlScope()
@@ -41,6 +55,86 @@ export function useSourceControlRowOpening({
   const placementWorkspaceId = scope?.placementWorkspaceId
   const placementId = placementWorkspaceId ?? activeWorktreeId
   const runtimeEnvironmentId = sourceControlScopeRuntimeEnvironmentId(scope)
+  const { owner: reviewOwner, keyFor: reviewKeyFor } = useSourceControlReview(
+    activeWorktreeId,
+    worktreePath
+  )
+
+  useEffect(() => {
+    if (!reviewOwner || !activeWorktreeId || !worktreePath) {
+      return
+    }
+    const ownerKey = diffReviewOwnerKey(reviewOwner)
+    const uncommitted = buildUncommittedReviewEntries({
+      owner: reviewOwner,
+      worktreeId: activeWorktreeId,
+      worktreePath,
+      rows: reviewSelectionEntries.flatMap(({ entry }) =>
+        entry.conflictStatus || entry.submodule ? [] : [entry]
+      ),
+      executionHostId: executionHostId ?? undefined,
+      runtimeEnvironmentId: runtimeEnvironmentId ?? undefined,
+      reveal: (entry, source) => revealReviewPath(entry.path, source)
+    })
+    const clearUncommitted = registerDiffReviewList(
+      diffReviewListKey(ownerKey, 'unstaged'),
+      uncommitted
+    )
+    const branch =
+      branchSummary?.status === 'ready'
+        ? visibleBranchEntries.flatMap((entry) => {
+            const key = reviewKeyFor(entry, 'branch')
+            return key
+              ? [
+                  {
+                    key,
+                    entrySignature: reviewEntrySignature(entry),
+                    open: (placement: { placementWorkspaceId: string; targetGroupId?: string }) => {
+                      revealReviewPath(entry.path, 'branch')
+                      useAppStore
+                        .getState()
+                        .openBranchDiff(
+                          activeWorktreeId,
+                          worktreePath,
+                          entry,
+                          branchSummary,
+                          detectLanguage(entry.path),
+                          {
+                            ...placement,
+                            executionHostId,
+                            runtimeEnvironmentId,
+                            preview: true
+                          }
+                        )
+                    }
+                  }
+                ]
+              : []
+          })
+        : []
+    const clearBranch = registerDiffReviewList(
+      diffReviewListKey(
+        ownerKey,
+        diffReviewScope({ diffSource: 'branch', branchCompare: branchSummary ?? undefined })
+      ),
+      branch
+    )
+    return () => {
+      clearUncommitted()
+      clearBranch()
+    }
+  }, [
+    reviewOwner,
+    reviewKeyFor,
+    activeWorktreeId,
+    worktreePath,
+    reviewSelectionEntries,
+    revealReviewPath,
+    visibleBranchEntries,
+    branchSummary,
+    executionHostId,
+    runtimeEnvironmentId
+  ])
 
   // Modifier-click opens a right split to preserve the current pane.
   const resolveSplitTargetGroupId = useCallback(

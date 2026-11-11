@@ -4,7 +4,6 @@ import type { GitStatusEntry } from '../../../../../../shared/git/status/git-sta
 import type { DiffSection } from '../../diff/sections/diff-section-types'
 import type { CombinedDiffFileTreeMode } from '../resolve-changes/combined-diff-section-identity'
 import { handleCombinedDiffFileTreeNavigation } from './combined-diff-file-tree-navigation'
-import { isCombinedDiffSectionViewed } from './combined-diff-file-tree-filter'
 
 export type CombinedDiffTreeNavigation = {
   activeTreeSectionKey: string | null
@@ -21,10 +20,10 @@ export function useCombinedDiffTreeNavigation({
   markDirectScrollInput,
   scrollToIndex,
   sectionIndexByKey,
-  sections,
   sectionsRef,
   toggleSection,
-  treeMode
+  treeMode,
+  viewedSectionKeys
 }: {
   ensureSectionLoaded: (index: number) => void
   entrySignature: string
@@ -32,10 +31,10 @@ export function useCombinedDiffTreeNavigation({
   scrollToIndex: (index: number) => void
   // Share one identity-stable map with the viewer’s scroll anchor.
   sectionIndexByKey: ReadonlyMap<string, number>
-  sections: DiffSection[]
   sectionsRef: React.RefObject<DiffSection[]>
   toggleSection: (index: number) => void
   treeMode: CombinedDiffFileTreeMode
+  viewedSectionKeys: Set<string>
 }): CombinedDiffTreeNavigation {
   const sectionIndexByKeyRef = useRef<ReadonlyMap<string, number>>(sectionIndexByKey)
   sectionIndexByKeyRef.current = sectionIndexByKey
@@ -50,63 +49,6 @@ export function useCombinedDiffTreeNavigation({
     // Reset before paint so another entry set cannot inherit a stale highlight.
     setActiveTreeSectionState({ entrySignature, key: null })
   }
-  const viewedSectionCacheRef = useRef<{
-    entrySignature: string
-    sections: DiffSection[]
-    keys: Set<string>
-  } | null>(null)
-  const viewedSectionKeys = React.useMemo(() => {
-    const recomputeAllViewedKeys = (): Set<string> => {
-      const keys = new Set(
-        sections
-          .filter((section) => isCombinedDiffSectionViewed(section))
-          .map((section) => section.key)
-      )
-      viewedSectionCacheRef.current = { entrySignature, sections, keys }
-      return keys
-    }
-    const previous = viewedSectionCacheRef.current
-    if (
-      previous === null ||
-      previous.entrySignature !== entrySignature ||
-      previous.sections.length !== sections.length
-    ) {
-      return recomputeAllViewedKeys()
-    }
-
-    let keys = previous.keys
-    let copied = false
-    for (let index = 0; index < sections.length; index += 1) {
-      const previousSection = previous.sections[index]
-      const section = sections[index]
-      if (!previousSection || !section) {
-        continue
-      }
-      // Loads replace only their own section; identical row objects need no viewed-state derivation.
-      if (previousSection === section) {
-        continue
-      }
-      // Reordered keys require full recomputation or a later delete could erase an earlier addition.
-      if (previousSection.key !== section.key) {
-        return recomputeAllViewedKeys()
-      }
-      const viewed = isCombinedDiffSectionViewed(section)
-      if (isCombinedDiffSectionViewed(previousSection) === viewed) {
-        continue
-      }
-      if (!copied) {
-        keys = new Set(previous.keys)
-        copied = true
-      }
-      if (viewed) {
-        keys.add(section.key)
-      } else {
-        keys.delete(section.key)
-      }
-    }
-    viewedSectionCacheRef.current = { entrySignature, sections, keys }
-    return keys
-  }, [entrySignature, sections])
   const handleTreeNavigate = useCallback(
     (entry: GitStatusEntry | GitBranchChangeEntry) => {
       markDirectScrollInput()

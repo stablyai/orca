@@ -1,3 +1,8 @@
+import { joinPath } from '@/lib/path'
+import {
+  statRuntimePath,
+  isMissingRuntimePathError
+} from '@/runtime/files/metadata/runtime-file-metadata-client'
 import {
   getRuntimeGitBranchDiff,
   getRuntimeGitCommitDiff,
@@ -12,7 +17,7 @@ import type { GitStatusEntry } from '../../../../../../shared/git/status/git-sta
 import { acquireCombinedDiffSectionOperation } from './combined-diff-section-connection'
 import { withDiffSectionLoadTimeout } from './combined-diff-section-load-timeout'
 
-export function fetchCombinedDiffSection({
+export async function fetchCombinedDiffSection({
   branchCompare,
   commitCompare,
   entry,
@@ -32,12 +37,25 @@ export function fetchCombinedDiffSection({
   operation?: ReturnType<typeof acquireCombinedDiffSectionOperation>
 }): Promise<{
   result: GitDiffResult
+  reviewModifiedTime: Promise<number | null | undefined>
   operation: ReturnType<typeof acquireCombinedDiffSectionOperation>
 }> {
+  const readModifiedTime = () =>
+    isCommitMode
+      ? Promise.resolve(null)
+      : statRuntimePath(operation.context, joinPath(file.filePath, entry.path)).then(
+          (stat) => stat.mtime,
+          (error: unknown) => (isMissingRuntimePathError(error) ? null : undefined)
+        )
+  const beforeTime = await readModifiedTime()
+  operation.assertCurrent()
   const retainResult = async (result: Promise<GitDiffResult>) => {
     const value = await result
     operation.assertCurrent()
-    return { result: value, operation }
+    const reviewModifiedTime = readModifiedTime().then((time) =>
+      time === beforeTime ? time : undefined
+    )
+    return { result: value, operation, reviewModifiedTime }
   }
   if ((isBranchMode || (isAllMode && !('area' in entry))) && branchCompare) {
     return retainResult(

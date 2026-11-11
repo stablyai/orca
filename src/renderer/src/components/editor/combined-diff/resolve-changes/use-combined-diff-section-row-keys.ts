@@ -28,7 +28,7 @@ const EMPTY_ROW_KEYS: CombinedDiffSectionRowKeys = {
 }
 
 function scanCombinedDiffSectionRowKeys(
-  previous: CombinedDiffSectionRowKeyCache | null,
+  previous: CombinedDiffSectionRowKeyCache | null = null,
   generation: number,
   sections: readonly DiffSection[]
 ): CombinedDiffSectionRowKeyCache {

@@ -111,6 +111,8 @@ const STATIC_TITLE_COPY = {
   'editor.copyContext': () => translate('keybindings.title.258e7f75ec', 'Copy context'),
   'editor.previousChange': () => translate('keybindings.title.324e886c0f', 'Go to previous change'),
   'editor.nextChange': () => translate('keybindings.title.7055c70bdb', 'Go to next change'),
+  'editor.toggleViewed': () =>
+    translate('keybindings.title.editorToggleViewed', 'Toggle File as Viewed'),
   'editor.addReviewNote': () => translate('keybindings.title.9cb1023d40', 'Add review note'),
   'sourceControl.sendReviewNotes': () =>
     translate('keybindings.title.e9da9f872a', 'Send review notes to agent'),

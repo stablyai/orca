@@ -1,3 +1,4 @@
+import type { fetchCombinedDiffSection } from '../load-sections/fetch-combined-diff-section'
 import { combinedDiffViewportAttributes, combinedDiffRowAttributes } from './combined-diff-viewport'
 import type React from 'react'
 import { useMemo } from 'react'
@@ -8,6 +9,7 @@ import type { DiffComment } from '../../../../../../shared/diff-comment-types'
 import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment-owner'
 import { DiffSectionItem } from '../../diff/sections/DiffSectionItem'
 import type { DiffSectionItemProps } from '../../diff/sections/diff-section-item-props'
+import { CombinedDiffViewedControl } from '../review-controls/combined-diff-viewed-control'
 import { DiffNotesSendMenu } from '../../diff/review/DiffNotesSendMenu'
 import { canOpenDiffSectionPreviewToSide } from '../../diff/sections/diff-section-preview'
 import type { DiffSection } from '../../diff/sections/diff-section-types'
@@ -26,6 +28,7 @@ export function CombinedDiffSectionList({
   isCommitMode,
   isDark,
   loadSection,
+  loadSectionForReview,
   loadDeferredSection,
   markDirectScrollInput,
   modifiedEditorsRef,
@@ -54,6 +57,7 @@ export function CombinedDiffSectionList({
   isBranchMode: boolean
   isCommitMode: boolean
   isDark: boolean
+  loadSectionForReview: (index: number) => ReturnType<typeof fetchCombinedDiffSection>
   loadSection: (index: number) => void
   loadDeferredSection: (index: number) => void
   markDirectScrollInput: () => void
@@ -150,17 +154,28 @@ export function CombinedDiffSectionList({
                   handleSectionSaveRef={handleSectionSaveRef}
                   renderHeaderTrailingContent={(section) => {
                     const fileNoteCount = commentCountByFilePath.get(section.path) ?? 0
-                    return fileNoteCount > 0 ? (
-                      <DiffNotesSendMenu
-                        owner={commentOwner}
-                        worktreeId={file.worktreeId}
-                        groupId={activeGroupId ?? file.worktreeId}
-                        comments={diffCommentsForWorktree}
-                        filePath={section.path}
-                        showFileScope
-                        triggerClassName="p-0.5 can-hover:opacity-0 group-hover:opacity-100"
-                      />
-                    ) : null
+                    return (
+                      <>
+                        <CombinedDiffViewedControl
+                          onExpand={() => toggleSection(virtualItem.index)}
+                          loadForReview={() => loadSectionForReview(virtualItem.index)}
+                          file={file}
+                          section={section}
+                          setSections={setSections}
+                        />
+                        {fileNoteCount > 0 ? (
+                          <DiffNotesSendMenu
+                            owner={commentOwner}
+                            worktreeId={file.worktreeId}
+                            groupId={activeGroupId ?? file.worktreeId}
+                            comments={diffCommentsForWorktree}
+                            filePath={section.path}
+                            showFileScope
+                            triggerClassName="p-0.5 can-hover:opacity-0 group-hover:opacity-100"
+                          />
+                        ) : null}
+                      </>
+                    )
                   }}
                 />
               </div>

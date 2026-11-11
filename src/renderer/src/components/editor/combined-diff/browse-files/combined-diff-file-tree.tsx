@@ -85,7 +85,7 @@ export function CombinedDiffFileTree({
         : Array.from(new Set(entries.map(getEntryExtension))).sort(),
     [collapsed, entries]
   )
-  // Apply viewed/loading changes as an overlay without rebuilding path filters or tree structure.
+  // Apply review marks as an overlay without rebuilding path filters or tree structure.
   const structurallyFilteredEntries = React.useMemo(
     () =>
       collapsed

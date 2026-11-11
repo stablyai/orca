@@ -41,6 +41,7 @@ import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-la
 export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   entryKey,
   entry,
+  viewed,
   currentWorktreeId,
   worktreePath,
   depth = 0,
@@ -60,6 +61,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   submoduleExpansion
 }: {
   entryKey: string
+  viewed: boolean
   entry: GitStatusEntry
   currentWorktreeId: string
   worktreePath: string
@@ -123,6 +125,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
         className={cn(
           'group relative flex cursor-pointer items-center gap-1 pr-3 py-1 transition-colors',
           getSourceControlRowHighlightClass(isOpenFile),
+          viewed && 'opacity-50',
           !isOpenFile && selected && 'bg-accent/60'
         )}
         style={{

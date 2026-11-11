@@ -20,6 +20,7 @@ export type DiffSection = {
   dirty: boolean
   /** A save was refused because disk changed since this section loaded. */
   saveConflict?: true
+  reviewModifiedTime?: number | null
   diffResult: GitDiffResult | null
   operation?: ReturnType<typeof acquireEditorFileOperation>
   largeDiffRenderLimit: LargeDiffRenderLimit | null

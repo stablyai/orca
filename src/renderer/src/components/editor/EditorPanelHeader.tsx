@@ -1,4 +1,6 @@
 import { useMemo } from 'react'
+import { DiffViewedControl } from './diff/review/diff-viewed-control'
+import type { DiffContent } from './editor-panel-content-types'
 import { ArrowDown, ArrowUp, Columns2, Eye, FileText, ListTree, Rows2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useVisibleWorktreeDiffComments } from '../diff-comments/use-visible-worktree-diff-comments'
@@ -29,6 +31,8 @@ const NO_CUSTOM_EDITOR_TITLES: Readonly<Record<CustomEditorToggleValue, string>>
 
 type EditorPanelHeaderProps = {
   activeFile: OpenFile
+  diffContent?: DiffContent
+  activeViewStateId?: string | null
   copiedPathVisible: boolean
   isSingleDiff: boolean
   isDiffSurface: boolean
@@ -66,6 +70,8 @@ type EditorPanelHeaderProps = {
 
 export function EditorPanelHeader({
   activeFile,
+  diffContent,
+  activeViewStateId,
   copiedPathVisible,
   isSingleDiff,
   isDiffSurface,
@@ -356,6 +362,9 @@ export function EditorPanelHeader({
         onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
         onExportMarkdownToPdf={onExportMarkdownToPdf}
       />
+      {isSingleDiff && !activeFile.conflict && (
+        <DiffViewedControl file={activeFile} content={diffContent} viewId={activeViewStateId} />
+      )}
     </div>
   )
 }

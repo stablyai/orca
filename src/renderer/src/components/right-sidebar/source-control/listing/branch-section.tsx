@@ -1,3 +1,4 @@
+import { useSourceControlReview } from './use-source-control-review'
 import React from 'react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
@@ -57,6 +58,7 @@ export function SourceControlBranchSection({
   ) => void
   diffCommentCountByPath: Map<string, number>
 }): React.JSX.Element {
+  const review = useSourceControlReview(currentWorktreeId, worktreePath)
   const t = useTranslate()
   const baseRef = branchSummary.baseRef?.trim()
   const fileCount = filteredBranchEntries.length
@@ -120,6 +122,7 @@ export function SourceControlBranchSection({
                 <BranchEntryRow
                   key={node.key}
                   entry={node.entry}
+                  viewed={review.isViewed(node.entry, 'branch')}
                   currentWorktreeId={currentWorktreeId}
                   worktreePath={worktreePath}
                   depth={node.depth}
@@ -143,6 +146,7 @@ export function SourceControlBranchSection({
                 key={`branch::${entry.path}`}
                 isOpenFile={activeOpenRowKeys.has(`branch::${entry.path}`)}
                 entry={entry}
+                viewed={review.isViewed(entry, 'branch')}
                 currentWorktreeId={currentWorktreeId}
                 worktreePath={worktreePath}
                 onRevealInExplorer={revealInExplorer}

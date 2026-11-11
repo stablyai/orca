@@ -13,9 +13,16 @@ import { canUseChangesModeForFile } from './view-mode/editor-panel-file-mode'
 import type { EditorPanelContentLoadOptions } from './external-changes/useEditorPanelExternalContentEvents'
 import { stampCleanTabDiskBaseline } from './external-changes/editor-clean-tab-disk-baseline'
 import { translate } from '@/i18n/i18n'
+import {
+  statRuntimePath,
+  isMissingRuntimePathError
+} from '@/runtime/files/metadata/runtime-file-metadata-client'
 import { isWslDistroNotRunningRefusal } from '../../../../shared/wsl-distro-not-running-refusal'
 
-const inFlightDiffReads = new Map<string, InFlightContentRead<DiffContent>>()
+const inFlightDiffReads = new Map<
+  string,
+  InFlightContentRead<{ result: DiffContent; beforeTime: number | null | undefined }>
+>()
 
 export type EditorPanelDiffContentLoader = (
   file: OpenFile | null,
@@ -95,10 +102,21 @@ export function useEditorPanelDiffContentLoader({
           // Forced reloads must bypass deduped reads that predate external changes.
           inFlightDiffReads.delete(key)
         }
+        const readReviewMetadata = () =>
+          effectiveDiffSource === 'commit'
+            ? Promise.resolve(null)
+            : statRuntimePath(
+                { target: fileTarget, worktreeId: file.worktreeId, worktreePath, connectionId },
+                file.filePath
+              ).then(
+                (stat) => stat.mtime,
+                (error: unknown) => (isMissingRuntimePathError(error) ? null : undefined)
+              )
         let pending = inFlightDiffReads.get(key)
         if (!pending) {
-          const promise: Promise<DiffContent> =
-            effectiveDiffSource === 'commit'
+          const promise = (async () => {
+            const beforeTime = await readReviewMetadata()
+            const result: DiffContent = await (effectiveDiffSource === 'commit'
               ? commitCompare
                 ? getRuntimeGitCommitDiff(
                     {
@@ -152,7 +170,9 @@ export function useEditorPanelDiffContentLoader({
                         : {})
                     },
                     wake
-                  )
+                  ))
+            return { result, beforeTime }
+          })()
           pending = { externalEventGeneration: options?.externalEventGeneration, promise }
           inFlightDiffReads.set(key, pending)
           queueMicrotask(() => {
@@ -161,7 +181,7 @@ export function useEditorPanelDiffContentLoader({
             }
           })
         }
-        const result = await pending.promise
+        const { result, beforeTime } = await pending.promise
         if (diffReadGenerationRef.current[file.id] !== generation) {
           return
         }
@@ -173,6 +193,15 @@ export function useEditorPanelDiffContentLoader({
           result.largeDiffRenderLimit === undefined
         ) {
           stampCleanTabDiskBaseline(file.id, { content: result.modifiedContent, isBinary: false })
+        }
+        const afterTime = await readReviewMetadata()
+        const reviewModifiedTime = beforeTime === afterTime ? afterTime : undefined
+        if (diffReadGenerationRef.current[file.id] === generation) {
+          setDiffContents((prev) =>
+            prev[file.id] === result
+              ? { ...prev, [file.id]: { ...result, reviewModifiedTime } }
+              : prev
+          )
         }
       } catch (err) {
         if (diffReadGenerationRef.current[file.id] !== generation) {
@@ -187,6 +216,7 @@ export function useEditorPanelDiffContentLoader({
             ...prev,
             [file.id]: {
               kind: 'text',
+              loadError: true,
               originalContent: '',
               modifiedContent: translate(
                 'auto.components.editor.EditorPanel.diffLoadError',

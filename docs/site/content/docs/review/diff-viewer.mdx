@@ -25,6 +25,17 @@ Long lines wrap in place when diff word wrap is on, so wide diffs read top-to-bo
 
 Combined diffs can show a collapsible file tree beside the hunks. Drag the tree's resize handle (or use arrow keys on the handle; Shift multiplies the step) to set width — the size is remembered across sessions. Collapse or show the tree from the combined-diff toolbar.
 
+## Review progress
+
+Use **Viewed** to mark a file as reviewed in either its individual diff or **View all**. The mark is shared with Source Control for the same workspace and comparison. Staged and unstaged changes are tracked separately.
+
+Marking a file Viewed in an individual diff advances to the next file. In **View all**, marking Viewed collapses that file's changes. You can expand a reviewed file again without clearing its mark. Uncheck Viewed to mark it for another review.
+
+Clicking a file header or using **Collapse all** changes visibility only; it does not mark files Viewed. The file-tree **Viewed files** filter includes or hides explicitly marked files, regardless of whether their contents have loaded or are collapsed.
+
+Review marks persist across sessions and clear when the file changes. Unsaved drafts cannot be marked Viewed. The shortcut hint appears when hovering over the individual diff's Viewed control.
+
 ## Keyboard shortcuts
 
+- `Control+V` on macOS; `Alt+Shift+V` on Windows/Linux — toggle Viewed in the focused individual-file diff. Change this under **Settings → Shortcuts → Toggle File as Viewed**.
 - `F7` / `Shift+F7` — next / previous change in the active editor.

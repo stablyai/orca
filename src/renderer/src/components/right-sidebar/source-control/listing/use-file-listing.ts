@@ -29,6 +29,7 @@ export function useSourceControlFileListing({
   isGitHistoryExpanded,
   isMac,
   refreshActiveGitStatusAfterMutation,
+  revealReviewPath,
   remoteActionError,
   repositoryHuge,
   rightSidebarTab,
@@ -54,6 +55,7 @@ export function useSourceControlFileListing({
   isGitHistoryExpanded: boolean
   isMac: boolean
   refreshActiveGitStatusAfterMutation: SourceControlStatusRefresh['refreshActiveGitStatusAfterMutation']
+  revealReviewPath: SourceControlPanelViewState['revealReviewPath']
   remoteActionError: SourceControlActionError | null
   repositoryHuge: SourceControlWorktreeContext['repositoryHuge']
   rightSidebarTab: SourceControlWorktreeContext['rightSidebarTab']
@@ -81,7 +83,9 @@ export function useSourceControlFileListing({
     visibleTreeRowsBySection,
     visibleListRowsBySection,
     visibleBranchTreeRows,
-    visibleSelectionEntries
+    visibleSelectionEntries,
+    reviewSelectionEntries,
+    reviewBranchEntries
   } = useSourceControlFileProjection({
     entries,
     branchEntries,
@@ -126,6 +130,9 @@ export function useSourceControlFileListing({
       worktreePath,
       visibleSelectionEntries,
       visibleBranchRowKeys,
+      visibleBranchEntries: reviewBranchEntries,
+      reviewSelectionEntries,
+      revealReviewPath,
       branchSummary
     })
 

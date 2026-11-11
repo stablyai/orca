@@ -5,6 +5,19 @@ const WINDOWS_LINUX_TOGGLE_BINDINGS = ['Mod+Shift+F11', 'Mod+Shift+J']
 
 export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
   {
+    id: 'editor.toggleViewed',
+    title: 'Toggle File as Viewed',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: ['shortcut', 'editor', 'diff', 'review', 'viewed'],
+    // Why: Conductor uses Control+V on macOS; preserve Ctrl+V paste on other platforms.
+    defaultBindings: {
+      darwin: ['Ctrl+V'],
+      linux: ['Alt+Shift+V'],
+      win32: ['Alt+Shift+V']
+    }
+  },
+  {
     id: 'sidebar.projects.toggleCollapse',
     title: 'Collapse / Expand All Projects',
     group: 'Global',

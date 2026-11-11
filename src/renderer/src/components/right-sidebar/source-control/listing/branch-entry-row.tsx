@@ -21,6 +21,7 @@ import { useTranslate } from '@/i18n/use-translate'
 
 export function BranchEntryRow({
   entry,
+  viewed,
   currentWorktreeId,
   worktreePath,
   depth = 0,
@@ -31,6 +32,7 @@ export function BranchEntryRow({
   commentCount,
   showPathHint = true
 }: {
+  viewed: boolean
   entry: GitBranchChangeEntry
   currentWorktreeId: string
   worktreePath: string
@@ -63,7 +65,8 @@ export function BranchEntryRow({
         data-current={isOpenFile ? 'true' : undefined}
         className={cn(
           'group flex cursor-pointer items-center gap-1 pr-3 py-1 transition-colors',
-          getSourceControlRowHighlightClass(isOpenFile)
+          getSourceControlRowHighlightClass(isOpenFile),
+          viewed && 'opacity-50'
         )}
         style={{
           paddingLeft: `${depth * SOURCE_CONTROL_TREE_INDENT_PX + SOURCE_CONTROL_TREE_FILE_PADDING_PX}px`

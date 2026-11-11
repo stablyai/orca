@@ -185,13 +185,19 @@ export const fsApi = {
       permanent?: boolean
     } & SshMutationExpectation
   ): Promise<void> => ipcRenderer.invoke('fs:deletePath', args),
-  stat: (args: {
+  stat: async (args: {
     filePath: string
     connectionId?: string
     access?: LocalFileAccess
     wakeWslDistro?: boolean
-  }): Promise<{ size: number; isDirectory: boolean; mtime: number }> =>
-    ipcRenderer.invoke('fs:stat', args),
+  }): Promise<{ size: number; isDirectory: boolean; mtime: number }> => {
+    const result = await ipcRenderer.invoke('fs:stat', args)
+    if (result === null) {
+      // Expected absence crosses IPC as data so Electron does not log a handler failure.
+      throw Object.assign(new Error('ENOENT: no such file or directory'), { code: 'ENOENT' })
+    }
+    return result
+  },
   pathsExist: (args: {
     filePaths: string[]
     connectionId?: string

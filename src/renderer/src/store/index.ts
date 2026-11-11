@@ -221,6 +221,11 @@ registerRendererMemoryProfileContributor('storeKB', () =>
   estimateStateCollectionKB(useAppStore.getState(), 16)
 )
 
+// Non-hook getState alias: React Compiler rejects hook-name references inside component bodies.
+export function readAppState(): AppState {
+  return useAppStore.getState()
+}
+
 // Expose store for dev console or VITE_EXPOSE_STORE E2E assertions, avoiding fragile DOM scraping.
 if ((import.meta.env.DEV || e2eConfig.exposeStore) && typeof window !== 'undefined') {
   const testWindow = window as unknown as Record<string, unknown>

@@ -39,6 +39,8 @@ import {
 } from './review-controls/combined-diff-skipped-conflicts'
 import { useCombinedDiffNotesActions } from './review-controls/use-combined-diff-notes-actions'
 import { useCombinedDiffSectionActions } from './review-controls/use-combined-diff-section-actions'
+import { useCombinedDiffReviewLoader } from './review-controls/use-combined-diff-review-loader'
+import { useCombinedDiffReviewedCollapse } from './review-controls/use-combined-diff-reviewed-collapse'
 import { useCombinedDiffViewPreferences } from './review-controls/use-combined-diff-view-preferences'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 
@@ -114,6 +116,13 @@ export default function CombinedDiffViewer({
     succession: buildCombinedDiffViewTabSuccession(file.id, viewStateScopeId),
     viewStateKey
   })
+  const viewedSectionKeys = useCombinedDiffReviewedCollapse({
+    file,
+    entrySet,
+    setSections,
+    viewStateKey
+  })
+  const loadSectionForReview = useCombinedDiffReviewLoader({ entrySet, file, registry })
   const { loadSection, loadDeferredSection } = useCombinedDiffSectionLoader({
     entrySet,
     file,
@@ -194,10 +203,10 @@ export default function CombinedDiffViewer({
     markDirectScrollInput,
     scrollToIndex: anchors.scrollToSectionIndex,
     sectionIndexByKey,
-    sections,
     sectionsRef: registry.sectionsRef,
     toggleSection,
-    treeMode: entrySet.treeMode
+    treeMode: entrySet.treeMode,
+    viewedSectionKeys
   })
   const combinedGitStatusSignature = useCombinedDiffSectionRevalidation({
     file,
@@ -375,6 +384,7 @@ export default function CombinedDiffViewer({
             isCommitMode={entrySet.isCommitMode}
             isDark={isDark}
             loadSection={loadSection}
+            loadSectionForReview={loadSectionForReview}
             loadDeferredSection={loadDeferredSection}
             markDirectScrollInput={markDirectScrollInput}
             modifiedEditorsRef={modifiedEditorsRef}

@@ -1,3 +1,5 @@
+import { entryReviewSource } from '@/lib/editor/diff-reviewed-files'
+import { useSourceControlReview } from './use-source-control-review'
 import React from 'react'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { ConflictResolution } from '../../../../../../shared/source-control/listing/source-control-entry-actions'
@@ -73,6 +75,7 @@ export function SourceControlSectionFileList({
   requestDiscardEntry: (entry: GitStatusEntry) => void
   diffCommentCountByPath: Map<string, number>
 }): React.JSX.Element {
+  const review = useSourceControlReview(currentWorktreeId, worktreePath)
   return sourceControlViewMode === 'tree' ? (
     <VirtualizedList
       rows={treeRows}
@@ -116,6 +119,7 @@ export function SourceControlSectionFileList({
             key={node.key}
             entryKey={node.key}
             entry={node.entry}
+            viewed={review.isViewed(node.entry, entryReviewSource(node.entry))}
             currentWorktreeId={currentWorktreeId}
             worktreePath={worktreePath}
             depth={node.depth}
@@ -168,6 +172,7 @@ export function SourceControlSectionFileList({
             key={key}
             entryKey={key}
             entry={entry}
+            viewed={review.isViewed(entry, entryReviewSource(entry))}
             currentWorktreeId={currentWorktreeId}
             worktreePath={worktreePath}
             depth={entry.submoduleRoot ? 1 : 0}

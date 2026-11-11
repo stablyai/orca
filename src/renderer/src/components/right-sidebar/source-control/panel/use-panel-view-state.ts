@@ -103,6 +103,29 @@ export function useSourceControlPanelViewState({
     })
   }, [])
 
+  const revealReviewPath = useCallback(
+    (path: string, area: 'unstaged' | 'staged' | 'branch') => {
+      setCollapsedTreeDirs((previous) => {
+        const prefix = `dir::${area}::`
+        const next = new Set(
+          [...previous].filter(
+            (key) => !key.startsWith(prefix) || !path.startsWith(`${key.slice(prefix.length)}/`)
+          )
+        )
+        return next.size === previous.size ? previous : next
+      })
+      if (collapsedSections.has(area)) {
+        const next = new Set(collapsedSections)
+        next.delete(area)
+        setCollapsedSections(next)
+        if (activeWorktreeId) {
+          collapsedSectionsByWorktree.set(activeWorktreeId, next)
+        }
+      }
+    },
+    [activeWorktreeId, collapsedSections]
+  )
+
   return {
     baseRefDialogOpen,
     collapsedSections,
@@ -121,7 +144,8 @@ export function useSourceControlPanelViewState({
     sourceControlRef,
     sourceControlViewMode,
     toggleSection,
-    toggleTreeDir
+    toggleTreeDir,
+    revealReviewPath
   }
 }
 
