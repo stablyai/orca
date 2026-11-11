@@ -142,7 +142,7 @@ export function failureCopy(t: Translate, code: CloudRemoteDesktopToastFailure):
 export function actionLabel(t: Translate, action: CloudRemoteDesktopNextAction): string {
   switch (action) {
     case 'wake':
-      return t('components.cloudRemoteDesktop.wake', 'Wake sandbox')
+      return t('components.cloudRemoteDesktop.wake', 'Wake workspace')
     case 'unarchive':
       return t('components.cloudRemoteDesktop.unarchive', 'Unarchive')
     case 'sign_in':

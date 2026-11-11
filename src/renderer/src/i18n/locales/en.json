@@ -23436,7 +23436,7 @@
       "forwardFailedDetail": "The desktop is running in the sandbox. Your files are safe.",
       "unavailableTitle": "Couldn’t start the remote desktop.",
       "unavailableDetail": "Orca Cloud didn’t respond in time. Your files are safe.",
-      "wake": "Wake sandbox",
+      "wake": "Wake workspace",
       "signIn": "Sign in",
       "createWorkspace": "Create workspace",
       "slowDetail": "The first start in a sandbox can take up to a minute.",
