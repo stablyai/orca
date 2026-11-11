@@ -143,6 +143,16 @@ it('keeps successful LAN scanning automatic', async () => {
   expect(mocks.replace).toHaveBeenCalledWith('/')
 })
 
+it('preserves the failure detail for a LAN scan', async () => {
+  const screen = await render()
+  await act(async () =>
+    screen.root
+      .findAll((node) => String(node.type) === 'CameraView')[0]
+      ?.props.onBarcodeScanned({ data: 'orca://pair?code=' + code('ws://192.168.1.5:6768') })
+  )
+  expect(JSON.stringify(screen.toJSON())).toContain('Pairing failed: Access required')
+})
+
 it('offers secure paste recovery even when camera permission is denied', async () => {
   mocks.cameraGranted = false
   const screen = await render()

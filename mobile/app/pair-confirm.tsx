@@ -188,10 +188,12 @@ function PairConfirmAttemptScreen({ routeState }: { routeState: PairConfirmRoute
             timedOut: activeAttempt.current?.timedOut ?? false,
             timeoutMs: PAIRING_OVERALL_TIMEOUT_MS,
             t,
-            fallbackMessage: t(
-              'app.pairConfirm.edgePairingFailed',
-              'Could not finish pairing or save credentials. Check the connection and protected storage, then retry.'
-            )
+            fallbackMessage: secure
+              ? t(
+                  'app.pairConfirm.edgePairingFailed',
+                  'Could not finish pairing or save credentials. Check the connection and protected storage, then retry.'
+                )
+              : undefined
           })
         )
       }

@@ -215,10 +215,12 @@ export default function PairScanScreen() {
           timedOut,
           timeoutMs: PAIRING_OVERALL_TIMEOUT_MS,
           t,
-          fallbackMessage: t(
-            'app.pairScan.secureFailure',
-            'Pairing failed. Check that Orca is reachable and the pairing link is current.'
-          )
+          fallbackMessage: secure
+            ? t(
+                'app.pairScan.secureFailure',
+                'Pairing failed. Check that Orca is reachable and the pairing link is current.'
+              )
+            : undefined
         })
       )
       processingRef.current = false

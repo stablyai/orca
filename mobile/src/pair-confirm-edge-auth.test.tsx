@@ -234,6 +234,18 @@ it('allows pairing retry with static errors after verification fails', async () 
   expect(mocks.start).toHaveBeenCalledTimes(2)
   expect(mocks.replace).toHaveBeenCalledTimes(1)
 })
+it('preserves the failure detail for an insecure LAN pairing', async () => {
+  mocks.code = code('ws://192.168.1.5:6768')
+  mocks.start.mockImplementation(() => ({
+    result: Promise.reject(new Error('Connection refused')),
+    retryCredentialSave: vi.fn(),
+    dispose: vi.fn(),
+    timedOut: false
+  }))
+  const screen = await render()
+  await press('Pair')
+  expect(JSON.stringify(screen.toJSON())).toContain('Pairing failed: Connection refused')
+})
 it('blocks duplicate submits and cancels an in-flight attempt on route replacement', async () => {
   let finish: (value: { hostId: string; credentialsSaved: boolean }) => void = () => {}
   const dispose = vi.fn()
