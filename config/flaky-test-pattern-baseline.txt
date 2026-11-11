@@ -379,7 +379,6 @@
 1 test-no-real-time-wait:tests/e2e/sparse-preset-proof.spec.ts
 1 test-no-real-time-wait:tests/e2e/ssh-orcad-explorer-selected-host.spec.ts
 1 test-no-real-time-wait:tests/e2e/ssh-orcad-idle-exit.spec.ts
-1 test-no-real-time-wait:tests/e2e/ssh-orcad-legacy-relay-bridge.spec.ts
 1 test-no-real-time-wait:tests/e2e/ssh-orcad-pairing-repair.spec.ts
 1 test-no-real-time-wait:tests/e2e/ssh-orcad-relay-tab-only-shell.spec.ts
 1 test-no-real-time-wait:tests/e2e/ssh-orcad-sleep-disconnected.spec.ts
@@ -918,7 +917,7 @@
 1 test-timeout-needs-reason:tests/e2e/ssh-orcad-explorer-selected-host.spec.ts
 1 test-timeout-needs-reason:tests/e2e/ssh-orcad-explorer-watch-recovery.spec.ts
 4 test-timeout-needs-reason:tests/e2e/ssh-orcad-idle-exit.spec.ts
-3 test-timeout-needs-reason:tests/e2e/ssh-orcad-legacy-relay-bridge.spec.ts
+1 test-timeout-needs-reason:tests/e2e/ssh-orcad-legacy-relay-bridge.spec.ts
 1 test-timeout-needs-reason:tests/e2e/ssh-orcad-markdown-conversion.spec.ts
 1 test-timeout-needs-reason:tests/e2e/ssh-orcad-markdown-link-refresh.spec.ts
 1 test-timeout-needs-reason:tests/e2e/ssh-orcad-markdown-live-documents.spec.ts
