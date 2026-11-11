@@ -43,6 +43,10 @@ export class AvccFrameStream {
         return
       }
       response.on('data', (chunk: Buffer) => {
+        // serve-sim sends nothing until capture starts; the renderer's first-frame timeout covers that wait.
+        if (this.lastDataAt === 0) {
+          this.watchForStall(response.socket)
+        }
         this.lastDataAt = Date.now()
         try {
           this.parser.push(chunk)
@@ -54,8 +58,6 @@ export class AvccFrameStream {
       response.on('close', () => this.fail('Simulator video stream closed.'))
     })
     this.request = request
-    this.lastDataAt = Date.now()
-    request.on('socket', (socket) => this.watchForStall(socket))
     request.on('error', (error) => this.fail(error.message))
     request.end()
   }
