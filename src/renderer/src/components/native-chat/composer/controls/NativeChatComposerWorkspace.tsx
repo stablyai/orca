@@ -13,7 +13,10 @@ import {
   createNativeChatComposerWorkspaceSelector,
   type NativeChatComposerWorkspaceTarget
 } from './native-chat-composer-workspace'
-import { NativeChatComposerBranchPicker } from './NativeChatComposerBranchPicker'
+import {
+  NATIVE_CHAT_COMPOSER_BRANCH_BUTTON_CLASS,
+  NativeChatComposerBranchPicker
+} from './NativeChatComposerBranchPicker'
 
 // Trim to cap height so flex centering aligns glyphs with icons; clip x only to keep descenders.
 const FOOTER_TEXT =
@@ -93,7 +96,7 @@ export function NativeChatComposerWorkspace({
             type="button"
             variant="ghost"
             size="xs"
-            className="h-5.5 min-w-0 flex-1 justify-start"
+            className={NATIVE_CHAT_COMPOSER_BRANCH_BUTTON_CLASS}
             aria-label={t(
               'components.native-chat.composerWorkspace.copyIdentity',
               'Copy {{value0}}',

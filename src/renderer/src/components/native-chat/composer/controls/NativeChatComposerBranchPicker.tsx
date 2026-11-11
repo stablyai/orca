@@ -7,6 +7,10 @@ import { WorkspaceBranchPicker } from '@/components/right-sidebar/source-control
 import { recordWorktreeBranchSwitchLanded } from '@/components/right-sidebar/source-control/branches/workspace-branch-switch-status'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 
+// Hover fill is the button box, so growing into the empty row paints blank space.
+export const NATIVE_CHAT_COMPOSER_BRANCH_BUTTON_CLASS =
+  'h-5.5 min-w-0 w-fit max-w-full shrink justify-start'
+
 export function NativeChatComposerBranchPicker({
   worktreeId,
   worktreePath,
@@ -64,7 +68,7 @@ export function NativeChatComposerBranchPicker({
           type="button"
           variant="ghost"
           size="xs"
-          className="h-5.5 min-w-0 flex-1 justify-start"
+          className={NATIVE_CHAT_COMPOSER_BRANCH_BUTTON_CLASS}
           title={branch}
           aria-label={t('sourceControl.branchPicker.switch', 'Switch branch: {{branch}}', {
             branch
