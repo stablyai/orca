@@ -46,6 +46,11 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
       )
     }
     const timeoutMs = getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms')
+    const run = getOptionalStringFlag(flags, 'run')
+    const dispatch = getOptionalStringFlag(flags, 'dispatch')
+    if (run && dispatch) {
+      throw new RuntimeClientError('invalid_argument', 'Choose either --dispatch or --run.')
+    }
     const explicitTerminal = getOptionalStringFlag(flags, 'terminal')
     const terminal = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'terminal')
     // Sessions use their injected id; inherited pane keys belong to a different caller.
@@ -66,7 +71,8 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
         format: flags.has('format') ? true : undefined,
         inject: flags.has('inject') ? true : undefined,
         compatibilityCliCommand: resolveCompatibilityCliCommand(),
-        run: getOptionalStringFlag(flags, 'run'),
+        run,
+        dispatch,
         ack: getOptionalStringFlag(flags, 'ack'),
         wait: wait ? true : undefined,
         timeoutMs

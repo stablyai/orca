@@ -1,5 +1,6 @@
 import type { AgentStatus } from '../../../../../shared/agent-status/title/agent-title-core'
 import type { OrchestrationDb } from '../../db/orchestration-db'
+import { liveDispatchMailboxes } from './live-dispatch-mailboxes'
 
 /** A live terminal mail pointers are typed into, keyed by its PTY rather than any window pane. */
 export type OrchestrationMailboxTerminal = {
@@ -62,6 +63,27 @@ export class OrchestrationMailboxOwner {
       return null
     }
     const { handle: terminalHandle, paneKeys } = terminal
+    const requestedDispatchId = requestedMailbox?.startsWith('dispatch:')
+      ? requestedMailbox.slice('dispatch:'.length)
+      : undefined
+    // A helper Run is the default mailbox, but a Dispatch this terminal still owns must stay
+    // addressable. An id it does not own stays null so the pointer is never typed elsewhere.
+    if (requestedDispatchId) {
+      const owned = liveDispatchMailboxes(db, terminal).find(
+        (dispatch) => dispatch.id === requestedDispatchId
+      )
+      if (!owned) {
+        return null
+      }
+      return this.resolveDispatchMailbox(
+        db,
+        terminal,
+        owned.id,
+        owned.run_id,
+        requestedMailbox,
+        options
+      )
+    }
     const runs = this.runsBoundToTerminal(db, terminal)
     // A coordinator of several Runs owns each one's mailbox; unnamed mail goes to its current Run.
     const run = runs.find((bound) => requestedMailbox === `run:${bound.id}`) ?? runs[0]
@@ -111,12 +133,18 @@ export class OrchestrationMailboxOwner {
       return []
     }
     const db = this.deps.getDb()
-    const others = db
+    const runHandles = db
       ? this.runsBoundToTerminal(db, terminal)
           .map((run) => `run:${run.id}`)
           .filter((handle) => handle !== mailboxHandle)
       : []
-    // One query instead of probing every finished Run; a Run without mail has nothing to deliver.
+    const dispatchHandles = db
+      ? liveDispatchMailboxes(db, terminal)
+          .map((dispatch) => `dispatch:${dispatch.id}`)
+          .filter((handle) => handle !== mailboxHandle)
+      : []
+    const others = [...runHandles, ...dispatchHandles]
+    // One query instead of probing every finished mailbox; one without mail has nothing to deliver.
     const withMail = db && others.length > 0 ? db.getMailboxesWithPointerWork(others) : new Set()
     return [mailboxHandle, ...new Set(others.filter((handle) => withMail.has(handle)))]
   }

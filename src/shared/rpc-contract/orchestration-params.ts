@@ -44,6 +44,7 @@ export const CheckParams = z
     compatibilityQuestionAck: OptionalString,
     compatibilityCliCommand: z.enum(['orca', 'orca-ide', 'orca-dev']).optional(),
     run: OptionalString,
+    dispatch: OptionalString,
     wait: OptionalBoolean,
     timeoutMs: OptionalFiniteNumber
   })
@@ -58,6 +59,12 @@ export const CheckParams = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Choose at most one message read mode: --unread, --peek, or --all.'
+      })
+    }
+    if (params.dispatch && params.run) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Choose either --dispatch or --run.'
       })
     }
   })

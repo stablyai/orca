@@ -138,11 +138,20 @@ export function formatMessagePointer(
   heldDeliveryId?: string
 ): string {
   const noun = count === 1 ? 'message' : 'messages'
-  const runFlag = mailboxHandle?.startsWith('run:')
-    ? ` --run ${mailboxHandle.slice('run:'.length)}`
-    : ''
+  const mailboxFlag = mailboxCheckSelector(mailboxHandle)
   if (heldDeliveryId) {
-    return `\nYou have ${count} new orchestration ${noun} after delivery ${heldDeliveryId}, which you have not acknowledged. If you no longer have it, run \`${cliCommand} orchestration check${runFlag}\` to see it again; once it is handled, run \`${cliCommand} orchestration check${runFlag} --ack ${heldDeliveryId}\`, then \`${cliCommand} orchestration check${runFlag}\` for the new mail.\n`
+    return `\nYou have ${count} new orchestration ${noun} after delivery ${heldDeliveryId}, which you have not acknowledged. If you no longer have it, run \`${cliCommand} orchestration check${mailboxFlag}\` to see it again; once it is handled, run \`${cliCommand} orchestration check${mailboxFlag} --ack ${heldDeliveryId}\`, then \`${cliCommand} orchestration check${mailboxFlag}\` for the new mail.\n`
   }
-  return `\nYou have ${count} orchestration ${noun}. Run \`${cliCommand} orchestration check${runFlag}\`.\n`
+  return `\nYou have ${count} orchestration ${noun}. Run \`${cliCommand} orchestration check${mailboxFlag}\`.\n`
+}
+
+/** Name the mailbox a plain check would miss. A helper Run is the default, so Dispatch mail must say so. */
+function mailboxCheckSelector(mailboxHandle?: string): string {
+  if (mailboxHandle?.startsWith('run:')) {
+    return ` --run ${mailboxHandle.slice('run:'.length)}`
+  }
+  if (mailboxHandle?.startsWith('dispatch:')) {
+    return ` --dispatch ${mailboxHandle.slice('dispatch:'.length)}`
+  }
+  return ''
 }

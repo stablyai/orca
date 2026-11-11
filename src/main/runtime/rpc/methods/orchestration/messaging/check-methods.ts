@@ -60,6 +60,29 @@ export const ORCHESTRATION_CHECK_METHODS = [
         }
         return withReportFollowUps(db, result)
       }
+      if (params.dispatch) {
+        const owners = db.getActiveDispatchMailboxOwners(handle, paneKey)
+        const owned = owners.find((dispatch) => dispatch.id === params.dispatch)
+        // A helper Run is bound on this same terminal. Name the parent Dispatch or the check
+        // reads the helper and leaves the worker inbox unread.
+        if (!owned || !callerHoldsDispatchPane(owned, paneKey)) {
+          throw dispatchFenced()
+        }
+        return releasing(
+          await checkWorkerMailbox({
+            params,
+            runtime,
+            db,
+            handle,
+            paneKey,
+            typeFilter,
+            signal,
+            activeDispatch: owned,
+            remoteAttachment: undefined,
+            recordMutationReceipt
+          })
+        )
+      }
       if (params.run || boundRun) {
         const result = await checkRunMailbox({
           params,
