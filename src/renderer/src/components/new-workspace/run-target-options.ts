@@ -308,3 +308,16 @@ export function buildRunTargetRows(
   ]
   return { rows, matchedRecipes, hiddenHostCount: hostRows.hiddenHostCount }
 }
+
+/** Add-host actions open dialogs, so the picker closes before they run. */
+export function closingFirst(
+  close: () => void,
+  action: (() => void) | undefined
+): (() => void) | undefined {
+  return action
+    ? () => {
+        close()
+        action()
+      }
+    : undefined
+}

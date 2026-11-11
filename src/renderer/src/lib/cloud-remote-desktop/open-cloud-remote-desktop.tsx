@@ -96,7 +96,10 @@ function desktopToast(worktreeId: string): DesktopToast {
   }
 }
 
-function requestDesktop(environmentId: string): Promise<CloudRemoteDesktopResult> {
+/** Starts the sandbox's desktop and forwards it here; never throws. */
+export function requestCloudRemoteDesktop(
+  environmentId: string
+): Promise<CloudRemoteDesktopResult> {
   const open = window.api?.ephemeralVm?.openCloudRemoteDesktop
   if (typeof open !== 'function') {
     return Promise.resolve({ ok: false, code: 'unavailable' })
@@ -107,22 +110,31 @@ function requestDesktop(environmentId: string): Promise<CloudRemoteDesktopResult
 }
 
 /** Opens (or reuses) the workspace's desktop tab, unless the workspace moved meanwhile. */
-function showDesktopTab(worktreeId: string, environmentId: string, url: string): void {
+function showDesktopTab(
+  worktreeId: string,
+  environmentId: string,
+  url: string,
+  activate = true
+): void {
   const state = useAppStore.getState()
   // The workspace may have been deleted or moved while the sandbox answered.
   if (selectWorkspaceRuntimeEnvironmentId(state, worktreeId) !== environmentId) {
     return
   }
-  activateAndRevealWorkspace(worktreeId, { providesInitialSurface: true })
+  if (activate) {
+    activateAndRevealWorkspace(worktreeId, { providesInitialSurface: true })
+  }
   const existing = takeDesktopTab(worktreeId, url)
   if (existing) {
-    state.setActiveBrowserTab(existing, worktreeId)
+    if (activate) {
+      state.setActiveBrowserTab(existing, worktreeId)
+    }
     return
   }
   // Client-local: the forwarded port lives on this computer, not on the workspace's host.
   state.createBrowserTab(worktreeId, url, {
     title: translate('components.cloudRemoteDesktop.tabTitle', 'Remote desktop'),
-    activate: true,
+    activate,
     browserRuntimeEnvironmentId: null
   })
 }
@@ -148,7 +160,7 @@ export function openCloudRemoteDesktop(worktreeId: string, environmentId: string
   return exclusive(worktreeId, async () => {
     const view = desktopToast(worktreeId)
     const stopSlow = view.showStarting()
-    const result = await requestDesktop(environmentId).finally(stopSlow)
+    const result = await requestCloudRemoteDesktop(environmentId).finally(stopSlow)
     if (!result.ok) {
       view.show({ kind: 'failed', code: result.code })
       return
@@ -182,7 +194,7 @@ function wakeThenOpen(worktreeId: string, via: 'wake' | 'unarchive'): Promise<vo
         return wake?.phase === 'failed' && wake.at >= startedAt
       },
       environmentId: () => selectWorkspaceRuntimeEnvironmentId(useAppStore.getState(), worktreeId),
-      open: requestDesktop,
+      open: requestCloudRemoteDesktop,
       onAwake: () => {
         stopSlow = view.showStarting()
       }

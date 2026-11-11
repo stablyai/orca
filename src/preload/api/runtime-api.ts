@@ -11,6 +11,10 @@ import type {
 import type { McpSyncStatus } from '../../shared/agent-mcp-sync/mcp-sync-contract'
 import type { CloudMcpSyncPreferences } from '../../shared/agent-mcp-sync/mcp-sync-preferences'
 import type {
+  AgentConfigSyncStatus,
+  CloudAgentConfigSyncPreferences
+} from '../../shared/agent-config-sync/agent-config-sync-contract'
+import type {
   CrewSubscriptionAttemptArgs,
   CrewSubscriptionAttemptCallbacks,
   CrewSubscriptionSetupResult
@@ -135,6 +139,21 @@ export type RuntimeApi = {
       included: boolean
     ) => Promise<CloudMcpSyncPreferences | null>
     onMcpSyncChanged?: (callback: (status: McpSyncStatus) => void) => () => void
+    // Orca Cloud skills and slash commands sync; desktop only, like MCP sync.
+    getAgentConfigSyncStatus?: (environmentId: string) => Promise<AgentConfigSyncStatus | null>
+    syncAgentConfigNow?: (environmentId: string) => Promise<AgentConfigSyncStatus | null>
+    getAgentConfigSyncPreferences?: () => Promise<CloudAgentConfigSyncPreferences | null>
+    setAgentConfigSyncPreferences?: (
+      preferences: Partial<Omit<CloudAgentConfigSyncPreferences, 'excluded'>>
+    ) => Promise<CloudAgentConfigSyncPreferences | null>
+    setAgentConfigItemIncluded?: (
+      key: string,
+      included: boolean
+    ) => Promise<CloudAgentConfigSyncPreferences | null>
+    onAgentConfigSyncChanged?: (callback: (status: AgentConfigSyncStatus) => void) => () => void
+    onAgentConfigSyncPreferencesChanged?: (
+      callback: (preferences: CloudAgentConfigSyncPreferences) => void
+    ) => () => void
     getStatusSnapshots: () => Promise<RuntimeHostStatusSnapshot[]>
     onStatusChanged: (callback: (snapshot: RuntimeHostStatusSnapshot) => void) => () => void
     // Absent in the web client, whose catalog lives in the browser rather than a CLI-editable file.

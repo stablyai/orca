@@ -91,6 +91,8 @@ export type BuildConfig = {
   installScript: string
   envVarNames: string[]
   machineSize: MachineSize
+  /** `git clone --filter`: automatic environments clone blobless (auto-environments.ts). */
+  cloneFilter?: 'blob:none'
 }
 
 export type BuildResult = {
@@ -338,7 +340,8 @@ async function bootBuild(deps: BuildDeps, row: BuildRow, config: BuildConfig): P
     ORCA_BUILD_REPOS: lines.join('\n'),
     ORCA_INSTALL_SCRIPT_B64: base64(config.installScript),
     ORCA_LOCKFILES: LOCKFILES.join(' '),
-    ORCA_DEPS_HOOK_B64: base64(ENVIRONMENT_DEPS_HOOK)
+    ORCA_DEPS_HOOK_B64: base64(ENVIRONMENT_DEPS_HOOK),
+    ...(config.cloneFilter ? { ORCA_CLONE_FILTER: config.cloneFilter } : {})
   }
   log('environment_build_secrets', { buildId: row.id, injected: Object.keys(secrets).length, named: config.envVarNames.length })
   const commandId = await deps.provider.startCommand(box.session.id, {

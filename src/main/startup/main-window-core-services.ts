@@ -73,7 +73,7 @@ export function attachMainWindowCoreServices(
   // Server status probes start inside registerCoreHandlers; held hosts must be marked first.
   holdLaunchReconnectOptOuts(store.getSshTargets())
   registerAgentApiKeyHandlers(app.getPath('userData'))
-  registerCloudWorkspacesHandlers()
+  registerCloudWorkspacesHandlers({ removedServerStore: store })
   registerCloudApiHandlers()
   registerCloudSecretsHandlers(app.getPath('userData'))
   registerOrcaCloudAgentsHandlers(app.getPath('userData'))

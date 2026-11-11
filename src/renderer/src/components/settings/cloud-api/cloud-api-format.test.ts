@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CLOUD_API_SCOPES } from '../../../../../shared/cloud-api/cloud-api-types'
+import { creatorName } from './CloudRoutineRow'
+import { translate } from '@/i18n/i18n'
 import {
   cloudApiErrorCopy,
   describeRoutineRunError,
@@ -10,6 +12,7 @@ import {
   describeRoutineTrigger,
   formatCountdown,
   formatKeyPrefix,
+  formatRelativeFromNow,
   formatRunDuration,
   presetForScopes,
   scopesForPreset,
@@ -63,6 +66,15 @@ describe('formatting', () => {
         timezone: 'America/New_York'
       })
     ).toMatch(/^Weekdays at 9:00.* E[SD]T$/)
+  })
+
+  it('says "just now" for the last minute, not "this minute"', () => {
+    const now = 1_000_000_000
+    expect(formatRelativeFromNow(now - 3_000, now, 'en')).toBe('just now')
+    expect(formatRelativeFromNow(now - 59_000, now, 'en')).toBe('just now')
+    expect(formatRelativeFromNow(now - 5 * 60_000, now, 'en')).toBe('5 minutes ago')
+    // Future times (next scheduled run) keep Intl wording.
+    expect(formatRelativeFromNow(now + 10 * 60_000, now, 'en')).toBe('in 10 minutes')
   })
 
   it('offers the local zone first', () => {
@@ -125,5 +137,23 @@ describe('run failure tone', () => {
       'neutral',
       'neutral'
     ])
+  })
+})
+
+describe('routine creator', () => {
+  it('shows a display name only, never a raw id', () => {
+    const roster = new Map([['u_lin', 'Lin Chen']])
+    expect(
+      creatorName({ createdBy: 'u_grace', createdByName: 'Grace Hopper' }, roster, translate)
+    ).toBe('Grace Hopper')
+    expect(creatorName({ createdBy: 'u_lin', createdByName: null }, roster, translate)).toBe(
+      'Lin Chen'
+    )
+    expect(creatorName({ createdBy: 'u_7f3k', createdByName: '  ' }, roster, translate)).toBe(
+      'Former member'
+    )
+    expect(creatorName({ createdBy: 'u_7f3k', createdByName: null }, undefined, translate)).toBe(
+      'Former member'
+    )
   })
 })

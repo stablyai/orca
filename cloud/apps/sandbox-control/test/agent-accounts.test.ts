@@ -334,3 +334,53 @@ describe('a provider 401 revokes only when confirmed', () => {
     expect(await auditRows()).toEqual([{ action: 'revoked', reason: 'provider_401_confirmed_by_check', upstream_path: '/v1/messages' }])
   })
 })
+
+describe('POST /v1/agent-credentials/claude/verify (pre-launch check)', () => {
+  it('a pass is remembered: the next calls answer without asking the provider', async () => {
+    const { h, as, check } = await setup()
+    const mia = await as('mia')
+    await h.call('PUT', '/v1/agent-credentials/claude', { bearer: mia, body: { token: SETUP_TOKEN } })
+    check.status = 200
+    check.body = '{"input_tokens":3}'
+    const first = await h.call('POST', '/v1/agent-credentials/claude/verify', { bearer: mia })
+    expect(first.body).toMatchObject({ claude: { state: 'active' }, checked: true })
+    expect(first.body.verifiedAt).toEqual(expect.any(Number))
+    const again = await h.call('POST', '/v1/agent-credentials/claude/verify', { bearer: mia })
+    expect(again.body).toMatchObject({ claude: { state: 'active' }, checked: false, verifiedAt: first.body.verifiedAt })
+    expect(check.calls).toBe(1)
+  })
+
+  it('a dead token is revoked (and audited); an inconclusive check keeps it', async () => {
+    const dead = await setup()
+    const mia = await dead.as('mia')
+    await dead.h.call('PUT', '/v1/agent-credentials/claude', { bearer: mia, body: { token: SETUP_TOKEN } })
+    const revoked = await dead.h.call('POST', '/v1/agent-credentials/claude/verify', { bearer: mia })
+    expect(revoked.body).toMatchObject({ claude: { state: 'revoked' }, checked: true, verifiedAt: null })
+    const rows = (await dead.h.env.SANDBOX_DB.prepare('SELECT action, reason FROM agent_credential_audit').all()).results
+    expect(rows).toEqual([{ action: 'revoked', reason: 'verify_confirmed_auth_failure' }])
+
+    const flaky = await setup()
+    const ada = await flaky.as('ada')
+    await flaky.h.call('PUT', '/v1/agent-credentials/claude', { bearer: ada, body: { token: SETUP_TOKEN } })
+    flaky.check.status = 529
+    flaky.check.body = '{"type":"error","error":{"type":"overloaded_error"}}'
+    const kept = await flaky.h.call('POST', '/v1/agent-credentials/claude/verify', { bearer: ada })
+    expect(kept.body).toMatchObject({ claude: { state: 'active' }, checked: true, verifiedAt: null })
+    // Rate limited: a second call within the minute doesn't ask again.
+    await flaky.h.call('POST', '/v1/agent-credentials/claude/verify', { bearer: ada })
+    expect(flaky.check.calls).toBe(1)
+  })
+
+  it('storing a new token forgets the old verification', async () => {
+    const { h, as, check } = await setup()
+    const mia = await as('mia')
+    await h.call('PUT', '/v1/agent-credentials/claude', { bearer: mia, body: { token: SETUP_TOKEN } })
+    check.status = 200
+    check.body = '{}'
+    await h.call('POST', '/v1/agent-credentials/claude/verify', { bearer: mia })
+    await h.call('PUT', '/v1/agent-credentials/claude', { bearer: mia, body: { token: SETUP_TOKEN } })
+    const after = await h.call('POST', '/v1/agent-credentials/claude/verify', { bearer: mia })
+    expect(after.body.checked).toBe(true)
+    expect(check.calls).toBe(2)
+  })
+})

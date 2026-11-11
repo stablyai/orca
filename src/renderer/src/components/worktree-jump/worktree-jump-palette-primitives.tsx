@@ -338,5 +338,7 @@ export function getPaletteSupportingTextLabel(
       return t('worktreeJumpPalette.matchLabel.task', 'Task')
     case 'automation':
       return t('worktreeJumpPalette.matchLabel.automationItem', 'Automation')
+    case 'cloudWorkspace':
+      return t('worktreeJumpPalette.matchLabel.cloudWorkspace', 'Cloud workspace')
   }
 }

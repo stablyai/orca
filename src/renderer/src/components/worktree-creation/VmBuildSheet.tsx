@@ -7,19 +7,20 @@ import { useOrcaBillingStatus } from '@/components/billing/use-orca-billing-stat
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { resolveVmEnvironmentCheckDecision } from '@/lib/ephemeral-vm-environment-check-decision'
+import {
+  isAwaitingVmEnvironmentCheckDecision,
+  resolveVmEnvironmentCheckDecision
+} from '@/lib/ephemeral-vm-environment-check-decision'
 import { openPlansPage } from '@/components/billing/plans/plans-page-store'
 import { ORCA_BILLING_OVERAGE_SECTION_ID } from '@/components/new-workspace/orca-cloud-run-target-access'
 import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
 import { toast } from 'sonner'
-import { OrcaCloudHoursChip } from '@/components/new-workspace/run-on/OrcaCloudHoursChip'
 import type { EnvironmentSetupFailureContext } from '../../../../shared/environment-setup-agent-prompt'
 import { formatEnvironmentDoctorChecks } from '../../../../shared/environment-doctor-types'
 import { VmBuildStepRow } from './VmBuildStepRow'
 import { firstBuildLogErrorLine, VmBuildLog } from './VmBuildLog'
 import { VmBuildFailureCard } from './VmBuildFailureCard'
 import { VmBuildAgentSignInRow } from './VmBuildAgentSignInRow'
-import { VmBuildCloudAgentsRow } from './cloud-agents-row/VmBuildCloudAgentsRow'
 import { VmBuildSecretsRow } from '../cloud-secrets-ask/VmBuildSecretsRow'
 import { OrcaCloudQueuedPrompt } from '@/components/orca-cloud/OrcaCloudQueuedPrompt'
 import {
@@ -39,9 +40,17 @@ import {
   orcaCloudRepoName,
   PUSH_TO_GITHUB_URL
 } from './vm-build-repo-actions'
-import { useVmBuildStepTimings, type VmBuildStepTimings } from './vm-build-timing'
+import {
+  recordCloudStartSample,
+  useVmBuildStepTimings,
+  type VmBuildStepTimings
+} from './vm-build-timing'
 import { cloneStageLabel, headerTitle, stepLabel, type SheetState } from './vm-build-sheet-copy'
 import { humanizeOrcaCloudLogLine, latestOrcaCloudPhaseLabel } from './orca-cloud-build-log'
+import {
+  orcaCloudCloneProgress,
+  orcaCloudPlannedRepoMode
+} from '@/lib/orca-cloud/orca-cloud-clone-progress'
 
 const NO_STAMPS: readonly number[] = []
 const SUPPORT_URL = 'https://github.com/stablyai/orca/issues/new'
@@ -99,7 +108,6 @@ export function VmBuildSheet({
   onReturnToComposer,
   onEditRecipe,
   agentSignInRow,
-  cloudAgentsRow,
   secretsRow,
   stepTimings
 }: {
@@ -117,8 +125,6 @@ export function VmBuildSheet({
   onEditRecipe: () => void
   /** Fixtures only: a fixed sign-in row in place of the live one. */
   agentSignInRow?: React.ReactNode
-  /** Fixtures only: a fixed cloud Agents row (null for none) in place of the live one. */
-  cloudAgentsRow?: React.ReactNode
   /** Fixtures only: a fixed Secrets row (null for none) in place of the live one. */
   secretsRow?: React.ReactNode
   /** Fixtures only: measured step timings in place of the control plane's. */
@@ -131,7 +137,12 @@ export function VmBuildSheet({
     [entry.provisioningLog]
   )
   const cloud = isOrcaCloudBuild(entry)
-  const measuredTimings = useVmBuildStepTimings(cloud && stepTimings === undefined)
+  // Clone and update starts are measured apart (the boot plan names the kind before the step runs).
+  const startKind = cloud
+    ? (orcaCloudCloneProgress(entry.provisioningLog ?? '', [])?.mode ??
+      orcaCloudPlannedRepoMode(entry.provisioningLog ?? ''))
+    : null
+  const measuredTimings = useVmBuildStepTimings(cloud && stepTimings === undefined, startKind)
   const timings = stepTimings ?? measuredTimings
   const formatLine = React.useMemo(
     () => (cloud ? (line: string) => humanizeOrcaCloudLogLine(line, t) : undefined),
@@ -152,6 +163,15 @@ export function VmBuildSheet({
       : step
   )
   const steps = useMinimumRunningSteps(derived, failure === null, now)
+  // JA-11: this computer's own "Start sandbox" durations drive the next sheet's hint.
+  const provisionMs = cloud
+    ? derived.find((step) => step.id === 'provision' && step.state === 'done')?.elapsedMs
+    : null
+  React.useEffect(() => {
+    if (provisionMs && startKind) {
+      recordCloudStartSample(creationId, startKind, provisionMs)
+    }
+  }, [creationId, provisionMs, startKind])
   const state: SheetState = failure
     ? failure.kind === 'checks'
       ? 'attention'
@@ -189,51 +209,54 @@ export function VmBuildSheet({
   return (
     <div data-vm-build-sheet className="flex min-h-full justify-center pt-12">
       <div className="flex w-full max-w-2xl flex-col gap-4">
-        <div className="flex min-h-7 items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="grid size-4 shrink-0 place-items-center">
-              {building ? (
-                <Loader2 aria-hidden className="size-4 text-muted-foreground animate-spin" />
-              ) : state === 'ready' ? (
-                <CircleCheck aria-hidden className="size-4 text-foreground" />
-              ) : gated ? (
-                <CircleAlert aria-hidden className="size-4 text-muted-foreground" />
-              ) : (
-                <AlertTriangle
-                  aria-hidden
-                  // Failed checks leave a running sandbox that needs a decision, not a broken start.
-                  className={cn(
-                    'size-4 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-90 motion-safe:duration-200',
-                    failure?.kind === 'checks' ? 'text-status-warning-text' : 'text-destructive'
-                  )}
-                />
+        {/* JA-24: on Orca Cloud a failure card carries the one title; no page title above it. */}
+        {cloud && failure ? null : (
+          <div className="flex min-h-7 items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="grid size-4 shrink-0 place-items-center">
+                {building ? (
+                  <Loader2 aria-hidden className="size-4 text-muted-foreground animate-spin" />
+                ) : state === 'ready' ? (
+                  <CircleCheck aria-hidden className="size-4 text-foreground" />
+                ) : gated ? (
+                  <CircleAlert aria-hidden className="size-4 text-muted-foreground" />
+                ) : (
+                  <AlertTriangle
+                    aria-hidden
+                    // Failed checks leave a running sandbox that needs a decision, not a broken start.
+                    className={cn(
+                      'size-4 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-90 motion-safe:duration-200',
+                      failure?.kind === 'checks' && !cloud
+                        ? 'text-status-warning-text'
+                        : 'text-destructive'
+                    )}
+                  />
+                )}
+              </span>
+              {/* Retry lands focus here once the failure card collapses. The card announces failures. */}
+              <h2
+                data-vm-build-heading
+                tabIndex={-1}
+                aria-live={failure ? 'off' : 'polite'}
+                className="text-sm font-medium text-foreground outline-none"
+              >
+                {headerTitle(state, cloud, t, failure?.kind === 'create')}
+              </h2>
+              {/* Orca Cloud: each step carries its own timer, so the header has none. */}
+              {gated || cloud ? null : (
+                <span className="text-xs tabular-nums text-muted-foreground">{elapsedLabel}</span>
               )}
-            </span>
-            {/* Retry lands focus here once the failure card collapses. The card announces failures. */}
-            <h2
-              data-vm-build-heading
-              tabIndex={-1}
-              aria-live={failure ? 'off' : 'polite'}
-              className="text-sm font-medium text-foreground outline-none"
-            >
-              {headerTitle(state, cloud, t, failure?.kind === 'create')}
-            </h2>
-            {/* Orca Cloud: each step carries its own timer, so the header has none. */}
-            {gated || cloud ? null : (
-              <span className="text-xs tabular-nums text-muted-foreground">{elapsedLabel}</span>
-            )}
-            {/* O4: which sandbox hours this start spends, while it starts. */}
-            <OrcaCloudHoursChip enabled={cloud && building} />
+            </div>
+            {building ? (
+              <Button type="button" variant="ghost" size="xs" onClick={onCancel}>
+                {t(
+                  'auto.components.worktree.creation.WorktreeCreationPanel.cancelProvisioning',
+                  'Cancel'
+                )}
+              </Button>
+            ) : null}
           </div>
-          {building ? (
-            <Button type="button" variant="ghost" size="xs" onClick={onCancel}>
-              {t(
-                'auto.components.worktree.creation.WorktreeCreationPanel.cancelProvisioning',
-                'Cancel'
-              )}
-            </Button>
-          ) : null}
-        </div>
+        )}
 
         <div>
           {/* An account refusal happens before anything starts, so there are no steps to show. */}
@@ -248,22 +271,15 @@ export function VmBuildSheet({
                     cloud && step.id === 'provision' && step.state === 'running'
                       ? latestOrcaCloudPhaseLabel(entry.provisioningLog ?? '', t)
                       : step.id === 'clone' && step.state === 'running'
-                        ? cloneStageLabel(step.stage, t)
+                        ? cloneStageLabel(step.stage, t, step.cloneMode)
                         : null
                   }
                   timing={timings[step.id] ?? null}
                   t={t}
                 />
               ))}
-              {/* Orca Cloud: one fixed-height row from the Orca account, never a per-sandbox sign-in
-                  (spec §5b). Other VMs keep the host's own sign-in row. */}
-              {cloud ? (
-                cloudAgentsRow !== undefined ? (
-                  cloudAgentsRow
-                ) : (
-                  <VmBuildCloudAgentsRow creationId={creationId} entry={entry} />
-                )
-              ) : null}
+              {/* Orca Cloud: agent setup happens after create (the setup page and the workspace's
+                  sign-in strip), so the build card has no agent row. Other VMs keep the host's own. */}
               {agentSignInRow ??
                 (!cloud && entry.vmEnvironmentId ? (
                   <VmBuildAgentSignInRow
@@ -282,7 +298,11 @@ export function VmBuildSheet({
           <VmBuildFailureCard
             failure={failure}
             cloud={cloud}
-            vmKept={failure?.kind === 'checks' || Boolean(entry.request.ephemeralVmRuntimeId)}
+            vmKept={
+              failure?.kind === 'checks'
+                ? failure.sandbox !== 'deleted'
+                : Boolean(entry.request.ephemeralVmRuntimeId)
+            }
             firstErrorLine={firstErrorLine}
             canFixWithAgent={Boolean(recipe)}
             canManageBilling={canManageBilling}
@@ -305,6 +325,11 @@ export function VmBuildSheet({
                   : onRetry,
               onEditRecipe,
               onOpenAnyway: () => resolveVmEnvironmentCheckDecision(creationId, 'open-anyway'),
+              // A paused create deletes this sandbox and starts over; one already gone just retries.
+              onStartAgain: () =>
+                isAwaitingVmEnvironmentCheckDecision(creationId)
+                  ? resolveVmEnvironmentCheckDecision(creationId, 'restart')
+                  : onRetry(),
               // Nothing was created, so leaving a billing refusal hands the typed prompt back.
               onDismiss:
                 isBillingFailure(failure) && typedComposerPrompt(entry).trim()

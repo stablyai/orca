@@ -28,7 +28,7 @@ export function mcpSyncSummary(status: McpSyncStatus, t: Translate = translate):
   if (status.rows.length === 0) {
     return t(
       'cloudMcpSync.summary.none',
-      'None found in Claude Code or Codex on this computer. Servers you add there show up here.'
+      'None found in Claude or Codex on this computer. Servers you add there show up here.'
     )
   }
   if (status.error === 'host-outdated' && status.lastSyncedAt === null) {

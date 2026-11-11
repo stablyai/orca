@@ -195,6 +195,49 @@ describe('response hardening', () => {
     expect(parsed.result?.prUrl).toBeUndefined()
     expect(parsed.status).toBe('succeeded')
   })
+
+  it('accepts the run the control plane answers Run now with (object trigger detail)', async () => {
+    // Exactly what POST /v1/routines/:id/run returns (routines/store.ts runView, private view).
+    const queued = {
+      id: 'run_9',
+      routineId: 'rt_1',
+      trigger: 'manual',
+      triggerDetail: { requestedBy: 'usr_1' },
+      status: 'queued',
+      workspaceId: null,
+      result: null,
+      error: null,
+      createdAt: 5,
+      startedAt: null,
+      finishedAt: null,
+      durationMs: null
+    }
+    const fetchImpl = vi.fn<typeof fetch>(async () => respond(202, { run: queued }))
+    const { run } = await client(fetchImpl).runRoutine('rt_1')
+    expect(run).toMatchObject({ id: 'run_9', status: 'queued', triggerDetail: null })
+
+    const github = {
+      ...queued,
+      trigger: 'github',
+      triggerDetail: {
+        event: 'pull_request.labeled',
+        delivery: 'd1',
+        target: { repo: 'acme/web', number: 482, kind: 'pull_request' },
+        context: { anything: true }
+      }
+    }
+    const page = vi.fn<typeof fetch>(async () =>
+      respond(200, {
+        runs: [github, { ...queued, triggerDetail: 'POST from ci' }],
+        nextBefore: null
+      })
+    )
+    const { runs } = await client(page).listRoutineRuns('rt_1')
+    expect(runs.map((r) => r.triggerDetail)).toEqual([
+      'acme/web#482 pull_request.labeled',
+      'POST from ci'
+    ])
+  })
 })
 
 describe('classifyCloudApiResponse', () => {

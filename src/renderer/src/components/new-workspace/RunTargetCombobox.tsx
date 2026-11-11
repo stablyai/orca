@@ -16,6 +16,7 @@ import {
   getRunTargetFieldText,
   getRecipeSubmenuItemKey,
   getRunTargetSubmenuItemKeys,
+  closingFirst,
   getRunTargetCurrentRowKey,
   getRunTargetOptionId,
   RUN_TARGET_ADD_HOST_KEY,
@@ -50,19 +51,11 @@ type RunTargetComboboxProps = {
   orcaCloudAccess?: OrcaCloudRunTargetAccess
   /** From main: drives the sign-in/upsell row when there is no Orca Cloud recipe. */
   orcaCloudAvailability?: OrcaCloudAvailability
-}
-
-/** Add-host actions open dialogs, so the picker closes before they run. */
-function closingFirst(
-  close: () => void,
-  action: (() => void) | undefined
-): (() => void) | undefined {
-  return action
-    ? () => {
-        close()
-        action()
-      }
-    : undefined
+  /**
+   * The composer's pick: Orca Cloud is selected even while the account needs setup, which then
+   * happens on a page after Start. Without it, a blocked account's pick runs the fix instead.
+   */
+  onSelectOrcaCloud?: () => void
 }
 
 const ROOT_ATTRIBUTE = 'data-run-target-combobox-root'
@@ -81,7 +74,8 @@ export default function RunTargetCombobox({
   onConnectHost,
   onSetLocation,
   orcaCloudAccess: orcaCloudAccessOverride,
-  orcaCloudAvailability = 'unavailable'
+  orcaCloudAvailability = 'unavailable',
+  onSelectOrcaCloud
 }: RunTargetComboboxProps): React.JSX.Element {
   const t = useTranslate()
   // Track in-flight connects per host so one stalling connect never blocks the others.
@@ -173,7 +167,8 @@ export default function RunTargetCombobox({
     override: orcaCloudAccessOverride,
     open,
     close,
-    selectRecipe
+    selectRecipe,
+    ...(onSelectOrcaCloud ? { onSelectOrcaCloud } : {})
   })
 
   const addSshHost = useMemo(() => closingFirst(close, onAddSshHost), [close, onAddSshHost])
@@ -332,7 +327,9 @@ export default function RunTargetCombobox({
         onKeyDown={handleKeyDown}
       />
       <PopoverContent
-        align="start"
+        // Right column of the composer: grow leftwards from the trigger so the menu stays inside
+        // the dialog.
+        align="end"
         sideOffset={4}
         className={cn(
           'flex w-[var(--radix-popover-trigger-width)] min-w-[18rem] flex-col p-0',
@@ -404,6 +401,7 @@ export default function RunTargetCombobox({
               onSelectRecipe={selectRecipe}
               onSelectOrcaCloud={selectOrcaCloud}
               onOrcaCloudBlockedAction={runOrcaCloudBlockedAction}
+              orcaCloudSetupAfterStart={Boolean(onSelectOrcaCloud)}
               onConnectHost={(option) => void connectHost(option)}
               onSetLocation={setLocation}
             />

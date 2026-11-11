@@ -58,6 +58,8 @@ export type EphemeralVmApi = {
     branch?: string
     ref?: string
     provisionId?: string
+    /** Orca Cloud: one per Create press, sent as the create's Idempotency-Key. */
+    idempotencyKey?: string
   }) => Promise<
     | {
         ok: true
@@ -112,6 +114,11 @@ export type EphemeralVmApi = {
   suspendWorkspace: (args: { workspaceId: string }) => Promise<EphemeralVmWorkspaceLifecycleResult>
   /** Fires after any runtime record write; re-list to read the new lifecycle status. */
   onRuntimesChanged: (callback: () => void) => () => void
+  /**
+   * Orca Cloud: puts a sandbox that never became a workspace to sleep (a create blocked on a
+   * failed environment check). Optional: the web client has no VM lifecycle.
+   */
+  suspendRuntime?: (args: { runtimeId: string }) => Promise<{ ok: boolean; error?: string }>
   cleanup: (args: { runtimeId: string }) => Promise<EphemeralVmRuntimeRecord>
   /** Orca Cloud: before Delete drops the row, prove the signed-in identity can reach the sandbox. */
   preflightCloudDelete?: (args: {

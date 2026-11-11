@@ -1,3 +1,4 @@
+import { selectAwakeBrowserTabsByWorktree } from '@/components/sidebar/workspace-actions/sleep/browser-tab-sleep'
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { useMemo, useState } from 'react'
 import { shallow } from 'zustand/shallow'
@@ -93,7 +94,9 @@ export function useVisibleSidebarWorktrees(args: {
   )
   const ptyIdsByTabId = useAppStore((s) => (needsActivityMaps ? s.ptyIdsByTabId : null))
   const browserTabsByWorktree = useAppStore((s) =>
-    !showSleepingWorkspaces ? getVisibleWorktreeBrowserActivityTabs(s.browserTabsByWorktree) : null
+    !showSleepingWorkspaces
+      ? getVisibleWorktreeBrowserActivityTabs(selectAwakeBrowserTabsByWorktree(s))
+      : null
   )
   const worktreeIdsWithStructuredChat = useAppStore((s) =>
     getStructuredChatWorktreeIds(

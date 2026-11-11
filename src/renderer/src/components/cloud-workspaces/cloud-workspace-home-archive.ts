@@ -8,6 +8,7 @@ import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-w
 import {
   runArchiveCloudWorkspace,
   runArchiveWithUndo,
+  runRestartCloudWorkspace,
   runUnarchiveCloudWorkspace
 } from '../orca-cloud/cloud-workspace-actions'
 import { describeError } from './cloud-workspace-errors'
@@ -159,7 +160,7 @@ export function homeArchiveActions(options: {
   t: Translate
   refresh: () => void
   confirmArchive: (pending: { kind: 'archive' | 'delete'; workspace: CloudWorkspace }) => void
-}): Pick<RowActions, 'archive' | 'unarchive' | 'sleep' | 'remove'> {
+}): Pick<RowActions, 'archive' | 'unarchive' | 'sleep' | 'remove' | 'restart'> {
   const { selfId, t, refresh } = options
   return {
     sleep: (w) => void sleepFromHome(w, cloudWorkspaceTitle(w, t)).finally(refresh),
@@ -171,8 +172,24 @@ export function homeArchiveActions(options: {
       }
       runHomeArchive(w, t, refresh)
     },
-    unarchive: (w) => void unarchiveFromHome(w, cloudWorkspaceTitle(w, t)).finally(refresh)
+    unarchive: (w) => void unarchiveFromHome(w, cloudWorkspaceTitle(w, t)).finally(refresh),
+    restart: (w) => void restartFromHome(w).finally(refresh)
   }
+}
+
+/** Restart runs through this desktop's runtime for it, as the sidebar's Restart does. */
+async function restartFromHome(w: CloudWorkspace, deps = defaultDeps()): Promise<void> {
+  const worktreeId = await deps.localWorktreeId(w.id)
+  if (!worktreeId) {
+    toast.error(
+      translate(
+        'auto.components.cloudWorkspaces.restartElsewhere',
+        'Restart it from the computer that created it.'
+      )
+    )
+    return
+  }
+  await runRestartCloudWorkspace(worktreeId)
 }
 
 /** The team list's confirm dialog was accepted for an archive or a delete. */

@@ -1,3 +1,4 @@
+import { consumeReopenAfterSleep } from '@/components/sidebar/workspace-actions/sleep/browser-tab-sleep'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
@@ -147,6 +148,17 @@ export function useRemoteBrowserPageLifecycle({
         state.removeRemoteBrowserPageHandle(browserTab.id, remotePageId)
       }
       lifecycle.abandonRemotePage()
+      // Slept with its VM (NEW-01): the tab stays. While asleep it waits; once the workspace is
+      // open again it opens a new host page at its URL.
+      if (state.asleepBrowserWorktreeIds[browserTab.worktreeId]) {
+        clearStreamFrame()
+        return
+      }
+      if (consumeReopenAfterSleep(browserTab.id)) {
+        clearStreamFrame()
+        lifecycle.open()
+        return
+      }
       if (remoteViewportTimerRef.current !== null) {
         window.clearTimeout(remoteViewportTimerRef.current)
         remoteViewportTimerRef.current = null
@@ -166,6 +178,7 @@ export function useRemoteBrowserPageLifecycle({
     [
       browserTab.id,
       browserTab.workspaceId,
+      browserTab.worktreeId,
       clearStreamFrame,
       closeBrowserPage,
       closeBrowserTab,

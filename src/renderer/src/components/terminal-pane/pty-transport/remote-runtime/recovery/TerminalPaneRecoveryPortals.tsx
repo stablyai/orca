@@ -19,6 +19,7 @@ import { useRetryPanesWhenWslHostReturns } from '../../recovery/wsl/use-wsl-host
 import { useCalmStatusReveal } from '@/hooks/use-calm-status-reveal'
 import { useAppStore } from '@/store/index'
 import { useCloudRecoveryContext } from '@/lib/orca-cloud/use-cloud-recovery-context'
+import { CloudAsleepTerminalNotice } from '@/components/orca-cloud/offline/CloudAsleepTerminalNotice'
 import { paneShowsWslHostStoppedCard } from '@/runtime/hosts/wsl/wsl-host-stopped-status'
 import { withoutWslHostStoppedLines } from '../../../../../../../shared/wsl-host-stopped-message'
 import { mapPaneTerminalErrors } from '../../../errors/terminal-error-accumulation'
@@ -110,6 +111,7 @@ export function TerminalPaneRecoveryPortals({
   // An Orca Cloud workspace mid-wake already shows its waking pill; "Reconnecting" would be noise.
   const cloud = useCloudRecoveryContext(controller.worktreeId)
   const cloudWaking = cloud?.waking === true
+  const cloudAsleep = cloud?.asleep === true
   const isolated = controller.isolatedPaneKey !== null
   // Why: a pane waiting for SSH sign-in says so itself; "reconnecting" over it would be false.
   const awaitingSignInHere = managedPanes.some(
@@ -125,7 +127,8 @@ export function TerminalPaneRecoveryPortals({
     // Why: "retrying automatically" would be false; each pane offers Start instead.
     stoppedWslDistro === null &&
     pairingRefusedEnvironmentId === null &&
-    !cloudWaking
+    !cloudWaking &&
+    !cloudAsleep
   const serverDown = retryingOutageEnvironmentId !== null
   const notice = useRemoteServerNoticeClaim(ownerEnvironmentId, serverDown, canSpeak)
   const [noticeEnvironmentId, setNoticeEnvironmentId] = useState<string | null>(null)
@@ -190,6 +193,14 @@ export function TerminalPaneRecoveryPortals({
             />,
             pane.container,
             `wsl-host-stopped-${pane.id}`
+          )
+        }
+        // Asleep: nothing to reconnect to; one calm line with Wake instead of a reconnect card (RA-12).
+        if (cloudAsleep) {
+          return createPortal(
+            <CloudAsleepTerminalNotice workspaceId={controller.worktreeId} />,
+            pane.container,
+            `cloud-asleep-${pane.id}`
           )
         }
         // Why mounted with no recovery: the banner's minimum time and hold outlive the recovery itself.

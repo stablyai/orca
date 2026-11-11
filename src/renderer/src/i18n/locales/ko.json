@@ -893,8 +893,7 @@
             "76deec8f58": "조직을 전환하지 못했습니다",
             "7d4bc516ee": "프로필을 전환하지 못했습니다",
             "f518e89aa5": "프로젝트가 해당 프로필에 이미 있습니다",
-            "f03ae7f27b": "프로젝트를 전송하지 못했습니다",
-            "signInTimedOut": "로그인 시간이 초과되었습니다"
+            "f03ae7f27b": "프로젝트를 전송하지 못했습니다"
           }
         },
         "runtime": {
@@ -17691,7 +17690,6 @@
           "signout": {
             "confirm": {
               "title": "Orca에서 로그아웃할까요?",
-              "description": "이 기기의 Orca에서 로그아웃됩니다. 로컬 프로젝트와 워크트리에는 영향을 주지 않습니다.",
               "cancel": "취소",
               "action": "로그아웃"
             }
@@ -20049,7 +20047,6 @@
       "startInTerminal": "터미널에서 {{value0}} 시작"
     },
     "newWorkspace": {
-      "agentOptional": "에이전트 [선택 사항]",
       "createDescription": "프로젝트와 워크스페이스 이름을 선택하세요. 원하면 시작할 에이전트를 선택하세요.",
       "directSetup": {
         "run": "Run setup",

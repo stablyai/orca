@@ -1,4 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCloudRecoveryContext } from '@/lib/orca-cloud/use-cloud-recovery-context'
+import { useIsCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { useCloudSetupPageRequest } from '@/lib/orca-cloud/cloud-setup-page-store'
+import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/worktree-creation-surface'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { track } from '@/lib/telemetry'
@@ -67,8 +71,21 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
     [activeRepoId, activeWorktree, repos, settings]
   )
   const activeRepoHostIdentity = activeRepo ? getRepoHostIdentity(activeRepo) : null
+  // An asleep Orca Cloud workspace can't be inspected: wait until it's awake instead of showing
+  // "Couldn't verify this repo's setup script" with Retry (RA-12).
+  const asleepCloud = useCloudRecoveryContext(activeWorktreeId)?.asleep === true
+  // Orca Cloud never shows this nudge: a cloud workspace reports a setup script that hasn't run in
+  // its own notice, and while a create is setting up, starting or stopped on a check the card would
+  // flip between states under the start screen (JA-12, PC-7).
+  const cloudWorkspace = useIsCloudWorkspace(activeWorktreeId)
+  const creationShown = useAppStore(selectWorktreeCreationSurfaceShown)
+  const cloudSetupOpen = useCloudSetupPageRequest() !== null
   const isDismissed =
     provisionedByEnvironmentBuild ||
+    asleepCloud ||
+    cloudWorkspace ||
+    creationShown ||
+    cloudSetupOpen ||
     (activeRepoHostIdentity
       ? isSetupScriptPromptDismissed(activeRepoHostIdentity, dismissedRepoIds)
       : false)

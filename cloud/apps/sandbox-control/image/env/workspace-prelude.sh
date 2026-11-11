@@ -68,9 +68,62 @@ clone_failure_reason() {
   fi
 }
 
+
+# Brings a prebuilt checkout (environment build) up to date: fetches only what changed on the target
+# branch (ORCA_REPO_REF, else the build's branch) and checks it out. A branch the remote doesn't have
+# yet (a new workspace branch) starts from the build's branch, freshly fetched. Progress goes to stderr.
+update_repo() {
+  local base target status
+  base="$(git -C "$P" symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+  target="${ref:-$base}"
+  [ -n "$target" ] || return 0
+  timeout "$CLONE_TIMEOUT_S" git ${auth[@]+"${auth[@]}"} -C "$P" fetch --progress origin "+refs/heads/$target:refs/remotes/origin/$target"
+  status=$?
+  if [ "$status" -eq 0 ]; then
+    # -f: the install may have rewritten tracked files (a lockfile); the branch's version wins.
+    git -C "$P" checkout --quiet -f -B "$target" "origin/$target" --
+    return $?
+  fi
+  [ "$status" -eq 124 ] && return 124
+  { [ -n "$base" ] && [ "$base" != "$target" ]; } || return "$status"
+  timeout "$CLONE_TIMEOUT_S" git ${auth[@]+"${auth[@]}"} -C "$P" fetch --progress origin "+refs/heads/$base:refs/remotes/origin/$base" || return $?
+  git -C "$P" checkout --quiet -f -B "$target" "origin/$base" --
+}
+
+# Runs clone_repo or update_repo detached (own session, no inherited stdio), so the start command
+# returns while it runs; $CLONE_DIR/state reads running, then done or "failed <reason>".
+run_detached() {
+  echo running >"$CLONE_DIR/state"
+  : >"$CLONE_DIR/progress.log"
+  export -f clone_repo update_repo first_commit clone_failure_reason
+  export P CLONE_DIR CLONE_TIMEOUT_S ORCA_REPO_URL ref
+  export ORCA_PRELUDE_AUTH="${ORCA_GIT_EXTRAHEADER:-}" ORCA_PRELUDE_STEP="$1"
+  setsid bash -c '
+    auth=()
+    [ -n "$ORCA_PRELUDE_AUTH" ] && auth=(-c "http.https://github.com/.extraheader=$ORCA_PRELUDE_AUTH")
+    unset ORCA_PRELUDE_AUTH
+    "$ORCA_PRELUDE_STEP" >>"$CLONE_DIR/progress.log" 2>&1
+    status=$?
+    if [ "$status" -eq 0 ]; then
+      echo done >"$CLONE_DIR/state.next"
+    elif [ "$ORCA_PRELUDE_STEP" = update_repo ]; then
+      # Not fatal: the build'"'"'s checkout is there, just older. The status says so; the create goes on.
+      echo "done stale" >"$CLONE_DIR/state.next"
+    else
+      echo "failed $(clone_failure_reason "$status" "$CLONE_DIR/progress.log")" >"$CLONE_DIR/state.next"
+    fi
+    mv -f "$CLONE_DIR/state.next" "$CLONE_DIR/state"
+  ' </dev/null >/dev/null 2>&1 &
+}
+
 if [ ! -e "$P" ] && [ -n "${ORCA_ENV_REPO_DIR:-}" ] && [ -d "$ROOT/$ORCA_ENV_REPO_DIR/.git" ]; then
   ln -s "$ROOT/$ORCA_ENV_REPO_DIR" "$P"
-  if [ -n "$ref" ] && [ "$(git -C "$P" symbolic-ref --quiet --short HEAD 2>/dev/null)" != "$ref" ]; then
+  if [ "${ORCA_CLONE_BACKGROUND:-}" = 1 ]; then
+    # The desktop shows this as "Update repository" (GET /v1/sandboxes/:id/clone): fetch what changed
+    # since the build, in the background. A failure leaves the build's commit, which still opens.
+    mkdir -p "$CLONE_DIR"
+    run_detached update_repo
+  elif [ -n "$ref" ] && [ "$(git -C "$P" symbolic-ref --quiet --short HEAD 2>/dev/null)" != "$ref" ]; then
     if timeout 60 git "${auth[@]}" -C "$P" fetch --quiet origin "+refs/heads/$ref:refs/remotes/origin/$ref"; then
       # -f: the install may have rewritten tracked files (a lockfile); the branch's version wins.
       git -C "$P" checkout --quiet -f -B "$ref" "origin/$ref" -- ||
@@ -83,25 +136,7 @@ if [ ! -e "$P" ] && [ -n "${ORCA_ENV_REPO_DIR:-}" ] && [ -d "$ROOT/$ORCA_ENV_REP
 elif [ ! -e "$P" ] && [ -n "${ORCA_REPO_URL:-}" ]; then
   mkdir -p "$P" "$CLONE_DIR"
   if [ "${ORCA_CLONE_BACKGROUND:-}" = 1 ]; then
-    echo running >"$CLONE_DIR/state"
-    : >"$CLONE_DIR/progress.log"
-    # Detached (own session, no inherited stdio): the start command returns while this runs.
-    export -f clone_repo first_commit clone_failure_reason
-    export P CLONE_DIR CLONE_TIMEOUT_S ORCA_REPO_URL ref
-    export ORCA_PRELUDE_AUTH="${ORCA_GIT_EXTRAHEADER:-}"
-    setsid bash -c '
-      auth=()
-      [ -n "$ORCA_PRELUDE_AUTH" ] && auth=(-c "http.https://github.com/.extraheader=$ORCA_PRELUDE_AUTH")
-      unset ORCA_PRELUDE_AUTH
-      clone_repo >>"$CLONE_DIR/progress.log" 2>&1
-      status=$?
-      if [ "$status" -eq 0 ]; then
-        echo done >"$CLONE_DIR/state.next"
-      else
-        echo "failed $(clone_failure_reason "$status" "$CLONE_DIR/progress.log")" >"$CLONE_DIR/state.next"
-      fi
-      mv -f "$CLONE_DIR/state.next" "$CLONE_DIR/state"
-    ' </dev/null >/dev/null 2>&1 &
+    run_detached clone_repo
   else
     clone_repo 2>"$CLONE_DIR/progress.log" || exit 1
   fi

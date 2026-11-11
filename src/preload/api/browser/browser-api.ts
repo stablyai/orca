@@ -1,3 +1,4 @@
+import type { RemoteDesktopPageState } from '../../../shared/hosted-sandbox/cloud-remote-desktop'
 import type { BrowserSessionCookieApi } from './browser-session-cookie-api'
 import type { BrowserDevToolsDockBounds } from '../../../shared/browser/devtools/browser-devtools-dock'
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
@@ -213,9 +214,7 @@ export type BrowserApi = {
   /** Escape pressed in a focused page; the page also receives it unless a grab pick is running. */
   onGuestEscape: (callback: (args: { browserPageId: string }) => void) => () => void
   /** A browser page became (or stopped being) a remote desktop, or gained or lost the keyboard. */
-  onRemoteDesktopState: (
-    callback: (args: { browserPageId: string; desktop: boolean; captured: boolean }) => void
-  ) => () => void
+  onRemoteDesktopState: (callback: (args: RemoteDesktopPageState) => void) => () => void
   /** The release chord was pressed in a remote desktop: give the keyboard back to Orca. */
   onRemoteDesktopRelease: (callback: (args: { browserPageId: string }) => void) => () => void
   sessionListProfiles: () => Promise<BrowserSessionProfile[]>

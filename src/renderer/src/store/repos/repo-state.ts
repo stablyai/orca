@@ -203,7 +203,9 @@ export type RepoSlice = {
     options?: AddRepoPathOptions
   ) => Promise<Repo | null>
   setupProjectExistingFolder: (
-    args: ProjectHostSetupExistingFolderArgs
+    args: ProjectHostSetupExistingFolderArgs,
+    /** `quiet`: no "Project added" toast (a VM create registering its own checkout). */
+    options?: { quiet?: boolean }
   ) => Promise<ProjectHostSetupResult | null>
   createProjectHostSetup: (
     args: ProjectHostSetupCreateArgs

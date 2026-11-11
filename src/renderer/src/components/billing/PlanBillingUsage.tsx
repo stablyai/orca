@@ -4,13 +4,12 @@ import { Button } from '@/components/ui/button'
 import { SettingsDisabledControlTooltip } from '@/components/settings/form-controls/SettingsDisabledControlTooltip'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
-import { Switch } from '@/components/ui/switch'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type {
   OrcaBillingEntitlement,
   OrcaBillingOverageArgs
 } from '../../../../shared/orca-billing'
-import { formatHours, includedUsagePercent } from './plan-billing-format'
+import { formatHours, formatHoursUsed, includedUsagePercent } from './plan-billing-format'
 import {
   includedUsageTone,
   sandboxHoursLeftLine,
@@ -35,7 +34,9 @@ function resetLine(
           value0: resets,
           value1: ends
         })
-      : t('auto.components.billing.endsOn', 'Plan ends {{value0}}', { value0: ends })
+      : t('auto.components.billing.endsOn', 'Plan ends {{value0}}', {
+          value0: ends
+        })
   }
   if (resets && ends) {
     return resets === ends
@@ -48,9 +49,15 @@ function resetLine(
         })
   }
   if (resets) {
-    return t('auto.components.billing.resets', 'Hours reset {{value0}}', { value0: resets })
+    return t('auto.components.billing.resets', 'Hours reset {{value0}}', {
+      value0: resets
+    })
   }
-  return ends ? t('auto.components.billing.renewsOn', 'Renews {{value0}}', { value0: ends }) : null
+  return ends
+    ? t('auto.components.billing.renewsOn', 'Renews {{value0}}', {
+        value0: ends
+      })
+    : null
 }
 
 export function UsageSummary({
@@ -72,7 +79,7 @@ export function UsageSummary({
             'auto.components.billing.sandboxHoursUsedMonth',
             '{{value0}} of {{value1}} sandbox hours used this month',
             {
-              value0: formatHours(Math.min(entitlement.usedSeconds, entitlement.includedSeconds)),
+              value0: formatHoursUsed(Math.min(entitlement.usedSeconds, entitlement.includedSeconds)),
               value1: formatHours(entitlement.includedSeconds)
             }
           )}
@@ -106,30 +113,28 @@ export function OverageControls({
   const t = useTranslate()
   const locale = useIntlLocale()
   const capId = useId()
-  const descriptionId = useId()
+  const hintId = useId()
   const capErrorId = useId()
   const savedRef = useRef<HTMLSpanElement>(null)
   const { overage } = entitlement
-  const savedDollars = String(Math.round(overage.spendCapCents / 100))
+  // One field: the cap while overage is on, $0 while it's off.
+  const savedDollars = overage.optedIn ? String(Math.round(overage.spendCapCents / 100)) : '0'
+  const defaultCapCents = entitlement.offers?.team.defaultSpendCapCents ?? 2500
   const [capDollars, setCapDollars] = useState(savedDollars)
-  // Shows "Saved" after a successful cap change until the field is edited again (review M13).
+  // Shows "Saved" after a successful change until the field is edited again (review M13).
   const [savedFlash, setSavedFlash] = useState(false)
-  // The switch flips at once; the saved value takes over when billing answers.
-  const [optimisticOn, setOptimisticOn] = useState<boolean | null>(null)
   // Re-seed from the server whenever the saved values change (render-time adjustment, no effect).
-  const [seededFrom, setSeededFrom] = useState(`${savedDollars}:${overage.optedIn}`)
-  if (seededFrom !== `${savedDollars}:${overage.optedIn}`) {
-    setSeededFrom(`${savedDollars}:${overage.optedIn}`)
+  const [seededFrom, setSeededFrom] = useState(savedDollars)
+  if (seededFrom !== savedDollars) {
+    setSeededFrom(savedDollars)
     setCapDollars(savedDollars)
-    setOptimisticOn(null)
   }
   const [seenFailures, setSeenFailures] = useState(failures)
   if (seenFailures !== failures) {
     setSeenFailures(failures)
-    setOptimisticOn(null)
+    setCapDollars(savedDollars)
     setSavedFlash(false)
   }
-  const optedIn = optimisticOn ?? overage.optedIn
   const parsedCap = Number(capDollars)
   const maxCapCents = entitlement.offers?.team.maxSpendCapCents ?? null
   const capWhole = capDollars.trim() !== '' && Number.isInteger(parsedCap) && parsedCap >= 0
@@ -137,18 +142,11 @@ export function OverageControls({
   const capValid = capWhole && !capTooHigh
   const changed = capValid && capDollars.trim() !== savedDollars
   const paymentFailed = entitlement.payment.pastDueSince !== null
-  const description = t(
-    'auto.components.billing.overageDescription7',
-    'Optional overage at {{rate}} per sandbox hour, billed by the minute, up to a monthly spend cap you set ({{cap}} by default).',
-    {
-      rate: formatRateCents(overage.centsPerHour, locale),
-      cap: formatCents(entitlement.offers?.team.defaultSpendCapCents ?? 2500, locale)
-    }
-  )
-  const descriptionOn = t(
-    'auto.components.billing.overageDescriptionOn4',
-    'Optional overage at {{rate}} per sandbox hour, billed by the minute, up to a monthly spend cap you set.',
-    { rate: formatRateCents(overage.centsPerHour, locale) }
+  const rate = formatRateCents(overage.centsPerHour, locale)
+  const hint = t(
+    'auto.components.billing.overage.capHint',
+    '{{rate}} per sandbox hour after your included hours, billed by the minute. $0 keeps overage off.',
+    { rate }
   )
   const capPercent =
     overage.spendCapCents > 0
@@ -169,155 +167,147 @@ export function OverageControls({
       </p>
     </div>
   )
+  const title = (
+    <p className="text-sm font-medium">{t('auto.components.billing.overageTitle', 'Overage')}</p>
+  )
 
-  // Members see the setting as plain text: a switch they can't use only invites clicks.
+  // Members see the setting as plain text: a field they can't use only invites clicks.
   if (!entitlement.canManageBilling) {
     return (
       <div className="space-y-2 rounded-md border border-border/60 p-3">
-        <p className="text-sm">
-          <span className="font-medium">
-            {t('auto.components.billing.overageTitle', 'Overage')}
-          </span>
-          <span className="text-muted-foreground">
-            {' · '}
-            {overage.optedIn
-              ? t('auto.components.billing.overageOnRead', 'On')
-              : t('auto.components.billing.overageOffRead', 'Off')}
-          </span>
+        {title}
+        <p className="text-xs text-muted-foreground tabular-nums">
+          {overage.optedIn
+            ? t('auto.components.billing.overage.memberOn', 'On, up to {{cap}} a month.', {
+                cap: formatCents(overage.spendCapCents, locale)
+              })
+            : t(
+                'auto.components.billing.overage.memberOff2',
+                'Off. Ask an owner or admin to turn it on.'
+              )}
         </p>
         {overage.optedIn ? spent : null}
-        <p className="text-xs text-muted-foreground">
-          {t('auto.components.billing.overageMemberHint', 'Owners and admins can change overage.')}
-        </p>
       </div>
     )
   }
 
-  const toggleBlocked = busy || paymentFailed
+  const save = (enabled: boolean, cents: number): void => {
+    onSetOverage(enabled ? { enabled: true, spendCapCents: cents } : { enabled: false })
+    setSavedFlash(true)
+    // The action turns into "Saving…" in place; move focus onto it.
+    window.requestAnimationFrame(() => savedRef.current?.focus())
+  }
+  const blockedReason = paymentFailed
+    ? t(
+        'auto.components.billing.overagePaymentFailed',
+        'Update the payment method before changing overage.'
+      )
+    : undefined
   return (
     // Deep-link target: the Run-on picker's "Turn on overage" / "Raise cap" lands here.
     <div
       id={ORCA_BILLING_OVERAGE_SECTION_ID}
       className="space-y-3 rounded-md border border-border/60 p-3"
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="space-y-1">
-          <p className="text-sm font-medium">
-            {t('auto.components.billing.overageTitle', 'Overage')}
-          </p>
-          <p id={descriptionId} className="text-xs text-muted-foreground">
-            {optedIn ? descriptionOn : description}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {t(
-              'auto.components.billing.usageAlertsNote',
-              'Owners and admins are alerted in Orca at 75%, 90% and 100% of your team’s sandbox hours.'
-            )}
-          </p>
-        </div>
-        <SettingsDisabledControlTooltip
-          reason={
-            paymentFailed
-              ? t(
-                  'auto.components.billing.overagePaymentFailed',
-                  'Update the payment method before changing overage.'
-                )
-              : undefined
+      {title}
+      <form
+        className="flex flex-wrap items-start gap-2"
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (changed && !busy && !paymentFailed) {
+            save(parsedCap > 0, parsedCap * 100)
           }
-        >
-          <Switch
-            checked={optedIn}
-            // aria-disabled keeps focus on the switch while a change saves.
-            aria-disabled={toggleBlocked || undefined}
-            aria-describedby={descriptionId}
-            onCheckedChange={(enabled) => {
-              if (toggleBlocked) {
-                return
-              }
-              setOptimisticOn(enabled)
-              onSetOverage({ enabled })
-            }}
-            aria-label={t('auto.components.billing.overageToggle', 'Allow overage')}
-          />
-        </SettingsDisabledControlTooltip>
-      </div>
-      {optedIn ? (
-        <div className="space-y-3">
-          {spent}
-          {paymentFailed ? null : (
-            <form
-              className="flex flex-wrap items-start gap-2"
-              onSubmit={(event) => {
-                event.preventDefault()
-                if (changed && !busy) {
-                  onSetOverage({ enabled: true, spendCapCents: parsedCap * 100 })
-                  setSavedFlash(true)
-                  // Save turns into "Saving…" in place; move focus onto it.
-                  window.requestAnimationFrame(() => savedRef.current?.focus())
-                }
-              }}
-            >
-              <label htmlFor={capId} className="flex h-9 items-center text-xs font-medium">
-                {t('auto.components.billing.capLabel2', 'Monthly spend cap')}
-              </label>
-              <div className="space-y-1">
-                <div className="relative w-32">
-                  <span
-                    aria-hidden
-                    className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm text-muted-foreground"
-                  >
-                    $
-                  </span>
-                  <Input
-                    id={capId}
-                    inputMode="numeric"
-                    adornment="leading"
-                    value={capDollars}
-                    aria-invalid={!capValid || undefined}
-                    aria-describedby={capValid ? undefined : capErrorId}
-                    onChange={(event) => {
-                      setCapDollars(event.target.value)
-                      setSavedFlash(false)
-                    }}
-                  />
-                </div>
-                {capValid ? null : (
-                  <p id={capErrorId} className="text-xs text-destructive">
-                    {capTooHigh && maxCapCents !== null
-                      ? capTooHighCopy(maxCapCents, locale, t)
-                      : t('auto.components.billing.capInvalid', 'Enter a whole dollar amount.')}
-                  </p>
-                )}
-              </div>
-              {savedFlash ? (
-                <span
-                  ref={savedRef}
-                  tabIndex={-1}
-                  role="status"
-                  className="flex h-9 items-center gap-1 text-xs text-muted-foreground outline-none"
-                >
-                  <Check className="size-3.5" />
-                  {busy || changed
-                    ? t('auto.components.billing.capSaving', 'Saving…')
-                    : t('auto.components.billing.capSaved', 'Saved')}
-                </span>
-              ) : changed ? (
-                <Button type="submit" variant="outline" aria-disabled={busy || undefined}>
-                  {t('auto.components.billing.saveCap', 'Save')}
-                </Button>
-              ) : null}
-              {capValid && entitlement.reason === 'overage_cap_reached' ? (
-                <p className="basis-full text-xs text-muted-foreground">
-                  {t(
-                    'auto.components.billing.capReachedHint2',
-                    'Raise the cap to start sandboxes again. Your sandboxes are asleep, and your files are safe.'
-                  )}
-                </p>
-              ) : null}
-            </form>
+        }}
+      >
+        <label htmlFor={capId} className="flex h-9 items-center text-xs font-medium">
+          {t('auto.components.billing.capLabel2', 'Monthly spend cap')}
+        </label>
+        <div className="space-y-1">
+          <SettingsDisabledControlTooltip reason={blockedReason}>
+            <div className="relative w-32">
+              <span
+                aria-hidden
+                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm text-muted-foreground"
+              >
+                $
+              </span>
+              <Input
+                id={capId}
+                inputMode="numeric"
+                adornment="leading"
+                value={capDollars}
+                readOnly={paymentFailed}
+                aria-disabled={paymentFailed || undefined}
+                aria-invalid={!capValid || undefined}
+                aria-describedby={capValid ? hintId : `${capErrorId} ${hintId}`}
+                onChange={(event) => {
+                  setCapDollars(event.target.value)
+                  setSavedFlash(false)
+                }}
+              />
+            </div>
+          </SettingsDisabledControlTooltip>
+          {capValid ? null : (
+            <p id={capErrorId} className="text-xs text-destructive">
+              {capTooHigh && maxCapCents !== null
+                ? capTooHighCopy(maxCapCents, locale, t)
+                : t('auto.components.billing.capInvalid', 'Enter a whole dollar amount.')}
+            </p>
           )}
         </div>
-      ) : null}
+        {savedFlash ? (
+          <span
+            ref={savedRef}
+            tabIndex={-1}
+            role="status"
+            className="flex h-9 items-center gap-1 text-xs text-muted-foreground outline-none"
+          >
+            <Check className="size-3.5" />
+            {busy || changed
+              ? t('auto.components.billing.capSaving', 'Saving…')
+              : t('auto.components.billing.capSaved', 'Saved')}
+          </span>
+        ) : changed ? (
+          <Button type="submit" variant="outline" aria-disabled={busy || undefined}>
+            {t('auto.components.billing.saveCap', 'Save')}
+          </Button>
+        ) : !overage.optedIn && !paymentFailed ? (
+          <Button
+            type="button"
+            variant="outline"
+            aria-disabled={busy || undefined}
+            onClick={() => {
+              if (busy) {
+                return
+              }
+              setCapDollars(String(Math.round(defaultCapCents / 100)))
+              save(true, defaultCapCents)
+            }}
+          >
+            {t('auto.components.billing.overage.turnOn', 'Turn on with a {{cap}} cap', {
+              cap: formatCents(defaultCapCents, locale)
+            })}
+          </Button>
+        ) : null}
+        <p id={hintId} className="basis-full text-xs text-muted-foreground">
+          {hint}
+        </p>
+        {capValid && entitlement.reason === 'overage_cap_reached' ? (
+          <p className="basis-full text-xs text-muted-foreground">
+            {t(
+              'auto.components.billing.capReachedHint2',
+              'Raise the cap to start sandboxes again. Your sandboxes are asleep, and your files are safe.'
+            )}
+          </p>
+        ) : null}
+      </form>
+      {overage.optedIn ? spent : null}
+      <p className="text-xs text-muted-foreground">
+        {t(
+          'auto.components.billing.usageAlertsNote',
+          'Owners and admins are alerted in Orca at 75%, 90% and 100% of your team’s sandbox hours.'
+        )}
+      </p>
     </div>
   )
 }
