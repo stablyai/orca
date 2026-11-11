@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import type { editor } from 'monaco-editor'
 import { getEditorFileReadContext } from '@/lib/editor/file-operations/editor-file-operation-owner'
 import { getRuntimeGitDiff } from '@/runtime/source-control/git/runtime-git-diff-client'
@@ -58,7 +58,7 @@ export function useMonacoGitChangeGutter(params: {
   eligible: boolean
 }): void {
   const { mountedEditor, fileId, worktreeId, relativePath, eligible } = params
-  const baselineKey = useAppStore((state) => {
+  const fileBaselineKey = useAppStore((state) => {
     if (!eligible || !worktreeId || state.settings?.editorGitChangeGutterEnabled !== true) {
       return null
     }
@@ -74,6 +74,25 @@ export function useMonacoGitChangeGutter(params: {
       statusEntries: state.gitStatusByWorktree[worktreeId]
     })
   })
+  // Why: a file too long to mark must not cost a Git read, yet must get one once edits shrink it.
+  const watchesModelSize = fileBaselineKey !== null
+  const subscribeToModelSize = useCallback(
+    (onChange: () => void) => {
+      const model = watchesModelSize ? mountedEditor?.getModel() : null
+      if (!model) {
+        return () => {}
+      }
+      const contentSub = model.onDidChangeContent(onChange)
+      return () => contentSub.dispose()
+    },
+    [mountedEditor, watchesModelSize]
+  )
+  const modelIsTooLong = useSyncExternalStore(
+    subscribeToModelSize,
+    () => (mountedEditor?.getModel()?.getLineCount() ?? 0) > MAX_GUTTER_LINES
+  )
+  // Until the editor mounts its length is unknown, and there is nothing to paint on anyway.
+  const baselineKey = !mountedEditor || modelIsTooLong ? null : fileBaselineKey
   const [baseline, setBaseline] = useState<GitHeadBaseline>(null)
   // Repaint on theme change: the overview ruler holds resolved colors.
   const isDarkTheme = useDocumentDarkTheme()
@@ -121,7 +140,7 @@ export function useMonacoGitChangeGutter(params: {
       timer = null
       lastPaintAt = Date.now()
       const hunks =
-        model.getLineCount() > MAX_GUTTER_LINES || baseline.length > MAX_GUTTER_LINES
+        baseline.length > MAX_GUTTER_LINES
           ? null
           : computeGitChangeHunks(baseline, model.getLinesContent())
       collection.set(hunks ? buildGitChangeGutterDecorations(hunks, overviewRulerColors) : [])
