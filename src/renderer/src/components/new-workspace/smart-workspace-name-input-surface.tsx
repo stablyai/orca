@@ -14,6 +14,7 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { SelectionIcon } from './smart-workspace-source-row-content'
 import type { SmartWorkspaceNameFieldController } from './use-smart-workspace-name-field-controller'
+import { TASK_SOURCE_MODES } from './SmartWorkspaceSourceTabs'
 
 export function renderSmartWorkspaceNameInput(
   controller: SmartWorkspaceNameFieldController,
@@ -236,7 +237,7 @@ export function renderSmartWorkspaceNameInput(
         onKeyDown={(event) => {
           if (event.key === 'Tab' && event.shiftKey) {
             const activeTrigger = tabsListRef.current?.querySelector<HTMLElement>(
-              `[data-smart-name-mode="${mode}"]`
+              `[data-smart-name-mode="${TASK_SOURCE_MODES.includes(mode) ? 'tasks' : mode}"]`
             )
             if (activeTrigger) {
               event.preventDefault()

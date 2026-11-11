@@ -22108,6 +22108,10 @@
         "yamlSource": "orca.yaml",
         "bothSources": "orca.yaml + local",
         "localSource": "local settings"
+      },
+      "sourceTabs": {
+        "tasks": "Tasks",
+        "taskSource": "Task source"
       }
     },
     "JiraIssueWorkspace": {
