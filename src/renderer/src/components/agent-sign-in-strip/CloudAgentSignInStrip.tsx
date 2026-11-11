@@ -242,6 +242,10 @@ export function CloudAgentSignInStrip({
         {primary ? (
           <Button
             type="button"
+            // The short label still names what it does for a screen reader.
+            aria-label={
+              (width === 'tiny' || compact) && primary.narrowLabel ? primary.label : undefined
+            }
             size="xs"
             variant={model.status === 'error' ? 'outline' : 'default'}
             aria-busy={primary.busy || undefined}

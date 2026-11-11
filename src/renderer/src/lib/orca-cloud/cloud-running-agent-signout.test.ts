@@ -4,7 +4,8 @@ import type { OrcaCloudAgentAccountsState } from './orca-cloud-agent-accounts-st
 import {
   clearCloudRunningSignout,
   cloudRunningStrip,
-  resetCloudRunningSignoutForTest
+  resetCloudRunningSignoutForTest,
+  workspaceUsesAccount
 } from './cloud-running-agent-signout'
 
 function accounts(
@@ -33,8 +34,9 @@ const strip = (
   account: ReturnType<typeof accounts>,
   entry: Parameters<typeof cloudRunningStrip>[0]['entry'] = RUNNING,
   now = 1_000,
-  paneKey = 'tab:a'
-) => cloudRunningStrip({ paneKey, entry, accounts: account, held: false, now })
+  paneKey = 'tab:a',
+  usesAccount: boolean | null = true
+) => cloudRunningStrip({ paneKey, entry, accounts: account, held: false, now, usesAccount })
 
 describe('cloudRunningStrip (RA-11)', () => {
   beforeEach(resetCloudRunningSignoutForTest)
@@ -104,10 +106,44 @@ describe('cloudRunningStrip (RA-11)', () => {
         entry: RUNNING,
         accounts: accounts({ state: 'revoked' }),
         held: true,
-        now: 1
+        now: 1,
+        usesAccount: true
       })
     ).toBeNull()
     expect(strip(accounts({ state: 'revoked' }), { ...RUNNING, agentType: 'gemini' })).toBeNull()
     expect(strip(accounts({ state: 'revoked' }), null)).toBeNull()
+  })
+})
+
+describe('D13: only workspaces that run the agent on the person’s own account', () => {
+  beforeEach(resetCloudRunningSignoutForTest)
+  const view = (extra: Record<string, unknown> = {}) => ({
+    defaults: {},
+    coveredByKey: { claude: false, codex: false },
+    ...extra
+  })
+
+  it('reads the workspace Source: shared and key-sourced workspaces never use the account', () => {
+    expect(workspaceUsesAccount(view({ sharedWorkspace: true }), 'claude')).toBe(false)
+    expect(workspaceUsesAccount(view({ effective: { claude: { source: 'key' } } }), 'claude')).toBe(
+      false
+    )
+    expect(workspaceUsesAccount(view({ defaults: { claude: 'key' } }), 'claude')).toBe(false)
+    // Nothing chosen and a key covers the agent: the key wins.
+    expect(
+      workspaceUsesAccount(view({ coveredByKey: { claude: true, codex: false } }), 'claude')
+    ).toBe(false)
+    expect(
+      workspaceUsesAccount(view({ effective: { claude: { source: 'sign-in' } } }), 'claude')
+    ).toBe(true)
+    expect(workspaceUsesAccount(view(), 'claude')).toBe(true)
+  })
+
+  it('shows no strip for a shared or keyed workspace, nor while the Source is unread (fail quiet)', () => {
+    expect(strip(accounts({ state: 'revoked' }), RUNNING, 1_000, 'tab:s', false)).toBeNull()
+    expect(strip(accounts({ state: 'revoked' }), RUNNING, 1_000, 'tab:u', null)).toBeNull()
+    expect(strip(accounts({ state: 'revoked' }), RUNNING, 1_000, 'tab:y', true)?.phase).toBe(
+      'expired'
+    )
   })
 })

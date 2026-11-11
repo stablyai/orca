@@ -8,6 +8,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
+import type { HostAgentSignInAgent } from '../../../../shared/host-agent-sign-in-status'
 import { useAgentSignInGate } from '@/lib/agent-sign-in/agent-sign-in-gate-store'
 import { useCloudAgentHold } from '@/lib/orca-cloud/cloud-agent-launch-hold'
 import {
@@ -20,7 +21,8 @@ import {
   clearCloudRunningSignout,
   cloudRunningStrip,
   useCloudRunningAccountReads,
-  useCloudRunningSignoutVersion
+  useCloudRunningSignoutVersion,
+  useWorkspaceUsesAccount
 } from '@/lib/orca-cloud/cloud-running-agent-signout'
 import {
   CloudAgentSignInStrip,
@@ -63,6 +65,17 @@ export function CloudRunningStripPortal({
   const running = cloud && (entry?.agentType === 'claude' || entry?.agentType === 'codex')
   useCloudRunningAccountReads(running)
   const accounts = useOrcaCloudAgentAccounts(running)
+  const agentType = entry?.agentType
+  const agent: HostAgentSignInAgent | null =
+    agentType === 'claude' ? 'claude' : agentType === 'codex' ? 'codex' : null
+  // D13: only a workspace that runs the agent on the person's own account (never shared or keyed).
+  const expired =
+    agent !== null &&
+    accounts.load.kind === 'ready' &&
+    accounts.load.status.credentials[agent].state !== 'active' &&
+    accounts.load.status.credentials[agent].state !== 'expiring' &&
+    accounts.load.status.credentials[agent].state !== 'none'
+  const usesAccount = useWorkspaceUsesAccount(running ? environmentId : null, agent, expired)
   const hold = useCloudAgentHold(paneKey)
   const gate = useAgentSignInGate(paneKey)
   const held = hold !== null || gate !== null
@@ -75,7 +88,8 @@ export function CloudRunningStripPortal({
     entry,
     accounts,
     held,
-    now: orcaCloudAgentAccountsLoadedAt()
+    now: orcaCloudAgentAccountsLoadedAt(),
+    usesAccount
   })
   if (!strip) {
     return null

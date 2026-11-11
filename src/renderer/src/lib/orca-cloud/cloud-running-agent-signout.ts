@@ -5,6 +5,7 @@
 // same read the build sheet uses), never from terminal output.
 import { useEffect, useSyncExternalStore } from 'react'
 import type { HostAgentSignInAgent } from '../../../../shared/host-agent-sign-in-status'
+import type { AgentSourcesView } from '../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
 import { agentTurnEndedUncleanly } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
@@ -72,6 +73,11 @@ export function cloudRunningStrip(args: {
   accounts: Pick<OrcaCloudAgentAccountsState, 'load' | 'keyKinds'>
   held: boolean
   now: number
+  /**
+   * D13: does this pane's workspace run the agent on the person's own account? false for a shared
+   * workspace or a key-sourced one, null while unread or unreadable (then no strip: fail quiet).
+   */
+  usesAccount: boolean | null
 }): CloudRunningStrip | null {
   const { paneKey, entry, accounts } = args
   const remembered = signedOut.get(paneKey)
@@ -82,6 +88,9 @@ export function cloudRunningStrip(args: {
   const coverage = orcaCloudAgentCoverage(agent, accounts.load.status, accounts.keyKinds[agent])
   switch (coverage.kind) {
     case 'expired':
+      if (args.usesAccount !== true) {
+        return null
+      }
       if (!remembered || remembered.renewedAt !== null) {
         signedOut.set(paneKey, { agent, renewedAt: null })
       }
@@ -154,8 +163,67 @@ export function useCloudRunningAccountReads(active: boolean): void {
   }, [active])
 }
 
+type SourceRead = { usesAccount: boolean | null; at: number } | 'pending'
+const sourceReads = new Map<string, SourceRead>()
+const SOURCE_READ_MS = 10 * 60_000
+
+/** Pure: whether a workspace's Sources view runs the agent on the person's own account (D13). */
+export function workspaceUsesAccount(view: AgentSourcesView, agent: HostAgentSignInAgent): boolean {
+  if (view.sharedWorkspace === true) {
+    return false
+  }
+  const source = view.effective?.[agent]?.source ?? view.defaults[agent] ?? null
+  if (source !== null) {
+    return source === 'sign-in'
+  }
+  // Nothing chosen: a key that covers the agent wins, otherwise the account is the source.
+  return !view.coveredByKey[agent]
+}
+
+/**
+ * The pane's workspace Source for the agent, read once per workspace (cached 10 min) and only while
+ * `wanted` (the account just went expired). Never polled; a failed read stays null (no strip).
+ */
+export function useWorkspaceUsesAccount(
+  runtimeEnvironmentId: string | null,
+  agent: HostAgentSignInAgent | null,
+  wanted: boolean
+): boolean | null {
+  const key = runtimeEnvironmentId && agent ? `${runtimeEnvironmentId}:${agent}` : null
+  useSyncExternalStore(
+    subscribe,
+    () => version,
+    () => version
+  )
+  useEffect(() => {
+    if (!wanted || !key || !runtimeEnvironmentId || !agent) {
+      return
+    }
+    const read = sourceReads.get(key)
+    if (read === 'pending' || (read && Date.now() - read.at < SOURCE_READ_MS)) {
+      return
+    }
+    const api = window.api.orcaCloudAgents
+    if (!api) {
+      return
+    }
+    sourceReads.set(key, 'pending')
+    const settle = (usesAccount: boolean | null): void => {
+      sourceReads.set(key, { usesAccount, at: Date.now() })
+      notify()
+    }
+    void api
+      .workspaceSources({ runtimeEnvironmentId })
+      .then((result) => settle(result.ok ? workspaceUsesAccount(result.value, agent) : null))
+      .catch(() => settle(null))
+  }, [wanted, key, runtimeEnvironmentId, agent])
+  const read = key ? sourceReads.get(key) : undefined
+  return read && read !== 'pending' ? read.usesAccount : null
+}
+
 /** Tests only. */
 export function resetCloudRunningSignoutForTest(): void {
   signedOut.clear()
+  sourceReads.clear()
   notify()
 }
