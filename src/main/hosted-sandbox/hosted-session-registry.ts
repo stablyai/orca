@@ -27,6 +27,7 @@ import { HOSTED_SANDBOX_DRIVER_ID } from './hosted-sandbox-driver'
 import { createHostedRuntimeEnvironmentCall } from './hosted-runtime-environment-call'
 import type { HostedActivitySample } from './hosted-session-lease-policy'
 import { HostedSessionLeaseScheduler } from './hosted-session-lease-scheduler'
+import { isOrcaCloudRuntimeInAccount } from '../../shared/hosted-sandbox/orca-cloud-account'
 import { noteIdleSleepRequested } from './idle-sleep-requests'
 import { cloudSshActiveAt } from '../cloud-ssh/cloud-ssh-activity'
 import { getRuntimePortForwardManager } from '../runtime-port-forward/runtime-port-forward-manager'
@@ -64,6 +65,11 @@ export function createHostedSessionRegistry(deps: {
   onConnected?: (runtimeEnvironmentId: string) => void
   /** After each sync: whether any Orca Cloud workspace is recorded running. */
   onRunningChange?: (anyRunning: boolean) => void
+  /**
+   * The active team (sandbox-control account). Another team's sandbox, or one not yet filed under
+   * a team, gets no scheduler: its lease, wake and orcad calls would only fail under this team.
+   */
+  activeAccountId?: () => string | null
 }): HostedSessionRegistry {
   const running = new Map<string, Running>()
   const log = deps.log ?? ((line: string) => console.error(line))
@@ -193,11 +199,13 @@ export function createHostedSessionRegistry(deps: {
   return {
     async sync() {
       const live = new Set<string>()
+      const account = deps.activeAccountId ? deps.activeAccountId() : undefined
       for (const runtime of listEphemeralVmRuntimes(deps.userDataPath)) {
         if (
           runtime.recipe?.provider !== 'orca-cloud' ||
           runtime.status !== 'running' ||
-          !runtime.recipeResult
+          !runtime.recipeResult ||
+          (account !== undefined && !isOrcaCloudRuntimeInAccount(runtime, account))
         ) {
           continue
         }

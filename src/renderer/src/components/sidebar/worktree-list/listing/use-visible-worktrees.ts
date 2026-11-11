@@ -1,5 +1,5 @@
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
-import { useMemo, useState, useSyncExternalStore } from 'react'
+import { useMemo, useState } from 'react'
 import { shallow } from 'zustand/shallow'
 import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store'
@@ -24,11 +24,8 @@ import type { SidebarWorktreeFilters } from './use-filters'
 import { useReusedArrayIdentity } from './use-reused-array-identity'
 import { useSleepingSweepRetention } from './use-sleeping-sweep-retention'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
-import {
-  readHiddenVmCheckouts,
-  subscribeHiddenVmCheckouts,
-  withoutHiddenVmWorktrees
-} from '@/lib/vm-create-hidden-checkouts'
+import { withoutHiddenVmWorktrees } from '@/lib/vm-create-hidden-checkouts'
+import { useSidebarHiddenCheckouts } from '@/lib/orca-cloud/use-sidebar-hidden-checkouts'
 
 const EMPTY_WORKTREE_ID_SET: ReadonlySet<string> = new Set()
 
@@ -123,7 +120,7 @@ export function useVisibleSidebarWorktrees(args: {
     worktreeIdsWithStructuredChat
   })
 
-  const hiddenVmCheckouts = useSyncExternalStore(subscribeHiddenVmCheckouts, readHiddenVmCheckouts)
+  const hiddenVmCheckouts = useSidebarHiddenCheckouts()
   const recomputedVisibleWorktrees = useMemo(() => {
     const visible = computeVisibleWorktrees(worktreesByRepo, sortedIds, {
       filterRepoIds,

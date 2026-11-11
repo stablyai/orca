@@ -9,6 +9,7 @@ import {
 } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
 import { useRepoMap } from '@/store/repos/use-repository-catalog'
+import { useSidebarScopedRepos } from '@/lib/orca-cloud/use-sidebar-hidden-checkouts'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { openHeaderCreateComposer } from '../rows/header-create-workspace-target'
@@ -86,7 +87,8 @@ const WorktreeList = React.memo(function WorktreeList({
   const allWorktrees = useAllWorktrees()
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
-  const repos = useAppStore((s) => s.repos)
+  // Another team's sandbox projects never get a header (or an empty-project placeholder).
+  const repos = useSidebarScopedRepos()
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
   const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
   const crossStoreChildrenByFolderId = useAppStore(selectCrossStoreFolderChildrenById)
