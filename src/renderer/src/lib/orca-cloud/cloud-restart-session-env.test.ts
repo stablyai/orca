@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 
-const state = vi.hoisted(() => ({ cloud: true, ptyId: 'remote:env-1@@term_1' as string | null }))
+const state = vi.hoisted((): { cloud: boolean; ptyId: string | null } => ({
+  cloud: true,
+  ptyId: 'remote:env-1@@term_1'
+}))
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({
