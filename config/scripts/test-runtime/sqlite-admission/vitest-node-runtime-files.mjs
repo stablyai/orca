@@ -24,6 +24,10 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/github/rate-limit.test.ts',
   // Electron main bridges streams with Node's implementation.
   'src/main/host/electron-http-client.test.ts',
+  // undici dispatchers and SOCKS tunnels back the Orca account/relay calls in Electron main; Bun's fetch ignores them.
+  'src/main/network/env-proxy-transport.test.ts',
+  // Mocks the `ws` package, which Bun replaces with its built-in WebSocket.
+  'src/main/runtime/mobile-cloud-relay/relay-proxy-agent.test.ts',
   'src/main/browser/extensions/native-messaging/browser-extension-native-host-process-backpressure.test.ts',
   'src/main/daemon/providers/lifecycle/testing/daemon-init-provider-installation.test.ts',
   'src/renderer/src/components/terminal-pane/pty-transport/input/pty-input-write-queue.test.ts',

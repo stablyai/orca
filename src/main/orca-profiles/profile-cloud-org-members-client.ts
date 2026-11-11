@@ -4,6 +4,7 @@ import type {
   OrcaOrgPendingInvite,
   OrcaOrgRole
 } from '../../shared/orca-profiles'
+import { accountRelayFetch } from '../network/env-proxy-transport'
 import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
 import type { OrcaCloudSession } from './profile-cloud-session-store'
 import { OrcaCloudRequestError } from './profile-cloud-client'
@@ -137,7 +138,7 @@ async function requestOrgMembers<T>(
   init: RequestInit,
   parse: (value: unknown) => T
 ): Promise<T> {
-  const response = await fetch(url, init)
+  const response = await accountRelayFetch()(url, init)
   if (!response.ok) {
     throw new OrcaCloudRequestError(response.status, await extractErrorCode(response))
   }
