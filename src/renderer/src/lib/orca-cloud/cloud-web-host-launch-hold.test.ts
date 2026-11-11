@@ -123,6 +123,52 @@ describe('createWithCloudAgentHold (the one hold for every Orca Cloud agent laun
     setActiveTab.mockRestore()
   })
 
+  it('Start focuses the agent’s tab even when it reaches the store after the placeholder closes (create flow)', async () => {
+    const { useAppStore } = await import('@/store')
+    const { makeTerminalTab } = await import('@/store/terminals/terminal-row.test-fixture')
+    const agentTab = toWebTerminalSurfaceTabId('h2')
+    const plain = makeTerminalTab({ id: 'plain-terminal', worktreeId: 'w1' })
+    useAppStore.setState({ tabsByWorktree: { w1: [plain] }, activeTabId: 'plain-terminal' })
+    const setActiveTab = vi.spyOn(useAppStore.getState(), 'setActiveTab')
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'none' }))
+    const result = createWithCloudAgentHold(CREATE_AGENT, hostCreate())
+    await flush()
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'active' }))
+    releaseCloudAgentHold(cloudTabHoldKey(toWebTerminalSurfaceTabId('h1')), 'proceed')
+    await result
+    await flush()
+    // The placeholder is gone and its neighbour is active; the agent's tab arrives with the host sync.
+    expect(setActiveTab).not.toHaveBeenCalled()
+    useAppStore.setState({
+      tabsByWorktree: { w1: [plain, makeTerminalTab({ id: agentTab, worktreeId: 'w1' })] }
+    })
+    expect(setActiveTab).toHaveBeenCalledExactlyOnceWith(agentTab)
+    setActiveTab.mockRestore()
+  })
+
+  it('a late agent tab never takes focus from a tab the person picked meanwhile', async () => {
+    const { useAppStore } = await import('@/store')
+    const { makeTerminalTab } = await import('@/store/terminals/terminal-row.test-fixture')
+    const agentTab = toWebTerminalSurfaceTabId('h2')
+    const plain = makeTerminalTab({ id: 'plain-terminal', worktreeId: 'w1' })
+    const other = makeTerminalTab({ id: 'other', worktreeId: 'w1' })
+    useAppStore.setState({ tabsByWorktree: { w1: [plain, other] }, activeTabId: 'plain-terminal' })
+    const setActiveTab = vi.spyOn(useAppStore.getState(), 'setActiveTab')
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'none' }))
+    const result = createWithCloudAgentHold(CREATE_AGENT, hostCreate())
+    await flush()
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'active' }))
+    releaseCloudAgentHold(cloudTabHoldKey(toWebTerminalSurfaceTabId('h1')), 'proceed')
+    await result
+    await flush()
+    useAppStore.setState({ activeTabId: 'other' })
+    useAppStore.setState({
+      tabsByWorktree: { w1: [plain, other, makeTerminalTab({ id: agentTab, worktreeId: 'w1' })] }
+    })
+    expect(setActiveTab).not.toHaveBeenCalled()
+    setActiveTab.mockRestore()
+  })
+
   it("a create's first Claude that isn't set up holds on a plain shell, then starts unchanged (prompt included) on Start", async () => {
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'none' }))
     const create = hostCreate()

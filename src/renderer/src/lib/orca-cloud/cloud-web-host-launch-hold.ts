@@ -112,9 +112,41 @@ export async function createWithCloudAgentHold(
   return created
 }
 
+// The agent's tab can reach the store after the placeholder's close (a create's sync is slower).
+const AGENT_TAB_FOCUS_WAIT_MS = 10_000
+
+/** Focus the agent's tab once it is in the store, unless the person picked another tab meanwhile. */
 function focusAgentTab(worktreeId: string, agentTabId: string): void {
-  const state = useAppStore.getState()
-  if ((state.tabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === agentTabId)) {
-    state.setActiveTab(agentTabId)
+  const hasTab = (): boolean =>
+    (useAppStore.getState().tabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === agentTabId)
+  if (hasTab()) {
+    useAppStore.getState().setActiveTab(agentTabId)
+    return
   }
+  const activeAtClose = useAppStore.getState().activeTabId
+  let done = false
+  const finish = (): void => {
+    done = true
+    unsubscribe()
+    clearTimeout(timer)
+  }
+  const unsubscribe = useAppStore.subscribe((state) => {
+    if (done) {
+      return
+    }
+    if (state.activeTabId !== activeAtClose && state.activeTabId !== agentTabId) {
+      // The person chose a tab themselves: never take it from them.
+      finish()
+      return
+    }
+    if (hasTab()) {
+      finish()
+      useAppStore.getState().setActiveTab(agentTabId)
+    }
+  })
+  const timer = setTimeout(() => {
+    if (!done) {
+      finish()
+    }
+  }, AGENT_TAB_FOCUS_WAIT_MS)
 }
