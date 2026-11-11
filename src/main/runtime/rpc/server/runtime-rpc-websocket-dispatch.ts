@@ -260,6 +260,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
         clientId: principal.clientId,
         pairedDeviceId: device.deviceId,
         pairedDeviceParentId: device.parentDeviceId,
+        pairedDeviceOriginId: device.forkedFrom ?? device.deviceId,
         // Diet only mobile payloads; retain full web/desktop replies.
         clientKind: device.scope,
         callerScope,

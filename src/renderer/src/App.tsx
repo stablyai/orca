@@ -11,6 +11,7 @@ import { CloudSecretsAskDialogHost } from './components/cloud-secrets-ask/CloudS
 import { OrcaCloudSignInSheet } from './components/settings/agent-accounts/sign-in-sheet/OrcaCloudSignInSheet'
 import { AgentHostPanel } from './components/agent-host-panel/AgentHostPanel'
 import { SecretRequestUnseenNotifier } from './components/agent-pane/SecretRequestUnseenNotifier'
+import { LocalCommandApprovalDialogHost } from './components/local-commands/LocalCommandApprovalDialog'
 import { TeamDialogHost } from './components/billing/team/TeamDialogHost'
 import { TeammateProfileDialog } from './components/teammates/TeammateProfileDialog'
 import { PokesNotifier } from './components/teammates/PokesNotifier'
@@ -132,6 +133,7 @@ function App(): React.JSX.Element {
             <AgentHostPanel />
             <OrcaCloudSignInSheet />
             <SecretRequestUnseenNotifier />
+            <LocalCommandApprovalDialogHost />
             <TeamDialogHost />
             <TeammateProfileDialog />
             <PokesNotifier />

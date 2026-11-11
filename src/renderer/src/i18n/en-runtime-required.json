@@ -2348,6 +2348,14 @@
     "liveTerminals_one": "{{count}} live terminal will reconnect after restart.",
     "liveTerminals_other": "{{count}} live terminals will reconnect after restart."
   },
+  "localCommands": {
+    "prompt": {
+      "timeoutMinutes_one": "Stops after {{count}} minute",
+      "timeoutMinutes_other": "Stops after {{count}} minutes",
+      "timeoutSeconds_one": "Stops after {{count}} second",
+      "timeoutSeconds_other": "Stops after {{count}} seconds"
+    }
+  },
   "menu": {
     "quitApp": "Quit {{appName}}"
   },

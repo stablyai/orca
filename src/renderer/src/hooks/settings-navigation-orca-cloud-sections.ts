@@ -5,6 +5,7 @@ import {
 import {
   getOrcaCloudBillingSearchEntries,
   getOrcaCloudEnvironmentsSearchEntries,
+  getOrcaCloudLocalCommandsSearchEntries,
   getOrcaCloudMcpSearchEntries,
   getOrcaCloudSkillsSearchEntries,
   getOrcaCloudSecretsSearchEntries,
@@ -20,6 +21,7 @@ import {
   KeySquare,
   LockKeyhole,
   Plug,
+  SquareTerminal,
   Users,
   Workflow
 } from 'lucide-react'
@@ -100,6 +102,17 @@ export function buildOrcaCloudSettingsSections(
       ),
       icon: Plug,
       searchEntries: getOrcaCloudMcpSearchEntries(),
+      group
+    },
+    {
+      id: 'cloud-local-commands',
+      title: t('localCommands.settings.title', 'Commands on this computer'),
+      description: t(
+        'localCommands.settings.description',
+        'Let agents in your cloud workspaces ask to run a command on this computer. You approve each one.'
+      ),
+      icon: SquareTerminal,
+      searchEntries: getOrcaCloudLocalCommandsSearchEntries(),
       group
     },
     {

@@ -69,12 +69,7 @@ export function CloudAsleepFilesPanel({
     >
       {git ? (
         <>
-          <SavedChanges
-            git={git}
-            at={snapshot?.capturedAt ?? null}
-            now={now}
-            archived={archived}
-          />
+          <SavedChanges git={git} at={snapshot?.capturedAt ?? null} now={now} archived={archived} />
           <RecentCommits git={git} now={now} />
           <div className="flex flex-col items-start gap-2 border-t border-border/60 pt-3 text-muted-foreground">
             <p>
@@ -142,15 +137,15 @@ function SavedChanges({
                 'No files had changed when this workspace was archived'
               )
           : time
-          ? t(
-              'orcaCloudWorkspace.files.noChangesAtSleep',
-              'No files had changed when this workspace went to sleep · {{time}}',
-              { time }
-            )
-          : t(
-              'orcaCloudWorkspace.files.noChangesAtSleepNoTime',
-              'No files had changed when this workspace went to sleep'
-            )}
+            ? t(
+                'orcaCloudWorkspace.files.noChangesAtSleep',
+                'No files had changed when this workspace went to sleep · {{time}}',
+                { time }
+              )
+            : t(
+                'orcaCloudWorkspace.files.noChangesAtSleepNoTime',
+                'No files had changed when this workspace went to sleep'
+              )}
       </p>
     )
   }
@@ -173,15 +168,15 @@ function SavedChanges({
                 'Changed files when this workspace was archived'
               )
           : time
-          ? t(
-              'orcaCloudWorkspace.files.changedAtSleep',
-              'Changed files when this workspace went to sleep · {{time}}',
-              { time }
-            )
-          : t(
-              'orcaCloudWorkspace.files.changedAtSleepNoTime',
-              'Changed files when this workspace went to sleep'
-            )}
+            ? t(
+                'orcaCloudWorkspace.files.changedAtSleep',
+                'Changed files when this workspace went to sleep · {{time}}',
+                { time }
+              )
+            : t(
+                'orcaCloudWorkspace.files.changedAtSleepNoTime',
+                'Changed files when this workspace went to sleep'
+              )}
       </h3>
       <ul className="flex flex-col gap-0.5">
         {git.changes.map((change) => (

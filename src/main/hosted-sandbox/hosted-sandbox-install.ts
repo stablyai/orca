@@ -63,6 +63,10 @@ import {
   registerCloudMcpSyncHandlers
 } from '../agent-mcp-sync/desktop/cloud-mcp-sync-ipc'
 import {
+  installLocalCommands,
+  registerLocalCommandHandlers
+} from '../local-commands/local-command-service'
+import {
   installCloudAgentConfigSync,
   registerCloudAgentConfigSyncHandlers
 } from '../agent-config-sync/desktop/cloud-agent-config-sync-ipc'
@@ -94,6 +98,7 @@ export function installHostedSandbox(
   registerCloudMcpSyncHandlers()
   registerCloudAgentConfigSyncHandlers()
   const userDataPath = app.getPath('userData')
+  registerLocalCommandHandlers()
   const config = getHostedSandboxConfig(
     userDataPath,
     withCloudBuildDefaults(process.env),
@@ -123,6 +128,7 @@ export function installHostedSandbox(
     onListed: (account, listed) => gonePrune.observeList(account, listed),
     relistMs: 10 * 60_000
   })
+  installLocalCommands(userDataPath)
   const mcpSync = installCloudMcpSync(userDataPath, {
     baseUrl: config.controlPlaneUrl,
     getAccessToken: config.getAccessToken

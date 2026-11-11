@@ -79,7 +79,9 @@ export function UsageSummary({
             'auto.components.billing.sandboxHoursUsedMonth',
             '{{value0}} of {{value1}} sandbox hours used this month',
             {
-              value0: formatHoursUsed(Math.min(entitlement.usedSeconds, entitlement.includedSeconds)),
+              value0: formatHoursUsed(
+                Math.min(entitlement.usedSeconds, entitlement.includedSeconds)
+              ),
               value1: formatHours(entitlement.includedSeconds)
             }
           )}

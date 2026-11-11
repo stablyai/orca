@@ -95,6 +95,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  cloud projects list       List Orca Cloud projects',
   '  cloud routine             List Orca Cloud routines or run one now',
   '  secret request            Ask the person for a secret this workspace needs',
+  '  local-command run         Ask the person to run a command on their own computer',
   '',
   'Automations:',
   '  automations list          List scheduled Orca automations',
