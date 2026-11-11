@@ -1,3 +1,4 @@
+import type * as hooks from '../../../../shared/agent-session/agent-session-hooks'
 import type { PrepareStructuredRewind } from './structured-agent-session-rewind-contract'
 import type { ProviderProcessCloseOptions } from '../../../provider-process/provider-process-close'
 import type { NativeCopyCoverage } from '../../agent-session-journal/context-epochs/journal-history-origin'
@@ -174,6 +175,11 @@ export type StructuredAgentSessionSetOptionInput = {
 }
 
 export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & {
+  reviewHooks?(
+    record: AgentSessionRecord,
+    trust: hooks.AgentSessionHookTrust | undefined,
+    signal: AbortSignal
+  ): Promise<hooks.AgentSessionHooks>
   readAccountUsage?(record: AgentSessionRecord, signal: AbortSignal): Promise<CodexAccountUsageRead>
   open: StructuredAgentSessionProviderOpen
   supportsCreate?(location: AgentSessionExecutionLocation, agent: string): boolean

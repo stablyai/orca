@@ -1,3 +1,4 @@
+import { openNativeChatHooksModal } from '@/components/native-chat/hooks/native-chat-hooks-modal'
 import { openNativeChatAccountUsageModal } from '@/components/native-chat/usage/native-chat-account-usage-modal'
 import { useMemo, type Dispatch, type SetStateAction } from 'react'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../../../shared/agent-session/view/structured-agent-session-composer'
@@ -110,6 +111,13 @@ export function useNativeChatStructuredComposerTransport(args: {
             : Promise.resolve(false)
       : null
     return {
+      hooks:
+        controller.hookTrust === true
+          ? {
+              open: () =>
+                openNativeChatHooksModal({ sessionId: props.sessionId, target: props.target })
+            }
+          : undefined,
       accountUsage:
         controller.accountUsage === true
           ? {

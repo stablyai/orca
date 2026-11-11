@@ -21015,6 +21015,29 @@
         "questionNotSentDetail": "Your question is still in this chat. Send /btw again to retry.",
         "questionUnconfirmed": "{{agent}} couldn't confirm the side chat got your question",
         "questionUnconfirmedDetail": "Check the side chat before asking again. Your question is still in this chat."
+      },
+      "hooks": {
+        "description": "Review and trust this chat’s Codex hooks",
+        "trusted": "Trusted",
+        "managed": "Managed",
+        "modified": "Changed since last trusted",
+        "untrusted": "Needs review",
+        "source": "Source: ",
+        "matcher": "Matcher: ",
+        "timeout": "Timeout (seconds): ",
+        "execution": "Execution: ",
+        "async": "Background",
+        "sync": "Foreground",
+        "unsupportedHandler": "Review this hook type in Codex; its full contents are not available here.",
+        "disabled": "Disabled. Trusting this hook will not enable it.",
+        "trust": "Trust this hook",
+        "title": "Review Codex hooks",
+        "warning": "Hooks run commands on the execution host. Trust only commands you understand. Trust is saved in this chat’s Codex configuration and applies wherever the same hook is used, until its contents change.",
+        "loading": "Checking Codex hooks…",
+        "failed": "Could not confirm hook trust. Refresh to check its current state. This requires a Codex version with hooks support.",
+        "resting": "Showing workspace and user hooks. Start the chat to include hooks from its selected environments and plugins.",
+        "empty": "No hooks found for this chat.",
+        "refresh": "Refresh"
       }
     },
     "tab": {

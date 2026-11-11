@@ -26,7 +26,8 @@ export function withNativeChatResumeCommand(
   commands: readonly SlashCommandSuggestion[],
   accountUsage = false,
   fork = false,
-  t: Translate = translate
+  t: Translate = translate,
+  hooks = false
 ): SlashCommandSuggestion[] {
   const resume: SlashCommandSuggestion = {
     name: NATIVE_CHAT_RESUME_COMMAND,
@@ -36,6 +37,19 @@ export function withNativeChatResumeCommand(
     ),
     argumentHint: t('components.native-chat.resumeCommand.argumentHint', '[search]'),
     orcaOwned: true
+  }
+  if (hooks) {
+    commands = [
+      {
+        name: 'hooks',
+        description: t(
+          'components.native-chat.hooks.description',
+          'Review and trust this chat’s Codex hooks'
+        ),
+        orcaOwned: true
+      },
+      ...commands.filter((command) => command.name !== 'hooks')
+    ]
   }
   if (accountUsage) {
     commands = [
@@ -92,7 +106,7 @@ export type NativeChatResumeCommand = {
  *  reaches the agent. */
 export function useNativeChatResumeCommand(args: {
   structuredTransport:
-    | Pick<NativeChatStructuredComposerTransport, 'worktreeId' | 'accountUsage' | 'fork'>
+    | Pick<NativeChatStructuredComposerTransport, 'worktreeId' | 'accountUsage' | 'fork' | 'hooks'>
     | undefined
   agent: AgentType
   terminalTabId: string
@@ -112,14 +126,15 @@ export function useNativeChatResumeCommand(args: {
   const { setNotice } = args
   const structured = structuredTransport !== undefined
   const structuredWorktreeId = structuredTransport?.worktreeId
+  const hooks = structuredTransport?.hooks
   const usage = structuredTransport?.accountUsage
   const fork = structuredTransport?.fork
-  const openUsage = useCallback(
-    (draft: string): void => {
+  const openReview = useCallback(
+    (draft: string, kind: 'usage' | 'hooks'): void => {
       const rest = draft.replace(/^\/\S+\s*/, '')
       // Focus before opening so closing the modal returns to the editor even after a Send click.
       textareaRef.current?.focus()
-      usage?.open()
+      ;(kind === 'hooks' ? hooks : usage)?.open()
       setDraft(rest)
       setCaret(rest.length)
       setActiveSuggestion(0)
@@ -130,7 +145,7 @@ export function useNativeChatResumeCommand(args: {
         writeNativeChatComposerText(input, rest, rest.length)
       }
     },
-    [usage, setDraft, setCaret, setActiveSuggestion, setNotice, textareaRef]
+    [hooks, usage, setDraft, setCaret, setActiveSuggestion, setNotice, textareaRef]
   )
 
   const runFork = useCallback(
@@ -212,8 +227,9 @@ export function useNativeChatResumeCommand(args: {
       !isPickedSkill(draft) &&
       (parseNativeChatResumeDraft(draft) !== null ||
         (usage !== undefined && /^\/usage\s*$/i.test(draft)) ||
+        (hooks !== undefined && /^\/hooks\s*$/i.test(draft)) ||
         (fork !== undefined && FORK_DRAFT.test(draft.trim()))),
-    [fork, isPickedSkill, structured, usage]
+    [fork, hooks, isPickedSkill, structured, usage]
   )
   const consume = useCallback(
     (draft: string): boolean => {
@@ -221,7 +237,9 @@ export function useNativeChatResumeCommand(args: {
         return false
       }
       if (/^\/usage\s*$/i.test(draft)) {
-        openUsage(draft)
+        openReview(draft, 'usage')
+      } else if (/^\/hooks\s*$/i.test(draft)) {
+        openReview(draft, 'hooks')
       } else if (fork && FORK_DRAFT.test(draft.trim())) {
         runFork(draft)
       } else {
@@ -229,7 +247,7 @@ export function useNativeChatResumeCommand(args: {
       }
       return true
     },
-    [fork, matchesDraft, open, openUsage, runFork]
+    [fork, matchesDraft, open, openReview, runFork]
   )
 
   const interceptPick = useCallback(
@@ -241,14 +259,15 @@ export function useNativeChatResumeCommand(args: {
           if (
             item.name !== 'resume' &&
             !(item.name === 'usage' && usage) &&
+            !(item.name === 'hooks' && hooks) &&
             !(item.name === 'fork' && fork)
           ) {
             pick(item)
             return
           }
           clearSkillOrigin()
-          if (item.name === 'usage') {
-            openUsage(textareaRef.current?.value ?? '')
+          if (item.name === 'usage' || item.name === 'hooks') {
+            openReview(textareaRef.current?.value ?? '', item.name)
             return
           }
           if (item.name === 'fork') {
@@ -263,7 +282,7 @@ export function useNativeChatResumeCommand(args: {
         }
         pick(item)
       },
-    [autocomplete, clearSkillOrigin, fork, open, openUsage, runFork, textareaRef, usage]
+    [autocomplete, clearSkillOrigin, fork, hooks, open, openReview, runFork, textareaRef, usage]
   )
 
   return { consume, interceptPick, matchesDraft }
