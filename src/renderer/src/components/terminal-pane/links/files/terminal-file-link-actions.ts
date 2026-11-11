@@ -100,6 +100,8 @@ export function buildFileLinkActions(
     fileContext
   )
   const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(fileContext)
+  // Hover is synchronous: avoid a stat per link, so only a trailing separator marks a folder.
+  const looksLikeFolder = options?.directoryHint === true || /[/\\]$/.test(mappedPath)
   const isMac = navigator.userAgent.includes('Mac')
 
   // Remote default-app opens download first because the OS can only launch local files.
@@ -130,8 +132,8 @@ export function buildFileLinkActions(
             run: () =>
               openDetectedFilePath(filePath, line, column, { ...deps, openWithSystemDefault: true })
           }
-        : // Hover is synchronous: avoid a remote stat per link. Unmarked directories fail visibly during download.
-          /[/\\]$/.test(mappedPath)
+        : // An unmarked folder still reveals in the explorer when clicked.
+          looksLikeFolder
           ? null
           : {
               label: t(
@@ -197,7 +199,7 @@ export function buildFileLinkActions(
                   'auto.components.terminal.pane.TerminalLinkActionPopover.switchWorkspace',
                   'Switch workspace'
                 )
-              : options?.directoryHint
+              : looksLikeFolder
                 ? t(
                     'auto.components.terminal.pane.TerminalLinkActionPopover.openFolder',
                     'Open folder'

@@ -1,5 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { openDetectedFilePath } from '../../../terminal-pane/links/files/terminal-file-open-routing'
 import { createTerminalLinkTestDoubles } from '../../../terminal-pane/links/terminal-link-handlers-test-fixtures'
 import {
@@ -138,6 +139,29 @@ it('activates the owning worktree before revealing its folder', async () => {
     executionHostId: 'runtime:env-1'
   })
   expect(revealInExplorerMock).toHaveBeenCalledWith('wt-other', folderPath)
+})
+
+it('reveals a folder below an SSH workspace in the file explorer', async () => {
+  const folderPath = '/home/me/project/docs'
+  const sshContext = {
+    worktreeId: 'wt-ssh',
+    worktreePath: '/home/me/project',
+    runtimeEnvironmentId: null
+  }
+  vi.mocked(getConnectionId).mockReturnValue('ssh-1')
+  storeState.activeWorktreeId = sshContext.worktreeId
+  statMock.mockResolvedValue({ isDirectory: true })
+  openDetectedFilePath(
+    folderPath,
+    null,
+    null,
+    nativeChatFileOpenDeps({ absolutePath: folderPath, line: null, column: null }, sshContext)
+  )
+  await flushDoubleRaf()
+
+  // This computer's OS can't open an SSH folder; only the workspace explorer can show it.
+  expect(openFilePathMock).not.toHaveBeenCalled()
+  expect(revealInExplorerMock).toHaveBeenCalledWith('wt-ssh', folderPath)
 })
 
 it('reports a paired folder outside the workspace instead of revealing it', async () => {

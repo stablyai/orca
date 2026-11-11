@@ -32,8 +32,6 @@ type FolderOpenArgs = {
   worktreeId: string
   worktreePath: string
   hostWorkspaceFile: HostWorkspaceFile | null
-  /** A paired workspace's folder is not a local path; only its explorer can show it. */
-  environmentOwned: boolean
   sourceHostId: ExecutionHostId
   openWithSystemDefault: boolean
   onFailure: (failure: FileOpenFailure) => void
@@ -68,8 +66,8 @@ export async function openDetectedFolder(args: FolderOpenArgs): Promise<void> {
     }
     return
   }
+  // Why: this computer's OS can't open an SSH or paired folder; the workspace explorer reads through its host.
   if (
-    args.environmentOwned &&
     getRelativePathInsideRoot(folderPath, args.worktreePath) !== null &&
     revealFolderInWorktree(args.worktreeId, args.sourceHostId, folderPath)
   ) {

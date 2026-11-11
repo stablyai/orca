@@ -191,13 +191,10 @@ export function openDetectedFilePath(
     const opensWithSystemDefault = pageDestination
       ? pageDestination === 'system'
       : openWithSystemDefault
-    if (opensWithSystemDefault && canOpenWithSystemDefault) {
+    // Why folders skip this: the folder branch opens them with the OS too, and reports a failed open.
+    if (opensWithSystemDefault && canOpenWithSystemDefault && !statResult.isDirectory) {
       // Shift+Cmd/Ctrl follows URL-link behavior and OS file associations without new editor settings.
-      const openedWithSystemDefault = await window.api.shell.openFilePath(
-        mappedFilePath,
-        LOCAL_EXECUTION_HOST_ID
-      )
-      if (openedWithSystemDefault || statResult.isDirectory) {
+      if (await window.api.shell.openFilePath(mappedFilePath, LOCAL_EXECUTION_HOST_ID)) {
         return
       }
     }
@@ -211,7 +208,6 @@ export function openDetectedFilePath(
         worktreeId,
         worktreePath,
         hostWorkspaceFile,
-        environmentOwned: fileContext.target.kind === 'environment',
         sourceHostId: sourceFileHostId,
         openWithSystemDefault: canOpenWithSystemDefault,
         onFailure: (failure) => deps.onOpenFailure?.(failure)
