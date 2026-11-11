@@ -933,11 +933,11 @@ jobs:
             exit 0
           fi
           echo 'Installing WebKit dependencies through the primary route.'
-          if ! sudo env "PATH=$PATH" timeout --kill-after=10s 240 pnpm exec playwright-core install-deps webkit; then
+          if ! sudo env "PATH=$PATH" timeout --kill-after=10s 240 ./node_modules/.bin/playwright-core install-deps webkit; then
             echo 'Dependency installation did not complete; retrying with the Ubuntu mirror fallback.'
             bash .github/scripts/use-ubuntu-apt-mirror.sh
             bash .github/scripts/recover-ubuntu-dpkg.sh || true
-            sudo env "PATH=$PATH" timeout --kill-after=10s 360 pnpm exec playwright-core install-deps webkit
+            sudo env "PATH=$PATH" timeout --kill-after=10s 360 ./node_modules/.bin/playwright-core install-deps webkit
           fi
           timeout --kill-after=10s 180 pnpm exec playwright-core install webkit
 
