@@ -104,7 +104,7 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeActionEf
     const inThisCall = captureActiveRpcCall()
     // Decided at enqueue: a queued command runs under the caller of the command ahead of it.
     const reportEffects = options.reportEffects === true && agentCommand.agent
-    // Page actions deliver input; a picker it opens would activate Orca over the user's work.
+    // Page actions deliver agent or remote input; a desktop picker would activate Orca over the user's work.
     const blockFileChooser = options.reportEffects === true && options.ownsFileChooser !== true
     const expectedUrl = getRequestedPageUrl()
 
@@ -167,7 +167,8 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeActionEf
                       )
                     : guarded()
                 const wc = blockFileChooser ? this.getWebContents(target.webContentsId) : null
-                const act = (): Promise<T> => (wc ? withFileChooserBlocked(wc, report) : report())
+                const act = (): Promise<T> =>
+                  wc ? withFileChooserBlocked(wc, report, { agent: agentCommand.agent }) : report()
                 return origin.bridged
                   ? this.runHostCommand(session, target.webContentsId, gate, origin, act)
                   : act()

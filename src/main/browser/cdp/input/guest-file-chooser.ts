@@ -3,6 +3,7 @@ import { withTimeout } from '../../../../shared/promise-timeout-fallback'
 import { BrowserError } from '../../browser-error'
 import { acquireElectronDebugger } from '../debugger/electron-debugger-lease'
 import { sendGuestCdpCommand } from '../debugger/guest-cdp-command'
+import { runOutsideRemoteCliBrowserScope } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 
 // A click's user activation lasts 5s in Chromium, so its picker cannot open any later.
 const FILE_CHOOSER_OPEN_TIMEOUT_MS = 5_000
@@ -23,7 +24,9 @@ export type FileChooserInterception = {
  */
 export async function interceptFileChooser(
   wc: WebContents,
-  frameSessionId: string | undefined
+  frameSessionId: string | undefined,
+  // Cancel tells the page its picker closed; upload keeps it pending to set files.
+  { cancel = false }: { cancel?: boolean } = {}
 ): Promise<FileChooserInterception> {
   const sessionIds = [...new Set([undefined, frameSessionId])]
   const { promise: opened, resolve: resolveOpened } = Promise.withResolvers<OpenedFileChooser>()
@@ -43,28 +46,29 @@ export async function interceptFileChooser(
   wc.debugger.on('message', onMessage)
   const release = async (): Promise<void> => {
     wc.debugger.removeListener('message', onMessage)
-    await Promise.all(
-      sessionIds.map((sessionId) =>
-        sendGuestCdpCommand(
-          wc,
-          'Page.setInterceptFileChooserDialog',
-          { enabled: false },
-          sessionId
-        ).catch(() => {})
+    // Desktop-owned cleanup: a revoked host scope must not leave the user's pickers intercepted.
+    await runOutsideRemoteCliBrowserScope(() =>
+      Promise.all(
+        sessionIds.map((sessionId) =>
+          sendGuestCdpCommand(
+            wc,
+            'Page.setInterceptFileChooserDialog',
+            { enabled: false },
+            sessionId
+          ).catch(() => {})
+        )
       )
     )
   }
   try {
     await Promise.all(
       sessionIds.map(async (sessionId) => {
-        // Cross-site frame sessions report choosers only with Page on; the page session has it.
-        if (sessionId !== undefined) {
-          await sendGuestCdpCommand(wc, 'Page.enable', {}, sessionId)
-        }
+        // Chromium reports choosers only with Page on; a page with no agent session may not have it.
+        await sendGuestCdpCommand(wc, 'Page.enable', {}, sessionId)
         await sendGuestCdpCommand(
           wc,
           'Page.setInterceptFileChooserDialog',
-          { enabled: true },
+          cancel ? { enabled: true, cancel: true } : { enabled: true },
           sessionId
         )
       })
@@ -82,14 +86,15 @@ export async function interceptFileChooser(
   }
 }
 
-/** Agent input must not raise the OS file dialog, which activates Orca over the user's work. */
+/** Agent or remote input must not raise the OS file dialog, which activates Orca over the user's work. */
 export async function withFileChooserBlocked<T>(
   wc: WebContents,
-  run: () => Promise<T>
+  run: () => Promise<T>,
+  { agent }: { agent: boolean }
 ): Promise<T> {
   const debuggerLease = acquireElectronDebugger(wc)
   try {
-    const chooser = await interceptFileChooser(wc, undefined)
+    const chooser = await interceptFileChooser(wc, undefined, { cancel: true })
     let result: T
     try {
       result = await run()
@@ -99,7 +104,9 @@ export async function withFileChooserBlocked<T>(
     if (chooser.opened) {
       throw new BrowserError(
         'browser_file_chooser_opened',
-        'The action opened a file picker, which Orca closed so the system dialog would not take over the screen. To choose files, run `upload --element <ref> --files <paths>` on the file input or the button that opens it.'
+        agent
+          ? 'The action opened a file picker, which Orca closed so the system dialog would not take over the screen. To choose files, run `upload --element <ref> --files <paths>` on the file input or the button that opens it.'
+          : "This page's file picker can't open from a remote view."
       )
     }
     return result

@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { AgentBrowserBridge } from '../agent-browser-bridge'
+import { runInRemoteCliBrowserScope } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import {
   answerAgentBrowserCommands,
   mockBrowserManager,
@@ -50,6 +51,7 @@ describe('an agent click that opens a file picker', () => {
   let debuggerEvents: EventEmitter
   let intercepting: boolean
   let bridge: AgentBrowserBridge
+  let onClick: () => void
 
   beforeEach(() => {
     resetAgentBrowserBridgeMocks({
@@ -60,6 +62,7 @@ describe('an agent click that opens a file picker', () => {
       cdpWsProxyInstances: CdpWsProxyMock.instances
     })
     intercepting = false
+    onClick = () => {}
     debuggerEvents = new EventEmitter()
     const guest = mockWebContents(100)
     guest.debugger = {
@@ -89,6 +92,9 @@ describe('an agent click that opens a file picker', () => {
       if (command[0] === 'click' && intercepting) {
         debuggerEvents.emit('message', {}, 'Page.fileChooserOpened', { backendNodeId: 7 })
       }
+      if (command[0] === 'click') {
+        onClick()
+      }
       cb(null, JSON.stringify({ success: true, data: {} }), '')
     })
     bridge = new AgentBrowserBridge(mockBrowserManager())
@@ -99,6 +105,21 @@ describe('an agent click that opens a file picker', () => {
     await expect(bridge.click('@e3')).rejects.toMatchObject({
       code: 'browser_file_chooser_opened'
     })
+    expect(intercepting).toBe(false)
+  })
+
+  it("stops intercepting the desktop user's pickers when an SSH host loses the page mid-click", async () => {
+    const revoked = new AbortController()
+    onClick = () => revoked.abort()
+
+    const click = runInRemoteCliBrowserScope(
+      'workspace',
+      () => bridge.click('@e3'),
+      revoked.signal,
+      () => true
+    )
+
+    await expect(click).rejects.toBeDefined()
     expect(intercepting).toBe(false)
   })
 })
