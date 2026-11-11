@@ -1,3 +1,6 @@
+import { useMemo } from 'react'
+import { MOBILE_TERMINAL_FILE_UPLOAD_RUNTIME_CAPABILITY } from '../../../../src/shared/remote-runtime/protocol/mobile-runtime-capabilities'
+import { useRouteCapability } from '../../worktree/execution-hosts/use-workspace-client'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { MobileImageSource } from '../../platform/media-picking/media-picker-contract'
@@ -13,7 +16,8 @@ import {
 } from '../../session/native-chat/composer/attachments/use-mobile-native-chat-image-attachments'
 import {
   useMobileNativeChatFileAttachments,
-  type MobileNativeChatFileAttachments
+  type MobileNativeChatFileAttachments,
+  type MobileNativeChatFileTarget
 } from '../../session/native-chat/composer/attachments/use-mobile-native-chat-file-attachments'
 
 type CurrentRef<T> = { readonly current: T }
@@ -92,11 +96,29 @@ export function useMobileSessionImageAttachments({
     onSuccess,
     onError
   })
+  const terminalFileUploadSupported = useRouteCapability(
+    MOBILE_TERMINAL_FILE_UPLOAD_RUNTIME_CAPABILITY
+  )
+  const fileTarget = useMemo<MobileNativeChatFileTarget | null>(() => {
+    if (structuredNativeChat) {
+      return nativeChatSessionId ? { kind: 'structured', sessionId: nativeChatSessionId } : null
+    }
+    return terminalFileUploadSupported
+      ? { kind: 'terminal', getConnectionId: getActiveWorktreeConnectionId }
+      : null
+  }, [
+    getActiveWorktreeConnectionId,
+    nativeChatSessionId,
+    structuredNativeChat,
+    terminalFileUploadSupported
+  ])
   const nativeChatFiles = useMobileNativeChatFileAttachments({
     client,
-    sessionId: structuredNativeChat ? nativeChatSessionId : null,
+    target: fileTarget,
     scopeKey: nativeChatScopeKey,
-    enabled: structuredNativeChat && connState === 'connected',
+    enabled: structuredNativeChat
+      ? connState === 'connected'
+      : nativeChatInputLeaseReady && nativeChatAgentConfirmed && connState === 'connected',
     showToast
   })
   const nativeChatImages = useMobileNativeChatImageAttachments({
