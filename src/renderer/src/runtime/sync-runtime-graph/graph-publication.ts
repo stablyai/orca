@@ -5,13 +5,8 @@ import {
   getParkedTerminalWatcherPaneIdsByPtyId
 } from '@/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
 import { serializePaneTree } from '@/components/terminal-pane/layout/terminal-layout-dom-serialization'
-import { getSystemPrefersDark } from '@/lib/terminal-theme'
-import type {
-  RuntimeMobileSessionTabsSnapshot,
-  RuntimeRendererSyncWindowGraph
-} from '../../../../shared/runtime-session-contracts'
+import { getSystemPrefersDark } from '@/lib/terminal/appearance/terminal-theme'
 import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
-import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { applyNativeChatLaunchDraftResolved } from '../native-chat/launch-drafts/native-chat-launch-draft-runtime-resolution'
 import { resolveTerminalLayoutRoot } from '../hosted-terminals/actions/remote-terminal-layout-resolution'
 import { buildMobileSessionTabSnapshots } from './mobile-session-snapshots'
@@ -38,6 +33,11 @@ import {
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { changedActiveGroups } from './active-group-publication'
+import type {
+  RuntimeMobileSessionTabsSnapshot,
+  RuntimeRendererSyncWindowGraph
+} from '../../../../shared/runtime-session-contracts'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 export async function syncRuntimeGraph(): Promise<void> {
   if (!graphState.syncEnabled || !graphState.getStoreState) {

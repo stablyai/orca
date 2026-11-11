@@ -10,7 +10,7 @@ import {
   findKnownWorktreeById
 } from '../listing/detected-worktree-meta'
 import { getFolderWorkspaceActivityPersistence } from './folder-workspace-activity'
-import { warnAmbiguousOwnerOnce } from '@/lib/ambiguous-owner-warning'
+import { warnAmbiguousOwnerOnce } from '@/lib/workspace/ownership/ambiguous-owner-warning'
 import { persistWorktreeMeta } from '../metadata/worktree-meta-persist'
 import { isRuntimeSelectorNotFoundError } from '../listing/runtime-worktree-rpc-errors'
 

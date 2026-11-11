@@ -13,7 +13,18 @@ function memoryStore() {
   const snapshots = new Map<string, RemoteLayoutSnapshot>()
   const saves: ('now' | 'later')[] = []
   const store: RemoteLayoutSnapshotStore = {
-    getRemoteLayoutSnapshot: (environmentId) => snapshots.get(environmentId),
+    getRemoteLayoutSnapshotWorkspace: (environmentId, worktreeId) =>
+      snapshots.get(environmentId)?.workspaces[worktreeId],
+    setRemoteLayoutSnapshotWorkspace: (environmentId, worktreeId, workspace, save) => {
+      saves.push(save)
+      const snapshot = snapshots.get(environmentId) ?? { workspaces: {} }
+      if (workspace) {
+        snapshot.workspaces[worktreeId] = workspace
+      } else {
+        delete snapshot.workspaces[worktreeId]
+      }
+      snapshots.set(environmentId, snapshot)
+    },
     setRemoteLayoutSnapshot: (environmentId, snapshot, save) => {
       saves.push(save)
       if (snapshot) {

@@ -1,5 +1,5 @@
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { getPairedWebClientEnvironmentId } from '@/lib/paired-web-client-host'
+import { getPairedWebClientEnvironmentId } from '@/app-shell/platform/paired-web-client-host'
 import { prepareAutomationLaunchSetup } from './automation-capability-probe'
 import type {
   Automation,

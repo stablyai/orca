@@ -1,3 +1,4 @@
+import { captureWorkspaceTerminalNoticeRemoval } from '../../../terminals/terminal-notice-removal'
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
@@ -145,6 +146,10 @@ export function createPurgeWorktreeTerminalState(
     if (purgeableWorktreeTargets.length === 0) {
       return
     }
+    const retireNotices = captureWorkspaceTerminalNoticeRemoval(
+      get(),
+      purgeableWorktreeTargets.map((target) => (typeof target === 'string' ? target : target.id))
+    )
     // Why before the purge: delayed views must commit text the purge may offer back.
     flushPurgedWorkspaceEdits(
       get(),
@@ -157,5 +162,6 @@ export function createPurgeWorktreeTerminalState(
         buildWorktreePurgeState(s, purgeableWorktreeTargets, changedPaneKeys)
       )
     )
+    retireNotices(get())
   }
 }

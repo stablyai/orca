@@ -707,7 +707,7 @@
 6 src/renderer/src/hooks/useVirtualizedScrollAnchor.ts
 1 src/renderer/src/lib/agent-session/launch/inventory/host-chat-program-acquisition.ts
 1 src/renderer/src/lib/files/search/quick-open-file-history.ts
-2 src/renderer/src/lib/worker-auto-close.ts
+2 src/renderer/src/runtime/agent-orchestration/worker-auto-close.ts
 1 src/renderer/src/runtime/native-chat/naming/structured-chat-name-observation.ts
 1 src/renderer/src/store/plugins/appearance/plugin-icon-themes.ts
 5 src/renderer/src/store/retained-views/app-state-view.ts

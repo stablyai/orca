@@ -6,7 +6,7 @@ import type {
 import type { AgentMessageSender } from '../../../../../shared/agent-session/agent-session-message-source'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import type { OrchestrationSessionCaller } from '../../addressing/orchestration-caller-identity'
+import type { OrchestrationEntryCaller } from '../../addressing/orchestration-caller-identity'
 
 export type AgentCreationCard = AgentJournalAgentStartItem | AgentJournalAgentHandoffItem
 
@@ -48,7 +48,7 @@ export function startedAgentSender(
 
 export function prepareWorkerStartCard(
   runtime: OrcaRuntimeService,
-  callerSession: OrchestrationSessionCaller | undefined
+  callerSession: OrchestrationEntryCaller | undefined
 ): (args: {
   dispatchId: string
   workerAddress: string
@@ -56,7 +56,10 @@ export function prepareWorkerStartCard(
   /** What this start launched; the only kind known for a worker on another host. */
   agent: AgentType | null
 }) => void {
-  const publish = prepareAgentCreationCard(callerSession?.sessionId)
+  // A paired Orca has no chat here to show the card in.
+  const publish = prepareAgentCreationCard(
+    callerSession?.kind === 'peer' ? undefined : callerSession?.sessionId
+  )
   if (!publish) {
     return () => {}
   }

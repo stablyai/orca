@@ -1,6 +1,3 @@
-import type { BrowserPageCreationPlacement } from '../../../../../shared/browser/client-hosting/browser-client-host-placement'
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
-import type { BrowserTabCreateResult } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
 import { translate } from '../../../i18n/i18n'
 import { useAppStore } from '../../../store/index'
 import { hasRuntimeRpcErrorCode } from '../../../../../shared/runtime-rpc-error-code'
@@ -19,9 +16,9 @@ import {
   rehomeWebRuntimeBrowserCreation,
   resolveWebRuntimeBrowserClientTargetGroupId,
   restageWebRuntimeBrowserCreation,
-  stageWebRuntimeBrowserCreation,
-  type CreateWebRuntimeSessionBrowserTabArgs
+  stageWebRuntimeBrowserCreation
 } from './web-runtime-browser-creation-context'
+import type { CreateWebRuntimeSessionBrowserTabArgs } from './web-runtime-browser-creation-context'
 import {
   finishWebRuntimeBrowserCreationFailure,
   prepareWebRuntimeBrowserCreationFailure
@@ -36,7 +33,10 @@ import { registerPairedBrowserTabCreator } from '../../../store/slices/browser/t
 import {
   forgetStagedBrowserTabHandover,
   wasStagedBrowserTabHandedToFrames
-} from '@/lib/staged-browser-frame-handover'
+} from '@/runtime/browser/creation/staged-browser-frame-handover'
+import type { BrowserPageCreationPlacement } from '../../../../../shared/browser/client-hosting/browser-client-host-placement'
+import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
+import type { BrowserTabCreateResult } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
 
 export async function createWebRuntimeSessionBrowserTab(
   args: CreateWebRuntimeSessionBrowserTabArgs

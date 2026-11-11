@@ -11,7 +11,7 @@ import {
   getAgentPickerCommandValue,
   searchAgentPickerEntries
 } from '@/lib/agent-catalog/agent-picker-search'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import * as state from './agent-combobox-command-state'
 import {

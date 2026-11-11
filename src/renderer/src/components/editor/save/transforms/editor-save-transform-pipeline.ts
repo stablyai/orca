@@ -1,7 +1,7 @@
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { AppStoreApi } from '../queue/editor-save-queue-contract'
 import type { EditorSaveRequest } from '../queue/editor-save-slots'
-import { EditorSaveDiscardedError, editorDiscardEpoch } from '../flush/editor-discard-epoch'
+import { EditorSaveDiscardedError } from '../flush/editor-discard-epoch'
 import { editorFormatOnSave } from './editor-format-on-save'
 import { editorSavePluginHook } from './editor-save-plugin-hook'
 
@@ -23,7 +23,7 @@ export function editorSaveTransform(
     text,
     () => {
       operation.assertAuthorityCurrent()
-      if (editorDiscardEpoch(request.recordId) !== request.discardEpoch) {
+      if (request.discardGeneration.discarded) {
         throw new EditorSaveDiscardedError()
       }
     }

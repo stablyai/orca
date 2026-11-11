@@ -6,21 +6,21 @@ import {
   AGENT_SESSION_AGENTS_METHOD,
   decodeAgentSessionAgentsResult
 } from '../../../../../shared/agent-session/agent-session-registered-agents'
-import type {
-  AgentSessionHistoryPage,
-  AgentSessionHistoryResult
-} from '../../../../../shared/agent-session/agent-session-wire'
-import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { nativeChatForkRequiresInheritedOriginal } from '../../../../../shared/native-chat/native-chat-fork-offer'
 import { runtimeEnvironmentCapabilityProof } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { structuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
-import type { StructuredAgentSessionLaunchIntent } from '../../launch-structured-agent-session'
 import { abandonStructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-abandon'
 import {
   StructuredAgentSessionCreateRefusalError,
   StructuredAgentSessionCreateUnknownOutcomeError
 } from './structured-agent-session-launch-errors'
+import type {
+  AgentSessionHistoryPage,
+  AgentSessionHistoryResult
+} from '../../../../../shared/agent-session/agent-session-wire'
+import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-intent'
 
 /** The refusal a fork gets from a host that does not advertise forks; nothing was sent to it. */
 export const STRUCTURED_LAUNCH_FORK_UNSUPPORTED_REFUSAL =

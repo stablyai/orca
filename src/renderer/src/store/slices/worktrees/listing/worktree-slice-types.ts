@@ -34,6 +34,8 @@ export type DetectedWorktreeRefreshOptions = BackgroundRuntimeRefreshOptions & {
   // Why a callback: staleness is judged against the client's live applied version, which a
   // create or remove reply can advance while the listing is in flight.
   isStaleCatalogPublication?: (result: DetectedWorktreeListResult) => boolean
+  // Start a new listing instead of joining one in flight (it may predate a published metadata write).
+  forceFresh?: boolean
 }
 
 export type AdmittedDetectedWorktreeRefresh = {

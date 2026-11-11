@@ -1,16 +1,17 @@
-import type { ITheme } from '@xterm/xterm'
-import { cn } from '@/lib/utils'
-import '@/lib/terminal-theme'
-import { getTheme } from '@/lib/terminal-themes-data'
+import { cn } from '@/lib/class-names'
+import '@/lib/terminal/appearance/terminal-theme'
+import { getTheme } from '@/lib/terminal/appearance/terminal-themes-data'
 import {
   DEFAULT_TERMINAL_THEME_DARK,
   DEFAULT_TERMINAL_THEME_LIGHT
 } from '../../../../../../shared/terminal-themes/terminal-theme-selection'
 import { IpynbMarkdownCell } from '../cells/IpynbCellEditor'
 import { IpynbHtmlOutput } from './IpynbHtmlOutput'
-import { parseAnsiSegments, type AnsiColor } from './ipynb-ansi'
-import type { IpynbCell, IpynbOutput, IpynbOutputItem } from '../document/ipynb-parse'
+import { parseAnsiSegments } from './ipynb-ansi'
+import type { AnsiColor } from './ipynb-ansi'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import type { ITheme } from '@xterm/xterm'
+import type { IpynbCell, IpynbOutput, IpynbOutputItem } from '../document/ipynb-parse'
 
 const ANSI_PALETTE_KEYS = [
   'black',

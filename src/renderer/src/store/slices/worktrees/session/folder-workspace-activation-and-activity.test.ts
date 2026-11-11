@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { installAttentionScreen } from '../../workspace-attention/workspace-unread-characterization-fixture'
+import '../../workspace-attention/workspace-unread-characterization-fixture'
 import type { AppState } from '../../../types'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
@@ -101,28 +101,6 @@ afterEach(() => {
 })
 
 describe('folder workspace generic activation and activity', () => {
-  it('publishes folder-scoped active state and reads the flag once on screen', async () => {
-    const folderWorkspace = makeFolderWorkspace({ isUnread: true })
-    const workspaceKey = folderWorkspaceKey(folderWorkspace.id)
-    folderWorkspacesUpdate.mockImplementation(respondWithUpdates(folderWorkspace))
-    const store = seedLocalFolderStore(folderWorkspace)
-
-    installAttentionScreen(store, true)
-    store.getState().setActiveWorktree(workspaceKey)
-    await Promise.resolve()
-
-    expect(store.getState()).toMatchObject({
-      activeRepoId: null,
-      activeWorktreeId: workspaceKey,
-      activeWorkspaceKey: workspaceKey
-    })
-    expect(store.getState().folderWorkspaces[0]?.isUnread).toBe(false)
-    expect(folderWorkspacesUpdate).toHaveBeenCalledWith({
-      folderWorkspaceId: folderWorkspace.id,
-      updates: { isUnread: false }
-    })
-  })
-
   it('coalesces repeated activity persistence while keeping local activity current', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)

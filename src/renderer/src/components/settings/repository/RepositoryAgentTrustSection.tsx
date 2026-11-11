@@ -30,7 +30,7 @@ export function RepositoryAgentTrustSection({
     (state) => state.settings?.agentWorkspaceTrustEnabled !== false
   )
   const entry = getRepositoryAgentTrustSearchEntry()
-  const value = repo.agentWorkspaceTrust ?? 'undecided'
+  const value = repo.agentWorkspaceTrust ?? 'pre-trust'
   return (
     <SearchableSetting
       title={entry.title}
@@ -43,10 +43,10 @@ export function RepositoryAgentTrustSection({
         <div className="text-sm font-semibold">{entry.title}</div>
         <p className="text-xs text-muted-foreground">{entry.description}</p>
       </div>
-      <SettingsSegmentedControl<AgentWorkspaceTrustDecision | 'undecided'>
+      <SettingsSegmentedControl<AgentWorkspaceTrustDecision>
         value={value}
         onChange={(next) => {
-          if (next !== 'undecided' && next !== value) {
+          if (next !== value) {
             void updateRepo(repo.id, { agentWorkspaceTrust: next })
           }
         }}
@@ -59,8 +59,6 @@ export function RepositoryAgentTrustSection({
       />
       {!globalTrustEnabled ? (
         <p className="text-xs text-muted-foreground">{copy.settingGlobalOff()}</p>
-      ) : value === 'undecided' ? (
-        <p className="text-xs text-muted-foreground">{copy.settingUndecided()}</p>
       ) : null}
     </SearchableSetting>
   )

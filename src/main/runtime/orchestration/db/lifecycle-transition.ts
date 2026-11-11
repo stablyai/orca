@@ -1,6 +1,7 @@
 import type Database from '../../../sqlite/sync-database'
 import { OrchestrationError } from '../orchestration-error'
 import type { OrchestrationDb } from './orchestration-db'
+import { notifyPeerMailQueued } from '../federation/peer-mail/peer-mail-waiters'
 
 /** Callers own transactions so lifecycle projections and mailbox effects commit atomically together. */
 export type LifecycleEntity = 'task' | 'dispatch' | 'worker'
@@ -189,7 +190,8 @@ export function transitionLifecycleWithDb(
       `${params.entity} ${params.id} changed while transitioning.`
     )
   }
-
+  // A peer Run's change is queued home by trigger in this statement.
+  notifyPeerMailQueued(db)
   return { changed: true }
 }
 
