@@ -38,6 +38,7 @@ export abstract class UsageProviderStoreLifecycle<
   private readonly loaded: Promise<void>
   private readonly schemaVersion: number
   private scanPromise: Promise<void> | null = null
+  private rescanRequested = false
   private tokenReporter: AgentTokenUsageReporter | null = null
   private analyticsSessionIds: AnalyticsSessionIdStore | null = null
   private readonly writer: UsageCacheSnapshotWriter
@@ -94,7 +95,10 @@ export abstract class UsageProviderStoreLifecycle<
     return this.getScanState()
   }
 
-  async refresh(force = false): Promise<PublicUsageProviderScanState<DataPresenceKey>> {
+  async refresh(
+    force = false,
+    options: { rerunIfScanning?: boolean } = {}
+  ): Promise<PublicUsageProviderScanState<DataPresenceKey>> {
     await this.loaded
     if (!this.state.scanState.enabled) {
       return this.getScanState()
@@ -106,7 +110,7 @@ export abstract class UsageProviderStoreLifecycle<
         return this.getScanState()
       }
     }
-    await this.runScan()
+    await this.runScan(options.rerunIfScanning ?? false)
     return this.getScanState()
   }
 
@@ -217,44 +221,51 @@ export abstract class UsageProviderStoreLifecycle<
     })
   }
 
-  private async runScan(): Promise<void> {
+  private async runScan(rerunIfScanning: boolean): Promise<void> {
     if (this.scanPromise) {
+      this.rescanRequested ||= rerunIfScanning
       await this.scanPromise
       return
     }
 
-    this.state.scanState.lastScanStartedAt = Date.now()
-    this.state.scanState.lastScanError = null
-
     // Assign before yielding so concurrent refreshes share one scan.
     this.scanPromise = (async () => {
-      try {
-        const repos = this.store.getRepos()
-        const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
-        const worktreeFingerprint = getUsageWorktreeFingerprint(worktreesByRepo)
-        const result = await this.config.scan(createWorktreeRefs(repos, worktreesByRepo), {
-          path: usageSourceCachePath(this.config.resolveCacheFile()),
-          schemaVersion: this.schemaVersion,
-          worktreeFingerprint,
-          reuse: this.state.worktreeFingerprint === worktreeFingerprint
-        })
-        this.state.sessions = result.sessions
-        this.state.dailyAggregates = result.dailyAggregates
-        this.state.worktreeFingerprint = worktreeFingerprint
-        this.state.schemaVersion = this.schemaVersion
-        this.inlineCache.active = false
-        this.state.scanState.lastScanCompletedAt = Date.now()
+      do {
+        this.rescanRequested = false
+        this.state.scanState.lastScanStartedAt = Date.now()
         this.state.scanState.lastScanError = null
-        // Persistence failures do not turn a successful source scan into a scan failure.
-        await this.writeToDisk().catch(() => {})
-        await this.reportTokenUsage()
-      } catch (error) {
-        this.state.scanState.lastScanError = error instanceof Error ? error.message : String(error)
-        await this.writeToDisk().catch(() => {})
-      } finally {
-        this.scanPromise = null
+        try {
+          const repos = this.store.getRepos()
+          const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
+          const worktreeFingerprint = getUsageWorktreeFingerprint(worktreesByRepo)
+          const result = await this.config.scan(createWorktreeRefs(repos, worktreesByRepo), {
+            path: usageSourceCachePath(this.config.resolveCacheFile()),
+            schemaVersion: this.schemaVersion,
+            worktreeFingerprint,
+            reuse: this.state.worktreeFingerprint === worktreeFingerprint
+          })
+          this.state.sessions = result.sessions
+          this.state.dailyAggregates = result.dailyAggregates
+          this.state.worktreeFingerprint = worktreeFingerprint
+          this.state.schemaVersion = this.schemaVersion
+          this.inlineCache.active = false
+          this.state.scanState.lastScanCompletedAt = Date.now()
+          this.state.scanState.lastScanError = null
+          // Persistence failures do not turn a successful source scan into a scan failure.
+          await this.writeToDisk().catch(() => {})
+          await this.reportTokenUsage()
+        } catch (error) {
+          this.state.scanState.lastScanError =
+            error instanceof Error ? error.message : String(error)
+          await this.writeToDisk().catch(() => {})
+        }
+      } while (this.rescanRequested && this.state.scanState.enabled)
+    })().finally(async () => {
+      this.scanPromise = null
+      if (this.rescanRequested && this.state.scanState.enabled) {
+        await this.runScan(false)
       }
-    })()
+    })
 
     await this.scanPromise
   }

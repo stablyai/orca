@@ -65,6 +65,22 @@ export function initializeMainProcessAccountServices(): void {
   // Defer shared-home migration; compatibility launches re-arm non-destructive scans for new rollouts (#4444, #8612, #12480).
   state.codexSessionMigration.scheduleInitialRun()
   store.onSettingsChanged((updates) => {
+    if (
+      [
+        'localAccountRuntime',
+        'localAccountWslDistro',
+        'localWindowsRuntimeDefault',
+        'activeClaudeManagedAccountId',
+        'activeClaudeManagedAccountIdsByRuntime',
+        'claudeManagedAccounts'
+      ].some((key) => key in updates)
+    ) {
+      void state.claudeUsage
+        ?.refresh(true, { rerunIfScanning: true })
+        .catch((error: unknown) =>
+          console.warn('[claude-usage] Failed to refresh after account runtime change:', error)
+        )
+    }
     // An account switch would otherwise leave the next chat's picker on a cold catalog.
     if (MODEL_CATALOG_ACCOUNT_SETTINGS.some((key) => key in updates)) {
       prewarmStructuredAgentModelCatalogs()
