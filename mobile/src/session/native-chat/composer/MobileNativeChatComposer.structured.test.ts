@@ -7,17 +7,17 @@ import {
   updateMobileNativeChatDraftInputs
 } from './mobile-native-chat-draft-inputs'
 import './use-mobile-native-chat-drafts'
-import '../../use-mobile-structured-native-chat-send-bridge'
+import './use-mobile-structured-native-chat-send-bridge'
 import '../mobile-native-chat-scope-key'
-import '../../use-mobile-structured-agent-session'
+import '../agent-session/use-mobile-structured-agent-session'
 import '../agent-session/use-mobile-structured-agent-session-queued.test-fixture'
 import '../../structured-agent-send-result.test-fixture'
 import { findByHostType } from '../../../test-support/react-test-renderer-host-nodes'
 
-import '../../mobile-structured-agent-session-host-support'
+import '../agent-session/mobile-structured-agent-session-host-support'
 import '../../../../../src/shared/agent-session/agent-session-runtime-capabilities'
-import '../../use-mobile-structured-agent-options'
-import '../../use-mobile-structured-agent-options.test-fixture'
+import '../input/use-mobile-structured-agent-options'
+import '../input/use-mobile-structured-agent-options.test-fixture'
 
 import { createElement, type ComponentProps } from 'react'
 

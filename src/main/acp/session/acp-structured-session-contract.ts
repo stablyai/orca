@@ -24,6 +24,8 @@ export type AcpStructuredSession = {
   options: AcpStructuredOptions
   turns: AcpStructuredTurns
   closeRequested: boolean
+  /** Why Orca stopped this agent after its own failure (stream loss, a refused journal write). */
+  failureClose: string | null
   /** Null while provider events can still reach the journal. */
   journalClosed: string | null
   /** Exit was proven and reported to the host. */

@@ -3,7 +3,7 @@ import { getFolderWorkspaceStatusRequestDependencies } from '@/store/folder-work
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
-import { useFolderWorkspacePathStatusCacheExpiryTick } from '@/lib/folder-workspace-path-status-cache-expiry'
+import { useFolderWorkspacePathStatusCacheExpiryTick } from '@/lib/workspace/paths/folder-workspace-path-status-cache-expiry'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'

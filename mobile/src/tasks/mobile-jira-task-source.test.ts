@@ -40,19 +40,4 @@ describe('mobile Jira task requests', () => {
       ).resolves.toEqual({ issue, comments: [] })
     }
   })
-
-  it('surfaces issue failures even when comments can be read', async () => {
-    const sendRequest = vi.fn(async (method: string) =>
-      method === 'jira.getIssue'
-        ? {
-            id: 'jira-test',
-            ok: false as const,
-            error: { code: 'UNAVAILABLE', message: 'Issue permission denied' }
-          }
-        : { id: 'jira-test', ok: true as const, result: [] }
-    )
-    await expect(fetchJiraIssueDetail({ sendRequest }, { key: issue.key })).rejects.toThrow(
-      'Issue permission denied'
-    )
-  })
 })

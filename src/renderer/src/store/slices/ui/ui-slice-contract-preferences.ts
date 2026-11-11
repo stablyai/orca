@@ -1,5 +1,6 @@
+import type { StatusBarUsageFormat } from '../../../../../shared/status-bar-usage-format'
 import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
-import type { BrowserDevToolsDockLayout } from '../../../../../shared/browser-devtools-dock'
+import type { BrowserDevToolsDockLayout } from '../../../../../shared/browser/devtools/browser-devtools-dock'
 import type {
   ActivityGroupBy,
   ThreadReadFilter
@@ -125,6 +126,8 @@ export type UISlicePreferences = {
   setUsagePercentageDisplay: (display: UsagePercentageDisplay) => void
   statusBarUsageMode: StatusBarUsageMode
   setStatusBarUsageMode: (mode: StatusBarUsageMode) => void
+  statusBarUsageFormat: StatusBarUsageFormat
+  setStatusBarUsageFormat: (format: StatusBarUsageFormat) => void
 }
 
 export type UISliceSurfaces = {

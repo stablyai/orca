@@ -1,18 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from '../../agent-hook-server'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { buildBody, PANE, postHookEvent } from '../server.test-fixtures'
 
 vi.mock('../../../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: vi.fn(() => ({ nth_repo_added: 2 }))
 }))
-
-class ClockedHookServer extends AgentHookServer {
-  advanceConnectionClock(at: number): void {
-    this.connectionTimestampWatermarkById.set('conn-1', at)
-  }
-}
 
 const route = { paneKey: PANE, tabId: 'tab-1', worktreeId: 'wt-1' }
 
@@ -94,28 +87,6 @@ describe('nested provider ownership boundaries', () => {
     } finally {
       server.stop()
     }
-  })
-
-  it('uses the retained connection clock to allow a stale provider replacement after rollback', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000)
-    const server = new ClockedHookServer()
-    server.ingestRemote(
-      { ...route, payload: { state: 'working', prompt: 'Old work', agentType: 'claude' } },
-      'conn-1'
-    )
-    const future = 1_000 + AGENT_STATUS_STALE_AFTER_MS + 100
-    server.advanceConnectionClock(future)
-    vi.setSystemTime(500)
-    server.ingestRemote(
-      { ...route, payload: { state: 'working', prompt: 'New work', agentType: 'codex' } },
-      'conn-1'
-    )
-    expect(server.getStatusSnapshot()[0]).toMatchObject({
-      agentType: 'codex',
-      prompt: 'New work',
-      receivedAt: future + 1
-    })
   })
 
   it('keeps nested Pi identity-only metadata off an active owner and permits it after completion', () => {

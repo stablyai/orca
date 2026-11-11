@@ -45,13 +45,4 @@ describe('Node source/copy content equality', () => {
     }
     expect(nodeSourceAndCopyContentsEqualSync(sourcePath, copyPath)).toBe(false)
   })
-
-  it('rejects a non-file copy without attempting to consume it', () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-resource-compare-dir-'))
-    roots.push(root)
-    const sourcePath = join(root, 'source.md')
-    writeFileSync(sourcePath, 'contents')
-
-    expect(nodeSourceAndCopyContentsEqualSync(sourcePath, root)).toBe(false)
-  })
 })

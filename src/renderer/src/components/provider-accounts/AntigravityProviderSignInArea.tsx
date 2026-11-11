@@ -6,24 +6,10 @@ import {
   AntigravityChatSignInAction,
   AntigravityChatSignInBadge
 } from './AntigravityChatSignInAction'
-import {
-  antigravityChatSignInBlocked,
-  useAntigravityChatSignInControls
-} from './AntigravityChatSignInRow'
+import { antigravityChatSignInBlocked } from './antigravity-chat-runtime-sign-in-policy'
+import { useAntigravityChatSignInControls } from './use-antigravity-chat-sign-in'
 
 type ActiveInstall = Extract<ManagedRuntimeInstallObservation, { kind: 'active' }>
-
-const CHANGING_PHASES = new Set(['downloading', 'extracting', 'verifying', 'removing'])
-
-/** Require an installed server outside install/removal; retain space while host status is unknown. */
-export function antigravityProviderSignInShown(install: ActiveInstall): boolean {
-  const { snapshot } = install
-  if (snapshot.kind !== 'known') {
-    return true
-  }
-  const { source, operation } = snapshot.state
-  return source !== null && !(operation && CHANGING_PHASES.has(operation.phase))
-}
 
 export function AntigravityProviderSignInArea(props: {
   owner: RuntimeClientTarget

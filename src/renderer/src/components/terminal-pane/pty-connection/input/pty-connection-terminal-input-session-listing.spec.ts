@@ -61,8 +61,9 @@ export function registerPtyConnectionTerminalInputSessionListingTests(): void {
         typeKeystroke: (data?: string) => void
       }> {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks16 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks16 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport('pty-pane-2')
         transportFactoryQueue.push(transport)
         const manager = createManager(2)

@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { syncLegacySharedCodexConfigForRetainedPanes } from './legacy-shared-config-compatibility'
-import type * as FsUtils from './fs-utils'
+import type * as FsUtils from '../filesystem/atomic-file-publication'
 
 const generationRace = vi.hoisted(() => ({
   path: null as string | null,
@@ -19,7 +19,7 @@ vi.mock(
   })
 )
 
-vi.mock('./fs-utils', async (importOriginal) => {
+vi.mock('../filesystem/atomic-file-publication', async (importOriginal) => {
   const actual = await importOriginal<typeof FsUtils>()
   return {
     ...actual,

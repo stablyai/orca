@@ -2,7 +2,7 @@ import { Buffer } from 'node:buffer'
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 
-import { decodeBrowserScreencastFrame } from '../../../../shared/browser-screencast-protocol'
+import { decodeBrowserScreencastFrame } from '../../../../shared/browser/screencast/browser-screencast-protocol'
 import { startBrowserScreencast } from './browser-screencast-stream'
 import { installBrowserJavaScriptDialogs } from '../../guest-lifecycle/prompts/browser-javascript-dialogs'
 import { createMockScreencastWebContents as createMockWebContents } from './browser-screencast-web-contents-test-double'
@@ -27,6 +27,7 @@ describe('startBrowserScreencast', () => {
       maxHeight: 1200,
       everyNthFrame: 1,
       minFrameIntervalMs: 0,
+      holdPaint: () => () => {},
       onFrame
     })
 
@@ -84,6 +85,7 @@ describe('startBrowserScreencast', () => {
       maxHeight: 1200,
       everyNthFrame: 1,
       minFrameIntervalMs: 100,
+      holdPaint: () => () => {},
       onFrame
     })
 
@@ -136,6 +138,7 @@ describe('startBrowserScreencast', () => {
       maxHeight: 1200,
       everyNthFrame: 2,
       minFrameIntervalMs: 0,
+      holdPaint: () => () => {},
       onFrame: vi.fn(),
       onEvent
     })

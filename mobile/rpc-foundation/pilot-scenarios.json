@@ -8473,6 +8473,7 @@
             "branch": "feature",
             "linkedPRNumber": null,
             "fallbackPRNumber": 12,
+            "acceptMergedFallbackPR": true,
             "currentHeadOid": null
           },
           "paramsFollowDivergence": true,
@@ -8573,6 +8574,398 @@
       ]
     },
     {
+      "id": "pr-sidebar-revisit-and-refresh",
+      "operation": "session.pr-sidebar",
+      "family": "session.pr-sidebar",
+      "sites": [
+        "mobile/src/source-control/review/use-mobile-pr-sidebar-controller.ts",
+        "mobile/src/source-control/review/mobile-pr-queries.ts",
+        "mobile/src/source-control/review/mobile-pr-sidebar-state.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "github.repoSlug#1",
+          "params": {
+            "repo": "id:repo-9"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "owner": "owner",
+              "repo": "repo"
+            }
+          }
+        },
+        {
+          "complete": "hostedReview.forBranch#1",
+          "params": {
+            "repo": "id:repo-9",
+            "branch": "feature",
+            "linkedGitHubPR": null,
+            "active": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "provider": "github",
+              "number": 12,
+              "title": "Recorded",
+              "state": "open",
+              "url": "https://github.com/owner/repo/pull/12",
+              "updatedAt": "2026-01-01T00:00:00Z",
+              "mergeable": "MERGEABLE"
+            }
+          }
+        },
+        {
+          "complete": "worktree.show#1",
+          "params": {
+            "worktree": "id:repo-9::/w"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "linkedPR": null
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "branch-hint"
+        },
+        {
+          "complete": "github.prForBranch#1",
+          "params": {
+            "repo": "id:repo-9",
+            "branch": "feature",
+            "linkedPRNumber": null,
+            "fallbackPRNumber": 12,
+            "acceptMergedFallbackPR": true,
+            "currentHeadOid": null
+          },
+          "paramsFollowDivergence": true,
+          "reply": {
+            "ok": true,
+            "result": {
+              "kind": "found",
+              "pr": {
+                "number": 12,
+                "state": "open",
+                "title": "Recorded",
+                "url": "https://github.com/owner/repo/pull/12",
+                "headSha": "head-sha-1",
+                "updatedAt": "2026-01-01T00:00:00Z",
+                "mergeable": "MERGEABLE"
+              },
+              "fetchedAt": 0
+            }
+          }
+        },
+        {
+          "checkpoint": "pr"
+        },
+        {
+          "complete": "github.prChecks#1",
+          "params": {
+            "repo": "id:repo-9",
+            "prNumber": 12,
+            "headSha": "head-sha-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": [
+              {
+                "name": "build",
+                "status": "completed",
+                "conclusion": "success",
+                "checkRunId": 7
+              }
+            ]
+          }
+        },
+        {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "runtimeId": "recorded"
+            }
+          }
+        },
+        {
+          "complete": "github.workItemDetails#1",
+          "params": {
+            "repo": "id:repo-9",
+            "number": 12,
+            "type": "pr"
+          },
+          "paramsFollowDivergence": true,
+          "reply": {
+            "ok": true,
+            "result": {
+              "item": {
+                "id": "PR_1",
+                "number": 12,
+                "type": "pr",
+                "state": "open",
+                "title": "Recorded",
+                "url": "https://github.com/owner/repo/pull/12",
+                "updatedAt": "2026-01-01T00:00:00Z",
+                "labels": [],
+                "assignees": []
+              },
+              "body": "body",
+              "headSha": "head-sha-1",
+              "comments": [
+                {
+                  "id": 55,
+                  "author": "rev",
+                  "body": "please fix",
+                  "createdAt": "2026-01-01T00:00:00Z",
+                  "url": "https://github.com/owner/repo/pull/12#discussion_r55",
+                  "threadId": "thread-1",
+                  "path": "src/app.ts",
+                  "line": 3,
+                  "isResolved": false
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "loaded"
+        },
+        {
+          "action": "revisit",
+          "id": "revisit"
+        },
+        {
+          "complete": "worktree.show#2",
+          "params": {
+            "worktree": "id:repo-9::/w"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "linkedPR": null
+              }
+            }
+          }
+        },
+        {
+          "complete": "github.prForBranch#2",
+          "params": {
+            "repo": "id:repo-9",
+            "branch": "feature",
+            "linkedPRNumber": null,
+            "fallbackPRNumber": 12,
+            "acceptMergedFallbackPR": true,
+            "currentHeadOid": null
+          },
+          "paramsFollowDivergence": true,
+          "reply": {
+            "ok": true,
+            "result": {
+              "kind": "found",
+              "pr": {
+                "number": 12,
+                "state": "open",
+                "title": "Recorded",
+                "url": "https://github.com/owner/repo/pull/12",
+                "headSha": "head-sha-1",
+                "updatedAt": "2026-01-01T00:00:00Z",
+                "mergeable": "MERGEABLE"
+              },
+              "fetchedAt": 0
+            }
+          }
+        },
+        {
+          "checkpoint": "revisited"
+        },
+        {
+          "action": "refresh",
+          "id": "refresh"
+        },
+        {
+          "complete": "hostedReview.forBranch#2",
+          "params": {
+            "repo": "id:repo-9",
+            "branch": "feature",
+            "linkedGitHubPR": null,
+            "active": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "provider": "github",
+              "number": 12,
+              "title": "Recorded",
+              "state": "open",
+              "url": "https://github.com/owner/repo/pull/12",
+              "updatedAt": "2026-01-01T00:00:00Z",
+              "mergeable": "MERGEABLE"
+            }
+          }
+        },
+        {
+          "complete": "worktree.show#3",
+          "params": {
+            "worktree": "id:repo-9::/w"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "linkedPR": null
+              }
+            }
+          }
+        },
+        {
+          "complete": "github.prForBranch#3",
+          "params": {
+            "repo": "id:repo-9",
+            "branch": "feature",
+            "linkedPRNumber": null,
+            "fallbackPRNumber": 12,
+            "acceptMergedFallbackPR": true,
+            "currentHeadOid": null,
+            "userRefresh": true
+          },
+          "paramsFollowDivergence": true,
+          "reply": {
+            "ok": true,
+            "result": {
+              "kind": "found",
+              "pr": {
+                "number": 12,
+                "state": "open",
+                "title": "Recorded",
+                "url": "https://github.com/owner/repo/pull/12",
+                "headSha": "head-sha-1",
+                "updatedAt": "2026-01-01T00:00:00Z",
+                "mergeable": "MERGEABLE"
+              },
+              "fetchedAt": 0
+            }
+          }
+        },
+        {
+          "complete": "github.prChecks#2",
+          "params": {
+            "repo": "id:repo-9",
+            "prNumber": 12,
+            "noCache": true,
+            "userRefresh": true,
+            "headSha": "head-sha-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": [
+              {
+                "name": "build",
+                "status": "completed",
+                "conclusion": "success",
+                "checkRunId": 7
+              }
+            ]
+          }
+        },
+        {
+          "bind": "refresh-status-2",
+          "request": "status.get#2",
+          "params": {
+            "$undefined": true
+          }
+        },
+        {
+          "complete": "refresh-status-2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "runtimeId": "recorded"
+            }
+          }
+        },
+        {
+          "bind": "refresh-status-3",
+          "request": "status.get#3",
+          "params": {
+            "$undefined": true
+          }
+        },
+        {
+          "complete": "refresh-status-3",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "runtimeId": "recorded"
+            }
+          }
+        },
+        {
+          "complete": "github.workItemDetails#2",
+          "params": {
+            "repo": "id:repo-9",
+            "number": 12,
+            "type": "pr"
+          },
+          "paramsFollowDivergence": true,
+          "reply": {
+            "ok": true,
+            "result": {
+              "item": {
+                "id": "PR_1",
+                "number": 12,
+                "type": "pr",
+                "state": "open",
+                "title": "Recorded",
+                "url": "https://github.com/owner/repo/pull/12",
+                "updatedAt": "2026-01-01T00:00:00Z",
+                "labels": [],
+                "assignees": []
+              },
+              "body": "body",
+              "headSha": "head-sha-1",
+              "comments": [
+                {
+                  "id": 55,
+                  "author": "rev",
+                  "body": "please fix",
+                  "createdAt": "2026-01-01T00:00:00Z",
+                  "url": "https://github.com/owner/repo/pull/12#discussion_r55",
+                  "threadId": "thread-1",
+                  "path": "src/app.ts",
+                  "line": 3,
+                  "isResolved": false
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "refreshed"
+        }
+      ]
+    },
+    {
       "id": "pr-sidebar-checks-refused",
       "operation": "session.pr-sidebar",
       "family": "session.pr-sidebar",
@@ -8645,6 +9038,7 @@
             "branch": "feature",
             "linkedPRNumber": null,
             "fallbackPRNumber": 12,
+            "acceptMergedFallbackPR": true,
             "currentHeadOid": null
           },
           "paramsFollowDivergence": true,
@@ -8813,6 +9207,7 @@
             "branch": "feature",
             "linkedPRNumber": null,
             "fallbackPRNumber": 12,
+            "acceptMergedFallbackPR": true,
             "currentHeadOid": null
           },
           "paramsFollowDivergence": true,
@@ -9012,6 +9407,7 @@
             "branch": "feature",
             "linkedPRNumber": null,
             "fallbackPRNumber": 12,
+            "acceptMergedFallbackPR": true,
             "currentHeadOid": null
           },
           "paramsFollowDivergence": true,
@@ -16205,7 +16601,7 @@
       "id": "notifications-push-registered",
       "operation": "notifications.push-registration",
       "family": "notifications.push-registration",
-      "sites": ["mobile/src/notifications/push-registration.ts"],
+      "sites": ["mobile/src/notifications/mobile-push-registration-operations.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16254,7 +16650,7 @@
       "id": "notifications-push-gateway-rejected",
       "operation": "notifications.push-registration",
       "family": "notifications.push-registration",
-      "sites": ["mobile/src/notifications/push-registration.ts"],
+      "sites": ["mobile/src/notifications/mobile-push-registration-operations.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17633,7 +18029,7 @@
       "id": "native-chat-write-accepted",
       "operation": "nativeChat.terminal-write",
       "family": "nativeChat.terminal-write",
-      "sites": ["mobile/src/session/native-chat/mobile-native-chat-send.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17669,7 +18065,7 @@
       "id": "native-chat-write-rejected",
       "operation": "nativeChat.terminal-write",
       "family": "nativeChat.terminal-write",
-      "sites": ["mobile/src/session/native-chat/mobile-native-chat-send.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17705,7 +18101,7 @@
       "id": "native-chat-write-delivery-unknown",
       "operation": "nativeChat.terminal-write",
       "family": "nativeChat.terminal-write",
-      "sites": ["mobile/src/session/native-chat/mobile-native-chat-send.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17737,7 +18133,7 @@
       "id": "native-chat-write-clear-line",
       "operation": "nativeChat.terminal-write",
       "family": "nativeChat.terminal-write",
-      "sites": ["mobile/src/session/native-chat/mobile-native-chat-send.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17773,7 +18169,7 @@
       "id": "native-chat-write-typed-command",
       "operation": "nativeChat.terminal-write",
       "family": "nativeChat.terminal-write",
-      "sites": ["mobile/src/session/native-chat/mobile-native-chat-send.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18444,7 +18840,9 @@
       "id": "structured-launch-unsupported",
       "operation": "agentSession.structured-launch",
       "family": "agentSession.structured-launch",
-      "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
+      "sites": [
+        "mobile/src/session/native-chat/agent-session/mobile-structured-agent-session-launch.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -18474,7 +18872,9 @@
       "id": "structured-launch-support-refused",
       "operation": "agentSession.structured-launch",
       "family": "agentSession.structured-launch",
-      "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
+      "sites": [
+        "mobile/src/session/native-chat/agent-session/mobile-structured-agent-session-launch.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -18504,7 +18904,9 @@
       "id": "structured-launch-created",
       "operation": "agentSession.structured-launch",
       "family": "agentSession.structured-launch",
-      "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
+      "sites": [
+        "mobile/src/session/native-chat/agent-session/mobile-structured-agent-session-launch.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -18555,7 +18957,9 @@
       "id": "structured-launch-definitive-refusal",
       "operation": "agentSession.structured-launch",
       "family": "agentSession.structured-launch",
-      "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
+      "sites": [
+        "mobile/src/session/native-chat/agent-session/mobile-structured-agent-session-launch.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -18607,7 +19011,9 @@
       "id": "structured-launch-replays-dropped-create",
       "operation": "agentSession.structured-launch",
       "family": "agentSession.structured-launch",
-      "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
+      "sites": [
+        "mobile/src/session/native-chat/agent-session/mobile-structured-agent-session-launch.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -19047,7 +19453,7 @@
       "id": "native-chat-stop-accepted",
       "operation": "session.native-chat-stop",
       "family": "session.native-chat-stop",
-      "sites": ["mobile/src/session/native-chat/use-mobile-native-chat-stop.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/use-mobile-native-chat-stop.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19108,7 +19514,7 @@
       "id": "native-chat-stop-both-rejected",
       "operation": "session.native-chat-stop",
       "family": "session.native-chat-stop",
-      "sites": ["mobile/src/session/native-chat/use-mobile-native-chat-stop.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/use-mobile-native-chat-stop.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19166,7 +19572,7 @@
       "id": "native-chat-stop-delivery-unknown",
       "operation": "session.native-chat-stop",
       "family": "session.native-chat-stop",
-      "sites": ["mobile/src/session/native-chat/use-mobile-native-chat-stop.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/use-mobile-native-chat-stop.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19566,7 +19972,7 @@
         "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/composer/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -19643,7 +20049,7 @@
         "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/composer/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -19721,7 +20127,7 @@
         "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/composer/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -19756,7 +20162,7 @@
         "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/composer/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -19792,7 +20198,7 @@
         "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/composer/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -19828,7 +20234,7 @@
         "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/composer/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -19884,7 +20290,7 @@
         "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/composer/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -20639,7 +21045,7 @@
       "id": "codex-reset-credit-consumed",
       "operation": "accounts.codex-reset-credit",
       "family": "components.codex-reset-credit",
-      "sites": ["mobile/src/components/codex-reset-credit.ts"],
+      "sites": ["mobile/src/accounts/usage/codex-reset-credit.ts"],
       "schedules": [],
       "deviceStore": {},
       "steps": [
@@ -21681,6 +22087,144 @@
         },
         {
           "checkpoint": "stopped"
+        }
+      ]
+    },
+    {
+      "id": "event-router-failed-read-floor",
+      "operation": "query.event-router-catalog",
+      "family": "query.event-router-catalog",
+      "sites": ["mobile/src/query/host-event-router.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "frame": "runtime.clientEvents.subscribe#1",
+          "params": null,
+          "reply": {
+            "ok": true,
+            "streaming": true,
+            "result": {
+              "type": "ready",
+              "subscriptionId": "sub-1"
+            }
+          }
+        },
+        {
+          "checkpoint": "listening"
+        },
+        {
+          "complete": "worktree.ps#1",
+          "params": {
+            "limit": 10000,
+            "supportsWorktreeVisibilitySourceDefaults": true,
+            "afterSnapshotId": null,
+            "acceptRowDelta": true
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "runtime_error",
+              "message": "worktree list unavailable"
+            }
+          }
+        },
+        {
+          "checkpoint": "read-refused"
+        },
+        {
+          "frame": "runtime.clientEvents.subscribe#1",
+          "params": null,
+          "reply": {
+            "ok": true,
+            "streaming": true,
+            "result": {
+              "type": "worktreesChanged",
+              "repoId": "repo-1"
+            }
+          }
+        },
+        {
+          "advance": 150
+        },
+        {
+          "frame": "runtime.clientEvents.subscribe#1",
+          "params": null,
+          "reply": {
+            "ok": true,
+            "streaming": true,
+            "result": {
+              "type": "worktreesChanged",
+              "repoId": "repo-1"
+            }
+          }
+        },
+        {
+          "advance": 150
+        },
+        {
+          "frame": "runtime.clientEvents.subscribe#1",
+          "params": null,
+          "reply": {
+            "ok": true,
+            "streaming": true,
+            "result": {
+              "type": "worktreesChanged",
+              "repoId": "repo-1"
+            }
+          }
+        },
+        {
+          "advance": 150
+        },
+        {
+          "frame": "runtime.clientEvents.subscribe#1",
+          "params": null,
+          "reply": {
+            "ok": true,
+            "streaming": true,
+            "result": {
+              "type": "worktreesChanged",
+              "repoId": "repo-1"
+            }
+          }
+        },
+        {
+          "advance": 150
+        },
+        {
+          "frame": "runtime.clientEvents.subscribe#1",
+          "params": null,
+          "reply": {
+            "ok": true,
+            "streaming": true,
+            "result": {
+              "type": "worktreesChanged",
+              "repoId": "repo-1"
+            }
+          }
+        },
+        {
+          "advance": 150
+        },
+        {
+          "checkpoint": "five-notices-inside-the-floor"
+        },
+        {
+          "advance": 3000
+        },
+        {
+          "checkpoint": "floor-passed"
+        },
+        {
+          "action": "unmount",
+          "id": "unmount"
+        },
+        {
+          "checkpoint": "unmounted"
         }
       ]
     },
@@ -24355,7 +24899,7 @@
         "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/composer/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -24410,7 +24954,7 @@
         "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
         "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/composer/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -24484,7 +25028,9 @@
       "id": "structured-agent-session-created",
       "operation": "agentSession.structured-launch",
       "family": "agentSession.structured-create",
-      "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
+      "sites": [
+        "mobile/src/session/native-chat/agent-session/mobile-structured-agent-session-launch.ts"
+      ],
       "schedules": [],
       "steps": [
         {

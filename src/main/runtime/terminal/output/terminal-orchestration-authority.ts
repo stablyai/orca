@@ -183,7 +183,7 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
   }
 
   protected retirePtyAgentLaunchAuthority(ptyId: string): void {
-    const pty = this.ptysById.get(ptyId)
+    const pty = this.retireHeldLaunch(ptyId)
     if (!pty) {
       return
     }

@@ -1,6 +1,6 @@
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
-import { selectExecutionHostDisplayLabel } from '@/lib/execution-host-display-label'
+import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { forgeCredentialTarget } from '@/runtime/source-control/forge/forge-credential-target'
 import { useAppStore } from '@/store'
 

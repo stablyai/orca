@@ -1,7 +1,7 @@
 // The CLI loads these paths after electron-vite replaces out/main.
 export const CLI_MAIN_ENTRY_NAMES = [
   'agent-hooks/installation/managed-agent-hook-controls',
-  'gitlab/project-ref-parser',
+  'gitlab/projects/project-ref-parser',
   'orca-profiles/profile-index-store',
   'claude-accounts/keychain',
   // The CLI checks a relocated runtime socket dir before it sends the auth token.
@@ -12,16 +12,17 @@ export const CLI_MAIN_ENTRY_NAMES = [
   'orcad/orcad-stale-lock-reclaim',
   'orcad/orcad-host-identity-reset',
   'plugins/plugin-authoring-checks',
-  ...[
-    'access',
-    'active-location',
-    'storage-classification',
-    'offline-settings',
-    'backup-path',
-    'database-recovery',
-    'domain-reader',
-    'recovery-command'
-  ].map((module) => `persistence/profile-state/profile-state-${module}`),
+  // `orca vm env doctor` runs its checks in the CLI process.
+  'environment-doctor/environment-doctor',
+  'environment-doctor/environment-doctor-host',
+  'persistence/profile-state/access/profile-state-access',
+  'persistence/profile-state/offline-access/profile-state-active-location',
+  'persistence/profile-state/database/profile-state-storage-classification',
+  'persistence/profile-state/offline-access/profile-state-offline-settings',
+  'persistence/profile-state/backup/profile-state-backup-path',
+  'persistence/profile-state/recovery/profile-state-database-recovery',
+  'persistence/profile-state/documents/profile-state-domain-reader',
+  'persistence/profile-state/recovery/profile-state-recovery-command',
   'persistence/profile-state/legacy-json/profile-state-export-path',
   'persistence/profile-state/legacy-json/profile-state-recovery',
   'startup/http1-compatibility-marker'

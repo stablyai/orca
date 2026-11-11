@@ -1,4 +1,4 @@
-import type { PRCheckContract } from '@/lib/pr-check-observation-contract'
+import type { PRCheckContract } from '@/lib/source-control/checks/pr-check-observation-contract'
 import {
   acceptPRCheckObservation,
   completePRCheckOwnerScope

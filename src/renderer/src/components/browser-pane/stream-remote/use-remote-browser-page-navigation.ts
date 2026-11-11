@@ -10,7 +10,7 @@ import type {
   BrowserGotoResult,
   BrowserReloadResult,
   BrowserTabInfo
-} from '../../../../../shared/runtime-types'
+} from '../../../../../shared/browser/runtime/runtime-browser-contracts'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { isRemoteBrowserPageMissingError } from './remote-browser-stream-errors'

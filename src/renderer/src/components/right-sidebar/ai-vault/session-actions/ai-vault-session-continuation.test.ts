@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { buildAgentSessionContinuationPrompt } from '@/lib/agent-session-continuation'
+import { buildAgentSessionContinuationPrompt } from '@/lib/agent-session/context/agent-session-continuation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 import { prepareAiVaultSessionContinuation } from './ai-vault-session-continuation'
 

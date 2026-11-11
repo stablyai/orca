@@ -8,6 +8,7 @@ import {
 import { isCancelledConnectAttemptError } from './ssh-connect-attempt-cancellation'
 import { SshReconnectLadder } from './ssh-reconnect-ladder'
 import { isSshUserDisconnected } from '../ssh-user-disconnect'
+import { isSshHostHeldAsleep } from '../ssh-host-sleep-hold'
 
 // Coalesce resume/online signals: a fresh handshake belongs to the first signal, not the stale pre-sleep route.
 const STALE_BACKGROUND_ATTEMPT_MS = 5_000
@@ -96,8 +97,13 @@ export class SshConnectionReconnector {
   }
 
   // User Disconnect is recorded before delayed teardown; block every drop/backoff/wake redial meanwhile.
+  // A sleeping VM's host is held the same way: a redial would be the login that wakes it (#36363).
   private mayRedial(): boolean {
-    return !this.host.isDisposed() && !isSshUserDisconnected(this.host.targetId)
+    return (
+      !this.host.isDisposed() &&
+      !isSshUserDisconnected(this.host.targetId) &&
+      !isSshHostHeldAsleep(this.host.targetId)
+    )
   }
 
   scheduleReconnect(): void {

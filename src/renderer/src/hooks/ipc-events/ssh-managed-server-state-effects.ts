@@ -15,7 +15,7 @@ import {
 import { toastSshHostMoveRefused } from './ssh-managed-server-refusal-toast'
 import { useAppStore } from '../../store'
 import { withoutConvertedSshHostRows } from '../../store/repos/converted-ssh-host-rows'
-import { rekeyWorktreeVisitHost } from '@/lib/worktree-visit-recency'
+import { rekeyWorktreeVisitHost } from '@/lib/workspace/activation/worktree-visit-recency'
 import { preserveConvertedSshBrowserPages } from '../../store/repos/converted-ssh-browser-pages'
 import {
   selectDetectedWorktreesByRepo,

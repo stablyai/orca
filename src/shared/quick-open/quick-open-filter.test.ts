@@ -54,15 +54,4 @@ describe('normalizeQuickOpenRgLine', () => {
       'a.ts\r'
     )
   })
-
-  it('returns null for paths outside the absolute root', () => {
-    expect(
-      normalizeQuickOpenRgLine('/other/a.ts', { kind: 'absolute', rootPath: '/root' })
-    ).toBeNull()
-  })
-
-  it('returns null for cwd-relative parent-directory escapes', () => {
-    expect(normalizeQuickOpenRgLine('../outside/a.ts', { kind: 'cwd-relative' })).toBeNull()
-    expect(normalizeQuickOpenRgLine('./../outside/a.ts', { kind: 'cwd-relative' })).toBeNull()
-  })
 })

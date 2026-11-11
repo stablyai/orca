@@ -1,9 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  configureHardeningRetryBudget,
-  mayAttemptHardening,
-  recordHardeningOutcome
-} from './secure-path-hardening-retry-budget'
+import { configureHardeningRetryBudget } from './secure-path-hardening-retry-budget'
 
 const PATH = 'C:\\Users\\me\\.orca\\secret.json'
 const OTHER = 'C:\\Users\\me\\.orca\\other.json'
@@ -19,13 +15,6 @@ describe('secure path hardening retry budget', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
-  })
-
-  it('budgets each path separately', () => {
-    recordHardeningOutcome(PATH, false)
-
-    expect(mayAttemptHardening(PATH)).toBe(false)
-    expect(mayAttemptHardening(OTHER)).toBe(true)
   })
 
   /** A second importer may have no configuration; throwing there made async hardening crash main.

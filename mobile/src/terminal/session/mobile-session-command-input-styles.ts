@@ -75,9 +75,5 @@ export const mobileSessionCommandInputStyles = themedStyleSheet(() => ({
   keyboardDismissChevron: {
     bottom: -2,
     position: 'absolute'
-  },
-  dictationButtonActive: {
-    borderWidth: 1,
-    borderColor: colors.textSecondary
   }
 }))

@@ -10,7 +10,7 @@ const UPDATE_DELAY_DATE_FORMAT: Intl.DateTimeFormatOptions = {
 }
 
 export function getUpdateDelayTitle(t: Translate = translate): string {
-  return t('settings.updateDelay.title', 'Update Delay')
+  return t('settings.updateDelay.1b4d825e0e', 'Update delay')
 }
 
 export function getUpdateDelayDescription(t: Translate = translate): string {

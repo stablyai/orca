@@ -1,7 +1,7 @@
 import type {
   BrowserTabInfo,
   BrowserTabListResult
-} from '../../../../shared/runtime-browser-contracts'
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../../browser-error'
 import type { ResolvedBrowserCommandTarget } from './agent-browser-command-target'
 import { AgentBrowserBridgeState } from './agent-browser-bridge-state'

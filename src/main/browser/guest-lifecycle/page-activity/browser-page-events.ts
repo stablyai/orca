@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import type { BrowserPopupEvent } from '../../../../shared/browser-guest-events'
+import type { BrowserPopupEvent } from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
 
 /** Facts the browser manager resolves to their owning page: a tab it asked for, a popup outcome, a download. */
 export type BrowserPageEvent =

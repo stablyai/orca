@@ -25,8 +25,8 @@ export const PR_EDITOR_PREVIEW_E2E_SOURCE_ROUTES = [
       (file.startsWith('src/renderer/src/components/editor/model-lifetime/identity/') ||
         [
           'src/renderer/src/components/editor/useEditorPanelFileContentLoader.ts',
-          'src/renderer/src/lib/editor-file-operation-owner.ts',
-          'src/renderer/src/lib/editor-file-operation-provenance.ts'
+          'src/renderer/src/lib/editor/file-operations/editor-file-operation-owner.ts',
+          'src/renderer/src/lib/editor/file-operations/editor-file-operation-provenance.ts'
         ].includes(file))
   },
   {

@@ -13,7 +13,7 @@ import '../../../../orchestration/db/attempt-outcome-projection'
 
 import { RpcDispatcher } from '../../../dispatcher'
 import { ORCHESTRATION_METHODS } from '../orchestration'
-import { startFederatedWorker } from '../federation/federated-worker-start'
+import { startFederatedWorker } from '../../../../orchestration/legacy-remote-home/federated-worker-start'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
 
 describe('orchestration migration behavior', () => {

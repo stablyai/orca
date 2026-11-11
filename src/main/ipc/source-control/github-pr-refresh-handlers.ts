@@ -7,6 +7,7 @@ import type {
   PRRefreshOutcome
 } from '../../../shared/github/pull-request-refresh-types'
 import type { Repo } from '../../../shared/repo-types'
+import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { getPRForBranch } from '../../github/client/lookup/get-pr-for-branch'
 import type { GitHubPRBranchLookupOptions } from '../../github/client/lookup/pull-request-lookup-data'
 import {
@@ -18,6 +19,7 @@ import {
   setPRRefreshRegistrationCheck
 } from '../../github/pr-refresh-coordinator'
 import { setPRRefreshRendererPort } from '../../github/pr-refresh-renderer-port'
+import { pullRequestChangeObserver } from '../../github/pull-request-changed-events'
 import { electronPRRefreshRenderer } from '../../host/electron-pr-refresh-renderer'
 import type { Store } from '../../persistence/loading-store/store'
 import type { StatsCollector } from '../../stats/collector'
@@ -35,7 +37,11 @@ import { abortWhenRendererGone } from '../renderer-lifetime-abort'
 
 const visibilityCleanupRegistered = new Set<number>()
 
-export function registerGitHubPRRefreshHandlers(store: Store, stats: StatsCollector): void {
+export function registerGitHubPRRefreshHandlers(
+  store: Store,
+  stats: StatsCollector,
+  runtime: Pick<OrcaRuntimeService, 'notifyPullRequestChangedForRemoteClients'>
+): void {
   // The windows these handlers serve are the renderers the coordinator reports to.
   setPRRefreshRendererPort(electronPRRefreshRenderer)
   function recordPRIfNeeded(repo: Repo, outcome: PRRefreshOutcome): void {
@@ -57,6 +63,10 @@ export function registerGitHubPRRefreshHandlers(store: Store, stats: StatsCollec
       recordPRIfNeeded(repo, outcome)
     }
   })
+  // Only the desktop drives the coordinator; serve and orcad have no publisher, so phones keep polling there.
+  addPRRefreshOutcomeObserver(
+    pullRequestChangeObserver((change) => runtime.notifyPullRequestChangedForRemoteClients(change))
+  )
   setPRRefreshRegistrationCheck((candidate) =>
     isPRRefreshCandidateRegistered(candidate, store.getRepos())
   )

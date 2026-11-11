@@ -118,7 +118,7 @@ so the projection has a temporal dimension instead of relying on where a checkpo
 Any transition the product schedules for itself is recorded at the time it actually fires: change a
 request deadline or the search debounce by any amount, in either direction, and a recorded number
 moves. Granularity is exact milliseconds, because the fake timers fire at their scheduled time and
-never coalesce; `recording-runner.test.ts` pins a 5 ms deadline settling at exactly `settledAt: 5`.
+never coalesce.
 
 A checkpoint's own clock is not recorded. It is always the sum of the scripted `advance` steps, so
 it is a function of the scenario rather than of the code under test; `run-recording.ts` asserts that

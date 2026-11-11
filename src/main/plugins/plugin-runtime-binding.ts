@@ -1,4 +1,5 @@
 import type { PluginEventName } from '../../shared/plugins/manifest/plugin-manifest'
+import { savedWorkspaceCatalog } from '../persistence/profile-save-domains'
 import type { PluginAgentStatusChangedPayload } from '../../shared/plugins/events/plugin-events'
 import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../shared/plugins/workers/plugin-host-api'
 import type { PluginRuntimeDelegate } from './workers/plugin-host-service-bindings'
@@ -139,25 +140,34 @@ export function createPluginAgentStatusForwarder(
   }
 }
 
-/** The `workspace.changed` payload for the context as it is now. */
-export async function readPluginWorkspaceChange(
-  delegate: PluginRuntimeDelegate
-): Promise<{ context: PluginWorkspaceContext }> {
+/**
+ * The `workspace.changed` payload for the context as it is now, plus the focused worktree id the
+ * watcher dedupes on (kept out of the payload because it can embed a provider path).
+ */
+export async function readPluginWorkspaceChange(delegate: PluginRuntimeDelegate): Promise<{
+  change: { context: PluginWorkspaceContext }
+  worktreeId: string | null
+}> {
   const context = await delegate.resolveActiveWorktreeContext().catch(() => null)
   const terminals = context
     ? await listWorkspaceTerminals(delegate, context.worktreeId).catch(() => [])
     : []
-  return { context: projectPluginWorkspaceContext(context, terminals) }
+  return {
+    change: { context: projectPluginWorkspaceContext(context, terminals) },
+    worktreeId: context?.worktreeId ?? null
+  }
 }
 
 /**
  * `workspace.changed`: after workspace session writes settle (focus moves, terminals open, close
  * or are renamed), re-read the context and emit when it differs from the last one sent.
+ * Why: compare by worktree id too, so focus moving between identical-looking workspaces still emits.
  */
 export function watchPluginWorkspaceContext(input: {
   delegate: PluginRuntimeDelegate
   events: PluginEvents
   onSessionWritten: (listener: () => void) => () => void
+  onStateWritten: (listener: (domains: readonly string[] | undefined) => void) => () => void
   delayMs?: number
 }): () => void {
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -168,18 +178,26 @@ export function watchPluginWorkspaceContext(input: {
       last = null
       return
     }
-    const change = await readPluginWorkspaceChange(input.delegate)
-    const signature = JSON.stringify(change)
+    const { change, worktreeId } = await readPluginWorkspaceChange(input.delegate)
+    const signature = JSON.stringify({ worktreeId, change })
     if (signature !== last) {
       last = signature
       input.events.emitEvent('workspace.changed', change)
     }
   }
-  const stop = input.onSessionWritten(() => {
+  const schedule = (): void => {
     timer ??= setTimeout(() => void check(), input.delayMs ?? WORKSPACE_CHANGE_DEBOUNCE_MS)
+  }
+  const stopSession = input.onSessionWritten(schedule)
+  // A folder workspace rename reaches the context through the catalog, not the session.
+  const stopCatalog = input.onStateWritten((domains) => {
+    if (savedWorkspaceCatalog(domains)) {
+      schedule()
+    }
   })
   return () => {
-    stop()
+    stopSession()
+    stopCatalog()
     if (timer) {
       clearTimeout(timer)
     }

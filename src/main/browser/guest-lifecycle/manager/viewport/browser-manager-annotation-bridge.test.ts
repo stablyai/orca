@@ -30,7 +30,7 @@ vi.mock('../../popups/presentation/popup-origin-bar-window', () => ({
 }))
 
 import { browserManager } from '../browser-manager'
-import type { BrowserAnnotationViewportBridgeOptions } from '../../../../../shared/browser-annotation-viewport-bridge'
+import type { BrowserAnnotationViewportBridgeOptions } from '../../../../../shared/browser/annotations/browser-annotation-viewport-bridge'
 import {
   rendererWebContentsId,
   resetBrowserManagerMocks,

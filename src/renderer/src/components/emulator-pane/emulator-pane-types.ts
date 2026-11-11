@@ -1,4 +1,4 @@
-import { SIMULATOR_DEFAULT_TAB_LABEL } from '@/lib/simulator-tab-label'
+import { SIMULATOR_DEFAULT_TAB_LABEL } from '@/lib/simulator/tabs/simulator-tab-label'
 
 export type SimulatorDeviceRow = {
   name: string
@@ -26,6 +26,12 @@ export type EmulatorStreamInfo = {
 export type EmulatorPaneSession = {
   attached: boolean
   info?: EmulatorStreamInfo
+}
+
+export type UseEmulatorPaneSessionArgs = {
+  worktreeId: string
+  tabId?: string
+  autoAttachOnMount: boolean
 }
 
 export function deviceLabel(

@@ -11,6 +11,7 @@ export function paneHasStateClaims(state: HookListenerState, paneKey: string): b
     state.claudeLaunchedBackgroundTasksByPaneKey.has(paneKey) ||
     state.claudeSessionOwnerByPaneKey.has(paneKey) ||
     state.codexSubagentRosterByPaneKey.has(paneKey) ||
-    state.codexLeadStateByPaneKey.has(paneKey)
+    state.codexLeadStateByPaneKey.has(paneKey) ||
+    state.codexAsyncQuestionsByPaneKey.has(paneKey)
   )
 }

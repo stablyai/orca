@@ -90,7 +90,7 @@ export function DeleteWorktreeDialogFooter({
           onAlwaysForceDelete={onAlwaysDelete}
           moreActionsLabel={t('workspaceDeletion.moreDeleteOptions', 'More delete options')}
           alwaysForceDeleteLabel={t('workspaceDeletion.alwaysDelete', 'Always delete')}
-          alwaysForceDeleteTooltip={t(
+          alwaysForceDeleteDescription={t(
             'workspaceDeletion.alwaysDeleteTooltip',
             'Skip this confirmation for future deletions.'
           )}

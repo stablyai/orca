@@ -3,7 +3,7 @@ import {
   BrowserScreencastOpcode,
   decodeBrowserScreencastFrame,
   encodeBrowserScreencastFrame
-} from '../../../../shared/browser-screencast-protocol'
+} from '../../../../shared/browser/screencast/browser-screencast-protocol'
 import { acknowledgeBrowserScreencastFrame } from './browser-screencast-frame-credit'
 import {
   createSinglePageBrowserCommandsHost,

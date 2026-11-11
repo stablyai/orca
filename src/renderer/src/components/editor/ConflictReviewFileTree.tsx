@@ -2,7 +2,7 @@ import React from 'react'
 import { ChevronDown, PanelLeftClose } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { FileTypeIcon, FolderIcon } from '@/components/FileTypeIcon'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   buildSourceControlTree,
   compactSourceControlTree,

@@ -1,6 +1,7 @@
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeTempDirs } from '../../shared/testing/remove-temp-dirs.test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
 import { PAIRING_OFFER_VERSION } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
@@ -30,6 +31,7 @@ const {
 }))
 
 vi.mock('electron', () => ({
+  BrowserWindow: { getAllWindows: () => [] },
   app: {
     getPath: getPathMock
   },
@@ -52,13 +54,12 @@ vi.mock('./runtime-environments/runtime-environments', () => ({
 import { registerEphemeralVmHandlers } from './ephemeral-vm'
 import { suspendEphemeralVmWorkspace } from '../ephemeral-vm/workspace-suspend'
 import { resumeEphemeralVmWorkspace } from '../ephemeral-vm/workspace-resume'
+import { toWorkspaceLifecycleResult } from '../ephemeral-vm/workspace-lifecycle-result'
 
 const tempDirs: string[] = []
 
-afterEach(() => {
-  for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { recursive: true, force: true })
-  }
+afterEach(async () => {
+  await removeTempDirs(tempDirs.splice(0))
 })
 
 function makeDir(prefix: string): string {
@@ -109,10 +110,7 @@ function pluginServiceWithRecipes(
 }
 
 describe('registerEphemeralVmHandlers', () => {
-  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
-
   beforeEach(() => {
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     handlers.clear()
     handleMock.mockReset()
     removeHandlerMock.mockReset()
@@ -136,12 +134,6 @@ describe('registerEphemeralVmHandlers', () => {
     handleMock.mockImplementation((channel: string, handler: never) => {
       handlers.set(channel, handler)
     })
-  })
-
-  afterEach(() => {
-    if (originalPlatform) {
-      Object.defineProperty(process, 'platform', originalPlatform)
-    }
   })
 
   it('uses an immutable plugin recipe snapshot after the plugin is removed', async () => {
@@ -403,6 +395,95 @@ describe('registerEphemeralVmHandlers', () => {
     expect(invalidateRuntimeEnvironmentTransportMock).toHaveBeenCalledWith(
       provisioned.environment.id
     )
+  })
+
+  it('returns coded suspend and resume failures and keeps them on the record', async () => {
+    const userDataPath = makeDir('orca-ephemeral-vm-ipc-user-data-')
+    const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
+    getPathMock.mockReturnValue(userDataPath)
+    mkdirSync(join(repoPath, 'scripts'), { recursive: true })
+    const startPath = join(repoPath, 'scripts', 'start.js')
+    const suspendPath = join(repoPath, 'scripts', 'suspend.js')
+    const resumePath = join(repoPath, 'scripts', 'resume.js')
+    writeFileSync(
+      startPath,
+      [
+        'console.log(JSON.stringify({',
+        '  schemaVersion: 1,',
+        `  pairingCode: ${JSON.stringify(makePairingCode())},`,
+        "  projectRoot: '/workspace/repo'",
+        '}))'
+      ].join('\n')
+    )
+    writeFileSync(suspendPath, "if (require('fs').existsSync('fail-suspend.txt')) process.exit(4)")
+    writeFileSync(resumePath, 'process.exit(3)')
+    writeFileSync(
+      join(repoPath, 'orca.yaml'),
+      [
+        'environmentRecipes:',
+        '  - id: cloud-sandbox',
+        '    name: Cloud Sandbox',
+        `    create: ${JSON.stringify(nodeCommand(startPath))}`,
+        `    suspend: ${JSON.stringify(nodeCommand(suspendPath))}`,
+        `    resume: ${JSON.stringify(nodeCommand(resumePath))}`,
+        '    destroy: none'
+      ].join('\n')
+    )
+    const store = makeStore(repoPath)
+    registerEphemeralVmHandlers(store as never)
+    const provisioned = (await handlers.get('ephemeralVm:provision')?.(null, {
+      repoId: 'repo-1',
+      recipeId: 'cloud-sandbox'
+    } as never)) as { ok: true; runtime: { id: string } }
+    await handlers.get('ephemeralVm:attachWorkspace')?.(null, {
+      runtimeId: provisioned.runtime.id,
+      workspaceId: 'workspace-1'
+    } as never)
+    const suspend = () =>
+      toWorkspaceLifecycleResult(async () => {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the suspend reads only getRepo and getRepos, which makeStore provides.
+        await suspendEphemeralVmWorkspace(store as never, 'workspace-1')
+        return null
+      })
+
+    writeFileSync(join(repoPath, 'fail-suspend.txt'), '')
+    expect(await suspend()).toEqual({
+      ok: false,
+      error: 'Suspend exited with code 4.',
+      errorCode: 'suspendExited',
+      errorParams: { exitCode: 4 }
+    })
+    expect(listEphemeralVmRuntimes(userDataPath)[0]).toMatchObject({
+      status: 'suspend_failed',
+      lifecycleLastErrorCode: 'suspendExited'
+    })
+
+    rmSync(join(repoPath, 'fail-suspend.txt'))
+    expect(await suspend()).toEqual({ ok: true, runtime: null })
+    // A successful suspend clears the earlier suspend failure from the record.
+    expect(listEphemeralVmRuntimes(userDataPath)[0]?.lifecycleLastErrorCode).toBeUndefined()
+
+    const resumeFailed = await toWorkspaceLifecycleResult(() =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resume reads only getRepo and getRepos, which makeStore provides.
+      resumeEphemeralVmWorkspace(store as never, 'workspace-1', {
+        sshHeld: false,
+        sshUserDisconnects: 0
+      })
+    )
+    expect(resumeFailed).toEqual({
+      ok: false,
+      error: 'Resume exited with code 3.',
+      errorCode: 'resumeExited',
+      errorParams: { exitCode: 3 }
+    })
+    expect(listEphemeralVmRuntimes(userDataPath)).toEqual([
+      expect.objectContaining({
+        status: 'resume_failed',
+        lifecycleLastError: 'Resume exited with code 3.',
+        lifecycleLastErrorCode: 'resumeExited',
+        lifecycleLastErrorParams: { exitCode: 3 }
+      })
+    ])
   })
 
   it('redacts recipe stdout when provisioning fails', async () => {

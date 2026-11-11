@@ -33,6 +33,8 @@ export const SendParams = z
     // Use remint-stable pane keys to attest worker_done/heartbeat; from handles only route.
     senderPaneKey: OptionalString,
     run: OptionalString,
+    // A paired server: this Orca carries the mail there and the replies back (`send --on`).
+    on: OptionalString,
     waitForLifecycleSettlement: OptionalBoolean,
     devMode: OptionalBoolean
   })

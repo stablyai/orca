@@ -24,7 +24,7 @@ import {
   reviewDescriptorFromItem
 } from './mobile-diff-review-screen-model'
 import type { ReviewSheetIntents } from './mobile-diff-review-sheets'
-import { useMobileDiffReviewNoteDraft } from './use-mobile-diff-review-note-draft'
+import type { MobileDiffReviewNoteDraft } from './use-mobile-diff-review-note-draft'
 
 type CommentActionsInput = {
   client: RpcClient | null
@@ -43,9 +43,12 @@ type CommentActionsInput = {
   navigationRef: { readonly current: number }
   /** GitHub's viewed mark for a PR file, or null when the file's viewed state lives on the phone. */
   remoteViewed: (item: MobileDiffReviewQueueItem, viewed: boolean) => Promise<boolean> | null
-  setComposerBody: Dispatch<SetStateAction<string>>
+  noteDraft: Pick<
+    MobileDiffReviewNoteDraft,
+    'openNewNoteSheet' | 'openEditComposer' | 'clearSavedNote'
+  >
   setActionError: Dispatch<SetStateAction<string | null>>
-  sheets: Pick<ReviewSheetIntents, 'openSheet' | 'openSheetWhenIdle' | 'closeSheet'>
+  sheets: Pick<ReviewSheetIntents, 'openSheetWhenIdle' | 'closeSheet'>
 }
 
 export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
@@ -64,11 +67,12 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
     selectIndex,
     navigationRef,
     remoteViewed,
-    setComposerBody,
+    noteDraft,
     setActionError,
     sheets
   } = input
-  const { openSheet, openSheetWhenIdle, closeSheet } = sheets
+  const { openSheetWhenIdle, closeSheet } = sheets
+  const { openNewNoteSheet, openEditComposer, clearSavedNote } = noteDraft
 
   const persistMetadata = useCallback(
     async (
@@ -146,12 +150,6 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
     },
     [persistMetadata, screenState, setActionError, setScreenState, updateReadyState, worktreeId]
   )
-
-  const { openNewNoteSheet, openEditComposer, clearSavedNote } = useMobileDiffReviewNoteDraft({
-    composerBody,
-    setComposerBody,
-    openSheet
-  })
 
   const openComposer = useCallback(
     (lineNumber: number) =>

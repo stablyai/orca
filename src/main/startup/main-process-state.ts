@@ -10,7 +10,7 @@ import type { CodexRuntimeHomeService } from '../codex-accounts/runtime-home-ser
 import type { ClaudeAccountService } from '../claude-accounts/service'
 import type { ClaudeRuntimeAuthService } from '../claude-accounts/runtime-auth-service'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import type { RateLimitService } from '../rate-limits/service'
+import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
 import type { OrcaRuntimeRpcServer } from '../runtime/rpc/server/runtime-rpc'
 import type { DesktopRelayService } from '../runtime/mobile-cloud-relay/desktop-relay-service'
 import type { DesktopRelayServiceInstaller } from '../runtime/mobile-cloud-relay/desktop-relay-service-installer'
@@ -48,8 +48,8 @@ import {
 } from '../crash-reporting/gpu-crash-fallback-decision'
 import type { GpuCrashDiagnosticsRecorder } from '../crash-reporting/gpu-crash-diagnostics'
 import { createWebContentsTimedFlag } from './web-contents-timed-flag'
-import type { ProfileStateStorageClassification } from '../persistence/profile-state/profile-state-storage-classification'
-import type { ProfileStateRuntimeAdmission } from '../persistence/profile-state/profile-state-access'
+import type { ProfileStateStorageClassification } from '../persistence/profile-state/database/profile-state-storage-classification'
+import type { ProfileStateRuntimeAdmission } from '../persistence/profile-state/access/profile-state-access'
 
 export type ProfileStateStartupMetadata = {
   backend: 'sqlite'

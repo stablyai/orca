@@ -7,7 +7,7 @@ import {
 } from '../../shared/claude-profile-routing'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import { writeFileAtomically } from '../codex-accounts/fs-utils'
+import { writeFileAtomically } from '../filesystem/atomic-file-publication'
 import { ClaudeProfileSurfaceError } from './claude-profile-report'
 
 /** Caller-relative `executionHostId` routes calls but must not be persisted. */

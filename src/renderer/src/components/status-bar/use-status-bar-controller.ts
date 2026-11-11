@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import { selectFloatingWorkspaceHasUnread } from '../../store/workspaces/floating/floating-workspace-unread-selector'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { normalizeUsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
@@ -12,7 +12,7 @@ import {
   usageRowSignInOpensSettings
 } from './usage-provider-settings-target'
 import { useStatusBarMenuFocusHandoff } from './ProviderDetailsMenu'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import { useStatusBarDensity } from './status-bar-density'
 import { getUsageOwnerHostScope, useOwnerUsageRateLimits } from './use-owner-usage-rate-limits'
 import { isOwnerNotSetUpPlaceholder } from './owner-usage-rate-limits'

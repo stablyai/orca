@@ -19,7 +19,8 @@ const { useAppStoreMock, useShortcutLabelMock } = vi.hoisted(() => ({
 vi.mock('@/store/index', () => ({ useAppStore: useAppStoreMock }))
 
 vi.mock('@/hooks/useShortcutLabel', () => ({
-  useShortcutLabel: useShortcutLabelMock
+  useShortcutLabel: useShortcutLabelMock,
+  useShortcutKeyDetails: () => ({ keys: [], doubleTap: false })
 }))
 
 vi.mock('sonner', () => ({
@@ -108,6 +109,12 @@ describe('VoicePane', () => {
       root.render(<VoicePane settings={settingsWithKey(true)} updateSettings={updateSettings} />)
     })
 
+    const cloudTab = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('[role="radio"]')
+    ).find((button) => button.textContent === 'Cloud')
+    await act(async () => {
+      cloudTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
     const disconnect = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Disconnect OpenAI API key"]'
     )

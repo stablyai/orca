@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
   launch: vi.fn<(args: LaunchAgentInNewTabArgs) => LaunchAgentInNewTabResult>()
 }))
 vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
-  launchAgentInNewTab: mocks.launch
+  launchAgentInNewTabWithOutcome: mocks.launch
 }))
 vi.mock('@/runtime/native-chat/tab-retirement/structured-agent-session-tab-retirement', () => ({
   beginStructuredAgentSessionTabClose: vi.fn()
@@ -24,7 +24,7 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
     await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('../../../host-chat-program-acquisition', () => ({
+vi.mock('../inventory/host-chat-program-acquisition', () => ({
   acquireAgentLaunchChoices: async () => ({ detected: ['codex'], offered: ['codex'] })
 }))
 

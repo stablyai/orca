@@ -11,7 +11,7 @@ import {
 } from './mobile-hosted-review-operations'
 import { pushMobileHostedReviewBranch } from './mobile-hosted-review-git-preparation'
 import { linkMobileHostedReview } from './mobile-pr-link'
-import type { RpcOperationSender } from '../transport/rpc/rpc-operation-sender'
+import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 
 // Mobile ids combine repo::path; hosted-review RPCs need separate selectors.
 export function mobileRepoSelectorFromWorktreeId(worktreeId: string): string {
@@ -30,7 +30,7 @@ export type MobileHostedReviewEligibilityInput = {
 }
 
 export async function fetchMobileHostedReviewEligibility(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   input: MobileHostedReviewEligibilityInput
 ): Promise<MobileHostedReviewEligibilityReply | null> {
@@ -67,7 +67,7 @@ export type MobileHostedReviewPrefill = {
 }
 
 export async function resolveMobileHostedReviewPrefill(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   args: {
     branch: string | undefined
@@ -166,7 +166,7 @@ export type MobileHostedReviewCreateOutcome =
 
 // The form intentionally uses one actionable fallback for all push failures.
 async function pushMobileBranchBeforeCreate(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const error = translate(
@@ -200,7 +200,7 @@ function formatMobileHostedReviewCreateError(
 }
 
 async function finishMobileHostedReviewCreateSuccess(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   input: MobileHostedReviewCreateInput,
   result: { number: number; url: string },
@@ -221,7 +221,7 @@ async function finishMobileHostedReviewCreateSuccess(
 }
 
 export async function createMobileHostedReview(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   input: MobileHostedReviewCreateInput
 ): Promise<MobileHostedReviewCreateOutcome> {

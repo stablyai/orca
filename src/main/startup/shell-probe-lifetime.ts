@@ -1,5 +1,5 @@
 /** A detached login-shell probe gets no terminal signals, so its owner ends it: on timeout and when the owner exits. */
-import type { SpawnedProcess } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
 import { signalProcessTree } from '@orca/process-host/process-tree-termination'
 
 export type ShellProbeLifetime = {
@@ -10,7 +10,7 @@ export type ShellProbeLifetime = {
 }
 
 // No signal listeners: one would replace Electron's graceful signal quit, and every owner turns INT/TERM into an exit.
-export function bindShellProbeLifetime(child: SpawnedProcess): ShellProbeLifetime {
+export function bindShellProbeLifetime(child: ChildProcess): ShellProbeLifetime {
   const kill = (): void => {
     if (process.platform === 'win32') {
       // Windows probes stay attached, and a tree kill would spawn taskkill from an exit hook.

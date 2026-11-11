@@ -18,20 +18,38 @@ function isWithinDepth(rootPath: string, childPath: string, maxDepth: number): b
   return rel.split(sep).length <= maxDepth
 }
 
+/** Codex's own walk skips hidden folders; stopping at a skill folder skips its references and scripts. */
+export type SkillFileWalkOptions = {
+  skipHiddenDirectories?: boolean
+  stopAtSkillDirectories?: boolean
+}
+
+function entersDirectory(name: string, options: SkillFileWalkOptions): boolean {
+  return (
+    name !== SKILL_FILE_NAME &&
+    !isSkillStagingEntryName(name) &&
+    !(options.skipHiddenDirectories && name.startsWith('.'))
+  )
+}
+
+function holdsSkillFile(entries: readonly Dirent[]): boolean {
+  return entries.some((entry) => entry.name === SKILL_FILE_NAME && !entry.isDirectory())
+}
+
 /** Entry indexes of the plain child directories a walk enters. */
 function enteredChildIndexes(
   rootPath: string,
   maxDepth: number,
   dirPath: string,
-  entries: readonly Dirent[]
+  entries: readonly Dirent[],
+  options: SkillFileWalkOptions
 ): number[] {
+  if (options.stopAtSkillDirectories && holdsSkillFile(entries)) {
+    return []
+  }
   const indexes: number[] = []
   for (const [index, entry] of entries.entries()) {
-    if (
-      !entry.isDirectory() ||
-      entry.name === SKILL_FILE_NAME ||
-      isSkillStagingEntryName(entry.name)
-    ) {
+    if (!entry.isDirectory() || !entersDirectory(entry.name, options)) {
       continue
     }
     // Directory entry names add one segment, so siblings share the depth verdict.
@@ -47,14 +65,15 @@ function enteredChildIndexes(
 export async function findSkillFiles(
   rootPath: string,
   maxDepth: number,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options: SkillFileWalkOptions = {}
 ): Promise<string[]> {
   const out: string[] = []
   const visitedDirectoryPaths = new Set<string>()
   const readAhead = createDirectoryReadAhead({
     signal,
     enteredChildIndexes: (dirPath, entries) =>
-      enteredChildIndexes(rootPath, maxDepth, dirPath, entries)
+      enteredChildIndexes(rootPath, maxDepth, dirPath, entries, options)
   })
   async function visit(dirPath: string, order: WalkOrder): Promise<void> {
     // Reject on abort; a cached truncated listing would falsely report skills removed.
@@ -68,7 +87,8 @@ export async function findSkillFiles(
     if (!entries) {
       return
     }
-    const childIndexes = new Set(enteredChildIndexes(rootPath, maxDepth, dirPath, entries))
+    const childIndexes = new Set(enteredChildIndexes(rootPath, maxDepth, dirPath, entries, options))
+    const leaf = options.stopAtSkillDirectories === true && holdsSkillFile(entries)
     for (const [index, entry] of entries.entries()) {
       signal?.throwIfAborted()
       // Hide transaction siblings so in-flight skills cannot appear twice or be deleted again.
@@ -98,7 +118,12 @@ export async function findSkillFiles(
         }
         continue
       }
-      if (entry.isSymbolicLink() && isWithinDepth(rootPath, entryPath, maxDepth)) {
+      if (
+        !leaf &&
+        entry.isSymbolicLink() &&
+        entersDirectory(entry.name, options) &&
+        isWithinDepth(rootPath, entryPath, maxDepth)
+      ) {
         // Follow provider directory links but guard realpaths against cycles.
         let linksToDirectory = false
         try {

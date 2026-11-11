@@ -4,7 +4,7 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 export const getPrivacyPaneSearchEntries = createLocalizedCatalog(() => [
   {
-    title: translate('auto.components.settings.privacy.search.5c508bad41', 'Privacy & Telemetry'),
+    title: translate('auto.components.settings.privacy.search.a966af0840', 'Privacy & telemetry'),
     description: translate(
       'auto.components.settings.privacy.search.aa3b794c17',
       'Anonymous product usage data, diagnostics, and telemetry controls.'
@@ -23,8 +23,8 @@ export const getPrivacyPaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
-      'auto.components.settings.privacy.search.57b283461a',
-      'Share Anonymous Usage Data'
+      'auto.components.settings.privacy.search.6776226be7',
+      'Share anonymous usage data'
     ),
     description: translate(
       'auto.components.settings.privacy.search.b707cc3981',

@@ -10,7 +10,7 @@ import {
 } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { CUSTOM_AGENT_ID } from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
-import { getAgentLabel } from '@/lib/agent-catalog'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { useTranslate } from '@/i18n/use-translate'
 import { Switch } from '../../ui/switch'
 import { Card, CardContent } from '../../ui/card'

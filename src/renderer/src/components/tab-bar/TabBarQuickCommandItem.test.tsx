@@ -22,8 +22,10 @@ vi.mock('@/i18n/i18n', () => ({
   }
 }))
 
-vi.mock('@/lib/agent-catalog', () => ({
-  AgentIcon: () => null,
+vi.mock('@/components/agent/icons/AgentIcon', () => ({
+  AgentIcon: () => null
+}))
+vi.mock('@/lib/agent-catalog/agent-catalog', () => ({
   getAgentLabel: (agent: string) => agent
 }))
 

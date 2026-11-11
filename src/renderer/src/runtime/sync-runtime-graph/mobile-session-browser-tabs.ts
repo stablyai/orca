@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type { Tab } from '../../../../shared/tab-types'
 import { editorRowHost } from '../../../../shared/workspace-session/session-tab-file-host'
 import { remoteTabFaviconUrl } from '../../../../shared/browser/browser-favicon-url'

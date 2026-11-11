@@ -7,8 +7,11 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { formatBytes, formatCompactCount } from './workspace-space-format'
 import { getLargestWorkspaceSpaceItemSize } from './workspace-space-presentation'
 import { useTranslate } from '@/i18n/use-translate'
-import { getRevealInFileManagerLabel, revealInFileManager } from '@/lib/reveal-in-file-manager'
-import { cn } from '@/lib/utils'
+import {
+  getRevealInFileManagerLabel,
+  revealInFileManager
+} from '@/lib/files/os-open/reveal-in-file-manager'
+import { cn } from '@/lib/class-names'
 import {
   ContextMenu,
   ContextMenuContent,

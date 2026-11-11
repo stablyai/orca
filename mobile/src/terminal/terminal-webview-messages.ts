@@ -1,4 +1,4 @@
-import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
+import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-mobile-session-tab-contracts'
 import type { TerminalOscLinkRange } from '../../../src/shared/terminal/links/terminal-osc-link-ranges'
 
 export type TerminalFrame = { width: number; height: number }

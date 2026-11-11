@@ -1,4 +1,4 @@
-import { endComposition } from '@/lib/ime-composition-event.test-support'
+import { endComposition } from '@/lib/text-input/ime/ime-composition-event.test-support'
 import { changePrompt, promptValue } from '../editor/native-chat-prompt-editor.test-support'
 // @vitest-environment happy-dom
 
@@ -173,7 +173,7 @@ describe('structured send racing the next IME composition', () => {
 
     changePrompt(input, '/goal 안녕')
     pressEnter(input)
-    expect(structured.dispatchCommand).toHaveBeenCalledWith('/goal 안녕')
+    expect(structured.dispatchCommand).toHaveBeenCalledWith('/goal 안녕', expect.any(Function))
 
     fireEvent.compositionStart(input)
     changePrompt(input, '/goal 안녕하')

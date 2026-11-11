@@ -36,6 +36,7 @@ function Cards() {
           expanded
           onToggle={() => {}}
           onOpen={() => {}}
+          actionsSlotRef={() => {}}
         />
         <SectionBody files={['src/main/index.ts', 'src/renderer/App.tsx', 'README.md']} />
       </section>
@@ -48,6 +49,7 @@ function Cards() {
           expanded
           onToggle={() => {}}
           onOpen={() => {}}
+          actionsSlotRef={() => {}}
         />
         <SectionBody files={['package.json']} />
       </section>
@@ -59,6 +61,7 @@ function Cards() {
           expanded={false}
           onToggle={() => {}}
           onOpen={() => {}}
+          actionsSlotRef={() => {}}
         />
       </section>
     </div>
@@ -82,6 +85,7 @@ export const narrow = defineFixture({
           expanded={false}
           onToggle={() => {}}
           onOpen={() => {}}
+          actionsSlotRef={() => {}}
         />
       </section>
     </div>

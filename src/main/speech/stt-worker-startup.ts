@@ -1,4 +1,5 @@
 import type { SttEvent } from './stt-service'
+import type { SttRecognizerInit } from './stt-recognizer'
 import type { SttWorkerProcess } from './stt-worker-process'
 
 /** Session events carry the stream they belong to. */
@@ -84,19 +85,6 @@ export function attachSttWorkerLifecycle(args: {
   }
 }
 
-export function initializeSttWorker(
-  worker: SttWorkerProcess,
-  input: {
-    sherpaModulePath: string
-    modelDir: string
-    modelType: string
-    streaming: boolean
-    sampleRate: number
-    files: readonly string[]
-    hotwordsFilePath?: string
-    modelingUnit?: string
-    language?: string
-  }
-): void {
+export function initializeSttWorker(worker: SttWorkerProcess, input: SttRecognizerInit): void {
   worker.postMessage({ type: 'init', ...input })
 }

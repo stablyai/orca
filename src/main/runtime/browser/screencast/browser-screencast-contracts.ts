@@ -1,4 +1,4 @@
-import type { BrowserScreencastResult } from '../../../../shared/runtime-browser-contracts'
+import type { BrowserScreencastResult } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type {
   BrowserScreencastFrameBudget,
   BrowserScreencastSession,

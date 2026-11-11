@@ -33,7 +33,7 @@ import {
   ipcOrRuntimeTargetForHostId,
   runtimeTargetEnvironmentId
 } from '@/runtime/rpc/targets/runtime-client-target'
-import { getEnvironmentRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { getEnvironmentRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
 import { useTaskPageJiraProjectScope } from './use-task-page-jira-project-scope'
 const EMPTY_JIRA_PRIORITIES: JiraPrioritiesBySite = new Map()

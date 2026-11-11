@@ -12,19 +12,20 @@ import type {
 } from '../../../../shared/agent-session/agent-session-wire'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
 import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
-import { subscribeRemoteRuntimeRequest } from '../../../../shared/remote-runtime/remote-runtime-client'
+import '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
 import { latestNativeChatOrcaStopCut } from '../../../../shared/native-chat/native-chat-orca-stop-cut'
 import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-quoting'
 import type { WslHostStatus } from '../../../../shared/wsl-host-types'
 import { claudeSessionIdForOrcaSession } from '../../../claude/structured/claude-structured-session-id'
-import { hasOrcadTemplate } from '../../../orcad/orcad-artifact-materializer'
+import '../../../orcad/orcad-artifact-materializer'
 import { packagedClaudeChatScenario } from '../../../orcad/orcad-structured-chat-scenario'
 import { wslDistroHolderKey } from '../../discovery/wsl-distro-holder-record'
 import { wslHostStoppedMessage } from '../../../../shared/wsl-host-stopped-message'
 import { wslHostConnectOptions } from '../../host-lifecycle/wsl-host-connect-request'
-import { createWslHostConnector } from '../../host-lifecycle/wsl-host-connector'
-import type { WslHostConnector } from '../../host-lifecycle/wsl-host-connector-contract'
-import { WslHostService } from '../../host-lifecycle/wsl-host-service'
+import '../../host-lifecycle/wsl-host-connector'
+import '../../host-lifecycle/wsl-host-service'
+import type { LaneWslHost } from './wsl-orcad-lane-host-fixture'
 import { assistantText } from './wsl-orcad-chat-assistant-text'
 import { envelope } from './wsl-orcad-chat-envelope'
 import {
@@ -38,40 +39,6 @@ import {
 /** Polls the running list (and the chat's runtime call) this long after the terminate returns. */
 const STAYS_STOPPED_MS = 30_000
 const POLL_MS = 5_000
-
-export type LaneWslHost = {
-  service: WslHostService
-  connector: WslHostConnector
-  /** Everything the service published, as the window's status listener receives it. */
-  published: WslHostStatus[]
-}
-
-/** The production service and connector, wired as wsl-host-handlers wires them minus Electron. */
-export function createLaneWslHost(userDataPath: string): LaneWslHost {
-  const published: WslHostStatus[] = []
-  const service = new WslHostService({
-    userDataPath: () => userDataPath,
-    isEnabled: () => true,
-    hasServerFiles: hasOrcadTemplate,
-    publish: (status) => {
-      published.push(status)
-      console.log(`[lane] host ${JSON.stringify(status)}`)
-    },
-    pairingChanged: () => {},
-    ready: () => {},
-    removed: () => {}
-  })
-  const refuse = (): Promise<never> => Promise.reject(new Error('The lane never removes a host'))
-  const connector = createWslHostConnector({
-    userDataPath,
-    onChange: service.handleConnectionChange.bind(service),
-    hasUserVisibleWork: (distro) => service.hasUserVisibleWork(distro),
-    isKnownDistro: (distro) => service.isKnownDistro(distro),
-    runtime: { call: refuse, census: refuse }
-  })
-  service.attach(connector)
-  return { service, connector, published }
-}
 
 export type MidTurnStopLane = Pick<WslChatHost, 'rpc' | 'guest'> & {
   /** The host connection's pairing, read at each call: Start replaces the connection. */
@@ -101,7 +68,7 @@ type Watch = { close(): void }
 async function watchAssistantText(lane: MidTurnStopLane, sessionId: string, opened: Watch[]) {
   const text: string[] = []
   const errors: Error[] = []
-  const subscription = await subscribeRemoteRuntimeRequest<AgentSessionSubscribeEvent>(
+  const subscription = await subscribeRemoteRuntimeTransport<AgentSessionSubscribeEvent>(
     lane.pairing(),
     'agentSession.subscribe',
     { sessionId },

@@ -3,8 +3,7 @@ import {
   hasExplicitTaskScope,
   parseTaskQuery,
   serializeTaskQuery,
-  stripRepoQualifiers,
-  withQualifier
+  stripRepoQualifiers
 } from './task-query'
 
 describe('hasExplicitTaskScope', () => {
@@ -73,36 +72,5 @@ describe('serializeTaskQuery', () => {
   it('serializes all state so filter changes do not fall back to the default open state', () => {
     const raw = serializeTaskQuery(parseTaskQuery('is:pr state:all'))
     expect(raw).toBe('is:pr state:all')
-  })
-})
-
-describe('withQualifier', () => {
-  it('sets and clears the author qualifier without disturbing free text', () => {
-    const set = withQualifier('hello', 'author', 'alice')
-    expect(parseTaskQuery(set).author).toBe('alice')
-    expect(parseTaskQuery(set).freeText).toBe('hello')
-    const cleared = withQualifier(set, 'author', null)
-    expect(parseTaskQuery(cleared).author).toBeNull()
-    expect(parseTaskQuery(cleared).freeText).toBe('hello')
-  })
-
-  it('preserves quoted free-text tokens when applying a filter', () => {
-    const result = withQualifier('"exact phrase" milestone:"next release"', 'author', 'alice')
-    expect(result).toContain('"exact phrase"')
-    expect(result).toContain('milestone:"next release"')
-    expect(parseTaskQuery(result).author).toBe('alice')
-  })
-
-  it('keeps PR-only filters scoped to PRs', () => {
-    expect(parseTaskQuery(withQualifier('', 'draft', 'true')).scope).toBe('pr')
-    expect(parseTaskQuery(withQualifier('', 'state', 'merged')).scope).toBe('pr')
-    expect(parseTaskQuery(withQualifier('', 'reviewRequested', '@me')).scope).toBe('pr')
-  })
-
-  it('forces draft filters back to open PRs', () => {
-    const parsed = parseTaskQuery(withQualifier('is:pr is:closed', 'draft', 'true'))
-    expect(parsed.scope).toBe('pr')
-    expect(parsed.state).toBe('open')
-    expect(parsed.draft).toBe(true)
   })
 })

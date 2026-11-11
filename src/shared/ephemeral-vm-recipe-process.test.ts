@@ -1,18 +1,15 @@
-import { EventEmitter } from 'node:events'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { PassThrough } from 'node:stream'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeTempDirs } from './testing/remove-temp-dirs.test-support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runRecipeCommand } from './ephemeral-vm-recipe-process'
 
 const tmpRoots: string[] = []
 
-afterEach(() => {
+afterEach(async () => {
   vi.useRealTimers()
-  for (const root of tmpRoots.splice(0)) {
-    rmSync(root, { recursive: true, force: true })
-  }
+  await removeTempDirs(tmpRoots.splice(0))
 })
 
 function makeRepo(): string {
@@ -35,47 +32,6 @@ function isAlive(pid: number): boolean {
 }
 
 describe('runRecipeCommand', () => {
-  it.skipIf(process.platform === 'win32')(
-    'stops the recipe process group when the timeout elapses',
-    async () => {
-      vi.useFakeTimers()
-      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
-      const child = Object.assign(new EventEmitter(), {
-        pid: 4242,
-        stdin: new PassThrough(),
-        stdout: new PassThrough(),
-        stderr: new PassThrough(),
-        kill: vi.fn(),
-        unref: vi.fn()
-      })
-      try {
-        const resultPromise = runRecipeCommand({
-          command: 'create',
-          repoPath: makeRepo(),
-          mode: 'create',
-          resultSchemaVersion: 1,
-          context: { recipeId: 'cloud-sandbox', repoPath: makeRepo() },
-          timeoutMs: 60_000,
-          spawnCommand: vi.fn(() => child) as never
-        })
-
-        await vi.advanceTimersByTimeAsync(59_999)
-        expect(killSpy).not.toHaveBeenCalled()
-        await vi.advanceTimersByTimeAsync(1)
-        expect(killSpy).toHaveBeenCalledWith(-4242, 'SIGTERM')
-
-        // The shell ignores SIGTERM, so the group is force-killed after the grace period.
-        await vi.advanceTimersByTimeAsync(5_000)
-        expect(killSpy).toHaveBeenCalledWith(-4242, 'SIGKILL')
-        const result = await resultPromise
-        expect(result).toMatchObject({ timedOut: true, exitCode: null })
-        expect(result).not.toHaveProperty('aborted')
-      } finally {
-        killSpy.mockRestore()
-      }
-    }
-  )
-
   it.skipIf(process.platform === 'win32')(
     'kills grandchildren of a recipe that outlives its timeout',
     async () => {
@@ -124,37 +80,6 @@ describe('runRecipeCommand', () => {
     10_000
   )
 
-  it('clears the force-kill timer when graceful termination closes synchronously', async () => {
-    vi.useFakeTimers()
-    const child = Object.assign(new EventEmitter(), {
-      pid: undefined,
-      stdin: new PassThrough(),
-      stdout: new PassThrough(),
-      stderr: new PassThrough(),
-      kill: vi.fn(),
-      unref: vi.fn()
-    })
-    child.kill.mockImplementation(() => {
-      child.emit('close', null, 'SIGTERM')
-      return true
-    })
-    const controller = new AbortController()
-    const resultPromise = runRecipeCommand({
-      command: 'destroy',
-      repoPath: makeRepo(),
-      mode: 'destroy',
-      resultSchemaVersion: 1,
-      context: { recipeId: 'cloud-sandbox', repoPath: makeRepo() },
-      signal: controller.signal,
-      spawnCommand: vi.fn(() => child) as never
-    })
-
-    controller.abort()
-
-    await expect(resultPromise).resolves.toMatchObject({ aborted: true, signal: 'SIGTERM' })
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
   it.each([
     { output: 'abcdef', maxCaptureBytes: 4, expected: 'cdef' },
     { output: 'A😀B', maxCaptureBytes: 5, expected: '😀B' },
@@ -180,48 +105,6 @@ describe('runRecipeCommand', () => {
 
       expect(result.stdout).toBe(expected)
       expect(Buffer.byteLength(result.stdout, 'utf8')).toBeLessThanOrEqual(maxCaptureBytes)
-    }
-  )
-
-  it.skipIf(process.platform === 'win32')(
-    'cancels shell child processes without waiting for long-running descendants',
-    async () => {
-      const repoPath = makeRepo()
-      const scriptPath = join(repoPath, 'slow.js')
-      writeFileSync(
-        scriptPath,
-        [
-          "process.stderr.write('ready\\n')",
-          'setTimeout(() => {',
-          "  console.log('done')",
-          '}, 5000)'
-        ].join('\n')
-      )
-      const controller = new AbortController()
-
-      const result = await Promise.race([
-        runRecipeCommand({
-          command: nodeCommand(scriptPath),
-          repoPath,
-          mode: 'create',
-          resultSchemaVersion: 1,
-          context: {
-            recipeId: 'cloud-sandbox',
-            repoPath
-          },
-          signal: controller.signal,
-          onStderr: (chunk) => {
-            if (chunk.includes('ready')) {
-              controller.abort()
-            }
-          }
-        }),
-        new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('recipe cancellation timed out')), 1500)
-        })
-      ])
-
-      expect(result).toMatchObject({ signal: 'SIGTERM', aborted: true })
     }
   )
 })

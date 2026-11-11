@@ -17,6 +17,7 @@ type Reads = {
   ) => Promise<AgentPickerEntry['catalog'] | undefined>
   support: (entry: AgentPickerEntry) => Promise<AgentPickerEntry['structured'] | undefined>
 }
+type ReadKind = 'catalog' | 'refresh' | 'support'
 type SupportRead = {
   state: 'queued' | 'pending' | 'settled'
   value?: AgentPickerEntry['structured']
@@ -26,9 +27,8 @@ class AgentPickerAcquisition {
   readonly observers = new Set<Observer>()
   entries: AgentPickerEntry[]
   settingsPending = false
-  private outstanding = { catalog: 0, support: 0 }
-  private queued: Record<'catalog' | 'support', Set<number>>
-  private deferredCatalogs = new Set<number>()
+  private outstanding = { catalog: 0, refresh: 0, support: 0 }
+  private queued: Record<ReadKind, Set<number>>
   private supports = new Map<number, SupportRead>()
   private defaults: AgentPickerEntry[]
 
@@ -52,6 +52,7 @@ class AgentPickerAcquisition {
       catalog: new Set(
         this.entries.flatMap((entry, i) => (entry.catalogRead === 'pending' ? [i] : []))
       ),
+      refresh: new Set(),
       support: new Set(this.supports.keys())
     }
   }
@@ -65,8 +66,7 @@ class AgentPickerAcquisition {
           this.initial[i].catalogRead !== 'unsupported' &&
           entry.surfaces.length &&
           entry.catalogRead !== 'pending' &&
-          (this.deferredCatalogs.has(i) ||
-            entry.catalog.origin === 'unknown' ||
+          (entry.catalog.origin === 'unknown' ||
             entry.catalogRead === 'failed' ||
             entry.catalogRead === 'unsupported' ||
             entry.catalog.unavailable !== undefined ||
@@ -90,6 +90,7 @@ class AgentPickerAcquisition {
     }
     observer.publish(this.entries)
     this.admit('catalog')
+    this.admit('refresh')
     this.admit('support')
     return () => {
       this.observers.delete(observer)
@@ -147,24 +148,27 @@ class AgentPickerAcquisition {
       })
   }
 
-  private async readCatalog(entry: AgentPickerEntry, index: number) {
-    this.deferredCatalogs.delete(index)
-    const saved = await this.reads.catalog(entry, false)
-    if (!saved?.listingInProgress) {
-      return saved
+  private async readCatalog(entry: AgentPickerEntry, index: number, waitForListing: boolean) {
+    const catalog = await this.reads.catalog(entry, waitForListing)
+    // An open picker waits on a running listing, and again when a wait used its whole budget.
+    const refresh =
+      this.observers.size > 0 &&
+      (waitForListing ? catalog?.waitExpired : catalog?.listingInProgress) === true
+    if (refresh) {
+      this.queued.refresh.add(index)
     }
-    if (saved.origin !== 'unknown') {
-      this.entries = this.entries.map((e, i) => (i === index ? { ...e, catalog: saved } : e))
-      this.publish()
-    }
-    if (!this.observers.size) {
-      this.deferredCatalogs.add(index)
-      return saved
-    }
-    return this.reads.catalog(entry, true)
+    this.entries = this.entries.map((e, i) =>
+      i === index
+        ? {
+            ...e,
+            ...(catalog ? { catalog } : {}),
+            catalogRead: !catalog ? 'failed' : refresh ? 'pending' : 'settled'
+          }
+        : e
+    )
   }
 
-  private admit(kind: 'catalog' | 'support') {
+  private admit(kind: ReadKind) {
     while (this.observers.size && this.outstanding[kind] < 2 && this.queued[kind].size) {
       const priorities = [...this.observers].map((o) => o.selected())
       const preferred = this.entries.findIndex((e) => priorities.includes(e.agent))
@@ -181,40 +185,24 @@ class AgentPickerAcquisition {
         this.supports.set(index, { state: 'pending' })
       }
       const read =
-        kind === 'catalog'
-          ? this.readCatalog(entry, index)
-              .then((catalog) => {
-                const resume = this.deferredCatalogs.has(index) && this.observers.size > 0
-                if (resume) {
-                  this.queued.catalog.add(index)
-                }
-                this.entries = this.entries.map((e, i) =>
-                  i === index
-                    ? {
-                        ...e,
-                        ...(catalog ? { catalog } : {}),
-                        catalogRead: resume ? 'pending' : 'settled'
-                      }
-                    : e
-                )
-              })
-              .catch((error: unknown) => {
-                const unsupported =
-                  typeof error === 'object' &&
-                  error !== null &&
-                  'code' in error &&
-                  (error.code === 'method_not_found' ||
-                    error.code === 'structured_agent_session_unsupported' ||
-                    error.code === 'forbidden')
-                this.entries = this.entries.map((e, i) =>
-                  i === index
-                    ? {
-                        ...e,
-                        catalogRead: unsupported ? 'unsupported' : 'failed'
-                      }
-                    : e
-                )
-              })
+        kind !== 'support'
+          ? this.readCatalog(entry, index, kind === 'refresh').catch((error: unknown) => {
+              const unsupported =
+                typeof error === 'object' &&
+                error !== null &&
+                'code' in error &&
+                (error.code === 'method_not_found' ||
+                  error.code === 'structured_agent_session_unsupported' ||
+                  error.code === 'forbidden')
+              this.entries = this.entries.map((e, i) =>
+                i === index
+                  ? {
+                      ...e,
+                      catalogRead: unsupported ? 'unsupported' : 'failed'
+                    }
+                  : e
+              )
+            })
           : this.reads
               .support(entry)
               .catch(() => undefined)
@@ -228,6 +216,9 @@ class AgentPickerAcquisition {
           this.outstanding[kind]--
           this.publish()
           this.admit(kind)
+          if (kind === 'catalog') {
+            this.admit('refresh')
+          }
           this.retire()
         })
     }
@@ -238,6 +229,7 @@ class AgentPickerAcquisition {
       !this.observers.size &&
       !this.settingsPending &&
       !this.outstanding.catalog &&
+      !this.outstanding.refresh &&
       !this.outstanding.support
     ) {
       pending.delete(this.key)

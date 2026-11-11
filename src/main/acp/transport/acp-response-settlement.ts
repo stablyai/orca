@@ -2,6 +2,9 @@ export type AcpResponse = { value: unknown } | { error: Error }
 
 export type AcpRequestOptions<T = unknown> = {
   timeoutMs?: number | null
+  /** 'cancel': a timeout asks the agent to drop the call and never touches the stream, so an
+   *  unanswered control cannot end the connection. Default withdraws the write. */
+  onTimeout?: 'withdraw' | 'cancel'
   settle: (response: AcpResponse) => T
 }
 

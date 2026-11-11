@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import {
   createWorkerMaintenanceFixture,
   maintenanceBarrier
-} from '../persistence/loading-store/profile-state-maintenance-fixture'
+} from '../persistence/loading-store/profile-writing/profile-state-maintenance-fixture'
 
 const {
   handleMock,

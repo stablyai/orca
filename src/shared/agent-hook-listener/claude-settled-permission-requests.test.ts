@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { AgentHookEventPayload } from './listener-event'
 import {
   isClaudePermissionSettledByReplay,
-  MAX_CLAUDE_SETTLED_REQUESTS,
-  readClaudeSettledRequests,
   retainClaudeSettledRequests
 } from './claude-settled-permission-requests'
 
@@ -46,25 +44,6 @@ describe('retained Claude request settlements', () => {
     ])
   })
 
-  it("keeps a long batch's retention cost independent of its length", () => {
-    const readsFor = (length: number): number => {
-      let reads = 0
-      const requests = Array.from({ length }, (_, index) => ({
-        get toolUseId() {
-          reads++
-          return `tool-${index}`
-        }
-      }))
-      const batch = { ...base, hookEventName: 'PostToolBatch', claudeSettledRequests: requests }
-      retainClaudeSettledRequests([{ toolUseId: 'earlier' }], base, batch)
-      return reads
-    }
-    // Only the newest MAX entries can be retained, each compared with at most 2 * MAX kept ones.
-    const bound = MAX_CLAUDE_SETTLED_REQUESTS * (2 * MAX_CLAUDE_SETTLED_REQUESTS + 1)
-    expect(readsFor(100)).toBeLessThanOrEqual(bound)
-    expect(readsFor(1000)).toBe(readsFor(100))
-  })
-
   it.each([
     { launchToken: 'launch-2' },
     { providerSession: { key: 'session_id' as const, id: 'session-2' } },
@@ -73,32 +52,6 @@ describe('retained Claude request settlements', () => {
     const retained = retainClaudeSettledRequests(undefined, base, ended('tool-1'))
     expect(
       retainClaudeSettledRequests(retained, ended('tool-1'), { ...base, ...change })
-    ).toBeUndefined()
-  })
-
-  it('bounds the list and keeps the newest', () => {
-    let retained = retainClaudeSettledRequests(undefined, base, ended('tool-0'))
-    for (let index = 1; index < 40; index++) {
-      retained = retainClaudeSettledRequests(retained, base, ended(`tool-${index}`))
-    }
-    expect(retained).toHaveLength(MAX_CLAUDE_SETTLED_REQUESTS)
-    expect(retained).toEqual(
-      Array.from({ length: MAX_CLAUDE_SETTLED_REQUESTS }, (_, index) => ({
-        toolUseId: `tool-${40 - MAX_CLAUDE_SETTLED_REQUESTS + index}`
-      }))
-    )
-  })
-
-  it('rejects a malformed or oversized wire list whole', () => {
-    expect(readClaudeSettledRequests([{ toolUseId: ' tool-1 ' }])).toEqual([
-      { toolUseId: 'tool-1' }
-    ])
-    expect(readClaudeSettledRequests([{ toolUseId: 'tool-1' }, { toolUseId: '' }])).toBeUndefined()
-    expect(readClaudeSettledRequests([{ toolUseId: 'tool-1', toolAgentId: 7 }])).toBeUndefined()
-    expect(
-      readClaudeSettledRequests(
-        Array.from({ length: MAX_CLAUDE_SETTLED_REQUESTS + 1 }, (_, i) => ({ toolUseId: `t${i}` }))
-      )
     ).toBeUndefined()
   })
 

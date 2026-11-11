@@ -3,7 +3,7 @@ import { SESSION_TABS_MOVE_PANE_TO_NEW_TAB_RUNTIME_CAPABILITY } from '../../../.
 import { toHostSessionTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { isRecoverableRemoteRuntimeConnectionError } from '../../../../../shared/remote-runtime/remote-runtime-client-error-classification'
-import { runtimeEnvironmentIdUnlessTwin } from '../../../lib/resolve-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '../../../lib/workspace/ownership/resolve-owner'
 import { useAppStore } from '../../../store/index'
 import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'
 import { unwrapRuntimeRpcResult } from '../../rpc/calls/runtime-rpc-result'

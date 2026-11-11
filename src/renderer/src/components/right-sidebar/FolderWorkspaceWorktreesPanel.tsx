@@ -8,11 +8,10 @@ import {
   getLineageChildrenInlineStyle,
   LINEAGE_CHILDREN_INLINE_OFFSET
 } from '@/components/sidebar/worktree-list/rows/indentation'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
-import { resolveReviewRepository } from '@/lib/review-owner'
-import type { Worktree } from '../../../../shared/worktree/types'
+import { resolveReviewRepository } from '@/lib/source-control/review/review-owner'
 import { getAttachedWorktreesForFolderWorkspace } from './folder-workspace-attached-worktrees'
 import { useState } from 'react'
 import {
@@ -20,6 +19,7 @@ import {
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import { FolderWorkspaceEmptyState } from './folder-workspace-empty-state'
+import type { Worktree } from '../../../../shared/worktree/types'
 
 export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
   const t = useTranslate()

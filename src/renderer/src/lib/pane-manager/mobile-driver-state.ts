@@ -1,14 +1,12 @@
 // Mirror runtime PTY driver presence from IPC: mobile ownership locks xterm input/resize and shows Take back (mobile-presence-lock.md).
 
-import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-types'
+import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
 
-export type DriverState = RuntimeTerminalDriverState
-
-const driverByPtyId = new Map<string, DriverState>()
+const driverByPtyId = new Map<string, RuntimeTerminalDriverState>()
 
 type DriverChangeEvent = {
   ptyId: string
-  driver: DriverState
+  driver: RuntimeTerminalDriverState
 }
 type DriverChangeListener = (event: DriverChangeEvent) => void
 const changeListeners = new Set<DriverChangeListener>()
@@ -24,7 +22,7 @@ function notifyChange(event: DriverChangeEvent): void {
   }
 }
 
-export function setDriverForPty(ptyId: string, driver: DriverState): void {
+export function setDriverForPty(ptyId: string, driver: RuntimeTerminalDriverState): void {
   if (driver.kind === 'idle') {
     driverByPtyId.delete(ptyId)
   } else {
@@ -45,11 +43,11 @@ export function replaceDriverPtyId(replacedPtyId: string, ptyId: string): void {
   setDriverForPty(replacedPtyId, { kind: 'idle' })
 }
 
-export function getDriverForPty(ptyId: string): DriverState {
+export function getDriverForPty(ptyId: string): RuntimeTerminalDriverState {
   return driverByPtyId.get(ptyId) ?? { kind: 'idle' }
 }
 
-export function getAllDrivers(): Map<string, DriverState> {
+export function getAllDrivers(): Map<string, RuntimeTerminalDriverState> {
   return new Map(driverByPtyId)
 }
 
@@ -57,7 +55,9 @@ export function isPtyLocked(ptyId: string): boolean {
   return driverByPtyId.get(ptyId)?.kind === 'mobile'
 }
 
-export function hydrateDrivers(drivers: { ptyId: string; driver: DriverState }[]): void {
+export function hydrateDrivers(
+  drivers: { ptyId: string; driver: RuntimeTerminalDriverState }[]
+): void {
   const affectedPtyIds = new Set(driverByPtyId.keys())
   driverByPtyId.clear()
 

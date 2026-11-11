@@ -5,11 +5,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useTranslate } from '@/i18n/use-translate'
 import { RemoteFileBrowser } from '../../host-path-browser/RemoteFileBrowser'
+import type { CloneFolderOverride } from '../clone-folder/use-clone-folder-override'
+import { CloneFolderNameField } from '../clone-folder/CloneFolderNameField'
 
 type CloneStepProps = {
   cloneUrl: string
   cloneDestination: string
   cloneError: string | null
+  cloneFolder?: CloneFolderOverride | null
   cloneProgress: { phase: string; percent: number } | null
   isCloning: boolean
   disableDestinationPicker?: boolean
@@ -19,6 +22,7 @@ type CloneStepProps = {
   submitDisabled?: boolean
   onUrlChange: (value: string) => void
   onDestChange: (value: string) => void
+  onFolderNameChange?: (value: string) => void
   onPickDestination: () => void
   onClone: () => void
 }
@@ -27,6 +31,7 @@ export function CloneStep({
   cloneUrl,
   cloneDestination,
   cloneError,
+  cloneFolder,
   cloneProgress,
   isCloning,
   disableDestinationPicker = false,
@@ -34,6 +39,7 @@ export function CloneStep({
   cloneTargetLabel,
   onUrlChange,
   onDestChange,
+  onFolderNameChange,
   onPickDestination,
   onClone,
   submitDisabled = false
@@ -41,7 +47,11 @@ export function CloneStep({
   const t = useTranslate()
   const [browsingDestination, setBrowsingDestination] = useState(false)
   const canBrowseRemoteDestination = Boolean(runtimeEnvironmentId)
-  const canClone = !!cloneUrl.trim() && !!cloneDestination.trim() && !isCloning
+  const canClone =
+    !!cloneUrl.trim() &&
+    !!cloneDestination.trim() &&
+    (!cloneFolder || !!cloneFolder.name.trim()) &&
+    !isCloning
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
     if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
       e.preventDefault()
@@ -165,13 +175,18 @@ export function CloneStep({
           </div>
         </div>
 
+        {cloneFolder && onFolderNameChange && (
+          <CloneFolderNameField
+            cloneFolder={cloneFolder}
+            disabled={isCloning}
+            onChange={onFolderNameChange}
+            onKeyDown={handleKeyDown}
+          />
+        )}
+
         {cloneError && <p className="text-[11px] text-destructive">{cloneError}</p>}
 
-        <Button
-          onClick={onClone}
-          disabled={!cloneUrl.trim() || !cloneDestination.trim() || isCloning || submitDisabled}
-          className="w-full"
-        >
+        <Button onClick={onClone} disabled={!canClone || submitDisabled} className="w-full">
           {isCloning
             ? t('auto.components.sidebar.AddRepoSteps.69f5b5380d', 'Cloning...')
             : t('auto.components.sidebar.AddRepoSteps.32a7256d85', 'Clone')}

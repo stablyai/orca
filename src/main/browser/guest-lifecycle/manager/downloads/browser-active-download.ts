@@ -1,8 +1,8 @@
 import type {
   BrowserDownloadFinishedEvent,
   BrowserDownloadProgressEvent
-} from '../../../../../shared/browser-guest-events'
-import type { BrowserClientDownloadRoute } from '../../../client-hosts/file-transfers/browser-client-download-relay'
+} from '../../../../../shared/browser/guest-lifecycle/browser-guest-events'
+import type { BrowserClientDownloadRoute } from '../../../client-hosts/file-transfers/browser-client-download-routing'
 
 export type BrowserDownloadDoneState = 'completed' | 'cancelled' | 'interrupted'
 

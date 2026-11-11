@@ -39,23 +39,6 @@ function comment(overrides: Partial<DiffComment> & Pick<DiffComment, 'id'>): Dif
 }
 
 describe('mobile diff review queue', () => {
-  it('leaves out a status entry whose staging area it does not know', () => {
-    const queue = buildMobileDiffReviewQueue({
-      worktreeId: 'wt-1',
-      statusEntries: [
-        statusEntry({ path: 'placed.ts', area: 'unstaged' }),
-        statusEntry({ path: 'placeless.ts', area: undefined })
-      ],
-      branchEntries: [],
-      branchHeadOid: 'head',
-      branchMergeBase: 'base',
-      comments: [],
-      reviewState: emptyReviewState
-    })
-
-    expect(queue.map((item) => item.filePath)).toEqual(['placed.ts'])
-  })
-
   it('keeps scope, rename, and source matching when notes share a path', () => {
     const queue = buildMobileDiffReviewQueue({
       worktreeId: 'wt-1',

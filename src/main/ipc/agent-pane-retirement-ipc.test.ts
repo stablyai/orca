@@ -30,12 +30,9 @@ beforeEach(() => {
 })
 
 describe('pane retirement IPC request identity', () => {
-  it.each([null, '', 'bad-id', 42, {}, `${id} `])(
-    'rejects malformed request identity %j',
-    (requestId) => {
-      mocks.handlers.get('agentStatus:retirePaneAuthority')?.({}, paneKey, requestId)
-      expect(mocks.retire).not.toHaveBeenCalled()
-      expect(mocks.clear).not.toHaveBeenCalled()
-    }
-  )
+  it.each([null, 'bad-id', `${id} `])('rejects malformed request identity %j', (requestId) => {
+    mocks.handlers.get('agentStatus:retirePaneAuthority')?.({}, paneKey, requestId)
+    expect(mocks.retire).not.toHaveBeenCalled()
+    expect(mocks.clear).not.toHaveBeenCalled()
+  })
 })

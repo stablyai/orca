@@ -5,7 +5,7 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import { DropdownMenuItem, DropdownMenuSeparator } from '../../ui/dropdown-menu'
 import type { PluginListEntry } from './plugin-list-entries'
-import { SettingsSwitch } from '../../settings/form-controls/SettingsFormControls'
+import { Switch } from '@/components/ui/switch'
 import {
   pluginNeedsReview,
   installedPluginPresentation,
@@ -170,11 +170,11 @@ export function installedPluginControls(
     action,
     toggle: (
       <span className="relative inline-flex">
-        <SettingsSwitch
+        <Switch
           checked={enabled && !needsReview}
           disabled={!switchable}
-          onChange={() => handlers.onToggleEnabled(plugin.pluginKey)}
-          ariaLabel={
+          onCheckedChange={() => handlers.onToggleEnabled(plugin.pluginKey)}
+          aria-label={
             enabled && !needsReview
               ? t('auto.components.settings.PluginSettingsRow.disableLabel', 'Disable {{value0}}', {
                   value0: entry.name

@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { sendNotificationSettingsTestNotification } from '@/components/settings/notifications/notification-settings-copy'
+import { sendNotificationSettingsTestNotification } from '@/components/notifications/notification-test-delivery'
 import { getNotificationSoundOptions } from '@/components/notification-sound-options'
 import {
   MacNotificationPermissionCard,

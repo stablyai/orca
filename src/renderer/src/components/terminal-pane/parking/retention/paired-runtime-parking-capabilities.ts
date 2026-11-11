@@ -1,4 +1,5 @@
 import '../../../../../../shared/protocol-version'
+import { readRecordChanges } from '@/store/keyed-record-change-reads'
 import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import {
   isRuntimeHostContactRevoked,
@@ -8,17 +9,18 @@ import {
 
 type PairedRuntimeParkingCapability = { capabilities?: readonly string[] }
 
+type PairedRuntimeParkingCapabilityStatus = {
+  status: PairedRuntimeParkingCapability | null | undefined
+  snapshot?:
+    | ({ status: PairedRuntimeParkingCapability | null } & Pick<
+        RuntimeHostStatusSnapshot,
+        'verification' | 'retired'
+      >)
+    | null
+}
 type PairedRuntimeParkingCapabilityStatuses = ReadonlyMap<
   string,
-  {
-    status: PairedRuntimeParkingCapability | null | undefined
-    snapshot?:
-      | ({ status: PairedRuntimeParkingCapability | null } & Pick<
-          RuntimeHostStatusSnapshot,
-          'verification' | 'retired'
-        >)
-      | null
-  }
+  PairedRuntimeParkingCapabilityStatus
 >
 
 type PairedRuntimeParkingEnvironmentIdsCache = {
@@ -38,6 +40,18 @@ function haveSameEnvironmentIds(left: ReadonlySet<string>, right: ReadonlySet<st
   return true
 }
 
+export function runtimeEnvironmentSupportsTerminalParking(
+  entry: PairedRuntimeParkingCapabilityStatus | null | undefined
+): boolean {
+  // Last-verified capabilities survive transport loss; explicit revocation withdraws restoration.
+  return (
+    !isRuntimeHostContactRevoked(entry) &&
+    lastVerifiedRuntimeStatus<PairedRuntimeParkingCapability>(entry)?.capabilities?.includes(
+      TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY
+    ) === true
+  )
+}
+
 export function createPairedRuntimeParkingEnvironmentIdsSelector() {
   let cache: PairedRuntimeParkingEnvironmentIdsCache | null = null
   return (statuses: PairedRuntimeParkingCapabilityStatuses): ReadonlySet<string> => {
@@ -46,14 +60,17 @@ export function createPairedRuntimeParkingEnvironmentIdsSelector() {
       return cached.environmentIds
     }
 
-    const capable = new Set<string>()
-    for (const [environmentId, entry] of statuses) {
-      // Keep last-verified build capabilities across unverifiable probes; a revoked host cannot promise restoration (docs/reference/ssh-execution-boundary.md).
-      if (isRuntimeHostContactRevoked(entry)) {
+    const changes = cached ? readRecordChanges(statuses, cached.statuses) : null
+    const changedIds = changes?.kind === 'addressed' ? changes.keys : null
+    const capable = changedIds ? new Set(cached?.environmentIds) : new Set<string>()
+    const environmentIdsToInspect = changedIds ?? statuses.keys()
+    for (const environmentId of environmentIdsToInspect) {
+      capable.delete(environmentId)
+      const entry = statuses.get(environmentId)
+      if (!entry) {
         continue
       }
-      const status = lastVerifiedRuntimeStatus<PairedRuntimeParkingCapability>(entry)
-      if (status?.capabilities?.includes(TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY)) {
+      if (runtimeEnvironmentSupportsTerminalParking(entry)) {
         capable.add(environmentId)
       }
     }

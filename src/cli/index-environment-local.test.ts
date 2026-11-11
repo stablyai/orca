@@ -103,6 +103,29 @@ describe('--environment local and workspace addresses', () => {
     }
   })
 
+  it('runs worker-start --on on this Orca despite an inherited ORCA_ENVIRONMENT', async () => {
+    const args = [
+      'orchestration',
+      'worker-start',
+      '--on',
+      'build-box',
+      '--spec',
+      'Go',
+      '--agent',
+      'claude'
+    ]
+    vi.stubEnv('ORCA_ENVIRONMENT', 'srv-b')
+    runtimeClientConstructorMock.mockClear()
+    listEnvironmentsMock.mockReturnValue(SAVED)
+    callMock.mockRejectedValue(new RuntimeClientError('runtime_unavailable', 'stop here'))
+    await run([...args, '--json'])
+    expect(runtimeClientConstructorMock).toHaveBeenCalled()
+    expect(
+      runtimeClientConstructorMock.mock.calls.every(([, environment]) => environment === null)
+    ).toBe(true)
+    vi.unstubAllEnvs()
+  })
+
   it('refuses current against another environment with an inspection command', async () => {
     listEnvironmentsMock.mockReturnValue(SAVED)
     const { exitCode, output } = await run([

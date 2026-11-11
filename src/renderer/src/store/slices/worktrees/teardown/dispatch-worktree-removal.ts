@@ -72,11 +72,6 @@ async function requestWorktreeRemoval(
       ...snapshotPruneBatch
     })
   }
-  if (options?.approvedNestedWorktrees) {
-    throw new Error(
-      'Nested worktree deletion is not supported by this runtime. Delete its children individually first.'
-    )
-  }
   const effectiveHostId =
     options?.sameIdSurvivingHostId != null ? hostId : qualifyRuntimeCallHost(target, hostId)
   return callRuntimeRpc<RemoveWorktreeResult>(
@@ -89,18 +84,24 @@ async function requestWorktreeRemoval(
       allowUnverifiedPtyStop: options?.allowUnverifiedPtyStop === true,
       // Send waiver only when true; older hosts silently strip unknown params at this version boundary.
       ...(options?.allowFailedArchiveHook === true ? { allowFailedArchiveHook: true } : {}),
+      ...(options?.approvedNestedWorktrees
+        ? { approvedNestedWorktrees: options.approvedNestedWorktrees }
+        : {}),
       runHooks: !skipArchive
     },
     {
       // Why (#19334): the host may run an archive hook before it decides anything, then waits for
       // Git's delete before it replies; outlast both when a hook can run.
-      timeoutMs: worktreeRemovalReplyTimeoutMs(!skipArchive),
+      timeoutMs: worktreeRemovalReplyTimeoutMs(
+        !skipArchive,
+        options?.approvedNestedWorktrees?.length
+      ),
       beforeSend
     }
   )
 }
 
-function qualifyRuntimeCallHost(
+export function qualifyRuntimeCallHost(
   target: RuntimeClientTarget,
   hostId: ExecutionHostId | undefined
 ): ExecutionHostId | undefined {
