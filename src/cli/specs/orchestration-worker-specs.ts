@@ -5,7 +5,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'worker-start'],
     summary: 'Start one supervised worker on the Run home or a connected Orca server',
     usage:
-      'orca orchestration worker-start (--task <task_id> | --spec <text> | --spec-file <path|->) [--keep-open] [--on <saved-environment>] [--worktree <current|selector|new-child|new-top-level>] (--agent <agent> | --terminal <handle>) [--task-title <text>] [--deps <json_array>] [--parent <task_id>] [--model <id>] [--effort <level>] [--name <name>] [--repo <selector>] [--base-branch <ref>] [--display-name <text>] [--comment <text>] [--setup <run|skip|inherit>] [--retry-of <dispatch_id>] [--timeout-ms <n>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
+      'orca orchestration worker-start (--task <task_id> | --spec <text> | --spec-file <path|->) [--keep-open] [--on <saved-environment>] [--worktree <current|selector|new-child|new-top-level>] [--agent <agent> | --terminal <handle>] [--task-title <text>] [--deps <json_array>] [--parent <task_id>] [--model <id>] [--effort <level>] [--name <name>] [--repo <selector>] [--base-branch <ref>] [--display-name <text>] [--comment <text>] [--setup <run|skip|inherit>] [--retry-of <dispatch_id>] [--timeout-ms <n>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'task',
@@ -41,6 +41,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
       "Reusing a settled worker's terminal with --terminal before its autoReleaseAt cancels that automatic release; after it, the start is refused while the release runs.",
       'A terminal the user kept open takes --terminal work and stays kept open.',
       '--agent takes an Orca agent id enabled on the worker server, such as claude, codex, cursor, antigravity, muse, zcode, opencode, or opencode2.',
+      'When omitted, --agent uses the Settings > Orchestration default worker agent and --model/--effort use their Settings > Orchestration defaults; without a default agent, worker-start fails with agent_unconfigured.',
       '--model supports Claude, Codex, Cursor, Antigravity, Grok, and Muse opaque provider model ids; --effort requires --model. OMP also takes its model roles and selectors (such as @worker or provider/model:level), with --effort as its thinking level. Neither can combine with --terminal. OpenCode model selection requires an existing worktree, a verified execution-host CLI, and an available model; effort is unsupported. Other agents, including zcode, launch with the model from their own config.',
       'Finished workers close on their own unless started with --keep-open; a worker started in a new worktree (new-child or new-top-level) is kept open, so release it when no one will use its chat.',
       'New worktrees use agent-first creation; without --setup, setup runs unless the project turns it off. Repository start-immediately runs setup beside the agent; wait-for-setup gates agent readiness and task input.',
@@ -51,7 +52,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
       'Not every worker has a terminal. Read output with worker-read --source auto or --source transcript, which always work; --source terminal is refused when there is none, and orca terminal verbs do not accept every worker handle. Nothing above needs you to know which kind you have — the orchestration verbs cover all of them.',
       '--on selects only the worker server; the Run and this command remain on the current Orca server.',
       'With --on, use an exact remote selector, new-child or new-top-level (new-child and new-top-level need a remote --repo); new-child nests the server worktree under your workspace, or starts it top-level with a warning when that server is too old to nest across machines. Remote current is invalid.',
-      '--retry-of needs --task naming the failed Task (--spec creates a new one) and does not inherit placement; repeat the intended --on/worktree and --agent/terminal choices.',
+      '--retry-of needs --task naming the failed Task (--spec creates a new one) and does not inherit placement; repeat the intended --on/worktree and --agent/terminal choices; --agent/--model/--effort follow the normal Settings > Orchestration default rules.',
       '--spec-file reads the spec from a file (relative to the current directory) or stdin (-) on this machine, so quotes and backticks need no shell escaping.',
       '--keep-open keeps the worker open after it finishes, as worker-keep-open does right after start.',
       'The call exits 0 for ready, and in the concise view for a start whose turn was not yet observed (--full exits 1 for anything but ready). Failed or outcome_unknown exits 1 and JSON includes stage/failedStage, setup, effects, residualResources, and recovery commands when needed.'

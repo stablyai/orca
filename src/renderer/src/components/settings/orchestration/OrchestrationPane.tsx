@@ -20,6 +20,7 @@ import { AgentSkillSetupPanel } from '../../skills/setup/AgentSkillSetupPanel'
 import { OrchestrationSkillAgentCoverage } from './OrchestrationSkillAgentCoverage'
 import { SkillUsageExamplesSection } from '../../skills/examples/SkillUsageExamplesSection'
 import { useTranslate } from '@/i18n/use-translate'
+import { OrchestrationWorkerModelSetting } from './OrchestrationWorkerModelSetting'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { resolveNestedWorkerMaxDepth } from '../../../../../shared/orchestration/workers/nested-worker-depth'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
@@ -55,6 +56,10 @@ export function OrchestrationPane({
   const t = useTranslate()
   const [skillPromptOpen, setSkillPromptOpen] = useState(false)
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
+  const defaultWorkerAgent = settings.orchestrationDefaultWorkerAgent
+  const disabledAgents = settings.disabledTuiAgents
+  const workerModels = settings.orchestrationWorkerModels
+  const workerEfforts = settings.orchestrationWorkerEfforts
   const showLocalRuntimeSettings = !isPairedWebClientWindow()
   const searchEntries = getOrchestrationPaneSearchEntries({
     includeLocalRuntimeSettings: showLocalRuntimeSettings
@@ -109,6 +114,18 @@ export function OrchestrationPane({
       className="space-y-8"
     >
       <SettingsGroup>
+        <OrchestrationWorkerModelSetting
+          defaultAgent={defaultWorkerAgent}
+          disabledAgents={disabledAgents}
+          models={workerModels}
+          efforts={workerEfforts}
+          onDefaultAgentChange={(orchestrationDefaultWorkerAgent) => {
+            void updateSettings({ orchestrationDefaultWorkerAgent })
+          }}
+          onChange={(orchestrationWorkerModels, orchestrationWorkerEfforts) => {
+            void updateSettings({ orchestrationWorkerModels, orchestrationWorkerEfforts })
+          }}
+        />
         <div className="py-4">
           <AgentSkillSetupPanel
             variant="inline"

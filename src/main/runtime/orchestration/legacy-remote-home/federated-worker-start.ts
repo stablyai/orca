@@ -16,6 +16,7 @@ import {
   assertWorkerLaunchPreferencesRuntimeSupported,
   assertWorkerLaunchPreferencesCreateTerminal,
   createPendingWorkerLaunchReceipt,
+  resolveFederatedWorkerLaunchParams,
   resolveFederatedWorkerLaunchReceipt
 } from '../../rpc/methods/orchestration/worker/worker-launch-preferences'
 import { validateFederatedWorkerStartPlacement } from '../../rpc/methods/orchestration/worker/worker-start-validation'
@@ -66,11 +67,6 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
   const createsWorktree = worktree === 'new-top-level' || worktree === 'new-child'
   assertWorkerLaunchPreferencesCreateTerminal(params)
   validateFederatedWorkerStartPlacement(params, createsWorktree)
-  const requestedLaunch = createPendingWorkerLaunchReceipt({
-    agent: isTuiAgent(params.agent) ? params.agent : null,
-    model: params.model,
-    effort: params.effort
-  })
   const server = runtime.resolveOrchestrationWorkerServer(params.on as string)
   const pairingFence = { expectedEnvironmentPairingRevision: server.pairingRevision }
   const budgets = resolveFederatedWorkerStartBudgets(params.timeoutMs)
@@ -95,11 +91,21 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
       `Connected server ${server.name} does not support orchestration federation.`
     )
   }
+  const launchParams = resolveFederatedWorkerLaunchParams({
+    params,
+    capabilities: status.capabilities,
+    defaultsApplied: args.defaultsApplied
+  })
   assertWorkerLaunchPreferencesRuntimeSupported({
-    model: params.model,
-    effort: params.effort,
+    model: launchParams.model,
+    effort: launchParams.effort,
     capabilities: status.capabilities,
     serverName: server.name
+  })
+  const requestedLaunch = createPendingWorkerLaunchReceipt({
+    agent: isTuiAgent(launchParams.agent) ? launchParams.agent : null,
+    model: launchParams.model,
+    effort: launchParams.effort
   })
   const childParent =
     worktree === 'new-child'
@@ -142,7 +148,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
       repo: params.repo ?? null,
       baseBranch: params.baseBranch ?? null,
       terminal: params.terminal ?? null,
-      agent: params.agent ?? null,
+      agent: launchParams.agent ?? null,
       launch: requestedLaunch,
       timeoutMs: budgets.readinessTimeoutMs,
       setup: setupDecision,
@@ -202,9 +208,9 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
               : 'orchestration_default'
             : undefined,
           terminal: params.terminal,
-          agent: params.agent,
-          model: params.model,
-          effort: params.effort,
+          agent: launchParams.agent,
+          model: launchParams.model,
+          effort: launchParams.effort,
           timeoutMs: budgets.readinessTimeoutMs,
           devMode: params.devMode
         },
