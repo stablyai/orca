@@ -76,8 +76,8 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeActionEf
     })
   }
 
-  /** Navigation delivers no user activation, so it opens no file picker to block. */
-  protected enqueueNavigation<T>(
+  /** Navigation, pointer moves, wheel and scrolling deliver no user activation, so they open no file picker to block. */
+  protected enqueueInertAction<T>(
     worktreeId: string | undefined,
     browserPageId: string | undefined,
     execute: (sessionName: string, target: ResolvedBrowserCommandTarget) => Promise<T>,
