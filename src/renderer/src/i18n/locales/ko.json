@@ -11891,7 +11891,7 @@
               "tokenHint": "리포지토리, 프로젝트 및 워크스페이스 액세스 토큰은 일치하는 Bitbucket 설정 페이지에서 생성되며 PR에 대한 읽기 액세스 권한이 필요합니다.",
               "basicHint": "귀하의 계정에 대한 Atlassian API 토큰을 생성한 다음 이를 소유한 이메일 주소와 페어링하세요.",
               "scopesTitle": "다음 Bitbucket API 토큰 범위를 선택하세요:",
-              "scopeUser": "계정 확인",
+              "scopeUser": "계정 이름 표시",
               "scopeRepository": "빌드 상태 읽기",
               "scopeReadPullRequest": "PR 읽기",
               "scopeWritePullRequest": "PR 생성",

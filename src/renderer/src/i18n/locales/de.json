@@ -12494,7 +12494,7 @@
               "tokenHint": "Zugriffstoken für Repositorys, Projekte und Arbeitsbereiche werden auf der jeweiligen Bitbucket-Einstellungsseite erstellt und benötigen Lesezugriff auf Pull Requests.",
               "basicHint": "Einen Atlassian-API-Token für das Konto erstellen und mit der zugehörigen E-Mail-Adresse kombinieren.",
               "scopesTitle": "Diese Bitbucket-API-Token-Bereiche auswählen:",
-              "scopeUser": "Konto bestätigen",
+              "scopeUser": "Kontonamen anzeigen",
               "scopeRepository": "Build-Status lesen",
               "scopeReadPullRequest": "Pull Requests lesen",
               "scopeWritePullRequest": "Pull Requests erstellen",
