@@ -26,10 +26,9 @@ vi.mock('../../git/command-runner/gh-exec-file', async (importOriginal) => ({
 
 import { listMergeRequests } from '../merge-requests/merge-request-list'
 import { isTaskRepositoryIneligible } from '../../git/task-repository-eligibility'
-import { rememberGlabKnownHosts } from './gitlab-known-host-probe'
+import { rememberGlabKnownHosts, _resetKnownHostsCache } from './gitlab-known-host-probe'
 import '../issues/gitlab-issue-queries'
 import { _resetProjectRefCache } from './gitlab-project-ref-resolution'
-import { _resetKnownHostsCache } from './gitlab-known-host-probe'
 import { _resetRemoteNameListingCache } from '../../git/remotes/remote-name-listing'
 
 function serveRemotes(repos: Record<string, Record<string, string>>): void {
