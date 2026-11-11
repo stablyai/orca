@@ -11,6 +11,7 @@ export type PrimaryStateWriteOperationsRuntime = Pick<
   | 'runDurableMutation'
   | 'firstPendingSaveAt'
   | 'lastDurableWriteGeneration'
+  | 'lastWriteError'
   | 'lastWrittenStateHash'
   | 'pendingSnapshotFileWork'
   | 'pendingAutomationRunsAfter'

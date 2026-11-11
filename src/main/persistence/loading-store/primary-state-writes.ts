@@ -30,7 +30,10 @@ export class PrimaryStateWriteOperations {
   flushOrThrow(): void {
     const context = this[primaryStateWriteOperationsContext]
     const { runtime } = context
-    if (runtime.quitFlushStarted || runtime.profileMaintenancePending) {
+    if (
+      (runtime.quitFlushStarted && runtime.lastWriteError == null) ||
+      runtime.profileMaintenancePending
+    ) {
       throw new Error('Cannot synchronously flush after final persistence has started')
     }
     if (runtime.profileStateAuthority?.asynchronous) {
@@ -43,6 +46,7 @@ export class PrimaryStateWriteOperations {
     runtime.firstPendingSaveAt = null
     runtime.writeGeneration++
     writeToDiskSync(context)
+    runtime.lastWriteError = null
   }
 
   flushActiveViewPreferenceOrThrow(): void {
@@ -203,7 +207,20 @@ export function enqueueWrite(
     if (capture.fullCheckpoint) {
       runtime.dirtyProfileStateDomains = null
     }
-    await writeToDiskAsync(owner)
+    const attemptGeneration = runtime.writeGeneration
+    let serializedGeneration: number | null = null
+    try {
+      serializedGeneration = runtime.writeGeneration
+      await writeToDiskAsync(owner)
+      runtime.lastWriteError = null
+    } catch (err) {
+      // A newer durable generation already replaced this attempt.
+      if (runtime.lastDurableWriteGeneration > (serializedGeneration ?? attemptGeneration)) {
+        return
+      }
+      runtime.lastWriteError = err
+      throw err
+    }
   })
   if (batchable) {
     context.queuedSnapshot = { completion, capture }
