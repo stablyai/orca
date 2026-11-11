@@ -1,5 +1,6 @@
 import { removeTree } from '../../shared/windows-transient-lock-removal'
-import { chmodSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, fstatSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import * as filesystem from 'node:fs'
 import * as processHost from '@orca/process-host'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -15,9 +16,16 @@ import { addEnvironmentFromPairingCode } from './environments'
 import { resolveRemoteConnection } from './runtime-remote-pairing'
 import { readRemoteEdgeAuthFile } from './remote-edge-auth-file'
 
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof filesystem>()
+  return { ...actual, statSync: vi.fn(actual.statSync), fstatSync: vi.fn(actual.fstatSync) }
+})
+
 const directories: string[] = []
 afterEach(async () => {
   vi.restoreAllMocks()
+  vi.mocked(statSync).mockReset()
+  vi.mocked(fstatSync).mockReset()
   vi.unstubAllEnvs()
   for (const dir of directories.splice(0)) {
     await removeTree(dir)
@@ -43,6 +51,31 @@ function fixture(contents = JSON.stringify(bundle())) {
 }
 
 describe('CLI private edge credential input', () => {
+  it.skipIf(process.platform !== 'win32' && process.platform !== 'darwin')(
+    'refuses replacement file identities that round to the same JavaScript number',
+    () => {
+      const { path } = fixture()
+      const numeric = statSync(path)
+      const precise = statSync(path, { bigint: true })
+      const nextPrecise = statSync(path, { bigint: true })
+      const firstInode = 9007199254740992n
+      const nextInode = firstInode + 1n
+      expect(Number(firstInode)).toBe(Number(nextInode))
+      numeric.ino = Number(firstInode)
+      precise.ino = firstInode
+      nextPrecise.ino = nextInode
+      vi.mocked(fstatSync).mockImplementation((_descriptor, options) =>
+        typeof options === 'object' && options?.bigint ? precise : numeric
+      )
+      vi.spyOn(filesystem, 'statSync').mockImplementation((_path, options) =>
+        typeof options === 'object' && options?.bigint ? nextPrecise : numeric
+      )
+      expect(() => readRemoteEdgeAuthFile(path, paired)).toThrow(
+        'Invalid remote edge authentication file'
+      )
+    }
+  )
+
   it('reads a bound private file without rewriting it', () => {
     const { path } = fixture()
     const before = readFileSync(path)

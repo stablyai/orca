@@ -24,7 +24,8 @@ export function readRemoteEdgeAuthFile(
 ): NonNullable<PairedRuntimeConnection['edgeAuth']> {
   try {
     const { buffer, stats } = readNodeFileSyncWithinLimit(filePath, 32768, {
-      regularFileOnly: true
+      regularFileOnly: true,
+      bigint: true
     })
     if (process.platform === 'win32') {
       const security = loadWindowsSecurity()
@@ -34,7 +35,7 @@ export function readRemoteEdgeAuthFile(
       ) {
         throw new Error('Unsafe permissions')
       }
-    } else if (stats.uid !== process.getuid?.() || (stats.mode & 0o077) !== 0) {
+    } else if (stats.uid !== BigInt(process.getuid?.() ?? -1) || (stats.mode & 0o077n) !== 0n) {
       throw new Error('Unsafe permissions')
     }
     if (process.platform === 'darwin') {
@@ -58,11 +59,11 @@ export function readRemoteEdgeAuthFile(
       }
     }
     if (process.platform === 'win32' || process.platform === 'darwin') {
-      const current = statSync(filePath)
+      const current = statSync(filePath, { bigint: true })
       if (
         current.dev !== stats.dev ||
         current.ino !== stats.ino ||
-        current.ctimeMs !== stats.ctimeMs ||
+        current.ctimeNs !== stats.ctimeNs ||
         current.size !== stats.size
       ) {
         throw new Error('Credential file changed')
