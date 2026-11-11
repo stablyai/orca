@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import { useCloudWorkspace, useIsCloudWorkspace } from './orca-cloud-workspace-store'
+import { useWakeAfterSleep } from '@/lib/worktree-sleep-wake-request'
 
 export type CloudRecoveryContext = {
   /** A wake is in flight: the waking pill already says what's happening, so no reconnect banner. */
@@ -19,6 +20,9 @@ export function useCloudRecoveryContext(
 ): CloudRecoveryContext | null {
   const isCloud = useIsCloudWorkspace(worktreeId)
   const phase = useCloudWorkspace((s) => (worktreeId ? s.wake[worktreeId]?.phase : undefined))
+  // Wake pressed while main still suspends the VM: waking already shows from the press, before
+  // main reports, while the connection drops as the VM goes down.
+  const wakeAfterSleep = useWakeAfterSleep(worktreeId ?? '')
   const reported = useCloudWorkspace((s) =>
     worktreeId ? s.status[worktreeId]?.status?.state : undefined
   )
@@ -38,7 +42,7 @@ export function useCloudRecoveryContext(
   if (!isCloud) {
     return null
   }
-  const waking = phase === 'waking' || phase === 'connecting'
+  const waking = phase === 'waking' || phase === 'connecting' || wakeAfterSleep !== undefined
   const asleep =
     !waking &&
     (reported === 'sleeping' || reported === 'stopping' || reported === 'archived' || vmSuspended)
