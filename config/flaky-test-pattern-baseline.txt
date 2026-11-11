@@ -638,7 +638,6 @@
 4 test-no-wall-clock:tests/e2e/cross-version-wire/release-checkout.unit.test.ts
 2 test-no-wall-clock:tests/e2e/cross-version-wire/release-source-retention.unit.test.ts
 1 test-no-wall-clock:tests/e2e/host-cold-park-remote-subscriber.unit.test.ts
-2 test-no-wall-clock:tests/e2e/omp-child-session-recovery.unit.test.ts
 2 test-timeout-needs-reason:mobile/src/terminal/document/native-document-bundle.test.ts
 1 test-timeout-needs-reason:mobile/src/test-support/rpc-recording/family-recordings.test.ts
 1 test-timeout-needs-reason:mobile/src/test-support/rpc-recording/mutants/family-mutants.test.ts
