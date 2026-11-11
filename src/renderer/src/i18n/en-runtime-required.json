@@ -1313,6 +1313,10 @@
         "unavailableCount_one": "{{count}} unavailable",
         "unavailableCount_other": "{{count}} unavailable"
       },
+      "teammates": {
+        "daySandboxHours_one": "{{hours}} sandbox hour",
+        "daySandboxHours_other": "{{hours}} sandbox hours"
+      },
       "terminal": {
         "pane": {
           "TerminalErrorToast": {

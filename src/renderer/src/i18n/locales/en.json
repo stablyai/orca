@@ -10964,6 +10964,14 @@
               "extension": "extension",
               "chrome": "chrome",
               "password": "password manager"
+            },
+            "pokes": {
+              "poke": "poke",
+              "nudge": "nudge",
+              "teammate": "teammate",
+              "activityTitle": "Pokes and activity",
+              "activityDescription": "Teammates can poke you and see which days you used Orca Cloud. Amounts stay private.",
+              "activity": "activity"
             }
           }
         },
@@ -20708,7 +20716,9 @@
           "createInvalid2": "Use letters, numbers, spaces or underscores (up to 64).",
           "nameTaken": "That team name is taken. Try another.",
           "totalPerMonth": "{{total}} per month",
-          "totalPerYear": "{{total}} per year"
+          "totalPerYear": "{{total}} per year",
+          "openProfile": "Open {{value0}}’s profile",
+          "viewProfile": "View profile"
         },
         "manageBilling": "Manage billing",
         "comparePlans": "Compare plans",
@@ -21023,7 +21033,8 @@
         "errorSeatSandboxLimitSelf_one": "You already have {{count}} sandbox running, the most one seat can run. Put it to sleep or delete it, then try again.",
         "errorSeatSandboxLimitSelf_other": "You already have {{count}} sandboxes running, the most one seat can run. Put one to sleep or delete it, then try again.",
         "errorSeatSandboxLimitOwner_one": "{{name}} already has {{count}} sandbox running. This workspace runs on their seat, so ask them to put it to sleep, then try again.",
-        "errorSeatSandboxLimitOwner_other": "{{name}} already has {{count}} sandboxes running. This workspace runs on their seat, so ask them to put one to sleep, then try again."
+        "errorSeatSandboxLimitOwner_other": "{{name}} already has {{count}} sandboxes running. This workspace runs on their seat, so ask them to put one to sleep, then try again.",
+        "viewOwnerProfile": "View {{name}}'s profile"
       },
       "orcaCloud": {
         "QueuedPrompt": {
@@ -21040,6 +21051,53 @@
           "sending": "Sending to {{agent}} next",
           "edit": "Edit queued prompt"
         }
+      },
+      "teammates": {
+        "pokesNeedTeam": "Sign in to Orca and switch to a team to use Pokes.",
+        "pokesSaveFailed": "Couldn’t save. Check your connection and try again.",
+        "unreachable": "Can’t reach Orca Cloud right now. Check your connection.",
+        "someone": "A teammate",
+        "pokedYou": "{{name}} poked you",
+        "pokeBack": "Poke back",
+        "poked": "Poked {{name}}",
+        "viewProfile": "View profile",
+        "title": "Teammate profile",
+        "description": "Role, daily Orca Cloud usage and recent workspaces.",
+        "pokesOffThem": "{{name}} hasn’t turned on Pokes yet.",
+        "loadFailed": "Couldn’t load this profile",
+        "tryAgain": "Try again",
+        "usageHeading": "Usage",
+        "recentWorkspaces": "Recent workspaces",
+        "showAll": "Show all",
+        "noWorkspacesSelf": "You have no cloud workspaces yet.",
+        "noWorkspaces": "No cloud workspaces shared with the team.",
+        "openWorkspace": "Open {{title}}, {{status}}",
+        "pokeHint": "A poke is a friendly nudge. {{name}} sees it in Orca.",
+        "openExperimental": "Open settings",
+        "poke": "Poke",
+        "levelNone": "No usage",
+        "levelLight": "Light usage",
+        "levelModerate": "Moderate usage",
+        "levelBusy": "Busy day",
+        "levelPeak": "One of their busiest days",
+        "daySandboxHours_one": "{{hours}} sandbox hour",
+        "daySandboxHours_other": "{{hours}} sandbox hours",
+        "dayAgentUsage": "Agent usage",
+        "heatmapSummarySelf": "You used Orca Cloud on {{active}} of the last {{days}} days",
+        "heatmapSummary": "{{name}} used Orca Cloud on {{active}} of the last {{days}} days",
+        "heatmapEmpty": "No Orca Cloud usage in the last 26 weeks.",
+        "heatmapHint": "Each day compared with their busiest day. Amounts stay private.",
+        "legendLess": "Less",
+        "legendMore": "More",
+        "pokeCooldown": "You just poked {{name}}. Try again in a minute.",
+        "pokeRate": "That’s a lot of pokes. Try again later.",
+        "pokeOffline": "Can’t reach Orca Cloud right now. Check your connection.",
+        "pokeFailed": "Couldn’t send the poke. Try again.",
+        "pokesActivitySettingCopy": "Teammates can poke you and see which days you used Orca Cloud. Amounts stay private.",
+        "pokesActivityToggle": "Toggle Pokes and activity",
+        "pokesOffYouActivity": "Pokes are off. Turn on Pokes and activity in Settings → Experimental.",
+        "activityNotShared": "{{name}} hasn’t shared their activity.",
+        "heatmapHintSelfHover": "Hover a day to see your sandbox hours."
       }
     },
     "i18n": {

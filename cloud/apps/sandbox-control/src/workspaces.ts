@@ -13,6 +13,7 @@ import type { SandboxCaller } from './auth'
 import type { MachineSize } from './entitlements'
 import { getSandbox, touchActivity, updateRegistry, type SandboxRow } from './store'
 import { memberNamesFor } from './member-names'
+import { recordTokenSpend } from './member-usage'
 import { readSnapshotTimes } from './read-snapshots'
 import { sandboxView } from './wire'
 import { ORCA_CLOUD_OVERAGE_CENTS_PER_HOUR } from '../../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
@@ -321,6 +322,12 @@ export async function patchWorkspace(
   })
   if (!next) {
     throw new WorkspaceError('not_found')
+  }
+  if (patch.tokenUsdMicros !== undefined) {
+    // Dated per reporter for teammate profiles' heatmap; the label above is only a running total.
+    await recordTokenSpend(db, row.account_id, caller.userId, row.token_usd_micros, patch.tokenUsdMicros, now).catch((error: unknown) =>
+      console.warn('member_usage_write_failed', String(error))
+    )
   }
   const ownerChanged = patch.ownerUserId !== undefined && patch.ownerUserId !== row.user_id
   const wentPrivate = row.visibility === 'team' && next.visibility === 'private'
