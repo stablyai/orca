@@ -69,8 +69,9 @@ vi.mock('./browser-page-pane', () => ({
     return <span data-browser-page-id={props.browserTab.id} />
   }
 }))
-import { hydrateBrowserDrivers } from '@/lib/pane-manager/browser-mobile-driver-state'
-import { hydrateBrowserRemoteViewerPages } from '@/lib/pane-manager/browser-remote-viewer-state'
+import { hydrateBrowserDrivers } from '@/runtime/browser/ownership/browser-mobile-driver-state'
+import '@/runtime/browser/ownership/browser-remote-viewer-state'
+import { hydrateBrowserRemoteViewerPages } from '@/runtime/browser/ownership/browser-remote-viewer-store'
 import BrowserPane from './browser-workspace-pane'
 
 const WORKSPACE_ID = 'ws-1'

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { makeWorktree } from '@/components/worktree-jump/worktree-jump-palette-test-fixtures'
-import { toLocallyOwnedRows } from './workspace-activity-shadow'
+import { toLocallyOwnedRows } from './sidebar-workspace-activity.test-fixture'
 
 describe('toLocallyOwnedRows', () => {
   it('leaves out an id a paired server also lists, since bare-id activity names no one host', () => {

@@ -1,6 +1,7 @@
 /** Keep live DOM/store census reads outside the typing probe’s sampling loop: focused pane/screen, mounted rows and listener counts. */
-import { useAppStore } from '@/store'
-import { listProbePanes, paneRootElement, type ProbePane } from './echo-instrumentation'
+import { useAppStore } from '@/store/index'
+import './echo-instrumentation'
+import { listProbePanes, paneRootElement, type ProbePane } from './pane-target'
 import type { FocusedPaneCensus } from './diagnostic-summary'
 
 type ProbeStoreState = {
@@ -61,4 +62,4 @@ export function countMountedAgentRows(): number | null {
   }
 }
 
-export { readStoreListenerCount } from '@/store/diagnostics/store-listener-census'
+import '@/store/diagnostics/store-listener-census'

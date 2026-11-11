@@ -1,12 +1,12 @@
 // Hide/close late publication of canceled creates for paired hosts; they may not fence close-before-create. Local window-owned builds retain tombstones until layout-owner phase F.
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import {
   hasStructuredAgentLaunchCancellationTombstonePersisted,
   markStructuredAgentLaunchCancelledPersisted,
   readStructuredAgentLaunchCancellationTombstoneSessionIds,
   retireAbsentStructuredAgentLaunchCancellationTombstonesPersisted,
   retireStructuredAgentLaunchCancellationTombstonePersisted
-} from '../agent-session/launch/structured-agent-session-launch-persistence'
+} from './structured-agent-session-launch-persistence'
 
 type CancellationRetirement = {
   retireAfterInventory: number | null

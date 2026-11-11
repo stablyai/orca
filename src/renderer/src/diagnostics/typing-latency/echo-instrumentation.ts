@@ -14,44 +14,26 @@ import {
   createEchoObservation,
   type EchoBatch,
   type EchoCandidate,
-  type EchoObservation as EchoObservationValue,
+  type EchoObservation,
   type RecordedKeystroke
 } from './echo-observation'
 import type { TypingInputSource } from './input-events'
 import type { ProbePane } from './pane-target'
 
-export type {
-  AmbiguousEchoBurst,
-  EchoObservation,
-  EchoSourceCounts,
-  ExactEchoSample,
-  RecordedKeystroke
-} from './echo-observation'
-export {
-  findPaneOwningFocus,
-  findPaneOwningNode,
-  listProbePanes,
-  paneRootElement
-} from './pane-target'
-export type { ProbePane } from './pane-target'
-export { drainTimedOutEchoCandidates }
+import './pane-target'
 
 type Disposable = { dispose: () => void }
 
-export type KeystrokeSource = TypingInputSource
-
 export type PreventedKeystrokeDiscard = 'pending' | 'counted-unmatched' | null
-
-type PendingKeystroke = EchoCandidate
 
 export type InstrumentedPane = {
   pane: ProbePane | null
-  undispatched: PendingKeystroke[]
-  nextDispatch: PendingKeystroke | null
-  deferredNextDispatch: PendingKeystroke | null
-  ignoredDispatches: PendingKeystroke[]
+  undispatched: EchoCandidate[]
+  nextDispatch: EchoCandidate | null
+  deferredNextDispatch: EchoCandidate | null
+  ignoredDispatches: EchoCandidate[]
   ignoredDispatchOverflowedAt: number | null
-  awaitingEcho: PendingKeystroke[]
+  awaitingEcho: EchoCandidate[]
   attributionGap: boolean
   parsingBatch: EchoBatch | null
   parsedBatches: EchoBatch[]
@@ -64,7 +46,7 @@ export type InstrumentedPane = {
 export function recordKeystroke(
   entry: InstrumentedPane,
   now: number,
-  source: KeystrokeSource,
+  source: TypingInputSource,
   eventAt: number | null = null
 ): RecordedKeystroke {
   const dropped = drainTimedOutEchoCandidates(entry, now)
@@ -82,7 +64,7 @@ export function recordKeystroke(
 /** Removes a prevented routed commit only if it never reached terminal.onData. */
 export function discardUndispatchedKeystroke(
   entry: InstrumentedPane,
-  candidate: PendingKeystroke
+  candidate: EchoCandidate
 ): PreventedKeystrokeDiscard {
   if (candidate.status === 'unmatched-undispatched') {
     const index = entry.ignoredDispatches.lastIndexOf(candidate)
@@ -143,7 +125,7 @@ function updateEchoBatch(entry: InstrumentedPane): EchoBatch | null {
 
 export function instrumentPaneEcho(
   pane: ProbePane,
-  onObservation: (observation: EchoObservationValue) => void
+  onObservation: (observation: EchoObservation) => void
 ): InstrumentedPane {
   const entry: InstrumentedPane = {
     pane,

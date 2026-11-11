@@ -11,7 +11,7 @@ import {
 import {
   createCoalescedPollRunner,
   type CoalescedPollRunner
-} from '../../../../lib/repository-refresh/coalesced-poll-runner'
+} from '../../../../lib/source-control/refresh/coalesced-poll-runner'
 import type { ChecksPanelControllerState } from '../use-checks-panel-controller-state'
 import type { ChecksPanelReviewState } from '../use-checks-panel-review-state'
 import type { ChecksPanelContextState } from '../use-checks-panel-context-state'

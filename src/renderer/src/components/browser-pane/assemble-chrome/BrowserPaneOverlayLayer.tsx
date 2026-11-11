@@ -15,7 +15,7 @@ import {
   isClientHostedBrowserRowSelectionLive,
   useClientHostedBrowserRowSelection,
   useClientHostedBrowserRows
-} from '@/lib/pane-manager/client-hosted-browser-row-state'
+} from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
 import { ClientHostedBrowserHostRowPane } from '../client-hosted-browser-host-row-pane'
 import { useAnyBrowserPageMountAdmission } from '../host-guest/browser-page-mount-admission'
 

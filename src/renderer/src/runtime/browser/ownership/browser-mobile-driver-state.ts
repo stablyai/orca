@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { recomputeOn } from '@/lib/recompute-on'
-import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../../shared/runtime-session-contracts'
 
 const driverByBrowserPageId = new Map<string, RuntimeTerminalDriverState>()
 

@@ -106,7 +106,8 @@ export function piOptionRefreshHost(sessionId = 'session-1') {
         },
         serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
         openConversation: async () => conversation,
-        conversation: async () => conversation
+        conversation: async () => conversation,
+        sessions: new Map([[sessionId, conversation]])
       } as unknown as StructuredAgentSessionMutationContext
       return readStructuredAgentSessionOptions(context, sessionId, { readsWithoutModel: true })
     },

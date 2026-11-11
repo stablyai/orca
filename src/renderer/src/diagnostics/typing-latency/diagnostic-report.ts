@@ -1,9 +1,5 @@
-import {
-  countMountedAgentRows,
-  readFocusedPaneCensus,
-  readProbeStoreState,
-  readStoreListenerCount
-} from './census-probe'
+import { countMountedAgentRows, readFocusedPaneCensus, readProbeStoreState } from './census-probe'
+import { readStoreListenerCount } from '../../store/diagnostics/store-listener-census'
 import {
   summarizeLatencySamples,
   summarizeTypingScaleCensus,
@@ -11,7 +7,9 @@ import {
   type LatencyPercentiles,
   type TypingScaleCensus
 } from './diagnostic-summary'
-import { listProbePanes, type InstrumentedPane } from './echo-instrumentation'
+import './echo-instrumentation'
+import type { InstrumentedPane } from './echo-instrumentation'
+import { listProbePanes } from './pane-target'
 import {
   emptyInputSourceBreakdown,
   type InputSourceBreakdown,

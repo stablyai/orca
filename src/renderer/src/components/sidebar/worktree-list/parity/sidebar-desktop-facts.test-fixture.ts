@@ -9,9 +9,9 @@ import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   toSshExecutionHostId
-} from '../../../../shared/execution-host'
-import type { DesktopSidebarFacts } from '../../../../shared/sidebar-list/desktop-sidebar-facts'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+} from '../../../../../../shared/execution-host'
+import type { DesktopSidebarFacts } from '../../../../../../shared/sidebar-list/desktop-sidebar-facts'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 
 type WindowFactsState = Pick<
   AppState,

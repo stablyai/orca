@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { findWorktreeReviewOwner } from '@/store/github/refresh/worktree-refresh'
 
 /** Re-reads the worktree's current linked issue in this window's store; fresh-gated by fetchIssue. */
