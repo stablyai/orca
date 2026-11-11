@@ -90,7 +90,7 @@ describe('ompProfileSessionsDirs', () => {
     }
     expect(
       ompProfileSessionsDirs({ env: { XDG_DATA_HOME: xdg }, homeDir: home, platform: 'linux' })
-    ).toEqual([xdgOnly, local, xdgVariant])
+    ).toEqual([xdgOnly, xdgVariant, local])
     expect(
       ompProfileSessionsDirs({ env: { XDG_DATA_HOME: xdg }, homeDir: home, platform: 'win32' })
     ).toEqual([local])

@@ -105,9 +105,9 @@ export function ompProfileSessionsDirs(
   return [...names]
     .sort()
     .flatMap((name) => [
-      join(profilesDir, name, 'agent', 'sessions'),
-      // OMP writes here once the profile's XDG dir exists; the config-home dir keeps older runs.
-      ...(xdgProfilesDir ? [join(xdgProfilesDir, name, 'sessions')] : [])
+      // OMP writes here once the profile's XDG dir exists, so ID lookup must find it before older copies.
+      ...(xdgProfilesDir ? [join(xdgProfilesDir, name, 'sessions')] : []),
+      join(profilesDir, name, 'agent', 'sessions')
     ])
     .filter((dir) => existsSync(dir))
 }
