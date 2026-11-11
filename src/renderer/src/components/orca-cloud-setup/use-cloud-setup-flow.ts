@@ -20,11 +20,7 @@ import {
   reopenCloudSetup
 } from '@/components/new-workspace/cloud-setup/cloud-setup-tracker-actions'
 import { getCloudSetupStarter } from '@/lib/orca-cloud/cloud-setup-session-seam'
-import {
-  isCloudSetupAgentSkipped,
-  rememberCloudSetupAgentSkipped,
-  type CloudSetupPageRequest
-} from '@/lib/orca-cloud/cloud-setup-page-store'
+import type { CloudSetupPageRequest } from '@/lib/orca-cloud/cloud-setup-page-store'
 import { reportCloudSetupProgress } from '@/lib/orca-cloud/cloud-setup-telemetry'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import type { OrcaCloudAvailability } from '../../../../shared/orca-yaml-hook-types'
@@ -89,7 +85,6 @@ export type CloudSetupFlow = CloudSetupPageModel & {
   startTrial: () => void
   fixBilling: () => void
   installGitHub: () => void
-  skipAgent: () => void
   checkAgain: () => void
   copyLink: (() => void) | null
   reopenBrowser: () => void
@@ -108,7 +103,6 @@ export function useCloudSetupFlow(
   // opened for, so it waits on all of them; a single hop (GitHub install, billing) only on its own.
   const [browserStep, setBrowserStep] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [agentSkipped, setAgentSkipped] = useState(() => isCloudSetupAgentSkipped(request.agent))
   const githubOverride = useMemo<CloudSetupStep | null>(
     () => (request.cloudOnlyRepo ? { id: 'github', state: 'done' } : null),
     [request.cloudOnlyRepo]
@@ -127,14 +121,14 @@ export function useCloudSetupFlow(
     githubOverride
   })
   const { steps, held: switchTeam } = useSwitchTeamSteps(rowSteps, !session)
-  const model = cloudSetupPageModel(steps, { agentSkipped, teamSwitch: switchTeam !== null })
+  const model = cloudSetupPageModel(steps, { teamSwitch: switchTeam !== null })
   const error = useMemo(() => {
     const parsed = parseCloudSetupError(session?.error)
     return parsed && session?.teamName ? { ...parsed, teamName: session.teamName } : parsed
   }, [session?.error, session?.teamName])
 
   // Rows derived from billing tick on their own: re-read while a step is waiting elsewhere.
-  const waiting = model.action !== 'done' && model.action !== 'agent'
+  const waiting = model.action !== 'done'
   useEffect(() => {
     if (!waiting || accessOverride) {
       return
@@ -217,11 +211,6 @@ export function useCloudSetupFlow(
     void openInstall()
   }, [markInBrowser, openInstall])
 
-  const skipAgent = useCallback(() => {
-    rememberCloudSetupAgentSkipped(request.agent)
-    setAgentSkipped(true)
-  }, [request.agent])
-
   const checkAgain = useCallback(() => void prefetchOrcaCloudBilling(true), [])
 
   return {
@@ -235,7 +224,6 @@ export function useCloudSetupFlow(
     startTrial,
     fixBilling,
     installGitHub,
-    skipAgent,
     checkAgain,
     copyLink:
       sessionId && canCopyCloudSetupLink(sessionId)

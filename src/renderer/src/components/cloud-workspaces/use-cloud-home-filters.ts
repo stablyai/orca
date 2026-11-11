@@ -6,12 +6,15 @@ import {
 } from './CloudWorkspacesToolbar'
 import { readHomeSwitches, writeHomeSwitches } from './cloud-workspaces-home-prefs'
 import { usePendingHomeFilters } from './cloud-workspaces-home-nav'
+import { CLOUD_ROUTINES_UI_ENABLED } from '../../../../shared/cloud-api/cloud-routines-ui'
 
 /** Home's list filters for this account. The three switches are remembered; owner/repo/scope start fresh. */
 export function useCloudHomeFilters(account: string) {
   const initialFilters = (key: string): CloudWorkspacesFilters => ({
     ...INITIAL_CLOUD_WORKSPACE_FILTERS,
-    ...readHomeSwitches(key)
+    ...readHomeSwitches(key),
+    // A switch saved before Routines were parked must not keep listing routine runs.
+    ...(CLOUD_ROUTINES_UI_ENABLED ? {} : { routines: false })
   })
   const [filters, setFilters] = useState(() => initialFilters(account))
   usePendingHomeFilters(setFilters)

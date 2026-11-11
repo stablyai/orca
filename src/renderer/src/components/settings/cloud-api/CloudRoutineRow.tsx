@@ -21,14 +21,13 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Switch } from '@/components/ui/switch'
-import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import type {
   CloudApiProject,
   Routine,
   RoutineRun
 } from '../../../../../shared/cloud-api/cloud-api-types'
-import { PersonSentence } from './PersonName'
 import { RoutineRunHistory, type LoadRoutineRuns } from './RoutineRunHistory'
 import {
   describeRoutineTrigger,
@@ -62,7 +61,8 @@ export function RoutineRow({
   onLatestRun,
   onOpenWorkspace,
   fixedNow,
-  viewerUserId
+  viewerUserId,
+  memberNames
 }: {
   routine: Routine
   projects: readonly CloudApiProject[]
@@ -79,6 +79,7 @@ export function RoutineRow({
   onOpenWorkspace?: (workspaceId: string) => void
   fixedNow?: number
   viewerUserId: string | null
+  memberNames?: ReadonlyMap<string, string>
 }): React.JSX.Element {
   const t = useTranslate()
   const locale = useIntlLocale()
@@ -127,17 +128,14 @@ export function RoutineRow({
     setNotice(null)
     const failure = await onRunNow()
     setRunning(false)
-    setNotice(
-      failure
-        ? { tone: 'error', text: failure }
-        : {
-            tone: 'ok',
-            text: t(
-              'auto.components.settings.cloudRoutines.queued',
-              'Run queued. It shows up in the history below.'
-            )
-          }
-    )
+    if (failure) {
+      setNotice({ tone: 'error', text: failure })
+      return
+    }
+    // The new run's status lives in the pill and the history; open the history so it is in view.
+    if (!expanded) {
+      onToggleHistory()
+    }
   }
 
   return (
@@ -167,14 +165,9 @@ export function RoutineRow({
             {viewerUserId && routine.createdBy !== viewerUserId ? (
               <span className="text-muted-foreground">
                 {' · '}
-                <PersonSentence
-                  sentence={t(
-                    'auto.components.settings.cloudRoutines.createdByPerson',
-                    'by <person></person>'
-                  )}
-                  name={routine.createdByName}
-                  id={routine.createdBy}
-                />
+                {t('auto.components.settings.cloudRoutines.createdByName', 'by {{name}}', {
+                  name: creatorName(routine, memberNames, t)
+                })}
               </span>
             ) : null}
           </p>
@@ -218,7 +211,7 @@ export function RoutineRow({
             variant="ghost"
             size="xs"
             aria-disabled={running && !active}
-            aria-busy={running || active}
+            aria-busy={running}
             aria-expanded={active ? expanded : undefined}
             aria-controls={active ? historyId : undefined}
             onClick={() => void runNow()}
@@ -246,14 +239,9 @@ export function RoutineRow({
                 : undefined
             }
           >
-            {running || active ? (
-              <Loader2 className="animate-spin motion-reduce:animate-none" />
-            ) : (
-              <Play />
-            )}
-            {active
-              ? t('auto.components.settings.cloudRoutines.runningNow', 'Running…')
-              : t('auto.components.settings.cloudRoutines.runNow', 'Run now')}
+            {/* Spins only while the request is in flight; the run's own status is the pill's job. */}
+            {running ? <Loader2 className="animate-spin motion-reduce:animate-none" /> : <Play />}
+            {t('auto.components.settings.cloudRoutines.runNow', 'Run now')}
           </Button>
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
@@ -327,5 +315,18 @@ export function RoutineRow({
         </div>
       ) : null}
     </li>
+  )
+}
+
+/** Display name only, never a raw id: the server's name, then the team roster, then "Former member". */
+export function creatorName(
+  routine: Pick<Routine, 'createdBy' | 'createdByName'>,
+  memberNames: ReadonlyMap<string, string> | undefined,
+  t: Translate
+): string {
+  return (
+    routine.createdByName?.trim() ||
+    memberNames?.get(routine.createdBy)?.trim() ||
+    t('auto.components.settings.cloudRoutines.formerMember', 'Former member')
   )
 }

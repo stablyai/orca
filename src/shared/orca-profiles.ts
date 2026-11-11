@@ -252,6 +252,8 @@ export type OrcaOrgMember = {
   userId: string | null
   email: string
   displayName?: string
+  /** Profile picture from the identity provider (https only); avatars fall back to initials. */
+  pictureUrl?: string
   role: OrcaOrgRole
 }
 

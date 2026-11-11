@@ -3,15 +3,16 @@
 import { useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { keybindingMatchesAction } from '../../../../shared/keybindings/matching'
 import { parseCloudWorkspaceLink } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
+import { reportCloudWorkspaceLinkFailure } from './cloud-workspace-link-failure'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
-import { describeError } from './cloud-workspace-errors'
 import { copyCloudWorkspaceLink, openCloudWorkspace } from './open-cloud-workspace'
 import { currentCloudChatId, focusCloudChat } from './cloud-chat-focus'
 import { cloudWorkspacesAvailable } from './use-cloud-workspaces'
+import { installCloudWorkspaceSync } from './cloud-workspace-sync'
+import { rememberCloudWorkspaces } from './cloud-workspace-identity'
 
 const HIGHLIGHT_MS = 4_000
 /** No input for this long and the desktop stops reporting presence (and renewing a lease). */
@@ -47,27 +48,27 @@ export async function handleCloudWorkspaceLink(link: string): Promise<void> {
   if (!parsed || !(await cloudWorkspacesAvailable())) {
     return
   }
-  setHighlight(parsed.workspaceId)
-  const resolved = await window.api.cloudWorkspaces.resolveLink(parsed.workspaceId, parsed.chatId)
+  if (parsed.target.kind === 'id') {
+    setHighlight(parsed.target.workspaceId)
+  }
+  const resolved = await window.api.cloudWorkspaces.resolveLink(parsed.target, parsed.chatId)
   if (!resolved.ok) {
-    toast.error(
-      resolved.error === 'not_found'
-        ? translate(
-            'auto.components.cloudWorkspaces.linkNotFound',
-            'This link points to a private workspace, another team, or a workspace that was deleted.'
-          )
-        : describeError(resolved.error, resolved.reason)
-    )
     setHighlight(null)
+    reportCloudWorkspaceLinkFailure(parsed.target, resolved, () => {
+      void handleCloudWorkspaceLink(link)
+    })
     return
   }
-  const outcome = await openCloudWorkspace(resolved.value.workspace)
+  const workspace = resolved.value.workspace
+  rememberCloudWorkspaces([workspace])
+  setHighlight(workspace.id)
+  const outcome = await openCloudWorkspace(workspace)
   if (!outcome.ok) {
     toast.error(outcome.message)
   } else if (resolved.value.chatId) {
     await focusCloudChat(outcome.worktreeId, resolved.value.chatId)
   }
-  setHighlight(parsed.workspaceId, HIGHLIGHT_MS)
+  setHighlight(workspace.id, HIGHLIGHT_MS)
 }
 
 type Front = {
@@ -128,6 +129,7 @@ export function installCloudWorkspaceLinks(): () => void {
   if (!api) {
     return () => {}
   }
+  cleanups.push(installCloudWorkspaceSync())
   cleanups.push(
     api.onOpenLink((link) => {
       // The push already delivered it; drain the pending copy so a reload does not replay it.

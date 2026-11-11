@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from 'react'
-import { CalendarClock, GitBranch, Loader2, Lock } from 'lucide-react'
+import { GitBranch, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { type Translate, useIntlLocale, useTranslate } from '@/i18n/use-translate'
@@ -11,7 +11,12 @@ import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-w
 import { CloudStateDot } from '../orca-cloud/CloudStateDot'
 import type { CloudDotState } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 import { MemberAvatar, PresenceStack } from './CloudMemberAvatars'
-import { CloudWorkspaceRowMenu, isReadableAsleep, type RowActions } from './CloudWorkspaceRowMenu'
+import {
+  CloudWorkspaceRowMenu,
+  isReadableAsleep,
+  type RowActions,
+  type RowArrangement
+} from './CloudWorkspaceRowMenu'
 import {
   formatSandboxHours,
   formatRelative,
@@ -23,6 +28,7 @@ import {
   type MemberDirectory
 } from './cloud-workspace-format'
 import { cloudWorkspaceTitle } from './open-cloud-workspace'
+import { CloudWorkspaceRowBadges } from './CloudWorkspaceRowBadges'
 
 /** The shared Orca Cloud dot vocabulary (shape and tone), same as the sidebar and panel. */
 export function dotState(w: CloudWorkspace): CloudDotState {
@@ -81,7 +87,10 @@ export function CloudWorkspaceRow({
   opening,
   highlighted,
   now,
-  actions
+  actions,
+  arrangement,
+  dragProps,
+  dragging = false
 }: {
   workspace: CloudWorkspace
   directory: MemberDirectory
@@ -93,6 +102,11 @@ export function CloudWorkspaceRow({
   highlighted: boolean
   now: number
   actions: RowActions
+  /** Pinned state and whether Move up / Move down apply (synced prefs). */
+  arrangement?: RowArrangement
+  /** Drag-to-reorder within its group (from CloudWorkspaceGroup's rowDragProps). */
+  dragProps?: React.LiHTMLAttributes<HTMLLIElement>
+  dragging?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
@@ -155,6 +169,7 @@ export function CloudWorkspaceRow({
     <li
       ref={rowRef}
       data-cloud-workspace-row=""
+      {...dragProps}
       onKeyDown={(event) => {
         // Menu items render in a portal but still bubble through React; only this row's own DOM counts.
         if (!(event.target instanceof Node) || !event.currentTarget.contains(event.target)) {
@@ -174,7 +189,8 @@ export function CloudWorkspaceRow({
       }}
       className={cn(
         'group relative isolate flex items-center gap-3 rounded-lg pr-2 transition-colors hover:bg-accent',
-        menuOpen && 'bg-accent'
+        menuOpen && 'bg-accent',
+        dragging && 'opacity-50'
       )}
     >
       {/* Opened from a link: an accent tint that fades out (instantly under reduced motion). */}
@@ -230,48 +246,12 @@ export function CloudWorkspaceRow({
             >
               {title}
             </span>
-            {w.visibility === 'private' && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Lock
-                    role="img"
-                    className="size-3 shrink-0 text-muted-foreground"
-                    aria-label={t('auto.components.cloudWorkspaces.private', 'Private')}
-                  />
-                </TooltipTrigger>
-                <TooltipContent side="top">
-                  {w.ownerUserId === selfId
-                    ? t(
-                        'auto.components.cloudWorkspaces.privateTooltipYou',
-                        'Private — only you can see it'
-                      )
-                    : t(
-                        'auto.components.cloudWorkspaces.privateTooltip',
-                        'Private — only {{name}} can open it',
-                        {
-                          name: ownerName
-                        }
-                      )}
-                </TooltipContent>
-              </Tooltip>
-            )}
-            {w.fromRoutine === true && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <CalendarClock
-                    role="img"
-                    className="size-3 shrink-0 text-muted-foreground"
-                    aria-label={t('auto.components.cloudWorkspaces.routineRun', 'Routine run')}
-                  />
-                </TooltipTrigger>
-                <TooltipContent side="top">
-                  {t(
-                    'auto.components.cloudWorkspaces.routineRunTooltip',
-                    "Started by a routine. It's deleted when the run ends."
-                  )}
-                </TooltipContent>
-              </Tooltip>
-            )}
+            <CloudWorkspaceRowBadges
+              workspace={w}
+              selfId={selfId}
+              ownerName={ownerName}
+              revealNumber={revealOpen}
+            />
           </span>
           <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
             <MemberAvatar userId={w.ownerUserId} directory={directory} selfId={selfId} size="sm" />
@@ -395,6 +375,7 @@ export function CloudWorkspaceRow({
         open={menuOpen}
         onOpenChange={setMenuOpen}
         actions={actions}
+        arrangement={arrangement}
       />
       <span id={descriptionId} className="sr-only">
         {description}

@@ -29,6 +29,7 @@ import type { NativeChatMessage } from '../../../../shared/native-chat/native-ch
 import { deriveNativeChatRowContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
 import WorktreeCreationTabStrip from './WorktreeCreationTabStrip'
 import { WorktreeSetupSteps } from './WorktreeSetupSteps'
+import { isOrcaCloudBuild } from './vm-build-steps'
 import { deriveWorktreeSetupSteps } from './worktree-setup-steps'
 import { useWorktreeCreationClock } from './worktree-creation-clock'
 import { getRepoMainWorktreeId } from '../../../../shared/worktree/id'
@@ -84,6 +85,8 @@ export default function PendingNativeChatCreation({
   const handedOff = entry?.chatInputHandedOff === true
   const heldMessage = entry ? pendingCreationHeldChatMessage(entry) : null
   const held = heldMessage !== null
+  // Glossary: cloud copy says workspace, never worktree (JA-25).
+  const cloud = entry ? isOrcaCloudBuild(entry) : false
   // Like t3code, progress shows only in the steps card after a send, never above the composer.
   const now = useWorktreeCreationClock(status === 'creating' && held)
   const suppressFocus = entry?.request.suppressTerminalFocusOnCompletion === true
@@ -96,15 +99,25 @@ export default function PendingNativeChatCreation({
             'Opening chat…'
           )
         : status === 'error'
-          ? translate(
-              'auto.components.worktree.creation.PendingNativeChatCreation.sendBlockedFailed',
-              'Retry creating the worktree to send'
-            )
-          : held
+          ? cloud
             ? translate(
-                'auto.components.worktree.creation.PendingNativeChatCreation.sendBlockedHeld',
-                'Sends when the worktree is ready'
+                'components.worktreeCreation.pendingNativeChat.sendBlockedFailedCloud',
+                'Retry creating the workspace to send'
               )
+            : translate(
+                'auto.components.worktree.creation.PendingNativeChatCreation.sendBlockedFailed',
+                'Retry creating the worktree to send'
+              )
+          : held
+            ? cloud
+              ? translate(
+                  'components.worktreeCreation.pendingNativeChat.sendBlockedHeldCloud',
+                  'Sends when the workspace is ready'
+                )
+              : translate(
+                  'auto.components.worktree.creation.PendingNativeChatCreation.sendBlockedHeld',
+                  'Sends when the worktree is ready'
+                )
             : undefined
     return {
       capturePresentation: () => () => true,
@@ -147,6 +160,7 @@ export default function PendingNativeChatCreation({
       runtimeEnvironmentId: null
     }
   }, [
+    cloud,
     creationId,
     handedOff,
     held,

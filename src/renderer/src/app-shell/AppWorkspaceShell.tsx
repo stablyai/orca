@@ -11,6 +11,7 @@ import { FloatingTerminalToggleButton } from '../components/floating-terminal/Fl
 import { TerminalWorkbenchContainer } from '../components/TerminalWorkbenchContainer'
 import { WorkspaceLowDiskBanner } from '../components/low-disk/WorkspaceLowDiskBanner'
 import { CloudSetupPageLayer } from '../components/orca-cloud-setup/CloudSetupPageLayer'
+import { CloudOpenCoverLayer } from '../components/worktree-creation/CloudOpenCoverLayer'
 import type { VirtualizedScrollAnchor } from '../hooks/useVirtualizedScrollAnchor'
 import { TitlebarLeftControls } from './TitlebarLeftControls'
 import { RightSidebarToggle, TitlebarMainStrip } from './TitlebarMainStrip'
@@ -248,6 +249,9 @@ export function AppWorkspaceShell(props: {
                   </Suspense>
                 </div>
                 <CloudSetupPageLayer />
+                <CloudOpenCoverLayer
+                  reserveCollapsedSidebarHeaderSpace={layout.leftTitlebarChromeLayout.isFloating}
+                />
                 {floatingWorkspace.showToggleButton && !capturingPluginShot ? (
                   <MemoFloatingTerminalToggleButton
                     open={floatingWorkspace.open}

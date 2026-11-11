@@ -21450,7 +21450,6 @@
       "startInTerminal": "Запустить {{value0}} в терминале"
     },
     "newWorkspace": {
-      "agentOptional": "Агент [необязательно]",
       "createDescription": "Выберите проект и название рабочего пространства. При желании выберите агента для запуска.",
       "directSetup": {
         "run": "Run setup",

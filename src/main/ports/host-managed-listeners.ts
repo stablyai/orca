@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import type { RawListeningPort } from './local-workspace-port-scan-state'
 
 /** Colon-separated install roots whose binaries are the host's own services (e.g. a sandbox image's tools). */
@@ -28,27 +29,79 @@ export function hostManagedListenerConfig(
 
 /**
  * Listeners the host runs itself: this server process, a program started from a managed root
- * (checked on argv[0] and argv[1], so `python3 /root/bin/tool` counts too), or a declared platform
- * port whose owner is invisible. A pid-less listener on any other port (a root-run postgres or
+ * (checked on argv[0] and argv[1], so `python3 /root/bin/tool` counts too) or its descendant, or a
+ * declared platform port whose owner is invisible. A pid-less listener on any other port (a root-run postgres or
  * Docker-published port) is still the user's.
  */
-export function isHostManagedListener(
+export async function isHostManagedListener(
   port: Pick<RawListeningPort, 'pid' | 'commandLine' | 'port'>,
   config: HostManagedListenerConfig,
-  serverPid: number = process.pid
-): boolean {
+  serverPid: number = process.pid,
+  readParent: (pid: number) => Promise<ParentProcess | undefined> = readLinuxParentProcess
+): Promise<boolean> {
   if (port.pid === undefined) {
     return config.unownedPorts.has(port.port)
   }
   if (port.pid === serverPid) {
     return true
   }
-  if (config.roots.length === 0 || !port.commandLine) {
+  if (config.roots.length === 0) {
     return false
   }
-  return port.commandLine
+  if (startedFromRoot(port.commandLine, config.roots)) {
+    return true
+  }
+  // A managed tool's descendant (agent-browser's Chrome DevTools port). The walk stops at the server
+  // (it spawns the user's terminals) and at a shell (a user session, e.g. over the managed sshd).
+  let pid = port.pid
+  for (let depth = 0; depth < MAX_ANCESTRY_DEPTH; depth++) {
+    const parent = await readParent(pid)
+    if (!parent || parent.pid === serverPid || isShell(parent.commandLine)) {
+      return false
+    }
+    if (startedFromRoot(parent.commandLine, config.roots)) {
+      return true
+    }
+    pid = parent.pid
+  }
+  return false
+}
+
+const MAX_ANCESTRY_DEPTH = 8
+const SHELLS = new Set(['sh', 'bash', 'dash', 'zsh', 'fish', 'ksh', 'tcsh', 'csh', 'nu', 'pwsh'])
+
+function isShell(commandLine: string): boolean {
+  const argv0 = commandLine.trim().split(/\s+/)[0] ?? ''
+  return SHELLS.has(argv0.replace(/^-/, '').split('/').pop() ?? '')
+}
+
+export type ParentProcess = { pid: number; commandLine: string }
+
+function startedFromRoot(commandLine: string | undefined, roots: readonly string[]): boolean {
+  return (commandLine ?? '')
     .trim()
     .split(/\s+/)
     .slice(0, 2)
-    .some((token) => config.roots.some((root) => token === root || token.startsWith(`${root}/`)))
+    .some((token) => roots.some((root) => token === root || token.startsWith(`${root}/`)))
+}
+
+async function readLinuxParentProcess(pid: number): Promise<ParentProcess | undefined> {
+  if (process.platform !== 'linux') {
+    return undefined
+  }
+  try {
+    // /proc/<pid>/stat: "pid (comm) state ppid ..."; comm may contain spaces or parens.
+    const stat = await readFile(`/proc/${pid}/stat`, 'utf8')
+    const ppid = Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[1])
+    if (!Number.isInteger(ppid) || ppid <= 1) {
+      return undefined
+    }
+    const commandLine = (await readFile(`/proc/${ppid}/cmdline`, 'utf8'))
+      .split('\0')
+      .join(' ')
+      .trim()
+    return { pid: ppid, commandLine }
+  } catch {
+    return undefined
+  }
 }

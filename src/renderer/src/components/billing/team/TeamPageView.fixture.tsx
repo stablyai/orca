@@ -6,6 +6,10 @@ import { sampleTeam } from '../plan-billing-fixtures'
 import { TeamDialogContent } from './TeamDialogHost'
 import { TeamPageView, type TeamPageViewProps } from './TeamPageView'
 
+// Fixtures render offline: a self-contained stand-in for a provider profile picture.
+const ADA_PICTURE =
+  "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%23f6c38f'/><stop offset='1' stop-color='%23c0713d'/></linearGradient></defs><rect width='64' height='64' fill='url(%23g)'/><circle cx='32' cy='26' r='12' fill='%23fff3e6'/><rect x='14' y='42' width='36' height='22' rx='11' fill='%23fff3e6'/></svg>"
+
 const NOW = Date.UTC(2026, 10, 18, 15)
 const DAY = 86_400_000
 const width = 1100
@@ -15,7 +19,13 @@ const roster: OrcaOrgMembersRoster = {
   canManageMembers: true,
   members: [
     { userId: 'u-neil', email: 'neil@acme.dev', displayName: 'Neil Parker', role: 'owner' },
-    { userId: 'u-ada', email: 'ada@acme.dev', displayName: 'Ada Lovelace', role: 'admin' },
+    {
+      userId: 'u-ada',
+      email: 'ada@acme.dev',
+      displayName: 'Ada Lovelace',
+      role: 'admin',
+      pictureUrl: ADA_PICTURE
+    },
     { userId: 'u-grace', email: 'grace@acme.dev', displayName: 'Grace Hopper', role: 'member' },
     { userId: null, email: 'linus@acme.dev', role: 'member' }
   ],

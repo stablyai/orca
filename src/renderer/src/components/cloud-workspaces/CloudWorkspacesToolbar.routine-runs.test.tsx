@@ -14,7 +14,14 @@ import type { CloudWorkspaceRoutineRuns } from '../../../../shared/cloud-workspa
 vi.mock('../new-workspace/run-on/OrcaCloudTrialUsedUpNotice', () => ({
   OrcaCloudTrialUsedUpBanner: () => null
 }))
-vi.mock('@/hooks/useOrcaCloudApiAvailability', () => ({ useOrcaCloudApiAvailable: () => false }))
+vi.mock('@/hooks/useOrcaCloudApiAvailability', () => ({ useOrcaCloudApiAvailable: () => true }))
+// The switch is behind the parked-Routines flag; flip it per test to cover both states.
+const flag = vi.hoisted(() => ({ on: true }))
+vi.mock('../../../../shared/cloud-api/cloud-routines-ui', () => ({
+  get CLOUD_ROUTINES_UI_ENABLED() {
+    return flag.on
+  }
+}))
 
 afterEach(cleanup)
 
@@ -50,6 +57,19 @@ const runs = (over: Partial<CloudWorkspaceRoutineRuns> = {}): CloudWorkspaceRout
   hiddenRunning: 0,
   hiddenComputeMs: 0,
   ...over
+})
+
+describe('Home toolbar while Routines are parked', () => {
+  it('offers neither the Routines entry nor the Routine runs switch', () => {
+    flag.on = false
+    try {
+      toolbar(runs({ hidden: 2, hiddenRunning: 1 }), { routines: true })
+      expect(screen.queryByLabelText('Show routine runs')).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Routines' })).toBeNull()
+    } finally {
+      flag.on = true
+    }
+  })
 })
 
 describe('Home toolbar: Routine runs switch', () => {

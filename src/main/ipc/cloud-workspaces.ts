@@ -18,6 +18,7 @@ import {
 import type { ReaderKeyAccess } from '../cloud-workspaces/cloud-read-snapshot-reader'
 import { registerTeamPresenceHandlers } from './cloud-workspaces-team-presence'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
+import { registerCloudWorkspacePrefsHandlers } from './cloud-workspaces-prefs'
 import type { CloudReadSnapshotState } from '../../shared/cloud-workspaces/read-snapshot-state'
 import type { RemovedServerStore } from './runtime-environments/runtime-environment-removal-cleanup'
 import {
@@ -29,6 +30,14 @@ import {
 const Id = z.string().regex(/^sbx_[0-9a-f]{24}$/)
 const GrantId = z.string().regex(/^grt_[0-9a-f]{24}$/)
 const ChatId = z.string().min(1).max(256)
+const LinkTarget = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('id'), workspaceId: Id }),
+  z.object({
+    kind: z.literal('number'),
+    org: z.string().regex(/^[a-z0-9-]{1,40}$/),
+    number: z.number().int().min(1).max(999_999_999)
+  })
+])
 const ListQuery = z
   .object({
     scope: z.enum(['mine', 'team', 'all']).optional(),
@@ -200,13 +209,13 @@ export function registerCloudWorkspacesHandlers(
   })
   handle('cloudWorkspaces:resolveLink', async (args) => {
     const parsed = z
-      .object({ workspaceId: Id, chatId: ChatId.nullable().optional() })
+      .object({ target: LinkTarget, chatId: ChatId.nullable().optional() })
       .safeParse(args)
     const s = await getService()
     return !s
       ? NOT_CONFIGURED
       : parsed.success
-        ? s.resolveLink(parsed.data.workspaceId, parsed.data.chatId)
+        ? s.resolveLink(parsed.data.target, parsed.data.chatId)
         : INVALID
   })
   handle('cloudWorkspaces:openGrant', async (args) => {
@@ -305,6 +314,7 @@ export function registerCloudWorkspacesHandlers(
         ? s.putOrgPrompts(parsed.data.document, parsed.data.revision)
         : INVALID
   })
+  registerCloudWorkspacePrefsHandlers(handle, getService)
   registerTeamPresenceHandlers(handle, getService)
   // Handlers are re-registered per main window; the quit hook must only be added once.
   if (!quitHookInstalled) {

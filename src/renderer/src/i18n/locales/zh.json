@@ -20048,7 +20048,6 @@
       "startInTerminal": "在终端中启动 {{value0}}"
     },
     "newWorkspace": {
-      "agentOptional": "智能体 [可选]",
       "createDescription": "选择项目和工作区名称。如果想启动智能体，请选择一个。",
       "directSetup": {
         "run": "Run setup",

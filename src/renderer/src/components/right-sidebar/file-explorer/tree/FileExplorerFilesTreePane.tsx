@@ -137,7 +137,13 @@ export function FileExplorerFilesTreePane({
   // An asleep Orca Cloud workspace has no tree to read: its saved changes and Wake, not an error.
   const asleepCloud = useAsleepCloudWorkspace()
   if (asleepCloud) {
-    return <CloudAsleepFilesPanel workspaceId={asleepCloud.id} waking={asleepCloud.waking} />
+    return (
+      <CloudAsleepFilesPanel
+        workspaceId={asleepCloud.id}
+        waking={asleepCloud.waking}
+        archived={asleepCloud.archived}
+      />
+    )
   }
 
   return (
