@@ -169,14 +169,6 @@ async function completeOnboardingIntoHome(page: Page): Promise<void> {
   await expect(page.getByRole('dialog', { name: /Add a project/i })).toHaveCount(0)
 }
 
-// Onboarding launches the chosen agent in the fresh ~ workspace, whose first launch asks once.
-async function answerAgentFolderTrustPrompt(page: Page, repoName: string): Promise<void> {
-  const prompt = page.getByRole('dialog', { name: `Trust ${repoName} for agents?` })
-  await expect(prompt).toBeVisible({ timeout: 15_000 })
-  await prompt.getByRole('button', { name: 'Let agents ask' }).click()
-  await expect(prompt).toBeHidden()
-}
-
 async function waitForRepoLoaded(page: Page, repoPath: string): Promise<void> {
   await expect
     .poll(
@@ -462,7 +454,6 @@ test.describe('New-user golden core flow', () => {
     await expect(orcaPage.getByRole('button', { name: /Send Test Notification/i })).toBeVisible()
     await chooseNotificationSound(orcaPage)
     await completeOnboardingIntoHome(orcaPage)
-    await answerAgentFolderTrustPrompt(orcaPage, '~')
     await orcaPage.getByRole('button', { name: 'Add project', exact: true }).click()
     await expect(orcaPage.getByRole('dialog', { name: /Add a project/i })).toBeVisible()
 
