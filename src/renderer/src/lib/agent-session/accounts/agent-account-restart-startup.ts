@@ -24,6 +24,7 @@ import { resolveResumeLaunchRecipe } from '../../../../../shared/agent-launch/ch
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
 import { resolveAgentLaunchCommand } from '../../../../../shared/agent-launch/startup/tui-agent-launch-command'
+import { withOrcaCloudSessionEnv } from '@/lib/orca-cloud/cloud-restart-session-env'
 import { resolveStartupShell } from '../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 
 export type AgentAccountRestartStartup = {
@@ -131,7 +132,9 @@ export function buildPaneAccountRestartStartup(
   ) {
     return null
   }
-  return resume ?? (agent === 'codex' ? buildCodexAccountRestartStartup(args) : null)
+  const startup = resume ?? (agent === 'codex' ? buildCodexAccountRestartStartup(args) : null)
+  // Orca Cloud: refresh the shell's session env first, so a renewed account reaches the agent.
+  return startup ? withOrcaCloudSessionEnv(startup, args) : null
 }
 
 export function buildCodexAccountRestartStartup(
