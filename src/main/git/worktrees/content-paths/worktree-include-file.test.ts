@@ -57,11 +57,10 @@ describe('resolveWorktreeIncludePaths', () => {
     mkdirSync(join(repo, '.vscode'))
     mockCheckIgnore(['.env', 'config/secrets.json', '.vscode'])
 
-    await expect(resolveWorktreeIncludePaths(repo)).resolves.toEqual([
-      '.env',
-      '.vscode',
-      'config/secrets.json'
-    ])
+    await expect(resolveWorktreeIncludePaths(repo)).resolves.toEqual({
+      paths: ['.env', '.vscode', 'config/secrets.json'],
+      skipped: [{ mechanism: 'include', path: 'missing.txt', reason: 'missing' }]
+    })
   })
 
   it('drops listed paths that exist but are not gitignored', async () => {
@@ -70,7 +69,10 @@ describe('resolveWorktreeIncludePaths', () => {
     writeFileSync(join(repo, 'tracked.json'), '{}')
     mockCheckIgnore(['.env'])
 
-    await expect(resolveWorktreeIncludePaths(repo)).resolves.toEqual(['.env'])
+    await expect(resolveWorktreeIncludePaths(repo)).resolves.toEqual({
+      paths: ['.env'],
+      skipped: [{ mechanism: 'include', path: 'tracked.json', reason: 'not-gitignored' }]
+    })
   })
 
   it('skips glob and negation entries with a warning', async () => {
@@ -78,7 +80,13 @@ describe('resolveWorktreeIncludePaths', () => {
     writeFileSync(join(repo, '.env'), 'A=1')
     mockCheckIgnore(['.env'])
 
-    await expect(resolveWorktreeIncludePaths(repo)).resolves.toEqual(['.env'])
+    await expect(resolveWorktreeIncludePaths(repo)).resolves.toEqual({
+      paths: ['.env'],
+      skipped: [
+        { mechanism: 'include', path: '.env.*', reason: 'unsupported-pattern' },
+        { mechanism: 'include', path: '!.env.production', reason: 'unsupported-pattern' }
+      ]
+    })
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('unsupported'))
   })
 
@@ -87,13 +95,20 @@ describe('resolveWorktreeIncludePaths', () => {
     writeFileSync(join(repo, '.env'), 'A=1')
     mockCheckIgnore(['.env'])
 
-    await expect(resolveWorktreeIncludePaths(repo)).resolves.toEqual(['.env'])
+    await expect(resolveWorktreeIncludePaths(repo)).resolves.toEqual({
+      paths: ['.env'],
+      skipped: [
+        { mechanism: 'include', path: '../outside', reason: 'unsafe' },
+        { mechanism: 'include', path: '/etc/passwd', reason: 'unsafe' },
+        { mechanism: 'include', path: '.git/config', reason: 'unsafe' }
+      ]
+    })
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('unsafe'))
   })
 
   it('stops after 1000 entries so one repo file cannot request unbounded work', async () => {
-    const names = Array.from({ length: 1001 }, (_, index) => `ignored-${index}.env`)
-    for (const name of names) {
+    const names = Array.from({ length: 1002 }, (_, index) => `ignored-${index}.env`)
+    for (const name of names.slice(0, 1000)) {
       writeFileSync(join(repo, name), 'A=1')
     }
     writeInclude(`${names.join('\n')}\n`)
@@ -101,7 +116,12 @@ describe('resolveWorktreeIncludePaths', () => {
 
     const resolved = await resolveWorktreeIncludePaths(repo)
 
-    expect(resolved).toHaveLength(1000)
+    expect(resolved.paths).toHaveLength(1000)
+    expect(resolved.skipped).toEqual([
+      { mechanism: 'include', path: 'ignored-1000.env', reason: 'too-many-entries' },
+      { mechanism: 'include', path: 'ignored-1001.env', reason: 'too-many-entries' }
+    ])
+    expect(warn).toHaveBeenCalledTimes(1)
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('more than 1000 entries'))
   })
 })

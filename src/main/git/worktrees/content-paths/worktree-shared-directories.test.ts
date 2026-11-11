@@ -78,7 +78,10 @@ describe('resolveWorktreeSharedDirectories', () => {
     mkdirSync(join(repo, 'shared-but-tracked'))
     writeOrcaYaml('worktree:\n  sharedDirectories:\n    - shared-but-tracked\n')
 
-    expect(await resolveWorktreeSharedDirectories(repo)).toEqual([])
+    expect(await resolveWorktreeSharedDirectories(repo)).toEqual({
+      paths: [],
+      skipped: [{ mechanism: 'share', path: 'shared-but-tracked', reason: 'not-gitignored' }]
+    })
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('only gitignored directories'))
   })
 
@@ -86,8 +89,20 @@ describe('resolveWorktreeSharedDirectories', () => {
     writeFileSync(join(repo, '.cache'), 'not a dir')
     writeOrcaYaml('worktree:\n  sharedDirectories:\n    - .cache\n')
 
-    expect(await resolveWorktreeSharedDirectories(repo)).toEqual([])
+    expect(await resolveWorktreeSharedDirectories(repo)).toEqual({
+      paths: [],
+      skipped: [{ mechanism: 'share', path: '.cache', reason: 'not-directory' }]
+    })
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('must be directories'))
+  })
+
+  it('records a listed directory that is absent from the primary checkout', async () => {
+    writeOrcaYaml('worktree:\n  sharedDirectories:\n    - node_modules\n')
+
+    expect(await resolveWorktreeSharedDirectories(repo)).toEqual({
+      paths: [],
+      skipped: [{ mechanism: 'share', path: 'node_modules', reason: 'missing' }]
+    })
   })
 
   it('drops unsafe entries before touching the filesystem', async () => {
@@ -105,7 +120,10 @@ describe('resolveWorktreeSharedDirectories', () => {
       ].join('\n')
     )
 
-    expect(await resolveWorktreeSharedDirectories(repo)).toEqual(['node_modules'])
+    expect(await resolveWorktreeSharedDirectories(repo)).toEqual({
+      paths: ['node_modules'],
+      skipped: []
+    })
   })
 })
 
@@ -142,7 +160,7 @@ describe('shared directories and worktree removal', () => {
     await createWorktreeSharedPaths(
       primary,
       worktree,
-      await resolveWorktreeSharedDirectories(primary)
+      (await resolveWorktreeSharedDirectories(primary)).paths
     )
     expect(lstatSync(join(worktree, 'node_modules')).isSymbolicLink()).toBe(true)
 
@@ -163,7 +181,7 @@ describe('shared directories and worktree removal', () => {
     await createWorktreeSharedPaths(
       primary,
       worktree,
-      await resolveWorktreeSharedDirectories(primary)
+      (await resolveWorktreeSharedDirectories(primary)).paths
     )
     writeFileSync(join(worktree, 'precious.txt'), 'unsaved work')
 
@@ -194,7 +212,7 @@ describe('shared directories and worktree removal', () => {
     await createWorktreeSharedPaths(
       primary,
       worktree,
-      await resolveWorktreeSharedDirectories(primary)
+      (await resolveWorktreeSharedDirectories(primary)).paths
     )
 
     const ignoredLinkedPaths = await findExistingWorktreeSymlinkPaths(

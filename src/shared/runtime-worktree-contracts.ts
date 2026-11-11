@@ -13,13 +13,16 @@ import type { AgentChildWorkView } from './agent-status/child-work/agent-status-
 import type { AgentSubagentSnapshot } from './agent-status/contracts/agent-status-subagent-snapshot'
 import type { RuntimeTerminalInteractiveWait } from './runtime-terminal-contracts'
 import type { BaseRefSearchResult, Repo } from './repo-types'
-import type { CreateWorktreeResult, RemoveWorktreeResult } from './worktree/create-types'
+import type {
+  CreateWorktreeResult,
+  RemoveWorktreeResult,
+  WorktreeCreateWarning
+} from './worktree/create-types'
 import type {
   CrossStoreWorkspaceLineage,
   WorkspaceLineageEdge,
   WorkspaceLineage,
-  WorktreeLineage,
-  WorktreeLineageWarning
+  WorktreeLineage
 } from './worktree/lineage-types'
 import type { RuntimeListingHostScope } from './runtime-listing-host-scope'
 import type { GitWorktreeInfo, Worktree } from './worktree/types'
@@ -212,7 +215,7 @@ export type RuntimeWorktreeCreateResult = {
   lineage: WorktreeLineage | null
   workspaceLineage?: WorkspaceLineage | null
   crossStoreLineage?: CrossStoreWorkspaceLineage | null
-  warnings: WorktreeLineageWarning[]
+  warnings: WorktreeCreateWarning[]
   warning?: string
   startupTerminal?: CreateWorktreeResult['startupTerminal']
   agentTerminalHandle?: string
