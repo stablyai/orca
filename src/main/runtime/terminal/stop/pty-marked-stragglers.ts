@@ -21,10 +21,10 @@ export type StragglerDeps = {
   graceMs?: number
 }
 
-const defaultListPids = async (): Promise<number[]> =>
-  (await readdir('/proc').catch(() => [] as string[]))
-    .filter((name) => /^\d+$/.test(name))
-    .map(Number)
+const defaultListPids = async (): Promise<number[]> => {
+  const names: string[] = await readdir('/proc').catch(() => [])
+  return names.filter((name) => /^\d+$/.test(name)).map(Number)
+}
 const readOrNull = (path: string) => readFile(path, 'utf8').catch(() => null)
 
 /** /proc/<pid>/stat's pgid (field 5, after the parenthesised command that may itself contain spaces). */
