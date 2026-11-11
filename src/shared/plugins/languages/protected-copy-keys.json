@@ -457,7 +457,7 @@
     "auto.components.sidebar.CloudSshIncludeDialog.cancel",
     "auto.components.sidebar.CloudSshIncludeDialog.title",
     "auto.components.sidebar.DeleteCloudWorkspace.archiveInstead",
-    "auto.components.sidebar.DeleteCloudWorkspace.body",
+    "auto.components.sidebar.DeleteCloudWorkspace.bodyNoSnapshot",
     "auto.components.sidebar.DeleteCloudWorkspace.cancel",
     "auto.components.sidebar.DeleteCloudWorkspace.delete",
     "auto.components.sidebar.DeleteCloudWorkspace.title",

@@ -1,6 +1,7 @@
 // The delete dialog's Orca Cloud variant (DS-07): it names the sandbox and its disk, offers
 // Archive instead, and deletes an asleep sandbox without waking it or a Force step (this dialog is
 // the confirmation that its uncommitted changes go with it).
+import { ArchiveSnapshotTooltip } from '@/components/orca-cloud/ArchiveSnapshotTooltip'
 import type React from 'react'
 import { useEffect, useState } from 'react'
 import { Archive, Loader2, Trash2 } from 'lucide-react'
@@ -47,8 +48,8 @@ export function DeleteCloudWorkspaceHeader({
       </DialogTitle>
       <DialogDescription>
         {t(
-          'auto.components.sidebar.DeleteCloudWorkspace.body',
-          "Deletes the sandbox and its disk, including chats, terminals and uncommitted changes. This can't be undone. To keep a snapshot, archive it instead."
+          'auto.components.sidebar.DeleteCloudWorkspace.bodyNoSnapshot',
+          "Deletes the sandbox and its disk, including chats, terminals and uncommitted changes. This can't be undone."
         )}
       </DialogDescription>
       {/* The files live in the sandbox: name, repo and branch, and its state; no local path. */}
@@ -134,10 +135,13 @@ export function DeleteCloudWorkspaceFooter({
       >
         {t('auto.components.sidebar.DeleteCloudWorkspace.cancel', 'Cancel')}
       </Button>
-      <Button variant="outline" size="sm" onClick={onArchive} disabled={isDeleting}>
-        <Archive />
-        {t('auto.components.sidebar.DeleteCloudWorkspace.archiveInstead', 'Archive instead')}
-      </Button>
+      {/* What archive keeps, for how long, and that it costs no sandbox hours (one shared definition). */}
+      <ArchiveSnapshotTooltip>
+        <Button variant="outline" size="sm" onClick={onArchive} disabled={isDeleting}>
+          <Archive />
+          {t('auto.components.sidebar.DeleteCloudWorkspace.archiveInstead', 'Archive instead')}
+        </Button>
+      </ArchiveSnapshotTooltip>
       <Button variant="destructive" size="sm" onClick={onDelete} disabled={isDeleting}>
         {isDeleting ? <Loader2 className="animate-spin" /> : <Trash2 />}
         {t('auto.components.sidebar.DeleteCloudWorkspace.delete', 'Delete workspace')}

@@ -109,7 +109,8 @@ describe('one Orca Cloud group (JA-16)', () => {
 
 describe('isOrcaCloudSettingsSectionId', () => {
   it('is true only for the Orca Cloud group pages', async () => {
-    const { isOrcaCloudSettingsSectionId } = await import('./settings-navigation-orca-cloud-sections')
+    const { isOrcaCloudSettingsSectionId } =
+      await import('./settings-navigation-orca-cloud-sections')
     expect(isOrcaCloudSettingsSectionId('cloud-billing')).toBe(true)
     expect(isOrcaCloudSettingsSectionId('cloud-team')).toBe(true)
     expect(isOrcaCloudSettingsSectionId('orca-account')).toBe(true)
