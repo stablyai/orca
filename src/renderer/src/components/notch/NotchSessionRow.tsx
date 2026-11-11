@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { agentTypeToIconAgent } from '../../../../shared/agent-status/presentation/agent-type-icon-agent'
@@ -23,8 +24,7 @@ const LANE_STATE_FALLBACK: Record<NotchLane, string> = {
 function useElapsedLabel(stateStartedAt: number): string {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(timer)
+    return installWindowVisibilityInterval({ run: () => setNow(Date.now()), intervalMs: 1000 })
   }, [])
   return formatNotchElapsedSince(stateStartedAt, now)
 }

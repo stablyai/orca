@@ -1,7 +1,7 @@
 // Reads real notch geometry from the bundled Swift helper.
 // Everything here degrades to "no notch" rather than throwing: a missing or misbehaving helper
 // must leave the indicator on its pill presentation, never break the window.
-import { existsSync } from 'node:fs'
+import { access } from 'node:fs/promises'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { app } from 'electron'
@@ -20,7 +20,7 @@ export type ScreenNotchGeometry = {
 
 let cachedHelperPath: string | null | undefined
 
-function resolveHelperPath(): string | null {
+async function resolveHelperPath(): Promise<string | null> {
   if (cachedHelperPath !== undefined) {
     return cachedHelperPath
   }
@@ -48,8 +48,23 @@ function resolveHelperPath(): string | null {
           HELPER_EXECUTABLE
         )
       ]
-  cachedHelperPath = candidates.find((candidate) => existsSync(candidate)) ?? null
+  cachedHelperPath = null
+  for (const candidate of candidates) {
+    if (await isPresent(candidate)) {
+      cachedHelperPath = candidate
+      break
+    }
+  }
   return cachedHelperPath
+}
+
+async function isPresent(path: string): Promise<boolean> {
+  try {
+    await access(path)
+    return true
+  } catch {
+    return false
+  }
 }
 
 function isFiniteNumber(value: unknown): value is number {
@@ -116,17 +131,17 @@ let readInFlight: Promise<Map<number, ScreenNotchGeometry>> | null = null
  * a process, so it must never sit on a per-frame path.
  */
 export function readScreenGeometry(): Promise<Map<number, ScreenNotchGeometry>> {
-  const helperPath = resolveHelperPath()
-  if (!helperPath) {
-    return Promise.resolve(new Map())
-  }
   // Startup and a display-change burst can both ask at once; one run answers all of them.
   if (readInFlight) {
     return readInFlight
   }
-  readInFlight = runHelper(helperPath).finally(() => {
-    readInFlight = null
-  })
+  readInFlight = resolveHelperPath()
+    .then((helperPath) =>
+      helperPath ? runHelper(helperPath) : new Map<number, ScreenNotchGeometry>()
+    )
+    .finally(() => {
+      readInFlight = null
+    })
   return readInFlight
 }
 

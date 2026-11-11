@@ -25,11 +25,7 @@ import {
   getTypographyEntries,
   getZoomEntries
 } from './appearance-search'
-import {
-  getMenuBarIconEntries,
-  getNotchStatusEntries,
-  getSystemTrayEntries
-} from './appearance-system-presence-search'
+import * as systemPresence from './appearance-system-presence-search'
 import { SHOW_UI_LANGUAGE_SETTING, UI_LANGUAGE_CHOICES } from '@/i18n/supported-languages'
 import { useTranslate } from '@/i18n/use-translate'
 import type { UiLanguage } from '../../../../../shared/ui-language'
@@ -105,8 +101,8 @@ export function AppearanceInterfaceSection({
   const zoomInKeyCombos = useShortcutKeyComboDetails('zoom.in')
   const zoomOutKeyCombos = useShortcutKeyComboDetails('zoom.out')
   const languageEntry = getLanguageEntries()[0]
-  const menuBarIconEntry = getMenuBarIconEntries({ showMenuBarIcon: true })[0]
-  const systemTrayEntry = getSystemTrayEntries({ showSystemTray: true })[0]
+  const menuBarIconEntry = systemPresence.getMenuBarIconEntries({ showMenuBarIcon: true })[0]
+  const systemTrayEntry = systemPresence.getSystemTrayEntries({ showSystemTray: true })[0]
   const themeEntry = getThemeEntries()[0]
   const themeLabel = t('auto.components.settings.AppearancePane.932ff1fbff', 'Theme')
   const titlebarEntry = getTitlebarEntries()[0]
@@ -136,12 +132,11 @@ export function AppearanceInterfaceSection({
       disabled: true
     })
   }
+  const presence = { showSystemTray: isDesktopWindows, showMenuBarIcon: isDesktopMac }
   const advancedEntries = [
     ...getTitlebarEntries(),
     ...getReduceVisualEffectsEntries(),
-    ...getSystemTrayEntries({ showSystemTray: isDesktopWindows }),
-    ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac }),
-    ...getNotchStatusEntries({ showNotchStatus: isDesktopMac })
+    ...systemPresence.getSystemPresenceEntries({ ...presence, showNotchStatus: isDesktopMac })
   ]
   const showAdvanced = !isSearching || matchesSettingsSearch(searchQuery, advancedEntries)
   const languageTitle = t('settings.appearance.language.title', 'Language')
@@ -414,12 +409,7 @@ export function AppearanceInterfaceSection({
               </SearchableSetting>
             ) : null}
 
-            {isDesktopMac ? (
-              <NotchStatusSetting
-                enabled={settings.showNotchStatus === true}
-                updateSettings={updateSettings}
-              />
-            ) : null}
+            <NotchStatusSetting settings={settings} updateSettings={updateSettings} />
           </div>
         </AppearanceAdvancedDisclosure>
       ) : null}

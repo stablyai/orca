@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { translate } from '../../i18n/i18n'
 import { useTranslate } from '../../i18n/use-translate'
 import type { NotchLane } from '../../../../shared/notch/notch-status-summary'
@@ -18,8 +19,10 @@ function useSpinnerFrame(active: boolean): string {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       return
     }
-    const timer = setInterval(() => setIndex((value) => value + 1), SPINNER_INTERVAL_MS)
-    return () => clearInterval(timer)
+    return installWindowVisibilityInterval({
+      run: () => setIndex((value) => value + 1),
+      intervalMs: SPINNER_INTERVAL_MS
+    })
   }, [active])
   return SPINNER_FRAMES[index % SPINNER_FRAMES.length]
 }

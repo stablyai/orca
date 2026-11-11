@@ -289,6 +289,28 @@ describe('NotchStatusService', () => {
     expect(service.getSummary().counts.working).toBe(0)
   })
 
+  it('runs the stale ticker only while sessions are listed', () => {
+    const harness = makeSource([])
+    const stopTicker = vi.fn()
+    const startTicker = vi.fn(() => stopTicker)
+    const service = new NotchStatusService({
+      source: harness.source,
+      scheduleFlush: immediateFlush,
+      startStaleTicker: startTicker
+    })
+    service.start()
+    expect(startTicker).not.toHaveBeenCalled()
+
+    harness.setSnapshot([payload('t1:a', 'working')])
+    harness.emitStatus()
+    expect(startTicker).toHaveBeenCalledTimes(1)
+
+    harness.setSnapshot([])
+    harness.emitStatus()
+    expect(stopTicker).toHaveBeenCalledTimes(1)
+    service.stop()
+  })
+
   it('stops the stale ticker on stop()', () => {
     const harness = makeSource([payload('t1:a', 'working')])
     const stopTicker = vi.fn()

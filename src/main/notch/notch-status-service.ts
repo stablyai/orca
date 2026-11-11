@@ -41,10 +41,24 @@ function defaultScheduleFlush(flush: () => void): () => void {
 }
 
 function defaultStaleTicker(tick: () => void): () => void {
-  const timer = setInterval(tick, DEFAULT_STALE_TICK_MS)
-  // Why: a minute-resolution sweep must never be the reason the process stays alive.
-  timer.unref?.()
-  return () => clearInterval(timer)
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const schedule = (): void => {
+    timer = setTimeout(() => {
+      tick()
+      if (timer !== null) {
+        schedule()
+      }
+    }, DEFAULT_STALE_TICK_MS)
+    // Why: a minute-resolution sweep must never be the reason the process stays alive.
+    timer.unref?.()
+  }
+  schedule()
+  return () => {
+    if (timer !== null) {
+      clearTimeout(timer)
+      timer = null
+    }
+  }
 }
 
 export class NotchStatusService {
@@ -79,7 +93,6 @@ export class NotchStatusService {
       this.source.subscribeEnrichedStatus(() => this.requestRecompute()),
       this.source.subscribePaneStatusClear(() => this.requestRecompute())
     )
-    this.stopStaleTicker = this.startStaleTicker(() => this.recompute())
     this.recompute()
   }
 
@@ -147,6 +160,7 @@ export class NotchStatusService {
       snapshot,
       acknowledgedAtByPaneKey: this.mergeAcknowledgements()
     })
+    this.syncStaleTicker(next)
     if (summariesEqual(this.summary, next)) {
       return
     }
@@ -157,6 +171,16 @@ export class NotchStatusService {
       } catch (err) {
         console.error('[notch] summary listener threw', err)
       }
+    }
+  }
+
+  // Why: only listed sessions can go stale, so an empty bar keeps no timer running.
+  private syncStaleTicker(summary: NotchStatusSummary): void {
+    if (summary.sessions.length === 0) {
+      this.stopStaleTicker?.()
+      this.stopStaleTicker = null
+    } else if (this.started && this.stopStaleTicker === null) {
+      this.stopStaleTicker = this.startStaleTicker(() => this.recompute())
     }
   }
 

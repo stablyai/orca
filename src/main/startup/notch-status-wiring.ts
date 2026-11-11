@@ -25,7 +25,6 @@ import {
 } from '../../shared/notch/notch-snapshot'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { getWorktreePathBasenameFromId } from '../../shared/worktree/id'
-import type { GlobalSettings } from '../../shared/global-settings-types'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
 import { mainProcessState as state } from './main-process-state'
 
@@ -166,16 +165,6 @@ function installNotchQuitHandlers(): void {
     }, NOTCH_QUIT_ABORT_GRACE_MS)
     timer.unref?.()
   })
-}
-
-/** The ready foundation's settings listener forwards every update here; the store owns the mutation. */
-export function syncNotchStatusSettingUpdate(
-  updates: Partial<GlobalSettings>,
-  settings: Pick<GlobalSettings, 'showNotchStatus'>
-): void {
-  if ('showNotchStatus' in updates) {
-    syncNotchStatus(settings.showNotchStatus === true)
-  }
 }
 
 /** Installs the notch's IPC and app listeners once, after the main quit handlers. */
