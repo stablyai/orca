@@ -167,6 +167,7 @@ jobs:
           printf '%s *%s\n' "$sha256" "$(basename "$apk")" > "$apk.sha256"
 
           {
+            echo "name=$(basename "$apk")"
             echo "checksum=$apk.sha256"
             echo "bytes=$bytes"
             echo "sha256=$sha256"
@@ -221,11 +222,21 @@ jobs:
             sed '/^### Verify your download\r*$/,$d'
           }
 
-          # Truncate by characters like desktop releases and reserve the appended section inside GitHub’s cap,
+          # The APK link goes first: on a phone the asset list sits below every generated note.
+          download_section() {
+            printf '### [Download %s](%s/%s/releases/download/%s/%s)\n\n' \
+              '${{ steps.apk.outputs.name }}' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$tag" '${{ steps.apk.outputs.name }}'
+          }
+
+          drop_download_section() {
+            awk 'NR == 1 && /^### \[Download / { skip = 1; next } skip && /^\r?$/ { skip = 0; next } { skip = 0; print }'
+          }
+
+          # Truncate by characters like desktop releases and reserve the added sections inside GitHub’s cap,
           # or --clobber could replace assets before notes fail. wc -c over-reserves multibyte section text safely.
           write_notes_with_verification() {
             NOTES_FILE="$notes_file" \
-            NOTES_RESERVE="$(verification_section | wc -c | tr -d ' ')" \
+            NOTES_RESERVE="$({ download_section; verification_section; } | wc -c | tr -d ' ')" \
             NOTES_MODULE="$GITHUB_WORKSPACE/config/scripts/release/publication/create-draft-release.mjs" \
             node --input-type=module -e '
               const { readFileSync, writeFileSync } = await import("node:fs")
@@ -237,7 +248,8 @@ jobs:
               const max = MAX_RELEASE_BODY_LENGTH - Number(process.env.NOTES_RESERVE)
               writeFileSync(file, truncateReleaseBody(readFileSync(file, "utf8"), max))
             '
-            verification_section >> "$notes_file"
+            { download_section; cat "$notes_file"; verification_section; } > "$notes_file.tmp"
+            mv "$notes_file.tmp" "$notes_file"
           }
 
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
@@ -248,7 +260,7 @@ jobs:
               "${{ steps.apk.outputs.checksum }}"
             # --clobber replaced the APK; rewrite its digest so users cannot compare against obsolete bytes.
             gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json body --jq .body \
-              | drop_verification_section > "$notes_file"
+              | drop_download_section | drop_verification_section > "$notes_file"
             write_notes_with_verification
             gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --notes-file "$notes_file"
           else
