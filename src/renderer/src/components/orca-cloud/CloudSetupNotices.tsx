@@ -228,7 +228,9 @@ export function CloudSetupNoticesDock({ workspaceId }: { workspaceId: string }):
         install: () => record.repoUrl && push.startInstall(record.repoUrl),
         runSetup: (noticeId) => void runCloudSetupScript(workspaceId, record, noticeId),
         dismiss: (noticeId) => dismissCloudSetupNotice(record.environmentId, noticeId)
-      })
+      }),
+      // N-03: only over its own workspace; never over Settings or another workspace.
+      { scope: { workspaceId } }
     )
   })
   useEffect(

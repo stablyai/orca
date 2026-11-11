@@ -36,10 +36,13 @@ export function VmBuildStepRow({
   cloud,
   detail,
   timing,
+  stopped = false,
   t
 }: {
   step: VmBuildStep
   cloud: boolean
+  /** The build stopped (a failure card shows): an undecided clone/update never will be decided. */
+  stopped?: boolean
   /** The step's measured duration, when there is one. */
   timing: VmBuildStepTiming | null
   /** What the running step is doing right now, in plain words. */
@@ -55,7 +58,9 @@ export function VmBuildStepRow({
     timing?.p95Ms ?? (cloud && step.id === 'provision' ? SLOW_WITHOUT_MEASURE_MS : null)
   const slow =
     measuring && slowAfterMs !== null && step.elapsedMs !== null && step.elapsedMs > slowAfterMs
-  const modeUnknown = cloud && step.id === 'clone' && step.state === 'pending' && !step.cloneMode
+  const undecided = cloud && step.id === 'clone' && step.state === 'pending' && !step.cloneMode
+  // N-12: once the start has failed, the mode stays unknown for good: name the step neutrally.
+  const modeUnknown = undecided && !stopped
   const placeholderDue = useDelayedFlag(modeUnknown, PLACEHOLDER_DELAY_MS)
 
   return (
@@ -94,6 +99,8 @@ export function VmBuildStepRow({
                 </span>
               )}
             </>
+          ) : undecided ? (
+            t('auto.components.worktree.creation.VmBuildSheet.getRepository', 'Get repository')
           ) : (
             stepLabel(step, cloud, t)
           )}

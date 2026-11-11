@@ -15,6 +15,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store'
 
 export type CloudToastPriority = 'action' | 'warning' | 'info'
 
@@ -44,8 +45,17 @@ export type CloudToastView = {
   label?: string
 }
 
+/** A toast about one workspace shows only while that workspace is on screen (N-03). */
+export type CloudToastScope = { workspaceId: string }
+
+/** What decides visibility: the app's view and its active workspace. */
+export type CloudToastContext = { activeView: string; activeWorktreeId: string | null }
+
 type Entry = {
   view: CloudToastView
+  scope?: CloudToastScope
+  /** In sonner at least once: coming back is quiet (no re-announce, no slide-in). */
+  everShown: boolean
   /** Called when the user closes it with ×; never on an internal re-add. */
   onDismiss?: () => void
   seq: number
@@ -65,6 +75,8 @@ let sonnerOrder: string[] = []
 let seqCounter = 0
 const listeners = new Set<() => void>()
 let version = 0
+// Until the app tells us otherwise, nothing scoped is on screen; unscoped toasts show.
+let context: CloudToastContext = { activeView: 'terminal', activeWorktreeId: null }
 
 function emit(): void {
   version += 1
@@ -73,8 +85,17 @@ function emit(): void {
   }
 }
 
+/** Never over Settings or any other page; a scoped toast only in its own workspace (N-03). */
+function isVisible(entry: Entry): boolean {
+  if (context.activeView !== 'terminal') {
+    return false
+  }
+  return !entry.scope || entry.scope.workspaceId === context.activeWorktreeId
+}
+
 function desiredOrder(): string[] {
   return [...entries.entries()]
+    .filter(([, entry]) => isVisible(entry))
     .sort(([, a], [, b]) => RANK[a.view.priority] - RANK[b.view.priority] || a.seq - b.seq)
     .map(([id]) => id)
 }
@@ -104,10 +125,32 @@ function addToSonner(logicalId: string, entry: Entry, readd: boolean): void {
   }
 }
 
-/** Puts sonner's order right: everything from the first misplaced card up is re-added on top. */
+/** Takes a card out of sonner without its exit animation; its next appearance gets a fresh id. */
+function removeQuietly(logicalId: string, entry: Entry): void {
+  toast.custom(() => <span hidden />, {
+    id: entry.internalId,
+    unstyled: true,
+    className: 'cloud-toast-gone'
+  })
+  toast.dismiss(entry.internalId)
+  entry.generation += 1
+  entry.internalId = `${logicalId}#${entry.generation}`
+}
+
+/**
+ * Puts sonner right: cards that may not show (another page, another workspace) leave quietly, and
+ * everything from the first misplaced card up is re-added on top in priority order.
+ */
 function reconcile(now: number): void {
   const desired = desiredOrder()
   sonnerOrder = sonnerOrder.filter((id) => entries.has(id))
+  for (const id of sonnerOrder) {
+    const entry = entries.get(id)
+    if (entry && !desired.includes(id)) {
+      removeQuietly(id, entry)
+    }
+  }
+  sonnerOrder = sonnerOrder.filter((id) => desired.includes(id))
   let firstDiff = 0
   while (
     firstDiff < desired.length &&
@@ -121,37 +164,66 @@ function reconcile(now: number): void {
     if (!entry) {
       continue
     }
-    const wasShown = sonnerOrder.includes(id)
-    if (wasShown) {
+    if (sonnerOrder.includes(id)) {
       // Take the old card away without its exit animation, then add the new one on top.
-      toast.custom(() => <span hidden />, {
-        id: entry.internalId,
-        unstyled: true,
-        className: 'cloud-toast-gone'
-      })
-      toast.dismiss(entry.internalId)
-      entry.generation += 1
-      entry.internalId = `${id}#${entry.generation}`
+      removeQuietly(id, entry)
+    }
+    // Already seen once: it reappears in place, unannounced.
+    const returning = entry.everShown
+    if (returning) {
       entry.quietUntil = now + READD_QUIET_MS
     }
-    addToSonner(id, entry, wasShown)
+    entry.everShown = true
+    addToSonner(id, entry, returning)
   }
   sonnerOrder = desired
+}
+
+/** The app's view or active workspace changed: show and hide the scoped toasts to match. */
+export function setCloudToastContext(next: CloudToastContext, now = Date.now()): void {
+  if (
+    next.activeView === context.activeView &&
+    next.activeWorktreeId === context.activeWorktreeId
+  ) {
+    return
+  }
+  context = next
+  reconcile(now)
+  emit()
+}
+
+let contextSync: (() => void) | null = null
+
+/** Follows the app's view and active workspace once any cloud toast exists. */
+function ensureContextSync(): void {
+  if (contextSync) {
+    return
+  }
+  const read = (): CloudToastContext => {
+    const state = useAppStore.getState()
+    return { activeView: state.activeView, activeWorktreeId: state.activeWorktreeId ?? null }
+  }
+  context = read()
+  contextSync = useAppStore.subscribe(() => setCloudToastContext(read()))
 }
 
 /** Shows or updates a persistent cloud toast. Updating keeps its place and state. */
 export function showCloudToast(
   logicalId: string,
   view: CloudToastView,
-  options: { onDismiss?: () => void } = {},
+  options: { onDismiss?: () => void; scope?: CloudToastScope } = {},
   now = Date.now()
 ): void {
+  ensureContextSync()
   const existing = entries.get(logicalId)
   if (existing) {
-    const priorityChanged = existing.view.priority !== view.priority
+    const reorder =
+      existing.view.priority !== view.priority ||
+      existing.scope?.workspaceId !== options.scope?.workspaceId
     existing.view = view
     existing.onDismiss = options.onDismiss
-    if (priorityChanged) {
+    existing.scope = options.scope
+    if (reorder) {
       reconcile(now)
     }
     emit()
@@ -161,6 +233,8 @@ export function showCloudToast(
   entries.set(logicalId, {
     view,
     onDismiss: options.onDismiss,
+    ...(options.scope ? { scope: options.scope } : {}),
+    everShown: false,
     seq: seqCounter,
     internalId: `${logicalId}#0`,
     generation: 0,
@@ -177,8 +251,10 @@ export function hideCloudToast(logicalId: string): void {
     return
   }
   entries.delete(logicalId)
+  if (sonnerOrder.includes(logicalId)) {
+    toast.dismiss(entry.internalId)
+  }
   sonnerOrder = sonnerOrder.filter((id) => id !== logicalId)
-  toast.dismiss(entry.internalId)
   emit()
 }
 
@@ -203,6 +279,9 @@ export function resetCloudToasts(): void {
   entries = new Map()
   sonnerOrder = []
   seqCounter = 0
+  context = { activeView: 'terminal', activeWorktreeId: null }
+  contextSync?.()
+  contextSync = null
   emit()
 }
 

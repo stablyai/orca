@@ -15,8 +15,10 @@ vi.mock('sonner', () => ({ toast: sonner }))
 
 import {
   cloudToastInternalId,
+  hideCloudToast,
   READD_QUIET_MS,
   resetCloudToasts,
+  setCloudToastContext,
   showCloudToast,
   type CloudToastView
 } from './cloud-toast-stack'
@@ -162,5 +164,56 @@ describe('cloud toast stack (DS-q)', () => {
     expect(onDismiss).toHaveBeenCalledOnce()
     expect(sonner.dismiss).toHaveBeenCalledWith(internal)
     expect(cloudToastInternalId(AGENT)).toBeNull()
+  })
+
+  describe('workspace scope (N-03)', () => {
+    const W1 = 'w1'
+    const inWorkspace = (id: string | null) => ({ activeView: 'terminal', activeWorktreeId: id })
+
+    it("shows a workspace's notice only in that workspace, and quietly again on return", () => {
+      vi.useFakeTimers({ now: 1_000 })
+      // The stack reads the app's context on its first toast; then the user is in w1.
+      showCloudToast(PUSH, pushView, { scope: { workspaceId: W1 } }, 1_000)
+      setCloudToastContext(inWorkspace(W1), 1_000)
+      expect(sonnerStack()).toEqual([cloudToastInternalId(PUSH)])
+      const first = cloudToastInternalId(PUSH)
+
+      // Another workspace: gone from sonner (no focus or tab stops left behind).
+      setCloudToastContext(inWorkspace('w2'), 1_100)
+      expect(sonnerStack()).toEqual([])
+      expect(sonner.dismiss).toHaveBeenCalledWith(first)
+
+      // Back: shown again, under a fresh id, without a slide-in or a second announcement.
+      setCloudToastContext(inWorkspace(W1), 1_200)
+      const back = cloudToastInternalId(PUSH) ?? ''
+      expect(back).not.toBe(first)
+      expect(sonnerStack()).toEqual([back])
+      const call = sonner.custom.mock.calls.findLast(([, options]) => options.id === back)
+      expect(call?.[1].className).toBe('cloud-toast-readd')
+      const view = renderInternal(back)
+      expect(view.container.querySelector('[data-cloud-toast]')?.getAttribute('aria-hidden')).toBe(
+        'true'
+      )
+    })
+
+    it('never shows over Settings or another page, scoped or not', () => {
+      showCloudToast(PUSH, pushView, { scope: { workspaceId: W1 } }, 0)
+      showCloudToast('info', infoView, {}, 0)
+      setCloudToastContext(inWorkspace(W1), 0)
+      expect(sonnerStack()).toHaveLength(2)
+      setCloudToastContext({ activeView: 'settings', activeWorktreeId: W1 }, 1)
+      expect(sonnerStack()).toEqual([])
+      setCloudToastContext(inWorkspace(W1), 2)
+      expect(sonnerStack()).toHaveLength(2)
+    })
+
+    it('a toast closed while hidden stays closed', () => {
+      showCloudToast(PUSH, pushView, { scope: { workspaceId: W1 } }, 0)
+      setCloudToastContext(inWorkspace(W1), 0)
+      setCloudToastContext(inWorkspace('w2'), 1)
+      hideCloudToast(PUSH)
+      setCloudToastContext(inWorkspace(W1), 2)
+      expect(sonnerStack()).toEqual([])
+    })
   })
 })
