@@ -1,12 +1,13 @@
 import { Readable } from 'node:stream'
 import { afterEach, describe, expect, it } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
-import type { PipedChildProcess, PipedProcessSpec } from '@orca/process-host/process-spec'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import type { PipedProcessSpec } from '@orca/process-host/process-spec'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { createWslOrcadHostTransport, type WslOrcadHostTransport } from './wsl-orcad-host-transport'
 
 const posix = process.platform !== 'win32'
-const children: PipedChildProcess[] = []
+const children: ChildProcessWithoutNullStreams[] = []
 const transports: WslOrcadHostTransport[] = []
 
 /** Runs what follows `--exec` with the local sh, as wsl.exe would inside the distro. */

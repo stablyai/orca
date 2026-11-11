@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import './markdown-preview-search'
-import { findTextMatchRanges } from '../../../../lib/text-match-ranges'
+import { findTextMatchRanges } from '../../../../lib/text-search/text-match-ranges'
 
 afterEach(() => {
   vi.restoreAllMocks()

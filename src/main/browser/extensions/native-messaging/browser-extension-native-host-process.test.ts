@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { once } from 'node:events'
 import { build } from 'esbuild'
 import { spawnProcess } from '@orca/process-host'
-import type { PipedChildProcess } from '@orca/process-host/process-spec'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import {
   killAllNativeHosts,
@@ -160,7 +160,7 @@ describe('native host process', () => {
   it('waits for the Windows supervisor to start the host before exposing its connection', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
-    const children: PipedChildProcess[] = []
+    const children: ChildProcessWithoutNullStreams[] = []
     const messages: string[] = []
     let resolved = false
     try {

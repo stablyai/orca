@@ -11,13 +11,13 @@ import {
   type SelectedSourceControlActionRecipe
 } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'
+import type { AgentLaunchChoice } from '@/lib/agent-session/launch/routing/agent-menu-selection'
 import type { LaunchSource } from '../../../../../../shared/telemetry-property-schemas'
 import {
   normalizeSourceControlActionRecipe,

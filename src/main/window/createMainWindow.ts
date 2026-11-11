@@ -100,8 +100,9 @@ export function createMainWindow(
 
   const settings = store?.getSettings()
   browserManager.setDictationShortcutForwardingPredicate(() => {
-    // Webview guests have no safe transcript target; yield the dictation shortcut to the page.
-    return false
+    const voice = store?.getSettings().voice
+    // Chromium drops a page's key releases after a press cancelled here, so Hold can't see its release; the page keeps the key then.
+    return voice?.enabled === true && voice.dictationMode !== 'hold'
   })
   const windowMaterial = resolveWindowMaterial(
     settings,

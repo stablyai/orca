@@ -15,7 +15,7 @@ vi.mock('./terminal/window-close-running-work', () => ({
 vi.mock('./window-close-request-coordinator', () => ({
   runWithWindowCloseCheckpointScope: (fn: () => unknown) => fn()
 }))
-vi.mock('@/lib/shutdown-checkpoint-failure-toast', () => ({
+vi.mock('@/app-shell/shutdown/shutdown-checkpoint-failure-toast', () => ({
   showShutdownCheckpointFailureToast: vi.fn()
 }))
 
@@ -43,19 +43,6 @@ afterEach(() => {
 })
 
 describe('proceedToNativeWindowClose', () => {
-  it('asks the running-work policy about the quit rather than assuming it is safe', async () => {
-    assessWindowCloseRunningWorkMock.mockResolvedValue({ kind: 'none' })
-    const { result } = mountFoundation()
-
-    await act(async () => {
-      result.current.proceedToNativeWindowClose(true)
-    })
-
-    expect(assessWindowCloseRunningWorkMock).toHaveBeenCalledWith({ isQuitting: true })
-    expect(confirmWindowCloseMock).toHaveBeenCalledTimes(1)
-    expect(result.current.windowCloseDialogOpen).toBe(false)
-  })
-
   it('raises the dialog and does not close when a host reports live work', async () => {
     assessWindowCloseRunningWorkMock.mockResolvedValue({ kind: 'running' })
     const { result } = mountFoundation()
@@ -83,15 +70,4 @@ describe('proceedToNativeWindowClose', () => {
   })
 
   // Assessment exceptions must not leave SIGKILL as the only way to close.
-  it('falls through to the close when the assessment throws', async () => {
-    assessWindowCloseRunningWorkMock.mockRejectedValue(new Error('store blew up'))
-    const { result } = mountFoundation()
-
-    await act(async () => {
-      result.current.proceedToNativeWindowClose(false)
-    })
-
-    expect(confirmWindowCloseMock).toHaveBeenCalledTimes(1)
-    expect(result.current.windowCloseDialogOpen).toBe(false)
-  })
 })

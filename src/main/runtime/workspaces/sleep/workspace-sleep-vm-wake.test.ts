@@ -81,6 +81,29 @@ describe('WorkspaceSleepCoordinator VM wake', () => {
     expect(order).toEqual(['suspend:start', 'suspend:end', 'resume'])
   })
 
+  it('destroys the VM only after a wake still running for it settles', async () => {
+    const order: string[] = []
+    const resuming = gate()
+    const workspaceSleep = coordinator({
+      suspendVm: async () => {},
+      resumeVm: async () => {
+        order.push('resume:start')
+        await resuming.opened
+        order.push('resume:end')
+        return null
+      }
+    })
+
+    const woke = workspaceSleep.wakeVm(WORKTREE_ID)
+    const destroyed = workspaceSleep.destroyVm(WORKTREE_ID, async () => {
+      order.push('destroy')
+    })
+    resuming.open()
+    await Promise.all([woke, destroyed])
+
+    expect(order).toEqual(['resume:start', 'resume:end', 'destroy'])
+  })
+
   it('keeps the VM up when the workspace is opened while its suspend waits behind a wake', async () => {
     const order: string[] = []
     const resuming = gate()
@@ -105,6 +128,79 @@ describe('WorkspaceSleepCoordinator VM wake', () => {
     await Promise.all([woke, slept])
 
     expect(order).toEqual(['resume'])
+  })
+
+  it("runs the user's Suspend VM after a wake already running, and reads it as asleep meanwhile", async () => {
+    const order: string[] = []
+    const resuming = gate()
+    const workspaceSleep = coordinator({
+      suspendVm: async () => {
+        order.push('suspend')
+      },
+      resumeVm: async () => {
+        await resuming.opened
+        order.push('resume')
+        return null
+      }
+    })
+
+    const woke = workspaceSleep.wakeVm(WORKTREE_ID)
+    const suspended = workspaceSleep.suspendVm(WORKTREE_ID)
+    expect(workspaceSleep.vmState(WORKTREE_ID, false)).toBe('waking')
+    resuming.open()
+    await woke
+    expect(workspaceSleep.vmState(WORKTREE_ID, false)).toBe('asleep')
+    await suspended
+
+    expect(order).toEqual(['resume', 'suspend'])
+    expect(workspaceSleep.vmState(WORKTREE_ID, true)).toBe('asleep')
+  })
+
+  it('drops a queued Suspend VM when the workspace is opened before its turn', async () => {
+    const order: string[] = []
+    const resuming = gate()
+    const workspaceSleep = coordinator({
+      suspendVm: async () => {
+        order.push('suspend')
+      },
+      resumeVm: async () => {
+        await resuming.opened
+        order.push('resume')
+        return null
+      }
+    })
+
+    const woke = workspaceSleep.wakeVm(WORKTREE_ID)
+    const suspended = workspaceSleep.suspendVm(WORKTREE_ID)
+    workspaceSleep.noteReopened(WORKTREE_ID)
+    resuming.open()
+    await Promise.all([woke, suspended])
+
+    expect(order).toEqual(['resume'])
+  })
+
+  it('runs one suspend for a Suspend VM chosen twice before the first finishes', async () => {
+    const suspending = gate()
+    const suspendVm = vi.fn(async () => {
+      await suspending.opened
+    })
+    const workspaceSleep = coordinator({ suspendVm, resumeVm: async () => null })
+
+    const first = workspaceSleep.suspendVm(WORKTREE_ID)
+    const second = workspaceSleep.suspendVm(WORKTREE_ID)
+    suspending.open()
+    await Promise.all([first, second])
+
+    expect(suspendVm).toHaveBeenCalledTimes(1)
+  })
+
+  it('skips Suspend VM for a workspace without a VM', async () => {
+    const suspendVm = vi.fn(async () => {})
+    const workspaceSleep = coordinator({ suspendVm, resumeVm: async () => null })
+
+    await workspaceSleep.suspendVm('repo-1::/tmp/plain')
+
+    expect(suspendVm).not.toHaveBeenCalled()
   })
 
   // #36923: clients reaching the VM's server learn where it stands from its pending operations,

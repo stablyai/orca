@@ -1,12 +1,6 @@
-import { assertJsonTextStructureWithinLimits } from '../../../json-stream/json-text-structure-limit'
 import { parseClaudeModelList } from '../../../claude-model-list-probe'
 import { labelFromModelId } from '../../../model-id-label'
 import type { CommitMessageModel, ThinkingLevel } from './commit-message-agent-spec'
-
-export const COMMIT_MESSAGE_MODEL_JSON_STRUCTURE_LIMITS = {
-  structuralTokens: 64 * 1024,
-  nestingDepth: 16
-} as const
 
 export const BASIC_THINKING_LEVELS: ThinkingLevel[] = [
   { id: 'low', label: 'Low' },
@@ -95,42 +89,6 @@ export function parseClaudeModels(stdout: string): CommitMessageModel[] {
       }
     })
   )
-}
-
-export function parseCodexModels(stdout: string): CommitMessageModel[] {
-  try {
-    assertJsonTextStructureWithinLimits(stdout, COMMIT_MESSAGE_MODEL_JSON_STRUCTURE_LIMITS)
-    const parsed = JSON.parse(stdout) as {
-      models?: {
-        slug?: string
-        display_name?: string
-        supported_reasoning_levels?: { effort?: string }[]
-        default_reasoning_level?: string
-      }[]
-    }
-    return uniqueModels(
-      (parsed.models ?? [])
-        .filter((model) => model.slug && model.display_name)
-        .map((model) => ({
-          id: model.slug!,
-          label: model.display_name!,
-          ...(model.supported_reasoning_levels?.length
-            ? {
-                thinkingLevels: model.supported_reasoning_levels
-                  .map((level) => level.effort)
-                  .filter((effort): effort is string => Boolean(effort))
-                  .map((effort) => ({
-                    id: effort,
-                    label: effort === 'xhigh' ? 'Extra High' : labelFromModelId(effort)
-                  })),
-                defaultThinkingLevel: model.default_reasoning_level ?? 'low'
-              }
-            : {})
-        }))
-    )
-  } catch {
-    return []
-  }
 }
 
 export function parseLineModels(stdout: string): CommitMessageModel[] {

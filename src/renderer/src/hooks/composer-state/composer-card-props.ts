@@ -1,6 +1,6 @@
 import { resolveComposerAttachmentTarget } from './composer-attachment-target'
-import { getAttachmentLabel } from '@/lib/new-workspace'
-import { getQuickComposerCreateDisabled } from '@/lib/new-workspace-create-gates'
+import { getAttachmentLabel } from '@/lib/workspace/creation/new-workspace'
+import { getQuickComposerCreateDisabled } from '@/lib/workspace/creation/new-workspace-create-gates'
 import type { ComposerModel } from './composer-model'
 import { resolveComposerAgentRows } from './composer-agent-rows-target'
 import type { ComposerCardActionProps, ComposerCardSourceProps } from './composer-card-contract'
@@ -23,6 +23,8 @@ export function buildComposerCardProps(state: ComposerModel) {
       : undefined
   const {
     advancedOpen,
+    setupChoiceRevealRequest,
+    clearSetupChoiceReveal,
     agentPrompt,
     attachmentPaths,
     baseBranch,
@@ -103,6 +105,7 @@ export function buildComposerCardProps(state: ComposerModel) {
     selectedRepoRequiresConnection,
     sourceIntentBlocksCreate,
     sparseError,
+    selectedTargetNeedsVisibleHost,
     selectedRepoSshStatus,
     setAdvancedOpen,
     setAgentPrompt,
@@ -135,9 +138,8 @@ export function buildComposerCardProps(state: ComposerModel) {
     workspaceSeedName,
     creating,
     sourceIntentBlocksCreate,
-    requiresExplicitSetupChoice,
-    hasSetupDecision: Boolean(setupDecision),
     selectedRepoRequiresConnection,
+    selectedTargetNeedsVisibleHost,
     sparseError
   })
   const createDisabled = isProjectGroupTarget ? folderCreateDisabled : repoCreateDisabled
@@ -237,6 +239,8 @@ export function buildComposerCardProps(state: ComposerModel) {
     agentRows: resolveComposerAgentRows(state),
     onOpenAgentSettings: handleOpenAgentSettings,
     advancedOpen,
+    setupChoiceRevealRequest,
+    onSetupChoiceRevealed: clearSetupChoiceReveal,
     onToggleAdvanced: () => setAdvancedOpen((current) => !current),
     createDisabled,
     projectError: isProjectGroupTarget ? pathStatusProjectError : projectError,

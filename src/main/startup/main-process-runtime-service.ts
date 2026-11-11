@@ -1,3 +1,5 @@
+import { wireRecipeWorkspaceRemoval } from '../ephemeral-vm/recipe-workspace-removal-wiring'
+import { wireGitHubIssueLinkTitleFill } from '../github/github-issue-link-title-wiring'
 import {
   applySessionSearchSettingsChange,
   installChildSessionSearchService
@@ -34,6 +36,11 @@ import {
   resumeEphemeralVmWorkspace
 } from '../ephemeral-vm/workspace-resume'
 import { registerRecipeVmWaker } from '../runtime/workspaces/sleep/recipe-vm-waker-registry'
+import { setSshHostAsleepCheck } from '../ssh/connection/ssh-host-sleep-hold'
+import {
+  isRecipeVmSshTargetAsleep,
+  setRecipeVmAsleepStoreRoot
+} from '../ephemeral-vm/recipe-vm-asleep'
 import { openRecipeVmEnvironment } from '../ipc/runtime-environments/runtime-environment-recipe-vm-wake'
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { findWorkspaceEphemeralVmRuntime } from '../../shared/ephemeral-vm-workspace-runtime'
@@ -152,6 +159,10 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   startAgentStateRulesLiveUpdates(store, (rules) =>
     recordDurableCrashBreadcrumb('agent_state_rules_active', rules)
   )
+  wireRecipeWorkspaceRemoval(runtime, store, () => app.getPath('userData'))
+  // Each host titles its own workspaces' untitled GitHub issue links once, when they are linked.
+  const disposeIssueLinkTitleFill = wireGitHubIssueLinkTitleFill(store, runtime)
+  app.once('will-quit', disposeIssueLinkTitleFill)
   state.runtime = runtime
   // Opening a recipe VM's workspace from a client wakes the VM through the runtime's one owner.
   registerRecipeVmWaker({
@@ -164,6 +175,9 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
       return openRecipeVmEnvironment(root, resolveEnvironment(root, selector))
     }
   })
+  // A sleeping VM's SSH host takes no background login until its workspace wakes (#36363).
+  setRecipeVmAsleepStoreRoot(getRuntimeEnvironmentRegistryRoot)
+  setSshHostAsleepCheck((targetId) => isRecipeVmSshTargetAsleep(app.getPath('userData'), targetId))
   runtime.attachAgentStatusStore(agentHookServer)
   agentHookServer.subscribeEnrichedStatus((enriched) =>
     recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched, runtime)

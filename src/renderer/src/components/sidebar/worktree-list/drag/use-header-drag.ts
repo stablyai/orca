@@ -2,7 +2,8 @@ import { enqueueRootProjectOrderForSidebarDrop } from './root-project-order-comm
 import { useCallback, useEffect, useMemo } from 'react'
 import type React from 'react'
 import { useAppStore } from '@/store'
-import { getProjectGroupHostId } from '@/store/project-groups/project-group-owner-routing'
+import '@/store/project-groups/project-group-owner-routing'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
 import type { Repo } from '../../../../../../shared/repo-types'
@@ -24,7 +25,10 @@ import { getSidebarOrderedRepoHeaderIdsByBucket } from './project-header-drop'
 import { useProjectGroupHeaderDrag } from './project-group-header-drag'
 import { getSidebarOrderedProjectGroupHeaderIdsByBucket } from './project-group-header-drop'
 import { USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS } from '../viewport/use-scroll-suppression'
-import { getSidebarRootProjectHeaderKeys } from './root-project-header-drop'
+import {
+  getRootProjectHeaderCountByOccurrenceKey,
+  getSidebarRootProjectHeaderKeys
+} from './root-project-header-drop'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 
@@ -105,11 +109,15 @@ export function useWorktreeSidebarHeaderDrag(args: {
     () => new Map(projectGroups.map((group) => [group.id, group])),
     [projectGroups]
   )
+  const rootProjectHeaderCountByOccurrenceKey = useMemo(
+    () => getRootProjectHeaderCountByOccurrenceKey(rootProjectHeaderKeys),
+    [rootProjectHeaderKeys]
+  )
   // Why: an id shared by two hosts has no single owner, so leave it unrouted rather than guess.
   const projectGroupOwnerHostIdByGroupId = useMemo(() => {
     const byGroupId = new Map<string, ExecutionHostId | null>()
     for (const group of projectGroups) {
-      const hostId = getProjectGroupHostId(group)
+      const hostId = getRepoExecutionHostId(group)
       const existing = byGroupId.get(group.id)
       byGroupId.set(group.id, existing === undefined || existing === hostId ? hostId : null)
     }
@@ -259,11 +267,15 @@ export function useWorktreeSidebarHeaderDrag(args: {
   )
 
   const rootProjectHeaderSectionEndByKey = useMemo(
-    () => getRootProjectHeaderSectionEndByKey(renderRows, firstHeaderIndex),
-    [renderRows, firstHeaderIndex]
+    () =>
+      hasProjectGroups
+        ? getRootProjectHeaderSectionEndByKey(renderRows, firstHeaderIndex)
+        : new Map<string, number>(),
+    [hasProjectGroups, renderRows, firstHeaderIndex]
   )
 
   return {
+    rootProjectHeaderCountByOccurrenceKey,
     rootProjectHeaderSectionEndByKey,
     canReorderRepoHeaders,
     canReorderProjectGroupHeaders,

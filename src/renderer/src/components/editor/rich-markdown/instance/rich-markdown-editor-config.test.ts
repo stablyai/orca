@@ -71,7 +71,7 @@ function createConfigParams(overrides: Partial<EditorConfigParams> = {}): Editor
     cancelAutoFocusRef: ref(null),
     fileId: 'file-a',
     serializeTimerRef: ref(null),
-    pendingEditEpochRef: ref(0),
+    pendingEditGenerationRef: ref({ discarded: false }),
     isInitializingRef: ref(false),
     isApplyingProgrammaticUpdateRef: ref(false),
     markdownCommentsRef: ref([]),

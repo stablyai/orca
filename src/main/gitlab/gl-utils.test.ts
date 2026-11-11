@@ -138,6 +138,36 @@ describe('gitlab project ref resolution', () => {
     expect((await getIssueProjectRef('/repo'))?.path).toBe('team/recovered')
     expect(gitRemoteGetUrlCalls('upstream')).toHaveLength(2)
   })
+
+  // `glab auth status --hostname <host>` output (glab 1.102) for a host with a stray config entry.
+  function rejectHostnameProbeWithStatusBlock(host: string): void {
+    glabExecFileAsyncMock.mockRejectedValue(
+      Object.assign(new Error('glab auth status failed'), {
+        stdout: '',
+        stderr: [
+          host,
+          `  x ${host}: API call failed: 404 Not Found`,
+          '  ✓ Token found: **************************'
+        ].join('\n')
+      })
+    )
+  }
+
+  it.each([
+    ['https://github.com/owner/repo.git', 'github.com'],
+    ['git@bitbucket.org:owner/repo.git', 'bitbucket.org']
+  ])('does not claim %s from a stray glab %s host entry', async (url, host) => {
+    mockGitRemoteCommands({ origin: url })
+    rejectHostnameProbeWithStatusBlock(host)
+
+    await expect(getProjectRef('/repo')).resolves.toBeNull()
+  })
+
+  it('does not claim a github.com remote listed in the glab known-host inventory', async () => {
+    mockGitRemoteCommands({ origin: 'git@github.com:owner/repo.git' })
+
+    await expect(getProjectRef('/repo', ['gitlab.com', 'github.com'])).resolves.toBeNull()
+  })
 })
 
 describe('GitLab operation admission', () => {

@@ -141,21 +141,25 @@ export function useNativeChatStructuredComposerTransport(args: {
               ...request
             )
         ),
-      dispatchCommand: (text: string) =>
-        dispatchStructuredAgentSessionComposerCommand(text, {
-          agent: props.agent,
-          snapshot: controller.optionSnapshot,
-          invokeAction: async (id) => {
-            setOptionPickerRequest({ id, consume: () => setOptionPickerRequest(null) })
-            return true
+      dispatchCommand: (text: string, onSent?: () => void) =>
+        dispatchStructuredAgentSessionComposerCommand(
+          text,
+          {
+            agent: props.agent,
+            snapshot: controller.optionSnapshot,
+            invokeAction: async (id) => {
+              setOptionPickerRequest({ id, consume: () => setOptionPickerRequest(null) })
+              return true
+            },
+            setOption: controller.setStructuredOption,
+            sessionCommands: controller.sessionCommands,
+            conversationCommands: controller.conversationCommands,
+            compactInstructions: controller.compactInstructions,
+            runConversationCommand: controller.runConversationCommand,
+            ...(changeThreadGoal ? { changeThreadGoal } : {})
           },
-          setOption: controller.setStructuredOption,
-          sessionCommands: controller.sessionCommands,
-          conversationCommands: controller.conversationCommands,
-          compactInstructions: controller.compactInstructions,
-          runConversationCommand: controller.runConversationCommand,
-          ...(changeThreadGoal ? { changeThreadGoal } : {})
-        }).then(localizeStructuredComposerOutcome),
+          onSent
+        ).then(localizeStructuredComposerOutcome),
       ...(changeThreadGoal
         ? {
             threadGoal: {

@@ -15,9 +15,7 @@ export type RepoActionRecipe = NonNullable<
 function completeRepoActionRecipe(
   recipe: SourceControlActionRecipe,
   actionId: SourceControlActionId
-): NonNullable<
-  NonNullable<RepoSourceControlAiOverrides['actionOverrides']>[SourceControlActionId]
-> {
+): RepoActionRecipe {
   if (recipe.argumentChoices && recipe.argumentChoices.syntaxAgent !== recipe.agentId) {
     recipe = demoteActionArgumentChoices(recipe)
   }

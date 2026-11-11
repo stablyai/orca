@@ -4,7 +4,7 @@ import { ArrowRight, ExternalLink, MoveRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Badge } from '@/components/ui/badge'
 import {
   DropdownMenu,
@@ -15,8 +15,8 @@ import {
 import {
   readJiraBoardIssueDragData,
   writeJiraBoardIssueDragData
-} from '@/lib/jira-board-drag-payload'
-import type { JiraBoardIssueDragRef } from '@/lib/jira-board-drag-payload'
+} from '@/lib/work-items/jira/jira-board-drag-payload'
+import type { JiraBoardIssueDragRef } from '@/lib/work-items/jira/jira-board-drag-payload'
 import type { JiraIssue, JiraProjectStatusOrder } from '../../../../../shared/jira/jira-types'
 import {
   buildJiraBoardSections,

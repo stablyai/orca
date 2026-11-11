@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import {
   APP_MENU_SELECTION_ACTION_EVENT,
   type AppMenuSelectionAction
-} from '@/lib/app-menu-selection-actions'
+} from '@/lib/app-commands/app-menu-selection-actions'
 
 export function useNativeChatComposerAppMenuSelection(isComposingOverride?: () => boolean) {
   const textareaRef = useRef<NativeChatComposerInput>(null)

@@ -17,6 +17,7 @@ import type {
 } from './linear-project-nodes'
 import { mapIssueForWorkspace, normalizeConcreteWorkspaceId } from './linear-project-models'
 import { readConcreteCollection } from './linear-project-collection-read'
+import { linearConnectionHasNextPage } from './issue-context/pagination'
 
 export async function readIssueConnectionPages(
   entry: LinearClientForWorkspace,
@@ -36,7 +37,7 @@ export async function readIssueConnectionPages(
     const connection = await loadConnection(after ? { first, after } : { first })
     const nodes = connection?.nodes ?? []
     items.push(...nodes.map((issue) => mapIssueForWorkspace(entry, issue)))
-    hasMore = Boolean(connection?.pageInfo?.hasNextPage)
+    hasMore = linearConnectionHasNextPage(connection)
 
     const nextCursor = connection?.pageInfo?.endCursor ?? undefined
     if (!hasMore || !nextCursor || nextCursor === after || nodes.length === 0) {

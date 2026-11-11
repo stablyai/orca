@@ -7,7 +7,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import type { TerminalController } from '../../../use-terminal-controller'
 import { TerminalLegacyEditorSurface } from '../../../TerminalLegacyEditorSurface'
-import { editorModelRegistry } from '@/lib/editor-model-registry'
+import { editorModelRegistry } from '@/lib/editor/monaco/editor-model-registry'
 import { useClosedEditorTabCleanup } from './useClosedEditorTabCleanup'
 import {
   createModelLifetimeFixture,

@@ -8,10 +8,8 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import {
-  SettingsSegmentedControl,
-  SettingsSwitch
-} from '../settings/form-controls/SettingsFormControls'
+import { SettingsSegmentedControl } from '../settings/form-controls/SettingsFormControls'
+import { Switch } from '@/components/ui/switch'
 import type { AgentDashboardMode } from '../../../../shared/ui-chrome-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { canOpenAgentDashboardPopout } from './agent-dashboard-open-mode'
@@ -124,14 +122,14 @@ export function AgentDashboardSettingsMenu({
               )}
             </span>
           </span>
-          <SettingsSwitch
+          <Switch
             checked={showIdle}
-            onChange={() => {
+            onCheckedChange={() => {
               void updateSettings({
                 experimentalAgentDashboardShowIdle: !showIdle
               })
             }}
-            ariaLabel={t('dashboardPopout.settings.showIdle', 'Show idle agents')}
+            aria-label={t('dashboardPopout.settings.showIdle', 'Show idle agents')}
           />
         </div>
       </DropdownMenuContent>

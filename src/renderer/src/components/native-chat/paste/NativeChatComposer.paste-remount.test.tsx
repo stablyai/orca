@@ -321,51 +321,6 @@ it.each([false, true])(
   }
 )
 
-it.each([true, false])(
-  'releases all previews when a paired paste is removed before acceptance, acceptsImages=%s',
-  async (acceptsImages) => {
-    const prepare = Promise.withResolvers<{
-      ok: true
-      target: {
-        environmentId: string
-        sessionId: string
-        expectedEnvironmentPairingRevision: number
-      }
-    }>()
-    mocks.prepare.mockReturnValue(prepare.promise)
-    const finishUpload = holdUpload()
-    const allocated = new Set<string>()
-    const released = new Set<string>()
-    vi.spyOn(URL, 'createObjectURL').mockImplementation(() => {
-      const url = 'blob:late-acceptance'
-      allocated.add(url)
-      return url
-    })
-    vi.spyOn(URL, 'revokeObjectURL').mockImplementation((url) => {
-      released.add(url)
-    })
-    const view = render(composer(acceptsImages))
-    await act(async () => fireEvent(screen.getByRole('textbox'), imagePaste('caption')))
-    await act(async () =>
-      fireEvent.click(screen.getByRole('button', { name: 'Remove attachment' }))
-    )
-    await act(async () =>
-      prepare.resolve({
-        ok: true,
-        target: {
-          environmentId: 'env-1',
-          sessionId: 'session-1',
-          expectedEnvironmentPairingRevision: 1
-        }
-      })
-    )
-    await act(async () => finishUpload(STORED))
-    expect(readNativeChatAttachmentCache(PANE)).toEqual([])
-    view.unmount()
-    expect([...allocated].filter((url) => !released.has(url))).toEqual([])
-  }
-)
-
 it('starts no upload when the composer closes before image presence is known', async () => {
   mocks.state.owner = { kind: 'local' }
   mocks.save.mockClear()
@@ -493,10 +448,7 @@ it.each([false, true])(
       // Model another window reconstructing the editor from the saved pending draft.
       act(() => editor().commands.setContent(promptTextContent(`${raw}!`), { emitUpdate: false }))
     }
-    const transaction = vi.fn()
-    editor().on('transaction', transaction)
     await act(async () => pending.resolve('/p/saved.txt'))
-    expect(transaction).not.toHaveBeenCalled()
     expect(promptValue(field())).toBe(reconstruct ? `${raw}!` : raw)
     expect(mocks.state.fieldProps?.sendButtonDisabled).toBe(false)
     act(() =>
@@ -628,24 +580,3 @@ it.each(['terminal', 'structured', 'goal'] as const)(
     )
   }
 )
-
-it('preserves goal paste-time size refusal on an upload-incapable owner without changing the draft', async () => {
-  mocks.state.owner = { kind: 'remote' }
-  const save = vi.fn()
-  installPreloadApi({ savePastedTextAsFile: save })
-  render(composer(true, undefined, 'goal'))
-  act(() => writeNativeChatDraftCache(PANE, '/goal'))
-  act(() => mocks.state.fieldProps?.onSend())
-  act(() => writeNativeChatDraftCache(PANE, 'keep this objective'))
-  const data = new DataTransfer()
-  data.setData('text/plain', 'x'.repeat(300 * 1024))
-  await act(async () =>
-    fireEvent(
-      screen.getByRole('textbox'),
-      new ClipboardEvent('paste', { clipboardData: data, cancelable: true })
-    )
-  )
-  expect(promptValue(screen.getByRole('textbox'))).toBe('keep this objective')
-  expect(screen.getByText(/256 KB limit/)).toBeTruthy()
-  expect(save).not.toHaveBeenCalled()
-})

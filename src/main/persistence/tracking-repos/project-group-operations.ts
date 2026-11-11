@@ -1,5 +1,9 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { ProjectGroup, ProjectGroupUpdate } from '../../../shared/project-group-types'
+import type {
+  ProjectGroup,
+  ProjectGroupMutation,
+  ProjectGroupUpdate
+} from '../../../shared/project-group-types'
 import {
   createProjectGroup,
   getProjectGroupSubtreeIds,
@@ -73,6 +77,28 @@ export class ProjectGroupPersistenceOperations {
     if (!group) {
       return null
     }
+    this.applyGroupUpdate(group, updates)
+    this.scheduleSave()
+    return group
+  }
+
+  updateProjectGroups(mutations: readonly ProjectGroupMutation[]): ProjectGroup[] | null {
+    const byId = new Map((this.state.projectGroups ?? []).map((group) => [group.id, group]))
+    if (mutations.some(({ groupId }) => !byId.has(groupId))) {
+      return null
+    }
+    const updated = mutations.map(({ groupId, updates }) => {
+      const group = byId.get(groupId)!
+      this.applyGroupUpdate(group, updates)
+      return group
+    })
+    if (updated.length > 0) {
+      this.scheduleSave()
+    }
+    return updated
+  }
+
+  private applyGroupUpdate(group: ProjectGroup, updates: ProjectGroupUpdate): void {
     if (updates.name !== undefined) {
       group.name = normalizeProjectGroupName(updates.name, group.name)
     }
@@ -94,8 +120,6 @@ export class ProjectGroupPersistenceOperations {
       group.color = typeof updates.color === 'string' ? updates.color : null
     }
     group.updatedAt = Date.now()
-    this.scheduleSave()
-    return group
   }
 
   deleteProjectGroup(groupId: string): boolean {

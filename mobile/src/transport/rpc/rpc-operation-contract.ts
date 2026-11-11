@@ -2,8 +2,6 @@ import type { RpcAcceptedResult } from './rpc-accepted-result'
 import type { RpcMethodName } from '../../../../src/shared/rpc-contract/rpc-params-catalog.generated'
 import type { RpcFailure, RpcResponse, RpcSuccess } from './rpc-wire-types'
 
-export type { RpcAcceptedResult }
-
 // Fix method, acceptance and interpretation barrier per family so callers cannot drift in decoding or settlement order.
 
 export type RpcAcceptanceName =

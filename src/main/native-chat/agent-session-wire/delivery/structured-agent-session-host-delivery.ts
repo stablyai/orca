@@ -87,6 +87,8 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   >
 }): StructuredAgentSessionConversationDelivery {
   const { deps, sessions } = input
+  const captureTitleSourceUnavailable = (sessionId: string, journal: AgentSessionJournal) =>
+    deps.conversationNaming?.captureTitleSourceUnavailable?.(sessionId, journal)
   const retainedWork = (sessionId: string, continuingId?: string) => ({
     currentWork: () =>
       hostStructuredAgentSessionCurrentWork({ store: deps.store, sessions }, sessionId),
@@ -101,6 +103,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
       [...(sessions.get(sessionId)?.child?.heldSends?.() ?? [])].some((id) => id !== continuingId)
   })
   const loop = new StructuredAgentSessionDeliveryLoop({
+    captureTitleSourceUnavailable,
     sessions,
     adapter: deps.adapter,
     agents: deps.agents,
@@ -239,13 +242,19 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   const wakesQueued = new Set<string>()
   const afterCommit = (sessionId: string, journal: AgentSessionJournal): void => {
     input.deliveryOrder.reconcile(sessionId, journal)
+    if (wakesQueued.has(sessionId)) {
+      return
+    }
+    const sourceUnavailable = captureTitleSourceUnavailable(sessionId, journal)
     const work = hostStructuredAgentSessionCurrentWork({ store: deps.store, sessions }, sessionId)
     if (
-      wakesQueued.has(sessionId) ||
       !work ||
       structuredAgentSessionCommandRunning(work) ||
       !selectableStructuredSubmission(journal, work)
     ) {
+      if (!loop.isRunning(sessionId)) {
+        sourceUnavailable?.()
+      }
       return
     }
     wakesQueued.add(sessionId)
@@ -256,6 +265,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
       })
       .catch((error: unknown) => {
         wakesQueued.delete(sessionId)
+        sourceUnavailable?.()
         deps.logger.warn('waking the delivery loop after a commit failed', {
           scope: 'delivery-wake',
           sessionId,

@@ -12,7 +12,7 @@ import {
   parseOpenCodeModelListing
 } from '../../opencode/opencode-model-catalog-listing'
 
-import { agentSessionSignInFor } from '../../../shared/agent-session/lifecycle/agent-session-sign-in'
+import { agentSessionSetupFor } from '../../../shared/agent-session/lifecycle/agent-session-setup-commands'
 import {
   loadGrokVisualsSkill,
   loadOmpVisualsSkill,
@@ -41,7 +41,7 @@ const GROK_LAUNCH_SPEC: AcpLaunchSpec = {
   env: {},
   dialect: GROK_ACP_DIALECT,
   historyCatchUp: 'prompt-id',
-  loginCommand: agentSessionSignInFor('grok')?.loginCommand ?? [],
+  loginCommand: agentSessionSetupFor('grok')?.loginCommand ?? [],
   // Prefer the launch environment's API key, then cached sign-in; never prompt interactively.
   authMethod: ({ advertised, env }) =>
     env.XAI_API_KEY?.trim() && advertised.includes('xai.api_key')
@@ -79,7 +79,7 @@ function openCodeLaunchSpec(
     scrubEnvironment: scrubOpenCodeAcpEnvironment,
     dialect: OPENCODE_ACP_DIALECT,
     historyCatchUp: 'user-message-id',
-    loginCommand: agentSessionSignInFor(row.agent)?.loginCommand ?? [],
+    loginCommand: agentSessionSetupFor(row.agent)?.loginCommand ?? [],
     account: openCodeAcpAccountBinding(),
     installDirectories: ({ homePath }) => [join(homePath, '.opencode', 'bin')],
     visualsSkill: loadOpenCodeVisualsSkill,
@@ -129,7 +129,7 @@ const OMP_LAUNCH_SPEC: AcpLaunchSpec = {
   // overlay ACP cannot draw and fail; OMP's own headless modes set this too.
   env: { PI_NO_PTY: '1' },
   dialect: OMP_ACP_DIALECT,
-  loginCommand: agentSessionSignInFor('omp')?.loginCommand ?? [],
+  loginCommand: agentSessionSetupFor('omp')?.loginCommand ?? [],
   account: directoryAccountBinding('PI_CODING_AGENT_DIR', (homePath) =>
     join(homePath, '.omp', 'agent')
   ),

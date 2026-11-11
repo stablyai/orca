@@ -14,7 +14,7 @@ import { useConfirmationDialog } from '../../../confirmation-dialog-context'
 import { describeUnsupportedBrowserExtensionFeatures } from '../../../browser-extension-permission-messages'
 import { browserExtensionRemovalDescription } from '../../../browser-extension-removal-description'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import { SettingsSwitch } from '../../form-controls/SettingsFormControls'
+import { Switch } from '@/components/ui/switch'
 import { getBrowserExtensionsSearchEntry } from './browser-extensions-search'
 import { BrowserExtensionsWebStoreInstall } from './BrowserExtensionsWebStoreInstall'
 
@@ -88,13 +88,13 @@ function ExtensionRow({
             {t('settings.browser.extensions.options', 'Options')}
           </Button>
         ) : null}
-        <SettingsSwitch
+        <Switch
           checked={extension.enabled}
           disabled={busy}
-          ariaLabel={t('settings.browser.extensions.toggleLabel', 'Turn {{name}} on or off', {
+          aria-label={t('settings.browser.extensions.toggleLabel', 'Turn {{name}} on or off', {
             name: extension.name
           })}
-          onChange={onToggle}
+          onCheckedChange={onToggle}
         />
         {extension.source === 'unpacked' ? (
           <Tooltip>

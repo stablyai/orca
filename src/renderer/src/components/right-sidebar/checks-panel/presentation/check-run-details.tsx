@@ -2,7 +2,7 @@ import React from 'react'
 import { LoaderCircle, PanelRight, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store/index'
 import type { GitLabProjectRef } from '../../../../../../shared/gitlab-types'
 import type { PRCheckDetail } from '../../../../../../shared/github/check-types'
@@ -12,15 +12,16 @@ import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { checkJobIdentities } from '@/components/editor/check-details/reading/check-details-reading-cache'
 import { resolveStepOutcome } from '../../../../../../shared/source-control/checks/pr-check-step-status'
 import {
+  getCheckStatusLabel,
+  isGitLabAllowedFailureJob
+} from '@/components/github/pr-check-presentation'
+import {
   type CheckDetailsLoadState,
   type CheckDetailsStickySurface,
   formatCheckTimestamp,
   getCheckDetailsStickySurfaceClass
 } from './check-details-model'
-import {
-  getCheckConclusion,
-  getCheckStatusLabel
-} from '../../../../../../shared/source-control/checks/pr-check-status-label'
+import { getCheckConclusion } from '../../../../../../shared/source-control/checks/pr-check-status-label'
 
 function ViewFullCheckDetailsButton({
   onClick,
@@ -129,7 +130,7 @@ export function CheckRunDetails({
           <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-2xs text-muted-foreground">
             <span>
               {t('auto.components.right.sidebar.checks.panel.content.a54ae21c6f', 'Status:')}{' '}
-              {details ? getCheckStatusLabel(detailsStatusCheck) : getCheckStatusLabel(check)}
+              {getCheckStatusLabel(detailsStatusCheck, t)}
             </span>
             {startedAt && (
               <span>
@@ -202,12 +203,14 @@ export function CheckRunDetails({
                             {job.name}
                           </span>
                           <span className="shrink-0 text-2xs text-muted-foreground">
-                            {job.conclusion ??
-                              job.status ??
-                              t(
-                                'auto.components.right.sidebar.checks.panel.content.ee07b33924',
-                                'unknown'
-                              )}
+                            {isGitLabAllowedFailureJob(check, job)
+                              ? getCheckStatusLabel(check, t)
+                              : (job.conclusion ??
+                                job.status ??
+                                t(
+                                  'auto.components.right.sidebar.checks.panel.content.ee07b33924',
+                                  'unknown'
+                                ))}
                           </span>
                         </div>
                         {job.steps.length > 0 && (

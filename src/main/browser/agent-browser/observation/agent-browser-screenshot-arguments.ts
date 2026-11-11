@@ -6,7 +6,7 @@ import { z } from 'zod'
 import type {
   BrowserScreenshotAnnotation,
   BrowserScreenshotResult
-} from '../../../../shared/runtime-browser-contracts'
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../../browser-error'
 
 const Annotation: z.ZodType<BrowserScreenshotAnnotation> = z.object({

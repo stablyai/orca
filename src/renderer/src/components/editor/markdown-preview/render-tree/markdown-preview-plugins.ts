@@ -11,8 +11,8 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import { remarkMarkdownDocLinks } from '../../markdown/documents/markdown-doc-links'
 import { GITHUB_CALLOUT_SANITIZE_ATTRIBUTE } from '../../../../../../shared/github/github-callouts'
-import { remarkGitHubCallouts } from '@/lib/remark-github-callouts'
-import { remarkAutolinkLiteralProseBoundary } from '@/lib/remark-autolink-literal-prose-boundary'
+import { remarkGitHubCallouts } from '@/lib/markdown/remark-github-callouts'
+import { remarkAutolinkLiteralProseBoundary } from '@/lib/markdown/remark-autolink-literal-prose-boundary'
 
 const markdownPreviewSanitizeSchema = {
   ...defaultSchema,

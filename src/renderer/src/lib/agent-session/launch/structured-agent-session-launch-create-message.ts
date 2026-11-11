@@ -56,7 +56,7 @@ export function prepareStructuredLaunchCreateMessage(
   if (intent.createMessageSupport !== true) {
     prepareLegacyStructuredLaunchPrompts(intent.sessionId)
     intent.createPrepared = true
-    notifyStructuredLaunchListeners()
+    notifyStructuredLaunchListeners(intent.sessionId)
     return
   }
   const hadPrompt = hasStagedStructuredLaunchPrompt(intent.sessionId)
@@ -94,7 +94,7 @@ export function prepareStructuredLaunchCreateMessage(
     }
   }
   intent.createPrepared = true
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchListeners(intent.sessionId)
 }
 
 /** Hosts before options-mode may refuse an action's mode (older permission tables): the chat takes

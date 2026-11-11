@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import { editorViewPlacement } from '@/store/slices/editor/tabs/editor-view-placement'
-import { detectLanguage } from '@/lib/language-detect'
+import { detectLanguage } from '../../../../shared/editor-language/editor-language-detect'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { getEditorPanelRenderModel } from './editor-panel-render-model'
 

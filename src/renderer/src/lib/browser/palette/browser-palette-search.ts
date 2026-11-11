@@ -1,4 +1,5 @@
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
+import '../../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard-text'
@@ -13,7 +14,7 @@ import { buildPaletteTabDocument } from '../../../../../shared/palette-match/tab
 import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
-} from '../../worktree-default-display-name'
+} from '../../workspace/display/worktree-default-display-name'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { MatchRange } from '../../../../../shared/palette-match/normalized-text'
 import type {

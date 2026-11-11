@@ -1,7 +1,7 @@
 import { resolvePaneTitleDecision } from '../../titles/terminal-title-evidence'
 import { useAppStore } from '@/store'
 import { shouldSeedCacheTimerOnInitialTitle } from '../../titles/cache-timer-seeding'
-import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
+import { resolveExplicitTerminalTitleAgentType } from '../../../../../../shared/agent-status/title/terminal-title-agent-type'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 export function installPaneTitleObservation(session: ConnectPanePtySession): void {
@@ -10,7 +10,7 @@ export function installPaneTitleObservation(session: ConnectPanePtySession): voi
     rawTitle: string,
     meta?: { staleWorkingTitleClear?: boolean }
   ): void => {
-    if (!meta?.staleWorkingTitleClear && resolveCommittedTitleAgentType(rawTitle)) {
+    if (!meta?.staleWorkingTitleClear && resolveExplicitTerminalTitleAgentType(rawTitle)) {
       session.paneForegroundAgentTracker.onAgentStartupObserved()
     }
     // Share owner-aware display/title/completion/GPU decisions so raw title text cannot override stronger pane identity (#7428/#7447).

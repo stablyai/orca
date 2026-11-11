@@ -1,13 +1,13 @@
 import React from 'react'
 import { ChevronDown, CircleDashed } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   CHECK_COLOR,
-  CHECK_ICON
+  CHECK_ICON,
+  checkPresentationKey
 } from '@/components/right-sidebar/checks-panel/presentation/check-presentation'
 import type { CheckDetailsLoadState } from '@/components/github-checks-tab-state'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
-import { getCheckConclusion } from '@/components/pr-check-counts'
 import { getCheckDetailsKey, getCheckStatusLabel } from '@/components/github/pr-check-presentation'
 import { ChecksTabCheckDetails } from './checks-tab-check-details'
 import { useTranslate } from '@/i18n/use-translate'
@@ -57,7 +57,7 @@ export function ChecksTabCheckRow({
   onRetry: (check: PRCheckDetail, key: string) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const conclusion = getCheckConclusion(check)
+  const conclusion = checkPresentationKey(check)
   const Icon = CHECK_ICON[conclusion] ?? CircleDashed
   const color = CHECK_COLOR[conclusion] ?? 'text-muted-foreground'
   const statusLabel = getCheckStatusLabel(check, t)

@@ -38,7 +38,7 @@ export function trackStructuredLaunchPromptOutcome(
       state.visibilityUnknown = true
       group.outcome = 'unknown'
     }
-    notifyStructuredLaunchListeners()
+    notifyStructuredLaunchListeners(state.intent.sessionId)
   })
 }
 
@@ -61,7 +61,7 @@ export function trackStructuredLaunchConfirmationDeadline(
     }
     state.visibilityUnknown = true
     state.callers.outcome = 'unknown'
-    notifyStructuredLaunchListeners()
+    notifyStructuredLaunchListeners(state.intent.sessionId)
   }, STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS)
   const clear = (): void => clearTimeout(deadline)
   void promise.then(clear, clear)

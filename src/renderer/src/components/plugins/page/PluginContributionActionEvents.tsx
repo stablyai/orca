@@ -35,6 +35,11 @@ function eventTitle(event: PluginEventName, t: Translate = translate): string {
         'auto.components.settings.PluginContributionActionEvents.workspaceChanged',
         'When you switch workspace or its terminals change'
       )
+    case 'editor.typography.changed':
+      return t(
+        'auto.components.settings.PluginContributionActionEvents.editorTypographyChanged',
+        'When the editor font or zoom changes'
+      )
   }
 }
 

@@ -300,6 +300,7 @@
       "plan": "計畫",
       "stoppedManually": "已手動停止",
       "permissionDenied": "{{agent}} 拒絕了權限。查看詳細資訊。",
+      "safetyReviewApproved": "{{agent}} 已核准此操作。查看詳細資訊。",
       "safetyReview": "{{agent}} 回報了安全審查警告。查看詳細資訊。",
       "truncatedResponse": "供應商回應已截斷（原始大小：{{bytes}} 位元組）。",
       "modelFallback": "Claude 已切換模型：{{from}} → {{to}}。",
@@ -598,6 +599,7 @@
       "fullCopySaveUpdate": "完整複製和儲存此附件的功能將在手機更新中提供。"
     },
     "hostOutage": {
+      "offlineAsOf": "{{host}} 已離線 · 截至 {{time}}",
       "reconnecting": "{{hostName}} 正在重新連線…",
       "stopped": "{{hostName}} 已停止。請在你的電腦上啟動它。",
       "server": "伺服器",
@@ -1298,6 +1300,62 @@
       "sessionLimit": "這台電腦上正在聽寫的裝置過多。請等其中一台結束後再試。",
       "sessionLost": "聽寫功能與電腦的連線已中斷。請再試一次。",
       "updateFailed": "無法更新聽寫設定"
+    },
+    "controls": {
+      "start": "聽寫",
+      "starting": "正在開始聽寫",
+      "stop": "停止並插入",
+      "finishing": "正在完成聽寫",
+      "cancel": "取消聽寫",
+      "meterOnPhone": "正在錄音，{{duration}}，在此手機上",
+      "meterOn": "正在錄音，{{duration}}，在 {{computer}} 上",
+      "meterOnComputer": "正在錄音，{{duration}}，在電腦上",
+      "meter": "正在錄音，{{duration}}",
+      "durationMinutesSeconds": "{{minutes}} {{seconds}}",
+      "durationSeconds_one": "{{count}} 秒",
+      "durationSeconds_other": "{{count}} 秒",
+      "durationMinutes_one": "{{count}} 分鐘",
+      "durationMinutes_other": "{{count}} 分鐘",
+      "discard": "捨棄錄音",
+      "retry": "重試聽寫",
+      "retryShort": "重試"
+    },
+    "status": {
+      "finishingOn": "正在 {{computer}} 上完成",
+      "finishingOnComputer": "正在電腦上完成",
+      "movedTo": "已轉到 {{computer}}",
+      "movedToComputer": "已轉到電腦"
+    },
+    "failure": {
+      "connectionLost": "連線中斷",
+      "connectionSlow": "連線太慢",
+      "phoneStopped": "已在此手機上停止",
+      "stopped": "聽寫已停止",
+      "recordingKept": "錄音已保留"
+    },
+    "announce": {
+      "typedInto": "已輸入到 {{target}}",
+      "insertedIn": "已插入到 {{target}}",
+      "listeningOnPhone": "正在聽。正在此手機上轉寫。",
+      "listeningOn": "正在聽。正在 {{computer}} 上轉寫。",
+      "listeningOnComputer": "正在聽。正在電腦上轉寫。",
+      "finishing": "正在完成。",
+      "inserted": "已插入。",
+      "cancelled": "已取消聽寫。",
+      "movedTo": "此手機已停止轉寫。在 {{computer}} 上繼續。",
+      "movedToComputer": "此手機已停止轉寫。在電腦上繼續。",
+      "stoppedKept": "聽寫已停止。{{reason}}。錄音已保留。",
+      "stoppedKeptGeneric": "聽寫已停止。錄音已保留。",
+      "stillListening": "仍在聽。"
+    },
+    "pill": {
+      "open": "開啟",
+      "listening": "正在聽",
+      "starting": "正在開始",
+      "finishing": "正在完成",
+      "stopped": "聽寫已停止",
+      "label": "聽寫到 {{target}}，{{duration}}",
+      "hint": "點兩下返回"
     }
   },
   "files": {
@@ -1530,6 +1588,8 @@
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "要刪除「{{name}}」（{{branch}}）嗎？",
+      "deleteDestroysEnvironment": "這也會銷毀 Orca 為其建立的環境「{{environment}}」，包括其中未提交的變更和正在執行的終端機。",
+      "deleteKeepsEnvironment": "Orca 為其建立的環境「{{environment}}」會繼續執行：其配方沒有銷毀步驟。",
       "deleteWorktree": "刪除工作樹",
       "pin": "固定",
       "primaryWorktreeDeleteHint": "主工作樹不能刪除。請改為移除專案。",
@@ -2100,6 +2160,10 @@
       "providerExitedRejection": "{{agent}} 在傳送此訊息前已停止。",
       "providerExitedRow": "{{agent}} 在產生此回覆時停止了。您可以在此對話中繼續。",
       "providerRateLimited": "{{agent}} 受到速率限制，正在重試。",
+      "providerUnavailable": "{{agent}} 因服務忙碌而無法回覆。請選擇其他模型，或稍候片刻後重新傳送。",
+      "providerSafetyStopped": "{{agent}} 在安全檢查後停止了此次回覆。請檢查您的請求後重新傳送。",
+      "providerResponseFailed": "{{agent}} 未能完成此回覆。開啟詳細資料以取得更多資訊。",
+      "selectedModel": "所選模型",
       "providerRejected": "{{agent}} 未接受此訊息。",
       "providerRejectedQuoted": "{{agent}} 未接受此訊息：{{detail}}。",
       "providerRetryLastError": "上次錯誤：{{detail}}。",
@@ -2398,11 +2462,7 @@
     "terminalInputActions": {
       "attachFileHint": "長按可改為附加檔案",
       "attachPhoto": "附加照片",
-      "sendingImage": "正在傳送圖片",
-      "startDictation": "開始語音聽寫",
-      "startingDictation": "正在啟動語音聽寫",
-      "stopDictation": "停止語音聽寫",
-      "transcribingDictation": "正在轉錄語音聽寫內容"
+      "sendingImage": "正在傳送圖片"
     },
     "terminalLiveInputStatus": {
       "listening": "正在聆聽",
@@ -2411,8 +2471,6 @@
       "processing": "處理中",
       "releaseMicHint": "放開按鈕即可停止錄音",
       "startingMic": "正在啟動麥克風",
-      "stopHint": "點一下麥克風即可停止",
-      "transcribing": "正在電腦上轉錄",
       "uploadingImage": "正在將圖片上傳至主機",
       "uploadingImageTitle": "正在上傳圖片"
     },
@@ -2506,7 +2564,8 @@
       "insertFailed": "無法插入聽寫內容",
       "insertFailedCopied": "無法插入聽寫內容，已複製到剪貼簿",
       "inserted": "已插入聽寫內容",
-      "stoppedAfterSilence": "靜音一分鐘後已停止"
+      "stoppedAtCloudLimit": "已達 10 分鐘雲端上限。聽寫已停止。",
+      "stoppedAfterSilenceSeconds": "靜音 {{seconds}} 秒後已停止"
     },
     "useNativeChatStop": {
       "stopNotSent": "未送出停止命令",
@@ -2827,6 +2886,8 @@
       "dictationHeading": "聽寫",
       "dictationMode": "聽寫模式",
       "dictationModeDescription": "切換：按一次開始，再按一次停止。按住：按住期間進行聽寫。",
+      "dictationModeWithAutoDescription": "自動：輕按開始和停止；在電腦上按住快捷鍵會一直錄音，直到放開。按住：按住期間進行聽寫。切換：按一次開始，再按一次停止。",
+      "autoMode": "自動",
       "downloadFailed": "下載失敗",
       "enableDictation": "啟用語音聽寫",
       "holdMode": "按住",
@@ -3299,6 +3360,27 @@
     }
   },
   "tasks": {
+    "hostedMerge": {
+      "confirmGitHubMerge": "要合併 PR #{{number}} 嗎？",
+      "confirmGitHubSquash": "要將 PR #{{number}} 的提交壓縮後合併嗎？",
+      "confirmGitHubRebase": "要將 PR #{{number}} 變基後合併嗎？",
+      "confirmGitLabMerge": "要合併合併請求 #{{number}} 嗎？",
+      "confirmGitLabSquash": "要將合併請求 #{{number}} 的提交壓縮後合併嗎？",
+      "confirmGitLabRebase": "要將合併請求 #{{number}} 變基後合併嗎？",
+      "merged": "已合併",
+      "closed": "已關閉",
+      "conflicts": "有衝突",
+      "behind": "落後",
+      "blocked": "已封鎖",
+      "checksPending": "等待檢查",
+      "ableToMerge": "可以合併",
+      "unknown": "未知"
+    },
+    "pagination": {
+      "pageUnreachable": "第 {{page}} 頁超出 GitHub 搜尋可傳回的範圍。",
+      "loadPageFailed": "無法從 GitHub 載入第 {{page}} 頁。",
+      "noMoreResults": "第 {{page}} 頁沒有更多結果。"
+    },
     "composerSource": {
       "baseFailed": "無法解析基礎分支。",
       "forkPushWarning": "此 PR 未啟用「允許維護者編輯」；推送至分叉存放庫可能會遭 GitHub 拒絕。"

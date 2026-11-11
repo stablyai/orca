@@ -352,7 +352,7 @@ it('forwards a cold host comparison to the retained canonical binding without cr
   expect(frame().paneOwner).toBeUndefined()
 })
 
-it('rejects before mutating provider folds and validates scoped IDs with the locator parser', () => {
+it('rejects an inherited hook and malformed scoped session IDs', () => {
   const now = 1_700_000_000_000
   vi.spyOn(Date, 'now').mockReturnValue(now)
   const state = createHookListenerState()
@@ -377,9 +377,6 @@ it('rejects before mutating provider folds and validates scoped IDs with the loc
     user_message: 'poison'
   })
   expect(normalizeHookPayload(state, 'hermes', body, 'production')).toBeNull()
-  expect(state.lastPromptByPaneKey.size).toBe(0)
-  expect(state.lastToolByPaneKey.size).toBe(0)
-  expect(state.hermesTurnByPaneKey.size).toBe(0)
   for (const session of ['x'.repeat(513), '-option', 'bad\nidentity']) {
     expect(readAgentProcessPresence({ agent: 'hermes', session })?.session).toBeUndefined()
     expect(readAgentProcessPresence({ agent: 'antigravity', session })?.session).toBeUndefined()

@@ -4,7 +4,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../../shared/constants'
 import { buildRuntimeSessionPlaceholders } from './workspace-terminal-placeholders'
 import { addHydratedSshWorktreePlaceholders } from './workspace-terminal-ssh-placeholders'
-import { resolveOwner } from '@/lib/resolve-owner'
+import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
 
 const repo: Repo = {
   id: 'repo-1',

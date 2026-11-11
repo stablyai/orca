@@ -1,6 +1,6 @@
 import React from 'react'
 import { conflictOverviewView } from '@/store/slices/editor/buffers/editor-buffer-conflict-overview'
-import { detectLanguage } from '@/lib/language-detect'
+import { detectLanguage } from '../../../../shared/editor-language/editor-language-detect'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'

@@ -1,6 +1,6 @@
 import type React from 'react'
 import type { useAppStore } from '@/store'
-import type { parseGitHubIssueOrPRLink, RepoSlug } from '@/lib/github-links'
+import type { parseGitHubIssueOrPRLink, RepoSlug } from '../../../../shared/github/links'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { JiraIssue, JiraSite } from '../../../../shared/jira/jira-types'

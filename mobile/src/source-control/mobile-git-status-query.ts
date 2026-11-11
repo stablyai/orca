@@ -1,15 +1,17 @@
 import * as z from 'zod'
+import { hashKey, type QueryClient } from '@tanstack/react-query'
 import { translate } from '../i18n/mobile-i18n'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../src/shared/execution-host'
 import { getRepoIdFromWorktreeId, worktreeIdsEqual } from '../../../src/shared/worktree/id'
 import { defineHostQuery, type HostSignalEvent } from '../query/host-query'
-import type { HostQueryTarget } from '../query/host-query-key'
+import { hostQueryKey, type HostQueryTarget } from '../query/host-query-key'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   gitStatusHostPayloadSchema,
   type MobileGitStatusHostPayload
 } from './git-status-reply-schema'
 import { gitStatusHostPayloadRead } from './mobile-git-read-operations'
+import { holdsRestoredHostQueryData } from '../query/host-query-persistence'
 import {
   isMobileGitTransientRefreshError,
   isMobileGitUnavailableReply,
@@ -28,12 +30,14 @@ export type GitStatusRead =
 async function readGitStatus(
   client: RpcClient,
   worktreeId: string,
-  revalidating: boolean
+  revalidating: boolean,
+  lineStats = true
 ): Promise<GitStatusRead> {
   for (let attempt = 0; ; attempt += 1) {
     // Changes rows show each file's +/- counts, so ask the host for line stats.
     const reply = await gitStatusHostPayloadRead.request(client, {
       worktree: `id:${worktreeId}`,
+      ...(lineStats ? {} : { includeLineStats: false }),
       // Rows are already shown: reuse counts while HEAD and entries match, and never wake a stopped WSL distro.
       ...(revalidating && { reuseLineStats: true, admissionTier: 'background' as const })
     })
@@ -93,3 +97,70 @@ export const gitStatusQuery = defineHostQuery({
     ])
   }
 })
+
+const fetchStatusSummary = (
+  client: RpcClient,
+  target: HostQueryTarget,
+  _input: Record<string, never>,
+  previous: GitStatusRead | undefined
+) => readGitStatus(client, target.worktree ?? '', previous !== undefined, false)
+
+/** Branch, sync and change count only, for a list that shows no per-file counts; older hosts ignore the opt-out. */
+export const gitStatusSummaryQuery = defineHostQuery({
+  family: 'git.statusSummary',
+  staleTime: 3_000,
+  refetchOnWindowFocus: true,
+  signal: { events: ['gitStatusChanged'], floorMs: 1_000, matches: namesThisStatus },
+  fetch: fetchStatusSummary
+})
+
+// A relayed server's statuses get no desktop signal (namesThisStatus), so its reads hold no event stream.
+export const serverGitStatusSummaryQuery = defineHostQuery({
+  family: 'git.statusSummary.server',
+  staleTime: 3_000,
+  refetchOnWindowFocus: true,
+  fetch: fetchStatusSummary
+})
+
+/** Hands a detailed read to the summary a folder list shows for the same worktree, so Back shows what an action just did. */
+export async function publishGitStatusSummary(
+  queryClient: QueryClient,
+  hostId: string,
+  target: HostQueryTarget,
+  read: GitStatusRead,
+  readAt: number,
+  /** A read accepted now; otherwise a cached one, which can't tell whether a summary read out started before it. */
+  accepted: boolean
+): Promise<void> {
+  // An earlier launch's copy is unconfirmed; the summary's own read decides.
+  if (
+    holdsRestoredHostQueryData(
+      queryClient,
+      hashKey(hostQueryKey(hostId, gitStatusQuery.family, target, {}))
+    )
+  ) {
+    return
+  }
+  const summary =
+    target.exec === LOCAL_EXECUTION_HOST_ID ? gitStatusSummaryQuery : serverGitStatusSummaryQuery
+  const queryKey = hostQueryKey(hostId, summary.family, target, {})
+  // No list reads this worktree, or its summary, a failed read included, is newer than this read.
+  const supersedes = () => {
+    const state = queryClient.getQueryState(queryKey)
+    return state !== undefined && Math.max(state.dataUpdatedAt, state.errorUpdatedAt) < readAt
+  }
+  if (!supersedes()) {
+    return
+  }
+  if (queryClient.getQueryState(queryKey)?.fetchStatus !== 'idle') {
+    // A cached read leaves a summary read out to answer for itself.
+    if (!accepted) {
+      return
+    }
+    // A summary read out started before this answer; landing later, it would undo it.
+    await queryClient.cancelQueries({ queryKey, exact: true }, { silent: true })
+  }
+  if (supersedes()) {
+    queryClient.setQueryData(queryKey, read, { updatedAt: readAt })
+  }
+}

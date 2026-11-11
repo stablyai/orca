@@ -1,6 +1,7 @@
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import type { BrowserExecutionHostKeyResolution } from './runtime-browser-client-page-adoption'
-import { browserNetworkExecutionHostKey } from '../../../browser/network/execution-routes/browser-network-execution-route'
+import '../../../browser/network/execution-routes/browser-network-execution-route'
+import { browserNetworkExecutionHostKey } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 import {
   type ClientHostedBrowserRpcRoute,
   routeRuntimeBrowserClientAutomation

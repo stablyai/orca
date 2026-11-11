@@ -1,14 +1,14 @@
-import type { ChildProcessHandle } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
 import {
   watcherChildPhysicalExit,
   requireWatcherChildTermination
 } from './parcel-watcher-child-termination'
 
 export class WatcherOwnedChildren {
-  private readonly children = new Set<ChildProcessHandle>()
+  private readonly children = new Set<ChildProcess>()
   private disposal: Promise<void> | null = null
 
-  track(child: ChildProcessHandle): ChildProcessHandle {
+  track(child: ChildProcess): ChildProcess {
     this.children.add(child)
     // Reuse launch-owned physical-exit evidence, including close without exit after spawn failure.
     void watcherChildPhysicalExit(child).then(() => {

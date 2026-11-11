@@ -1,6 +1,6 @@
 import { basename } from '@/lib/path'
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
-import { describeDropSkipReason } from '@/lib/drop-skip-reason-copy'
+import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
+import { describeDropSkipReason } from '@/lib/files/drop/drop-skip-reason-copy'
 import { isImageDropPath } from '../../../../../../shared/image-path-paste'
 import type { NativeChatAttachmentFocusOptions } from '../uploads/native-chat-resolved-path-ownership'
 import {

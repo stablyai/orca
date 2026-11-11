@@ -1,6 +1,6 @@
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 import { writeLinearIssue } from '@/lib/work-items/linear/linear-issue-write'
-import { taskProviderErrorMessage } from '@/lib/task-provider-error-copy'
+import { taskProviderErrorMessage } from '@/lib/work-items/task-provider-error-copy'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type { LinearCustomViewModel } from '../../../../../shared/linear/project-types'
 import type {
@@ -9,20 +9,20 @@ import type {
 } from '../../../../../shared/linear/workspace-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import React, { useState, useRef, useCallback } from 'react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useTeamStates } from '@/hooks/useIssueMetadata'
 import { linearUpdateIssue } from '@/runtime/linear/runtime-linear-issue-client'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   getLinearStatePillStyle,
   getLinearStateMarkerStyle
 } from '@/components/linear-state-pill-style'
 import { LoaderCircle, ChevronDown } from 'lucide-react'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 export type LinearProjectTab = 'overview' | 'issues'
 export type LinearGroupSection = {
   key: string

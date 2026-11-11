@@ -1,8 +1,9 @@
 import { Check } from 'lucide-react'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 
-import { type AgentCatalogEntry, AgentIcon } from '@/lib/agent-catalog'
-import { cn } from '@/lib/utils'
+import type { AgentCatalogEntry } from '@/lib/agent-catalog/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
@@ -67,7 +68,7 @@ export function AgentDefaultSetting({
 
   return (
     <SettingsGroup
-      title={t('auto.components.settings.AgentsPane.385212c7a1', 'Default Agent')}
+      title={t('auto.components.settings.AgentsPane.3bddd54c9e', 'Default agent')}
       description={description}
     >
       <div className="flex flex-wrap gap-2 py-4">

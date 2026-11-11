@@ -1,6 +1,6 @@
 import { setTimeout as delay } from 'node:timers/promises'
 import type { WebContents } from 'electron'
-import type { BrowserActionEffects } from '../../../../shared/runtime-browser-contracts'
+import type { BrowserActionEffects } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { isRecord } from '../../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 import { withTimeout } from '../../../../shared/promise-timeout-fallback'
 import type { BrowserPageEvent } from '../../guest-lifecycle/page-activity/browser-page-events'

@@ -181,7 +181,12 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
       }
       if (recipe) {
         livePty.pty.launchAgent ??= recipe.launchAgent ?? null
-        if (!livePty.pty.launchConfig && recipe.launchConfig) {
+        // A finished launch's recipe must not return to the shell left behind.
+        if (
+          !livePty.pty.launchConfig &&
+          recipe.launchConfig &&
+          livePty.pty.launchEvidence?.kind !== 'gone'
+        ) {
           livePty.pty.launchConfig = copySleepingAgentLaunchConfig(recipe.launchConfig)
         }
       }

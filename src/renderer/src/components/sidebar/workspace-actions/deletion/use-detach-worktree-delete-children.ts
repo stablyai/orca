@@ -159,7 +159,8 @@ export function useDetachWorktreeDeleteChildren({
   }
 
   return {
-    preserveChildren,
+    preserveChildren: preserveChildren && canPreserveChildren,
+    preserveChildrenSelected: preserveChildren,
     setPreserveChildren: (preserve: boolean) => {
       setPreserve(preserve)
       setDetachError(null)

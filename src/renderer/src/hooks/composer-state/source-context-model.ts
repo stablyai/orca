@@ -1,7 +1,7 @@
 import type * as React from 'react'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { GitHubWorkItemIdentity } from '../../../../shared/new-workspace/github-work-item-identity'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 
 export type ComposerSourceContextModel = {
   setRepoId: (value: string) => void

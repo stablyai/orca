@@ -40,10 +40,10 @@ vi.mock('@/store/index', () => ({
 vi.mock('@/hooks/terminal-command-finished-event', () => ({
   dispatchTerminalCommandFinishedEvent
 }))
-vi.mock('@/lib/agent-status-connection-ownership', () => ({
+vi.mock('@/lib/agent-status/ownership/agent-status-connection-ownership', () => ({
   resolveLiveAgentStatusConnectionRouting
 }))
-vi.mock('@/lib/connection-owner-resolution', () => ({
+vi.mock('@/lib/workspace/ownership/connection-owner-resolution', () => ({
   getConnectionIdFromState
 }))
 

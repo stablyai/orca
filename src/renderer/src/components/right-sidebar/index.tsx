@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { PanelRight } from 'lucide-react'
-import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store/index'
+import { cn } from '@/lib/class-names'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
@@ -22,8 +22,8 @@ import { useMeasuredWidth } from './right-sidebar-measured-width'
 import {
   isPairedWebClientWindow,
   shouldRenderDesktopWindowChrome
-} from '@/lib/desktop-window-chrome'
-import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
+} from '@/app-shell/chrome/desktop-window-chrome'
+import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
 import { ActivityBarPositionMenu, useActivityBarContextPlugin } from './activity-bar-position-menu'
 import { RightSidebarTopActivityBar } from './right-sidebar-top-activity-bar'
 import { useRightSidebarActivityItems } from './use-right-sidebar-activity-items'
@@ -227,7 +227,7 @@ function RightSidebarInner(): React.JSX.Element {
             <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground">
               {visibleItems.find((item) => item.id === effectiveTab)?.title ?? ''}
             </span>
-            <TooltipProvider delayDuration={400}>
+            <TooltipProvider>
               <div className="flex items-center">{closeButton}</div>
             </TooltipProvider>
           </div>
@@ -249,7 +249,7 @@ function RightSidebarInner(): React.JSX.Element {
             onPointerDown={contextPlugin.onPointerDown}
           >
             <div className="flex flex-col items-center w-10 min-w-[40px] bg-sidebar border-l border-border side-activity-bar-windows-inset">
-              <TooltipProvider delayDuration={400}>{sideActivityBarIcons}</TooltipProvider>
+              <TooltipProvider>{sideActivityBarIcons}</TooltipProvider>
             </div>
           </ContextMenuTrigger>
           <ActivityBarPositionMenu

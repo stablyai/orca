@@ -2,7 +2,7 @@
 
 import type { BrowserBackend } from '../../../browser/browser-backend'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { BrowserTabInfo } from '../../../../shared/runtime-browser-contracts'
+import type { BrowserTabInfo } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type {

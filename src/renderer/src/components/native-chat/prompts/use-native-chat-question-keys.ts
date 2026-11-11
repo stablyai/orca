@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent, type RefObject } from 'react'
-import { isEditableTarget } from '@/lib/editable-target'
+import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 import { isInNativeChatPaneOf } from './use-native-chat-prompt-card-focus'
 
 /** Keep question shortcuts scoped to its pane, including when a replaced row drops focus. */
@@ -7,7 +7,7 @@ export function useNativeChatQuestionKeys(
   cardRef: RefObject<HTMLElement | null>,
   enabled: boolean,
   optionCount: number,
-  onPick: (optionIndex: number) => void,
+  onPick: (optionIndex: number, via: 'digit' | 'enter') => void,
   onStep: (delta: 1 | -1) => boolean
 ): void {
   const onKeyDown = useEffectEvent((event: KeyboardEvent): void => {
@@ -48,7 +48,7 @@ export function useNativeChatQuestionKeys(
         return
       }
       event.preventDefault()
-      onPick(optionIndex)
+      onPick(optionIndex, 'digit')
     } else if (isArrow) {
       const up = event.key === 'ArrowUp'
       if (
@@ -82,7 +82,7 @@ export function useNativeChatQuestionKeys(
       }
     } else if (event.key === 'Enter' && focusedIndex !== -1) {
       event.preventDefault()
-      onPick(focusedIndex)
+      onPick(focusedIndex, 'enter')
     }
   })
   useEffect(() => {

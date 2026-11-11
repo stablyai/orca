@@ -29,10 +29,10 @@ vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
 vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   runtimeEnvironmentIdOrLocalUnlessTwin: () => 'host-A'
 }))
-vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
+vi.mock('@/lib/workspace/tabs/activate-tab-and-focus-pane', () => ({
   activateTabAndFocusPane: mocks.activateTabAndFocusPane
 }))
-vi.mock('@/lib/terminal-tab-owner-activation', () => ({
+vi.mock('@/lib/workspace/tabs/terminal-tab-owner-activation', () => ({
   activateTerminalTabOnOwner: mocks.activateTerminalTabOnOwner
 }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({

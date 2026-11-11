@@ -9,7 +9,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import { dirname, join } from 'node:path'
-import '../../../codex-accounts/fs-utils'
+import '../../../filesystem/atomic-file-publication'
 import { renameFileWithWindowsRetry } from '../../../../shared/windows-retry-file-operations'
 import { writeRollingFileBackup } from '../../../filesystem/rolling-file-backup'
 

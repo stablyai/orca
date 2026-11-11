@@ -131,6 +131,22 @@ describe('transcript slots', () => {
     expect(working.find((slot) => slot.message.id === 'a')?.activeTurnIsWorking).toBe(true)
   })
 
+  it('marks only the newest reply for always-visible actions, including while it is working', () => {
+    const messages = [
+      text('u1', 'first', 'user'),
+      text('a1', 'first reply'),
+      text('u2', 'second', 'user'),
+      text('a2', 'second reply')
+    ]
+    for (const overrides of [{}, { liveTurnKey: 'u2', isWorking: true }]) {
+      const replies = build(messages, overrides).filter((slot) => slot.endsResponse)
+      expect(replies.map((slot) => [slot.message.id, slot.latestResponse === true])).toEqual([
+        ['a1', false],
+        ['a2', true]
+      ])
+    }
+  })
+
   it("keeps a turn's actions on its text, or on its image while folding hides the text", () => {
     const image: NativeChatMessage = {
       id: 'a-image',

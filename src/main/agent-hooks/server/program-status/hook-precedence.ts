@@ -6,6 +6,17 @@ import type { EnrichedAgentHookEventPayload } from '../server-types'
 // Long tool calls can be hook-silent; allow sustained disagreement before yielding to OSC 7501.
 export const HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS = 2 * 60 * 1000
 
+function isOpenCodeAgent(agentType: string | undefined): boolean {
+  return agentType === 'opencode' || agentType === 'opencode2'
+}
+
+/** OpenCode's OSC 7501 covers every session sharing its folder's tabs; its hook covers only the pane's own. */
+export function isOpenCodeHookRow(
+  row: Pick<EnrichedAgentHookEventPayload, 'observation' | 'payload'>
+): boolean {
+  return row.observation?.origin === 'hook' && isOpenCodeAgent(row.payload.agentType)
+}
+
 /** Hook precedence ends at this time; undefined means no yield, Infinity means silence cannot end it. */
 export function programStatusHookYieldEndsAt(
   previous: EnrichedAgentHookEventPayload | undefined,
@@ -14,6 +25,14 @@ export function programStatusHookYieldEndsAt(
 ): number | undefined {
   if (previous?.observation?.origin !== 'hook' || previous.providerSessionOnly === true) {
     return undefined
+  }
+  // OpenCode's OSC 7501 idle means every session rests, so only that can overrule a silent hook.
+  if (
+    isOpenCodeHookRow(previous) &&
+    isOpenCodeAgent(payload.agentType) &&
+    payload.state !== 'done'
+  ) {
+    return Infinity
   }
   const sameAgent =
     payload.agentType === undefined || payload.agentType === previous.payload.agentType
@@ -41,11 +60,19 @@ export function programStatusHookYieldEndsAt(
   ) {
     return Infinity
   }
-  // Settled turns are naturally silent; a later wait must prove intervening program work.
-  if (previous.payload.state === 'done' && payload.state === 'waiting') {
-    return programWorkingSince !== undefined && programWorkingSince > previous.receivedAt
+  // A settled turn yields only to program work begun after it (a replayed done keeps its own time):
+  // Codex re-reports the settled turn's working while a background terminal it started runs.
+  if (
+    previous.payload.state === 'done' &&
+    (payload.state === 'waiting' || payload.state === 'working')
+  ) {
+    const doneAt = previous.evidenceObservedAt ?? previous.receivedAt
+    if (programWorkingSince === undefined || programWorkingSince <= doneAt) {
+      return Infinity
+    }
+    return payload.state === 'waiting'
       ? undefined
-      : Infinity
+      : previous.receivedAt + HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS
   }
   // A question sends no hooks while open, so a `working` that began before it (e.g. re-sent by the
   // lease renewal) proves nothing; a working transition after it keeps the silence fallback.

@@ -5,7 +5,7 @@ import { makeWorktree } from '../../../../store/slices/worktrees/worktree.test-f
 import type { AiVaultResumePlatformState } from './ai-vault-resume-platform'
 import { buildAiVaultDropRepinStartup } from './ai-vault-resume-command'
 
-vi.mock('@/lib/new-workspace', () => ({ CLIENT_PLATFORM: 'darwin' }))
+vi.mock('@/lib/workspace/creation/new-workspace', () => ({ CLIENT_PLATFORM: 'darwin' }))
 
 const WORKTREE_ID = 'repo-1::/srv/repo'
 

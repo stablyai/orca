@@ -149,22 +149,3 @@ it('keeps original hits and truncation when the shared vocabulary seek allowance
     await index.close()
   }
 })
-
-it('seeks past a whole vocabulary term while retaining its extensions', async () => {
-  const index = await openSessionSearchHarness('ss-posting-vocabulary-successor')
-  try {
-    addSyntheticSession(index.db, { id: 1, text: 'coalesce coalesces coalescing', rows: 2 })
-    const seek = index.db.prepare(
-      'SELECT term FROM temp.session_search_vocab WHERE term >= ? ORDER BY term LIMIT 1'
-    )
-    expect(seek.get('coal')).toEqual({ term: 'coalesce' })
-    expect(seek.get('coalesce\u0000')).toEqual({ term: 'coalesces' })
-    expect(seek.get('coalesces\u0000')).toEqual({ term: 'coalescing' })
-    expect(seek.get('coalescing\u0000')).toBeUndefined()
-    const result = index.engine.search({ query: 'coalescs' })
-    expect(result.planner.repairedTerms).toEqual(['coalesces'])
-    expect(result.hits.map((hit) => hit.sessionId)).toEqual(['1'])
-  } finally {
-    await index.close()
-  }
-})

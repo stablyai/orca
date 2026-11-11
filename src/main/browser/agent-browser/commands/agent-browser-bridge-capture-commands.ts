@@ -4,7 +4,7 @@ import { app, nativeImage, type WebContents } from 'electron'
 import type {
   BrowserScreenshotResult,
   BrowserEvalResult
-} from '../../../../shared/runtime-browser-contracts'
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../../browser-error'
 import {
   captureFullPageScreenshot,

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useTranslate } from '@/i18n/use-translate'
-import { addOnThisComputerLabel } from '@/lib/wsl-host-windows-drive-refusal-toast'
+import { addOnThisComputerLabel } from '@/lib/workspace/creation/wsl-host-windows-drive-refusal-toast'
 
 /** Inline in the add-project flow: the `\\wsl.localhost` path's distro already runs as a host. */
 export function AddRepoExistingWslHostOffer({

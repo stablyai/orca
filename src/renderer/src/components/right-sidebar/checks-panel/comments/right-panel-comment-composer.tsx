@@ -3,25 +3,25 @@ import {
   useGitHubImagePending,
   type GitHubImageIntake
 } from '@/components/github/use-github-image-uploads'
-import { ImeTextarea } from '@/lib/ime-text-field'
+import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Bold, Code2, Italic, List, Quote } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
-import { cn } from '@/lib/utils'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
+import { cn } from '@/lib/class-names'
+import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
-} from '@/lib/comment-body-submit-state'
+} from '@/lib/source-control/review/comments/comment-body-submit-state'
 import {
   clearRightPanelCommentFocusTimer,
   scheduleRightPanelCommentFocusTimer
 } from './right-panel-comment-focus-timers'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 export type RightPanelCommentSubmitResult = { ok: true } | { ok: false; error: string }
 

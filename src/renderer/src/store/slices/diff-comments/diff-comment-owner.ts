@@ -5,7 +5,7 @@ import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace,
   getRuntimeEnvironmentIdForFolderWorkspace
-} from '@/lib/folder-workspace-runtime-owner'
+} from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
 import {
   DIFF_COMMENT_OWNER_INPUTS,
@@ -14,13 +14,13 @@ import {
   readCopyNotes,
   type DiffCommentSelectorState
 } from './worktree-diff-comments-selector'
-import { focusFreeRouteStateOf } from '@/lib/editor-file-operation-provenance'
+import { focusFreeRouteStateOf } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import {
   resolveSourceCopy,
   resolveSourceFolderHost,
   type WorkspaceCopySource,
   type WorkspaceResource
-} from '@/lib/workspace-copy-owner'
+} from '@/lib/workspace/ownership/workspace-copy-owner'
 
 /** A copy whose notes can be changed: the workspace and the authority serving it (endpoint plus place). */
 export type DiffCommentOwner =

@@ -116,7 +116,7 @@
 1 src/main/codex-accounts/codex-login-auth-snapshot.ts
 5 src/main/codex-accounts/codex-managed-home-lifecycle.ts
 6 src/main/codex-accounts/codex-managed-home-path.ts
-17 src/main/codex-accounts/fs-utils.ts
+17 src/main/filesystem/atomic-file-publication.ts
 1 src/main/codex-accounts/guest-codex-account-homes.ts
 6 src/main/codex-accounts/host-codex-managed-home-ownership.ts
 2 src/main/codex-accounts/legacy-shared-auth-migration.ts
@@ -282,6 +282,7 @@
 1 src/main/ipc/filesystem/watcher-process/parcel-watcher-supervisor-subscribe.ts
 1 src/main/ipc/filesystem/watcher-process/rebinding-file-watch.ts
 1 src/main/ipc/filesystem/watcher-process/watcher-event-root-path-rewrite.ts
+1 src/main/ipc/floating-workspace-directory.ts
 1 src/main/ipc/macos-keyboard-layout-snapshot.ts
 1 src/main/ipc/notification-authorization-status.ts
 1 src/main/ipc/pty/spawn-pane-env.ts
@@ -461,11 +462,11 @@
 6 src/main/pty/shell-startup/zsh-startup-hook-pty-harness.ts
 2 src/main/pty/shell-startup/zsh-wrapper-dir-ownership.ts
 1 src/main/qoder/workspace-trust.ts
-4 src/main/rate-limits/cursor-auth.ts
-2 src/main/rate-limits/grok-auth.ts
-3 src/main/rate-limits/hidden-probe-cwd.ts
-2 src/main/rate-limits/opencode-go-api-key-source.ts
-1 src/main/rate-limits/zcode-usage-credentials.ts
+4 src/main/rate-limits/providers/cursor/cursor-auth.ts
+2 src/main/rate-limits/providers/grok/grok-auth.ts
+3 src/main/lib/hidden-probe-cwd.ts
+2 src/main/rate-limits/providers/opencode-go/opencode-go-api-key-source.ts
+1 src/main/rate-limits/providers/zcode/zcode-usage-credentials.ts
 3 src/main/ripgrep/bundled-ripgrep-path.ts
 8 src/main/runtime/agent-session/ownership/agent-session-claim-identity.ts
 1 src/main/runtime/agent-session/records/agent-session-record-store-slot.ts
@@ -478,7 +479,7 @@
 2 src/main/runtime/mobile-cloud-relay/relay-revoke-outbox.ts
 1 src/main/runtime/orchestration/db/runtime-orchestration-database-access.ts
 2 src/main/runtime/push/push-unregister-outbox.ts
-2 src/main/runtime/rpc/methods/mobile-delivery/bundled-mobile-web-bundle.ts
+1 src/main/runtime/rpc/methods/mobile-delivery/bundled-mobile-web-bundle.ts
 1 src/main/runtime/rpc/server/network-source-policy-store.ts
 2 src/main/runtime/rpc/server/pairing/device-registry-corruption.ts
 2 src/main/runtime/rpc/server/pairing/device-registry-disk-merge.ts
@@ -496,9 +497,10 @@
 10 src/main/speech/openai-api-key-store.ts
 2 src/main/speech/speech-model-download-cleanup.ts
 1 src/main/speech/speech-model-download-transport.ts
+1 src/main/speech/speech-model-files.ts
 2 src/main/speech/speech-model-http-download.ts
-1 src/main/speech/stt-worker-model-config.ts
-2 src/main/speech/stt-worker-paths.ts
+1 src/main/speech/speech-vad-model.ts
+2 src/main/speech/stt-gpu-failure-marker.ts
 2 src/main/sqlite/harden-database-files.ts
 1 src/main/sqlite/row-cache/keyed-json-row-cache.ts
 2 src/main/sqlite/row-cache/legacy-json-source.ts
@@ -549,7 +551,6 @@
 2 src/main/worker-threads/forked-child-entry-path.ts
 4 src/main/workspace-hooks/hooks.ts
 10 src/main/workspace-hooks/issue-command-file.ts
-4 src/main/workspace-hooks/worktree-runner-script.ts
 1 src/main/workspaces/catalog/folder-repo-git-conversion.ts
 2 src/main/workspaces/catalog/folder-upgrade-worktree-path.ts
 3 src/main/workspaces/execution-host/project-runtime-git-router.ts
@@ -609,6 +610,7 @@
 7 src/shared/serve-bundle-park.ts
 1 src/shared/serve-user-data-path.ts
 3 src/shared/source-scan/source-tree-scan.ts
+2 src/shared/speech-recognizer-package.ts
 5 src/shared/startup-command-staging.ts
 1 src/shared/terminal/pty/native-process/pty-process-ceiling-state.ts
 8 src/shared/windows-breakaway-launcher.ts

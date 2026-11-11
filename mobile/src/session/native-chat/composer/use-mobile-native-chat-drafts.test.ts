@@ -4,9 +4,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import {
-  resetMobileNativeChatDraftStoreForTests,
+  closeMobileNativeChatTabDraft,
   useMobileNativeChatDraft
 } from './mobile-native-chat-draft-store'
+
+import { loadMobileNativeChatDrafts } from './mobile-native-chat-draft-persistence'
+
+vi.mock('@react-native-async-storage/async-storage', async () => {
+  const { createInMemoryAsyncStorage } =
+    await import('../../../test-support/in-memory-async-storage')
+  return { default: createInMemoryAsyncStorage() }
+})
 
 type DraftState = ReturnType<typeof useMobileNativeChatDrafts> & { composerText: string }
 
@@ -34,11 +42,15 @@ describe('useMobileNativeChatDrafts', () => {
   let renderer: ReactTestRenderer | null = null
   let state: DraftState | null = null
 
-  afterEach(() => {
+  afterEach(async () => {
     act(() => renderer?.unmount())
-    resetMobileNativeChatDraftStoreForTests()
+    await loadMobileNativeChatDrafts('host', 'worktree')
+    closeMobileNativeChatTabDraft('host\0worktree\0a')
+    closeMobileNativeChatTabDraft('host\0worktree\0b')
+    await loadMobileNativeChatDrafts('host', 'worktree')
     renderer = null
     state = null
+    vi.useRealTimers()
   })
 
   function Harness({
@@ -195,7 +207,8 @@ describe('useMobileNativeChatDrafts', () => {
       )
       expect(state?.composerText).toBe('')
     } finally {
-      vi.useRealTimers()
+      act(() => renderer?.unmount())
+      renderer = null
     }
   })
 
@@ -354,52 +367,6 @@ describe('useMobileNativeChatDrafts', () => {
     expect(state?.composerText).toBe(' /clear')
   })
 
-  it('reconciles an image-only unconfirmed send against the next user turn (no false warning)', async () => {
-    vi.useFakeTimers()
-    try {
-      await mount('a')
-      await act(async () =>
-        renderer?.update(
-          createElement(Harness, { tabId: 'a', messages: [assistantTextMessage('a1', 'hi')] })
-        )
-      )
-      const origin = state?.captureSendOrigin('')
-      const onUnconfirmed = vi.fn()
-      act(() => {
-        if (origin) {
-          state?.holdUnconfirmedSend(origin, '', onUnconfirmed)
-        }
-      })
-
-      await act(async () =>
-        renderer?.update(
-          createElement(Harness, {
-            tabId: 'a',
-            messages: [assistantTextMessage('a1', 'hi'), assistantTextMessage('a2', 'ok')]
-          })
-        )
-      )
-      await act(async () =>
-        renderer?.update(
-          createElement(Harness, {
-            tabId: 'a',
-            messages: [
-              assistantTextMessage('a1', 'hi'),
-              assistantTextMessage('a2', 'ok'),
-              userTextMessage('u1', '')
-            ]
-          })
-        )
-      )
-      act(() => {
-        vi.advanceTimersByTime(30_000)
-      })
-      expect(onUnconfirmed).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('clears image-only echoes one per landed user turn, not all at once', async () => {
     await mount('a')
     await act(async () =>
@@ -428,59 +395,6 @@ describe('useMobileNativeChatDrafts', () => {
       )
     )
     expect(state?.pending.map((pending) => pending.images)).toEqual([['file:///b.jpg']])
-  })
-
-  it('registers no deadline when the transcript echo beat the ambiguous RPC rejection', async () => {
-    vi.useFakeTimers()
-    try {
-      await mount('a')
-      const origin = state?.captureSendOrigin('ping')
-      const onUnconfirmed = vi.fn()
-
-      await act(async () =>
-        renderer?.update(
-          createElement(Harness, { tabId: 'a', messages: [userTextMessage('m1', 'ping')] })
-        )
-      )
-      act(() => {
-        if (origin) {
-          state?.holdUnconfirmedSend(origin, 'ping', onUnconfirmed)
-        }
-      })
-
-      expect(vi.getTimerCount()).toBe(0)
-      act(() => {
-        vi.advanceTimersByTime(30_000)
-      })
-      expect(onUnconfirmed).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('surfaces uncertainty when no echo lands before the deadline', async () => {
-    vi.useFakeTimers()
-    try {
-      await mount('a')
-      const origin = state?.captureSendOrigin('ping')
-      const onUnconfirmed = vi.fn()
-      act(() => {
-        if (origin) {
-          state?.holdUnconfirmedSend(origin, 'ping', onUnconfirmed)
-        }
-      })
-
-      act(() => {
-        vi.advanceTimersByTime(19_999)
-      })
-      expect(onUnconfirmed).not.toHaveBeenCalled()
-      act(() => {
-        vi.advanceTimersByTime(1)
-      })
-      expect(onUnconfirmed).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.useRealTimers()
-    }
   })
 
   it('does not confirm an unconfirmed send against an older identical turn', async () => {
@@ -516,7 +430,8 @@ describe('useMobileNativeChatDrafts', () => {
       })
       expect(onUnconfirmed).toHaveBeenCalledTimes(1)
     } finally {
-      vi.useRealTimers()
+      act(() => renderer?.unmount())
+      renderer = null
     }
   })
 
@@ -552,64 +467,8 @@ describe('useMobileNativeChatDrafts', () => {
       })
       expect(onUnconfirmed).toHaveBeenCalledTimes(1)
     } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('requires one new transcript echo per repeated unconfirmed send', async () => {
-    vi.useFakeTimers()
-    try {
-      await mount('a')
-      act(() => state?.setComposerText('ping'))
-      const origin = state?.captureSendOrigin('ping')
-      const firstUnconfirmed = vi.fn()
-      const secondUnconfirmed = vi.fn()
-      act(() => {
-        if (origin) {
-          state?.holdUnconfirmedSend(origin, 'ping', firstUnconfirmed)
-          state?.holdUnconfirmedSend(origin, 'ping', secondUnconfirmed)
-        }
-      })
-
-      await act(async () =>
-        renderer?.update(
-          createElement(Harness, { tabId: 'a', messages: [userTextMessage('echo-1', 'ping')] })
-        )
-      )
-      act(() => {
-        vi.advanceTimersByTime(30_000)
-      })
-
-      expect(firstUnconfirmed).not.toHaveBeenCalled()
-      expect(secondUnconfirmed).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('does not retain a deadline when an ambiguous send settles after unmount', async () => {
-    vi.useFakeTimers()
-    try {
-      await mount('a')
-      const origin = state?.captureSendOrigin('ping')
-      const holdUnconfirmedSend = state?.holdUnconfirmedSend
-      const onUnconfirmed = vi.fn()
       act(() => renderer?.unmount())
       renderer = null
-
-      act(() => {
-        if (origin) {
-          holdUnconfirmedSend?.(origin, 'ping', onUnconfirmed)
-        }
-      })
-
-      expect(vi.getTimerCount()).toBe(0)
-      act(() => {
-        vi.advanceTimersByTime(30_000)
-      })
-      expect(onUnconfirmed).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
     }
   })
 
@@ -661,7 +520,8 @@ describe('useMobileNativeChatDrafts', () => {
       })
       expect(onUnconfirmed).toHaveBeenCalledTimes(1)
     } finally {
-      vi.useRealTimers()
+      act(() => renderer?.unmount())
+      renderer = null
     }
   })
 

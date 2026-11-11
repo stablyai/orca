@@ -6,7 +6,7 @@ import {
   normalizeProxyUrl,
   type NetworkProxySettings
 } from '../../../../shared/network-proxy'
-import type { BrowserNetworkTunnelOpen } from '../../../../shared/browser-network-tunnel-protocol'
+import type { BrowserNetworkTunnelOpen } from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import { isEligibleLocalCertificateHost } from '../../../../shared/browser-url'
 
 export type BrowserNetworkTunnelProxy =

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 import { View } from 'react-native'
 import { Keyboard as KeyboardIcon } from 'lucide-react-native'
 import { composerInputStyles as inputStyles } from '../components/composer-input/composer-input-styles'
@@ -13,7 +13,6 @@ import { terminalDockStyles as dockStyles } from '../terminal/session/terminal-d
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useMobileSessionKeyboardLift } from '../terminal/session/use-mobile-session-keyboard-lift'
 import { useLiveInputCaptureText } from '../terminal/session/live-input-capture'
@@ -23,6 +22,8 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
   useMobileColorScheme()
   const rail = useSessionTerminalKeyRail(controller)
   const keyboardLift = useMobileSessionKeyboardLift(controller.dockBottomInset)
+  // The field's ✕, which the held mic may be released over.
+  const dictationCancelRef = useRef<View>(null)
   const {
     insets,
     dictationMode,
@@ -59,10 +60,10 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
       <View style={dockStyles.inputBar}>
         <LiveInputField
           controller={controller}
-          keysInRail={rail.keysInRail}
           trailing={
             <MobileTerminalLiveInputStatus
               dictation={dictation}
+              cancelRef={dictationCancelRef}
               dictationMode={dictationMode}
               heard={liveDictationText}
               isAttaching={isAttaching}
@@ -76,7 +77,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           dictationMode={dictationMode}
           dictationEnabled={dictationEnabled}
           buttonStyle={inputStyles.controlButton}
-          activeButtonStyle={styles.dictationButtonActive}
+          dictationCancelRef={dictationCancelRef}
           disabledButtonStyle={inputStyles.disabled}
           onAttachImage={() => void attachImage('library')}
           onAttachFile={() => void attachImage('files')}
@@ -93,11 +94,9 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
 // Only this field reads the typed text, so a keystroke re-renders it and not the dock or session.
 function LiveInputField({
   controller,
-  keysInRail,
   trailing
 }: {
   controller: MobileSessionController
-  keysInRail: boolean
   trailing: ReactNode
 }) {
   const t = useMobileTranslation()
@@ -122,11 +121,8 @@ function LiveInputField({
       trailing={trailing}
       value={text}
       onChange={(event) => {
-        // A ctrl/alt/shift held on the Duo rail turns the next typed letter into a combo, while the rail shows it.
-        if (
-          !keysInRail ||
-          !dockKeys.interceptTypedCharacter(text, event.nativeEvent.text, liveInputRef)
-        ) {
+        // A held Shift, Ctrl or Alt on the key row or the Duo rail turns the next typed letter into a combo.
+        if (!dockKeys.interceptTypedCharacter(text, event.nativeEvent.text, liveInputRef)) {
           handleLiveInputChange(event)
         }
       }}

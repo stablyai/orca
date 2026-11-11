@@ -2,7 +2,7 @@ import React from 'react'
 import { Circle, CircleCheck, CircleX, Loader2, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatElapsedTime } from './worktree-creation-clock'
@@ -27,7 +27,7 @@ function stepLabel(id: WorktreeSetupStepId, agentLabel: string, t: Translate = t
   }
 }
 
-function StepIcon({ state }: { state: WorktreeSetupStep['state'] }): React.JSX.Element {
+export function StepIcon({ state }: { state: WorktreeSetupStep['state'] }): React.JSX.Element {
   switch (state) {
     case 'running':
       return (

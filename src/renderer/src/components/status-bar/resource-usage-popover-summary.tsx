@@ -2,7 +2,7 @@ import React from 'react'
 import { AlertTriangle, MemoryStick, RotateCw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { DaemonActionsApi } from '../shared/useDaemonActions'
@@ -37,7 +37,7 @@ export function renderResourceUsagePopoverHeader(
             {t('resourceManager.refresh', 'Refresh')}
           </Button>
         )}
-        <Tooltip delayDuration={200}>
+        <Tooltip>
           <TooltipTrigger asChild>
             <button
               type="button"
@@ -53,7 +53,7 @@ export function renderResourceUsagePopoverHeader(
             {t('resourceManager.restartLocal', 'Restart local daemon')}
           </TooltipContent>
         </Tooltip>
-        <Tooltip delayDuration={200}>
+        <Tooltip>
           <TooltipTrigger asChild>
             <button
               type="button"
@@ -151,75 +151,46 @@ export function renderResourceUsageSummary(
   t: Translate = translate
 ): React.JSX.Element {
   return (
-    <div className="px-3 py-2 border-b border-border flex items-baseline justify-between gap-3 text-xs tabular-nums">
-      <div className="flex items-baseline gap-3 min-w-0">
-        <Tooltip delayDuration={200}>
-          <TooltipTrigger asChild>
-            <span
-              tabIndex={0}
-              className="font-medium text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:rounded"
-            >
-              {formatCpu(totalCpu)}
+    <div className="shrink-0 border-b border-border px-3 py-2 text-xs tabular-nums">
+      <div className="flex flex-wrap items-baseline gap-3">
+        <span className="font-medium text-foreground">{formatCpu(totalCpu)}</span>
+        <span className="font-medium text-foreground">
+          {formatMemory(totalMemory)}{' '}
+          <span className="font-normal text-muted-foreground">{memoryMetricCopy.summaryLabel}</span>
+        </span>
+        {commitBadgeLabel && commitMetricCopy && (
+          <span className={cn('font-medium', commitToneClass ?? 'text-foreground')}>
+            {commitBadgeLabel}{' '}
+            <span className="font-normal text-muted-foreground">
+              {commitMetricCopy.summaryLabel}
             </span>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={6} className="z-[70] max-w-xs">
+          </span>
+        )}
+        {orphanCount > 0 && (
+          <span className="ml-auto shrink-0 text-status-warning-text" aria-live="polite">
+            {t(
+              'auto.components.status.bar.ResourceUsageStatusSegment.orphanCount',
+              '{{count}} orphans',
+              { count: orphanCount, defaultValue_one: '{{count}} orphan' }
+            )}
+          </span>
+        )}
+      </div>
+      <details className="mt-1.5 text-muted-foreground">
+        <summary className="cursor-pointer rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          {t('resourceManager.metricDetails', 'Metric details')}
+        </summary>
+        <div className="mt-1.5 space-y-1.5">
+          <p>
             {t(
               'auto.components.status.bar.ResourceUsageStatusSegment.1fedf94eae',
               'Combined CPU load. Values above 100% mean more than one core is working at once.'
             )}
-          </TooltipContent>
-        </Tooltip>
-        <span className="text-muted-foreground/50">·</span>
-        <Tooltip delayDuration={200}>
-          <TooltipTrigger asChild>
-            <span
-              tabIndex={0}
-              className="font-medium text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:rounded"
-            >
-              {formatMemory(totalMemory)}{' '}
-              <span className="font-normal text-muted-foreground">
-                {memoryMetricCopy.summaryLabel}
-              </span>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={6} className="z-[70] max-w-xs">
-            {memoryMetricCopy.description}
-          </TooltipContent>
-        </Tooltip>
-        {commitBadgeLabel && commitMetricCopy && (
-          <>
-            <span className="text-muted-foreground/50">·</span>
-            <Tooltip delayDuration={200}>
-              <TooltipTrigger asChild>
-                <span
-                  tabIndex={0}
-                  className={cn(
-                    'font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:rounded',
-                    commitToneClass ?? 'text-foreground'
-                  )}
-                >
-                  {commitBadgeLabel}{' '}
-                  <span className="font-normal text-muted-foreground">
-                    {commitMetricCopy.summaryLabel}
-                  </span>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={6} className="z-[70] max-w-xs">
-                {commitMetricCopy.description}
-              </TooltipContent>
-            </Tooltip>
-          </>
-        )}
-      </div>
-      {orphanCount > 0 && (
-        <span className="shrink-0 text-yellow-500" aria-live="polite">
-          {t(
-            'auto.components.status.bar.ResourceUsageStatusSegment.orphanCount',
-            '{{count}} orphans',
-            { count: orphanCount, defaultValue_one: '{{count}} orphan' }
-          )}
-        </span>
-      )}
+          </p>
+          <p>{memoryMetricCopy.description}</p>
+          {commitBadgeLabel && commitMetricCopy ? <p>{commitMetricCopy.description}</p> : null}
+        </div>
+      </details>
     </div>
   )
 }

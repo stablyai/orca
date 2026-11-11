@@ -1,6 +1,6 @@
 import { Copy, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Button } from '../../../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../../ui/tooltip'
 import { translate } from '@/i18n/i18n'
@@ -70,7 +70,7 @@ export function MobileEmulatorExamples({
               {prompt}
               {t('auto.components.settings.MobileEmulatorExamples.d151e25078', '"')}
             </p>
-            <TooltipProvider delayDuration={250}>
+            <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button

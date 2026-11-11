@@ -15,7 +15,7 @@ import {
 import {
   isDesktopCreatedTabInFrameDrawnServerWorkspace,
   serverTabCount
-} from '@/lib/frame-drawn-desktop-created-tabs'
+} from '@/store/workspace-layout/frames/frame-drawn-desktop-created-tabs'
 
 export type TabGroupPanelGeometryEntry = {
   groupId: string

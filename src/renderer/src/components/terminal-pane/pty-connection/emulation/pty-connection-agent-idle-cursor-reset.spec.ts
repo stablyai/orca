@@ -61,8 +61,9 @@ export function registerPtyConnectionAgentIdleCursorResetTests(): void {
 
     it('resets renderer cursor style when an agent becomes idle', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -97,8 +98,9 @@ export function registerPtyConnectionAgentIdleCursorResetTests(): void {
       )
       await loadFreshTerminalModules()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks2 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -182,8 +184,9 @@ export function registerPtyConnectionWindowsCompletedTurnCursorResetTests(): voi
       )
       await loadFreshTerminalModules()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks4 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -238,8 +241,9 @@ export function registerPtyConnectionWindowsCompletedTurnCursorResetTests(): voi
       )
       await loadFreshTerminalModules()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks5 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks5 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -298,8 +302,9 @@ export function registerPtyConnectionWindowsCompletedTurnCursorResetTests(): voi
       )
       await loadFreshTerminalModules()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks6 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks6 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -356,8 +361,9 @@ export function registerPtyConnectionWindowsCompletedTurnCursorResetTests(): voi
       )
       await loadFreshTerminalModules()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks7 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks7 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -455,8 +461,9 @@ export function registerPtyConnectionWindowsCursorResetDisposalTests(): void {
       )
       await loadFreshTerminalModules()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks12 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks12 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 

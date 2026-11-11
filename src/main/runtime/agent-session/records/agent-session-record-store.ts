@@ -175,8 +175,20 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   setUserConversationName = (sessionId: string, name: string, write: AgentSessionUserNameWrite) =>
     setAgentSessionRecordUserNameThrough((apply) => this.mutate(sessionId, apply), name, write)
 
-  compareAndSetConversationName: CompareAndSetConversationName = (id, name, expected, context) =>
-    compareAndSetAgentSessionRecordName((apply) => this.mutate(id, apply), name, expected, context)
+  compareAndSetConversationName: CompareAndSetConversationName = (
+    id,
+    name,
+    expected,
+    context,
+    applicable
+  ) =>
+    compareAndSetAgentSessionRecordName(
+      (apply) => this.mutate(id, apply),
+      name,
+      expected,
+      context,
+      applicable
+    )
 
   /** Launch history is metadata and does not contend with the writer lease. */
   pinLaunchDirectory = (sessionId: string, launchDirectory: string): Promise<AgentSessionRecord> =>
