@@ -1,3 +1,4 @@
+import type { WorkspaceSessionTitlePatch } from '../../shared/workspace-session/workspace-session-terminal-titles'
 import type { IssueInfo, PRInfo } from '../../shared/github/pull-request-types'
 import type {
   WorkspaceSessionPatch,
@@ -14,6 +15,10 @@ export type WorkspaceSessionApi = {
     listHostIds: () => Promise<ExecutionHostId[]>
     set: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => Promise<void>
     patch: (args: WorkspaceSessionPatch, hostId?: ExecutionHostId) => Promise<void>
+    patchTerminalTitles?: (
+      args: WorkspaceSessionTitlePatch,
+      hostId?: ExecutionHostId
+    ) => Promise<void>
     /** Commits a terminal tab or split-pane close into main's membership. */
     closeTerminalSurface: (args: {
       worktreeId: string

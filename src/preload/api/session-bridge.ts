@@ -6,6 +6,8 @@ export const sessionApi = {
   listHostIds: () => ipcRenderer.invoke('session:list-host-ids'),
   set: (args, hostId) => ipcRenderer.invoke('session:set', args, hostId),
   patch: (args, hostId) => ipcRenderer.invoke('session:patch', args, hostId),
+  patchTerminalTitles: (args, hostId) =>
+    ipcRenderer.invoke('session:patch-terminal-titles', args, hostId),
   closeTerminalSurface: (args) => ipcRenderer.invoke('session:close-terminal-surface', args),
   flush: () => ipcRenderer.invoke('session:flush'),
   readTerminalScrollback: (args) =>

@@ -197,3 +197,38 @@ describe('a host partition written from a per-host renderer snapshot', () => {
     }
   })
 })
+
+describe('targeted terminal title saves', () => {
+  it('changes existing host titles without reviving closed tabs or changing their binding', async () => {
+    const store = createStore()
+    const tab = {
+      id: 'live',
+      worktreeId: WT,
+      ptyId: 'host-pty',
+      title: 'before',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1
+    }
+    store.setWorkspaceSession(
+      { ...rendererSession('live'), tabsByWorktree: { [WT]: [tab] } },
+      HOST_ID
+    )
+    store.patchWorkspaceSessionTerminalTitles(
+      {
+        terminalTitles: [
+          { worktreeId: WT, tabId: 'live', value: 'after' },
+          { worktreeId: WT, tabId: 'closed', value: 'must-not-return' }
+        ],
+        unifiedLabels: []
+      },
+      HOST_ID
+    )
+    await store.flushPendingOrThrowAsync()
+    expect(store.getWorkspaceSession(HOST_ID).tabsByWorktree[WT]).toEqual([
+      { ...tab, title: 'after' }
+    ])
+    expect(store.getWorkspaceSession().tabsByWorktree[WT]).toBeUndefined()
+  })
+})

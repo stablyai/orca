@@ -1,3 +1,4 @@
+import { applyWorkspaceSessionTerminalTitles } from '../../../../../shared/workspace-session/workspace-session-terminal-titles'
 /** Cover SSH persistence beyond repo-backed repair: folder rows split between renderer local/main SSH, stored partitions absent from repos, and same bare IDs across rival hosts requiring gap-fill-only adoption (#12723). */
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../../shared/constants'
@@ -11,7 +12,10 @@ import type {
   WorkspaceSessionState
 } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import { fetchWorkspaceSessionWithRuntimeHostOwners } from './workspace-session-host-hydration'
-import { patchWorkspaceSessionByHost } from './workspace-session-host-persistence'
+import {
+  patchWorkspaceSessionByHost,
+  patchWorkspaceSessionTerminalTitlesByHost
+} from './workspace-session-host-persistence'
 
 const TARGET_ID = 'target-1'
 const SSH_HOST_ID: ExecutionHostId = `ssh:${TARGET_ID}`
@@ -91,4 +95,48 @@ describe('a bare workspace id two partitions both hold', () => {
     expect(Object.keys(sshTabs ?? {}).sort()).toEqual([SIBLING_ID, WORKTREE_ID].sort())
     expect(sshTabs?.[WORKTREE_ID]?.map((entry) => entry.id)).toEqual(['tab-declined'])
   })
+})
+
+it('routes folder title writes and contested titles without changing the parked claimant', async () => {
+  const folder = 'folder:notes'
+  const contested = 'repo-shared::/checkout'
+  const partitions: Record<string, WorkspaceSessionState> = {
+    local: session({}),
+    [SSH_HOST_ID]: session({
+      tabsByWorktree: {
+        [folder]: [tab('folder-tab', folder)],
+        [contested]: [tab('parked-tab', contested)]
+      }
+    }),
+    [OTHER_SSH_HOST_ID]: session({
+      tabsByWorktree: {
+        [contested]: [tab('primary-tab', contested)]
+      }
+    })
+  }
+  await patchWorkspaceSessionTerminalTitlesByHost(
+    async (updates, hostId) => {
+      const host = hostId ?? 'local'
+      partitions[host] = applyWorkspaceSessionTerminalTitles(partitions[host], updates)
+    },
+    {
+      terminalTitles: [
+        { worktreeId: folder, tabId: 'folder-tab', value: 'folder-renamed' },
+        { worktreeId: contested, tabId: 'primary-tab', value: 'primary-renamed' }
+      ],
+      unifiedLabels: []
+    },
+    {
+      repos: [],
+      worktreesByRepo: {},
+      projectGroups: [{ id: 'group', executionHostId: SSH_HOST_ID }],
+      folderWorkspaces: [{ id: 'notes', projectGroupId: 'group' }],
+      contestedPrimaryHostBySessionKey: { [contested]: OTHER_SSH_HOST_ID },
+      contestedHostWorkspaceSessions: { [SSH_HOST_ID]: partitions[SSH_HOST_ID] }
+    }
+  )
+  expect(partitions[SSH_HOST_ID].tabsByWorktree[folder][0].title).toBe('folder-renamed')
+  expect(partitions[SSH_HOST_ID].tabsByWorktree[contested][0].title).toBe('parked-tab')
+  expect(partitions[OTHER_SSH_HOST_ID].tabsByWorktree[contested][0].title).toBe('primary-renamed')
+  expect(partitions.local.tabsByWorktree).toEqual({})
 })

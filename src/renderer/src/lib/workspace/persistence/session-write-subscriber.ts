@@ -1,3 +1,5 @@
+import { collectTitleUpdates } from './session-terminal-title-updates'
+import type { WorkspaceSessionTitlePatch } from '../../../../../shared/workspace-session/workspace-session-terminal-titles'
 import type { AppState } from '../../../store/types'
 import { isDecorativeAgentTitleFrameChange } from '../../../../../shared/agent-status/title/agent-decorative-title-signature'
 import type { WorkspaceSessionPatch } from '../../../../../shared/workspace-session/workspace-session-state-types'
@@ -11,6 +13,9 @@ type TerminalTab = TabsByWorktree[string][number]
 type UnifiedTabsByWorktree = AppState['unifiedTabsByWorktree']
 type UnifiedTab = UnifiedTabsByWorktree[string][number]
 
+const SEAM_TERMINAL_TITLE_FIELDS = ['tabsByWorktree', 'unifiedTabsByWorktree'] as const
+const terminalTitleFields = new Set<SessionRelevantField>(SEAM_TERMINAL_TITLE_FIELDS)
+
 const TERMINAL_TAB_LIVE_TITLE_KEYS = new Set<keyof TerminalTab>(['title'])
 // Handoff flags are stripped from sessions; toggling alone must not rebuild durable payloads.
 const TERMINAL_TAB_TRANSIENT_SESSION_KEYS = new Set<keyof TerminalTab>([
@@ -18,7 +23,11 @@ const TERMINAL_TAB_TRANSIENT_SESSION_KEYS = new Set<keyof TerminalTab>([
   'recovery'
 ])
 
-function terminalTabChangedForSession(prev: TerminalTab, next: TerminalTab): boolean {
+function terminalTabChangedForSession(
+  prev: TerminalTab,
+  next: TerminalTab,
+  includeTitle = true
+): boolean {
   if (prev === next) {
     return false
   }
@@ -34,7 +43,11 @@ function terminalTabChangedForSession(prev: TerminalTab, next: TerminalTab): boo
       return true
     }
   }
-  return prev.title !== next.title && !isDecorativeAgentTitleFrameChange(prev.title, next.title)
+  return (
+    includeTitle &&
+    prev.title !== next.title &&
+    !isDecorativeAgentTitleFrameChange(prev.title, next.title)
+  )
 }
 function createTerminalSessionTabsProjection() {
   return createWorktreeTabBucketProjection<TerminalTab, TerminalTab>({
@@ -44,7 +57,11 @@ function createTerminalSessionTabsProjection() {
   })
 }
 
-function unifiedTabChangedForSession(prev: UnifiedTab, next: UnifiedTab): boolean {
+function unifiedTabChangedForSession(
+  prev: UnifiedTab,
+  next: UnifiedTab,
+  includeLabel = true
+): boolean {
   if (prev === next) {
     return false
   }
@@ -66,7 +83,7 @@ function unifiedTabChangedForSession(prev: UnifiedTab, next: UnifiedTab): boolea
   if (prev.contentType !== 'terminal' || next.contentType !== 'terminal') {
     return true
   }
-  return !isDecorativeAgentTitleFrameChange(prev.label, next.label)
+  return includeLabel && !isDecorativeAgentTitleFrameChange(prev.label, next.label)
 }
 function createUnifiedSessionTabsProjection() {
   return createWorktreeTabBucketProjection<UnifiedTab, UnifiedTab>({
@@ -77,6 +94,7 @@ function createUnifiedSessionTabsProjection() {
 
 export type WorkspaceSessionWrite = {
   patch: WorkspaceSessionPatch
+  terminalTitles?: WorkspaceSessionTitlePatch
 }
 
 export type SessionWriteSubscriberDeps = {
@@ -86,6 +104,7 @@ export type SessionWriteSubscriberDeps = {
   }
   persist: (payload: WorkspaceSessionWrite) => void | Promise<void>
   onPersistError?: (error: unknown) => void
+  supportsTerminalTitlePatches?: boolean
   debounceMs?: number
 }
 
@@ -94,6 +113,7 @@ export function createSessionWriteSubscriber({
   store,
   persist,
   onPersistError,
+  supportsTerminalTitlePatches = false,
   debounceMs = 150
 }: SessionWriteSubscriberDeps): () => void {
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -103,6 +123,8 @@ export function createSessionWriteSubscriber({
   let prev: Record<string, unknown> | null = null
   // prev holds projected maps; retain raw identities separately for the allocation-free scan.
   let prevTabsSource: TabsByWorktree | null = null
+  let persistedTabsSource: TabsByWorktree | null = null
+  let persistedUnifiedTabsSource: UnifiedTabsByWorktree | null = null
   let prevUnifiedTabsSource: UnifiedTabsByWorktree | null = null
   // Pending fields are the only owed-write ledger after prev advances. In-flight writes own their fields until ACK; failures merge them back without replacing newer same-field edits.
   const pendingChangedFields = new Set<SessionRelevantField>()
@@ -121,17 +143,55 @@ export function createSessionWriteSubscriber({
     }
     const changed = new Set(pendingChangedFields)
     pendingChangedFields.clear()
-    const patch = buildWorkspaceSessionPatch(fresh, changed)
-    if (Object.keys(patch).length === 0) {
+    let terminalTitles: WorkspaceSessionTitlePatch | undefined
+    if (
+      supportsTerminalTitlePatches &&
+      persistedTabsSource &&
+      persistedUnifiedTabsSource &&
+      [...changed].every((field) => terminalTitleFields.has(field))
+    ) {
+      const titles = collectTitleUpdates(
+        persistedTabsSource,
+        fresh.tabsByWorktree,
+        (before, after) => terminalTabChangedForSession(before, after, false),
+        (tab) => tab.title
+      )
+      const labels = collectTitleUpdates(
+        persistedUnifiedTabsSource,
+        fresh.unifiedTabsByWorktree,
+        (before, after) => unifiedTabChangedForSession(before, after, false),
+        (tab) => tab.label
+      )
+      if (titles && labels) {
+        terminalTitles = { terminalTitles: titles, unifiedLabels: labels }
+      }
+    }
+    const patch = terminalTitles ? {} : buildWorkspaceSessionPatch(fresh, changed)
+    if (!terminalTitles && Object.keys(patch).length === 0) {
       return
     }
     writing = true
     const settle = (failed: boolean, error?: unknown): void => {
       writing = false
+      if (!failed) {
+        if (terminalTitles || Object.hasOwn(patch, 'tabsByWorktree')) {
+          persistedTabsSource = fresh.tabsByWorktree
+        }
+        if (terminalTitles || Object.hasOwn(patch, 'unifiedTabs')) {
+          persistedUnifiedTabsSource = fresh.unifiedTabsByWorktree
+        }
+      }
       if (disposed) {
         return
       }
       if (failed) {
+        // A failed multi-host write may have partially applied; retry full rows even after a revert.
+        if (terminalTitles || Object.hasOwn(patch, 'tabsByWorktree')) {
+          persistedTabsSource = null
+        }
+        if (terminalTitles || Object.hasOwn(patch, 'unifiedTabs')) {
+          persistedUnifiedTabsSource = null
+        }
         for (const field of changed) {
           pendingChangedFields.add(field)
         }
@@ -142,7 +202,7 @@ export function createSessionWriteSubscriber({
       }
     }
     try {
-      const result = persist({ patch })
+      const result = persist(terminalTitles ? { patch, terminalTitles } : { patch })
       if (result && typeof result.then === 'function') {
         void result.then(
           () => settle(false),
