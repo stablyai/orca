@@ -104,3 +104,25 @@ export function buildOrcaCloudSettingsSections(
     }
   ]
 }
+
+/**
+ * JA-16: in Orca Cloud builds every cloud entry sits in one group, led by Agent accounts and the
+ * Orca account, instead of being split across AI capabilities, Set up and Orca Cloud.
+ */
+export function gatherOrcaCloudSettingsGroup(
+  sections: readonly SettingsNavSection[],
+  { isWebClient, isOrcaCloudApiAvailable }: SettingsNavigationBuildOptions
+): SettingsNavSection[] {
+  if (isWebClient || !isOrcaCloudApiAvailable) {
+    return [...sections]
+  }
+  const leadIds = ['accounts', 'orca-account']
+  const leads = leadIds
+    .map((id) => sections.find((section) => section.id === id))
+    .filter((section): section is SettingsNavSection => section !== undefined)
+    .map((section) => ({ ...section, group: 'orca-cloud' as const }))
+  const rest = sections.filter((section) => !leadIds.includes(section.id))
+  const firstCloud = rest.findIndex((section) => section.group === 'orca-cloud')
+  const at = firstCloud === -1 ? rest.length : firstCloud
+  return [...rest.slice(0, at), ...leads, ...rest.slice(at)]
+}

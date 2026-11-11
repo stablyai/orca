@@ -1397,7 +1397,7 @@
       "orcaCloud": "Orca Cloud"
     },
     "orcaAccount": {
-      "descriptionWithCloud": "Sign-in, plan, team and Orca Cloud settings."
+      "descriptionIdentity": "The Orca account you’re signed in with."
     },
     "agentAccounts": {
       "searchTitle": "Agent accounts",
