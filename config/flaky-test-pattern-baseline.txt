@@ -507,7 +507,6 @@
 3 test-no-wall-clock:src/main/github/pr-refresh-coordinator-active-visible-priority.test.ts
 8 test-no-wall-clock:src/main/github/pr-refresh-coordinator-alias-coalescing.test.ts
 5 test-no-wall-clock:src/main/github/pr-refresh-coordinator-completion-order.test.ts
-1 test-no-wall-clock:src/main/github/pr-refresh-coordinator-error-cadence.test.ts
 3 test-no-wall-clock:src/main/github/pr-refresh-coordinator-foreground-pacing.test.ts
 3 test-no-wall-clock:src/main/github/pr-refresh-coordinator-refresh-events.test.ts
 4 test-no-wall-clock:src/main/github/pr-refresh-coordinator-visibility-policy.test.ts
@@ -614,7 +613,6 @@
 3 test-no-wall-clock:src/main/windows/windows-msys-job.win32.test.ts
 1 test-no-wall-clock:src/main/windows/windows-process-table-native-addon.win32.test.ts
 2 test-no-wall-clock:src/main/windows/windows-pty-job.win32.test.ts
-2 test-no-wall-clock:src/main/workspace-hooks/hook-archive-timeout-observation.test.ts
 2 test-no-wall-clock:src/main/workspaces/removal/local-worktree-removal-recovery-live.test.ts
 1 test-no-wall-clock:src/main/workspaces/removal/worktree-removal-close-records.test.ts
 2 test-no-wall-clock:src/main/wsl/execution/wsl-runner.wsl.test.ts
@@ -627,7 +625,6 @@
 2 test-no-wall-clock:src/renderer/src/components/native-chat/tools/tasks/NativeChatStructuredSessionStatus.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/sidebar/workspace-card/review/use-workspace-reference-details.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/sidebar/worktree-list/listing/WorktreeList.lineage-agent-expansion-coupling.test.tsx
-2 test-no-wall-clock:src/renderer/src/components/task-page/jira/task-page-jira-cache-selectors.test.ts
 2 test-no-wall-clock:src/renderer/src/components/terminal-pane/pty-connection/emulation/fish-color-scheme-child-stdin.node-pty.test.ts
 2 test-no-wall-clock:src/renderer/src/components/terminal-pane/snapshots/remote-snapshot-alt-screen-host-chain.test.ts
 1 test-no-wall-clock:src/renderer/src/components/terminal/initial-terminal-structured-launch.test.tsx
@@ -750,7 +747,7 @@
 1 test-timeout-needs-reason:src/main/windows/windows-msys-job.win32.test.ts
 2 test-timeout-needs-reason:src/main/windows/windows-pty-job.win32.test.ts
 5 test-timeout-needs-reason:src/main/worker-thread-child-process/worker-thread-child-process.test.ts
-2 test-timeout-needs-reason:src/main/workspace-hooks/hook-archive-timeout-observation.test.ts
+1 test-timeout-needs-reason:src/main/workspace-hooks/hook-archive-timeout-observation.test.ts
 2 test-timeout-needs-reason:src/main/workspace-hooks/hook-termination-real-process.test.ts
 2 test-timeout-needs-reason:src/main/workspaces/removal/local-worktree-filesystem-wsl-banner.wsl.test.ts
 4 test-timeout-needs-reason:src/main/wsl/execution/wsl-runner.wsl.test.ts
