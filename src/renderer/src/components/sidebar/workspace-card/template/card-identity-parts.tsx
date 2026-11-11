@@ -104,6 +104,7 @@ export const CARD_IDENTITY_PARTS = {
   HostMark: part(['runtime'], (props, _children, card) => (
     <WorktreeCardHostMark
       worktreeId={card.worktree.id}
+      hostId={getWorktreeExecutionHostId(card.worktree, card.repo)}
       onPointerDown={card.stopQuickActionPointerPropagation}
       // Always icon-only in the 12px slot; classic cards show Connect on line 2 (SshConnect).
       sshControl={sshControl({ iconOnly: true }, card)}

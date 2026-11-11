@@ -4,6 +4,8 @@ import {
   ArchiveRestore,
   Moon,
   Trash2,
+  ArrowDown,
+  ArrowUp,
   ArrowUpRight,
   BookOpen,
   FolderInput,
@@ -11,7 +13,10 @@ import {
   Link2,
   Lock,
   MoreHorizontal,
+  Pin,
+  PinOff,
   Play,
+  RotateCw,
   UserRoundCog,
   Users
 } from 'lucide-react'
@@ -38,7 +43,12 @@ import type {
   CloudWorkspacePresence
 } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { MemberAvatar } from './CloudMemberAvatars'
+import { openTeammateProfile } from '../teammates/teammate-profile-store'
 import { memberName, presentMembers, type MemberDirectory } from './cloud-workspace-format'
+import {
+  cloudWorkspaceActionGroups,
+  type CloudWorkspaceAction
+} from './cloud-workspace-action-groups'
 
 export type RowActions = {
   /** Opens it, waking it first when it is asleep. */
@@ -56,9 +66,17 @@ export type RowActions = {
   unarchive: (w: CloudWorkspace) => void
   /** Put a running sandbox to sleep (frees a running slot). */
   sleep: (w: CloudWorkspace) => void
+  /** Restart it; only offered where this desktop runs it (the sidebar has the same action). */
+  restart?: (w: CloudWorkspace) => void
   /** Delete the sandbox and its disk, after a confirmation. */
   remove: (w: CloudWorkspace) => void
+  /** Pin to the top of Home, synced to your other devices (your own pins, not the team's). */
+  setPinned?: (w: CloudWorkspace, pinned: boolean) => void
+  /** Move one place up (-1) or down (1) within its group, synced like pins. */
+  move?: (w: CloudWorkspace, delta: number) => void
 }
+
+export type RowArrangement = { pinned: boolean; canMoveUp: boolean; canMoveDown: boolean }
 
 /** Placeholder replaced by the inline section editor in CloudWorkspacesHome. */
 export const NEW_SECTION = '\u0000new-section'
@@ -87,7 +105,8 @@ export function CloudWorkspaceRowMenu({
   selfId,
   open,
   onOpenChange,
-  actions
+  actions,
+  arrangement
 }: {
   workspace: CloudWorkspace
   title: string
@@ -100,6 +119,7 @@ export function CloudWorkspaceRowMenu({
   open: boolean
   onOpenChange: (open: boolean) => void
   actions: RowActions
+  arrangement?: RowArrangement
 }): React.JSX.Element {
   const t = useTranslate()
   const keybindings = useAppStore((state) => state.keybindings)
@@ -109,6 +129,23 @@ export function CloudWorkspaceRowMenu({
     : []
   // Focus returns to ⋯ on close; after a mouse open that would leave a ring nobody asked for.
   const openedByPointer = useRef(false)
+  // The same action list the sidebar menu renders (JA-14); this menu adds Home-only arrangement.
+  const groups = cloudWorkspaceActionGroups({
+    surface: 'home',
+    status: w.status,
+    archivedAt: w.archivedAt,
+    visibility: w.visibility,
+    canOpen,
+    canManage,
+    readableAsleep: isReadableAsleep(w),
+    canRestart:
+      actions.restart !== undefined &&
+      w.access === 'owner' &&
+      (w.status === 'running' || w.status === 'failed'),
+    hasMembers: members.length > 0
+  })
+  const has = (action: CloudWorkspaceAction): boolean =>
+    groups.some((group) => group.actions.includes(action))
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger
@@ -159,6 +196,32 @@ export function CloudWorkspaceRowMenu({
             <DropdownMenuShortcut>↵</DropdownMenuShortcut>
           </DropdownMenuItem>
         )}
+        {arrangement && actions.setPinned && w.archivedAt === null && (
+          <DropdownMenuItem onSelect={() => actions.setPinned?.(w, !arrangement.pinned)}>
+            {arrangement.pinned ? <PinOff /> : <Pin />}
+            {arrangement.pinned
+              ? t('auto.components.cloudWorkspaces.unpin', 'Unpin')
+              : t('auto.components.cloudWorkspaces.pin', 'Pin')}
+          </DropdownMenuItem>
+        )}
+        {arrangement && actions.move && (arrangement.canMoveUp || arrangement.canMoveDown) && (
+          <>
+            <DropdownMenuItem
+              disabled={!arrangement.canMoveUp}
+              onSelect={() => actions.move?.(w, -1)}
+            >
+              <ArrowUp />
+              {t('auto.components.cloudWorkspaces.moveUp', 'Move up')}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={!arrangement.canMoveDown}
+              onSelect={() => actions.move?.(w, 1)}
+            >
+              <ArrowDown />
+              {t('auto.components.cloudWorkspaces.moveDown', 'Move down')}
+            </DropdownMenuItem>
+          </>
+        )}
         <DropdownMenuItem onSelect={() => actions.copyLink(w)}>
           <Link2 />
           {t('auto.components.cloudWorkspaces.copyLink', 'Copy link')}
@@ -168,6 +231,16 @@ export function CloudWorkspaceRowMenu({
           <Link2 />
           {t('auto.components.cloudWorkspaces.copyWorkspaceLink', 'Copy workspace link')}
         </DropdownMenuItem>
+        {w.ownerUserId !== selfId && (
+          <DropdownMenuItem onSelect={() => openTeammateProfile(w.ownerUserId)}>
+            <MemberAvatar userId={w.ownerUserId} directory={directory} selfId={selfId} size="sm" />
+            <span className="truncate">
+              {t('auto.components.cloudWorkspaces.viewOwnerProfile', "View {{name}}'s profile", {
+                name: memberName(directory, w.ownerUserId, selfId, t)
+              })}
+            </span>
+          </DropdownMenuItem>
+        )}
         {teammatesHere.length > 0 && (
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
@@ -273,7 +346,13 @@ export function CloudWorkspaceRowMenu({
               </DropdownMenuSub>
             )}
             <DropdownMenuSeparator />
-            {w.status === 'running' && w.archivedAt === null ? (
+            {has('restart') && actions.restart ? (
+              <DropdownMenuItem onSelect={() => actions.restart?.(w)}>
+                <RotateCw />
+                {t('orcaCloudWorkspace.restart', 'Restart')}
+              </DropdownMenuItem>
+            ) : null}
+            {has('sleep') ? (
               <DropdownMenuItem onSelect={() => actions.sleep(w)}>
                 <Moon />
                 {t('auto.components.cloudWorkspaces.sleep', 'Sleep')}

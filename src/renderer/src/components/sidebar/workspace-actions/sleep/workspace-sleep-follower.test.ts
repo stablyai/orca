@@ -53,6 +53,10 @@ vi.mock('./sleep-worktree-sidebar-position', () => ({
   preserveSidebarWorktreePosition: () => () => {}
 }))
 vi.mock('./sleep-worktree-flow', () => ({ toastWorkspaceSleepOutcome: vi.fn() }))
+vi.mock('./browser-tab-sleep', () => ({
+  sleepWorktreeBrowserTabs: vi.fn(),
+  wakeWorktreeBrowserTabs: vi.fn()
+}))
 
 import { followWorkspaceSleep, keepWorkspaceAwakeDuringSleep } from './workspace-sleep-follower'
 import { forgetWorktreeSleepIntent, hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'

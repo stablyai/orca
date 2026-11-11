@@ -41,7 +41,7 @@ export function createProjectHostSetupActions(
   | 'setupProjectClone'
 > {
   return {
-    setupProjectExistingFolder: async (args) => {
+    setupProjectExistingFolder: async (args, options) => {
       try {
         assertNotSshProjectHost(get(), args.hostId)
         const target = getProjectSetupRuntimeTarget(args.hostId)
@@ -94,9 +94,11 @@ export function createProjectHostSetupActions(
             projectHostSetups: nextSetups
           }
         })
-        toast.success(translate('auto.store.slices.repos.8bb3ad7935', 'Project added'), {
-          description: project.displayName
-        })
+        if (!options?.quiet) {
+          toast.success(translate('auto.store.slices.repos.8bb3ad7935', 'Project added'), {
+            description: project.displayName
+          })
+        }
         return { ...result, project, repo, setup }
       } catch (err) {
         console.error('Failed to set up project on host:', err)

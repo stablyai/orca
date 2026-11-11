@@ -1,3 +1,4 @@
+import { selectAwakeBrowserTabsByWorktree } from '@/components/sidebar/workspace-actions/sleep/browser-tab-sleep'
 import type { AppState } from '@/store/types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { isSleepingSweepExempt } from '../../../../../../shared/workspace-view/workspace-row-filters'
@@ -15,7 +16,9 @@ export function createSleepingSweepHiddenCheck(
   exemptWorktreeIds?: ReadonlySet<string>
 ): (worktree: Worktree) => boolean {
   const tabsByWorktree = getVisibleWorktreeTerminalActivityTabs(state.tabsByWorktree)
-  const browserTabsByWorktree = getVisibleWorktreeBrowserActivityTabs(state.browserTabsByWorktree)
+  const browserTabsByWorktree = getVisibleWorktreeBrowserActivityTabs(
+    selectAwakeBrowserTabsByWorktree(state)
+  )
   const liveAgentWorktrees = getWorktreeIdsWithLiveAgent(
     state.agentStatusByPaneKey,
     tabsByWorktree,

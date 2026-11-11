@@ -126,6 +126,10 @@ describe('cloud setup session (renderer)', () => {
   it('stops on an expired session and returns null when setup cannot open', async () => {
     cloudSetupStart.mockResolvedValueOnce({ status: 'signed-out' })
     expect(await startCloudSetupSession({ needs: ['plan'] })).toBeNull()
+    // A cancelled (or timed-out, or replaced) sign-in is not a failure: callers must not fall back
+    // to another browser trip.
+    cloudSetupStart.mockResolvedValueOnce({ status: 'cancelled' })
+    expect(await startCloudSetupSession({ needs: ['plan'] })).toEqual({ cancelled: true })
 
     cloudSetupGet.mockResolvedValue({ status: 'not-found' })
     await refreshCloudSetupSession(ID)

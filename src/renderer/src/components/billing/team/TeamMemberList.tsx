@@ -1,4 +1,12 @@
-import { Crown, LogOut, MailPlus, MoreHorizontal, UserMinus, XCircle } from 'lucide-react'
+import {
+  Crown,
+  LogOut,
+  MailPlus,
+  MoreHorizontal,
+  UserMinus,
+  UserRound,
+  XCircle
+} from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
@@ -39,6 +47,8 @@ export type TeamMemberListProps = {
   onResend: (email: string, role: OrcaOrgRole) => void
   onRevoke: (email: string) => void
   onLeave: () => void
+  /** Opens a signed-in member's profile (usage heatmap, recent workspaces, Pokes). */
+  onOpenProfile?: (userId: string) => void
 }
 
 function relativeSince(then: number, now: number, locale: string): string {
@@ -118,7 +128,23 @@ function RowMenu({
   const name =
     row.kind === 'member' ? (row.member.displayName ?? row.member.email) : row.invite.email
   const items: React.ReactNode[] = []
+  const profileUserId = row.kind === 'member' && row.status === 'active' ? row.member.userId : null
+  if (profileUserId && props.onOpenProfile) {
+    items.push(
+      <DropdownMenuItem key="profile" onSelect={() => props.onOpenProfile?.(profileUserId)}>
+        <UserRound />
+        {t('auto.components.billing.team.viewProfile', 'View profile')}
+      </DropdownMenuItem>
+    )
+  }
+  // Profile sits apart from the role and membership actions below it.
+  const separateFromProfile = (): void => {
+    if (items.length === 1 && profileUserId && props.onOpenProfile) {
+      items.push(<DropdownMenuSeparator key="profile-sep" />)
+    }
+  }
   if (row.kind === 'invite' && row.manageable) {
+    separateFromProfile()
     items.push(
       <DropdownMenuItem
         key="resend"
@@ -139,6 +165,7 @@ function RowMenu({
     )
   }
   if (row.kind === 'member' && row.manageable) {
+    separateFromProfile()
     if (props.viewerRole === 'owner' && row.member.role !== 'owner') {
       items.push(
         <DropdownMenuItem key="owner" onSelect={() => props.onMakeOwner(row.member)}>
@@ -160,6 +187,7 @@ function RowMenu({
     )
   }
   if (row.self) {
+    separateFromProfile()
     items.push(
       <DropdownMenuItem
         key="leave"
@@ -210,6 +238,8 @@ export function TeamMemberList(props: TeamMemberListProps): React.JSX.Element {
         const state = props.rowStates[row.key] ?? {}
         const name =
           row.kind === 'member' ? (row.member.displayName ?? row.member.email) : row.invite.email
+        const profileUserId =
+          row.kind === 'member' && row.status === 'active' ? row.member.userId : null
         const secondary =
           row.kind === 'member'
             ? row.member.displayName
@@ -229,10 +259,29 @@ export function TeamMemberList(props: TeamMemberListProps): React.JSX.Element {
             className="group/row flex min-h-12 flex-col justify-center bg-card px-3 py-2 transition-colors animate-in fade-in-0 duration-200 motion-reduce:animate-none"
           >
             <div className="flex items-center gap-3">
-              <PersonAvatar name={name} pending={row.status !== 'active'} />
+              <PersonAvatar
+                name={name}
+                pending={row.status !== 'active'}
+                pictureUrl={row.kind === 'member' ? row.member.pictureUrl : undefined}
+              />
               <div className="min-w-0 flex-1">
                 <p className="flex min-w-0 items-center gap-2 text-sm font-medium">
-                  <span className="truncate">{name}</span>
+                  {profileUserId && props.onOpenProfile ? (
+                    <button
+                      type="button"
+                      onClick={() => props.onOpenProfile?.(profileUserId)}
+                      aria-label={t(
+                        'auto.components.billing.team.openProfile',
+                        'Open {{value0}}’s profile',
+                        { value0: name }
+                      )}
+                      className="min-w-0 cursor-default truncate rounded-sm text-left outline-none hover:underline focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+                    >
+                      {name}
+                    </button>
+                  ) : (
+                    <span className="truncate">{name}</span>
+                  )}
                   {row.self ? (
                     <span className="shrink-0 text-xs font-normal text-muted-foreground">
                       {t('auto.components.billing.team.you', '(you)')}

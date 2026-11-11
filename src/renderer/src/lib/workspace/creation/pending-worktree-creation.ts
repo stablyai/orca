@@ -153,6 +153,10 @@ export type PendingVmEnvironmentCheck = {
   checks?: readonly EnvironmentDoctorCheck[]
   startedAt?: number
   finishedAt?: number
+  /** Orca Cloud, failed: when the unused sandbox is put to sleep so it stops spending hours. */
+  sleepsAt?: number
+  /** Orca Cloud, failed: the sandbox after that timer (absent while it still runs). */
+  sandbox?: 'sleeping' | 'asleep' | 'deleted'
 }
 
 /** Session-only creation status drives sidebar/panel and vanishes on reload; completed worktrees reconcile normally. request owns display fields and retry intent so they cannot drift. */
@@ -319,6 +323,12 @@ export function getCreationProgressLabel(
   }
   if (entry.phase === 'provisioning-vm') {
     if (entry.environmentCheck?.status === 'failed') {
+      // Orca Cloud stops only on an unusable sandbox; the row says what the card says.
+      if (entry.request.ephemeralVmRecipe?.provider === 'orca-cloud') {
+        return entry.environmentCheck.sandbox === 'asleep'
+          ? t('auto.lib.pendingWorktreeCreation.cloudBlockedAsleep', 'Asleep')
+          : t('auto.lib.pendingWorktreeCreation.cloudCouldNotOpen', 'Couldn’t open')
+      }
       return t('auto.lib.pendingWorktreeCreation.vmChecksFailed', 'Environment checks failed')
     }
     // Glossary: an Orca Cloud machine is a sandbox; "VM" stays only for bring-your-own recipes.
@@ -328,7 +338,9 @@ export function getCreationProgressLabel(
         ? null
         : orcaCloudCloneProgress(entry.provisioningLog ?? '', [])
       if (clone && !clone.ended) {
-        return t('auto.lib.pendingWorktreeCreation.cloningRepository', 'Cloning the repository…')
+        return clone.mode === 'update'
+          ? t('auto.lib.pendingWorktreeCreation.updatingRepository', 'Updating the repository…')
+          : t('auto.lib.pendingWorktreeCreation.cloningRepository', 'Cloning the repository…')
       }
       return entry.environmentCheck || clone
         ? t('auto.lib.pendingWorktreeCreation.preparingCloudEnvironment', 'Preparing environment…')

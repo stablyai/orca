@@ -1,5 +1,6 @@
 import type { AgentAccountsPart } from '../accounts/AgentAccountsSubsection'
 import { OrcaCloudAccountsSection } from '../agent-accounts/OrcaCloudAccountsSection'
+import { OrcaCloudAccountsDescription } from '../agent-accounts/OrcaCloudAccountsDescription'
 import { AgentAccountsOverviewSection } from '../agent-accounts/overview/AgentAccountsOverviewSection'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -29,10 +30,7 @@ export function orcaCloudAgentAccountsParts(
     {
       id: 'accounts-orca-cloud',
       title: t('orcaCloudAccounts.title', 'Orca Cloud'),
-      description: t(
-        'orcaCloudAccounts.help',
-        'Set up once on this computer. Every cloud workspace uses it, including new, cloned and restarted ones.'
-      ),
+      description: <OrcaCloudAccountsDescription />,
       content: <OrcaCloudAccountsSection hideHeader />
     }
   ]

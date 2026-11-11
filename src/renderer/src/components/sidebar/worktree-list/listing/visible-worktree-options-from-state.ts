@@ -21,6 +21,7 @@ export function buildVisibleWorktreeOptionsFromState(
     tabsByWorktree: state.tabsByWorktree,
     ptyIdsByTabId: state.ptyIdsByTabId,
     browserTabsByWorktree: state.browserTabsByWorktree,
+    asleepBrowserWorktreeIds: state.asleepBrowserWorktreeIds,
     worktreeIdsWithLiveAgent: getWorktreeIdsWithLiveAgent(
       state.agentStatusByPaneKey,
       state.tabsByWorktree,

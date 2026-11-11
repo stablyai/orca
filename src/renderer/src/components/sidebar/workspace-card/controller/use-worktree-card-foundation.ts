@@ -9,6 +9,7 @@ import {
 } from '../../../../../../shared/execution-host'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-ports/workspace-port-groups'
+import { vmWorkspacePortsAreStale } from '@/lib/workspace-ports/vm-workspace-stale-ports'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
 import { hydrateRuntimeEnvironmentSshState } from '@/runtime/hosts/ssh/runtime-environment-ssh-state'
 import { useRuntimeHostDisconnected } from '@/store/slices/runtime-status/views/use-runtime-status-view'
@@ -152,11 +153,21 @@ export function useWorktreeCardFoundation({
   })
   const conflictOperation = useAppStore((s) => s.gitConflictOperationByWorktree[worktree.id])
   const remoteBranchConflict = useAppStore((s) => s.remoteBranchConflictByWorktreeId[worktree.id])
-  const workspacePorts = useAppStore(
-    (s) =>
-      getWorkspacePortsByWorktreeId(s.workspacePortScan?.result).get(worktree.id) ??
-      EMPTY_WORKSPACE_PORTS
-  )
+  const workspacePorts = useAppStore((s) => {
+    const scan = s.workspacePortScan?.result
+    // A sleeping VM's ports died with it: none while asleep or waking, nor after the wake until a
+    // newer scan finds them again (JA-13).
+    if (
+      vmWorkspacePortsAreStale({
+        runtime: s.ephemeralVmRuntimesByWorkspaceId?.[worktree.id],
+        waking: Boolean(s.wakingEphemeralVmWorkspaceIds?.[worktree.id]),
+        scannedAt: scan?.scannedAt
+      })
+    ) {
+      return EMPTY_WORKSPACE_PORTS
+    }
+    return getWorkspacePortsByWorktreeId(scan).get(worktree.id) ?? EMPTY_WORKSPACE_PORTS
+  })
 
   // Avoid per-card host-qualified scans; twins use direct SSH status for this status-only chip.
   const sshOwnerEnvironmentId = useAppStore((s) =>

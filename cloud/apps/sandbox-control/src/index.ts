@@ -9,6 +9,7 @@
 //          the public API's POST /v1/workspaces/:id/wake answers the same fields plus `workspace`)
 //   POST   /v1/sandboxes/:id/restart                              -> {sandbox, connection}
 //   GET    /v1/sandboxes/:id/status                               -> {sandbox, status} (live metrics, cost)
+//   GET    /v1/sandboxes/boot-plan?repo=<url>                     -> {repo: 'clone' | 'update'}
 //   GET    /v1/sandboxes/:id/clone                                -> {clone: {state, percent?, stage?, reason?}}
 //   POST   /v1/sandboxes/:id/archive {pullRequests?, checkouts?}  -> {sandbox}
 //   GET    /v1/sandboxes/:id/archive                              -> {archive}
@@ -24,10 +25,13 @@
 //   POST   /v1/device-sessions | GET | DELETE /:id  per-phone access (see device-sessions.ts)
 // Phones sign their own EdDSA tokens (device-sessions.ts) and act as their user, except that they
 // cannot enroll devices, manage secrets or connect GitHub.
-//   /v1/team/workspaces[/:id[/presence|wake|lease|grants[/:grantId]]], /v1/team/links/resolve, /v1/team/prompts
+//   /v1/team/workspaces[/:id[/presence|wake|lease|grants[/:grantId]]], /v1/team/links/resolve, /v1/team/prompts,
+//   /v1/team/prefs (src/workspace-prefs.ts), /v1/team/org (src/org-slugs.ts)
 //          team workspace registry, presence, per-device grants (src/workspaces.ts, src/grants.ts)
 //          POST /v1/team/workspaces/:id/wake?wait=30s: any member who can open it wakes it (single-flight,
 //          billed to the account, counted on the owner's seat like every wake) -> {state, endpoint: null, …}
+//   /v1/team/members/:userId/(profile|poke), /v1/team/pokes[/settings|/seen]
+//          teammate profiles (usage heatmap, recent workspaces) and opt-in Pokes (src/team-presence.ts)
 // /v1/sandboxes/* is the owner's lifecycle API: only the workspace's owner (and, for suspend and
 // destroy, an org admin) can reach a row there, because resume hands back an orcad pairing offer.
 // Browser (GitHub redirects): GET /v1/github/setup, GET /v1/github/callback
@@ -141,6 +145,9 @@ import { credentialTargets, type CredentialTarget } from './provider-env'
 import type { Keyring } from './secrets-crypto'
 import { ProviderError, type SandboxProviderApi } from './sandbox-provider'
 import { readCloneStatus } from './clone-status'
+import { readIdempotencyKey, withIdempotency } from './api/idempotency'
+import { ApiError } from './api/caller'
+import { ensureAutoEnvironment, expireAutoEnvironments, touchEnvironment } from './auto-environments'
 import { DesktopCommandError, VmCommandError, startDesktop } from './sandbox-vm-commands'
 import { forgetShareLink, handleShareGateway } from './share-gateway'
 import { handleShareRoute, revokeSandboxShares, sharePathMode, shareSecret, shareSecrets } from './share-links'
@@ -150,7 +157,7 @@ import { getSandbox, getSandboxByProviderName, listAccountSandboxes, markUserSle
 import { createVercelSandboxApi } from './vercel-sandbox-api'
 import { advanceAllBuilds, tickBuild, unfinishedBuilds, type BuildDeps } from './environment-builds'
 import { environmentErrorResponse, handleEnvironmentRoute, isEnvironmentRoute } from './environment-routes'
-import { EnvironmentError } from './environments'
+import { EnvironmentError, resolveEnvironmentBoot } from './environments'
 import type { GoldenImageProviderApi } from './golden-image-provider'
 import { CreateRequestSchema, LeaseRequestSchema, parseWakeWait, readyView, sandboxView } from './wire'
 import { ArchiveRequestSchema } from './sandbox-vm-inspect'
@@ -185,7 +192,10 @@ import {
   userAuthorizeUrl
 } from './github-user-tokens'
 import { MEMBER_GIT_WINDOW_MS, memberGitRoutes, memberSentWithin, recordMemberSend } from './member-git'
+import { getWorkspacePrefs, putWorkspacePrefs } from './workspace-prefs'
+import { getOrgSlug, putOrgSlug } from './org-slugs'
 import {
+  LinkOtherOrgError,
   PatchSchema,
   PresenceSchema,
   WORKSPACE_ERROR_STATUS,
@@ -201,6 +211,7 @@ import {
   workspaceViews
 } from './workspaces'
 import { rememberCallerName } from './member-names'
+import { TeamPresenceError, teamPresenceRoute } from './team-presence'
 import { sweepSessionCpu } from './session-cpu'
 import type { SandboxCaller } from './auth'
 
@@ -742,8 +753,8 @@ function devCredentials(env: Env): CredentialBroker {
 }
 
 /** Ready answers carry phase timings as Server-Timing so clients and dashboards can see the slow step. */
-function readyResponse(ready: Ready): Response {
-  const response = json(readyView(ready.row, ready.connection, ready.cloning))
+function readyResponse(ready: Ready, updateAware = false): Response {
+  const response = json(readyView(ready.row, ready.connection, ready.cloning, updateAware))
   const timing = Object.entries(ready.timings ?? {})
     .map(([phase, ms]) => `${phase};dur=${ms}`)
     .join(', ')
@@ -802,7 +813,7 @@ export async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps
       projectId: env.VERCEL_PROJECT_ID!,
       baseUrl: env.VERCEL_API_BASE
     })
-  return {
+  const life: LifecycleDeps = {
     db: env.SANDBOX_DB,
     provider,
     entitlements: deps.entitlements ?? withDevAccountBypass(env, createEntitlementClient(env)),
@@ -834,6 +845,14 @@ export async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps
         env.SESSION_DEADLINE_MS && env.SANDBOX_ENV !== 'prod' ? Number(env.SESSION_DEADLINE_MS) : undefined
     }
   }
+  // AUTO_ENVIRONMENTS=off: creates of repos without an environment keep cloning from scratch.
+  if (env.AUTO_ENVIRONMENTS !== 'off') {
+    life.autoEnvironment = {
+      ensure: (accountId, repoUrl) => ensureAutoEnvironment(buildDeps(life, deps, env), accountId, repoUrl),
+      touch: (environmentId) => touchEnvironment(env.SANDBOX_DB, environmentId, life.now())
+    }
+  }
+  return life
 }
 
 /**
@@ -1131,7 +1150,12 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       return await internalInstallUrl(env, deps, url)
     }
     if (url.pathname.startsWith('/v1/internal/')) {
-      if (!(await isOperator(request, env.OPERATOR_TOKEN))) {
+      // Auth's member-removed push holds a token good for that one route, not the operator token.
+      const memberRemovedOnly =
+        url.pathname === '/v1/internal/org-members/removed' &&
+        request.method === 'POST' &&
+        (await isOperator(request, env.MEMBER_REMOVED_TOKEN))
+      if (!memberRemovedOnly && !(await isOperator(request, env.OPERATOR_TOKEN))) {
         return fail('not_found', 404)
       }
       const life = await lifecycleDeps(env, deps)
@@ -1471,13 +1495,32 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       url.pathname === '/v1/team/workspaces' ||
       url.pathname.startsWith('/v1/team/workspaces/') ||
       url.pathname === '/v1/team/links/resolve' ||
-      url.pathname === '/v1/team/prompts'
+      url.pathname === '/v1/team/prompts' ||
+      url.pathname === '/v1/team/prefs' ||
+      url.pathname === '/v1/team/org' ||
+      url.pathname.startsWith('/v1/team/members/') ||
+      url.pathname === '/v1/team/pokes' ||
+      url.pathname.startsWith('/v1/team/pokes/')
     ) {
       const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
       if (!caller) {
         return fail('unauthorized', 401)
       }
       return await workspaceRoute(request, url, env, deps, caller)
+    }
+    if (url.pathname === '/v1/sandboxes/boot-plan' && request.method === 'GET') {
+      // Whether a create of this repo would clone it or update a prebuilt copy, so the desktop names
+      // its repository step once, before the create answers (environments.ts resolveEnvironmentBoot).
+      const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
+      if (!caller) {
+        return fail('unauthorized', 401)
+      }
+      const repo = url.searchParams.get('repo') ?? ''
+      if (repo.length === 0 || repo.length > 2048) {
+        return fail('invalid_request', 400)
+      }
+      const source = await resolveEnvironmentBoot(env.SANDBOX_DB, caller.accountId, { repoUrl: repo }).catch(() => null)
+      return json({ repo: source?.repoDir ? 'update' : 'clone' })
     }
     const match =
       /^\/v1\/sandboxes(?:\/([A-Za-z0-9_]+)(?:\/(suspend|resume|lease|rollover|wake|restart|status|clone|archive|unarchive|env\/refresh|egress\/hosts|ssh-keys|desktop))?)?$/.exec(
@@ -1514,14 +1557,39 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         return fail('not_found', 404)
       }
       await consumeCreateToken(life.db, life.config.guardrails!, caller.accountId, life.now())
-      const body = CreateRequestSchema.safeParse(await readJson(request))
+      const raw = await readJson(request)
+      const body = CreateRequestSchema.safeParse(raw)
       if (!body.success) {
         return fail('invalid_request', 400)
       }
-      // Desktops that show the clone as its own step ask for it in the background (GET .../clone).
-      const ready = await createSandbox(life, caller, { ...body.data, cloneInBackground: features.includes('clone-progress') })
-      await recordOwnerDeviceAndSync(life, ready.row, ready.connection.pairingCode)
-      return readyResponse(ready)
+      // Idempotency-Key (one per Create press): a re-sent create with the same key and body answers
+      // with the sandbox the first one made, for 24 h, instead of starting another (PC-8).
+      let timings: Ready['timings']
+      try {
+        const response = await withIdempotency(
+          life.db,
+          { accountId: caller.accountId, scope: `sandbox.create:${caller.userId}`, key: readIdempotencyKey(request), body: raw, now: life.now() },
+          async () => {
+            // Desktops that show the clone as its own step ask for it in the background (GET .../clone).
+            const ready = await createSandbox(life, caller, { ...body.data, cloneInBackground: features.includes('clone-progress') })
+            await recordOwnerDeviceAndSync(life, ready.row, ready.connection.pairingCode)
+            timings = ready.timings
+            return { status: 200, body: readyView(ready.row, ready.connection, ready.cloning, features.includes('repo-update')) }
+          }
+        )
+        const timing = Object.entries(timings ?? {})
+          .map(([phase, ms]) => `${phase};dur=${ms}`)
+          .join(', ')
+        if (timing) {
+          response.headers.set('server-timing', timing)
+        }
+        return response
+      } catch (error) {
+        if (error instanceof ApiError) {
+          return fail(error.code, error.status, error.reason)
+        }
+        throw error
+      }
     }
     const row = await getSandbox(env.SANDBOX_DB, id)
     const route = `${request.method} ${action ?? ''}`
@@ -1809,7 +1877,32 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
   // Labels for teammates' lists; a failure here must never fail the request itself.
   await rememberCallerName(db, caller, now).catch((error: unknown) => console.warn('member_name_write_failed', String(error)))
   if (url.pathname === '/v1/team/links/resolve' && request.method === 'GET') {
-    return json(await resolveLink(db, caller, url, now))
+    try {
+      return json(await resolveLink(db, caller, url, now))
+    } catch (error) {
+      if (error instanceof LinkOtherOrgError) {
+        return json({ error: 'not_found', reason: 'other_org', orgId: error.orgId }, 404)
+      }
+      throw error
+    }
+  }
+  if (url.pathname === '/v1/team/prefs') {
+    if (request.method === 'GET') {
+      return json(await getWorkspacePrefs(db, caller))
+    }
+    if (request.method === 'PUT') {
+      return json(await putWorkspacePrefs(db, caller, await readJson(request), now))
+    }
+    return fail('not_found', 404)
+  }
+  if (url.pathname === '/v1/team/org') {
+    if (request.method === 'GET') {
+      return json(await getOrgSlug(db, caller, url, now))
+    }
+    if (request.method === 'PUT') {
+      return json(await putOrgSlug(db, caller, await readJson(request), now))
+    }
+    return fail('not_found', 404)
   }
   if (url.pathname === '/v1/team/prompts') {
     if (request.method === 'GET') {
@@ -1822,6 +1915,26 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
   }
   if (url.pathname === '/v1/team/workspaces') {
     return request.method === 'GET' ? json(await listWorkspaces(db, caller, url, now)) : fail('not_found', 404)
+  }
+  if (url.pathname.startsWith('/v1/team/members/') || url.pathname.startsWith('/v1/team/pokes')) {
+    try {
+      const answer = await teamPresenceRoute(db, caller, request, url, now, () => readJson(request), {
+        activitySharing: env.TEAMMATE_ACTIVITY_SHARING === 'team' ? 'team' : 'opt_in'
+      })
+      return answer === null ? fail('not_found', 404) : json(answer)
+    } catch (error) {
+      if (error instanceof TeamPresenceError) {
+        const response = json(
+          { error: error.code, ...(error.reason ? { reason: error.reason } : {}), ...(error.retryAfterMs ? { retryAfterMs: error.retryAfterMs } : {}) },
+          error.status
+        )
+        if (error.retryAfterMs) {
+          response.headers.set('retry-after', String(Math.ceil(error.retryAfterMs / 1000)))
+        }
+        return response
+      }
+      throw error
+    }
   }
   const match = /^\/v1\/team\/workspaces\/(sbx_[0-9a-f]{24})(?:\/(presence|wake|lease|grants|sent|read-snapshot)(?:\/(grt_[0-9a-f]{24}))?)?$/.exec(url.pathname)
   if (!match) {
@@ -2137,6 +2250,11 @@ export default {
           const refresh = await refreshEnvironmentsOnGolden(env, fresh)
           if (refresh.stale > 0) {
             console.log(JSON.stringify({ event: 'environment_golden_refresh', ...refresh }))
+          }
+          // Automatic environments unused for 14 days go with their snapshots (storage).
+          const expired = await expireAutoEnvironments(buildDeps(fresh, {}, env)).catch(() => 0)
+          if (expired > 0) {
+            console.log(JSON.stringify({ event: 'auto_environments_expired', expired }))
           }
         }
       })

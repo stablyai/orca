@@ -126,4 +126,35 @@ describe('asleep Files tab (RA-10)', () => {
     )
     expect(queryByRole('button')).toBeNull()
   })
+
+  it('archived: says "archived", never "went to sleep", and offers no Wake (DS-h)', async () => {
+    serve(
+      snapshot({
+        branch: 'master',
+        head: 'abc',
+        at: NOW - 47_000,
+        changeCount: 1,
+        changes: [{ path: 'README.md', status: 'M', area: 'unstaged' }],
+        commits: []
+      })
+    )
+    const { container } = render(<CloudAsleepFilesPanel workspaceId="ws" archived />)
+    await waitFor(() => expect(container.textContent).toContain('README.md'))
+    const text = container.textContent ?? ''
+    expect(text).toContain('Changed files when this workspace was archived · 47s ago')
+    expect(text).toContain('Unarchive the workspace to browse all its files.')
+    expect(text).not.toContain('sleep')
+    expect(container.querySelector('button')).toBeNull()
+  })
+
+  it('archived without a snapshot: the archived note, no Wake', async () => {
+    serve(null)
+    const { container } = render(<CloudAsleepFilesPanel workspaceId="ws" archived />)
+    await waitFor(() =>
+      expect(container.textContent).toContain(
+        'Files aren’t available while the workspace is archived.'
+      )
+    )
+    expect(container.querySelector('button')).toBeNull()
+  })
 })

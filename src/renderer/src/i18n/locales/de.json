@@ -1369,8 +1369,7 @@
             "76deec8f58": "Organisation konnte nicht gewechselt werden",
             "7d4bc516ee": "Profil konnte nicht gewechselt werden",
             "f518e89aa5": "Projekt existiert bereits in diesem Profil",
-            "f03ae7f27b": "Projekt konnte nicht übertragen werden",
-            "signInTimedOut": "Zeitüberschreitung bei der Anmeldung"
+            "f03ae7f27b": "Projekt konnte nicht übertragen werden"
           }
         },
         "runtime": {
@@ -18413,7 +18412,6 @@
           "signout": {
             "confirm": {
               "title": "Von Orca abmelden?",
-              "description": "Artefakte und Orca Relay sind bis zur erneuten Anmeldung nicht verfügbar. Lokale Projekte und Worktrees sind davon nicht betroffen.",
               "cancel": "Abbrechen",
               "action": "Abmelden"
             }
@@ -20763,7 +20761,6 @@
       "startInTerminal": "{{value0}} in einem Terminal starten"
     },
     "newWorkspace": {
-      "agentOptional": "Agent [optional]",
       "createDescription": "Projekt und Namen des Arbeitsbereichs auswählen. Optional einen Agenten zum Starten auswählen.",
       "directSetup": {
         "run": "Run setup",

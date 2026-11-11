@@ -170,8 +170,8 @@ export function buildSetupSettingsSections(
             title: t('auto.components.settings.orcaAccount.title', 'Orca account'),
             description: isOrcaCloudApiAvailable
               ? t(
-                  'settings.orcaAccount.descriptionWithCloud',
-                  'Sign-in, plan, team and Orca Cloud settings.'
+                  'settings.orcaAccount.descriptionIdentity',
+                  'The Orca account you’re signed in with.'
                 )
               : t(
                   'auto.components.settings.orcaAccount.description',

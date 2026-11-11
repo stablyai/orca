@@ -66,6 +66,35 @@ describe('workspace registry', () => {
     expect((await t.req(stranger, 'GET', `/v1/team/links/resolve?w=${t.id}`)).status).toBe(404)
   })
 
+  it('keeps routine runs off Home unless the Routine runs filter asks for them', async () => {
+    const t = await team()
+    // A routine run's VM: hidden and tagged with its routine (what routines/runs.ts creates).
+    expect((await t.req(t.alice, 'GET', '/v1/team/workspaces?scope=mine')).body.routineRuns).toEqual({ routines: 0, hidden: 0, hiddenRunning: 0, hiddenComputeMs: 0 })
+    t.h.raw
+      .prepare(
+        `INSERT INTO routines (id, account_id, created_by, name, project_id, trigger_kind, trigger_config, agent, prompt, max_runtime_ms, created_at, updated_at)
+         VALUES ('rtn_1', 'org:acme', 'alice', 'nightly-deps', 'prj_1', 'webhook', '{}', 'claude', 'x', 60000, 0, 0)`
+      )
+      .run()
+    t.h.raw.prepare(`UPDATE sandboxes SET hidden = 1, origin = 'routine', origin_ref = 'rtn_1' WHERE id = ?`).run(t.id)
+    const off = await t.req(t.alice, 'GET', '/v1/team/workspaces?scope=mine')
+    expect(off.body.workspaces).toEqual([])
+    // What the switch hides is still counted for Home: the switch label and the team's hours.
+    expect(off.body.routineRuns).toMatchObject({ routines: 1, hidden: 1, hiddenRunning: 1 })
+    const shown = await t.req(t.alice, 'GET', '/v1/team/workspaces?scope=mine&routines=include')
+    expect(shown.body.workspaces.map((w: { id: string; fromRoutine: boolean; routineName: string }) => [w.id, w.fromRoutine, w.routineName])).toEqual([
+      [t.id, true, 'nightly-deps']
+    ])
+    expect(shown.body.routineRuns).toMatchObject({ routines: 1, hidden: 0, hiddenRunning: 0 })
+    // Other machine-made rows stay hidden even then.
+    t.h.raw.prepare(`UPDATE sandboxes SET origin = 'vm' WHERE id = ?`).run(t.id)
+    expect((await t.req(t.alice, 'GET', '/v1/team/workspaces?scope=mine&routines=include')).body.workspaces).toEqual([])
+    // A plain workspace says so.
+    t.h.raw.prepare(`UPDATE sandboxes SET hidden = 0, origin = 'desktop' WHERE id = ?`).run(t.id)
+    expect((await t.req(t.alice, 'GET', '/v1/team/workspaces?scope=mine')).body.workspaces[0].fromRoutine).toBe(false)
+    expect((await t.req(t.alice, 'GET', '/v1/team/workspaces?routines=bogus')).status).toBe(400)
+  })
+
   it('lets admins see private rows for management (scope=all) without access', async () => {
     const t = await team()
     expect((await t.req(t.bob, 'GET', '/v1/team/workspaces?scope=all')).status).toBe(403)
@@ -414,7 +443,7 @@ describe('desktop wire contract', () => {
       ).body
     )
     wire.CloudWorkspaceGrantListSchema.parse((await t.req(t.bob, 'GET', `/v1/team/workspaces/${t.id}/grants`)).body)
-    expect(wire.parseCloudWorkspaceLink(wire.cloudWorkspaceLink(t.id, 'chat 1'))).toEqual({ workspaceId: t.id, chatId: 'chat 1' })
+    expect(wire.parseCloudWorkspaceLink(wire.cloudWorkspaceLink(t.id, 'chat 1'))).toEqual({ target: { kind: 'id', workspaceId: t.id }, chatId: 'chat 1' })
     expect(issued.grant.status).toBe('active')
   })
 

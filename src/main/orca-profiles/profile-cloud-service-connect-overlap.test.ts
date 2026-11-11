@@ -184,7 +184,8 @@ describe('Orca cloud overlapping connect', () => {
       redirectUri: 'http://127.0.0.1:4100/auth/callback',
       state: 'earlier-state'
     })
-    await expect(earlier).resolves.toMatchObject({ status: 'connected' })
+    // The later sign-in replaced the earlier one, so the earlier callback can't link anything.
+    await expect(earlier).resolves.toMatchObject({ status: 'cancelled' })
     await expect(signOutCurrentOrcaProfile(userDataPath)).resolves.toMatchObject({
       status: 'signed-out'
     })
@@ -196,7 +197,7 @@ describe('Orca cloud overlapping connect', () => {
       state: 'later-state'
     })
     await expect(later).resolves.toMatchObject({ status: 'cancelled' })
-    expect(exchangeOrcaCloudAuthCodeMock).toHaveBeenCalledTimes(1)
+    expect(exchangeOrcaCloudAuthCodeMock).not.toHaveBeenCalled()
     expect(getCurrentOrcaProfileAuthStatus(userDataPath)).toMatchObject({ state: 'local' })
   })
 })

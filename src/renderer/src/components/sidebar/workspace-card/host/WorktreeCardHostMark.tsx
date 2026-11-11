@@ -50,11 +50,14 @@ function LocalOrVmGlyph({ worktreeId }: { worktreeId: string }): React.JSX.Eleme
  */
 export function WorktreeCardHostMark({
   worktreeId,
+  hostId,
   sshControl,
   runtimeMark,
   onPointerDown
 }: {
   worktreeId: string
+  /** The execution host: an Orca Cloud sandbox's server gets the cloud glyph from the first frame. */
+  hostId?: string | null
   /** Set for SSH repos: the connection control replaces the glyph. */
   sshControl?: React.ReactNode
   /** Set for Orca server repos. */
@@ -68,6 +71,7 @@ export function WorktreeCardHostMark({
   return (
     <CloudWorkspaceMarkSlot
       workspaceId={worktreeId}
+      hostId={hostId}
       onPointerDown={onPointerDown}
       fallback={runtimeMark ?? <LocalOrVmGlyph worktreeId={worktreeId} />}
     />
