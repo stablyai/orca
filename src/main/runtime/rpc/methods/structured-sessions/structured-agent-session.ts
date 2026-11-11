@@ -192,7 +192,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       )
     }
   }),
-  // Waiters poll this instead of history, so each check costs no transcript work.
+  // Waiters poll this instead of history: no page or retained-item scan, and no transcript in the reply.
   defineMethod({
     name: 'agentSession.workState',
     permission: 'workspace',
