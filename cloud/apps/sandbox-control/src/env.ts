@@ -23,10 +23,18 @@ export type Env = {
   GOLDEN_SNAPSHOT_REGION?: string
   /** Non-prod only: pin this image over the rotated active one (preview versions testing new VM entry points). */
   GOLDEN_SNAPSHOT_OVERRIDE?: string
+  /** 'off': no automatic environments (auto-environments.ts); creates without one keep cloning. */
+  AUTO_ENVIRONMENTS?: string
   /** Git as the sender: `on`, `accounts:<id>,<id>` or off (default). See memberGitEnabled in index.ts. */
   MEMBER_GIT_IDENTITY?: string
   /** How long after a member's own send their GitHub identity stays usable (default 30). */
   MEMBER_GIT_WINDOW_MINUTES?: string
+  /**
+   * Who sees a member's daily activity heatmap on their profile. `opt_in` (default): only members
+   * who turned on "Pokes and activity". `team`: every teammate (Conductor's default). Config only,
+   * so flipping it needs no migration.
+   */
+  TEAMMATE_ACTIVITY_SHARING?: string
   /** `release:latest` | `release:v1.2.3`: build golden images from Orca's released orca-server tarball. */
   GOLDEN_IMAGE_SOURCE?: string
   /** TTL for Worker-built golden images; unset/0 keeps them until rotated out. */

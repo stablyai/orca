@@ -2289,7 +2289,8 @@
         "vmChecksFailed": "Environment checks failed",
         "preparingCloudEnvironment": "Preparing environment…",
         "startingSandbox": "Starting sandbox…",
-        "cloningRepository": "Cloning the repository…"
+        "cloningRepository": "Cloning the repository…",
+        "updatingRepository": "Updating the repository…"
       },
       "duplicatePairedServers": {
         "ambiguousSameServer": "{{value0}} and {{value1}} are the same server paired twice. Remove one in Settings > Remote Orca Servers."
@@ -2330,7 +2331,8 @@
       "ephemeralVmEnvironmentCheck": {
         "backgroundFailed": "Environment checks failed for a new VM workspace. Open it in the sidebar to continue.",
         "openedDegraded": "Creating the workspace on a VM whose environment checks failed.",
-        "unreachable": "The environment checks could not finish: {{error}}"
+        "unreachable": "The environment checks could not finish: {{error}}",
+        "backgroundFailedCloud": "A new cloud workspace couldn’t start. Open it in the sidebar to continue."
       },
       "orcaCloudSession": {
         "seePlans": "See plans",
@@ -4236,7 +4238,10 @@
             "cloneCloud": "Clone repository",
             "cloneCheckout": "Checking out files…",
             "cloneDownload": "Downloading history…",
-            "cloneCounting": "Counting objects…"
+            "cloneCounting": "Counting objects…",
+            "updateCloud": "Update repository",
+            "updateFetching": "Fetching changes…",
+            "repositoryPending": "Repository"
           },
           "VmBuildFailureCard": {
             "createFailedTitle": "Couldn’t create workspace",
@@ -4245,7 +4250,6 @@
             "unavailableTitle": "Orca Cloud is unavailable right now",
             "networkTitle": "Couldn’t reach Orca Cloud",
             "snapshotTitle": "This project’s saved environment is missing",
-            "stillRunningCloud": "The sandbox is running and using sandbox hours until you choose.",
             "stillRunningLocal": "The VM is running and using hours until you choose.",
             "tryAgain": "Try again",
             "signIn": "Sign in",
@@ -4288,14 +4292,9 @@
             "outOfHoursBodyMember3": "Your team has used this month’s sandbox hours, so sandboxes can’t start or keep running. Nothing was created, and you weren’t charged. Ask an owner or admin to add hours.",
             "spendCapReachedBodyMember4": "Your team has reached this month’s spend cap, so sandboxes can’t start or keep running. Nothing was created, and you weren’t charged. Ask an owner or admin to raise the spend cap.",
             "paymentFailedBodyMember2": "New sandboxes can’t start until the payment goes through. Nothing was created, and you weren’t charged. Ask an owner or admin to update the payment method.",
-            "checksAttentionTitleCloud": "The sandbox is up, but some environment checks need attention",
             "checksAttentionTitleVm": "The VM is up, but some environment checks need attention",
-            "checksCountTitleCloud_one": "The sandbox is up, but {{count}} environment check failed",
-            "checksCountTitleCloud_other": "The sandbox is up, but {{count}} environment checks failed",
             "checksCountTitleVm_one": "The VM is up, but {{count}} environment check failed",
             "checksCountTitleVm_other": "The VM is up, but {{count}} environment checks failed",
-            "checksBodyCloud2_one": "Open it anyway and fix it inside the workspace, or run the checks again after changing your project.",
-            "checksBodyCloud2_other": "Open it anyway and fix them inside the workspace, or run the checks again after changing your project.",
             "provisionBodyCloudKept": "Something went wrong while starting the sandbox. Try again, or delete the sandbox to stop using sandbox hours.",
             "provisionBodyCloud2": "Something went wrong while starting the sandbox. Nothing was created, and you weren’t charged.",
             "provisionBodyVm": "Your VM recipe stopped with an error before the VM was ready.",
@@ -4310,7 +4309,11 @@
             "cloneDiskFullBody": "This repository doesn’t fit on the sandbox’s disk. The sandbox was deleted.",
             "cloneFailedBody": "Git stopped with an error while cloning, and the sandbox was deleted. Try again, or open the logs for details.",
             "githubNotConnectedBody2": "Orca Cloud clones your code from GitHub and needs access to this repository first. Install the Orca GitHub App on {{owner}}, then try again. Nothing was created, and you weren’t charged.",
-            "cloneFailedTitle": "Couldn’t clone {{repo}}"
+            "cloneFailedTitle": "Couldn’t clone {{repo}}",
+            "startAgain": "Start again",
+            "cloudUnusableTitle": "This sandbox can’t open your workspace",
+            "cloudUnusableDeletedBody": "The sandbox was deleted. Start again to try a new one.",
+            "cloudUnusableBody": "Start again on a new sandbox, or delete this one."
           },
           "VmBuildLog": {
             "jumpToError": "Jump to first error",
@@ -4348,7 +4351,8 @@
             "denyMachineSize2": "This sandbox size isn’t part of your plan.",
             "refusedProvider2": "Orca Cloud is unavailable right now.",
             "rollingOver2": "Restarting the sandbox…",
-            "cloning": "Cloning the repository…"
+            "cloning": "Cloning the repository…",
+            "updating": "Updating the repository…"
           },
           "environmentCheckCopy": {
             "gitMissing": "git isn’t installed.",
@@ -4366,7 +4370,12 @@
             "failed": "Failed",
             "warning": "Warning",
             "passed": "Passed",
-            "toolMissingFixCloud": "Install {{command}} in the workspace, or add it to your project’s setup script."
+            "toolMissingFixCloud": "Install {{command}} in the workspace, or add it to your project’s setup script.",
+            "setupNotRun": "Setup script hasn’t run yet.",
+            "cloudUnreachable": "Orca couldn’t reach the sandbox.",
+            "cloudRepoMissing": "The repository isn’t in the sandbox.",
+            "cloudRepoUnreadable": "Git can’t read the repository in the sandbox.",
+            "cloudGitMissing": "git isn’t installed in the sandbox."
           },
           "WorktreeCreationTabStrip": {
             "cancelLabel": "Cancel workspace creation"
@@ -4386,6 +4395,12 @@
             "copiedStatus": "Details copied",
             "earlierLines_one": "…{{count}} earlier line. Copy details includes it.",
             "earlierLines_other": "…{{count}} earlier lines. Copy details includes them."
+          },
+          "BlockedSandboxHoursNote": {
+            "asleep": "Asleep. It isn’t using sandbox hours.",
+            "sleeping": "Going to sleep…",
+            "sleepsIn_one": "Sleeps in {{count}} minute if unused.",
+            "sleepsIn_other": "Sleeps in {{count}} minutes if unused."
           }
         }
       },
@@ -10949,6 +10964,14 @@
               "extension": "extension",
               "chrome": "chrome",
               "password": "password manager"
+            },
+            "pokes": {
+              "poke": "poke",
+              "nudge": "nudge",
+              "teammate": "teammate",
+              "activityTitle": "Pokes and activity",
+              "activityDescription": "Teammates can poke you and see which days you used Orca Cloud. Amounts stay private.",
+              "activity": "activity"
             }
           }
         },
@@ -16715,20 +16738,12 @@
             "currentSuffix": "(current)",
             "orcaCloudSignInDetail": "Sign in to start a sandbox",
             "orcaCloudChecking": "Checking your plan…",
-            "orcaCloudNeedsTeamPlan": "Orca Cloud needs a Team plan.",
             "orcaCloudOutOfHours": "Out of sandbox hours",
             "orcaCloudRaiseSpendCap": "Raise spend cap",
-            "orcaCloudPaymentEffect": "New sandboxes can't start.",
             "orcaCloudUpdatePaymentMethod": "Update payment method",
             "orcaCloudSandboxHoursLeft_one": "{{hours}} sandbox hour left",
             "orcaCloudSandboxHoursLeft_other": "{{hours}} sandbox hours left",
             "orcaCloudAskOwnerOrAdmin": "Ask an owner or admin",
-            "orcaCloudAskPayment": "Ask an owner or admin to update the payment method.",
-            "orcaCloudIdleSleep_one": "Sleeps after {{count}} minute idle",
-            "orcaCloudIdleSleep_other": "Sleeps after {{count}} minutes idle",
-            "orcaCloudAskAddHoursOnly": "Ask an owner or admin to add hours.",
-            "orcaCloudAskChoosePlan": "Ask an owner or admin to choose one.",
-            "orcaCloudAskRaiseSpendCap": "Ask an owner or admin to raise the spend cap.",
             "hintConnect": "{{host}}, not connected. Press Enter to connect.",
             "hintSetLocation": "{{host}}, project location not set. Press Enter to set it.",
             "hintSignIn": "Orca Cloud, signed out. Press Enter to sign in.",
@@ -20701,7 +20716,9 @@
           "createInvalid2": "Use letters, numbers, spaces or underscores (up to 64).",
           "nameTaken": "That team name is taken. Try another.",
           "totalPerMonth": "{{total}} per month",
-          "totalPerYear": "{{total}} per year"
+          "totalPerYear": "{{total}} per year",
+          "openProfile": "Open {{value0}}’s profile",
+          "viewProfile": "View profile"
         },
         "manageBilling": "Manage billing",
         "comparePlans": "Compare plans",
@@ -21011,12 +21028,19 @@
         "deleteWorkspace": "Delete…",
         "showRunningOnly": "Show running only",
         "running": "Running",
+        "showRoutineRuns": "Show routine runs",
+        "routineRuns": "Routine runs",
+        "routineRun": "Routine run",
+        "routineRunTooltip": "Started by a routine. It's deleted when the run ends.",
+        "routineRunOf": "Routine · {{name}}",
+        "routineRunsHidden": "Routine runs · {{count}}",
         "errorTeamSandboxLimit_one": "Your team can run {{count}} sandbox at once ({{perSeat}} per seat). Put it to sleep or delete it, then try again.",
         "errorTeamSandboxLimit_other": "Your team can run {{count}} sandboxes at once ({{perSeat}} per seat). Put one to sleep or delete it, then try again.",
         "errorSeatSandboxLimitSelf_one": "You already have {{count}} sandbox running, the most one seat can run. Put it to sleep or delete it, then try again.",
         "errorSeatSandboxLimitSelf_other": "You already have {{count}} sandboxes running, the most one seat can run. Put one to sleep or delete it, then try again.",
         "errorSeatSandboxLimitOwner_one": "{{name}} already has {{count}} sandbox running. This workspace runs on their seat, so ask them to put it to sleep, then try again.",
-        "errorSeatSandboxLimitOwner_other": "{{name}} already has {{count}} sandboxes running. This workspace runs on their seat, so ask them to put one to sleep, then try again."
+        "errorSeatSandboxLimitOwner_other": "{{name}} already has {{count}} sandboxes running. This workspace runs on their seat, so ask them to put one to sleep, then try again.",
+        "viewOwnerProfile": "View {{name}}'s profile"
       },
       "orcaCloud": {
         "QueuedPrompt": {
@@ -21033,6 +21057,53 @@
           "sending": "Sending to {{agent}} next",
           "edit": "Edit queued prompt"
         }
+      },
+      "teammates": {
+        "pokesNeedTeam": "Sign in to Orca and switch to a team to use Pokes.",
+        "pokesSaveFailed": "Couldn’t save. Check your connection and try again.",
+        "unreachable": "Can’t reach Orca Cloud right now. Check your connection.",
+        "someone": "A teammate",
+        "pokedYou": "{{name}} poked you",
+        "pokeBack": "Poke back",
+        "poked": "Poked {{name}}",
+        "viewProfile": "View profile",
+        "title": "Teammate profile",
+        "description": "Role, daily Orca Cloud usage and recent workspaces.",
+        "pokesOffThem": "{{name}} hasn’t turned on Pokes yet.",
+        "loadFailed": "Couldn’t load this profile",
+        "tryAgain": "Try again",
+        "usageHeading": "Usage",
+        "recentWorkspaces": "Recent workspaces",
+        "showAll": "Show all",
+        "noWorkspacesSelf": "You have no cloud workspaces yet.",
+        "noWorkspaces": "No cloud workspaces shared with the team.",
+        "openWorkspace": "Open {{title}}, {{status}}",
+        "pokeHint": "A poke is a friendly nudge. {{name}} sees it in Orca.",
+        "openExperimental": "Open settings",
+        "poke": "Poke",
+        "levelNone": "No usage",
+        "levelLight": "Light usage",
+        "levelModerate": "Moderate usage",
+        "levelBusy": "Busy day",
+        "levelPeak": "One of their busiest days",
+        "daySandboxHours_one": "{{hours}} sandbox hour",
+        "daySandboxHours_other": "{{hours}} sandbox hours",
+        "dayAgentUsage": "Agent usage",
+        "heatmapSummarySelf": "You used Orca Cloud on {{active}} of the last {{days}} days",
+        "heatmapSummary": "{{name}} used Orca Cloud on {{active}} of the last {{days}} days",
+        "heatmapEmpty": "No Orca Cloud usage in the last 26 weeks.",
+        "heatmapHint": "Each day compared with their busiest day. Amounts stay private.",
+        "legendLess": "Less",
+        "legendMore": "More",
+        "pokeCooldown": "You just poked {{name}}. Try again in a minute.",
+        "pokeRate": "That’s a lot of pokes. Try again later.",
+        "pokeOffline": "Can’t reach Orca Cloud right now. Check your connection.",
+        "pokeFailed": "Couldn’t send the poke. Try again.",
+        "pokesActivitySettingCopy": "Teammates can poke you and see which days you used Orca Cloud. Amounts stay private.",
+        "pokesActivityToggle": "Toggle Pokes and activity",
+        "pokesOffYouActivity": "Pokes are off. Turn on Pokes and activity in Settings → Experimental.",
+        "activityNotShared": "{{name}} hasn’t shared their activity.",
+        "heatmapHintSelfHover": "Hover a day to see your sandbox hours."
       }
     },
     "i18n": {
@@ -23099,68 +23170,15 @@
         "bothSources": "orca.yaml + local",
         "localSource": "local settings"
       },
-      "cloudStart": {
-        "useThisComputer": "Use this computer instead",
-        "start": "Start in Orca Cloud",
-        "setUpAndStart": "Set up and start",
-        "choosePlanAndStart": "Choose plan and start",
-        "renewAndStart": "Renew and start",
-        "giveAccessAndStart": "Give access and start",
-        "checking": "Checking Orca Cloud…",
-        "githubGranted": "GitHub access granted for {{repo}}"
-      },
       "cloudSetup": {
-        "account": "Orca account",
-        "team": "Team",
-        "plan": "Team plan",
-        "github": "GitHub access",
-        "githubNeeded": "Orca Cloud clones your code from GitHub. Give access to this repository once.",
-        "agent": "Agent",
-        "planAfterSignIn": "Checked after you sign in",
-        "askOwner": "Ask an owner or admin to fix it.",
-        "planEnded": "Your Team plan ended.",
-        "outOfHours": "Out of sandbox hours.",
-        "spendCap": "Spend cap reached.",
-        "paymentFailed": "Payment failed.",
-        "planMember": "Orca Cloud needs a Team plan. Only owners and admins can choose one.",
-        "planNeeded": "Orca Cloud needs a Team plan.",
-        "stateDone": "Done",
-        "stateOptional": "Optional",
-        "stateNext": "Next",
-        "stateInBrowser": "In browser",
-        "stateFailed": "Didn't finish",
-        "stateChecking": "Checking",
-        "stateNeeded": "Needed",
-        "allSet": "All set",
-        "title": "Set up Orca Cloud",
-        "starting": "Starting your cloud workspace…",
-        "accountNeededTeam": "Sign in or create one. We’ll make a team for you.",
-        "trial": "Trial",
-        "trialNoCard": "No card needed. Nothing is charged until you choose a plan.",
-        "stateIncluded": "Included",
-        "trialUsedUp": "Your trial is used up.",
-        "trialUsedUpMember": "Only owners and admins can choose a plan.",
-        "trialUsedUpOwner": "Choose a plan to keep using Orca Cloud. Your prompt is still here.",
-        "subtitleNoCard": "One visit to your browser, no card. Your prompt stays here and starts when you’re done.",
         "trialUsedUpTitle": "Your trial is used up",
         "choosePlan": "Choose plan",
         "askChoosePlan": "Ask an owner or admin to choose a plan.",
-        "trialUsedUpChoose": "Choose a plan to keep using Orca Cloud.",
         "trialOffer_one": "{{hours}} sandbox hour to try Orca Cloud",
         "trialOffer_other": "{{hours}} sandbox hours to try Orca Cloud",
-        "subtitleChoosePlan": "One visit to your browser to choose a plan. Your prompt stays here and starts when you’re done.",
-        "subtitleNeedsRepository": "Orca Cloud needs a GitHub repository. Your prompt stays here.",
-        "outOfHoursMember": "Out of sandbox hours. Ask an owner or admin to add hours.",
-        "spendCapMember": "Spend cap reached. Ask an owner or admin to raise the spend cap.",
-        "paymentFailedMember": "Payment failed. Ask an owner or admin to update the payment method.",
-        "subtitleOwnerFixes": "An owner or admin needs to fix this. Your prompt stays here.",
-        "cancelSetup": "Cancel setup",
-        "copySetupLink": "Copy setup link",
         "reopenBrowser": "Reopen browser",
         "tryAgain": "Try again",
         "switchAccount": "Switch account",
-        "trackerTitle": "Finish in your browser",
-        "trackerSubtitle": "Orca picks up each step the moment it’s done, then starts this workspace.",
         "teamRequired": "Cloud workspaces belong to a team.",
         "teamHasPlan": "{{team}} has a Team plan. Switch to start this workspace there.",
         "teamsHavePlans": "{{teams}} have a Team plan. Switch to one to start this workspace there.",
@@ -23168,7 +23186,6 @@
         "switchTeam": "Switch team",
         "switchFirst": "Switch to {{team}} first",
         "switchTeamFirst": "Switch to a team first",
-        "linkUnavailable": "Couldn’t get a setup link. Try Set up and start again.",
         "linkCopied": "Setup link copied. Open it in the browser you use for Orca.",
         "error": {
           "timedOut": "Setup didn’t finish in your browser. Your prompt is still here.",
@@ -23183,18 +23200,11 @@
         "planCoveredByTrial": "Your trial covers it.",
         "planCheckoutOpen": "Finish checkout in your browser.",
         "githubRequestedSession": "Waiting for an owner on GitHub to approve Orca Cloud.",
-        "subtitleChoosePlanAndGitHub": "One visit to your browser to choose a plan and give Orca Cloud access on GitHub. Your prompt stays here and starts when you’re done."
+        "linkUnavailableRetry": "Couldn’t get a setup link. Try Continue in browser again."
       },
       "runOn": {
         "thisComputer": "This computer",
-        "orcaCloud": "Orca Cloud",
-        "moreWithTarget": "More places to run: {{name}}",
-        "more": "More places to run",
-        "cloudUnreachableReason": "Orca Cloud: can't reach it right now. Check your connection.",
-        "thisComputerUnusable": "This computer, {{reason}}",
-        "locationNotSet": "Project location not set",
-        "cloudUnreachableName": "Orca Cloud, can't reach it right now",
-        "cloudHosted": "Hosted sandbox"
+        "orcaCloud": "Orca Cloud"
       },
       "cloudHours": {
         "trialChip_one": "Trial · {{hours}} sandbox hour left",
@@ -23218,18 +23228,20 @@
         "heading": "On GitHub · Orca Cloud only",
         "detail": "Orca Cloud clones it. No copy on this computer needed.",
         "moreAccess": "Give Orca Cloud access to more repositories…",
-        "notOnThisComputer": "Not on this computer · Orca Cloud only",
         "startFailed": "Couldn’t start the cloud workspace. Nothing was created, and you weren’t charged.",
         "starting": "Starting {{repo}} in Orca Cloud…",
         "openLater": "Your cloud workspace started, but this computer couldn’t open it yet. Open it from Cloud workspaces.",
         "private": "{{owner}} · Private",
         "public": "{{owner}} · Public",
         "showMore": "Show more repositories…",
-        "chooseRepository": "Choose a GitHub repository",
-        "addGitHubProject": "Add a GitHub project…",
         "folderDetail": "Orca Cloud starts from a GitHub repository. This project is a folder on this computer."
       },
-      "orcaCloudAgentFallback": "{{agent}} isn’t available on Orca Cloud yet, so {{fallback}} is selected."
+      "cloudStart": {
+        "agentNotStarted": "{{agent}} isn’t set up for Orca Cloud, so it didn’t start. The workspace has a terminal.",
+        "agentNotStartedGeneric": "Your agent isn’t set up for Orca Cloud, so it didn’t start. The workspace has a terminal.",
+        "setUpAgentOnce": "Set up {{agent}} once",
+        "setUpAgentOnceGeneric": "Set up once"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Another issue change is in progress."
@@ -23449,12 +23461,26 @@
       "waking": "Waking sandbox…",
       "unarchiving": "Unarchiving workspace…",
       "wakingDetail": "The remote desktop opens when it’s awake.",
-      "paletteDescription": "Open the sandbox’s desktop in a browser tab.",
+      "paletteDescription": "Open the sandbox’s desktop in a tab.",
       "verbs": {
         "remoteDesktop": "remote desktop",
         "openDesktop": "open desktop",
         "vnc": "vnc",
         "screen": "screen"
+      },
+      "openTabMenuItem": "Open Remote Desktop",
+      "goToTabMenuItem": "Go to Remote Desktop",
+      "tab": {
+        "connected": "Connected",
+        "connecting": "Connecting…",
+        "reconnecting": "Reconnecting…",
+        "disconnected": "Disconnected",
+        "releaseHint": "{{chord}} returns keys to Orca",
+        "reconnectingTitle": "Reconnecting…",
+        "wakingDetail": "The remote desktop reconnects when it’s awake.",
+        "asleepDetail": "Wake it to reconnect. Apps that were open on the remote desktop need to be started again. Your files are safe.",
+        "asleepTitle": "This workspace is asleep.",
+        "waking": "Waking…"
       }
     },
     "orcaCloud": {
@@ -27434,6 +27460,19 @@
         "public": "{{repo}} is public. Nothing to do.",
         "doneStatus": "Done"
       }
+    },
+    "setupNotices": {
+      "pushNeedsApp": "Orca Cloud can read {{repo}} but can’t push yet. Install the Orca GitHub App on {{owner}} to push.",
+      "waitingForGitHub": "Waiting for GitHub…",
+      "installOn": "Install on {{owner}}",
+      "pushRefused": "Orca Cloud can’t push from this workspace.",
+      "setupNotRun": "Setup script hasn’t run yet",
+      "runSetup": "Run setup script",
+      "label": "Workspace setup",
+      "dismiss": "Dismiss",
+      "installFailed": "Couldn’t open GitHub. Check your connection and try again.",
+      "pushReady": "Orca Cloud can push to {{repo}} now.",
+      "setupMissing": "Couldn’t read the setup script from orca.yaml in this workspace."
     }
   },
   "runActions": {
@@ -27912,31 +27951,9 @@
     "menu": {
       "notYet": "You can choose once the sandbox is created.",
       "failed": "Couldn’t read this workspace’s choice.",
-      "shared": "Personal accounts aren’t used in shared workspaces.",
-      "label": "Agent sign-in options",
-      "inThisWorkspace": "{{agent}} in this workspace",
       "yourAccount": "Your account",
-      "useKey": "Use an API key instead",
-      "manage": "Manage agent accounts…",
       "saveFailed": "Couldn’t change it. Nothing was changed."
     },
-    "codeCopied": "Code copied",
-    "cancel": "Cancel",
-    "renew": "Renew",
-    "setUp": "Set up",
-    "openAgain": "Open again",
-    "copyAndOpen": "Copy code and open",
-    "pasteToken": "Paste token",
-    "tryAgain": "Try again",
-    "dismiss": "Dismiss",
-    "signInHere": "Sign in for this workspace",
-    "checking": "Checking agent sign-in",
-    "readyDetail": "Every cloud workspace uses it. Nothing to do here.",
-    "keyFailed": "Couldn’t save {{name}}. Nothing was changed.",
-    "queued": "Opens when the sandbox is ready. Keep Orca open until then.",
-    "deviceEnter": "Enter",
-    "deviceOn": "on {{host}}",
-    "manage": "Manage",
     "separator": " · ",
     "stepOf": "{{step}} of {{of}}",
     "settingUp": "Setting up {{agent}}",
@@ -28054,15 +28071,89 @@
     "cancelledToast": "The agent didn’t start. The shell is still open.",
     "expiredCompact": "{{agent}} sign-in expired"
   },
-  "cloudAgentCheck": {
-    "keyAgentSignedOut": "{{agent}} isn’t signed in.",
-    "keyAgentFix": "Add its API key in Settings → Cloud secrets, or sign in when it starts in this workspace.",
-    "notSetUp": "{{agent}} isn’t set up for Orca Cloud yet.",
-    "notSetUpFix": "Set it up once in Settings → Agent accounts. Every cloud workspace uses it.",
-    "expired": "Your {{agent}} sign-in for Orca Cloud expired.",
-    "expiredFix": "Renew it once in Settings → Agent accounts. Every cloud workspace uses it.",
-    "signInHere": "{{agent}} isn’t signed in for this workspace.",
-    "pausedFix": "Orca account sign-in is paused. Sign in for this workspace; the sign-in stays with this workspace.",
-    "notOfferedFix": "Signs in for each cloud workspace for now. Sign in for this workspace; the sign-in stays with this workspace."
+  "cloudSetupPage": {
+    "agent": {
+      "lead": "Save your agent sign-in to your Orca account and every cloud workspace uses it. You can also skip this and sign in inside the workspace.",
+      "setUp": "Set up once",
+      "skip": "Skip for now",
+      "title": "Sign in to {{agent}} once",
+      "titleGeneric": "Sign in to your agent once"
+    },
+    "back": "Back",
+    "billing": {
+      "capLead": "Raise the spend cap to start this workspace.",
+      "capTitle": "Spend cap reached",
+      "hoursLead": "Turn on overage to start this workspace.",
+      "hoursTitle": "Out of sandbox hours",
+      "paymentLead": "The last payment failed. Update the card to keep going.",
+      "paymentTitle": "Update your payment method",
+      "openSettings": "Open billing settings"
+    },
+    "checkAgain": "Check again",
+    "checking": {
+      "title": "Checking your Orca Cloud account…"
+    },
+    "continueInBrowser": "Continue in browser",
+    "copyLink": "Copy link",
+    "done": {
+      "lead": "Starting your cloud workspace…",
+      "title": "All set"
+    },
+    "eyebrow": "Orca Cloud setup",
+    "github": {
+      "lead": "Orca Cloud clones your code from GitHub. Install the Orca Cloud app on this repository once.",
+      "title": "Give Orca Cloud access on GitHub",
+      "waiting": "This page starts the workspace once they approve.",
+      "waitingTitle": "Waiting for approval on GitHub"
+    },
+    "orcaCloud": "Orca Cloud",
+    "owner": {
+      "lead": "Orca Cloud needs a Team plan. Only owners and admins can choose one.",
+      "title": "An owner or admin needs to fix this"
+    },
+    "plan": {
+      "lead": "Orca Cloud needs a Team plan. Checkout opens in your browser.",
+      "renewLead": "Your Team plan ended. Renew it in your browser to start this workspace.",
+      "renewTitle": "Renew your Team plan",
+      "title": "Choose a Team plan",
+      "trialUsedUpLead": "Choose a Team plan to keep using Orca Cloud. Checkout opens in your browser.",
+      "trialUsedUpTitle": "Your trial is used up"
+    },
+    "reopenBrowser": "Reopen browser",
+    "repository": {
+      "title": "Orca Cloud needs a GitHub repository"
+    },
+    "signIn": {
+      "lead": "Orca Cloud runs your agents in a cloud workspace, so they keep going with your laptop closed. Sign in or create an account in your browser. We’ll make a team for you.",
+      "note": "New teams get a trial with no card needed. This page picks up each step on its own.",
+      "title": "Sign in to Orca"
+    },
+    "starting": "Starting…",
+    "startsAfter": "Starts when setup is done",
+    "step": {
+      "account": "Account",
+      "agent": "Agent",
+      "github": "GitHub",
+      "plan": "Plan",
+      "team": "Team",
+      "trial": "Trial"
+    },
+    "stepCurrent": "current step",
+    "stepDone": "done",
+    "stepsLabel": "Setup steps",
+    "team": {
+      "title": "Switch to your team"
+    },
+    "trial": {
+      "lead": "{{hours}} sandbox hours to try Orca Cloud. No card needed.",
+      "leadNoHours": "Try Orca Cloud on your team. No card needed.",
+      "note": "Nothing is charged until you choose a plan.",
+      "start": "Start free trial",
+      "title": "Start your free trial",
+      "lead_one": "{{hours}} sandbox hour to try Orca Cloud. No card needed.",
+      "lead_other": "{{hours}} sandbox hours to try Orca Cloud. No card needed."
+    },
+    "untitled": "New cloud workspace",
+    "waitingBrowser": "Waiting for your browser…"
   }
 }

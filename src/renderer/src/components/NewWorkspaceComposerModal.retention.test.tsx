@@ -397,7 +397,7 @@ it('offers Reopen with the submitted target and picker and does not replace a ne
   fireEvent.change(textarea(), { target: { value: '--verbose' } })
   fireEvent.click(screen.getByRole('radio', { name: 'Low' }))
   await useDraft()
-  const create = await screen.findByRole('button', { name: 'Create worktree' })
+  const create = await screen.findByRole('button', { name: 'Create workspace' })
   await waitFor(() => expect(create.hasAttribute('disabled')).toBe(false))
   fireEvent.click(create)
   await waitFor(() => expect(evidence.submit).toHaveBeenCalledOnce())

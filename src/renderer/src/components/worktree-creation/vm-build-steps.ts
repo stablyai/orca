@@ -6,6 +6,7 @@ import {
 import type { WorktreeSetupStepState } from './worktree-setup-steps'
 import {
   orcaCloudCloneProgress,
+  orcaCloudPlannedRepoMode,
   type OrcaCloudCloneProgress
 } from '@/lib/orca-cloud/orca-cloud-clone-progress'
 
@@ -26,6 +27,8 @@ export type VmBuildStep = {
    * percent yet (the row shows an indeterminate bar, never a frozen 0%).
    */
   stage?: 'counting' | 'download' | 'checkout'
+  /** Clone only: 'update' when the repo came prebuilt and only changes are fetched. */
+  cloneMode?: 'clone' | 'update'
   /** When the step started, if it has. */
   startedAt: number | null
 }
@@ -82,12 +85,14 @@ function runningClone(
   startedAt: number
 ): VmBuildStep {
   // No percent yet, or git's first 0% while GitHub counts objects: nothing to measure yet.
+  const cloneMode = clone?.mode ?? 'clone'
   if (!clone || (!clone.percent && clone.stage !== 'checkout')) {
-    return { ...step('clone', 'running', elapsedMs, startedAt), stage: 'counting' }
+    return { ...step('clone', 'running', elapsedMs, startedAt), stage: 'counting', cloneMode }
   }
   return {
     ...step('clone', 'running', elapsedMs, startedAt, { percent: clone.percent }),
-    stage: clone.stage ?? 'download'
+    stage: clone.stage ?? 'download',
+    cloneMode
   }
 }
 
@@ -111,6 +116,11 @@ export function deriveVmBuildSteps(
     ? orcaCloudCloneProgress(entry.provisioningLog ?? '', entry.provisioningLogStamps ?? [])
     : null
   const cloneAt = clone?.startedAt ?? undefined
+  // Known before the step renders (boot plan) or once the create answers; never changes after.
+  const cloneMode =
+    clone?.mode ??
+    (cloud ? orcaCloudPlannedRepoMode(entry.provisioningLog ?? '') : null) ??
+    undefined
   const afterClone = clone?.endedAt ?? check?.startedAt ?? createAt
   const provisionDone = Boolean(check) || workspacePhase || cloneAt !== undefined
 
@@ -130,9 +140,15 @@ export function deriveVmBuildSteps(
   const cloneStep: VmBuildStep | null = !cloud
     ? null
     : cloneAt === undefined
-      ? step('clone', provisionDone ? 'done' : 'pending', null, undefined)
+      ? {
+          ...step('clone', provisionDone ? 'done' : 'pending', null, undefined),
+          ...(cloneMode ? { cloneMode } : {})
+        }
       : clone?.ended || check || workspacePhase
-        ? step('clone', 'done', span(cloneAt, afterClone), cloneAt)
+        ? {
+            ...step('clone', 'done', span(cloneAt, afterClone), cloneAt),
+            cloneMode: clone?.mode ?? 'clone'
+          }
         : failed
           ? step('clone', 'failed', span(cloneAt, entry.errorAt), cloneAt)
           : runningClone(clone, span(cloneAt, now), cloneAt)

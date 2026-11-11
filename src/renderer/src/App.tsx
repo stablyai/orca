@@ -11,6 +11,8 @@ import { CloudSecretsAskDialogHost } from './components/cloud-secrets-ask/CloudS
 import { AgentHostPanel } from './components/agent-host-panel/AgentHostPanel'
 import { SecretRequestUnseenNotifier } from './components/agent-pane/SecretRequestUnseenNotifier'
 import { TeamDialogHost } from './components/billing/team/TeamDialogHost'
+import { TeammateProfileDialog } from './components/teammates/TeammateProfileDialog'
+import { PokesNotifier } from './components/teammates/PokesNotifier'
 import { BrowserPagePrompts } from './components/browser-pane/browser-page-prompts'
 import { LinkRoutingPreferenceDialogProvider } from './components/link-routing-preference-dialog'
 import { SkillFreshnessNudge } from './components/skills/SkillFreshnessNudge'
@@ -129,6 +131,8 @@ function App(): React.JSX.Element {
             <AgentHostPanel />
             <SecretRequestUnseenNotifier />
             <TeamDialogHost />
+            <TeammateProfileDialog />
+            <PokesNotifier />
           </LinkRoutingPreferenceDialogProvider>
         </ConfirmationDialogProvider>
         {createPortal(

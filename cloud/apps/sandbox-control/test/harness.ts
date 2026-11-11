@@ -50,6 +50,8 @@ export async function createHarness(overrides: Partial<Env> = {}, extraDeps: Par
     GOLDEN_SNAPSHOT_ID: GOLDEN,
     VERCEL_TEAM_ID: 'team_orca',
     VERCEL_PROJECT_ID: 'prj_orca',
+    // Off unless a test turns it on (auto-environments.test.ts): it starts builds behind creates.
+    AUTO_ENVIRONMENTS: 'off',
     ...overrides
   }
   // No live github.com from tests: repos count as public unless a test says otherwise.

@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { noteRemoteDesktopBeforeSleep } from '@/lib/cloud-remote-desktop/desktop-sleep-reopen'
 import {
   captureWorkspaceSelection,
   restoreWorkspaceSelection,
@@ -55,6 +56,10 @@ export function followWorkspaceSleep(
     const state = useAppStore.getState()
     const wasActive = state.activeWorktreeId === worktreeId
     const selectionBeforeSleep = wasActive ? captureWorkspaceSelection(state) : null
+    if (!options.keepBrowserTabs) {
+      // Before the selection clears: whether the desktop tab was in front decides how it comes back.
+      noteRemoteDesktopBeforeSleep(worktreeId)
+    }
     // Why first: clearing the active workspace unmounts its panes, whose exits must not stamp activity.
     markWorktreeSleepIntent(worktreeId)
     if (wasActive) {
