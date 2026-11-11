@@ -160,14 +160,9 @@ it('keeps note navigation through an overlay-only rebuild and releases actual zo
   const fixture = createScrollCommandFixture()
   let surface: ReturnType<typeof fixture.bindEditor> | null = fixture.bindEditor()
   const consumed = vi.fn(consumeDiffCommentScrollCommand)
-  const hook = renderHook(
-    ({
-      current,
-      label
-    }: {
-      current: ReturnType<typeof fixture.bindEditor> | null
-      label: string
-    }) => fixture.useDecoratorSurface(current, label, consumed),
+  type Props = { current: ReturnType<typeof fixture.bindEditor> | null; label: string }
+  const hook = renderHook<ReturnType<typeof fixture.useDecoratorSurface>, Props>(
+    ({ current, label }) => fixture.useDecoratorSurface(current, label, consumed),
     { initialProps: { current: surface, label: 'Add note' } }
   )
   const mountCard = async (): Promise<void> => {
