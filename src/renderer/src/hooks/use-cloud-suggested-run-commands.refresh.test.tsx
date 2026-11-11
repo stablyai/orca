@@ -9,15 +9,18 @@ type State = {
   wakingEphemeralVmWorkspaceIds: Record<string, boolean>
 }
 
-const mocks = vi.hoisted(() => ({
-  read: vi.fn<() => Promise<{ content: string; isBinary: boolean }>>(),
-  sleepIntent: false,
-  now: 1_000_000,
-  state: {
+const mocks = vi.hoisted(() => {
+  const state: State = {
     ephemeralVmRuntimesByWorkspaceId: { ws: { status: 'running' } },
     wakingEphemeralVmWorkspaceIds: {}
-  } as State
-}))
+  }
+  return {
+    read: vi.fn<() => Promise<{ content: string; isBinary: boolean }>>(),
+    sleepIntent: false,
+    now: 1_000_000,
+    state
+  }
+})
 vi.mock('@/store', () => ({
   useAppStore: (select: (state: State) => unknown) => select(mocks.state)
 }))
