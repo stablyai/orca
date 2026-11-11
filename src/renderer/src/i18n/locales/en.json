@@ -19014,6 +19014,12 @@
             "sandboxOnly": "This page can only be viewed in the sandbox.",
             "cantShow": "Orca can't show the sandbox's browser here yet.",
             "openFailed": "Couldn't open the page. Try again."
+          },
+          "SandboxUnreachableSite": {
+            "title": "The sandbox can't reach {{value0}}",
+            "notRunning": "Nothing is running on {{value0}} in the sandbox.",
+            "outside": "Orca Cloud sandboxes only reach approved sites and servers running in the sandbox, like localhost:3000.",
+            "openInBrowser": "Open in your browser"
           }
         },
         "webauthn": {
