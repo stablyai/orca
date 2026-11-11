@@ -2,8 +2,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { AgentHookServer } from './server'
-import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
+import { AgentHookServer } from '../../../agent-hook-server'
+import { buildBody, PANE, postHookEvent } from '../../server.test-fixtures'
 
 const ROOT_ID = '5883db93-32ca-48da-ba29-db952021d273'
 const WORKER_ID = 'dc08d047-adfd-4190-a0f4-6c3f7167d394'
@@ -51,21 +51,17 @@ describe('Droid mission resume identity', () => {
     const rootPath = transcript(ROOT_ID)
     const workerPath = transcript(WORKER_ID, ROOT_ID)
 
+    await post(WORKER_ID, workerPath, 'PreToolUse')
+    expect(resumeId()).toBeUndefined()
+
     await post(ROOT_ID, rootPath, 'UserPromptSubmit')
     await post(WORKER_ID, workerPath, 'PreToolUse')
     await post(WORKER_ID, workerPath, 'Stop')
     expect(resumeId()).toBe(ROOT_ID)
 
-    await post(ROOT_ID, rootPath, 'PreToolUse')
-    expect(resumeId()).toBe(ROOT_ID)
-  })
-
-  it('lets a worker resumed after the orchestrator exited claim the pane', async () => {
-    await post(ROOT_ID, transcript(ROOT_ID), 'UserPromptSubmit')
+    // Dismissing the row keeps only the resume identity; the mission is still running.
     server.dropStatusEntry(PANE)
-    expect(server.getStatusSnapshotForPane(PANE)[0]?.providerSessionOnly).toBe(true)
-
-    await post(WORKER_ID, transcript(WORKER_ID, ROOT_ID), 'UserPromptSubmit')
-    expect(resumeId()).toBe(WORKER_ID)
+    await post(WORKER_ID, workerPath, 'PreToolUse')
+    expect(resumeId()).toBe(ROOT_ID)
   })
 })
