@@ -11,6 +11,9 @@ export type PlanBillingUsageState =
   | { status: 'ok'; history: OrcaBillingUsageHistory; names: UsageNames }
   | { status: 'failed' }
 
+/** How long the 30-day read may take before the chart says it couldn't load (with Try again). */
+export const USAGE_HISTORY_TIMEOUT_MS = 15_000
+
 /** Minutes east of UTC, so the chart's days are the viewer's local days. */
 function utcOffsetMinutes(): number {
   return -new Date().getTimezoneOffset()
@@ -40,9 +43,18 @@ export function usePlanBillingUsageHistory(
       return
     }
     let disposed = false
-    void window.api.orcaProfiles
-      .billingUsageHistory({ utcOffsetMinutes: utcOffsetMinutes() })
-      .catch(() => ({ status: 'failed' as const }))
+    // A read that never answers must not leave the chart as a grey box forever: give up after 15 s.
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timeout = new Promise<{ status: 'failed' }>((resolve) => {
+      timer = setTimeout(() => resolve({ status: 'failed' }), USAGE_HISTORY_TIMEOUT_MS)
+    })
+    void Promise.race([
+      window.api.orcaProfiles
+        .billingUsageHistory({ utcOffsetMinutes: utcOffsetMinutes() })
+        .catch(() => ({ status: 'failed' as const })),
+      timeout
+    ])
+      .finally(() => clearTimeout(timer))
       .then((result) => {
         if (disposed) {
           return
@@ -62,6 +74,7 @@ export function usePlanBillingUsageHistory(
       })
     return () => {
       disposed = true
+      clearTimeout(timer)
     }
   }, [readKey, attempt])
 
