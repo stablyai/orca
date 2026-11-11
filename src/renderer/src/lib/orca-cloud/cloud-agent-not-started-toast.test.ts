@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const toastMock = vi.hoisted(() => ({ message: vi.fn(), dismiss: vi.fn() }))
 vi.mock('sonner', () => ({ toast: toastMock }))
@@ -39,12 +39,14 @@ function accounts(
   }
 }
 
+const NOW = 1_800_000_000_000
+
 /** The create for `name` runs (`phase`) and then finishes: the sandbox is up, the prompt may show. */
 function creation(name: string, phase: string, status = 'creating'): void {
   useAppStore.setState({
     pendingWorktreeCreations: {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the toast reads only these fields
-      c1: { creationId: 'c1', startedAt: Date.now(), status, phase, request: { name } } as never
+      c1: { creationId: 'c1', startedAt: NOW, status, phase, request: { name } } as never
     }
   })
 }
@@ -55,10 +57,14 @@ function created(name: string): void {
 
 describe('cloud agent not-started toast', () => {
   beforeEach(() => {
+    vi.useFakeTimers({ now: NOW })
     toastMock.message.mockClear()
     toastMock.dismiss.mockClear()
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'none' }))
     useAppStore.setState({ activeWorktreeId: null, pendingWorktreeCreations: {} })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('says it once, with no extra sentence, and names the workspace only after a switch', () => {
