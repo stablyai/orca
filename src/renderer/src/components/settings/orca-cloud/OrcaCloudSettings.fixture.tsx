@@ -9,7 +9,6 @@ import { FIXTURE_NAMES, fixtureCloudSecretsApi } from '../cloud-secrets/cloud-se
 import { CloudMcpSyncPanel } from '../runtime-environments/cloud-mcp/CloudMcpSyncPanel'
 import { SettingsSection } from '../section-layout/SettingsSection'
 import { OrcaCloudMcpServersView, type OrcaCloudMcpWorkspace } from './OrcaCloudMcpServersPane'
-import { OrcaCloudSettingsLinks } from './OrcaCloudSettingsLinks'
 import { OrcaCloudSignedOutNotice } from './OrcaCloudSettingsPanes'
 
 const noop = (): void => {}
@@ -100,7 +99,7 @@ function mcpPage(workspaces: OrcaCloudMcpWorkspace[] | null | 'failed'): React.J
     <Page
       id="cloud-mcp"
       title="MCP servers"
-      description="MCP servers from Claude Code and Codex on this computer, synced to your cloud workspaces."
+      description="MCP servers from Claude and Codex on this computer, synced to your cloud workspaces."
     >
       <OrcaCloudMcpServersView
         workspaces={workspaces}
@@ -194,16 +193,6 @@ export const sessionExpired = defineFixture({
     >
       <OrcaCloudSignedOutNotice />
     </Page>
-  )
-})
-
-/** Settings › Orca account, signed in: the Orca Cloud panes are one click away. */
-export const accountLinks = defineFixture({
-  width: 720,
-  render: () => (
-    <div className="bg-background p-6">
-      <OrcaCloudSettingsLinks onOpen={noop} />
-    </div>
   )
 })
 

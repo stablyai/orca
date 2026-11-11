@@ -180,3 +180,18 @@ describe('pokes', () => {
     expect((await t.req(solo, 'GET', '/v1/team/pokes')).body).toEqual({ enabled: false, pokes: [] })
   })
 })
+
+describe('member-removed token', () => {
+  it('authorizes only POST /v1/internal/org-members/removed, never other operator routes', async () => {
+    const MR = 'm'.repeat(40)
+    const body = { accountId: 'org:acme', userId: 'bob' }
+    const h = await createHarness({ OPERATOR_TOKEN: 'o'.repeat(40), MEMBER_REMOVED_TOKEN: MR })
+    expect((await h.call('POST', '/v1/internal/org-members/removed', { bearer: MR, body })).status).toBe(200)
+    expect((await h.call('GET', '/v1/internal/status', { bearer: MR })).status).toBe(404)
+    expect((await h.call('POST', '/v1/internal/members/removed', { bearer: MR, body })).status).toBe(404)
+    // The operator token still works on the route; a short token is never accepted.
+    expect((await h.call('POST', '/v1/internal/org-members/removed', { bearer: 'o'.repeat(40), body })).status).toBe(200)
+    const weak = await createHarness({ OPERATOR_TOKEN: 'o'.repeat(40), MEMBER_REMOVED_TOKEN: 'short' })
+    expect((await weak.call('POST', '/v1/internal/org-members/removed', { bearer: 'short', body })).status).toBe(404)
+  })
+})

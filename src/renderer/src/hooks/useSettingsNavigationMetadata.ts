@@ -31,7 +31,10 @@ import {
   buildSetupSettingsSections
 } from './settings-navigation-capability-sections'
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
-import { buildOrcaCloudSettingsSections } from './settings-navigation-orca-cloud-sections'
+import {
+  buildOrcaCloudSettingsSections,
+  gatherOrcaCloudSettingsGroup
+} from './settings-navigation-orca-cloud-sections'
 import { buildInterfaceSettingsSections } from './settings-navigation-interface-sections'
 import { buildRemoteSettingsSections } from './settings-navigation-remote-sections'
 import { buildWorkflowSettingsSections } from './settings-navigation-workflow-sections'
@@ -110,14 +113,17 @@ export function buildSettingsNavigationMetadata(
   }
 
   // Match SETTINGS_NAV_GROUPS order so Settings and Cmd+J keep siblings together.
-  return [
-    ...buildCapabilitySettingsSections(options, t),
-    ...buildSetupSettingsSections(options, t),
-    ...buildOrcaCloudSettingsSections(options, t),
-    ...buildWorkflowSettingsSections(options, terminalPaneSearchEntries, t),
-    ...buildInterfaceSettingsSections(options, t),
-    ...buildRemoteSettingsSections(options, runtimeEnvironmentsSearchEntry, reposById, t)
-  ]
+  return gatherOrcaCloudSettingsGroup(
+    [
+      ...buildCapabilitySettingsSections(options, t),
+      ...buildSetupSettingsSections(options, t),
+      ...buildOrcaCloudSettingsSections(options, t),
+      ...buildWorkflowSettingsSections(options, terminalPaneSearchEntries, t),
+      ...buildInterfaceSettingsSections(options, t),
+      ...buildRemoteSettingsSections(options, runtimeEnvironmentsSearchEntry, reposById, t)
+    ],
+    options
+  )
 }
 
 export function useSettingsNavigationMetadata(): SettingsNavSection[] {

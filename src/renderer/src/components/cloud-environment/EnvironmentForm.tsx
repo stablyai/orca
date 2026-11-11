@@ -124,7 +124,7 @@ export function EnvironmentForm({
                 <DropdownMenuLabel variant="hint">
                   {t(
                     'cloudEnvironment.form.importHint',
-                    'Reads Conductor and dev container setup from a local project.'
+                    'Reads Conductor and Dev Container setup from a local project.'
                   )}
                 </DropdownMenuLabel>
                 {importProjects.map((project) => (

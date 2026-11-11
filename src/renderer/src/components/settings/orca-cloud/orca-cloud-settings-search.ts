@@ -96,3 +96,20 @@ export const getOrcaCloudLocalCommandsSearchEntries = createLocalizedCatalog(() 
     ]
   }
 ])
+
+export const getOrcaCloudSkillsSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('cloudSkillsSync.title', 'Skills & commands'),
+    description: translate(
+      'settings.orcaCloud.skills.searchDescription',
+      'Sync Claude and Codex skills and slash commands from this computer to your cloud workspaces.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.orcaCloud.skills.keywordSkills', 'skills'),
+      ...translateSearchKeyword('settings.orcaCloud.skills.keywordCommands', 'slash commands'),
+      ...translateSearchKeyword('settings.orcaCloud.skills.keywordPrompts', 'prompts'),
+      ...translateSearchKeyword('settings.orcaCloud.mcp.keywordSync', 'sync'),
+      ...translateSearchKeyword('settings.orcaCloud.mcp.keywordCloud', 'cloud')
+    ]
+  }
+])

@@ -18,7 +18,7 @@ import {
   listTeamCloudRuntimes,
   readOrcaCloudActiveAccountId
 } from '../hosted-sandbox/orca-cloud-active-account'
-import { readCloudWorkspaceRecord } from '../ipc/cloud-workspaces'
+import { getCloudWorkspacesService } from '../ipc/cloud-workspaces'
 import {
   callRuntimeEnvironment,
   subscribeRuntimeEnvironment
@@ -126,7 +126,9 @@ export function installLocalCommands(userDataPath: string): void {
     supported,
     listWorkspaces,
     readPolicy: async (sandboxId) => {
-      const record = await readCloudWorkspaceRecord(sandboxId)
+      const service = await getCloudWorkspacesService().catch(() => null)
+      const result = await service?.get(sandboxId)
+      const record = result?.ok ? result.value : null
       return record
         ? {
             isOwner: record.access === 'owner',

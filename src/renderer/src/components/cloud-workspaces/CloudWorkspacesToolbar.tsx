@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils'
 import { repoLabel, type MemberDirectory } from './cloud-workspace-format'
 import type { CloudWorkspaceRoutineRuns } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { OrcaCloudTrialUsedUpBanner } from '../new-workspace/run-on/OrcaCloudTrialUsedUpNotice'
+import { CLOUD_ROUTINES_UI_ENABLED } from '../../../../shared/cloud-api/cloud-routines-ui'
 
 export const ANY = '__any'
 
@@ -78,7 +79,8 @@ export function CloudWorkspacesToolbar({
 }): React.JSX.Element {
   const t = useTranslate()
   // Routines start cloud workspaces on their own, so they sit next to the list they fill.
-  const routinesAvailable = useOrcaCloudApiAvailable()
+  // Routines are parked (cloud-routines-ui.ts): no Routines entry and no Routine runs switch.
+  const routinesAvailable = useOrcaCloudApiAvailable() && CLOUD_ROUTINES_UI_ENABLED
   return (
     <div className="mb-2 flex flex-col gap-2">
       <div className="flex items-center gap-2">
@@ -192,7 +194,8 @@ export function CloudWorkspacesToolbar({
             />
             {t('auto.components.cloudWorkspaces.running', 'Running')}
           </label>
-          {(routineRuns?.routines ?? 0) > 0 || filters.routines === true ? (
+          {CLOUD_ROUTINES_UI_ENABLED &&
+          ((routineRuns?.routines ?? 0) > 0 || filters.routines === true) ? (
             <label className="flex h-7 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
               <Switch
                 checked={filters.routines === true}

@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -18,6 +17,7 @@ import { environmentHandleFromRecipeResult } from '../../environment-providers/e
 import { HOSTED_SANDBOX_DRIVER_ID } from '../../hosted-sandbox/hosted-sandbox-driver'
 import { readLocalMcpConfig, type LocalMcpConfig } from './local-mcp-config-read'
 import type { CloudMcpEgress } from './cloud-mcp-egress'
+import { readOrCreateSyncerId } from '../../agent-config-sync/desktop/syncer-id'
 
 const SYNC_TIMEOUT_MS = 30_000
 const MAX_EXCLUDED = 512
@@ -146,30 +146,7 @@ export function createCloudMcpSync(deps: CloudMcpSyncDeps): CloudMcpSync {
     }
   }
 
-  let syncer: string | null = null
-  /** This computer's stable sync identity (random, not a device fingerprint). */
-  function syncerId(): string {
-    if (syncer) {
-      return syncer
-    }
-    const path = join(deps.userDataPath, 'mcp-sync-syncer-id')
-    try {
-      const stored = readFileSync(path, 'utf8').trim()
-      if (/^[a-f0-9]{16}$/.test(stored)) {
-        syncer = stored
-        return stored
-      }
-    } catch {
-      // First sync from this computer.
-    }
-    syncer = randomBytes(8).toString('hex')
-    try {
-      writeFileAtomically(path, `${syncer}\n`)
-    } catch {
-      // Unwritable profile: this run still syncs as itself; the next launch gets a new id.
-    }
-    return syncer
-  }
+  const syncerId = (): Promise<string> => readOrCreateSyncerId(deps.userDataPath)
 
   async function plan(environmentId: string) {
     const runtime = cloudRuntime(environmentId)
@@ -180,7 +157,7 @@ export function createCloudMcpSync(deps: CloudMcpSyncDeps): CloudMcpSync {
       repoServerNames: local.repoServerNames,
       homeDir: homedir()
     })
-    return { ...planned, params: { ...planned.params, syncer: syncerId() } }
+    return { ...planned, params: { ...planned.params, syncer: await syncerId() } }
   }
 
   function publish(status: McpSyncStatus): McpSyncStatus {

@@ -443,7 +443,7 @@ describe('desktop wire contract', () => {
       ).body
     )
     wire.CloudWorkspaceGrantListSchema.parse((await t.req(t.bob, 'GET', `/v1/team/workspaces/${t.id}/grants`)).body)
-    expect(wire.parseCloudWorkspaceLink(wire.cloudWorkspaceLink(t.id, 'chat 1'))).toEqual({ workspaceId: t.id, chatId: 'chat 1' })
+    expect(wire.parseCloudWorkspaceLink(wire.cloudWorkspaceLink(t.id, 'chat 1'))).toEqual({ target: { kind: 'id', workspaceId: t.id }, chatId: 'chat 1' })
     expect(issued.grant.status).toBe('active')
   })
 
