@@ -6,6 +6,11 @@ import { requestCloudWorkspaceGrant } from './cloud-control-plane-access'
 import { wakeCloudWorkspace } from './cloud-control-plane-client'
 import { CloudRequestError, type CloudControlPlane } from './cloud-control-plane-request'
 import { encodeBase64Bytes } from '../transport/encryption/base64-byte-codec'
+import { loadCloudDeviceIdentity } from './cloud-device-identity'
+import {
+  recordCloudReadSignerFromGrant,
+  repinCloudReadSignerAfterPairing
+} from './cloud-read-snapshot-pins'
 import { createGrantRecipientKey, openCloudSealedGrant } from './cloud-sealed-grant'
 
 // Opening a cloud workspace from the phone: wake the VM through the control plane, then talk to its
@@ -21,6 +26,7 @@ export class CloudAttachError extends Error {
       | 'failed'
       | 'not_found'
       | 'wake_timeout'
+      | 'wake_failed'
       | 'grant_failed'
       | 'pairing_failed'
   ) {
@@ -73,24 +79,53 @@ export async function attachCloudWorkspace(args: {
   deviceLabel: string
   onPhase: (phase: CloudAttachPhase) => void
   signal?: AbortSignal
-}): Promise<{ hostId: string; paired: boolean }> {
+  /**
+   * Pair afresh through a new grant even if a host is saved: the saved one was refused (its orcad
+   * identity changed) or the workspace's snapshot signer changed, both signs of a rebuilt sandbox.
+   * The saved host is only replaced once the new pairing succeeds.
+   */
+  freshPairing?: boolean
+}): Promise<{ hostId: string; paired: boolean; replacedHostId?: string }> {
   args.onPhase('waking')
-  await wakeCloudWorkspaceUntilReady(args.plane, args.sandboxId, args.signal)
+  try {
+    await wakeCloudWorkspaceUntilReady(args.plane, args.sandboxId, args.signal)
+  } catch (error) {
+    // The control plane failing the wake itself (an unknown 5xx) reads as "couldn't wake".
+    if (error instanceof CloudRequestError && error.status >= 500) {
+      throw new CloudAttachError('wake_failed')
+    }
+    throw error
+  }
   const existing = await cloudWorkspaceHostId(args.sandboxId)
-  if (existing) {
+  if (existing && !args.freshPairing) {
     args.onPhase('connected')
     return { hostId: existing, paired: false }
   }
   args.onPhase('granting')
   const recipient = createGrantRecipientKey()
   let pairingUrl: string
+  // The grant's read-snapshot signer, held until this grant's pairing proves it (see below).
+  let grantSigner: { sessionId: string; publicKeyB64: string } | null = null
   try {
     const grant = await requestCloudWorkspaceGrant(args.plane, args.sandboxId, {
       recipientPublicKeyB64: encodeBase64Bytes(recipient.publicKey),
       deviceLabel: args.deviceLabel
     })
-    pairingUrl = (await openCloudSealedGrant(grant.sealed, grant.grantId, recipient.secretKey))
-      .pairingUrl
+    const opened = await openCloudSealedGrant(grant.sealed, grant.grantId, recipient.secretKey)
+    pairingUrl = opened.pairingUrl
+    // The grant names the workspace's read-snapshot signer. On its own (relayed by the control
+    // plane) it only fills an empty pin; it never replaces one.
+    if (opened.readSignerPublicKeyB64) {
+      const sessionId = (await loadCloudDeviceIdentity()).enrollment?.deviceSessionId
+      if (sessionId) {
+        grantSigner = { sessionId, publicKeyB64: opened.readSignerPublicKeyB64 }
+        await recordCloudReadSignerFromGrant(
+          sessionId,
+          args.sandboxId,
+          opened.readSignerPublicKeyB64
+        ).catch(() => undefined)
+      }
+    }
   } catch (error) {
     if (error instanceof CloudRequestError && error.status === 401) {
       throw error
@@ -112,10 +147,23 @@ export async function attachCloudWorkspace(args: {
   args.signal?.addEventListener('abort', disposeOnAbort)
   try {
     const { hostId } = await attempt.result
+    // This grant's offer just completed the end-to-end encrypted pairing with the workspace's
+    // orcad: now its signer may replace a pinned one (a rebuilt sandbox). The floor stays.
+    if (grantSigner) {
+      await repinCloudReadSignerAfterPairing(
+        grantSigner.sessionId,
+        args.sandboxId,
+        grantSigner.publicKeyB64
+      ).catch(() => undefined)
+    }
     await recordCloudWorkspaceHost(args.sandboxId, hostId)
     await updateHostNameAndEndpoint(hostId, { personalName: args.title }).catch(() => undefined)
     args.onPhase('connected')
-    return { hostId, paired: true }
+    return {
+      hostId,
+      paired: true,
+      ...(existing && existing !== hostId ? { replacedHostId: existing } : {})
+    }
   } catch {
     throw new CloudAttachError('pairing_failed')
   } finally {

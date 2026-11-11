@@ -52,6 +52,11 @@ export type WorkspaceSleepNotice =
       /** The agents main recorded for wake, which the window reads; null when another host keeps them. */
       records: SleepingAgentSessionRecord[] | null
     }
+  /**
+   * Main passed its last reopen check and is suspending the VM: a reopen can no longer keep it up,
+   * so the window stops offering "Keep awake" (a press now is an honest wake after the sleep).
+   */
+  | { worktreeId: string; phase: 'suspending'; projectMovePauseId?: string }
   /** A phone or CLI's sleep that did not fully succeed; the window shows its own Sleep's toast. */
   | { worktreeId: string; phase: 'failed'; outcome: WorkspaceSleepOutcome }
 

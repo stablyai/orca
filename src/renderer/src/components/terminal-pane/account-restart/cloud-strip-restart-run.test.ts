@@ -2,13 +2,36 @@
 // pane whose signed-out Claude reports 'blocked' (which the account-restart path reads as mid-turn),
 // the mounted pane's runner relaunches it in place, and the strip learns the outcome.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+// Which environments count as Orca Cloud in a test (the real check reads the runtime catalog).
+const rpc = vi.hoisted(() => {
+  const state: { tail: string[]; sends: unknown[] } = { tail: [], sends: [] }
+  return state
+})
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: async (_target: unknown, method: string, params: unknown) => {
+    if (method === 'terminal.read') {
+      return { terminal: { tail: rpc.tail } }
+    }
+    if (method === 'terminal.send') {
+      rpc.sends.push(params)
+    }
+    return {}
+  }
+}))
+const cloud = vi.hoisted(() => ({ ids: new Set<string>() }))
+vi.mock('@/lib/orca-cloud/orca-cloud-environment-id', () => ({
+  isOrcaCloudEnvironmentId: (id: string) => cloud.ids.has(id)
+}))
 import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { resetCloudRunningSignoutForTest } from '@/lib/orca-cloud/cloud-running-agent-signout'
 import {
   beginCloudAgentRestart,
+  CLOUD_AGENT_FRESH_NOTICE_MS,
   CLOUD_AGENT_RESTART_TIMEOUT_MS,
+  cloudAgentRestartStartedFresh,
   cloudAgentRestartAttempt,
   resetCloudAgentRestartsForTest,
   settleCloudAgentRestart
@@ -269,6 +292,7 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
     const resumeRemotePane = vi.fn(async () => {
       order.push('resume')
     })
+    const freshIfResumeFoundNothing = vi.fn(async () => false)
     const handleRestartPane = vi.fn(() => order.push('reconnect'))
     runReadyPaneAccountRestarts({
       panes: [{ id: 7, leafId: LEAF }],
@@ -284,10 +308,17 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
       stopRemotePane: async () => {
         order.push('stop')
       },
-      resumeRemotePane
+      resumeRemotePane,
+      freshIfResumeFoundNothing,
+      buildFreshCommand: (agent, leafId) => `fresh ${agent} ${leafId}`
     })
     await vi.waitFor(() => expect(handleRestartPane).toHaveBeenCalledTimes(1))
     expect(order).toEqual(['stop', 'resume', 'reconnect'])
+    // RA-11e: after the reconnect, the resume is watched once for "no conversation" (then fresh).
+    await vi.waitFor(() => expect(freshIfResumeFoundNothing).toHaveBeenCalledTimes(1))
+    expect(freshIfResumeFoundNothing).toHaveBeenCalledWith(
+      expect.objectContaining({ replacedPtyId: REMOTE, freshCommand: `fresh claude ${LEAF}` })
+    )
     expect(resumeRemotePane).toHaveBeenCalledWith({
       ptyId: REMOTE,
       worktreeId: 'wt-1',
@@ -296,6 +327,83 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
       agent: 'claude',
       providerSession
     })
+    // A resume that worked never says it started fresh.
+    expect(cloudAgentRestartStartedFresh(PANE_KEY, 0)).toBe(false)
+  })
+
+  it('end to end: resume → "No conversation found" → one fresh relaunch → "Started a new conversation." once', async () => {
+    const { freshIfResumeFoundNothing: realBackstop } =
+      await import('@/lib/orca-cloud/cloud-pane-restart-stop')
+    rpc.tail = [
+      '$ claude --resume sess-tab-1',
+      'No conversation found with session ID: sess-tab-1',
+      '$ '
+    ]
+    rpc.sends = []
+    clickRemoteRestart()
+    const NEW = 'remote:env-1@@term_new'
+    const handleRestartPane = vi.fn(() => {
+      // The reconnect binds the pane to its new terminal.
+      useAppStore.setState({
+        terminalLayoutsByTabId: {
+          ...useAppStore.getState().terminalLayoutsByTabId,
+          [TAB]: {
+            root: { type: 'leaf', leafId: LEAF },
+            activeLeafId: LEAF,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [LEAF]: NEW }
+          }
+        }
+      })
+    })
+    runReadyPaneAccountRestarts({
+      panes: [{ id: 7, leafId: LEAF }],
+      ptyIdOf: () => REMOTE,
+      readyRestartPtyIds: selectReadyAccountRestartPtyIds(useAppStore.getState(), TAB),
+      tabId: TAB,
+      consumePendingPaneAccountRestart: useAppStore.getState().consumePendingPaneAccountRestart,
+      buildAccountRestartStartup: () => ({
+        command: 'claude',
+        resumeProviderSession: { key: 'session_id' as const, id: 'sess-tab-1' }
+      }),
+      handleRestartPane,
+      stopRemotePane: () => Promise.resolve(),
+      resumeRemotePane: () => Promise.resolve(),
+      freshIfResumeFoundNothing: (input) =>
+        realBackstop({ ...input, sleep: () => Promise.resolve() }),
+      buildFreshCommand: () => 'claude --dangerously-skip-permissions'
+    })
+    await vi.waitFor(() => expect(cloudAgentRestartStartedFresh(PANE_KEY, 0)).toBe(true))
+    expect(rpc.sends).toEqual([
+      { terminal: 'term_new', text: 'claude --dangerously-skip-permissions', enter: true }
+    ])
+    vi.advanceTimersByTime(CLOUD_AGENT_FRESH_NOTICE_MS)
+    expect(cloudAgentRestartStartedFresh(PANE_KEY, 0)).toBe(false)
+    expect(rpc.sends).toHaveLength(1)
+  })
+
+  it('a resume that found no conversation says "Started a new conversation." for 3 s, then clears', async () => {
+    clickRemoteRestart()
+    const handleRestartPane = vi.fn()
+    runReadyPaneAccountRestarts({
+      panes: [{ id: 7, leafId: LEAF }],
+      ptyIdOf: () => REMOTE,
+      readyRestartPtyIds: selectReadyAccountRestartPtyIds(useAppStore.getState(), TAB),
+      tabId: TAB,
+      consumePendingPaneAccountRestart: useAppStore.getState().consumePendingPaneAccountRestart,
+      buildAccountRestartStartup: () => ({
+        command: 'claude',
+        resumeProviderSession: { key: 'session_id' as const, id: 'sess-tab-1' }
+      }),
+      handleRestartPane,
+      stopRemotePane: () => Promise.resolve(),
+      resumeRemotePane: () => Promise.resolve(),
+      freshIfResumeFoundNothing: async () => true,
+      buildFreshCommand: () => 'claude'
+    })
+    await vi.waitFor(() => expect(cloudAgentRestartStartedFresh(PANE_KEY, 0)).toBe(true))
+    vi.advanceTimersByTime(CLOUD_AGENT_FRESH_NOTICE_MS)
+    expect(cloudAgentRestartStartedFresh(PANE_KEY, 0)).toBe(false)
   })
 
   it('a failed resume on the host shows the failure and never reconnects', async () => {
@@ -329,14 +437,70 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
     expect(cloudAgentRestartAttempt(PANE_KEY, 0)?.phase).toBe('failed')
   })
 
-  it('an account-switch restart on a remote pane does not stop the host terminal', () => {
+  // RA-11c: an account switch on a paired pane reattached to the old agent and never relaunched.
+  it('an account-switch restart on a paired pane stops that host terminal, then reconnects', async () => {
     useAppStore.setState({
       agentStatusByPaneKey: { [PANE_KEY]: { ...entry(TAB, LEAF), state: 'done' } }
     })
     useAppStore.getState().queuePaneAccountRestarts([REMOTE], 'claude')
     const stopRemotePane = vi.fn(() => Promise.resolve())
     const handleRestartPane = runRemote(stopRemotePane)
-    expect(stopRemotePane).not.toHaveBeenCalled()
-    expect(handleRestartPane).toHaveBeenCalledTimes(1)
+    expect(handleRestartPane).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(handleRestartPane).toHaveBeenCalledTimes(1))
+    expect(stopRemotePane).toHaveBeenCalledWith(REMOTE, 'wt-1')
+    expect(stopRemotePane).not.toHaveBeenCalledWith(OTHER, expect.anything())
+    // Not Orca Cloud: no strip to show a result on, so nothing is tracked.
+    expect(cloudAgentRestartAttempt(PANE_KEY, 0)).toBeNull()
+  })
+
+  it('on Orca Cloud an account-switch restart is tracked: Restarting…, then proof or a failure', async () => {
+    cloud.ids.add('env-1')
+    try {
+      useAppStore.setState({
+        agentStatusByPaneKey: { [PANE_KEY]: { ...entry(TAB, LEAF), state: 'done' } }
+      })
+      useAppStore.getState().queuePaneAccountRestarts([REMOTE], 'claude')
+      const handleRestartPane = runRemote(() => Promise.resolve())
+      expect(cloudAgentRestartAttempt(PANE_KEY, 0)?.phase).toBe('restarting')
+      await vi.waitFor(() => expect(handleRestartPane).toHaveBeenCalledTimes(1))
+      expect(cloudAgentRestartAttempt(PANE_KEY, 0)?.launchedAt).not.toBeNull()
+      // No new PTY bound by the timeout: a visible failure, never a silent stale pane.
+      vi.advanceTimersByTime(CLOUD_AGENT_RESTART_TIMEOUT_MS)
+      expect(cloudAgentRestartAttempt(PANE_KEY, 0)?.phase).toBe('failed')
+    } finally {
+      cloud.ids.clear()
+    }
+  })
+
+  it('a host that will not stop the terminal shows the reason, and a Codex switch asks again', async () => {
+    cloud.ids.add('env-1')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const reopen = vi.spyOn(useAppStore.getState(), 'reopenCodexRestartPrompt')
+    try {
+      useAppStore.getState().queuePaneAccountRestarts([REMOTE], 'codex')
+      const handleRestartPane = vi.fn()
+      runReadyPaneAccountRestarts({
+        panes: [{ id: 7, leafId: LEAF }],
+        ptyIdOf: () => REMOTE,
+        readyRestartPtyIds: selectReadyAccountRestartPtyIds(useAppStore.getState(), TAB),
+        tabId: TAB,
+        consumePendingPaneAccountRestart: useAppStore.getState().consumePendingPaneAccountRestart,
+        buildAccountRestartStartup: () => ({ command: 'codex' }),
+        handleRestartPane,
+        stopRemotePane: () => Promise.reject(new Error('terminal_exact_stop_failed'))
+      })
+      await vi.waitFor(() =>
+        expect(cloudAgentRestartAttempt(PANE_KEY, 0)).toMatchObject({
+          phase: 'failed',
+          failure: 'hostUnresponsive'
+        })
+      )
+      expect(handleRestartPane).not.toHaveBeenCalled()
+      expect(reopen).toHaveBeenCalledWith(REMOTE)
+    } finally {
+      warn.mockRestore()
+      reopen.mockRestore()
+      cloud.ids.clear()
+    }
   })
 })

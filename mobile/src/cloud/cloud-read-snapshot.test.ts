@@ -1,14 +1,17 @@
-import {
-  createCipheriv,
-  createPublicKey,
-  diffieHellman,
-  generateKeyPairSync,
-  hkdfSync,
-  randomBytes
-} from 'node:crypto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { store } = vi.hoisted(() => ({ store: new Map<string, string>() }))
+const { store, local } = vi.hoisted(() => ({
+  store: new Map<string, string>(),
+  local: new Map<string, string>()
+}))
+vi.mock('@react-native-async-storage/async-storage', () => ({
+  default: {
+    getItem: async (key: string) => local.get(key) ?? null,
+    setItem: async (key: string, value: string) => void local.set(key, value),
+    getAllKeys: async () => [...local.keys()],
+    multiRemove: async (keys: string[]) => keys.forEach((key) => local.delete(key))
+  }
+}))
 vi.mock('expo-secure-store', () => ({
   WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'WHEN_UNLOCKED_THIS_DEVICE_ONLY',
   getItemAsync: async (key: string) => store.get(key) ?? null,
@@ -28,133 +31,17 @@ vi.mock('./cloud-device-identity', () => ({
   })
 }))
 
-import type { SealedReadSnapshot } from '../../../src/shared/cloud-workspaces/read-snapshot'
-import type { CloudControlPlane } from './cloud-control-plane-request'
 import {
   CLOUD_READER_KEY_REFRESH_MS,
   ensureCloudReaderKey,
-  readCloudWorkspaceSnapshot,
-  resetCloudReadSnapshotPins
+  readCloudWorkspaceSnapshot
 } from './cloud-read-snapshot'
+import { PAYLOAD, fakePlane, registered, sealLikeVm } from './cloud-read-snapshot.test-fixture'
 import { loadCloudReaderKey } from './cloud-reader-key'
-
-// Seals exactly as the header of src/shared/cloud-workspaces/read-snapshot.ts says the VM does.
-function sealLikeVm(args: {
-  readerPublicKeyB64: string
-  keyId: string
-  workspaceId: string
-  snapshotId: string
-  payload: unknown
-}): SealedReadSnapshot {
-  const dek = randomBytes(32)
-  const nonce = randomBytes(12)
-  const body = createCipheriv('aes-256-gcm', dek, nonce)
-  body.setAAD(Buffer.from(`orca-cloud-read-v1:${args.workspaceId}:${args.snapshotId}`))
-  const ciphertext = Buffer.concat([
-    body.update(JSON.stringify(args.payload), 'utf8'),
-    body.final(),
-    body.getAuthTag()
-  ])
-  const readerPublic = Buffer.from(args.readerPublicKeyB64, 'base64')
-  const eph = generateKeyPairSync('x25519')
-  const ephRaw = Buffer.from(eph.publicKey.export({ format: 'jwk' }).x!, 'base64url')
-  const shared = diffieHellman({
-    privateKey: eph.privateKey,
-    publicKey: createPublicKey({
-      key: { kty: 'OKP', crv: 'X25519', x: readerPublic.toString('base64url') },
-      format: 'jwk'
-    })
-  })
-  const kek = Buffer.from(
-    hkdfSync('sha256', shared, Buffer.concat([ephRaw, readerPublic]), 'orca-cloud-read-wrap-v1', 32)
-  )
-  const wrapNonce = randomBytes(12)
-  const wrap = createCipheriv('aes-256-gcm', kek, wrapNonce)
-  wrap.setAAD(
-    Buffer.from(`orca-cloud-read-wrap-v1:${args.workspaceId}:${args.snapshotId}:${args.keyId}`)
-  )
-  const wrapped = Buffer.concat([wrap.update(dek), wrap.final(), wrap.getAuthTag()])
-  return {
-    v: 1,
-    snapshotId: args.snapshotId,
-    workspaceId: args.workspaceId,
-    storedAt: 2,
-    nonceB64: nonce.toString('base64'),
-    ciphertextB64: ciphertext.toString('base64'),
-    recipient: {
-      keyId: args.keyId,
-      ephemeralPublicKeyB64: ephRaw.toString('base64'),
-      nonceB64: wrapNonce.toString('base64'),
-      wrappedKeyB64: wrapped.toString('base64')
-    }
-  }
-}
-
-const PAYLOAD = {
-  v: 1,
-  workspaceId: 'sbx_1',
-  snapshotId: 'snap_1',
-  capturedAt: 1_700_000_000_000,
-  reason: 'sleep',
-  pr: {
-    number: 42,
-    title: 'Fix login',
-    state: 'open',
-    url: 'https://github.com/o/r/pull/42',
-    checksStatus: 'success',
-    checksSummary: null
-  },
-  git: { branch: 'fix-login', changes: [{ path: 'a.ts', added: 3, removed: 1 }], changeCount: 1 },
-  sessions: [
-    {
-      sessionId: 's1',
-      agent: 'claude',
-      title: 'Login bug',
-      status: 'idle',
-      turnOutcome: 'completed',
-      messages: [
-        { itemId: 'm1', role: 'user', text: 'fix it', at: 1 },
-        { itemId: 'm2', role: 'assistant', text: '**Done**', at: 2 }
-      ]
-    }
-  ]
-}
-
-type Call = { method: string; url: string; body: unknown }
-
-function fakePlane(handle: (call: Call) => { status: number; body: unknown }): {
-  plane: CloudControlPlane
-  calls: Call[]
-} {
-  const calls: Call[] = []
-  const fakeFetch: typeof fetch = async (input, init) => {
-    const call = {
-      method: init?.method ?? 'GET',
-      url: String(input),
-      body: init?.body ? JSON.parse(String(init.body)) : undefined
-    }
-    calls.push(call)
-    const reply = handle(call)
-    return new Response(JSON.stringify(reply.body), { status: reply.status })
-  }
-  const plane: CloudControlPlane = {
-    baseUrl: 'https://cloud.test',
-    token: () => 'tok',
-    fetch: fakeFetch
-  }
-  return { plane, calls }
-}
-
-const registered = (id = 'rk_aaaaaaaaaaaaaaaaaaaaaaaa') => ({
-  status: 200,
-  body: {
-    readerKey: { id, deviceKind: 'mobile', deviceLabel: 'x', createdAt: 1, lastSeenAt: 1 }
-  }
-})
 
 beforeEach(() => {
   store.clear()
-  resetCloudReadSnapshotPins()
+  local.clear()
 })
 
 describe('ensureCloudReaderKey', () => {
@@ -284,7 +171,7 @@ describe('readCloudWorkspaceSnapshot', () => {
     next = seal('snap_old', 1_000)
     expect(await readCloudWorkspaceSnapshot(plane, 'sbx_pin')).toMatchObject({
       state: 'error',
-      error: { name: 'CloudReadSnapshotRollbackError', capturedAt: 1_000, newestShownAt: 2_000 }
+      error: { name: 'CloudReadSnapshotRefusedError', reason: 'rollback' }
     })
     next = seal('snap_same', 2_000)
     expect((await readCloudWorkspaceSnapshot(plane, 'sbx_pin')).state).toBe('ready')

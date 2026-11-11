@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { translate } from '@/i18n/i18n'
-import { cloudRestartAttemptModel } from './cloud-running-strip-model'
+import { cloudRestartAttemptModel, cloudRestartFreshModel } from './cloud-running-strip-model'
 
 const attempt = { agent: 'claude' as const, resumable: true, ptyId: 'p', launchedAt: null }
 
@@ -10,7 +10,7 @@ describe('RA-11 Restart feedback copy', () => {
     expect(model).toMatchObject({
       status: 'busy',
       title: 'Restarting Claude…',
-      detail: 'Picking up where you left off.',
+      detail: '',
       primary: null,
       noClose: true
     })
@@ -38,5 +38,17 @@ describe('RA-11 Restart feedback copy', () => {
       announcement: 'Couldn’t restart Claude. Try again.'
     })
     expect(model.primary?.busy).toBeUndefined()
+  })
+})
+
+describe('RA-11e fresh-start copy', () => {
+  it('says a new conversation started, with nothing to click', () => {
+    expect(cloudRestartFreshModel('claude', translate)).toMatchObject({
+      status: 'done',
+      title: 'Started a new conversation.',
+      detail: 'Claude had nothing to pick up.',
+      primary: null,
+      noClose: true
+    })
   })
 })

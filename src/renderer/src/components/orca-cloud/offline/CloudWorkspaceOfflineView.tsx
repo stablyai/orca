@@ -24,6 +24,12 @@ export type CloudOfflineViewProps = {
   onCancel: (id: string) => void
   onEdit: (id: string, text: string) => Promise<boolean>
   headingRef?: React.Ref<HTMLHeadingElement>
+  /** Sleep chosen here and still running: the status line says so, and Keep awake replaces Wake. */
+  goingToSleep?: boolean
+  /** Keeps it running instead (the same as opening it again before the sleep ends). */
+  onKeepAwake?: () => void
+  /** Kept on screen right after Sleep: nothing here wakes it but "Wake to continue". */
+  viewOnly?: boolean
 }
 
 /** A terminal tail opens at its newest lines, the way the live pane did. */
@@ -46,9 +52,11 @@ export function CloudWorkspaceOfflineView(props: CloudOfflineViewProps): React.J
     snapshot.chats.length > 0 ? 'chat' : snapshot.terminals.length > 0 ? 'terminals' : 'changes'
   const empty = snapshot.capturedAt === null
   const asOf = snapshot.capturedAt === null ? null : asOfParts(snapshot.capturedAt, now)
-  const stateLine = asOf
-    ? t('components.orcaCloud.read.asOf', 'Asleep · As of {{when}}', { when: asOf.relative })
-    : t('orcaCloudWorkspace.asleep.noCopy', 'Asleep · nothing cached yet')
+  const stateLine = props.goingToSleep
+    ? t('orcaCloudWorkspace.state.goingToSleep', 'Going to sleep…')
+    : asOf
+      ? t('components.orcaCloud.read.asOf', 'Asleep · As of {{when}}', { when: asOf.relative })
+      : t('orcaCloudWorkspace.asleep.noCopy', 'Asleep · nothing cached yet')
   // Sections may come from the copy the workspace saved when it went to sleep (Orca Cloud).
   const fromCloud = snapshot.source === 'cloud' || snapshot.source === 'mixed'
   return (
@@ -72,18 +80,30 @@ export function CloudWorkspaceOfflineView(props: CloudOfflineViewProps): React.J
         }
         headingRef={props.headingRef}
         action={
-          <Button size="sm" onClick={props.onWake}>
-            <Play />
-            {t('components.orcaCloud.read.wakeToContinue', 'Wake to continue')}
-          </Button>
+          props.goingToSleep && props.onKeepAwake ? (
+            <Button size="sm" onClick={props.onKeepAwake}>
+              <Play />
+              {t('components.orcaCloud.offline.keepAwake', 'Keep awake')}
+            </Button>
+          ) : (
+            <Button size="sm" onClick={props.onWake}>
+              <Play />
+              {t('components.orcaCloud.read.wakeToContinue', 'Wake to continue')}
+            </Button>
+          )
         }
       />
       {empty ? (
         <p className="max-w-[60ch] text-sm text-muted-foreground">
-          {t(
-            'components.orcaCloud.offline.emptyBody',
-            'Orca keeps a copy of chats, terminals and changes once you have used this workspace while it was awake.'
-          )}
+          {props.goingToSleep
+            ? t(
+                'components.orcaCloud.offline.savingCopy',
+                'Saving a read-only copy of chats, terminals and changes…'
+              )
+            : t(
+                'components.orcaCloud.offline.emptyBody',
+                'Orca keeps a copy of chats, terminals and changes once you have used this workspace while it was awake.'
+              )}
         </p>
       ) : (
         <>
@@ -116,6 +136,7 @@ export function CloudWorkspaceOfflineView(props: CloudOfflineViewProps): React.J
                 onQueue={props.onQueue}
                 onCancel={props.onCancel}
                 onEdit={props.onEdit}
+                viewOnly={props.viewOnly}
               />
             </TabsContent>
             <TabsContent value="terminals" className="mt-3 flex min-h-0 flex-1 flex-col">

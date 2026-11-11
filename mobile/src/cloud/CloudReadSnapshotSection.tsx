@@ -16,8 +16,9 @@ import { formatTimeAgo } from '../worktree/agent-row-display'
 import { CloudErrorBanner } from './CloudErrorBanner'
 import { CloudStatusDot } from './CloudStatusDot'
 import { CloudReadSnapshotSessions } from './CloudReadSnapshotSessions'
-import { CloudReadSnapshotRollbackError, type CloudReadSnapshotResult } from './cloud-read-snapshot'
+import { CloudReadSnapshotRefusedError, type CloudReadSnapshotResult } from './cloud-read-snapshot'
 import { readSnapshotStyles as styles } from './cloud-read-snapshot-styles'
+import { readSnapshotRefusedMessage } from './cloud-workspace-copy'
 import { cloudStatusLabel } from './cloud-workspace-display'
 import { cloudWorkspaceScreenStyles as screen } from './cloud-workspace-screen-styles'
 
@@ -92,13 +93,10 @@ export function CloudReadSnapshotSection(props: {
             'This device was added after the workspace went to sleep. Wake it once to read it here.'
           )}
         />
-      ) : result.state === 'error' && result.error instanceof CloudReadSnapshotRollbackError ? (
-        // Trying again cannot help: the newer copy only comes back from the workspace itself.
+      ) : result.state === 'error' && result.error instanceof CloudReadSnapshotRefusedError ? (
+        // Trying again cannot help: the real copy only comes back from waking the workspace.
         <CloudErrorBanner
-          message={t(
-            'cloud.snapshot.rollback',
-            'Orca Cloud sent an older copy than the one you last saw, so it isn’t shown. Wake the workspace to see it as it is now.'
-          )}
+          message={readSnapshotRefusedMessage(result.error.reason, t)}
           onRetry={null}
         />
       ) : (
