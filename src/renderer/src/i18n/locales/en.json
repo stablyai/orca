@@ -1469,7 +1469,8 @@
       "port": "Port",
       "pr": "PR",
       "task": "Task",
-      "automationItem": "Automation"
+      "automationItem": "Automation",
+      "cloudWorkspace": "Cloud workspace"
     },
     "linearIssue": {
       "createLabel": "Create worktree from Linear issue {{value0}}: {{value1}}",
@@ -21042,7 +21043,26 @@
         "errorSeatSandboxLimitSelf_other": "You already have {{count}} sandboxes running, the most one seat can run. Put one to sleep or delete it, then try again.",
         "errorSeatSandboxLimitOwner_one": "{{name}} already has {{count}} sandbox running. This workspace runs on their seat, so ask them to put it to sleep, then try again.",
         "errorSeatSandboxLimitOwner_other": "{{name}} already has {{count}} sandboxes running. This workspace runs on their seat, so ask them to put one to sleep, then try again.",
-        "viewOwnerProfile": "View {{name}}'s profile"
+        "viewOwnerProfile": "View {{name}}'s profile",
+        "pinned": "Pinned",
+        "sectionActions": "Actions for section {{name}}",
+        "moveSectionUp": "Move section up",
+        "moveSectionDown": "Move section down",
+        "linkCopiedShort": "Link copied",
+        "copyLinkTo": "Copy link to {{number}}",
+        "unpin": "Unpin",
+        "pin": "Pin",
+        "moveUp": "Move up",
+        "moveDown": "Move down",
+        "linkNoAccess": "You don't have access to {{number}}.",
+        "linkOtherTeam2": "{{number}} is in {{team}}.",
+        "linkSwitchTeam": "Switch and open",
+        "prefsSaveFailed": "Couldn't save that change, so your other devices won't show it. Try again.",
+        "movedTo": "Moved {{name}} to position {{position}} in {{group}}",
+        "pinLimit": "You can pin up to {{count}} workspaces. Unpin one first.",
+        "pinnedName": "Pinned {{name}}",
+        "unpinnedName": "Unpinned {{name}}",
+        "otherWorkspaces": "Other workspaces"
       },
       "orcaCloud": {
         "QueuedPrompt": {
