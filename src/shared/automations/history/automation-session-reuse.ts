@@ -63,6 +63,30 @@ export function findReusableAutomationRun<Session>(args: {
   return null
 }
 
+export function latestAutomationSessionRun(args: {
+  automationId: string
+  worktreeId: string
+  currentRunId: string
+  target: AutomationSessionTarget
+  runs: readonly AutomationRun[]
+}): AutomationRun | undefined {
+  return args.runs
+    .filter(
+      (run) =>
+        run.id !== args.currentRunId &&
+        run.automationId === args.automationId &&
+        run.workspaceId === args.worktreeId &&
+        run.sessionKind === 'terminal' &&
+        Boolean(run.terminalPaneKey) &&
+        (!run.runContext ||
+          (parseExecutionHostId(run.runContext.hostId)?.id === args.target.hostId &&
+            run.runContext.repoId === args.target.repoId &&
+            normalizeRuntimePathForComparison(run.runContext.path) ===
+              normalizeRuntimePathForComparison(args.target.path)))
+    )
+    .toSorted((a, b) => automationRunRecency(b) - automationRunRecency(a))[0]
+}
+
 function isReusableRun(run: AutomationRun, worktreeId: string): run is ReusableAutomationRun {
   return (
     run.workspaceId === worktreeId &&

@@ -202,6 +202,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/agent-hooks.js')).AGENT_HOOK_HANDLERS
   },
   {
+    name: 'agent-resume',
+    keys: ['agent sessions', 'agent resume'],
+    load: async () => (await import('./handlers/agent-resume.js')).AGENT_RESUME_HANDLERS
+  },
+  {
     name: 'agent-launch',
     keys: ['agent launch'],
     load: async () => (await import('./handlers/agent-launch.js')).AGENT_LAUNCH_HANDLERS

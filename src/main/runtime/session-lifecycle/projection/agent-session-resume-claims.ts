@@ -82,6 +82,26 @@ export class AgentSessionResumeClaims {
     return this.share(hold, request)
   }
 
+  hasUnsettledResume(session: ResumedAgentSession, paneKey: string): boolean {
+    return [...this.holds].some(
+      (hold) =>
+        hold.paneKey === paneKey &&
+        hold.agent === session.agent &&
+        hold.unsettled > 0 &&
+        agentProviderSessionsEqual(hold.agent, hold.providerSession, session.providerSession)
+    )
+  }
+
+  ownsPty(session: ResumedAgentSession, paneKey: string, ptyId: string): boolean {
+    return [...this.holds].some(
+      (hold) =>
+        hold.paneKey === paneKey &&
+        hold.agent === session.agent &&
+        hold.ptys.has(ptyId) &&
+        agentProviderSessionsEqual(hold.agent, hold.providerSession, session.providerSession)
+    )
+  }
+
   private find(session: ResumedAgentSession): Hold | undefined {
     for (const hold of this.holds) {
       if (

@@ -16,6 +16,7 @@ import {
   TUI_AGENT_CONFIG
 } from '../../shared/agent-launch/catalog/tui-agent-config'
 import { launchAutomationTerminalAgent, runOwnHandle } from './automation-terminal-launch'
+import { hasResumableAutomationTerminal } from './automation-terminal-session-reuse'
 import {
   AGENT_HOOKS_REVIEW_BLOCKED_ERROR,
   createRuntimeAutomationRunTerminalObserver
@@ -234,6 +235,7 @@ function createRuntimeRunTerminalRetention(
       return run.terminalPtyId ? runtime.readTerminalClientUse(run.terminalPtyId) : 'unknown'
     },
     runTerminalAlive: (run) => runOwnHandle(runtime, run) !== null,
+    runTerminalResumable: (run) => hasResumableAutomationTerminal(runtime, run),
     shellAloneAtPrompt: (run) =>
       run.terminalPtyId
         ? runtime.confirmTerminalShellAlone(run.terminalPtyId)

@@ -10,10 +10,10 @@ import { tuiAgentDisplayName } from '../../shared/agent-launch/catalog/tui-agent
 import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
 import type { Automation } from '../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../shared/automations/history/automation-run'
-import { findReusableAutomationRun } from '../../shared/automations/history/automation-session-reuse'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { deliverTerminalAgentLaunchPrompt } from '../runtime/rpc/methods/agent-launch/agent-launch-terminal-prompt'
 import { AutomationRunLaunchError, type AutomationLaunch } from './automation-launch'
+import { sendToReusableSession } from './automation-terminal-session-reuse'
+export { runOwnHandle } from './automation-terminal-session-reuse'
 import { AutomationDispatchRefusedError } from './automation-launch-runner'
 import { buildAutomationWorktreeCreateArgs } from './automation-workspace-create'
 import type { AutomationRunTargetResult } from './run-target-resolution'
@@ -195,72 +195,6 @@ function runTargetOf(
   }
 }
 
-async function sendToReusableSession(
-  runtime: OrcaRuntimeService,
-  request: {
-    automation: Automation
-    run: Pick<AutomationRun, 'id'>
-    runs: readonly AutomationRun[]
-    text: string
-    target: Extract<AutomationRunTargetResult, { ok: true }>
-  },
-  workspaceDisplayName: string | null,
-  physicalHostId: string
-): Promise<AutomationTerminalAgentLaunch | null> {
-  const { automation, text } = request
-  const worktreeId = requireWorkspaceId(automation)
-  const session = findReusableAutomationRun({
-    automationId: automation.id,
-    agentId: automation.agentId,
-    worktreeId,
-    target: {
-      hostId: getRepoExecutionHostId(request.target.repo),
-      repoId: request.target.repo.id,
-      path: request.target.repo.path
-    },
-    currentRunId: request.run.id,
-    runs: request.runs,
-    agentStatusForPane: (paneKey) =>
-      runtime
-        .getAgentStatusRowsForPane(paneKey)
-        .filter((row) => !row.providerSessionOnly)
-        .toSorted((left, right) => right.receivedAt - left.receivedAt)[0],
-    liveSession: (previous) => {
-      const handle = runOwnHandle(runtime, previous)
-      const liveWorktreeId = handle ? runtime.getTerminalWorktreeIdForHandle(handle) : null
-      const liveHostId = handle
-        ? runtime.getPtyExecutionHostMetadata(runtime.getTerminalPtyIdForHandle(handle))
-            .executionHostId
-        : undefined
-      return handle && liveWorktreeId === worktreeId && liveHostId === physicalHostId
-        ? { handle, previous }
-        : null
-    }
-  })
-  if (
-    !session ||
-    !(await deliverTerminalAgentLaunchPrompt({
-      runtime,
-      handle: session.handle,
-      agent: automation.agentId,
-      freshLaunch: false,
-      text,
-      // Windows cannot prove which agent is foreground; refuse only a proven shell.
-      unprovableHost: 'write-unless-shell'
-    }))
-  ) {
-    return null
-  }
-  return {
-    workspaceId: worktreeId,
-    workspaceDisplayName,
-    terminalHandle: session.handle,
-    terminalSessionId: session.previous.terminalSessionId,
-    terminalPaneKey: session.previous.terminalPaneKey,
-    terminalPtyId: session.previous.terminalPtyId
-  }
-}
-
 /** A missing workspace or one owned by a paired server is a typed skip, never a fresh local launch. */
 async function resolveLocalExistingWorkspace(
   runtime: OrcaRuntimeService,
@@ -284,21 +218,6 @@ async function resolveLocalExistingWorkspace(
     throw unavailable
   }
   return selected
-}
-
-/** Reject reused pane handles whose PTY no longer belongs to this run. */
-export function runOwnHandle(
-  runtime: Pick<OrcaRuntimeService, 'getTerminalHandleForPaneKey' | 'getTerminalPtyIdForHandle'>,
-  run: AutomationRun
-): string | null {
-  const handle = run.terminalPaneKey
-    ? runtime.getTerminalHandleForPaneKey(run.terminalPaneKey)
-    : null
-  return handle &&
-    run.terminalPtyId &&
-    runtime.getTerminalPtyIdForHandle(handle) === run.terminalPtyId
-    ? handle
-    : null
 }
 
 function requireWorkspaceId(automation: Automation): string {

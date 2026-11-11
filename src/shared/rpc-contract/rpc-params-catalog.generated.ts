@@ -575,6 +575,10 @@ import {
   ProjectUpdate
 } from './project-runtime-params'
 import { RecipeVmWakeParams } from './recipe-vm-wake-params'
+import {
+  RecordedAgentSessionsParams,
+  ResumeRecordedAgentSessionParams
+} from './recorded-agent-session-params'
 import { ReferenceFind, ReferenceList } from './reference-params'
 import {
   ProjectGroupCreate,
@@ -823,6 +827,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.zcodePlanSaveApiKey': UsageCredentialApiKeyParams,
   'agent.launch': AgentLaunch,
   'agent.launchReplay': AgentLaunchReplay,
+  'agent.resume': ResumeRecordedAgentSessionParams,
+  'agent.sessions': RecordedAgentSessionsParams,
   'agentActivity.clear': AgentActivityClearParams,
   'agentActivity.setRead': AgentActivitySetReadParams,
   'agentHooks.prepareCodexForWslPane': PrepareCodexForWslPaneParams,

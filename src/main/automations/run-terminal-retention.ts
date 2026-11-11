@@ -14,6 +14,7 @@ export type RunTerminalRetentionDeps = {
   terminalClientUse: (run: AutomationRun) => 'used' | 'unused' | 'unknown'
   /** True only while the pane holds this run's PTY. */
   runTerminalAlive: (run: AutomationRun) => boolean
+  runTerminalResumable?: (run: AutomationRun) => Promise<boolean>
   /** Require fresh proof that only an idle shell remains in the PTY. */
   shellAloneAtPrompt: (run: AutomationRun) => Promise<boolean>
   /** Close only this run's pane and PTY; preserve user-created splits. */
@@ -81,6 +82,9 @@ export function createRunTerminalRetention(deps: RunTerminalRetentionDeps): RunT
       }
       try {
         if (!deps.runTerminalAlive(run)) {
+          if (await deps.runTerminalResumable?.(run)) {
+            continue
+          }
           if (isFinalAutomationRunStatus(run.status)) {
             await forget(run)
           }

@@ -1,3 +1,7 @@
+import {
+  requireRecordedResumeStartup,
+  bindRecordedResumePty
+} from './recorded-agent-session-startup'
 // Restore terminal-less saved panes for pending-row activation and workspace wakes; main-owned layouts also handle triggers outside desktop restore.
 
 import type { OrcaRuntimeWithAgentSessionResumeOwnership as AgentSessionResume } from './agent-session-resume-ownership'
@@ -11,6 +15,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import { isUnclaimedRunningSleepRecord, markResumedRecordLive } from './sleep-record-pane-claim'
 import { isWorktreeTerminalsSleepingError } from '../../../../shared/workspace-sleep'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
+import type { RecordedAgentSessionIdentity } from '../../../../shared/agent-session/recorded-agent-session'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-session-contracts'
@@ -32,7 +37,6 @@ import { HistoryReader } from '../../../daemon/history/restoration/history-reade
 import { servesWslMovedPaneHistory } from '../../../orcad/orcad-migration-wsl-destination'
 import { movedPaneHistorySessionId } from '../../../persistence/migrating-orcad-catalog/terminal-history/orcad-terminal-history-installer'
 import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 
 export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs {
@@ -96,7 +100,11 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
         if (!started.tab.ptyId || !this.ptysById.has(started.tab.ptyId)) {
           throw new Error('terminal_not_started')
         }
-        return { id: started.tab.ptyId, startupCwdFallback: started.startupCwdFallback }
+        return {
+          id: started.tab.ptyId,
+          startupCwdFallback: started.startupCwdFallback,
+          resumedAgentSession: started.resumedAgentSession
+        }
       }
     })
     return this.restoredPanes.ensureStarted(pane, trigger)
@@ -208,11 +216,17 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
       targetsHost = false,
       targetGroupId,
       sessionId,
-      wslUserAct
+      wslUserAct,
+      resumeSession
     }: RestoredPaneTrigger & { sessionId?: string }
-  ): Promise<RuntimeMobileSessionCreateTerminalResult> {
+  ): Promise<
+    RuntimeMobileSessionCreateTerminalResult & {
+      resumedAgentSession?: RecordedAgentSessionIdentity
+    }
+  > {
     // Recover undelivered startup commands (#7587) or recorded agent sessions (#27147, #27777); live-session attach skips startup commands, preventing double launches.
     const resumeStartup = await this.resolvePaneOwnedResumeStartup(worktreeId, tab)
+    requireRecordedResumeStartup(resumeStartup, resumeSession)
     // After a claimed-record resume starts, mark that record live.
     const paneKey = `${tab.parentTabId}:${tab.leafId}`
     const resumedRecord =
@@ -239,6 +253,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
       }
     }
     let dispatched = false
+    let resumedAgentSession: RecordedAgentSessionIdentity | undefined
     try {
       const startSessionId =
         sessionId ??
@@ -280,24 +295,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
           ...(resumeClaim
             ? {
                 onPtyCreated: (ptyId: string, result: RuntimeTerminalCreate) => {
-                  const decision = result.savedResumeDecision
-                  if (
-                    !result.isReattach &&
-                    result.agentSessionDisposition !== 'adopted' &&
-                    decision &&
-                    decision.agent === resumeStartup?.launchAgent &&
-                    decision.verdict !== 'admitted' &&
-                    decision.verdict === result.agentResumeRefused &&
-                    agentProviderSessionsEqual(
-                      decision.agent,
-                      decision.providerSession,
-                      resumeStartup?.resumeProviderSession
-                    )
-                  ) {
-                    resumeClaim.settleFailure(false)
-                  } else {
-                    resumeClaim.bind(ptyId)
-                  }
+                  resumedAgentSession = bindRecordedResumePty(resumeStartup, ptyId, result)
                 }
               }
             : {}),
@@ -316,7 +314,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
           resumedRecord
         ).catch((err: unknown) => console.warn('[layout] could not mark a resumed pane live', err))
       }
-      return created
+      return { ...created, ...(resumedAgentSession ? { resumedAgentSession } : {}) }
     } catch (err) {
       resumeClaim?.settleFailure(dispatched, err)
       if (

@@ -6,6 +6,12 @@ const CHAT_SESSION_HELP =
   '--session <id>        Chat session id or handle from chat list or agent launch'
 
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
+  'agent resume': {
+    pane: '--pane <paneKey>      Original pane key from agent sessions',
+    session:
+      '--session <id>        Recorded provider conversation ID; requires --agent without --pane',
+    agent: '--agent <id>          Agent that owns the recorded conversation'
+  },
   'chat rename': {
     session: '--session <id>        Chat session id from chat list or agent launch'
   },

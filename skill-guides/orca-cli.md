@@ -76,6 +76,18 @@ ORCA chat wait --session <session> --timeout-ms 600000 --json
 
 If a launch reply is lost, use the returned `operationId` to re-issue the exact same command from the same directory against the same execution host with `--retry-launch <operationId>`. Keep that ID on every retry: the host replays the accepted launch instead of starting another agent or submitting the brief twice. Do not retry as a fresh launch. If replay says the outcome is unknown or expired, or an older host gives no replay ID, inspect the workspace and agent without sending input before deciding whether another launch is needed. A host that cannot safely carry prompts or honor background/focus requests is refused before launch; update Orca on that execution host.
 
+## Resuming a recorded terminal conversation
+
+```text
+ORCA agent sessions --worktree <exact-selector> --json
+ORCA agent resume --worktree <exact-selector> --pane <paneKey-from-sessions> --json
+ORCA agent resume --worktree <exact-selector> --agent codex --session <providerSessionId> --json
+```
+
+`agent sessions` lists the host's recorded conversations in existing panes, including sleeping ones. `agent resume` restores the selected conversation in its original tab and pane using its saved launch recipe, without taking focus or sending work. It returns the current terminal handle; the receipt proves resume startup, not composer readiness. Read/wait on that terminal before `terminal send`. A verified running conversation is reused. Concurrent restores share that pane. Missing, ambiguous or unresumable records fail rather than start a fresh agent. After an uncertain response inspect the same pane and repeat the same selection; never switch to `agent launch` to retry it. A connected terminal alone does not prove the conversation is ready. Chats use `chat read/send`.
+
+Use the execution host's exact workspace and `--environment` for a paired server. A remote request must include `--worktree`; the client directory cannot identify that server's workspace. These commands need an updated host that exposes `agent.sessions` and `agent.resume`.
+
 ## Worktrees
 
 An Orca worktree is Orca's tracked view of a repo checkout, its metadata, terminals, browser tabs, and UI state.

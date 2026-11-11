@@ -64,6 +64,7 @@ import { MOBILE_RELAY_HOSTS_METHODS } from './pairing/mobile-relay-hosts'
 import { MOBILE_PROJECT_SECTIONS_METHODS } from './mobile-delivery/mobile-project-sections'
 import { UPDATER_METHODS } from './updater/updater'
 import { AUTOMATIC_WORK_METHODS } from './automations/automatic-work'
+import { RECORDED_AGENT_SESSION_METHODS } from './terminal/recorded-agent-sessions'
 import { AGENT_SESSION_METHODS } from './terminal/agent-session'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-sessions/structured-agent-session'
 import { STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS } from './structured-sessions/attachments/structured-agent-session-attachments'
@@ -97,6 +98,7 @@ export const ALL_RPC_METHODS = [
   ...AGENT_ACTIVITY_METHODS,
   ...REFERENCE_METHODS,
   ...AGENT_SESSION_METHODS,
+  ...RECORDED_AGENT_SESSION_METHODS,
   ...STRUCTURED_AGENT_SESSION_METHODS,
   ...STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS,
   ...STRUCTURED_AGENT_SESSION_VISUAL_METHODS,

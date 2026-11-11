@@ -9,6 +9,7 @@ const HOST_SPAWN_METHODS: ReadonlySet<string> = new Set([
   'terminal.create',
   'terminal.createAgentSession',
   'terminal.ensureAgentSession',
+  'agent.resume',
   'terminal.split',
   'agentSession.create',
   'agentSession.ensure',
