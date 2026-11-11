@@ -253,6 +253,14 @@ export function DictationController() {
     }
 
     let captureStarted = false
+    // Capture ended the recording before the user did; its words still land, but only as a draft.
+    const stopEarly = (markCutOff: () => void, showToast: () => void): void => {
+      markCutOff()
+      if (isCurrent()) {
+        showToast()
+        void stopDictation()
+      }
+    }
 
     try {
       // Capture and buffer before slow worker startup so speech during model load is retained.
@@ -263,19 +271,8 @@ export function DictationController() {
         microphoneDeviceId: preferredMicrophoneDeviceId,
         microphoneDeviceLabel: settings?.voice?.microphoneDeviceLabel ?? null,
         onFrame: kept.keep,
-        onCaptureLost: () => {
-          if (isCurrent()) {
-            showMicrophoneDisconnectedToast()
-            void stopDictation()
-          }
-        },
-        onAudioLimitReached: () => {
-          kept.reachedHostLimit()
-          if (isCurrent()) {
-            showCloudLimitToast()
-            void stopDictation()
-          }
-        }
+        onCaptureLost: () => stopEarly(kept.lostCapture, showMicrophoneDisconnectedToast),
+        onAudioLimitReached: () => stopEarly(kept.reachedHostLimit, showCloudLimitToast)
       })
       captureStarted = true
       if (captureResult?.fellBackToDefaultMicrophone) {

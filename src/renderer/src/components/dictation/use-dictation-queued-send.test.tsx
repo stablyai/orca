@@ -58,6 +58,7 @@ async function dictateIntoSessionA() {
   keptRef.current = {
     chunks: [],
     complete: true,
+    cutOff: false,
     context: {},
     target: { kind: 'composer', root, insert: () => true },
     deliver: Object.assign(() => {}, {

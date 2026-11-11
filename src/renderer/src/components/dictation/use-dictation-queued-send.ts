@@ -214,7 +214,7 @@ export function useDictationQueuedSend(
       const kept = keptRef.current
       const target = kept?.target
       if (
-        (kept !== null && revokedRecordings.has(kept)) ||
+        (kept !== null && (kept.cutOff || revokedRecordings.has(kept))) ||
         !voice?.enabled ||
         !voice.autoSendAfterDictation ||
         target?.kind !== 'composer' ||
@@ -296,6 +296,7 @@ export function useDictationQueuedSend(
       const stillQueued = (): boolean => sessionRef.current.run === run
       if (
         watch?.live &&
+        !keptRef.current?.cutOff &&
         queuedRef.current?.run !== run &&
         landed &&
         sessionRef.current.heardFinalText &&
