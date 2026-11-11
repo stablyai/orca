@@ -110,6 +110,18 @@ async function settle(
 }
 
 /**
+ * What the agent is typed: a teammate's message names its sender (W4: agents address them and
+ * commit as them via `orca-git-as`); nobody can type a leading envelope to impersonate someone else.
+ */
+export async function agentText(db: D1Database, workspace: { user_id: string; account_id: string }, sentBy: string, body: string): Promise<string> {
+  if (sentBy === workspace.user_id) {
+    return parseSenderEnvelope(body).body
+  }
+  const name = (await memberNamesFor(db, workspace.account_id, [sentBy])).get(sentBy) ?? sentBy
+  return withSenderEnvelope(body, { userId: sentBy, name })
+}
+
+/**
  * Delivers one queued message: wakes the workspace if needed, then continues the named session or
  * starts a new agent session with the text as its first prompt.
  */
@@ -127,15 +139,7 @@ export async function deliverMessage(life: LifecycleDeps, message: MessageRow): 
       row = (await resumeSandbox(life, row)).row
     }
     const sessionId = row.session_id!
-    // A teammate's message names its sender (W4: agents address them and commit as them via
-    // `orca-git-as`); nobody can type a leading envelope to impersonate someone else.
-    const text =
-      message.sent_by === row.user_id
-        ? parseSenderEnvelope(message.body).body
-        : withSenderEnvelope(message.body, {
-            userId: message.sent_by,
-            name: (await memberNamesFor(life.db, message.account_id, [message.sent_by])).get(message.sent_by) ?? message.sent_by
-          })
+    const text = await agentText(life.db, row, message.sent_by, message.body)
     let handle: string
     if (message.session_handle) {
       await sendToSession(life.provider, sessionId, message.session_handle, text)

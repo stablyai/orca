@@ -12,9 +12,20 @@ import { allowed, authorize, canSee, isOrgAdmin, isWorkspaceOwner } from './acce
 import { ApiError, actorOf, authenticateApi, isAdmin, requireAdmin, requireScope, scopesForRole, type ApiCaller } from './caller'
 import { auditCaller, auditView, consumeRate, listAudit, rateHeaders, RateLimitedError, type RateLimit } from './audit'
 import { API_SCOPES, ADMIN_SCOPES, apiKeyView, getApiKey, listApiKeys, mintApiKey, revokeApiKey, type ApiScope } from './keys'
-import { deliverMessage, getMessage, listMessages, MAX_MESSAGE_CHARS, messageView, queueMessage } from './messages'
+import { agentText, deliverMessage, getMessage, listMessages, MAX_MESSAGE_CHARS, messageView, queueMessage } from './messages'
 import { getAccountSettings, putAccountSettings } from './settings'
-import { listSessions, readSession, VmAgentError } from './vm-agent'
+import { interruptSession, launchAgent, listSessions, readSession, renameSession, VmAgentError } from './vm-agent'
+import {
+  attachmentView,
+  insertAttachment,
+  MAX_ATTACHMENTS_PER_MESSAGE,
+  newAttachment,
+  readUpload,
+  resolveAttachments,
+  withAttachmentPaths
+} from './attachments'
+import { EFFORT_ID, knownEfforts, MODEL_ID, modelsView } from './models'
+import { resumeSandbox } from '../lifecycle'
 import {
   archiveProject,
   archiveWorkspace,
@@ -85,14 +96,32 @@ const CreateWorkspaceBody = z
     message: z.object({ text: z.string().min(1).max(MAX_MESSAGE_CHARS), agent: z.enum(AGENTS).optional() }).strict().optional()
   })
   .strict()
+const SessionHandle = z.string().regex(/^term_[A-Za-z0-9-]{1,80}$/)
+const AttachmentIds = z.array(z.string().regex(/^att_[A-Za-z0-9]{1,64}$/)).min(1).max(MAX_ATTACHMENTS_PER_MESSAGE)
 const MessageBody = z
   .object({
     text: z.string().min(1).max(MAX_MESSAGE_CHARS),
     agent: z.enum(AGENTS).optional(),
     /** A session handle from GET /sessions or a previous message: continue that conversation. */
-    session: z.string().regex(/^term_[A-Za-z0-9-]{1,80}$/).optional()
+    session: SessionHandle.optional(),
+    /** Files uploaded with POST /attachments: their on-disk paths are appended for the agent. */
+    attachments: AttachmentIds.optional()
   })
   .strict()
+const CreateSessionBody = z
+  .object({
+    agent: z.enum(AGENTS).optional(),
+    model: z.string().regex(MODEL_ID, 'a model id from GET /v1/models').optional(),
+    effort: z.string().regex(EFFORT_ID).optional(),
+    name: Name.optional(),
+    /** Optional first prompt; without it the agent starts idle and waits for send_message. */
+    message: z.string().min(1).max(MAX_MESSAGE_CHARS).optional(),
+    attachments: AttachmentIds.optional()
+  })
+  .strict()
+  .refine((body) => !body.effort || body.model, { message: 'effort requires model', path: ['effort'] })
+  .refine((body) => !body.attachments || body.message, { message: 'attachments require message', path: ['attachments'] })
+const RenameBody = z.object({ name: Name }).strict()
 
 function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return Response.json(body, { status, headers: { 'cache-control': 'no-store', ...headers } })
@@ -152,7 +181,7 @@ import { parseWakeWait } from '../wire'
 import { MachineSizeInput } from '../machine-size'
 
 export function isApiPath(pathname: string): boolean {
-  return /^\/v1\/(me|api-keys|settings|audit|projects|workspaces|routines|oauth-approvals|oauth-grants)(\/|$)/.test(pathname)
+  return /^\/v1\/(me|models|api-keys|settings|audit|projects|workspaces|routines|oauth-approvals|oauth-grants)(\/|$)/.test(pathname)
 }
 
 export async function handleApi(request: Request, url: URL, env: Parameters<typeof authenticateApi>[0], ctx: ApiContext): Promise<Response> {
@@ -241,6 +270,11 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
       scopes: [...caller.scopes],
       ...(caller.sandboxId ? { workspaceId: caller.sandboxId } : {})
     })
+  }
+
+  if (resource === 'models' && !id && method === 'GET') {
+    // Static catalog, no account data: any authenticated caller may read it.
+    return json(modelsView())
   }
 
   if (resource === 'api-keys') {
@@ -435,7 +469,7 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
       const life = () => requireLife(ctx)
       const mutate = async (action: string, run: () => Promise<WorkspaceRow>) => {
         requireScope(caller, 'workspaces:write')
-        authorize(caller, row, action === 'wake' ? 'owner' : 'manage')
+        authorize(caller, row, action === 'wake' || action === 'unarchive' ? 'owner' : 'manage')
         if (caller.via === 'workspace' && row.id === caller.sandboxId) {
           // An agent must not put its own VM to sleep or delete it from under itself.
           throw new ApiError(403, 'forbidden', 'own_workspace')
@@ -477,6 +511,117 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
       if (sub === 'archive' && method === 'POST') {
         return mutate('archive', () => archiveWorkspace(life(), row))
       }
+      if (sub === 'unarchive' && method === 'POST') {
+        if (row.status !== 'archived' && row.archived_at === null) {
+          // Idempotent: a retry after success (or a never-archived workspace) is not an error.
+          requireScope(caller, 'workspaces:write')
+          authorize(caller, row, 'owner')
+          return json({ workspace: workspaceView(row) })
+        }
+        // Back in default lists and running again (same path as waking an archived workspace).
+        return mutate('unarchive', () => wakeWorkspace(life(), row))
+      }
+      if (sub === 'rename' && method === 'POST') {
+        requireScope(caller, 'workspaces:write')
+        authorize(caller, row, 'manage')
+        const body = parse(RenameBody, await ctx.readJson())
+        await ctx.db.prepare('UPDATE sandboxes SET name = ? WHERE id = ?').bind(body.name, row.id).run()
+        await auditCaller(ctx.db, caller, { action: 'workspace.rename', targetType: 'workspace', targetId: row.id, detail: { chars: body.name.length } }, now)
+        return json({ workspace: workspaceView({ ...row, name: body.name }) })
+      }
+      // The agent's VM, woken if it sleeps (sessions and files need a running sandbox).
+      const runningSession = async (): Promise<string> => {
+        if (row.status === 'archived' || row.archived_at !== null) {
+          throw new ApiError(409, 'conflict', 'workspace_archived')
+        }
+        if (row.status === 'running' && row.session_id) {
+          return row.session_id
+        }
+        const ready = await resumeSandbox(life(), row)
+        return ready.row.session_id!
+      }
+      if (sub === 'sessions' && !subId && method === 'POST') {
+        // A new chat: start another agent session in this workspace (optionally with a first prompt).
+        requireScope(caller, 'messages:write')
+        authorize(caller, row, 'open')
+        const body = parse(CreateSessionBody, await ctx.readJson())
+        const agent = body.agent ?? 'claude'
+        if (body.model && body.effort) {
+          const efforts = knownEfforts(agent, body.model)
+          if (efforts && !efforts.includes(body.effort)) {
+            throw new ApiError(400, 'invalid_request', `effort: ${body.model} takes ${efforts.length ? efforts.join(', ') : 'no effort'}`)
+          }
+        }
+        if (body.message) {
+          await consumeRate(ctx.db, messageBucket(caller), MESSAGES_PER_MINUTE, now)
+        }
+        const attachments = await resolveAttachments(ctx.db, row.id, body.attachments ?? [])
+        const started = performance.now()
+        const sessionId = await runningSession()
+        // A teammate's first prompt names its sender, exactly like a message (deliverMessage).
+        const prompt = body.message ? await agentText(ctx.db, row, caller.userId, withAttachmentPaths(body.message, attachments)) : null
+        const handle = await launchAgent(life().provider, sessionId, agent, prompt, { model: body.model, effort: body.effort })
+        if (body.name) {
+          await renameSession(life().provider, sessionId, handle, body.name)
+        }
+        await auditCaller(
+          ctx.db,
+          caller,
+          { action: 'workspace.session.create', targetType: 'workspace', targetId: row.id, detail: { handle, agent, model: body.model ?? null, prompt: Boolean(prompt), attachments: attachments.length, ms: Math.round(performance.now() - started) } },
+          ctx.now()
+        )
+        return json({ session: { handle, workspaceId: row.id, agent, model: body.model ?? null, effort: body.effort ?? null, name: body.name ?? null } }, 201)
+      }
+      if (sub === 'sessions' && subId && parts[4] && method === 'POST') {
+        requireScope(caller, 'messages:write')
+        authorize(caller, row, 'open')
+        if (!SessionHandle.safeParse(subId).success) {
+          throw new ApiError(404, 'not_found')
+        }
+        if (parts[4] === 'cancel' && !parts[5]) {
+          // Queued messages for this session never get typed; the running turn gets an interrupt.
+          const dropped = await ctx.db
+            .prepare(`UPDATE workspace_messages SET status = 'failed', error = 'canceled', updated_at = ? WHERE sandbox_id = ? AND session_handle = ? AND status = 'queued'`)
+            .bind(now, row.id, subId)
+            .run()
+          const running = row.status === 'running' && row.session_id !== null
+          if (running) {
+            await interruptSession(life().provider, row.session_id!, subId)
+          }
+          const canceledQueuedMessages = dropped.meta.changes ?? 0
+          await auditCaller(ctx.db, caller, { action: 'workspace.session.cancel', targetType: 'workspace', targetId: row.id, detail: { handle: subId, interrupted: running, canceledQueuedMessages } }, ctx.now())
+          return json({ workspaceId: row.id, session: subId, interrupted: running, canceledQueuedMessages })
+        }
+        if (parts[4] === 'rename' && !parts[5]) {
+          const body = parse(RenameBody, await ctx.readJson())
+          if (row.status !== 'running' || !row.session_id) {
+            throw new ApiError(409, 'conflict', 'workspace_not_running')
+          }
+          await renameSession(life().provider, row.session_id, subId, body.name)
+          await auditCaller(ctx.db, caller, { action: 'workspace.session.rename', targetType: 'workspace', targetId: row.id, detail: { handle: subId } }, ctx.now())
+          return json({ session: { handle: subId, workspaceId: row.id, name: body.name } })
+        }
+      }
+      if (sub === 'attachments' && !subId && method === 'POST') {
+        requireScope(caller, 'messages:write')
+        authorize(caller, row, 'open')
+        const provider = life().provider
+        if (!provider.writeFile) {
+          throw new ApiError(503, 'not_configured')
+        }
+        await consumeRate(ctx.db, messageBucket(caller), MESSAGES_PER_MINUTE, now)
+        const upload = await readUpload(request, url)
+        const sessionId = await runningSession()
+        const attachment = newAttachment(
+          { sandboxId: row.id, accountId: row.account_id, uploadedBy: caller.userId, filename: upload.filename, contentType: upload.contentType, byteSize: upload.bytes.length },
+          now
+        )
+        const started = performance.now()
+        await provider.writeFile(sessionId, attachment.path, upload.bytes)
+        await insertAttachment(ctx.db, attachment)
+        await auditCaller(ctx.db, caller, { action: 'workspace.attachment', targetType: 'workspace', targetId: row.id, detail: { attachmentId: attachment.id, bytes: attachment.byte_size, ms: Math.round(performance.now() - started) } }, ctx.now())
+        return json({ attachment: attachmentView(attachment) }, 201)
+      }
       if (sub === 'sessions' && !subId && method === 'GET') {
         requireScope(caller, 'workspaces:read')
         authorize(caller, row, 'open')
@@ -485,7 +630,7 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
         }
         return json({ workspaceStatus: 'running', sessions: await listSessions(life().provider, row.session_id) })
       }
-      if (sub === 'sessions' && subId && method === 'GET') {
+      if (sub === 'sessions' && subId && !parts[4] && method === 'GET') {
         requireScope(caller, 'workspaces:read')
         authorize(caller, row, 'owner')
         if (!/^term_[A-Za-z0-9-]{1,80}$/.test(subId)) {
@@ -518,8 +663,10 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
         const life = requireLife(ctx)
         await consumeRate(ctx.db, messageBucket(caller), MESSAGES_PER_MINUTE, now)
         const body = parse(MessageBody, await ctx.readJson())
-        const queued = await queueMessage(ctx.db, { workspace: row, sentBy: caller.userId, agent: body.agent ?? 'claude', text: body.text, session: body.session }, now)
-        await auditCaller(ctx.db, caller, { action: 'workspace.message', targetType: 'workspace', targetId: row.id, detail: { messageId: queued.id, chars: body.text.length, continues: Boolean(body.session) } }, now)
+        const attachments = await resolveAttachments(ctx.db, row.id, body.attachments ?? [])
+        const text = withAttachmentPaths(body.text, attachments)
+        const queued = await queueMessage(ctx.db, { workspace: row, sentBy: caller.userId, agent: body.agent ?? 'claude', text, session: body.session }, now)
+        await auditCaller(ctx.db, caller, { action: 'workspace.message', targetType: 'workspace', targetId: row.id, detail: { messageId: queued.id, chars: body.text.length, continues: Boolean(body.session), attachments: attachments.length } }, now)
         // Queued now, delivered in the background (waking the VM if it sleeps); poll the message.
         ctx.waitUntil(deliverMessage(life, queued))
         return json({ message: messageView(queued) }, 202, { location: `/v1/workspaces/${row.id}/messages/${queued.id}` })
