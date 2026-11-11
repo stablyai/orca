@@ -225,9 +225,12 @@ describe('sleeping the workspace on screen', () => {
     expect(isWorktreeGoingToSleep(CLOUD)).toBe(false)
     expect(mocks.setActiveWorktree).not.toHaveBeenCalled()
     mocks.notify()
+    await flush()
+    // Once at the click, and again when main starts the sleep (its reopen baseline is read then).
+    expect(sleepReopened).toHaveBeenCalledTimes(2)
     await ended(true)
     await flush()
-    expect(sleepReopened).toHaveBeenCalledTimes(1)
+    expect(sleepReopened).toHaveBeenCalledTimes(2)
     expect(hasWorktreeSleepIntent(CLOUD)).toBe(false)
     expect(mocks.setActiveWorktree).toHaveBeenCalledWith(CLOUD)
   })

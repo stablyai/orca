@@ -113,7 +113,9 @@ export function followWorkspaceSleep(
     const stayed =
       kept || (wasActive && !notice.projectMovePauseId && holdActiveCloudSleepView(worktreeId))
     if (kept) {
-      // Nothing to hold or watch.
+      // Main reads its reopen baseline when the sleep starts (after it saved the copy): a Keep awake
+      // pressed before that is told again now, or the VM is still suspended.
+      noteReopened(worktreeId)
     } else if (stayed) {
       // Window focus on the workspace still on screen must not wake it (phone or CLI sleeps too).
       notePredictiveWakeSlept(worktreeId)
