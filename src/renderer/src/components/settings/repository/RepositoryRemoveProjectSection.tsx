@@ -56,8 +56,14 @@ function selectSetupHostLabel(state: AppState, setup: ProjectHostSetup, t: Trans
     sshEnvironmentId: setup.runtimeOwnerEnvironmentId ?? null
   })
   const parsed = parseExecutionHostId(setup.hostId)
-  // A runtime missing from the catalog falls back to its raw id, which users can't recognize.
-  return parsed?.kind === 'runtime' && label === parsed.environmentId
+  const rawId =
+    parsed?.kind === 'runtime'
+      ? parsed.environmentId
+      : parsed?.kind === 'ssh'
+        ? parsed.targetId
+        : null
+  // An unlabeled host falls back to its raw id, which users can't recognize.
+  return label === rawId
     ? t('auto.components.settings.RepositoryRemoveProjectSection.unknownHost', 'Unknown host')
     : label
 }
@@ -100,33 +106,10 @@ function RemovedCheckoutList({ groups }: { groups: RemovedHostGroup[] }): React.
   )
 }
 
-// Mounted only while the dialog is open so the tab walk never runs on unrelated store writes.
-function RemoveProjectTerminalWarning({
-  setups
-}: {
-  setups: readonly ProjectHostSetup[]
-}): React.JSX.Element | null {
-  const t = useTranslate()
-  const openTerminalCount = useAppStore((state) =>
-    setups.reduce(
-      (count, setup) => count + countOpenRepoTerminalTabs(state, setup.repoId, setup.hostId),
-      0
-    )
-  )
-  if (openTerminalCount === 0) {
-    return null
-  }
-  return (
-    <p className="text-xs font-medium text-foreground">
-      {t(
-        'auto.components.settings.RepositoryRemoveProjectSection.terminalWarning',
-        '{{count}} open terminals in this project will be closed.',
-        {
-          count: openTerminalCount,
-          defaultValue_one: '{{count}} open terminal in this project will be closed.'
-        }
-      )}
-    </p>
+function countSetupTerminalTabs(state: AppState, setups: readonly ProjectHostSetup[]): number {
+  return setups.reduce(
+    (count, setup) => count + countOpenRepoTerminalTabs(state, setup.repoId, setup.hostId),
+    0
   )
 }
 
@@ -147,6 +130,8 @@ export function RepositoryRemoveProjectSection({
 }): React.JSX.Element {
   const t = useTranslate()
   const [dialogOpen, setDialogOpen] = useState(false)
+  // Read once on open: a live subscription would walk every tab on each store write.
+  const [openTerminalCount, setOpenTerminalCount] = useState(0)
   const hostLabels = useAppStore(
     useShallow((state) => setups.map((setup) => selectSetupHostLabel(state, setup, t)))
   )
@@ -217,7 +202,15 @@ export function RepositoryRemoveProjectSection({
             <p className="text-sm">{description}</p>
             <p className="text-xs text-muted-foreground">{filesNote}</p>
           </div>
-          <Button type="button" variant="outline" size="sm" onClick={() => setDialogOpen(true)}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setOpenTerminalCount(countSetupTerminalTabs(useAppStore.getState(), setups))
+              setDialogOpen(true)
+            }}
+          >
             {t('auto.components.settings.RepositoryRemoveProjectSection.removeButton', 'Remove…')}
           </Button>
         </div>
@@ -256,7 +249,18 @@ export function RepositoryRemoveProjectSection({
               <RemovedCheckoutList groups={groups} />
             </div>
           ) : null}
-          <RemoveProjectTerminalWarning setups={setups} />
+          {openTerminalCount > 0 ? (
+            <p className="text-xs font-medium text-foreground">
+              {t(
+                'auto.components.settings.RepositoryRemoveProjectSection.terminalWarning',
+                '{{count}} open terminals in this project will be closed.',
+                {
+                  count: openTerminalCount,
+                  defaultValue_one: '{{count}} open terminal in this project will be closed.'
+                }
+              )}
+            </p>
+          ) : null}
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDialogOpen(false)}>
               {t('auto.components.settings.RepositoryRemoveProjectSection.cancel', 'Cancel')}
