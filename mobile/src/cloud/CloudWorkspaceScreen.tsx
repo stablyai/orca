@@ -51,6 +51,7 @@ import {
   cloudScrollBottomPadding,
   cloudWorkspaceScreenStyles as styles
 } from './cloud-workspace-screen-styles'
+import { CloudReadSnapshotRefusedError } from './cloud-read-snapshot'
 import { useCloudReadSnapshot } from './use-cloud-read-snapshot'
 import { useCloudWorkspaceRun, type CloudWorkspaceRun } from './use-cloud-workspace-run'
 import {
@@ -85,6 +86,10 @@ export function CloudWorkspaceScreen({
   // Asleep: read its last sealed snapshot instead of waking it. Nothing here ever wakes it.
   const asleep = workspace?.status === 'sleeping'
   const snapshot = useCloudReadSnapshot(sandboxId, asleep, workspace?.readSnapshotAt ?? null)
+  const signerChanged =
+    snapshot.data?.state === 'error' &&
+    snapshot.data.error instanceof CloudReadSnapshotRefusedError &&
+    snapshot.data.error.reason === 'signer_changed'
   const invalidate = useInvalidateCloudWorkspaces()
   const { run, active, start, fail, clearError, openSession } = useCloudWorkspaceRun(
     sandboxId,
@@ -389,7 +394,10 @@ export function CloudWorkspaceScreen({
                 return
               }
               setWakeTappedAt(run)
-              void start('open').finally(() => setWakeTappedAt(null))
+              // A changed snapshot signer means a rebuilt sandbox: pair afresh, not the saved host.
+              void start('open', { freshPairing: signerChanged }).finally(() =>
+                setWakeTappedAt(null)
+              )
             }}
             style={({ pressed }) => [
               styles.primary,

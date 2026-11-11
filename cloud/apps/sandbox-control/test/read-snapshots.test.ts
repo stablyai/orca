@@ -1,4 +1,5 @@
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { createPublicKey, verify } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,6 +8,7 @@ import { SignJWT, exportJWK, generateKeyPair } from 'jose'
 import { describe, expect, it, vi } from 'vitest'
 import { generateGrantRecipientKey, nodeSealedGrantPrimitives } from '../../../../src/main/cloud-workspaces/sealed-grant-node'
 import { openReadSnapshot, type ReadSnapshot } from '../../../../src/shared/cloud-workspaces/read-snapshot'
+import { checkReadSnapshotPin, verifyReadSnapshotSigner } from '../../../../src/shared/cloud-workspaces/read-snapshot-signature'
 import type { RunCommandParams } from '../src/sandbox-provider'
 import { MAX_READ_RECIPIENTS, READ_SNAPSHOT_COMMAND } from '../src/read-snapshots'
 import { createHarness } from './harness'
@@ -18,7 +20,15 @@ const vm = require('../image/vm/orca-read-snapshot.cjs') as {
   gather: (call: (method: string, params: unknown) => Promise<unknown>, opts: Record<string, unknown>) => Promise<Record<string, unknown>>
   fitToBudget: <T>(payload: T, maxBytes?: number) => T
   storedSessions: (dataDir: string) => Record<string, unknown>[]
+  signingKey: (stateDir: string) => { publicKeyB64: string }
+  workspaceCheckout: (worktrees: Record<string, unknown>[], sessions: Record<string, unknown>[]) => Record<string, unknown> | null
+  sign: (out: Record<string, unknown>, key: unknown) => { publicKeyB64: string; signatureB64: string }
 }
+
+// The VM's signing key lives on its own disk; here, a temp dir standing in for ~/.orca-sandbox.
+const VM_STATE = mkdtempSync(join(tmpdir(), 'orca-sandbox-'))
+const ed25519Verify = (publicKey: Uint8Array, message: Uint8Array, signature: Uint8Array) =>
+  verify(null, message, createPublicKey({ key: { kty: 'OKP', crv: 'Ed25519', x: Buffer.from(publicKey).toString('base64url') }, format: 'jwk' }), signature)
 
 const SECRET_LINE = 'the deploy key is in 1password, not in the repo'
 
@@ -77,6 +87,7 @@ async function runVmSealer(params: RunCommandParams): Promise<string> {
     })
   )
   const out = vm.seal(payload, JSON.parse(env.ORCA_READ_RECIPIENTS ?? '[]'), env.ORCA_READ_WORKSPACE_ID!, env.ORCA_READ_SNAPSHOT_ID!)
+  out.signature = vm.sign(out, vm.signingKey(VM_STATE))
   return `${JSON.stringify(out)}\n`
 }
 
@@ -319,5 +330,52 @@ describe('read snapshots of sleeping workspaces (E2EE)', () => {
       expect.objectContaining({ sessionId: 'claude_1', agent: 'claude', title: 'Gap5 live check', status: 'idle', turnOutcome: 'success', open: true, lastPrompt: 'What is this repo?', lastReply: 'Hello World!' })
     ])
     expect(vm.storedSessions(join(dir, 'missing'))).toEqual([])
+  })
+
+  it('the VM signs every snapshot; a forged or swapped one fails, and a device keeps the signer it pinned', async () => {
+    const t = await setup()
+    const key = await t.register(t.alice)
+    await t.sleep()
+    const sealed = (await t.read(t.alice, key.id)).body.snapshot
+    const signer = await verifyReadSnapshotSigner(sealed, ed25519Verify)
+    expect(signer).toBe(vm.signingKey(VM_STATE).publicKeyB64)
+    // The control plane can seal anything to a reader key, but it can't sign as the VM.
+    const forged = { ...sealed, ciphertextB64: Buffer.from(Buffer.from(sealed.ciphertextB64, 'base64').map((b: number, i: number) => (i === 0 ? b ^ 1 : b))).toString('base64') }
+    await expect(verifyReadSnapshotSigner(forged, ed25519Verify)).rejects.toThrow('bad_signature')
+    const otherVm = vm.signingKey(mkdtempSync(join(tmpdir(), 'other-vm-')))
+    const resigned = { ...forged, signature: vm.sign(forged, otherVm) }
+    const other = await verifyReadSnapshotSigner(resigned, ed25519Verify)
+    const snap = await t.open({ snapshot: sealed } as never, key.secretKey)
+    const first = checkReadSnapshotPin(null, signer, snap.capturedAt)
+    expect(first.ok).toBe(true)
+    const pin = first.ok ? first.pin : null
+    expect(checkReadSnapshotPin(pin, other, snap.capturedAt + 1)).toEqual({ ok: false, reason: 'signer_changed' })
+    expect(checkReadSnapshotPin(pin, null, snap.capturedAt + 1)).toEqual({ ok: false, reason: 'unsigned' })
+    expect(checkReadSnapshotPin(pin, signer, snap.capturedAt - 1)).toEqual({ ok: false, reason: 'rollback' })
+    // D1 relays the signature it was given, nothing more.
+    expect(t.h.raw.prepare('SELECT signature FROM read_snapshots').get()).toEqual({ signature: JSON.stringify(sealed.signature) })
+  })
+
+  it('the VM signing key survives a broken file and refuses a relative state dir', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-sandbox-'))
+    const first = vm.signingKey(dir).publicKeyB64
+    expect(vm.signingKey(dir).publicKeyB64).toBe(first)
+    writeFileSync(join(dir, 'read-signing-key.pem'), '')
+    const replaced = vm.signingKey(dir).publicKeyB64
+    expect(replaced).not.toBe(first)
+    expect(vm.signingKey(dir).publicKeyB64).toBe(replaced)
+    expect(() => vm.signingKey('.orca-sandbox')).toThrow()
+  })
+
+  it('reads the workspace’s own checkout, not the base clone (branch workspaces are separate worktrees)', () => {
+    const base = { path: '/vercel/sandbox/project', isMainWorktree: true, lastActivityAt: 0, sortOrder: 5 }
+    const branch = { path: '/vercel/sandbox/worktrees/ra10-asleep', isMainWorktree: false, lastActivityAt: 0, sortOrder: 9 }
+    // No chats: the most recently active checkout.
+    expect(vm.workspaceCheckout([base, branch], [])).toBe(branch)
+    // Chats: the checkout the newest one works in wins.
+    expect(vm.workspaceCheckout([base, branch], [{ worktreePath: base.path, updatedAt: 2 }, { worktreePath: branch.path, updatedAt: 1 }])).toBe(base)
+    // A tie prefers the workspace's worktree over the base clone.
+    expect(vm.workspaceCheckout([{ ...base, sortOrder: 9 }, branch], [])).toBe(branch)
+    expect(vm.workspaceCheckout([], [])).toBeNull()
   })
 })

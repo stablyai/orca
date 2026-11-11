@@ -1,4 +1,5 @@
 import { buildLegacyAgentCreateTerminalParams } from './web-runtime-legacy-agent-create-params'
+import { createWithCloudAgentHold } from '@/lib/orca-cloud/cloud-web-host-launch-hold'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
 import { createAgentSessionKeyboardOptions } from './agent-launch/agent-session-keyboard-capability'
 import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
@@ -50,7 +51,20 @@ import {
   agentSessionCreateRequest
 } from './agent-launch/agent-session-create-request'
 
+/**
+ * Every host terminal the desktop creates, including each Claude/Codex launch on a paired host.
+ * An Orca Cloud launch whose Orca account can't run the agent holds here first (one choke point).
+ */
 export async function createWebRuntimeSessionTerminalResult(
+  args: CreateWebRuntimeSessionTerminalOnHostArgs
+): Promise<CreatedWebRuntimeSessionTerminal> {
+  return await createWithCloudAgentHold(
+    { ...args, environmentId: resolveWebRuntimeSessionEnvironmentId(args.environmentId, null) },
+    createHostTerminal
+  )
+}
+
+async function createHostTerminal(
   args: CreateWebRuntimeSessionTerminalOnHostArgs
 ): Promise<CreatedWebRuntimeSessionTerminal> {
   const environmentId = resolveWebRuntimeSessionEnvironmentId(args.environmentId, null)

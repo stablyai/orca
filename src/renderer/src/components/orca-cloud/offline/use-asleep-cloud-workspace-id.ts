@@ -1,10 +1,12 @@
 import { useAppStore } from '@/store'
+import { useIsWorktreeSleepViewHeld } from '@/lib/worktree-sleep-view'
 import { useCloudWorkspaceView } from '../use-cloud-workspace-view'
 
 /**
  * The active workspace when it is an Orca Cloud workspace whose files can't be read right now:
- * asleep, waking (opening one wakes it), failed to wake, or archived. `waking` and `archived` say
- * which (an archived one is suspended too, but its copy must say archived, not asleep: DS-h).
+ * asleep (or kept read-only while its Sleep runs), waking (opening one wakes it), failed to
+ * wake, or archived. `waking` and `archived` say which (an archived one is suspended too,
+ * but its copy must say archived, not asleep: DS-h).
  */
 export function useAsleepCloudWorkspace(): {
   id: string
@@ -21,6 +23,7 @@ export function useAsleepCloudWorkspace(): {
         !state.wakingEphemeralVmWorkspaceIds?.[activeWorktreeId]
       : false
   )
+  const viewOnly = useIsWorktreeSleepViewHeld(activeWorktreeId)
   if (!activeWorktreeId || !view.isCloud) {
     return null
   }
@@ -30,7 +33,7 @@ export function useAsleepCloudWorkspace(): {
   if (view.state === 'archived') {
     return { id: activeWorktreeId, waking: false, archived: true }
   }
-  return view.state === 'sleeping' || view.state === 'wakeFailed' || vmSuspended
+  return view.state === 'sleeping' || view.state === 'wakeFailed' || vmSuspended || viewOnly
     ? { id: activeWorktreeId, waking: false, archived: false }
     : null
 }

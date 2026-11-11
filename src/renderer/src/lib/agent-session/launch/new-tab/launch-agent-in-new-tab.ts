@@ -21,7 +21,7 @@ import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership
 import { snapshotAgentTabLaunchArgs } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-args'
 import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 // Orca Cloud: an expired Orca-account sign-in holds the launch on the recovery strip (RA-1).
-import { launchAgentInWebHostTabWithCloudHold as launchAgentInWebHostTab } from '@/lib/orca-cloud/cloud-web-host-launch-hold'
+import { launchAgentInWebHostTab } from '@/lib/agent-session/launch/new-tab/launch-agent-web-host-tab'
 import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { readAgentLaunchPreferencesForWorktree } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { TUI_AGENT_CONFIG } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'

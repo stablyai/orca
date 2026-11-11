@@ -1,16 +1,19 @@
-// Private layer, Orca Cloud only (RA-1). An Orca Cloud workspace is a paired web host: a Claude/Codex
-// launch is published by the host (terminal.create) and the desktop only attaches, so the pane-spawn
-// gate never runs. This holds the launch itself. When the agent's Orca-account sign-in expired (and no
-// key covers it), the host opens a plain shell tab; its pane shows the account-recovery strip, and
-// the agent starts in its place once Renew fixes it. Cancel leaves the plain shell.
+// Private layer, Orca Cloud only (RA-1, PC-3b). An Orca Cloud workspace is a paired web host, so
+// every Claude/Codex launch the desktop asks it for becomes one host terminal create. This is the
+// single hold for all of them: a new tab, a create's first agent, an agent restarted after a wake.
+// When the agent's Orca account is expired (or not set up) and no key covers it, the host opens a
+// plain shell tab instead; its pane shows the strip, and the agent starts in its place (with the
+// launch's own prompt) once Renew or the one-time setup is done and the person starts it. Cancel
+// leaves the plain shell.
 import { toast } from 'sonner'
-import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
-import { createWebRuntimeSessionTerminalResult } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-create-operation'
 import { webTerminalPlacementParentTabId } from '@/runtime/hosted-terminals/placement/web-session-terminal-placement'
 import { closeWebRuntimeSessionTab } from '@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle'
+import type {
+  CreateWebRuntimeSessionTerminalOnHostArgs,
+  CreatedWebRuntimeSessionTerminal
+} from '@/runtime/hosted-terminals/creation/terminal-create-contracts'
 import { translate } from '@/i18n/i18n'
-import { launchAgentInWebHostTab } from '@/lib/agent-session/launch/new-tab/launch-agent-web-host-tab'
 import { isOrcaCloudEnvironmentId } from './orca-cloud-environment-id'
 import {
   cloudAgentLaunchDecision,
@@ -18,53 +21,60 @@ import {
   holdCloudAgentLaunch
 } from './cloud-agent-launch-hold'
 
-type WebHostLaunchResult = { delivered: boolean; failureNotified: boolean }
+type CreateHostTerminal = (
+  args: CreateWebRuntimeSessionTerminalOnHostArgs
+) => Promise<CreatedWebRuntimeSessionTerminal>
 
-export type CloudWebHostLaunch = {
-  agent: TuiAgent
-  worktreeId: string
-  environmentId: string
-  groupId?: string
-  cwd?: string | null
-  prompt: string
-  activate?: boolean
+/** A fresh Claude/Codex launch on an Orca Cloud host: the only creates the account hold applies to. */
+function heldAgent(args: CreateWebRuntimeSessionTerminalOnHostArgs): 'claude' | 'codex' | null {
+  const agent = args.launchAgent ?? args.agent
+  if (agent !== 'claude' && agent !== 'codex') {
+    return null
+  }
+  // A resume continues a conversation the account already started; #315/RA-11 own that path.
+  if (args.agentSessionKind === 'resume' || args.providerSession) {
+    return null
+  }
+  return args.environmentId && isOrcaCloudEnvironmentId(args.environmentId) ? agent : null
+}
+
+/** The plain shell a held launch waits in: the same place, no agent, no startup. */
+function placeholderArgs(
+  args: CreateWebRuntimeSessionTerminalOnHostArgs
+): CreateWebRuntimeSessionTerminalOnHostArgs {
+  return {
+    worktreeId: args.worktreeId,
+    environmentId: args.environmentId,
+    ...(args.targetGroupId ? { targetGroupId: args.targetGroupId } : {}),
+    ...(args.afterTabId ? { afterTabId: args.afterTabId } : {}),
+    ...(args.cwd?.trim() ? { cwd: args.cwd } : {}),
+    ...(args.activate === false ? { activate: false } : {}),
+    ...(args.selectWorktree === false ? { selectWorktree: false } : {})
+  }
 }
 
 /**
- * Runs `launch` at once unless this is a Claude/Codex launch on Orca Cloud whose Orca-account
- * sign-in expired with no key to fall back to. Never throws; a failed placeholder launches as before.
+ * Creates the host terminal at once unless it launches Claude/Codex on Orca Cloud and the account
+ * hold applies; then it holds in a plain shell first. Never throws past `create`; a failed
+ * placeholder creates the terminal as before rather than block on a broken host.
  */
-export async function launchWithCloudAgentHold<T extends WebHostLaunchResult>(
-  request: CloudWebHostLaunch,
-  launch: () => Promise<T>,
-  cancelled: (placeholderCreated: boolean) => T
-): Promise<T> {
-  const { agent } = request
-  if (
-    (agent !== 'claude' && agent !== 'codex') ||
-    !isOrcaCloudEnvironmentId(request.environmentId)
-  ) {
-    return launch()
+export async function createWithCloudAgentHold(
+  args: CreateWebRuntimeSessionTerminalOnHostArgs,
+  create: CreateHostTerminal
+): Promise<CreatedWebRuntimeSessionTerminal> {
+  const agent = heldAgent(args)
+  if (!agent || (await cloudAgentLaunchDecision(agent)) !== 'hold') {
+    return await create(args)
   }
-  if ((await cloudAgentLaunchDecision(agent)) !== 'hold') {
-    return launch()
-  }
-  const placeholder = await createWebRuntimeSessionTerminalResult({
-    worktreeId: request.worktreeId,
-    environmentId: request.environmentId,
-    ...(request.groupId ? { targetGroupId: request.groupId } : {}),
-    ...(request.cwd?.trim() ? { cwd: request.cwd } : {}),
-    ...(request.activate === false ? { activate: false } : {})
-  }).catch(() => null)
+  const placeholder = await create(placeholderArgs(args)).catch(() => null)
   if (placeholder?.outcome.status !== 'created' || !placeholder.hostTabId) {
-    // Nothing to hold the strip in: start as before rather than block the launch on a broken host.
-    return launch()
+    return await create(args)
   }
   const tabId = toWebTerminalSurfaceTabId(webTerminalPlacementParentTabId(placeholder.hostTabId))
   const outcome = await holdCloudAgentLaunch({
     paneKey: cloudTabHoldKey(tabId),
     agent,
-    prompt: request.prompt.trim() || null,
+    prompt: args.prompt?.trim() || null,
     decided: true
   })
   if (outcome === 'cancel') {
@@ -74,38 +84,17 @@ export async function launchWithCloudAgentHold<T extends WebHostLaunchResult>(
         'The agent didn’t start. The shell is still open.'
       )
     )
-    return cancelled(true)
+    return placeholder
   }
-  const launched = await launch()
+  const created = await create(args)
   // The agent opened in its own tab; the placeholder shell has done its job.
-  void closeWebRuntimeSessionTab({
-    worktreeId: request.worktreeId,
-    tabId,
-    environmentId: request.environmentId,
-    reason: 'user'
-  }).catch(() => undefined)
-  return launched
-}
-
-/** launchAgentInWebHostTab with the Orca Cloud account hold in front (same arguments and result). */
-export function launchAgentInWebHostTabWithCloudHold(
-  args: Parameters<typeof launchAgentInWebHostTab>[0]
-): ReturnType<typeof launchAgentInWebHostTab> {
-  const { environmentId } = args
-  if (!environmentId) {
-    return launchAgentInWebHostTab(args)
-  }
-  return launchWithCloudAgentHold(
-    {
-      agent: args.agent,
+  if (args.environmentId) {
+    void closeWebRuntimeSessionTab({
       worktreeId: args.worktreeId,
-      environmentId,
-      groupId: args.groupId,
-      cwd: args.cwd,
-      prompt: args.prompt,
-      activate: args.activate
-    },
-    () => launchAgentInWebHostTab(args),
-    () => ({ delivered: false, failureNotified: true, outcome: { status: 'failed', message: '' } })
-  )
+      tabId,
+      environmentId: args.environmentId,
+      reason: 'user'
+    }).catch(() => undefined)
+  }
+  return created
 }

@@ -89,3 +89,55 @@ export async function resumeRemotePaneAgent(args: {
     { timeoutMs: 15_000 }
   )
 }
+
+/** What Claude prints when `--resume <id>` names a session that never had a conversation. */
+const NO_CONVERSATION = /No conversation found with session ID/i
+const RESUME_CHECK_MS = 10_000
+const RESUME_POLL_MS = 1_000
+
+/**
+ * RA-11e backstop: a recorded session can have no conversation on disk (Claude started, never ran a
+ * turn). Its `--resume` prints "No conversation found…" and exits, leaving a bare shell. Watch the
+ * relaunched pane briefly; if that happened, start the agent fresh in the same shell, once.
+ * Returns whether it relaunched fresh.
+ */
+export async function freshIfResumeFoundNothing(args: {
+  /** The pane's PTY id now (the relaunched terminal), or null while it is still binding. */
+  currentPtyId: () => string | null
+  /** The PTY id the restart replaced; the check waits for a different one. */
+  replacedPtyId: string
+  freshCommand: string
+  sleep?: (ms: number) => Promise<void>
+  now?: () => number
+}): Promise<boolean> {
+  const sleep =
+    args.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)))
+  const now = args.now ?? Date.now
+  const deadline = now() + RESUME_CHECK_MS
+  while (now() < deadline) {
+    await sleep(RESUME_POLL_MS)
+    const ptyId = args.currentPtyId()
+    const parsed = ptyId && ptyId !== args.replacedPtyId ? parseRemoteRuntimePtyId(ptyId) : null
+    if (!parsed?.environmentId) {
+      continue
+    }
+    const target = { kind: 'environment' as const, environmentId: parsed.environmentId }
+    const read = await callRuntimeRpc<{ terminal?: { tail?: string[] } }>(
+      target,
+      'terminal.read',
+      { terminal: parsed.handle, limit: 40 },
+      { timeoutMs: 5_000 }
+    ).catch(() => null)
+    if (!read?.terminal?.tail?.some((line) => NO_CONVERSATION.test(line))) {
+      continue
+    }
+    await callRuntimeRpc(
+      target,
+      'terminal.send',
+      { terminal: parsed.handle, text: args.freshCommand, enter: true },
+      { timeoutMs: 5_000 }
+    )
+    return true
+  }
+  return false
+}

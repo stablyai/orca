@@ -154,7 +154,7 @@ test('RA-11 Restart: "Restarting Claude…" is the spinner and words only; a fai
   await expect(page.locator('html')).toHaveAttribute('data-fixture-state', 'ready')
   const strip = page.locator('[data-cloud-sign-in-strip]')
   await expect(strip).toContainText('Restarting Claude…')
-  await expect(strip).toContainText('Picking up where you left off.')
+  await expect(strip).not.toContainText('Picking up where you left off.')
   // Nothing to click twice, nothing to close: the strip leaves with a result.
   await expect(strip.getByRole('button')).toHaveCount(0)
   await page.goto(

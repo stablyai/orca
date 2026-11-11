@@ -11,30 +11,23 @@ import {
   releaseCloudAgentHold
 } from './cloud-agent-launch-hold'
 
-const created = vi.hoisted(() => ({
-  create: vi.fn(),
+const host = vi.hoisted(() => ({
   close: vi.fn(),
   cloud: true
 }))
 
-vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-create-operation', () => ({
-  createWebRuntimeSessionTerminalResult: created.create
-}))
 vi.mock('@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle', () => ({
-  closeWebRuntimeSessionTab: created.close
+  closeWebRuntimeSessionTab: host.close
 }))
 vi.mock('@/runtime/hosted-terminals/placement/web-session-terminal-placement', () => ({
   webTerminalPlacementParentTabId: (id: string) => id
 }))
 vi.mock('./orca-cloud-environment-id', () => ({
-  isOrcaCloudEnvironmentId: () => created.cloud
+  isOrcaCloudEnvironmentId: () => host.cloud
 }))
 vi.mock('sonner', () => ({ toast: vi.fn() }))
-vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-web-host-tab', () => ({
-  launchAgentInWebHostTab: vi.fn()
-}))
 
-const { launchWithCloudAgentHold } = await import('./cloud-web-host-launch-hold')
+const { createWithCloudAgentHold } = await import('./cloud-web-host-launch-hold')
 const { toWebTerminalSurfaceTabId } =
   await import('../../../../shared/workspace-layout/terminal-surface-id')
 
@@ -59,79 +52,132 @@ function accounts(
   }
 }
 
-const REQUEST = {
-  agent: 'claude' as const,
+// A create's first agent as the after-wake seeding sends it: the startup command already carries
+// the prompt (preparedAgentCommand), so it never passes through launchAgentInWebHostTab.
+const CREATE_AGENT = {
   worktreeId: 'w1',
   environmentId: 'env-cloud',
-  prompt: 'fix the bug'
+  command: "claude 'say hello'",
+  launchAgent: 'claude' as const,
+  preparedAgentCommand: true,
+  activate: false,
+  selectWorktree: false
 }
-const DONE = { delivered: true, failureNotified: false }
-const CANCELLED = { delivered: false, failureNotified: true }
+const PLACEHOLDER = { outcome: { status: 'created' }, hostTabId: 'h1' } as const
+const AGENT = { outcome: { status: 'created' }, hostTabId: 'h2' } as const
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
 
-describe('launchWithCloudAgentHold (RA-1: host-published cloud launches)', () => {
+function hostCreate() {
+  return vi.fn(async (args: { launchAgent?: string; agent?: string }) =>
+    args.launchAgent || args.agent ? AGENT : PLACEHOLDER
+  )
+}
+
+describe('createWithCloudAgentHold (the one hold for every Orca Cloud agent launch)', () => {
   beforeEach(() => {
-    created.create
-      .mockReset()
-      .mockResolvedValue({ outcome: { status: 'created' }, hostTabId: 'h1' })
-    created.close.mockReset().mockResolvedValue('applied')
-    created.cloud = true
+    host.close.mockReset().mockResolvedValue('applied')
+    host.cloud = true
   })
 
-  it('starts at once when the Orca account is ready', async () => {
+  it('creates at once when the Orca account is ready', async () => {
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'active' }))
-    const launch = vi.fn().mockResolvedValue(DONE)
-    await expect(launchWithCloudAgentHold(REQUEST, launch, () => CANCELLED)).resolves.toBe(DONE)
-    expect(launch).toHaveBeenCalledOnce()
-    expect(created.create).not.toHaveBeenCalled()
+    const create = hostCreate()
+    await expect(createWithCloudAgentHold(CREATE_AGENT, create)).resolves.toBe(AGENT)
+    expect(create).toHaveBeenCalledExactlyOnceWith(CREATE_AGENT)
   })
 
-  it('never holds a non-cloud host or a non-account agent', async () => {
-    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'expired' }))
-    created.cloud = false
-    const launch = vi.fn().mockResolvedValue(DONE)
-    await launchWithCloudAgentHold(REQUEST, launch, () => CANCELLED)
-    created.cloud = true
-    await launchWithCloudAgentHold({ ...REQUEST, agent: 'gemini' }, launch, () => CANCELLED)
-    expect(launch).toHaveBeenCalledTimes(2)
-    expect(created.create).not.toHaveBeenCalled()
+  it('never holds a non-cloud host, a non-account agent, a plain shell or a resume', async () => {
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'none' }))
+    const create = hostCreate()
+    host.cloud = false
+    await createWithCloudAgentHold(CREATE_AGENT, create)
+    host.cloud = true
+    await createWithCloudAgentHold({ ...CREATE_AGENT, launchAgent: 'gemini' }, create)
+    await createWithCloudAgentHold({ worktreeId: 'w1', environmentId: 'env-cloud' }, create)
+    await createWithCloudAgentHold({ ...CREATE_AGENT, agentSessionKind: 'resume' }, create)
+    expect(create).toHaveBeenCalledTimes(4)
+    expect(readCloudAgentHold(cloudTabHoldKey(toWebTerminalSurfaceTabId('h1')))).toBeNull()
   })
 
-  it('expired: holds the agent on a plain shell tab whose first pane shows the strip, then starts it on Renew', async () => {
-    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'revoked' }))
-    const launch = vi.fn().mockResolvedValue(DONE)
-    const result = launchWithCloudAgentHold(REQUEST, launch, () => CANCELLED)
+  it("a create's first Claude that isn't set up holds on a plain shell, then starts unchanged (prompt included) on Start", async () => {
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'none' }))
+    const create = hostCreate()
+    const result = createWithCloudAgentHold(CREATE_AGENT, create)
     await flush()
-    // The placeholder is a plain shell: no command, no agent.
-    expect(created.create).toHaveBeenCalledWith({ worktreeId: 'w1', environmentId: 'env-cloud' })
+    // The placeholder is a plain shell in the same place: no command, no agent.
+    expect(create).toHaveBeenCalledExactlyOnceWith({
+      worktreeId: 'w1',
+      environmentId: 'env-cloud',
+      activate: false,
+      selectWorktree: false
+    })
     const key = cloudTabHoldKey(toWebTerminalSurfaceTabId('h1'))
-    expect(readCloudAgentHold(key)).toMatchObject({ agent: 'claude', prompt: 'fix the bug' })
-    expect(launch).not.toHaveBeenCalled()
-    // Renew in S0 makes the account usable: every held launch starts.
+    expect(readCloudAgentHold(key)).toMatchObject({ agent: 'claude', reason: 'notSetUp' })
+    // Set up finishes; the strip offers Start, and only Start launches the agent.
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'active' }))
-    await expect(result).resolves.toBe(DONE)
-    expect(launch).toHaveBeenCalledOnce()
-    expect(readCloudAgentHold(key)).toBeNull()
-    expect(created.close).toHaveBeenCalledWith(
+    await flush()
+    expect(create).toHaveBeenCalledOnce()
+    releaseCloudAgentHold(key, 'proceed')
+    await expect(result).resolves.toBe(AGENT)
+    // The original launch, untouched: its command still carries the first prompt.
+    expect(create).toHaveBeenLastCalledWith(CREATE_AGENT)
+    expect(host.close).toHaveBeenCalledWith(
       expect.objectContaining({ tabId: toWebTerminalSurfaceTabId('h1'), reason: 'user' })
     )
   })
 
-  it('cancel leaves the plain shell and never starts the agent', async () => {
-    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'expired' }))
-    const launch = vi.fn().mockResolvedValue(DONE)
-    const result = launchWithCloudAgentHold(REQUEST, launch, () => CANCELLED)
+  it('exactly once: one create with a queued prompt shows one strip and starts the agent once', async () => {
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'none' }))
+    const create = hostCreate()
+    const launch = { ...CREATE_AGENT, prompt: 'say hello' }
+    const result = createWithCloudAgentHold(launch, create)
     await flush()
-    releaseCloudAgentHold(cloudTabHoldKey(toWebTerminalSurfaceTabId('h1')), 'cancel')
-    await expect(result).resolves.toBe(CANCELLED)
-    expect(launch).not.toHaveBeenCalled()
-    expect(created.close).not.toHaveBeenCalled()
+    const key = cloudTabHoldKey(toWebTerminalSurfaceTabId('h1'))
+    // One strip, carrying the queued prompt; no hold anywhere else (the agent's create isn't held again).
+    expect(readCloudAgentHold(key)).toMatchObject({ agent: 'claude', prompt: 'say hello' })
+    expect(readCloudAgentHold(cloudTabHoldKey(toWebTerminalSurfaceTabId('h2')))).toBeNull()
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'active' }))
+    releaseCloudAgentHold(key, 'proceed')
+    await expect(result).resolves.toBe(AGENT)
+    const agentCreates = create.mock.calls.filter(([args]) => args.launchAgent === 'claude')
+    // The prompt rides in the prepared command, delivered once by the one agent create.
+    expect(agentCreates).toEqual([[launch]])
+    expect(create).toHaveBeenCalledTimes(2)
+    expect(readCloudAgentHold(key)).toBeNull()
   })
 
-  it('a host that cannot open the placeholder launches as before rather than blocking', async () => {
+  it('expired: holds, then starts on Renew', async () => {
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'revoked' }))
+    const create = hostCreate()
+    const args = { ...CREATE_AGENT, prompt: 'fix the bug' }
+    const result = createWithCloudAgentHold(args, create)
+    await flush()
+    const key = cloudTabHoldKey(toWebTerminalSurfaceTabId('h1'))
+    expect(readCloudAgentHold(key)).toMatchObject({
+      reason: 'accountExpired',
+      prompt: 'fix the bug'
+    })
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'active' }))
+    await expect(result).resolves.toBe(AGENT)
+    expect(create).toHaveBeenLastCalledWith(args)
+  })
+
+  it('cancel leaves the plain shell and never starts the agent', async () => {
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'expired' }))
-    created.create.mockResolvedValue({ outcome: { status: 'failed', message: 'x' } })
-    const launch = vi.fn().mockResolvedValue(DONE)
-    await expect(launchWithCloudAgentHold(REQUEST, launch, () => CANCELLED)).resolves.toBe(DONE)
+    const create = hostCreate()
+    const result = createWithCloudAgentHold(CREATE_AGENT, create)
+    await flush()
+    releaseCloudAgentHold(cloudTabHoldKey(toWebTerminalSurfaceTabId('h1')), 'cancel')
+    await expect(result).resolves.toBe(PLACEHOLDER)
+    expect(create).toHaveBeenCalledOnce()
+    expect(host.close).not.toHaveBeenCalled()
+  })
+
+  it('a host that cannot open the placeholder creates as before rather than blocking', async () => {
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'expired' }))
+    const create = vi.fn(async (args: { launchAgent?: string }) =>
+      args.launchAgent ? AGENT : { outcome: { status: 'failed' as const, message: 'x' } }
+    )
+    await expect(createWithCloudAgentHold(CREATE_AGENT, create)).resolves.toBe(AGENT)
   })
 })

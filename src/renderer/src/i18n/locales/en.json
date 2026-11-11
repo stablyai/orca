@@ -23584,7 +23584,9 @@
         "readOnly": "Read-only",
         "terminalOutput": "Saved output of {{title}}",
         "noGit": "No source control state was saved.",
-        "terminalN": "Terminal {{n}}"
+        "terminalN": "Terminal {{n}}",
+        "keepAwake": "Keep awake",
+        "savingCopy": "Saving a read-only copy of chats, terminals and changes…"
       },
       "read": {
         "wakeToContinue": "Wake to continue",
@@ -23626,7 +23628,10 @@
         "wakingElapsed": "Waking… {{elapsed}}",
         "staleCopy": "Orca Cloud sent an older copy than the one you last saw, so it isn’t shown. Wake the workspace to see it as it is now.",
         "keychainUnavailable": "Orca can’t open the saved copy because this computer’s keychain isn’t available. Wake the workspace to see it.",
-        "keychainLinux": "Or set up a keyring (like GNOME Keyring) and reopen Orca."
+        "keychainLinux": "Or set up a keyring (like GNOME Keyring) and reopen Orca.",
+        "unverified": "The saved copy of this workspace couldn’t be verified, so it isn’t shown. Wake the workspace to see it as it is now.",
+        "signerChangedHidden": "The saved copy of this workspace is signed by a different key than before, so it isn’t shown. Wake the workspace to see it as it is now.",
+        "justNow": "just now"
       }
     },
     "runtimeDownload": {
@@ -26975,7 +26980,8 @@
       "failed": "Couldn’t start",
       "unknown": "Checking…",
       "starting": "Starting",
-      "wakeFailed": "Couldn’t wake"
+      "wakeFailed": "Couldn’t wake",
+      "goingToSleep": "Going to sleep…"
     },
     "unarchive": "Unarchive",
     "change": {
@@ -27135,7 +27141,8 @@
       "changedTitle": "Changed files",
       "moreChanged": "+{{count}} more",
       "recentCommitsOn": "Recent commits on {{branch}}",
-      "recentCommits": "Recent commits"
+      "recentCommits": "Recent commits",
+      "goingToSleep": "Going to sleep… The read-only copy shows here when it’s done."
     },
     "terminal": {
       "asleepHistoryKept": "This workspace is asleep. Your terminal history is kept.",
@@ -28111,9 +28118,9 @@
   },
   "agentSignInStrip": {
     "rowNeedsSignIn": "Needs sign-in",
-    "rowNeedsSignInTooltip": "Set up once in Settings → Agent accounts",
+    "rowNeedsSignInTooltip": "Set up once for Orca Cloud",
     "rowExpired": "Sign-in expired",
-    "rowExpiredTooltip": "Renew in Settings → Agent accounts",
+    "rowExpiredTooltip": "Renew for Orca Cloud",
     "sandbox": "the sandbox",
     "queued": "Queued prompt: {{prompt}}",
     "pasteLabel": "Code from claude.ai",
@@ -28170,7 +28177,8 @@
     "dismiss": "Dismiss",
     "renewedAnnounce": "{{agent}} sign-in renewed. Restart {{agent}} to use it.",
     "restarting": "Restarting {{agent}}…",
-    "restartingResume": "Picking up where you left off.",
+    "startedFresh": "Started a new conversation.",
+    "startedFreshDetail": "{{agent}} had nothing to pick up.",
     "restartFailed": "Couldn’t restart {{agent}}",
     "restartHostUnresponsive": "The workspace didn’t respond.",
     "restartFailedAnnounce": "Couldn’t restart {{agent}}. Try again.",

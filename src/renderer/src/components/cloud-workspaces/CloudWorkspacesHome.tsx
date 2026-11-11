@@ -162,7 +162,7 @@ export function CloudWorkspacesHome({
         if (!outcome.ok) {
           if (fromPanel && readingRef.current === w.id) {
             // The panel shows the failure in place (with the reason) instead of a toast.
-            setReadWake({ phase: 'failed', message: outcome.message })
+            setReadWake({ ...outcome, phase: 'failed' })
           } else {
             toast.error(outcome.message)
           }

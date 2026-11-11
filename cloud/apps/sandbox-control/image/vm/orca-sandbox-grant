@@ -35,9 +35,11 @@ if [ -d "$project" ]; then
 fi
 offer="$(ORCA_USER_DATA_PATH="$DATA" timeout 30 "$node" "$cli" pair --json --rotate "${scope[@]}" \
   --address "$ORCA_PUBLIC_WSS" 2>/dev/null)" || { echo 'pair failed' >&2; exit 1; }
+# This workspace's read-snapshot signer (public half), so the paired device pins it; best effort.
+signer="$("$node" "$ORCA_HOME/bin/orca-read-snapshot.cjs" --signer-public-key 2>/dev/null || true)"
 # The offer goes to the sealer on stdin (never argv or disk); only the sealed form is printed.
 # Granted devices are listed so orcad can keep owner-only features (local commands) from them.
-printf '%s' "$offer" | ORCA_GRANT_ID="$ORCA_GRANT_ID" ORCA_GRANT_RECIPIENT_KEY="$ORCA_GRANT_RECIPIENT_KEY" \
+printf '%s' "$offer" | ORCA_GRANT_ID="$ORCA_GRANT_ID" ORCA_GRANT_RECIPIENT_KEY="$ORCA_GRANT_RECIPIENT_KEY" ORCA_READ_SIGNER="$signer" \
   ORCA_GRANT_LEDGER="$STATE/grant-devices" "$node" -e '
 const crypto = require("node:crypto")
 let input = ""
@@ -58,7 +60,8 @@ process.stdin.on("data", (c) => (input += c)).on("end", () => {
   const nonce = crypto.randomBytes(12)
   const cipher = crypto.createCipheriv("aes-256-gcm", key, nonce)
   cipher.setAAD(Buffer.from("orca-cloud-grant-v1:" + process.env.ORCA_GRANT_ID))
-  const body = Buffer.from(JSON.stringify({ pairingUrl: res.pairingUrl, deviceId: res.deviceId, scope: res.scope }))
+  const signer = /^[A-Za-z0-9+/]{43}=$/.test(process.env.ORCA_READ_SIGNER || "") ? process.env.ORCA_READ_SIGNER : undefined
+  const body = Buffer.from(JSON.stringify({ pairingUrl: res.pairingUrl, deviceId: res.deviceId, scope: res.scope, ...(signer ? { readSignerPublicKeyB64: signer } : {}) }))
   const ct = Buffer.concat([cipher.update(body), cipher.final(), cipher.getAuthTag()])
   process.stdout.write(JSON.stringify({ deviceId: res.deviceId, sealed: { v: 1, ephemeralPublicKeyB64: ephRaw.toString("base64"), nonceB64: nonce.toString("base64"), ciphertextB64: ct.toString("base64") } }) + "\n")
 })'

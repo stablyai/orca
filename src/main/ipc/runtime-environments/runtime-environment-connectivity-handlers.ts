@@ -26,8 +26,7 @@ import type { Store } from '../../persistence/loading-store/store'
 import { retireRemovedRuntimeEnvironment } from './runtime-environment-removal-cleanup'
 import { removeRedundantManagedPairing } from './runtime-environment-redundant-managed-removal'
 import { readSettingsWithRuntimeEnvironmentPreference } from './runtime-environment-preference'
-import { verifyAndAddRuntimeEnvironmentFromPairingCode } from './runtime-environment-pairing-verification'
-import { publishVerifiedPairing } from './runtime-environment-verified-pairing-publish'
+import { verifyAddAndPublishPairing } from './runtime-environment-verified-pairing-publish'
 import {
   closeRemoteRuntimeRequestConnection,
   getRuntimeEnvironmentStatusSnapshots
@@ -98,17 +97,8 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
   )
   ipcMain.handle(
     'runtimeEnvironments:verifyAndAddFromPairingCode',
-    async (_event, args: { name: string; pairingCode: string; allowLoopback?: boolean }) => {
-      const result = await verifyAndAddRuntimeEnvironmentFromPairingCode(getUserDataPath(), args)
-      if (result.ok) {
-        await publishVerifiedPairing(
-          getUserDataPath(),
-          result,
-          result.updatedExisting ? { invalidateTransport } : null
-        )
-      }
-      return result
-    }
+    (_event, args: { name: string; pairingCode: string; allowLoopback?: boolean }) =>
+      verifyAddAndPublishPairing(getUserDataPath(), args, invalidateTransport)
   )
   ipcMain.handle('runtimeEnvironments:resolve', (_event, args: { selector: string }) =>
     redactRuntimeEnvironment(resolveEnvironment(getUserDataPath(), args.selector))

@@ -5,6 +5,12 @@ import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { returnFocusToWorkspace } from './cloud-focus-return'
+import {
+  MENU_FOCUS_RETURN_MS,
+  coveredPaneHadFocus,
+  isEditable,
+  useInertSiblings
+} from './cloud-cover-focus'
 import { useNow } from '@/hooks/use-now'
 import { useTranslate } from '@/i18n/use-translate'
 import {
@@ -18,6 +24,7 @@ import {
   useIsCloudWorkspace
 } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import type { CloudWakeProgressEvent } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
+import type { CloudOfflineSnapshot } from '../../../../shared/hosted-sandbox/cloud-workspace-offline-api'
 import { CloudArchivedWorkspaceView, type ArchiveLoad } from './CloudArchivedWorkspaceView'
 import { CloudWakingOverlay } from './CloudWakingOverlay'
 import { CloudWorkspaceNotice } from './CloudWorkspaceNotice'
@@ -27,10 +34,16 @@ import { useCloudVersionSkewNotice } from './use-cloud-version-skew-notice'
 import { CloudWorkspaceOfflineView } from './offline/CloudWorkspaceOfflineView'
 import { useCloudOfflineData } from './offline/use-cloud-offline-data'
 import { useCloudWorkspaceView } from './use-cloud-workspace-view'
+import {
+  useIsWorktreeGoingToSleep,
+  useIsWorktreeSleepViewHeld,
+  useIsWorktreeSuspendCommitted
+} from '@/lib/worktree-sleep-view'
 import { useWakeInput, useWakeInputNotices } from './use-wake-input'
 import { useWakeAttachHold } from './use-wake-attach-hold'
 import { clearWakeInput } from '@/components/terminal-pane/input/wake-input-buffer'
 import { runUnarchiveCloudWorkspace, wakeCloudWorkspace } from './cloud-workspace-actions'
+import { keepWorkspaceAwakeDuringSleep } from '@/components/sidebar/workspace-actions/sleep/workspace-sleep-follower'
 
 /** A wake that settles faster than this never shows the overlay (no skeleton flash). */
 const SHOW_DELAY_MS = 300
@@ -162,62 +175,8 @@ function useWakeOverlay(
   return { wake: shown?.wake ?? null, leaving }
 }
 
-/** Did the pane this layer is about to cover hold focus (or nothing did)? Then the layer takes it. */
-function coveredPaneHadFocus(cover: HTMLElement | null): boolean {
-  const active = document.activeElement
-  const pane = cover?.parentElement
-  return !active || active === document.body || Boolean(pane && pane.contains(active))
-}
-
-// Shared across covers: an element stays inert while any cover still holds it, and an element
-// that was inert before any cover arrived (some other owner) is never released by us.
-const inertHolds = new Map<HTMLElement, number>()
-
-function holdInert(element: HTMLElement): void {
-  const holds = inertHolds.get(element)
-  if (holds === undefined) {
-    if (element.inert) {
-      return
-    }
-    element.inert = true
-  }
-  inertHolds.set(element, (holds ?? 0) + 1)
-}
-
-function releaseInert(element: HTMLElement): void {
-  const holds = inertHolds.get(element)
-  if (holds === undefined) {
-    return
-  }
-  if (holds <= 1) {
-    inertHolds.delete(element)
-    element.inert = false
-  } else {
-    inertHolds.set(element, holds - 1)
-  }
-}
-
-/** Marks every sibling of the cover (the panes it hides) inert while it is shown. */
-function useInertSiblings(cover: React.RefObject<HTMLElement | null>, active: boolean): void {
-  useLayoutEffect(() => {
-    const element = cover.current
-    const parent = element?.parentElement
-    if (!active || !element || !parent) {
-      return
-    }
-    const held: HTMLElement[] = []
-    for (const child of Array.from(parent.children)) {
-      if (
-        child !== element &&
-        child instanceof HTMLElement &&
-        !child.hasAttribute('data-cloud-surface')
-      ) {
-        holdInert(child)
-        held.push(child)
-      }
-    }
-    return () => held.forEach(releaseInert)
-  }, [cover, active])
+function emptySnapshot(workspaceId: string): CloudOfflineSnapshot {
+  return { workspaceId, asleep: true, capturedAt: null, git: null, terminals: [], chats: [] }
 }
 
 function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Element | null {
@@ -241,9 +200,14 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
   const archived = view.state === 'archived'
   const maybeAsleep =
     view.state === 'sleeping' || view.state === 'failed' || view.state === 'unknown'
+  // Just put to sleep from here: stays on screen read-only, never woken by being shown.
+  const viewOnly = useIsWorktreeSleepViewHeld(workspaceId) && !archived
+  const goingToSleep = useIsWorktreeGoingToSleep(workspaceId) && viewOnly
+  // Past main's last reopen check Keep awake can't work: Wake to continue (an honest wake) instead.
+  const suspendCommitted = useIsWorktreeSuspendCommitted(workspaceId)
   const [archiveLoad, retryArchive] = useArchiveLoad(workspaceId, archived)
-  const offline = useCloudOfflineData(workspaceId, maybeAsleep && !archived)
-  const asleep = Boolean(offline.snapshot?.asleep) && maybeAsleep
+  const offline = useCloudOfflineData(workspaceId, (maybeAsleep || viewOnly) && !archived)
+  const asleep = (Boolean(offline.snapshot?.asleep) && maybeAsleep) || viewOnly
   const wakeInFlight =
     wakeInput.waking ||
     Boolean(
@@ -270,14 +234,38 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
   useInertSiblings(coverRef, layer !== null && !typeThrough && !overlay.leaving)
   useLayoutEffect(() => {
     // Decide once per layer change, before the cover moves focus anywhere. A type-through wake
-    // leaves focus in the terminal the person is typing into.
-    setTakeFocus(layer !== null && !typeThrough && coveredPaneHadFocus(coverRef.current))
-  }, [layer, typeThrough])
+    // leaves focus in the terminal the person is typing into; Sleep from here lands on the heading.
+    setTakeFocus(
+      layer !== null &&
+        !typeThrough &&
+        ((layer === 'asleep' && viewOnly) || coveredPaneHadFocus(coverRef.current))
+    )
+  }, [layer, typeThrough, viewOnly])
   useEffect(() => {
-    if (takeFocus && (layer === 'archived' || layer === 'asleep')) {
-      headingRef.current?.focus()
+    if (!takeFocus || (layer !== 'archived' && layer !== 'asleep')) {
+      return
     }
-  }, [takeFocus, layer])
+    headingRef.current?.focus()
+    if (!viewOnly) {
+      return
+    }
+    // Sleep was chosen from a menu, which hands focus back to its trigger as it closes.
+    const timer = setTimeout(() => {
+      if (!isEditable(document.activeElement)) {
+        headingRef.current?.focus()
+      }
+    }, MENU_FOCUS_RETURN_MS)
+    return () => clearTimeout(timer)
+  }, [takeFocus, layer, viewOnly])
+  // The sleep ended: re-read the copy so it says asleep, as of the capture main just made.
+  const refreshOffline = offline.refresh
+  const wasGoingToSleep = useRef(goingToSleep)
+  useEffect(() => {
+    if (wasGoingToSleep.current && !goingToSleep) {
+      void refreshOffline()
+    }
+    wasGoingToSleep.current = goingToSleep
+  }, [goingToSleep, refreshOffline])
   const hadLayer = useRef(false)
   useEffect(() => {
     if (layer) {
@@ -319,7 +307,7 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
           : t('orcaCloudWorkspace.announce.waking', 'Waking {{name}}.', { name: label })
       : layer === 'archived'
         ? t('orcaCloudWorkspace.announce.archived', '{{name}} is archived.', { name: label })
-        : layer === 'asleep'
+        : layer === 'asleep' && !goingToSleep
           ? t('orcaCloudWorkspace.announce.asleep', '{{name}} is asleep.', { name: label })
           : ''
 
@@ -398,13 +386,19 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
                   : () => dismissCloudWake(workspaceId)
               }
             />
-          ) : layer === 'asleep' && offline.snapshot ? (
+          ) : layer === 'asleep' && (offline.snapshot || viewOnly) ? (
             <div className="absolute inset-0 flex justify-center overflow-hidden bg-background">
               <CloudWorkspaceOfflineView
-                snapshot={offline.snapshot}
+                // Kept on screen before (or without) a copy: the header and Wake still show.
+                snapshot={offline.snapshot ?? emptySnapshot(workspaceId)}
                 queued={offline.queued}
                 workspaceName={name}
                 now={Math.max(now, slowNow)}
+                goingToSleep={goingToSleep}
+                onKeepAwake={
+                  suspendCommitted ? undefined : () => keepWorkspaceAwakeDuringSleep(workspaceId)
+                }
+                viewOnly={viewOnly}
                 headingRef={headingRef}
                 onWake={wake}
                 onQueue={async (sessionId, text) => {
