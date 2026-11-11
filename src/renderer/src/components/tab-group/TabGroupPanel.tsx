@@ -75,6 +75,7 @@ export default function TabGroupPanel({
   const t = useTranslate()
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
+  const reserveRightTitlebarSpace = reserveClosedExplorerToggleSpace && !rightSidebarOpen
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
   const {
     activeTab,
@@ -303,6 +304,8 @@ export default function TabGroupPanel({
               />
             ) : null}
             <div className="min-w-0 flex-1 h-full">{tabBar}</div>
+            {/* Why: overflowing tabs eat all strip whitespace; keep a window-drag handle while the right sidebar header is closed. */}
+            {reserveRightTitlebarSpace ? <div className="w-10 shrink-0" /> : null}
             <div
               className={actionChromeClassName}
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
@@ -317,7 +320,7 @@ export default function TabGroupPanel({
               ) : null}
             </div>
             {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the floating right-sidebar toggle + window controls clickable. */}
-            {reserveClosedExplorerToggleSpace && !rightSidebarOpen ? (
+            {reserveRightTitlebarSpace ? (
               <div
                 className="shrink-0"
                 style={
