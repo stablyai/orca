@@ -10,9 +10,15 @@ const mocks = vi.hoisted(() => ({
   owner: vi.fn()
 }))
 vi.mock('@/store', () => ({ useAppStore: { getState: mocks.getState } }))
-vi.mock('@/lib/editor/file-operations/editor-file-operation-owner', () => ({ getEditorFileOperationContext: mocks.context }))
-vi.mock('@/runtime/files/reads/runtime-file-read-client', () => ({ readRuntimeFilePreview: mocks.read }))
-vi.mock('@/components/editor/model-lifetime/identity/editor-model-owner', () => ({ getEditorModelOwnerKey: mocks.owner }))
+vi.mock('@/lib/editor/file-operations/editor-file-operation-owner', () => ({
+  getEditorFileOperationContext: mocks.context
+}))
+vi.mock('@/runtime/files/reads/runtime-file-read-client', () => ({
+  readRuntimeFilePreview: mocks.read
+}))
+vi.mock('@/components/editor/model-lifetime/identity/editor-model-owner', () => ({
+  getEditorModelOwnerKey: mocks.owner
+}))
 
 beforeEach(() => {
   vi.resetAllMocks()

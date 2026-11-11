@@ -1346,7 +1346,11 @@
     },
     "editor": {
       "remoteJsonSchemas": "Download JSON Schemas",
-      "remoteJsonSchemasDescription": "Fetch schemas and known filename mappings from the web for JSON validation and completion. Turn off for offline use. Workspace schemas still work."
+      "remoteJsonSchemasDescription": "Fetch schemas and known filename mappings from the web for JSON validation and completion. Turn off for offline use. Workspace schemas still work.",
+      "remoteJsonSchemasKeywordSchema": "schema",
+      "remoteJsonSchemasKeywordValidation": "validation",
+      "remoteJsonSchemasKeywordOffline": "offline",
+      "remoteJsonSchemasKeywordPrivacy": "privacy"
     }
   },
   "menu": {
