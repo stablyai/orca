@@ -40,7 +40,7 @@ export function finalizeMailboxDelivery(
     )
   }
   const ids = params.messages.map((message) => message.id)
-  const selected = JSON.parse(raw.message_ids) as string[]
+  const selected: string[] = JSON.parse(raw.message_ids)
   if (
     ids.some(
       (id, index) =>
@@ -61,7 +61,7 @@ export function finalizeMailboxDelivery(
 }
 
 export function markDeliveryAcknowledged(db: OrchestrationDb, delivery: DeliveryRow): DeliveryRow {
-  const messageIds = JSON.parse(delivery.message_ids) as string[]
+  const messageIds: string[] = JSON.parse(delivery.message_ids)
   if (messageIds.length > 0) {
     const placeholders = messageIds.map(() => '?').join(',')
     db.db

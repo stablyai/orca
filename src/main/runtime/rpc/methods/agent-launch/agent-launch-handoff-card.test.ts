@@ -114,7 +114,17 @@ async function cards() {
 }
 
 it('records one card per launch operation, linking the new chat, and none on replay', async () => {
-  const append = vi.spyOn(rig.host, 'appendAgentStart')
+  const entered = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  const appended = Promise.withResolvers<void>()
+  const appendAgentStart = rig.host.appendAgentStart
+  const append = vi.spyOn(rig.host, 'appendAgentStart').mockImplementation(async (...args) => {
+    entered.resolve()
+    await release.promise
+    const result = appendAgentStart(...args)
+    void result.then(appended.resolve, appended.reject)
+    return result
+  })
   const operationId = nextOperationId()
   const create = { kind: 'create-worktree', create: { repo: 'id:repo-1', name: 'task' } }
 
@@ -123,7 +133,11 @@ it('records one card per launch operation, linking the new chat, and none on rep
     AGENT_CLI,
     { operationId }
   )
-  await vi.waitFor(async () => expect(await cards()).toHaveLength(1))
+  await entered.promise
+  expect(await cards()).toEqual([])
+  release.resolve()
+  await appended.promise
+  expect(await cards()).toHaveLength(1)
   const replayed = await launch(
     { target: create, prompt: { text: TASK, delivery: 'submit' } },
     AGENT_CLI,

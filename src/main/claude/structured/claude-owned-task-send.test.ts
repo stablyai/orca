@@ -1,5 +1,5 @@
 import { readTestHostJournal } from '../../native-chat/agent-session-journal/journal-observation.test-support'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import {
   adapterFor,
   claudeFrame,
@@ -97,11 +97,19 @@ it('delivers an ordinary send after an owned roster/start refresh without invent
       .sessions.get(SESSION)!
       .journal.reads.runningTurn()
 
+    const delivered = Promise.withResolvers<void>()
+    const send = connection.send
+    vi.spyOn(connection, 'send').mockImplementation((...args) => {
+      const result = send(...args)
+      void result.then(delivered.resolve, delivered.reject)
+      return result
+    })
     const followup = rig.send('continue normally')
     expect(await followup.result).toMatchObject({ ok: true })
     await eventually(async () =>
       expect((await rig.submission(followup.id))?.handedOverAt).toBeDefined()
     )
+    await delivered.promise
     expect(rootAfterChild).toBeNull()
     expect(connection.sent).toHaveLength(2)
     expect(connection.sent[1]).toMatchObject({

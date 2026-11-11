@@ -7,6 +7,12 @@ import { waitForStructuredAgentSessionRecovery } from '../../../agent-session/st
 import { awakeNow, createAwakeClock, type AwakeClock } from '../../../../power/awake-clock'
 import type * as AwakeClockModule from '../../../../power/awake-clock'
 
+function hasDeliveryCompletion(value: object): value is {
+  deliver(mailbox: string, types?: ReadonlySet<string>): Promise<void>
+} {
+  return 'deliver' in value && typeof value.deliver === 'function'
+}
+
 // Agent startups read the process-wide awake clock, whose heartbeat is a timer that outlives the
 // runtime by design. Under fake time each observation window gets its own production awake clock
 // whose heartbeat it counts, so the closed-database drain can still demand every other timer end.
@@ -72,10 +78,10 @@ export function createCoordinatorMailObservationClock(
         return result instanceof Promise ? track(result) : result
       })
       // The existing private delivery promise spans sends and recursive reruns after settlement.
-      const deliveryPrototype =
-        OrchestrationStructuredMailboxPointerDelivery.prototype as unknown as {
-          deliver(mailbox: string, types?: ReadonlySet<string>): Promise<void>
-        }
+      const deliveryPrototype: object = OrchestrationStructuredMailboxPointerDelivery.prototype
+      if (!hasDeliveryCompletion(deliveryPrototype)) {
+        throw new Error('structured mailbox delivery has no completion method')
+      }
       const deliver = deliveryPrototype.deliver
       vi.spyOn(deliveryPrototype, 'deliver').mockImplementation(function (
         this: typeof deliveryPrototype,

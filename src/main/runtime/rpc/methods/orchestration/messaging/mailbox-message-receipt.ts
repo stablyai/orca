@@ -3,7 +3,6 @@ import type { MailboxDeliveryBatch } from '../../../../orchestration/db/messages
 import { formatMessageBanner } from '../../../../orchestration/mailbox/formatting/message-formatting'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { completionReportFollowUp } from '../../../../orchestration/workers/reports/report-follow-up-action'
-import type { ReportFollowUpAction } from '../../../../../../shared/orchestration/mailbox/orchestration-report-follow-up'
 
 // Hide read/sequence, pointer_* and sender_pane_key: they are runtime delivery plumbing, not caller mailbox truth.
 const INTERNAL_MESSAGE_COLUMNS = [
@@ -51,7 +50,7 @@ export function deliveryReceipt(args: {
       response.formatted = batch.messages
         .map((message, index) =>
           formatMessageBanner(message, {
-            followUp: (saved.messages[index] as { follow_up?: ReportFollowUpAction }).follow_up
+            followUp: saved.messages[index]?.follow_up
           })
         )
         .join('\n\n')

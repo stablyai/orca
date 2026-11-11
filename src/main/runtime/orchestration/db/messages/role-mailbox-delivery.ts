@@ -11,6 +11,7 @@ import type { OrchestrationDb } from '../orchestration-db'
 import { exposeDeliveryTimestamps, exposeMessageListTimestamps } from '../utc-timestamp'
 import { requireMailboxConsumer } from './mailbox-consumer'
 import { ORCHESTRATION_DELIVERY_BATCH_LIMIT } from './mailbox-routing-page'
+import type { ReportFollowUpAction } from '../../../../../shared/orchestration/mailbox/orchestration-report-follow-up'
 
 export function getDeliveryRaw(this: OrchestrationDb, id: string): DeliveryRow | undefined {
   return this.db.prepare('SELECT * FROM deliveries WHERE id = ?').get(id) as DeliveryRow | undefined
@@ -47,7 +48,7 @@ export type MailboxDeliveryBatch = {
     runId: string
     dispatchId?: string
     deliveryId: string | null
-    messages: object[]
+    messages: (object & { follow_up?: ReportFollowUpAction })[]
     count: number
     replayed: boolean
     deliveryAcknowledged?: boolean
