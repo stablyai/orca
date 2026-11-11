@@ -30,7 +30,7 @@ warmUpdaterModule()
 describe('fork auto-update switch', () => {
   beforeEach(() => {
     resetUpdaterMocks()
-    vi.stubEnv('MAIN_VITE_ORCA_FORK_NO_AUTO_UPDATE', '1')
+    vi.stubEnv('DEV', false)
   })
 
   afterEach(() => {
@@ -39,9 +39,11 @@ describe('fork auto-update switch', () => {
 
   it('makes no update check against the release feed in a packaged fork build', async () => {
     const send = vi.fn()
-    const { setupAutoUpdater, checkForUpdatesFromMenu, getUpdateStatus } = await loadUpdaterModule()
+    const { setupAutoUpdater, checkForUpdates, checkForUpdatesFromMenu, getUpdateStatus } =
+      await loadUpdaterModule()
 
     setupAutoUpdater(updaterMainWindow(send), { getLastUpdateCheckAt: () => null })
+    checkForUpdates()
     checkForUpdatesFromMenu()
     checkForUpdatesFromMenu({ channel: 'stable', targetTag: 'v1.0.60' })
     await vi.dynamicImportSettled()

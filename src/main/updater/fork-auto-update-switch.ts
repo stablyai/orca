@@ -2,17 +2,17 @@ import { app } from 'electron'
 
 let loggedForkSwitch = false
 
-// Fork-only (FORK.md): keeps an upstream release from replacing this build.
+// Fork-only (FORK.md): off in every non-DEV build, so no build flag or mode can let upstream replace it.
 export function runsAutoUpdater(): boolean {
   if (!app.isPackaged) {
     return false
   }
-  if (import.meta.env.MAIN_VITE_ORCA_FORK_NO_AUTO_UPDATE !== '1') {
+  if (import.meta.env.DEV === true) {
     return true
   }
   if (!loggedForkSwitch) {
     loggedForkSwitch = true
-    console.info('[updater] Fork build: auto-update is off (MAIN_VITE_ORCA_FORK_NO_AUTO_UPDATE=1)')
+    console.info('[updater] Fork build: auto-update is off')
   }
   return false
 }
