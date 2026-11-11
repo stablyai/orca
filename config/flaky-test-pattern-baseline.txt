@@ -291,7 +291,6 @@
 1 test-no-real-time-wait:tests/e2e/codex-ctrl-c-status.spec.ts
 4 test-no-real-time-wait:tests/e2e/combined-diff-scroll-restore.spec.ts
 1 test-no-real-time-wait:tests/e2e/computer-windows.e2e.ts
-1 test-no-real-time-wait:tests/e2e/cross-version-wire/cross-version-agent-session-wire.unit.test.ts
 3 test-no-real-time-wait:tests/e2e/cross-version-wire/host-model-catalog-released-phone.unit.test.ts
 1 test-no-real-time-wait:tests/e2e/cross-version-wire/legacy-relay-bridge.unit.test.ts
 1 test-no-real-time-wait:tests/e2e/cross-version-wire/released-relay-daemon.ts

@@ -4339,7 +4339,6 @@
       "src/main/window/clipboard-agent-session-attachment-paste.test.ts": 585,
       "src/main/window/clipboard-copied-file-paths.test.ts": 58,
       "src/main/window/clipboard-dashboard-popout-access.test.ts": 1361,
-      "src/main/window/clipboard-ipc-handlers.test.ts": 496,
       "src/main/window/clipboard-macos-image-paste.test.ts": 1087,
       "src/main/window/clipboard-publisher-executable.test.ts": 62,
       "src/main/window/clipboard-remote-file-staging-fs.test.ts": 66,
