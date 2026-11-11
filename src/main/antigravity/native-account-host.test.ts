@@ -4,10 +4,13 @@ import {
   getAntigravityAccountService,
   setAntigravityNativeCredentialChangeListener
 } from './native-account-host'
+import { antigravityHostAccountHome } from './antigravity-host-acp'
 import { createAntigravityHostCredentialBackend } from './native-credential-backend'
 import { createEncryptedAntigravityAccountStore } from './native-account-store'
 import { credential, harness, refreshedWithoutIdToken } from './native-account-test-fixtures'
 import { parseAntigravityWindowsSnapshot } from './native-windows-token-decode'
+import { agentModelCatalogFingerprint } from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
+import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import './native-wsl-credentials'
 
 void process.platform
@@ -42,13 +45,39 @@ it('reports new credentials and verified account switches, but not baseline read
   await service.listAccounts()
   expect(changed).not.toHaveBeenCalled()
 
+  const hostFingerprint = agentModelCatalogFingerprint({
+    agent: 'antigravity',
+    accountHome: antigravityHostAccountHome('/task/home'),
+    wslDistro: null
+  })
+  agentModelCatalogStore.recordSuccess(
+    hostFingerprint,
+    'antigravity',
+    {
+      origin: 'probe',
+      models: [{ id: 'gemini-4-carbon', label: 'Gemini 4 Carbon', isDefault: false, efforts: [] }]
+    },
+    'discovery'
+  )
+
   h.setNative(null)
   await service.listAccounts()
   expect(changed).not.toHaveBeenCalled()
+  expect(agentModelCatalogStore.observation(hostFingerprint)).toBeNull()
 
+  agentModelCatalogStore.recordSuccess(
+    hostFingerprint,
+    'antigravity',
+    {
+      origin: 'probe',
+      models: [{ id: 'gemini-4-carbon', label: 'Gemini 4 Carbon', isDefault: false, efforts: [] }]
+    },
+    'discovery'
+  )
   h.setNative(credential('b'))
   await service.addCurrentAccount()
   expect(changed).toHaveBeenCalledTimes(1)
+  expect(agentModelCatalogStore.observation(hostFingerprint)).toBeNull()
   await service.selectAccount(a)
   expect(parse).toHaveBeenCalledWith(credential('a'))
   expect(changed).toHaveBeenCalledTimes(2)

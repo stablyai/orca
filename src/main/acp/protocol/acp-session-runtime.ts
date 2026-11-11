@@ -6,7 +6,7 @@ import { AcpPromptRequest } from './acp-prompt-request'
 import { callAcpSession } from './acp-session-call'
 import { AcpJsonRpcPeer, type AcpRequestContext } from '../transport/acp-json-rpc-peer'
 import { answerAcpPermission, readAcpPermissionRequest } from './acp-permission-requests'
-import { readAcpSessionEvent, type AcpSessionEvent } from './acp-session-events'
+import { deliverAcpNotificationFrame, type AcpSessionEvent } from './acp-session-events'
 import {
   setupAcpSession,
   type AcpSessionStarted,
@@ -49,7 +49,7 @@ export class AcpSessionRuntime {
   private starting?: Promise<AcpSessionStarted>
   private started?: AcpSessionStarted
   private readonly prompts: AcpPromptRequest
-  private reportedUpdateAnomaly = false
+  private readonly anomalyState = { reportedAnomaly: false }
 
   constructor(
     input: Readable,
@@ -65,6 +65,7 @@ export class AcpSessionRuntime {
         onNotification: (method, params) => this.handleNotification(method, params),
         onDiagnostic: options.onDiagnostic,
         onClose: (error) => {
+          options.turnTracker?.dispose()
           this.prompts.close(error)
           options.onClose?.(error)
         },
@@ -81,9 +82,7 @@ export class AcpSessionRuntime {
 
   subscribe(listener: (event: AcpSessionEvent) => void): () => void {
     this.listeners.add(listener)
-    return () => {
-      this.listeners.delete(listener)
-    }
+    return () => void this.listeners.delete(listener)
   }
 
   initialize(): Promise<InitializeResponse> {
@@ -145,6 +144,7 @@ export class AcpSessionRuntime {
   /** Requires advertised session deletion support. */
   deleteSession = (sessionId: string) => this.call('session/delete', { sessionId }, z.unknown())
 
+  /** Start or resume the ACP session and attach any configured prompt-turn tracker. */
   start(
     options: AcpSessionStartOptions,
     received?: (started: AcpSessionStarted) => void
@@ -159,8 +159,16 @@ export class AcpSessionRuntime {
           options,
           (method, params, schema, accepted) => this.call(method, params, schema, accepted),
           (started) => {
-            received?.(started)
+            const prevStarted = this.started
             this.started = started
+            try {
+              this.options.turnTracker?.attach(started.sessionId, (m, p) => this.emitFrame(m, p))
+              received?.(started)
+            } catch (error) {
+              this.started = prevStarted
+              this.options.turnTracker?.dispose()
+              throw error
+            }
           }
         )
       )
@@ -173,7 +181,10 @@ export class AcpSessionRuntime {
 
   async prompt(prompt: PromptRequest['prompt'], meta?: Meta): Promise<PromptResponse> {
     const params: PromptRequest = { sessionId: this.sessionId(), prompt, ...withMeta(meta) }
-    return this.prompts.run(() => this.call('session/prompt', params, PromptResponseSchema))
+    return this.prompts.run(
+      () => this.call('session/prompt', params, PromptResponseSchema),
+      this.options.turnTracker
+    )
   }
 
   /** Stop and steering share this notification; the adapter owns their completion policy. */
@@ -241,7 +252,9 @@ export class AcpSessionRuntime {
     )
   }
 
+  /** Dispose the prompt-turn tracker, close the JSON-RPC peer, and clear subscribers. */
   close(error?: Error): void {
+    this.options.turnTracker?.dispose()
     this.peer.close(error)
     this.listeners.clear()
   }
@@ -302,30 +315,23 @@ export class AcpSessionRuntime {
     }
   }
 
+  /** Filter peer notifications through the optional prompt-turn tracker before delivery. */
   private handleNotification(method: string, params: unknown): void {
-    if (method !== 'session/update') {
-      try {
-        this.options.onExtensionNotification?.(method, params)
-      } catch (error) {
-        this.diagnose(`ACP extension listener failed: ${String(error)}`)
-      }
-      return
+    if (this.options.turnTracker?.beforeNotification(method, params) !== false) {
+      this.emitFrame(method, params)
     }
-    const event = readAcpSessionEvent(params)
-    if (!event) {
-      this.diagnose('Ignored invalid ACP session update envelope')
-      return
-    }
-    if (event.kind === 'unrecognized' && !this.reportedUpdateAnomaly) {
-      this.reportedUpdateAnomaly = true
-      this.diagnose('Forwarded unrecognized ACP session update')
-    }
-    for (const listener of this.listeners) {
-      try {
-        listener(event)
-      } catch (error) {
-        this.diagnose(`ACP event listener failed: ${String(error)}`)
-      }
-    }
+  }
+
+  /** Deliver an ACP notification frame to subscribers or the extension notification callback. */
+  private emitFrame(method: string, params: unknown): void {
+    deliverAcpNotificationFrame(
+      method,
+      params,
+      this.listeners,
+      this.options.onExtensionNotification,
+      (message) => this.diagnose(message),
+      this.anomalyState,
+      this.started?.sessionId
+    )
   }
 }

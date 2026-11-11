@@ -104,13 +104,25 @@ export async function runAgentModelCatalogListing(
           )
         )
       // Required replies already in hand outlive an optional reply that runs out of time or room.
-      const failUnlessReady = (message: string, reason: AgentModelCatalogProbeFailure): void =>
-        partialTimer === undefined ? fail(message, reason) : resolve(output.text())
+      const failUnlessReady = (
+        message: string,
+        reason: AgentModelCatalogProbeFailure,
+        failedExit?: ClaudeBackgroundFailedExit
+      ): void =>
+        partialTimer === undefined ? fail(message, reason, failedExit) : resolve(output.text())
       onAbort = () => fail(`${launch.command} listing stopped`, 'stopped')
       options.signal?.addEventListener('abort', onAbort, { once: true })
       timer = setTimeout(
         () =>
-          failUnlessReady(`${launch.command} did not list models within ${timeoutMs}ms`, 'timeout'),
+          failUnlessReady(
+            `${launch.command} did not list models within ${timeoutMs}ms`,
+            'timeout',
+            {
+              exitCode: null,
+              stdout: output.text(),
+              stderr: managed.stderrTail()
+            }
+          ),
         timeoutMs
       )
       child.stdout.on('data', (chunk: Buffer | string) => {

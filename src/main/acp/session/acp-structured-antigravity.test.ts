@@ -1,4 +1,7 @@
 import type { AntigravityChatAuthConfig } from '../../../shared/antigravity-chat-auth-config'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { z } from 'zod'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
@@ -130,4 +133,119 @@ it('stops a chat that has left the gate but is not loaded yet before the operati
     }
   )
   expect(ranOverLiveChild).toBe(false)
+})
+
+it('passes Antigravity safety metadata and user rules together in session/new _meta', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'orca-antigravity-meta-test-'))
+  const homeDir = join(tempDir, 'home')
+  const workspaceDir = join(tempDir, 'workspace')
+  await mkdir(join(homeDir, '.gemini'), { recursive: true })
+  await mkdir(workspaceDir, { recursive: true })
+  await writeFile(join(homeDir, '.gemini', 'GEMINI.md'), '# Personal Rules', 'utf8')
+  await writeFile(join(workspaceDir, 'AGENTS.md'), '# Workspace Instructions', 'utf8')
+
+  try {
+    const [initialized, opened] = await readAcpFixture('antigravity-v1-question')
+    const rig = await openAcpAdapterRig({
+      spec: {
+        ...ANTIGRAVITY,
+        sessionMeta: async (input) => {
+          const base = await ANTIGRAVITY.sessionMeta?.(input)
+          return {
+            ...base,
+            antigravity: {
+              ...(typeof base?.antigravity === 'object' && base.antigravity !== null
+                ? base.antigravity
+                : {}),
+              disabledTools: ['run_workflow']
+            }
+          }
+        }
+      },
+      launch: {
+        cwd: workspaceDir,
+        env: {
+          GEMINI_HOME: join(tempDir, 'gemini-home'),
+          HOME: homeDir,
+          USERPROFILE: homeDir
+        }
+      },
+      initialize: result(initialized),
+      script: (agent) => {
+        agent.on('session/new', (frame) =>
+          agent.reply(frame, { ...result(opened), sessionId: PROVIDER_SESSION })
+        )
+      }
+    })
+    await rig.acquire()
+    const sessionNewFrame = rig.sent('session/new')[0]
+    expect(sessionNewFrame?.params).toMatchObject({
+      cwd: workspaceDir,
+      _meta: {
+        antigravity: {
+          disabledTools: ['run_workflow'],
+          systemPrompt: {
+            append: expect.stringContaining('# Personal Rules')
+          }
+        }
+      }
+    })
+    expect(sessionNewFrame?.params).toMatchObject({
+      _meta: {
+        antigravity: {
+          systemPrompt: {
+            append: expect.stringContaining('# Workspace Instructions')
+          }
+        }
+      }
+    })
+  } finally {
+    await rm(tempDir, { recursive: true, force: true })
+  }
+})
+
+it('preserves exitCode and combinedOutput when rawOutput.output is non-text and ignores foreign _agy/turn_update frames', async () => {
+  const [initialized, opened] = await readAcpFixture('antigravity-v1-question')
+  const rig = await openAcpAdapterRig({
+    spec: ANTIGRAVITY,
+    initialize: result(initialized),
+    script: (agent) => {
+      agent.on('session/new', (frame) =>
+        agent.reply(frame, { ...result(opened), sessionId: PROVIDER_SESSION })
+      )
+    }
+  })
+  await rig.acquire()
+  const child = rig.child()
+  // Foreign-session turn_update must not open a turn on this session's timeline
+  child.agent.notify('_agy/turn_update', {
+    sessionId: 'foreign-session-999',
+    turn: 'agy-reactive:99',
+    started: true,
+    backgroundTasks: [{ taskId: 'foreign/task-1', state: 'working', kind: 'command', label: 'bad' }]
+  })
+  // Matching session tool update with structured `output: {}` preserves `combinedOutput` and `exitCode`
+  child.agent.notify('session/update', {
+    sessionId: PROVIDER_SESSION,
+    _meta: { agyTurn: 'agy-reactive:1' },
+    update: {
+      sessionUpdate: 'tool_call',
+      toolCallId: 'cmd-non-text',
+      kind: 'execute',
+      title: 'Run check',
+      status: 'completed',
+      rawInput: { CommandLine: 'npm run check' },
+      rawOutput: { combinedOutput: 'all good', exitCode: 0, output: { structured: true } }
+    }
+  })
+  child.agent.notify('_agy/turn_update', {
+    sessionId: PROVIDER_SESSION,
+    turn: 'agy-reactive:1',
+    end: { stopReason: 'end_turn' }
+  })
+  await waitFor(async () => {
+    const rows = await rig.rig.rows()
+    expect(rows.some((r) => JSON.stringify(r.body).includes('foreign/task-1'))).toBe(false)
+    expect(rows.some((r) => JSON.stringify(r.body).includes('all good'))).toBe(true)
+  })
 })

@@ -11,6 +11,8 @@ import {
 } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { ANTIGRAVITY_ACP_HOME } from '../../shared/antigravity-session-origin'
 import { compareAppVersions, isValidAppVersion } from '../../shared/app-version'
+import { agentModelCatalogFingerprint } from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
+import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { initializeAntigravityAcp } from './antigravity-acp-runtime-probe'
 import {
   createAntigravityHostCredentialBackend,
@@ -24,7 +26,8 @@ export const ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION = '1.5.2'
 const AGY_HOME_FOLDER = '.gemini'
 /** Approves tools, not plans; the check launches with it, so a build without it stays managed. */
 export const AGY_SKIP_PERMISSIONS_FLAG = '--dangerously-skip-permissions'
-const PROBE_TIMEOUT_MS = 5_000
+// agy.exe can take 6-7s to list sessions while Orca starts on Windows.
+const PROBE_TIMEOUT_MS = process.platform === 'win32' ? 15_000 : 5_000
 const RECHECK_MS = 5 * 60_000
 
 export function isCompatibleAntigravityHostAcp(initialized: InitializeResponse): boolean {
@@ -60,6 +63,21 @@ export function isAntigravityHostAccountHome(home: AgentSessionAccountHome): boo
 type HostCheck = { identity: string; answer: Promise<boolean>; retryAt?: number }
 const checks = new Map<string, HostCheck>()
 
+/** Clear cached host ACP readiness checks and retire any cached host model catalog for `homePath`. */
+export function expireAntigravityHostAcpChecks(homePath?: string): void {
+  checks.clear()
+  if (homePath !== undefined) {
+    agentModelCatalogStore.expireAgent(
+      'antigravity',
+      agentModelCatalogFingerprint({
+        agent: 'antigravity',
+        accountHome: antigravityHostAccountHome(homePath),
+        wslDistro: null
+      })
+    )
+  }
+}
+
 class IncompatibleHostAcp extends Error {}
 
 /** Whether `command acp` initializes as a compatible server that serves session requests. An
@@ -69,14 +87,25 @@ export async function antigravityHostAcpReady(
   command: string,
   env: Record<string, string>,
   envToDelete: string[],
+  prefixArgs: readonly string[] = [],
   now = Date.now
 ): Promise<boolean> {
   const stats = await stat(command).catch(() => null)
   if (!stats?.isFile()) {
     return false
   }
-  const identity = `${stats.size}:${stats.mtimeMs}`
-  const cached = checks.get(command)
+  const prefixStats = await Promise.all(
+    prefixArgs
+      .filter((arg) => !arg.startsWith('-'))
+      .map(async (arg) => {
+        const st = await stat(arg).catch(() => null)
+        return st?.isFile() ? `${arg}:${st.size}:${st.mtimeMs}` : null
+      })
+  )
+  const trackedPrefixFiles = prefixStats.filter((item): item is string => item !== null)
+  const cacheKey = `${command}\0${prefixArgs.join('\0')}`
+  const identity = [`${stats.size}:${stats.mtimeMs}`, ...trackedPrefixFiles].join('\0')
+  const cached = checks.get(cacheKey)
   if (cached?.identity === identity && (cached.retryAt === undefined || now() < cached.retryAt)) {
     return cached.answer
   }
@@ -85,7 +114,12 @@ export async function antigravityHostAcpReady(
     identity,
     retryAt: now() + RECHECK_MS,
     answer: initializeAntigravityAcp(
-      () => ({ command, args: ['acp', AGY_SKIP_PERMISSIONS_FLAG], env, envToDelete }),
+      () => ({
+        command,
+        args: [...prefixArgs, 'acp', AGY_SKIP_PERMISSIONS_FLAG],
+        env,
+        envToDelete
+      }),
       PROBE_TIMEOUT_MS,
       undefined,
       async (connection, initialized, folder) => {
@@ -102,9 +136,11 @@ export async function antigravityHostAcpReady(
       () => true,
       (error: unknown) => {
         // An exit before initialize answers is a binary rejecting the launch flag, not a lapse.
+        const canPinRejection = prefixArgs.length === 0 || trackedPrefixFiles.length > 0
         if (
-          error instanceof IncompatibleHostAcp ||
-          (!answered && error instanceof AcpConnectionClosedError)
+          canPinRejection &&
+          (error instanceof IncompatibleHostAcp ||
+            (!answered && error instanceof AcpConnectionClosedError))
         ) {
           check.retryAt = undefined
         }
@@ -112,7 +148,7 @@ export async function antigravityHostAcpReady(
       }
     )
   }
-  checks.set(command, check)
+  checks.set(cacheKey, check)
   return check.answer
 }
 

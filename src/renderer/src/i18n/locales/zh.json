@@ -422,7 +422,7 @@
       "defaultSurfaceSetAllTerminal": "全部设为终端",
       "sameAsChoice": "与 {{agent}} 相同 · {{choice}}",
       "modelListFallback": "内置列表。Orca 无法从此主机获取模型列表。",
-      "chatUnavailableOnWindows": "{{value0}} Chat 暂不支持 Windows，因此 {{value0}} 会在此主机的终端中打开。macOS 或 Linux 主机上的聊天仍可正常使用。",
+      "chatUnavailableOnWindows": "在 Windows 上，{{value0}} Chat 通过 agy 运行。请安装或更新 agy，并使用个人 Google 账号登录；如果 Chat 配置为 Google Cloud 账号，请在设置中选择“个人”。在此之前，{{value0}} 会在终端中打开。",
       "undetectedCommandHint": "如果 {{agent}} CLI 安装在 PATH 之外，请输入其在此主机上的可执行文件完整路径。",
       "permissionMixed": "混合"
     },
@@ -3963,7 +3963,7 @@
             "chatNotInWsl": "WSL 中不支持聊天",
             "cliTag": "（CLI）",
             "chatNotOverSsh": "SSH 下不支持聊天",
-            "chatNotOnWindows": "Windows 暂不支持聊天"
+            "chatNotOnWindows": "检查 agy 设置"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "切换选项卡",
@@ -19795,7 +19795,7 @@
         "turnWorking": "此聊天的智能体正在工作。请在其回合结束后再切换分支。",
         "worktree": "工作树"
       },
-      "explicitChatWindows": "此 Agent 的聊天暂不支持 Windows。请改为在终端中打开。",
+      "explicitChatWindows": "在 Windows 上，此聊天通过 agy 运行。请安装或更新 agy，并使用个人 Google 账号登录；如果 Chat 配置为 Google Cloud 账号，请在设置中选择“个人”。然后重试，或改为在终端中打开。",
       "fork": {
         "action": "从此回复创建分支",
         "pending": "正在为此聊天创建分支…",

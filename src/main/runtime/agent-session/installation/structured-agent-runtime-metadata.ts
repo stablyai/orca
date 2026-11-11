@@ -52,7 +52,8 @@ function acpChatProgram(spec: AcpLaunchSpec): StructuredAgentChatProgram {
       ? {
           hostAlternative: async (shellEnv, settings) =>
             (await selectAcpHostAccountHome(spec, shellEnv, getProfileUserDataPath(), settings)) !==
-            null
+            null,
+          ...(managedRuntime ? { onlyHostAlternative: () => managedRuntime.pin() === null } : {})
         }
       : {})
   }
@@ -69,6 +70,7 @@ function cliChatProgram(agent: 'claude' | 'codex'): StructuredAgentChatProgram {
   }
 }
 
+/** Build structured-agent runtime metadata, launch checks, and host/managed account selection for `spec`. */
 function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
   const { minimumVersions } = spec
   return {
@@ -90,23 +92,24 @@ function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
           }
         }
       : {}),
-    // New chats prefer a compatible host program, which their account home then pins; reads such
-    // as Orca's own sign-in keep the agent's account.
+    // New chats and sessionless catalog reads share the active backend; `identity` reads keep the
+    // agent's managed home.
     resolveAccountHome: async (
       { launchEnv, purpose, permissionMode },
       { stateDirectory, hostLaunchEnvironment, hostSettings }
     ) => {
       // A host program without the chat's permission mode never takes it; `own` sets none.
-      const host =
+      const canUseHost =
         spec.hostBackend &&
-        purpose === 'launch' &&
+        (purpose === 'launch' || purpose === 'read') &&
         (permissionMode === undefined ||
           permissionMode === 'own' ||
           spec.hostBackend.spec.permissionModeConfig?.values[permissionMode] !== undefined)
-          ? await hostLaunchEnvironment(spec.agent)
-              .then((env) => selectAcpHostAccountHome(spec, env, stateDirectory, hostSettings()))
-              .catch(() => null)
-          : null
+      const host = canUseHost
+        ? await hostLaunchEnvironment(spec.agent)
+            .then((env) => selectAcpHostAccountHome(spec, env, stateDirectory, hostSettings()))
+            .catch(() => null)
+        : null
       return host ?? spec.account.resolve({ launchEnv, stateDirectory })
     },
     modelCatalog: (context) => acpModelCatalogDiscovery(spec, context),

@@ -20,25 +20,22 @@ import {
   type AgentModelCatalogSuccess
 } from './agent-model-catalog-entry'
 
-export type {
-  AgentModelCatalogEntry,
-  AgentModelCatalogListing,
-  AgentModelCatalogLiveListing,
-  AgentModelCatalogSource,
-  AgentModelCatalogSuccess
+export {
+  withLiveCatalogListing,
+  type AgentModelCatalogEntry,
+  type AgentModelCatalogListing,
+  type AgentModelCatalogLiveListing,
+  type AgentModelCatalogSource,
+  type AgentModelCatalogSuccess
 } from './agent-model-catalog-entry'
-export { withLiveCatalogListing } from './agent-model-catalog-entry'
 import {
-  AGENT_MODEL_CATALOG_FAILURE_TTL_MS,
   AgentModelCatalogFailures,
   type AgentModelCatalogFailure
 } from './agent-model-catalog-failures'
-import {
-  AGENT_MODEL_CATALOG_PICKER_WAIT_MS,
-  AgentModelCatalogListingWaiters
-} from './agent-model-catalog-listing-waiters'
+import { AgentModelCatalogListingWaiters } from './agent-model-catalog-listing-waiters'
 
-export { AGENT_MODEL_CATALOG_FAILURE_TTL_MS, AGENT_MODEL_CATALOG_PICKER_WAIT_MS }
+export { AGENT_MODEL_CATALOG_FAILURE_TTL_MS } from './agent-model-catalog-failures'
+export { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from './agent-model-catalog-listing-waiters'
 export type { AgentModelCatalogFailure }
 
 // Persist successful catalogs only; failures/unavailability are held separately.
@@ -176,16 +173,17 @@ export class AgentModelCatalogStore {
     this.failures.expire(fingerprint)
   }
 
-  expireAgent(agent: string): void {
+  expireAgent(agent: string, fingerprint?: string): void {
     this.retireListings(agent)
     retireAgentModelCatalogObservations(
       this.entries,
       this.dueEntries,
       this.retiredObservations,
       this.partialAttempts,
-      agent
+      agent,
+      fingerprint
     )
-    this.failures.expireAgent(agent)
+    this.failures.expireAgent(agent, fingerprint)
   }
 
   recordSuccess(

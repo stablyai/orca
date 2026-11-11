@@ -1076,7 +1076,7 @@
       "defaultSurfaceSetAllTerminal": "Set all to Terminal",
       "sameAsChoice": "Same as {{agent}} · {{choice}}",
       "modelListFallback": "Built-in list. Orca could not get a model list from this host.",
-      "chatUnavailableOnWindows": "{{value0}} Chat isn't available on Windows yet, so {{value0}} opens in a terminal on this host. Chats on a macOS or Linux host still work.",
+      "chatUnavailableOnWindows": "On Windows, {{value0}} Chat runs on agy. Install or update agy and sign in with a personal Google account; if Chat is set to a Google Cloud account, choose Personal in Settings. Until then, {{value0}} opens in a terminal.",
       "undetectedCommandHint": "If the {{agent}} CLI is installed outside PATH, enter the full path to its executable on this host.",
       "agentActions": "{{agent}} actions",
       "defaultAutoBadge": "Default · Auto",
@@ -4915,7 +4915,7 @@
             "startChat": "Start a chat with {{value0}}",
             "cliTag": "(CLI)",
             "agentsLoading": "Loading agents",
-            "chatNotOnWindows": "No chat on Windows yet"
+            "chatNotOnWindows": "Check agy setup"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Switch Tab",
@@ -21483,7 +21483,7 @@
         "many_one": "Opened {{count}} pull request",
         "many_other": "Opened {{count}} pull requests"
       },
-      "explicitChatWindows": "This agent's chat isn't available on Windows yet. Open it in a terminal instead.",
+      "explicitChatWindows": "On Windows, this chat runs on agy. Install or update agy and sign in with a personal Google account; if Chat is set to a Google Cloud account, choose Personal in Settings. Then try again, or open it in a terminal instead.",
       "splitRight": "Split Right",
       "splitDown": "Split Down",
       "sideChat": {
