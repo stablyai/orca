@@ -88,9 +88,11 @@ export function rememberCloudSetupAgentSkipped(agent: string | null): void {
 
 // Dev and e2e: drive the page from the console or CDP (as `__store` is), e.g. to walk the trial step.
 if ((import.meta.env.DEV || e2eConfig.exposeStore) && typeof window !== 'undefined') {
-  ;(window as unknown as Record<string, unknown>).__cloudSetupPage = {
-    open: openCloudSetupPage,
-    close: closeCloudSetupPage,
-    get: getCloudSetupPageRequest
-  }
+  Object.assign(window, {
+    __cloudSetupPage: {
+      open: openCloudSetupPage,
+      close: closeCloudSetupPage,
+      get: getCloudSetupPageRequest
+    }
+  })
 }

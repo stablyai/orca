@@ -327,7 +327,9 @@ export default function RunTargetCombobox({
         onKeyDown={handleKeyDown}
       />
       <PopoverContent
-        align="start"
+        // Right column of the composer: grow leftwards from the trigger so the menu stays inside
+        // the dialog.
+        align="end"
         sideOffset={4}
         className={cn(
           'flex w-[var(--radix-popover-trigger-width)] min-w-[18rem] flex-col p-0',

@@ -318,12 +318,10 @@ function QuickTabBody({
   const isFolderWorkspaceTarget =
     cardProps.projectOptions.find((option) => option.id === cardProps.selectedProjectId)?.kind ===
     'project-group'
-  // Run on never changes the button: Orca Cloud reads exactly like this computer.
+  // Run on never changes the button, and it matches the title for every target (design-squad).
   const primaryActionLabel = isFolderWorkspaceTarget
     ? getFolderWorkspacePrimaryActionLabel(t)
-    : cardProps.selectedRepoIsGit
-      ? t('auto.components.NewWorkspaceComposerModal.createWorktree', 'Create worktree')
-      : t('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace')
+    : t('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace')
 
   // Let Radix own Escape for the topmost layer. This dialog auto-focuses input, so page-style blur-first handling swallowed its first Escape.
   const nestedDialogOpen = agentSettingsOpen || addProjectOpen || setLocationOpen

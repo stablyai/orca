@@ -28014,7 +28014,8 @@
       "hoursLead": "Turn on overage to start this workspace.",
       "hoursTitle": "Out of sandbox hours",
       "paymentLead": "The last payment failed. Update the card to keep going.",
-      "paymentTitle": "Update your payment method"
+      "paymentTitle": "Update your payment method",
+      "openSettings": "Open billing settings"
     },
     "checkAgain": "Check again",
     "checking": {
@@ -28076,7 +28077,9 @@
       "leadNoHours": "Try Orca Cloud on your team. No card needed.",
       "note": "Nothing is charged until you choose a plan.",
       "start": "Start free trial",
-      "title": "Start your free trial"
+      "title": "Start your free trial",
+      "lead_one": "{{hours}} sandbox hour to try Orca Cloud. No card needed.",
+      "lead_other": "{{hours}} sandbox hours to try Orca Cloud. No card needed."
     },
     "untitled": "New cloud workspace",
     "waitingBrowser": "Waiting for your browser…"

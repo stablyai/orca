@@ -89,6 +89,24 @@ export function CloudSetupPageLayer(): React.JSX.Element | null {
       closeCloudSetupPage()
     }
   }, [activeWorktreeId, request])
+  // The right sidebar (files, source control) is noise during setup: hide it while the page shows,
+  // and put it back as it was when the page closes or another page takes over.
+  const showing = request !== null && onWorkspaceView
+  useEffect(() => {
+    if (!showing) {
+      return
+    }
+    const store = useAppStore.getState()
+    const wasOpen = store.rightSidebarOpen
+    if (wasOpen) {
+      store.setRightSidebarOpen(false)
+    }
+    return () => {
+      if (wasOpen && !useAppStore.getState().rightSidebarOpen) {
+        useAppStore.getState().setRightSidebarOpen(true)
+      }
+    }
+  }, [showing])
   if (!request) {
     return null
   }
