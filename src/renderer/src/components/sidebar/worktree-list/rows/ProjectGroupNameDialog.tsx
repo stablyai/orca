@@ -40,13 +40,23 @@ export function ProjectGroupNameDialog({
   const [name, setName] = useState(initialName)
   const [submitting, setSubmitting] = useState(false)
   const [previousOpenState, setPreviousOpenState] = useState({ open, initialName })
-  const mountedRef = useRef(true)
+  // Bumped on every close request and content attach/detach; a save from an older session must not touch a newer one.
+  const sessionRef = useRef(0)
   const trimmedName = name.trim()
 
-  const handleDialogContentRef = useCallback((node: HTMLDivElement | null): void => {
-    // Track content attachment so late saves cannot update closed dialog state.
-    mountedRef.current = node !== null
+  const handleDialogContentRef = useCallback((): void => {
+    sessionRef.current += 1
   }, [])
+
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean): void => {
+      if (!nextOpen) {
+        sessionRef.current += 1
+      }
+      onOpenChange(nextOpen)
+    },
+    [onOpenChange]
+  )
 
   // Seed before paint so selection sees the current name instead of the prior draft.
   if (open !== previousOpenState.open || initialName !== previousOpenState.initialName) {
@@ -62,8 +72,6 @@ export function ProjectGroupNameDialog({
     }
   }
 
-  const submittedInitialNameRef = useRef<string | null>(null)
-
   const handleSubmit = useCallback(
     async (event?: React.FormEvent<HTMLFormElement>) => {
       event?.preventDefault()
@@ -71,25 +79,24 @@ export function ProjectGroupNameDialog({
         return
       }
       setSubmitting(true)
-      submittedInitialNameRef.current = initialName
+      const session = sessionRef.current
       try {
         await onSubmit(trimmedName)
-        // A cancelled-and-reopened dialog is a new session; a stale save must not close it.
-        if (mountedRef.current && submittedInitialNameRef.current === initialName) {
+        if (sessionRef.current === session) {
           onOpenChange(false)
         }
       } catch (error) {
         console.error('Failed to save name:', error)
-        if (mountedRef.current) {
+        if (sessionRef.current === session) {
           setSubmitting(false)
         }
       }
     },
-    [initialName, onOpenChange, onSubmit, submitting, trimmedName]
+    [onOpenChange, onSubmit, submitting, trimmedName]
   )
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         ref={handleDialogContentRef}
         className="max-w-sm sm:max-w-sm"
@@ -123,7 +130,7 @@ export function ProjectGroupNameDialog({
               variant="outline"
               size="sm"
               className="text-xs"
-              onClick={() => onOpenChange(false)}
+              onClick={() => handleOpenChange(false)}
             >
               {t('auto.components.sidebar.ProjectGroupNameDialog.d99a034073', 'Cancel')}
             </Button>
