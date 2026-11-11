@@ -13,6 +13,7 @@ import type {
 } from '../../../../native-chat/transcript-watch-contract'
 import { nativeChatTranscriptPathOnExecutionHost } from '../../../../native-chat/ssh-transcript-path'
 import { defineMethod, defineStreamingMethod, type RpcContext } from '../../core'
+import { NATIVE_CHAT_CLAUDE_SESSION_STATUS_METHOD } from './native-chat-claude-session-status'
 import { sanitizeNativeChatRpcBlock } from './native-chat-rpc-block-sanitize'
 import {
   boundNativeChatRpcPageByBytes,
@@ -90,6 +91,7 @@ function resumeIndex(
 }
 
 export const NATIVE_CHAT_METHODS = [
+  NATIVE_CHAT_CLAUDE_SESSION_STATUS_METHOD,
   defineMethod({
     name: 'nativeChat.readSession',
     permission: 'workspace',
