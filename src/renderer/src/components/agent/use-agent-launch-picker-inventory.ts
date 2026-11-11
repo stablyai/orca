@@ -14,6 +14,12 @@ import { workspaceKindForWorktreeId } from '../../../../shared/agent-launch/cont
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { readHostStructuredAgentsForRuntime } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
+import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
+import { resolveWorktreeModelDiscoveryRuntime } from '../native-chat/session/options/catalog/native-chat-session-option-discovery'
+import {
+  agentPickerListsCliModels,
+  readAgentPickerCliModelCatalog
+} from './agent-launch-picker-cli-model-catalog'
 import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
@@ -150,6 +156,18 @@ export function useAgentLaunchPickerInventorySource(
       ]),
     [context, worktreeId, selector, executionHostId, model, settings]
   )
+  // Without a concrete workspace, CLI discovery can only ask this machine, so other hosts keep the seed.
+  const cliDiscoveryRuntime = (): RuntimeGitContext | null =>
+    draftTarget.worktreeId
+      ? resolveWorktreeModelDiscoveryRuntime(store.getState(), draftTarget.worktreeId)
+      : target?.kind === 'local'
+        ? {
+            target,
+            prefs: store.getState().settings,
+            worktreeId: null,
+            worktreePath: repo?.path ?? ''
+          }
+        : null
   const build = (defaults: AgentPickerDefaultSettings | null | undefined) =>
     model.state === 'settled'
       ? agentPickerEntriesFromRows(
@@ -160,7 +178,7 @@ export function useAgentLaunchPickerInventorySource(
           model.defaultTuiAgent
         ).map((entry) => ({
           ...entry,
-          ...(!target ||
+          ...((!target && !(agentPickerListsCliModels(entry) && cliDiscoveryRuntime())) ||
           !entry.surfaces.length ||
           (registeredAgents &&
             !registeredAgents.some(({ agent }) => agent === entry.agent) &&
@@ -196,7 +214,8 @@ export function useAgentLaunchPickerInventorySource(
     [key, open, fallback]
   )
   useEffect(() => {
-    if (!viewActive || !open || !target || model.state !== 'settled') {
+    const discoveryRuntime = cliDiscoveryRuntime()
+    if (!viewActive || !open || (!target && !discoveryRuntime) || model.state !== 'settled') {
       return
     }
     const controller = new AbortController()
@@ -205,7 +224,7 @@ export function useAgentLaunchPickerInventorySource(
       fallback,
       {
         settings:
-          target.kind !== 'environment'
+          target?.kind !== 'environment'
             ? undefined
             : async () => {
                 const defaults = await readHostAgentLaunchDefaults(
@@ -228,18 +247,22 @@ export function useAgentLaunchPickerInventorySource(
                     }))
                   : undefined
               },
-        catalog: (entry, waitForListing) =>
-          callStructuredAgentSession<AgentSessionModelCatalogResult>(
-            target,
-            'agentSession.modelCatalog',
-            {
-              ...(selector ? { worktree: selector } : {}),
-              agent: entry.agent,
-              ...(waitForListing ? { waitForListing } : {})
-            }
-          ),
+        catalog: async (entry, waitForListing) =>
+          discoveryRuntime && agentPickerListsCliModels(entry)
+            ? readAgentPickerCliModelCatalog(entry.agent, discoveryRuntime)
+            : target
+              ? callStructuredAgentSession<AgentSessionModelCatalogResult>(
+                  target,
+                  'agentSession.modelCatalog',
+                  {
+                    ...(selector ? { worktree: selector } : {}),
+                    agent: entry.agent,
+                    ...(waitForListing ? { waitForListing } : {})
+                  }
+                )
+              : undefined,
         support: async (entry) => {
-          if (!selector) {
+          if (!selector || !target) {
             return undefined
           }
           const support = await callStructuredAgentSession<{
