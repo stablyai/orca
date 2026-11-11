@@ -37,6 +37,12 @@ import {
   DesktopBrowserBridgeResultParams
 } from '../desktop-browser-bridge-protocol'
 import { OrcadWorkVerdictParamsSchema } from '../hosted-sandbox/hosted-session-events'
+import {
+  LocalCommandAttachParamsSchema,
+  LocalCommandIdParamsSchema,
+  LocalCommandRequestParamsSchema,
+  LocalCommandSettleParamsSchema
+} from '../local-commands/local-command-contract'
 import { MobileWebBundleChunkParamsSchema } from '../mobile-web-bundle/bundle-rpc-contract'
 import { OrcaCloudEnrollDeviceParamsSchema } from '../orca-cloud-device-enrollment-contract'
 import { OrcadDiskUsageParamsSchema } from '../orcad-disk-usage'
@@ -1353,6 +1359,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'linear.testConnection': WorkspaceSelection,
   'linear.updateIssue': IssueUpdateOfLinearParams,
   'linkPreview.get': LinkPreviewGetParams,
+  'localCommands.attach': LocalCommandAttachParamsSchema,
+  'localCommands.request': LocalCommandRequestParamsSchema,
+  'localCommands.settle': LocalCommandSettleParamsSchema,
+  'localCommands.status': LocalCommandIdParamsSchema,
   'managedRuntime.cancel': ManagedRuntimeCancelParams,
   'managedRuntime.install': ManagedRuntimeAgentParams,
   'managedRuntime.remove': ManagedRuntimeAgentParams,

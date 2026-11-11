@@ -133,6 +133,9 @@ export async function readCloudWorkspaceSnapshot(
   return result?.ok ? result.value : null
 }
 
+/** The team registry service, for main-process readers (null when this build has no control plane). */
+export const getCloudWorkspacesService = (): Promise<CloudWorkspacesService | null> => getService()
+
 /** Stable per-install id for presence rows (one row per device, not per window). */
 async function clientIdFor(userDataPath: string): Promise<string> {
   const file = join(userDataPath, 'cloud-workspaces-client-id')

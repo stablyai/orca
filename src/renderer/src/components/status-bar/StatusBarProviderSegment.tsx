@@ -1,9 +1,6 @@
 import { cn } from '@/lib/utils'
 import React from 'react'
-import type {
-  ProviderRateLimits,
-  RateLimitWindow
-} from '../../../../shared/rate-limit-types'
+import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
 import {
   getDisplayedUsagePercentage,
   type UsagePercentageDisplay
