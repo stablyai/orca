@@ -69,6 +69,8 @@ export function readTerminalTail(terminal: TailSource, count = 200): string[] {
 const hints = new Map<string, WakeProcessHint>()
 // Panes already looked at in this sleep: the first look sees the pre-sleep scrollback.
 const captured = new Set<string>()
+// Panes whose pre-sleep scrollback had any text: greyed while waking until the new terminal attaches.
+const withHistory = new Set<string>()
 const listeners = new Set<() => void>()
 let version = 0
 
@@ -85,9 +87,15 @@ export function captureWakeProcessHint(leafId: string, lines: readonly string[])
     return
   }
   captured.add(leafId)
+  const hasHistory = lines.some((line) => line.trim() !== '')
+  if (hasHistory) {
+    withHistory.add(leafId)
+  }
   const hint = detectForegroundCommand(lines)
   if (hint) {
     hints.set(leafId, hint)
+  }
+  if (hasHistory || hint) {
     emit()
   }
 }
@@ -96,7 +104,13 @@ export function captureWakeProcessHint(leafId: string, lines: readonly string[])
 export function resetWakeProcessCapture(leafIds: readonly string[]): void {
   for (const id of leafIds) {
     captured.delete(id)
+    withHistory.delete(id)
   }
+}
+
+/** The pane still shows output from before the sleep (looked at during this sleep, with any text). */
+export function wakeShowsStaleHistory(leafId: string): boolean {
+  return withHistory.has(leafId)
 }
 
 export function dismissWakeProcessHint(leafId: string): void {
@@ -123,5 +137,6 @@ export function useWakeProcessHintsVersion(): number {
 export function resetWakeProcessHintsForTests(): void {
   hints.clear()
   captured.clear()
+  withHistory.clear()
   version = 0
 }

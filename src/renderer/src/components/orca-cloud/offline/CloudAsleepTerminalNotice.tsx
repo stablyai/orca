@@ -23,10 +23,13 @@ export function formatAsleepSince(at: number, now = Date.now()): string {
  */
 export function CloudAsleepTerminalNotice({
   workspaceId,
-  asleepSince
+  asleepSince,
+  waking = false
 }: {
   workspaceId: string
   asleepSince: number | null
+  /** Waking: the waking pill speaks; keep only the greyed history and its divider. */
+  waking?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   return (
@@ -55,21 +58,27 @@ export function CloudAsleepTerminalNotice({
             <span className="h-px flex-1 bg-border" />
           </div>
         ) : null}
-        <div
-          role="status"
-          className="pointer-events-auto flex items-center justify-between gap-3 rounded-md border border-border bg-popover px-3.5 py-2.5 text-xs text-muted-foreground"
-        >
-          <span>
-            {t(
-              'orcaCloudWorkspace.terminal.asleepHistoryKept',
-              'This workspace is asleep. Your terminal history is kept.'
-            )}
-          </span>
-          <Button size="xs" variant="outline" onClick={() => void wakeCloudWorkspace(workspaceId)}>
-            <Play />
-            {t('orcaCloudWorkspace.wake', 'Wake')}
-          </Button>
-        </div>
+        {waking ? null : (
+          <div
+            role="status"
+            className="pointer-events-auto flex items-center justify-between gap-3 rounded-md border border-border bg-popover px-3.5 py-2.5 text-xs text-muted-foreground"
+          >
+            <span>
+              {t(
+                'orcaCloudWorkspace.terminal.asleepHistoryKept',
+                'This workspace is asleep. Your terminal history is kept.'
+              )}
+            </span>
+            <Button
+              size="xs"
+              variant="outline"
+              onClick={() => void wakeCloudWorkspace(workspaceId)}
+            >
+              <Play />
+              {t('orcaCloudWorkspace.wake', 'Wake')}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   )

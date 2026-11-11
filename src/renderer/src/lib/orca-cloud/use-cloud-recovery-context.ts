@@ -9,7 +9,7 @@ export type CloudRecoveryContext = {
   asleep: boolean
   /** What the person calls it (never the sandbox's server name or id). */
   workspaceName: string | null
-  /** When this computer last saw it go to sleep (the local record's suspend time); null if unknown. */
+  /** While asleep or waking: when it went to sleep (the local record's suspend time); null if unknown. */
   asleepSince: number | null
 }
 
@@ -42,5 +42,5 @@ export function useCloudRecoveryContext(
   const asleep =
     !waking &&
     (reported === 'sleeping' || reported === 'stopping' || reported === 'archived' || vmSuspended)
-  return { waking, asleep, workspaceName, asleepSince: asleep ? suspendedAt : null }
+  return { waking, asleep, workspaceName, asleepSince: asleep || waking ? suspendedAt : null }
 }

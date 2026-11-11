@@ -27,6 +27,7 @@ import {
   getWakeProcessHint,
   readTerminalTail,
   resetWakeProcessCapture,
+  wakeShowsStaleHistory,
   useWakeProcessHintsVersion
 } from '@/lib/orca-cloud/cloud-wake-process-hints'
 import { paneShowsWslHostStoppedCard } from '@/runtime/hosts/wsl/wsl-host-stopped-status'
@@ -230,6 +231,18 @@ export function TerminalPaneRecoveryPortals({
             />,
             pane.container,
             `cloud-asleep-${pane.id}`
+          )
+        }
+        // Waking: the pre-sleep scrollback is still there and must not read as live (JA-15).
+        if (cloudWaking && wakeShowsStaleHistory(pane.leafId)) {
+          return createPortal(
+            <CloudAsleepTerminalNotice
+              workspaceId={controller.worktreeId}
+              asleepSince={cloud?.asleepSince ?? null}
+              waking
+            />,
+            pane.container,
+            `cloud-waking-history-${pane.id}`
           )
         }
         // Up again after a sleep: the process that was running is gone; say so once, never rerun it.
