@@ -74,9 +74,15 @@ export function CloudWorkspaceOfflineView(props: CloudOfflineViewProps): React.J
         note={
           empty
             ? undefined
-            : fromCloud
-              ? t('components.orcaCloud.read.note', 'Read-only copy saved when it went to sleep.')
-              : t('orcaCloudWorkspace.asleep.readOnly', 'Read-only copy kept on this computer.')
+            : // Still saving: the copy shown is the one from before, not the one going to sleep.
+              props.goingToSleep
+              ? t(
+                  'components.orcaCloud.offline.savingCopy',
+                  'Saving a read-only copy of chats, terminals and changes…'
+                )
+              : fromCloud
+                ? t('components.orcaCloud.read.note', 'Read-only copy saved when it went to sleep.')
+                : t('orcaCloudWorkspace.asleep.readOnly', 'Read-only copy kept on this computer.')
         }
         headingRef={props.headingRef}
         action={

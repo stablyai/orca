@@ -95,8 +95,10 @@ export function WorktreeCardHostStateWord({
   const goingToSleep = useIsWorktreeGoingToSleep(worktreeId)
   const t = useTranslate()
   const state = cloud.isCloud ? cloud.state : vmDot
-  // Sleep chosen, the sandbox not suspended yet: its record still reads running for a while.
-  const going = cloud.isCloud && goingToSleep && (state === 'running' || state === 'unknown')
+  // Sleep chosen and not ended: "Going to sleep…" until the sleep ends, driven by the same flag as
+  // the view, so the row never says Asleep (the record flips to suspended first) before the view
+  // does. A failure still names itself.
+  const going = cloud.isCloud && goingToSleep && !(state && PROBLEM.has(state))
   // Unknown is not a state to name (the panel shows a placeholder until the first read).
   if (!going && (!state || state === 'running' || state === 'unknown')) {
     return null

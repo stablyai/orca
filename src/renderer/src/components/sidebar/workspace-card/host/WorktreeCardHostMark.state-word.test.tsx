@@ -42,18 +42,27 @@ describe('the sidebar row state word', () => {
     view.state = 'running'
   })
 
-  it('says "Going to sleep…" from Sleep until the sandbox reads asleep', () => {
+  it('says "Going to sleep…" from Sleep until the sleep ends, then Asleep with the view', () => {
     const { container, rerender } = render(<WorktreeCardHostStateWord worktreeId="ws" />)
     expect(word(container)).toBeNull()
     act(() => markWorktreeGoingToSleep('ws'))
     expect(word(container)?.textContent).toBe('Going to sleep…')
     expect(word(container)?.getAttribute('data-host-state-word')).toBe('goingToSleep')
-    // The suspended record lands before the sleep ends: the real state wins.
+    // The suspended record lands before the sleep ends: the row keeps "Going to sleep…" until the
+    // view flips too (same flag), never Asleep ahead of it.
     view.state = 'sleeping'
     rerender(<WorktreeCardHostStateWord worktreeId="ws" />)
-    expect(word(container)?.textContent).toBe('Asleep')
+    expect(word(container)?.textContent).toBe('Going to sleep…')
     act(() => clearWorktreeGoingToSleep('ws'))
     expect(word(container)?.textContent).toBe('Asleep')
+  })
+
+  it('a failure during the sleep still names itself', () => {
+    const { container, rerender } = render(<WorktreeCardHostStateWord worktreeId="ws" />)
+    act(() => markWorktreeGoingToSleep('ws'))
+    view.state = 'failed'
+    rerender(<WorktreeCardHostStateWord worktreeId="ws" />)
+    expect(word(container)?.getAttribute('data-host-state-word')).toBe('failed')
   })
 
   it('names nothing for another workspace going to sleep, or a non-cloud row', () => {

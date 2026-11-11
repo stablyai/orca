@@ -81,6 +81,18 @@ describe('the asleep view kept on screen after Sleep', () => {
     expect(container.textContent).not.toContain('Saving a read-only copy')
   })
 
+  it('with an earlier copy on screen, the header note says the new copy is being saved', () => {
+    // The copy shown is from before (local), while the sleep saves a new one.
+    const { container, rerender, props } = view({ goingToSleep: true, viewOnly: true })
+    expect(container.textContent).toContain(
+      'Saving a read-only copy of chats, terminals and changes…'
+    )
+    expect(container.textContent).not.toContain('Read-only copy kept on this computer.')
+    rerender(<CloudWorkspaceOfflineView {...props} goingToSleep={false} />)
+    expect(container.textContent).not.toContain('Saving a read-only copy')
+    expect(container.textContent).toContain('Read-only copy kept on this computer.')
+  })
+
   it('once main commits the suspend (no Keep awake handler) offers Wake to continue instead', () => {
     const { getByRole, queryByRole, props } = view({ goingToSleep: true, viewOnly: true })
     expect(queryByRole('button', { name: 'Keep awake' })).toBeNull()
