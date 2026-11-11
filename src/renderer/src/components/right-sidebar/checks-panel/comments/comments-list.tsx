@@ -86,6 +86,7 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
           // Keep filters and Add Comment reachable while the sidebar scrolls through long threads.
           'sticky top-0 z-10 bg-sidebar/95 backdrop-blur-sm'
         )}
+        data-glass-surface="pinned"
       >
         <div className="flex min-w-0 items-center gap-2">
           <MessageSquare className="size-3.5 text-muted-foreground" />

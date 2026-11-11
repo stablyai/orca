@@ -34,6 +34,7 @@ export function LocalPortSection({
       <button
         type="button"
         className="sticky top-0 z-10 mb-1 flex w-full items-center gap-1 border-b border-border/40 bg-background py-1 text-left text-muted-foreground transition-colors hover:text-foreground"
+        data-glass-surface="pinned"
         onClick={onToggle}
         aria-expanded={!collapsed}
         aria-controls={`local-port-section-${id}`}

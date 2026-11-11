@@ -39,7 +39,7 @@ export function FileExplorerViewSwitch({
   ]
 
   return (
-    <div className="rounded-md bg-muted p-0.5">
+    <div className="rounded-md bg-muted p-0.5" data-glass-surface="muted">
       <ToggleGroup
         variant="segmented"
         size="xs"
