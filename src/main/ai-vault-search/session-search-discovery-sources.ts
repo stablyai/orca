@@ -164,7 +164,7 @@ export class SessionSearchDiscoverySources {
       metadataOnly,
       metadataOwed
     )
-    if (!('file' in change)) {
+    if (change.file === undefined) {
       return change
     }
     for (const observer of root.dependencies.values()) {

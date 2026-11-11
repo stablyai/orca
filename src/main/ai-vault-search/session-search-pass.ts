@@ -177,7 +177,7 @@ export async function runSessionSearchPass(
         if (observation === null) {
           return work
         }
-        if (!('file' in observation)) {
+        if (observation.file === undefined) {
           // Observation debt owns retry/holdout; accepted facts cannot certify a refused input.
           await state.queue.acknowledge(work, false, observation.handoff)
           return undefined

@@ -158,6 +158,7 @@ export class SessionSearchCatalogClient<T> {
       orderRank?: boolean
       limit?: number
       prefix?: string
+      throughRevision?: number
     } = {}
   ): Promise<{ rows: { key: string; value: T }[]; after?: string }> {
     const result = await this.request({ kind: 'page', scope: this.scope, ...options })
