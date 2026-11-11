@@ -3,6 +3,7 @@ import type {
   AiVaultSessionTitlesArgs,
   AiVaultSessionTitlesResult
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-title'
+import { generatedAiVaultSessionTitle } from '../../../../../../shared/ai-vault/contracts/generated-session-title'
 import type { AppState } from '@/store/types'
 import {
   collectAiVaultTitleRequests,
@@ -99,7 +100,12 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
     }
     const titleByIdentity = new Map<string, Pick<AiVaultSessionTitle, 'title' | 'kind'>>()
     for (const title of result.titles) {
-      if (title.title.trim()) {
+      // A generated "Claude 6ebe07c5" (no transcript title or prompt yet, e.g. a failed first turn)
+      // never replaces the tab's own title (CR-title).
+      if (
+        title.title.trim() &&
+        title.title.trim() !== generatedAiVaultSessionTitle(title.agent, title.sessionId)
+      ) {
         titleByIdentity.set(`${first.executionHostId}\0${title.agent}\0${title.sessionId}`, {
           title: title.title.trim(),
           kind: title.kind

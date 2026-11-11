@@ -1,9 +1,9 @@
 import { basename, extname } from 'node:path'
-import {
-  aiVaultAgentLabel,
-  type AiVaultAgent,
-  type AiVaultSession,
-  type AiVaultSessionTitleKind
+import { generatedAiVaultSessionTitle } from '../../shared/ai-vault/contracts/generated-session-title'
+import type {
+  AiVaultAgent,
+  AiVaultSession,
+  AiVaultSessionTitleKind
 } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { buildAiVaultResumeCommand } from '../../shared/ai-vault/resume/ai-vault-resume-command'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
@@ -155,7 +155,7 @@ export function finalizeSession(
 
 /** Shared fallback lets sidecar enrichment distinguish generated titles from transcript titles. */
 export function generatedSessionTitle(agent: AiVaultAgent, sessionId: string): string {
-  return `${aiVaultAgentLabel(agent)} ${sessionId.slice(0, 8)}`
+  return generatedAiVaultSessionTitle(agent, sessionId)
 }
 
 export function updateTimeline(accumulator: SessionAccumulator, timestamp: unknown): void {
