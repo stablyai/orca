@@ -124,6 +124,18 @@ describe('edge evacuation under runtime control', () => {
     expect(h.admin.drained.sort()).toEqual([hostId(1), hostId(2)])
   })
 
+  it('reports an edge row above the leave ceiling (the ceiling was set too low) and still drains it', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const flags: EdgeControlFlags = { mode: 'on', rolloutPermille: 0, leaveCeilingPermille: 0 }
+    const h = await harness({ control: () => flags })
+    await h.insert(hostId(1))
+    expect(await h.evacuation.sweep()).toBe(1)
+    expect(errors.mock.calls.map((call) => String(call[0]))).toContain(
+      JSON.stringify({ event: 'orca_relay_edge_row_above_ceiling' })
+    )
+  })
+
   it(`sends at most ${EDGE_EVACUATION_CONCURRENCY} drains at once`, async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const h = await harness()

@@ -26,7 +26,8 @@ import { describeAiVaultCliForkFailure } from './ai-vault-session-cli-fork'
 import { prepareAiVaultSessionContinuation } from './ai-vault-session-continuation'
 import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import { adoptsCliConversations } from '../../../../../../shared/structured-agent-cli-conversation-adoption'
-import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+
+import { createNonSecureContextUuid } from '../../../../../../shared/non-secure-context-uuid'
 import { describeAiVaultResumeFailure } from '@/lib/agent-session/resume/history/ai-vault-resume-refusal'
 import { resumeAiVaultSessionInNewChat } from './ai-vault-session-resume-in-chat-launch'
 import { resolveAiVaultTargetWorkspacePath } from './ai-vault-session-launch-target'
@@ -212,7 +213,7 @@ export function useAiVaultSessionLaunchActions({
         session,
         session.agent,
         worktreeId,
-        newAgentLaunchRequestId()
+        createNonSecureContextUuid()
       )
     },
     [activeWorktree?.id, activeWorktreeId]

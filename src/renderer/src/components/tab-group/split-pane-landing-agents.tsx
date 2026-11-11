@@ -133,9 +133,16 @@ export function LandingAgentResults({
   if (model.state !== 'settled') {
     return null
   }
-  const matches = model.rows.filter(
-    (row) => row.kind !== 'chat-unavailable' && landingQueryMatches(rowLabel(row, t), query)
-  )
+  const catalog = getAgentCatalog()
+  const matches = model.rows.filter((row) => {
+    if (row.kind === 'chat-unavailable') {
+      return false
+    }
+    const entry = catalog.find((candidate) => candidate.id === row.agent)
+    return [rowLabel(row, t), ...(entry?.searchAliases ?? [])].some((candidate) =>
+      landingQueryMatches(candidate, query)
+    )
+  })
   if (matches.length === 0) {
     return null
   }

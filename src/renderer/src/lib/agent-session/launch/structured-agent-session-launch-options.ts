@@ -14,9 +14,10 @@ import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import {
   getStructuredLaunchStateBySessionId,
-  subscribeStructuredAgentLaunchStatus
-} from './structured-agent-session-launch-registry'
-import type { StructuredLaunchState } from './structured-agent-session-launch-registry'
+  subscribeStructuredAgentLaunchStatus,
+  type StructuredLaunchState
+} from './structured-agent-session-launch-state-store'
+
 import {
   agentSessionRefusalFailure,
   agentSessionThrownFailure
@@ -57,8 +58,6 @@ export function initialStructuredLaunchSelection(
   }
 }
 
-export type StructuredLaunchOptionOutcome = SelectionOutcome
-
 const launchControllers = new WeakMap<
   StructuredLaunchState,
   ReturnType<typeof structuredSessionSelectionController>
@@ -91,7 +90,7 @@ export function holdStructuredAgentSessionLaunchOption(
   encoded: string,
   /** The picker's list, under which a model pick keeps only the held values the model offers. */
   picker?: StructuredAgentSessionOptionState
-): Promise<StructuredLaunchOptionOutcome> | null {
+): Promise<SelectionOutcome> | null {
   const state = getStructuredLaunchStateBySessionId(sessionId)
   if (!state || state.cancelled || state.callers.outcome === 'published') {
     return null
@@ -130,7 +129,7 @@ export async function setStructuredSessionSelectionOption(
   key: string,
   value: string,
   options: { expectedEnvironmentPairingRevision?: number } = {}
-): Promise<StructuredLaunchOptionOutcome> {
+): Promise<SelectionOutcome> {
   const fields = { key, value }
   try {
     const result = await callStructuredAgentSession<

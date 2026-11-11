@@ -12,7 +12,7 @@ import { normalizeRuntimePathForComparison } from '../../../shared/cross-platfor
 import { rewriteWorktreeIdPath } from '../../../shared/worktree/id'
 import { wslUncDrivePathToWindows } from '../../../shared/wsl-paths'
 
-import { wslMoveRepoPaths } from '../../persistence/moving-wsl-projects/wsl-move-scope'
+import { wslMoveRepoPaths } from '../../persistence/moving-wsl-projects/manifest-scope/wsl-move-scope'
 import type { WindowsDriveMount } from './wsl-guest-drive-mountinfo'
 import { wslUncPathIsWindowsDriveFolder } from './wsl-drive-unc-mounts'
 

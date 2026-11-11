@@ -35,6 +35,10 @@ const PAGED_READ_CHUNK_BYTES = 384 * 1024
 export const PAGED_REMOTE_FILE_MAX_BYTES = 50 * 1024 * 1024
 export const REMOTE_FILE_CHANGED_DURING_READ_MESSAGE =
   'File changed on disk while it was loading. Reload the file to see the latest version.'
+export const REMOTE_PATH_IS_DIRECTORY_MESSAGE = 'Remote path is a directory'
+// Why: an older server has no files.stat/readChunk, so a truncated files.read cannot be completed.
+export const REMOTE_FILE_PAGED_READ_UNSUPPORTED_MESSAGE =
+  'Remote file is larger than the 512 KB this Orca server can send. Update the server to open it.'
 
 export type PagedRemoteFileRead =
   | { kind: 'ok'; bytes: Uint8Array<ArrayBuffer> }
@@ -86,7 +90,7 @@ export async function readFileInChunks(
     return { kind: 'unsupported' }
   }
   if (before.isDirectory) {
-    throw new Error('Remote path is a directory')
+    throw new Error(REMOTE_PATH_IS_DIRECTORY_MESSAGE)
   }
   if (before.size > maxBytes) {
     return { kind: 'too_large', size: before.size }
