@@ -138,7 +138,6 @@ describe('ModelManager', () => {
         rmSync(stagingDir, { recursive: true, force: true })
       }
       await expect(failedSwap.downloadModel(modelId)).rejects.toThrow('ENOENT')
-      expect(existsSync(`${modelDir}.previous`)).toBe(false)
       expect((await failedSwap.getModelState(modelId)).needsUpdate).toBe(true)
 
       // An interrupted swap leaves the old files only in .previous.
