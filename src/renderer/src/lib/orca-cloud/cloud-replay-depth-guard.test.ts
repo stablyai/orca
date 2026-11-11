@@ -54,6 +54,21 @@ describe('a shallower replay never shrinks a cloud pane (N-02)', () => {
     expect(after.at(-1)).toBe('$')
   })
 
+  it('a 4th reveal in a minute (rebuild capped at 1000 rows) still shows all 5000 from line 1', async () => {
+    const terminal = new Terminal({ cols: 80, rows: 10, scrollback: 6000, allowProposedApi: true })
+    await write(terminal, `${lines(1, 5000).join('\r\n')}\r\n$ `)
+    // The pane missed output while hidden: the host's capped image carries the new lines too.
+    const rebuilt = [...lines(4021, 5000), ...lines(5001, 5020)]
+
+    const kept = await shallowReplay(terminal, `${rebuilt.join('\r\n')}\r\n$ `)
+
+    expect(kept).toBe(true)
+    const after = rows(terminal)
+    expect(after[0]).toBe('00001 line')
+    expect(after.filter((row) => row.endsWith(' line'))).toHaveLength(5020)
+    expect(after.filter((row) => row === '05000 line')).toHaveLength(1)
+  })
+
   it('leaves the replay alone when it does not overlap what the pane held', async () => {
     const terminal = new Terminal({ cols: 80, rows: 10, scrollback: 6000, allowProposedApi: true })
     await write(terminal, `${lines(1, 3000).join('\r\n')}\r\n$ `)
