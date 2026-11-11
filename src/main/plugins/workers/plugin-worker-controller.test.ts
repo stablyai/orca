@@ -1,8 +1,9 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { pluginManifestSchema } from '../../../shared/plugins/manifest/plugin-manifest'
+import { hashPluginTree } from '../plugin-content-hash'
 import { PluginContentVerifier } from '../plugin-content-integrity'
 import type { ValidDiscoveredPlugin } from '../plugin-discovery'
 import type { PluginWorkerHandle } from './plugin-host-process'
@@ -65,14 +66,16 @@ function worker(commands: string[]): PluginWorkerHandle & { dispose: ReturnType<
 
 function controller(options: {
   factory: PluginWorkerFactory
-  verify: () => Promise<void>
+  verify?: () => Promise<void>
   isApproved: () => boolean
   isApprovalKept?: () => boolean
   logs?: PluginLogBuffer
 }): PluginWorkerController {
   const contentVerifier = new PluginContentVerifier()
-  contentVerifier.verify = options.verify
-  contentVerifier.verifyNow = options.verify
+  if (options.verify) {
+    contentVerifier.verify = options.verify
+    contentVerifier.verifyNow = options.verify
+  }
   return new PluginWorkerController({
     entryPath: '/host-entry.js',
     workerFactory: options.factory,
@@ -127,6 +130,23 @@ describe('PluginWorkerController activation authority', () => {
 
     await expect(activation).rejects.toThrow(/changed or (is no longer approved|was disabled)/)
     expect(startedWorker.dispose).toHaveBeenCalledOnce()
+    await subject.dispose()
+  })
+
+  it('starts a dev worker after typings land in .orca/ past the reviewed dev-folder hash', async () => {
+    const subjectPlugin = await plugin()
+    const reviewed = await hashPluginTree(subjectPlugin.rootDir, { devFolder: true })
+    if (!reviewed.ok) {
+      throw new Error(reviewed.error)
+    }
+    await mkdir(join(subjectPlugin.rootDir, '.orca', 'types'), { recursive: true })
+    await writeFile(join(subjectPlugin.rootDir, '.orca', 'types', 'orca.d.ts'), 'export {}')
+    const factory = vi.fn<PluginWorkerFactory>().mockResolvedValue(worker(['run']))
+    const subject = controller({ factory, isApproved: () => true })
+
+    await subject.ensure({ ...subjectPlugin, consentContentHash: reviewed.hash })
+
+    expect(factory).toHaveBeenCalledOnce()
     await subject.dispose()
   })
 })

@@ -6,7 +6,7 @@ import type { RuntimePtySpawnState } from './spawn-state'
 import { startupCwdFallbackOutcome } from '../spawn-startup-target'
 import { commitPtySpawn } from '../spawn-commit-assembly'
 import type { PtySpawnPaneBinding } from '../spawn-commit-binding'
-import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
+import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/terminal-bindings/pty-binding-span'
 import { commitPtyWithOpenCodePromptIntent } from '../../../opencode/opencode-startup-prompt-owner'
 
 export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {

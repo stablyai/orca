@@ -12,12 +12,12 @@
 1 src/main/browser/extensions/native-messaging/browser-extension-native-ports.ts
 1 src/main/browser/extensions/web-store/browser-extension-webstore-updater.ts
 1 src/main/claude/agent-view/agent-view-bridge.ts
-1 src/main/cli/appimage-serve-preparation.ts
+1 src/main/cli/appimage/appimage-serve-preparation.ts
 1 src/main/codex-accounts/codex-login-session.ts
 1 src/main/codex/configuration/homes/codex-windows-sandbox-read-grant.ts
-1 src/main/crash-reporting/pre-gone-host-memory.ts
-1 src/main/crash-reporting/process-gone-diagnostics.ts
-1 src/main/crash-reporting/renderer-heap-allocation-profile.ts
+1 src/main/crash-reporting/memory/pre-gone-host-memory.ts
+1 src/main/crash-reporting/process-exits/process-gone-diagnostics.ts
+1 src/main/crash-reporting/memory/renderer-heap-allocation-profile.ts
 1 src/main/daemon/admission/host-terminal-ledger.ts
 1 src/main/daemon/admission/host-terminal-policy.ts
 1 src/main/daemon/endpoint/publication/daemon-endpoint-lifecycle.ts

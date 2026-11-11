@@ -66,8 +66,6 @@ export const ptySessionControlApi = {
     placement?: TerminalPanePlacement
     spawnIntent?: SpawnIntent
     wslPassiveRestore?: true
-    // The user's "let agents ask" answer for this launch; older mains ignore it.
-    skipAgentWorkspaceTrust?: true
     agentLaunch?: AgentPaneLaunchRequest
     telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
   }): Promise<{

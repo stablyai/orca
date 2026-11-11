@@ -5,6 +5,7 @@ import type { Project, ProjectUpdateArgs } from '../../../../../shared/project-t
 import type { Repo } from '../../../../../shared/repo-types'
 import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../../shared/repo-kind'
+import { useFolderSetupSupport } from '@/lib/workspace/creation/setup/folder-setup-support'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
 import { Label } from '../../ui/label'
 import { useShallow } from 'zustand/react/shallow'
@@ -101,6 +102,7 @@ export function RepositoryPane({
 }: RepositoryPaneProps): React.JSX.Element {
   const t = useTranslate()
   const isFolder = isFolderRepo(repo)
+  const hooksSupported = useFolderSetupSupport(repo) === 'supported'
   // Bind writes to the switcher-selected owner; same-ID/self-paired repos must not use focused-host fallback.
   const selectedHostId = getRepoExecutionHostId(repo)
   const updateSelectedRepo = useCallback(
@@ -187,7 +189,8 @@ export function RepositoryPane({
   } = getRepositoryPaneSearchMetadata(repo, { isLocalWindowsProject }, t)
 
   const hooksSection =
-    !isFolder && (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, hooksEntries)) ? (
+    hooksSupported &&
+    (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, hooksEntries)) ? (
       <RepositoryHooksSection
         key="hooks"
         repo={repo}

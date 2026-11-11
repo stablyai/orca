@@ -7,13 +7,13 @@ import Animated, {
   useSharedValue,
   withTiming
 } from 'react-native-reanimated'
+import { usageBarFill } from '../../accounts/usage/UsageBar'
 import {
   getUsageBarState,
   getWindowResetLabel,
-  usageBarFill,
-  type AccountsSnapshot,
   type ProviderKey
-} from '../../components/AccountUsage'
+} from '../../accounts/usage/usage-selectors'
+import type { AccountsSnapshot } from '../../accounts/accounts-snapshot'
 import { ClaudeIcon, OpenAIIcon } from '../../components/AgentIcons'
 import { useNow } from '../../hooks/use-now'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'

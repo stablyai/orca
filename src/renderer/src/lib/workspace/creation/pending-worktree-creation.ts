@@ -179,6 +179,8 @@ export type PendingWorktreeCreation = {
   heldChatSkills?: readonly AgentJournalSkillRef[]
   /** The launch owns the captured input until its replacement surface is published. */
   chatInputHandedOff?: boolean
+  /** When the worktree was ready and the chat's agent began starting. */
+  chatHandedOffAt?: number
   request: WorktreeCreationRequest
 }
 
