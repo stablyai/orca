@@ -13,11 +13,13 @@ import {
 import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
 import type { usePaneProcessRestart } from '../process-exit/use-pane-process-restart'
 import {
+  freshIfResumeFoundNothing,
   resumeRemotePaneAgent,
   stopRemotePaneTerminalForRestart
 } from '@/lib/orca-cloud/cloud-pane-restart-stop'
 import type { AgentProviderSessionMetadata } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { buildFreshAccountRestartCommand } from '@/lib/agent-session/accounts/agent-account-restart-startup'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import type { usePaneAccountRestartStartup } from './use-pane-account-restart-startup'
 
@@ -98,10 +100,21 @@ export function runReadyPaneAccountRestarts<
   stopRemotePane?: (ptyId: string, worktreeId: string) => Promise<void>
   /** Relaunches the paired pane's agent on its own conversation, in the same pane. */
   resumeRemotePane?: typeof resumeRemotePaneAgent
+  /** RA-11e: start fresh in the same pane when a resume found no conversation. */
+  freshIfResumeFoundNothing?: typeof freshIfResumeFoundNothing
+  /** The fresh-launch command for this tab's pane (no session to resume). */
+  buildFreshCommand?: (agent: AccountRestartAgent, leafId: string) => string
 }): void {
   const args = {
     stopRemotePane: stopRemotePaneTerminalForRestart,
     resumeRemotePane: resumeRemotePaneAgent,
+    freshIfResumeFoundNothing,
+    buildFreshCommand: (agent: AccountRestartAgent, leafId: string) =>
+      buildFreshAccountRestartCommand(agent, {
+        tabId: input.tabId,
+        leafId,
+        worktreeId: worktreeIdForTab(input.tabId) ?? ''
+      }),
     ...input
   }
   for (const pane of args.panes) {
@@ -163,10 +176,30 @@ export function runReadyPaneAccountRestarts<
             })
           : undefined
       )
-      .then(launch, (err: unknown) => {
-        console.warn('[orca-cloud] restart could not relaunch the pane’s agent on its host:', err)
-        useAppStore.getState().consumeSuppressedPtyExit(ptyId)
-        failCloudAgentRestart(ptyId)
-      })
+      .then(
+        () => {
+          launch()
+          if (providerSession) {
+            // RA-11e: a session with no conversation can't resume; start fresh in the same pane, once.
+            void Promise.resolve()
+              .then(() =>
+                args.freshIfResumeFoundNothing({
+                  currentPtyId: () =>
+                    useAppStore.getState().terminalLayoutsByTabId[args.tabId]?.ptyIdsByLeafId?.[
+                      pane.leafId
+                    ] ?? null,
+                  replacedPtyId: ptyId,
+                  freshCommand: args.buildFreshCommand(agent, pane.leafId)
+                })
+              )
+              .catch((err: unknown) => console.warn('[orca-cloud] fresh fallback failed:', err))
+          }
+        },
+        (err: unknown) => {
+          console.warn('[orca-cloud] restart could not relaunch the pane’s agent on its host:', err)
+          useAppStore.getState().consumeSuppressedPtyExit(ptyId)
+          failCloudAgentRestart(ptyId)
+        }
+      )
   }
 }

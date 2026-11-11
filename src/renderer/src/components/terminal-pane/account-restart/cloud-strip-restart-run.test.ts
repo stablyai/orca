@@ -269,6 +269,7 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
     const resumeRemotePane = vi.fn(async () => {
       order.push('resume')
     })
+    const freshIfResumeFoundNothing = vi.fn(async () => false)
     const handleRestartPane = vi.fn(() => order.push('reconnect'))
     runReadyPaneAccountRestarts({
       panes: [{ id: 7, leafId: LEAF }],
@@ -284,10 +285,17 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
       stopRemotePane: async () => {
         order.push('stop')
       },
-      resumeRemotePane
+      resumeRemotePane,
+      freshIfResumeFoundNothing,
+      buildFreshCommand: (agent, leafId) => `fresh ${agent} ${leafId}`
     })
     await vi.waitFor(() => expect(handleRestartPane).toHaveBeenCalledTimes(1))
     expect(order).toEqual(['stop', 'resume', 'reconnect'])
+    // RA-11e: after the reconnect, the resume is watched once for "no conversation" (then fresh).
+    await vi.waitFor(() => expect(freshIfResumeFoundNothing).toHaveBeenCalledTimes(1))
+    expect(freshIfResumeFoundNothing).toHaveBeenCalledWith(
+      expect.objectContaining({ replacedPtyId: REMOTE, freshCommand: `fresh claude ${LEAF}` })
+    )
     expect(resumeRemotePane).toHaveBeenCalledWith({
       ptyId: REMOTE,
       worktreeId: 'wt-1',
