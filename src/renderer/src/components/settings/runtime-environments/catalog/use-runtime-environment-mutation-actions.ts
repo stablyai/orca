@@ -101,7 +101,6 @@ export function useRuntimeEnvironmentMutationActions({
         if (submission !== revision.current || !mountedRef.current) {
           return
         }
-        setPendingCredentials(null)
         await loadEnvironments()
         if (submission !== revision.current || !mountedRef.current) {
           return

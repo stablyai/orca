@@ -171,3 +171,40 @@ it('invalidates a storage-only retry if the access link changes', async () => {
   expect(view.result.current.credentialsPending).toBe(false)
   expect(saveEdgeAuth).not.toHaveBeenCalled()
 })
+
+it('keeps the credential retry available when refreshing the saved servers fails', async () => {
+  const saveEdgeAuth = vi.fn().mockResolvedValue({ configured: true, unreadable: false })
+  window.api.runtimeEnvironments.saveEdgeAuth = saveEdgeAuth
+  verifyAndAddFromPairingCode.mockResolvedValue({
+    ok: false,
+    kind: 'environment-save-failed',
+    message: 'Paired; credentials not saved',
+    savedEnvironmentId: saved.id,
+    savedEnvironmentPairingRevision: 3
+  })
+  const refreshed = { ...saved, pairingRevision: 3 }
+  const load = vi
+    .fn(async () => {
+      useAppStore.getState().setRuntimeEnvironments([refreshed])
+    })
+    .mockRejectedValueOnce(new Error('Could not refresh saved servers'))
+  const connect = vi.fn(async () => true)
+  const view = renderActions(connect, 'Studio', load)
+  const headers = [{ name: 'X-Token', value: 'synthetic-secret' }]
+
+  await act(async () => {
+    await view.result.current.addEnvironment(false, headers)
+  })
+  await act(async () => {
+    await view.result.current.addEnvironment(false, headers)
+  })
+  expect(view.result.current.credentialsPending).toBe(true)
+  expect(connect).not.toHaveBeenCalled()
+
+  await act(async () => {
+    await view.result.current.addEnvironment(false, headers)
+  })
+  expect(verifyAndAddFromPairingCode).toHaveBeenCalledTimes(1)
+  expect(saveEdgeAuth).toHaveBeenCalledTimes(2)
+  expect(connect).toHaveBeenCalledExactlyOnceWith(refreshed)
+})
