@@ -220,6 +220,18 @@ export async function insertUsage(db: D1Database, usage: UsageInsert): Promise<b
   return (result?.meta.changes ?? 0) > 0
 }
 
+/** Meter reports (any status) for usage that ended since `since`, plus any still pending. */
+export async function meterReportsSince(db: D1Database, accountId: string, since: number): Promise<number> {
+  const row = await db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM meter_reports m JOIN usage_events p ON p.usage_id = m.usage_id
+       WHERE p.account_id = ?1 AND (m.event_timestamp >= ?2 OR m.status = 'pending')`
+    )
+    .bind(accountId, since)
+    .first<{ n: number }>()
+  return row?.n ?? 0
+}
+
 /** Overage seconds already metered (billed) in an allowance window. */
 export async function meteredSeconds(db: D1Database, accountId: string, windowStart: number): Promise<number> {
   const row = await db

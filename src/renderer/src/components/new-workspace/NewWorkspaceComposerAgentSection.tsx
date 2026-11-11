@@ -59,7 +59,8 @@ export function NewWorkspaceComposerAgentSection({
       <div className="min-w-0 space-y-1" data-contextual-tour-target="workspace-creation-agent">
         <div className="flex items-center justify-between gap-2">
           <label className="text-xs font-medium text-muted-foreground">
-            {t('components.newWorkspace.agentOptional', 'Agent (optional)')}
+            {/* Optional is implied by the Blank terminal default (PC-9). */}
+            {t('components.newWorkspace.agentLabel', 'Agent')}
           </label>
           <Tooltip>
             <TooltipTrigger asChild>
