@@ -37,7 +37,8 @@ const ROWS: AgentConfigSyncRow[] = [
   row('claude-skill', 'release-notes', { withheldFiles: 1 }),
   row('claude-command', 'review'),
   row('claude-command', 'frontend/component', { outcome: 'unchanged' }),
-  row('agents-skill', 'playwright-cli'),
+  row('agents-skill', 'playwright-cli', { digest: 'd-pw' }),
+  row('claude-skill', 'playwright-cli', { digest: 'd-pw' }),
   row('codex-prompt', 'fix-ci', { outcome: 'unchanged' }),
   row('agents-skill', 'deploy-preview', { convertedFrom: 'user:claude-skill:deploy-preview' }),
   row('claude-skill', 'local-notes', { scope: 'project' }),
@@ -185,4 +186,41 @@ export const panelLoading = defineFixture({
       <CloudSkillsSyncSkeleton />
     </div>
   )
+})
+
+/** A real profile: every skill installed for both agents, so Synced starts collapsed. */
+const LONG_NAMES = [
+  'agent-slack',
+  'jira-tickets',
+  'linear-tickets',
+  'memory-leak-audit',
+  'memory-leak-debugging',
+  'orca-cli',
+  'orca-computer-use',
+  'orca-emulator',
+  'orca-emulator-android',
+  'orca-jira',
+  'orca-linear',
+  'orca-per-workspace-env',
+  'orchestration'
+]
+const LONG_ROWS: AgentConfigSyncRow[] = [
+  row('claude-command', 'acs-test-hello'),
+  ...LONG_NAMES.flatMap((name) => [
+    row('agents-skill', name, { digest: `d-${name}` }),
+    row('claude-skill', name, { digest: `d-${name}` })
+  ]),
+  row('agents-skill', 'computer-use', { digest: 'd-cu' }),
+  row('agents-skill', 'electron', { digest: 'd-el' }),
+  row('agents-skill', 'find-skills', { digest: 'd-fs' }),
+  row('agents-skill', 'visual-proof', { digest: 'd-vp' }),
+  row('claude-skill', 'acs-test-secret', {
+    state: 'skipped',
+    outcome: undefined,
+    skipReason: 'secret'
+  })
+]
+export const longList = defineFixture({
+  width: 784,
+  render: () => page(ON, ONE, { ...STATUS, rows: LONG_ROWS })
 })

@@ -55,6 +55,7 @@ function rowOf(item: LocalAgentConfigItem, key: string, included: boolean): Agen
     bytes: item.bytes,
     fileCount: item.fileCount,
     withheldFiles: item.withheldFiles,
+    ...(item.digest ? { digest: item.digest } : {}),
     included,
     state: 'pending'
   }
