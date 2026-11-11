@@ -7,10 +7,10 @@ vi.mock('../session-actions/ai-vault-original-pane', () => ({
     session.sessionId === 'unmatched'
       ? null
       : { paneKey: 'tab-1:leaf', worktreeId: 'w1', tabId: 'tab-1', leafId: 'leaf' },
-  resolveOriginalPaneTarget: () => ({
+  resolveOriginalPaneTarget: (args: { worktreeIdHint?: string; tabIdHint?: string }) => ({
     paneKey: 'tab-1:leaf',
-    worktreeId: 'w1',
-    tabId: 'tab-1',
+    worktreeId: args.worktreeIdHint ?? 'w1',
+    tabId: args.tabIdHint ?? 'tab-1',
     leafId: 'leaf'
   })
 }))
@@ -67,9 +67,9 @@ const state: OriginalPaneState = {
 }
 
 describe('withTerminalTabTitleMatches', () => {
-  it('adds history rows whose renamed tab matches every term', () => {
+  it('adds history rows whose renamed tab matches a term; the panel filter checks the rest', () => {
     const history = [session('a'), session('unmatched')]
-    const result = withTerminalTabTitleMatches([], history, 'billing refactor', 'relevance', state)
+    const result = withTerminalTabTitleMatches([], history, 'billing payments', 'relevance', state)
     expect(result.map((row) => row.sessionId)).toEqual(['a'])
   })
 
@@ -144,5 +144,42 @@ describe('openRenamedTabSessionRefs', () => {
       'billing'
     )
     expect(refs).toEqual([{ agent: 'claude', sessionId: 'old-session', worktreeId: 'w1' }])
+  })
+
+  it('keeps every worktree whose tab title matches the same provider session', () => {
+    const tab = (id: string, worktreeId: string) => ({
+      id,
+      ptyId: null,
+      worktreeId,
+      title: 'Terminal',
+      customTitle: 'Billing',
+      color: null,
+      sortOrder: 0,
+      createdAt: 0
+    })
+    const entry = (tabId: string, worktreeId: string) => ({
+      paneKey: `${tabId}:leaf`,
+      tabId,
+      worktreeId,
+      agentType: 'claude' as const,
+      providerSession: { key: 'session_id' as const, id: 'shared' },
+      state: 'done' as const,
+      prompt: '',
+      updatedAt: 0,
+      stateStartedAt: 0,
+      stateHistory: []
+    })
+    const refs = openRenamedTabSessionRefs(
+      {
+        ...state,
+        tabsByWorktree: { w1: [tab('tab-1', 'w1')], w2: [tab('tab-2', 'w2')] },
+        agentStatusByPaneKey: {
+          'tab-1:leaf': entry('tab-1', 'w1'),
+          'tab-2:leaf': entry('tab-2', 'w2')
+        }
+      },
+      'billing'
+    )
+    expect(refs.map((ref) => ref.worktreeId).sort()).toEqual(['w1', 'w2'])
   })
 })

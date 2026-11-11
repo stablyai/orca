@@ -71,19 +71,8 @@ export function useAiVaultSearchSessions(
     () =>
       showingHits
         ? withTerminalTabTitleMatches(listing.sessions, candidates, query, sort, paneState)
-        : fetchedOpenTabSessions.length > 0
-          ? candidates
-          : history,
-    [
-      showingHits,
-      listing.sessions,
-      history,
-      candidates,
-      fetchedOpenTabSessions,
-      query,
-      sort,
-      paneState
-    ]
+        : candidates,
+    [showingHits, listing.sessions, candidates, query, sort, paneState]
   )
   const resolverSessions = showingHits && sessions.length > 0 ? sessions : history
   const onDeleted = useCallback(

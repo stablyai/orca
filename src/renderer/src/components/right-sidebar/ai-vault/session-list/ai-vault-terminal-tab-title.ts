@@ -27,7 +27,7 @@ function queryTerms(query: string): string[] {
   return parseVaultQuery(query).terms
 }
 
-/** Provider sessions running in open tabs whose rename matches every term, whether or not history loaded them. */
+/** Provider sessions running in open tabs whose rename matches any term, whether or not history loaded them; the panel filter then checks every term across title and session text. */
 export function openRenamedTabSessionRefs(
   state: OriginalPaneState,
   query: string
@@ -52,8 +52,12 @@ export function openRenamedTabSessionRefs(
       ? state.tabsByWorktree[target.worktreeId]?.find((candidate) => candidate.id === target.tabId)
       : undefined
     const title = tab?.customTitle?.trim().toLowerCase()
-    if (target && title && terms.every((term) => title.includes(term))) {
-      refs.set(`${agent}\u0000${sessionId}`, { agent, sessionId, worktreeId: target.worktreeId })
+    if (target && title && terms.some((term) => title.includes(term))) {
+      refs.set(`${agent}\u0000${sessionId}\u0000${target.worktreeId}`, {
+        agent,
+        sessionId,
+        worktreeId: target.worktreeId
+      })
     }
   }
   for (const entry of Object.values(state.agentStatusByPaneKey)) {
@@ -86,7 +90,7 @@ export function openRenamedTabSessionRefs(
   return [...refs.values()]
 }
 
-/** Host search indexes transcripts, not tab renames, so add history rows whose renamed tab matches every term. */
+/** Host search indexes transcripts, not tab renames, so add history rows whose renamed tab matches any term; the panel filter then checks every term. */
 export function withTerminalTabTitleMatches(
   hitSessions: readonly AiVaultSession[],
   history: readonly AiVaultSession[],
@@ -116,7 +120,7 @@ export function withTerminalTabTitleMatches(
       return false
     }
     const title = terminalTabTitleForSession(state, session)?.toLowerCase()
-    return title !== undefined && terms.every((term) => title.includes(term))
+    return title !== undefined && terms.some((term) => title.includes(term))
   })
   if (extra.length === 0) {
     return [...hitSessions]
