@@ -28,6 +28,7 @@ import { useMonacoMarkdownAnnotations } from '../markdown-source-tools/monaco/us
 import { useMonacoEditorDecorations } from './use-monaco-editor-decorations'
 import { useMonacoGitBlame } from '../blame/use-monaco-git-blame'
 import { useMonacoEditorMount } from './use-monaco-editor-mount'
+import { useMonacoGitChangeGutter } from '../git-change-gutter/use-monaco-git-change-gutter'
 import { snapshotMonacoViewState } from './monaco-view-state-persistence'
 import { MonacoMarkdownAnnotationOverlay } from '../markdown-source-tools/monaco/MonacoMarkdownAnnotationOverlay'
 import { usePluginSyntaxLanguage } from './use-plugin-syntax-language'
@@ -59,6 +60,7 @@ type MonacoEditorProps = {
   noteSource?: WorkspaceResource
   markdownAnnotationsEnabled?: boolean
   conflictDecorationsEnabled?: boolean
+  gitChangeGutterEligible?: boolean
   readOnly?: boolean
   // Why: shows another tab's record read-only; never moves its cursor line or takes its reveals.
   passiveMirror?: boolean
@@ -84,6 +86,7 @@ export default function MonacoEditor({
   noteSource = NO_RESOURCE_EVIDENCE,
   markdownAnnotationsEnabled = false,
   conflictDecorationsEnabled = false,
+  gitChangeGutterEligible = false,
   readOnly = false,
   passiveMirror = false,
   liveTail = false,
@@ -216,6 +219,13 @@ export default function MonacoEditor({
     language,
     markdownDocuments,
     conflictDecorationsEnabled
+  })
+  useMonacoGitChangeGutter({
+    mountedEditor,
+    fileId,
+    worktreeId,
+    relativePath,
+    eligible: gitChangeGutterEligible
   })
 
   const handleMount = useMonacoEditorMount({
