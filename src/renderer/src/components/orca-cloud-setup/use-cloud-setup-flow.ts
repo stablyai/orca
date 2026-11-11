@@ -3,6 +3,7 @@
 // one-trip setup session (#255) with its deep-link return (#257), B2's team switch, and the
 // tracker's error parsing (#260). Only the UI moved: from a card in the dialog to this page.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useAppStore } from '@/store'
 import { claimOrcaCloudTrial } from '@/components/billing/claim-trial'
 import {
   invalidateOrcaCloudBilling,
@@ -80,6 +81,13 @@ function useLiveAvailability(
 export type CloudSetupFlow = CloudSetupPageModel & {
   /** True from the click until the browser opens or the trial answers. */
   busy: boolean
+  /** This page's browser sign-in is pending: the page offers Cancel and keeps Reopen browser live. */
+  signingIn: boolean
+  /** The last sign-in stopped on its own (it timed out): "Sign-in didn’t finish. Try again." */
+  signInDidNotFinish: boolean
+  cancelSignIn: () => void
+  /** Leaving setup (Back): cancels a sign-in this page started. */
+  abandon: () => void
   /** The browser trip is open: the current step reads "Waiting for your browser". */
   inBrowser: boolean
   error: ReturnType<typeof parseCloudSetupError>
@@ -166,6 +174,12 @@ export function useCloudSetupFlow(
     [access, availability]
   )
 
+  const runRef = useRef(0)
+  const [startedSignIn, setStartedSignIn] = useState(false)
+  const signInPending = useAppStore((state) => Boolean(state.orcaProfileSignInProgress))
+  const signInTimedOut = useAppStore((state) => state.orcaProfileSignInEnd === 'timed-out')
+  const signingIn = busy && startedSignIn && signInPending
+
   // One browser trip for everything still open from here (sign-in, team, trial or Checkout, GitHub).
   const continueInBrowser = useCallback(() => {
     const needs = sessionNeedsFrom(stepsRef.current)
@@ -180,9 +194,19 @@ export function useCloudSetupFlow(
       fallback()
       return
     }
+    // Each click is a new run. An older run that ends late (its sign-in was replaced or cancelled)
+    // must not touch the page or open anything.
+    const run = ++runRef.current
+    const isCurrent = (): boolean => run === runRef.current
     setBusy(true)
+    setBrowserStep(null)
+    setStartedSignIn(cloudSetupPageModel(stepsRef.current).current?.id === 'account')
     void start({ repoId: request.repoId, needs })
       .then((opened) => {
+        if (!isCurrent() || (opened && 'cancelled' in opened)) {
+          // Cancelled, timed out or replaced: back to the step's own button; nothing reopens.
+          return
+        }
         markInBrowser()
         if (opened) {
           setSessionId(opened.sessionId)
@@ -190,9 +214,30 @@ export function useCloudSetupFlow(
           fallback()
         }
       })
-      .catch(() => fallback())
-      .finally(() => setBusy(false))
+      .catch(() => {
+        if (isCurrent()) {
+          fallback()
+        }
+      })
+      .finally(() => {
+        if (isCurrent()) {
+          setBusy(false)
+          setStartedSignIn(false)
+        }
+      })
   }, [fallback, markInBrowser, openInstall, request.repoId])
+
+  const cancelSignIn = useCallback(() => {
+    void window.api.orcaProfiles.cancelSignIn().catch(() => {})
+  }, [])
+
+  const abandon = useCallback(() => {
+    if (busy && startedSignIn) {
+      // Back means "not now": the tab this page opened must not sign in behind the user's back.
+      runRef.current++
+      cancelSignIn()
+    }
+  }, [busy, cancelSignIn, startedSignIn])
 
   const startTrial = useCallback(() => {
     setBusy(true)
@@ -226,7 +271,11 @@ export function useCloudSetupFlow(
 
   return {
     ...model,
-    busy,
+    busy: busy && !signingIn,
+    signingIn,
+    signInDidNotFinish: !busy && signInTimedOut && model.action === 'sign-in',
+    cancelSignIn,
+    abandon,
     inBrowser: browserStep !== null && (sessionId !== null || model.current?.id === browserStep),
     error,
     canManageBilling: access.state === 'no-plan' ? access.canManageBilling : true,

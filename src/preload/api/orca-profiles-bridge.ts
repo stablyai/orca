@@ -3,6 +3,7 @@ import type { PreloadApi } from '../api-types'
 import {
   ORCA_PROFILE_AUTH_STATUS_CHANGED_CHANNEL,
   ORCA_PROFILE_SIGN_IN_PROGRESS_CHANGED_CHANNEL,
+  type OrcaCloudSignInEnd,
   type OrcaCloudSignInProgress,
   type OrcaProfileListResult,
   type SwitchOrcaProfileResult,
@@ -29,10 +30,13 @@ export const orcaProfilesApi = {
     return () => ipcRenderer.removeListener(ORCA_PROFILE_AUTH_STATUS_CHANGED_CHANNEL, listener)
   },
   onSignInProgressChanged: (
-    callback: (progress: OrcaCloudSignInProgress | null) => void
+    callback: (progress: OrcaCloudSignInProgress | null, end: OrcaCloudSignInEnd | null) => void
   ): (() => void) => {
-    const listener = (_event: unknown, progress: OrcaCloudSignInProgress | null): void =>
-      callback(progress)
+    const listener = (
+      _event: unknown,
+      progress: OrcaCloudSignInProgress | null,
+      end?: OrcaCloudSignInEnd | null
+    ): void => callback(progress, end ?? null)
     ipcRenderer.on(ORCA_PROFILE_SIGN_IN_PROGRESS_CHANGED_CHANNEL, listener)
     return () => ipcRenderer.removeListener(ORCA_PROFILE_SIGN_IN_PROGRESS_CHANGED_CHANNEL, listener)
   },

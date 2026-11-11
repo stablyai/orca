@@ -18,31 +18,24 @@ async function copySignInLink(link: string): Promise<void> {
   }
 }
 
+/**
+ * Stays clickable while a sign-in is pending: another click starts a fresh sign-in in the browser
+ * and replaces the pending one (main cancels it), so a closed or lost tab never strands the user.
+ */
 export function OrcaSignInButton({
   children,
-  disabled,
   ...props
 }: Omit<React.ComponentProps<typeof Button>, 'onClick' | 'type'>): React.JSX.Element {
-  const t = useTranslate()
   const connect = useAppStore((state) => state.connectCurrentOrcaProfile)
-  const signingIn = useAppStore((state) => Boolean(state.orcaProfileSignInProgress))
   return (
-    <Button
-      {...props}
-      type="button"
-      disabled={disabled || signingIn}
-      onClick={() => void connect()}
-    >
-      {signingIn ? (
-        <>
-          <Loader2 className="animate-spin" />
-          {t('auto.components.OrcaSignInProgress.signingIn', 'Signing in…')}
-        </>
-      ) : (
-        children
-      )}
+    <Button {...props} type="button" onClick={() => void connect()}>
+      {children}
     </Button>
   )
+}
+
+function cancelSignIn(): void {
+  void window.api.orcaProfiles.cancelSignIn().catch(() => {})
 }
 
 export function OrcaSignInWaitNotice({
@@ -51,10 +44,20 @@ export function OrcaSignInWaitNotice({
   className?: string
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const link = useAppStore((state) => state.orcaProfileSignInProgress?.link)
-  if (!link) {
-    return null
+  const progress = useAppStore((state) => state.orcaProfileSignInProgress)
+  const timedOut = useAppStore((state) => state.orcaProfileSignInEnd === 'timed-out')
+  const signedIn = useAppStore((state) => state.orcaProfileAuthStatus?.state === 'connected')
+  if (!progress) {
+    if (!timedOut || signedIn) {
+      return null
+    }
+    return (
+      <p role="status" className={cn('text-xs text-muted-foreground', className)}>
+        {t('auto.components.OrcaSignInProgress.didNotFinish', 'Sign-in didn’t finish. Try again.')}
+      </p>
+    )
   }
+  const link = progress.link
   return (
     <div
       role="status"
@@ -63,20 +66,22 @@ export function OrcaSignInWaitNotice({
         className
       )}
     >
+      <Loader2 className="mr-1.5 size-3 motion-safe:animate-spin" aria-hidden />
       <span className="pr-2">
-        {t('auto.components.OrcaSignInProgress.waiting', 'Waiting for sign-in in your browser')}
+        {link
+          ? t('auto.components.OrcaSignInProgress.waiting', 'Waiting for sign-in in your browser')
+          : t('auto.components.OrcaSignInProgress.signingIn', 'Signing in…')}
       </span>
+      {link ? (
+        <>
+          <span aria-hidden>·</span>
+          <Button type="button" variant="link" size="xs" onClick={() => void copySignInLink(link)}>
+            {t('auto.components.OrcaSignInProgress.copyLink', 'Copy sign-in link')}
+          </Button>
+        </>
+      ) : null}
       <span aria-hidden>·</span>
-      <Button type="button" variant="link" size="xs" onClick={() => void copySignInLink(link)}>
-        {t('auto.components.OrcaSignInProgress.copyLink', 'Copy sign-in link')}
-      </Button>
-      <span aria-hidden>·</span>
-      <Button
-        type="button"
-        variant="link"
-        size="xs"
-        onClick={() => void window.api.orcaProfiles.cancelSignIn().catch(() => {})}
-      >
+      <Button type="button" variant="link" size="xs" onClick={cancelSignIn}>
         {t('auto.components.OrcaSignInProgress.cancel', 'Cancel')}
       </Button>
     </div>

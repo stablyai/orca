@@ -66,7 +66,7 @@ export function useCheckoutFlow({ onPaid }: { onPaid: (seats: number) => void })
         // O1: a plan always lands on a team. The browser makes or picks the team, then Checkout;
         // the setup session switches this profile to that team when it's there.
         const started = await startCloudSetupSession({ needs: ['team', 'plan'], chooseTeam: true })
-        return started ? { status: 'opened' } : result
+        return started && 'sessionId' in started ? { status: 'opened' } : result
       })
       .then((result) => {
         if (id === runId.current) {

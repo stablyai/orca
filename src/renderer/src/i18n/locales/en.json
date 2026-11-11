@@ -1770,7 +1770,8 @@
             "7d4bc516ee": "Failed to switch profile",
             "f518e89aa5": "Project already exists in that profile",
             "f03ae7f27b": "Failed to transfer project",
-            "signInTimedOut": "Sign-in timed out"
+            "signInTimedOut": "Sign-in timed out",
+            "signInDidNotFinish": "Sign-in didn’t finish. Try again."
           }
         },
         "runtime": {
@@ -20395,7 +20396,8 @@
         "copied": "Sign-in link copied",
         "copyFailed": "Could not copy the link.",
         "signingIn": "Signing in…",
-        "cancel": "Cancel"
+        "cancel": "Cancel",
+        "didNotFinish": "Sign-in didn’t finish. Try again."
       },
       "plainSshTerminal": {
         "open": "Open plain SSH terminal",
@@ -28047,7 +28049,8 @@
     "signIn": {
       "lead": "Orca Cloud runs your agents in a cloud workspace, so they keep going with your laptop closed. Sign in or create an account in your browser. We’ll make a team for you.",
       "note": "New teams get a trial with no card needed. This page picks up each step on its own.",
-      "title": "Sign in to Orca"
+      "title": "Sign in to Orca",
+      "didNotFinish": "Sign-in didn’t finish. Try again."
     },
     "starting": "Starting…",
     "startsAfter": "Starts when setup is done",
@@ -28075,6 +28078,7 @@
       "lead_other": "{{hours}} sandbox hours to try Orca Cloud. No card needed."
     },
     "untitled": "New cloud workspace",
-    "waitingBrowser": "Waiting for your browser…"
+    "waitingBrowser": "Waiting for your browser…",
+    "cancelSignIn": "Cancel"
   }
 }
