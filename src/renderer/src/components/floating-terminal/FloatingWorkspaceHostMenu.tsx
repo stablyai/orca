@@ -83,7 +83,7 @@ export function FloatingWorkspaceHostMenu(
                 </DropdownMenuShortcut>
               )}
             </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="w-56">
+            <DropdownMenuSubContent scrollable className="w-56">
               <FloatingWorkspaceHostItems hostId={host.id} {...actions} />
             </DropdownMenuSubContent>
           </DropdownMenuSub>
