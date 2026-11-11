@@ -2,10 +2,13 @@ import { useMemo } from 'react'
 import {
   Clipboard,
   Copy,
+  CornerUpLeft,
   Eraser,
   GitFork,
   Maximize2,
   MessageSquare,
+  MessageSquarePlus,
+  MessageSquareQuote,
   Minimize2,
   PanelBottomClose,
   PanelsTopLeft,
@@ -25,6 +28,7 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import type { SideChatMenuActions } from '../side-chat/side-chat-actions'
 import { shouldIgnoreTerminalMenuPointerDownOutside } from './terminal-context-menu-dismiss'
 import type { TerminalQuickCommand } from '../../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
@@ -72,6 +76,7 @@ type TerminalContextMenuProps = {
   isNativeChatView: boolean
   onToggleNativeChat: () => void
   onCopyAgentSessionContext: () => void
+  sideChat?: SideChatMenuActions
   quickCommandHosts: TerminalQuickCommandMenuHost[]
   quickCommandHostLoadFailed: boolean
   quickCommandHostOwnershipPending: boolean
@@ -164,6 +169,7 @@ function TerminalContextMenuItems({
   isNativeChatView,
   onToggleNativeChat,
   onCopyAgentSessionContext,
+  sideChat,
   quickCommandHosts,
   quickCommandHostLoadFailed,
   quickCommandHostOwnershipPending,
@@ -180,6 +186,8 @@ function TerminalContextMenuItems({
   onCopyAgentSessionId
 }: TerminalContextMenuProps): React.JSX.Element {
   const t = useTranslate()
+  // Items mount only while the menu is open, so the pane under it is resolved per opening.
+  const sideChatMode = sideChat?.sideChatMode() ?? null
   // Why: one primary binding prevents Windows/Linux shortcut labels from forcing row wraps.
   const shortcuts = useMemo(
     () => ({
@@ -193,7 +201,8 @@ function TerminalContextMenuItems({
       setTitle: formatPrimaryShortcutLabel('terminal.setTitle', keybindings),
       clearPaneTitle: formatPrimaryShortcutLabel('terminal.clearPaneTitle', keybindings),
       close: formatPrimaryShortcutLabel('terminal.closePane', keybindings),
-      nativeChat: formatOptionalPrimaryShortcutLabel('terminal.toggleNativeChat', keybindings)
+      nativeChat: formatOptionalPrimaryShortcutLabel('terminal.toggleNativeChat', keybindings),
+      sideChat: formatOptionalPrimaryShortcutLabel('terminal.toggleSideChat', keybindings)
     }),
     [keybindings]
   )
@@ -236,6 +245,30 @@ function TerminalContextMenuItems({
       />
       {canContinueAgentSessionInNewSession ? (
         <AgentSessionContinuationMenuItem onSelect={onContinueAgentSessionInNewSession} />
+      ) : null}
+      {sideChat && sideChatMode === 'open' ? (
+        <DropdownMenuItem onSelect={sideChat.onToggleSideChat}>
+          <MessageSquarePlus />
+          {t('components.sideChat.open', 'Open Side Chat')}
+          {shortcuts.sideChat ? (
+            <DropdownMenuShortcut>{shortcuts.sideChat}</DropdownMenuShortcut>
+          ) : null}
+        </DropdownMenuItem>
+      ) : null}
+      {sideChat && sideChatMode === 'open' && sideChat.menuPaneHasSelection() ? (
+        <DropdownMenuItem onSelect={sideChat.onAskInSideChat}>
+          <MessageSquareQuote />
+          {t('components.sideChat.askSelection', 'Ask in Side Chat')}
+        </DropdownMenuItem>
+      ) : null}
+      {sideChat && sideChatMode === 'return' ? (
+        <DropdownMenuItem onSelect={sideChat.onToggleSideChat}>
+          <CornerUpLeft />
+          {t('components.sideChat.returnToMain', 'Back to Main Chat')}
+          {shortcuts.sideChat ? (
+            <DropdownMenuShortcut>{shortcuts.sideChat}</DropdownMenuShortcut>
+          ) : null}
+        </DropdownMenuItem>
       ) : null}
       <DropdownMenuItem onSelect={onForkAgentSession}>
         <GitFork />

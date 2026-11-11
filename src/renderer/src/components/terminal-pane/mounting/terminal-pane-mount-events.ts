@@ -2,6 +2,8 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import {
   CLOSE_TERMINAL_PANE_EVENT,
   SET_TERMINAL_PANE_TITLE_EVENT,
+  TOGGLE_SIDE_CHAT_EVENT,
+  type ToggleSideChatDetail,
   type CloseTerminalPaneDetail,
   type SetTerminalPaneTitleDetail
 } from '@/constants/terminal'
@@ -24,6 +26,7 @@ import {
   registerTerminalPaneMoveToNewTabHandler,
   resolvePaneMoveTargetGroup
 } from '../layout/detach/terminal-pane-move-request-routing'
+import { toggleSideChatInTab } from '../side-chat/side-chat-actions'
 
 export function installTerminalPaneMountEvents(args: {
   manager: PaneManager
@@ -79,7 +82,8 @@ export function installTerminalPaneMountEvents(args: {
         ...(detail.ptyId ? { ptyId: detail.ptyId } : {})
       }
       if (detail.command) {
-        const createdPane = splitPaneWithOneShotStartup(ptyDeps, { command: detail.command }, () =>
+        const startup = { command: detail.command, ...(detail.env ? { env: detail.env } : {}) }
+        const createdPane = splitPaneWithOneShotStartup(ptyDeps, startup, () =>
           mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
         )
         recordCreatedTerminalPaneSplit(createdPane, {
@@ -152,10 +156,20 @@ export function installTerminalPaneMountEvents(args: {
     }
   }
 
+  const onToggleSideChat = (event: Event): void => {
+    const detail: ToggleSideChatDetail | null = event instanceof CustomEvent ? event.detail : null
+    const manager = deps.managerRef.current
+    if (detail?.tabId === deps.tabId && manager) {
+      toggleSideChatInTab({ manager, tabId: deps.tabId, worktreeId: deps.worktreeId })
+    }
+  }
+
   window.addEventListener(SET_TERMINAL_PANE_TITLE_EVENT, onSetPaneTitle)
+  window.addEventListener(TOGGLE_SIDE_CHAT_EVENT, onToggleSideChat)
   window.addEventListener(CLOSE_TERMINAL_PANE_EVENT, onCliClosePane)
   return () => {
     window.removeEventListener(SET_TERMINAL_PANE_TITLE_EVENT, onSetPaneTitle)
+    window.removeEventListener(TOGGLE_SIDE_CHAT_EVENT, onToggleSideChat)
     unregisterPaneMoveHandler()
     unregisterTerminalPaneSplitRequestHandler()
     window.removeEventListener(CLOSE_TERMINAL_PANE_EVENT, onCliClosePane)

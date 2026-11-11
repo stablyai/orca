@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { OMP_SIDE_CHAT_DIR_NAME } from '../../shared/agent-launch/side-chat/omp-side-chat-session'
 
 import { resolveSessionFilePath } from './session-file-resolver'
 
@@ -162,6 +163,24 @@ describe('resolveSessionFilePath', () => {
       codexSessionsDirs: [codexSessionsDir]
     })
     expect(resolved).toBe(target)
+  })
+
+  it('never resolves an omp side chat transcript', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-omp-side-chat-')
+    const ompSessionsDir = join(root, 'omp-sessions')
+    const cwdDir = join(ompSessionsDir, '-Users-ada-repo')
+    const sideChatDir = join(cwdDir, OMP_SIDE_CHAT_DIR_NAME, 'side-1')
+    await mkdir(sideChatDir, { recursive: true })
+    const parent = join(cwdDir, '2026-07-16T00-27-02-222Z_sess-omp-parent.jsonl')
+    await writeFile(parent, '{}\n')
+    await writeFile(join(sideChatDir, '2026-07-16T00-30-00-000Z_sess-omp-side.jsonl'), '{}\n')
+
+    await expect(
+      resolveSessionFilePath('omp', 'sess-omp-side', { ompSessionsDir })
+    ).resolves.toBeNull()
+    await expect(
+      resolveSessionFilePath('omp', 'sess-omp-parent', { ompSessionsDir })
+    ).resolves.toBe(parent)
   })
 
   it('never descends into an omp session artifact dir', async () => {

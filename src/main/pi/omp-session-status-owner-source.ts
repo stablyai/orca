@@ -1,4 +1,11 @@
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
+import { OMP_SIDE_CHAT_DIR_NAME } from '../../shared/agent-launch/side-chat/omp-side-chat-session'
+
+// Same match as isOmpSideChatTranscriptPath, emitted as a literal into the generated source.
+const SIDE_CHAT_SEGMENT = new RegExp(
+  `[\\\\/]${OMP_SIDE_CHAT_DIR_NAME.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\\\/]`,
+  'i'
+)
 
 // OMP task sessions and Pi subagents load the same extension in-process with their own SessionManager.
 export function getOmpSessionOwnerHandlerSourceLines(kind: PiAgentKind): string[] {
@@ -20,7 +27,9 @@ export function getOmpSessionOwnerHandlerSourceLines(kind: PiAgentKind): string[
     '    const current = sessionProvenance(ctx)',
     '    if (!current) return true',
     '    // Child transcripts cannot become the pane resume root, even when their callbacks arrive first.',
-    '    if (omp && current.parent) return false',
+    "    // A side chat is the pane's own root even though omp records its fork parent.",
+    `    const sideChat = typeof current.file === "string" && ${SIDE_CHAT_SEGMENT}.test(current.file)`,
+    '    if (omp && current.parent && !sideChat) return false',
     '    // Keep ownership through module reload and shutdown while child sessions drain.',
     "    const key = Symbol.for('orca.omp.status-session-owners')",
     '    let owners = Reflect.get(globalThis, key)',

@@ -2,6 +2,7 @@ import type {
   AgentProviderSessionMetadata,
   ResumableTuiAgent
 } from '../../agent-session/lifecycle/agent-session-resume'
+import { isSideChatProviderSession } from '../side-chat/side-chat'
 
 /** Keep per-agent resume argv separate from session metadata; type-only imports avoid runtime cycles. */
 export function getAgentResumeArgv(
@@ -9,6 +10,10 @@ export function getAgentResumeArgv(
   providerSession: AgentProviderSessionMetadata,
   ompResumeFilePath?: string | null
 ): string[] | null {
+  // Side chats are ephemeral forks; nothing may resume one.
+  if (isSideChatProviderSession(agent, providerSession)) {
+    return null
+  }
   const id = providerSession.id
   switch (agent) {
     case 'codebuddy':
@@ -122,5 +127,10 @@ export function getAgentForkArgv(
   providerSession: AgentProviderSessionMetadata
 ): string[] | null {
   const forkArgv = FORK_ARGV[agent]
-  return forkArgv && providerSession.key === 'session_id' ? forkArgv(providerSession) : null
+  // A side chat is ephemeral, so it cannot seed another conversation.
+  return forkArgv &&
+    providerSession.key === 'session_id' &&
+    !isSideChatProviderSession(agent, providerSession)
+    ? forkArgv(providerSession)
+    : null
 }

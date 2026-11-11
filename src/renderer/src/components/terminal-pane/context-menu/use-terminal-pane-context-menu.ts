@@ -11,6 +11,7 @@ import type { TerminalQuickCommand } from '../../../../../shared/terminal/quick-
 import { useTerminalPaneSplitActions } from '../layout/split/use-terminal-pane-split-actions'
 import { useTerminalContextMenuTrigger } from './use-terminal-context-menu-trigger'
 import { resetTerminalInputModes } from '../input/terminal-input-mode-reset'
+import { useSideChatMenuActions, type SideChatMenuActions } from '../side-chat/side-chat-actions'
 
 type TerminalMenuState = {
   open: boolean
@@ -43,6 +44,7 @@ type TerminalMenuState = {
   onSetTitle: () => void
   onClearPaneTitle: () => void
   runForPane: <Result>(paneId: number, action: () => Result) => Result
+  sideChat: SideChatMenuActions
 }
 
 export function useTerminalPaneContextMenu({
@@ -116,6 +118,8 @@ export function useTerminalPaneContextMenu({
     fallbackCwd,
     resolveMenuPane
   })
+
+  const sideChat = useSideChatMenuActions({ managerRef, resolveMenuPane, tabId, worktreeId })
 
   const agentSessionContext = {
     paneCwdRef,
@@ -194,6 +198,7 @@ export function useTerminalPaneContextMenu({
   const menuPaneId = menuPane?.id ?? null
 
   return {
+    sideChat,
     open,
     setOpen,
     point,

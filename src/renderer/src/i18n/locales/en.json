@@ -22305,6 +22305,20 @@
     },
     "dictation": {
       "stoppedAfterSilenceSeconds": "Stopped after {{seconds}} seconds of silence"
+    },
+    "sideChat": {
+      "title": "Side chat · from main",
+      "mainWorking": "main working",
+      "mainNeedsApproval": "main needs approval",
+      "mainNeedsInput": "main needs input",
+      "mainInterrupted": "main interrupted",
+      "mainFinished": "main finished",
+      "nested": "A side chat cannot open another side chat. Return to the main chat first.",
+      "notStarted": "Side chat is available once this conversation has started. Send a message first, then try again.",
+      "unavailable": "This conversation cannot open a side chat.",
+      "open": "Open Side Chat",
+      "askSelection": "Ask in Side Chat",
+      "returnToMain": "Back to Main Chat"
     }
   },
   "dashboardPopout": {
@@ -24302,7 +24316,8 @@
       "128cce6e6d": "Set title…",
       "e9da9f872a": "Send review notes to agent",
       "1524825c2c": "Toggle workspace board",
-      "d286d1ab85": "Clear pane title"
+      "d286d1ab85": "Clear pane title",
+      "terminalToggleSideChat": "Open or switch to side chat"
     },
     "group": {
       "global": "Global",

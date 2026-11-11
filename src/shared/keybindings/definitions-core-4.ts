@@ -42,6 +42,26 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     }
   },
   {
+    id: 'terminal.toggleSideChat',
+    title: 'Open or switch to side chat',
+    group: 'Chat',
+    scope: 'terminal',
+    implicitDefaultYields: true,
+    searchKeywords: [
+      'shortcut',
+      'claude',
+      'omp',
+      'side chat',
+      'side',
+      'btw',
+      'fork',
+      'question',
+      'toggle'
+    ],
+    // Matches Codex's Open side chat chord on every platform.
+    defaultBindings: platformBindings(['Mod+Alt+S'])
+  },
+  {
     id: 'sidebar.childWorkspaces.toggle',
     title: 'Toggle Child Workspaces',
     group: 'Global',

@@ -43,16 +43,13 @@ type FakeCurlChild = {
 
 export type AgentStatusExtensionHarness = {
   setModelMock: ReturnType<typeof vi.fn>
+  sendMessageMock: ReturnType<typeof vi.fn>
   commands: Record<string, { handler: (args: string, context: HookContext) => Promise<void> }>
   killMock: ReturnType<typeof vi.fn>
   fetchMock: ReturnType<typeof vi.fn>
   spawnMock: ReturnType<typeof vi.fn>
   spawnedChildren: FakeCurlChild[]
-  fsMock: {
-    existsSync: ReturnType<typeof vi.fn>
-    readFileSync: ReturnType<typeof vi.fn>
-    statSync: ReturnType<typeof vi.fn>
-  }
+  fsMock: Record<'existsSync' | 'readFileSync' | 'statSync' | 'rmSync', ReturnType<typeof vi.fn>>
   handlers: Record<string, HookHandler>
   processEnv: Record<string, string | undefined>
   callHook: (name: string, event?: unknown, context?: HookContext) => Promise<void>
@@ -155,7 +152,8 @@ export function createAgentStatusExtensionHarness(args: {
         ((path: string) => {
           throw Object.assign(new Error(`ENOENT: ${path}`), { code: 'ENOENT' })
         })
-    )
+    ),
+    rmSync: vi.fn()
   }
 
   const module: {
@@ -167,6 +165,7 @@ export function createAgentStatusExtensionHarness(args: {
           command: { handler: (args: string, context: HookContext) => Promise<void> }
         ) => void
         setModel: (model: unknown) => Promise<boolean>
+        sendMessage: (message: unknown) => Promise<void>
         events?: PiEventBus
         pi?: unknown
       }) => void
@@ -236,6 +235,7 @@ export function createAgentStatusExtensionHarness(args: {
   let busSubscriptions: [string, (event: unknown) => void][] = []
   const commands: AgentStatusExtensionHarness['commands'] = {}
   const setModelMock = vi.fn(async (_model: unknown) => true)
+  const sendMessageMock = vi.fn(async (_message: unknown) => undefined)
   const registerInto = (
     target: Record<string, HookHandler>,
     events: PiEventBus = piEvents
@@ -246,6 +246,7 @@ export function createAgentStatusExtensionHarness(args: {
         commands[name] = command
       },
       setModel: setModelMock,
+      sendMessage: sendMessageMock,
       events,
       pi: args.ompModule,
       on(name: string, handler: HookHandler) {
@@ -285,6 +286,7 @@ export function createAgentStatusExtensionHarness(args: {
 
   return {
     setModelMock,
+    sendMessageMock,
     commands,
     fetchMock,
     killMock,

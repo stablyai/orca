@@ -1,5 +1,6 @@
 import { getOmpModelCommandSourceLines } from './omp-model-command-source'
 import { getPiPrefillHandlerSourceLines } from './prefill-extension-source'
+import { getOmpSideChatHandlerSourceLines } from './omp-side-chat-source'
 import { getAgentStatusInputRedactionSourceLines } from './agent-status-input-redaction-source'
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 import { getOmpSessionOwnerHandlerSourceLines } from './omp-session-status-owner-source'
@@ -135,7 +136,9 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     ...getAgentStatusSessionBoundaryHandlerSourceLines(kind),
     ...getOmpModelCommandSourceLines(),
     ...sessionStartHandler,
-    ...(kind === 'omp' ? getPiPrefillHandlerSourceLines('omp', true) : []),
+    ...(kind === 'omp'
+      ? [...getPiPrefillHandlerSourceLines('omp', true), ...getOmpSideChatHandlerSourceLines()]
+      : []),
     `  onStatus('before_agent_start', (event${ctxParam}) => {`,
     ...captureSessionMetadata,
     "    post('before_agent_start', { prompt: event.prompt ?? '' })",

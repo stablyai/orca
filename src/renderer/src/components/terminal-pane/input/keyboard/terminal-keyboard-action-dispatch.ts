@@ -11,6 +11,8 @@ import {
 } from '@/lib/pane-manager/terminal-scroll/terminal-scroll-intent'
 import type { resolveTerminalShortcutAction as resolveTerminalKeyboardShortcutAction } from './terminal-shortcut-policy'
 import { equalizeTerminalPanes } from '../../layout/ownership/terminal-pane-layout-owner-commands'
+import { useAppStore } from '@/store/index'
+import { sideChatMenuMode, toggleSideChatFromPane } from '../../side-chat/side-chat-actions'
 
 type TerminalShortcutAction = NonNullable<ReturnType<typeof resolveTerminalKeyboardShortcutAction>>
 
@@ -188,6 +190,17 @@ export function dispatchTerminalShortcutAction(
     if (pane) {
       onSetTitle(pane.id)
     }
+    return
+  }
+  if (action.type === 'toggleSideChat') {
+    const pane = manager.getActivePane() ?? manager.getPanes()[0]
+    // Panes without a side-chat agent keep the chord for the program running in them.
+    if (!pane || !sideChatMenuMode(useAppStore.getState(), tabId, pane.leafId)) {
+      return
+    }
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    toggleSideChatFromPane({ manager, pane, tabId, worktreeId })
     return
   }
   if (action.type === 'clearPaneTitle') {

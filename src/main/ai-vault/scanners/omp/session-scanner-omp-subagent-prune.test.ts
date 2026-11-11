@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { OMP_SIDE_CHAT_DIR_NAME } from '../../../../shared/agent-launch/side-chat/omp-side-chat-session'
 import { scanAiVaultSessions } from '../../session-scanner'
 import { isolatedScanRoots, jsonLines } from '../../session-scanner-test-fixtures'
 
@@ -97,6 +98,39 @@ describe('scanAiVaultSessions OMP subagent pruning', () => {
     const result = await scanAiVaultSessions({ ...roots, platform: 'darwin' })
 
     expect(result.sessions.map((entry) => entry.sessionId)).toContain(SESSION_ID)
+  })
+
+  it('never lists an ephemeral side chat transcript', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-omp-side-chat-'))
+    tempRoots.push(root)
+    const roots = isolatedScanRoots(root)
+    const workspaceDir = join(roots.ompSessionsDir, 'home-app-85dfa2f0')
+    const sideChatDir = join(workspaceDir, OMP_SIDE_CHAT_DIR_NAME, 'side-chat-1')
+    await mkdir(sideChatDir, { recursive: true })
+    const header = (id: string) => ({
+      type: 'session',
+      version: 3,
+      id,
+      cwd: '/repo/app',
+      timestamp: '2026-05-01T10:00:00.000Z'
+    })
+    const prompt = {
+      type: 'message',
+      timestamp: '2026-05-01T10:00:01.000Z',
+      message: { role: 'user', content: 'Hello' }
+    }
+    await writeFile(
+      join(workspaceDir, `${SESSION_STEM}.jsonl`),
+      jsonLines([header(SESSION_ID), prompt])
+    )
+    await writeFile(
+      join(sideChatDir, '2026-05-01T11-00-00-000Z_eeeeeeee-ffff-4aaa-8bbb-333333333333.jsonl'),
+      jsonLines([header('eeeeeeee-ffff-4aaa-8bbb-333333333333'), prompt])
+    )
+
+    const result = await scanAiVaultSessions({ ...roots, platform: 'darwin' })
+
+    expect(result.sessions.map((entry) => entry.sessionId)).toEqual([SESSION_ID])
   })
 
   it('picks up a task transcript written after the coordinator last changed', async () => {

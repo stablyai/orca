@@ -145,3 +145,24 @@ export async function postClaudeHook(
   })
   expect(response.status).toBe(204)
 }
+
+/** One OMP status event for a pane, as Orca's managed omp extension posts it. */
+export async function postOmpHook(
+  endpoint: AgentHookEndpoint,
+  pane: { paneKey: string; worktreeId: string },
+  payload: Record<string, unknown>
+): Promise<void> {
+  const response = await fetch(`http://127.0.0.1:${endpoint.port}/hook/omp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Orca-Agent-Hook-Token': endpoint.token },
+    body: JSON.stringify({
+      paneKey: pane.paneKey,
+      tabId: pane.paneKey.split(':')[0],
+      worktreeId: pane.worktreeId,
+      env: endpoint.env,
+      version: endpoint.version,
+      payload
+    })
+  })
+  expect(response.status).toBe(204)
+}
