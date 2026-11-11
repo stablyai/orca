@@ -192,13 +192,13 @@ export function OverageControls({
         <p className="text-xs text-muted-foreground tabular-nums">
           {overage.optedIn
             ? t(
-                'components.billing.overage.memberOn3',
-                'Overage is on, up to {{cap}} a month. Ask an owner or admin to change this.',
+                'components.billing.overage.memberOn4',
+                'Overage is on, up to your {{cap}} spend cap. Ask an owner or admin to change this.',
                 { cap: formatCents(overage.spendCapCents, locale) }
               )
             : t(
-                'components.billing.overage.memberOff3',
-                'Overage is off. Work stops when sandbox hours run out. Ask an owner or admin to change this.'
+                'components.billing.overage.memberOff4',
+                'Off until an owner or admin turns it on. Ask an owner or admin to change this.'
               )}
         </p>
         {overage.optedIn ? spent : null}
@@ -245,8 +245,8 @@ export function OverageControls({
         {title}
         <p className="text-xs text-muted-foreground">
           {t(
-            'components.billing.overage.offStatus',
-            'Overage is off. Work stops when sandbox hours run out.'
+            'components.billing.overage.offStatus2',
+            'Overage is off. Running sandboxes go to sleep and new ones can’t start when your team runs out of sandbox hours.'
           )}
         </p>
         <div className="flex flex-wrap items-center gap-2">
@@ -298,7 +298,7 @@ export function OverageControls({
         }}
       >
         <label htmlFor={capId} className="flex h-9 items-center text-xs font-medium">
-          {t('components.billing.overageCapLabel', 'Monthly overage cap')}
+          {t('auto.components.billing.capLabel2', 'Monthly spend cap')}
         </label>
         <div className="space-y-1">
           <SettingsDisabledControlTooltip reason={blockedReason}>
@@ -330,8 +330,8 @@ export function OverageControls({
             <p id={capErrorId} className="text-xs text-destructive">
               {capZero
                 ? t(
-                    'components.billing.capZero',
-                    'Set a cap above $0, or turn overage off.'
+                    'components.billing.capZero2',
+                    'Set a spend cap above $0, or turn overage off.'
                   )
                 : capTooHigh && maxCapCents !== null
                   ? capTooHighCopy(maxCapCents, locale, t)

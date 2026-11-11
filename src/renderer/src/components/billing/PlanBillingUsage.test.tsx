@@ -16,7 +16,7 @@ const overageOn: OrcaBillingEntitlement = {
 }
 
 function capField(): HTMLInputElement {
-  const field = screen.getByLabelText('Monthly overage cap')
+  const field = screen.getByLabelText('Monthly spend cap')
   if (!(field instanceof HTMLInputElement)) {
     throw new Error('the spend cap is not an input')
   }
@@ -28,8 +28,8 @@ describe('spend cap field', () => {
   it('shows off as a status line and one Turn on button, with no cap field', () => {
     const onSetOverage = vi.fn()
     render(<OverageControls entitlement={sampleTeam} busy={false} onSetOverage={onSetOverage} />)
-    expect(screen.getByText('Overage is off. Work stops when sandbox hours run out.')).toBeTruthy()
-    expect(screen.queryByLabelText('Monthly overage cap')).toBeNull()
+    expect(screen.getByText('Overage is off. Running sandboxes go to sleep and new ones can’t start when your team runs out of sandbox hours.')).toBeTruthy()
+    expect(screen.queryByLabelText('Monthly spend cap')).toBeNull()
     expect(screen.queryByText('$')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Turn on with a $25 cap' }))
     expect(onSetOverage).toHaveBeenCalledWith({ enabled: true, spendCapCents: 2500 })
@@ -46,7 +46,7 @@ describe('spend cap field', () => {
     onSetOverage.mockClear()
     render(<OverageControls entitlement={overageOn} busy={false} onSetOverage={onSetOverage} />)
     fireEvent.change(capField(), { target: { value: '0' } })
-    expect(screen.getByText('Set a cap above $0, or turn overage off.')).toBeTruthy()
+    expect(screen.getByText('Set a spend cap above $0, or turn overage off.')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
     expect(onSetOverage).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Turn off overage' }))
@@ -71,9 +71,9 @@ describe('spend cap field', () => {
         onSetOverage={() => {}}
       />
     )
-    expect(screen.queryByLabelText('Monthly overage cap')).toBeNull()
+    expect(screen.queryByLabelText('Monthly spend cap')).toBeNull()
     expect(
-      screen.getByText('Overage is on, up to $40 a month. Ask an owner or admin to change this.')
+      screen.getByText('Overage is on, up to your $40 spend cap. Ask an owner or admin to change this.')
     ).toBeTruthy()
     expect(screen.queryByText(/alerted in Orca/)).toBeNull()
   })
@@ -177,7 +177,7 @@ it('gives members an outlined Compare plans and the off line', () => {
   )
   expect(
     screen.getByText(
-      'Overage is off. Work stops when sandbox hours run out. Ask an owner or admin to change this.'
+      'Off until an owner or admin turns it on. Ask an owner or admin to change this.'
     )
   ).toBeTruthy()
   expect(screen.getByRole('button', { name: 'Compare plans' }).className).toMatch(/border/)
