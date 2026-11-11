@@ -986,6 +986,12 @@
       "keywordEndOfFile": "檔案結尾",
       "62aa3336d9": "插入結尾換行符號"
     },
+    "editorGitChangeGutter": {
+      "title": "Git 變更指示器",
+      "description": "在行號邊欄標示與上次提交相比新增、修改和刪除的行。預設為關閉。",
+      "keywordGit": "git",
+      "keywordGutter": "邊欄"
+    },
     "repositoryFormatter": {
       "description": "儲存時格式化使用此專案的格式化工具。",
       "saveFailed": "無法儲存格式化工具設定。",

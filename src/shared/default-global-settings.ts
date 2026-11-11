@@ -63,6 +63,7 @@ export function buildDefaultSettings(args: {
     editorInsertFinalNewline: false,
     editorAutoSaveDelayMs: args.editorAutoSaveDelayMs,
     editorMinimapEnabled: false,
+    editorGitChangeGutterEnabled: false,
     // Why empty: the editor keeps following the terminal font unless the user opts in.
     editorFontFamily: '',
     editorWordWrap: true,

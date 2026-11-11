@@ -84,6 +84,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   updateDelayDays?: number
   editorAutoSaveDelayMs: number
   editorMinimapEnabled: boolean
+  /** Opt-in: marks lines that differ from HEAD in the file editor gutter. */
+  editorGitChangeGutterEnabled?: boolean
   /** Defaults on for profiles saved before file-editor wrapping became configurable. */
   editorWordWrap?: boolean
   /** Persisted opt-out for browser spellcheck noise in rich Markdown editing surfaces. */

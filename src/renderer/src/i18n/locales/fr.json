@@ -807,6 +807,12 @@
       "keywordEndOfFile": "fin de fichier",
       "62aa3336d9": "Insérer un saut de ligne final"
     },
+    "editorGitChangeGutter": {
+      "title": "Indicateurs de modifications Git",
+      "description": "Marque dans la gouttière les lignes ajoutées, modifiées et supprimées par rapport au dernier commit. Désactivé par défaut.",
+      "keywordGit": "git",
+      "keywordGutter": "gouttière"
+    },
     "repositoryFormatter": {
       "description": "Utilise le formateur de ce projet pour formater à l’enregistrement.",
       "saveFailed": "Impossible d’enregistrer les paramètres du formateur.",
