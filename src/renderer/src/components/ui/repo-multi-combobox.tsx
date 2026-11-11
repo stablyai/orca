@@ -9,7 +9,7 @@ import {
   CommandList
 } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { searchRepos } from '@/lib/repo-search'
+import { searchRepos } from '@/lib/workspace/catalog/repo-search'
 import { cn } from '@/lib/class-names'
 import type { Repo } from '../../../../shared/repo-types'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'

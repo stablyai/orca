@@ -13,7 +13,7 @@ import {
   getIndexedWorktreeById,
   getIndexedWorktreeMap
 } from '@/store/slices/worktrees/listing/worktree-catalog-index'
-import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
+import { compareWorktreeDisplayName } from '@/lib/workspace/display/worktree-display-name-order'
 import '@/components/sidebar/workspace-card/activity/worktree-card-empty-inputs'
 import { branchDisplayName } from '@/components/sidebar/workspace-card/identity/worktree-branch-display'
 import { getCyclicProjectedWorktreeLineageIds } from '../../../../shared/sidebar-list/worktree-lineage-projection'

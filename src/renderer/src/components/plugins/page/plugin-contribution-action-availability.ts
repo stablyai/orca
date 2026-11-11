@@ -2,7 +2,7 @@ import type { PluginHostListEntry } from '../../../../../preload/api-types'
 import { isWorkspaceScopedPluginContext } from '../../../../../shared/plugins/contributions/plugin-command-contribution'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
+import { canShowRightSidebarForView } from '@/components/right-sidebar/visibility/right-sidebar-visibility'
 import type { AppState } from '@/store/types'
 
 /** Only these statuses back the Adds rows with Orca's live registrations, so a "try it" does what it says. */

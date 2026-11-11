@@ -8,9 +8,9 @@ import type {
 } from './floating-terminal-panel-bounds'
 import { readPersistedFloatingTerminalPanelViewState } from './floating-terminal-panel-view-state'
 import {
-  hasOrchestrationSetupMarker,
+  isOrchestrationSetupEnabled,
   isOrchestrationSetupDismissed
-} from '@/lib/orchestration-setup-state'
+} from '@/components/orchestration/setup/orchestration-setup-state'
 import {
   readInitialPanelBounds,
   type FloatingTerminalPanelBoundsState
@@ -35,7 +35,7 @@ export function useFloatingTerminalPanelLocalState() {
   const panelViewportSettled = useSettledPanelViewport()
   const [orchestrationDialogOpen, setOrchestrationDialogOpen] = useState(false)
   const [showOrchestrationSetup, setShowOrchestrationSetup] = useState(
-    () => !hasOrchestrationSetupMarker() && !isOrchestrationSetupDismissed()
+    () => !isOrchestrationSetupEnabled() && !isOrchestrationSetupDismissed()
   )
   const restoreBoundsRef = useRef<FloatingTerminalPanelBoundsState | null>(null)
   const stagedBoundsRef = useRef<FloatingTerminalPanelBounds | null>(null)

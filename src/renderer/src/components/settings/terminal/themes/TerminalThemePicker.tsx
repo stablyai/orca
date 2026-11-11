@@ -1,11 +1,11 @@
-import type React from 'react'
 import { useState } from 'react'
+import type React from 'react'
 import { Trash2 } from 'lucide-react'
 import { ThemeColorSwatch } from '../../../plugins/page/PluginThemeSwatch'
 import { SettingsRow } from '../../form-controls/SettingsFormControls'
 import { SettingsSearchableSelect } from '../../form-controls/SettingsSearchableSelect'
 import { useTranslate } from '@/i18n/use-translate'
-import type { TerminalThemeOption } from '@/lib/terminal-theme'
+import type { TerminalThemeOption } from '@/lib/terminal/appearance/terminal-theme'
 
 type ThemePickerProps = {
   label: string
