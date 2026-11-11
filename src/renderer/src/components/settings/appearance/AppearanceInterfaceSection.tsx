@@ -5,7 +5,7 @@ import { UIZoomControl } from './UIZoomControl'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { ReduceVisualEffectsSetting } from './ReduceVisualEffectsSetting'
 import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
-import { AppearanceAdvancedDisclosure } from './AppearanceAdvancedDisclosure'
+import { SettingsGroupDisclosure } from '../section-layout/SettingsGroupDisclosure'
 import {
   SettingsSearchableSelect,
   type SettingsSearchableSelectOption
@@ -141,7 +141,7 @@ export function AppearanceInterfaceSection({
   const languageTitle = t('settings.appearance.language.title', 'Language')
 
   return (
-    <div className="divide-y divide-border/40">
+    <>
       <SearchableSetting
         title={themeLabel}
         description={themeEntry?.description}
@@ -338,8 +338,8 @@ export function AppearanceInterfaceSection({
       </SearchableSetting>
 
       {showAdvanced ? (
-        <AppearanceAdvancedDisclosure showTopBorder={false}>
-          <div className="divide-y divide-border/40">
+        <SettingsGroupDisclosure>
+          <>
             <SearchableSetting
               title={t('auto.components.settings.AppearancePane.8063dd3b6b', 'Titlebar app name')}
               description={titlebarEntry?.description}
@@ -407,9 +407,9 @@ export function AppearanceInterfaceSection({
                 />
               </SearchableSetting>
             ) : null}
-          </div>
-        </AppearanceAdvancedDisclosure>
+          </>
+        </SettingsGroupDisclosure>
       ) : null}
-    </div>
+    </>
   )
 }

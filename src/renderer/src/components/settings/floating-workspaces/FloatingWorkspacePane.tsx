@@ -13,6 +13,7 @@ import { matchesSettingsSearch } from '../search/settings-search'
 import { useAppStore } from '../../../store/index'
 import { useTranslate } from '@/i18n/use-translate'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 type FloatingWorkspacePaneProps = {
   settings: GlobalSettings
@@ -84,7 +85,7 @@ export function FloatingWorkspacePane({
   }
 
   return (
-    <section className="space-y-4">
+    <SettingsGroup>
       <SearchableSetting
         title={t('auto.components.settings.FloatingWorkspacePane.2374e81dd8', 'Floating workspace')}
         description={t(
@@ -102,7 +103,7 @@ export function FloatingWorkspacePane({
           'quick panel',
           'launch directory'
         ]}
-        className="divide-y divide-border/40"
+        className="divide-y divide-border"
       >
         <SettingsSwitchRow
           label={t(
@@ -197,6 +198,6 @@ export function FloatingWorkspacePane({
           }
         />
       </SearchableSetting>
-    </section>
+    </SettingsGroup>
   )
 }

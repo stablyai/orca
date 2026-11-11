@@ -44,7 +44,6 @@ export function renderProjectSettingsSections(
       <SettingsSection
         key={repoSectionId}
         id={repoSectionId}
-        grouped
         title={t('auto.components.settings.Settings.3bf149e873', 'Project Settings > {{value0}}', {
           value0: settingsProject.checkoutLabel ?? project.displayName
         })}

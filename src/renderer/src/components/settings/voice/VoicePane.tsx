@@ -293,7 +293,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
             <>
               {voiceSettings.openAiApiKeyConfigured ? (
                 <>
-                  <div data-settings-row="" className="px-5 py-3 empty:hidden">
+                  <div data-settings-row="" className="py-3 empty:hidden">
                     <UnsealedCredentialNotice
                       protection={openAiKeyProtection}
                       credentialName={t(
@@ -303,7 +303,6 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
                     />
                   </div>
                   <OpenAiTranscriptionSettingsRow
-                    className="px-5"
                     configured
                     disabled={openAiKeyPending}
                     onConfigure={() => openOpenAiDialog(null)}
@@ -313,7 +312,6 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
               ) : null}
               {compatibleConfigured ? (
                 <OpenAiTranscriptionSettingsRow
-                  className="px-5"
                   variant="compatible"
                   configured
                   disabled={false}

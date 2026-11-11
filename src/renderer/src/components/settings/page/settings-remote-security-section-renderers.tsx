@@ -38,8 +38,6 @@ export function renderServersSettingsSection(
             <RuntimeServersHeaderActions canGeneratePairingUrl={!model.isWebClient} />
           ) : undefined
         }
-        // Rows/cards already supply surfaces; another frame would nest cards.
-        bodyClassName="rounded-none border-0 bg-transparent px-0 py-0 shadow-none"
       >
         {mounted ? (
           <RuntimeEnvironmentsPane
@@ -72,8 +70,6 @@ export function renderSshSettingsSection(
         )}
         searchEntries={navigation.getSectionSearchEntries('ssh')}
         headerAction={mounted ? <SshHostsHeaderSlot /> : undefined}
-        // Host groups already supply surfaces; another frame would nest cards.
-        bodyClassName="rounded-none border-0 bg-transparent px-0 py-0 shadow-none"
       >
         {mounted ? <SshPane addTargetIntentSignal={model.sshHostAddIntentSignal} /> : null}
       </SettingsSection>
@@ -89,7 +85,6 @@ export function renderDeveloperPermissionsSettingsSection(
   return model.showDesktopOnlySettings && model.isMac ? (
     <SettingsSection
       id="developer-permissions"
-      grouped
       title={t('auto.components.settings.Settings.65660d4548', 'macOS Permissions')}
       description={t(
         'auto.components.settings.Settings.9b83cc62c2',

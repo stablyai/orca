@@ -28,7 +28,8 @@ import {
 } from './developer-permission-status'
 import { showDeveloperPermissionRequestNotice } from './developer-permission-request-notice'
 import { TerminalTccAttributionNotice } from './TerminalTccAttributionNotice'
-import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { SETTINGS_GROUP_ROW_BLEED_CLASS, SettingsGroup } from '../section-layout/SettingsGroup'
+import { cn } from '@/lib/class-names'
 
 type DeveloperPermissionsPaneProps = {
   highlightedSettingId?: string | null
@@ -348,7 +349,10 @@ export function DeveloperPermissionsPane({
               <div
                 data-settings-section={settingId}
                 data-highlighted={highlightedSettingId === settingId ? 'true' : undefined}
-                className="-mx-5 flex items-center justify-between gap-4 px-5 py-3 transition-[background-color,box-shadow] duration-500 data-[highlighted=true]:bg-accent data-[highlighted=true]:ring-2 data-[highlighted=true]:ring-inset data-[highlighted=true]:ring-ring/50 motion-reduce:transition-none"
+                className={cn(
+                  SETTINGS_GROUP_ROW_BLEED_CLASS,
+                  'flex items-center justify-between gap-4 py-3 transition-[background-color,box-shadow] duration-500 data-[highlighted=true]:bg-accent data-[highlighted=true]:ring-2 data-[highlighted=true]:ring-inset data-[highlighted=true]:ring-ring/50 motion-reduce:transition-none'
+                )}
               >
                 <div className="flex min-w-0 items-start gap-3">
                   <div className="mt-0.5 text-muted-foreground">{permission.icon}</div>

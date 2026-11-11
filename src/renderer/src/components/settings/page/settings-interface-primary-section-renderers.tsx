@@ -7,6 +7,7 @@ import { SettingsSection } from '../section-layout/SettingsSection'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsRenderContext } from './settings-render-context'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 export function renderTerminalSettingsSection(
   context: SettingsRenderContext,
@@ -16,7 +17,6 @@ export function renderTerminalSettingsSection(
   return (
     <SettingsSection
       id="terminal"
-      grouped
       title={t('auto.components.settings.Settings.3de4bbb841', 'Terminal')}
       description={t(
         'auto.components.settings.Settings.b79b5b31e9',
@@ -59,10 +59,12 @@ export function renderQuickCommandsSettingsSection(
       searchEntries={navigation.getSectionSearchEntries('quick-commands')}
     >
       {view.isSectionMounted('quick-commands') ? (
-        <QuickCommandsPane
-          settings={model.settings}
-          addCommandIntentSignal={model.quickCommandAddIntentSignal}
-        />
+        <SettingsGroup bodyClassName="py-4">
+          <QuickCommandsPane
+            settings={model.settings}
+            addCommandIntentSignal={model.quickCommandAddIntentSignal}
+          />
+        </SettingsGroup>
       ) : null}
     </SettingsSection>
   )
@@ -76,7 +78,6 @@ export function renderBrowserSettingsSection(
   return model.showDesktopOnlySettings ? (
     <SettingsSection
       id="browser"
-      grouped
       title={t('auto.components.settings.Settings.c46215ea03', 'Browser')}
       description={t(
         'auto.components.settings.Settings.ad9788036f',
@@ -103,7 +104,6 @@ export function renderMobileEmulatorSettingsSection(
   return model.showDesktopOnlySettings ? (
     <SettingsSection
       id="mobile-emulator"
-      grouped
       title={t('auto.components.settings.Settings.129ae9859c', 'Mobile emulator')}
       description={t(
         'auto.components.settings.Settings.01f9d36292',

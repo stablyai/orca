@@ -1,7 +1,8 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { Label } from '../../ui/label'
 import { Switch } from '../../ui/switch'
-import { AppearanceAdvancedDisclosure } from './AppearanceAdvancedDisclosure'
+import { SettingsGroup } from './SettingsGroup'
+import { SettingsGroupDisclosure } from './SettingsGroupDisclosure'
 
 function AdvancedFontControls(): React.JSX.Element {
   return (
@@ -21,18 +22,22 @@ function AdvancedFontControls(): React.JSX.Element {
 export const collapsed = defineFixture({
   width: 420,
   render: () => (
-    <AppearanceAdvancedDisclosure>
-      <AdvancedFontControls />
-    </AppearanceAdvancedDisclosure>
+    <SettingsGroup>
+      <SettingsGroupDisclosure>
+        <AdvancedFontControls />
+      </SettingsGroupDisclosure>
+    </SettingsGroup>
   )
 })
 
 export const expanded = defineFixture({
   width: 420,
   render: () => (
-    <AppearanceAdvancedDisclosure>
-      <AdvancedFontControls />
-    </AppearanceAdvancedDisclosure>
+    <SettingsGroup>
+      <SettingsGroupDisclosure>
+        <AdvancedFontControls />
+      </SettingsGroupDisclosure>
+    </SettingsGroup>
   ),
   interact: (frame) => {
     frame.querySelector<HTMLButtonElement>('button[aria-expanded]')?.click()
@@ -44,8 +49,10 @@ export const forcedOpenBySearch = defineFixture({
   width: 420,
   store: { settingsSearchQuery: 'font' },
   render: () => (
-    <AppearanceAdvancedDisclosure>
-      <AdvancedFontControls />
-    </AppearanceAdvancedDisclosure>
+    <SettingsGroup>
+      <SettingsGroupDisclosure>
+        <AdvancedFontControls />
+      </SettingsGroupDisclosure>
+    </SettingsGroup>
   )
 })

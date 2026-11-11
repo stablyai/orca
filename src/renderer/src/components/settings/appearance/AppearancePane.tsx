@@ -4,7 +4,6 @@ import { AppWindow, PanelLeft, TerminalSquare } from 'lucide-react'
 
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 
-import { AppearanceSection } from './AppearanceSection'
 import { AppearanceInterfaceSection } from './AppearanceInterfaceSection'
 import { AppearanceWindowSidebarSection } from './AppearanceWindowSidebarSection'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
@@ -198,16 +197,21 @@ export function AppearancePane({
   } · ${settings.terminalFontSize}px`
 
   return (
-    <div className="space-y-2.5">
+    <>
       {interfaceMatches ? (
-        <AppearanceSection
-          id="interface"
-          icon={<AppWindow aria-hidden="true" />}
-          title={interfaceTitle}
-          summary={interfaceSummary}
-          open={isSectionOpen('interface')}
-          onToggle={() => toggleSection('interface')}
-          toggleDisabled={isSearching}
+        <SettingsGroup
+          title={
+            <span className="flex items-center gap-2">
+              <AppWindow aria-hidden="true" className="size-4" />
+              {interfaceTitle}
+            </span>
+          }
+          collapse={{
+            open: isSectionOpen('interface'),
+            onToggle: () => toggleSection('interface'),
+            disabled: isSearching,
+            summary: interfaceSummary
+          }}
         >
           <AppearanceInterfaceSection
             settings={settings}
@@ -219,18 +223,23 @@ export function AppearancePane({
             isDesktopWindows={isDesktopWindows}
             forceVisiblePrimary={interfaceLabelMatches}
           />
-        </AppearanceSection>
+        </SettingsGroup>
       ) : null}
 
       {terminalMatches ? (
-        <AppearanceSection
-          id="terminal"
-          icon={<TerminalSquare aria-hidden="true" />}
-          title={terminalTitle}
-          summary={terminalSummary}
-          open={isSectionOpen('terminal')}
-          onToggle={() => toggleSection('terminal')}
-          toggleDisabled={isSearching}
+        <SettingsGroup
+          title={
+            <span className="flex items-center gap-2">
+              <TerminalSquare aria-hidden="true" className="size-4" />
+              {terminalTitle}
+            </span>
+          }
+          collapse={{
+            open: isSectionOpen('terminal'),
+            onToggle: () => toggleSection('terminal'),
+            disabled: isSearching,
+            summary: terminalSummary
+          }}
         >
           <TerminalAppearanceSection
             settings={settings}
@@ -242,25 +251,30 @@ export function AppearancePane({
             warpThemes={warpThemes}
             forceVisiblePrimary={terminalLabelMatches}
           />
-        </AppearanceSection>
+        </SettingsGroup>
       ) : null}
 
       {windowMatches ? (
-        <AppearanceSection
-          id="window"
-          icon={<PanelLeft aria-hidden="true" />}
-          title={windowSidebarTitle}
-          summary={windowSidebarSummary}
-          open={isSectionOpen('window')}
-          onToggle={() => toggleSection('window')}
-          toggleDisabled={isSearching}
+        <SettingsGroup
+          title={
+            <span className="flex items-center gap-2">
+              <PanelLeft aria-hidden="true" className="size-4" />
+              {windowSidebarTitle}
+            </span>
+          }
+          collapse={{
+            open: isSectionOpen('window'),
+            onToggle: () => toggleSection('window'),
+            disabled: isSearching,
+            summary: windowSidebarSummary
+          }}
         >
           <AppearanceWindowSidebarSection
             settings={settings}
             updateSettings={updateSettings}
             forceVisiblePrimary={windowLabelMatches}
           />
-        </AppearanceSection>
+        </SettingsGroup>
       ) : null}
 
       {/* Keep the App Icon easter egg at the bottom instead of inside Interface advanced. */}
@@ -286,6 +300,6 @@ export function AppearancePane({
           </SearchableSetting>
         </SettingsGroup>
       ) : null}
-    </div>
+    </>
   )
 }

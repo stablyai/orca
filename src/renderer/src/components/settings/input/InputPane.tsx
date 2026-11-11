@@ -2,6 +2,7 @@ import type { GlobalSettings } from '../../../../../shared/global-settings-types
 import { Label } from '../../ui/label'
 import { Switch } from '../../ui/switch'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { isDefaultPrimarySelectionMiddleClickPasteUserAgent } from '@/hooks/clipboard/primary-selection/usePrimarySelectionPaste'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -17,7 +18,7 @@ export function InputPane({ settings, updateSettings }: InputPaneProps): React.J
     isDefaultPrimarySelectionMiddleClickPasteUserAgent()
 
   return (
-    <section className="space-y-4">
+    <SettingsGroup>
       <SearchableSetting
         title={t(
           'auto.components.settings.InputPane.dc26974909',
@@ -69,6 +70,6 @@ export function InputPane({ settings, updateSettings }: InputPaneProps): React.J
           }
         />
       </SearchableSetting>
-    </section>
+    </SettingsGroup>
   )
 }
