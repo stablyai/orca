@@ -93,14 +93,7 @@ export default function EditHostScreen() {
         try {
           await loadAuthForHost(found.id, found.endpoint, () => revision === routeRevision.current)
         } catch {
-          if (revision === routeRevision.current) {
-            setSaveError(
-              translate(
-                'edgeAuth.loadFailed',
-                'Could not load edge authentication. Unlock protected storage and reopen this form.'
-              )
-            )
-          }
+          // Keep host editing available while credential controls stay locked.
         }
         if (revision !== routeRevision.current) {
           return
@@ -150,12 +143,19 @@ export default function EditHostScreen() {
     endpointEdit != null &&
     endpointEdit.kind !== 'invalid' &&
     authNormalized.ok &&
+    (!authChanged || edgeAuth.authLoaded) &&
     !authEndpointCheck.blocked &&
     (nameChanged || endpointChanged || authChanged) &&
     !saving
 
   async function handleSave() {
-    if (!host || !hostId || !endpointEdit || savingRef.current) {
+    if (
+      !host ||
+      !hostId ||
+      !endpointEdit ||
+      savingRef.current ||
+      (authChanged && !edgeAuth.authLoaded)
+    ) {
       return
     }
     const nextName = name.trim()
@@ -371,7 +371,7 @@ export default function EditHostScreen() {
               <Text style={styles.previewError}>{endpointEdit.error}</Text>
             ) : null}
 
-            {Platform.OS !== 'web' ? (
+            {Platform.OS !== 'web' && edgeAuth.authLoaded ? (
               <EdgeAuthHeadersSection
                 rows={edgeAuth.authRows}
                 storedCount={edgeAuth.storedAuthCount}
@@ -382,6 +382,15 @@ export default function EditHostScreen() {
                 }}
                 scrollViewRef={authScrollTarget}
               />
+            ) : null}
+
+            {Platform.OS !== 'web' && !edgeAuth.authLoaded ? (
+              <Text style={styles.errorText}>
+                {t(
+                  'edgeAuth.loadFailed',
+                  'Could not load edge authentication. Unlock protected storage and reopen this form.'
+                )}
+              </Text>
             ) : null}
 
             {saveError ? <Text style={styles.errorText}>{saveError}</Text> : null}
