@@ -9,6 +9,7 @@ import { runWithActionEffects } from '../observation/agent-browser-action-effect
 import { getRequestedPageUrl, runExpectingPageUrl } from '../../cdp/input/browser-expected-page-url'
 import { AGENT_BROWSER_CLEANUP_TIMEOUT_MS } from '../session-lifecycle/agent-browser-cleanup-options'
 import { releaseHeldPageInput } from '../../cdp/input/guest-direct-key-input'
+import { withFileChooserBlocked } from '../../cdp/input/guest-file-chooser'
 import { onBrowserJavaScriptDialogOpened } from '../../guest-lifecycle/prompts/browser-javascript-dialogs'
 import {
   assertNoJavaScriptDialog,
@@ -103,6 +104,8 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeActionEf
     const inThisCall = captureActiveRpcCall()
     // Decided at enqueue: a queued command runs under the caller of the command ahead of it.
     const reportEffects = options.reportEffects === true && agentCommand.agent
+    // Page actions deliver input; a picker it opens would activate Orca over the user's work.
+    const blockFileChooser = options.reportEffects === true && options.ownsFileChooser !== true
     const expectedUrl = getRequestedPageUrl()
 
     // A dialog blocks the page until it is answered. A command still waiting never runs; one
@@ -156,13 +159,15 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeActionEf
                         () => this.livePageUrls(target),
                         () => execute(session, target)
                       )
-                const act = (): Promise<T> =>
+                const report = (): Promise<T> =>
                   reportEffects
                     ? runWithActionEffects(
                         this.actionEffectsHost(worktreeId, pageId, session),
                         guarded
                       )
                     : guarded()
+                const wc = blockFileChooser ? this.getWebContents(target.webContentsId) : null
+                const act = (): Promise<T> => (wc ? withFileChooserBlocked(wc, report) : report())
                 return origin.bridged
                   ? this.runHostCommand(session, target.webContentsId, gate, origin, act)
                   : act()

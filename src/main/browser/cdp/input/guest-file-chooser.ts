@@ -1,5 +1,7 @@
 import type { WebContents } from 'electron'
 import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { BrowserError } from '../../browser-error'
+import { acquireElectronDebugger } from '../debugger/electron-debugger-lease'
 import { sendGuestCdpCommand } from '../debugger/guest-cdp-command'
 
 // A click's user activation lasts 5s in Chromium, so its picker cannot open any later.
@@ -10,6 +12,8 @@ export type OpenedFileChooser = { backendNodeId: number | null; sessionId: strin
 export type FileChooserInterception = {
   /** The next chooser the page opened, or null when none opened in time. */
   next(): Promise<OpenedFileChooser | null>
+  /** Whether a chooser has opened since interception began. */
+  readonly opened: boolean
   release(): Promise<void>
 }
 
@@ -23,6 +27,7 @@ export async function interceptFileChooser(
 ): Promise<FileChooserInterception> {
   const sessionIds = [...new Set([undefined, frameSessionId])]
   const { promise: opened, resolve: resolveOpened } = Promise.withResolvers<OpenedFileChooser>()
+  let openedAny = false
   const onMessage = (
     _event: unknown,
     method: string,
@@ -31,6 +36,7 @@ export async function interceptFileChooser(
   ): void => {
     const sessionId = eventSessionId || undefined
     if (method === 'Page.fileChooserOpened' && sessionIds.includes(sessionId)) {
+      openedAny = true
       resolveOpened({ backendNodeId: params?.backendNodeId ?? null, sessionId })
     }
   }
@@ -69,6 +75,35 @@ export async function interceptFileChooser(
   }
   return {
     next: () => withTimeout<OpenedFileChooser | null>(opened, FILE_CHOOSER_OPEN_TIMEOUT_MS, null),
+    get opened() {
+      return openedAny
+    },
     release
+  }
+}
+
+/** Agent input must not raise the OS file dialog, which activates Orca over the user's work. */
+export async function withFileChooserBlocked<T>(
+  wc: WebContents,
+  run: () => Promise<T>
+): Promise<T> {
+  const debuggerLease = acquireElectronDebugger(wc)
+  try {
+    const chooser = await interceptFileChooser(wc, undefined)
+    let result: T
+    try {
+      result = await run()
+    } finally {
+      await chooser.release()
+    }
+    if (chooser.opened) {
+      throw new BrowserError(
+        'browser_file_chooser_opened',
+        'The action opened a file picker, which Orca closed so the system dialog would not take over the screen. To choose files, run `upload --element <ref> --files <paths>` on the file input or the button that opens it.'
+      )
+    }
+    return result
+  } finally {
+    debuggerLease.release()
   }
 }
