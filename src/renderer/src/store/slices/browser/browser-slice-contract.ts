@@ -116,6 +116,8 @@ export type BrowserCookieImportExecutionResult = BrowserCookieImportResult & {
 
 export type BrowserSlice = {
   browserTabsByWorktree: Record<string, BrowserWorkspace[]>
+  /** Workspaces whose tabs Sleep put to rest (when): kept in the layout, not activity (NEW-01). */
+  asleepBrowserWorktreeIds: Record<string, number>
   browserPagesByWorkspace: Record<string, BrowserPage[]>
   browserCertificateFailuresByPageId: Record<string, BrowserCertificateFailure>
   /** May precede the page record (client-hosted pages); main's false on guest teardown clears it. */

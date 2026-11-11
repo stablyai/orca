@@ -62,7 +62,12 @@ export function selectWorktreeActivityPtyIds(
 
 export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
   const tabs = useAppStore((s) => s.tabsByWorktree[worktreeId] ?? EMPTY_TABS)
-  const browserTabs = useAppStore((s) => s.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS)
+  // Tabs Sleep put to rest stay in the layout but are not activity (NEW-01).
+  const browserTabs = useAppStore((s) =>
+    s.asleepBrowserWorktreeIds?.[worktreeId]
+      ? EMPTY_BROWSER_TABS
+      : (s.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS)
+  )
   const hasStructuredChat = useAppStore((s) =>
     hasAwakeStructuredChat(s.unifiedTabsByWorktree[worktreeId], s.structuredChatSleptAtByPaneKey)
   )
