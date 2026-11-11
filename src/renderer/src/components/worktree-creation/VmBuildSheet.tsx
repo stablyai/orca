@@ -276,6 +276,7 @@ export function VmBuildSheet({
                   }
                   timing={timings[step.id] ?? null}
                   t={t}
+                  waitedMs={steps.find((candidate) => candidate.id === 'provision')?.elapsedMs ?? 0}
                 />
               ))}
               {/* Orca Cloud: agent setup happens after create (the setup page and the workspace's

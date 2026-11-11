@@ -36,7 +36,8 @@ export function VmBuildStepRow({
   cloud,
   detail,
   timing,
-  t
+  t,
+  waitedMs = 0
 }: {
   step: VmBuildStep
   cloud: boolean
@@ -45,6 +46,12 @@ export function VmBuildStepRow({
   /** What the running step is doing right now, in plain words. */
   detail: string | null
   t: Translate
+  /**
+   * How long the create has been running (the sandbox step's time). Past PLACEHOLDER_DELAY_MS the
+   * boot plan had its chance to answer, so a still-unknown row shows its placeholder at once: no
+   * blank row, also not in a fixture or a remount.
+   */
+  waitedMs?: number
 }): React.JSX.Element {
   const labelId = React.useId()
   // A live percent already says how far along the step is.
@@ -56,7 +63,8 @@ export function VmBuildStepRow({
   const slow =
     measuring && slowAfterMs !== null && step.elapsedMs !== null && step.elapsedMs > slowAfterMs
   const modeUnknown = cloud && step.id === 'clone' && step.state === 'pending' && !step.cloneMode
-  const placeholderDue = useDelayedFlag(modeUnknown, PLACEHOLDER_DELAY_MS)
+  const placeholderDelayed = useDelayedFlag(modeUnknown, PLACEHOLDER_DELAY_MS)
+  const placeholderDue = modeUnknown && (placeholderDelayed || waitedMs >= PLACEHOLDER_DELAY_MS)
 
   return (
     <li
