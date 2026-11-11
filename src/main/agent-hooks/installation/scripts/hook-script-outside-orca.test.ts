@@ -86,4 +86,45 @@ describe.skipIf(process.platform === 'win32')('managed hook outside an Orca term
     // A failed post would spool beside the endpoint file.
     expect(readdirSync(dir).sort()).toEqual(['codex-hook.sh', 'endpoint.env'])
   })
+
+  it('CodeBuddy background session with an inherited pane env: neither posts nor spools', () => {
+    const dir = createTempDir('orca-outside-codebuddy-bg-')
+    const endpoint = join(dir, 'endpoint.env')
+    writeFileSync(endpoint, 'ORCA_AGENT_HOOK_PORT=9\nORCA_AGENT_HOOK_TOKEN=stale\n')
+    const res = runHook(dir, {
+      ORCA_AGENT_HOOK_ENDPOINT: endpoint,
+      ORCA_PANE_KEY: 'tab:0',
+      CODEBUDDY_SESSION_KIND: 'bg'
+    })
+    expect(res.status).toBe(0)
+    expect(res.stdout).toBe('')
+    expect(readdirSync(dir).sort()).toEqual(['codex-hook.sh', 'endpoint.env'])
+  })
+
+  it('CodeBuddy job directory with an inherited pane env: neither posts nor spools', () => {
+    const dir = createTempDir('orca-outside-codebuddy-job-')
+    const endpoint = join(dir, 'endpoint.env')
+    writeFileSync(endpoint, 'ORCA_AGENT_HOOK_PORT=9\nORCA_AGENT_HOOK_TOKEN=stale\n')
+    const res = runHook(dir, {
+      ORCA_AGENT_HOOK_ENDPOINT: endpoint,
+      ORCA_PANE_KEY: 'tab:0',
+      CODEBUDDY_JOB_DIR: join(dir, 'job')
+    })
+    expect(res.status).toBe(0)
+    expect(res.stdout).toBe('')
+    expect(readdirSync(dir).sort()).toEqual(['codex-hook.sh', 'endpoint.env'])
+  })
+
+  it('interactive CodeBuddy session still delivers the hook', () => {
+    const dir = createTempDir('orca-outside-codebuddy-interactive-')
+    const endpoint = join(dir, 'endpoint.env')
+    writeFileSync(endpoint, 'ORCA_AGENT_HOOK_PORT=9\nORCA_AGENT_HOOK_TOKEN=stale\n')
+    const res = runHook(dir, {
+      ORCA_AGENT_HOOK_ENDPOINT: endpoint,
+      ORCA_PANE_KEY: 'tab:0',
+      CODEBUDDY_SESSION_KIND: 'interactive'
+    })
+    expect(res.status).toBe(0)
+    expect(readdirSync(dir).sort()).toEqual(['codex-hook.sh', 'endpoint.env', 'spool'])
+  })
 })
