@@ -2,7 +2,7 @@ import { inspectRuntimeTerminalProcess } from '@/runtime/hosted-terminals/inspec
 import { isExpectedAgentProcess } from '../../../../../../shared/agent-status/process/agent-process-recognition'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../../../../shared/draft-paste-ready-timeout'
 import { createDraftPasteReadyScanner } from '../../../../../../shared/draft-paste-ready-scanner'
-import { sendAgentDraftPasteContent } from '@/lib/agent-draft-paste-content'
+import { sendAgentDraftPasteContent } from '@/lib/agent-session/messaging/paste/agent-draft-paste-content'
 import { writeTerminalPastePtyInput } from '../../input/paste/terminal-pty-paste-writer'
 import { createPasteReadinessTimeoutNotice } from '@/lib/agent-session/launch/prompt/launch-agent-paste-timeout-notice'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'

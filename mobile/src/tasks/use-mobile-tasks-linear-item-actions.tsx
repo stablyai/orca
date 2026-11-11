@@ -81,7 +81,7 @@ export function useMobileTasksLinearItemActions<
         finish()
       }
     },
-    [client, linearCommentDraft, tryBeginMutation]
+    [client, linearCommentDraft, setLinearCommentDraft, tryBeginMutation]
   )
 
   const openLinearSubIssue = useCallback(

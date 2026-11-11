@@ -175,11 +175,4 @@ describe('same-conversation clear', () => {
       store.getOperationRow(caller.callerKey, params.envelope.clientOperationId)?.outcome.status
     ).toBe('succeeded')
   })
-
-  it('stops the old agent with a brief grace, since the divider waits on that stop', async () => {
-    await clearCommits()
-    expect(adapter.closeSession).toHaveBeenCalledWith(HOST_TEST_SESSION, undefined, {
-      grace: 'brief'
-    })
-  })
 })

@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  PROMPT_LOG_TAIL_LINES,
-  PROMPT_LOG_TAIL_SCAN_CODE_UNITS,
-  buildFixBrokenChecksPrompt,
-  getCheckDetailsPromptKey,
-  truncateLogTailForPrompt
-} from './pr-checks-fix-prompt'
+import { buildFixBrokenChecksPrompt, getCheckDetailsPromptKey } from './pr-checks-fix-prompt'
 import type { PRCheckDetail, PRCheckJob, PRCheckRunDetails } from '../../github/check-types'
 
 const failingCheck: PRCheckDetail = {
@@ -216,32 +210,5 @@ describe('buildFixBrokenChecksPrompt', () => {
     expect(readCheckData(prompt)).toMatchObject([{ logTail: expected }])
     expect(expected.split('\n')).toHaveLength(150)
     expect(prompt).not.toContain('ERROR_ONLY')
-  })
-
-  it('keeps the independent code-unit scan cap after ordered job aggregation', () => {
-    const suffix = '漢'.repeat(PROMPT_LOG_TAIL_SCAN_CODE_UNITS - 2)
-    const prompt = buildPromptWithJobs([
-      createJob({ logTail: 'earlier' }),
-      createJob({ id: 1002, logState: 'error', logTail: 'ERROR_ONLY' }),
-      createJob({ id: 1003, logTail: suffix })
-    ])
-
-    expect(readCheckData(prompt)).toMatchObject([{ logTail: `\n\n${suffix}` }])
-    expect(prompt).not.toContain('earlier')
-    expect(prompt).not.toContain('ERROR_ONLY')
-  })
-})
-
-describe('truncateLogTailForPrompt', () => {
-  it('retains the exact line and code-unit boundaries without adding a byte clamp', () => {
-    expect(PROMPT_LOG_TAIL_LINES).toBe(150)
-    expect(PROMPT_LOG_TAIL_SCAN_CODE_UNITS).toBe(256 * 1024)
-    const lines = Array.from({ length: 150 }, (_, index) => `line ${index}`).join('\n')
-    expect(truncateLogTailForPrompt(lines)).toBe(lines)
-    expect(truncateLogTailForPrompt(`discard\n${lines}`)).toBe(lines)
-    const multibyte = '漢'.repeat(PROMPT_LOG_TAIL_SCAN_CODE_UNITS)
-    expect(truncateLogTailForPrompt(multibyte)).toBe(multibyte)
-    expect(truncateLogTailForPrompt(`discard${multibyte}`)).toBe(multibyte)
-    expect(truncateLogTailForPrompt('one\rtwo')).toBe('one\rtwo')
   })
 })

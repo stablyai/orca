@@ -1,4 +1,4 @@
-import { activateTabAndFocusPane } from '../../../lib/activate-tab-and-focus-pane'
+import { activateTabAndFocusPane } from '../../../lib/workspace/tabs/activate-tab-and-focus-pane'
 import { useAppStore } from '../../../store/index'
 import { matchesWebSessionIntentOwner } from '../../web-session-tabs-sync/identity/web-runtime-session-environment'
 import { refreshWebRuntimeSessionTabsSnapshot } from '../../web-session-tabs-sync/inventory/web-runtime-session-snapshot'

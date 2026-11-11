@@ -1,9 +1,11 @@
 import type { VoiceSettings } from '../../../shared/speech-types'
+import { stopAfterSilenceSeconds } from '../../../shared/dictation-silence-stop'
 import type {
   RuntimeSpeechModelSummary,
   RuntimeSpeechSetupState
 } from '../../../shared/runtime-worktree-contracts'
 import { getDefaultVoiceSettings } from '../../../shared/constants'
+import { dictationShortcutModeSettings } from '../../../shared/dictation-shortcut-mode'
 import {
   getCatalogModel,
   isLocalSpeechModel,
@@ -17,6 +19,7 @@ import {
   getSpeechModelDeletionErrorCode
 } from '../../speech/speech-model-deletion'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
+import { hostDictationTerms } from './runtime-dictation-terms'
 import {
   clearOpenAiSpeechApiKey,
   getOpenAiSpeechApiKeyProtection,
@@ -33,23 +36,28 @@ export type OpenAiSpeechKeyStatus = {
 export class RuntimeMobileSpeechCatalog {
   constructor(private readonly getStore: () => RuntimeStore | null) {}
 
-  async list(): Promise<RuntimeSpeechSetupState> {
+  /** `worktreeId` picks the repo terms a phone recognizing on its own spells with. */
+  async list(worktreeId?: string): Promise<RuntimeSpeechSetupState> {
     const store = this.requireStore()
     const voice = store.getSettings().voice ?? getDefaultVoiceSettings()
     const states = await getSpeechModelManager(store).getModelStates()
     const stateById = new Map(states.map((state) => [state.id, state]))
     // Omit unsupported status variants; older phones could treat them as pickable models.
-    const localRunnable = hasLocalSpeechRecognizer()
     const runnable = SPEECH_MODEL_CATALOG.filter(
       (manifest) =>
-        isOfferedSpeechModel(manifest) && (localRunnable || !isLocalSpeechModel(manifest))
+        isOfferedSpeechModel(manifest) &&
+        (!isLocalSpeechModel(manifest) || hasLocalSpeechRecognizer()) &&
+        // Phones offer an unready cloud row as "add an OpenAI key", which can't set this one up.
+        (manifest.provider !== 'openai-compatible' ||
+          stateById.get(manifest.id)?.status === 'ready')
     )
     const models: RuntimeSpeechModelSummary[] = runnable.map((manifest) => {
       const state = stateById.get(manifest.id)
       return {
         id: manifest.id,
         label: manifest.label,
-        provider: manifest.provider === 'openai' ? 'openai' : 'local',
+        // Older phones know only these two; both cloud providers transcribe on this host.
+        provider: isLocalSpeechModel(manifest) ? 'local' : 'openai',
         sizeBytes: manifest.sizeBytes ?? null,
         recommended: manifest.recommended === true,
         status: state?.status ?? 'not-downloaded',
@@ -60,7 +68,12 @@ export class RuntimeMobileSpeechCatalog {
       enabled: voice.enabled === true,
       selectedModelId: voice.sttModel ?? '',
       dictationMode: voice.dictationMode === 'hold' ? 'hold' : 'toggle',
+      dictationHoldToRecord: voice.dictationHoldToRecord !== false,
       removeFillerWords: voice.removeFillerWords !== false,
+      stopAfterSilenceSeconds: stopAfterSilenceSeconds(voice),
+      // The phone has no Whisper prompt to bias, and its text pass would only join the name; keeping the
+      // hint out also spares a phone page from before hints, which would treat the name as a full term.
+      dictationTerms: hostDictationTerms(store, worktreeId).filter((entry) => !entry.hint),
       models
     }
   }
@@ -101,6 +114,7 @@ export class RuntimeMobileSpeechCatalog {
     enabled?: boolean
     modelId?: string
     dictationMode?: 'toggle' | 'hold'
+    dictationHoldToRecord?: boolean
   }): Promise<RuntimeSpeechSetupState> {
     const store = this.requireWritableStore()
     const current = store.getSettings().voice ?? getDefaultVoiceSettings()
@@ -114,7 +128,13 @@ export class RuntimeMobileSpeechCatalog {
       ...current,
       ...(params.enabled !== undefined ? { enabled: params.enabled } : {}),
       ...(params.modelId !== undefined ? { sttModel: params.modelId } : {}),
-      ...(params.dictationMode !== undefined ? { dictationMode: params.dictationMode } : {})
+      ...(params.dictationMode !== undefined ? { dictationMode: params.dictationMode } : {}),
+      ...(params.dictationHoldToRecord !== undefined
+        ? { dictationHoldToRecord: params.dictationHoldToRecord }
+        : // A phone without Auto that picks Hold leaves no hold-to-record behind for a later Toggle.
+          params.dictationMode === 'hold'
+          ? dictationShortcutModeSettings('hold')
+          : {})
     }
     store.updateSettings?.({ voice: nextVoice }, { notifyListeners: true })
     return this.list()

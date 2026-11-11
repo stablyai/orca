@@ -5,7 +5,7 @@ import { useAppStore } from '@/store/index'
 import {
   runtimeEnvironmentIdForWorkspaceOwner,
   type RuntimeEnvironmentOwnerMatch
-} from '@/lib/resolve-owner'
+} from '@/lib/workspace/ownership/resolve-owner'
 import type { OrcadDeploymentLink } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'

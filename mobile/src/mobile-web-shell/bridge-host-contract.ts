@@ -168,6 +168,8 @@ export type BridgeHost = {
    * every page older than the frame; the caller then leaves the key to the navigator.
    */
   sendBack: () => boolean
+  /** Tells a page that reads it that the app is leaving the foreground; nothing for older pages. */
+  sendAppInactive: () => void
   // Transfer the session’s Back state on client-driven host rebuild; the mounted page never reclaims it. Ending sessions simply discard it.
   readSessionBack: () => BridgeSessionBack
   dispose: () => void

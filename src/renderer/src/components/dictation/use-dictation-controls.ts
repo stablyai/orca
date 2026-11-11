@@ -1,6 +1,6 @@
 import { useEffect, useEffectEvent } from 'react'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
-import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
+import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { isPlainEscapeKeyEvent } from '../terminal-pane/input/keyboard/agent-interrupt-key-event'
 import { DICTATION_CONTROL_EVENT, type DictationControlAction } from './dictation-control-events'
 import type { DictationState } from '../../../../shared/speech-types'
@@ -34,7 +34,7 @@ export function useDictationControls(
   const enterQueues = useEffectEvent((event: KeyboardEvent) => handlers.enterQueues(event))
   // A failed recording stays retryable even after voice is turned off in Settings.
   const enabled = voice?.enabled === true || phase !== 'idle'
-  const mainShortcut = voice?.enabled === true && (voice.dictationMode ?? 'auto') !== 'hold'
+  const mainShortcut = voice?.enabled === true && voice.dictationMode !== 'hold'
 
   // Main intercepts Toggle presses and Auto double taps so the chord never reaches xterm.
   useEffect(() => {

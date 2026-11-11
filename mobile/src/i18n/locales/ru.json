@@ -308,6 +308,7 @@
       "plan": "План",
       "stoppedManually": "Остановлено вручную",
       "permissionDenied": "{{agent}} отказал в разрешении. Подробнее.",
+      "safetyReviewApproved": "{{agent}} одобрил это действие. Подробнее.",
       "safetyReview": "{{agent}} сообщил о предупреждении проверки безопасности. Подробнее.",
       "truncatedResponse": "Ответ поставщика обрезан (исходный размер: {{bytes}} байт).",
       "modelFallback": "Claude переключил модель: {{from}} → {{to}}.",
@@ -672,6 +673,7 @@
       "fullCopySaveUpdate": "Полное копирование и сохранение этого вложения станут доступны после обновления приложения на телефоне."
     },
     "hostOutage": {
+      "offlineAsOf": "{{host}} не в сети · на {{time}}",
       "reconnecting": "{{hostName}} переподключается…",
       "stopped": "{{hostName}} остановлен. Запустите его на компьютере.",
       "server": "Сервер",
@@ -1399,13 +1401,47 @@
       "durationMinutes_one": "{{count}} минута",
       "durationMinutes_other": "{{count}} минуты",
       "durationMinutes_few": "{{count}} минуты",
-      "durationMinutes_many": "{{count}} минут"
+      "durationMinutes_many": "{{count}} минут",
+      "discard": "Удалить запись",
+      "retry": "Повторить диктовку",
+      "retryShort": "Повторить"
     },
     "status": {
       "finishingOn": "Завершается на {{computer}}",
       "finishingOnComputer": "Завершается на компьютере",
       "movedTo": "Перешло на {{computer}}",
       "movedToComputer": "Перешло на компьютер"
+    },
+    "failure": {
+      "connectionLost": "Соединение потеряно",
+      "connectionSlow": "Соединение слишком медленное",
+      "phoneStopped": "Остановлено на этом телефоне",
+      "stopped": "Диктовка остановлена",
+      "recordingKept": "Запись сохранена"
+    },
+    "announce": {
+      "typedInto": "Введено в {{target}}",
+      "insertedIn": "Вставлено в {{target}}",
+      "listeningOnPhone": "Слушаю. Распознавание на этом телефоне.",
+      "listeningOn": "Слушаю. Распознавание на {{computer}}.",
+      "listeningOnComputer": "Слушаю. Распознавание на компьютере.",
+      "finishing": "Завершение.",
+      "inserted": "Вставлено.",
+      "cancelled": "Диктовка отменена.",
+      "movedTo": "Этот телефон перестал распознавать. Продолжение на {{computer}}.",
+      "movedToComputer": "Этот телефон перестал распознавать. Продолжение на компьютере.",
+      "stoppedKept": "Диктовка остановлена. {{reason}}. Запись сохранена.",
+      "stoppedKeptGeneric": "Диктовка остановлена. Запись сохранена.",
+      "stillListening": "Продолжаю слушать."
+    },
+    "pill": {
+      "open": "Открыть",
+      "listening": "Слушаю",
+      "starting": "Запуск",
+      "finishing": "Завершение",
+      "stopped": "Диктовка остановлена",
+      "label": "Диктовка в {{target}}, {{duration}}",
+      "hint": "Дважды коснитесь, чтобы вернуться"
     }
   },
   "files": {
@@ -1638,6 +1674,8 @@
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "Удалить «{{name}}» ({{branch}})?",
+      "deleteDestroysEnvironment": "Также будет уничтожено окружение «{{environment}}», созданное для него Orca, вместе с незакоммиченными изменениями и запущенными терминалами.",
+      "deleteKeepsEnvironment": "Окружение «{{environment}}», созданное для него Orca, продолжит работать: в его рецепте нет шага уничтожения.",
       "deleteWorktree": "Удалить рабочее дерево",
       "pin": "Закрепить",
       "primaryWorktreeDeleteHint": "Основное рабочее дерево нельзя удалить. Вместо этого уберите проект.",
@@ -2262,6 +2300,10 @@
       "providerExitedRejection": "{{agent}} остановился до отправки этого сообщения.",
       "providerExitedRow": "{{agent}} остановился во время ответа. Вы можете продолжить этот разговор.",
       "providerRateLimited": "{{agent}} повторяет попытку из-за ограничения частоты запросов.",
+      "providerUnavailable": "{{agent}} не смог ответить, поскольку сервис занят. Выберите другую модель или немного подождите и отправьте сообщение снова.",
+      "providerSafetyStopped": "{{agent}} остановил этот ответ после проверки безопасности. Проверьте запрос и отправьте его снова.",
+      "providerResponseFailed": "{{agent}} не удалось завершить этот ответ. Откройте подробности, чтобы узнать больше.",
+      "selectedModel": "выбранную модель",
       "providerRejected": "{{agent}} не принял это сообщение.",
       "providerRejectedQuoted": "{{agent}} не принял это сообщение: {{detail}}.",
       "providerRetryLastError": "Последняя ошибка: {{detail}}.",
@@ -2666,7 +2708,8 @@
       "insertFailed": "Не удалось вставить текст диктовки",
       "insertFailedCopied": "Не удалось вставить текст диктовки — он скопирован в буфер обмена",
       "inserted": "Текст диктовки вставлен",
-      "stoppedAfterSilence": "Остановлено после минуты тишины"
+      "stoppedAtCloudLimit": "Диктовка остановлена: достигнут 10-минутный облачный лимит.",
+      "stoppedAfterSilenceSeconds": "Остановлено после {{seconds}} с тишины"
     },
     "useNativeChatStop": {
       "stopNotSent": "Команда остановки не отправлена",
@@ -2995,6 +3038,8 @@
       "dictationHeading": "ДИКТОВКА",
       "dictationMode": "Режим диктовки",
       "dictationModeDescription": "Переключение: нажмите один раз, чтобы начать, ещё раз — чтобы остановить. Удержание: диктуйте, пока удерживаете кнопку.",
+      "dictationModeWithAutoDescription": "Авто: нажмите, чтобы начать и остановить; на компьютере удержание сочетания клавиш записывает до отпускания. Удержание: диктуйте, пока удерживаете кнопку. Переключение: нажмите один раз, чтобы начать, ещё раз — чтобы остановить.",
+      "autoMode": "Авто",
       "downloadFailed": "Не удалось скачать",
       "enableDictation": "Включить голосовую диктовку",
       "holdMode": "Удержание",
@@ -3495,6 +3540,27 @@
     }
   },
   "tasks": {
+    "hostedMerge": {
+      "confirmGitHubMerge": "Слить PR #{{number}}?",
+      "confirmGitHubSquash": "Объединить коммиты и слить PR #{{number}}?",
+      "confirmGitHubRebase": "Выполнить rebase и слить PR #{{number}}?",
+      "confirmGitLabMerge": "Слить запрос на слияние #{{number}}?",
+      "confirmGitLabSquash": "Объединить коммиты и слить запрос на слияние #{{number}}?",
+      "confirmGitLabRebase": "Выполнить rebase и слить запрос на слияние #{{number}}?",
+      "merged": "Слито",
+      "closed": "Закрыто",
+      "conflicts": "Конфликты",
+      "behind": "Отстаёт",
+      "blocked": "Заблокировано",
+      "checksPending": "Проверки ожидаются",
+      "ableToMerge": "Можно слить",
+      "unknown": "Неизвестно"
+    },
+    "pagination": {
+      "pageUnreachable": "Страница {{page}} выходит за пределы результатов поиска GitHub.",
+      "loadPageFailed": "Не удалось загрузить страницу {{page}} из GitHub.",
+      "noMoreResults": "На странице {{page}} больше нет результатов."
+    },
     "composerSource": {
       "baseFailed": "Не удалось определить базовую ветку.",
       "forkPushWarning": "В этом PR отключена настройка «Разрешить правки сопровождающим»; GitHub может отклонить отправку в форк."

@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   searchRuntimeFiles: vi.fn()
 }))
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: mocks.getConnectionId
 }))
 

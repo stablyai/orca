@@ -5,7 +5,7 @@ import type {
   PointerEventHandler,
   WheelEventHandler
 } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { getEmulatorScreenAriaLabel } from './emulator-screen-aria-label'
 import { EmulatorScreenStreamContent } from './emulator-screen-stream-content'
 import type {

@@ -14,4 +14,3 @@ tests/e2e/cross-version-wire/legacy-relay-bridge.unit.test.ts
 tests/e2e/helpers/legacy-relay-docker-host.ts
 src/main/managed-server/install/remote-install-model.ts
 src/main/ssh/system-transport/ssh-system-transport.integration.test.ts
-src/main/ssh/migration-source/orcad-migration-bridged-panes.test.ts

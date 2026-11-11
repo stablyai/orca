@@ -1,4 +1,5 @@
 import type { NativeChatImageRefBlock } from '../../../../../shared/native-chat/native-chat-types'
+import { isInlineDataUrl } from '../../../../../shared/native-chat/native-chat-inline-data-url'
 
 // Image refs are labels over RPC; inline bytes stay local and metadata cannot consume the frame.
 const NATIVE_CHAT_RPC_IMAGE_METADATA_CAP = 512
@@ -20,12 +21,4 @@ export function sanitizeNativeChatRpcImageBlock(
 
 function boundedImageMetadata(value: string | undefined): string | undefined {
   return value && value.length <= NATIVE_CHAT_RPC_IMAGE_METADATA_CAP ? value : undefined
-}
-
-function isInlineDataUrl(value: string): boolean {
-  let schemeStart = 0
-  while (schemeStart < value.length && value.charCodeAt(schemeStart) <= 0x20) {
-    schemeStart += 1
-  }
-  return /^data:/i.test(value.slice(schemeStart))
 }

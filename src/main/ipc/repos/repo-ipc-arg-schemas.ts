@@ -30,6 +30,10 @@ export const ProjectGroupSelectorArgs = z.object({
   groupId: z.string().min(1)
 })
 
+export const ProjectGroupUpdateManyArgs = z.object({
+  mutations: z.array(ProjectGroupUpdateArgs)
+})
+
 export const ProjectHostSetupExistingFolderIpcArgs = z.object({
   projectId: z.string().min(1),
   projectProviderIdentity: z

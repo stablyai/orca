@@ -3,7 +3,7 @@
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import { afterLayoutFrame } from '@/runtime/workspace-layout/frames/layout-frame-position'
 import { expectTabRowFields } from '@/runtime/workspace-layout/intents/layout-owner-pane-intents'
-import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
 import { sendLayoutApply } from '@/runtime/workspace-layout/commands/layout-apply-send'
 import { newGroupSplitOf } from '@/runtime/workspace-layout/commands/layout-owner-new-group-split'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'

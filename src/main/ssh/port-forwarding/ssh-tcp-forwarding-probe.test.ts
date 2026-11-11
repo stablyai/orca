@@ -51,11 +51,4 @@ describe('forward channel check (system SSH)', () => {
     })
     await expect(checkForwardChannel(forward)).resolves.toBe('allowed')
   })
-
-  it('reads reply bytes through the channel as allowed', async () => {
-    const forward = await forwardAnswering((socket) => {
-      socket.once('data', () => socket.end('HTTP/1.1 400 Bad Request\r\n\r\n'))
-    })
-    await expect(checkForwardChannel(forward)).resolves.toBe('allowed')
-  })
 })

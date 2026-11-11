@@ -11,7 +11,7 @@ import {
   isWorkspaceSessionRecord,
   type WorkspaceSessionRecord
 } from '../../../../../shared/workspace-session/workspace-session-host-records'
-import type { WorkspaceRuntimeOwnerProjection } from '../../workspace-runtime-host-ownership'
+import type { WorkspaceRuntimeOwnerProjection } from '../ownership/workspace-runtime-host-ownership'
 import {
   mergeWorkspaceSessionsFromHosts,
   type HostSessionSlices

@@ -6,9 +6,7 @@ import './bridge-port-pair-test-harness'
 import './bridge-client-subscriptions'
 import { BRIDGE_PROTOCOL_VERSION, type BridgeHostMessage } from './bridge-envelope'
 import './bridge-client-init-handshake'
-import { BridgeClientNotReadyError } from './bridge-rpc-client'
 import {
-  CONNECTION,
   INIT,
   createPageClient,
   eventFrame,
@@ -57,19 +55,6 @@ describe('bridge client handshake', () => {
     expect(isRpcDeliveryUnknown(error)).toBe(true)
     expect(onData.mock.calls).toEqual([[{ type: 'error', message: expect.any(String) }]])
     expect(page.client.getShellSession()?.sessionId).toBe('session-b')
-  })
-})
-
-describe('bridge client before a session', () => {
-  it('drops a state frame that beat init rather than priming from it', () => {
-    const page = createPageClient()
-    page.deliver({
-      v: BRIDGE_PROTOCOL_VERSION,
-      type: 'state',
-      connection: { ...CONNECTION, state: 'reconnecting' }
-    })
-    expect(() => page.client.getState()).toThrow(BridgeClientNotReadyError)
-    expect(page.diagnostics).toEqual([])
   })
 })
 

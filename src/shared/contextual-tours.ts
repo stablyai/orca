@@ -130,18 +130,11 @@ export const CONTEXTUAL_TOURS = [
     id: 'browser',
     steps: [
       {
-        id: 'browser-grab',
-        title: 'Grab page context for agents',
-        body: "Use the grab tool to copy a page element's context for agents.",
-        targetSelector: '[data-contextual-tour-target="browser-grab-control"]',
-        requiredForStart: true,
-        preferredPlacement: 'bottom'
-      },
-      {
         id: 'browser-annotate',
         title: 'Mark design feedback in place',
         body: 'Annotate elements and send those notes to an agent.',
         targetSelector: '[data-contextual-tour-target="browser-annotation-control"]',
+        requiredForStart: true,
         preferredPlacement: 'bottom'
       },
       {

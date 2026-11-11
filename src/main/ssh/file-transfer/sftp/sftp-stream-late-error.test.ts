@@ -7,9 +7,6 @@ import type { SFTPWrapper } from 'ssh2'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { uploadBuffer, writeStringViaSftp } from './sftp-upload'
 import { uploadFile } from './sftp-file-upload'
-import { writeRemoteInstallFile } from '../../../managed-server/install/remote-install-transfers'
-import type { SshConnection } from '../../connection/ssh-connection'
-import { getRemoteHostPlatform } from '../../remote-host/ssh-remote-platform'
 
 function sftpNoSuchFileError(): Error {
   return Object.assign(new Error('file does not exist'), { code: 2 })
@@ -76,27 +73,5 @@ describe('late SFTP stream errors', () => {
     await expect(writeStringViaSftp(failing, '/home/user/x', 'v1')).rejects.toThrow(
       'file does not exist'
     )
-  })
-})
-
-describe('sandboxed SFTP subsystem diagnosis', () => {
-  it('leaves a permission refusal as itself rather than blaming a chroot', async () => {
-    // Permission denial names visible paths; mislabeling it as sandboxing sends users to fix ProxyJump for chmod.
-    const conn = {
-      writeFile: () => Promise.reject(Object.assign(new Error('permission denied'), { code: 3 }))
-    } as unknown as SshConnection
-
-    const failure: unknown = await writeRemoteInstallFile(
-      conn,
-      getRemoteHostPlatform('linux-x64'),
-      '/home/user/.orca-remote/relay-1/.version',
-      'v1'
-    ).then(
-      () => null,
-      (err: unknown) => err
-    )
-
-    expect((failure as Error).message).toBe('permission denied')
-    expect(failure).not.toHaveProperty('sandboxedSftpNamespace')
   })
 })

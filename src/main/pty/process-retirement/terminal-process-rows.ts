@@ -83,20 +83,57 @@ export async function readTerminalTty(
   return output === null ? null : normalizePtyTty(output)
 }
 
+/** A container's private pts/N reuses the host's terminal number while its processes keep their own session, so
+ * ps -t lists them beside the terminal's own (#39488). Strip the sid column ps prefixes and keep only the anchor
+ * process's session; a missing anchor row keeps every row. */
+function parseTerminalSessionRows(stdout: string, anchorPid: number): ProcessTableRow[] {
+  const sidByPid = new Map<number, number>()
+  const body = stdout
+    .split(/\r?\n/)
+    .map((line) => {
+      const match = line.trim().match(/^(\d+)\s+(\d+)\s+(.*)$/)
+      if (!match) {
+        return line.trim()
+      }
+      sidByPid.set(Number(match[2]), Number(match[1]))
+      return `${match[2]} ${match[3]}`
+    })
+    .join('\n')
+  const rows = parseShellForegroundRows(body, { strict: true })
+  const anchorSid = sidByPid.get(anchorPid)
+  return anchorSid === undefined ? rows : rows.filter((row) => sidByPid.get(row.pid) === anchorSid)
+}
+
 export async function readPtyTerminalRows(
   tty: string,
+  anchorPid: number,
   timeoutMs = PS_TIMEOUT_MS
 ): Promise<ProcessTableRow[] | null> {
   const normalized = normalizePtyTty(tty)
   if (!normalized || timeoutMs <= 0) {
     return null
   }
+  // macOS ps has no sid keyword.
+  const withSid = process.platform === 'linux'
   const stdout = await readTerminalPs(
-    ['-ww', '-o', 'pid=,ppid=,pgid=,tpgid=,stat=,command=', '-t', normalized],
+    [
+      '-ww',
+      '-o',
+      withSid
+        ? 'sid=,pid=,ppid=,pgid=,tpgid=,stat=,command='
+        : 'pid=,ppid=,pgid=,tpgid=,stat=,command=',
+      '-t',
+      normalized
+    ],
     timeoutMs
   )
   try {
-    return stdout === null ? null : parseShellForegroundRows(stdout, { strict: true })
+    if (stdout === null) {
+      return null
+    }
+    return withSid
+      ? parseTerminalSessionRows(stdout, anchorPid)
+      : parseShellForegroundRows(stdout, { strict: true })
   } catch {
     return null
   }
@@ -106,7 +143,7 @@ export async function readPtyTerminalRows(
 export async function readTerminalProcessRows(rootPid: number): Promise<ProcessTableRow[] | null> {
   const deadline = Date.now() + PS_TIMEOUT_MS
   const tty = await readTerminalTty(rootPid, deadline - Date.now())
-  const rows = tty ? await readPtyTerminalRows(tty, deadline - Date.now()) : null
+  const rows = tty ? await readPtyTerminalRows(tty, rootPid, deadline - Date.now()) : null
   if (!rows?.some((row) => row.pid === rootPid) || Date.now() >= deadline) {
     return null
   }

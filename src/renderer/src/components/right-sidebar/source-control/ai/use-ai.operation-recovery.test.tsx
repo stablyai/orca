@@ -31,14 +31,16 @@ const { mutationInFlight, detectAgents, launchAgent } = vi.hoisted(() => ({
 vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
   launchAgentInNewTab: launchAgent
 }))
-vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
+vi.mock('@/components/terminal-pane/input/focus/focus-terminal-tab-surface', () => ({
+  focusTerminalTabSurface: vi.fn()
+}))
 vi.mock('@/runtime/source-control/git/runtime-git-status-client', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeGitStatusClientModule>()),
   getRuntimeGitMutationInFlight: mutationInFlight
 }))
 
 const navigate = vi.hoisted(() => vi.fn())
-vi.mock('@/lib/workspace-navigation-toast-action', () => ({
+vi.mock('@/lib/workspace/activation/workspace-navigation-toast-action', () => ({
   workspaceNavigationToastAction: ({
     workspaceId,
     executionHostId

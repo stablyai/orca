@@ -6,6 +6,7 @@ import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { RpcRequest } from '../../../core'
 import { registerHomeAutoReleaseScenarios } from './federation-home-auto-release-scenarios.test-support'
+import { GRACE_MS } from './federation-auto-release-grace.test-support'
 
 export type AutoReleaseScenarioHarness = {
   startRemoteWorker: () => Promise<string>
@@ -21,8 +22,6 @@ export type AutoReleaseScenarioHarness = {
   setWorkerAdvertisesAutoRelease: (advertised: boolean) => void
   setHomeOmitsAutoRelease: (omitted: boolean) => void
 }
-
-export const GRACE_MS = 2 * 60_000
 
 export function registerFederatedAutoReleaseScenarios(harness: AutoReleaseScenarioHarness): void {
   afterEach(() => {

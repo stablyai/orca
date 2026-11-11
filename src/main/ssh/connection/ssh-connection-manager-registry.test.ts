@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { resetSsh2ClientState } from './testing/ssh-connection-test-client'
+import { resetSshConnectionMocks } from './testing/ssh-connection-test-harness'
 import { createCallbacks, createTarget } from './testing/ssh-connection-test-fixtures'
 import { SshConnectionManager } from './ssh-connection-manager'
 
@@ -45,7 +45,7 @@ vi.mock('../config/ssh-g-config-resolution', async (importOriginal) =>
 
 describe('SshConnectionManager', () => {
   beforeEach(() => {
-    resetSsh2ClientState()
+    resetSshConnectionMocks()
   })
 
   it('does not erase a replacement registered while an admitted disconnect settles', async () => {

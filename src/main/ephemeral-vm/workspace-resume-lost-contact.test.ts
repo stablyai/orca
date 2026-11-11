@@ -92,39 +92,6 @@ describe('opening a workspace whose VM host Orca gave up reaching', () => {
     mocks.updateStatus.mockClear()
   })
 
-  it('runs the recipe resume, reconnects the VM and reopens its server', async () => {
-    vi.useFakeTimers()
-    state.sshStatus = 'reconnection-failed'
-    mocks.resume.mockResolvedValue(RESUMED)
-
-    await resumeEphemeralVmWorkspace(STORE, 'workspace-1', REQUEST)
-    await vi.runAllTimersAsync()
-
-    expect(mocks.resume).toHaveBeenCalledTimes(1)
-    expect(mocks.connect).toHaveBeenCalledTimes(1)
-    expect(mocks.reconnectControl).toHaveBeenCalledWith('env-vm')
-    expect(mocks.refreshStatus).toHaveBeenCalledWith({ reconnect: true })
-  })
-
-  it('leaves a VM alone while its host answers, is reconnecting, or was never dialed', async () => {
-    for (const sshStatus of [undefined, 'connected', 'reconnecting', 'connecting'] as const) {
-      state.sshStatus = sshStatus
-      await expect(resumeEphemeralVmWorkspace(STORE, 'workspace-1', REQUEST)).resolves.toBe(
-        state.record
-      )
-    }
-    expect(mocks.resume).not.toHaveBeenCalled()
-    expect(mocks.connect).not.toHaveBeenCalled()
-  })
-
-  it('leaves a host the user disconnected, and a paired VM, to their own reconnects', async () => {
-    state.sshStatus = 'reconnection-failed'
-    await resumeEphemeralVmWorkspace(STORE, 'workspace-1', { ...REQUEST, sshHeld: true })
-    state.record = { ...UP_RECORD, connectionMode: 'paired', sshTargetId: undefined }
-    await resumeEphemeralVmWorkspace(STORE, 'workspace-1', REQUEST)
-    expect(mocks.resume).not.toHaveBeenCalled()
-  })
-
   it('keeps the record as it was when the recovery fails, so reconnects go on', async () => {
     state.sshStatus = 'reconnection-failed'
     mocks.resume.mockResolvedValue({

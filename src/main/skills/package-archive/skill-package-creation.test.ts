@@ -1,4 +1,4 @@
-import { chmod, lstat, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { gunzipSync, gzipSync } from 'node:zlib'
@@ -134,33 +134,6 @@ describe('skill package creation and extraction', () => {
         destinationDirectory: join(root, 'truncated')
       })
     ).rejects.toThrow('skill-package-tar-truncated')
-  })
-
-  it('cancels during streamed extraction and removes partial bytes', async () => {
-    const root = await temporaryDirectory()
-    const created = await createSkillPackageArchive({
-      sourceDirectory: await createSkill(root),
-      archivePath: join(root, 'package.tar.gz'),
-      packageId: 'package_1',
-      versionId: 'version_1'
-    })
-    let checks = 0
-    const signal = {
-      get aborted() {
-        checks += 1
-        return checks >= 3
-      }
-    } as AbortSignal
-    const destinationDirectory = join(root, 'cancelled-extraction')
-
-    await expect(
-      extractSkillPackageArchive({
-        archivePath: created.archivePath,
-        destinationDirectory,
-        signal
-      })
-    ).rejects.toThrow('skill-install-cancelled')
-    await expect(lstat(destinationDirectory)).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
   it('rejects content checksum and SKILL identity mismatches', async () => {

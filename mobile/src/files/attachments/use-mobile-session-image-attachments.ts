@@ -4,8 +4,8 @@ import type { MobileImageSource } from '../../platform/media-picker-contract'
 import type {
   MobileNativeChatSendIntent,
   MobileNativeChatSendOutcome
-} from '../../session/native-chat/mobile-native-chat-send'
-import type { StructuredMobileSendAttachment } from '../../session/use-mobile-structured-send-with-outcome'
+} from '../../session/native-chat/composer/mobile-native-chat-send'
+import type { StructuredMobileSendAttachment } from '../../session/native-chat/composer/use-mobile-structured-send-with-outcome'
 import { useMobileImageAttachment } from './use-mobile-image-attachment'
 import {
   useMobileNativeChatImageAttachments,

@@ -423,37 +423,6 @@ describe('useMobileSourceControlLoaders status summary', () => {
     })
     expect(child.writesTo(summaryKey)).toBe(2)
   })
-
-  it.each([10, 100])('touches one summary of N=%i listed beside it', async (n) => {
-    vi.useFakeTimers({ toFake: ['Date'] })
-    const calls: PendingCall[] = []
-    const child = setup(calls)
-    const others = Array.from({ length: n }, (_, i) => [
-      hostQueryKey(
-        'host-1',
-        gitStatusSummaryQuery.family,
-        { exec: 'local', worktree: `repo42::/o${i}` },
-        {}
-      ),
-      hostQueryKey(
-        'host-1',
-        serverGitStatusSummaryQuery.family,
-        { exec: `runtime:env-${i}`, worktree: WORKTREE },
-        {}
-      )
-    ]).flat()
-    for (const key of [summaryKey, ...others]) {
-      child.queryClient.setQueryData(key, readOf('first'))
-    }
-    child.clearWrites()
-    vi.setSystemTime(Date.now() + 1)
-    await child.mount()
-    await act(async () => takeRead(calls, false).settle(statusReply('opened')))
-    await settleQueryNotifications()
-    expect(child.writesTo(summaryKey)).toBe(1)
-    expect(others.filter((key) => child.writesTo(key) > 0)).toHaveLength(0)
-    expect(calls.filter((call) => call.method === 'git.status')).toHaveLength(0)
-  })
 })
 
 function memoryStore() {

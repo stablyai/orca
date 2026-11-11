@@ -268,6 +268,7 @@ describe('workspace.changed', () => {
           written = listener
           return () => undefined
         },
+        onStateWritten: () => () => undefined,
         delayMs: 10
       })
       written()
@@ -285,6 +286,48 @@ describe('workspace.changed', () => {
       expect(events.emitEvent).toHaveBeenLastCalledWith('workspace.changed', {
         context: { branch: 'main', displayName: 'w', terminals: [] }
       })
+      // Same projected payload, different focused workspace: still a change.
+      source.resolveActiveWorktreeContext.mockResolvedValueOnce({
+        worktreeId: 'repo::/other',
+        path: '/w',
+        branch: 'refs/heads/main',
+        displayName: 'w'
+      })
+      source.listTerminals.mockResolvedValueOnce({ terminals: [] })
+      written()
+      await vi.advanceTimersByTimeAsync(20)
+      expect(events.emitEvent).toHaveBeenCalledTimes(3)
+      stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('re-reads the context after a catalog save such as a folder rename, not a UI save', async () => {
+    vi.useFakeTimers()
+    try {
+      const delegate = pluginRuntimeDelegate(
+        runtime([{ handle: 'term_a', title: 'zsh' }]),
+        () => []
+      )
+      const events = { wantsEvent: vi.fn(() => true), emitEvent: vi.fn() }
+      let saved: (domains: readonly string[] | undefined) => void = () => undefined
+      const stop = watchPluginWorkspaceContext({
+        delegate,
+        events,
+        onSessionWritten: () => () => undefined,
+        onStateWritten: (listener) => {
+          saved = listener
+          return () => undefined
+        },
+        delayMs: 10
+      })
+      saved(['ui'])
+      await vi.advanceTimersByTimeAsync(20)
+      expect(events.emitEvent).not.toHaveBeenCalled()
+      saved(['folderWorkspaces'])
+      await vi.advanceTimersByTimeAsync(20)
+      expect(events.emitEvent).toHaveBeenCalledWith('workspace.changed', expect.anything())
       stop()
     } finally {
       vi.useRealTimers()

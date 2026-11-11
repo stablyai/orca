@@ -304,6 +304,7 @@
       "plan": "Plan",
       "stoppedManually": "Detenido manualmente",
       "permissionDenied": "{{agent}} denegó el permiso. Ver detalles.",
+      "safetyReviewApproved": "{{agent}} aprobó esta acción. Ver detalles.",
       "safetyReview": "{{agent}} notificó una advertencia de revisión de seguridad. Ver detalles.",
       "truncatedResponse": "Respuesta del proveedor truncada (tamaño original: {{bytes}} bytes).",
       "modelFallback": "Claude cambió de modelo: {{from}} → {{to}}.",
@@ -637,6 +638,7 @@
       "fullCopySaveUpdate": "Copiar todo y Guardar para este adjunto estarán disponibles en una actualización del teléfono."
     },
     "hostOutage": {
+      "offlineAsOf": "{{host}} está sin conexión · a las {{time}}",
       "reconnecting": "{{hostName}} se está reconectando…",
       "stopped": "{{hostName}} está detenido. Inícialo en tu ordenador.",
       "server": "El servidor",
@@ -1358,13 +1360,47 @@
       "durationSeconds_many": "{{count}} segundos",
       "durationMinutes_one": "{{count}} minuto",
       "durationMinutes_other": "{{count}} minutos",
-      "durationMinutes_many": "{{count}} minutos"
+      "durationMinutes_many": "{{count}} minutos",
+      "discard": "Descartar grabación",
+      "retry": "Reintentar dictado",
+      "retryShort": "Reintentar"
     },
     "status": {
       "finishingOn": "Terminando en {{computer}}",
       "finishingOnComputer": "Terminando en el ordenador",
       "movedTo": "Pasado a {{computer}}",
       "movedToComputer": "Pasado al ordenador"
+    },
+    "failure": {
+      "connectionLost": "Conexión perdida",
+      "connectionSlow": "Conexión demasiado lenta",
+      "phoneStopped": "Detenido en este teléfono",
+      "stopped": "Dictado detenido",
+      "recordingKept": "Grabación guardada"
+    },
+    "announce": {
+      "typedInto": "Escrito en {{target}}",
+      "insertedIn": "Insertado en {{target}}",
+      "listeningOnPhone": "Escuchando. Transcribiendo en este teléfono.",
+      "listeningOn": "Escuchando. Transcribiendo en {{computer}}.",
+      "listeningOnComputer": "Escuchando. Transcribiendo en el ordenador.",
+      "finishing": "Terminando.",
+      "inserted": "Insertado.",
+      "cancelled": "Dictado cancelado.",
+      "movedTo": "Este teléfono dejó de transcribir. Continúa en {{computer}}.",
+      "movedToComputer": "Este teléfono dejó de transcribir. Continúa en el ordenador.",
+      "stoppedKept": "Dictado detenido. {{reason}}. Tu grabación se conserva.",
+      "stoppedKeptGeneric": "Dictado detenido. Tu grabación se conserva.",
+      "stillListening": "Sigue escuchando."
+    },
+    "pill": {
+      "open": "Abrir",
+      "listening": "Escuchando",
+      "starting": "Iniciando",
+      "finishing": "Terminando",
+      "stopped": "Dictado detenido",
+      "label": "Dictado en {{target}}, {{duration}}",
+      "hint": "Toca dos veces para volver"
     }
   },
   "files": {
@@ -1466,11 +1502,11 @@
       "updateRequired": "Actualiza Orca Mobile para abrir archivos PDF"
     },
     "unsavedEditsOffer": {
-      "changedSince": "Modificado en el escritorio desde tus cambios de las {{time}}",
+      "changedSince": "Modificado en el ordenador después de tus cambios de {{time}}",
       "copyMyEdits": "Copiar mis cambios",
       "discard": "Descartar",
       "restore": "Restaurar",
-      "unsavedFrom": "Cambios sin guardar de las {{time}}"
+      "unsavedFrom": "Cambios sin guardar ({{time}})"
     }
   },
   "home": {
@@ -1597,6 +1633,8 @@
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "¿Eliminar \"{{name}}\" ({{branch}})?",
+      "deleteDestroysEnvironment": "También se destruye el entorno «{{environment}}» que Orca creó para él, con los cambios sin confirmar y los terminales en ejecución que haya en él.",
+      "deleteKeepsEnvironment": "El entorno «{{environment}}» que Orca creó para él sigue en ejecución: su receta no tiene un paso de destrucción.",
       "deleteWorktree": "Eliminar worktree",
       "pin": "Fijar",
       "primaryWorktreeDeleteHint": "El worktree principal no se puede eliminar. Quita el proyecto en su lugar.",
@@ -2194,6 +2232,10 @@
       "providerExitedRejection": "{{agent}} se detuvo antes de que se enviara este mensaje.",
       "providerExitedRow": "{{agent}} se detuvo mientras esta respuesta estaba en curso. Puede continuar en esta conversación.",
       "providerRateLimited": "{{agent}} alcanzó un límite de solicitudes y está reintentando.",
+      "providerUnavailable": "{{agent}} no pudo responder porque el servicio está ocupado. Elige otro modelo o espera un poco y vuelve a enviar el mensaje.",
+      "providerSafetyStopped": "{{agent}} detuvo esta respuesta tras una comprobación de seguridad. Revisa tu solicitud y vuelve a enviarla.",
+      "providerResponseFailed": "{{agent}} no pudo terminar esta respuesta. Abre los detalles para obtener más información.",
+      "selectedModel": "el modelo seleccionado",
       "providerRejected": "{{agent}} no aceptó este mensaje.",
       "providerRejectedQuoted": "{{agent}} no aceptó este mensaje: {{detail}}.",
       "providerRetryLastError": "Último error: {{detail}}.",
@@ -2596,7 +2638,8 @@
       "insertFailed": "No se pudo insertar el dictado",
       "insertFailedCopied": "No se pudo insertar el dictado, así que se copió al portapapeles.",
       "inserted": "Dictado insertado",
-      "stoppedAfterSilence": "Se detuvo tras un minuto de silencio"
+      "stoppedAtCloudLimit": "Dictado detenido al llegar al límite de 10 minutos en la nube.",
+      "stoppedAfterSilenceSeconds": "Detenido tras {{seconds}} segundos de silencio"
     },
     "useNativeChatStop": {
       "stopNotSent": "No se envió la orden de detener",
@@ -2921,6 +2964,8 @@
       "dictationHeading": "DICTADO",
       "dictationMode": "Modo de dictado",
       "dictationModeDescription": "Alternar: pulsa una vez para iniciar y otra para detener. Mantener pulsado: dicta sin soltar.",
+      "dictationModeWithAutoDescription": "Automático: toca para iniciar y detener; en tu ordenador, mantener el atajo graba hasta que lo sueltes. Mantener pulsado: dicta sin soltar. Alternar: pulsa una vez para iniciar y otra para detener.",
+      "autoMode": "Automático",
       "downloadFailed": "Falló la descarga",
       "enableDictation": "Habilitar dictado de voz",
       "holdMode": "Mantener",
@@ -3407,6 +3452,27 @@
     }
   },
   "tasks": {
+    "hostedMerge": {
+      "confirmGitHubMerge": "¿Fusionar el PR #{{number}}?",
+      "confirmGitHubSquash": "¿Compactar y fusionar el PR #{{number}}?",
+      "confirmGitHubRebase": "¿Hacer rebase y fusionar el PR #{{number}}?",
+      "confirmGitLabMerge": "¿Fusionar la solicitud de merge #{{number}}?",
+      "confirmGitLabSquash": "¿Compactar y fusionar la solicitud de merge #{{number}}?",
+      "confirmGitLabRebase": "¿Hacer rebase y fusionar la solicitud de merge #{{number}}?",
+      "merged": "Fusionado",
+      "closed": "Cerrado",
+      "conflicts": "Conflictos",
+      "behind": "Desactualizado",
+      "blocked": "Bloqueado",
+      "checksPending": "Comprobaciones pendientes",
+      "ableToMerge": "Se puede fusionar",
+      "unknown": "Desconocido"
+    },
+    "pagination": {
+      "pageUnreachable": "La página {{page}} está fuera del alcance de la búsqueda de GitHub.",
+      "loadPageFailed": "No se pudo cargar la página {{page}} desde GitHub.",
+      "noMoreResults": "No hay más resultados en la página {{page}}."
+    },
     "composerSource": {
       "baseFailed": "No se pudo resolver la rama base.",
       "forkPushWarning": "Esta PR tiene desactivada la opción \"Allow edits from maintainers\"; GitHub podría rechazar el push al fork."

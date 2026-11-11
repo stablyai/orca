@@ -129,3 +129,28 @@ export const ssh = menuFixture(
   { ...repo, connectionId: 'preview' },
   { ...worktree, hostId: 'ssh:preview' }
 )
+
+function vmMenuFixture(status: 'running' | 'suspended' | 'resume_failed', waking = false) {
+  const fixture = menuFixture(repo)
+  return defineFixture({
+    ...fixture,
+    store: {
+      ...fixture.store,
+      ephemeralVmRuntimesByWorkspaceId: {
+        [worktree.id]: {
+          id: 'vm-1',
+          workspaceId: worktree.id,
+          status,
+          runtimeEnvironmentId: 'vm',
+          canSuspend: true
+        }
+      },
+      wakingEphemeralVmWorkspaceIds: waking ? { [worktree.id]: true } : {}
+    }
+  })
+}
+
+export const vmRunning = vmMenuFixture('running')
+export const vmSuspended = vmMenuFixture('suspended')
+export const vmResumeFailed = vmMenuFixture('resume_failed')
+export const vmWaking = vmMenuFixture('suspended', true)

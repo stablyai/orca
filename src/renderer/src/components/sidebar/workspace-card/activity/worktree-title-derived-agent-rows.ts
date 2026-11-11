@@ -1,3 +1,4 @@
+import type { TitleDerivedAgentRowsInput } from './title-derived-agent-row-input'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
 import {
@@ -5,7 +6,8 @@ import {
   isCursorAgentTitle
 } from '../../../../../../shared/agent-status/title/agent-title-core'
 
-import { classifyTitleActivity, resolveTitleActivityLabel } from '@/lib/pane-agent-evidence'
+import { detectAgentStatusFromTitle } from '../../../../../../shared/agent-status/title/agent-title-status'
+import { getAgentLabel } from '../../../../../../shared/agent-status/title/agent-title-identity'
 import { tabHasLivePty } from '../../../../../../shared/tab-has-live-pty'
 import type {
   AgentStatusEntry,
@@ -49,16 +51,7 @@ const EMPTY_LIVE_PTY_IDS: Record<string, string[]> = {}
 const EMPTY_TERMINAL_LAYOUTS: Record<string, TerminalLayoutSnapshot | undefined> = {}
 const EMPTY_PANE_FOREGROUND: Record<string, TitleDerivedPaneForeground> = {}
 
-export function buildTitleDerivedAgentRows(args: {
-  tabs: TerminalTab[]
-  runtimePaneTitlesByTabId?: Record<string, Record<number, string>>
-  ptyIdsByTabId?: Record<string, string[]>
-  terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
-  runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
-  paneForegroundAgentByPaneKey?: Record<string, TitleDerivedPaneForeground>
-  seenPaneKeys: Set<string>
-  now: number
-}): DashboardAgentRow[] {
+export function buildTitleDerivedAgentRows(args: TitleDerivedAgentRowsInput): DashboardAgentRow[] {
   const rows: DashboardAgentRow[] = []
   const runtimePaneTitlesByTabId = args.runtimePaneTitlesByTabId ?? EMPTY_RUNTIME_TITLES
   const ptyIdsByTabId = args.ptyIdsByTabId ?? EMPTY_LIVE_PTY_IDS
@@ -163,8 +156,8 @@ function buildTitleDerivedAgentRow(args: {
   // Claude management and Cursor’s status-less native titles still identify idle panes without claiming active work.
   const titleStatus = isClaudeAgentsTitle
     ? 'idle'
-    : (classifyTitleActivity(title) ?? (isCursorAgentTitle(title) ? 'idle' : null))
-  const label = isClaudeAgentsTitle ? 'Claude Code' : resolveTitleActivityLabel(title)
+    : (detectAgentStatusFromTitle(title) ?? (isCursorAgentTitle(title) ? 'idle' : null))
+  const label = isClaudeAgentsTitle ? 'Claude Code' : getAgentLabel(title)
   if (!isTerminalLeafId(args.leafId)) {
     return null
   }
@@ -259,7 +252,7 @@ export function resolveAgentTypeFromTerminalTitle(
     return null
   }
   const normalizedTitle = normalizeCompatibleAgentTitleForOwner(title, ownerAgentType, options)
-  const label = resolveTitleActivityLabel(normalizedTitle)
+  const label = getAgentLabel(normalizedTitle)
   return label
     ? (resolveCompatibleAgentTypeForOwner(
         resolveTitleDerivedAgentType(normalizedTitle, label, ownerAgentType),

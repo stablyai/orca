@@ -80,7 +80,7 @@ describe('complete profile state checkpoints', () => {
       try {
         other.readSerializedState()
         other.writeSerializedDomains([{ domain: 'futureDomain', payload: '{"external":true}' }])
-        scheduleSave(store)
+        scheduleSave(store, ['ui'])
         if (mode === 'sync') {
           expect(() => store.flushOrThrow()).toThrow(/Profile state revision changed/)
         } else {

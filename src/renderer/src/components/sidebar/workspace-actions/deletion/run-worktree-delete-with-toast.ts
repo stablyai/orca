@@ -5,7 +5,7 @@ import { translate } from '@/i18n/i18n'
 import {
   resolveWorktreeOperationRoute,
   resolveWorktreeOperationRouteForHost
-} from '@/lib/worktree-operation-route'
+} from '@/lib/workspace/ownership/worktree-operation-route'
 import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal'
 import { showDeleteWorktreeFailureToast } from './delete-worktree-failure-toast'
 import type { WorktreeDeleteWithToastOptions } from './worktree-delete-request'

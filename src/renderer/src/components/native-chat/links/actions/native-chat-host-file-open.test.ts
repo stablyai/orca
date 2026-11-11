@@ -15,7 +15,9 @@ vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorkspace: vi.fn(),
   activateAndRevealWorktree: vi.fn()
 }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionId: vi.fn(() => null) }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionId: vi.fn(() => null)
+}))
 
 installTerminalLinkTestEnvironment(doubles)
 

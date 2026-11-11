@@ -1,13 +1,13 @@
 // @protected-copy: preserve copy used by security settings.
-import type React from 'react'
 import { useState } from 'react'
+import type React from 'react'
 import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
 import { Switch } from '../../ui/switch'
 import { SettingsDisabledControlTooltip } from './SettingsDisabledControlTooltip'
-import { normalizeColor } from '@/lib/terminal-theme'
-import { cn } from '@/lib/utils'
+import { normalizeColor } from '@/lib/terminal/appearance/terminal-theme'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 
 type SettingsRowProps = {
@@ -217,7 +217,9 @@ export function SettingsSubsectionHeader({
   return (
     <div className={cn('flex items-start justify-between gap-3', className)}>
       <div className="space-y-1">
-        <h3 className="text-sm font-semibold">{title}</h3>
+        <h3 data-settings-group-heading="" className="text-sm font-semibold">
+          {title}
+        </h3>
         {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}

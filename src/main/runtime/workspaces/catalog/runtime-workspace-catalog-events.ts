@@ -5,6 +5,7 @@ import {
 import type { Repo } from '../../../../shared/repo-types'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { composeWorktreeId } from '../../../../shared/worktree/id'
+import type { PullRequestChange } from '../../../github/pull-request-changed-events'
 import { OrcaRuntimeWithGetStatus } from '../../hosts/runtime-status'
 
 export abstract class RuntimeWorkspaceCatalogEvents extends OrcaRuntimeWithGetStatus {
@@ -76,5 +77,10 @@ export abstract class RuntimeWorkspaceCatalogEvents extends OrcaRuntimeWithGetSt
   // Host repo IPC bypasses runtime methods; invalidate paired clients without duplicating local repos:changed (#11994).
   notifyReposChangedForRemoteClients(): void {
     this.emitClientEvent({ type: 'reposChanged' })
+  }
+
+  // The PR coordinator is fed by desktop IPC, so its refreshes reach paired clients only through here.
+  notifyPullRequestChangedForRemoteClients(change: PullRequestChange): void {
+    this.emitClientEvent({ type: 'pullRequestChanged', ...change })
   }
 }

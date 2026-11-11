@@ -6,7 +6,7 @@ import { WslHostStoppedNotice } from './WslHostStoppedNotice'
 
 const start = vi.hoisted(() => vi.fn<(environmentId: string) => Promise<boolean>>())
 
-vi.mock('@/lib/wsl-host-user-start', () => ({
+vi.mock('@/runtime/hosts/wsl/wsl-host-user-start', () => ({
   startWslHostAndReloadProjects: start
 }))
 

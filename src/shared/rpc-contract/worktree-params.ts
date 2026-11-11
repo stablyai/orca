@@ -242,7 +242,10 @@ export const WorktreeRemove = WorktreeSelector.extend({
     .array(z.object({ path: z.string().min(1), head: z.string(), branch: z.string() }))
     .min(1)
     .max(1_000)
-    .optional()
+    .optional(),
+  // The caller showed that this also destroys the recipe environment Orca created for the workspace.
+  // Absent: today's removal, which leaves that environment running. Older hosts strip it.
+  destroyHost: z.literal(true).optional()
 })
 
 export const WorktreePreviewNestedRemoval = WorktreeSelector.extend({

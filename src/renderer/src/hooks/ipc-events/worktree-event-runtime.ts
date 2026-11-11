@@ -22,7 +22,7 @@ import {
   captureWorkspaceSelection,
   isWorkspaceSelected,
   restoreWorkspaceSelection
-} from '@/lib/active-workspace-host'
+} from '@/lib/workspace/ownership/active-workspace-host'
 import {
   invalidateRemoteWorktreeLineage,
   isRemoteWorktreeLineageFresh

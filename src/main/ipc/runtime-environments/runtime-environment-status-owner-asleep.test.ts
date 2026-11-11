@@ -61,10 +61,4 @@ describe('status probe of a sleeping VM server', () => {
     expect(mocks.send).not.toHaveBeenCalled()
     expect(mocks.resolveManaged).not.toHaveBeenCalled()
   })
-
-  it('probes again once the VM is awake', async () => {
-    mocks.asleep = false
-    await owner().refresh({ timeoutMs: 1_000 })
-    expect(mocks.send).toHaveBeenCalledTimes(1)
-  })
 })

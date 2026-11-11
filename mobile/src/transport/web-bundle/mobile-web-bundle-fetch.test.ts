@@ -35,6 +35,7 @@ type HostOptions = {
   buildId?: string
   intercept?: (call: HostCall) => unknown
   onInFlight?: (inFlight: number) => void
+  catalogs?: readonly string[]
 }
 
 /** Box first, so params that are not an object read as absent instead of throwing. */
@@ -51,7 +52,8 @@ function bundleHost(files: Record<string, string>, options: HostOptions = {}) {
       path,
       sha256: toHex(sha256(content)),
       byteLength: content.byteLength,
-      contentType: 'text/plain'
+      contentType: 'text/plain',
+      ...(options.catalogs?.includes(path) ? { kind: 'catalog' } : {})
     }))
     .sort((left, right) => (left.path < right.path ? -1 : 1))
   // Derive fixture ids from final asset lists unless the test explicitly selects a mismatch.
@@ -155,5 +157,19 @@ describe('fetchMobileWebBundle', () => {
     const failed = fetchMobileWebBundle({ client: host.client })
     await expect(failed).rejects.toThrow(/index\.html hashed [0-9a-f]{64}, not/)
     expect(await refusalOf(failed)).toBe('asset-checksum-mismatch')
+  })
+
+  it('leaves language-catalog chunks on the desktop and fetches the rest', async () => {
+    const host = bundleHost(
+      { 'index.html': 'abcdef', 'assets/de.js': 'catalog' },
+      { catalogs: ['assets/de.js'] }
+    )
+
+    const fetched = await fetchMobileWebBundle({ client: host.client })
+
+    expect([...fetched.assets.keys()]).toEqual(['index.html'])
+    expect(host.calls.some((call) => paramField(call.params, 'path') === 'assets/de.js')).toBe(
+      false
+    )
   })
 })

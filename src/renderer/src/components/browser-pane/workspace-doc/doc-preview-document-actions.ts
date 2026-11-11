@@ -1,14 +1,14 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
+import { getConnectionIdForFileFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { isTwinWorkspace } from '@/lib/resolve-owner'
-import { detectLanguage } from '@/lib/language-detect'
+import { isTwinWorkspace } from '@/lib/workspace/ownership/resolve-owner'
+import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
 import {
   buildWorkspaceFileContextForFile,
   canClientOsOpenWorkspaceFile
-} from '@/lib/workspace-file-host-routing'
+} from '@/runtime/files/workspace-file-host-routing'
 import { useAppStore } from '@/store'
 import { downloadAndOpenRemoteTerminalFile } from '@/components/terminal-pane/links/files/terminal-remote-file-download-open'
 

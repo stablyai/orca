@@ -89,8 +89,9 @@ export function registerPtyConnectionRemoteWindowsFocusReportTests(): void {
         )
         await loadFreshTerminalModules()
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks3 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport()
         transportFactoryQueue.push(transport)
 
@@ -170,8 +171,9 @@ export function registerPtyConnectionWindowsFocusReportAuthorityTests(): void {
       )
       await loadFreshTerminalModules()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks8 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks8 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -245,8 +247,9 @@ export function registerPtyConnectionWindowsFocusReportAuthorityTests(): void {
         )
         await loadFreshTerminalModules()
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks9 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks9 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport()
         transportFactoryQueue.push(transport)
 
@@ -291,8 +294,9 @@ export function registerPtyConnectionWindowsFocusReportAuthorityTests(): void {
       )
       await loadFreshTerminalModules()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks10 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks10 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -364,8 +368,9 @@ export function registerPtyConnectionWindowsFocusReportAuthorityTests(): void {
       )
       await loadFreshTerminalModules()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks11 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks11 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 

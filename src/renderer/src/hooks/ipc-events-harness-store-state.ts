@@ -39,6 +39,7 @@ export function createHarnessStoreState(
     fetchRepos: vi.fn(),
     fetchWorktrees: vi.fn(),
     fetchHostWorkspaceStatuses: vi.fn(),
+    refreshEphemeralVmRuntimes: vi.fn(async () => undefined),
     closeModal: vi.fn(),
     openModal: vi.fn(),
     setActiveRepo: vi.fn(),

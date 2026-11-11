@@ -23,7 +23,7 @@ export const COMPARE_AGAINST_UPSTREAM_KEYWORDS = [
 ]
 
 function getCompareAgainstUpstreamTitle(t: Translate = translate): string {
-  return t('auto.components.settings.GitPane.compareAgainstUpstreamTitle', 'Default Compare Base')
+  return t('auto.components.settings.GitPane.074f7aa0d6', 'Default compare base')
 }
 
 function getCompareAgainstUpstreamDescription(t: Translate = translate): string {

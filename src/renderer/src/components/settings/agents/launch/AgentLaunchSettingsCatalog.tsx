@@ -2,7 +2,7 @@ import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { AgentLaunchChoiceEditor } from '@/components/agent/launch-settings/AgentLaunchChoiceEditor'
 import { agentChatPermissionModes } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import { savedChatPermissionMode } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
-import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
+import { useChatProgramFacts } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import { useMemo } from 'react'
 import { recomputeOn } from '@/lib/recompute-on'
 import { toast } from 'sonner'
@@ -38,12 +38,12 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { isTuiAgentEnabled } from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import {
   agentChoiceOpensAsChat,
   readChatProgram,
   resolveChatProgramContext
-} from '@/lib/host-chat-program'
+} from '@/lib/agent-session/launch/inventory/host-chat-program'
 import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
 import { useDetectedAgents, type AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import { AgentDefaultSetting } from '@/components/settings/agents/launch/AgentDefaultSetting'
@@ -56,7 +56,10 @@ import {
   AgentChatRuntimeArea,
   chatUnavailableOnThisDesktop
 } from '@/components/agent/launch-settings/AgentChatChoiceControls'
-import { chatProviderAgents, useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
+import {
+  chatProviderAgents,
+  useHostStructuredAgentsVersion
+} from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
 import { readHostStructuredAgents } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 import { useTranslate } from '@/i18n/use-translate'
@@ -254,6 +257,13 @@ export function AgentLaunchSettingsCatalog({
             <AgentLaunchChoiceEditor
               permissionControlRef={permissionControlRef}
               showArguments={isDetected}
+              catalogTarget={
+                detectionTarget.kind === 'ssh'
+                  ? null
+                  : detectionTarget.kind === 'runtime'
+                    ? { kind: 'environment', environmentId: detectionTarget.environmentId }
+                    : { kind: 'local' }
+              }
               agent={agent.id}
               label={agent.label}
               choices={settings.agentChoices?.defaults[agent.id]}

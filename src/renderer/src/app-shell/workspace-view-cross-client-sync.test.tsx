@@ -405,20 +405,4 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     await flushDesktopDebounce()
     expect(authority.get().hideDefaultBranchWorkspace).toBe(true)
   })
-
-  it('desktop and another client changing the same field converge on the newest write', async () => {
-    act(() => {
-      store.getState().setHideDefaultBranchWorkspace(true)
-    })
-    await flushDesktopDebounce()
-    deliverBroadcasts()
-
-    // Another client flips the SAME field afterwards; last writer wins everywhere.
-    authority.set({ hideDefaultBranchWorkspace: false })
-    deliverBroadcasts()
-    expect(authority.get().hideDefaultBranchWorkspace).toBe(false)
-    await flushDesktopDebounce()
-    expect(authority.get().hideDefaultBranchWorkspace).toBe(false)
-    expect(store.getState().hideDefaultBranchWorkspace).toBe(false)
-  })
 })

@@ -2,14 +2,14 @@ import type { KeybindingActionId, KeybindingOverrides } from '../../../shared/ke
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { useAppStore } from '../store'
 import type { AppState } from '../store/types'
-import { readDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
+import { readDetectedAgentsForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { readAgentLaunchPreferencesForWorktree } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import {
   listBoundAgentTabActions,
   resolveDefaultAgentForNewTab,
   resolveDefaultAgentForWorktreeNewTab
-} from '@/lib/agent-tab-shortcuts'
-import { chosenAgentChatUnlearned } from '@/lib/host-chat-program'
+} from '@/lib/agent-session/launch/shortcuts/agent-tab-shortcuts'
+import { chosenAgentChatUnlearned } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 
 export type TerminalAgentTabShortcut = {

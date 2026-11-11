@@ -7,7 +7,6 @@ import { mapRawIssueForWorkspace } from './linear-issue-query-support'
 import { loadLinearSdk } from './linear-sdk'
 
 type LinearIssueDetailNode = LinearIssueNode & {
-  project?: { id: string; name: string; url?: string | null; color?: string | null } | null
   children?: { nodes?: NonNullable<LinearIssue['subIssues']> } | null
 }
 type LinearIssueDetailResponse = { issue?: LinearIssueDetailNode | null }
@@ -66,14 +65,6 @@ export async function readLinearIssueDetail(
   return {
     ...mapRawIssueForWorkspace(entry, issue),
     updatedAt: new Date(issue.updatedAt).toISOString(),
-    project: issue.project
-      ? {
-          id: issue.project.id,
-          name: issue.project.name,
-          url: issue.project.url ?? undefined,
-          color: issue.project.color ?? undefined
-        }
-      : undefined,
     subIssues: issue.children?.nodes
   }
 }

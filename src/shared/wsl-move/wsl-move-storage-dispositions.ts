@@ -1,12 +1,9 @@
-import {
-  moveDisposition,
-  notApplicableDisposition,
-  type WslMoveFieldDisposition
-} from './wsl-move-dispositions'
+import { moveDisposition, notApplicableDisposition } from './wsl-move-dispositions'
+import type { WslMoveFieldDisposition } from './wsl-move-dispositions'
 
 /** Census tests require a disposition for each renderer module using localStorage. */
 export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> = {
-  'src/renderer/src/lib/quick-open-file-history.ts': {
+  'src/renderer/src/lib/files/search/quick-open-file-history.ts': {
     disposition: 'rewrite-desktop',
     item: 42
   },
@@ -30,18 +27,21 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
     notApplicableDisposition(45, 'Keyed by session id.'),
   'src/renderer/src/components/native-chat/session/structured/delivery/structured-agent-session-legacy-outbox.ts':
     notApplicableDisposition(45, 'Keyed by session id.'),
-  'src/renderer/src/lib/wsl-move-renderer-store-rewrites.ts': notApplicableDisposition(
-    62,
-    "The mover's own record of which renderer rewrites landed; keyed by move id."
-  ),
-  'src/renderer/src/lib/wsl-drive-unc-renderer-store-rewrites.ts': notApplicableDisposition(
-    62,
-    "A Windows-drive conversion's own record of which renderer rewrites landed; keyed by its id."
-  ),
-  'src/renderer/src/lib/desktop-created-server-tabs.ts': notApplicableDisposition(
-    60,
-    'Tabs this desktop created in a paired server workspace, keyed by that server; a local or WSL project has none.'
-  ),
+  'src/renderer/src/lib/workspace/persistence/wsl-move-renderer-store-rewrites.ts':
+    notApplicableDisposition(
+      62,
+      "The mover's own record of which renderer rewrites landed; keyed by move id."
+    ),
+  'src/renderer/src/lib/workspace/persistence/wsl-drive-unc-renderer-store-rewrites.ts':
+    notApplicableDisposition(
+      62,
+      "A Windows-drive conversion's own record of which renderer rewrites landed; keyed by its id."
+    ),
+  'src/renderer/src/store/workspace-layout/frames/desktop-created-server-tabs.ts':
+    notApplicableDisposition(
+      60,
+      'Tabs this desktop created in a paired server workspace, keyed by that server; a local or WSL project has none.'
+    ),
   'src/renderer/src/store/slices/worktrees/session/worktree-visit-recency.ts':
     notApplicableDisposition(
       32,
@@ -83,9 +83,9 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       'src/renderer/src/components/terminal-pane/diagnostics/startup/terminal-startup-timing.ts',
       'src/renderer/src/components/UnexpectedSignoutCard.tsx',
       'src/renderer/src/lib/document-theme.ts',
-      'src/renderer/src/lib/feature-education-telemetry.ts',
-      'src/renderer/src/lib/orchestration-setup-state.ts',
-      'src/renderer/src/lib/terminal-shortcut-capture-notification.tsx',
+      'src/renderer/src/diagnostics/telemetry/feature-education-telemetry.ts',
+      'src/renderer/src/components/orchestration/setup/orchestration-setup-state.ts',
+      'src/renderer/src/lib/notifications/terminal-shortcut-capture-notification.tsx',
       'src/renderer/src/web/preload-api/web-keybindings-api.ts',
       'src/renderer/src/web/preload-api/web-onboarding-api.ts',
       'src/renderer/src/web/preload-api/web-preferences-store.ts',

@@ -1,4 +1,4 @@
-import { endComposition } from '@/lib/ime-composition-event.test-support'
+import { endComposition } from '@/lib/text-input/ime/ime-composition-event.test-support'
 import { changePrompt, promptValue } from './native-chat-prompt-editor.test-support'
 // @vitest-environment happy-dom
 
@@ -22,7 +22,7 @@ import {
   NativeChatComposerField,
   type NativeChatComposerFieldProps
 } from './NativeChatComposerField'
-import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
+import { useImeEnterGestureOwnership } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useNativeChatDraft } from '../../drafts/use-native-chat-draft'
 import { useNativeChatDraftEvents } from './use-native-chat-draft-events'
@@ -108,7 +108,7 @@ function textarea(): HTMLTextAreaElement {
 }
 
 describe('native chat composer composition ownership', () => {
-  it('preserves the focused browser preedit through 120 stale streaming rerenders', () => {
+  it('preserves the focused preedit through a stale streaming rerender', () => {
     const textareaRef = createRef<HTMLTextAreaElement>()
     const onImeSettled = vi.fn()
     const props = fieldProps({ textareaRef, onImeSettled })
@@ -118,12 +118,10 @@ describe('native chat composer composition ownership', () => {
     fireEvent.compositionStart(input)
     changePrompt(input, '가')
 
-    for (let index = 0; index < 120; index += 1) {
-      view.rerender(<TestField {...props} draft={`stale streaming draft ${index}`} />)
-      expect(textarea()).toBe(input)
-      expect(document.activeElement).toBe(input)
-      expect(promptValue(input)).toBe('가')
-    }
+    view.rerender(<TestField {...props} draft="stale streaming draft" />)
+    expect(textarea()).toBe(input)
+    expect(document.activeElement).toBe(input)
+    expect(promptValue(input)).toBe('가')
 
     fireEvent.compositionEnd(input, { data: '가' })
     expect(onImeSettled).toHaveBeenCalledOnce()

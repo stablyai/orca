@@ -1,4 +1,4 @@
-import { normalizeRetirableGeneratedName } from '../../workspaces/removal/retirement/worktree-name-retirement'
+import { normalizeRetirableGeneratedName } from '../../workspaces/removal/retirement/retirable-generated-name'
 import { recordRetirementNamespaceRegistry } from '../../workspaces/removal/retirement/worktree-retirement-namespace'
 import {
   addRetiredNames,
@@ -88,7 +88,9 @@ export class RetiredWorktreeNamePersistence {
       namespaceKey,
       next
     )
-    scheduleSave(this[retiredWorktreeNamePersistenceContext].scheduling)
+    scheduleSave(this[retiredWorktreeNamePersistenceContext].scheduling, [
+      'retiredWorktreeNamesByNamespace'
+    ])
     return true
   }
 }
@@ -105,6 +107,8 @@ export function applyRetiredWorktreeNames(
   owner[retiredWorktreeNamePersistenceContext].runtime.state.retiredWorktreeNamesByRepo ??= {}
   owner[retiredWorktreeNamePersistenceContext].runtime.state.retiredWorktreeNamesByRepo[repoId] =
     next
-  scheduleSave(owner[retiredWorktreeNamePersistenceContext].scheduling)
+  scheduleSave(owner[retiredWorktreeNamePersistenceContext].scheduling, [
+    'retiredWorktreeNamesByRepo'
+  ])
   return true
 }

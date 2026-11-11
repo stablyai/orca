@@ -9,9 +9,9 @@ import {
   captureGitHubTaskObservation,
   githubTaskBinding,
   type GitHubTaskObservation
-} from '@/lib/github-task-observation'
-import { githubTaskIdentity } from '@/lib/github-task-target'
-import { getWorkItemRepo } from '@/lib/work-item-repo-row'
+} from '@/lib/work-items/github/github-task-observation'
+import { githubTaskIdentity } from '@/lib/work-items/github/github-task-target'
+import { getWorkItemRepo } from '@/lib/work-items/work-item-repo-row'
 import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/links'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { nextProviderRequestId } from '../requests/request-coordination'

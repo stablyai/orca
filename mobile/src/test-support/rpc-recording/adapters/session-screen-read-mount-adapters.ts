@@ -11,7 +11,7 @@ import { mountFixture } from '../recorder-fixture-shape'
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
 import type * as MobileNativeChatReadability from '../../../session/native-chat/transcript/use-mobile-native-chat-readability'
-import type * as MobileNativeChatStopModule from '../../../session/native-chat/use-mobile-native-chat-stop'
+import type * as MobileNativeChatStopModule from '../../../session/native-chat/composer/use-mobile-native-chat-stop'
 
 const WORKSPACE = 'workspace-1'
 const HANDLE = 'terminal-1'
@@ -163,7 +163,7 @@ export function sessionScreenReadMountAdapters(
     },
     'session.native-chat-stop': ({ client, effect }) => {
       const useStop = modules.load<typeof MobileNativeChatStopModule>(
-        'mobile/src/session/native-chat/use-mobile-native-chat-stop.ts'
+        'mobile/src/session/native-chat/composer/use-mobile-native-chat-stop.ts'
       ).useMobileNativeChatStop
       const errors: string[] = []
       let stop: () => void

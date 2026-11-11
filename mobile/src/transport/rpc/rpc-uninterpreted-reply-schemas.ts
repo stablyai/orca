@@ -1,5 +1,4 @@
 import * as z from 'zod'
-import '../../../../src/shared/zod-salvage'
 
 // Leave unread replies opaque; structured creates/probes require raw-envelope uncertainty checks at their callers.
 export const sessionLaunchUnreadReplySchema = z.unknown()

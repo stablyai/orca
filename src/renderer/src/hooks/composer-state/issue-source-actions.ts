@@ -48,14 +48,15 @@ import {
 import {
   buildLinearIssueLinkedWorkItem,
   getLinearLinkedWorkItemBranchName
-} from '@/lib/linear-linked-work-item'
-import { getLinearIssueWorkspaceName } from '../../../../shared/workspace-name'
-import { getJiraIssueKeyCasingSeedOptions } from '@/lib/jira-issue-key-casing'
+} from '@/lib/work-items/linear/linear-linked-work-item'
 import {
+  getLinearIssueWorkspaceName,
   getLinkedWorkItemSuggestedName,
-  getLinkedWorkItemWorkspaceName,
-  type LinkedWorkItemSummary
-} from '@/lib/new-workspace'
+  getLinkedWorkItemWorkspaceName
+} from '../../../../shared/workspace-name'
+import { getJiraIssueKeyCasingSeedOptions } from '@/lib/work-items/jira/jira-issue-key-casing'
+import '@/lib/workspace/creation/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/smart-workspace-name-field-model'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 

@@ -133,7 +133,7 @@ export function AgentLaunchSetupSubmenu({
           <Button
             ref={segment}
             variant="menu-segment"
-            size="icon-sm"
+            size="icon"
             // Why: stretch to the row so compact omnibox rows keep their height.
             className="h-auto min-h-6 self-stretch"
             type="button"
