@@ -93,7 +93,9 @@ export function useFileExplorerRepositories(
     const model = new ExplorerRepositoryFrontier(root, JSON.parse(ownerKey), {
       apply: (changes, affected, retains) => instance.updateFrontier(changes, affected, retains),
       invalidate: (path) => instance.invalidateCandidate(path),
-      resetProof: () => instance.invalidate()
+      resetProof: () => instance.invalidate(),
+      branches: (path) => instance.proofBranches(path),
+      invalidateSubtree: (path) => instance.invalidateProofSubtree(path)
     })
     frontier.current = model
     applyView(model)

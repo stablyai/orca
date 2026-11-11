@@ -1,3 +1,4 @@
+import { ExplorerRepositoryFrontier } from './file-explorer-repository-frontier-owner'
 import { afterEach, expect, it, vi } from 'vitest'
 import type {
   GitRepositoryStatus,
@@ -315,17 +316,36 @@ it('discards invalidated in-flight discovery proof while healthy siblings and la
     }
   )
   const cache = discoveryCache(101)
-  applyDiscoveryCache(observer, cache)
+  const frontier = new ExplorerRepositoryFrontier(
+    '/w',
+    { kind: 'local' },
+    {
+      apply: (changes, affected, retains) => observer.updateFrontier(changes, affected, retains),
+      invalidate: (path) => observer.invalidateCandidate(path),
+      resetProof: () => observer.invalidate(),
+      branches: (path) => observer.proofBranches(path),
+      invalidateSubtree: (path) => observer.invalidateProofSubtree(path)
+    }
+  )
+  frontier.setView('/w', new Set(), true)
+  frontier.commit(cache, [], true)
+  frontier.setVisible(true)
   observer.setVisible(true)
   try {
     await vi.advanceTimersByTimeAsync(1000)
     expect(probes).toHaveLength(1)
     expect(probes[0]).toHaveLength(100)
-    observer.invalidateChanges([{ path: 'd1/.git', kind: 'update', directory: false }])
-    applyDiscoveryCache(observer, {
-      ...cache,
-      '/w/unrelated': { operationOwner: { kind: 'local' }, children: [] }
-    })
+    frontier.commit(
+      {
+        ...cache,
+        '/w': {
+          ...cache['/w'],
+          children: cache['/w'].children.filter((child) => child.relativePath !== 'd1')
+        }
+      },
+      ['/w']
+    )
+    frontier.commit(cache, ['/w'])
     release(probes[0].map((path) => ({ path, kind: 'repository' })))
     await vi.advanceTimersByTimeAsync(0)
     expect(probes).toHaveLength(2)

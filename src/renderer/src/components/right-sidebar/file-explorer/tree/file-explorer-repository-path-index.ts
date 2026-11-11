@@ -52,6 +52,12 @@ export class ExplorerRepositoryPathIndex {
     return this.find(path)?.member === true
   }
 
+  branches(path: string): string[] {
+    return [...(this.find(path)?.children.keys() ?? [])].map((part) =>
+      path ? `${path}/${part}` : part
+    )
+  }
+
   set(paths: Iterable<string>): void {
     this.root = { member: false, children: new Map() }
     for (const path of paths) {

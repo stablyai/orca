@@ -16,7 +16,9 @@ export function buildExplorerRepositoryFrontier(
   const frontier = new ExplorerRepositoryFrontier(root, owner, {
     apply: () => {},
     invalidate: () => {},
-    resetProof: () => {}
+    resetProof: () => {},
+    branches: () => [],
+    invalidateSubtree: () => {}
   })
   frontier.setView(displayRoot, expanded, hasRootGitSource)
   frontier.commit(dirCache, [])

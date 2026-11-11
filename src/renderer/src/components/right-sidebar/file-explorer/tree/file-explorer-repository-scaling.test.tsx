@@ -495,3 +495,163 @@ it('keeps unknown discovery backoff across repeated unreadable cache updates', a
   expect(probes).toEqual([['folder'], ['folder']])
   fixture.unmount()
 })
+
+it.each([1000, 10000])(
+  'retires only discontinued hidden parent edges among %i unrelated directories',
+  async (count) => {
+    vi.useFakeTimers()
+    supports.mockResolvedValue(true)
+    const repositories = new Set<string>()
+    const probes: string[][] = []
+    read.mockImplementation(async (_route, request: GitRepositoryStatusRequest) => {
+      if (request.repositoryIntent === 'probe') {
+        probes.push(request.repositoryPaths!)
+      }
+      return {
+        repositoryStatuses: request.repositoryPaths!.map((path) => ({
+          path,
+          kind: repositories.has(path) ? 'repository' : 'absent',
+          ...(repositories.has(path) && request.repositoryIntent === 'status'
+            ? { status: { entries: [], conflictOperation: 'unknown' } }
+            : {})
+        }))
+      }
+    })
+    let parentRows = 0
+    let unrelatedRows = 0
+    let unrelatedMetadata = 0
+    const child = (name: string): TreeNode => ({
+      ...node(`p/${name}`, true),
+      get outsideProject() {
+        parentRows++
+        return undefined
+      }
+    })
+    const initialParent: DirCache = {
+      operationOwner: owner,
+      repositoryMarker: false,
+      children: [child('d'), child('stable')]
+    }
+    const cache: Record<string, DirCache> = {
+      '/w': {
+        operationOwner: owner,
+        children: [
+          node('p', true),
+          ...Array.from({ length: count }, (_, index) => ({
+            ...node(`peer${index}`, true),
+            get outsideProject() {
+              unrelatedRows++
+              return undefined
+            }
+          }))
+        ]
+      },
+      '/w/p': initialParent
+    }
+    for (let index = 0; index < count; index++) {
+      cache[`/w/peer${index}`] = {
+        operationOwner: owner,
+        children: [],
+        get repositoryMarker() {
+          unrelatedMetadata++
+          return false
+        }
+      }
+    }
+    const store = new FileExplorerDirectoryCache()
+    store.update(() => ({
+      dirCache: cache,
+      sourceWorkspaceId: 'folder:w',
+      reset: true,
+      changedPaths: []
+    }))
+    const expanded = new Set(['/w/p'])
+    const fixture = renderHook(
+      ({ visible }) =>
+        useFileExplorerRepositories(
+          'folder:w',
+          '/w',
+          '/w',
+          { dirCacheStore: store },
+          expanded,
+          visible,
+          true
+        ),
+      { initialProps: { visible: true } }
+    )
+    await act(() => vi.advanceTimersByTimeAsync(1000))
+    expect(probes.flat().sort()).toEqual(['p/d', 'p/stable'])
+    const commit = (listing: DirCache): void => {
+      act(() =>
+        store.update((previous) => ({
+          dirCache: { ...previous, '/w/p': listing },
+          changedPaths: ['/w/p']
+        }))
+      )
+    }
+    const partial = { ...initialParent, children: [child('stable')], more: true }
+    const failed = { ...initialParent, children: [], error: 'unreadable' }
+    fixture.rerender({ visible: false })
+    probes.length = 0
+    parentRows = unrelatedRows = unrelatedMetadata = 0
+    commit(failed)
+    commit(partial)
+    commit(initialParent)
+    expect(parentRows).toBe(3)
+    expect(probes).toEqual([])
+    fixture.rerender({ visible: true })
+    await act(() => vi.advanceTimersByTimeAsync(4000))
+    expect(probes.flat()).toEqual(['p'])
+
+    fixture.rerender({ visible: false })
+    probes.length = 0
+    parentRows = 0
+    // Transient unadmitted edges do not create proof history or retry obligations.
+    for (let index = 0; index < 20; index++) {
+      commit({
+        ...initialParent,
+        children: [...initialParent.children, child(`transient${index}`)]
+      })
+      commit(initialParent)
+    }
+    expect(parentRows).toBe(80)
+    commit(failed)
+    commit(partial)
+    commit({ ...initialParent, children: [child('stable')] })
+    const freshParent = { ...initialParent, children: [child('d'), child('stable')] }
+    commit(freshParent)
+    expect(parentRows).toBe(83)
+    repositories.add('p/d')
+    await act(() => vi.advanceTimersByTimeAsync(600_000))
+    expect(probes).toEqual([])
+    expect(parentRows).toBe(83)
+    expect(unrelatedRows).toBe(0)
+    expect(unrelatedMetadata).toBe(0)
+    fixture.rerender({ visible: true })
+    await act(() => vi.advanceTimersByTimeAsync(4000))
+    expect(probes.flat()).toEqual(['p/d'])
+    expect(fixture.result.current.sources.map((source) => source.path)).toEqual(['p/d'])
+    expect(parentRows).toBe(85)
+
+    // Even a return to the identical parent object cannot restore stable's old proof.
+    fixture.rerender({ visible: false })
+    probes.length = 0
+    parentRows = 0
+    commit({ ...freshParent, children: [child('d')] })
+    commit(freshParent)
+    repositories.add('p/stable')
+    expect(parentRows).toBe(2)
+    expect(probes).toEqual([])
+    fixture.rerender({ visible: true })
+    await act(() => vi.advanceTimersByTimeAsync(4000))
+    expect(probes.flat().sort()).toEqual(['p', 'p/stable'])
+    expect(fixture.result.current.sources.map((source) => source.path).sort()).toEqual([
+      'p/d',
+      'p/stable'
+    ])
+    expect(unrelatedRows).toBe(0)
+    expect(unrelatedMetadata).toBe(0)
+    fixture.unmount()
+    expect(vi.getTimerCount()).toBe(0)
+  }
+)

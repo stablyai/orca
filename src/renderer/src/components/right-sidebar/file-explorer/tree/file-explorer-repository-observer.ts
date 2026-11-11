@@ -172,6 +172,28 @@ export class FileExplorerRepositoryObserver {
     this.discovery.invalidate(path)
   }
 
+  proofBranches(path: string): string[] {
+    return [
+      ...new Set([...this.discovery.index.branches(path), ...this.sourceIndex.branches(path)])
+    ]
+  }
+
+  invalidateProofSubtree(path: string): void {
+    for (const candidate of this.discovery.index.descendants([path])) {
+      this.discovery.invalidate(candidate)
+    }
+    for (const sourcePath of this.sourceIndex.descendants([path])) {
+      const source = this.sources.get(sourcePath)!
+      source.statusDirty = true
+      source.proofRevision++
+      source.proofRetryAt = -Infinity
+      source.ignoredQueries.invalidate(this.visible)
+      if (this.visible) {
+        source.scheduler.signal()
+      }
+    }
+  }
+
   setDemand(paths: readonly string[] = this.demand, partition?: ExplorerRepositoryDemand): void {
     this.demand = paths
     updateExplorerRepositoryDemand(this.sources, paths, this.visible, () => this.emit(), partition)

@@ -1,5 +1,9 @@
 import { relativePathInsideRoot } from '../../../../../../shared/cross-platform-path'
 import { ExplorerRepositoryFrontierSupport } from './file-explorer-repository-frontier-support'
+import {
+  ExplorerRepositoryProofEdges,
+  sameRepositoryListingOwner
+} from './file-explorer-repository-proof-edges'
 import type { ExplorerRepositoryCandidate } from './file-explorer-repository-observer'
 import type { DirCache, FileExplorerOperationOwner } from './file-explorer-types'
 
@@ -16,25 +20,11 @@ type FrontierConsumer = {
   ) => void
   invalidate: (path: string) => void
   resetProof: () => void
+  branches: (path: string) => readonly string[]
+  invalidateSubtree: (path: string) => void
 }
 
-function sameOwner(
-  a: FileExplorerOperationOwner | undefined,
-  b: FileExplorerOperationOwner
-): boolean {
-  return (
-    a?.kind === b.kind &&
-    (b.kind === 'ssh'
-      ? a.kind === 'ssh' && a.connectionId === b.connectionId
-      : b.kind === 'runtime'
-        ? a.kind === 'runtime' &&
-          a.environmentId === b.environmentId &&
-          a.executionHostId === b.executionHostId
-        : true)
-  )
-}
-
-/** Each reachable directory owns its direct contribution; hidden commits retain only path headers. */
+/** Each reachable directory owns its direct contribution; hidden structure retains only path headers. */
 export class ExplorerRepositoryFrontier {
   private current: Readonly<Record<string, DirCache>> = {}
   private consumed = this.current
@@ -52,12 +42,20 @@ export class ExplorerRepositoryFrontier {
   private support = new ExplorerRepositoryFrontierSupport()
   private changes = new Map<string, ExplorerRepositoryCandidate | undefined>()
   private affected = new Set<string>()
+  private proofEdges: ExplorerRepositoryProofEdges
 
   constructor(
     private root: string,
     private owner: FileExplorerOperationOwner,
     private consumer: FrontierConsumer
-  ) {}
+  ) {
+    this.proofEdges = new ExplorerRepositoryProofEdges(
+      root,
+      owner,
+      consumer.branches,
+      consumer.invalidateSubtree
+    )
+  }
 
   setView(
     displayRoot: string | null,
@@ -78,10 +76,12 @@ export class ExplorerRepositoryFrontier {
     this.current = cache
     if (reset) {
       this.reset = true
+      this.proofEdges.clear()
       this.dirty.clear()
       this.consumer.resetProof()
     } else {
       for (const path of paths) {
+        this.proofEdges.commit(path, cache[path])
         const relative = relativePathInsideRoot(this.root, path)
         const before = this.valid(previous[path]) ? previous[path] : undefined
         const after = this.valid(cache[path]) ? cache[path] : undefined
@@ -167,6 +167,7 @@ export class ExplorerRepositoryFrontier {
     this.consumed = this.current
     this.consumedExpanded = this.expanded
     this.dirty.clear()
+    this.proofEdges.clear()
     for (const path of this.support.changedRanges()) {
       this.affected.add(path)
     }
@@ -178,7 +179,11 @@ export class ExplorerRepositoryFrontier {
   }
 
   private valid(cache: DirCache | undefined): cache is DirCache {
-    return !!cache && cache.error === undefined && sameOwner(cache.operationOwner, this.owner)
+    return (
+      !!cache &&
+      cache.error === undefined &&
+      sameRepositoryListingOwner(cache.operationOwner, this.owner)
+    )
   }
 
   private refreshCandidate(path: string): void {
@@ -235,7 +240,7 @@ export class ExplorerRepositoryFrontier {
         if (
           child.outsideProject ||
           child.isSymlink ||
-          !sameOwner(child.operationOwner, this.owner)
+          !sameRepositoryListingOwner(child.operationOwner, this.owner)
         ) {
           continue
         }
