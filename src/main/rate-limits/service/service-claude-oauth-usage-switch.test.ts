@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { RateLimitService } from './service'
-import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
+import { RateLimitService } from './rate-limit-service'
+import { fetchActiveClaudeRateLimits } from '../providers/claude/claude-active-usage-fetch'
+import { fetchInactiveClaudeAccountUsage } from '../providers/claude/claude-managed-account-usage'
 import {
   deferred,
   mockFreshBackgroundProviderFetches,
@@ -8,65 +9,68 @@ import {
   resetRateLimitProviderMocks
 } from './rate-limit-service-test-harness'
 
-vi.mock('../claude-accounts/claude-profile-installed-router', () => ({
+vi.mock('../../claude-accounts/claude-profile-installed-router', () => ({
   getClaudeProfileRouter: () => undefined
 }))
 
-vi.mock('./claude-fetcher', () => ({
-  fetchClaudeRateLimits: vi.fn(),
-  fetchManagedAccountUsage: vi.fn()
+vi.mock('../providers/claude/claude-active-usage-fetch', () => ({
+  fetchActiveClaudeRateLimits: vi.fn()
 }))
 
-vi.mock('./codex-fetcher', () => ({
+vi.mock('../providers/claude/claude-managed-account-usage', () => ({
+  fetchInactiveClaudeAccountUsage: vi.fn()
+}))
+
+vi.mock('../providers/codex/codex-fetcher', () => ({
   consumeCodexRateLimitResetCredit: vi.fn(),
   fetchCodexRateLimits: vi.fn()
 }))
 
-vi.mock('./gemini-usage-fetcher', () => ({
+vi.mock('../providers/gemini/gemini-usage-fetcher', () => ({
   fetchGeminiRateLimits: vi.fn()
 }))
 
-vi.mock('./kimi-fetcher', () => ({
+vi.mock('../providers/kimi/kimi-fetcher', () => ({
   fetchKimiRateLimits: vi.fn()
 }))
 
-vi.mock('./opencode-go-usage-source-selection', () => ({
+vi.mock('../providers/opencode-go/opencode-go-usage-source-selection', () => ({
   fetchOpenCodeGoUsage: vi.fn()
 }))
 
-vi.mock('./zcode-usage-fetcher', () => ({
+vi.mock('../providers/zcode/zcode-usage-fetcher', () => ({
   fetchZcodeRateLimits: vi.fn()
 }))
 
-vi.mock('./muse-usage-fetcher', () => ({
+vi.mock('../providers/muse/muse-usage-fetcher', () => ({
   fetchMuseRateLimits: vi.fn()
 }))
 
-vi.mock('./antigravity-usage-fetcher', () => ({
+vi.mock('../providers/antigravity/antigravity-usage-fetcher', () => ({
   fetchAntigravityRateLimits: vi.fn()
 }))
 
-vi.mock('./minimax/minimax-fetcher', () => ({
+vi.mock('../providers/minimax/minimax-fetcher', () => ({
   fetchMiniMaxRateLimits: vi.fn()
 }))
 
-vi.mock('./grok-fetcher', () => ({
+vi.mock('../providers/grok/grok-fetcher', () => ({
   fetchGrokRateLimits: vi.fn()
 }))
 
-vi.mock('./cursor-fetcher', () => ({
+vi.mock('../providers/cursor/cursor-fetcher', () => ({
   fetchCursorRateLimits: vi.fn()
 }))
 
-vi.mock('./cursor-auth', () => ({
+vi.mock('../providers/cursor/cursor-auth', () => ({
   readCursorAuthSession: vi.fn()
 }))
 
-vi.mock('./grok-auth', () => ({
+vi.mock('../providers/grok/grok-auth', () => ({
   readGrokAuthSession: vi.fn(() => ({ status: 'missing' }))
 }))
 
-vi.mock('../minimax/minimax-cookie-store', () => ({
+vi.mock('../../minimax/minimax-cookie-store', () => ({
   hasMiniMaxSessionCookie: vi.fn(() => false)
 }))
 
@@ -81,8 +85,8 @@ function serviceWithOAuthUsage(enabled: boolean): RateLimitService {
 describe('Claude OAuth usage switch', () => {
   beforeEach(() => {
     resetRateLimitProviderMocks()
-    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 18))
-    vi.mocked(fetchManagedAccountUsage).mockResolvedValue(okProvider('claude', 18))
+    vi.mocked(fetchActiveClaudeRateLimits).mockResolvedValue(okProvider('claude', 18))
+    vi.mocked(fetchInactiveClaudeAccountUsage).mockResolvedValue(okProvider('claude', 18))
     mockFreshBackgroundProviderFetches()
   })
 
@@ -93,7 +97,7 @@ describe('Claude OAuth usage switch', () => {
     await service.refreshClaudeForTarget()
     await service.refreshForClaudeAccountChange('account')
 
-    expect(fetchClaudeRateLimits).not.toHaveBeenCalled()
+    expect(fetchActiveClaudeRateLimits).not.toHaveBeenCalled()
     expect(service.getState().claude?.status).toBe('unavailable')
   })
 
@@ -103,7 +107,7 @@ describe('Claude OAuth usage switch', () => {
 
     await service.fetchInactiveClaudeAccountsOnOpen()
 
-    expect(fetchManagedAccountUsage).not.toHaveBeenCalled()
+    expect(fetchInactiveClaudeAccountUsage).not.toHaveBeenCalled()
   })
 
   it.each(['full', 'claude-only'])(
@@ -151,8 +155,8 @@ describe('Claude OAuth usage switch', () => {
       const service = new RateLimitService()
       service.setClaudeOAuthUsageEnabledResolver(() => enabled)
       const started = deferred<void>()
-      const pending = deferred<Awaited<ReturnType<typeof fetchClaudeRateLimits>>>()
-      vi.mocked(fetchClaudeRateLimits).mockImplementationOnce(() => {
+      const pending = deferred<Awaited<ReturnType<typeof fetchActiveClaudeRateLimits>>>()
+      vi.mocked(fetchActiveClaudeRateLimits).mockImplementationOnce(() => {
         started.resolve()
         return pending.promise
       })
@@ -171,8 +175,8 @@ describe('Claude OAuth usage switch', () => {
     const service = new RateLimitService()
     service.setClaudeOAuthUsageEnabledResolver(() => enabled)
     const started = deferred<void>()
-    const pending = deferred<Awaited<ReturnType<typeof fetchClaudeRateLimits>>>()
-    vi.mocked(fetchClaudeRateLimits).mockImplementationOnce(() => {
+    const pending = deferred<Awaited<ReturnType<typeof fetchActiveClaudeRateLimits>>>()
+    vi.mocked(fetchActiveClaudeRateLimits).mockImplementationOnce(() => {
       started.resolve()
       return pending.promise
     })
@@ -193,6 +197,6 @@ describe('Claude OAuth usage switch', () => {
   it('fetches when the user turns it on', async () => {
     await serviceWithOAuthUsage(true).refresh()
 
-    expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+    expect(fetchActiveClaudeRateLimits).toHaveBeenCalledTimes(1)
   })
 })
