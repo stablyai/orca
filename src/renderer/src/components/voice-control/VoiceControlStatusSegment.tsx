@@ -1,7 +1,7 @@
 import { Mic, MicOff } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { VoiceControlState } from '../../../../shared/voice-control-types'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from '../status-bar/status-bar-context-menu-policy'
 import { dispatchVoiceControlAction } from './voice-control-events'

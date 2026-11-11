@@ -364,13 +364,12 @@ export function VoicePane({
       </SettingsGroup>
 
       {showVoiceControlSection && (
-        <>
-          <Separator />
+        <SettingsGroup title={t('components.settings.voice.voiceControl.title', 'Voice Control')}>
           <VoiceControlSettingsSection
             voiceSettings={voiceSettings}
             onUpdateVoiceSettings={updateVoiceSettings}
           />
-        </>
+        </SettingsGroup>
       )}
 
       <OpenAiCompatibleProviderDialog
