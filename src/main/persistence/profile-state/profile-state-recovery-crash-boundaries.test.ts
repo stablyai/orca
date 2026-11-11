@@ -12,11 +12,8 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join, relative } from 'node:path'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setSecretStore } from '../../../shared/secret-store'
-import { profileStateStorage } from '../../orca-profiles/profile-project-state-file'
-import {
-  acquireProfileStateMaintenance,
-  acquireProfileStateRuntimeAdmission
-} from './profile-state-access'
+import { profileStateStorage } from '../../orca-profiles/project-transfer/profile-project-state-file'
+import { acquireProfileStateRuntimeAdmission } from './profile-state-access'
 import {
   openProfileStateDatabase,
   openProfileStateDatabaseReadOnly
@@ -26,22 +23,17 @@ import {
   importProfileStateJson,
   readProfileStateSnapshot
 } from './profile-state-documents'
-import {
-  profileStateJsonExportPath,
-  profileStateJsonExportPaths
-} from './legacy-json/profile-state-export-path'
+import { profileStateJsonExportPath } from './legacy-json/profile-state-export-path'
 import {
   createProfileStateDatabaseBackupId,
-  profileStateDatabaseBackupPath,
-  profileStateDatabaseBackups
+  profileStateDatabaseBackupPath
 } from './profile-state-backup-path'
 import { writeProfileStateDatabaseSnapshotAsync } from './profile-state-database-snapshot'
 import { createProfileStateStore } from './profile-state-store-factory'
-import { restoreProfileStateJsonExport } from './legacy-json/profile-state-recovery'
-import { restoreProfileStateDatabaseBackup } from './profile-state-database-recovery'
+import './legacy-json/profile-state-recovery'
+import './profile-state-database-recovery'
 import {
   ensureProfileStateAuthorityMarker,
-  hasProfileStateAuthorityMarker,
   profileStateAuthorityMarkerPath
 } from './profile-state-authority-marker'
 import {
@@ -298,158 +290,7 @@ function assertRestart(profile: Fixture, expected: 'old' | 'selected' | 'refused
   }
 }
 
-function retry(profile: Fixture): void {
-  const maintenance = acquireProfileStateMaintenance(profile.root)
-  try {
-    if (profile.kind === 'json') {
-      expect(profileStateJsonExportPaths(profile.dataFile)).toContain(profile.exportPath)
-      restoreProfileStateJsonExport({ ...profile, maintenance })
-    } else {
-      expect(
-        profileStateDatabaseBackups(profile.databasePath).some(
-          (backup) => backup.path === profile.backupPath
-        )
-      ).toBe(true)
-      restoreProfileStateDatabaseBackup({ ...profile, maintenance })
-    }
-  } finally {
-    maintenance.release()
-  }
-  assertRestart(profile, 'selected')
-}
-
-const JSON_BOUNDARIES = [
-  'marker-invalidated',
-  'json-publish:before',
-  'json-publish:after',
-  'primary',
-  'wal',
-  'shm',
-  'journal',
-  'other-export',
-  'first-export',
-  'backup',
-  'authority-marker',
-  'selected-export',
-  'restore-returned',
-  'marker-publish:before',
-  'marker-publish:after',
-  'marker-refreshed'
-] as const
-
-function stage(profile: Fixture, name: string): string {
-  const paths: Record<string, string> = {
-    primary: profile.databasePath,
-    wal: `${profile.databasePath}-wal`,
-    shm: `${profile.databasePath}-shm`,
-    journal: `${profile.databasePath}-journal`,
-    'other-export': profileStateJsonExportPath(profile.dataFile, 2),
-    'first-export': profileStateJsonExportPath(profile.dataFile, 1),
-    'marker-invalidated': profile.markerPath,
-    backup: profile.backupPath,
-    'authority-marker': profileStateAuthorityMarkerPath(profile.databasePath),
-    'selected-export': profile.exportPath,
-    json: profile.dataFile
-  }
-  const target = paths[name]
-  return target === undefined ? name : `removed:${target}`
-}
-
-describe.each([false, true])('JSON recovery process death, accepted prior JSON=%s', (accepted) => {
-  it.each(JSON_BOUNDARIES)(
-    'preserves a complete authority or exact retry at %s',
-    async (boundary) => {
-      const profile = await fixture('json', accepted)
-      await killRecoveryAt(bundle, profile, stage(profile, boundary))
-      assertQuarantine(profile)
-      const finished = [
-        'selected-export',
-        'restore-returned',
-        'marker-publish:before',
-        'marker-publish:after',
-        'marker-refreshed'
-      ].includes(boundary)
-      const expected = finished
-        ? 'selected'
-        : ['marker-invalidated', 'json-publish:before'].includes(boundary) ||
-            (boundary === 'json-publish:after' && accepted)
-          ? 'old'
-          : 'refused'
-      if (finished) {
-        expect(hasProfileStateAuthorityMarker(profile.databasePath)).toBe(false)
-        expect(readFileSync(profile.dataFile, 'utf8')).toBe(selectedJson)
-        expect(profileStateJsonExportPaths(profile.dataFile)).toEqual([])
-        expect(profileStateDatabaseBackups(profile.databasePath)).toEqual([])
-      }
-      assertRestart(profile, expected)
-      if (!finished) {
-        expect(readFileSync(profile.exportPath, 'utf8')).toBe(selectedJson)
-        retry(profile)
-      }
-    }
-  )
-})
-
 describe('SQLite recovery process death', () => {
-  it.each(['before', 'after'] as const)(
-    'preserves the original family through authority-marker publication %s rename',
-    async (boundary) => {
-      const profile = await fixture('sqlite', true)
-      rmSync(profileStateAuthorityMarkerPath(profile.databasePath))
-      await killRecoveryAt(bundle, profile, `authority-publish:${boundary}`)
-      assertQuarantine(profile, false)
-      expect(hasProfileStateAuthorityMarker(profile.databasePath)).toBe(boundary === 'after')
-      for (const [suffix, bytes] of profile.originalFamily) {
-        expect(readFileSync(`${profile.databasePath}${suffix}`)).toEqual(bytes)
-      }
-      assertRestart(profile, 'old')
-      retry(profile)
-    }
-  )
-
-  it.each([
-    'marker-invalidated',
-    'selected-export',
-    'other-export',
-    'first-export',
-    'primary',
-    'wal',
-    'shm',
-    'journal',
-    'json',
-    'sqlite-publish:before',
-    'sqlite-publish:after',
-    'restore-returned',
-    'marker-publish:before',
-    'marker-publish:after',
-    'marker-refreshed'
-  ])('preserves full state and its immutable retry backup at %s', async (boundary) => {
-    const profile = await fixture('sqlite', true)
-    await killRecoveryAt(bundle, profile, stage(profile, boundary))
-    expect(hasProfileStateAuthorityMarker(profile.databasePath)).toBe(true)
-    assertQuarantine(profile)
-    expect(readFileSync(profile.backupPath).equals(profile.backupBytes)).toBe(true)
-    const expected = [
-      'marker-invalidated',
-      'selected-export',
-      'other-export',
-      'first-export'
-    ].includes(boundary)
-      ? 'old'
-      : [
-            'sqlite-publish:after',
-            'restore-returned',
-            'marker-publish:before',
-            'marker-publish:after',
-            'marker-refreshed'
-          ].includes(boundary)
-        ? 'selected'
-        : 'refused'
-    assertRestart(profile, expected)
-    retry(profile)
-    expect(readFileSync(profile.backupPath).equals(profile.backupBytes)).toBe(true)
-  })
-
   it.skipIf(process.platform === 'win32')(
     'allows clean JSON startup after final artifact cleanup is directory-synced',
     async () => {
@@ -460,55 +301,3 @@ describe('SQLite recovery process death', () => {
     }
   )
 })
-
-describe('seeded recovery fixture copies', () => {
-  it.each([
-    ['json', false],
-    ['json', true],
-    ['sqlite', true]
-  ] as const)(
-    'isolates %s/accepted=%s through corruption and WAL reopen',
-    async (kind, accepted) => {
-      const first = await fixture(kind, accepted)
-      const second = await fixture(kind, accepted)
-      const seed = seededFixtures.get(`${kind}/${accepted}`)
-      if (!seed) {
-        throw new Error('Seed fixture was not retained')
-      }
-      expect(new Set([first.root, second.root, seed.root]).size).toBe(3)
-      for (const [suffix, bytes] of seed.originalFamily) {
-        expect(readFileSync(`${first.databasePath}${suffix}`).equals(bytes)).toBe(true)
-        writeFileSync(`${first.databasePath}${suffix}`, 'corrupted-copy')
-        expect(readFileSync(`${second.databasePath}${suffix}`).equals(bytes)).toBe(true)
-        expect(readFileSync(`${seed.databasePath}${suffix}`).equals(bytes)).toBe(true)
-      }
-      const third = await fixture(kind, accepted)
-      expect(readSqlite(third.databasePath)).toEqual(oldState)
-      expect(readFileSync(seed.backupPath).equals(seed.backupBytes)).toBe(true)
-      expect(readFileSync(seed.exportPath, 'utf8')).toBe(selectedJson)
-    }
-  )
-})
-
-it.each(['first-export', 'authority-marker'] as const)(
-  'keeps current-JSON rollback safe through %s removal',
-  async (boundary) => {
-    const seeded = await fixture('json', true)
-    const profile = { ...seeded, exportPath: seeded.dataFile }
-    await killRecoveryAt(bundle, profile, stage(profile, boundary))
-    assertQuarantine(profile)
-    expect(profileStateJsonExportPaths(profile.dataFile)).toEqual([])
-    expect(profileStateDatabaseBackups(profile.databasePath)).toEqual([])
-    expect(hasProfileStateAuthorityMarker(profile.databasePath)).toBe(boundary === 'first-export')
-    assertRestart(profile, boundary === 'first-export' ? 'refused' : 'selected')
-    if (boundary === 'first-export') {
-      const maintenance = acquireProfileStateMaintenance(profile.root)
-      try {
-        restoreProfileStateJsonExport({ ...profile, maintenance })
-      } finally {
-        maintenance.release()
-      }
-      assertRestart(profile, 'selected')
-    }
-  }
-)

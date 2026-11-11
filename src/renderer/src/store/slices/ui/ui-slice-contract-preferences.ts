@@ -1,12 +1,15 @@
+import type { StatusBarUsageFormat } from '../../../../../shared/status-bar-usage-format'
 import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
-import type { BrowserDevToolsDockLayout } from '../../../../../shared/browser-devtools-dock'
+import type { BrowserDevToolsDockLayout } from '../../../../../shared/browser/devtools/browser-devtools-dock'
 import type {
   ActivityGroupBy,
+  ThreadReadFilter
+} from '../../../../../shared/agents-view-thread-filters'
+import type {
   AgentActivityDisplayMode,
   ManualRepoOrderEntry,
   ProjectOrderBy,
   StatusBarItem,
-  ThreadReadFilter,
   WorktreeCardMode,
   WorktreeCardProperty,
   WorkspaceHostOrder,
@@ -14,17 +17,18 @@ import type {
   VisibleWorkspaceHostIds
 } from '../../../../../shared/ui-chrome-types'
 import type { UsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
-import type { AutomationHostFilter } from '../../../../../shared/automation-host-filter'
+import type { AutomationHostFilter } from '../../../../../shared/automations/ownership/automation-host-filter'
 import type { WorkspaceStatusDefinition } from '../../../../../shared/worktree/types'
 import type { WorkspacePortScanResult } from '../../../../../shared/workspace-ports'
 import type { CustomPet } from '../../../../../shared/pet-types'
 import type { ReleaseChannel } from '../../../../../shared/release-channel'
 import type { ChangelogData, UpdateStatus } from '../../../../../shared/update-status-types'
 import type { StatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
-import type { PersistedUIWriteBaseline } from '../persisted-ui-write-baseline'
+import type { PersistedUIWriteBaseline } from './persisted-ui-write-baseline'
 import type { UISliceCore } from './ui-slice-contract-core'
 
 export type UISlicePreferences = {
+  gitGraphFiltersByWorktree?: PersistedUIState['gitGraphFiltersByWorktree']
   /** Which list the sidebar body shows. Navigator-only; does not change the active view. */
   sidebarBody: 'workspaces' | 'agents'
   setSidebarBody: (body: UISlicePreferences['sidebarBody']) => void
@@ -90,6 +94,7 @@ export type UISlicePreferences = {
   setAgentsGroupBy: (v: ActivityGroupBy) => void
   collapsedGroups: Set<string>
   toggleCollapsedGroup: (key: string) => void
+  setCollapsedGroups: (keys: Set<string>) => void
   worktreeCardProperties: WorktreeCardProperty[]
   _worktreeCardModeDefaulted: boolean
   setWorktreeCardMode: (mode: WorktreeCardMode) => void
@@ -121,6 +126,8 @@ export type UISlicePreferences = {
   setUsagePercentageDisplay: (display: UsagePercentageDisplay) => void
   statusBarUsageMode: StatusBarUsageMode
   setStatusBarUsageMode: (mode: StatusBarUsageMode) => void
+  statusBarUsageFormat: StatusBarUsageFormat
+  setStatusBarUsageFormat: (format: StatusBarUsageFormat) => void
 }
 
 export type UISliceSurfaces = {
@@ -208,6 +215,8 @@ export type UISlicePersistence = {
   setUpdateCardCollapsed: (collapsed: boolean) => void
   updateReassuranceSeen: boolean
   markUpdateReassuranceSeen: () => void
+  seenMacosUpdateRequirement: string | null
+  markMacosUpdateRequirementSeen: (minimumMacosVersion: string) => void
   /** True on the launch where the OSC 52 default-on migration overrode a persisted `false`. */
   osc52ClipboardDefaultOnNoticePending: boolean
   clearOsc52ClipboardDefaultOnNotice: () => void

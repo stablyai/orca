@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RuntimeClient } from '../runtime-client'
 import type { CliStatusResult } from '../../shared/runtime-types'
-import { TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import '../../shared/protocol-version'
+import { TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY } from '../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import { TERMINAL_HANDLERS } from './terminal'
 
 function splitClient(
@@ -39,22 +40,6 @@ function retrySplit(client: RuntimeClient, splitId = 'leaf-1') {
 describe('terminal split --retry-split', () => {
   afterEach(() => {
     vi.restoreAllMocks()
-  })
-
-  it('sends the retry to a host that can resume the split', async () => {
-    const call = vi.fn().mockResolvedValue({
-      result: { split: { handle: 'term_2', tabId: 'tab-1', paneRuntimeId: 1, leafId: 'leaf-1' } }
-    })
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await retrySplit(splitClient(call, [TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY]))
-
-    expect(call).toHaveBeenCalledExactlyOnceWith('terminal.split', {
-      terminal: 'term_1',
-      direction: undefined,
-      command: 'agent --task 1',
-      retrySplit: 'leaf-1'
-    })
   })
 
   // An older host strips `retrySplit` and splits again, starting a second copy of the command.

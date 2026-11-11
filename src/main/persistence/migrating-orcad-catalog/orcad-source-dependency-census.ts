@@ -19,7 +19,7 @@ import {
   orcadMigrationPartitionScope,
   type OrcadMigrationSourceScope
 } from './orcad-source-scope'
-import { paneBelongsToTabs } from '../../../shared/workspace-session-pane-ownership'
+import { paneBelongsToTabs } from '../../../shared/workspace-session/workspace-session-pane-ownership'
 
 export type OrcadMigrationSourceDependencyCensus = {
   totalCount: number

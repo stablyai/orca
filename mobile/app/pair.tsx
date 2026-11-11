@@ -5,7 +5,7 @@ import { colors, radii, spacing, typography, pressedStyle } from '../src/theme/m
 import { themedStyleSheet } from '../src/theme/themed-styles'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
-import { extractPairingCodeFromUrl } from '../src/transport/pairing'
+import { extractPairingCodeFromUrl } from '../src/pairing/pairing'
 
 export default function PairRedirectScreen() {
   useMobileColorScheme()

@@ -1,10 +1,10 @@
-import { deriveWorkerTerminalListState } from '../../worker-terminal-ownership'
+import { deriveWorkerTerminalListState } from '../../terminal-authority/release/worker-terminal-ownership'
 import type {
   WorkerDispatchListState,
   WorkerTerminalListState,
   WorkerTerminalOwnershipState,
   WorkerTerminalReleaseState
-} from '../../worker-terminal-ownership'
+} from '../../terminal-authority/release/worker-terminal-ownership'
 import type { OrchestrationDb } from '../orchestration-db'
 import type { WorkerTerminalListingSnapshot } from './worker-terminal-listing'
 

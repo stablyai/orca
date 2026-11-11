@@ -1,31 +1,37 @@
 // Paired desktops can host pages without a local engine; present engine and desktop pages as one tab list.
 import { BrowserError } from '../browser/browser-error'
-import type { RuntimeBrowserCommands } from '../runtime/browser/browser-commands'
-import type { RuntimeBrowserCommandHost } from '../runtime/browser/browser-command-contracts'
+import type { RuntimeBrowserCommands } from '../runtime/browser/commands/browser-commands'
+import type { RuntimeBrowserCommandHost } from '../runtime/browser/commands/browser-command-contracts'
 import type {
   BrowserTabListResult,
   BrowserTabShowResult,
   BrowserTabSwitchResult
-} from '../../shared/runtime-types'
-import { browserUnavailableError } from '../runtime/runtime-browser-commands-factory'
-import { browserTabCreateClientPageStartsActive } from '../runtime/browser-tab-create-publication'
+} from '../../shared/browser/runtime/runtime-browser-contracts'
+import { browserUnavailableError } from '../runtime/browser/installation/runtime-browser-commands-factory'
+import { browserTabCreateClientPageStartsActive } from '../runtime/browser/tabs/browser-tab-create-publication'
 import {
   closeBrowserPageWithoutEngine,
   resolveClientPageToClose,
   retireRuntimeBrowserClientPage
-} from '../runtime/browser/browser-client-page-close'
+} from '../runtime/browser/client-pages/browser-client-page-close'
 import {
+  canPlacePairedPage,
   createBrowserClientPage,
   createBrowserPageOnPairedHost,
   DEFAULT_BROWSER_PROFILE_ID,
   hasPairedPageHost,
   openBrowserUrlOnClient
-} from '../runtime/browser/browser-client-page-opening'
+} from '../runtime/browser/client-pages/browser-client-page-opening'
 import {
   BrowserClientPageQueries,
   yieldClientPageSelection,
   type BrowserEngineTabs
-} from '../runtime/browser/browser-client-page-queries'
+} from '../runtime/browser/client-pages/browser-client-page-queries'
+
+import {
+  findListedBrowserTab,
+  readBrowserTabAnnotations
+} from '../runtime/browser/tabs/browser-tab-annotations'
 
 type Forward = (args: unknown[], name?: string) => unknown
 
@@ -69,6 +75,16 @@ export function orcadClientPageCommand(
         : closeBrowserPageWithoutEngine(host, params, browserUnavailableError)
     }
   }
+  if (name === 'browserTabAnnotations') {
+    return async (...args: Parameters<RuntimeBrowserCommands['browserTabAnnotations']>) => {
+      const { page, worktree } = args[0] ?? {}
+      // The engine's active flags are global, so a worktree's current tab needs its own query.
+      const tab = page
+        ? findListedBrowserTab((await logicalTabs().browserTabList({ worktree })).tabs, page)
+        : (await logicalTabs().browserTabCurrent({ worktree })).tab
+      return readBrowserTabAnnotations(host, tab)
+    }
+  }
   const query = LOGICAL_TAB_QUERIES.find((candidate) => candidate === name)
   if (query) {
     return (...args: unknown[]) => {
@@ -106,7 +122,7 @@ function createTab(
     !params?.placement &&
     !caller?.pairedDeviceId &&
     !engineAvailable() &&
-    hasPairedPageHost(host)
+    canPlacePairedPage(host)
   ) {
     return createBrowserPageOnPairedHost(
       host,

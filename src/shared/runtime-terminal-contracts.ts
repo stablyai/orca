@@ -1,15 +1,16 @@
 import type { TerminalLaunchResult } from './agent-session/lifecycle/agent-session-resume'
 import type * as AgentSessionResume from './agent-session/lifecycle/agent-session-resume'
-import type { StartupCommandDelivery } from './codex-startup-delivery'
+import type { StartupCommandDelivery } from './agent-launch/startup/codex-startup-delivery'
 import type { ExecutionHostId } from './execution-host'
-import type { PtyIncarnationId } from './pty-incarnation'
-import type { PtyLivenessVerdict } from './pty-liveness-verdict'
+import type { PtyIncarnationId } from './terminal/pty/lifecycle/pty-incarnation'
+import type { PtyLivenessVerdict } from './terminal/pty/lifecycle/pty-liveness-verdict'
 import type { RuntimeListingHostScope } from './runtime-listing-host-scope'
 import type { RuntimeMobileSessionTabsResult } from './runtime-session-contracts'
 import type { TabGroupLayoutNode } from './tab-types'
-import type { TerminalExitCause } from './terminal-exit-cause'
-import type { TerminalPaneLayoutNode } from './terminal-tab-types'
-import type { TerminalAgent, TuiAgent } from './terminal-agent'
+import type { TerminalExitCause } from './terminal/pty/lifecycle/terminal-exit-cause'
+import type { TerminalPaneLayoutNode } from './workspace-layout/terminal-tab-types'
+import type { TerminalAgent } from './agent-status/identity/terminal-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 export type {
   RuntimeTerminalSend,
   RuntimeTerminalPromptStage,
@@ -43,6 +44,16 @@ export type RuntimeTerminalSummary = {
   executionHostId?: ExecutionHostId
   /** Read verdict for host liveness: legacy connected can stay true while unreachable. Absent on older hosts. */
   verdict?: PtyLivenessVerdict['status']
+  /** Only when the caller asked for it; absent on older hosts. */
+  attention?: RuntimeTerminalAttention
+}
+
+/** Use of a PTY that its host's own window can't see: a remote client showing it, or input from anywhere. */
+export type RuntimeTerminalAttention = {
+  /** A paired client or phone is displaying it. Clients too old to report hidden panes never count. */
+  shownRemotely: boolean
+  /** Last user input from any client; null if none reached its current process. */
+  lastInputAt: number | null
 }
 
 export type RuntimeTerminalVisualTerminalNode = {
@@ -251,6 +262,7 @@ type RuntimeTerminalCreateBaseRequestPayload = {
   resumeProviderSession?: AgentSessionResume.AgentProviderSessionMetadata
   launchToken?: string
   launchAgent?: TuiAgent
+  trustWorktreeId?: string
   viewMode?: 'terminal' | 'chat'
   startupCommandDelivery?: StartupCommandDelivery
   title?: string
@@ -326,6 +338,8 @@ export type RuntimeTerminalWaitBlockedReason =
   | 'agent-hooks-review-prompt'
   | 'agent-interactive-prompt'
   | 'agent-approval-prompt'
+  | 'agent-sign-in-prompt'
+  | 'agent-startup-menu-prompt'
 
 export type RuntimeTerminalWait = {
   handle: string

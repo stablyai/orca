@@ -21,6 +21,9 @@ describe('worker-start infers its coordinator from the caller, not the worker pl
       if (method === 'worktree.list') {
         return okFixture('req_list', { worktrees: [COORDINATOR_WORKTREE] })
       }
+      if (method === 'folderWorkspace.list') {
+        return okFixture('req_folders', { folderWorkspaces: [] })
+      }
       if (method === 'terminal.resolveActive') {
         const worktree =
           params && typeof params === 'object' && 'worktree' in params ? params.worktree : undefined

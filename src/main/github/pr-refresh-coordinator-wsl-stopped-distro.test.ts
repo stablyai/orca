@@ -11,13 +11,12 @@ const gate = vi.hoisted(() => ({
   wslDistroForPath: vi.fn()
 }))
 
-vi.mock('electron', () => moduleMocks.electronModuleMock(coordinatorMocks))
+vi.mock('./pr-refresh-renderer-port', () => moduleMocks.rendererPortModuleMock(coordinatorMocks))
 vi.mock('./client', () => moduleMocks.clientModuleMock(coordinatorMocks))
 vi.mock('./github-api-repository', () =>
   moduleMocks.githubApiRepositoryModuleMock(coordinatorMocks)
 )
 vi.mock('./rate-limit', () => moduleMocks.rateLimitModuleMock(coordinatorMocks))
-vi.mock('../ipc/ui', () => moduleMocks.ipcUiModuleMock(coordinatorMocks))
 vi.mock('../wsl/filesystem/wsl-unc-access-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof WslUncAccessGateModule>()),
   blockedWslDistroForPath: gate.blockedWslDistroForPath,

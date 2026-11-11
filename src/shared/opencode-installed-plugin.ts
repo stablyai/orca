@@ -1,5 +1,5 @@
 import { lstatSync } from 'node:fs'
-import { nodeFileContentsEqualSync } from './node-file-content-equality'
+import { nodeFileContentsEqualSync } from './file-content/node-file-content-equality'
 
 // OpenCode 2 reloads this and subsequent plugins on mtime changes even for identical bytes; skip current writes.
 // Follow canonical symlinks because OpenCode loads through them.

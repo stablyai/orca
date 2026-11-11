@@ -1,6 +1,5 @@
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentModelCatalogBinding } from './agent-model-catalog-snapshot'
-import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
+import { independentAgentModelCatalog } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 import {
   type AgentSessionAccountHome,
   isLegacyAgentSessionAccountHome
@@ -30,13 +29,19 @@ export type AgentModelCatalogWorkspaceDeps = {
   }) => Promise<boolean>
 }
 
+/** Claude and Codex pickers show the account's default everywhere, as the references do; the CLI
+ *  still applies a project's own settings at launch and the chat then reports what it ran. */
+export function agentModelCatalogDefaultFollowsAccount(agent: string): boolean {
+  return independentAgentModelCatalog(agent)
+}
+
 export async function workspaceKeepsListedDefault(
   deps: AgentModelCatalogWorkspaceDeps,
   agent: string,
   workspacePath: string | null | undefined,
   accountHomePath: string | null
 ): Promise<boolean> {
-  if (workspacePath === undefined) {
+  if (workspacePath === undefined || agentModelCatalogDefaultFollowsAccount(agent)) {
     return true
   }
   if (workspacePath === null || !deps.workspaceMayOverrideDefaultModel) {
@@ -89,19 +94,21 @@ export async function recordConfiguredDefault(
   source?: AgentModelCatalogListing | null
 ): Promise<void> {
   const accountHome = record.accountHome
-  if (!deps.workspaceMayOverrideDefaultModel) {
-    return
-  }
-  const workspacePath = await sessionWorkspacePath(deps, record)
-  if (
-    !workspacePath ||
-    (await deps.workspaceMayOverrideDefaultModel({
-      agent: record.provider,
-      workspacePath,
-      accountHomePath: isLegacyAgentSessionAccountHome(accountHome) ? accountHome.path : null
-    }))
-  ) {
-    return
+  if (!agentModelCatalogDefaultFollowsAccount(record.provider)) {
+    if (!deps.workspaceMayOverrideDefaultModel) {
+      return
+    }
+    const workspacePath = await sessionWorkspacePath(deps, record)
+    if (
+      !workspacePath ||
+      (await deps.workspaceMayOverrideDefaultModel({
+        agent: record.provider,
+        workspacePath,
+        accountHomePath: isLegacyAgentSessionAccountHome(accountHome) ? accountHome.path : null
+      }))
+    ) {
+      return
+    }
   }
   if (
     current() &&
@@ -111,25 +118,14 @@ export async function recordConfiguredDefault(
   }
 }
 
-/** Default provenance belongs to the resolved binding and the operation projecting it. */
-export async function projectAgentModelCatalogDefault(
+/** The workspace's own settings, checked once per refresh for every reader sharing it; null
+ *  when the read failed, which leaves each binding's conservative projection. */
+export function agentModelCatalogListedDefault(
   deps: AgentModelCatalogWorkspaceDeps,
   agent: string,
-  bound: AgentModelCatalogBinding,
-  home: AgentSessionAccountHome | null,
-  current: () => boolean
-): Promise<void> {
+  workspacePath: string | null | undefined,
+  home: AgentSessionAccountHome | null
+): Promise<boolean | null> {
   const accountHomePath = home && isLegacyAgentSessionAccountHome(home) ? home.path : null
-  const path =
-    bound.workspacePath === null && independentAgentModelCatalog(agent)
-      ? undefined
-      : bound.workspacePath
-  try {
-    const keepDefault = await workspaceKeepsListedDefault(deps, agent, path, accountHomePath)
-    if (current()) {
-      bound.keepDefault = keepDefault
-    }
-  } catch {
-    /* A failed provenance read leaves the binding's conservative projection. */
-  }
+  return workspaceKeepsListedDefault(deps, agent, workspacePath, accountHomePath).catch(() => null)
 }

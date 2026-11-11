@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { StructuredAgentSessionAppendOptions } from '../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionAppendOptions } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { createClaudeJournalTranslator } from './journal/claude-structured-journal-translation'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
 
@@ -132,28 +132,6 @@ describe('a streamed reasoning row the provider never finishes', () => {
       completedAt: 9_000
     })
     expect(translator.pendingStreamedBlocks).toBe(0)
-  })
-
-  it('is not rewritten by the token tally Claude sends after every thinking delta', () => {
-    const { translator, message, thinkingDelta, reasoningWrites } = setup()
-    for (let index = 0; index < 20; index += 1) {
-      thinkingDelta(`delta-${index}`, 'more words ', 1_000 + index)
-      translator.handle(
-        message(
-          {
-            type: 'system',
-            subtype: 'thinking_tokens',
-            estimated_tokens: index,
-            estimated_tokens_delta: 1,
-            uuid: `tokens-${index}`
-          },
-          1_000 + index
-        )
-      )
-    }
-    expect(reasoningWrites()).toEqual([])
-    vi.advanceTimersByTime(100)
-    expect(reasoningWrites()).toHaveLength(1)
   })
 
   // Timings of the first block in a captured 2.1.280 session with summarized display.

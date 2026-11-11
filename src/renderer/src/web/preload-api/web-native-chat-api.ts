@@ -3,7 +3,7 @@ import { buildNativeChatUnsubscribe } from '../../../../shared/native-chat/nativ
 import {
   parseRuntimeNativeChatReadSessionResult,
   parseRuntimeNativeChatTurnLifecycle
-} from '@/components/native-chat/native-chat-runtime-contract'
+} from '@/components/native-chat/session/terminal/read/native-chat-runtime-contract'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeResult } from './web-runtime-calls'
 import { getClientForEnvironment, requireActiveEnvironmentOrNull } from './web-runtime-session'

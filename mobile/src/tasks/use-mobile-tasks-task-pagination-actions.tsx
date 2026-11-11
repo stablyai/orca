@@ -1,19 +1,19 @@
+import { useQueryClient } from '@tanstack/react-query'
+import { patchTaskHydration } from './task-queries'
 import {
   applyEmptyPageClamp,
   applyWindowPageLimit,
   deriveAdvertisedTotalPages,
   resolveEmptyPageOutcome
-} from '../../../src/shared/work-item-empty-page'
+} from '../../../src/shared/work-items/work-item-empty-page'
 import { translate } from '../i18n/mobile-i18n'
 import type { TaskListLoadingModel } from './use-mobile-tasks-task-list-loading'
 import {
   CROSS_REPO_DISPLAY_LIMIT,
   PER_REPO_FETCH_LIMIT,
-  getTaskPagePerRepoLimit,
-  useCallback,
-  useMemo,
-  useState
-} from './mobile-tasks-dependencies'
+  getTaskPagePerRepoLimit
+} from '../../../src/shared/work-items/work-item-pagination'
+import { useCallback, useMemo, useState } from './mobile-tasks-dependencies'
 import { type TaskItem, buildPartialRepositoryNotice } from './mobile-tasks-legacy-foundation'
 import { linearAccountConnect } from './mobile-task-list-operations'
 
@@ -42,11 +42,14 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
     githubPages,
     githubPaginationLoading,
     githubCountedTotalPages,
+    hostId,
     linearApiKeyDraft,
     linearConnectState,
     loadGenerationRef,
     loadLinearContext,
     loadTasks,
+    loading,
+    revalidating,
     selectedHostedRepos,
     setError,
     setGithubCurrentPage,
@@ -66,6 +69,7 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
     taskUiReady,
     tasksSupported
   } = model
+  const queryClient = useQueryClient()
   const connectLinearAccount = useCallback(async (): Promise<void> => {
     if (!client || connState !== 'connected' || !taskUiReady) {
       return
@@ -86,6 +90,7 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
       setLinearConnectState('idle')
       setShowLinearConnect(false)
       setLinearConnected(true)
+      patchTaskHydration(queryClient, hostId, (kept) => ({ ...kept, linearConnected: true }))
       setVisibleProviders((current) =>
         current.includes('linear') ? current : [...current, 'linear']
       )
@@ -95,7 +100,16 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
       setLinearConnectState('error')
       setLinearConnectError(err instanceof Error ? err.message : 'Connection failed')
     }
-  }, [client, connState, linearApiKeyDraft, linearConnectState, loadLinearContext, taskUiReady])
+  }, [
+    client,
+    connState,
+    hostId,
+    linearApiKeyDraft,
+    linearConnectState,
+    loadLinearContext,
+    queryClient,
+    taskUiReady
+  ])
 
   const retryGitHubIssueSourceFetch = useCallback(
     async (repoPath: string): Promise<void> => {
@@ -137,8 +151,11 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
     !githubCountedTotalPages &&
     (provenPageLimit === null || githubPages.length < provenPageLimit) &&
     hasRepoWithFullPage(githubPages.at(-1) ?? [], githubPerRepoLimit)
+  // Pages kept or left from another filter stand in while a list loads; paging from them would mix old and new rows.
   const githubCanShowPagination =
-    githubTotalPages > 1 || (githubPages.length > 0 && githubCanLoadUncountedNextPage)
+    !revalidating &&
+    !loading &&
+    (githubTotalPages > 1 || (githubPages.length > 0 && githubCanLoadUncountedNextPage))
   const githubPagePickerPages = useMemo(() => {
     const visible = new Set<number>()
     const availablePages = Math.min(
@@ -165,6 +182,8 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
         !tasksSupported ||
         targetPage < 0 ||
         githubPaginationLoading ||
+        revalidating ||
+        loading ||
         selectedHostedRepos.length === 0
       ) {
         return
@@ -251,6 +270,8 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
       githubPages,
       githubPaginationLoading,
       loadGenerationRef,
+      loading,
+      revalidating,
       selectedHostedRepos,
       setGithubCountedTotalPages,
       tasksSupported

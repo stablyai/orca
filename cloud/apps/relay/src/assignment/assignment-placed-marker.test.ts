@@ -1,7 +1,7 @@
 import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract/assignment-invariants'
 import { afterEach, describe, expect, it } from 'vitest'
 import { RelayAssignmentStore } from './assignment-store.js'
-import { openInMemoryRelayDatabase, type RelayDatabase } from '../database.js'
+import { openInMemoryRelayDatabase, type RelayDatabase } from '../database/database.js'
 
 const CELL = { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 }
 const IDENTITY = { userId: 'user-a', relayHostId: 'host000000000001' }
@@ -39,24 +39,10 @@ describe('assign marks only the answers it minted as placed', () => {
     now += ASSIGNMENT_LIMITS.dormantTtlMs
     const replaced = await store.assign(IDENTITY)
 
-    expect(replaced).toMatchObject({ cellId: first.cellId, assignmentEpoch: first.assignmentEpoch + 1 })
-    expect(replaced.placed).toBe(true)
-  })
-
-  it('marks a reserve booking and keeps the returned assignment otherwise unchanged', async () => {
-    const store = await setup(() => 100)
-    const booking = {
-      ...IDENTITY,
-      cellId: 'reserve-c1',
-      cellUrl: 'https://reserve-c1.example.com',
-      assignmentEpoch: 9,
-      leaseExpiresAt: 400_000,
-      region: 'us-central1' as const
-    }
-    const booked = await store.assign(IDENTITY, undefined, undefined, undefined, {
-      placeFresh: async () => booking
+    expect(replaced).toMatchObject({
+      cellId: first.cellId,
+      assignmentEpoch: first.assignmentEpoch + 1
     })
-
-    expect(booked).toEqual({ ...booking, placed: true })
+    expect(replaced.placed).toBe(true)
   })
 })

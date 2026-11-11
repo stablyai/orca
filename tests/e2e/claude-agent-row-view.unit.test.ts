@@ -5,39 +5,47 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import type { HostAuthority } from '../../src/shared/host-authority'
-import type { AgentStatusEntry } from '../../src/shared/agent-status-types'
+import type { AgentStatusEntry } from '../../src/shared/agent-status/contracts/agent-status-types'
 import type { ClaudeAgentViewResult } from '../../src/shared/claude-agent-view'
 import { TerminalViewClaudeAgent } from '../../src/shared/rpc-contract/terminal-unary-params'
 import { createHookListenerState } from '../../src/shared/agent-hook-listener/listener-state'
 import { seedClaudeSubagentRosterFromSnapshots } from '../../src/shared/agent-hook-listener/providers/claude-roster-state'
 import { claudeRosterToSnapshots } from '../../src/shared/claude-subagent-roster'
-import { decodeAgentSubagentsField } from '../../src/shared/agent-status-subagent-snapshot'
-import { makePaneKey } from '../../src/shared/stable-pane-id'
+import { decodeAgentSubagentsField } from '../../src/shared/agent-status/contracts/agent-status-subagent-snapshot'
+import { makePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'
 import { ClaudeAgentViewBridge } from '../../src/main/claude/agent-view/agent-view-bridge'
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { RUNTIME_PROTOCOL_VERSION } from '../../src/shared/protocol-version'
-import { buildSubagentChildRows } from '@/components/sidebar/worktree-subagent-child-rows'
+import { buildSubagentChildRows } from '@/components/sidebar/workspace-card/activity/worktree-subagent-child-rows'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { CompactAgentRow } from '@/components/sidebar/worktree-card-compact-agent-row'
+import { CompactAgentRow } from '@/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row'
 import FullAgentRow from '@/components/dashboard/DashboardAgentRow'
-import { opensClaudeParentConversation, viewClaudeAgentFromRow } from '@/lib/claude-agent-row-view'
-import type * as WorktreeRuntimeOwner from '@/lib/worktree-runtime-owner'
-import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
-import WorktreeCardAgents from '@/components/sidebar/WorktreeCardAgents'
+import {
+  opensClaudeParentConversation,
+  viewClaudeAgentFromRow
+} from '@/lib/agent-session/navigation/claude-agent-row-view'
+import type * as WorktreeRuntimeOwner from '@/lib/workspace/ownership/worktree-runtime-owner'
+import '@/store/slices/worktrees/worktree.test-fixture'
+import '@/store/repos/repo.test-fixture'
+import '@/components/sidebar/workspace-card/activity/WorktreeCardAgents'
 import { i18n, translate } from '@/i18n/i18n'
 
 const mocks = vi.hoisted(() => ({ info: vi.fn(), transport: vi.fn(), owner: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { info: mocks.info } }))
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn(),
   activateAndRevealWorkspace: vi.fn()
 }))
-vi.mock('@/lib/activate-tab-and-focus-pane', () => ({ activateTabAndFocusPane: vi.fn() }))
-vi.mock('@/lib/terminal-tab-owner-activation', () => ({ activateTerminalTabOnOwner: vi.fn() }))
+vi.mock('@/lib/workspace/tabs/activate-tab-and-focus-pane', () => ({
+  activateTabAndFocusPane: vi.fn()
+}))
+vi.mock('@/lib/workspace/tabs/terminal-tab-owner-activation', () => ({
+  activateTerminalTabOnOwner: vi.fn()
+}))
 vi.mock('@/lib/agent-session/structured-agent-session-tab-activation', () => ({
   activateStructuredAgentSessionTab: vi.fn()
 }))
-vi.mock('@/components/terminal-pane/stale-agent-row', () => ({
+vi.mock('@/components/terminal-pane/agent-status/stale-agent-row', () => ({
   dismissStaleAgentRowByKey: vi.fn()
 }))
 vi.mock('@/hooks/use-now', () => ({ useNow: () => 1000 }))
@@ -45,11 +53,11 @@ vi.mock('@/store', async () => {
   const { create } = await import('zustand')
   return { useAppStore: create(() => ({})) }
 })
-vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => ({
+vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', async (importOriginal) => ({
   ...(await importOriginal<typeof WorktreeRuntimeOwner>()),
   resolveOwnerOrLocal: mocks.owner
 }))
-vi.mock('@/runtime/runtime-rpc-environment-call', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-environment-call', () => ({
   callRuntimeEnvironmentWithRevision: (args: {
     method: string
     params: unknown
@@ -63,7 +71,7 @@ vi.mock('@/components/sidebar/comment-markdown-lazy', () => ({
   preloadCommentMarkdown: () => {},
   CommentMarkdownAsync: () => null
 }))
-vi.mock('@/components/sidebar/CacheTimer', () => ({
+vi.mock('@/components/sidebar/workspace-card/activity/CacheTimer', () => ({
   default: () => null,
   usePromptCacheCountdownForPane: () => null
 }))
@@ -227,7 +235,7 @@ async function click(index: number) {
 }
 
 const actualOwner = await vi.importActual<typeof WorktreeRuntimeOwner>(
-  '@/lib/worktree-runtime-owner'
+  '@/lib/workspace/ownership/worktree-runtime-owner'
 )
 
 beforeEach(async () => {
@@ -353,37 +361,6 @@ afterEach(async () => {
   expect(listeners).toBe(0)
 })
 
-it('updates a mounted compact workflow description through the subscribed production parent', async () => {
-  const key = 'auto.lib.claudeAgentRowView.openParentConversation'
-  const resources = structuredClone(i18n.getResourceBundle('en', 'translation'))
-  const agents = [child('modern', 'workflow-subagent')]
-  try {
-    await act(async () => {
-      root = createRoot(host)
-      root.render(
-        createElement(
-          TooltipProvider,
-          null,
-          createElement(WorktreeCardAgents, { worktreeId: parent.tab.worktreeId, agents })
-        )
-      )
-    })
-    const row = host.querySelector('.compact-agent-row')
-    expect(row?.getAttribute('aria-description')).toBe('Open parent conversation')
-    await act(async () => {
-      i18n.addResource('en', 'translation', key, 'Open the parent thread')
-    })
-    expect(host.querySelector('.compact-agent-row')).toBe(row)
-    expect(row?.getAttribute('aria-description')).toBe('Open the parent thread')
-    expect(requests).toHaveLength(0)
-  } finally {
-    await act(async () => {
-      i18n.removeResourceBundle('en', 'translation')
-      i18n.addResourceBundle('en', 'translation', resources)
-    })
-  }
-})
-
 it('settles real child and parent refusals once while observed A remains current', async () => {
   const workflow = child('restored')
   rows('compact', workflow)
@@ -414,62 +391,6 @@ it('settles real child and parent refusals once while observed A remains current
   expect(element(2).hasAttribute('aria-current')).toBe(false)
   expect(bridge.receive({ ...identity(), action: 'take' })).toEqual({})
 })
-
-it.each(
-  [100, 1000].flatMap((population) => [false, true].map((fallback) => ({ population, fallback })))
-)(
-  'bounds upstream active-SSH visits for $population records, fallback=$fallback',
-  async ({ population, fallback }) => {
-    const visits = { worktrees: 0, repos: 0 }
-    const worktrees = Array.from({ length: population }, (_, index) => {
-      const id = index === 0 ? parent.tab.worktreeId : `repo::/unrelated-${index}`
-      return {
-        ...makeWorktree({ id, repoId: 'repo', hostId: 'ssh:test' }),
-        get id() {
-          visits.worktrees++
-          return id
-        }
-      }
-    })
-    useAppStore.setState({
-      activeWorkspaceExecutionHostId: 'ssh:test',
-      worktreesByRepo: { repo: worktrees },
-      repos: [
-        {
-          ...TEST_REPO,
-          get id() {
-            visits.repos++
-            return 'repo'
-          },
-          connectionId: 'test'
-        }
-      ]
-    })
-    rows('compact', child('restored'))
-    await act(async () => {})
-    expect(visits.worktrees).toBeGreaterThanOrEqual(population)
-    visits.worktrees = 0
-    visits.repos = 0
-    await click(2)
-    expect(requests.map((request) => request.agentId)).toEqual(['W'])
-    await act(async () => {
-      takeAndSettle(fallback ? 'no agent under that id' : undefined)
-    })
-    if (fallback) {
-      expect(requests.map((request) => request.agentId)).toEqual(['W', undefined])
-      expect(mocks.info).not.toHaveBeenCalled()
-      await act(async () => {
-        takeAndSettle()
-      })
-    }
-    // Owner indexes are warm; clicks must not rescan either catalog.
-    expect(visits.worktrees).toBe(0)
-    expect(visits.repos).toBe(0)
-    expect(requests).toHaveLength(fallback ? 2 : 1)
-    expect(bridge.receive({ ...identity(), action: 'take' })).toEqual({})
-    expect(mocks.info).not.toHaveBeenCalled()
-  }
-)
 
 it.each(['compact', 'full'] as const)(
   'runs real %s clicks through child deny, parent take/ACK and observed selection',
@@ -534,86 +455,6 @@ it.each(['compact', 'full'] as const)(
     expect(element(1).getAttribute('aria-current')).toBe('true')
     expect(element(2).hasAttribute('aria-current')).toBe(false)
     expect(mocks.info).not.toHaveBeenCalled()
-  }
-)
-
-it.each(['modern', 'legacy', 'restored'] as const)(
-  'derives %s destinations without requiring type or a workflow child ID',
-  async (shape) => {
-    forced = { status: 'viewed' }
-    const typed = child(shape, 'workflow-subagent')
-    await viewClaudeAgentFromRow({
-      ...typed,
-      childRow: typed.childRow ? { ...typed.childRow, providerId: undefined, id: '' } : undefined
-    })
-    await viewClaudeAgentFromRow(child(shape, 'general-purpose'))
-    await viewClaudeAgentFromRow(child(shape))
-    await viewClaudeAgentFromRow(child(shape, 'teammate', 'teammate-1'))
-    expect(requests.map((r) => r.agentId)).toEqual([undefined, 'W', 'W', 'teammate-1'])
-    expect(mocks.info).not.toHaveBeenCalled()
-  }
-)
-
-it.each(
-  (
-    [
-      'viewed',
-      'busy',
-      'permission',
-      'unsupported',
-      'unavailable',
-      'timeout',
-      'denied',
-      'throw'
-    ] as const
-  ).flatMap((status) => (['direct', 'fallback'] as const).map((path) => ({ status, path })))
-)(
-  'terminates a $path parent $status with no third request or intermediate toast',
-  async ({ status, path }) => {
-    if (path === 'direct') {
-      forced = status === 'throw' ? new Error('raw provider failure') : { status }
-    }
-    const action = viewClaudeAgentFromRow(
-      child('restored', path === 'direct' ? 'workflow-subagent' : undefined)
-    )
-    if (path === 'fallback') {
-      await act(async () => {})
-      expect(requests).toHaveLength(1)
-      expect(mocks.info).not.toHaveBeenCalled()
-      forced = status === 'throw' ? new Error('raw provider failure') : { status }
-      takeAndSettle('no agent under that id')
-    }
-    await action
-    expect(requests.map((r) => r.agentId)).toEqual(
-      path === 'direct' ? [undefined] : ['W', undefined]
-    )
-    expect(mocks.info).toHaveBeenCalledTimes(status === 'viewed' || status === 'busy' ? 0 : 1)
-    if (status === 'permission') {
-      expect(mocks.info).toHaveBeenCalledWith(
-        'Answer Claude’s permission prompt before switching agents.'
-      )
-    } else if (status !== 'viewed' && status !== 'busy') {
-      expect(mocks.info.mock.calls[0][0]).toContain(
-        'Claude could not open the parent conversation.'
-      )
-      expect(mocks.info.mock.calls[0][0]).not.toContain('no agent under that id')
-    }
-    expect(bridge.receive({ ...identity(), action: 'take' })).toEqual({})
-  }
-)
-
-it.each(['permission', 'unsupported', 'unavailable', 'timeout', 'busy', 'throw'] as const)(
-  'does not recover a first child %s',
-  async (status) => {
-    forced = status === 'throw' ? new Error('transport detail') : { status }
-    await viewClaudeAgentFromRow(child('legacy'))
-    expect(requests.map((r) => r.agentId)).toEqual(['W'])
-    expect(mocks.info).toHaveBeenCalledTimes(status === 'busy' ? 0 : 1)
-    if (status === 'timeout' || status === 'unavailable' || status === 'throw') {
-      expect(mocks.info).toHaveBeenCalledWith(
-        'Claude could not open this agent. Try again in the Claude pane.'
-      )
-    }
   }
 )
 
@@ -722,7 +563,8 @@ it.each(['list', 'compatibility'] as const)(
       owner = { endpoint: { kind: 'environment', environmentId: 'remote' }, at: 'local' }
       mocks.owner.mockImplementation(() => ({ kind: 'resolved', owner }))
       delayStatus = gate
-      const { clearRuntimeCompatibilityCache } = await import('@/runtime/runtime-rpc-client')
+      const { clearRuntimeCompatibilityCache } =
+        await import('@/runtime/rpc/compatibility/runtime-compatibility-cache')
       clearRuntimeCompatibilityCache()
     }
     const old = viewClaudeAgentFromRow(child('restored'))

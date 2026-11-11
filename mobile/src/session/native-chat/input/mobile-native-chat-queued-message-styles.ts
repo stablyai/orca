@@ -1,14 +1,12 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
-import { COMPOSER_INSET_TOP } from '../composer/mobile-native-chat-composer-styles'
+import { COMPOSER_INSET_TOP, COMPOSER_TUCK } from '../composer/mobile-native-chat-composer-styles'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 
 // Keep 44pt targets inside the parent row because Android drops outside touches.
 const MIN_TOUCH_TARGET = 44
 const HEADER_HEIGHT = spacing.xl + spacing.sm
 const META_LINE_HEIGHT = typography.metaSize + spacing.xs
-
-const COMPOSER_TUCK = 12
 
 export const queuedMessageStyles = themedStyleSheet(() => ({
   list: {
@@ -136,6 +134,12 @@ export const queuedMessageStyles = themedStyleSheet(() => ({
   caption: {
     color: colors.textMuted,
     fontSize: typography.metaSize
+  },
+  editorHeading: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.xs
   },
   captionReturned: {
     color: colors.statusRed

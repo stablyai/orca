@@ -1,7 +1,7 @@
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { Worktree } from '../../../../../shared/worktree/types'
-import { isExecutionHostAliasForWorktree } from '@/lib/worktree-execution-host-alias'
+import { isExecutionHostAliasForWorktree } from '@/lib/workspace/ownership/worktree-execution-host-alias'
 
 type WorktreeHostAliases = Pick<Worktree, 'hostId' | 'runtimeOwnerEnvironmentId'>
 

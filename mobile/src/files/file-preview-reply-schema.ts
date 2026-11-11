@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { salvagedOptional } from '../../../src/shared/zod-salvage'
 
 // Require unguarded members, salvage typed guards to their existing fallbacks, and retain unknown for truthiness-only reads.

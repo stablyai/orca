@@ -1,8 +1,5 @@
-import {
-  MobileNativeChatScrollMotion,
-  scrollKeepsPlace
-} from '../../mobile-native-chat-scroll-motion'
-import { MobileNativeChatScrollAnchoring } from '../../mobile-native-chat-scroll-anchoring'
+import { MobileNativeChatScrollMotion, scrollKeepsPlace } from './mobile-native-chat-scroll-motion'
+import { MobileNativeChatScrollAnchoring } from './mobile-native-chat-scroll-anchoring'
 import {
   mobileNativeChatScrollRootAttribute as ROOT,
   mobileNativeChatScrollRootOwners as owners,

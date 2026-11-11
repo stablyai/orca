@@ -1,15 +1,15 @@
 import { OrcaRuntimeWithTitlelessPaneAgentIdentity } from '../wait/titleless-pane-agent-identity'
-import type { RuntimeAgentPromptWriteOptions } from '../../runtime-terminal-contracts'
+import type { RuntimeAgentPromptWriteOptions } from './agent-prompt-write-options'
 import {
   AGENT_PROMPT_SUBMIT,
   isHeldAgentPromptDraft
-} from '../../../../shared/agent-prompt-injection'
-import type { AgentPromptActivity } from '../../agent-prompt-submission-verification'
+} from '../../../../shared/agent-launch/startup/agent-prompt-injection'
+import type { AgentPromptActivity } from './agent-prompt-submission-verification'
 import {
   isAgentPromptStalledError,
   verifyAgentPromptSubmission
-} from '../../agent-prompt-submission-verification'
-import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
+} from './agent-prompt-submission-verification'
+import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 
 type HeldAgentPrompt = {
   baseline: AgentPromptActivity

@@ -1,8 +1,8 @@
-import { isAskUserQuestionTool } from '../../agent-question-answered-intent'
+import { isAskUserQuestionTool } from '../../agent-status/lifecycle/agent-question-answered-intent'
 import {
   normalizeAgentStatusPayload,
   type ParsedAgentStatusPayload
-} from '../../agent-status-types'
+} from '../../agent-status/contracts/agent-status-types'
 import type { HookListenerState } from '../listener-state'
 import {
   resolvePrompt,
@@ -60,6 +60,10 @@ export function normalizeCompatibleLifecycleEvent(
   }
   // CodeBuddy emits SessionStart after UserPromptSubmit, so it cannot settle a turn.
   if (source === 'codebuddy' && eventName === 'SessionStart') {
+    return null
+  }
+  // CodeBuddy also fires PermissionRequest before auto-review allows; real prompts send Notification.
+  if (source === 'codebuddy' && eventName === 'PermissionRequest') {
     return null
   }
   const stateName =

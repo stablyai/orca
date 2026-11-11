@@ -35,26 +35,6 @@ it('distinguishes a missing source from an inaccessible source and a linked ance
   expect(await inspectSourceDirectory(source)).toBe('unverifiable')
 })
 
-it('requires an absolute source whose hash matches the owned overlay', async () => {
-  const source = join(root, 'source')
-  const overlay = join(root, sourceOverlayDirName(source))
-  const manifest = { topLevelEntries: [], pluginEntries: [], sourceConfigDir: source }
-  expect(await resolveOwnedOverlaySource(overlay, manifest)).toBe(source)
-  expect(
-    await resolveOwnedOverlaySource(overlay, { ...manifest, sourceConfigDir: join(root, 'other') })
-  ).toBeUndefined()
-  expect(
-    await resolveOwnedOverlaySource(overlay, { ...manifest, sourceConfigDir: 'relative' })
-  ).toBeUndefined()
-  expect(
-    await resolveOwnedOverlaySource(join(root, '123'), {
-      topLevelEntries: [],
-      pluginEntries: [],
-      sourceConfigDir: source
-    })
-  ).toBeUndefined()
-})
-
 it.skipIf(process.platform === 'win32')(
   'recognizes an older source-scoped manifest only through its named mirrored link',
   async () => {

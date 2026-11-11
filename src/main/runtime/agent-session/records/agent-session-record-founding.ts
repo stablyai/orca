@@ -2,11 +2,12 @@ import {
   AGENT_SESSION_FOUNDING_FENCE,
   agentSessionNeverStarted
 } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
-import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-chat-permission-mode'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
   type AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import { normalizeAgentSessionConversationName } from '../../../../shared/agent-session/agent-session-conversation-name'
 
 export type AgentSessionRecordIdentity = Pick<
   AgentSessionRecord,
@@ -17,6 +18,8 @@ export type AgentSessionRecordIdentity = Pick<
   | 'options'
   | 'launchArgs'
   | 'launchDirectory'
+  | 'forkedFrom'
+  | 'conversationName'
 >
 
 export function agentSessionRecordIdentityFields(
@@ -26,17 +29,20 @@ export function agentSessionRecordIdentityFields(
   // Wire options carry permission mode; records store it separately.
   const { [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: permissionMode, ...options } =
     identity.options ?? {}
+  const conversationName = normalizeAgentSessionConversationName(identity.conversationName)
   return {
     schemaVersion: AGENT_SESSION_RECORD_SCHEMA_VERSION,
     sessionId: identity.sessionId,
     location: identity.location,
     provider: identity.provider,
     accountHome: identity.accountHome,
+    ...(identity.forkedFrom ? { forkedFrom: identity.forkedFrom } : {}),
     ...(Object.keys(options).length > 0 ? { options } : {}),
     ...(permissionMode ? { permissionMode } : {}),
     ...(identity.launchArgs ? { launchArgs: [...identity.launchArgs] } : {}),
     // /clear retains its tab and launch directory.
     ...(identity.launchDirectory ? { launchDirectory: identity.launchDirectory } : {}),
+    ...(conversationName ? { conversationName } : {}),
     createdAt: now,
     updatedAt: now
   }

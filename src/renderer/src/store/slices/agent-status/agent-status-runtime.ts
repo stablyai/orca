@@ -1,5 +1,6 @@
+import { removePaneKeys } from './agent-status-pane-keyed-records'
 import { applyAgentStatusBatchUpdate } from './agent-status-batch-update'
-import { projectAgentPaneConversation } from '../agent-pane-conversation'
+import { projectAgentPaneConversation } from './agent-pane-conversation'
 import { structuralValuesEqualIgnoringUndefined } from '../../../../../shared/structural-value-equality'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
@@ -10,7 +11,7 @@ import type {
   AgentStatusChangeListener
 } from './agent-status-contract'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
-import type { GeneratedTabTitleUpdate } from '../terminal-tab-title-batch'
+import type { GeneratedTabTitleUpdate } from '../../terminals/terminal-tab-title-batch'
 import { createFreshnessScheduler } from './agent-status-freshness-scheduler'
 
 export type AgentStatusStateUpdate =
@@ -273,19 +274,13 @@ export function createAgentStatusRuntime(
     }
     const uniquePaneKeys = new Set(paneKeys)
     set((s) => {
-      let nextSleeping = s.sleepingAgentSessionsByPaneKey
-      for (const paneKey of uniquePaneKeys) {
-        if (paneKey in nextSleeping) {
-          if (nextSleeping === s.sleepingAgentSessionsByPaneKey) {
-            nextSleeping = { ...nextSleeping }
-          }
-          delete nextSleeping[paneKey]
-        }
-      }
+      const nextSleeping = removePaneKeys(s.sleepingAgentSessionsByPaneKey, uniquePaneKeys)
       if (nextSleeping === s.sleepingAgentSessionsByPaneKey) {
         return s
       }
-      return { sleepingAgentSessionsByPaneKey: nextSleeping }
+      return {
+        sleepingAgentSessionsByPaneKey: nextSleeping
+      }
     })
   }
 

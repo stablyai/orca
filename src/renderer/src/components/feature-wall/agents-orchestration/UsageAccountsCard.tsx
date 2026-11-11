@@ -2,18 +2,18 @@ import { useEffect, useState } from 'react'
 import type { JSX, ReactNode } from 'react'
 import { Loader2, Plus } from 'lucide-react'
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { Button } from '@/components/ui/button'
 import { ClaudeIcon, OpenAIIcon } from '@/components/status-bar/icons'
-import { cn } from '@/lib/utils'
-import { readIpcErrorMessage } from '@/lib/ipc-error'
+import { cn } from '@/lib/class-names'
+import { readIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
 } from '../../../../../shared/managed-account-types'
 import { getFeatureWallUsageProviderConnection } from '../feature-wall-usage-tracking'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type ConnectAction = 'idle' | 'adding'
 
@@ -48,6 +48,7 @@ function ProviderRow(props: {
   isAdding: boolean
   onSignIn: () => void
 }): JSX.Element {
+  const t = useTranslate()
   const { icon, name, description, connected, connectionLabel, isAdding, onSignIn } = props
   return (
     <div className="rounded-lg border border-border bg-muted/20">
@@ -73,11 +74,11 @@ function ProviderRow(props: {
                 <Plus className="size-3.5" />
               )}
               {isAdding
-                ? translate(
+                ? t(
                     'auto.components.feature.wall.agents.orchestration.UsageAccountsCard.945865332e',
                     'Signing in'
                   )
-                : translate(
+                : t(
                     'auto.components.feature.wall.agents.orchestration.UsageAccountsCard.29d0653961',
                     'Sign in'
                   )}
@@ -92,6 +93,7 @@ function ProviderRow(props: {
 export function UsageAccountsCard(props: {
   onAccountStateChange?: () => void | Promise<void>
 }): JSX.Element {
+  const t = useTranslate()
   const { onAccountStateChange } = props
   const fetchSettings = useAppStore((s) => s.fetchSettings)
   const rateLimits = useAppStore((s) => s.rateLimits)
@@ -132,14 +134,20 @@ export function UsageAccountsCard(props: {
     }
   }, [fetchRateLimits])
 
-  const claudeConnection = getFeatureWallUsageProviderConnection({
-    managedAccountCount: claudeAccounts?.accounts.length,
-    provider: rateLimits.claude
-  })
-  const codexConnection = getFeatureWallUsageProviderConnection({
-    managedAccountCount: codexAccounts?.accounts.length,
-    provider: rateLimits.codex
-  })
+  const claudeConnection = getFeatureWallUsageProviderConnection(
+    {
+      managedAccountCount: claudeAccounts?.accounts.length,
+      provider: rateLimits.claude
+    },
+    t
+  )
+  const codexConnection = getFeatureWallUsageProviderConnection(
+    {
+      managedAccountCount: codexAccounts?.accounts.length,
+      provider: rateLimits.codex
+    },
+    t
+  )
 
   const handleClaudeSignIn = async (): Promise<void> => {
     if (claudeAction !== 'idle') {
@@ -156,7 +164,7 @@ export function UsageAccountsCard(props: {
         await onAccountStateChange?.()
         if (mountedRef.current) {
           toast.success(
-            translate(
+            t(
               'auto.components.feature.wall.agents.orchestration.UsageAccountsCard.9ddeb558f9',
               'Claude account added.'
             )
@@ -166,7 +174,7 @@ export function UsageAccountsCard(props: {
     } catch (error) {
       if (mountedRef.current) {
         toast.error(
-          translate(
+          t(
             'auto.components.feature.wall.agents.orchestration.UsageAccountsCard.4e71d72912',
             'Claude sign-in failed.'
           ),
@@ -197,7 +205,7 @@ export function UsageAccountsCard(props: {
         await onAccountStateChange?.()
         if (mountedRef.current) {
           toast.success(
-            translate(
+            t(
               'auto.components.feature.wall.agents.orchestration.UsageAccountsCard.c7b90c140b',
               'Codex account added.'
             )
@@ -207,7 +215,7 @@ export function UsageAccountsCard(props: {
     } catch (error) {
       if (mountedRef.current) {
         toast.error(
-          translate(
+          t(
             'auto.components.feature.wall.agents.orchestration.UsageAccountsCard.8919321417',
             'Codex sign-in failed.'
           ),
@@ -228,7 +236,7 @@ export function UsageAccountsCard(props: {
       <ProviderRow
         icon={<ClaudeIcon size={16} />}
         name="Claude"
-        description={translate(
+        description={t(
           'auto.components.feature.wall.agents.orchestration.UsageAccountsCard.d90d2e1f6d',
           'Track session and weekly usage.'
         )}
@@ -240,7 +248,7 @@ export function UsageAccountsCard(props: {
       <ProviderRow
         icon={<OpenAIIcon size={16} />}
         name="Codex"
-        description={translate(
+        description={t(
           'auto.components.feature.wall.agents.orchestration.UsageAccountsCard.6986b36708',
           'Surface rate limits and swap accounts inline.'
         )}

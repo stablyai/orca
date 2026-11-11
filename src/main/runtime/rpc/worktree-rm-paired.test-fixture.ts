@@ -6,8 +6,8 @@ import {
   encrypt,
   generateKeyPair,
   publicKeyToBase64
-} from '../../../shared/e2ee-crypto'
-import { encodePairingOffer } from '../../../shared/pairing'
+} from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
+import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
 import type { RpcRequest, RpcResponse } from './core'
 
 /** Authenticated transport around the real dispatcher supplied by the integration fixture. */
@@ -21,12 +21,16 @@ export async function pairedRemovalReceiver(
   const connections: string[][] = []
   sockets.on('connection', (socket) => {
     const methods: string[] = []
-    connections.push(methods)
     let key: Uint8Array | null = null
     let authenticated = false
     socket.on('message', (data) => {
       if (!key) {
-        const hello: { publicKeyB64: string } = JSON.parse(data.toString())
+        const hello: { publicKeyB64?: string } = JSON.parse(data.toString())
+        if (!hello.publicKeyB64) {
+          // Legacy-only host: refuses a v2 hello the way hosts before v2 do.
+          socket.close(4001, 'Invalid e2ee_hello')
+          return
+        }
         key = deriveSharedKey(keys.secretKey, Buffer.from(hello.publicKeyB64, 'base64'))
         socket.send(JSON.stringify({ type: 'e2ee_ready' }))
         return
@@ -43,6 +47,7 @@ export async function pairedRemovalReceiver(
           return
         }
         authenticated = true
+        connections.push(methods)
         socket.send(encrypt(JSON.stringify({ type: 'e2ee_authenticated' }), key))
         return
       }

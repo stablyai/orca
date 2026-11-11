@@ -1,4 +1,4 @@
-# Ratcheted by config/scripts/check-flaky-test-pattern-ratchet.mjs; info severity keeps
+# Ratcheted by config/scripts/static-analysis/ratchets/test-quality/check-flaky-test-pattern-ratchet.mjs; info severity keeps
 # `pnpm lint:ast-grep` quiet about the grandfathered baseline.
 # Conditional skips (`skipIf`, Playwright's `test.skip(condition, reason)`) are platform or
 # environment guards, not quarantines, so only unconditional forms are checked.

@@ -106,9 +106,16 @@ export type BridgeRead<TMessage> =
   | { ok: true; message: TMessage }
   | { ok: false; refusal: BridgeRefusal }
 
+const NON_ASCII_UNIT = /[\u0080-\uffff]/
+
+// Find the ASCII prefix natively: Hermes interprets the per-unit loop, which dominated the cost of a large reply.
 export function utf8ByteLength(value: string): number {
-  let bytes = 0
-  for (let index = 0; index < value.length; index += 1) {
+  const firstNonAscii = value.search(NON_ASCII_UNIT)
+  if (firstNonAscii < 0) {
+    return value.length
+  }
+  let bytes = firstNonAscii
+  for (let index = firstNonAscii; index < value.length; index += 1) {
     const unit = value.charCodeAt(index)
     if (unit < 0x80) {
       bytes += 1

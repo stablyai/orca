@@ -1,5 +1,5 @@
 import { delimiter } from 'node:path'
-import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
+import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { discoverFiles } from './session-scanner-discovery'
 import { opencodeDiscoveries } from './scanners/opencode/session-scanner-opencode-sources'
 import { zcodeDiscoveries } from './scanners/zcode/session-scanner-zcode-sources'
@@ -7,7 +7,7 @@ import { antigravityDiscoveries } from './scanners/antigravity/session-scanner-a
 import { AI_VAULT_AGENT_SOURCES, type AiVaultAgentSource } from './session-scanner-agent-sources'
 import { normalizedWslHomeDirs } from './session-scanner-roots'
 import { configureOpenCodeWslReaders } from './scanners/opencode/reader-transport/session-scanner-opencode-wsl-client'
-import { scopeWalksAgentFiles } from './session-scope-cwd'
+import { scopeOnlyScan, scopeWalksAgentFiles } from './session-scope-cwd'
 import type { AiVaultScanOptions, SessionFileDiscovery } from './session-scanner-types'
 
 export { DEFAULT_CODEX_HOME_DIR } from './session-scanner-agent-sources'
@@ -51,6 +51,14 @@ function agentDiscoveries(
   issues: AiVaultScanIssue[]
 ): Promise<SessionFileDiscovery>[] {
   const rootDirs = source.rootDirs(options, wslHomeDirs)
+  // Scope-only reads cwd buckets through the scope pass; Pi stays listed because OMP's dedupe needs its listing.
+  if (
+    scopeOnlyScan(options) &&
+    !scopeWalksAgentFiles(agent, options.scopePaths) &&
+    agent !== 'pi'
+  ) {
+    return rootDirs.map(async (rootDir) => ({ agent, rootDir, files: [] }))
+  }
   const discover = (rootDir: string): Promise<SessionFileDiscovery> =>
     discoverFiles({
       rootDir,

@@ -5,7 +5,7 @@ import type {
 } from '../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { Store } from '../../../persistence/loading-store/store'
-import { areWorktreePathsEqual } from '../../../git/worktree-path-comparison'
+import { areWorktreePathsEqual } from '../../../git/worktrees/catalog/worktree-path-comparison'
 import {
   deferUntilWslDistroRunning,
   onWslDistroGateNote

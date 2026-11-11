@@ -1,15 +1,16 @@
 import React from 'react'
 import { conflictOverviewView } from '@/store/slices/editor/buffers/editor-buffer-conflict-overview'
-import { detectLanguage } from '@/lib/language-detect'
+import { detectLanguage } from '../../../../shared/editor-language/editor-language-detect'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
-import type { OpenFile, PendingEditorReveal } from '@/store/slices/editor'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import type { PendingEditorReveal } from '@/store/slices/editor/types/pending-editor-reveal'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import { ConflictBanner, ConflictPlaceholderView, ConflictReviewPanel } from './ConflictComponents'
 import { ImageViewer, MonacoEditor } from './editor-lazy-views'
 import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
 import type { FileContent } from './editor-panel-content-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { EditorConflictNavigation } from './useEditorConflictNavigation'
 
 // Retry is a user act: it may start a stopped WSL distro.
@@ -44,6 +45,7 @@ export function EditorConflictReviewSurface({
   handleSaveForFile: (file: OpenFile, content: string) => Promise<boolean>
   reloadContent: (file: OpenFile, options?: { wakeWslDistro?: boolean }) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const openConflictReviewFile = useAppStore((s) => s.openConflictReviewFile)
   const openConflictReview = useAppStore((s) => s.openConflictReview)
   const closeFile = useAppStore((s) => s.closeFile)
@@ -85,11 +87,11 @@ export function EditorConflictReviewSurface({
               conflictKind: entry.conflictKind,
               conflictStatus: entry.conflictStatus,
               conflictStatusSource: entry.conflictStatusSource,
-              message: translate(
+              message: t(
                 'auto.components.editor.EditorContent.8b1a605bae',
                 'This file is in a conflict state, but no working-tree file is available to edit.'
               ),
-              guidance: translate(
+              guidance: t(
                 'auto.components.editor.EditorContent.resolveConflictGuidance',
                 'Resolve the conflict in Git or restore one side before reopening it.'
               )
@@ -147,7 +149,7 @@ export function EditorConflictReviewSurface({
       return (
         <div className={className}>
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            {translate('auto.components.editor.EditorContent.b2735221f5', 'Loading...')}
+            {t('auto.components.editor.EditorContent.b2735221f5', 'Loading...')}
           </div>
         </div>
       )
@@ -183,10 +185,7 @@ export function EditorConflictReviewSurface({
       return (
         <div className={className}>
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            {translate(
-              'auto.components.editor.EditorContent.b9de81ba52',
-              'Binary file — cannot display'
-            )}
+            {t('auto.components.editor.EditorContent.b9de81ba52', 'Binary file — cannot display')}
           </div>
         </div>
       )

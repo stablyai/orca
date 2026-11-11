@@ -3,7 +3,7 @@ import {
   normalizeCodexRuntimeSelection,
   type CodexAccountSelectionTarget
 } from './runtime-selection'
-import { recoverInterruptedGuardedFileOperation } from './fs-utils'
+import { recoverInterruptedGuardedFileOperation } from '../filesystem/atomic-file-publication'
 import type { CodexSharedRuntimeAuthProvenanceStatus } from './runtime-home-service-types'
 import { codexAuthIsMonotonicallyFresher } from './runtime-home-service-auth-sync-identity'
 import { CodexRuntimeHomeWsl } from './runtime-home-service-wsl'

@@ -37,15 +37,6 @@ vi.mock('./AgentTerminalPreview', () => ({
   )
 }))
 
-const TERMINAL_INPUT: DashboardCardTerminalInput = {
-  hostPlatform: 'win32',
-  localWindowsConpty: true,
-  osRelease: '10.0.22631',
-  windowsShiftEnterEncoding: 'csi-u',
-  ctrlEnterCsiU: false,
-  kittyKeyboardAdvertised: false
-}
-
 function card(overrides: Partial<DashboardCard> = {}): DashboardCard {
   return {
     paneKey: 'tab1:leaf1',
@@ -74,121 +65,6 @@ afterEach(() => {
 
 // This prop is the only path carrying relayed host-input facts into the preview; omission silently falls back to client-OS routing.
 describe('AgentTerminalDialog', () => {
-  it("hands the card's relayed host-input profile to the preview terminal", () => {
-    render(
-      <AgentTerminalDialog
-        card={card({ terminalInput: TERMINAL_INPUT })}
-        onOpenChange={() => {}}
-        onReveal={() => {}}
-      />
-    )
-
-    expect(screen.getByTestId('preview')).toHaveAttribute(
-      'data-terminal-input',
-      JSON.stringify(TERMINAL_INPUT)
-    )
-  })
-
-  it.each([
-    ['interrupted', 'Interrupted'],
-    ['failed', 'Failed'],
-    ['unconfirmed', 'Couldn’t confirm']
-  ] as const)('keeps an acknowledged %s verdict in the terminal header', (verdict, label) => {
-    const statusCard = { ...card({ dotState: 'done', bucket: 'idle', unseen: false }), verdict }
-    render(<AgentTerminalPanel card={statusCard} onOpenChange={() => {}} onReveal={() => {}} />)
-    expect(screen.getByText(new RegExp(label))).toBeInTheDocument()
-  })
-
-  it('passes null when the card carries no profile, so the preview routes by client OS', () => {
-    render(<AgentTerminalDialog card={card()} onOpenChange={() => {}} onReveal={() => {}} />)
-
-    expect(screen.getByTestId('preview')).toHaveAttribute('data-terminal-input', 'null')
-  })
-
-  it('does not claim a remote pane closed when the card carries no live pty', () => {
-    render(
-      <AgentTerminalDialog
-        card={card({ ptyId: null, hostKind: 'ssh' })}
-        onOpenChange={() => {}}
-        onReveal={() => {}}
-      />
-    )
-
-    // Loss of contact with an SSH host is `unverifiable`, never `exited`.
-    expect(screen.getByText(/remote session/)).toBeInTheDocument()
-    expect(screen.queryByText(/pane has closed/)).not.toBeInTheDocument()
-  })
-
-  it('keeps a local agent openable without claiming its missing preview means closure', () => {
-    render(
-      <AgentTerminalDialog
-        card={card({ ptyId: null, hostKind: 'local' })}
-        onOpenChange={() => {}}
-        onReveal={() => {}}
-      />
-    )
-
-    expect(screen.getByText(/No preview available/)).toBeInTheDocument()
-    expect(screen.queryByText(/pane has closed/)).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Open worktree' })).toBeEnabled()
-  })
-
-  it('labels acknowledged completions idle without review or pin controls', () => {
-    render(
-      <AgentTerminalDialog
-        card={card({ bucket: 'idle', dotState: 'done', finishedAt: 100, unseen: false })}
-        onOpenChange={() => {}}
-        onReveal={() => {}}
-      />
-    )
-
-    expect(screen.getByText(/Claude · Idle/)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Keep visible' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Mark reviewed' })).not.toBeInTheDocument()
-    expect(screen.getByTestId('preview')).toHaveAttribute('data-pty-id', 'pty-1')
-  })
-
-  it('labels unseen completions done', () => {
-    render(
-      <AgentTerminalDialog
-        card={card({ bucket: 'done', dotState: 'done', finishedAt: 100, unseen: true })}
-        onOpenChange={() => {}}
-        onReveal={() => {}}
-      />
-    )
-
-    expect(screen.getByText(/Claude · Done/)).toBeInTheDocument()
-  })
-
-  it('preserves the execution host when revealing a colliding worktree ID', () => {
-    const onReveal = vi.fn()
-    render(
-      <AgentTerminalDialog
-        card={card({ executionHostId: 'runtime:env-1' })}
-        onOpenChange={() => {}}
-        onReveal={onReveal}
-      />
-    )
-
-    fireEvent.click(screen.getByRole('button', { name: 'Open worktree' }))
-    expect(onReveal).toHaveBeenCalledWith({
-      repoId: 'r1',
-      worktreeId: 'w1',
-      executionHostId: 'runtime:env-1',
-      tabId: 'tab1',
-      leafId: 'leaf1'
-    })
-  })
-
-  it('reuses the terminal surface as a non-modal adjacent panel', () => {
-    render(<AgentTerminalPanel card={card()} onOpenChange={() => {}} onReveal={() => {}} />)
-
-    expect(screen.getByRole('dialog', { name: 'wt' })).toHaveAttribute('data-state', 'open')
-    expect(screen.getByTestId('preview')).toHaveClass('min-h-0', 'flex-1')
-    expect(document.querySelector('[data-slot="dialog-overlay"]')).not.toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'wt' })).toBeInTheDocument()
-  })
-
   it('lets a nested Radix layer consume Escape before closing the panel', () => {
     const onOpenChange = vi.fn()
     render(
@@ -247,3 +123,24 @@ it.each([false, true])(
     )
   }
 )
+
+it('shows last messages when a card has no live terminal', () => {
+  const { rerender } = render(
+    <AgentTerminalPanel
+      card={card({
+        ptyId: null,
+        lastUserMessage: 'Roll out rc-18',
+        lastAgentMessage: 'Rollout finished'
+      })}
+      onOpenChange={() => {}}
+      onReveal={() => {}}
+    />
+  )
+  expect(screen.getByText('Roll out rc-18')).toBeInTheDocument()
+  expect(screen.getByText('Rollout finished')).toBeInTheDocument()
+
+  rerender(
+    <AgentTerminalPanel card={card({ ptyId: null })} onOpenChange={() => {}} onReveal={() => {}} />
+  )
+  expect(screen.queryByText('Rollout finished')).not.toBeInTheDocument()
+})

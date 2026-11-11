@@ -8,12 +8,22 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { HOST_STACK_SCREENS, type HostStackAnimation } from './host-stack-screens'
 import { isOverlayPageRoute } from '../new-workspace/overlay-page-route'
 import { runStackMotion } from './host-stack-motion.web'
+import { useShellOpenTarget } from './use-shell-open-target.web'
+import { useReportedPageLocation } from './use-reported-page-location.web'
+import {
+  RouteScreenPaintProvider,
+  reportAfterFirstPaint,
+  useRouteScreenPaintReporter,
+  type PageFrameScheduler
+} from '../mobile-web-shell/bridge/page-first-paint'
 
 // Expo native-stack’s web view ignores animation and switches display; reuse StackRouter with a view that retains popped screens through their exit slide.
 export function HostStack({ animation }: { animation: HostStackAnimation }) {
   useMobileTranslation()
+  const router = useShellOpenTarget()
+  useReportedPageLocation()
   return (
-    <Navigator>
+    <Navigator router={router}>
       {HOST_STACK_SCREENS.map(({ name, title }) => (
         <Navigator.Screen key={name} name={name} options={{ title }} />
       ))}
@@ -35,6 +45,13 @@ type Shown = Readonly<{
   descriptors: Descriptors
   transition: Transition | null
 }>
+
+const FRAMES: PageFrameScheduler = {
+  requestFrame: (callback) => requestAnimationFrame(callback),
+  cancelFrame: (handle) => {
+    cancelAnimationFrame(handle)
+  }
+}
 
 function prefersReducedMotion(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -62,6 +79,9 @@ function HostStackView({ animation }: { animation: HostStackAnimation }) {
   const { routes } = state
   const [shown, setShown] = useState<Shown>({ routes, descriptors, transition: null })
   const nodes = useRef(new Map<string, HTMLElement>())
+  // A stack that starts with a route beneath the top (the host list under a shell-opened target) draws only the top until a screen paints, so the two don't compete.
+  const [released, setReleased] = useState(routes.length === 1)
+  const release = useCallback(() => setReleased(true), [])
 
   // Derive during render so a pop’s first frame still contains its outgoing screen.
   if (shown.routes !== routes) {
@@ -80,6 +100,11 @@ function HostStackView({ animation }: { animation: HostStackAnimation }) {
   const underKey = transition?.kind === 'push' ? transition.underKey : null
   // Keep one keyed sibling list so moving the leaving screen to the end preserves its mount.
   const slots = transition?.kind === 'pop' ? [...routes, transition.leaving] : routes
+  // A Back before the gate releases still slides the leaving screen off, so the motion settles and taps come back.
+  const leavingKey = transition?.kind === 'pop' ? transition.leaving.key : null
+  const drawn = released
+    ? slots
+    : slots.filter((route) => route.key === topKey || route.key === leavingKey)
 
   // Start before paint so screens never flash at rest before sliding.
   useLayoutEffect(() => {
@@ -100,7 +125,7 @@ function HostStackView({ animation }: { animation: HostStackAnimation }) {
     // Render descriptors bare like NavigatorSlot; NavigationContent cannot run in this view-only rerender.
     // Disable taps mid-slide so repeated row taps cannot push duplicate screens.
     <View style={styles.stack} pointerEvents={transition ? 'none' : 'auto'}>
-      {slots.map((route) => {
+      {drawn.map((route) => {
         const leaving = transition?.kind === 'pop' && route.key === transition.leaving.key
         const descriptor = leaving ? transition.descriptors[route.key] : descriptors[route.key]
         return (
@@ -109,6 +134,7 @@ function HostStackView({ animation }: { animation: HostStackAnimation }) {
             routeKey={route.key}
             nodes={nodes.current}
             visible={route.key === topKey || leaving || route.key === underKey}
+            onPainted={released ? null : release}
           >
             {descriptor?.render()}
           </StackScreen>
@@ -122,15 +148,30 @@ function StackScreen({
   routeKey,
   nodes,
   visible,
+  onPainted,
   children
 }: {
   routeKey: string
   nodes: Map<string, HTMLElement>
   visible: boolean
+  onPainted: (() => void) | null
   children: ReactNode
 }) {
   useMobileColorScheme()
   const transparent = isOverlayPageRoute(usePathname())
+  const reportToDocument = useRouteScreenPaintReporter()
+  // Pass the screen's paint on to the document's one report, and learn it here too while the stack waits for it.
+  const report = useCallback(() => {
+    const cancelDocument = reportToDocument()
+    if (onPainted === null) {
+      return cancelDocument
+    }
+    const cancelOwn = reportAfterFirstPaint(FRAMES, onPainted)
+    return () => {
+      cancelDocument()
+      cancelOwn()
+    }
+  }, [reportToDocument, onPainted])
   return (
     <View
       ref={(view: unknown) => {
@@ -142,7 +183,7 @@ function StackScreen({
       }}
       style={[styles.screen, transparent && styles.transparent, visible ? null : styles.hidden]}
     >
-      {children}
+      <RouteScreenPaintProvider report={report}>{children}</RouteScreenPaintProvider>
     </View>
   )
 }

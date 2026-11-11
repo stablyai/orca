@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
-import { writeIssueCommand } from './issue-command-file'
+import { readIssueCommandUnlessWslStopped, writeIssueCommand } from './issue-command-file'
 
 describe('issue command ignore rules', () => {
   let root: string
@@ -82,5 +82,28 @@ describe('issue command ignore rules', () => {
     await writeIssueCommand(repo, 'local command')
 
     expect(readFileSync(join(repo, '.gitignore'), 'utf8')).toBe('!.orca/\n.orca\n')
+  })
+
+  it('marks only an uncommitted local command as user-owned on launch', async () => {
+    mkdirSync(join(repo, '.orca'))
+    writeFileSync(join(repo, '.orca', 'issue-command'), 'repo command\n')
+    const launch = { wakeWslDistro: true }
+    await expect(readIssueCommandUnlessWslStopped(repo, launch)).resolves.toMatchObject({
+      source: 'local',
+      localUntracked: true
+    })
+
+    await git(['add', '-f', '.orca/issue-command'])
+
+    const tracked = await readIssueCommandUnlessWslStopped(repo, launch)
+    expect(tracked.source).toBe('local')
+    expect(tracked.localUntracked).toBeUndefined()
+
+    const folder = join(root, 'folder')
+    mkdirSync(join(folder, '.orca'), { recursive: true })
+    writeFileSync(join(folder, '.orca', 'issue-command'), 'folder command\n')
+    await expect(readIssueCommandUnlessWslStopped(folder, launch)).resolves.toMatchObject({
+      localUntracked: true
+    })
   })
 })

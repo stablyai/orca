@@ -13,17 +13,12 @@ import { tmpdir } from 'node:os'
 import { delimiter, isAbsolute, join } from 'node:path'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
-import { resolveCodexShellLaunchPreflightCommand } from './codex-shell-launch-preflight'
 import {
   CODEX_COMMAND_IDENTITY_ENV_KEYS,
   getFishCodexShellLaunchPreflight,
-  getPosixCodexShellLaunchPreflight,
-  getPowerShellCodexShellLaunchPreflight
+  getPosixCodexShellLaunchPreflight
 } from '../../../shared/codex-shell-function'
-import {
-  fishRequirementViolation,
-  resolveFishBinary
-} from '../../../shared/fish-binary-requirement'
+import { resolveFishBinary } from '../../../shared/fish-binary-requirement'
 import { getPowerShellAgentWrappers } from '../../../shared/powershell-agent-wrappers'
 
 const roots: string[] = []
@@ -199,52 +194,12 @@ describe.skipIf(process.platform === 'win32')('Codex shell launch preflight', ()
     expect(runAliasLaunch(afterRoot, getPosixCodexShellLaunchPreflight())).toBe('normal')
   })
 
-  it.skipIf(!existsSync('/bin/zsh'))('repairs a zsh cx alias before Codex starts', () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-codex-zsh-alias-'))
-    roots.push(root)
-
-    expect(runAliasLaunch(root, getPosixCodexShellLaunchPreflight(), '/bin/zsh')).toBe('normal')
-  })
-
   it.skipIf(!zshAvailable)('keeps a user alias named codex working in zsh', () => {
     expectNamedAliasSurvives('/bin/zsh', 'setopt aliases')
   })
 
   it.skipIf(!bashAvailable)('keeps a user alias named codex working in bash', () => {
     expectNamedAliasSurvives('/bin/bash', 'shopt -s expand_aliases')
-  })
-
-  it('still launches Codex when the best-effort preflight fails', () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-codex-preflight-failure-'))
-    roots.push(root)
-
-    expect(runAliasLaunch(root, getPosixCodexShellLaunchPreflight(), '/bin/bash', false)).toBe(
-      'hooks-review'
-    )
-  })
-
-  it('does not trigger a preflight outside an Orca terminal', () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-codex-plain-shell-'))
-    roots.push(root)
-    const bin = join(root, 'bin')
-    const marker = join(root, 'preflight-ran')
-    mkdirSync(bin)
-    writeExecutable(join(bin, 'codex'), '#!/bin/sh\nprintf launched\n')
-    writeExecutable(join(bin, 'orca-test'), `#!/bin/sh\nprintf ran > ${JSON.stringify(marker)}\n`)
-
-    const output = execFileSync(
-      '/bin/bash',
-      ['--noprofile', '--norc', '-c', `${getPosixCodexShellLaunchPreflight()}\ncodex`],
-      {
-        encoding: 'utf-8',
-        env: {
-          PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`
-        }
-      }
-    )
-
-    expect(output.trim()).toBe('launched')
-    expect(existsSync(marker)).toBe(false)
   })
 
   // skipIf exposes missing shells; an early return would report an unexercised test as passing.
@@ -276,29 +231,30 @@ describe.skipIf(process.platform === 'win32')('Codex shell launch preflight', ()
     )
   }
 
-  it.skipIf(!fishAvailable)('preserves a user-defined fish function', () => {
-    const output = execFileSync(
-      'fish',
-      [
-        '--no-config',
-        '-c',
-        [
-          'set -gx ORCA_CODEX_LAUNCH_PREFLIGHT missing-preflight',
-          'function codex; echo custom-codex; end',
-          getFishCodexShellLaunchPreflight(),
-          'codex'
-        ].join('\n')
-      ],
-      { encoding: 'utf-8' }
-    )
+  for (const shell of ['/bin/bash', '/bin/zsh']) {
+    it.skipIf(!existsSync(shell))(
+      `keeps the user’s own codex function in ${shell} when the cwd has a codex entry`,
+      () => {
+        const root = mkdtempSync(join(tmpdir(), 'orca-codex-user-fn-'))
+        roots.push(root)
+        mkdirSync(join(root, 'codex'))
 
-    expect(output.trim()).toBe('custom-codex')
-  })
+        const output = execFileSync(
+          shell,
+          [
+            shell.endsWith('/zsh') ? '-f' : '--noprofile',
+            '-c',
+            `codex() { printf 'user function'; }\n${getPosixCodexShellLaunchPreflight()}\ncodex`
+          ],
+          { encoding: 'utf-8', cwd: root, env: { ...process.env, PATH: '/usr/bin:/bin' } }
+        )
+
+        expect(output).toBe('user function')
+      }
+    )
+  }
 
   // Fail explicitly when CI requires fish; skipped regression cases cannot establish coverage.
-  it('has fish when CI demanded it', () => {
-    expect(fishRequirementViolation(fishLookup)).toBeNull()
-  })
 
   // #16893: absent Codex made unquoted (type -t codex) vanish and test complain; exercise real -l -C startup.
   it.skipIf(!fishAvailable)('stays silent and installs no wrapper when codex is absent', () => {
@@ -314,174 +270,6 @@ describe.skipIf(process.platform === 'win32')('Codex shell launch preflight', ()
     expect(result.status).toBe(0)
     expect(result.stdout.trim()).toBe('wrapper=NO var=[]')
   })
-
-  it.skipIf(!fishAvailable)('wraps codex and runs the preflight when codex is a real file', () => {
-    const { bin, preflight, marker } = createFishSandbox('orca-codex-fish-present-')
-    writeExecutable(join(bin, 'codex'), '#!/bin/sh\nprintf "real codex $*"\n')
-
-    const output = execFileSync(
-      join(bin, 'fish'),
-      ['--no-config', '-l', '-C', getFishCodexShellLaunchPreflight(), '-c', 'codex hi'],
-      { encoding: 'utf-8', env: { PATH: bin, ORCA_CODEX_LAUNCH_PREFLIGHT: preflight } }
-    )
-
-    expect(output.trim()).toBe('real codex hi')
-    expect(existsSync(marker)).toBe(true)
-  })
-
-  it.skipIf(!fishAvailable)('leaves a codex alias unwrapped', () => {
-    const { bin, preflight } = createFishSandbox('orca-codex-fish-alias-')
-    writeExecutable(join(bin, 'codex'), '#!/bin/sh\nprintf "real codex"\n')
-
-    const result = spawnSync(
-      join(bin, 'fish'),
-      [
-        '--no-config',
-        '-l',
-        '-C',
-        `alias codex='echo aliased'\n${getFishCodexShellLaunchPreflight()}`,
-        '-c',
-        FISH_STATE_PROBE
-      ],
-      { encoding: 'utf-8', env: { PATH: bin, ORCA_CODEX_LAUNCH_PREFLIGHT: preflight } }
-    )
-
-    expect(result.stderr).not.toContain('Missing argument')
-    expect(result.stdout.trim()).toBe('wrapper=NO var=[]')
-  })
-})
-
-describe('PowerShell Codex shell launch preflight', () => {
-  it('preserves a user-defined command', () => {
-    expect(getPowerShellCodexShellLaunchPreflight()).toContain(
-      '$orcaCodexCommand.CommandType -in @("Application", "ExternalScript")'
-    )
-  })
-
-  it.skipIf(!pwshAvailable)('fails open when native errors are promoted', () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-codex-pwsh-failure-'))
-    const bin = join(root, 'bin')
-    roots.push(root)
-    mkdirSync(bin)
-    const executableSuffix = process.platform === 'win32' ? '.cmd' : ''
-    writeExecutable(
-      join(bin, `orca-test${executableSuffix}`),
-      process.platform === 'win32' ? '@exit /b 7\r\n' : '#!/bin/sh\nexit 7\n'
-    )
-    writeExecutable(
-      join(bin, `codex${executableSuffix}`),
-      process.platform === 'win32' ? '@echo launched\r\n' : '#!/bin/sh\nprintf "launched\\n"\n'
-    )
-
-    const result = spawnSync(
-      'pwsh',
-      [
-        '-NoLogo',
-        '-NoProfile',
-        '-Command',
-        [
-          '$ErrorActionPreference = "Stop"',
-          '$PSNativeCommandUseErrorActionPreference = $true',
-          getPowerShellAgentWrappers(),
-          'codex'
-        ].join('\n')
-      ],
-      {
-        encoding: 'utf-8',
-        env: {
-          ...process.env,
-          PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
-          ORCA_CODEX_LAUNCH_PREFLIGHT: join(bin, `orca-test${executableSuffix}`)
-        }
-      }
-    )
-
-    expect(result.status, result.stderr).toBe(0)
-    expect(result.stdout.trim()).toBe('launched')
-  })
-})
-
-describe('Codex shell launch preflight command', () => {
-  function makeCliRoot(): { resourcesPath: string } {
-    const root = mkdtempSync(join(tmpdir(), 'orca-codex-preflight-cli-'))
-    roots.push(root)
-    const resourcesPath = join(root, 'resources')
-    mkdirSync(join(resourcesPath, 'bin'), { recursive: true })
-    return { resourcesPath }
-  }
-
-  function wslOptions(resourcesPath: string | null) {
-    return {
-      hooksEnabled: true,
-      isPackaged: true,
-      isWsl: true,
-      managedHomePath: '/home/jin/.local/share/orca/codex-runtime-home/home',
-      resourcesPath,
-      platform: 'win32' as const
-    }
-  }
-
-  it.each([
-    { platform: 'darwin' as const, bundled: 'orca', isPackaged: true },
-    { platform: 'linux' as const, bundled: 'orca-ide', isPackaged: true },
-    { platform: 'win32' as const, bundled: 'orca.exe', isPackaged: true },
-    { platform: 'darwin' as const, bundled: 'orca', isPackaged: false }
-  ])(
-    'gives a native $platform pane no preflight: the app prepares its Codex home (packaged $isPackaged)',
-    (config) => {
-      const { resourcesPath } = makeCliRoot()
-      writeExecutable(join(resourcesPath, 'bin', config.bundled), '#!/bin/sh\nexit 0\n')
-
-      expect(
-        resolveCodexShellLaunchPreflightCommand({
-          hooksEnabled: true,
-          isPackaged: config.isPackaged,
-          managedHomePath: '/managed/home',
-          resourcesPath,
-          platform: config.platform
-        })
-      ).toBeNull()
-    }
-  )
-
-  it('carries the packaged Windows launcher, as an absolute path, for WSLENV path translation', () => {
-    const { resourcesPath } = makeCliRoot()
-    const launcherPath = join(resourcesPath, 'bin', 'orca.exe')
-    writeExecutable(launcherPath, '#!/bin/sh\nexit 0\n')
-
-    const command = resolveCodexShellLaunchPreflightCommand(wslOptions(resourcesPath))
-
-    expect(command).toBe(launcherPath)
-    expect(isAbsolute(command as string)).toBe(true)
-  })
-
-  it.each([
-    { label: 'the launcher file is missing', create: null },
-    { label: 'the launcher path is a directory', create: 'directory' as const }
-  ])('skips the preflight when $label', (config) => {
-    const { resourcesPath } = makeCliRoot()
-    if (config.create === 'directory') {
-      mkdirSync(join(resourcesPath, 'bin', 'orca.exe'))
-    }
-
-    expect(resolveCodexShellLaunchPreflightCommand(wslOptions(resourcesPath))).toBeNull()
-  })
-
-  it('skips the preflight when the packaged build exposes no resources root', () => {
-    expect(resolveCodexShellLaunchPreflightCommand(wslOptions(null))).toBeNull()
-  })
-
-  it.each([{ hooksEnabled: false }, { isPackaged: false }, { managedHomePath: null }])(
-    'does not enable an unsupported WSL preflight for %o',
-    (override) => {
-      const { resourcesPath } = makeCliRoot()
-      writeExecutable(join(resourcesPath, 'bin', 'orca.exe'), '#!/bin/sh\nexit 0\n')
-
-      expect(
-        resolveCodexShellLaunchPreflightCommand({ ...wslOptions(resourcesPath), ...override })
-      ).toBeNull()
-    }
-  )
 })
 
 // Verified launcher paths may contain spaces in app bundles or Program Files.

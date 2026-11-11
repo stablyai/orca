@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import type { CommandHandler } from '../dispatch'
 import { formatCliStatus, formatStatus, printResult } from '../format'
 import { RuntimeClientError, serveOrcaApp } from '../runtime-client'
+import { getOptionalServeBind } from '../runtime/serve-bind-flag'
 import { stripElectronRunAsNode } from '../runtime/orca-app-executable'
 import { resolveCliStatusCaller } from '../runtime/status-caller'
 import { getServeSuperviseValidationError } from '../runtime/serve-supervised-service'
@@ -110,6 +111,8 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     const noPairing = flags.get('no-pairing') === true
     const mobilePairing = flags.get('mobile-pairing') === true
     const grantDesktopControl = flags.get('grant-desktop-control') === true
+    const allowPublic = flags.get('allow-public') === true
+    const refusePublic = flags.get('refuse-public') === true
     const recipeJson = flags.get('recipe-json') === true
     const force = flags.get('force') === true
     const supervise = flags.get('supervise') === true
@@ -117,10 +120,14 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     if (superviseError) {
       throw new RuntimeClientError('invalid_argument', superviseError)
     }
+    const bind = getOptionalServeBind(flags) ?? null
     const validationError = getServeOptionValidationError({
+      bind,
       noPairing,
       mobilePairing,
       grantDesktopControl,
+      allowPublic,
+      refusePublic,
       recipeJson,
       projectRoot
     })
@@ -132,12 +139,15 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     const exitCode = await serveOrcaApp({
       json,
       port,
+      bind,
       pairingAddress: typeof pairingAddressValue === 'string' ? pairingAddressValue : null,
       noPairing,
       mobilePairing,
       grantDesktopControl,
       recipeJson,
       projectRoot,
+      ...(allowPublic ? { allowPublic: true } : {}),
+      ...(refusePublic ? { refusePublic: true } : {}),
       ...(force ? { force: true } : {}),
       ...(supervise ? { supervise: true } : {})
     })

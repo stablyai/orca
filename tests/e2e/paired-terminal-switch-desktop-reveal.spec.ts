@@ -1,7 +1,7 @@
 // #24688: local CLI terminal switch --environment must select that server terminal on the desktop, even when serve has no window.
 import type { Page } from '@stablyai/playwright-test'
 import type { RuntimeTerminalFocus } from '../../src/shared/runtime-types'
-import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../src/shared/workspace-layout/terminal-surface-id'
 import { orcaCliResult } from './helpers/compiled-orca-cli'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
 import { launchPairedElectronClient } from './helpers/paired-electron-client'

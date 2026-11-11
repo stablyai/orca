@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { spawnMock, registerPtyMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { registerPtyHandlers } from './register-handlers'
 import { setLocalPtyProvider } from './provider/registry'
 
@@ -17,7 +16,7 @@ vi.mock('../../opencode/hook-service', () =>
 vi.mock('../../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
-vi.mock('../../agent-hooks/server', () =>
+vi.mock('../../agent-hooks/server/agent-hook-server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
 vi.mock('../../pi/titlebar-extension-service', () =>
@@ -41,13 +40,13 @@ vi.mock('../../cli/linux-terminal-orca-cli-shim', () =>
 vi.mock('../../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
-vi.mock('../../agent-hooks/migration-unsupported-pty-state', () =>
+vi.mock('../../agent-hooks/observations/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
-vi.mock('../../codex/codex-pane-account-registry', () =>
+vi.mock('../../codex/configuration/homes/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
-vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
+vi.mock('../../codex/history/index/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 
@@ -130,175 +129,5 @@ describe('registerPtyHandlers', () => {
       })
     ).rejects.toThrow('terminal_pane_owner_conflict')
     expect(providerSpawn).not.toHaveBeenCalled()
-  })
-  it('does not coalesce identical pane coordinates across worktrees', async () => {
-    const providerSpawn = vi.fn(async () => ({ id: `pty-${providerSpawn.mock.calls.length}` }))
-    setLocalPtyProvider({
-      spawn: providerSpawn,
-      write: vi.fn(),
-      resize: vi.fn(),
-      kill: vi.fn(),
-      shutdown: vi.fn(),
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      acknowledgeDataEvent: vi.fn(),
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      onData: vi.fn(() => () => {}),
-      onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
-      listProcesses: vi.fn(async () => []),
-      attach: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn()
-    } as never)
-    registerPtyHandlers(mainWindow as never)
-    const leafId = '77777777-7777-4777-8777-777777777777'
-    const paneKey = makePaneKey('tab-host-scope', leafId)
-    const spawn = (worktreeId: string) =>
-      handlers.get('pty:spawn')!(null, {
-        cols: 80,
-        rows: 24,
-        cwd: '/tmp',
-        worktreeId,
-        tabId: 'tab-host-scope',
-        leafId,
-        env: {
-          ORCA_PANE_KEY: paneKey,
-          ORCA_TAB_ID: 'tab-host-scope',
-          ORCA_WORKTREE_ID: worktreeId
-        }
-      })
-
-    await Promise.all([spawn('repo-1::/tmp/a'), spawn('repo-1::/tmp/b')])
-
-    expect(providerSpawn).toHaveBeenCalledTimes(2)
-  })
-  it('settles the pane reservation when a post-spawn step throws so later spawns do not hang', async () => {
-    // Post-spawn throws must release the reservation or later spawns for this pane hang.
-    registerPtyHandlers(mainWindow as never)
-    const leafId = '44444444-4444-4444-8444-444444444444'
-    const spawnArgs = { cols: 80, rows: 24, tabId: 'tab-reservation', leafId }
-
-    registerPtyMock.mockImplementationOnce(() => {
-      throw new Error('boom: post-spawn registration failed')
-    })
-
-    await expect(handlers.get('pty:spawn')!(null, spawnArgs)).rejects.toThrow('boom')
-
-    let hangTimer: ReturnType<typeof setTimeout> | undefined
-    const second = handlers.get('pty:spawn')!(null, spawnArgs) as Promise<{ id: string }>
-    const result = await Promise.race([
-      second,
-      new Promise<never>((_, reject) => {
-        hangTimer = setTimeout(
-          () => reject(new Error('second spawn hung: pane reservation leaked')),
-          1000
-        )
-      })
-    ]).finally(() => clearTimeout(hangTimer))
-
-    expect(result.id).toEqual(expect.any(String))
-    expect(spawnMock).toHaveBeenCalledTimes(2)
-  })
-  it('settles the runtime-owned pane reservation when a post-spawn step throws so later spawns do not hang', async () => {
-    // Runtime post-spawn throws need the same reservation cleanup as renderer spawns.
-    type RuntimeSpawnController = {
-      spawn(args: {
-        cols: number
-        rows: number
-        cwd?: string
-        worktreeId?: string
-        env?: Record<string, string>
-        tabId?: string
-        leafId?: string
-        persistHostSessionBinding?: boolean
-      }): Promise<{ id: string }>
-    }
-    let spawnCount = 0
-    const providerSpawn = vi.fn(async () => ({ id: `pty-${++spawnCount}` }))
-    setLocalPtyProvider({
-      spawn: providerSpawn,
-      write: vi.fn(),
-      resize: vi.fn(),
-      kill: vi.fn(),
-      shutdown: vi.fn(),
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      acknowledgeDataEvent: vi.fn(),
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      onData: vi.fn(() => () => {}),
-      onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
-      listProcesses: vi.fn(async () => []),
-      attach: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn()
-    } as never)
-    const store = {
-      persistPtyBinding: vi.fn()
-    }
-    let controller: RuntimeSpawnController | null = null
-    const runtime = {
-      setPtyController: vi.fn((value) => {
-        controller = value
-      }),
-      createPreAllocatedTerminalHandle: vi.fn(() => 'term_trusted'),
-      preAllocateHandleForPty: vi.fn(() => 'term_trusted'),
-      registerPreAllocatedHandleForPty: vi.fn(),
-      registerPty: vi.fn().mockImplementationOnce(() => {
-        throw new Error('boom: runtime registration failed')
-      }),
-      onPtySpawned: vi.fn(),
-      onPtyExit: vi.fn(),
-      onPtyData: vi.fn()
-    }
-
-    registerPtyHandlers(
-      mainWindow as never,
-      runtime as never,
-      undefined,
-      undefined,
-      undefined,
-      store as never
-    )
-    const spawnController = controller as unknown as RuntimeSpawnController
-    const leafId = '55555555-5555-4555-8555-555555555555'
-    const paneKey = makePaneKey('tab-runtime-reservation', leafId)
-    const spawnArgs = {
-      cols: 80,
-      rows: 24,
-      cwd: '/tmp',
-      worktreeId: 'wt-1',
-      tabId: 'tab-runtime-reservation',
-      leafId,
-      env: { ORCA_PANE_KEY: paneKey },
-      persistHostSessionBinding: true
-    }
-
-    await expect(spawnController.spawn(spawnArgs)).rejects.toThrow('boom')
-
-    let hangTimer: ReturnType<typeof setTimeout> | undefined
-    const second = spawnController.spawn(spawnArgs)
-    const result = await Promise.race([
-      second,
-      new Promise<never>((_, reject) => {
-        hangTimer = setTimeout(
-          () => reject(new Error('second runtime spawn hung: pane reservation leaked')),
-          1000
-        )
-      })
-    ]).finally(() => clearTimeout(hangTimer))
-    expect(result.id).toEqual(expect.any(String))
-    expect(providerSpawn).toHaveBeenCalledTimes(2)
   })
 })

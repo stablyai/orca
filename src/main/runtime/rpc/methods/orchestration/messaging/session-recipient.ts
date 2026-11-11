@@ -1,8 +1,8 @@
 /** Address any host-local chat by Orca session id, including /clear ancestors.
  * Unbound mail belongs to the root mailbox and points at the live session. Released leases may restart; closed/foreign/unknown chats refuse before storage. */
 
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/orca-session-address-prefix'
 import {
-  ORCA_SESSION_ADDRESS_PREFIX,
   formatOrcaSessionAddress,
   isOrcaSessionId,
   parseOrcaSessionAddress,
@@ -10,14 +10,14 @@ import {
   type OrcaSessionId
 } from '../../../../../../shared/orca-session-address'
 // The caller codes, reused: each names the same fact about a session, whichever side of the mail it is on.
-import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../../shared/orchestration-session-caller-codes'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../../shared/orchestration/orchestration-session-caller-codes'
 import {
   lookupOrcaAgentSession,
   structuredSessionMailReach
-} from '../../../../orchestration/structured-session-mail-address'
-import type { AgentSessionRecordReader } from '../../../../orchestration/structured-session-lineage'
-import type { OrchestrationDb } from '../../../../orchestration/db'
-import { canonicalOrcaSessionId } from '../../../../orchestration/canonical-orca-session-id'
+} from '../../../../orchestration/mailbox/routing/structured-session-mail-address'
+import type { AgentSessionRecordReader } from '../../../../orchestration/addressing/session-lineage/structured-session-lineage'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import { canonicalOrcaSessionId } from '../../../../orchestration/addressing/session-lineage/canonical-orca-session-id'
 
 /** `address` is the named session's own spelling; the mailbox mail lands in is its identity address. */
 export type SessionRecipient = { sessionId: OrcaSessionId; address: OrcaSessionAddress }

@@ -1,23 +1,27 @@
+import { isStructuredAgentSessionHostTabId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
+import {
+  normalizeMobileSessionTabSelection,
+  preserveLegacyPendingNavigation,
+  resolveMobileSessionActiveTab
+} from './mobile-session-tab-selection'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as StoredMobileSnapshotHasStalePreservedTabMethods } from './mobile-session-publication-preservation'
 import { OrcaRuntimeWithSyncMobileSessionTabs } from './mobile-session-reconciliation'
-import type {
-  RuntimeMobileSessionTabsSnapshot,
-  RuntimeMobileSessionTerminalTab
-} from '../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTerminalTab } from '../../../shared/runtime-mobile-session-tab-contracts'
 import {
   appendChatTabOrder,
   getMobileSessionSnapshotTabIdentityKeys,
   mergeMobileSessionSnapshotTabs,
   mergeMobileSessionTabGroups
-} from '../mobile-session-tab-merge'
-import { terminalLayoutContainsLeaf } from '../../../shared/workspace-session-pane-ownership'
+} from '../session-lifecycle/projection/mobile-session-tab-merge'
+import { terminalLayoutContainsLeaf } from '../../../shared/workspace-session/workspace-session-pane-ownership'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { terminalIsOfTab } from '../session-lifecycle/close/closed-tab-terminal'
-import { getHeadlessMobileSessionGroupId } from '../mobile-session-layout-projection'
+import { getHeadlessMobileSessionGroupId } from '../terminal/surface/mobile-session-layout-projection'
 import {
   appendBrowserTabOrder,
   collectBrowserGroupAssignment
-} from '../mobile-session-browser-group-projection'
+} from '../session-lifecycle/projection/mobile-session-browser-group-projection'
 
 export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs extends OrcaRuntimeWithSyncMobileSessionTabs {
   protected abstract collectPreservedHeadlessMobileSessionTabs(
@@ -29,69 +33,73 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
   >
 
   protected mergePreservedHeadlessMobileSessionTabs(
-    snapshot: RuntimeMobileSessionTabsSnapshot,
+    incoming: RuntimeMobileSessionTabsSnapshot,
     existing: RuntimeMobileSessionTabsSnapshot | undefined
   ): RuntimeMobileSessionTabsSnapshot {
+    const snapshot = preserveLegacyPendingNavigation(incoming, existing)
     if (!existing) {
-      return snapshot
+      return normalizeMobileSessionTabSelection(snapshot)
     }
     const preservedTabs = this.collectPreservedHeadlessMobileSessionTabs(existing, snapshot)
     if (preservedTabs.length === 0) {
-      return snapshot
+      return normalizeMobileSessionTabSelection(snapshot)
     }
-    const preservedActiveTab = preservedTabs.find(
-      (tab) => tab.id === existing.activeTabId && tab.isActive
-    )
-    const hasIncomingActiveTab = snapshot.tabs.some((tab) => tab.isActive)
-    const normalizedPreservedTabs = preservedTabs.map((tab) =>
-      hasIncomingActiveTab && !preservedActiveTab ? { ...tab, isActive: false } : tab
-    )
-    const normalizedIncomingTabs = preservedActiveTab
-      ? snapshot.tabs.map((tab) => (tab.isActive ? { ...tab, isActive: false } : tab))
-      : snapshot.tabs
-    const tabs = mergeMobileSessionSnapshotTabs(normalizedIncomingTabs, normalizedPreservedTabs)
-    if (tabs.length === snapshot.tabs.length) {
-      return snapshot
-    }
+    const tabs = mergeMobileSessionSnapshotTabs(snapshot.tabs, preservedTabs)
     const activeTab =
-      preservedActiveTab ??
-      normalizedIncomingTabs.find((tab) => tab.id === snapshot.activeTabId) ??
-      tabs.find((tab) => tab.id === existing.activeTabId) ??
-      tabs.find((tab) => tab.isActive) ??
-      tabs[0] ??
-      null
-    const browserTabIds = normalizedPreservedTabs
-      .filter((tab) => tab.type === 'browser')
-      .map((tab) => tab.id)
-    const tabGroups = appendBrowserTabOrder(
-      mergeMobileSessionTabGroups(
-        snapshot.worktree,
-        snapshot.tabGroups ?? existing.tabGroups ?? [],
-        tabs,
-        activeTab?.type === 'terminal' ? activeTab : null
+      snapshot.tabGroups !== undefined
+        ? resolveMobileSessionActiveTab(snapshot, tabs)
+        : (tabs.find((tab) => tab.id === snapshot.activeTabId) ??
+          tabs.find((tab) => tab.isActive) ??
+          tabs.find((tab) => tab.id === existing.activeTabId) ??
+          tabs[0] ??
+          null)
+    const browserTabIds = preservedTabs.filter((tab) => tab.type === 'browser').map((tab) => tab.id)
+    const tabGroups = appendChatTabOrder(
+      appendBrowserTabOrder(
+        mergeMobileSessionTabGroups(
+          snapshot.worktree,
+          snapshot.tabGroups ?? existing?.tabGroups ?? [],
+          tabs,
+          activeTab?.type === 'terminal' ? activeTab : null,
+          existing.tabGroups
+        ),
+        browserTabIds,
+        undefined,
+        collectBrowserGroupAssignment(existing?.tabGroups, browserTabIds)
       ),
-      browserTabIds,
-      undefined,
-      collectBrowserGroupAssignment(existing.tabGroups, browserTabIds)
+      existing?.tabGroups,
+      preservedTabs
     )
-    return {
-      ...snapshot,
-      publicationEpoch: this.getMergedMobileSessionPublicationEpoch(
-        snapshot,
-        normalizedPreservedTabs
-      ),
-      snapshotVersion: Math.max(snapshot.snapshotVersion, existing.snapshotVersion),
-      activeGroupId: snapshot.activeGroupId ?? existing.activeGroupId,
-      activeTabId: activeTab?.id ?? null,
-      activeTabType: activeTab?.type ?? null,
-      tabGroups: appendChatTabOrder(
-        tabGroups,
-        existing.tabGroups ?? [],
-        normalizedPreservedTabs,
-        activeTab?.id ?? null
-      ),
-      tabs
+    let activeGroupId =
+      snapshot.tabGroups !== undefined
+        ? snapshot.activeGroupId
+        : (snapshot.activeGroupId ?? existing?.activeGroupId ?? null)
+    if (snapshot.tabGroups === undefined && snapshot.activeTabId) {
+      const selectedId =
+        activeTab?.id === snapshot.activeTabId && activeTab.type === 'terminal'
+          ? activeTab.parentTabId
+          : snapshot.activeTabId
+      const group =
+        tabGroups.find((candidate) => candidate.tabOrder.includes(selectedId)) ??
+        tabGroups.find((candidate) => candidate.id === activeGroupId)
+      if (group) {
+        group.activeTabId = selectedId
+        if (isStructuredAgentSessionHostTabId(selectedId) && !group.tabOrder.includes(selectedId)) {
+          group.tabOrder = [...group.tabOrder, selectedId]
+        }
+        activeGroupId = group.id
+      }
     }
+    return normalizeMobileSessionTabSelection({
+      ...snapshot,
+      publicationEpoch: this.getMergedMobileSessionPublicationEpoch(snapshot, preservedTabs),
+      snapshotVersion: Math.max(snapshot.snapshotVersion, existing?.snapshotVersion ?? 0),
+      activeGroupId,
+      activeTabId: snapshot.activeTabId ?? activeTab?.id ?? null,
+      activeTabType: snapshot.activeTabId ? snapshot.activeTabType : (activeTab?.type ?? null),
+      tabGroups,
+      tabs
+    })
   }
 
   // Why: omitted from the renderer's publication AND from persistence = durably closed; a create in flight is not.
@@ -210,13 +218,13 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
     const publicationBase = rebaseToHeadless
       ? { ...existing, publicationEpoch: `headless-hydrated:${Date.now().toString(36)}` }
       : existing
-    return {
+    return normalizeMobileSessionTabSelection({
       ...existing,
       publicationEpoch: this.getMergedMobileSessionPublicationEpoch(publicationBase, tabs),
       // Bump version or clients discard same-epoch prune frames.
       snapshotVersion: existing.snapshotVersion + 1,
       activeGroupId: existing.activeGroupId ?? getHeadlessMobileSessionGroupId(existing.worktree),
-      activeTabId: activeTab?.id ?? null,
+      activeTabId: existing.activeTabId ?? activeTab?.id ?? null,
       activeTabType: activeTab?.type ?? null,
       tabGroups: appendChatTabOrder(
         mergeMobileSessionTabGroups(
@@ -226,11 +234,10 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
           activeTab?.type === 'terminal' ? activeTab : null
         ),
         existing.tabGroups ?? [],
-        tabs,
-        activeTab?.id ?? null
+        tabs
       ),
       tabs
-    }
+    })
   }
 }
 

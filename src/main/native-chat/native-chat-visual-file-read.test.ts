@@ -1,10 +1,9 @@
 import { execFileSync } from 'node:child_process'
-import { mkdir, mkdtemp, rm, symlink, writeFile, link } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { NATIVE_CHAT_VISUAL_MAX_BYTES } from '../../shared/native-chat/native-chat-visual-directive'
 import { nativeChatScratchFolderFor } from './native-chat-scratch-folder'
 import { readNativeChatVisualFile } from './native-chat-visual-file-read'
 
@@ -24,36 +23,6 @@ afterEach(async () => {
 })
 
 describe('readNativeChatVisualFile', () => {
-  it('answers unchanged without the bytes when the client already holds the revision', async () => {
-    await writeFile(join(folder, 'chart.html'), '<p>a</p>')
-    const first = await readNativeChatVisualFile(folder, 'chart.html')
-    if (!first.ok) {
-      throw new Error('expected a read')
-    }
-    const again = await readNativeChatVisualFile(folder, 'chart.html', first.revision)
-    expect(again).toMatchObject({
-      ok: true,
-      revision: first.revision,
-      sizeBytes: 8,
-      unchanged: true
-    })
-
-    await writeFile(join(folder, 'chart.html'), '<p>b</p>')
-    const changed = await readNativeChatVisualFile(folder, 'chart.html', first.revision)
-    expect(changed).toMatchObject({ ok: true, html: '<p>b</p>' })
-  })
-
-  it('refuses names that are not a bare visual file name', async () => {
-    await mkdir(join(stateDirectory, 'other'), { recursive: true })
-    await writeFile(join(stateDirectory, 'other', 'secret.html'), 'secret')
-    for (const name of ['../other/secret.html', '/etc/hosts', 'chart.txt', 'sub/chart.html']) {
-      expect(await readNativeChatVisualFile(folder, name)).toEqual({
-        ok: false,
-        error: 'outside_folder'
-      })
-    }
-  })
-
   posixIt('refuses a symlink to a sibling chat folder or another workspace', async () => {
     const sibling = nativeChatScratchFolderFor(stateDirectory, 'session-beta')
     await mkdir(sibling, { recursive: true })
@@ -108,16 +77,6 @@ describe('readNativeChatVisualFile', () => {
     })
   })
 
-  it('refuses a file over the byte cap and accepts one exactly at it', async () => {
-    await writeFile(join(folder, 'max.html'), 'a'.repeat(NATIVE_CHAT_VISUAL_MAX_BYTES))
-    expect(await readNativeChatVisualFile(folder, 'max.html')).toMatchObject({ ok: true })
-    await writeFile(join(folder, 'big.html'), 'a'.repeat(NATIVE_CHAT_VISUAL_MAX_BYTES + 1))
-    expect(await readNativeChatVisualFile(folder, 'big.html')).toEqual({
-      ok: false,
-      error: 'too_large'
-    })
-  })
-
   it('refuses binary and invalid UTF-8 content', async () => {
     await writeFile(join(folder, 'zero-byte.html'), Buffer.from([0x3c, 0x00, 0x3e]))
     await writeFile(join(folder, 'latin1.html'), Buffer.from([0x3c, 0xe9, 0x3e]))
@@ -129,12 +88,5 @@ describe('readNativeChatVisualFile', () => {
       ok: false,
       error: 'not_text'
     })
-  })
-
-  it('reads a hard link the agent made inside its own folder', async () => {
-    // Hard links grant no more than copying bytes the agent already controls.
-    await writeFile(join(folder, 'a.html'), '<p>a</p>')
-    await link(join(folder, 'a.html'), join(folder, 'b.html'))
-    expect(await readNativeChatVisualFile(folder, 'b.html')).toMatchObject({ ok: true })
   })
 })

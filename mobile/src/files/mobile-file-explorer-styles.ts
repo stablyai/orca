@@ -57,6 +57,26 @@ export const fileExplorerStyles = themedStyleSheet(() => ({
     color: colors.textSecondary,
     fontSize: typography.metaSize
   },
+  inlineStatusFill: {
+    flex: 1,
+    minWidth: 0,
+    color: colors.textSecondary,
+    fontSize: typography.metaSize
+  },
+  showMoreText: {
+    color: colors.accentBlue,
+    fontSize: typography.bodySize,
+    fontWeight: '500'
+  },
+  entryCount: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize
+  },
+  searchAllText: {
+    color: colors.accentBlue,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
+  },
   inlineErrorText: {
     flex: 1,
     minWidth: 0,

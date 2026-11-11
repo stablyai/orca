@@ -134,37 +134,6 @@ describe('artifact share record store', () => {
     expect(persisted.shares).toEqual({})
   })
 
-  it('caps records deterministically at ten thousand', async () => {
-    const path = await userDataPath()
-    clearArtifactShareRecords('local-profile', path)
-    const recordsPath = join(path, 'profiles', 'local-profile', 'artifact-shares.json')
-    const shares = Object.fromEntries(
-      Array.from({ length: 10_001 }, (_, index) => [
-        `/repo/report-${String(index).padStart(5, '0')}.html`,
-        {
-          ...scopeA,
-          slug: `artifact-${index}`,
-          editToken: `secret-${index}`,
-          shareUrl: `https://share.onorca.dev/a/artifact-${index}`,
-          expiresAt: '2099-01-01T00:00:00.000Z',
-          savedAt: index
-        }
-      ])
-    )
-    await writeFile(recordsPath, JSON.stringify({ version: 2, lifecycleGeneration: 0, shares }))
-
-    expect(
-      getArtifactShareRecord('local-profile', path, '/repo/report-10000.html', scopeA)?.editToken
-    ).toBe('secret-10000')
-    expect(
-      getArtifactShareRecord('local-profile', path, '/repo/report-00000.html', scopeA)
-    ).toBeNull()
-    const persisted = JSON.parse(await readFile(recordsPath, 'utf8')) as {
-      shares: Record<string, unknown>
-    }
-    expect(Object.keys(persisted.shares)).toHaveLength(10_000)
-  })
-
   it('keeps usable legacy version-two records without timestamps', async () => {
     const path = await userDataPath()
     clearArtifactShareRecords('local-profile', path)

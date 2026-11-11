@@ -11,6 +11,10 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
   list: {
     paddingBottom: spacing.lg
   },
+  offlineBanner: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm
+  },
   // The chevron sits in the rows' status-dot column, so the icon and title start at the row text.
   sectionHeader: {
     flexDirection: 'row',

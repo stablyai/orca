@@ -1,5 +1,5 @@
 import type React from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { PanZoomSize } from '../../../../shared/pan-zoom-view'
 import type { PanZoomViewport } from './use-pan-zoom-viewport'
 

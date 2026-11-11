@@ -1,4 +1,7 @@
-import { joinWorktreeRelativePath, normalizeRuntimeRelativePath } from '../runtime-relative-paths'
+import {
+  joinWorktreeRelativePath,
+  normalizeRuntimeRelativePath
+} from './paths/runtime-relative-paths'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { GitWorktreeInfo, Worktree } from '../../../shared/worktree/types'
 import {

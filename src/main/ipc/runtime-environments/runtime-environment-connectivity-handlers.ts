@@ -2,27 +2,28 @@ import {
   manuallyDisconnectedResponse,
   runtimeEnvironmentCallFailure
 } from './runtime-environment-call-failure'
-import { desktopChatCreationHistory } from '../../runtime/desktop-chat-creation-history'
+import { desktopChatCreationHistory } from '../../runtime/client/navigation/desktop-chat-creation-history'
 import { ipcMain } from 'electron'
 import {
   addEnvironmentFromPairingCode,
   listEnvironments,
   removeEnvironment,
   resolveEnvironment
-} from '../../../shared/runtime-environment-store'
+} from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   redactRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment,
   type RuntimeEnvironmentRemoval
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   connectThroughOwningService,
   removeThroughOwningService
 } from './runtime-environment-host-service-ops'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../../shared/runtime-types'
+import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
 import type { Store } from '../../persistence/loading-store/store'
 import { retireRemovedRuntimeEnvironment } from './runtime-environment-removal-cleanup'
+import { removeRedundantManagedPairing } from './runtime-environment-redundant-managed-removal'
 import { readSettingsWithRuntimeEnvironmentPreference } from './runtime-environment-preference'
 import { verifyAndAddRuntimeEnvironmentFromPairingCode } from './runtime-environment-pairing-verification'
 import { publishVerifiedPairing } from './runtime-environment-verified-pairing-publish'
@@ -39,7 +40,7 @@ import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
 import { noteRuntimeEnvironmentConnectRequested } from './runtime-environment-pairing-refusal-registry'
 import { publicRuntimeEnvironmentWithHostKey } from './runtime-environment-host-key'
 import { withWslOrcadAccountEnv } from '../../wsl/orcad/wsl-orcad-account-env'
-import { clearSshCredentialDeclinedForEnvironment } from '../../ssh/ssh-credential-decline'
+import { clearSshCredentialDeclinedForEnvironment } from '../../ssh/authentication/ssh-credential-decline'
 import {
   disconnectManagedHostOfEnvironmentForUser,
   disconnectRuntimeEnvironmentForUser,
@@ -131,6 +132,13 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
           removed: redactRuntimeEnvironment(environment),
           serverStop
         }))
+      }
+      const redundantManagedRemoval = removeRedundantManagedPairing(getUserDataPath(), environment)
+      if (redundantManagedRemoval) {
+        return redundantManagedRemoval.then((removal) => {
+          closeLegacySelectorTransport(args.selector, environment.id)
+          return removal
+        })
       }
       const removed = removeEnvironment(getUserDataPath(), args.selector)
       void retireRemovedRuntimeEnvironment(
