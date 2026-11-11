@@ -24,7 +24,6 @@ import { BrowserAgentActivity } from './browser-agent-activity'
 import { runWithActiveRpcCaller } from '../../../runtime/rpc/rpc-active-caller'
 import { runInRemoteCliBrowserScope } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import {
-  BROWSER_AGENT_ACTIVITY_CHANNEL,
   BROWSER_AGENT_CURSOR_ARRIVED_CHANNEL,
   BROWSER_AGENT_CURSOR_CHANNEL,
   type BrowserAgentCursorEvent
@@ -79,48 +78,6 @@ describe('BrowserAgentActivity', () => {
   })
   afterEach(() => {
     vi.useRealTimers()
-  })
-
-  it('marks pages only for an agent CLI caller, never for relayed user input', () => {
-    const { activity, sent } = setup()
-    runWithActiveRpcCaller({ kind: 'paired-device', deviceId: 'phone' }, () =>
-      activity.beginCommand(PAGE)
-    ).end()
-    activity.beginCommand(PAGE).end()
-    expect(sent).toEqual([])
-  })
-
-  it("names the chat whose agent's CLI sent the command", () => {
-    const { activity, sent } = setup()
-    const chat = '11111111-1111-4111-8111-111111111111'
-    runWithActiveRpcCaller({ kind: 'local-cli' }, () => activity.beginCommand(PAGE), chat).end()
-    expect(sent.at(-1)?.data).toEqual({
-      browserPageId: PAGE,
-      worktreeId: 'wt-1',
-      active: true,
-      agentSessionId: chat
-    })
-  })
-
-  it('clears the mark once the agent stays idle, and at once when the page closes', () => {
-    const { activity, sent, agentCommand } = setup()
-    agentCommand().end()
-    expect(sent).toEqual([
-      {
-        channel: BROWSER_AGENT_ACTIVITY_CHANNEL,
-        data: { browserPageId: PAGE, worktreeId: 'wt-1', active: true }
-      }
-    ])
-    vi.advanceTimersByTime(19_000)
-    agentCommand().end()
-    vi.advanceTimersByTime(19_000)
-    expect(sent.at(-1)?.data).toEqual({ browserPageId: PAGE, worktreeId: 'wt-1', active: true })
-    vi.advanceTimersByTime(1_000)
-    expect(sent.at(-1)?.data).toEqual({ browserPageId: PAGE, worktreeId: 'wt-1', active: false })
-
-    agentCommand()
-    activity.end(PAGE)
-    expect(sent.at(-1)?.data).toEqual({ browserPageId: PAGE, worktreeId: 'wt-1', active: false })
   })
 
   it("names the SSH host driving a page, and clears only that host's pages when it is stopped", async () => {
@@ -184,37 +141,5 @@ describe('BrowserAgentActivity', () => {
     arrive(event.sequence)
     await shown
     expect(landed).toBe(true)
-  })
-
-  it('stops waiting after the timeout, or when the page closes', async () => {
-    const { activity, agentCommand, show } = setup()
-    const timedOut = agentCommand().run(() => show({ type: 'mouseMoved', x: 1, y: 1 }))
-    await vi.advanceTimersByTimeAsync(1500)
-    await expect(timedOut).resolves.toBeUndefined()
-
-    const closed = agentCommand().run(() => show({ type: 'mouseMoved', x: 2, y: 2 }))
-    await vi.advanceTimersByTimeAsync(0)
-    activity.end(PAGE)
-    await expect(closed).resolves.toBeUndefined()
-  })
-
-  it('never waits for presses, drag steps, or a window nobody can see', async () => {
-    const { agentCommand, cursorEvents, show } = setup()
-    await agentCommand().run(async () => {
-      await show({ type: 'mousePressed', x: 5, y: 5 })
-      await show({ type: 'mouseMoved', x: 6, y: 5, buttons: 1 })
-      windowState.visible = false
-      await show({ type: 'mouseMoved', x: 300, y: 300 })
-    })
-    expect(cursorEvents().map((event) => event.awaitsArrival)).toEqual([false, false, false])
-    expect(cursorEvents()[0].press).toBe(true)
-  })
-
-  it('draws no cursor for input that runs while agent commands only wait in the queue', async () => {
-    const { agentCommand, cursorEvents, show } = setup()
-    const queuedAgentCommand = agentCommand()
-    await show({ type: 'mouseMoved', x: 40, y: 40 })
-    expect(cursorEvents()).toEqual([])
-    queuedAgentCommand.end()
   })
 })

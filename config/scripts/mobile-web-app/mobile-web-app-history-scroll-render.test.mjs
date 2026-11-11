@@ -1,4 +1,5 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { beforeAll, afterAll, describe, expect, it } from 'vitest'
@@ -92,8 +93,7 @@ beforeAll(async () => {
   if (!bundles) {
     return
   }
-  await mkdir(join(mobileDir, '.tmp'), { recursive: true })
-  scratch = await mkdtemp(join(mobileDir, '.tmp', 'history-scroll-'))
+  scratch = await mkdtemp(join(tmpdir(), 'orca-history-scroll-'))
   const outDir = join(scratch, 'bundle')
   await esbuild.build({
     ...mobileWebAppBuildOptions([]),
@@ -165,7 +165,14 @@ run('production mobile PageList scrolling', () => {
       await page.getByText('m99: Message history', { exact: true }).waitFor()
       await page.mouse.move(180, 300)
       await page.mouse.wheel(0, -500)
-      await page.waitForTimeout(50)
+      await page.waitForFunction(() =>
+        [...document.querySelectorAll('div')].some(
+          (node) =>
+            getComputedStyle(node).flexDirection === 'column-reverse' &&
+            ['auto', 'scroll'].includes(getComputedStyle(node).overflowY) &&
+            node.scrollTop < 0
+        )
+      )
       const before = await snapshot(page)
       await page.waitForTimeout(500)
       const after = await snapshot(page)

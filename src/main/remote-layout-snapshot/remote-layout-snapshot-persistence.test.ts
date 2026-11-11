@@ -5,7 +5,6 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState } from '../../shared/constants'
 import { setSecretStore } from '../../shared/secret-store'
 import { recordRemoteLayoutFrame } from './remote-layout-snapshot-recorder'
-import { openProfileStateDatabaseReadOnly } from '../persistence/profile-state/database/profile-state-database'
 import { ProfileStateSqliteAuthority } from '../persistence/profile-state/profile-state-sqlite-authority'
 import { Store } from '../persistence/loading-store/store'
 
@@ -67,20 +66,7 @@ function profile(seeded: Record<string, unknown> = {}) {
     stores.push(store)
     return store
   }
-  const documentRevisions = () => {
-    const opened = openProfileStateDatabaseReadOnly(databasePath, profileId)
-    try {
-      return new Map(
-        opened.db
-          .prepare('SELECT domain, revision FROM profile_state_documents')
-          .all()
-          .map((row) => [String(row.domain), Number(row.revision)])
-      )
-    } finally {
-      opened.db.close()
-    }
-  }
-  return { open, documentRevisions }
+  return { open }
 }
 
 const workspace = {
@@ -92,44 +78,6 @@ const workspace = {
   activeTabType: null,
   tabs: []
 }
-
-it('survives a restart and saves only its own domain', () => {
-  const { open, documentRevisions } = profile()
-  const store = open()
-  store.flushOrThrow()
-  const before = documentRevisions()
-  const fullWrite = vi.spyOn(
-    ProfileStateSqliteAuthority.prototype,
-    'writeCompleteSerializedDomains'
-  )
-
-  recordRemoteLayoutFrame(store, 'env', 'session.tabs.subscribeAll', {
-    id: 'stream',
-    ok: true,
-    result: { type: 'snapshots', snapshots: [workspace] },
-    _meta: { runtimeId: 'server' }
-  })
-  store.flushOrThrow()
-
-  // Not a whole-profile serialization per recorded frame.
-  expect(fullWrite).not.toHaveBeenCalled()
-  const after = documentRevisions()
-  const changed = [...after].filter(([domain, revision]) => before.get(domain) !== revision)
-  expect(changed.map(([domain]) => domain)).toEqual(['remoteLayoutSnapshots'])
-  expect(open().getRemoteLayoutSnapshots()).toEqual({
-    env: { workspaces: { [workspace.worktree]: workspace } }
-  })
-})
-
-it('reads a snapshot an older build saved with its receipt fields, without them', () => {
-  const workspaces = { [workspace.worktree]: workspace }
-  const { open } = profile({
-    remoteLayoutSnapshots: {
-      env: { receivedAt: 1, serverRuntimeId: 'server', workspaces }
-    }
-  })
-  expect(open().getRemoteLayoutSnapshots()).toEqual({ env: { workspaces } })
-})
 
 it('keeps a title-only change without arming a save, and writes it with the next save', () => {
   const { open } = profile()

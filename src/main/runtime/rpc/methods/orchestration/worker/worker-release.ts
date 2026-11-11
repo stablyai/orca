@@ -3,9 +3,9 @@ import { defineOrchestrationMethod } from '../access/orchestration-method-access
 import {
   releaseFederatedWorker,
   retainFederatedWorker
-} from '../../../../orchestration/legacy-remote-home/legacy-remote-home'
+} from '../../../../orchestration/legacy-remote-home/federated-worker-release'
 import { ORCHESTRATION_WORKER_LIST_METHOD } from './worker-list-method'
-import { resolvePinnedFederatedServer } from './worker-observation'
+import { resolvePinnedFederatedServer } from './pinned-federated-server'
 import { archiveSummary, exposeWorkerRetainReceipt } from './worker-terminal-resource-presentation'
 import {
   completeWorkerTerminalRelease,

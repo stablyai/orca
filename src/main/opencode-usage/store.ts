@@ -11,7 +11,7 @@ import type {
   OpenCodeUsageSnapshot,
   OpenCodeUsageSummary
 } from '../../shared/opencode-usage-types'
-import type { Store } from '../persistence/loading-store/store'
+import type { UsageWorktreeSource } from '../usage/worktree-attribution/usage-worktree-metadata'
 import type {
   OpenCodeUsageDailyAggregate,
   OpenCodeUsagePersistedState,
@@ -50,7 +50,7 @@ export class OpenCodeUsageStore extends UsageProviderStoreLifecycle<
   OpenCodeUsagePersistedState,
   'hasAnyOpenCodeData'
 > {
-  constructor(store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>) {
+  constructor(store: UsageWorktreeSource) {
     super(store, {
       tokenUsage: {
         provider: 'opencode',

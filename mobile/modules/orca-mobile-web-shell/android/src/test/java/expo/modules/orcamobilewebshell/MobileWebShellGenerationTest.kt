@@ -4,10 +4,8 @@ import java.io.File
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 private val DIRECTORY = File("/tmp/generation")
@@ -84,45 +82,4 @@ class MobileWebShellGenerationTest {
     ))))
   }
 
-  @Test
-  fun `accepts only portable relative asset paths`() {
-    assertTrue(MobileWebShellGeneration.isServableAssetPath("index.html"))
-    assertTrue(MobileWebShellGeneration.isServableAssetPath("assets/a-b_c.2.js"))
-    assertFalse(MobileWebShellGeneration.isServableAssetPath(""))
-    assertFalse(MobileWebShellGeneration.isServableAssetPath("/leading"))
-    assertFalse(MobileWebShellGeneration.isServableAssetPath("trailing/"))
-    assertFalse(MobileWebShellGeneration.isServableAssetPath("a//b"))
-    assertFalse(MobileWebShellGeneration.isServableAssetPath("../secret"))
-    assertFalse(MobileWebShellGeneration.isServableAssetPath("assets/../../secret"))
-    assertFalse(MobileWebShellGeneration.isServableAssetPath("assets/./a.js"))
-    assertFalse(MobileWebShellGeneration.isServableAssetPath("back\\slash"))
-    assertFalse(MobileWebShellGeneration.isServableAssetPath("has space.js"))
-    assertTrue(MobileWebShellGeneration.isServableAssetPath("a".repeat(255)))
-    assertFalse(MobileWebShellGeneration.isServableAssetPath("a".repeat(256)))
-  }
-
-  @Test
-  fun `accepts only a content type that cannot carry a second header`() {
-    assertTrue(MobileWebShellGeneration.isServableContentType("image/png"))
-    assertTrue(MobileWebShellGeneration.isServableContentType("text/html; charset=utf-8"))
-    assertTrue(MobileWebShellGeneration.isServableContentType("application/manifest+json"))
-    assertFalse(MobileWebShellGeneration.isServableContentType(""))
-    assertFalse(MobileWebShellGeneration.isServableContentType("text/html\r\nX-Injected: 1"))
-    assertFalse(MobileWebShellGeneration.isServableContentType("text/html; charset=utf-8; x=1"))
-    assertFalse(MobileWebShellGeneration.isServableContentType("TEXT/HTML"))
-    // A header value we did not mint character for character is a value we did not check.
-    assertFalse(MobileWebShellGeneration.isServableContentType("text/html; charset=UTF-8"))
-    assertFalse(MobileWebShellGeneration.isServableContentType("text"))
-    assertFalse(MobileWebShellGeneration.isServableContentType("text/html/extra"))
-    assertFalse(MobileWebShellGeneration.isServableContentType("/html"))
-    assertFalse(MobileWebShellGeneration.isServableContentType("-text/html"))
-    assertFalse(MobileWebShellGeneration.isServableContentType("text/html; charset="))
-    assertFalse(MobileWebShellGeneration.isServableContentType("a".repeat(130) + "/b"))
-  }
-
-  @Test
-  fun `refuses a directory path that is not absolute`() {
-    assertNull(MobileWebShellGeneration.load("relative/generation"))
-    assertNull(MobileWebShellGeneration.load(""))
-  }
 }

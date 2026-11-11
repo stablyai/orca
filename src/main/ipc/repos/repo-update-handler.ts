@@ -1,15 +1,21 @@
-import type { BrowserWindow } from 'electron'
-import { ipcMain } from 'electron'
+import { type BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
 import type { RepoHostTarget } from '../../../shared/repo-host-identity'
 import { isFolderRepo } from '../../../shared/repo-kind'
-import type { ExecutionHostId } from '../../../shared/execution-host'
-import { getRepoExecutionHostId, normalizeExecutionHostId } from '../../../shared/execution-host'
+
+import {
+  type ExecutionHostId,
+  getRepoExecutionHostId,
+  normalizeExecutionHostId
+} from '../../../shared/execution-host'
 import { normalizeRepoBadgeColor } from '../../../shared/repo-badge-color'
 import { sanitizeRepoIcon } from '../../../shared/repo-icon'
-import { normalizeGhAccountBinding } from '../../../shared/github/account-binding'
-import type { GhAccountBinding } from '../../../shared/github/account-binding'
+import {
+  normalizeGhAccountBinding,
+  type GhAccountBinding
+} from '../../../shared/github/account-binding'
+
 import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
 import {
   normalizeCustomWorktreeVisibilitySources,
@@ -23,7 +29,7 @@ import { notifyReposChanged } from './repos-changed-notification'
 import {
   assertWslMoveProjectWritable,
   isWslMoveSourceHost
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Store): void {
   ipcMain.handle(

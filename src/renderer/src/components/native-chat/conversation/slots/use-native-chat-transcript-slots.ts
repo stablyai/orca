@@ -1,10 +1,15 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useContext, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { toggleNativeChatExpandedKey } from '../../messages/disclosure/native-chat-expanded-keys'
 import {
   nativeChatHistoryTurnFold,
   nativeChatTurnFoldRow,
   type NativeChatTurnFoldHistory
 } from '../../../../../../shared/native-chat/transcript/native-chat-turn-fold'
+import { NativeChatVisualOwnerContext } from '../../media/visuals/native-chat-visual-owner'
+import {
+  nativeChatMarkdownImageSources,
+  nativeChatVisualMarkdownImageSources
+} from '../../markdown/native-chat-markdown-image-sources'
 import {
   nativeChatLiveLine,
   type NativeChatLiveLine
@@ -42,6 +47,10 @@ export function useNativeChatTranscriptSlots({
   toggleExpandedTurn: (key: string) => void
   forkPoint: NativeChatSideChatForkPoint | null
 } {
+  const visualOwner = useContext(NativeChatVisualOwnerContext)
+  const imageSources = visualOwner
+    ? nativeChatVisualMarkdownImageSources
+    : nativeChatMarkdownImageSources
   const {
     messages,
     unresolvedRowIds,
@@ -124,6 +133,7 @@ export function useNativeChatTranscriptSlots({
   const { slots, forkPoint } = useMemo(
     () =>
       buildNativeChatTranscript({
+        imageSources,
         messages,
         unresolvedRowIds,
         typography,
@@ -145,6 +155,7 @@ export function useNativeChatTranscriptSlots({
       }),
     [
       historyFold,
+      imageSources,
       forkOffer,
       isWorking,
       lifecycleWorking,

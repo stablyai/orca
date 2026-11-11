@@ -1,3 +1,4 @@
+import { useMobileNativeChatGeneratedImageAnswers } from './use-mobile-native-chat-generated-image-answers'
 import { useMobileNativeChatTurnDiffs } from './use-mobile-native-chat-turn-diffs'
 import type { MobileNativeChatTurnRow } from './use-mobile-native-chat-row-props'
 import { useCallback, useMemo } from 'react'
@@ -72,7 +73,13 @@ export function useMobileNativeChatTurnDisclosure({
   liveLine: MobileNativeChatLiveLine | null
   onToggleReasoning: (key: string) => void
 } {
-  const { rows, turnKeys, liveTurnKey, unresolvedRowIds, partialTurnKey } = useMemo(() => {
+  const {
+    rows: sourceRows,
+    turnKeys,
+    liveTurnKey,
+    unresolvedRowIds,
+    partialTurnKey
+  } = useMemo(() => {
     if (!enabled) {
       return {
         rows: messages,
@@ -91,6 +98,23 @@ export function useMobileNativeChatTurnDisclosure({
       unresolvedRowIds: membership.unresolvedRowIds
     }
   }, [enabled, messages, turnJournal])
+  const turnStatuses = useMobileNativeChatTurnStatus({
+    turnKeys,
+    liveTurnKey,
+    enabled,
+    isWorking,
+    workingStartedAt,
+    settledTurns,
+    thinking,
+    scopeKey
+  })
+  const { active, activeTurnKey, completedByTurn } = turnStatuses
+  const rows = useMobileNativeChatGeneratedImageAnswers(
+    enabled,
+    sourceRows,
+    turnKeys,
+    completedByTurn
+  )
   const summaries = useMobileNativeChatTurnDiffs(rows, enabled, turnKeys, partialTurnKey)
   const waiting = useMemo(() => {
     const ids = enabled
@@ -111,23 +135,12 @@ export function useMobileNativeChatTurnDisclosure({
       indexById: new Map(rows.map((message, index) => [message.id, index]))
     }
   }, [enabled, rows, stopping, turnJournal])
-  const turnStatuses = useMobileNativeChatTurnStatus({
-    turnKeys,
-    liveTurnKey,
-    enabled,
-    isWorking,
-    workingStartedAt,
-    settledTurns,
-    thinking,
-    scopeKey
-  })
   const [expandedTurnIds, toggleExpandedTurn] = useMobileNativeChatScopedOpenKeys(scopeKey)
   const [expandedReasoning, toggleReasoning] = useMobileNativeChatScopedOpenKeys(scopeKey)
   const [openSubagentGroups, toggleSubagentGroup] = useMobileNativeChatScopedOpenKeys(scopeKey)
   const [openUserMessages, toggleUserMessage] = useMobileNativeChatScopedOpenKeys(scopeKey)
   const bars = useMemo(() => nativeChatTurnBarRows(rows, turnKeys), [rows, turnKeys])
 
-  const { active, activeTurnKey, completedByTurn } = turnStatuses
   const inLiveWorkingTurn = useCallback(
     (index: number) =>
       isNativeChatRowInLiveWorkingTurn(
