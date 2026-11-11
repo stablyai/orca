@@ -24,6 +24,7 @@ import {
 } from './runtime-file-upload-client'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import type { LocalFileAccess } from '../../../../../shared/file-access/local-file-access'
+import { FILE_WRITE_CHUNK_AT_OFFSET_RUNTIME_CAPABILITY } from '../../../../../shared/file-access/files-runtime-capabilities'
 
 export async function importExternalPathsToRuntime(
   context: RuntimeFileOperationArgs,
@@ -62,7 +63,7 @@ export async function importExternalPathsToRuntime(
   const expectedEnvironmentConnectionGeneration = getRuntimeEnvironmentConnectionGeneration(
     target.environmentId
   )
-  const expectedEnvironmentRuntimeId = await assertRuntimeFileMutationCapability(
+  const runtimeStatus = await assertRuntimeFileMutationCapability(
     target,
     expectedEnvironmentPairingRevision
   )
@@ -76,7 +77,10 @@ export async function importExternalPathsToRuntime(
     target,
     expectedEnvironmentPairingRevision,
     expectedEnvironmentConnectionGeneration,
-    expectedEnvironmentRuntimeId,
+    // Every upload call is pinned to this runtime, so its capabilities hold for the session.
+    expectedEnvironmentRuntimeId: runtimeStatus.runtimeId,
+    writesChunksAtOffsets:
+      runtimeStatus.capabilities?.includes(FILE_WRITE_CHUNK_AT_OFFSET_RUNTIME_CAPABILITY) === true,
     assertCurrent: assertImportSessionCurrent
   }
   importSession.assertCurrent()

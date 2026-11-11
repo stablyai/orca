@@ -15,6 +15,9 @@ import { callRuntimeEnvironment } from './runtime-environments/runtime-environme
 // Base64 expands 384 KiB into the established 512 KiB wire chunk.
 export const RUNTIME_UPLOAD_SLICE_BYTES = 384 * 1024
 
+// Covers a WAN round trip and leaves half of an environment's eight foreground call slots free.
+const RUNTIME_UPLOAD_SLICE_WINDOW = 4
+
 const RUNTIME_UPLOAD_CHUNK_TIMEOUT_MS = 30_000
 
 export type RuntimeUploadFileStreamArgs = RuntimeUploadFileStreamRequest & {
@@ -28,6 +31,7 @@ export type RuntimeUploadFileStreamArgs = RuntimeUploadFileStreamRequest & {
 export async function streamExternalFileToRuntime(
   args: RuntimeUploadFileStreamArgs
 ): Promise<{ byteLength: number }> {
+  const sliceWindow = args.writesChunksAtOffsets ? RUNTIME_UPLOAD_SLICE_WINDOW : 1
   return streamExternalFileSlices({
     sourceRootPath: args.sourceRootPath,
     entryRelativePath: args.entryRelativePath,
@@ -35,7 +39,8 @@ export async function streamExternalFileToRuntime(
     signal: args.signal,
     maxFileBytes: REMOTE_IMPORT_MAX_FILE_BYTES,
     limitLabel: 'per-file remote import limit',
-    writeSlice: (contentBase64, offset) => sendChunk(args, contentBase64, offset > 0)
+    sliceWindow,
+    writeSlice: (contentBase64, offset) => sendChunk(args, contentBase64, offset, sliceWindow)
   })
 }
 
@@ -49,6 +54,8 @@ export type ExternalFileSliceStreamArgs = {
   maxFileBytes: number
   /** Names the ceiling in the refusal, e.g. "per-file remote import limit". */
   limitLabel: string
+  /** Slices in flight at once (default 1); above 1, `writeSlice` must place each slice by its offset. */
+  sliceWindow?: number
   /** Sends one base64 slice; `offset` is in source bytes. An empty file sends one empty slice. */
   writeSlice: (contentBase64: string, offset: number) => Promise<void>
 }
@@ -100,15 +107,33 @@ export async function streamExternalFileSlices(
       await args.writeSlice('', 0)
     } else {
       const buffer = Buffer.allocUnsafe(Math.min(RUNTIME_UPLOAD_SLICE_BYTES, totalBytes))
-      let offset = 0
-      while (offset < totalBytes) {
-        args.signal?.throwIfAborted()
-        const { bytesRead } = await handle.read(buffer, 0, buffer.byteLength, offset)
-        if (bytesRead === 0) {
-          throw new Error(`File truncated during upload: '${displayPath}'`)
+      const inFlight: Promise<void>[] = []
+      const failures: unknown[] = []
+      try {
+        let offset = 0
+        while (offset < totalBytes && failures.length === 0) {
+          args.signal?.throwIfAborted()
+          const { bytesRead } = await handle.read(buffer, 0, buffer.byteLength, offset)
+          if (bytesRead === 0) {
+            throw new Error(`File truncated during upload: '${displayPath}'`)
+          }
+          inFlight.push(
+            args
+              .writeSlice(buffer.subarray(0, bytesRead).toString('base64'), offset)
+              .catch((error: unknown) => void failures.push(error))
+          )
+          // Later slices write into the file that the first slice creates.
+          if (inFlight.length >= (offset === 0 ? 1 : (args.sliceWindow ?? 1))) {
+            await inFlight.shift()
+          }
+          offset += bytesRead
         }
-        await args.writeSlice(buffer.subarray(0, bytesRead).toString('base64'), offset)
-        offset += bytesRead
+      } finally {
+        // Settle every sent slice before the caller removes the temporary destination.
+        await Promise.all(inFlight)
+      }
+      if (failures.length > 0) {
+        throw failures[0]
       }
     }
 
@@ -150,7 +175,8 @@ function isSameFile(a: Stats, b: Stats): boolean {
 async function sendChunk(
   args: RuntimeUploadFileStreamArgs,
   contentBase64: string,
-  append: boolean
+  offset: number,
+  sliceWindow: number
 ): Promise<void> {
   // Main now owns chunk dispatch; each slice must still honor a concurrent manual disconnect.
   if (isRuntimeEnvironmentManuallyDisconnected(args.environmentId)) {
@@ -164,12 +190,14 @@ async function sendChunk(
       worktree: args.worktree,
       relativePath: args.relativePath,
       contentBase64,
-      append,
+      // No `append` beside `offset`: a host without offsets then refuses the slice instead of misplacing it.
+      ...(offset > 0 && args.writesChunksAtOffsets ? { offset } : { append: offset > 0 }),
       expectedSshTargetId: args.expectedSshTargetId,
       expectedSshConnectionGeneration: args.expectedSshConnectionGeneration,
       expectedExecutionHostId: args.expectedExecutionHostId
     },
-    RUNTIME_UPLOAD_CHUNK_TIMEOUT_MS,
+    // A slice can wait behind the rest of its window on a slow link.
+    RUNTIME_UPLOAD_CHUNK_TIMEOUT_MS * sliceWindow,
     // Abort if re-pairing changes the host between chunks.
     args.expectedEnvironmentPairingRevision,
     undefined,
