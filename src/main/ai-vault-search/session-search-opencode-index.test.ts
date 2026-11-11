@@ -144,7 +144,7 @@ it.each([40, 400])(
 )
 
 it('keeps a duplicate physical row and promotes it when the selected database disappears', async () => {
-  const storage = harness.roots.opencodeStorageDir
+  const storage = join(harness.root, 'opencode-storage')
   for (const [id, text] of [
     ['ses_shared', 'legacycopyneedle'],
     ['ses_legacy', 'legacyonlyneedle']
