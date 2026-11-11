@@ -173,11 +173,8 @@ export function registerCloudWorkspacesHandlers(
   handle('cloudWorkspaces:list', async (args) => {
     const query = ListQuery.safeParse(args ?? {})
     const s = await getService()
-    if (!s) {
-      return NOT_CONFIGURED
-    }
-    if (!query.success) {
-      return INVALID
+    if (!s || !query.success) {
+      return !s ? NOT_CONFIGURED : INVALID
     }
     const result = await s.list(query.data)
     // Each successful refresh also checks this device's pairings (throttled, in the background).
@@ -250,11 +247,8 @@ export function registerCloudWorkspacesHandlers(
   handle('cloudWorkspaces:destroy', async (args) => {
     const parsed = z.object({ id: Id }).safeParse(args)
     const s = await getService()
-    if (!s) {
-      return NOT_CONFIGURED
-    }
-    if (!parsed.success) {
-      return INVALID
+    if (!s || !parsed.success) {
+      return !s ? NOT_CONFIGURED : INVALID
     }
     const result = await s.destroy(parsed.data.id)
     // Deleted from here: its pairing, server and projects go now, not at the next list.
