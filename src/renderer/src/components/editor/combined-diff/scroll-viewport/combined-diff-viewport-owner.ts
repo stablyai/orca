@@ -1,115 +1,98 @@
 import { CombinedDiffViewportAnchor, type DiffSemanticPoint } from './combined-diff-viewport-anchor'
 import { CombinedDiffViewportScene } from './combined-diff-viewport-scene'
 import { CombinedDiffViewportItems } from './combined-diff-viewport-items'
-import {
-  diffAnchorAt,
-  diffAnchorOffset,
-  layoutDiffViewport,
-  mapDiffViewportTop,
-  type DiffItemExtent,
-  type DiffItemLayout,
-  type DiffReadingAnchor,
-  type DiffViewportLayout
-} from './combined-diff-layout'
+import { CombinedDiffExtentTransaction } from './combined-diff-extent-transaction'
+import type { DiffViewportInput } from './combined-diff-viewport-items'
+import type { DiffItemLayout, DiffReadingAnchor, DiffViewportLayout } from './combined-diff-layout'
 
 export type { DiffSemanticPoint } from './combined-diff-viewport-anchor'
-export type DiffViewportBinding = {
-  apply(layout: DiffItemLayout, viewport: DiffViewportLayout, width: number): void
-  readHeight(): number | null
-  capture(edge: number): DiffSemanticPoint | null
-  hasFocus(): boolean
-  detach(): void
-}
-export type DiffViewportItem = {
-  readonly key: string
-  readonly generation: string
-  readonly owner: CombinedDiffViewportOwner
-  index: number
-  height: number
-  collapsed: boolean
-  measured: boolean
-  retired: boolean
-  node: HTMLDivElement | null
-  binding: DiffViewportBinding | null
-  readonly onRetire: Set<() => void>
-}
+export type { DiffViewportItem, DiffViewportBinding } from './combined-diff-viewport-item'
+import type { DiffViewportItem, DiffViewportBinding } from './combined-diff-viewport-item'
 
 export class CombinedDiffViewportOwner {
   readonly onDispose = new Set<() => void>()
   private readonly listeners = new Set<() => void>()
   private readonly scrollListeners = new Set<() => void>()
-  private extents: DiffItemExtent[] = []
+  private readonly geometry = new CombinedDiffExtentTransaction()
   private visible: readonly DiffViewportItem[] = []
   private revision = 0
   private logicalTop = 0
   private reconciling = false
   private queued = false
+  private retainRevision = 0
   private disposed = false
   private dirty = false
   private indicesChanged = false
   private direction: 'up' | 'down' | undefined
   private directionTimer = 0
-  private layout = layoutDiffViewport({ items: [], height: 0, logicalTop: 0, revision: 0 })
+  private layout = this.geometry.index.project(0, 0, 0, false)
 
   private readonly anchor = new CombinedDiffViewportAnchor({
-    invalidate: () => this.invalidate(),
-    getExtents: () => this.extents,
-    getHeight: () => this.height,
+    invalidate: () => this.schedule(),
+    getIndex: () => this.geometry.index,
+    getHeight: () => this.surface.height,
     getTop: () => this.logicalTop,
     setTop: (top) => {
       this.logicalTop = top
     },
     render: () => this.render(true),
     getDirection: () => this.direction,
-    getOrder: () => this.order
+    getVisible: () =>
+      this.layout.items.flatMap((layout) => {
+        const item = this.registry.get(layout.key)
+        return item ? [item] : []
+      })
   })
   private readonly registry = new CombinedDiffViewportItems(this)
   private readonly surface = new CombinedDiffViewportScene({
     invalidate: () => this.invalidate(),
+    focusChanged: () => this.focusChanged(),
     scrollTo: (top) => this.input(top - this.logicalTop),
-    scrollBy: (delta) => this.input(delta),
-    unmount: () => this.dispose()
+    scrollBy: (delta) => this.input(delta)
   })
-  get scene(): HTMLDivElement {
-    return this.surface.scene
-  }
-  get root(): HTMLDivElement {
-    return this.surface.root
-  }
-  get overflow(): HTMLDivElement {
-    return this.surface.overflow
-  }
-  private get width(): number {
-    return this.surface.width
-  }
-  private get height(): number {
-    return this.surface.height
-  }
-  private get order(): readonly DiffViewportItem[] {
-    return this.registry.order
-  }
+  readonly scene = this.surface.scene
+  readonly root = this.surface.root
+  readonly overflow = this.surface.overflow
   retain(): () => void {
-    return this.surface.retain()
+    this.retainRevision++
+    return () => {
+      const revision = ++this.retainRevision
+      queueMicrotask(() => {
+        if (revision === this.retainRevision) {
+          this.dispose()
+        }
+      })
+    }
   }
   mount(host: HTMLDivElement): () => void {
     return this.surface.mount(host)
   }
-  setItems(
-    inputs: readonly {
-      key: string
-      generation: string
-      height: number
-      collapsed: boolean
-      index: number
-    }[]
-  ): void {
-    this.indicesChanged = this.registry.setItems(inputs) || this.indicesChanged
-    this.invalidate()
+  getItem(key: string): DiffViewportItem | undefined {
+    return this.registry.get(key)
+  }
+  setItems(inputs: readonly DiffViewportInput[]): void {
+    const changes = this.registry.setItems(inputs)
+    this.applyInputs(changes)
+  }
+  updateItems(inputs: readonly DiffViewportInput[]): void {
+    this.applyInputs(this.registry.updateItems(inputs))
+  }
+  private applyInputs(changes: {
+    structure: boolean
+    changed: readonly DiffViewportItem[]
+    indices: boolean
+  }): void {
+    this.indicesChanged ||= changes.indices
+    this.geometry.changed(changes.changed, changes.structure)
+    if (changes.structure || changes.changed.length || changes.indices) {
+      this.schedule()
+    }
   }
   private render(preserveSlack: boolean): void {
     this.layout = this.surface.render({
-      extents: this.extents,
-      order: this.order,
+      index: this.geometry.index,
+      attached: this.registry.attached,
+      focused: this.registry.focused,
       logicalTop: this.logicalTop,
       revision: this.revision,
       preserveSlack
@@ -130,42 +113,59 @@ export class CombinedDiffViewportOwner {
     return this.layout.logicalTop
   }
   getAnchor(): DiffReadingAnchor | null {
-    return diffAnchorAt(this.extents, this.logicalTop)
+    return this.geometry.index.anchorAt(this.logicalTop)
   }
   getLayout(): DiffViewportLayout {
     return this.layout
   }
-  getHeights(): Record<string, number> {
-    return Object.fromEntries(this.order.map((item) => [item.key, item.height]))
+  getItemLayout(key: string): DiffItemLayout | null {
+    return this.geometry.index.itemLayout(key, this.layout)
   }
 
   setNode(item: DiffViewportItem, node: HTMLDivElement | null): void {
     item.node = node
-    this.invalidate()
+    this.registry.trackAttachment(item)
+    this.invalidate(item)
   }
   measure(item: DiffViewportItem, height: number): void {
-    if (item.retired || height <= 0 || height === item.height) {
-      return
+    if (this.geometry.measure(item, height)) {
+      this.schedule()
     }
-    item.height = height
-    item.measured = true
-    this.invalidate()
   }
+
   bind(item: DiffViewportItem, binding: DiffViewportBinding): () => void {
     item.binding?.detach()
     item.binding = binding
-    this.invalidate()
+    this.registry.trackAttachment(item)
+    this.invalidate(item)
     return () => {
       if (item.binding !== binding) {
         return
       }
       binding.detach()
       item.binding = null
-      this.invalidate()
+      this.geometry.forget(item)
+      this.registry.trackAttachment(item)
+      this.schedule()
     }
   }
 
-  invalidate = (): void => {
+  retireItem(item: DiffViewportItem): void {
+    this.cancelItemNavigation(item)
+    this.geometry.forget(item)
+  }
+  private focusChanged(): void {
+    this.registry.focusChanged()
+    this.schedule()
+  }
+  invalidateView = (): void => {
+    this.schedule()
+  }
+  invalidate = (item?: DiffViewportItem): void => {
+    this.geometry.invalidate(item)
+    this.schedule()
+  }
+  private schedule(): void {
     this.dirty = true
     if (this.queued || this.reconciling || this.disposed) {
       return
@@ -181,7 +181,7 @@ export class CombinedDiffViewportOwner {
 
   input(delta: number): void {
     this.cancelNavigation()
-    this.anchor.clearPoint()
+    this.anchor.beginInput()
     if (delta !== 0) {
       this.direction = delta < 0 ? 'up' : 'down'
       clearTimeout(this.directionTimer)
@@ -189,7 +189,7 @@ export class CombinedDiffViewportOwner {
         this.direction = undefined
       }, 100)
     }
-    const max = Math.max(0, this.layout.logicalHeight - this.height)
+    const max = Math.max(0, this.layout.logicalHeight - this.surface.height)
     this.logicalTop = Math.max(
       -this.layout.leadingSlack,
       Math.min(this.logicalTop + delta, max + this.layout.trailingSlack)
@@ -198,13 +198,13 @@ export class CombinedDiffViewportOwner {
   }
 
   navigate(index: number): void {
-    const item = this.order.find((item) => item.index === index)
+    const item = this.registry.getByIndex(index)
     if (!item) {
       return
     }
     this.cancelNavigation()
     this.anchor.clearPoint()
-    this.logicalTop = diffAnchorOffset(this.extents, { key: item.key, offset: 0 }) ?? 0
+    this.logicalTop = this.geometry.index.anchorOffset({ key: item.key, offset: 0 }) ?? 0
     this.reconcile(true)
   }
 
@@ -230,36 +230,21 @@ export class CombinedDiffViewportOwner {
   }
 
   private reconcile(resetSlack = false): void {
-    if (!this.surface.mounted || this.height <= 0 || this.reconciling) {
+    if (!this.surface.mounted || this.surface.height <= 0 || this.reconciling) {
       return
     }
     this.reconciling = true
     let focus: (() => void) | undefined
     try {
-      const previous = this.extents
-      const previousTop = this.logicalTop
-      const prepare = (): void => {
-        this.extents = this.order.map((item) => ({ key: item.key, height: item.height }))
-        this.logicalTop = mapDiffViewportTop({
-          previous,
-          next: this.extents,
-          top: previousTop,
-          height: this.height,
-          direction: this.direction
-        })
+      if (this.geometry.pending) {
+        this.commitGeometry()
+      }
+      this.render(!resetSlack)
+      // A real native geometry notification during input promotes it before publication.
+      if (this.geometry.pending) {
+        this.commitGeometry()
         this.render(!resetSlack)
       }
-      prepare()
-      for (const item of this.order) {
-        const height = item.binding?.readHeight()
-        if (height !== null && height !== undefined && height > 0) {
-          item.height = height
-          item.measured = true
-        }
-      }
-      // Width/options have drained; height-only layout cannot rewrap with minimap and scroll-beyond disabled.
-      this.revision++
-      prepare()
       focus = this.anchor.reconcile()
       // Notifications from the synchronous native work above are represented by this commit.
       this.dirty = false
@@ -271,10 +256,25 @@ export class CombinedDiffViewportOwner {
     focus?.()
   }
 
+  private commitGeometry(): void {
+    const result = this.geometry.commit({
+      order: this.registry.order,
+      attached: this.registry.attached,
+      scene: this.surface,
+      layout: this.layout,
+      top: this.logicalTop,
+      height: this.surface.height,
+      direction: this.direction,
+      survives: (key) => this.registry.get(key) !== undefined
+    })
+    this.logicalTop = result.top
+    if (result.changed) {
+      this.revision++
+    }
+  }
+
   private publishVisible(): void {
-    const visible = this.order.filter(
-      (item, index) => this.layout.items[index]?.visible || item.binding?.hasFocus()
-    )
+    const visible = this.registry.visibleProjection(this.layout, this.geometry.index)
     if (
       this.indicesChanged ||
       visible.length !== this.visible.length ||
@@ -295,6 +295,9 @@ export class CombinedDiffViewportOwner {
   }
 
   dispose(): void {
+    if (this.disposed) {
+      return
+    }
     this.disposed = true
     this.cancelNavigation()
     this.anchor.clearPoint()

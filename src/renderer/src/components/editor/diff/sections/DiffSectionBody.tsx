@@ -246,7 +246,6 @@ export function DiffSectionBody({
         />
       ) : (
         <CombinedDiffEditor
-          index={index}
           className={wholeFileDiffTintClass(section.originalContent, section.modifiedContent)}
           language={language}
           original={section.originalContent}

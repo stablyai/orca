@@ -97,10 +97,13 @@ diff --git a/esm/vs/editor/browser/controller/pointerHandler.js b/esm/vs/editor/
 diff --git a/esm/vs/editor/browser/view.js b/esm/vs/editor/browser/view.js
 --- a/esm/vs/editor/browser/view.js
 +++ b/esm/vs/editor/browser/view.js
-@@ -517,6 +517,12 @@
+@@ -517,6 +517,15 @@
      createOverviewRuler(cssClassName) {
          return new OverviewRuler(this._context, cssClassName);
      }
++    getViewZoneAtVerticalOffset(offset, affinity) {
++        return this._viewZones.getViewZoneAtVerticalOffset(offset, affinity);
++    }
 +    getViewZoneBounds(id) {
 +        return this._viewZones.getViewZoneBounds(id);
 +    }
@@ -124,10 +127,22 @@ diff --git a/esm/vs/editor/browser/viewParts/viewLines/viewLines.js b/esm/vs/edi
 diff --git a/esm/vs/editor/browser/viewParts/viewZones/viewZones.js b/esm/vs/editor/browser/viewParts/viewZones/viewZones.js
 --- a/esm/vs/editor/browser/viewParts/viewZones/viewZones.js
 +++ b/esm/vs/editor/browser/viewParts/viewZones/viewZones.js
-@@ -137,6 +137,14 @@
+@@ -137,6 +137,26 @@
              minWidthInPx: this._minWidthInPixels(zone)
          };
      }
++    getViewZoneAtVerticalOffset(offset, affinity) {
++        const whitespace = this._context.viewLayout.getWhitespaceAtVerticalOffset(
++            affinity === 'before' ? Math.ceil(offset) - 1 : offset);
++        if (!whitespace) {
++            return null;
++        }
++        const zone = this._zones[whitespace.id];
++        return zone ? Object.freeze({
++            id: whitespace.id, top: whitespace.verticalOffset, height: whitespace.height,
++            hidden: zone.isInHiddenArea,
++        }) : null;
++    }
 +    getViewZoneBounds(id) {
 +        const zone = this._zones[id];
 +        if (!zone) {
@@ -196,10 +211,13 @@ diff --git a/esm/vs/editor/browser/widget/codeEditor/codeEditorWidget.js b/esm/v
      }
      getTopForPosition(lineNumber, column) {
          if (!this._modelData) {
-@@ -1179,6 +1203,45 @@
+@@ -1179,6 +1203,48 @@
              }
          }
      }
++    getViewZoneAtVerticalOffset(offset, affinity) {
++        return this._modelData?.hasRealView ? this._modelData.view.getViewZoneAtVerticalOffset(offset, affinity) : null;
++    }
 +    getViewZoneBounds(id) {
 +        return this._modelData?.hasRealView ? this._modelData.view.getViewZoneBounds(id) : null;
 +    }
@@ -242,7 +260,7 @@ diff --git a/esm/vs/editor/browser/widget/codeEditor/codeEditorWidget.js b/esm/v
      changeViewZones(callback) {
          if (!this._modelData || !this._modelData.hasRealView) {
              return;
-@@ -1251,6 +1314,16 @@
+@@ -1251,6 +1317,16 @@
          this._configuration.setModelLineCount(model.getLineCount());
          const attachedView = model.onBeforeAttached();
          const viewModel = new ViewModel(this._id, this._configuration, model, DOMLineBreaksComputerFactory.create(getWindow(this._domElement)), MonospaceLineBreaksComputerFactory.create(this._configuration.options), (callback) => scheduleAtNextAnimationFrame(getWindow(this._domElement), callback), this.languageConfigurationService, this._themeService, attachedView, {
@@ -331,7 +349,7 @@ diff --git a/esm/vs/editor/browser/widget/diffEditor/diffEditorWidget.js b/esm/v
              return !showSash ? undefined : new DiffEditorSash(this.elements.root, dimensions, this._options.enableSplitViewResizing, this._boundarySashes, this._sashLayout.sashLeft, () => this._sashLayout.resetSash());
          }).recomputeInitiallyAndOnChange(this._store);
 -        const unchangedRangesFeature = derivedDisposable(this, reader => /** @description UnchangedRangesFeature */ this._instantiationService.createInstance(readHotReloadableExport(HideUnchangedRegionsFeature), this._editors, this._diffModel, this._options)).recomputeInitiallyAndOnChange(this._store);
-+        const unchangedRangesFeature = derivedDisposable(this, reader => /** @description UnchangedRangesFeature */ this._instantiationService.createInstance(readHotReloadableExport(HideUnchangedRegionsFeature), this._editors, this._diffModel, this._options, (editor, lineNumber, update) => this._runWithScrollAnchor(editor, lineNumber, update))).recomputeInitiallyAndOnChange(this._store);
++        const unchangedRangesFeature = this._unchangedRangesFeature = derivedDisposable(this, reader => /** @description UnchangedRangesFeature */ this._instantiationService.createInstance(readHotReloadableExport(HideUnchangedRegionsFeature), this._editors, this._diffModel, this._options, (editor, lineNumber, update) => this._runWithScrollAnchor(editor, lineNumber, update))).recomputeInitiallyAndOnChange(this._store);
          derivedDisposable(this, reader => /** @description DiffEditorDecorations */ this._instantiationService.createInstance(readHotReloadableExport(DiffEditorDecorations), this._editors, this._diffModel, this._options, this)).recomputeInitiallyAndOnChange(this._store);
          const origViewZoneIdsToIgnore = new Set();
          const modViewZoneIdsToIgnore = new Set();
@@ -359,22 +377,26 @@ diff --git a/esm/vs/editor/browser/widget/diffEditor/diffEditorWidget.js b/esm/v
              }
          }, modViewZoneIdsToIgnore));
          this._accessibleDiffViewer = derivedDisposable(this, reader => this._instantiationService.createInstance(readHotReloadableExport(AccessibleDiffViewer), this.elements.accessibleDiffViewer, this._accessibleDiffViewerVisible, (visible, tx) => this._accessibleDiffViewerShouldBeVisible.set(visible, tx), this._options.onlyShowAccessibleDiffViewer.map(v => !v), this._rootSizeObserver.width, this._rootSizeObserver.height, this._diffModel.map((m, r) => m?.diff.read(r)?.mappings.map(m => m.lineRangeMapping)), new AccessibleDiffViewerModelFromEditors(this._editors))).recomputeInitiallyAndOnChange(this._store);
-@@ -290,6 +294,54 @@
-     handleInitialized() {
+@@ -291,6 +295,61 @@
          this._editors.original.handleInitialized();
          this._editors.modified.handleInitialized();
-+    }
+     }
 +    getScrollTopOffset() {
 +        return this._viewZoneManager.get().getScrollTopOffset();
 +    }
 +    setGeometryDelegate(delegate) {
++        this.stopHiddenRegionDrag();
 +        const entry = { delegate };
 +        this._geometryDelegate = entry;
 +        return toDisposable(() => {
 +            if (this._geometryDelegate === entry) {
++                this.stopHiddenRegionDrag();
 +                this._geometryDelegate = undefined;
 +            }
 +        });
++    }
++    stopHiddenRegionDrag() {
++        this._unchangedRangesFeature.get().cancelHiddenRegionDrag();
 +    }
 +    invalidateGeometry() {
 +        this._geometryDelegate?.delegate.onDidInvalidateGeometry();
@@ -401,7 +423,9 @@ diff --git a/esm/vs/editor/browser/widget/diffEditor/diffEditorWidget.js b/esm/v
 +            }), update);
 +        }
 +        finally {
-+            this.invalidateGeometry();
++            if (this._geometryDelegate === entry) {
++                this.invalidateGeometry();
++            }
 +        }
 +        return true;
 +    }
@@ -411,13 +435,31 @@ diff --git a/esm/vs/editor/browser/widget/diffEditor/diffEditorWidget.js b/esm/v
 +        const viewModel = this._instantiationService.createInstance(DiffEditorViewModel, model, itemOptions);
 +        itemOptions.setModel(viewModel);
 +        return viewModel;
-     }
++    }
      createViewModel(model) {
          return this._instantiationService.createInstance(DiffEditorViewModel, model, this._options);
+     }
+@@ -302,6 +361,7 @@
+         this.setDiffModel(vm);
+     }
+     setDiffModel(viewModel, tx) {
++        this.stopHiddenRegionDrag();
+         const currentModel = this._diffModel.get();
+         if (!viewModel && currentModel) {
+             // Transitioning from a model to no-model
 diff --git a/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegionsFeature.js b/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegionsFeature.js
 --- a/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegionsFeature.js
 +++ b/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegionsFeature.js
-@@ -49,7 +49,7 @@
+@@ -2,7 +2,7 @@
+ import { renderLabelWithIcons, renderIcon } from '../../../../../base/browser/ui/iconLabel/iconLabels.js';
+ import { Codicon } from '../../../../../base/common/codicons.js';
+ import { MarkdownString } from '../../../../../base/common/htmlContent.js';
+-import { Disposable } from '../../../../../base/common/lifecycle.js';
++import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
+ import '../../../../../base/common/observableInternal/index.js';
+ import { ThemeIcon } from '../../../../../base/common/themables.js';
+ import { isDefined } from '../../../../../base/common/types.js';
+@@ -49,12 +49,13 @@
          this._breadcrumbsSourceFactory.set(factory, undefined);
      }
      get isUpdatingHiddenAreas() { return this._isUpdatingHiddenAreas; }
@@ -426,24 +468,42 @@ diff --git a/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegio
          super();
          this._editors = _editors;
          this._diffModel = _diffModel;
-@@ -130,13 +130,13 @@
+         this._options = _options;
+         this._instantiationService = _instantiationService;
++        this._regionOverlays = new Set();
+         this._modifiedOutlineSource = derivedDisposable(this, (reader) => {
+             const m = this._editors.modifiedModel.read(reader);
+             const factory = HideUnchangedRegionsFeature_1._breadcrumbsSourceFactory.read(reader);
+@@ -130,13 +131,13 @@
                          const d = derived(this, reader => /** @description hiddenOriginalRangeStart */ r.getHiddenOriginalRange(reader).startLineNumber - 1);
                          const origVz = new PlaceholderViewZone(d, 24);
                          origViewZones.push(origVz);
 -                        reader.store.add(new CollapsedCodeOverlayWidget(this._editors.original, origVz, r, r.originalUnchangedRange, !sideBySide, modifiedOutlineSource, l => this._diffModel.get().ensureModifiedLineIsVisible(l, 2 /* RevealPreference.FromBottom */, undefined), this._options));
-+                        reader.store.add(new CollapsedCodeOverlayWidget(this._editors.original, origVz, r, r.originalUnchangedRange, !sideBySide, modifiedOutlineSource, l => this._diffModel.get().ensureModifiedLineIsVisible(l, 2 /* RevealPreference.FromBottom */, undefined), this._options, _runWithScrollAnchor));
++                        reader.store.add(this._trackRegionOverlay(new CollapsedCodeOverlayWidget(this._editors.original, origVz, r, r.originalUnchangedRange, !sideBySide, modifiedOutlineSource, l => this._diffModel.get().ensureModifiedLineIsVisible(l, 2 /* RevealPreference.FromBottom */, undefined), this._options, _runWithScrollAnchor)));
                      }
                      {
                          const d = derived(this, reader => /** @description hiddenModifiedRangeStart */ r.getHiddenModifiedRange(reader).startLineNumber - 1);
                          const modViewZone = new PlaceholderViewZone(d, 24);
                          modViewZones.push(modViewZone);
 -                        reader.store.add(new CollapsedCodeOverlayWidget(this._editors.modified, modViewZone, r, r.modifiedUnchangedRange, false, modifiedOutlineSource, l => this._diffModel.get().ensureModifiedLineIsVisible(l, 2 /* RevealPreference.FromBottom */, undefined), this._options));
-+                        reader.store.add(new CollapsedCodeOverlayWidget(this._editors.modified, modViewZone, r, r.modifiedUnchangedRange, false, modifiedOutlineSource, l => this._diffModel.get().ensureModifiedLineIsVisible(l, 2 /* RevealPreference.FromBottom */, undefined), this._options, _runWithScrollAnchor));
++                        reader.store.add(this._trackRegionOverlay(new CollapsedCodeOverlayWidget(this._editors.modified, modViewZone, r, r.modifiedUnchangedRange, false, modifiedOutlineSource, l => this._diffModel.get().ensureModifiedLineIsVisible(l, 2 /* RevealPreference.FromBottom */, undefined), this._options, _runWithScrollAnchor)));
                      }
                  }
              }
-@@ -235,7 +235,7 @@
+@@ -233,9 +234,19 @@
+             }
+         }));
      }
++    _trackRegionOverlay(widget) {
++        this._regionOverlays.add(widget);
++        widget._register(toDisposable(() => this._regionOverlays.delete(widget)));
++        return widget;
++    }
++    cancelHiddenRegionDrag() {
++        for (const widget of this._regionOverlays) {
++            widget.cancelDrag();
++        }
++    }
  };
  HideUnchangedRegionsFeature = HideUnchangedRegionsFeature_1 = __decorate([
 -    __param(3, IInstantiationService)
@@ -451,7 +511,7 @@ diff --git a/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegio
  ], HideUnchangedRegionsFeature);
  class CompactCollapsedCodeOverlayWidget extends ViewZoneOverlayWidget {
      constructor(editor, _viewZone, _unchangedRegion, _hide = false) {
-@@ -263,7 +263,7 @@
+@@ -263,7 +274,7 @@
      }
  }
  class CollapsedCodeOverlayWidget extends ViewZoneOverlayWidget {
@@ -460,15 +520,95 @@ diff --git a/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegio
          const root = h('div.diff-hidden-lines-widget');
          super(_editor, _viewZone, root.root);
          this._editor = _editor;
-@@ -272,6 +272,7 @@
+@@ -272,6 +283,10 @@
          this._hide = _hide;
          this._modifiedOutlineSource = _modifiedOutlineSource;
          this._revealModifiedHiddenLine = _revealModifiedHiddenLine;
 +        this._runWithScrollAnchor = _runWithScrollAnchor;
++        this._dragListeners = this._register(new DisposableStore());
++        this._register(toDisposable(() => this.cancelDrag()));
++        this._register(this._editor.onDidChangeModel(() => this.cancelDrag()));
          this._options = _options;
          this._nodes = h('div.diff-hidden-lines', [
              h('div.top@top', { title: localize(126, 'Click or drag to show more above') }),
-@@ -363,22 +364,12 @@
+@@ -318,6 +333,8 @@
+             if (e.button !== 0) {
+                 return;
+             }
++            this.cancelDrag();
++            const session = this._dragSession = { model: editor.getModel() };
+             this._nodes.top.classList.toggle('dragging', true);
+             this._nodes.root.classList.toggle('dragging', true);
+             e.preventDefault();
+@@ -326,29 +343,47 @@
+             const cur = this._unchangedRegion.visibleLineCountTop.get();
+             this._unchangedRegion.isDragged.set('top', undefined);
+             const window = getWindow(this._nodes.top);
+-            const mouseMoveListener = addDisposableListener(window, 'mousemove', e => {
++            this._dragListeners.add(addDisposableListener(window, 'mousemove', e => {
++                if (this._dragSession !== session) {
++                    return;
++                }
++                if (editor.getModel() !== session.model) {
++                    this.cancelDrag();
++                    return;
++                }
+                 const currentTop = e.clientY;
+                 const delta = currentTop - startTop;
+                 didMove = didMove || Math.abs(delta) > 2;
+                 const lineDelta = Math.round(delta / editor.getOption(75 /* EditorOption.lineHeight */));
+                 const newVal = Math.max(0, Math.min(cur + lineDelta, this._unchangedRegion.getMaxVisibleLineCountTop()));
+                 this._unchangedRegion.visibleLineCountTop.set(newVal, undefined);
+-            });
+-            const mouseUpListener = addDisposableListener(window, 'mouseup', e => {
++            }));
++            this._dragListeners.add(addDisposableListener(window, 'mouseup', e => {
++                if (this._dragSession !== session) {
++                    return;
++                }
++                if (editor.getModel() !== session.model) {
++                    this.cancelDrag();
++                    return;
++                }
+                 if (!didMove) {
+                     this._unchangedRegion.showMoreAbove(this._options.hideUnchangedRegionsRevealLineCount.get(), undefined);
++                }
++                if (this._dragSession !== session || editor.getModel() !== session.model) {
++                    return;
+                 }
+                 this._nodes.top.classList.toggle('dragging', false);
+                 this._nodes.root.classList.toggle('dragging', false);
+                 this._unchangedRegion.isDragged.set(undefined, undefined);
+-                mouseMoveListener.dispose();
+-                mouseUpListener.dispose();
+-            });
++                this.cancelDrag();
++            }));
+         }));
+         this._register(addDisposableListener(this._nodes.bottom, 'mousedown', e => {
+             if (e.button !== 0) {
+                 return;
+             }
++            this.cancelDrag();
++            const session = this._dragSession = { model: editor.getModel() };
+             this._nodes.bottom.classList.toggle('dragging', true);
+             this._nodes.root.classList.toggle('dragging', true);
+             e.preventDefault();
+@@ -357,34 +392,40 @@
+             const cur = this._unchangedRegion.visibleLineCountBottom.get();
+             this._unchangedRegion.isDragged.set('bottom', undefined);
+             const window = getWindow(this._nodes.bottom);
+-            const mouseMoveListener = addDisposableListener(window, 'mousemove', e => {
++            this._dragListeners.add(addDisposableListener(window, 'mousemove', e => {
++                if (this._dragSession !== session) {
++                    return;
++                }
++                if (editor.getModel() !== session.model) {
++                    this.cancelDrag();
++                    return;
++                }
+                 const currentTop = e.clientY;
+                 const delta = currentTop - startTop;
                  didMove = didMove || Math.abs(delta) > 2;
                  const lineDelta = Math.round(delta / editor.getOption(75 /* EditorOption.lineHeight */));
                  const newVal = Math.max(0, Math.min(cur - lineDelta, this._unchangedRegion.getMaxVisibleLineCountBottom()));
@@ -480,10 +620,22 @@ diff --git a/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegio
 -                    ? editor.getContentHeight()
 -                    : editor.getTopForLineNumber(this._unchangedRegionRange.endLineNumberExclusive);
 -                editor.setScrollTop(editor.getScrollTop() + (top2 - top));
+-            });
+-            const mouseUpListener = addDisposableListener(window, 'mouseup', e => {
 +                this._runWithLowerScrollAnchor(() => this._unchangedRegion.visibleLineCountBottom.set(newVal, undefined), true);
-             });
-             const mouseUpListener = addDisposableListener(window, 'mouseup', e => {
++            }));
++            this._dragListeners.add(addDisposableListener(window, 'mouseup', e => {
++                if (this._dragSession !== session) {
++                    return;
++                }
++                if (editor.getModel() !== session.model) {
++                    this.cancelDrag();
++                    return;
++                }
                  this._unchangedRegion.isDragged.set(undefined, undefined);
++                if (this._dragSession !== session || editor.getModel() !== session.model) {
++                    return;
++                }
                  if (!didMove) {
 -                    const top = editor.getTopForLineNumber(this._unchangedRegionRange.endLineNumberExclusive);
 -                    this._unchangedRegion.showMoreBelow(this._options.hideUnchangedRegionsRevealLineCount.get(), undefined);
@@ -493,10 +645,30 @@ diff --git a/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegio
                  }
                  this._nodes.bottom.classList.toggle('dragging', false);
                  this._nodes.root.classList.toggle('dragging', false);
-@@ -428,6 +419,21 @@
+-                mouseMoveListener.dispose();
+-                mouseUpListener.dispose();
+-            });
++                this.cancelDrag();
++            }));
+         }));
+         this._register(autorun(reader => {
+             /** @description update labels */
+@@ -428,6 +469,33 @@
              reset(this._nodes.others, ...children);
          }));
      }
++    cancelDrag() {
++        if (!this._dragSession) {
++            return;
++        }
++        this._dragSession = undefined;
++        this._dragListeners.clear();
++        this._nodes.top.classList.toggle('dragging', false);
++        this._nodes.bottom.classList.toggle('dragging', false);
++        this._nodes.root.classList.toggle('dragging', false);
++        this._editor.getDomNode()?.classList.remove('draggingUnchangedRegion', 'canMoveTop', 'canMoveBottom');
++        this._unchangedRegion.isDragged.set(undefined, undefined);
++    }
 +    _runWithLowerScrollAnchor(update, useContentEnd = false) {
 +        const lineNumber = this._unchangedRegionRange.endLineNumberExclusive;
 +        if (this._runWithScrollAnchor(this._editor, lineNumber, update)) {
@@ -515,10 +687,84 @@ diff --git a/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegio
  }
  
  export { HideUnchangedRegionsFeature };
+diff --git a/esm/vs/editor/common/model/textModel.js b/esm/vs/editor/common/model/textModel.js
+--- a/esm/vs/editor/common/model/textModel.js
++++ b/esm/vs/editor/common/model/textModel.js
+@@ -1246,6 +1246,26 @@
+             this._onDidChangeDecorations.endDeferredEmit();
+             this._deltaDecorationCallCnt--;
+         }
++    }
++    createTrackedRange(range, stickiness = 1) {
++        this._assertNotDisposed();
++        let id = this._setTrackedRange(null, range, stickiness);
++        return Object.freeze({
++            getRange: () => id && !this.isDisposed() ? this._getTrackedRange(id) : null,
++            setRange: (range) => {
++                if (!id || this.isDisposed() || !this._getTrackedRange(id)) {
++                    id = null;
++                    return;
++                }
++                this._setTrackedRange(id, range, stickiness);
++            },
++            dispose: () => {
++                if (id && !this.isDisposed()) {
++                    this._setTrackedRange(id, null, stickiness);
++                }
++                id = null;
++            },
++        });
+     }
+     _getTrackedRange(id) {
+         return this.getDecorationRange(id);
 diff --git a/esm/vs/editor/common/viewLayout/linesLayout.js b/esm/vs/editor/common/viewLayout/linesLayout.js
 --- a/esm/vs/editor/common/viewLayout/linesLayout.js
 +++ b/esm/vs/editor/common/viewLayout/linesLayout.js
-@@ -718,6 +718,17 @@
+@@ -61,6 +61,7 @@
+         this._pendingChanges = new PendingChanges();
+         this._lastWhitespaceId = 0;
+         this._arr = [];
++        this._whitespaceIndices = null;
+         this._prefixSumValidIndex = -1;
+         this._minWidth = -1; /* marker for not being computed */
+         this._lineCount = lineCount;
+@@ -221,21 +222,20 @@
+             return a.afterLineNumber - b.afterLineNumber;
+         });
+         this._arr = result;
++        this._whitespaceIndices = null;
+         this._prefixSumValidIndex = -1;
+     }
+     _insertWhitespace(whitespace) {
+         const insertIndex = LinesLayout.findInsertionIndex(this._arr, whitespace.afterLineNumber, whitespace.ordinal);
+         this._arr.splice(insertIndex, 0, whitespace);
++        this._whitespaceIndices = null;
+         this._prefixSumValidIndex = Math.min(this._prefixSumValidIndex, insertIndex - 1);
+     }
+     _findWhitespaceIndex(id) {
+-        const arr = this._arr;
+-        for (let i = 0, len = arr.length; i < len; i++) {
+-            if (arr[i].id === id) {
+-                return i;
+-            }
+-        }
+-        return -1;
++        if (!this._whitespaceIndices) {
++            this._whitespaceIndices = new Map(this._arr.map((whitespace, index) => [whitespace.id, index]));
++        }
++        return this._whitespaceIndices.get(id) ?? -1;
+     }
+     _changeOneWhitespace(id, newAfterLineNumber, newHeight) {
+         const index = this._findWhitespaceIndex(id);
+@@ -259,6 +259,7 @@
+     }
+     _removeWhitespace(removeIndex) {
+         this._arr.splice(removeIndex, 1);
++        this._whitespaceIndices = null;
+         this._prefixSumValidIndex = Math.min(this._prefixSumValidIndex, removeIndex - 1);
+     }
+     /**
+@@ -718,6 +719,17 @@
          }
          return result;
      }
@@ -722,7 +968,24 @@ diff --git a/esm/vs/editor/contrib/find/browser/findWidget.js b/esm/vs/editor/co
 diff --git a/esm/vs/editor/editor.api.d.ts b/esm/vs/editor/editor.api.d.ts
 --- a/esm/vs/editor/editor.api.d.ts
 +++ b/esm/vs/editor/editor.api.d.ts
-@@ -2562,9 +2562,77 @@
+@@ -2018,7 +2018,16 @@
+ 	/**
+ 	 * A model.
+ 	 */
++	export interface INonVisualTrackedRange extends IDisposable {
++        /** Current range after native model edits; null after disposal/model flush. */
++        getRange(): Range | null;
++        /** Retarget the existing native marker without decoration events; no-op after retirement. */
++        setRange(range: IRange): void;
++    }
++
+ 	export interface ITextModel {
++        /** Native edit-tracked marker with no decoration/render invalidation. */
++        createTrackedRange(range: IRange, stickiness?: TrackedRangeStickiness): INonVisualTrackedRange;
+ 		/**
+ 		 * Gets the resource associated with this editor model.
+ 		 */
+@@ -2562,9 +2571,77 @@
  		modified: ITextModel;
  	}
  
@@ -800,7 +1063,7 @@ diff --git a/esm/vs/editor/editor.api.d.ts b/esm/vs/editor/editor.api.d.ts
  	}
  
  	/**
-@@ -5968,6 +6036,27 @@
+@@ -5968,6 +6045,29 @@
  	 * A rich code editor.
  	 */
  	export interface ICodeEditor extends IEditor {
@@ -812,6 +1075,8 @@ diff --git a/esm/vs/editor/editor.api.d.ts b/esm/vs/editor/editor.api.d.ts
 +		getPositionAtVerticalOffset(offset: number, affinity: 'before' | 'after'): IPosition | null;
 +		/** Logical geometry only; consume synchronously after native reactions have drained. */
 +		getViewZoneBounds(id: string): IViewZoneBounds | null;
++        /** Exact native zone at this offset. Before uses the preceding pixel at an integer boundary; after is half-open. */
++        getViewZoneAtVerticalOffset(offset: number, affinity: 'before' | 'after'): IViewZoneBounds | null;
 +		readonly onDidChangeViewZones: IEvent<void>;
 +		/** Immediate semantic notification before native local reveal, including no-op requests. */
 +		readonly onDidRequestSemanticReveal: IEvent<ISemanticViewRevealRequest>;
@@ -828,12 +1093,14 @@ diff --git a/esm/vs/editor/editor.api.d.ts b/esm/vs/editor/editor.api.d.ts
  		/**
  		 * An event emitted when the content of the current model has changed.
  		 * @event
-@@ -6435,6 +6524,12 @@
+@@ -6435,6 +6535,14 @@
  		 */
  		getModel(): IDiffEditorModel | null;
  		createViewModel(model: IDiffEditorModel): IDiffEditorViewModel;
 +		/** Current original-to-modified scroll transform, including animated offsets and top padding; consume synchronously. */
 +		getScrollTopOffset(): number;
++        /** Cancel captured hidden-region gestures before a pooled binding detaches. */
++        stopHiddenRegionDrag(): void;
 +		/** Item-owned options/VM, independent of this widget's lifetime and later options. */
 +		createIndependentViewModel(model: IDiffEditorModel, options: IDiffEditorOptions, width: number): IIndependentDiffEditorViewModel;
 +		/** Binding-scoped, opt-in invalidation/lower-boundary preservation. */
@@ -844,7 +1111,24 @@ diff --git a/esm/vs/editor/editor.api.d.ts b/esm/vs/editor/editor.api.d.ts
 diff --git a/monaco.d.ts b/monaco.d.ts
 --- a/monaco.d.ts
 +++ b/monaco.d.ts
-@@ -2562,9 +2562,77 @@
+@@ -2018,7 +2018,16 @@
+ 	/**
+ 	 * A model.
+ 	 */
++	export interface INonVisualTrackedRange extends IDisposable$2 {
++        /** Current range after native model edits; null after disposal/model flush. */
++        getRange(): Range | null;
++        /** Retarget the existing native marker without decoration events; no-op after retirement. */
++        setRange(range: IRange): void;
++    }
++
+ 	export interface ITextModel {
++        /** Native edit-tracked marker with no decoration/render invalidation. */
++        createTrackedRange(range: IRange, stickiness?: TrackedRangeStickiness): INonVisualTrackedRange;
+ 		/**
+ 		 * Gets the resource associated with this editor model.
+ 		 */
+@@ -2562,9 +2571,77 @@
  		modified: ITextModel;
  	}
  
@@ -922,7 +1206,7 @@ diff --git a/monaco.d.ts b/monaco.d.ts
  	}
  
  	/**
-@@ -5968,6 +6036,27 @@
+@@ -5968,6 +6045,29 @@
  	 * A rich code editor.
  	 */
  	export interface ICodeEditor extends IEditor {
@@ -934,6 +1218,8 @@ diff --git a/monaco.d.ts b/monaco.d.ts
 +		getPositionAtVerticalOffset(offset: number, affinity: 'before' | 'after'): IPosition | null;
 +		/** Logical geometry only; consume synchronously after native reactions have drained. */
 +		getViewZoneBounds(id: string): IViewZoneBounds | null;
++        /** Exact native zone at this offset. Before uses the preceding pixel at an integer boundary; after is half-open. */
++        getViewZoneAtVerticalOffset(offset: number, affinity: 'before' | 'after'): IViewZoneBounds | null;
 +		readonly onDidChangeViewZones: IEvent$1<void>;
 +		/** Immediate semantic notification before native local reveal, including no-op requests. */
 +		readonly onDidRequestSemanticReveal: IEvent$1<ISemanticViewRevealRequest>;
@@ -950,12 +1236,14 @@ diff --git a/monaco.d.ts b/monaco.d.ts
  		/**
  		 * An event emitted when the content of the current model has changed.
  		 * @event
-@@ -6435,6 +6524,12 @@
+@@ -6435,6 +6535,14 @@
  		 */
  		getModel(): IDiffEditorModel | null;
  		createViewModel(model: IDiffEditorModel): IDiffEditorViewModel;
 +		/** Current original-to-modified scroll transform, including animated offsets and top padding; consume synchronously. */
 +		getScrollTopOffset(): number;
++        /** Cancel captured hidden-region gestures before a pooled binding detaches. */
++        stopHiddenRegionDrag(): void;
 +		/** Item-owned options/VM, independent of this widget's lifetime and later options. */
 +		createIndependentViewModel(model: IDiffEditorModel, options: IDiffEditorOptions, width: number): IIndependentDiffEditorViewModel;
 +		/** Binding-scoped, opt-in invalidation/lower-boundary preservation. */

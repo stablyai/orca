@@ -20,10 +20,9 @@ import {
 } from './diff-comment-add-button-overlay'
 import { installDiffCommentAddNoteShortcut } from './diff-comment-add-note-shortcut'
 import { installDiffCommentZoneMouseDownStopper } from './diff-comment-zone-mouse-events'
-import { untilDiffCommentZoneRemoved } from './diff-comment-zone-lifetime'
+import { registerDiffCommentNoteZone } from './diff-comment-note-zone-registration'
 import {
   createDiffCommentZoneNavigation,
-  registerDiffCommentZoneReading,
   usePendingDiffCommentZoneReveal
 } from './diff-comment-zone-geometry'
 import { getRenderSignature, renderDiffCommentZoneCard } from './diff-comment-zone-card'
@@ -292,7 +291,7 @@ export function useDiffCommentDecorator({
     // Unmounting a root inside changeViewZones races Monaco's zone bookkeeping; collect roots and unmount after the batch.
     const rootsToUnmount: Root[] = []
 
-    const { resizeZone, scrollToZone } = createDiffCommentZoneNavigation({
+    const { resizeZone, zoneMeasured, scrollToZone } = createDiffCommentZoneNavigation({
       editor,
       monacoModelIdentity,
       zones,
@@ -389,11 +388,9 @@ export function useDiffCommentDecorator({
           laidOut: false
         }
         zones.set(c.id, entry)
-        registerDiffCommentZoneReading(editor, monacoModelIdentity, zones, commentId, entry)
-        if (combined) {
-          const layout = editor.onDidLayoutChange(() => resizeZone(commentId))
-          untilDiffCommentZoneRemoved(lifetime.signal, () => layout.dispose())
-        }
+        registerDiffCommentNoteZone(editor, monacoModelIdentity, zones, commentId, entry, () =>
+          zoneMeasured(commentId)
+        )
         renderCard(root, c)
       }
 

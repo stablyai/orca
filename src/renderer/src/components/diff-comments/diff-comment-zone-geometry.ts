@@ -4,11 +4,10 @@ import type { DecoratedDiffComment } from './decorated-diff-comment'
 import {
   isCombinedEditorBindingCurrent,
   measureCombinedCommentZone,
-  registerCombinedCommentZone,
   revealCombinedCommentZone
 } from '../editor/combined-diff/scroll-viewport/combined-diff-editor-geometry'
 import { resizeDiffCommentZone, type ZoneEntry } from './diff-comment-view-zone-entry'
-import { untilDiffCommentZoneRemoved } from './diff-comment-zone-lifetime'
+import { requestDiffCommentZoneMeasurement } from './diff-comment-zone-measurement'
 
 type ZoneNavigationContext = {
   editor: monacoEditor.ICodeEditor
@@ -34,6 +33,7 @@ export function createDiffCommentZoneNavigation({
   cancelScrollToZoneFrame
 }: ZoneNavigationContext): {
   resizeZone: (commentId: string) => void
+  zoneMeasured: (commentId: string) => void
   scrollToZone: (commentId: string) => void
 } {
   const resizeZone = (commentId: string): void => {
@@ -45,7 +45,19 @@ export function createDiffCommentZoneNavigation({
     ) {
       return
     }
-    if (resizeDiffCommentZone(editor, entry) && combined) {
+    if (combined) {
+      requestDiffCommentZoneMeasurement(editor, entry)
+    } else {
+      resizeDiffCommentZone(editor, entry)
+    }
+  }
+  const zoneMeasured = (commentId: string): void => {
+    const entry = zones.get(commentId)
+    if (
+      entry &&
+      !entry.lifetime.signal.aborted &&
+      isCombinedEditorBindingCurrent(editor, monacoModelIdentity)
+    ) {
       entry.laidOut = true
       if (pendingScrollRef.current === commentId) {
         scrollToZone(commentId)
@@ -129,31 +141,7 @@ export function createDiffCommentZoneNavigation({
       onPendingScrollConsumedRef.current?.()
     })
   }
-  return { resizeZone, scrollToZone }
-}
-
-export function registerDiffCommentZoneReading(
-  editor: monacoEditor.ICodeEditor,
-  monacoModelIdentity: string | undefined,
-  zones: Map<string, ZoneEntry>,
-  commentId: string,
-  entry: ZoneEntry
-): void {
-  const { zoneId, domNode: dom, lifetime } = entry
-  untilDiffCommentZoneRemoved(
-    lifetime.signal,
-    registerCombinedCommentZone(editor, zoneId, dom, () => {
-      if (
-        zones.get(commentId) !== entry ||
-        lifetime.signal.aborted ||
-        !isCombinedEditorBindingCurrent(editor, monacoModelIdentity)
-      ) {
-        return []
-      }
-      const card = dom.firstElementChild
-      return card instanceof HTMLElement && card.isConnected ? [card] : []
-    })
-  )
+  return { resizeZone, zoneMeasured, scrollToZone }
 }
 
 type PendingZoneRevealContext = {

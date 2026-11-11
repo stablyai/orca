@@ -20,7 +20,6 @@ export function CombinedDiffEditor({
   theme,
   options,
   onMount,
-  index,
   className
 }: {
   original: string
@@ -29,7 +28,6 @@ export function CombinedDiffEditor({
   theme: string
   options: editor.IDiffEditorConstructionOptions
   onMount: CombinedDiffEditorMount
-  index: number
   className?: string
 }): React.JSX.Element {
   const item = useCombinedDiffRow()
@@ -79,7 +77,7 @@ export function CombinedDiffEditor({
       unbind()
       detach()
     }
-  }, [item, index])
+  }, [item])
   useLayoutEffect(() => {
     bindingRef.current?.updateOptions(options)
   }, [options])

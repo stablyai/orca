@@ -1,12 +1,10 @@
-import {
-  diffAnchorOffset,
-  type DiffItemExtent,
-  type DiffReadingAnchor
-} from './combined-diff-layout'
+import type { DiffReadingAnchor } from './combined-diff-layout'
+import type { CombinedDiffExtentIndex } from './combined-diff-extent-index'
 import type { DiffViewportItem } from './combined-diff-viewport-owner'
 
 export type DiffSemanticPoint = {
   resolveScrollTop(displacement: number): number | null
+  fitScrollTop?(preferredTop: number): number | null
   isValid?(): boolean
   project(): number | null
   projectEnd?(): number | null
@@ -17,17 +15,18 @@ export type DiffSemanticPoint = {
 type CommittedPoint = { point: DiffSemanticPoint; displacement: number }
 type AnchorContext = {
   invalidate(): void
-  getExtents(): readonly DiffItemExtent[]
+  getIndex(): CombinedDiffExtentIndex
   getHeight(): number
   getTop(): number
   setTop(top: number): void
   render(): void
   getDirection(): 'up' | 'down' | undefined
-  getOrder(): readonly DiffViewportItem[]
+  getVisible(): readonly DiffViewportItem[]
 }
 
 export class CombinedDiffViewportAnchor {
   private committed: CommittedPoint | null = null
+  private readingDirty = false
   private pending: {
     item: DiffViewportItem
     resolve: () => DiffSemanticPoint | null
@@ -36,6 +35,10 @@ export class CombinedDiffViewportAnchor {
   } | null = null
   private imported: { anchor: DiffReadingAnchor | null; fallback: number } | null = null
   constructor(private readonly context: AnchorContext) {}
+
+  beginInput(): void {
+    this.readingDirty = true
+  }
 
   importView(anchor: DiffReadingAnchor | null, fallback: number): void {
     this.imported = { anchor, fallback }
@@ -47,7 +50,10 @@ export class CombinedDiffViewportAnchor {
       point.dispose()
       return
     }
-    this.clearPoint()
+    if (this.committed?.point !== point) {
+      this.clearPoint()
+    }
+    this.readingDirty = false
     this.committed = { point, displacement }
   }
 
@@ -75,13 +81,12 @@ export class CombinedDiffViewportAnchor {
   }
 
   reconcile(): (() => void) | undefined {
-    let focus: (() => void) | undefined
-    if (this.imported && this.context.getExtents().length > 0) {
+    let navigation: typeof this.pending = null
+    if (this.imported && this.context.getIndex().length > 0) {
       this.clearPoint()
       this.context.setTop(
         this.imported.anchor
-          ? (diffAnchorOffset(this.context.getExtents(), this.imported.anchor) ??
-              this.imported.fallback)
+          ? (this.context.getIndex().anchorOffset(this.imported.anchor) ?? this.imported.fallback)
           : this.imported.fallback
       )
       this.imported = null
@@ -107,33 +112,40 @@ export class CombinedDiffViewportAnchor {
             point.revealDisplacement?.(this.context.getHeight()) ??
             Math.max(0, Math.min(projected, this.context.getHeight() - 24))
           this.preserve(point, top)
-          pending.point = undefined
-          this.pending = null
-          focus = pending.focus
+          navigation = pending
         }
       }
     }
-    this.applyPoint()
+    const settled = this.readingDirty ? false : this.applyPoint()
+    if (navigation && settled) {
+      navigation.point = undefined
+      this.pending = null
+    }
     this.captureReadingPoint()
-    return focus
+    return settled ? navigation?.focus : undefined
   }
 
-  private applyPoint(): void {
+  private applyPoint(): boolean {
     const anchor = this.committed
     if (!anchor) {
-      return
+      return false
     }
     if (anchor.point.isValid && !anchor.point.isValid()) {
       this.clearPoint()
-      return
+      return false
     }
     anchor.displacement =
       anchor.point.constrainDisplacement?.(this.context.getHeight(), anchor.displacement) ??
       anchor.displacement
-    const top = anchor.point.resolveScrollTop(anchor.displacement)
+    const resolved = anchor.point.resolveScrollTop(anchor.displacement)
+    const top =
+      resolved === null
+        ? null
+        : anchor.point.fitScrollTop
+          ? anchor.point.fitScrollTop(resolved)
+          : resolved
     if (top === null) {
-      this.clearPoint()
-      return
+      return false
     }
     if (top !== this.context.getTop()) {
       this.context.setTop(top)
@@ -141,34 +153,42 @@ export class CombinedDiffViewportAnchor {
     }
     const applied = anchor.point.project()
     if (applied !== null && Math.abs(applied - anchor.displacement) >= 1) {
-      const confirmed = anchor.point.resolveScrollTop(anchor.displacement)
+      const next = anchor.point.resolveScrollTop(anchor.displacement)
+      const confirmed =
+        next === null ? null : anchor.point.fitScrollTop ? anchor.point.fitScrollTop(next) : next
       if (confirmed !== null && confirmed !== this.context.getTop()) {
         this.context.setTop(confirmed)
         this.context.render()
       }
     }
+    return true
   }
 
   private captureReadingPoint(): void {
-    if (this.committed || this.pending) {
+    if ((!this.readingDirty && this.committed) || this.pending) {
       return
     }
+    const previous = this.committed?.point
+    this.readingDirty = false
     const edge = this.context.getDirection() === 'up' ? this.context.getHeight() : 0
     const step = this.context.getDirection() === 'up' ? -1 : 1
+    const visible = this.context.getVisible()
     for (
-      let index = step === 1 ? 0 : this.context.getOrder().length - 1;
-      index >= 0 && index < this.context.getOrder().length;
+      let index = step === 1 ? 0 : visible.length - 1;
+      index >= 0 && index < visible.length;
       index += step
     ) {
-      const point = this.context.getOrder()[index].binding?.capture(edge)
+      const point = visible[index].binding?.capture(edge, previous)
       if (point) {
         this.preserve(point)
         return
       }
     }
+    this.clearPoint()
   }
   clearPoint(): void {
     this.committed?.point.dispose()
     this.committed = null
+    this.readingDirty = false
   }
 }

@@ -22,6 +22,7 @@ export class CombinedDiffNativeBinding implements DiffViewportBinding {
   private readonly subscriptions: IDisposable[] = []
   private readonly cleanups: (() => void)[] = []
   private detached = false
+  private applying = false
   private width = -1
   private nativeHeight = -1
   private current: { item: DiffItemLayout; viewport: DiffViewportLayout } | null = null
@@ -51,7 +52,11 @@ export class CombinedDiffNativeBinding implements DiffViewportBinding {
       diff.restoreViewState(record.viewState)
     }
     body.append(template.node)
-    const invalidate = (): void => item.owner.invalidate()
+    const invalidate = (): void => {
+      if (!this.detached) {
+        item.owner.invalidate(item)
+      }
+    }
     this.subscriptions.push(record.viewModel.onDidChangeDiffState(invalidate))
     this.subscriptions.push(
       diff.setGeometryDelegate({
@@ -76,14 +81,22 @@ export class CombinedDiffNativeBinding implements DiffViewportBinding {
         pane.onDidChangeViewZones(invalidate),
         pane.onDidChangeHiddenAreas(invalidate),
         pane.onDidChangeConfiguration(invalidate),
-        pane.onDidScrollChange(invalidate),
+        pane.onDidScrollChange(() => {
+          if (!this.detached && !this.applying) {
+            item.owner.invalidateView()
+          }
+        }),
         pane.onDidRequestSemanticReveal((request) => this.reveal(pane, request)),
         pane.setVerticalSelectionDragDelegate(({ model, deltaY }) => {
           if (!this.detached && pane.getModel() === model) {
             item.owner.input(deltaY)
           }
         }),
-        pane.onDidChangeFindWidgetGeometry(invalidate),
+        pane.onDidChangeFindWidgetGeometry(() => {
+          if (!this.detached) {
+            item.owner.invalidateView()
+          }
+        }),
         pane.setFindWidgetGeometryDelegate({
           getPosition: ({ domNode }) => {
             const paneRect = pane.getContainerDomNode().getBoundingClientRect()
@@ -116,36 +129,44 @@ export class CombinedDiffNativeBinding implements DiffViewportBinding {
 
   updateOptions(options: editor.IDiffEditorConstructionOptions): void {
     this.options = options
-    this.item.owner.invalidate()
+    this.item.owner.invalidate(this.item)
   }
 
   apply(item: DiffItemLayout, viewport: DiffViewportLayout, width: number): void {
     if (this.detached) {
       return
     }
-    this.current = { item, viewport }
-    const bodyHeight = Math.max(0, item.renderedHeight - this.anchors.chromeHeight())
-    const nativeHeight = Math.max(0, bodyHeight - DIFF_SECTION_PADDING_HEIGHT)
-    this.body.style.height = `${bodyHeight}px`
-    this.body.style.transform = ''
-    this.template.node.style.height = `${nativeHeight}px`
-    this.template.node.style.width = `${width}px`
-    if (this.originalOptions !== this.options || this.width !== width) {
-      this.template.editor.updateOptions({ ...this.options, automaticLayout: false })
-      this.record.viewModel.updateOptions(this.options, width)
-      this.originalOptions = this.options
+    this.applying = true
+    try {
+      this.current = { item, viewport }
+      const bodyHeight = Math.max(
+        0,
+        item.renderedHeight - this.anchors.chromeHeight() - this.borderHeight()
+      )
+      const nativeHeight = Math.max(0, bodyHeight - DIFF_SECTION_PADDING_HEIGHT)
+      this.body.style.height = `${bodyHeight}px`
+      this.body.style.transform = ''
+      this.template.node.style.height = `${nativeHeight}px`
+      this.template.node.style.width = `${width}px`
+      if (this.originalOptions !== this.options || this.width !== width) {
+        this.template.editor.updateOptions({ ...this.options, automaticLayout: false })
+        this.record.viewModel.updateOptions(this.options, width)
+        this.originalOptions = this.options
+      }
+      if (this.width !== width || this.nativeHeight !== nativeHeight) {
+        this.width = width
+        this.nativeHeight = nativeHeight
+        this.template.editor.layout({ width, height: nativeHeight })
+      }
+      const original = this.template.editor.getOriginalEditor()
+      if (original.getScrollTop() !== item.scrollOffset) {
+        original.setScrollTop(item.scrollOffset, monaco.ScrollType.Immediate)
+      }
+      this.template.editor.getOriginalEditor().layoutFindWidget()
+      this.template.editor.getModifiedEditor().layoutFindWidget()
+    } finally {
+      this.applying = false
     }
-    if (this.width !== width || this.nativeHeight !== nativeHeight) {
-      this.width = width
-      this.nativeHeight = nativeHeight
-      this.template.editor.layout({ width, height: nativeHeight })
-    }
-    const original = this.template.editor.getOriginalEditor()
-    if (original.getScrollTop() !== item.scrollOffset) {
-      original.setScrollTop(item.scrollOffset, monaco.ScrollType.Immediate)
-    }
-    this.template.editor.getOriginalEditor().layoutFindWidget()
-    this.template.editor.getModifiedEditor().layoutFindWidget()
   }
 
   readHeight(): number | null {
@@ -155,12 +176,18 @@ export class CombinedDiffNativeBinding implements DiffViewportBinding {
     }
     return (
       this.anchors.chromeHeight() +
+      this.borderHeight() +
       DIFF_SECTION_PADDING_HEIGHT +
       Math.max(
         this.template.editor.getOriginalEditor().getContentHeight(),
         this.template.editor.getModifiedEditor().getContentHeight()
       )
     )
+  }
+
+  private borderHeight(): number {
+    const row = this.item.chrome.header?.parentElement
+    return row ? Math.max(0, row.offsetHeight - row.clientHeight) : 0
   }
 
   hasFocus(): boolean {
@@ -171,8 +198,8 @@ export class CombinedDiffNativeBinding implements DiffViewportBinding {
     )
   }
 
-  capture(edge: number): DiffSemanticPoint | null {
-    return this.anchors.capture(edge)
+  capture(edge: number, previous?: DiffSemanticPoint): DiffSemanticPoint | null {
+    return this.anchors.capture(edge, previous)
   }
 
   private reveal(pane: editor.ICodeEditor, request: editor.ISemanticViewRevealRequest): void {
@@ -201,18 +228,32 @@ export class CombinedDiffNativeBinding implements DiffViewportBinding {
     if (!point) {
       return
     }
-    point.revealDisplacement = (height) => {
+    point.fitScrollTop = (preferredTop) => {
       const top = point.project()
       const bottom = point.projectEnd?.() ?? null
-      if (top === null || bottom === null) {
+      if (
+        (request.selections?.length ?? 0) > 0 &&
+        top !== null &&
+        bottom !== null &&
+        bottom - top > this.anchors.usableHeight(pane)
+      ) {
+        return this.item.owner.getScrollTop()
+      }
+      return this.anchors.fitRange(pane, top, bottom, preferredTop)
+    }
+    point.revealDisplacement = () => {
+      const usable = this.anchors.usableInterval(pane)
+      const top = point.project()
+      const bottom = point.projectEnd?.() ?? null
+      if (!usable || top === null || bottom === null) {
         return null
       }
       const sticky = pane.getOption(monaco.editor.EditorOption.stickyScroll)
       return diffRevealDisplacement({
         top,
         bottom,
-        height,
-        chrome: this.anchors.chromeHeight(),
+        height: usable.bottom,
+        chrome: usable.top,
         lineHeight: pane.getOption(monaco.editor.EditorOption.lineHeight),
         surroundingLines: Math.max(
           pane.getOption(monaco.editor.EditorOption.cursorSurroundingLines),
@@ -234,6 +275,8 @@ export class CombinedDiffNativeBinding implements DiffViewportBinding {
     if (this.detached) {
       return
     }
+    this.template.editor.stopHiddenRegionDrag()
+    this.item.owner.cancelItemNavigation(this.item)
     this.record.viewState = this.template.editor.saveViewState()
     for (const dispose of this.onUnbind) {
       dispose()
@@ -241,7 +284,6 @@ export class CombinedDiffNativeBinding implements DiffViewportBinding {
     this.onUnbind.clear()
     this.anchors.zones.clear()
     this.detached = true
-    this.item.owner.cancelItemNavigation(this.item)
     for (const pane of [
       this.template.editor.getOriginalEditor(),
       this.template.editor.getModifiedEditor()

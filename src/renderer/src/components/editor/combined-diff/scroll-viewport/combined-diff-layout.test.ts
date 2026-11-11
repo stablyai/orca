@@ -1,9 +1,24 @@
 import { describe, expect, it } from 'vitest'
-import {
-  diffRevealDisplacement,
-  mapDiffViewportTop,
-  resolveDiffAnchorTop
-} from './combined-diff-layout'
+import { CombinedDiffExtentIndex, findDiffExtentEnd } from './combined-diff-extent-index'
+import type { DiffItemExtent } from './combined-diff-layout'
+
+function mapDiffViewportTop(input: {
+  previous: DiffItemExtent[]
+  next: DiffItemExtent[]
+  top: number
+  height: number
+  direction: 'up' | 'down'
+}): number {
+  const index = new CombinedDiffExtentIndex()
+  index.commit(input.previous, input.height, [], true)
+  const keys = new Set(input.next.map((item) => item.key))
+  const anchor = index.captureSizeAnchor(input.top, input.height, input.direction, (key) =>
+    keys.has(key)
+  )
+  index.commit(input.next, input.height, [], true)
+  return index.mapSizeAnchor(anchor, input.height)
+}
+import { diffRevealDisplacement, resolveDiffAnchorTop } from './combined-diff-layout'
 
 describe('combined diff reading position', () => {
   it('keeps the reading position in the next file when an earlier file finishes measuring', () => {
@@ -118,4 +133,77 @@ it('preserves a modified-pane reading point through unequal native scroll limits
       pane: 'modified'
     })
   ).toBe(260)
+})
+
+describe('indexed combined geometry', () => {
+  it('preserves compressed coordinates, negative slack and exact mixed-row boundaries', () => {
+    const index = new CombinedDiffExtentIndex()
+    index.commit(
+      [
+        { key: 'short', height: 100 },
+        { key: 'empty', height: 0 },
+        { key: 'tall', height: 1000 },
+        { key: 'last', height: 200 }
+      ],
+      400,
+      [],
+      true
+    )
+    const layout = index.project(700, 400, 1, true)
+    expect(layout.items).toEqual([
+      {
+        key: 'tall',
+        start: 100,
+        height: 1000,
+        renderedStart: 100,
+        renderedHeight: 400,
+        scrollOffset: 600,
+        visible: true
+      }
+    ])
+    expect(layout.renderedTop).toBe(100)
+    expect(index.anchorAt(1100)).toEqual({ key: 'last', offset: 0 })
+    const slack = index.project(-100, 400, 1, true)
+    expect(slack.leadingSlack).toBe(100)
+    expect(slack.logicalTop).toBe(-100)
+    expect(slack.items.map((item) => [item.key, item.renderedStart])).toEqual([
+      ['short', 100],
+      ['empty', 200],
+      ['tall', 200]
+    ])
+    expect(index.project(1100, 400, 1, true).trailingSlack).toBe(200)
+  })
+
+  it('retains the next surviving file displacement when the reading file is removed', () => {
+    expect(
+      mapDiffViewportTop({
+        previous: [
+          { key: 'removed', height: 1000 },
+          { key: 'next', height: 800 }
+        ],
+        next: [{ key: 'next', height: 800 }],
+        top: 700,
+        height: 400,
+        direction: 'down'
+      })
+    ).toBe(-300)
+  })
+
+  it.each([200, 2000])('searches %i extent ends logarithmically', (count) => {
+    let reads = 0
+    const prefix = new Proxy(
+      Array.from({ length: count + 1 }, (_, index) => index * 1000),
+      {
+        get(target, property) {
+          if (typeof property === 'string' && /^\d+$/.test(property)) {
+            reads++
+            return target[Number(property)]
+          }
+          return property === 'length' ? target.length : undefined
+        }
+      }
+    )
+    expect(findDiffExtentEnd(prefix, (count - 7) * 1000 + 90)).toBe(count - 7)
+    expect(reads).toBeLessThanOrEqual(Math.ceil(Math.log2(count + 1)) + 1)
+  })
 })

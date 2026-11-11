@@ -77,7 +77,10 @@ export function onCombinedEditorUnbind(
 }
 
 export function invalidateCombinedEditorGeometry(editor: editor.ICodeEditor): void {
-  bindings.get(editor)?.item.owner.invalidate()
+  const geometry = bindings.get(editor)
+  if (geometry) {
+    geometry.item.owner.invalidate(geometry.item)
+  }
 }
 
 export function scrollCombinedEditorBy(editor: editor.ICodeEditor, delta: number): boolean {

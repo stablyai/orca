@@ -1,5 +1,6 @@
 import type { editor as monacoEditor } from 'monaco-editor'
 import type { Root } from 'react-dom/client'
+import { readDiffCommentZoneHeight } from './diff-comment-zone-measurement'
 import {
   invalidateCombinedEditorGeometry,
   measureCombinedCommentZone
@@ -56,16 +57,10 @@ export function resizeDiffCommentZone(
   entry: ResizableZoneEntry
 ): boolean {
   return measureCombinedCommentZone(editor, entry.zoneId, entry.domNode, () => {
-    const child = entry.domNode.firstElementChild
-    const wrapperStyle = window.getComputedStyle(entry.domNode)
-    const verticalPadding =
-      Number.parseFloat(wrapperStyle.paddingTop) + Number.parseFloat(wrapperStyle.paddingBottom)
-    // Monaco pins the old zone height; measure intrinsic card height plus wrapper padding.
-    const childHeight = child?.getBoundingClientRect().height ?? 0
-    if (childHeight <= 0) {
+    const measured = readDiffCommentZoneHeight(entry)
+    if (measured === null) {
       return false
     }
-    const measured = Math.ceil(childHeight + verticalPadding)
     if (entry.delegate.heightInPx === measured) {
       return true
     }

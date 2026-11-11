@@ -1,3 +1,4 @@
+import { observeCombinedDiffRowChrome } from './combined-diff-row-chrome'
 import {
   createContext,
   useContext,
@@ -9,7 +10,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import type { DiffSection } from '../../diff/sections/diff-section-types'
-import { getDiffSectionRowEstimatedHeight } from '../../diff/sections/diff-section-layout'
+import { CombinedDiffInputs } from './combined-diff-inputs'
 import { CombinedDiffViewportOwner, type DiffViewportItem } from './combined-diff-viewport-owner'
 
 const DiffRowContext = createContext<DiffViewportItem | null>(null)
@@ -26,28 +27,10 @@ export function useCombinedDiffViewport(input: {
 }): CombinedDiffViewportOwner {
   const [owner] = useState(() => new CombinedDiffViewportOwner())
   useLayoutEffect(() => owner.retain(), [owner])
+  const [inputs] = useState(() => new CombinedDiffInputs(owner))
   useLayoutEffect(() => {
-    owner.setItems([
-      ...(input.prefix
-        ? [
-            {
-              key: 'combined-diff-notice',
-              generation: 'notice',
-              height: 88,
-              collapsed: false,
-              index: -1
-            }
-          ]
-        : []),
-      ...input.sections.map((section, index) => ({
-        index,
-        key: section.key,
-        generation: `${section.contentGeneration ?? 0}:${section.loading ? 'loading' : section.error ? 'error' : section.loadOnDemand ? 'deferred' : section.largeDiffRenderLimit?.limited ? 'limited' : (section.diffResult?.kind ?? 'text')}`,
-        height: getDiffSectionRowEstimatedHeight(section, input.sectionHeights[index]),
-        collapsed: section.collapsed
-      }))
-    ])
-  }, [input.sections, input.sectionHeights, input.prefix, owner])
+    inputs.update(input.sections, input.sectionHeights, Boolean(input.prefix))
+  }, [input.sections, input.sectionHeights, input.prefix, inputs])
   useLayoutEffect(() => {
     if (!input.renderedIndicesRef) {
       return
@@ -74,6 +57,10 @@ function DiffViewportRow({
   children: ReactNode
 }): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
+  useLayoutEffect(
+    () => observeCombinedDiffRowChrome(item, ref.current?.firstElementChild ?? null),
+    [item]
+  )
   useLayoutEffect(() => {
     const node = ref.current!
     item.owner.setNode(item, node)

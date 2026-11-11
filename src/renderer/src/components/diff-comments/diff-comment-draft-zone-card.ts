@@ -7,6 +7,10 @@ import {
   revealCombinedCommentZone
 } from '../editor/combined-diff/scroll-viewport/combined-diff-editor-geometry'
 import { untilDiffCommentZoneRemoved } from './diff-comment-zone-lifetime'
+import {
+  registerDiffCommentZoneMeasurement,
+  requestDiffCommentZoneMeasurement
+} from './diff-comment-zone-measurement'
 import { renderDiffCommentDraftCard } from './diff-comment-zone-card'
 import {
   resizeDiffCommentZone,
@@ -62,7 +66,7 @@ export function renderDiffCommentDraftZoneCard(
     })
   )
 
-  const resizeZone = (): void => {
+  const measured = (): void => {
     if (
       draftZoneRef.current !== entry ||
       lifetime.signal.aborted ||
@@ -70,13 +74,10 @@ export function renderDiffCommentDraftZoneCard(
     ) {
       return
     }
+    if (!combined || openingRequested) {
+      return
+    }
     measureCombinedCommentZone(editor, zoneId, dom, () => {
-      if (!resizeDiffCommentZone(editor, entry)) {
-        return false
-      }
-      if (!combined || openingRequested) {
-        return true
-      }
       const textarea = dom.querySelector<HTMLTextAreaElement>('textarea')
       const footer = dom.querySelector<HTMLElement>('.orca-diff-comment-popover-footer')
       if (!textarea || !footer || textarea.offsetHeight <= 0 || footer.offsetHeight <= 0) {
@@ -98,7 +99,17 @@ export function renderDiffCommentDraftZoneCard(
             textarea.isConnected &&
             footer.isConnected
           ) {
-            textarea.focus({ preventScroll: true })
+            // Flush the native zone's scheduled display update only after the owner resolves opening.
+            editor.render()
+            if (
+              draftZoneRef.current === entry &&
+              !lifetime.signal.aborted &&
+              isCombinedEditorBindingCurrent(editor, monacoModelIdentity) &&
+              textarea.isConnected &&
+              dom.contains(textarea)
+            ) {
+              textarea.focus({ preventScroll: true })
+            }
           }
         }
       })
@@ -106,10 +117,32 @@ export function renderDiffCommentDraftZoneCard(
     })
   }
   if (combined) {
-    const layout = editor.onDidLayoutChange(resizeZone)
-    untilDiffCommentZoneRemoved(lifetime.signal, () => layout.dispose())
+    registerDiffCommentZoneMeasurement(
+      editor,
+      entry,
+      lifetime.signal,
+      () =>
+        draftZoneRef.current === entry &&
+        !lifetime.signal.aborted &&
+        isCombinedEditorBindingCurrent(editor, monacoModelIdentity),
+      measured
+    )
   }
 
+  const resizeZone = (): void => {
+    if (
+      draftZoneRef.current !== entry ||
+      lifetime.signal.aborted ||
+      !isCombinedEditorBindingCurrent(editor, monacoModelIdentity)
+    ) {
+      return
+    }
+    if (combined) {
+      requestDiffCommentZoneMeasurement(editor, entry)
+    } else {
+      resizeDiffCommentZone(editor, entry)
+    }
+  }
   renderDiffCommentDraftCard(entry.root, draft, {
     lifetime: lifetime.signal,
     autoFocus: !combined,

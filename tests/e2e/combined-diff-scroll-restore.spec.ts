@@ -15,6 +15,7 @@ type ViewportAnchor = {
   index: number
   top: number
   bottom: number
+  lineText: string
   scrollTop: number
   scrollHeight: number
   clientHeight: number
@@ -160,54 +161,62 @@ async function openCombinedDiff(page: Page, worktreeId: string, repoPath: string
 
 async function scrollCombinedDiffDeep(page: Page): Promise<void> {
   await page.evaluate(() => {
-    const container = document.querySelector<HTMLElement>('.combined-diff-scroll-container')
+    const container = document.querySelector<HTMLElement>('[data-combined-diff-viewport]')
     if (!container) {
       throw new Error('combined diff scroll container not found')
     }
-    const target = Math.min(7_000, Math.max(0, container.scrollHeight - container.clientHeight - 1))
+    const target = 7_000
     container.dispatchEvent(
       new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: target })
     )
-    container.scrollTop = target
-    container.dispatchEvent(new Event('scroll', { bubbles: true }))
   })
 }
 
 async function readViewportAnchor(page: Page): Promise<ViewportAnchor | null> {
   return page.evaluate(() => {
-    const container = document.querySelector<HTMLElement>('.combined-diff-scroll-container')
+    const container = document.querySelector<HTMLElement>('[data-combined-diff-viewport]')
     if (!container) {
       return null
     }
     const containerRect = container.getBoundingClientRect()
-    const visibleRows = Array.from(
-      container.querySelectorAll<HTMLElement>('[data-combined-diff-section-row]')
-    )
-      .map((row) => {
-        const rect = row.getBoundingClientRect()
-        const key = row.dataset.combinedDiffSectionKey
-        const index = Number(row.dataset.index)
+    const visibleRows: ViewportAnchor[] = []
+    for (const row of container.querySelectorAll<HTMLElement>('[data-combined-diff-section-row]')) {
+      const key = row.dataset.combinedDiffSectionKey
+      const file = key?.match(/scroll-(\d+)/)
+      if (!key || !file) {
+        continue
+      }
+      const index = Number(file[1])
+      for (const line of row.querySelectorAll<HTMLElement>('.editor.modified .view-line')) {
+        const rect = line.getBoundingClientRect()
+        const lineText = line.textContent ?? ''
+        const position = lineText.match(/(?:base|changed)_(\d+)_(\d+)/)
+        const x = Math.max(rect.left, containerRect.left) + 12
+        const y = Math.max(rect.top, containerRect.top) + Math.min(8, rect.height / 2)
         if (
-          !key ||
-          !Number.isFinite(index) ||
-          rect.height <= 0 ||
+          !position ||
           rect.bottom <= containerRect.top ||
-          rect.top >= containerRect.bottom
+          rect.top >= containerRect.bottom ||
+          !line.contains(document.elementFromPoint(x, y))
         ) {
-          return null
+          continue
         }
-        return {
+        const lineIndex = Number(position[2]) + (lineText.includes('changed_') ? 20 : 0)
+        visibleRows.push({
           key,
           index,
+          lineText,
           top: rect.top - containerRect.top,
           bottom: rect.bottom - containerRect.top,
-          scrollTop: container.scrollTop,
-          scrollHeight: container.scrollHeight,
+          scrollTop: (index * 201 + lineIndex) * rect.height - (rect.top - containerRect.top),
+          scrollHeight: Number.parseFloat(
+            (container.firstElementChild as HTMLElement | null)?.style.height ?? '0'
+          ),
           clientHeight: container.clientHeight
-        }
-      })
-      .filter((row): row is ViewportAnchor => row !== null)
-      .sort((a, b) => a.top - b.top)
+        })
+      }
+    }
+    visibleRows.sort((a, b) => a.top - b.top)
     return visibleRows[0] ?? null
   })
 }
@@ -221,7 +230,7 @@ async function waitForStableViewportAnchor(page: Page): Promise<ViewportAnchor> 
   while (Date.now() - startedAt < 15_000) {
     const anchor = await readViewportAnchor(page)
     if (anchor) {
-      const signature = `${anchor.key}:${Math.round(anchor.top)}:${Math.round(
+      const signature = `${anchor.key}:${anchor.lineText}:${Math.round(anchor.top)}:${Math.round(
         anchor.bottom
       )}:${Math.round(anchor.scrollHeight)}`
       if (signature === lastSignature) {
@@ -251,7 +260,10 @@ async function waitForRestoredViewportAnchor(
   let lastAnchor = await waitForStableViewportAnchor(page)
   const startedAt = Date.now()
   while (Date.now() - startedAt < 10_000) {
-    if (lastAnchor.key === target.key && Math.abs(lastAnchor.top - target.top) < tolerancePx) {
+    if (
+      lastAnchor.key === target.key &&
+      Math.abs(lastAnchor.scrollTop - target.scrollTop) < tolerancePx
+    ) {
       return lastAnchor
     }
     await page.waitForTimeout(100)
@@ -263,72 +275,22 @@ async function waitForRestoredViewportAnchor(
   return lastAnchor
 }
 
-async function startCombinedDiffScrollProbe(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    type CombinedDiffScrollProbe = {
-      samples: ScrollProbeSample[]
-      stop: () => void
-    }
-    const targetWindow = window as typeof window & {
-      __combinedDiffScrollProbe?: CombinedDiffScrollProbe
-    }
-    targetWindow.__combinedDiffScrollProbe?.stop()
-
-    const container = document.querySelector<HTMLElement>('.combined-diff-scroll-container')
-    if (!container) {
-      throw new Error('combined diff scroll container not found')
-    }
-
-    const samples: ScrollProbeSample[] = []
-    const record = (): void => {
-      samples.push({
-        scrollHeight: container.scrollHeight,
-        scrollTop: container.scrollTop
-      })
-    }
-    container.addEventListener('scroll', record, { passive: true })
-    record()
-    targetWindow.__combinedDiffScrollProbe = {
-      samples,
-      stop: () => container.removeEventListener('scroll', record)
-    }
-  })
-}
-
-async function stopCombinedDiffScrollProbe(page: Page): Promise<ScrollProbeSample[]> {
-  return page.evaluate(() => {
-    type CombinedDiffScrollProbe = {
-      samples: ScrollProbeSample[]
-      stop: () => void
-    }
-    const targetWindow = window as typeof window & {
-      __combinedDiffScrollProbe?: CombinedDiffScrollProbe
-    }
-    const probe = targetWindow.__combinedDiffScrollProbe
-    if (!probe) {
-      return []
-    }
-    probe.stop()
-    delete targetWindow.__combinedDiffScrollProbe
-    return probe.samples
-  })
-}
-
 async function wheelCombinedDiffDown(page: Page): Promise<ScrollProbeSample[]> {
-  const container = page.locator('.combined-diff-scroll-container')
+  const container = page.locator('[data-combined-diff-viewport]')
   const box = await container.boundingBox()
   if (!box) {
     throw new Error('combined diff scroll container bounds not found')
   }
-
+  const samples: ScrollProbeSample[] = []
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-  await startCombinedDiffScrollProbe(page)
   for (let index = 0; index < 12; index += 1) {
     await page.mouse.wheel(0, 520)
-    await page.waitForTimeout(35)
+    const sample = await readViewportAnchor(page)
+    if (sample) {
+      samples.push(sample)
+    }
   }
-  await page.waitForTimeout(400)
-  return stopCombinedDiffScrollProbe(page)
+  return samples
 }
 
 function getLargestBackwardScrollJump(samples: readonly ScrollProbeSample[]): number {
@@ -353,7 +315,7 @@ async function clickVisibleDiffLine(page: Page): Promise<void> {
     .poll(
       async () => {
         linePoint = await page.evaluate(() => {
-          const container = document.querySelector<HTMLElement>('.combined-diff-scroll-container')
+          const container = document.querySelector<HTMLElement>('[data-combined-diff-viewport]')
           if (!container) {
             return null
           }
@@ -403,7 +365,7 @@ test.describe('Combined diff scroll restore', () => {
     try {
       const worktreeId = await addAndActivateRepo(orcaPage, fixture.repoPath)
       const diffTabId = await openCombinedDiff(orcaPage, worktreeId, fixture.repoPath)
-      await expect(orcaPage.locator('.combined-diff-scroll-container')).toBeVisible()
+      await expect(orcaPage.locator('[data-combined-diff-viewport]')).toBeVisible()
       await expect(orcaPage.getByText(`${FILE_COUNT} changed files`)).toBeVisible()
 
       await scrollCombinedDiffDeep(orcaPage)
@@ -427,21 +389,21 @@ test.describe('Combined diff scroll restore', () => {
         }
         store.getState().createTab(wId)
       }, worktreeId)
-      await expect(orcaPage.locator('.combined-diff-scroll-container')).toHaveCount(0)
+      await expect(orcaPage.locator('[data-combined-diff-viewport]')).toHaveCount(0)
 
       await orcaPage.locator(`[data-tab-id="${diffTabId}"]`).click({ force: true })
-      await expect(orcaPage.locator('.combined-diff-scroll-container')).toBeVisible()
+      await expect(orcaPage.locator('[data-combined-diff-viewport]')).toBeVisible()
       const afterSwitch = await waitForRestoredViewportAnchor(orcaPage, beforeSwitch)
 
       expect(afterSwitch.key).toBe(beforeSwitch.key)
-      expect(Math.abs(afterSwitch.top - beforeSwitch.top)).toBeLessThan(80)
+      expect(Math.abs(afterSwitch.scrollTop - beforeSwitch.scrollTop)).toBeLessThan(80)
 
       await clickVisibleDiffLine(orcaPage)
       const afterLineClick = await waitForStableViewportAnchor(orcaPage)
 
-      // Cap viewport movement rather than exact anchor keys; subpixel focus scroll can change the top key without a meaningful jump.
-      expect(Math.abs(afterLineClick.top - afterSwitch.top)).toBeLessThan(80)
-      // Cap scrollTop drift only at stable content height; Chromium anchoring compensates when Monaco replaces estimated heights.
+      // Compare a visible source-line witness, including its displacement within the viewport.
+      expect(Math.abs(afterLineClick.scrollTop - afterSwitch.scrollTop)).toBeLessThan(80)
+      // Compare source-line drift only when the logical content height is unchanged.
       if (afterLineClick.scrollHeight === afterSwitch.scrollHeight) {
         expect(Math.abs(afterLineClick.scrollTop - afterSwitch.scrollTop)).toBeLessThan(40)
       }

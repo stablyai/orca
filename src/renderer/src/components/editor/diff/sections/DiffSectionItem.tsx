@@ -1,6 +1,6 @@
 import { NO_RESOURCE_EVIDENCE } from '@/lib/workspace/ownership/workspace-copy-owner'
 import { useDiffCommentView } from '../../../diff-comments/use-diff-comment-owner'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CombinedDiffEditorMount } from '../../combined-diff/scroll-viewport/CombinedDiffEditor'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
@@ -16,8 +16,8 @@ import { useDiffSectionLayoutMetrics } from './useDiffSectionLayoutMetrics'
 import { getLiveDiffSectionRenderLimit } from './diff-section-live-render-limit'
 import { submitDiffSectionComment } from './diff-section-comment-submit'
 import type { DiffSectionItemProps } from './diff-section-item-props'
-import { hasLayoutBox } from '@/hooks/virtualized-hidden-row-measurement'
 import { DiffSectionSaveConflictBar } from './DiffSectionSaveConflictBar'
+import { hasLayoutBox } from '@/hooks/virtualized-hidden-row-measurement'
 
 export function DiffSectionItem({
   section,
@@ -72,6 +72,10 @@ export function DiffSectionItem({
   } | null>(null)
   const modifiedEditor = editorBinding?.editor ?? null
 
+  const currentIndex = useRef(index)
+  useLayoutEffect(() => {
+    currentIndex.current = index
+  }, [index])
   const diffEditorRef = useRef<monacoEditor.IStandaloneDiffEditor | null>(null)
   const lineNumberOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
   const hasLineCommentAction = Boolean(worktreeId || onAddLineComment)
@@ -162,7 +166,7 @@ export function DiffSectionItem({
     lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(editor, sideBySide)
     const modified = editor.getModifiedEditor()
 
-    // Wait for Monaco’s hidden-region layout; earlier full-file measurements make virtualized rows jump on remount.
+    // Persist content heights for tab restore; live viewport geometry belongs to the owner.
     let diffLayoutReady = false
     let pendingHeightFrame: number | null = null
     const updateHeight = (): void => {
@@ -172,10 +176,10 @@ export function DiffSectionItem({
       }
       const contentHeight = editor.getModifiedEditor().getContentHeight()
       setSectionHeights((prev) => {
-        if (prev[index] === contentHeight) {
+        if (prev[currentIndex.current] === contentHeight) {
           return prev
         }
-        return { ...prev, [index]: contentHeight }
+        return { ...prev, [currentIndex.current]: contentHeight }
       })
     }
     const requestHeightUpdate = (): void => {
@@ -213,8 +217,8 @@ export function DiffSectionItem({
       lineNumberOptionsSubRef.current?.dispose()
       lineNumberOptionsSubRef.current = null
       diffEditorRef.current = null
-      if (modifiedEditorsRef.current.get(index) === modified) {
-        modifiedEditorsRef.current.delete(index)
+      if (modifiedEditorsRef.current.get(currentIndex.current) === modified) {
+        modifiedEditorsRef.current.delete(currentIndex.current)
       }
       setEditorBinding((binding) => (binding?.identity === identity ? null : binding))
     })
@@ -230,7 +234,7 @@ export function DiffSectionItem({
     modifiedEditorsRef.current.set(index, modified)
     const original = editor.getOriginalEditor()
     const cleanupSaveShortcut = installEditorSaveShortcut(modified.getContainerDomNode(), () =>
-      handleSectionSaveRef.current(index)
+      handleSectionSaveRef.current(currentIndex.current)
     )
     const cleanupOriginalFindShortcut = installMonacoEditorFindShortcut(original)
     const cleanupModifiedFindShortcut = installMonacoEditorFindShortcut(modified)
@@ -239,7 +243,7 @@ export function DiffSectionItem({
       setSections((prev) => {
         let changed = false
         const next = prev.map((s, i) => {
-          if (i !== index) {
+          if (i !== currentIndex.current) {
             return s
           }
 
@@ -279,6 +283,20 @@ export function DiffSectionItem({
       }
     }
   }
+
+  useLayoutEffect(() => {
+    const modified = editorBinding?.editor
+    if (!modified || !isEditable) {
+      return
+    }
+    const editors = modifiedEditorsRef.current
+    editors.set(index, modified)
+    return () => {
+      if (editors.get(index) === modified) {
+        editors.delete(index)
+      }
+    }
+  }, [editorBinding, index, isEditable, modifiedEditorsRef])
 
   useEffect(() => {
     loadSection(index)

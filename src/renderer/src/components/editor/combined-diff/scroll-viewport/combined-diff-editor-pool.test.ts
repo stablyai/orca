@@ -59,6 +59,7 @@ describe('combined diff resource lifetime', () => {
         measured: false,
         retired: false,
         node: null,
+        chrome: { header: null, conflict: null, body: null },
         binding: null,
         onRetire: new Set<() => void>()
       }))
