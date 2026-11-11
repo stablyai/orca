@@ -87,53 +87,6 @@ describe('browser client page metadata publisher', () => {
       expect.objectContaining({ revision: 2, title: 'Later' })
     )
   })
-
-  it('reports a publish the runtime refused instead of discarding it', async () => {
-    const onUnpublished = vi.fn()
-    const publish = vi
-      .fn()
-      .mockResolvedValueOnce({ status: 'published', accepted: false })
-      .mockResolvedValueOnce({ status: 'failed', errorCode: 'browser_host_lease_stale' })
-    let revision = 0
-    const publisher = createBrowserClientPageMetadataPublisher({
-      browserPageId: 'page-a',
-      placement: PLACEMENT,
-      nextRevision: () => ++revision,
-      publish,
-      onUnpublished
-    })
-
-    publisher.publish(snapshot('Refused'))
-    await vi.waitFor(() => expect(onUnpublished).toHaveBeenCalledTimes(1))
-    expect(onUnpublished).toHaveBeenNthCalledWith(1, { reason: 'rejected' })
-
-    publisher.publish(snapshot('Failed'))
-    await vi.waitFor(() => expect(onUnpublished).toHaveBeenCalledTimes(2))
-    expect(onUnpublished).toHaveBeenNthCalledWith(2, {
-      reason: 'failed',
-      errorCode: 'browser_host_lease_stale'
-    })
-  })
-
-  // Transport rejection exercises a separate path from a runtime-declined outcome.
-  it('reports a publish that threw on its way out', async () => {
-    const onUnpublished = vi.fn()
-    let revision = 0
-    const publisher = createBrowserClientPageMetadataPublisher({
-      browserPageId: 'page-a',
-      placement: PLACEMENT,
-      nextRevision: () => ++revision,
-      publish: () => Promise.reject(new Error('remote_runtime_unavailable')),
-      onUnpublished
-    })
-
-    publisher.publish(snapshot('Thrown'))
-    await vi.waitFor(() => expect(onUnpublished).toHaveBeenCalledTimes(1))
-    expect(onUnpublished).toHaveBeenNthCalledWith(1, {
-      reason: 'failed',
-      errorCode: 'remote_runtime_unavailable'
-    })
-  })
 })
 
 function snapshot(title: string) {

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { useAppStore } from '@/store/index'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { EphemeralVmRuntimesSection } from '../../virtual-machines/runtimes/EphemeralVmRuntimesSection'
 import {
@@ -41,6 +41,7 @@ export function RuntimeEnvironmentsPane({
   allowLocalRuntime = true,
   addServerIntentSignal
 }: RuntimeEnvironmentsPaneProps): React.JSX.Element {
+  const t = useTranslate()
   const { dialog, setDialog } = useRuntimeServersPage()
   const [pendingSwitchValue, setPendingSwitchValue] = useState<string | null>(null)
   const [pendingRemove, setPendingRemove] = useState<PublicKnownRuntimeEnvironment | null>(null)
@@ -63,13 +64,10 @@ export function RuntimeEnvironmentsPane({
 
   const getEnvironmentLabel = (value: string): string => {
     if (value === LOCAL_RUNTIME_VALUE) {
-      return translate('auto.components.settings.serverList.thisComputer', 'This computer')
+      return t('auto.components.settings.serverList.thisComputer', 'This computer')
     }
     if (value === NO_RUNTIME_VALUE) {
-      return translate(
-        'auto.components.settings.RuntimeEnvironmentsPane.b07070ed3c',
-        'No server connected'
-      )
+      return t('auto.components.settings.RuntimeEnvironmentsPane.b07070ed3c', 'No server connected')
     }
     // The default may be WSL, which this listed-server subset omits.
     return (
@@ -232,7 +230,7 @@ export function RuntimeEnvironmentsPane({
 
       {managedCatalog.loadFailed ? (
         <p className="text-xs text-destructive">
-          {translate(
+          {t(
             'auto.components.settings.managedServers.loadFailed',
             'Orca couldn’t load SSH hosts and unfinished moves. Reopen Settings to try again.'
           )}

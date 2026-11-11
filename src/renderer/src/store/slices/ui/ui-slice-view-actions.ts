@@ -1,5 +1,5 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
-import { rewindHistoryIndexPastView } from '../worktree-nav-history'
+import { rewindHistoryIndexPastView } from './workspace-navigation-history'
 
 export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {

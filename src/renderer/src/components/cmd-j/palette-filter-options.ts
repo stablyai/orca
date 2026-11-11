@@ -13,11 +13,12 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getProjectHeaderRevealTarget } from '../../../../shared/project-section-grouping'
 import type { ProjectGroupingModel } from '../../../../shared/project-section-grouping'
-import type { SidebarHostOption } from '../sidebar/sidebar-host-options'
+import type { SidebarHostOption } from '../sidebar/worktree-list/controls/sidebar-host-options'
+import { translateHostDisplayLabel } from '../sidebar/execution-host-label'
 import {
   expandEquivalentExecutionHostIds,
   pickerExecutionHosts
-} from '../../../../shared/managed-orcad-execution-host'
+} from '../../../../shared/execution-host/managed-orcad-execution-host'
 import { buildPaletteFilterOptionSearchText } from './palette-filter-option-list'
 
 export type PaletteFilterOption = {
@@ -33,19 +34,24 @@ function toFilterOption({
   id,
   label,
   detail,
-  count
+  count,
+  searchText
 }: {
   id: string
   label: string
   detail: string
   count: number
+  searchText?: string
 }): PaletteFilterOption {
   return {
     id,
     label,
     detail,
     count,
-    searchText: buildPaletteFilterOptionSearchText(label, detail)
+    searchText: buildPaletteFilterOptionSearchText(
+      label,
+      searchText ? `${detail} ${searchText}` : detail
+    )
   }
 }
 
@@ -149,7 +155,8 @@ export function buildPaletteFilterModel({
   const hosts = hostRows.map((host) =>
     toFilterOption({
       id: host.id,
-      label: host.label,
+      label: translateHostDisplayLabel(host),
+      searchText: host.label,
       detail: host.detail,
       count: [host.id, ...(host.aliasHostIds ?? [])].reduce(
         (count, hostId) => count + (worktreeCountByHostId.get(hostId) ?? 0),

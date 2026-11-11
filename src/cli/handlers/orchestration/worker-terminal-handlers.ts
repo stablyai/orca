@@ -1,8 +1,13 @@
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
 import { printOrchestrationResult } from './agent-view'
-import { WORKER_LIST_VIEW, type WorkerListResult } from './worker-agent-views'
-import { WORKER_RELEASE_VIEW, workerStopFailure } from './worker-release-agent-view'
+import { remoteHost, WORKER_LIST_VIEW, type WorkerListResult } from './worker-agent-views'
+import {
+  formatHelperStops,
+  WORKER_RELEASE_VIEW,
+  workerStopFailure
+} from './worker-release-agent-view'
+import type { WorkerStopReceipt } from '../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
@@ -10,8 +15,15 @@ import {
 } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import { callOrchestrationMutation } from './mutation-request'
+import { resolveOrchestrationTerminalHandle } from './terminal-identity'
 import { formatWorkerRelease, type WorkerReleaseReceipt } from './worker-output'
 import { formatWorkerListScope, resolveWorkerListRunScope } from './worker-list-run-scope'
+
+type WorkerApprovalAnswerView = {
+  approvalId: string
+  option: string
+  reasonMessageId: string | null
+}
 
 const WORKER_TERMINAL_LIST_STATES = [
   'active',
@@ -40,16 +52,39 @@ const keepWorkerOpen: CommandHandler = async ({ flags, client, json }) => {
 }
 
 export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandler> = {
-  'orchestration worker-stop': async ({ flags, client, json }) => {
-    const result = await callOrchestrationMutation<{
-      dispatchId: string
-      state: string
-      processAction: string
-      lastError?: string
-      warning?: string
-    }>(client, flags, 'orchestration.workerStop', {
-      dispatch: getRequiredStringFlag(flags, 'dispatch')
+  'orchestration deny': async ({ flags, client, cwd, json }) => {
+    const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
+    const result = await callOrchestrationMutation<WorkerApprovalAnswerView>(
+      client,
+      flags,
+      'orchestration.approvalAnswer',
+      {
+        dispatch: getRequiredStringFlag(flags, 'dispatch'),
+        prompt: getRequiredStringFlag(flags, 'prompt'),
+        decision: 'deny',
+        reason: getRequiredStringFlag(flags, 'reason'),
+        from
+      }
+    )
+    printOrchestrationResult(result, json, {
+      fields: (value) => ({
+        approvalId: value.approvalId,
+        denied: value.option,
+        reason: value.reasonMessageId
+          ? `sent to the worker as message ${value.reasonMessageId}`
+          : undefined
+      })
     })
+  },
+  'orchestration worker-stop': async ({ flags, client, json }) => {
+    const result = await callOrchestrationMutation<WorkerStopReceipt>(
+      client,
+      flags,
+      'orchestration.workerStop',
+      {
+        dispatch: getRequiredStringFlag(flags, 'dispatch')
+      }
+    )
     if (!flags.has('full')) {
       printOrchestrationResult(result, json, {
         fields: (value) => value,
@@ -57,14 +92,14 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
       })
       return
     }
-    if (result.result.state === 'stop_unknown') {
+    if (workerStopFailure(result.result)) {
       process.exitCode = 1
     }
     printResult(
       result,
       json,
       (value) =>
-        `Worker ${value.dispatchId} [${value.state}] process=${value.processAction}${value.lastError ? `\n${value.lastError}` : ''}${value.warning ? `\nWarning: ${value.warning}` : ''}`
+        `Worker ${value.dispatchId} [${value.state}] process=${value.processAction}${value.lastError ? `\n${value.lastError}` : ''}${value.warning ? `\nWarning: ${value.warning}` : ''}${formatHelperStops(value.helpers)}${value.helperStopError ? `\n${value.helperStopError}` : ''}`
     )
   },
 
@@ -129,6 +164,7 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
       run: scope.run,
       terminalState,
       ...(flags.has('include-remote') ? { includeRemote: true } : {}),
+      on: getOptionalStringFlag(flags, 'on'),
       cursor: getOptionalStringFlag(flags, 'cursor'),
       limit: getOptionalPositiveIntegerFlag(flags, 'limit')
     })
@@ -162,14 +198,19 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
                 const attention = projection?.attention?.categories.join(',') || 'none'
                 const details = projection
                   ? `/${stage}] attention=${attention} liveness=${liveness} provider=${provider} host=${projection.host.id} workspace=${workspace}`
-                  : `]`
+                  : worker.server
+                    ? `] host=${remoteHost(worker.server)} asOf=${worker.server.asOf}`
+                    : `]`
                 const next = projection
                   ? ` next=${projection.nextAction.argv.join(' ') || 'none'}`
                   : ''
                 const autoRelease = projection?.autoReleaseAt
                   ? ` auto-release=${projection.autoReleaseAt}`
                   : ''
-                return `${worker.dispatchId} task=${worker.taskId} [${worker.workerState}${details} terminal=${worker.terminalState ?? 'none'}${autoRelease}${next}`
+                const coordinatedFrom = worker.coordinatedFrom
+                  ? ` coordinated from ${worker.coordinatedFrom}`
+                  : ''
+                return `${worker.dispatchId} task=${worker.taskId} [${worker.workerState}${details} terminal=${worker.terminalState ?? 'none'}${autoRelease}${next}${coordinatedFrom}`
               })
               .join('\n')
       const counts = Object.entries(value.counts)

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   AgentLaunchSettings,
   AgentLaunchSettingsMutation
-} from '../../../../../../shared/agent-launch-settings'
+} from '../../../../../../shared/agent-launch/choices/agent-launch-settings'
 import {
   type AgentPermissionsRenderer,
   AgentLaunchSettingsCatalog
@@ -23,7 +23,7 @@ import {
   useAgentPermissionOverrideNotice,
   type SelectPermissionOverrides
 } from '../permissions/agent-permission-override-notice'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type ReadState =
   | { kind: 'loading' | 'unsupported' | 'failed' }
@@ -45,6 +45,7 @@ export function HostAgentLaunchSettings({
   hostName: string
   renderPermissions: AgentPermissionsRenderer
 }): React.JSX.Element {
+  const t = useTranslate()
   const owner = useMemo(
     () => ({ environmentId, pairingRevision }),
     [environmentId, pairingRevision]
@@ -160,18 +161,18 @@ export function HostAgentLaunchSettings({
       <div className="space-y-2 text-sm text-muted-foreground">
         <p>
           {read.kind === 'unsupported'
-            ? translate(
+            ? t(
                 'settings.agents.updateHost',
                 'Update this server to edit its agent launch settings.'
               )
-            : translate(
+            : t(
                 'settings.agents.readFailed',
                 'Couldn’t read agent settings. Check the host connection and try again.'
               )}
         </p>
         {read.kind === 'failed' ? (
           <Button type="button" variant="ghost" size="xs" onClick={() => void refresh()}>
-            {translate('auto.components.settings.AgentsPane.retryDetection', 'Retry')}
+            {t('auto.components.settings.AgentsPane.retryDetection', 'Retry')}
           </Button>
         ) : null}
       </div>
@@ -195,7 +196,7 @@ export function HostAgentLaunchSettings({
       </fieldset>
       {saveFailed ? (
         <p role="alert" className="text-xs text-destructive">
-          {translate(
+          {t(
             'settings.agents.saveFailed',
             'Couldn’t save agent settings. Check the host connection and try again.'
           )}

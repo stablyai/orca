@@ -1,5 +1,6 @@
 import type { GitHubPRMergeMethod } from '../../../../shared/github/pull-request-types'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 export function getPullRequestStateConfirmationTitle(
   nextState: 'open' | 'closed',
@@ -40,13 +41,16 @@ export function getPullRequestMergeConfirmationTitle(
   }
 }
 
-export function getPullRequestMergeMethodLabel(method: GitHubPRMergeMethod): string {
+export function getPullRequestMergeMethodLabel(
+  method: GitHubPRMergeMethod,
+  t: Translate = translate
+): string {
   switch (method) {
     case 'merge':
-      return translate('auto.components.PullRequestConfirmation.mergeLabel', 'Create merge commit')
+      return t('auto.components.PullRequestConfirmation.mergeLabel', 'Create merge commit')
     case 'squash':
-      return translate('auto.components.PullRequestConfirmation.squashLabel', 'Squash and merge')
+      return t('auto.components.PullRequestConfirmation.squashLabel', 'Squash and merge')
     case 'rebase':
-      return translate('auto.components.PullRequestConfirmation.rebaseLabel', 'Rebase and merge')
+      return t('auto.components.PullRequestConfirmation.rebaseLabel', 'Rebase and merge')
   }
 }

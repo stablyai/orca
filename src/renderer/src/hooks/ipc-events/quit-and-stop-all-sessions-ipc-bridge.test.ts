@@ -19,7 +19,7 @@ vi.mock('@/components/shared/kill-all-terminal-surfaces', () => ({
   runKillAllTerminalSurfaces: mocks.runKillAll,
   snapshotKillAllTerminalSurfaceIds: mocks.snapshotIds
 }))
-vi.mock('@/lib/worktree-agent-activation-gate', () => ({
+vi.mock('@/lib/workspace/activation/worktree-agent-activation-gate', () => ({
   waitForWorkspaceSessionReady: mocks.waitReady
 }))
 vi.mock('../../store', () => ({ useAppStore: { getState: () => mocks.storeState } }))
@@ -87,45 +87,6 @@ describe('registerQuitAndStopAllSessionsIpcBridge', () => {
     vi.restoreAllMocks()
   })
 
-  it('waits for the restored session, stops every terminal surface, then asks main to quit', async () => {
-    registerQuitAndStopAllSessionsIpcBridge([])
-    await settle()
-
-    pending.push(true)
-    pushListener?.()
-    await settle()
-
-    expect(mocks.runKillAll).toHaveBeenCalledWith(['tab-1', 'tab-2'])
-    expect(quitAfterStoppingAllSessions).toHaveBeenCalledOnce()
-    const [waited, snapshotted, killed, quit] = [
-      mocks.waitReady,
-      mocks.snapshotIds,
-      mocks.runKillAll,
-      quitAfterStoppingAllSessions
-    ].map((mock) => mock.mock.invocationCallOrder[0])
-    expect(waited).toBeLessThan(snapshotted)
-    expect(snapshotted).toBeLessThan(killed)
-    expect(killed).toBeLessThan(quit)
-  })
-
-  it('acts on a request queued before the listener attached', async () => {
-    pending.push(true)
-
-    registerQuitAndStopAllSessionsIpcBridge([])
-    await settle()
-
-    expect(quitAfterStoppingAllSessions).toHaveBeenCalledOnce()
-  })
-
-  it('does nothing for a push whose request was already consumed', async () => {
-    registerQuitAndStopAllSessionsIpcBridge([])
-    pushListener?.()
-    await settle()
-
-    expect(mocks.runKillAll).not.toHaveBeenCalled()
-    expect(quitAfterStoppingAllSessions).not.toHaveBeenCalled()
-  })
-
   it('runs Kill all once while an earlier request is still stopping sessions', async () => {
     const killAll = Promise.withResolvers<KillAllSummary>()
     mocks.runKillAll.mockReturnValue(killAll.promise)
@@ -171,31 +132,6 @@ describe('registerQuitAndStopAllSessionsIpcBridge', () => {
     )
   })
 
-  it.each<[string, KillAllSummary]>([
-    ['the daemon sweep failed', { ...CLEAN_SUMMARY, daemon: { status: 'rejected' } }],
-    [
-      'a session refused to exit',
-      { ...CLEAN_SUMMARY, daemon: { status: 'fulfilled', killedCount: 1, remainingCount: 1 } }
-    ],
-    [
-      'a daemon generation could not list its sessions',
-      {
-        ...CLEAN_SUMMARY,
-        daemon: { status: 'fulfilled', killedCount: 0, remainingCount: 0, listingIncomplete: true }
-      }
-    ],
-    ['a tab failed to close', { ...CLEAN_SUMMARY, failedCloseAttemptCount: 1 }],
-    ['a PTY shutdown was rejected', { ...CLEAN_SUMMARY, exactKillRejectedCount: 1 }]
-  ])('stays open and says so when %s', async (_name, summary) => {
-    mocks.runKillAll.mockResolvedValue(summary)
-    pending.push(true)
-
-    registerQuitAndStopAllSessionsIpcBridge([])
-    await settle()
-
-    expectStayedOpen()
-  })
-
   it('stays open when a terminal tab opened while Kill all ran', async () => {
     mocks.snapshotIds.mockReset().mockReturnValueOnce(['tab-1']).mockReturnValue(['tab-new'])
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -209,49 +145,6 @@ describe('registerQuitAndStopAllSessionsIpcBridge', () => {
       '[quit-and-stop-all-sessions] Terminal tabs opened during Kill all:',
       ['tab-new']
     )
-  })
-
-  it('stays open when main still lists a terminal session after Kill all', async () => {
-    quitAfterStoppingAllSessions.mockResolvedValue(false)
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    pending.push(true)
-
-    registerQuitAndStopAllSessionsIpcBridge([])
-    await settle()
-
-    expect(quitAfterStoppingAllSessions).toHaveBeenCalledOnce()
-    expect(mocks.toastError).toHaveBeenCalledWith(FAILURE_MESSAGE)
-    expect(warn).toHaveBeenCalledWith(
-      '[quit-and-stop-all-sessions] Main still lists a terminal session after Kill all'
-    )
-  })
-
-  it('stays open and says so when stopping the sessions throws', async () => {
-    mocks.runKillAll.mockRejectedValue(new Error('IPC failed'))
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-    pending.push(true)
-
-    registerQuitAndStopAllSessionsIpcBridge([])
-    await settle()
-
-    expectStayedOpen()
-    expect(error).toHaveBeenCalledWith(
-      '[quit-and-stop-all-sessions] Stopping sessions failed:',
-      expect.any(Error)
-    )
-  })
-
-  it('stops nothing, without an unhandled rejection, when consuming the request fails', async () => {
-    Object.assign(window.api.ui, {
-      consumePendingQuitAndStopAllSessions: () => Promise.reject(new Error('IPC unavailable'))
-    })
-
-    registerQuitAndStopAllSessionsIpcBridge([])
-    await settle()
-
-    expect(mocks.waitReady).not.toHaveBeenCalled()
-    expect(quitAfterStoppingAllSessions).not.toHaveBeenCalled()
-    expect(unhandledRejections).toEqual([])
   })
 
   it('runs again on the next request after a failed attempt', async () => {

@@ -4,8 +4,8 @@
  * computer. This is the scope and the path map; nothing here writes.
  */
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { resolveFolderWorkspaceHost } from '../../../shared/folder-workspace-execution-host'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import { resolveFolderWorkspaceHost } from '../../../shared/folder-workspaces/folder-workspace-execution-host'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
@@ -13,7 +13,7 @@ import { rewriteWorktreeIdPath } from '../../../shared/worktree/id'
 import { wslUncDrivePathToWindows } from '../../../shared/wsl-paths'
 
 import { wslMoveRepoPaths } from '../../persistence/moving-wsl-projects/wsl-move-scope'
-import type { WindowsDriveMount } from '../../runtime/wsl-guest-drive-mountinfo'
+import type { WindowsDriveMount } from './wsl-guest-drive-mountinfo'
 import { wslUncPathIsWindowsDriveFolder } from './wsl-drive-unc-mounts'
 
 export type WslDriveUncRefusal =

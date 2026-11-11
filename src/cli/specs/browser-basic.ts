@@ -207,6 +207,12 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = withBrowserPageTarget(
     allowedFlags: [...GLOBAL_FLAGS, 'page', 'worktree']
   },
   {
+    path: ['tab', 'annotations'],
+    summary: "Show the notes the user left on a browser tab and hasn't sent yet",
+    usage: 'orca tab annotations [--page <id>] [--worktree <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'page', 'worktree']
+  },
+  {
     path: ['tab', 'current'],
     summary: 'Show the current browser tab',
     usage: 'orca tab current [--worktree <selector|all>] [--json]',

@@ -49,6 +49,7 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
     items,
     jiraConnection,
     linearTeams,
+    pendingGitHubProjectViewSelection,
     provider,
     reposById,
     selectedHostedRepos,
@@ -223,7 +224,7 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
   )
   const githubProjectViewOptions = useMemo<PickerOption<string>[]>(
     () =>
-      githubProjectViews.map((view) => ({
+      (pendingGitHubProjectViewSelection?.views ?? githubProjectViews).map((view) => ({
         value: view.id,
         label: view.name,
         subtitle:
@@ -232,7 +233,7 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
             : t('tasks.pickerProjection.unsupportedLayout', 'Unsupported layout on mobile'),
         disabled: view.layout !== 'TABLE_LAYOUT'
       })),
-    [githubProjectViews, t]
+    [githubProjectViews, pendingGitHubProjectViewSelection, t]
   )
   return Object.assign(model, {
     createTargetOptions,

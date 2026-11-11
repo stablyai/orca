@@ -1,4 +1,4 @@
-import { assertJsonTextStructureWithinLimits } from '../../shared/json-text-structure-limit'
+import { assertJsonTextStructureWithinLimits } from '../../shared/json-stream/json-text-structure-limit'
 
 const CONTROL_JSON_LIMITS = { structuralTokens: 64 * 1024, nestingDepth: 16 } as const
 

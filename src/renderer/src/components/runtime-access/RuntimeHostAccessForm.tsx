@@ -1,17 +1,17 @@
 import { Loader2, Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { parseHostAccessLink } from '../../../../shared/remote-pairing-address'
+import { parseHostAccessLink } from '../../../../shared/remote-runtime/pairing/remote-pairing-address'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Checkbox } from '../ui/checkbox'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   translateHostAccessLinkError,
   translateRemotePairingEndpointKind
-} from '@/lib/remote-pairing-copy'
-import { defaultServerNameForAccessLink } from '../settings/runtime-environments/catalog/runtime-server-default-name'
+} from '@/lib/remote-pairing/remote-pairing-copy'
+import { defaultServerNameForAccessLink } from '../../../../shared/remote-runtime/host-catalog/runtime-host-default-name'
 import {
   RuntimeHostAccessFailureAlert,
   type RuntimeHostAccessFailure
@@ -46,6 +46,7 @@ export function RuntimeHostAccessForm({
   onCancel,
   onSubmit
 }: RuntimeHostAccessFormProps): React.JSX.Element {
+  const t = useTranslate()
   const [allowLoopback, setAllowLoopback] = useState(false)
   const parsed = useMemo(() => parseHostAccessLink(accessLink), [accessLink])
   const tunnelOverrideEnabled =
@@ -75,7 +76,7 @@ export function RuntimeHostAccessForm({
     >
       <div className="space-y-2">
         <Label htmlFor="runtime-server-access-link">
-          {translate('auto.components.settings.RuntimeHostAccessForm.accessLink', 'Access link')}
+          {t('auto.components.settings.RuntimeHostAccessForm.accessLink', 'Access link')}
         </Label>
         <Input
           id="runtime-server-access-link"
@@ -87,7 +88,7 @@ export function RuntimeHostAccessForm({
             setAllowLoopback(false)
             onAccessLinkChange(event.target.value)
           }}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.settings.RuntimeHostAccessForm.accessLinkPlaceholder',
             'orca://pair?code=...'
           )}
@@ -95,14 +96,14 @@ export function RuntimeHostAccessForm({
           autoFocus
         />
         <p id="runtime-server-access-link-help" className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.RuntimeHostAccessForm.accessLinkHelp',
             'Orca shows the destination before connecting. Credentials stay hidden.'
           )}
         </p>
         {inputError ? (
           <p id="runtime-server-access-link-error" className="text-xs text-destructive">
-            {parsed.ok ? null : translateHostAccessLinkError(parsed.kind)}
+            {parsed.ok ? null : translateHostAccessLinkError(parsed.kind, t)}
           </p>
         ) : null}
       </div>
@@ -111,13 +112,10 @@ export function RuntimeHostAccessForm({
         <div className="space-y-1 rounded-md border border-border/60 bg-background/60 px-3 py-2">
           <div className="flex flex-wrap items-center gap-2 text-xs font-medium">
             <span>
-              {translate(
-                'auto.components.settings.RuntimeHostAccessForm.destination',
-                'Link destination'
-              )}
+              {t('auto.components.settings.RuntimeHostAccessForm.destination', 'Link destination')}
             </span>
             <Badge variant="outline">
-              {translateRemotePairingEndpointKind(parsed.value.endpointKind)}
+              {translateRemotePairingEndpointKind(parsed.value.endpointKind, t)}
             </Badge>
           </div>
           <div className="font-mono text-sm" aria-live="polite">
@@ -133,20 +131,20 @@ export function RuntimeHostAccessForm({
           className="space-y-1 rounded-md border border-destructive/50 bg-destructive/5 p-3 text-sm"
         >
           <div className="font-medium text-destructive">
-            {translate(
+            {t(
               'auto.components.settings.RuntimeHostAccessForm.loopbackTitle',
               'This link points back to this device'
             )}
           </div>
           <p>
-            {translate(
+            {t(
               'auto.components.settings.RuntimeHostAccessForm.loopbackDescription',
               'It uses {{endpoint}}, which points back to the device opening the link—not the other computer that created it.',
               { endpoint: parsed.value.displayEndpoint }
             )}
           </p>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.RuntimeHostAccessForm.loopbackRecoveryTunnel',
               'On the other computer, open Share this computer and create a link for Another device with its Tailscale or LAN address. If you reach it through an SSH tunnel, turn on the option below.'
             )}
@@ -164,13 +162,13 @@ export function RuntimeHostAccessForm({
           />
           <span className="space-y-0.5">
             <span className="block">
-              {translate(
+              {t(
                 'auto.components.settings.RuntimeHostAccessForm.sshTunnelReach',
                 'I reach this address through an SSH tunnel'
               )}
             </span>
             <span className="block text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.settings.RuntimeHostAccessForm.sshTunnelHelp',
                 'Keep the tunnel active while using this connection.'
               )}
@@ -181,9 +179,9 @@ export function RuntimeHostAccessForm({
 
       <div className="space-y-2">
         <Label htmlFor="runtime-server-name">
-          {translate('auto.components.settings.RuntimeHostAccessForm.nameLabel', 'Name')}{' '}
+          {t('auto.components.settings.RuntimeHostAccessForm.nameLabel', 'Name')}{' '}
           <span className="font-normal text-muted-foreground">
-            {translate('auto.components.settings.RuntimeHostAccessForm.optional', '(optional)')}
+            {t('auto.components.settings.RuntimeHostAccessForm.optional', '(optional)')}
           </span>
         </Label>
         <Input
@@ -193,10 +191,7 @@ export function RuntimeHostAccessForm({
           onChange={(event) => onNameChange(event.target.value)}
           placeholder={
             defaultName ||
-            translate(
-              'auto.components.settings.RuntimeHostAccessForm.namePlaceholder',
-              'Linux workstation'
-            )
+            t('auto.components.settings.RuntimeHostAccessForm.namePlaceholder', 'Linux workstation')
           }
         />
       </div>
@@ -210,7 +205,7 @@ export function RuntimeHostAccessForm({
       ) : null}
 
       <p className="text-xs text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.settings.RuntimeHostAccessForm.headlessHelpPrefix',
           'Running Orca without a window? On that computer, run'
         )}{' '}
@@ -221,16 +216,16 @@ export function RuntimeHostAccessForm({
 
       <div className="flex justify-end gap-2">
         <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={busy}>
-          {translate('auto.components.settings.RuntimeHostAccessForm.cancel', 'Cancel')}
+          {t('auto.components.settings.RuntimeHostAccessForm.cancel', 'Cancel')}
         </Button>
         <Button type="submit" size="sm" disabled={!canSubmit}>
           {busy ? <Loader2 className="animate-spin" /> : <Plus />}
           {tunnelOverrideEnabled
-            ? translate(
+            ? t(
                 'auto.components.settings.RuntimeHostAccessForm.addServerWithTunnel',
                 'Add server using tunnel'
               )
-            : translate('auto.components.settings.RuntimeHostAccessForm.addServer', 'Add server')}
+            : t('auto.components.settings.RuntimeHostAccessForm.addServer', 'Add server')}
         </Button>
       </div>
     </form>

@@ -51,7 +51,7 @@ vi.mock('../workspaces/creation/worktree-root-preparation', () =>
 
 import { registerRepoHandlers } from './repos'
 import { clearGitCapabilityStateForTests } from '../git/command-runner/git-capability-state'
-import { resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'
+import { resetSshProviderAuthorities } from '../ssh/connection/authority/ssh-provider-authority'
 import { getGitRepoRoot, isGitRepo } from '../git/repo'
 import { createRepoHandlerHarness, resetProjectGroupMocks } from './repos-remote-test-harness'
 

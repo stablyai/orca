@@ -1,8 +1,8 @@
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import type { ResolvedRuntimeFileTarget, ResolvedRuntimeFileWorktree } from './file-target'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { RuntimeNavigationTarget } from '../../../shared/runtime-navigation'
-import type { RuntimeFileOpenPosition } from '../../../shared/runtime-file-contracts'
+import type { RuntimeFileOpenPosition } from '../../../shared/file-access/runtime-editor-file-open'
 import type {
   NativeChatMediaPathRequest,
   NativeChatMediaPathResolution

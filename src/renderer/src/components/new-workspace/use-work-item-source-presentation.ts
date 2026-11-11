@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { CaseSensitive, LoaderCircle, Search } from 'lucide-react'
-import { parseGitHubIssueOrPRLink } from '@/lib/github-links'
-import { parseGitLabIssueOrMRLink } from '@/lib/gitlab-links'
+import { parseGitHubIssueOrPRLink } from '../../../../shared/github/links'
+import { parseGitLabIssueOrMRLink } from '../../../../shared/new-workspace/gitlab-links'
 import {
   isSmartWorkspaceLinearIssueIntentMatch,
   parseBoundedSmartWorkspaceLinearIssueInput,

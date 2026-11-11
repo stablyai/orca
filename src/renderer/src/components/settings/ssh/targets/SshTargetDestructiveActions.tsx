@@ -3,7 +3,7 @@ import { useCallback, useRef, useState, type ReactNode } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { SshDestructiveActionDialog } from './SshDestructiveActionDialog'
 import type { SshTargetBusyAction } from './ssh-target-action-state'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type PendingTargetAction = { id: string; label: string }
 
@@ -38,6 +38,7 @@ export function SshTargetDestructiveActions({
   onBulkRemoveFinished,
   children
 }: SshTargetDestructiveActionsProps): React.JSX.Element {
+  const t = useTranslate()
   const [pendingRemove, setPendingRemove] = useState<PendingTargetAction | null>(null)
   const [pendingBulk, setPendingBulk] = useState<SshBulkRemoveRequest | null>(null)
   const [bulkProgress, setBulkProgress] = useState<number | null>(null)
@@ -153,17 +154,17 @@ export function SshTargetDestructiveActions({
 
       <SshDestructiveActionDialog
         open={!!pendingRemove}
-        title={translate(
-          'auto.components.settings.SshTargetDestructiveActions.4808966c41',
-          'Remove SSH Target'
+        title={t(
+          'auto.components.settings.SshTargetDestructiveActions.916f480036',
+          'Remove SSH target'
         )}
-        description={translate(
+        description={t(
           'auto.components.settings.SshTargetDestructiveActions.3bb0cf0ee4',
           'This will remove the target and end any active remote terminals.'
         )}
         targetLabel={pendingRemove?.label}
-        actionLabel="Remove"
-        busyLabel="Removing"
+        actionLabel={t('auto.components.settings.SshTargetDestructiveActions.remove', 'Remove')}
+        busyLabel={t('auto.components.settings.SshTargetDestructiveActions.removing', 'Removing')}
         isBusy={pendingRemoveIsBusy}
         onOpenChange={(open) => {
           if (pendingRemoveIsBusy) {
@@ -182,18 +183,18 @@ export function SshTargetDestructiveActions({
         open={!!pendingBulk}
         title={
           bulkCount === 1
-            ? translate(
+            ? t(
                 'auto.components.settings.SshTargetDestructiveActions.bulkTitleSingular',
                 'Remove {{count}} SSH host?',
                 { count: bulkCount }
               )
-            : translate(
+            : t(
                 'auto.components.settings.SshTargetDestructiveActions.bulkTitlePlural',
                 'Remove {{count}} SSH hosts?',
                 { count: bulkCount }
               )
         }
-        description={translate(
+        description={t(
           'auto.components.settings.SshTargetDestructiveActions.bulkDescription',
           'Removed hosts disappear from host pickers in workspaces, automations and the sidebar. Your ~/.ssh/config is not changed, and later syncs won’t bring them back.'
         )}
@@ -202,23 +203,23 @@ export function SshTargetDestructiveActions({
           !pendingBulk || pendingBulk.connectedCount === 0
             ? undefined
             : pendingBulk.connectedCount === 1
-              ? translate(
+              ? t(
                   'auto.components.settings.SshTargetDestructiveActions.bulkConnectedSingular',
                   '{{count}} host is connected. Its remote terminals will be closed.',
                   { count: 1 }
                 )
-              : translate(
+              : t(
                   'auto.components.settings.SshTargetDestructiveActions.bulkConnectedPlural',
                   '{{count}} hosts are connected. Their remote terminals will be closed.',
                   { count: pendingBulk.connectedCount }
                 )
         }
-        actionLabel={translate(
+        actionLabel={t(
           'auto.components.settings.SshTargetDestructiveActions.bulkAction',
           'Remove {{count}}',
           { count: bulkCount }
         )}
-        busyLabel={translate(
+        busyLabel={t(
           'auto.components.settings.SshTargetDestructiveActions.bulkProgress',
           'Removing {{done}} of {{count}}…',
           { done: bulkProgress ?? 0, count: bulkCount }

@@ -2,7 +2,7 @@ import { readStreamedSessionDocument } from '../../transcripts/session-document-
 import { remoteSessionContentLines } from '../../transcripts/remote-session-content-lines'
 import { openTranscriptReadStream } from '../../../native-chat/wsl-transcript-fs-access'
 import { createInterface } from 'node:readline'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type {
   FileWithMtime,
   ResumableParseFinalizeOptions,
@@ -194,7 +194,8 @@ export async function parseGeminiSessionDocument(
       })
     },
     consume: (state, value) => consumeGeminiMessage(state, asRecord(value)),
-    signal
+    signal,
+    drain: () => messages?.drain?.() ?? Promise.resolve()
   })
   if (!parsed) {
     return null

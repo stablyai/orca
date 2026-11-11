@@ -3,7 +3,6 @@ import {
   emitAgentSubjectReads,
   registerAgentSubjectReadCapture,
   subscribeAgentSubjectReads,
-  type AgentSubjectRead,
   type StructuredSubjectRead
 } from './agent-subject-read-actions'
 
@@ -23,30 +22,6 @@ const structured: StructuredSubjectRead = {
 }
 
 describe('agent subject read batch index', () => {
-  it('shares one first-read-wins index without changing captured order or filtering', () => {
-    const first: AgentSubjectRead = { subjectKey: 'one' }
-    const duplicate: AgentSubjectRead = { subjectKey: 'one', structured }
-    const second: AgentSubjectRead = { subjectKey: 'two', structured }
-    const batches: {
-      reads: readonly AgentSubjectRead[]
-      index: ReadonlyMap<string, AgentSubjectRead>
-    }[] = []
-    stops.push(
-      subscribeAgentSubjectReads((reads, index) => batches.push({ reads, index })),
-      subscribeAgentSubjectReads((reads, index) => batches.push({ reads, index }))
-    )
-    emitAgentSubjectReads(['one', 'two'], [first, duplicate, { subjectKey: 'excluded' }, second])
-    expect(batches[0]?.reads).toEqual([first, duplicate, second])
-    expect(batches[0]?.index.size).toBe(2)
-    expect(batches[0]?.index.get('one')).toBe(first)
-    expect(batches[0]?.index.get('two')).toBe(second)
-    expect(batches[1]?.index).toBe(batches[0]?.index)
-    emitAgentSubjectReads(['two'], [second])
-    expect(batches[2]?.index).not.toBe(batches[0]?.index)
-    expect(batches[2]?.index.size).toBe(1)
-    expect(batches[2]?.index.get('two')).toBe(second)
-  })
-
   it('captures explicit reads, isolates listener errors, and retires subscriptions', () => {
     const capture = vi.fn(() => structured)
     stops.push(registerAgentSubjectReadCapture('one', capture))

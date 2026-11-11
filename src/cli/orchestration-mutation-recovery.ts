@@ -1,4 +1,4 @@
-import { quotePosixShellDoubleQuotedApostrophe } from '../shared/shell-argument-quoting'
+import { quotePosixShellDoubleQuotedApostrophe } from '../shared/shell/launch/shell-argument-quoting'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
 import {
   recoverableOrchestrationArgs,
@@ -7,7 +7,7 @@ import {
 import { quoteWindowsCmdArgument } from '@orca/process-host/windows-command-line'
 import { quotePowerShellNativeArgument } from '../shared/powershell-native-argument'
 import { resolveWindowsShellStartupFamily } from '../shared/windows-terminal-shell'
-import type { AgentStartupShell } from '../shared/tui-agent-startup-shell'
+import type { AgentStartupShell } from '../shared/agent-launch/startup/tui-agent-startup-shell'
 
 export function orchestrationMutationRecoveryError(
   error: unknown,
@@ -35,7 +35,16 @@ export function orchestrationMutationRecoveryError(
   // Without a dispatch id, query by request id to inspect the outcome before retrying a mutation.
   const queryCommand = dispatchId
     ? [executable, 'orchestration', 'worker-show', '--dispatch', dispatchId, '--json']
-    : [executable, 'orchestration', 'request-show', '--request', requestId, '--json']
+    : [
+        executable,
+        'orchestration',
+        'request-show',
+        '--request',
+        requestId,
+        // A command forwarded to a paired server keeps its receipt there.
+        ...(typeof data?.server === 'string' ? ['--on', data.server] : []),
+        '--json'
+      ]
   const recovery = {
     orchestrationRequestId: requestId,
     ...(dispatchId ? { dispatchId } : {}),

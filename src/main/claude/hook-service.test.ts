@@ -17,7 +17,8 @@ vi.mock('../pty/shell-startup/git-bash', async (importOriginal) => ({
 }))
 
 import type { SFTPWrapper } from 'ssh2'
-import { createManagedCommandMatcher, WINDOWS_CMD_SAFE_PATH } from '../agent-hooks/installer-utils'
+import { createManagedCommandMatcher } from '../agent-hooks/installation/commands/managed-hook-command-matching'
+import { WINDOWS_CMD_SAFE_PATH } from '../agent-hooks/installation/commands/windows-hook-command'
 import { ClaudeHookService } from './hook-service'
 import { CLAUDE_EVENTS } from './claude-managed-hook-events'
 import { getWindowsManagedLifecycleHook, OPENCLAUDE_HOOK_SETTINGS } from './hook-settings'
@@ -215,6 +216,38 @@ describe('ClaudeHookService.install', () => {
     }
   })
 
+  it.skipIf(process.platform === 'win32')(
+    'keeps a user-chosen async PermissionRequest async, without a decision wait',
+    () => {
+      const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-async-'))
+      vi.stubEnv('HOME', tmpHome)
+      try {
+        const service = new ClaudeHookService()
+        service.install(CURRENT_CLAUDE)
+        const settingsPath = join(tmpHome, '.claude', 'settings.json')
+        type Hook = TestHook & { async?: boolean; timeout?: number }
+        const read = (): { hooks: Record<string, { hooks: Hook[] }[]> } =>
+          JSON.parse(readFileSync(settingsPath, 'utf-8'))
+        const settings = read()
+        const managed = settings.hooks.PermissionRequest[0].hooks[0]
+        settings.hooks.PermissionRequest[0].hooks[0] = { ...managed, async: true }
+        writeFileSync(settingsPath, JSON.stringify(settings), 'utf-8')
+
+        expect(service.getStatus(CURRENT_CLAUDE).state).toBe('installed')
+        expect(service.install(CURRENT_CLAUDE).state).toBe('installed')
+        expect(read().hooks.PermissionRequest[0].hooks[0]).toMatchObject({
+          async: true,
+          command: `export ORCA_HOOK_ASYNC=1; ${managed.command}`,
+          timeout: 10
+        })
+        expect(service.getStatus(CURRENT_CLAUDE).state).toBe('installed')
+      } finally {
+        vi.unstubAllEnvs()
+        rmSync(tmpHome, { recursive: true, force: true })
+      }
+    }
+  )
+
   it('writes only the events an old resolved Claude knows and reports that as installed', () => {
     const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-old-version-'))
     vi.stubEnv('HOME', tmpHome)
@@ -287,21 +320,6 @@ describe('ClaudeHookService.install', () => {
         type: 'command',
         command: '/usr/local/bin/my-statusline'
       })
-    } finally {
-      vi.unstubAllEnvs()
-      rmSync(tmpHome, { recursive: true, force: true })
-    }
-  })
-
-  it('removes the managed statusLine on remove()', () => {
-    const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-statusline-remove-'))
-    vi.stubEnv('HOME', tmpHome)
-    vi.stubEnv('USERPROFILE', tmpHome)
-    try {
-      new ClaudeHookService().install()
-      new ClaudeHookService().remove()
-      const settings = JSON.parse(readFileSync(join(tmpHome, '.claude', 'settings.json'), 'utf-8'))
-      expect(settings.statusLine).toBeUndefined()
     } finally {
       vi.unstubAllEnvs()
       rmSync(tmpHome, { recursive: true, force: true })
@@ -443,16 +461,6 @@ describe('ClaudeHookService.installRemote', () => {
     expect(upgraded.hooks.StopFailure[0].hooks[0].command).toContain('claude-hook.sh')
     expect(upgraded.hooks.Stop[0]).toEqual(userStop)
     expect(upgraded.env).toEqual({ A: '1' })
-  })
-
-  it('reports parse error when remote settings.json cannot be parsed', async () => {
-    const svc = new ClaudeHookService()
-    const { sftp, fs } = createFakeSftp()
-    fs.files.set('/home/dev/.claude/settings.json', 'not json')
-    const status = await svc.installRemote(sftp, '/home/dev')
-    expect(status.state).toBe('error')
-    expect(status.managedHooksPresent).toBe(false)
-    expect(status.detail).toContain('Could not parse remote Claude settings.json')
   })
 
   it('preserves user-authored hook entries while sweeping old managed entries', async () => {

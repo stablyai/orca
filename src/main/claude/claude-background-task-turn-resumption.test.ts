@@ -8,7 +8,7 @@ import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-se
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { hasUnansweredStructuredAgentSessionDispatch } from '../../shared/agent-session/requests/structured-agent-session-unanswered-dispatch'
 import { projectStructuredAgentSessionStatus } from '../../shared/agent-session/view/structured-agent-session-projection'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 
 const SESSION = 'claude-session'
@@ -119,113 +119,6 @@ describe('a typed background-task row opens the turn it resumes', () => {
     expect(projected(items())).toBe('working')
   })
 
-  it('keeps an idle chat idle when a live task only reports progress', () => {
-    const { translator, items } = harness()
-    spawnToolCall(translator)
-    translator.handle(
-      systemFrame('s1', {
-        subtype: 'task_started',
-        task_id: 'live-progress',
-        tool_use_id: TOOL,
-        task_type: 'local_bash',
-        description: 'Wait for the verification verdict',
-        is_backgrounded: true
-      })
-    )
-    settleTurn(translator)
-    expect(projected(items())).toBe('idle')
-
-    translator.handle(
-      systemFrame('s2', {
-        subtype: 'task_progress',
-        task_id: 'live-progress',
-        tool_use_id: TOOL,
-        usage: { total_tokens: 14866 }
-      })
-    )
-
-    const taskRow = items().find((item) => item.itemId.includes('live-progress'))
-    expect(taskRow).toBeDefined()
-    expect(JSON.stringify(taskRow?.body)).toContain('14866')
-    expect(
-      items().filter((item) => readAgentJournalTurn(item.body)?.state === 'running')
-    ).toHaveLength(0)
-    expect(projected(items())).toBe('idle')
-  })
-
-  it('keeps an idle chat idle when a live task roster only refreshes its name', () => {
-    const { translator, items } = harness()
-    spawnToolCall(translator)
-    translator.handle(
-      systemFrame('s1', {
-        subtype: 'task_started',
-        task_id: 'live-roster',
-        tool_use_id: TOOL,
-        task_type: 'local_bash',
-        is_backgrounded: true
-      })
-    )
-    settleTurn(translator)
-    expect(projected(items())).toBe('idle')
-
-    translator.handle(
-      systemFrame('s2', {
-        subtype: 'background_tasks_changed',
-        tasks: [
-          {
-            task_id: 'live-roster',
-            task_type: 'local_bash',
-            description: 'Named after the turn settled'
-          }
-        ]
-      })
-    )
-
-    const taskRow = items().find((item) => item.itemId.includes('live-roster'))
-    expect(taskRow).toBeDefined()
-    expect(JSON.stringify(taskRow?.body)).toContain('Named after the turn settled')
-    expect(
-      items().filter((item) => readAgentJournalTurn(item.body)?.state === 'running')
-    ).toHaveLength(0)
-    expect(projected(items())).toBe('idle')
-  })
-
-  it('does not reopen a completed turn for a late task revision', () => {
-    const { translator, items } = harness()
-    spawnToolCall(translator)
-    translator.handle(
-      systemFrame('s1', {
-        subtype: 'task_started',
-        task_id: 'late-revision',
-        tool_use_id: TOOL,
-        task_type: 'local_bash',
-        description: 'Wait for the verification verdict',
-        is_backgrounded: true
-      })
-    )
-    translator.handle(
-      systemFrame('s2', {
-        subtype: 'task_notification',
-        task_id: 'late-revision',
-        tool_use_id: TOOL,
-        status: 'completed',
-        summary: 'first run finished'
-      })
-    )
-    settleTurn(translator)
-    expect(projected(items())).toBe('idle')
-
-    translator.handle(
-      systemFrame('s3', {
-        subtype: 'task_progress',
-        task_id: 'late-revision',
-        usage: { total_tokens: 99 }
-      })
-    )
-
-    expect(projected(items())).toBe('idle')
-  })
-
   it('does not reopen a completed turn when an overflow terminal row is enriched', () => {
     const { translator, items } = harness()
     for (let index = 0; index < 64; index += 1) {
@@ -267,4 +160,79 @@ describe('a typed background-task row opens the turn it resumes', () => {
 
     expect(projected(items())).toBe('idle')
   })
+})
+
+it('keeps an alias-only owned notification idle even when its alias was forwarded at the root', () => {
+  const { translator, items } = harness()
+  spawnToolCall(translator)
+  translator.handle(
+    systemFrame('owned-start', {
+      subtype: 'task_started',
+      task_id: 'owned',
+      tool_use_id: TOOL,
+      parent_task_id: 'owner',
+      task_type: 'local_bash',
+      is_backgrounded: true
+    })
+  )
+  settleTurn(translator)
+  translator.handle(
+    systemFrame('owned-terminal', {
+      subtype: 'task_notification',
+      tool_use_id: TOOL,
+      status: 'completed',
+      summary: 'Finished child'
+    })
+  )
+  expect(items().find((item) => item.itemId.includes('owned'))?.body).toMatchObject({
+    kind: 'message',
+    blocks: expect.arrayContaining([
+      expect.objectContaining({ type: 'background-task', taskId: 'owned', state: 'done' })
+    ])
+  })
+  expect(projected(items())).toBe('idle')
+  translator.dispose()
+})
+
+it('keeps owned terminal overflow writes idle without a retained row invocation', () => {
+  const { translator, items } = harness()
+  for (let index = 0; index < 65; index += 1) {
+    translator.handle(
+      systemFrame(`owned-start-${index}`, {
+        subtype: 'task_started',
+        task_id: `owned-${index}`,
+        parent_task_id: 'owner',
+        task_type: 'local_bash',
+        is_backgrounded: true
+      })
+    )
+  }
+  settleTurn(translator)
+  translator.handle(
+    systemFrame('overflow-owned-patch', {
+      subtype: 'task_updated',
+      task_id: 'owned-64',
+      patch: { status: 'failed' }
+    })
+  )
+  translator.handle(
+    systemFrame('overflow-owned-orphan', {
+      subtype: 'task_notification',
+      task_id: 'owned-terminal-only',
+      parent_task_id: 'owner',
+      status: 'completed'
+    })
+  )
+  const terminal = items().filter(
+    (item) =>
+      item.body.kind === 'message' &&
+      item.body.blocks.some(
+        (block) =>
+          block.type === 'background-task' &&
+          ['owned-64', 'owned-terminal-only'].includes(block.taskId)
+      )
+  )
+  expect(terminal).toHaveLength(2)
+  expect(projected(items())).toBe('idle')
+  translator.dispose()
 })

@@ -1,5 +1,5 @@
 import { isAgentSessionId } from './agent-session/lifecycle/agent-session-record'
-import { STRUCTURED_WORKER_HANDLE_PREFIX } from './structured-worker-handle'
+import { isTerminalHandle } from './terminal-handle-prefix'
 import { ORCA_SESSION_ADDRESS_PREFIX } from './orca-session-address-prefix'
 
 /** Orca-minted structured session identity (record id/ORCA_AGENT_SESSION_ID), never provider identity. Orchestration stores bare lineage-root ids after /clear,
@@ -15,11 +15,8 @@ export type OrcaSessionId = string & { readonly [orcaSessionIdBrand]: true }
 /** An `orca_session_id:<id>` mail address; only `formatOrcaSessionAddress` produces one. */
 export type OrcaSessionAddress = string & { readonly [orcaSessionAddressBrand]: true }
 
-// Terminal handles (term_/structworker_) share the charset but are never durable session ids.
-const TERMINAL_HANDLE_PREFIXES = ['term_', STRUCTURED_WORKER_HANDLE_PREFIX] as const
-
 export function isOrcaSessionId(id: string): id is OrcaSessionId {
-  return isAgentSessionId(id) && !TERMINAL_HANDLE_PREFIXES.some((prefix) => id.startsWith(prefix))
+  return isAgentSessionId(id) && !isTerminalHandle(id)
 }
 
 export function formatOrcaSessionAddress(orcaSessionId: OrcaSessionId): OrcaSessionAddress {

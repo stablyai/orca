@@ -1,10 +1,11 @@
-import { posixCurlCommand } from '../agent-hooks/hook-post-command'
+import { posixCurlCommand } from '../agent-hooks/installation/scripts/hook-post-command'
+import { buildHookProcessCapture } from '../agent-hooks/installation/scripts/hook-process-capture'
 import {
   buildPosixHookPayloadCapture,
   POSIX_HOOK_JSON_STDIN,
   buildPosixHookSpoolLines,
   buildWindowsHookEnvironmentGuardLines
-} from '../agent-hooks/hook-stdin-contract'
+} from '../agent-hooks/installation/scripts/hook-stdin-contract'
 import { ANTIGRAVITY_PRE_TOOL_USE_DECISION } from './hook-events'
 
 export function getManagedScript(
@@ -48,6 +49,7 @@ export function getManagedScript(
     'esac',
     // Events without stdin still need a status post.
     ...buildPosixHookPayloadCapture('empty-object', POSIX_HOOK_JSON_STDIN),
+    ...buildHookProcessCapture(),
     ...buildPosixHookSpoolLines('antigravity', 'ORCA_ANTIGRAVITY_EVENT'),
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
@@ -68,6 +70,8 @@ export function getManagedScript(
     '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
     '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
     '  --data-urlencode "hook_event_name=${ORCA_ANTIGRAVITY_EVENT}" \\',
+    '  --data-urlencode "agentProcess=${orca_agent_process}" \\',
+    '  --data-urlencode "tmuxPane=${orca_tmux_pane}" \\',
     '  --data-urlencode "payload@-" >/dev/null 2>&1 || spool_hook_event',
     'exit 0',
     ''

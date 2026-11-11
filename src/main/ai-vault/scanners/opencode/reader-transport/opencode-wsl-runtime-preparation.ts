@@ -7,7 +7,7 @@ import type { ServerTarget } from '../../../../../shared/node-runtime-pin'
 import { OPENCODE_SQLITE_READER_FILENAME } from '../../../../../shared/remote-bundle-artifacts'
 import { parseWslUncPath, toWindowsWslUncPath } from '../../../../../shared/wsl-paths'
 import { NODE_SQLITE_READER_API_SOURCE } from '../../../../sqlite/node-sqlite-reader-api'
-import { relayBundleCandidates } from '../../../../ssh/relay-bundle-paths'
+import { relayBundleCandidates } from '../../../../wsl/execution/relay-bundle-paths'
 import { materializeNodeRuntimeArchive } from '../../../../node-runtime/pinned-runtime-materializer'
 import { probeLinuxLibc } from '../../../../node-runtime/linux-libc-probe'
 import {
@@ -16,12 +16,12 @@ import {
   posixNodeRuntimeExecutable,
   probeRemoteNodeRuntimeCommand
 } from '../../../../managed-server/install/orcad-remote-node-runtime'
-import { REMOTE_NODE_RUNTIME_READY } from '../../../../ssh/orcad-remote-node-runtime-report'
-import { getRemoteHostPlatform } from '../../../../ssh/ssh-remote-platform'
+import { REMOTE_NODE_RUNTIME_READY } from '../../../../managed-server/install/orcad-remote-node-runtime-report'
+import { getRemoteHostPlatform } from '../../../../ssh/remote-host/ssh-remote-platform'
 import { runWslProcess, type WslSpec } from '../../../../wsl/execution/wsl-runner'
 import { describeWslProcessFailure } from '../../../../wsl/execution/wsl-process-failure'
 import { admitWslTranscriptPath } from '../../../../native-chat/wsl-transcript-running-admission'
-import { AI_VAULT_SCAN_ISSUE_COPY } from '../../../../../shared/ai-vault-scan-issue-copy'
+import { AI_VAULT_SCAN_ISSUE_COPY } from '../../../../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
 import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
 
 const preparation = new Map<string, { value: OpenCodeWslRuntime; expires: number }>()

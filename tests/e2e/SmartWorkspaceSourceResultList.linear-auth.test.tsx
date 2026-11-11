@@ -10,12 +10,12 @@ import {
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { credentialDecryptionMessage } from '../../src/shared/integration-credential-errors'
-import { getStatus } from '../../src/main/linear/client'
-import { searchIssues } from '../../src/main/linear/linear-issue-lookups'
-import { LINEAR_METHODS } from '../../src/main/runtime/rpc/methods/linear'
+import { getStatus } from '../../src/main/linear/accounts/linear-account-client'
+import { searchIssues } from '../../src/main/linear/issues/linear-issue-lookups'
+import { LINEAR_METHODS } from '../../src/main/runtime/rpc/methods/integrations/linear/linear'
 import { mapDispatcherError } from '../../src/main/runtime/rpc/dispatcher-error-response'
 import { successResponse } from '../../src/main/runtime/rpc/errors'
-import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-result'
+import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 import type { RpcContext } from '../../src/main/runtime/rpc/core'
 
 function installMainRpc(

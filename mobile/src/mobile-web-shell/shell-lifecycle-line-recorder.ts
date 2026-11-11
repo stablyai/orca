@@ -1,5 +1,5 @@
-import { connectionLogStore } from '../transport/persisted-connection-log-store'
-import type { ConnectionLogEntry } from '../transport/types'
+import { connectionLogStore } from '../diagnostics/connection/persisted-connection-log-store'
+import type { ConnectionLogEntry } from '../diagnostics/connection/connection-log-types'
 
 // Keep the shared 200-entry connection log sparse: healthy opens need only paint, with failures/stalls filling gaps. Exclude route paths, device directories and stacks.
 export type ShellLifecycleLine = Required<Pick<ConnectionLogEntry, 'level' | 'message' | 'code'>> &

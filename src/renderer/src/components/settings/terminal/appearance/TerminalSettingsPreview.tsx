@@ -1,21 +1,28 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
-import { LigaturesAddon } from '@xterm/addon-ligatures'
+import { TerminalLigaturesAddon } from '@/lib/pane-manager/terminal-rendering/terminal-ligatures-addon'
 import { Moon, Sun } from 'lucide-react'
 import '@xterm/xterm/css/xterm.css'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
-import { buildFontFamily } from '@/lib/monospace-font-family'
-import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-appearance'
-import { clampNumber, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
-import { resolveTerminalMinimumContrastRatio } from '../../../../../../shared/terminal-contrast-correction'
-import { resolveTerminalFontWeights } from '../../../../../../shared/terminal-fonts'
-import { resolveTerminalLigaturesEnabled } from '../../../../../../shared/terminal-ligatures'
-import { normalizeTerminalLineHeight } from '../../../../../../shared/terminal-line-height-settings'
+import { buildFontFamily } from '../../../../../../shared/monospace-font-family'
+import {
+  pluginFontFamilyWhenLoaded,
+  usePluginFontReady
+} from '@/store/plugins/appearance/plugin-fonts'
+import { composeActiveTerminalTheme } from '@/components/terminal-pane/appearance/terminal-appearance'
+import {
+  clampNumber,
+  resolveEffectiveTerminalAppearance
+} from '@/lib/terminal/appearance/terminal-theme'
+import { resolveTerminalMinimumContrastRatio } from '../../../../../../shared/terminal-themes/terminal-contrast-correction'
+import { resolveTerminalFontWeights } from '../../../../../../shared/terminal/appearance/terminal-fonts'
+import { resolveTerminalLigaturesEnabled } from '../../../../../../shared/terminal/appearance/terminal-ligatures'
+import { normalizeTerminalLineHeight } from '../../../../../../shared/terminal/appearance/terminal-line-height-settings'
 import { PREVIEW_BUFFER } from './terminal-preview-content'
-import { SettingsSwitch } from '../../form-controls/SettingsFormControls'
+import { Switch } from '@/components/ui/switch'
+import { useTranslate } from '@/i18n/use-translate'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import { translate } from '@/i18n/i18n'
 
 // Pin 36 columns for the 32-character sample plus margin; large fonts clip instead of wrapping.
 const PREVIEW_COLS = 36
@@ -58,13 +65,15 @@ export function TerminalSettingsPreview({
   modeOverride,
   showThemeToggle
 }: TerminalSettingsPreviewProps): React.JSX.Element {
+  const t = useTranslate()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const terminalRef = useRef<Terminal | null>(null)
-  const ligaturesAddonRef = useRef<LigaturesAddon | null>(null)
+  const ligaturesAddonRef = useRef<TerminalLigaturesAddon | null>(null)
   const skipInitialOptionMutationRef = useRef(false)
   const skipInitialThemeRewriteRef = useRef(false)
 
   const effectiveFontFamily = previewFontFamily || settings.terminalFontFamily
+  const fontReady = usePluginFontReady(effectiveFontFamily)
   const terminalLineHeight = normalizeTerminalLineHeight(settings.terminalLineHeight)
 
   // Seed from app theme once; preview toggles remain independent afterward.
@@ -127,7 +136,7 @@ export function TerminalSettingsPreview({
       cursorStyle: settings.terminalCursorStyle,
       cursorBlink: settings.terminalCursorBlink,
       fontSize: settings.terminalFontSize,
-      fontFamily: buildFontFamily(effectiveFontFamily),
+      fontFamily: buildFontFamily(pluginFontFamilyWhenLoaded(effectiveFontFamily)),
       fontWeight: weights.fontWeight,
       fontWeightBold: weights.fontWeightBold,
       lineHeight: terminalLineHeight,
@@ -173,7 +182,7 @@ export function TerminalSettingsPreview({
       settings.terminalFontWeightBold
     )
     terminal.options.fontSize = settings.terminalFontSize
-    terminal.options.fontFamily = buildFontFamily(effectiveFontFamily)
+    terminal.options.fontFamily = buildFontFamily(pluginFontFamilyWhenLoaded(effectiveFontFamily))
     terminal.options.fontWeight = weights.fontWeight
     terminal.options.fontWeightBold = weights.fontWeightBold
     terminal.options.lineHeight = terminalLineHeight
@@ -185,6 +194,7 @@ export function TerminalSettingsPreview({
     settings.terminalFontSize,
     settings.terminalFontWeightBold,
     effectiveFontFamily,
+    fontReady,
     settings.terminalFontWeight,
     terminalLineHeight,
     settings.terminalCursorStyle,
@@ -228,7 +238,7 @@ export function TerminalSettingsPreview({
     const enabled = resolveTerminalLigaturesEnabled(settings.terminalLigatures, effectiveFontFamily)
     const current = ligaturesAddonRef.current
     if (enabled && !current) {
-      const addon = new LigaturesAddon()
+      const addon = new TerminalLigaturesAddon()
       try {
         terminal.loadAddon(addon)
         ligaturesAddonRef.current = addon
@@ -258,15 +268,12 @@ export function TerminalSettingsPreview({
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
             <div className="flex items-center gap-2 rounded-md border border-border/50 bg-background/40 px-2 py-1">
               <span className="text-xs font-medium text-muted-foreground">
-                {translate(
-                  'auto.components.settings.TerminalSettingsPreview.50419052fe',
-                  'Pane divider'
-                )}
+                {t('auto.components.settings.TerminalSettingsPreview.50419052fe', 'Pane divider')}
               </span>
-              <SettingsSwitch
+              <Switch
                 checked={previewPaneDividerVisible}
-                onChange={() => setPreviewPaneDividerVisible((visible) => !visible)}
-                ariaLabel={translate(
+                onCheckedChange={() => setPreviewPaneDividerVisible((visible) => !visible)}
+                aria-label={t(
                   'auto.components.settings.TerminalSettingsPreview.f8931d407d',
                   'Show pane divider in preview'
                 )}
@@ -276,7 +283,7 @@ export function TerminalSettingsPreview({
               <div
                 className="flex gap-0.5 rounded-md border border-border/50 p-0.5"
                 role="group"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.settings.TerminalSettingsPreview.2c248fcc27',
                   'Preview theme'
                 )}
@@ -287,12 +294,12 @@ export function TerminalSettingsPreview({
                     type="button"
                     onClick={() => setTogglePreviewMode(mode)}
                     aria-pressed={togglePreviewMode === mode}
-                    aria-label={translate(
+                    aria-label={t(
                       'auto.components.settings.TerminalSettingsPreview.a63953a48a',
                       'Preview {{value0}} theme',
                       { value0: mode }
                     )}
-                    title={translate(
+                    title={t(
                       'auto.components.settings.TerminalSettingsPreview.a63953a48a',
                       'Preview {{value0}} theme',
                       { value0: mode }

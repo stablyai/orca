@@ -4,9 +4,9 @@ import type { AppState } from '@/store/types'
 import {
   listWslHostWindowsPathAccess,
   type WslHostWindowsPathAccess
-} from '@/lib/windows-path-access'
+} from '@/lib/files/os-open/windows-path-access'
 import { wslHostsAvailable } from './use-wsl-hosts-enabled'
-import { routeSidebarProjectDrop } from './sidebar-project-drop'
+import { routeSidebarProjectDrop } from './project-admission/drop/sidebar-project-drop'
 
 export type WslHostOfferGate = {
   /** WSL hosts can take new work here: Windows (or its e2e fake), gate open, server files shipped. */

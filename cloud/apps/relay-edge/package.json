@@ -1,0 +1,35 @@
+{
+  "name": "@orca-cloud/relay-edge",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --port 8787 --ip 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "spike": "tsx spike/run-all.ts",
+    "test": "vitest run",
+    "test:schema": "tsx test/apply-schema.ts",
+    "test:mvp": "tsx test/mvp.ts"
+  },
+  "dependencies": {
+    "@types/pg": "^8.23.1",
+    "jose": "^6.2.13",
+    "pg": "^8.23.1",
+    "tweetnacl": "^1.0.3",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261103.1",
+    "@types/node": "^24.19.2",
+    "@types/ws": "^8.18.2",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.5",
+    "wrangler": "^4.157.0",
+    "ws": "^8.22.0"
+  },
+  "allowScripts": {
+    "workerd@1.20261103.1": true,
+    "esbuild@0.28.2": true
+  }
+}

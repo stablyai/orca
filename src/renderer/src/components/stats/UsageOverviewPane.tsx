@@ -9,6 +9,7 @@ import { getRecentUsageDays } from './usage-overview-daily-series'
 import { buildUsageOverview, formatUsageCost, formatUsageTokens } from './usage-overview-model'
 import { DailyIntensityGrid, ProviderUsageRow, TokenMixBar } from './usage-overview-sections'
 import { getIntlLocale, translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 
 const RECENT_DAY_COUNT = 42
 
@@ -19,16 +20,22 @@ function formatPercent(value: number | null): string {
   return `${Math.round(value * 100)}%`
 }
 
-function formatUpdatedAt(timestamp: number | null): string {
+function formatUpdatedAt(
+  timestamp: number | null,
+  t: Translate = translate,
+  intlLocale: string = getIntlLocale()
+): string {
   if (!timestamp) {
-    return translate('auto.components.stats.usageFormatters.notScannedYet', 'Not scanned yet')
+    return t('auto.components.stats.usageFormatters.notScannedYet', 'Not scanned yet')
   }
-  return translate('auto.components.stats.usageFormatters.updatedAt', 'Updated {{time}}', {
-    time: new Date(timestamp).toLocaleString(getIntlLocale())
+  return t('auto.components.stats.usageFormatters.updatedAt', 'Updated {{time}}', {
+    time: new Date(timestamp).toLocaleString(intlLocale)
   })
 }
 
 export function UsageOverviewPane(): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const claudeScanState = useAppStore((state) => state.claudeUsageScanState)
   const claudeSummary = useAppStore((state) => state.claudeUsageSummary)
   const claudeDaily = useAppStore((state) => state.claudeUsageDaily)
@@ -122,12 +129,12 @@ export function UsageOverviewPane(): React.JSX.Element {
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-foreground">
-              {translate('auto.components.stats.UsageOverviewPane.c760c481c5', 'Usage Overview')}
+              {t('auto.components.stats.UsageOverviewPane.c760c481c5', 'Usage Overview')}
             </h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              {formatUpdatedAt(overview.lastUpdatedAt)}
+              {formatUpdatedAt(overview.lastUpdatedAt, t, intlLocale)}
               {overview.hasPartialCost
-                ? translate(
+                ? t(
                     'auto.components.stats.UsageOverviewPane.55c910f4f1',
                     '- some model prices are unavailable'
                   )
@@ -141,7 +148,7 @@ export function UsageOverviewPane(): React.JSX.Element {
                 size="icon-xs"
                 onClick={handleRefresh}
                 disabled={!overview.hasAnyEnabledProvider || isScanning}
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.stats.UsageOverviewPane.e06d1baf5c',
                   'Refresh usage overview'
                 )}
@@ -150,7 +157,7 @@ export function UsageOverviewPane(): React.JSX.Element {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {translate('auto.components.stats.UsageOverviewPane.ca6bc5fded', 'Refresh')}
+              {t('auto.components.stats.UsageOverviewPane.ca6bc5fded', 'Refresh')}
             </TooltipContent>
           </Tooltip>
         </div>
@@ -160,13 +167,10 @@ export function UsageOverviewPane(): React.JSX.Element {
             <div className="max-w-xl space-y-3">
               <div>
                 <h4 className="text-sm font-semibold text-foreground">
-                  {translate(
-                    'auto.components.stats.UsageOverviewPane.49405ccc8d',
-                    'Start tracking tokens'
-                  )}
+                  {t('auto.components.stats.UsageOverviewPane.49405ccc8d', 'Start tracking tokens')}
                 </h4>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.stats.UsageOverviewPane.6c00c46815',
                     'Enable a provider to scan local agent logs and build the combined token ledger.'
                   )}
@@ -180,7 +184,7 @@ export function UsageOverviewPane(): React.JSX.Element {
                     void enableClaudeUsage()
                   }}
                 >
-                  {translate('auto.components.stats.UsageOverviewPane.0ea0cae435', 'Enable Claude')}
+                  {t('auto.components.stats.UsageOverviewPane.0ea0cae435', 'Enable Claude')}
                 </Button>
                 <Button
                   variant="secondary"
@@ -190,7 +194,7 @@ export function UsageOverviewPane(): React.JSX.Element {
                     void enableCodexUsage()
                   }}
                 >
-                  {translate('auto.components.stats.UsageOverviewPane.2f1ee2878b', 'Enable Codex')}
+                  {t('auto.components.stats.UsageOverviewPane.2f1ee2878b', 'Enable Codex')}
                 </Button>
                 <Button
                   variant="outline"
@@ -200,10 +204,7 @@ export function UsageOverviewPane(): React.JSX.Element {
                     void enableOpenCodeUsage()
                   }}
                 >
-                  {translate(
-                    'auto.components.stats.UsageOverviewPane.2d13e57f72',
-                    'Enable OpenCode'
-                  )}
+                  {t('auto.components.stats.UsageOverviewPane.2d13e57f72', 'Enable OpenCode')}
                 </Button>
                 <Button
                   variant="outline"
@@ -213,7 +214,7 @@ export function UsageOverviewPane(): React.JSX.Element {
                     void enableMuseUsage()
                   }}
                 >
-                  {translate('auto.components.stats.UsageOverviewPane.enableMuse', 'Enable Muse')}
+                  {t('auto.components.stats.UsageOverviewPane.enableMuse', 'Enable Muse')}
                 </Button>
               </div>
             </div>
@@ -222,31 +223,22 @@ export function UsageOverviewPane(): React.JSX.Element {
           <>
             <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <StatCard
-                label={translate(
-                  'auto.components.stats.UsageOverviewPane.3887b94ce5',
-                  'Total tokens'
-                )}
-                value={formatUsageTokens(overview.totalTokens)}
+                label={t('auto.components.stats.UsageOverviewPane.3887b94ce5', 'Total tokens')}
+                value={formatUsageTokens(overview.totalTokens, intlLocale)}
                 icon={<Sparkles className="size-4" />}
               />
               <StatCard
-                label={translate('auto.components.stats.UsageOverviewPane.0eaf937335', 'Est. cost')}
+                label={t('auto.components.stats.UsageOverviewPane.0eaf937335', 'Est. cost')}
                 value={formatUsageCost(overview.estimatedCostUsd)}
                 icon={<Coins className="size-4" />}
               />
               <StatCard
-                label={translate(
-                  'auto.components.stats.UsageOverviewPane.327603fe8b',
-                  'Active days'
-                )}
-                value={overview.activeDays.toLocaleString(getIntlLocale())}
+                label={t('auto.components.stats.UsageOverviewPane.327603fe8b', 'Active days')}
+                value={overview.activeDays.toLocaleString(intlLocale)}
                 icon={<CalendarDays className="size-4" />}
               />
               <StatCard
-                label={translate(
-                  'auto.components.stats.UsageOverviewPane.70f36452d4',
-                  'Cache share'
-                )}
+                label={t('auto.components.stats.UsageOverviewPane.70f36452d4', 'Cache share')}
                 value={formatPercent(overview.cacheShare)}
                 icon={<DatabaseZap className="size-4" />}
               />
@@ -254,7 +246,7 @@ export function UsageOverviewPane(): React.JSX.Element {
 
             {!overview.hasAnyData ? (
               <div className="mt-4 rounded-lg border border-dashed border-border/60 bg-card/30 px-4 py-5 text-sm text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.stats.UsageOverviewPane.noLocalUsageYet',
                   'No local Claude, Codex, OpenCode, or Muse usage found yet. The overview will populate after the next agent session writes token logs.'
                 )}
@@ -273,10 +265,10 @@ export function UsageOverviewPane(): React.JSX.Element {
         <div className="flex items-center justify-between gap-3">
           <div>
             <h4 className="text-sm font-semibold text-foreground">
-              {translate('auto.components.stats.UsageOverviewPane.33f7b043d2', 'Providers')}
+              {t('auto.components.stats.UsageOverviewPane.33f7b043d2', 'Providers')}
             </h4>
             <p className="text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.stats.UsageOverviewPane.providersEnabledWithData',
                 '{{enabled}} enabled - {{withData}} with data',
                 { enabled: overview.enabledProviderCount, withData: overview.dataProviderCount }
@@ -285,15 +277,11 @@ export function UsageOverviewPane(): React.JSX.Element {
           </div>
           <Badge variant="outline" className="gap-1">
             <Activity className="size-3" />
-            {translate(
-              'auto.components.stats.UsageOverviewPane.sessionCount',
-              '{{formatted}} sessions',
-              {
-                count: overview.sessions,
-                formatted: overview.sessions.toLocaleString(getIntlLocale()),
-                defaultValue_one: '{{formatted}} session'
-              }
-            )}
+            {t('auto.components.stats.UsageOverviewPane.sessionCount', '{{formatted}} sessions', {
+              count: overview.sessions,
+              formatted: overview.sessions.toLocaleString(intlLocale),
+              defaultValue_one: '{{formatted}} session'
+            })}
           </Badge>
         </div>
         <div className="grid gap-3 xl:grid-cols-2">

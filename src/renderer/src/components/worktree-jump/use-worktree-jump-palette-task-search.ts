@@ -1,3 +1,4 @@
+import { useTranslate } from '@/i18n/use-translate'
 import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
 import { useEffect, useEffectEvent, useMemo, useState } from 'react'
 import { useAppStore } from '@/store/index'
@@ -13,7 +14,8 @@ import {
 import type { WorktreeJumpPaletteStoreState } from './use-worktree-jump-palette-store-state'
 import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-local-state'
 import type { WorktreeJumpPaletteFilter } from './use-worktree-jump-palette-filter'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import { translateHostDisplayLabel } from '../sidebar/execution-host-label'
 const TASK_SEARCH_DEBOUNCE_MS = 600
 
 type Input = Pick<WorktreeJumpPaletteStoreState, 'visible' | 'repos' | 'settings'> &
@@ -24,7 +26,7 @@ type SearchSnapshot = {
   session: object
   results: CmdJTaskSearchResult[]
   loading: boolean
-  failures: string[]
+  failures: { provider: string; hostId: ExecutionHostId; hostLabel: string }[]
 }
 const EMPTY_RESULTS: CmdJTaskSearchResult[] = []
 const EMPTY_FAILURES: string[] = []
@@ -39,6 +41,7 @@ export function useWorktreeJumpPaletteTaskSearch({
   filterModel,
   defaultHostId
 }: Input) {
+  const t = useTranslate()
   const connectionScope = useAppStore(
     useShallow((state) => ({
       jira: state.jiraConnectionRevisions,
@@ -49,8 +52,8 @@ export function useWorktreeJumpPaletteTaskSearch({
   const [snapshot, setSnapshot] = useState<SearchSnapshot | null>(null)
   const [retryNonce, setRetryNonce] = useState(0)
   const hostLabels = useMemo(
-    () => new Map(hostOptions.map((host) => [host.id, host.label])),
-    [hostOptions]
+    () => new Map(hostOptions.map((host) => [host.id, translateHostDisplayLabel(host, t)])),
+    [hostOptions, t]
   )
   const session = useMemo(() => ({ visible }), [visible])
   const effectiveFilter = {
@@ -96,7 +99,7 @@ export function useWorktreeJumpPaletteTaskSearch({
     }
     const controller = new AbortController()
     const resultsByRequest = new Map<string, CmdJTaskSearchResult[]>()
-    const failures: string[] = []
+    const failures: SearchSnapshot['failures'] = []
     const requests = buildRequests(controller.signal)
     let loadingVisible = false
     let pending = requests.length
@@ -131,7 +134,11 @@ export function useWorktreeJumpPaletteTaskSearch({
           resultsByRequest.set(request.id, results)
         } catch {
           if (!controller.signal.aborted) {
-            failures.push(`${request.provider} · ${request.hostLabel}`)
+            failures.push({
+              provider: request.provider,
+              hostId: request.hostId,
+              hostLabel: request.hostLabel
+            })
           }
         } finally {
           pending -= 1
@@ -177,14 +184,30 @@ export function useWorktreeJumpPaletteTaskSearch({
               raw.hostLabel
             )
           : raw
-      return [{ id: result.id, type: 'task' as const, result }]
+      return [
+        {
+          id: result.id,
+          type: 'task' as const,
+          result: {
+            ...result,
+            hostLabel: hostLabels.get(result.sourceContext.hostId) ?? result.hostLabel
+          }
+        }
+      ]
     })
-  }, [current?.results, projected])
+  }, [current?.results, projected, hostLabels])
+  const taskSearchFailures = useMemo(
+    () =>
+      current?.failures.map(
+        ({ provider, hostId, hostLabel }) => `${provider} · ${hostLabels.get(hostId) ?? hostLabel}`
+      ) ?? EMPTY_FAILURES,
+    [current?.failures, hostLabels]
+  )
   const retryTaskSearch = (): void => setRetryNonce((value) => value + 1)
   return {
     taskItems,
     taskSearchLoading: current?.loading ?? false,
-    taskSearchFailures: current?.failures ?? EMPTY_FAILURES,
+    taskSearchFailures,
     retryTaskSearch
   }
 }

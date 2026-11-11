@@ -8,7 +8,7 @@ import type {
   GhAccountBindingValidationResult,
   GhAuthDiagnostic
 } from '../../shared/github/auth-types'
-import type { TaskSourceContext } from '../../shared/task-source-context'
+import type { TaskSourceContext } from '../../shared/work-items/task-source-context'
 import type {
   GetProjectViewTableResult,
   GitHubProjectCommentMutationResult,
@@ -94,8 +94,9 @@ export const ghMutationsAndProjectsApi = {
     sourceContext?: TaskSourceContext | null
     number: number
     updates: unknown
-  }): Promise<{ ok: true } | { ok: false; error: string }> =>
-    ipcRenderer.invoke('gh:updateIssue', args),
+  }): Promise<
+    { ok: true; bodyImageUrls?: Record<string, string> } | { ok: false; error: string }
+  > => ipcRenderer.invoke('gh:updateIssue', args),
   addIssueComment: (args: {
     repoPath: string
     repoId?: string | null

@@ -1,20 +1,21 @@
 import {
   ORCA_SCRUB_SAFE_PANE_ENV,
   ORCA_SCRUB_SAFE_LAUNCH_ENV
-} from '../../../shared/agent-hook-scrub-safe-env'
+} from '../../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
 import {
   ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV,
   ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV,
   ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV,
   ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV
-} from '../../../shared/orchestration-compatibility-evidence'
+} from '../../../shared/orchestration/orchestration-compatibility-evidence'
 import {
   SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
-} from '../../../shared/setup-agent-sequencing'
+} from '../../../shared/agent-launch/startup/setup-agent-sequencing'
+import { SETUP_RUNNER_PATH_ENV_KEYS } from '../../workspace-hooks/setup-hook-env-vars'
 import { getShellReadyWrapperRoot } from '../../providers/local-pty/local-pty-shell-ready-wrapper-root'
-import { ORCA_IMAGE_PROTOCOL_ENV } from '../../../shared/terminal-image-protocol'
+import { ORCA_IMAGE_PROTOCOL_ENV } from '../../../shared/terminal/images/terminal-image-protocol'
 import {
   REMOTE_VIEWER_CLIPBOARD_ENV,
   CODEX_REMOTE_VIEWER_SSH_CONNECTION
@@ -59,11 +60,12 @@ function applyWslenvPassthrough(
 function worktreeSetupWslenvEntries(env: Record<string, string | undefined>): string[] {
   return [
     // Hooks need raw host paths translated (/p) and already-Linux paths unchanged (/u) (#9206).
-    ...['ORCA_ROOT_PATH', 'ORCA_WORKTREE_PATH', 'CONDUCTOR_ROOT_PATH', 'GHOSTX_ROOT_PATH'].map(
+    ...SETUP_RUNNER_PATH_ENV_KEYS.map(
       (name) => `${name}/${env[name]?.startsWith('/') ? 'u' : 'p'}`
     ),
-    // A display name, never a path.
-    'ORCA_WORKSPACE_NAME/u'
+    // Display names, never paths.
+    'ORCA_WORKSPACE_NAME/u',
+    'CONDUCTOR_WORKSPACE_NAME/u'
   ]
 }
 

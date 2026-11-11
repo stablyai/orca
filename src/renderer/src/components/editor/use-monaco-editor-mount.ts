@@ -1,15 +1,15 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import type { OnMount } from '@monaco-editor/react'
 import { useAppStore } from '@/store'
-import { registerFileSearchSelectedTextProvider } from '@/lib/file-search-selection'
+import { registerFileSearchSelectedTextProvider } from '@/lib/files/search/file-search-selection'
 import { syncContentOnMount } from './monaco-content-sync'
-import { toEditorModelUri } from './editor-model-uri'
+import { toEditorModelUri } from './model-lifetime/identity/editor-model-uri'
 import {
   beginProgrammaticContentSync,
   endProgrammaticContentSync
 } from './monaco-programmatic-sync'
-import { createMarkdownDocLinkDecorationController } from './monaco-markdown-doc-link-decorations'
-import { ensureMarkdownDocCompletionProvider } from './monaco-markdown-doc-completions'
+import { createMarkdownDocLinkDecorationController } from './markdown-source-tools/monaco/monaco-markdown-doc-link-decorations'
+import { ensureMarkdownDocCompletionProvider } from './markdown-source-tools/monaco/monaco-markdown-doc-completions'
 import { clampMonacoAutoHeight } from './monaco-auto-height'
 import { installMonacoE2EProbe } from './monaco-e2e-probe'
 import { matchesPendingEditorFocusRequest } from './pending-editor-focus-request'
@@ -24,7 +24,7 @@ import {
   mayPushTabTextIntoModel,
   requestStaleCacheReload,
   settleStaleCacheReload
-} from './editor-stale-mount-guard'
+} from './model-lifetime/buffer-text/editor-stale-mount-guard'
 
 function ignoreCursorLine(): void {}
 

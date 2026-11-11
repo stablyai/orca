@@ -1,8 +1,9 @@
+import { GIT_READ_TIMEOUT_MS } from '../../../shared/git/commands/git-command-timeout'
 import type {
   LocalBaseRefRefreshResult,
   LocalBaseRefUpdateSuggestion
 } from '../../../shared/worktree/base-ref-drift-types'
-import { readGitCommandFailureText } from '../../../shared/git-command-failure-text'
+import { readGitCommandFailureText } from '../../../shared/git/commands/git-command-failure-text'
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import type { WorktreeCheckoutProgressListener } from './creation/worktree-checkout-progress'
@@ -24,6 +25,8 @@ export type GitWorktreeExecOptions = {
   includeCreatePreparations?: boolean
   admissionTier?: GitAdmissionTier
   spawnOnWorkerThread?: boolean
+  canStart?: () => boolean
+  observeChildTermination?: (terminated: Promise<void>, writes: boolean) => void
 }
 
 export type WorktreeRemovalPreflightOptions = GitWorktreeExecOptions & {
@@ -61,6 +64,18 @@ export const WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS = 30_000
 // A wedged shared scan would otherwise stall every later listing.
 export const WORKTREE_LIST_TIMEOUT_MS = 30_000
 
+export const WORKTREE_CREATE_PREPARATION_TTL_MS = 5 * 60_000
+
+export function preparationWorkBudget(options: GitWorktreeExecOptions, refresh: boolean): number {
+  const checkout = resolveWorktreeAddTimeoutMs()
+  const read = options.timeout ?? GIT_READ_TIMEOUT_MS
+  // Include old-Git registration and direct-WSL read fallbacks, each with its own child budget.
+  return (
+    WORKTREE_CREATE_PREPARATION_TTL_MS +
+    (refresh ? 9 * (options.timeout ?? checkout) : 6 * read + 7 * checkout)
+  )
+}
+
 /** Clamp ORCA_WORKTREE_ADD_TIMEOUT_MS; warn for nonblank rejected/clamped values, not fractional truncation. */
 export function resolveWorktreeAddTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
   const raw = env.ORCA_WORKTREE_ADD_TIMEOUT_MS?.trim()
@@ -96,6 +111,8 @@ export type GitExecOptionsForWorktree = {
   timeout?: number
   admissionTier?: GitAdmissionTier
   spawnOnWorkerThread?: boolean
+  canStart?: () => boolean
+  observeChildTermination?: (terminated: Promise<void>, writes: boolean) => void
 }
 
 export function gitExecOptions(
@@ -108,7 +125,11 @@ export function gitExecOptions(
     ...(options.signal ? { signal: options.signal } : {}),
     ...(options.timeout ? { timeout: options.timeout } : {}),
     ...(options.admissionTier ? { admissionTier: options.admissionTier } : {}),
-    ...(options.spawnOnWorkerThread ? { spawnOnWorkerThread: true } : {})
+    ...(options.spawnOnWorkerThread ? { spawnOnWorkerThread: true } : {}),
+    ...(options.canStart ? { canStart: options.canStart } : {}),
+    ...(options.observeChildTermination
+      ? { observeChildTermination: options.observeChildTermination }
+      : {})
   }
 }
 

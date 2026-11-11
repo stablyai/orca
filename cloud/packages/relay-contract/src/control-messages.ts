@@ -51,6 +51,20 @@ export const RELAY_ASSIGNMENT_LEASE_HEADER = 'x-orca-relay-assignment-lease'
 // Advertise before sending pendingConns details: legacy strict parsers would reject the entire ack.
 export const RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS = 'pending-conn-details'
 export const RELAY_HOST_CAPABILITY_IDLE_REGIONAL_REHOME = 'idle-regional-rehome-v1'
+// The host can send the keepalive below. A relay that supports it says so with a keepalive-offer
+// after the hello-ack; only then does the host send it. Relays that never offer keep pinging.
+export const RELAY_HOST_CAPABILITY_CLIENT_KEEPALIVE = 'client-keepalive-v1'
+// Exact frames: the edge answers the request without waking the host's object, so they never vary.
+export const RELAY_CLIENT_KEEPALIVE_FRAME = '{"type":"keepalive"}'
+export const RELAY_CLIENT_KEEPALIVE_ACK_FRAME = '{"type":"keepalive-ack"}'
+
+export const KeepaliveOfferSchema = z
+  .object({
+    type: z.literal('keepalive-offer'),
+    v: z.literal(1),
+    intervalMs: z.number().int().min(1_000).max(60_000)
+  })
+  .strict()
 
 export function parseRelayHostCapabilities(
   header: string | string[] | undefined

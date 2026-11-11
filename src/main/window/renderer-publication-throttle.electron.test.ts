@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { build } from 'vite'
-import { resolveElectronProbeLaunch } from '../browser/electron-probe-display-launch'
+import { resolveElectronProbeLaunch } from '../browser/electron-fixtures/electron-probe-display-launch'
 
 describe('publication lease release during Electron guest destruction', () => {
   it('closes streamed guests without terminating the host', async () => {

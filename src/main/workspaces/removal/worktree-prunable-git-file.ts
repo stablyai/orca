@@ -1,7 +1,11 @@
-import { isENOENT } from '../../ipc/filesystem/filesystem-path-containment'
+import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
-import type { LocalWorktreeFilesystemOptions } from './local-worktree-filesystem'
-import { getLocalWorktreePathAccess, toLocalWorktreeRuntimePath } from './local-worktree-filesystem'
+
+import {
+  type LocalWorktreeFilesystemOptions,
+  getLocalWorktreePathAccess,
+  toLocalWorktreeRuntimePath
+} from './local-worktree-filesystem'
 
 /** Malformed .git paths must never resolve cleanup to a parent checkout. */
 export async function isPrunableGitFileWorktree(

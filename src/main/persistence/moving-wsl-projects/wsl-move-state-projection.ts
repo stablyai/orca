@@ -1,9 +1,9 @@
 // Compare stores independently of mover export so omitted rows remain visible after host/path normalization.
-import { getAutomationRunRepoId } from '../../../shared/automation-run-identity'
+import { getAutomationRunRepoId } from '../../../shared/automations/history/automation-run-identity'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   normalizeWorkspaceSessionKeyToWorkspaceId,
   parseWorkspaceKey
@@ -13,7 +13,7 @@ import {
   isWorktreeHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import { getAllWorktreeMetaForHost } from '../loading-store/worktree-identity-metadata'
+import { getAllWorktreeMetaForHost } from '../loading-store/worktree-metadata/worktree-identity-metadata'
 import { collectProjectGroups } from '../migrating-orcad-catalog/orcad-source-catalog'
 import {
   canonicalizeWslMoveValue,
@@ -53,6 +53,7 @@ export type WslMoveProjectionInput = {
     | 'worktreeIdentityAliases'
     | 'worktreeLineageById'
     | 'workspaceLineageByChildKey'
+    | 'crossStoreLineageByChildKey'
     | 'automations'
     | 'automationRuns'
   >
@@ -82,6 +83,7 @@ export const WSL_MOVE_PROJECTED_STATE_FIELDS = [
   'worktreeMetaByIdentity',
   'worktreeLineageById',
   'workspaceLineageByChildKey',
+  'crossStoreLineageByChildKey',
   'automations',
   'automationRuns'
 ] as const satisfies readonly (keyof PersistedState)[]
@@ -183,6 +185,7 @@ export function projectWslMoveState(
     ),
     worktreeLineageById: pickKeys(state.worktreeLineageById, ownerInScope),
     workspaceLineageByChildKey: pickKeys(state.workspaceLineageByChildKey, ownerInScope),
+    crossStoreLineageByChildKey: pickKeys(state.crossStoreLineageByChildKey ?? {}, ownerInScope),
     automations: byId(withoutKeys(automations, HOST_BINDINGS.automations).map(withoutSetupId)),
     automationRuns: byId(
       state.automationRuns.filter((run) => automationIds.has(run.automationId)).map(withoutSetupId)

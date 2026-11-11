@@ -102,6 +102,14 @@ export type AgentSessionLease = {
   deathEvidence: AgentSessionDeathEvidence | null
 }
 
+export type AgentSessionForkedFrom = {
+  sessionId: string
+  /** The source response whose turn the fork copied through. */
+  itemId: string
+  /** Where the inherited history ends in this chat's own journal. */
+  childBoundary: { kind: 'item'; itemId: string } | { kind: 'start' }
+}
+
 export type AgentSessionRecord = {
   schemaVersion: typeof AGENT_SESSION_RECORD_SCHEMA_VERSION
   sessionId: string
@@ -134,6 +142,8 @@ export type AgentSessionRecord = {
   /** Latest turn edge for lists that must not open conversation history. */
   lastTurn?: AgentSessionLastTurn
   launchArgs?: AgentSessionLaunchArgs
+  /** The chat this one was forked from; the marker after its inherited history derives from it. */
+  forkedFrom?: AgentSessionForkedFrom
   lease: AgentSessionLease
   createdAt: number
   updatedAt: number

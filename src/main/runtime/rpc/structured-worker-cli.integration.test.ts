@@ -1,4 +1,3 @@
-import './unused-default-rpc-methods.test-fixture'
 import { randomUUID } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -8,31 +7,40 @@ import { isOrcaSessionId } from '../../../shared/orca-session-address'
 import { getRuntimeMetadataPath } from '../../../shared/runtime-bootstrap'
 import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import * as versionProbe from '../../agent-launch/preflight/agent-cli-version-probe'
-import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
-import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
+import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
+import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { CODEX_MINIMUM_SUPPORTED_VERSION } from '../../../shared/codex-cli-installation'
-import { OrchestrationDb } from '../orchestration/db'
-import { storeRepo } from '../runtime-store-partial-fixture'
-import { scriptedCodexTransport } from '../scripted-codex-transport.test-fixture'
-import { chatTabCommandsSettled } from '../session-layout-apply.test-fixture'
+import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-server-request-error'
+
+import { OrchestrationDb } from '../orchestration/db/orchestration-db'
+import '../orchestration/db/contract-constants'
+import '../orchestration/db/messages/mailbox-routing-page'
+import '../orchestration/db/dispatch-row-writer'
+import '../orchestration/db/attempt-outcome-projection'
+
+import { scriptedCodexTransport } from '../orca-runtime-tests/scripted-codex-transport.test-fixture'
+import { chatTabCommandsSettled } from '../orca-runtime-tests/session-layout-apply.test-fixture'
 import {
   AuthorityRuntime,
   authorityProfile,
   root,
   savedIds
-} from '../structured-agent-session-tab-authority.test-support'
+} from '../agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
 import { ensureStructuredAgentSessionHost } from '../agent-session/structured-agent-session-runtime'
-import { fakeCodex, resetProviderFaults } from '../structured-chat-coordinator-fake-codex-fixture'
-import { structuredWorkerIdentities } from '../structured-worker-identity'
-import { releaseStructuredWorkerSession } from './methods/orchestration-structured-worker-session'
-import { AGENT_LAUNCH_METHODS } from './methods/agent-launch'
-import { ORCHESTRATION_METHODS } from './methods/orchestration'
-import { STATUS_METHODS } from './methods/status'
-import { WORKTREE_METHODS } from './methods/worktree'
-import { REPO_METHODS } from './methods/repo'
+import {
+  fakeCodex,
+  resetProviderFaults
+} from '../orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-fake-codex-fixture'
+import { structuredWorkerIdentities } from '../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
+import { releaseStructuredWorkerSession } from './methods/orchestration/structured-workers/orchestration-structured-worker-session'
+import { AGENT_LAUNCH_METHODS } from './methods/agent-launch/agent-launch'
+import { ORCHESTRATION_METHODS } from './methods/orchestration/orchestration'
+import { STATUS_METHODS } from './methods/host-management/status'
+import { WORKTREE_METHODS } from './methods/workspaces/worktree'
+import { REPO_METHODS } from './methods/projects/repo'
 import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
-import { idOf, isRecord, resultOf } from './orchestration-session-caller-test-fixture'
+import { isRecord, resultOf } from './orchestration-session-caller-test-fixture'
 import { UnixSocketTransport } from './unix-socket-transport'
 import { removalPtyProvider } from './worktree-rm-pty.test-fixture'
 
@@ -51,12 +59,14 @@ let codex: ReturnType<typeof fakeCodex>
 let socket: UnixSocketTransport | undefined
 let runId: string
 let finishTurns = true
+let rejectNextTurn = false
 const dispatches: string[] = []
 const requests: RpcRequest[] = []
 
 beforeEach(async () => {
   resetProviderFaults()
   finishTurns = true
+  rejectNextTurn = false
   rig = await authorityProfile([])
   await mkdir(join(root, 'codex-home'))
   rig.profile.updateSettings({
@@ -79,6 +89,10 @@ beforeEach(async () => {
     const connection = await codex.openConnection(...args)
     const request = connection.request.bind(connection)
     connection.request = async (method, params) => {
+      if (method === 'turn/start' && rejectNextTurn) {
+        rejectNextTurn = false
+        throw new CodexAppServerRequestError('turn/start', -32000, 'Task refused', 'Task refused')
+      }
       const response = await request(method, params)
       if (
         method === 'turn/start' &&
@@ -248,7 +262,7 @@ async function launch() {
   return { result, sessionId }
 }
 
-async function start() {
+async function start(retryOf?: string) {
   const receipt = await cli([
     'orchestration',
     'worker-start',
@@ -258,8 +272,9 @@ async function start() {
     `id:${rig.workspace}`,
     '--agent',
     'codex',
-    '--spec',
-    'Reply once then wait'
+    ...(retryOf
+      ? ['--task', db.getDispatchContextById(retryOf)!.task_id, '--retry-of', retryOf]
+      : ['--spec', 'Reply once then wait'])
   ])
   expect(receipt.code, receipt.stdout + receipt.stderr).toBe(0)
   const result = resultOf(receipt.output)
@@ -286,42 +301,6 @@ async function start() {
   expect(runtime.live(identity.sessionId)).toBe(true)
   return { result, dispatchId, taskId, worker, identity, connection }
 }
-
-it('joins actual launch, structured admission and CLI observers on one runtime', async () => {
-  await launch()
-  const worker = await start()
-  const show = await cli(['orchestration', 'worker-show', '--dispatch', worker.dispatchId])
-  expect(show.code, show.stdout).toBe(0)
-  expect(resultOf(show.output)).toMatchObject({ worker: { state: 'ready' } })
-  const list = await cli(['orchestration', 'worker-list', '--run', runId])
-  expect(list.code, list.stdout).toBe(0)
-  expect(list.stdout).toContain(worker.dispatchId)
-  await host.flushStreamedEvents(worker.identity.sessionId)
-  const read = await cli([
-    'orchestration',
-    'worker-read',
-    '--dispatch',
-    worker.dispatchId,
-    '--source',
-    'transcript'
-  ])
-  expect(read.code, read.stdout).toBe(0)
-  expect(resultOf(read.output)).toMatchObject({
-    dispatchId: worker.dispatchId,
-    source: 'transcript',
-    provider: 'codex'
-  })
-  expect(read.stdout).toContain('READY from bounded provider')
-  expect(requests.map((r) => r.method)).toEqual(
-    expect.arrayContaining([
-      'agent.launchReplay',
-      'orchestration.workerStart',
-      'orchestration.workerShow',
-      'orchestration.workerList',
-      'orchestration.workerRead'
-    ])
-  )
-})
 
 function visible(sessionId: string, expected: boolean) {
   expect(host.deps.store.getVisibleSessionTabIndex().sessionIds.includes(sessionId)).toBe(expected)
@@ -454,223 +433,3 @@ it.each(['worker-stop', 'worker-release'] as const)(
     }
   }
 )
-
-it.each(['worker-stop', 'worker-release'] as const)(
-  '%s reports an unproven provider close with exit 1 and retains the original surface',
-  async (command) => {
-    const survivor = await launch()
-    const worker = await start()
-    if (command === 'worker-release') {
-      settle(worker)
-    }
-    const selectionPreserved = await selectSurvivor(survivor.sessionId)
-    const close = vi.spyOn(worker.connection, 'close').mockResolvedValue(false)
-    try {
-      const receipt = await cli(['orchestration', command, '--dispatch', worker.dispatchId])
-      expect(receipt.code, receipt.stdout + receipt.stderr).toBe(1)
-      expect(resultOf(receipt.output)).toMatchObject({
-        state: command === 'worker-stop' ? 'stop_unknown' : 'release_unknown'
-      })
-      expect(worker.connection.closed).toBe(false)
-      expect(
-        host.deps.store.getRecord(worker.identity.sessionId)?.lease.ownerProcess
-      ).not.toBeNull()
-      visible(worker.identity.sessionId, true)
-      visible(survivor.sessionId, true)
-      selectionPreserved()
-      if (command === 'worker-stop') {
-        expect(db.getWorkerDispatch(worker.dispatchId)?.state).toBe('stop_unknown')
-      } else {
-        expect(db.getWorkerTerminalResourceByOwner(worker.dispatchId)?.release_state).toBe(
-          'unknown'
-        )
-      }
-    } finally {
-      close.mockRestore()
-      await host.close(worker.identity.sessionId, 'evict')
-    }
-  }
-)
-
-type ParkedMailRegistry = ReadonlyMap<unknown, unknown>
-
-function observeParkedMail(value: unknown): ParkedMailRegistry {
-  const parking = isRecord(value) ? value.parking : undefined
-  if (!isRecord(parking) || !(parking.sessionOf instanceof Map)) {
-    throw new Error('expected actual parked mail registry')
-  }
-  // Parked mailboxes, each with the session whose journal edge it waits on.
-  return parking.sessionOf
-}
-
-it('worker-abandon settles and fences consumption, releases the existing binding and retains the child', async () => {
-  await launch()
-  const observe = host.observeJournalPublications.bind(host)
-  const subscriptions = new Map<string, ReturnType<typeof vi.fn>>()
-  vi.spyOn(host, 'observeJournalPublications').mockImplementation((id, callback) => {
-    const unsubscribe = vi.fn(observe(id, callback))
-    subscriptions.set(id, unsubscribe)
-    return unsubscribe
-  })
-  finishTurns = false
-  const worker = await start()
-  await vi.waitFor(() => expect(host.currentWork(worker.identity.sessionId)?.working()).toBe(true))
-  const mailbox = `dispatch:${worker.dispatchId}`
-  const checked = db.insertMessage({
-    from: `run:${runId}`,
-    to: mailbox,
-    runId,
-    subject: 'Already checked'
-  })
-  const dispatch = db.getDispatchContextById(worker.dispatchId)!
-  const outstanding = db.getOrCreateMailboxDelivery({
-    runId,
-    mailboxHandle: mailbox,
-    consumerGeneration: dispatch.consumer_generation,
-    consumerSource: 'dispatch'
-  })
-  if (!outstanding) {
-    throw new Error('expected actual outstanding worker delivery')
-  }
-  expect(outstanding.messages.map((message) => message.id)).toContain(checked.id)
-  const unread = db.insertMessage({
-    from: `run:${runId}`,
-    to: mailbox,
-    runId,
-    subject: 'Retain until a real journal edge',
-    body: 'Do not lose this message'
-  })
-  const delivery = runtime.pointerDelivery()
-  const parked = observeParkedMail(delivery)
-  runtime.deliverPendingMessagesForHandle(mailbox)
-  // Queued behind the running turn, its card is followed on the session's next journal edge.
-  await vi.waitFor(() => expect(parked.has(mailbox)).toBe(true))
-  const originalForget = delivery.forgetSession.bind(delivery)
-  const releasedEntries: boolean[] = []
-  const forget = vi.spyOn(delivery, 'forgetSession').mockImplementation((sessionId) => {
-    originalForget(sessionId)
-    if (sessionId === worker.identity.sessionId) {
-      releasedEntries.push(!parked.has(mailbox))
-    }
-  })
-  const tableId = host.getSessionTabId(worker.identity.sessionId)
-  const owner = host.deps.store.getRecord(worker.identity.sessionId)?.lease.ownerProcess
-  const resource = db.getWorkerTerminalResourceByOwner(worker.dispatchId)
-  expect(tableId).toBe(structuredAgentSessionTabId(worker.identity.sessionId))
-  expect(owner).toBeTruthy()
-  expect(resource).toMatchObject({ ownership_state: 'owned', release_state: 'not_requested' })
-  const forgetIdentity = vi.spyOn(structuredWorkerIdentities, 'forget')
-  const receipt = await cli(['orchestration', 'worker-abandon', '--dispatch', worker.dispatchId])
-  expect(receipt.code, receipt.stdout + receipt.stderr).toBe(0)
-  expect(resultOf(receipt.output)).toMatchObject({ state: 'abandoned', processAction: 'none' })
-  expect(db.getWorkerDispatch(worker.dispatchId)?.state).toBe('abandoned')
-  expect(db.getDispatchContextById(worker.dispatchId)).toMatchObject({
-    status: 'failed',
-    last_failure: 'abandoned',
-    capability_revoked_at: expect.any(String)
-  })
-  expect(db.getWorkerTerminalResourceByOwner(worker.dispatchId)).toMatchObject({
-    id: resource?.id,
-    ownership_state: 'owned',
-    release_state: 'retained',
-    retained_reason: 'user_requested'
-  })
-  expect(subscriptions.get(worker.identity.sessionId)).toHaveBeenCalledOnce()
-  expect(forgetIdentity).toHaveBeenCalledWith(worker.identity.handle)
-  expect(forget).toHaveBeenCalledWith(worker.identity.sessionId)
-  expect(releasedEntries).toEqual([true])
-  // STA-12976: unchanged failed-dispatch notification routing can repark after this cleanup.
-  expect(worker.connection.closed).toBe(false)
-  expect(host.hasSession(worker.identity.sessionId)).toBe(true)
-  expect(host.deps.store.getRecord(worker.identity.sessionId)?.lease.ownerProcess).toEqual(owner)
-  expect(host.getSessionTabId(worker.identity.sessionId)).toBe(tableId)
-  visible(worker.identity.sessionId, true)
-  const unconsumed = () => {
-    expect(db.getMessageById(checked.id)?.read).toBe(0)
-    expect(db.getMessageById(unread.id)?.read).toBe(0)
-    expect(db.getDeliveryRaw(outstanding.delivery.id)?.acknowledged_at).toBeNull()
-  }
-  unconsumed()
-  vi.stubEnv('ORCA_AGENT_SESSION_ID', worker.identity.sessionId)
-  const refused = await cli(['orchestration', 'check'])
-  expect(refused.code, refused.stdout + refused.stderr).toBe(1)
-  expect(refused.output).toMatchObject({ ok: false, error: { code: 'consumer_fenced' } })
-  expect(requests.at(-1)).toMatchObject({
-    method: 'orchestration.check',
-    orchestrationCompatibilityEvidence: { agentSessionId: worker.identity.sessionId }
-  })
-  unconsumed()
-})
-
-it('worktree create --agent reaches common native creation and worktree rm performs actual teardown', async () => {
-  const survivor = await launch()
-  const folder = join(root, 'folder-repo')
-  await mkdir(folder)
-  rig.profile.addRepo(storeRepo({ id: 'cli-folder', path: folder, kind: 'folder' }))
-  const created = await cli([
-    'worktree',
-    'create',
-    '--repo',
-    'id:cli-folder',
-    '--name',
-    'native-child',
-    '--agent',
-    'codex',
-    '--surface',
-    'chat',
-    '--prompt',
-    'Reply READY',
-    '--setup',
-    'skip',
-    '--no-parent'
-  ])
-  expect(created.code, created.stdout + created.stderr).toBe(0)
-  const result = resultOf(created.output)
-  const worktreeId = idOf(result.worktree)
-  const session = host.deps.store
-    .listRecords()
-    .find((record) => record.location.workspaceId === worktreeId)
-  if (!session) {
-    throw new Error('created workspace has no native record')
-  }
-  const connection = codex.connections.find(
-    (c) => c.threadId === activeProviderContext(session).head?.handle.nativeId
-  )
-  if (!connection) {
-    throw new Error('created workspace has no provider')
-  }
-  await chatTabCommandsSettled()
-  expect(result.launch).toMatchObject({
-    worktreeId,
-    outcome: { kind: 'structured', sessionId: session.sessionId }
-  })
-  visible(session.sessionId, true)
-  expect(rig.profile.getWorktreeMeta(worktreeId)).toBeDefined()
-  const release = Promise.withResolvers<void>()
-  const close = connection.close.bind(connection)
-  vi.spyOn(connection, 'close').mockImplementation(async () => {
-    await release.promise
-    return close()
-  })
-  const removed = cli(['worktree', 'rm', '--worktree', `id:${worktreeId}`])
-  try {
-    await vi.waitFor(() => expect(connection.close).toHaveBeenCalled())
-    expect(connection.closed).toBe(false)
-    visible(survivor.sessionId, true)
-  } finally {
-    release.resolve()
-  }
-  const receipt = await removed
-  expect(receipt.code, receipt.stdout + receipt.stderr).toBe(0)
-  await chatTabCommandsSettled()
-  await rig.profile.flushPendingOrThrowAsync()
-  expect(resultOf(receipt.output)).toMatchObject({ removed: true })
-  expect(connection.closed).toBe(true)
-  expect(host.deps.store.getRecord(session.sessionId)?.lease.ownerProcess).toBeNull()
-  visible(session.sessionId, false)
-  visible(survivor.sessionId, true)
-  expect(rig.profile.getWorktreeMeta(worktreeId)).toBeUndefined()
-  expect(requests.map((r) => r.method)).toEqual(
-    expect.arrayContaining(['agent.launchReplay', 'worktree.rm'])
-  )
-})

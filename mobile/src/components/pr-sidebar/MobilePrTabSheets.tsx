@@ -14,9 +14,17 @@ import { ConfirmModal } from '../ConfirmModal'
 import { presentPrMerge } from './pr-actions-state'
 import { PrCreateSheet } from './PrCreateSheet'
 import { PrReviewersSheet } from './PrReviewersSheet'
-import { livePrDetails, readyPrData, type MobilePrTab, type PrTabSheet } from './use-mobile-pr-tab'
+import {
+  livePrDetails,
+  readyPrData,
+  type MobilePrTab,
+  type PrTabSheetRequest
+} from './use-mobile-pr-tab'
 import { prSheetStyles as sheetStyles } from './pr-tab-styles'
 import { FieldTextInput } from '../composer-input/FieldTextInput'
+import { draftTextHash, workspaceDraftRowKey } from '../../drafts/durable-draft-rows'
+import { useDurableDraftField } from '../../drafts/durable-draft-fields'
+import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-host'
 
 // Sheets for the PR tab's decisions; one Modal swaps between them so iOS never stacks presentations.
 export function MobilePrTabSheets({ tab }: { tab: MobilePrTab }) {
@@ -25,23 +33,28 @@ export function MobilePrTabSheets({ tab }: { tab: MobilePrTab }) {
   return (
     <>
       <KeyedBottomDrawer
-        sheet={tab.sheet}
-        sheetKey={(sheet: PrTabSheet) => sheet}
+        sheet={tab.sheetRequest}
+        // Each opened request is its own presentation, so a PR switch never refreshes one sheet into another PR's.
+        sheetKey={(request: PrTabSheetRequest) => `${request.kind}\u0000${request.id}`}
         onClose={tab.closeSheet}
         onAfterClose={tab.onSheetAfterClose}
         dismissible={!tab.creatingPr}
         dragContentToDismiss={false}
       >
-        {(sheet) => {
-          switch (sheet) {
+        {(request) => {
+          // An outgoing request whose PR departed renders nothing; it never sees the new PR's actions.
+          if (!tab.sheetInScope(request)) {
+            return null
+          }
+          switch (request.kind) {
             case 'merge':
-              return <PrMergeSheet tab={tab} />
+              return <PrMergeSheet tab={tab} request={request} />
             case 'reviewers':
-              return <PrReviewersSheet tab={tab} />
+              return <PrReviewersSheet tab={tab} request={request} />
             case 'editTitle':
-              return <PrEditTextSheet tab={tab} field="title" />
+              return <PrEditTextSheet tab={tab} request={request} field="title" />
             case 'editDescription':
-              return <PrEditTextSheet tab={tab} field="body" />
+              return <PrEditTextSheet tab={tab} request={request} field="body" />
             case 'createPr':
               return <PrCreateSheet tab={tab} />
           }
@@ -79,7 +92,7 @@ function mergeMethodCopy(
 }
 
 // Lists only the methods the repo allows, starting on its default; mobile used to merge with the default only.
-function PrMergeSheet({ tab }: { tab: MobilePrTab }) {
+function PrMergeSheet({ tab, request }: { tab: MobilePrTab; request: PrTabSheetRequest }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const data = readyPrData(tab)
@@ -95,9 +108,13 @@ function PrMergeSheet({ tab }: { tab: MobilePrTab }) {
   const merge = presentPrMerge({ ...pr, state: tab.actions.resolveState(pr.state) }, method)
   const busy = tab.actions.isBusy({ kind: 'merge' })
   const run = async () => {
+    // A click from an outgoing presentation sends nothing.
+    if (!tab.ownsSheet(request)) {
+      return
+    }
     setSubmitted(true)
     if (await tab.actions.merge(method)) {
-      tab.closeSheetIf('merge')
+      tab.closeSheetIf(request)
     }
   }
   return (
@@ -143,18 +160,60 @@ function PrMergeSheet({ tab }: { tab: MobilePrTab }) {
   )
 }
 
-function PrEditTextSheet({ tab, field }: { tab: MobilePrTab; field: 'title' | 'body' }) {
+function PrEditTextSheet({
+  tab,
+  request,
+  field
+}: {
+  tab: MobilePrTab
+  request: PrTabSheetRequest
+  field: 'title' | 'body'
+}) {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const executionHost = useWorkspaceExecutionHost()
   const data = readyPrData(tab)
   const details = livePrDetails(data?.details ?? null)
   const current =
     field === 'title' ? (details?.item.title ?? data?.pr.title ?? '') : (details?.body ?? '')
-  const [draft, setDraft] = useState(current)
+  const resource = request.scope.resource
+  // An unsaved edit waits through Cancel and the app being killed, with the PR text it was typed against.
+  const keptKey = resource
+    ? workspaceDraftRowKey(
+        'prEdit',
+        { hostId: tab.hostId, executionHost, worktreeId: tab.worktreeId },
+        `${resource}:${field}`
+      )
+    : null
+  const [keptAgainst, setKeptAgainst] = useDurableDraftField(keptKey, 'against')
+  const [keptText, setKeptText] = useDurableDraftField(keptKey, 'text')
+  // An edit typed against text the PR still has comes back; once the PR text changes it would revert someone's edit.
+  const [base] = useState(current)
+  // A fingerprint, never empty, so an emptied PR description still marks an edit (an empty field is no field).
+  const [against] = useState(() => draftTextHash(base))
+  const draft = keptAgainst === against ? keptText : base
+  const setDraft = (text: string) => {
+    const edited = text !== base
+    setKeptText(edited ? text : '')
+    setKeptAgainst(edited ? against : '')
+  }
   const { textAction } = tab
   const save = async () => {
-    if (await textAction.save(field, draft, current)) {
-      tab.closeSheetIf(field === 'title' ? 'editTitle' : 'editDescription')
+    if (!tab.ownsSheet(request)) {
+      return
+    }
+    const sent = draft
+    if (await textAction.save(field, sent, current)) {
+      // Only the saved edit; one typed since in a reopened sheet stays.
+      let saved = false
+      setKeptText((text) => {
+        saved = text === sent
+        return saved ? '' : text
+      })
+      if (saved) {
+        setKeptAgainst('')
+      }
+      tab.closeSheetIf(request)
     }
   }
   const cancel = () => {
@@ -235,14 +294,7 @@ function PrTabConfirm({ tab, t }: { tab: MobilePrTab; t: Translate }) {
       message={copy.message}
       confirmLabel={copy.confirmLabel}
       destructive={tab.confirm === 'close'}
-      onConfirm={() => {
-        if (tab.confirm === 'unlink') {
-          void tab.unlink()
-        } else if (tab.confirm) {
-          tab.actions.updateState(tab.confirm === 'close' ? 'closed' : 'open')
-        }
-        tab.setConfirm(null)
-      }}
+      onConfirm={tab.runConfirm}
       onCancel={() => tab.setConfirm(null)}
     />
   )

@@ -1,5 +1,8 @@
-import { AgentHookStartup, listenForAgentHooks } from '../../../shared/agent-hook-startup'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import {
+  AgentHookStartup,
+  listenForAgentHooks
+} from '../../../shared/agent-hook-listener/transport/agent-hook-startup'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { randomUUID } from 'node:crypto'
 
@@ -11,20 +14,14 @@ import { mergeAgentHookRequestHeaders } from '../../../shared/agent-hook-listene
 import { readRequestBody } from '../../../shared/agent-hook-listener/request-body'
 import { resolveHookSource } from '../../../shared/agent-hook-listener/source-routing'
 import { HOOK_REQUEST_SLOWLORIS_MS } from '../../../shared/agent-hook-listener/listener-limits'
-import { isHookRequestTruncatedError } from '../../../shared/agent-hook-transport-interference'
+import { isHookRequestTruncatedError } from '../../../shared/agent-hook-listener/transport/agent-hook-transport-interference'
 import { clearAllListenerCaches } from '../../../shared/agent-hook-listener/listener-state'
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import { AgentHookServerStatusHookLifecycle } from './server-status-hook-lifecycle'
-import { OPENCODE_STARTUP_PROMPT_CLAIM_PATH } from '../../../shared/opencode-startup-prompt'
+import { OPENCODE_STARTUP_PROMPT_CLAIM_PATH } from '../../../shared/agent-launch/startup/opencode-startup-prompt'
 import { CLAUDE_AGENT_VIEW_PATH } from '../../../shared/claude-agent-view'
-import { respondAfterAgentToolPluginHooks } from '../agent-tool-plugin-hooks'
 
-type HookServerStartOptions = {
-  env?: string
-  userDataPath?: string
-  endpointNamespace?: string
-  statusHooksEnabled?: boolean
-}
+import type { HookServerStartOptions } from './server-types'
 
 export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHookLifecycle {
   private readonly startup = new AgentHookStartup()
@@ -132,7 +129,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           return
         }
         const hookBody = mergeAgentHookRequestHeaders(body, req.headers)
-        trackEmptyPaneKeyHook(hookBody)
+        trackEmptyPaneKeyHook(hookBody, this.attributionDiagnostics)
         const aliasedBody = this.normalizeHookBodyPaneKeyAlias(hookBody)
         if (await this.ingestTmuxHook(source, aliasedBody)) {
           res.writeHead(204)
@@ -146,6 +143,9 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           return
         }
         const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
+        if (source === 'muse' && !normalized.event) {
+          this.rearmIgnoredMuseHook(aliasedBody)
+        }
         const statusDisposition = normalized.event
           ? this.getAgentStatusDisposition(normalized.event.paneKey, {
               source,
@@ -187,8 +187,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
             this.scheduleTranscriptPoll(source, aliasedBody, enriched)
           }
         }
-        // Plugins see only calls status accepted, so a fenced or reused pane's old agent is skipped.
-        await respondAfterAgentToolPluginHooks(res, source, aliasedBody, req.headers, toolCallOwner)
+        await this.respondToHook(req, res, source, aliasedBody, toolCallOwner)
       } catch (error) {
         if (pathname === OPENCODE_STARTUP_PROMPT_CLAIM_PATH) {
           if (isHookRequestTruncatedError(error) && !destroyedBySlowlorisCap) {
@@ -250,6 +249,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
   stop(options?: { keepStatus?: boolean }): void {
     this.startup.stop()
     this.claudeAgentViews.clear()
+    this.claudePermissionHooks.drain()
     // Terminal status may still have a pending write while hook ingress is disabled.
     if (this.statusHooksEnabled || this.statusPersistTimer) {
       this.flushStatusPersistSync()

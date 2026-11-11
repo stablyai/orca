@@ -8,6 +8,7 @@ import { colors, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { scaledType } from './mobile-native-chat-message-styles'
+import { MobileNativeChatQuestionText } from './MobileNativeChatQuestionText'
 
 const ICON_SIZE = 15
 
@@ -30,37 +31,66 @@ export function MobileNativeChatAwaitingInputRow({
     subject?.kind === 'questions' ? subject.questions.length : undefined
   )
   const label = !pending ? copy.asked : subject === null ? copy.awaitingUnnamed : copy.awaiting
-  const text =
-    subject === null ? null : subject.kind === 'question' ? subject.text : copy.questionCount
+  // The count stays in the label; questions are agent text, so they draw below it as chat markdown.
+  const count = subject?.kind === 'questions' ? copy.questionCount : null
   const type = scaledType(typography.bodySize, fontScale)
-  const questions = subject?.kind === 'questions' && listsQuestions ? subject.questions : null
+  const question = subject?.kind === 'question' ? subject.text : null
+  const questions =
+    subject?.kind === 'questions' && listsQuestions ? keyedQuestions(subject.questions) : null
+  const indent = { paddingLeft: ICON_SIZE * fontScale + spacing.sm }
   return (
     <>
-      <View style={styles.row} accessibilityLiveRegion={pending ? 'polite' : undefined}>
-        <MessageSquareMore
-          size={ICON_SIZE * fontScale}
-          color={colors.textMuted}
-          strokeWidth={2}
-          style={{ marginTop: 3 * fontScale }}
-        />
-        <Text selectable={INLINE_TEXT_SELECTION} style={[styles.label, type]}>
-          {label}
-          {text === null ? null : <Text style={[styles.question, type]}> {text}</Text>}
-        </Text>
+      {/* The question shares the label's live region, so a pending ask is announced whole. */}
+      <View accessibilityLiveRegion={pending ? 'polite' : undefined}>
+        <View style={styles.row}>
+          <MessageSquareMore
+            size={ICON_SIZE * fontScale}
+            color={colors.textMuted}
+            strokeWidth={2}
+            style={{ marginTop: 3 * fontScale }}
+          />
+          <Text selectable={INLINE_TEXT_SELECTION} style={[styles.label, type]}>
+            {label}
+            {count === null ? null : <Text style={[styles.question, type]}> {count}</Text>}
+          </Text>
+        </View>
+        {question === null ? null : (
+          <MobileNativeChatQuestionText
+            content={question}
+            fontSize={type.fontSize}
+            rangeSelectable
+            style={indent}
+          />
+        )}
       </View>
       {questions === null ? null : (
-        <View style={{ paddingLeft: ICON_SIZE * fontScale + spacing.sm }}>
-          {questions.map((question, index) => (
-            <Text
-              key={index}
-              selectable={INLINE_TEXT_SELECTION}
-              style={[styles.question, type]}
-            >{`${index + 1}. ${question}`}</Text>
+        <View style={indent}>
+          {/* Numbers stay outside the agent's text so its own markdown cannot restyle them. */}
+          {questions.map(({ key, entry }, index) => (
+            <View key={key} style={styles.entry}>
+              <Text style={[styles.question, type]}>{`${index + 1}.`}</Text>
+              <MobileNativeChatQuestionText
+                content={entry}
+                fontSize={type.fontSize}
+                rangeSelectable
+                style={styles.entryText}
+              />
+            </View>
           ))}
         </View>
       )}
     </>
   )
+}
+
+// Agents may repeat a question, so its text alone is not a unique key.
+function keyedQuestions(questions: readonly string[]): { key: string; entry: string }[] {
+  const seen = new Map<string, number>()
+  return questions.map((entry) => {
+    const occurrence = seen.get(entry) ?? 0
+    seen.set(entry, occurrence + 1)
+    return { key: `${occurrence}:${entry}`, entry }
+  })
 }
 
 const styles = themedStyleSheet(() => ({
@@ -76,5 +106,12 @@ const styles = themedStyleSheet(() => ({
   },
   question: {
     color: colors.textPrimary
+  },
+  entry: {
+    flexDirection: 'row',
+    gap: spacing.xs
+  },
+  entryText: {
+    flex: 1
   }
 }))

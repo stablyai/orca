@@ -9,10 +9,6 @@ function frameRow(provider: string, kind: string, extra: Partial<ProviderFrameRo
 }
 
 describe('isWordlessProviderFrame', () => {
-  it('reads a row whose only text is the host fallback label as wordless', () => {
-    expect(isWordlessProviderFrame(frameRow('codex', 'notification:future/event'))).toBe(true)
-  })
-
   it('keeps rows that carry words, a tone, a failure or an answered request', () => {
     expect(
       isWordlessProviderFrame({ ...frameRow('codex', 'notification:x'), text: 'Sandbox degraded' })

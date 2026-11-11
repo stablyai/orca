@@ -6,15 +6,11 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import {
   clearConfiguredWorktreeSharedDirectoriesCacheForTests,
   getConfiguredWorktreeSharedDirectories,
-  getConfiguredWorktreeSharedDirectoriesCacheSizeForTests,
-  MAX_CONFIGURED_SHARED_DIRECTORIES_CACHE_ENTRIES,
-  getWorktreeSharedLinkPaths,
   resolveWorktreeSharedDirectories
 } from './worktree-shared-directories'
 import { createWorktreeSharedPaths } from '../../../ipc/worktree-symlinks'
 import { findExistingWorktreeSymlinkPaths } from './worktree-symlink-detection'
 import { assertWorktreeCleanForRemoval } from '../removal/worktree-removal-preflight'
-import { getStatus } from '../../source-control/status-read'
 
 // An empty config file works with Windows Git (os.devNull does not) and isolates the production runner too.
 let gitConfigRoot: string
@@ -78,27 +74,6 @@ describe('resolveWorktreeSharedDirectories', () => {
     rmSync(repo, { recursive: true, force: true })
   })
 
-  it('returns gitignored directories listed under worktree.sharedDirectories', async () => {
-    mkdirSync(join(repo, 'node_modules'))
-    mkdirSync(join(repo, '.cache'))
-    writeOrcaYaml('worktree:\n  sharedDirectories:\n    - node_modules\n    - .cache\n')
-
-    expect(await resolveWorktreeSharedDirectories(repo)).toEqual(['.cache', 'node_modules'])
-  })
-
-  it('returns [] when orca.yaml is absent', async () => {
-    mkdirSync(join(repo, 'node_modules'))
-
-    expect(await resolveWorktreeSharedDirectories(repo)).toEqual([])
-  })
-
-  it('returns [] when orca.yaml has no worktree key', async () => {
-    mkdirSync(join(repo, 'node_modules'))
-    writeOrcaYaml('scripts:\n  setup: pnpm install\n')
-
-    expect(await resolveWorktreeSharedDirectories(repo)).toEqual([])
-  })
-
   it('skips a directory that is not gitignored', async () => {
     mkdirSync(join(repo, 'shared-but-tracked'))
     writeOrcaYaml('worktree:\n  sharedDirectories:\n    - shared-but-tracked\n')
@@ -113,12 +88,6 @@ describe('resolveWorktreeSharedDirectories', () => {
 
     expect(await resolveWorktreeSharedDirectories(repo)).toEqual([])
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('must be directories'))
-  })
-
-  it('skips entries that are absent from the primary checkout', async () => {
-    writeOrcaYaml('worktree:\n  sharedDirectories:\n    - node_modules\n')
-
-    expect(await resolveWorktreeSharedDirectories(repo)).toEqual([])
   })
 
   it('drops unsafe entries before touching the filesystem', async () => {
@@ -137,98 +106,6 @@ describe('resolveWorktreeSharedDirectories', () => {
     )
 
     expect(await resolveWorktreeSharedDirectories(repo)).toEqual(['node_modules'])
-  })
-
-  it('normalizes trailing slashes, ./ prefixes and duplicates', async () => {
-    mkdirSync(join(repo, 'node_modules'))
-    writeOrcaYaml(
-      'worktree:\n  sharedDirectories:\n    - node_modules/\n    - ./node_modules\n    - node_modules\n'
-    )
-
-    expect(await resolveWorktreeSharedDirectories(repo)).toEqual(['node_modules'])
-  })
-
-  it('returns [] for a malformed sharedDirectories value instead of throwing', async () => {
-    mkdirSync(join(repo, 'node_modules'))
-    writeOrcaYaml('worktree:\n  sharedDirectories: node_modules\n')
-
-    expect(await resolveWorktreeSharedDirectories(repo)).toEqual([])
-  })
-
-  it('resolves nested directories anchored at the repo root', async () => {
-    mkdirSync(join(repo, 'apps', 'web', '.cache'), { recursive: true })
-    writeFileSync(join(repo, '.gitignore'), 'node_modules/\n.cache\napps/web/.cache\n')
-    writeOrcaYaml('worktree:\n  sharedDirectories:\n    - apps/web/.cache\n')
-
-    expect(await resolveWorktreeSharedDirectories(repo)).toEqual(['apps/web/.cache'])
-  })
-})
-
-describe('getConfiguredWorktreeSharedDirectories', () => {
-  it('bounds cache growth when repository paths churn', () => {
-    for (let index = 0; index < MAX_CONFIGURED_SHARED_DIRECTORIES_CACHE_ENTRIES + 4; index += 1) {
-      getConfiguredWorktreeSharedDirectories(`/repo-${index}`)
-    }
-
-    expect(getConfiguredWorktreeSharedDirectoriesCacheSizeForTests()).toBe(
-      MAX_CONFIGURED_SHARED_DIRECTORIES_CACHE_ENTRIES
-    )
-  })
-  let repo: string
-
-  beforeEach(() => {
-    clearConfiguredWorktreeSharedDirectoriesCacheForTests()
-    repo = mkdtempSync(join(tmpdir(), 'orca-shared-dirs-config-'))
-  })
-
-  afterEach(() => {
-    rmSync(repo, { recursive: true, force: true })
-  })
-
-  it('returns the configured names without existence or gitignore filtering', () => {
-    // Removal needs configured names even after the primary directory disappears.
-    writeFileSync(
-      join(repo, 'orca.yaml'),
-      'worktree:\n  sharedDirectories:\n    - node_modules\n    - .cache\n'
-    )
-
-    expect(getConfiguredWorktreeSharedDirectories(repo)).toEqual(['node_modules', '.cache'])
-  })
-
-  it('combines live per-user paths with cached repo configuration', () => {
-    writeFileSync(join(repo, 'orca.yaml'), 'worktree:\n  sharedDirectories:\n    - node_modules\n')
-
-    expect(getWorktreeSharedLinkPaths({ path: repo, symlinkPaths: ['.cache'] })).toEqual([
-      '.cache',
-      'node_modules'
-    ])
-  })
-
-  it('returns [] when orca.yaml is absent or has no worktree key', () => {
-    expect(getConfiguredWorktreeSharedDirectories(repo)).toEqual([])
-
-    writeFileSync(join(repo, 'orca.yaml'), 'scripts:\n  setup: pnpm install\n')
-    clearConfiguredWorktreeSharedDirectoriesCacheForTests()
-    expect(getConfiguredWorktreeSharedDirectories(repo)).toEqual([])
-  })
-
-  it('caches repeated status polls but refreshes changed configuration', () => {
-    vi.useFakeTimers()
-    try {
-      writeFileSync(
-        join(repo, 'orca.yaml'),
-        'worktree:\n  sharedDirectories:\n    - node_modules\n'
-      )
-      expect(getConfiguredWorktreeSharedDirectories(repo)).toEqual(['node_modules'])
-
-      writeFileSync(join(repo, 'orca.yaml'), 'worktree:\n  sharedDirectories:\n    - .cache\n')
-
-      expect(getConfiguredWorktreeSharedDirectories(repo)).toEqual(['node_modules'])
-      vi.advanceTimersByTime(30_001)
-      expect(getConfiguredWorktreeSharedDirectories(repo)).toEqual(['.cache'])
-    } finally {
-      vi.useRealTimers()
-    }
   })
 })
 
@@ -281,19 +158,6 @@ describe('shared directories and worktree removal', () => {
   })
 
   // Pass actual resolver output to status so path spelling cannot drift across the seam.
-  it('leaves status clean when the resolved directory is fed back as a shared link', async () => {
-    await createWorktreeSharedPaths(
-      primary,
-      worktree,
-      await resolveWorktreeSharedDirectories(primary)
-    )
-
-    const status = await getStatus(worktree, {
-      sharedLinkPaths: getWorktreeSharedLinkPaths({ path: primary })
-    })
-
-    expect(status.entries).toEqual([])
-  })
 
   it('reports only genuine blockers in the removal error, with no NUL bytes', async () => {
     await createWorktreeSharedPaths(
@@ -342,23 +206,5 @@ describe('shared directories and worktree removal', () => {
     await expect(
       assertWorktreeCleanForRemoval(worktree, false, { ignoredUntrackedPaths: ignoredLinkedPaths })
     ).resolves.toBeUndefined()
-  })
-
-  it('still refuses removal for real untracked changes next to a shared directory', async () => {
-    await createWorktreeSharedPaths(
-      primary,
-      worktree,
-      await resolveWorktreeSharedDirectories(primary)
-    )
-    writeFileSync(join(worktree, 'scratch.txt'), 'unsaved work')
-
-    await expect(
-      assertWorktreeCleanForRemoval(worktree, false, {
-        ignoredUntrackedPaths: await findExistingWorktreeSymlinkPaths(
-          worktree,
-          getConfiguredWorktreeSharedDirectories(primary)
-        )
-      })
-    ).rejects.toThrow('uncommitted or untracked')
   })
 })

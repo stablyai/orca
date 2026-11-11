@@ -2,15 +2,15 @@
 
 import { isAgentSessionHandleProvider } from './agent-session/lifecycle/agent-session-provider-handle'
 import { parseExecutionHostId } from './execution-host'
-import type { ProjectExecutionRuntimeResolution } from './project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from './execution-host/project-execution-runtime'
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from './agent-session/agent-session-runtime-capabilities'
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from './agent-session/structured-agent-session-surface-capabilities'
 import type { AgentDefaultSurface } from './native-chat/native-chat-appearance-settings'
-import type { TuiAgent } from './tui-agent'
-import type { WorkspaceLaunchKind } from './workspace-launch-kind'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
+import type { WorkspaceLaunchKind } from './agent-launch/contracts/workspace-launch-kind'
 
 /** Keyed by agent id so host-registered agents outside `TuiAgent` read the same preference. */
 export type NativeChatDefaultSettings = {

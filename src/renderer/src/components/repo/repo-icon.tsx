@@ -48,7 +48,7 @@ import {
   REPO_LUCIDE_ICON_NAMES,
   type RepoLucideIconName
 } from '../../../../shared/repo-lucide-icon-names'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 

@@ -1,12 +1,13 @@
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
-import { applyWorktreeUpdates } from '../worktree-helpers'
+import { applyWorktreeUpdates } from '../worktrees/metadata/worktree-meta-update-application'
 import {
   applyDetectedWorktreeUpdates,
   findKnownWorktreeById
 } from '../worktrees/listing/detected-worktree-meta'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import type { FolderWorkspace } from '../../../../../shared/folder-workspace-types'
-import { getFolderWorkspaceHostId } from '../../../../../shared/folder-workspace-execution-host'
+import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
+import '../../../../../shared/folder-workspaces/folder-workspace-execution-host'
+import { getFolderWorkspaceHostId } from '../../../../../shared/folder-workspaces/folder-workspace-host-id'
 import type { AppState } from '../../types'
 import { persistPassiveWorktreeMetaForOwner } from '../worktrees/listing/worktree-owner-settings'
 import type { WorkspaceAttentionGet, WorkspaceAttentionSet } from './workspace-attention-contract'

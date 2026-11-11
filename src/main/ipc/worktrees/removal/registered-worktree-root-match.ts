@@ -1,4 +1,4 @@
-import { isDescendantOrEqual } from '../../filesystem/filesystem-path-containment'
+import { isDescendantOrEqual } from '../../filesystem/access/filesystem-path-containment'
 
 export function findRegisteredWorktreeRoot(
   targetPath: string,

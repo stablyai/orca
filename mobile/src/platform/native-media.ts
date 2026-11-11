@@ -14,7 +14,7 @@ import {
   type MediaHandleRegistry,
   type StagedMedia
 } from '../mobile-web-shell/media-handle-registry'
-import { MobileImageBase64Accumulator } from '../session/mobile-image-base64-accumulator'
+import { MobileImageBase64Accumulator } from '../files/attachments/mobile-image-base64-accumulator'
 
 // Stage native media behind handles because raw/base64 image sizes exceed reply caps; inject device calls to test provider/cancel/size failures.
 

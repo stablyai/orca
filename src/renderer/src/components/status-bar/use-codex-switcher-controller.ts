@@ -2,22 +2,22 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CodexRateLimitAccountsState } from '../../../../shared/managed-account-types'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { useAppStore } from '../../store'
-import { defaultScopeHost } from '@/lib/default-creation-host'
-import { useActiveAccountOwner } from '@/runtime/use-worktree-runtime-target'
-import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
+import { useActiveAccountOwner } from '@/runtime/provider-accounts/ownership/use-active-account-owner'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import {
   fetchProviderAccountsSnapshot,
   selectCodexProviderAccount
-} from '@/runtime/runtime-provider-accounts-client'
-import { translate } from '@/i18n/i18n'
+} from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   markLiveCodexSessionsForRestart,
   resolveCodexRestartPromptAccountLabel
-} from '@/lib/codex-session-restart'
+} from '@/lib/agent-session/accounts/codex/codex-session-restart'
 import {
   getWindowsTerminalCapabilityOwnerKey,
   useWindowsTerminalCapabilities
-} from '@/lib/windows-terminal-capabilities'
+} from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { getCodexAccountSyncKey, getCodexResetProjection } from './codex-switcher-projection'
 import {
   getCodexStatusRuntimeKey,
@@ -36,6 +36,7 @@ import {
 import { signInCodexAccount } from './codex-sign-in-action'
 
 export function useCodexSwitcherController(codex: ProviderRateLimits) {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false)
   const [skipFutureResetConfirm, setSkipFutureResetConfirm] = useState(false)
@@ -65,8 +66,7 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
   const hasActiveRuntimeEnvironment = activeRuntimeEnvironmentId !== null
   const providerAccountHostLabel = hasActiveRuntimeEnvironment
     ? (runtimeEnvironments.find((environment) => environment.id === activeRuntimeEnvironmentId)
-        ?.name ??
-      translate('auto.components.status.bar.StatusBar.remoteServerLabel', 'Remote server'))
+        ?.name ?? t('auto.components.status.bar.StatusBar.remoteServerLabel', 'Remote server'))
     : undefined
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     navigator.userAgent.includes('Windows') || hasActiveRuntimeEnvironment,
@@ -270,7 +270,7 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
   const selectedGroup =
     switchGroups.find((group) => group.key === selectedRuntimeKey) ?? switchGroups[0]
   const activeTarget = selectedGroup?.targets.find((target) => target.active)
-  const resetProjection = getCodexResetProjection(codex, hasActiveRuntimeEnvironment)
+  const resetProjection = getCodexResetProjection(codex, hasActiveRuntimeEnvironment, t)
 
   return {
     activeTarget,

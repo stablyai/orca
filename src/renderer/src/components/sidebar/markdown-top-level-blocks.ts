@@ -37,15 +37,20 @@ const mathBlockParser = blockParser().use(remarkChatMath)
 /** Tags that cannot hold anything, so cannot hold a later block. */
 const VOID_TAG_PATTERN = /^<(?:br|hr|wbr|img)\b[^>]*>$/i
 
+/** HTML that rendering turns into text, such as Vec<T> in prose, never reaches the HTML parser. */
+export type HtmlRendersAsText = (html: string) => boolean
+
 /** References and non-void HTML can affect other blocks and require whole-document parsing. */
-function reachesAcrossBlocks(node: Nodes): boolean {
+function reachesAcrossBlocks(node: Nodes, rendersAsText?: HtmlRendersAsText): boolean {
   if (node.type === 'definition' || node.type === 'footnoteDefinition') {
     return true
   }
   if (node.type === 'html') {
-    return !VOID_TAG_PATTERN.test(node.value.trim())
+    return !VOID_TAG_PATTERN.test(node.value.trim()) && !rendersAsText?.(node.value)
   }
-  return 'children' in node && node.children.some(reachesAcrossBlocks)
+  return (
+    'children' in node && node.children.some((child) => reachesAcrossBlocks(child, rendersAsText))
+  )
 }
 
 function hasLiteralMath(node: Nodes | undefined): boolean {
@@ -68,7 +73,8 @@ export function splitMarkdownTopLevelBlocks(
   previous: MarkdownBlockSplit | null,
   math = false,
   parseTree?: (source: string) => Root,
-  canReuse: (tail: string) => boolean = () => !source.includes('\uFEFF')
+  canReuse: (tail: string) => boolean = () => !source.includes('\uFEFF'),
+  rendersAsText?: HtmlRendersAsText
 ): MarkdownBlockSplit {
   let parse = parseTree
   const grewFromPrevious = previous !== null && source.startsWith(previous.source)
@@ -100,7 +106,7 @@ export function splitMarkdownTopLevelBlocks(
   if (math) {
     chatMathCodeFences(tree, tail)
   }
-  if (reachesAcrossBlocks(tree)) {
+  if (reachesAcrossBlocks(tree, rendersAsText)) {
     const whole = wholeDocument(source, math && hasLiteralMath(tree))
     return parse && base === 0 ? { ...whole, blocks: [{ ...whole.blocks[0], tree }] } : whole
   }

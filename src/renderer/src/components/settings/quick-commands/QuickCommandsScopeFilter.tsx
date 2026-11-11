@@ -5,8 +5,8 @@ import { Button } from '../../ui/button'
 import { Command, CommandItem, CommandList } from '../../ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover'
 import RepoBadgeLabel from '../../repo/RepoBadgeLabel'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 
 export const GLOBAL_SCOPE_KEY = '__global__'
 
@@ -23,12 +23,9 @@ function ScopeTriggerLabel({
   effectiveSelection: ReadonlySet<string>
   repos: readonly Repo[]
 }): React.JSX.Element {
+  const t = useTranslate()
   if (showAll) {
-    return (
-      <span>
-        {translate('auto.components.settings.QuickCommandsPane.c6b155911b', 'All commands')}
-      </span>
-    )
+    return <span>{t('auto.components.settings.QuickCommandsPane.c6b155911b', 'All commands')}</span>
   }
   const includesGlobal = effectiveSelection.has(GLOBAL_SCOPE_KEY)
   const selectedRepos = repos.filter((repo) => effectiveSelection.has(repo.id))
@@ -42,8 +39,7 @@ function ScopeTriggerLabel({
   }
   return (
     <span className="truncate">
-      {parts.join(', ') ||
-        translate('auto.components.settings.QuickCommandsPane.d1d0976320', 'None')}
+      {parts.join(', ') || t('auto.components.settings.QuickCommandsPane.d1d0976320', 'None')}
     </span>
   )
 }
@@ -65,6 +61,7 @@ export function QuickCommandsScopeFilter({
   handleSelectAll: () => void
   toggleScope: (key: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Popover open={scopePopoverOpen} onOpenChange={setScopePopoverOpen}>
@@ -106,10 +103,7 @@ export function QuickCommandsScopeFilter({
                   )}
                 />
                 <span>
-                  {translate(
-                    'auto.components.settings.QuickCommandsPane.c6b155911b',
-                    'All commands'
-                  )}
+                  {t('auto.components.settings.QuickCommandsPane.c6b155911b', 'All commands')}
                 </span>
               </button>
             </div>
@@ -125,9 +119,7 @@ export function QuickCommandsScopeFilter({
                     effectiveSelection.has(GLOBAL_SCOPE_KEY) ? 'opacity-70' : 'opacity-0'
                   )}
                 />
-                <span>
-                  {translate('auto.components.settings.QuickCommandsPane.8c877dec41', 'Global')}
-                </span>
+                <span>{t('auto.components.settings.QuickCommandsPane.8c877dec41', 'Global')}</span>
               </CommandItem>
               {repos.map((repo) => {
                 const isSelected = effectiveSelection.has(repo.id)

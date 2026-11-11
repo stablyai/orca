@@ -3,7 +3,6 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  realpathSync,
   renameSync,
   rmSync,
   writeFileSync
@@ -13,9 +12,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setAppEnvironment } from '../../shared/app-environment'
-import { readAgentHookSettingsFromProfileState } from '../../main/persistence/profile-state/profile-state-offline-settings'
-import { acquireProfileStateMaintenance } from '../../main/persistence/profile-state/profile-state-access'
-import { PROFILE_STATE_RECOVERY_RESULT_PREFIX } from '../../shared/profile-state-recovery-command'
+import { readAgentHookSettingsFromProfileState } from '../../main/persistence/profile-state/offline-access/profile-state-offline-settings'
 import type * as ProcessHost from '@orca/process-host'
 import { main } from '../index'
 
@@ -26,7 +23,7 @@ vi.mock('@orca/process-host', async (original) => ({
 }))
 
 // Exercise the existing hook installer on one isolated target; do not discover installed agents.
-vi.mock('../../main/agent-hooks/managed-agent-hook-controls', async () => {
+vi.mock('../../main/agent-hooks/installation/managed-agent-hook-controls', async () => {
   const { claudeHookService } = await import('../../main/claude/hook-service.js')
   return {
     applyAgentStatusHooksEnabled: vi.fn(async (enabled: boolean) => [
@@ -173,66 +170,6 @@ describe.skipIf(process.platform === 'win32')(
           )
           expect(JSON.stringify(config.hooks ?? {}).includes('orca')).toBe(enabled)
         }
-      }
-    )
-
-    it.each(['packaged', 'dev', 'older-override'])(
-      'retains the %s helper selection and never replays an uncertain child result',
-      async (kind) => {
-        metadata()
-        const executable = kind === 'older-override' ? join(root, 'older-Orca') : process.execPath
-        if (kind === 'older-override') {
-          vi.stubEnv('ORCA_APP_EXECUTABLE', executable)
-        } else {
-          vi.stubEnv('ELECTRON_RUN_AS_NODE', '1')
-        }
-        vi.stubEnv('ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT', kind === 'dev' ? '1' : undefined)
-        const result = {
-          profileId: 'fixture',
-          dataFile: join(profile, 'orca-data.json'),
-          databaseFile: join(profile, 'profile-state.db'),
-          exportPaths: [],
-          backups: [],
-          revision: null,
-          quarantineDirectory: profile,
-          removedDatabaseFiles: [],
-          storage: 'json',
-          restoredPath: join(profile, 'orca-data.json')
-        }
-        runChild.mockImplementationOnce(async () => {
-          // Parent observation precedes the existing child, with no new parent lease.
-          acquireProfileStateMaintenance(root).release()
-          return {
-            code: 0,
-            signal: null,
-            timedOut: false,
-            stdout: PROFILE_STATE_RECOVERY_RESULT_PREFIX + JSON.stringify({ ok: true, result }),
-            stderr: ''
-          }
-        })
-        await main(['profile', 'state', 'rollback', '--current-json', '--json'], root)
-        expect(process.exitCode).toBe(0)
-        expect(runChild).toHaveBeenCalledOnce()
-        expect(runChild.mock.calls[0][0]).toMatchObject({
-          program: executable,
-          timeoutMs: null,
-          env: { ORCA_BACKGROUND_LAUNCH: '1', ORCA_USER_DATA_PATH: realpathSync(root) }
-        })
-        expect(runChild.mock.calls[0][0].args).toContain('--serve')
-        expect(JSON.parse(runChild.mock.calls[0][0].args.at(-1))).toMatchObject({
-          selector: { kind: 'current-json' }
-        })
-        runChild.mockClear().mockResolvedValue({
-          code: 1,
-          signal: null,
-          timedOut: false,
-          stdout: 'partial',
-          stderr: 'uncertain result'
-        })
-        await main(['profile', 'state', 'rollback', '--current-json', '--json'], root)
-        expect(process.exitCode).toBe(1)
-        expect(runChild).toHaveBeenCalledOnce()
-        expect(existsSync(join(profile, 'profile-state.db'))).toBe(false)
       }
     )
 

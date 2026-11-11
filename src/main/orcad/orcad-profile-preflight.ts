@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { preflightProfileStateRuntime } from '../persistence/profile-state/profile-state-runtime-preflight'
+import { preflightProfileStateRuntime } from '../persistence/profile-state/startup/profile-state-runtime-preflight'
 import {
   ORCAD_STARTUP_PREFLIGHT_FLAG,
   ORCAD_PROFILE_PREFLIGHT_TIMEOUT_MS,
@@ -152,9 +152,9 @@ async function readServedDaemonProtocols(servedUserDataPath: string): Promise<nu
   try {
     // Import lazily: startup preflight loads this module and needs no daemon code.
     const [{ listLiveDaemonProtocols }, { daemonRuntimeDirFor }, protocol] = await Promise.all([
-      import('../daemon/daemon-generation-liveness'),
-      import('../daemon/daemon-runtime-dir'),
-      import('../daemon/daemon-protocol-version')
+      import('../daemon/launch/daemon-generation-liveness'),
+      import('../daemon/endpoint/publication/daemon-runtime-dir'),
+      import('../daemon/protocol/daemon-protocol-version')
     ])
     return await listLiveDaemonProtocols(daemonRuntimeDirFor(servedUserDataPath), [
       protocol.PROTOCOL_VERSION,

@@ -1,33 +1,33 @@
-import { resolveAgentChoiceLayers } from '../../../../../shared/agent-choice-layers'
+import { resolveAgentChoiceLayers } from '../../../../../shared/agent-launch/choices/agent-choice-layers'
 import {
   findCatalogModel,
   getAgentSessionOptionLaunchCatalog
 } from '../../../../../shared/agent-session/options/agent-session-option-catalog'
-import { sourceControlActionOptions } from '../../../../../shared/source-control-action-options'
+import { sourceControlActionOptions } from '../../../../../shared/source-control/ai/recipes/source-control-action-options'
 import { agentModelChoiceChips } from '../../agent/launch-settings/agent-model-choice-chips'
 import type {
   SourceControlActionLaunchPreferences,
   SourceControlActionRecipe
-} from '../../../../../shared/source-control-ai-actions'
+} from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import {
   agentPermissionArgs,
   agentPermissionChoices,
   resolveAgentPermission
-} from '../../../../../shared/tui-agent-permission-choice'
-import { agentArgsSetPermission } from '../../../../../shared/agent-permission-args'
-import { editActionArgumentChoices } from '../../../../../shared/source-control-action-argument-choices'
-import type { ActionArgumentChoices } from '../../../../../shared/source-control-action-argument-document'
+} from '../../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
+import { agentArgsSetPermission } from '../../../../../shared/agent-launch/permissions/agent-permission-args'
+import { editActionArgumentChoices } from '../../../../../shared/source-control/ai/recipes/source-control-action-argument-choices'
+import type { ActionArgumentChoices } from '../../../../../shared/source-control/ai/recipes/source-control-action-argument-document'
 import type {
   AgentChoicePatch,
   AgentLaunchChoices
-} from '../../../../../shared/agent-launch-choices'
+} from '../../../../../shared/agent-launch/choices/agent-launch-choices'
 import { SourceControlActionModelPicker } from './SourceControlActionModelPicker'
-import { AGENT_CATALOG } from '@/lib/agent-catalog'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
+import { AGENT_CATALOG } from '@/lib/agent-catalog/agent-catalog'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { useAppStore } from '@/store/index'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { AgentDefaultArgsInput } from '../../agent/launch-settings/AgentLaunchDefaultsEditor'
-import { AgentPermissionMenu } from '../../agent/launch-settings/AgentPermissionChoiceControls'
+import { AgentPermissionMenu } from '../../agent/launch-settings/AgentPermissionMenu'
 
 export function SourceControlActionArguments({
   agent,
@@ -62,6 +62,7 @@ export function SourceControlActionArguments({
     argumentChoices?: ActionArgumentChoices | null
   ) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const settings = useAppStore((state) => state.settings)
   const defaults =
     agentLaunchChoices === undefined ? settings?.agentLaunchChoices : agentLaunchChoices
@@ -146,7 +147,7 @@ export function SourceControlActionArguments({
             layout="stacked"
             size="sm"
             disabled={disabled}
-            inheritLabel={translate(
+            inheritLabel={t(
               'settings.sourceControl.actionPermissions.sameAsAgent',
               'Same as {{agent}}',
               { agent: label }
@@ -171,37 +172,26 @@ export function SourceControlActionArguments({
           defaultLabels={
             defaults != null
               ? {
-                  model: translate(
-                    'settings.agents.sameAsChoice',
-                    'Same as {{agent}} · {{choice}}',
-                    {
-                      agent: label,
-                      choice: defaults[agent]?.model
-                        ? (findCatalogModel(
-                            getAgentSessionOptionLaunchCatalog(agent) ?? {
-                              models: [],
-                              modelApply: {}
-                            },
-                            defaults[agent]?.model ?? ''
-                          )?.label ?? defaults[agent]?.model)
-                        : translate(
-                            'settings.sourceControl.actionModel.agentDefault',
-                            'Agent default'
-                          )
-                    }
-                  ),
+                  model: t('settings.agents.sameAsChoice', 'Same as {{agent}} · {{choice}}', {
+                    agent: label,
+                    choice: defaults[agent]?.model
+                      ? (findCatalogModel(
+                          getAgentSessionOptionLaunchCatalog(agent) ?? {
+                            models: [],
+                            modelApply: {}
+                          },
+                          defaults[agent]?.model ?? ''
+                        )?.label ?? defaults[agent]?.model)
+                      : t('settings.sourceControl.actionModel.agentDefault', 'Agent default')
+                  }),
                   options: {
-                    effort: translate(
-                      'settings.agents.sameAsChoice',
-                      'Same as {{agent}} · {{choice}}',
-                      {
-                        agent: label,
-                        choice:
-                          effortLabel ??
-                          defaultChoices?.options?.effort ??
-                          translate('settings.sourceControl.actionModel.effortDefault', 'Default')
-                      }
-                    )
+                    effort: t('settings.agents.sameAsChoice', 'Same as {{agent}} · {{choice}}', {
+                      agent: label,
+                      choice:
+                        effortLabel ??
+                        defaultChoices?.options?.effort ??
+                        t('settings.sourceControl.actionModel.effortDefault', 'Default')
+                    })
                   }
                 }
               : undefined
@@ -258,7 +248,7 @@ export function SourceControlActionArguments({
             choiceChips={chips}
             note={
               loose
-                ? translate(
+                ? t(
                     'settings.agents.permissionArgsTerminalOnly',
                     'These arguments may control {{agent}}’s terminal permissions, so Orca adds no flag. Chats use the Permissions choice above.',
                     { agent: label }

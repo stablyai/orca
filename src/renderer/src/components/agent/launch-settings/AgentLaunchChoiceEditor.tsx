@@ -3,17 +3,18 @@ import {
   AGENT_LAUNCH_CHOICE_KEYS,
   type AgentModelOptionChoices,
   type AgentChoicePatch
-} from '../../../../../shared/agent-launch-choices'
+} from '../../../../../shared/agent-launch/choices/agent-launch-choices'
 import { AgentDefaultArgsInput } from './AgentLaunchDefaultsEditor'
-import { AgentPermissionMenu, type AgentPermissionChoiceRow } from './AgentPermissionChoiceControls'
+import { AgentPermissionMenu } from './AgentPermissionMenu'
+import type { AgentPermissionChoiceRow } from './agent-permission-choice-row'
 import { agentModelChoiceChips } from './agent-model-choice-chips'
 import { useAgentLaunchFieldWrite } from './use-agent-launch-field-write'
-import { reconcileAgentChoiceArgs } from '../../../../../shared/agent-choice-reconciliation'
-
-import type { TuiAgent } from '../../../../../shared/tui-agent'
-
-import { translate } from '@/i18n/i18n'
+import { reconcileAgentChoiceArgs } from '../../../../../shared/agent-launch/choices/agent-choice-reconciliation'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import { useTranslate } from '@/i18n/use-translate'
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { AgentChoiceFields } from './AgentChoiceControls'
+import { useAgentSettingsModelCatalog } from './use-agent-settings-model-catalog'
 
 export function AgentLaunchChoiceEditor({
   agent,
@@ -23,9 +24,12 @@ export function AgentLaunchChoiceEditor({
   permission,
   permissionControlRef,
   save,
+  catalogTarget,
   showArguments = true
 }: {
   showArguments?: boolean
+  /** The host whose models this editor lists; null keeps the release's seed models. */
+  catalogTarget: RuntimeClientTarget | null
   agent: TuiAgent
   label: string
   choices: AgentModelOptionChoices | undefined
@@ -34,6 +38,11 @@ export function AgentLaunchChoiceEditor({
   permissionControlRef?: Ref<HTMLDivElement>
   save: (patch: AgentChoicePatch | undefined, userArgs: string) => Promise<void>
 }): React.JSX.Element {
+  const t = useTranslate()
+  const { catalog: liveCatalog, usesSeedModels } = useAgentSettingsModelCatalog(
+    agent,
+    catalogTarget
+  )
   const menu = useRef({ open: false, committed: false })
   const editorRef = useRef<HTMLDivElement>(null)
   const [draft, setDraft] = useState<string | null>(null)
@@ -101,6 +110,8 @@ export function AgentLaunchChoiceEditor({
           value={choices}
           disabled={pending}
           layout="rows"
+          liveCatalog={liveCatalog}
+          usesSeedModels={usesSeedModels}
           onOpenChange={onOpenChange}
           optionIds={['effort']}
           onSelect={(patch) => commit(patch)}
@@ -135,7 +146,7 @@ export function AgentLaunchChoiceEditor({
           choiceChips={chips}
           note={
             permission?.argsSetPermission
-              ? translate(
+              ? t(
                   'settings.agents.permissionArgsTerminalOnly',
                   'These arguments may control {{agent}}’s terminal permissions, so Orca adds no flag. Chats use the Permissions choice above.',
                   { agent: label }

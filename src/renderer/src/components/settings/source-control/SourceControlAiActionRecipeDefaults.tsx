@@ -2,16 +2,16 @@ import { useMemo } from 'react'
 import type React from 'react'
 import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { isFolderRepo } from '../../../../../shared/repo-kind'
 import type {
   SourceControlAiSettings,
   SourceControlAiSettingsPatch
-} from '../../../../../shared/source-control-ai-types'
+} from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import {
   CUSTOM_AGENT_ID,
   type CustomAgentId
-} from '../../../../../shared/commit-message-agent-spec'
+} from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 
 import {
   SOURCE_CONTROL_ACTION_IDS,
@@ -19,14 +19,14 @@ import {
   type SourceControlActionRecipe,
   type SourceControlActionId,
   type SourceControlAiActionDefaults
-} from '../../../../../shared/source-control-ai-actions'
+} from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { Label } from '../../ui/label'
 import { useAppStore } from '@/store/index'
-import { useRepos } from '@/store/selectors'
+import { useRepos } from '@/store/repos/use-repository-catalog'
 import {
   summarizeReposOverridingActionRecipe,
   type SourceControlActionRecipeOverrideSummary
-} from '../../../../../shared/source-control-launch-agent-selection'
+} from '../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { getRepositorySourceControlAiActionRecipeSectionId } from '../repository/repository-settings-targets'
 import { matchesSettingsSearch } from '../search/settings-search'
@@ -35,6 +35,7 @@ import { SourceControlActionRepoOverrideNote } from './SourceControlActionRepoOv
 import { retireActionLaunchPreferences } from './source-control-ai-action-recipe-draft'
 import { useSourceControlActionRecipeDraftState } from './source-control-action-recipe-draft-state'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useSourceControlActionAgentInventory } from './use-source-control-action-agent'
 
 type SourceControlAiActionRecipeDefaultsProps = {
@@ -102,6 +103,7 @@ export function SourceControlAiActionRecipeDefaults({
   searchQuery,
   writeConfig
 }: SourceControlAiActionRecipeDefaultsProps): React.JSX.Element | null {
+  const t = useTranslate()
   useSourceControlActionAgentInventory(
     config.enabled && matchesSettingsSearch(searchQuery, ACTION_RECIPES_SEARCH_ENTRY)
   )
@@ -127,6 +129,7 @@ export function SourceControlAiActionRecipeDefaults({
     onActionAgentArgsChange,
     onActionLaunchPreferencesChange,
     retireActionAgentDocument,
+    onTextModelChoiceChange,
     saveActionTemplateDraft,
     discardActionTemplateDraft,
     appendVariable
@@ -148,7 +151,7 @@ export function SourceControlAiActionRecipeDefaults({
     } catch (error) {
       console.error('Failed to save Source Control AI action agent default', error)
       toast.error(
-        translate(
+        t(
           'auto.components.settings.SourceControlAiActionRecipeDefaults.b5f46664d3',
           'Failed to save Source Control AI action default: {{value0}}',
           { value0: error instanceof Error ? error.message : 'Unknown error' }
@@ -210,12 +213,12 @@ export function SourceControlAiActionRecipeDefaults({
       title={ACTION_RECIPES_SEARCH_ENTRY.title}
       description={ACTION_RECIPES_SEARCH_ENTRY.description}
       keywords={ACTION_RECIPES_SEARCH_ENTRY.keywords}
-      className="space-y-3 px-1 py-2"
+      className="space-y-3 py-3"
     >
       <div className="space-y-0.5">
         <Label>{ACTION_RECIPES_SEARCH_ENTRY.title}</Label>
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.SourceControlAiActionRecipeDefaults.bf84dea6af',
             'Use variables only when you want Orca to inject context. Leave the agent as default to follow your normal agent preference.'
           )}
@@ -228,6 +231,9 @@ export function SourceControlAiActionRecipeDefaults({
           const overrideSummary = overrideSummaries[actionId]
           return (
             <SourceControlActionRecipeRow
+              source={config}
+              onTextModelChoiceChange={onTextModelChoiceChange}
+              writeSourceControlAiSettings={writeConfig}
               setupDiscardSignal={customPromptDiscardSignal}
               key={actionId}
               actionId={actionId}

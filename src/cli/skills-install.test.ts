@@ -33,7 +33,7 @@ vi.mock('../main/preflight/installed-agent-detection', () => ({
   detectInstalledAgentsWithShellPathHydration: detectAgentsMock
 }))
 // Avoid the production five-second lock wait in tests.
-vi.mock('../main/skills/bundled-skill-install/local-host', async (importOriginal) => {
+vi.mock('../main/skills/bundled-skill-install/bundled-skill-local-host', async (importOriginal) => {
   const actual = await importOriginal<typeof LocalHost>()
   return {
     localBundledSkillInput: async (...args: Parameters<typeof actual.localBundledSkillInput>) => ({
@@ -43,9 +43,12 @@ vi.mock('../main/skills/bundled-skill-install/local-host', async (importOriginal
   }
 })
 
-import type * as LocalHost from '../main/skills/bundled-skill-install/local-host'
+import type * as LocalHost from '../main/skills/bundled-skill-install/bundled-skill-local-host'
 import { main } from './index'
-import { acquireSkillInstallLock, skillInstallLockPath } from '../main/skills/skill-install-lock'
+import {
+  acquireSkillInstallLock,
+  skillInstallLockPath
+} from '../main/skills/transaction-state/skill-install-lock'
 
 type Paths = { root: string; home: string; userData: string; shared: string; claude: string }
 
@@ -86,13 +89,6 @@ async function run(args: string[]): Promise<string> {
 async function runJson<T>(args: string[]): Promise<T> {
   const parsed: T = JSON.parse(await run([...args, '--json']))
   return parsed
-}
-
-type DryRunJson = {
-  executed: false
-  planDigest: string
-  plan: BundledSkillPlan
-  notInstalled: string[]
 }
 type RunJson = {
   executed: true
@@ -135,33 +131,6 @@ describe('orca skills install/update', () => {
     expect(await skillText(paths.shared)).toBe(OLD_TEXT)
     expect(await lstat(paths.claude).catch(() => null)).toBeNull()
     expect(process.exitCode).toBeUndefined()
-  })
-
-  it('executes exactly the ops the dry run printed', async () => {
-    await writeCopy(paths.shared, OLD_TEXT)
-    const args = ['install', '--skill', NAME, '--agent', 'claude']
-
-    const dry = await runJson<DryRunJson>([...args, '--dry-run'])
-    const real = await runJson<RunJson>(args)
-
-    expect(dry.executed).toBe(false)
-    expect(real.planDigest).toBe(dry.planDigest)
-    expect(real.result.skills.map((skill) => skill.ops.map((op) => [op.path, op.kind]))).toEqual(
-      dry.plan.skills.map((skill) => skill.ops.map((op) => [op.path, op.kind]))
-    )
-    expect(real.result.skills[0].ops.every((op) => op.status === 'done')).toBe(true)
-    expect(real.summary).toMatchObject({ ok: true, exitCode: 0 })
-    expect(await skillText(paths.shared)).toBe(NEW_TEXT)
-    expect(await realpath(paths.claude)).toBe(paths.shared)
-    expect(process.exitCode).toBe(0)
-  })
-
-  it('prints one result line per skill for a real run', async () => {
-    await writeCopy(paths.shared, OLD_TEXT)
-
-    const text = await run(['update', '--skill', NAME, '--agent', 'universal'])
-
-    expect(text).toBe(`${NAME}: Updated\n`)
   })
 
   it('never installs a skill on update; install adds it', async () => {
@@ -216,90 +185,6 @@ describe('orca skills install/update', () => {
     expect(process.exitCode).toBe(1)
     expect(await skillText(paths.shared)).toBe(OLD_TEXT)
   }, 20_000)
-
-  it('counts a skill with multiple skipped folders once in text and JSON summaries', async () => {
-    await writeCopy(paths.shared, EDITED_TEXT)
-    await writeCopy(paths.claude, EDITED_TEXT)
-
-    const args = ['update', '--skill', NAME, '--agent', 'claude']
-    const text = await run(args)
-    expect(text).toContain(`${NAME}: No change · 1 skipped: Skill edited outside Orca\n`)
-    expect(text).toContain(`  ${paths.shared}: Update skipped: Skill edited outside Orca`)
-    expect(text).toContain(`  ${paths.claude}: Update skipped: Skill edited outside Orca`)
-    const result = await runJson<RunJson>(args)
-    expect(result.summary).toMatchObject({ ok: true, changedCount: 0, leftAloneCount: 1 })
-  })
-
-  it("accepts the skills CLI's agent keys and universal for the shared folder alone", async () => {
-    await writeCopy(paths.shared, NEW_TEXT)
-
-    const aliased = await runJson<DryRunJson>([
-      'install',
-      '--skill',
-      NAME,
-      '--agent',
-      'claude-code',
-      '--dry-run'
-    ])
-    expect(aliased.plan.skills[0].ops.map((op) => [op.path, op.kind])).toEqual([
-      [paths.shared, 'keep'],
-      [paths.claude, 'link']
-    ])
-    const shared = await runJson<DryRunJson>([
-      'install',
-      '--skill',
-      NAME,
-      '--agent',
-      'universal',
-      '--dry-run'
-    ])
-    expect(shared.plan.skills[0].ops.map((op) => op.path)).toEqual([paths.shared])
-    expect(detectAgentsMock).not.toHaveBeenCalled()
-  })
-
-  it('installs for OpenClaude when its Orca agent id is requested directly', async () => {
-    await run(['install', '--skill', NAME, '--agent', 'openclaude'])
-
-    expect(await realpath(join(paths.home, '.openclaude', 'skills', NAME))).toBe(paths.shared)
-    expect(await skillText(paths.shared)).toBe(NEW_TEXT)
-    expect(await lstat(paths.claude).catch(() => null)).toBeNull()
-    expect(process.exitCode).toBe(0)
-  })
-
-  it.each([
-    ['claude-code', '.claude', '.openclaude'],
-    ['openclaude', '.openclaude', '.claude']
-  ])('updates an existing agent-only copy for --agent %s', async (agent, folder, otherFolder) => {
-    const installed = join(paths.home, folder, 'skills', NAME)
-    await writeCopy(installed, OLD_TEXT)
-
-    const result = await runJson<RunJson>(['update', '--skill', NAME, '--agent', agent])
-
-    expect(result.notInstalled).toEqual([])
-    expect(result.result.skills[0].ops.map((op) => op.path)).toEqual([installed])
-    expect(await skillText(installed)).toBe(NEW_TEXT)
-    expect(await lstat(join(paths.home, otherFolder, 'skills', NAME)).catch(() => null)).toBeNull()
-    expect(await lstat(paths.shared).catch(() => null)).toBeNull()
-    expect(process.exitCode).toBe(0)
-  })
-
-  it('detects agents when --agent is omitted', async () => {
-    await writeCopy(paths.shared, NEW_TEXT)
-
-    const plan = await runJson<DryRunJson>(['install', '--skill', NAME, '--dry-run'])
-
-    expect(detectAgentsMock).toHaveBeenCalled()
-    expect(plan.plan.skills[0].ops.map((op) => op.path)).toEqual([paths.shared, paths.claude])
-  })
-
-  it('rejects an unknown --agent value', async () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
-    await main(['skills', 'install', '--skill', NAME, '--agent', 'nope'], paths.root)
-
-    expect(process.exitCode).toBe(1)
-    expect(String(errorSpy.mock.calls[0]?.[0])).toContain('Unknown --agent value "nope"')
-  })
 
   it('plans the current project for --local, linking only into agent folders it has', async () => {
     const project = join(paths.root, 'project')

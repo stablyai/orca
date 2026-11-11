@@ -1,5 +1,5 @@
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
-import { classifyAgentLaunchReplayRefusal } from '../shared/agent-launch-replay-refusal'
+import { classifyAgentLaunchReplayRefusal } from '../shared/agent-launch/contracts/agent-launch-replay-refusal'
 import {
   recoverableOrchestrationArgs,
   resolveOrchestrationCliExecutable

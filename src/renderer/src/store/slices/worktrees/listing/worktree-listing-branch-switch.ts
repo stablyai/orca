@@ -1,0 +1,121 @@
+import type { Worktree } from '../../../../../../shared/worktree/types'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { forgetDetachedOwner } from '../metadata/detached-hosted-review-owners'
+import { worktreeCopyOwnerKey } from '../metadata/worktree-copy-review-clear'
+
+function indexUnambiguousWorktrees(
+  worktrees: readonly Worktree[],
+  include?: (worktree: Worktree) => boolean
+): Map<string, Worktree | null> {
+  const byId = new Map<string, Worktree | null>()
+  for (const worktree of worktrees) {
+    if (include && !include(worktree)) {
+      continue
+    }
+    byId.set(worktree.id, byId.has(worktree.id) ? null : worktree)
+  }
+  return byId
+}
+
+function branchScopedReviewContextMatches(left: Worktree, right: Worktree): boolean {
+  return (
+    left.linkedPR === right.linkedPR &&
+    left.linkedGitLabMR === right.linkedGitLabMR &&
+    left.linkedBitbucketPR === right.linkedBitbucketPR &&
+    left.linkedAzureDevOpsPR === right.linkedAzureDevOpsPR &&
+    left.linkedGiteaPR === right.linkedGiteaPR &&
+    left.pushTarget?.remoteName === right.pushTarget?.remoteName &&
+    left.pushTarget?.branchName === right.pushTarget?.branchName
+  )
+}
+
+/** A headless row (e.g. a restored-session stub) that git status filled in with what the listing
+ * also reports gained no newer identity; keeping it would drop the listing's catalog facts. */
+function listingConfirmsFilledInIdentity(
+  requestStarted: Worktree,
+  existing: Worktree,
+  incoming: Worktree
+): boolean {
+  return (
+    requestStarted.head === '' &&
+    existing.branch === incoming.branch &&
+    existing.head === incoming.head &&
+    branchScopedReviewContextMatches(existing, requestStarted)
+  )
+}
+
+/** Clear branch-scoped review links before listing merge or git-status can miss the change and leave old PR checks pinned. Route only rows with review context so stale listings still cannot roll newer branch identity back. */
+export function routeListingBranchSwitchesThroughGitIdentity(args: {
+  requestStarted: readonly Worktree[] | undefined
+  current: readonly Worktree[] | undefined
+  incoming: Worktree[]
+  refreshHostId: ExecutionHostId
+  matchesRefreshHost: (worktree: Worktree) => boolean
+  hasBranchScopedReviewContext: (worktree: Worktree) => boolean
+  updateWorktreeGitIdentity: (
+    worktreeId: string,
+    identity: { head?: string; branch?: string | null },
+    ownerHostId: ExecutionHostId | null
+  ) => void
+}): Worktree[] {
+  const {
+    requestStarted,
+    current,
+    incoming,
+    refreshHostId,
+    matchesRefreshHost,
+    hasBranchScopedReviewContext,
+    updateWorktreeGitIdentity
+  } = args
+  if (!requestStarted?.length || !current?.length) {
+    return incoming
+  }
+
+  const allLatestById = indexUnambiguousWorktrees(current)
+  const startedById = indexUnambiguousWorktrees(requestStarted, matchesRefreshHost)
+  const latestById = indexUnambiguousWorktrees(current, matchesRefreshHost)
+  let reconciled: Worktree[] | null = null
+  for (const [index, worktree] of incoming.entries()) {
+    const requestStartedWorktree = startedById.get(worktree.id)
+    const existing = latestById.get(worktree.id)
+    const isAmbiguousAcrossHosts = allLatestById.get(worktree.id) === null
+    if (
+      requestStartedWorktree &&
+      existing &&
+      !listingConfirmsFilledInIdentity(requestStartedWorktree, existing, worktree) &&
+      (existing.branch !== requestStartedWorktree.branch ||
+        existing.head !== requestStartedWorktree.head ||
+        !branchScopedReviewContextMatches(existing, requestStartedWorktree))
+    ) {
+      // Why: rejecting the clear alone is insufficient; preserve the newer row
+      // so the subsequent listing merge cannot roll its branch and metadata back.
+      reconciled ??= [...incoming]
+      reconciled[index] = existing
+      continue
+    }
+    if (
+      !requestStartedWorktree ||
+      !existing ||
+      existing.branch === worktree.branch ||
+      !hasBranchScopedReviewContext(existing)
+    ) {
+      if (worktree.branch !== '') {
+        // Unrouted, an applied attached row still proves a reattach; the old proof must not judge it.
+        forgetDetachedOwner(worktree.id, worktreeCopyOwnerKey(worktree))
+      }
+      continue
+    }
+    updateWorktreeGitIdentity(
+      worktree.id,
+      {
+        head: worktree.head,
+        // Empty branch means detached HEAD in listing results; null is the
+        // explicit detached signal expected by updateWorktreeGitIdentity.
+        branch: worktree.branch === '' ? null : worktree.branch
+      },
+      // Same-ID twins need the listing's host to reconcile only the observed copy.
+      isAmbiguousAcrossHosts ? refreshHostId : null
+    )
+  }
+  return reconciled ?? incoming
+}

@@ -1,11 +1,15 @@
 import { AlertTriangle, GitBranch, Server, Trash2 } from 'lucide-react'
-import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
-import { cn } from '@/lib/utils'
+import { useState } from 'react'
+import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
+import { cn } from '@/lib/class-names'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '../ui/context-menu'
-import { isPortaledRowMenuClick, isRowActivationKey } from '@/lib/list-row-interaction'
+import {
+  isPortaledRowMenuClick,
+  isRowActivationKey
+} from '@/lib/list-interaction/list-row-interaction'
 import { HoverCard, HoverCardTrigger } from '../ui/hover-card'
 import {
   formatBytes,
@@ -13,7 +17,7 @@ import {
   getWorkspaceSpaceScanDateTimeLabel
 } from './workspace-space-format'
 import { isWorkspaceSpaceRowReadyToDelete } from './workspace-space-presentation'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { WorkspaceDecisionDetails } from './workspace-space-decision-details'
 import type {
   WorkspaceGitRefreshState,
@@ -22,8 +26,8 @@ import type {
 import { CheckButton } from './workspace-space-selection-controls'
 import { WorkspaceDecisionHoverCard } from './workspace-space-decision-hover-card'
 import { WorkspaceSpaceStatusBadge } from './workspace-space-status-badge'
-import { describeWorktreeDeleteError } from '../sidebar/worktree-delete-error-display'
-import { formatShortTimeAgo } from '@/lib/short-time-ago'
+import { describeWorktreeDeleteError } from '../sidebar/workspace-actions/deletion/worktree-delete-error-display'
+import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 import { WorkspaceSpaceChanges } from './workspace-space-changes'
 import { WORKSPACE_SPACE_TABLE_GRID_CLASS } from './workspace-space-table-layout'
 import {
@@ -58,8 +62,12 @@ export function WorkspaceSpaceWorktreeRow({
   onDelete: () => void
   onForceDelete: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
+  const [contextMenuOpen, setContextMenuOpen] = useState(false)
+  const [hoverOpen, setHoverOpen] = useState(false)
   const isDeleting = deleteState?.isDeleting ?? false
-  const deleteError = deleteState?.error ? describeWorktreeDeleteError(deleteState.error) : null
+  const deleteError = deleteState?.error ? describeWorktreeDeleteError(deleteState.error, t) : null
   const canForceDelete = deleteState?.canForceDelete ?? false
   const canSelect = isWorkspaceSpaceRowReadyToDelete(worktree, decisionDetails) && !isDeleting
   const canDelete =
@@ -101,7 +109,7 @@ export function WorkspaceSpaceWorktreeRow({
       <CheckButton
         checked={canSelect && selected}
         disabled={!canSelect}
-        label={translate(
+        label={t(
           'auto.components.status.bar.WorkspaceSpaceManagerPanel.0d1c78d749',
           'Select {{value0}}',
           { value0: worktree.displayName }
@@ -114,15 +122,12 @@ export function WorkspaceSpaceWorktreeRow({
         {worktree.isRemote ? <Server className="size-3.5 shrink-0 text-muted-foreground" /> : null}
         {worktree.isSparse ? (
           <Badge variant="outline">
-            {translate(
-              'auto.components.status.bar.WorkspaceSpaceManagerPanel.9155381019',
-              'Sparse'
-            )}
+            {t('auto.components.status.bar.WorkspaceSpaceManagerPanel.9155381019', 'Sparse')}
           </Badge>
         ) : null}
         <GitBranch className="size-3 shrink-0 text-muted-foreground" />
         <span className="max-w-24 shrink-0 truncate text-muted-foreground">
-          {getWorkspaceSpaceBranchLabel(worktree)}
+          {getWorkspaceSpaceBranchLabel(worktree, t)}
         </span>
         {deleteError ? (
           <div className="flex min-w-0 items-center gap-1 text-destructive">
@@ -139,10 +144,7 @@ export function WorkspaceSpaceWorktreeRow({
                 className="h-6 shrink-0"
               >
                 <Trash2 className="size-3" />
-                {translate(
-                  'auto.components.status.bar.WorkspaceSpaceManagerPanel.a998501630',
-                  'Force'
-                )}
+                {t('auto.components.status.bar.WorkspaceSpaceManagerPanel.a998501630', 'Force')}
               </Button>
             ) : null}
           </div>
@@ -157,7 +159,7 @@ export function WorkspaceSpaceWorktreeRow({
         className="truncate text-right tabular-nums text-muted-foreground"
         title={
           worktree.lastActivityAt > 0
-            ? getWorkspaceSpaceScanDateTimeLabel(worktree.lastActivityAt)
+            ? getWorkspaceSpaceScanDateTimeLabel(worktree.lastActivityAt, intlLocale)
             : undefined
         }
       >
@@ -176,7 +178,12 @@ export function WorkspaceSpaceWorktreeRow({
             canOpen={decisionDetails.canOpenWorkspace}
           />
         ) : (
-          <HoverCard openDelay={250} closeDelay={120}>
+          <HoverCard
+            open={!contextMenuOpen && hoverOpen}
+            onOpenChange={(open) => setHoverOpen(!contextMenuOpen && open)}
+            openDelay={250}
+            closeDelay={120}
+          >
             <HoverCardTrigger asChild>
               <span
                 className="inline-flex"
@@ -212,7 +219,14 @@ export function WorkspaceSpaceWorktreeRow({
   )
 
   return (
-    <ContextMenu>
+    <ContextMenu
+      onOpenChange={(open) => {
+        setContextMenuOpen(open)
+        if (open) {
+          setHoverOpen(false)
+        }
+      }}
+    >
       <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
       <ContextMenuContent>
         <WorkspaceSpaceWorktreeMenuItems

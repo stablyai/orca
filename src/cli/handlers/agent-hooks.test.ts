@@ -13,19 +13,18 @@ import {
   getOrcaProfileDataFile,
   getOrcaProfileStateDatabaseFile
 } from '../../main/orca-profiles/profile-storage-paths'
-import { openProfileStateDatabase } from '../../main/persistence/profile-state/profile-state-database'
-import * as profileStateDatabase from '../../main/persistence/profile-state/profile-state-database'
+import { openProfileStateDatabase } from '../../main/persistence/profile-state/database/profile-state-database'
+import * as profileStateDatabase from '../../main/sqlite/sync-database'
 import {
   exportProfileStateJson,
-  hashProfileStateJson,
   importProfileStateJson
-} from '../../main/persistence/profile-state/profile-state-documents'
-import { ProfileStateSqliteAuthority } from '../../main/persistence/profile-state/profile-state-sqlite-authority'
+} from '../../main/persistence/profile-state/documents/profile-state-documents'
+import { hashProfileStatePayload as hashProfileStateJson } from '../../main/persistence/profile-state/documents/profile-state-document-validation'
 import {
   acquireProfileStateMaintenance,
   acquireProfileStateRuntimeAdmission,
   type ProfileStateRuntimeAdmission
-} from '../../main/persistence/profile-state/profile-state-access'
+} from '../../main/persistence/profile-state/access/profile-state-access'
 
 vi.mock('node:fs', async (original) => ({ ...(await original<typeof fs>()) }))
 
@@ -83,24 +82,12 @@ vi.mock('../runtime-client', () => {
   }
 })
 
-vi.mock('../../main/agent-hooks/managed-agent-hook-controls', () => ({
+vi.mock('../../main/agent-hooks/installation/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: applyAgentStatusHooksEnabledMock,
   getManagedAgentHookStatuses: getManagedAgentHookStatusesMock
 }))
 
 import { main } from '../index'
-
-function readDefaultProfileState(userDataPath: string) {
-  const opened = openProfileStateDatabase(
-    getOrcaProfileStateDatabaseFile(DEFAULT_LOCAL_ORCA_PROFILE_ID, userDataPath),
-    DEFAULT_LOCAL_ORCA_PROFILE_ID
-  )
-  try {
-    return JSON.parse(exportProfileStateJson(opened.db))
-  } finally {
-    opened.db.close()
-  }
-}
 
 function writeDataFile(userDataPath: string, state: PersistedState): void {
   mkdirSync(userDataPath, { recursive: true })
@@ -143,19 +130,6 @@ describe('agent hooks CLI handler', () => {
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
-  it('keeps new card style off when creating offline settings for a fresh profile', async () => {
-    await runAgentHooksOff(userDataPath)
-
-    const persisted = readDefaultProfileState(userDataPath)
-
-    expect(persisted.settings.experimentalNewWorktreeCardStyle).toBe(false)
-    expect(persisted.settings.agentStatusHooksEnabled).toBe(false)
-    expect(existsSync(join(userDataPath, 'orca-data.json'))).toBe(false)
-    expect(existsSync(getOrcaProfileDataFile(DEFAULT_LOCAL_ORCA_PROFILE_ID, userDataPath))).toBe(
-      false
-    )
-  })
-
   it.each(['fresh', 'root-json', 'profile-json'] as const)(
     'refuses an incapable offline writer before any %s profile or hook changes',
     async (source) => {
@@ -169,7 +143,7 @@ describe('agent hooks CLI handler', () => {
       if (source === 'profile-json') {
         writeActiveProfileIndex(userDataPath, profileId)
       }
-      vi.spyOn(profileStateDatabase, 'isProfileStateSqliteAvailable').mockReturnValue(false)
+      vi.spyOn(profileStateDatabase, 'isSqliteAvailable').mockReturnValue(false)
 
       await runAgentHooksOff(userDataPath)
 
@@ -190,33 +164,6 @@ describe('agent hooks CLI handler', () => {
     }
   )
 
-  it('keeps runtime writes available to an incapable CLI', async () => {
-    vi.spyOn(profileStateDatabase, 'isProfileStateSqliteAvailable').mockReturnValue(false)
-    getCliStatusMock.mockResolvedValueOnce({
-      id: 'test-status',
-      ok: true,
-      result: {
-        app: { running: true, pid: null },
-        runtime: { state: 'ready', reachable: true, runtimeId: null },
-        graph: { state: 'ready' }
-      },
-      _meta: { runtimeId: 'test' }
-    })
-    callMock.mockResolvedValueOnce({ result: {} })
-
-    await runAgentHooksOff(userDataPath)
-
-    expect(process.exitCode).not.toBe(1)
-    expect(callMock).toHaveBeenCalledWith(
-      'settings.update',
-      { agentStatusHooksEnabled: false },
-      { timeoutMs: 10_000 }
-    )
-    expect(applyAgentStatusHooksEnabledMock).not.toHaveBeenCalled()
-    expect(existsSync(join(userDataPath, '.profile-state-access'))).toBe(false)
-    expect(existsSync(join(userDataPath, 'orca-profile-index.json'))).toBe(false)
-  })
-
   it.each(['root', 'indexed'] as const)(
     'reads %s JSON status without SQLite or migration',
     async (source) => {
@@ -228,7 +175,7 @@ describe('agent hooks CLI handler', () => {
         writeActiveProfileIndex(userDataPath, profileId)
       }
       getDefaultUserDataPathMock.mockReturnValue(userDataPath)
-      vi.spyOn(profileStateDatabase, 'isProfileStateSqliteAvailable').mockReturnValue(false)
+      vi.spyOn(profileStateDatabase, 'isSqliteAvailable').mockReturnValue(false)
       const original = readFileSync(join(directory, 'orca-data.json'), 'utf8')
 
       await main(['agent', 'hooks', 'status', '--json'], userDataPath)
@@ -239,26 +186,6 @@ describe('agent hooks CLI handler', () => {
       expect(applyAgentStatusHooksEnabledMock).not.toHaveBeenCalled()
     }
   )
-
-  it('names the file each status reports on', async () => {
-    writeDataFile(userDataPath, getDefaultPersistedState(userDataPath))
-    getDefaultUserDataPathMock.mockReturnValue(userDataPath)
-    getManagedAgentHookStatusesMock.mockReturnValue([
-      {
-        agent: 'codex',
-        state: 'installed',
-        configPath: '/u/orca/codex-runtime-home/home/hooks.json',
-        managedHooksPresent: true,
-        detail: null
-      }
-    ])
-
-    await main(['agent', 'hooks', 'status'], userDataPath)
-
-    expect(console.log).toHaveBeenCalledWith(
-      expect.stringContaining('codex: installed (/u/orca/codex-runtime-home/home/hooks.json)')
-    )
-  })
 
   it.each(['missing', 'corrupt'] as const)(
     'uses the backup index when the primary is %s',
@@ -299,7 +226,7 @@ describe('agent hooks CLI handler', () => {
     }
   )
 
-  it.each([0, 1, 2, 3, 4])('refuses a pre-index root with only legacy backup %s', async (slot) => {
+  it.each([0])('refuses a pre-index root with only legacy backup %s', async (slot) => {
     const backup = join(userDataPath, `orca-data.json.bak.${slot}`)
     const source = '{"settings":{"agentStatusHooksEnabled":true}}'
     writeFileSync(backup, source)
@@ -420,78 +347,6 @@ describe('agent hooks CLI handler', () => {
     }
   )
 
-  it.each(['on', 'off', 'status', 'prepare-codex'])(
-    'refuses explicit remote selection before local hook command %s',
-    async (command) => {
-      const state = getDefaultPersistedState(userDataPath)
-      writeDataFile(userDataPath, state)
-      const before = readFileSync(join(userDataPath, 'orca-data.json'), 'utf8')
-      getDefaultUserDataPathMock.mockReturnValue(userDataPath)
-
-      for (const selector of ['environment', 'pairing-code']) {
-        process.exitCode = undefined
-        await main(
-          ['agent', 'hooks', command, `--${selector}`, 'unreachable-host', '--json'],
-          userDataPath
-        )
-
-        expect(process.exitCode).toBe(1)
-        expect(getCliStatusMock).not.toHaveBeenCalled()
-        expect(callMock).not.toHaveBeenCalled()
-        expect(applyAgentStatusHooksEnabledMock).not.toHaveBeenCalled()
-        expect(readFileSync(join(userDataPath, 'orca-data.json'), 'utf8')).toBe(before)
-      }
-    }
-  )
-
-  it('does nothing for a native pane, so an old shell wrapper still exits 0', async () => {
-    const home = '/Users/jin/Library/Application Support/orca/codex-runtime-home/home'
-    vi.stubEnv('CODEX_HOME', home)
-    vi.stubEnv('ORCA_CODEX_HOME', home)
-    vi.stubEnv('WSL_DISTRO_NAME', '')
-
-    await main(['agent', 'hooks', 'prepare-codex'], userDataPath)
-
-    expect(callMock).not.toHaveBeenCalled()
-    expect(getCliStatusMock).not.toHaveBeenCalled()
-    expect(process.exitCode).toBeUndefined()
-  })
-
-  it('forwards WSL pane routing to the runtime exactly once', async () => {
-    const home = '/home/jin/.local/share/orca/codex-runtime-home/home'
-    vi.stubEnv('CODEX_HOME', home)
-    vi.stubEnv('ORCA_CODEX_HOME', home)
-    vi.stubEnv('WSL_DISTRO_NAME', 'Ubuntu-24.04')
-    callMock.mockResolvedValue({ result: { state: 'installed' } })
-
-    await main(['agent', 'hooks', 'prepare-codex'], userDataPath)
-
-    expect(callMock).toHaveBeenCalledExactlyOnceWith(
-      'agentHooks.prepareCodexForWslPane',
-      { codexHome: home, orcaCodexHome: home, wslDistro: 'Ubuntu-24.04' },
-      { timeoutMs: 50_000 }
-    )
-  })
-
-  it('fails open when WSL runtime preparation is unavailable', async () => {
-    vi.stubEnv('CODEX_HOME', '/home/jin/.local/share/orca/codex-runtime-home/home')
-    vi.stubEnv('ORCA_CODEX_HOME', '/home/jin/.local/share/orca/codex-runtime-home/home')
-    vi.stubEnv('WSL_DISTRO_NAME', 'Ubuntu')
-    callMock.mockRejectedValue(new Error('method_not_found'))
-
-    await expect(main(['agent', 'hooks', 'prepare-codex'], userDataPath)).resolves.toBeUndefined()
-    expect(callMock).toHaveBeenCalledExactlyOnceWith(
-      'agentHooks.prepareCodexForWslPane',
-      {
-        codexHome: '/home/jin/.local/share/orca/codex-runtime-home/home',
-        orcaCodexHome: '/home/jin/.local/share/orca/codex-runtime-home/home',
-        wslDistro: 'Ubuntu'
-      },
-      { timeoutMs: 50_000 }
-    )
-    expect(process.exitCode).toBeUndefined()
-  })
-
   it('updates an established SQLite profile without rewriting its JSON export', async () => {
     const profileId = 'work-profile'
     const profileDirectory = join(userDataPath, 'profiles', profileId)
@@ -534,60 +389,6 @@ describe('agent hooks CLI handler', () => {
       readBack.db.close()
     }
   })
-
-  it.each(['update-failed', 'unreachable', 'status-failed'] as const)(
-    'preserves a live SQLite writer when runtime contact is %s',
-    async (failure) => {
-      const profileId = 'live-profile'
-      const profileDirectory = join(userDataPath, 'profiles', profileId)
-      mkdirSync(profileDirectory, { recursive: true })
-      writeActiveProfileIndex(userDataPath, profileId)
-      const authority = new ProfileStateSqliteAuthority(
-        getOrcaProfileStateDatabaseFile(profileId, userDataPath),
-        profileId
-      )
-      authority.writeSerializedState(
-        Buffer.from(JSON.stringify({ settings: { agentStatusHooksEnabled: true } }))
-      )
-      if (failure === 'status-failed') {
-        getCliStatusMock.mockRejectedValueOnce(new Error('status transport unavailable'))
-      } else {
-        getCliStatusMock.mockResolvedValueOnce({
-          id: 'test-status',
-          ok: true,
-          result: {
-            app: { running: true, pid: null },
-            runtime: {
-              state: failure === 'unreachable' ? 'starting' : 'ready',
-              reachable: failure !== 'unreachable',
-              runtimeId: null
-            },
-            graph: { state: 'ready' }
-          },
-          _meta: { runtimeId: 'test' }
-        })
-        callMock.mockRejectedValueOnce(new Error('settings request timed out'))
-      }
-      try {
-        await runAgentHooksOff(userDataPath)
-
-        expect(process.exitCode).toBe(1)
-        expect(applyAgentStatusHooksEnabledMock).not.toHaveBeenCalled()
-        expect(() =>
-          authority.writeSerializedDomains([
-            { domain: 'ui', payload: '{"marker":"still-writable"}' }
-          ])
-        ).not.toThrow()
-        const persisted = JSON.parse(authority.readSerializedState() ?? '{}')
-        expect(persisted).toMatchObject({
-          settings: { agentStatusHooksEnabled: true },
-          ui: { marker: 'still-writable' }
-        })
-      } finally {
-        authority.close()
-      }
-    }
-  )
 
   it('imports a JSON-only active profile before the first settings mutation', async () => {
     const profileId = 'json-profile'

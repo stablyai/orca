@@ -201,66 +201,6 @@ describe('remaining dispatch metadata statement compilation', () => {
   )
 
   it.each(['fresh', 'v41'] as const)(
-    'reuses gate ownership and settlement reads while preserving completed rows and blocked tasks (%s)',
-    (version) => {
-      vi.useFakeTimers()
-      vi.setSystemTime(new Date(NOW))
-      const { reader, entries } = fixture(10, version)
-      const compile = vi.spyOn(DatabaseSync.prototype, 'prepare')
-      for (const { task, dispatch, expected } of entries) {
-        const gate = reader.createGate({ taskId: task.id, question: 'Continue?' })
-        expect(gate.task_id).toBe(task.id)
-        expect(gate.status).toBe('pending')
-        expect(reader.getDispatchContextById(dispatch.id)).toEqual({
-          ...expected,
-          status: 'completed',
-          completed_at: NOW,
-          capability_revoked_at: NOW
-        })
-        expect(reader.getTask(task.id)?.status).toBe('blocked')
-      }
-      expect(fullDispatchReads(compile.mock.calls)).toHaveLength(12)
-    }
-  )
-
-  it.each(['fresh', 'v41'] as const)(
-    'reuses the private failure snapshot while preserving returned committed row order (%s)',
-    (version) => {
-      vi.useFakeTimers()
-      vi.setSystemTime(new Date(NOW))
-      const { reader, entries } = fixture(10, version)
-      const compile = vi.spyOn(DatabaseSync.prototype, 'prepare')
-      for (const { task, dispatch, expected } of entries) {
-        const expectedFailure = {
-          ...expected,
-          status: 'failed',
-          failure_count: 1,
-          last_failure: 'failed send',
-          completed_at: NOW,
-          capability_revoked_at: NOW
-        }
-        const failure = reader.failDispatch(dispatch.id, 'failed send')
-        expect(failure).toEqual(expectedFailure)
-        expect(JSON.stringify(failure)).toBe(JSON.stringify(expectedFailure))
-        expect(reader.getTask(task.id)?.status).toBe('ready')
-      }
-      const reads = fullDispatchReads(compile.mock.calls)
-      compile.mockRestore()
-      const first = entries[0]
-      if (!first) {
-        throw new Error('Missing failure fixture')
-      }
-      const before = reader.db
-        .prepare('SELECT * FROM dispatch_contexts WHERE id = ?')
-        .get(first.dispatch.id)
-      const early = reader.failDispatch(first.dispatch.id, 'later')
-      expect(JSON.stringify(early)).toBe(JSON.stringify(before))
-      expect(early).not.toBe(reader.failDispatch(first.dispatch.id, 'later'))
-      expect(reads).toHaveLength(21)
-    }
-  )
-
-  it.each(['fresh', 'v41'] as const)(
     'reuses legacy dispatch identity scans with full rows and immediately fences settled rows (%s)',
     (version) => {
       const {

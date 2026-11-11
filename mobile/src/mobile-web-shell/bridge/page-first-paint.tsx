@@ -65,6 +65,11 @@ export function createRouteScreenPaintReporter(
   }
 }
 
+// Let a navigator learn when its own screens paint while still feeding the document's single report.
+export function useRouteScreenPaintReporter(): RouteScreenPaintReporter {
+  return useContext(RouteScreenPaintContext)
+}
+
 export function RouteScreenPaintProvider({
   report,
   children

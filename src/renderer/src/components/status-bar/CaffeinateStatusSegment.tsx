@@ -10,9 +10,10 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useAppStore } from '@/store'
-import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { useAppStore } from '@/store/index'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
   getAgentAwakeLidNote,
   getAgentAwakeModeLabel,
@@ -30,10 +31,10 @@ const INACTIVE_STATUS: ComputerAwakeStatus = {
   active: false
 }
 
-function activityLabel(active: boolean): string {
+function activityLabel(active: boolean, t: Translate = translate): string {
   return active
-    ? translate('auto.components.status.bar.CaffeinateStatusSegment.active', 'Active')
-    : translate('auto.components.status.bar.CaffeinateStatusSegment.inactive', 'Inactive')
+    ? t('auto.components.status.bar.CaffeinateStatusSegment.active', 'Active')
+    : t('auto.components.status.bar.CaffeinateStatusSegment.inactive', 'Inactive')
 }
 
 export function CaffeinateStatusSegment({
@@ -41,6 +42,7 @@ export function CaffeinateStatusSegment({
 }: {
   iconOnly: boolean
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const settings = useAppStore((state) => state.settings)
   const updateSettings = useAppStore((state) => state.updateSettings)
   const configuredMode = normalizeComputerAwakeMode(
@@ -77,9 +79,9 @@ export function CaffeinateStatusSegment({
   const mode = serviceStatus.mode === configuredMode ? serviceStatus.mode : configuredMode
   const active =
     serviceStatus.mode === configuredMode ? serviceStatus.active : configuredMode === 'on'
-  const title = getAgentAwakeTitle()
-  const statusText = `${getAgentAwakeModeLabel(mode)} · ${activityLabel(active)}`
-  const ariaLabel = translate(
+  const title = getAgentAwakeTitle(t)
+  const statusText = `${getAgentAwakeModeLabel(mode, t)} · ${activityLabel(active, t)}`
+  const ariaLabel = t(
     'auto.components.status.bar.CaffeinateStatusSegment.ariaLabel',
     '{{title}}, {{status}}',
     { title, status: statusText }
@@ -102,7 +104,7 @@ export function CaffeinateStatusSegment({
             >
               <Coffee className={`size-3 ${active ? 'text-foreground' : ''}`} />
               {!iconOnly ? (
-                <span className="text-[11px] font-medium">{getAgentAwakeModeLabel(mode)}</span>
+                <span className="text-[11px] font-medium">{getAgentAwakeModeLabel(mode, t)}</span>
               ) : null}
               <span
                 aria-hidden
@@ -114,7 +116,7 @@ export function CaffeinateStatusSegment({
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={6}>
-          {ariaLabel}. {getAgentAwakeLidNote()}
+          {ariaLabel}. {getAgentAwakeLidNote(undefined, t)}
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent
@@ -132,9 +134,9 @@ export function CaffeinateStatusSegment({
         <DropdownMenuRadioGroup value={mode} onValueChange={setMode}>
           <DropdownMenuRadioItem value="on" className="py-1.5">
             <span className="flex flex-col">
-              <span>{getAgentAwakeModeLabel('on')}</span>
+              <span>{getAgentAwakeModeLabel('on', t)}</span>
               <span className="text-[11px] font-normal text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.status.bar.CaffeinateStatusSegment.onDescription',
                   'Keep this computer awake continuously'
                 )}
@@ -143,9 +145,9 @@ export function CaffeinateStatusSegment({
           </DropdownMenuRadioItem>
           <DropdownMenuRadioItem value="auto" className="py-1.5">
             <span className="flex flex-col">
-              <span>{getAgentAwakeModeLabel('auto')}</span>
+              <span>{getAgentAwakeModeLabel('auto', t)}</span>
               <span className="text-[11px] font-normal text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.status.bar.CaffeinateStatusSegment.autoDescription',
                   'Stay awake while an agent is working'
                 )}
@@ -154,9 +156,9 @@ export function CaffeinateStatusSegment({
           </DropdownMenuRadioItem>
           <DropdownMenuRadioItem value="off" className="py-1.5">
             <span className="flex flex-col">
-              <span>{getAgentAwakeModeLabel('off')}</span>
+              <span>{getAgentAwakeModeLabel('off', t)}</span>
               <span className="text-[11px] font-normal text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.status.bar.CaffeinateStatusSegment.offDescription',
                   'Allow normal system sleep behavior'
                 )}

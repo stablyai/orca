@@ -1,12 +1,12 @@
 import { useState, type MutableRefObject } from 'react'
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
 import { isRuntimeEnvironmentRemovalBlocked } from './runtime-environment-host-details'
-import { defaultServerNameForAccessLink } from './runtime-server-default-name'
+import { defaultServerNameForAccessLink } from '../../../../../../shared/remote-runtime/host-catalog/runtime-host-default-name'
 import { forgetCachedRuntimeHostDetails } from './use-runtime-environment-catalog'
 import type { RuntimeHostAccessFailure } from '../../../runtime-access/RuntimeHostAccessFailureAlert'
 import { warnWslHostServerStop } from '../../../sidebar/wsl-host-removal'
@@ -31,6 +31,7 @@ export function useRuntimeEnvironmentMutationActions({
   loadEnvironments,
   connectEnvironment
 }: RuntimeEnvironmentMutationActionParams) {
+  const t = useTranslate()
   const [isSaving, setIsSaving] = useState(false)
   const [removingId, setRemovingId] = useState<string | null>(null)
   const [removeError, setRemoveError] = useState<string | null>(null)
@@ -55,7 +56,7 @@ export function useRuntimeEnvironmentMutationActions({
       defaultServerNameForAccessLink(trimmedPairingCode, useAppStore.getState().runtimeEnvironments)
     if (!trimmedName || !trimmedPairingCode) {
       toast.error(
-        translate(
+        t(
           'auto.components.settings.RuntimeEnvironmentsPane.0c55a47480',
           'Name and pairing code are required.'
         )
@@ -87,7 +88,7 @@ export function useRuntimeEnvironmentMutationActions({
       })
       if (result.updatedExisting && mountedRef.current) {
         toast.success(
-          translate(
+          t(
             'auto.components.settings.RuntimeEnvironmentsPane.serverAlreadyPaired',
             'This server is already paired as {{value0}}; updated its connection.',
             { value0: result.environment.name }
@@ -105,7 +106,7 @@ export function useRuntimeEnvironmentMutationActions({
       } else if (!result.updatedExisting) {
         if (mountedRef.current) {
           toast.success(
-            translate(
+            t(
               'auto.components.settings.RuntimeEnvironmentsPane.connectedNewProjectsHint',
               'Connected to {{value0}}. To create new projects there by default, choose it under New projects open on.',
               { value0: result.environment.name }
@@ -121,7 +122,7 @@ export function useRuntimeEnvironmentMutationActions({
         toast.error(
           error instanceof Error
             ? error.message
-            : translate(
+            : t(
                 'auto.components.settings.RuntimeEnvironmentsPane.6cb6eae14f',
                 'Failed to save runtime environment.'
               )
@@ -143,7 +144,7 @@ export function useRuntimeEnvironmentMutationActions({
       if (isRuntimeEnvironmentRemovalBlocked(settings.activeRuntimeEnvironmentId, environment.id)) {
         if (mountedRef.current) {
           setRemoveError(
-            translate(
+            t(
               'auto.components.settings.RuntimeEnvironmentsPane.removeDefaultServerBlocked',
               'This server is the default host for new projects. Choose another one under New projects open on before removing it.'
             )
@@ -157,11 +158,9 @@ export function useRuntimeEnvironmentMutationActions({
       // A WSL host whose Remove couldn't prove its server stopped says so instead of "Removed".
       if (mountedRef.current && !warnWslHostServerStop(removal?.serverStop)) {
         toast.success(
-          translate(
-            'auto.components.settings.RuntimeEnvironmentsPane.b5b5114cb0',
-            'Removed {{value0}}.',
-            { value0: environment.name }
-          )
+          t('auto.components.settings.RuntimeEnvironmentsPane.b5b5114cb0', 'Removed {{value0}}.', {
+            value0: environment.name
+          })
         )
       }
       return true

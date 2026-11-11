@@ -6,7 +6,7 @@ import {
 } from '../../../../shared/feature-wall-setup-steps'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { selectWorktreesByRepo } from '../../store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '../../store/workspaces/catalog/workspace-record-fields'
 
 export type FeatureWallSetupProgressInput = {
   ready?: boolean

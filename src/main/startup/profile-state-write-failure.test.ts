@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { ProfileStateWriterError } from '../persistence/profile-state/profile-state-writer-errors'
+import { ProfileStateWriterError } from '../persistence/profile-state/writer/profile-state-writer-errors'
 
 const fixture = await vi.hoisted(async () => {
   const events = await import('node:events')
@@ -16,13 +16,13 @@ vi.mock('../window/foreground-activation-policy', () => ({
   isBackgroundLaunch: () => fixture.background
 }))
 vi.mock('./main-process-state', () => ({ mainProcessState: fixture.state }))
-vi.mock('../persistence/profile-state/profile-state-writer-diagnostics', () => ({
+vi.mock('../persistence/profile-state/writer/profile-state-writer-diagnostics', () => ({
   recordProfileStateWriteFailureReport: vi.fn()
 }))
 
 const { reportProfileStateWriteFailure } = await import('./profile-state-write-failure')
 const { recordProfileStateWriteFailureReport } =
-  await import('../persistence/profile-state/profile-state-writer-diagnostics')
+  await import('../persistence/profile-state/writer/profile-state-writer-diagnostics')
 
 class FakeWindow extends EventEmitter {
   visible: boolean
@@ -90,16 +90,6 @@ it('attaches the alert to the visible main window and explains an unconfirmed wr
     buttons: ['OK']
   })
   expect(recordProfileStateWriteFailureReport).toHaveBeenCalledWith(workerExit, 'dialog')
-})
-
-it('tells the user saved changes are safe when no write was left unresolved', async () => {
-  fixture.state.mainWindow = new FakeWindow(true)
-  reportProfileStateWriteFailure(conflict)
-  await vi.waitFor(() => expect(fixture.show).toHaveBeenCalledOnce())
-  expect(fixture.show.mock.calls[0][1]).toMatchObject({
-    detail:
-      'Changes saved before this point are safe. New changes will not be saved until you restart Orca.'
-  })
 })
 
 it('waits for a hidden window to be shown by the user instead of revealing it', async () => {

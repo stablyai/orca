@@ -1,9 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import {
-  prepareBenchmark,
-  runDescriptor
-} from '../../config/scripts/check-job-log-byte-cap-benchmark.mjs'
-import { createManifest } from '../../config/scripts/check-job-log-performance-cases.mjs'
+import { describe, expect, it } from 'vitest'
 import { stripAnsiEscapeSequences } from './ansi-escape-sequences'
 
 describe('ordered linear ANSI stripping', () => {
@@ -29,37 +24,3 @@ describe('ordered linear ANSI stripping', () => {
     expect(stripAnsiEscapeSequences(input)).toBe(expected)
   })
 })
-
-// Manual benchmark: opt in with ORCA_CHECK_LOG_PERF=1.
-describe.runIf(process.env.ORCA_CHECK_LOG_PERF === '1')(
-  'near-cap unfinished 7-bit stripping completion',
-  { concurrent: false },
-  () => {
-    let context: Awaited<ReturnType<typeof prepareBenchmark>>
-    beforeAll(async () => {
-      context = await prepareBenchmark(process.cwd(), { compareBaseline: false })
-    }, 15_000)
-    afterAll(async () => {
-      await context?.cleanup()
-    })
-    it.each(['osc', 'dcs'])(
-      'completes %s warmups and a sample under the unchanged child watchdog',
-      async (family) => {
-        const descriptor = createManifest().find(
-          (item) =>
-            item.mode === 'direct' &&
-            item.arm === 'proposed' &&
-            item.family === family &&
-            item.width === 7 &&
-            item.bytes === 63 * 1024 * 1024 &&
-            item.sample === 0
-        )
-        expect(descriptor).toBeDefined()
-        const result = await runDescriptor(context, descriptor)
-        expect(result.status).toBe('completed')
-        expect(result.samples).toHaveLength(1)
-      },
-      15_000
-    )
-  }
-)

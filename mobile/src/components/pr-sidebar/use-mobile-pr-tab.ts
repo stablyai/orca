@@ -1,44 +1,62 @@
-import { useCallback, useLayoutEffect, useRef, useState } from 'react'
-import type { ConnectionState } from '../../transport/types'
-import type { RpcClient } from '../../transport/rpc-client'
+import { useCallback, useRef, useState } from 'react'
+import type { ConnectionState } from '../../transport/connection/connection-state'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import type { HostConnectionInputs } from '../../transport/connection/client-context-connection-metrics'
 import {
   isPrSidebarDetailsPlaceholder,
+  prSidebarResourceKey,
   type PrSidebarData,
   type PrSidebarState
-} from '../../session/mobile-pr-sidebar-state'
+} from '../../source-control/review/mobile-pr-sidebar-state'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
-import type { PrSidebarLoadOptions } from '../../session/use-mobile-pr-sidebar-controller'
-import type { PrSidebarLoadResult } from '../../session/pr-sidebar-load-result'
+import type { PrSidebarLoadOptions } from '../../source-control/review/use-mobile-pr-sidebar-controller'
+import {
+  prActionSlices,
+  type PrQueryScope,
+  type PrSlice
+} from '../../source-control/review/mobile-pr-queries'
+import type { PrActionBusyKey } from '../../source-control/review/pr-actions-engine'
 import type { MobileGitStatusResult } from '../../source-control/mobile-git-status'
-import { useMobilePrActions, type MobilePrActions } from '../../session/use-mobile-pr-actions'
-import { useMobilePrCommentActions } from '../../session/use-mobile-pr-comment-actions'
-import { useMobilePrTextAction } from '../../session/use-mobile-pr-text-action'
-import { useMobilePrAiTriage, type MobilePrAiTriage } from '../../session/use-mobile-pr-ai-triage'
-import { usePRBotAuthorOverrides } from '../../session/use-pr-bot-author-overrides'
+import {
+  useMobilePrActions,
+  type MobilePrActions
+} from '../../source-control/review/use-mobile-pr-actions'
+import { useMobilePrCommentActions } from '../../source-control/review/use-mobile-pr-comment-actions'
+import { useMobilePrTextAction } from '../../source-control/review/use-mobile-pr-text-action'
+import {
+  useMobilePrAiTriage,
+  type MobilePrAiTriage
+} from '../../source-control/review/use-mobile-pr-ai-triage'
+import { usePRBotAuthorOverrides } from '../../source-control/review/use-pr-bot-author-overrides'
 import { useHostProtocolGates } from '../host-protocol-gates-context'
 import { useMobilePrPolling, type PrTabLive } from './use-mobile-pr-polling'
 import { unlinkMobilePr } from '../../source-control/mobile-pr-link'
 import { translate } from '../../i18n/mobile-i18n'
-import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
-import { fetchPRCheckDetails } from '../../session/github-pr-rpc'
-import type { DetailEntry } from './PRCheckDetail'
-import { prCheckKey } from './pr-checks-presentation'
-
-const NO_DETAILS: Record<string, DetailEntry> = {}
+import { usePrCheckRunDetails } from './use-pr-check-run-details'
+import {
+  useSelectedScope,
+  usePrTabRequests,
+  type PrTabConfirm,
+  type PrTabScope
+} from './pr-tab-requests'
 
 export type PrTabScreen = 'checks' | 'comments'
-export type PrTabSheet = 'merge' | 'reviewers' | 'createPr' | 'editTitle' | 'editDescription'
-export type PrTabConfirm = 'close' | 'reopen' | 'unlink'
+export type { PrTabConfirm, PrTabSheet, PrTabSheetRequest } from './pr-tab-requests'
 
 type Input = {
+  hostId: string
   state: PrSidebarState
-  refetch: (options?: PrSidebarLoadOptions) => Promise<PrSidebarLoadResult> | void
-  /** A write's follow-up read: never skipped behind another read, and a failed one keeps the shown PR. */
-  rereadAfterWrite: () => Promise<void>
+  /** The reads behind `state`, which writes patch and polling keeps fresh. */
+  queries: PrQueryScope | null
+  refetch: (options?: PrSidebarLoadOptions) => Promise<void>
+  /** Re-reads the parts of the PR a write changed; a failed read keeps the shown PR. */
+  rereadSlices: (slices: readonly PrSlice[]) => Promise<void>
   /** What is on screen, so the PR keeps itself fresh only while someone is looking. */
   live?: PrTabLive
   client: RpcClient | null
   connState: ConnectionState
+  /** The screen header's own verdict inputs, so a sheet's no-data wait reads as the header does. */
+  hostConnection: HostConnectionInputs
   worktreeId: string
   gitBranch: string | null
   gitStatus: MobileGitStatusResult | null
@@ -71,9 +89,11 @@ export type MobilePrCreated = {
 // One owner for the PR tab's mutations, sheets and openers, so the hub bar and the tab body drive the same state.
 export function useMobilePrTab(input: Input) {
   const {
+    hostId,
     state,
+    queries,
     refetch,
-    rereadAfterWrite,
+    rereadSlices,
     client,
     connState,
     worktreeId,
@@ -84,6 +104,21 @@ export function useMobilePrTab(input: Input) {
   const prNumber = state.kind === 'ready' ? state.data.pr.number : 0
   // Keep stable PRInfo.prRepo identity; cloning owner/repo thrashes mutation/comment/title hooks.
   const prRepo = state.kind === 'ready' ? (state.data.pr.prRepo ?? null) : null
+  // The complete PR resource, not its number: fork #N and upstream #N are different owners of every cache and sheet.
+  const prScope = useSelectedScope({
+    client,
+    worktreeId,
+    branch: gitBranch,
+    resource: state.kind === 'ready' ? prSidebarResourceKey(state.data.pr) : null
+  })
+  const branchScope = useSelectedScope({ client, worktreeId, branch: gitBranch, resource: null })
+  const requests = usePrTabRequests(prScope, branchScope)
+  const { setSheet } = requests
+  // Every attempted action re-reads what it changed; the write's own outcome stays the only feedback.
+  const rereadAfterAction = useCallback(
+    (action: PrActionBusyKey) => rereadSlices(prActionSlices(action)),
+    [rereadSlices]
+  )
   const ownActions = useMobilePrActions({
     client,
     connState,
@@ -91,28 +126,30 @@ export function useMobilePrTab(input: Input) {
     prNumber,
     headSha: input.headSha,
     prRepo,
-    refetch: rereadAfterWrite
+    refetch: rereadAfterAction
   })
   const commentActions = useMobilePrCommentActions({
+    hostId,
     client,
     connState,
     worktreeId,
     prNumber,
     prRepo,
-    refetch: rereadAfterWrite
+    queries
   })
   const textAction = useMobilePrTextAction({
+    hostId,
     client,
     connState,
     worktreeId,
     prNumber,
     prRepo,
-    refetch: rereadAfterWrite
+    queries
   })
   const clearTextError = textAction.clearError
   const { polling } = useMobilePrPolling({
+    queries,
     state,
-    refetch,
     live: input.live ?? false,
     connected: connState === 'connected'
   })
@@ -135,88 +172,32 @@ export function useMobilePrTab(input: Input) {
     state.kind === 'ready' ? state.data.details : null
   )
 
-  // Check details outlive the Checks screen, so going back and in again does not refetch them; they belong to one PR.
-  const detailsOwner = `${worktreeId}\u0000${prNumber}`
-  const [detailsState, setDetailsState] = useState<{
-    owner: string
-    entries: Record<string, DetailEntry>
-  }>({ owner: detailsOwner, entries: {} })
-  const checkDetails = detailsState.owner === detailsOwner ? detailsState.entries : NO_DETAILS
-  // Read through a ref so the fetch starts here, not inside a state updater React may replay.
-  const checkDetailsRef = useRef(checkDetails)
-  useLayoutEffect(() => {
-    checkDetailsRef.current = checkDetails
+  const detailsOwner: PrTabScope = prScope
+  const { checkDetails, ensureCheckDetail } = usePrCheckRunDetails({
+    owner: detailsOwner,
+    client,
+    worktreeId,
+    prRepo
   })
-  const ensureCheckDetail = useCallback(
-    (check: PRCheckDetail) => {
-      const key = prCheckKey(check)
-      const existing = checkDetailsRef.current[key]
-      // A failed read is retried on the next open; only loaded and in-flight reads are kept.
-      if ((existing && existing.status !== 'error') || !client) {
-        return
-      }
-      const loading: DetailEntry = { status: 'loading' }
-      checkDetailsRef.current = { ...checkDetailsRef.current, [key]: loading }
-      setDetailsState((prev) => ({
-        owner: detailsOwner,
-        entries: { ...(prev.owner === detailsOwner ? prev.entries : NO_DETAILS), [key]: loading }
-      }))
-      void fetchPRCheckDetails(client, worktreeId, {
-        checkRunId: check.checkRunId,
-        workflowRunId: check.workflowRunId,
-        checkName: check.name,
-        url: check.url,
-        prRepo
-      })
-        .then((outcome): DetailEntry =>
-          outcome.ok
-            ? { status: 'loaded', details: outcome.result }
-            : { status: 'error', message: outcome.error }
-        )
-        .catch((err: unknown): DetailEntry => ({ status: 'error', message: String(err) }))
-        .then((entry) =>
-          setDetailsState((current) =>
-            current.owner === detailsOwner
-              ? { owner: detailsOwner, entries: { ...current.entries, [key]: entry } }
-              : current
-          )
-        )
-    },
-    [client, detailsOwner, prRepo, worktreeId]
-  )
 
-  // A sheet belongs to the PR (or, for Create, the branch) it opened for; a switch closes it rather than retargeting a save.
-  const sheetOwner = (kind: PrTabSheet) =>
-    kind === 'createPr'
-      ? `${worktreeId}\u0000${gitBranch}`
-      : `${worktreeId}\u0000${gitBranch}\u0000${prNumber}`
-  const [opened, setOpened] = useState<{ kind: PrTabSheet; owner: string } | null>(null)
-  const sheet = opened && opened.owner === sheetOwner(opened.kind) ? opened.kind : null
-  const sheetOwnerRef = useRef(sheetOwner)
-  useLayoutEffect(() => {
-    sheetOwnerRef.current = sheetOwner
-  })
-  const setSheet = useCallback((kind: PrTabSheet | null) => {
-    setOpened(kind ? { kind, owner: sheetOwnerRef.current(kind) } : null)
-  }, [])
-  const sheetRef = useRef(sheet)
-  useLayoutEffect(() => {
-    sheetRef.current = sheet
-  })
   const afterSheetCloseRef = useRef<(() => void) | null>(null)
   // A running Create holds its sheet up (the drawer refuses dismissal), so the run's result has somewhere to land.
   const [creatingPr, setCreatingPr] = useState(false)
-  const [confirm, setConfirm] = useState<PrTabConfirm | null>(null)
   const [unlinking, setUnlinking] = useState(false)
   // An unlink failure belongs to the PR it was for, and the next menu action replaces it.
-  const [unlinkFailure, setUnlinkFailure] = useState<{ owner: string; message: string } | null>(
-    null
-  )
+  const [unlinkFailure, setUnlinkFailure] = useState<{
+    owner: PrTabScope
+    message: string
+  } | null>(null)
   const unlinkError = unlinkFailure?.owner === detailsOwner ? unlinkFailure.message : null
-  const openConfirm = useCallback((next: PrTabConfirm | null) => {
-    setUnlinkFailure(null)
-    setConfirm(next)
-  }, [])
+  const { setConfirm, takeConfirm } = requests
+  const openConfirm = useCallback(
+    (next: PrTabConfirm | null) => {
+      setUnlinkFailure(null)
+      setConfirm(next)
+    },
+    [setConfirm]
+  )
 
   const unlink = useCallback(async (): Promise<void> => {
     if (!client || unlinking || prNumber === 0) {
@@ -227,7 +208,7 @@ export function useMobilePrTab(input: Input) {
     try {
       const outcome = await unlinkMobilePr(client, worktreeId, prNumber)
       if (outcome.ok) {
-        refetch()
+        void refetch()
       } else {
         setUnlinkFailure({ owner: detailsOwner, message: outcome.error })
       }
@@ -255,27 +236,22 @@ export function useMobilePrTab(input: Input) {
     textAction,
     triage,
     botAuthorOverrides,
-    sheet,
+    sheet: requests.sheet,
+    sheetRequest: requests.sheetRequest,
+    ownsSheet: requests.ownsSheet,
+    sheetInScope: requests.inScope,
     closeSheet: useCallback(() => setSheet(null), [setSheet]),
-    // A save or merge that lands late closes only its own sheet, never one opened since.
-    closeSheetIf: useCallback(
-      (kind: PrTabSheet) => {
-        if (sheetRef.current === kind) {
-          setSheet(null)
-        }
-      },
-      [setSheet]
-    ),
+    closeSheetIf: requests.closeSheetIf,
     closeSheetThen: useCallback(
       (next: () => void) => {
-        if (sheetRef.current === null) {
+        if (!requests.hasSheet()) {
           next()
           return
         }
         afterSheetCloseRef.current = next
         setSheet(null)
       },
-      [setSheet]
+      [requests.hasSheet, setSheet]
     ),
     polling,
     creatingPr,
@@ -283,14 +259,11 @@ export function useMobilePrTab(input: Input) {
     checkDetails,
     ensureCheckDetail,
     onSheetAfterClose: useCallback(() => {
-      // A sheet closed by a PR switch must not come back if the user switches back.
-      setOpened((current) =>
-        current && current.owner === sheetOwnerRef.current(current.kind) ? current : null
-      )
+      requests.retireDepartedSheet()
       const next = afterSheetCloseRef.current
       afterSheetCloseRef.current = null
       next?.()
-    }, []),
+    }, [requests.retireDepartedSheet]),
     openMergeSheet: useCallback(() => setSheet('merge'), [setSheet]),
     openReviewersSheet: useCallback(() => setSheet('reviewers'), [setSheet]),
     openCreatePrSheet: useCallback(() => setSheet('createPr'), [setSheet]),
@@ -304,8 +277,17 @@ export function useMobilePrTab(input: Input) {
     }, [clearTextError, setSheet]),
     openChecksScreen: useCallback(() => onOpenScreen('checks'), [onOpenScreen]),
     openCommentsScreen: useCallback(() => onOpenScreen('comments'), [onOpenScreen]),
-    confirm,
+    confirm: requests.confirm,
     setConfirm: openConfirm,
+    // A confirmation whose PR departed closes without acting; a current one acts on the PR it opened for.
+    runConfirm: useCallback(() => {
+      const kind = takeConfirm()
+      if (kind === 'unlink') {
+        void unlink()
+      } else if (kind) {
+        actions.updateState(kind === 'close' ? 'closed' : 'open')
+      }
+    }, [actions, takeConfirm, unlink]),
     unlink,
     unlinking,
     unlinkError

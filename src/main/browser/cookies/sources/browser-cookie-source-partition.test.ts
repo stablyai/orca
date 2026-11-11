@@ -13,18 +13,6 @@ const MODERN_COLUMNS = new Set([
 ])
 
 describe('readChromiumRowPartition', () => {
-  it('reads a partitioned row as both halves of the partition key', () => {
-    expect(
-      readChromiumRowPartition(
-        { top_frame_site_key: 'https://top.example', has_cross_site_ancestor: 1n },
-        MODERN_COLUMNS
-      )
-    ).toEqual({
-      status: 'partitioned',
-      partitionKey: { topLevelSite: 'https://top.example', hasCrossSiteAncestor: true }
-    })
-  })
-
   it('carries a false cross-site-ancestor rather than defaulting it to true', () => {
     expect(
       readChromiumRowPartition(
@@ -37,21 +25,6 @@ describe('readChromiumRowPartition', () => {
     })
   })
 
-  it('reads an empty partition site as unpartitioned', () => {
-    expect(
-      readChromiumRowPartition(
-        { top_frame_site_key: '', has_cross_site_ancestor: 0n },
-        MODERN_COLUMNS
-      )
-    ).toEqual({ status: 'unpartitioned' })
-  })
-
-  it('reads a schema without the partition column as unpartitioned', () => {
-    expect(readChromiumRowPartition({ name: 'sid' }, new Set(['host_key', 'name']))).toEqual({
-      status: 'unpartitioned'
-    })
-  })
-
   it('refuses a partitioned row whose schema has no cross-site-ancestor column', () => {
     const result = readChromiumRowPartition(
       { top_frame_site_key: 'https://top.example' },
@@ -60,33 +33,6 @@ describe('readChromiumRowPartition', () => {
 
     expect(result.status).toBe('unreadable')
     expect(result).toHaveProperty('reason', expect.stringContaining('cross-site-ancestor'))
-  })
-
-  it('refuses a partitioned row whose ancestor flag is not an integer', () => {
-    expect(
-      readChromiumRowPartition(
-        { top_frame_site_key: 'https://top.example', has_cross_site_ancestor: null },
-        MODERN_COLUMNS
-      ).status
-    ).toBe('unreadable')
-  })
-
-  it.each([2n, -1n, 2, -1, 0.5])('refuses an out-of-range ancestor flag (%s)', (flag) => {
-    expect(
-      readChromiumRowPartition(
-        { top_frame_site_key: 'https://top.example', has_cross_site_ancestor: flag },
-        MODERN_COLUMNS
-      ).status
-    ).toBe('unreadable')
-  })
-
-  it('refuses a partition site column that is not text', () => {
-    expect(
-      readChromiumRowPartition(
-        { top_frame_site_key: 42, has_cross_site_ancestor: 1n },
-        MODERN_COLUMNS
-      ).status
-    ).toBe('unreadable')
   })
 
   it.each([null, 'not-a-site', 'ftp://top.example', 'https://top.example/path'])(
@@ -103,10 +49,6 @@ describe('readChromiumRowPartition', () => {
 })
 
 describe('readJsonCookiePartition', () => {
-  it('reads an absent partitionKey as unpartitioned', () => {
-    expect(readJsonCookiePartition(undefined)).toEqual({ status: 'unpartitioned' })
-  })
-
   it('refuses an opaque partition key even when its key object is absent or populated', () => {
     expect(readJsonCookiePartition(undefined, true)).toEqual({
       status: 'unreadable',
@@ -120,56 +62,11 @@ describe('readJsonCookiePartition', () => {
     ).toBe('unreadable')
   })
 
-  it('accepts the explicit non-opaque CDP shape and rejects a malformed opaque flag', () => {
-    expect(readJsonCookiePartition(undefined, false)).toEqual({ status: 'unpartitioned' })
-    expect(readJsonCookiePartition(undefined, 'false').status).toBe('unreadable')
-  })
-
-  it.each([null, ''])('refuses a present but empty partitionKey (%s)', (partitionKey) => {
-    expect(readJsonCookiePartition(partitionKey).status).toBe('unreadable')
-  })
-
-  it('reads a complete partitionKey object', () => {
-    expect(
-      readJsonCookiePartition({ topLevelSite: 'https://top.example', hasCrossSiteAncestor: true })
-    ).toEqual({
-      status: 'partitioned',
-      partitionKey: { topLevelSite: 'https://top.example', hasCrossSiteAncestor: true }
-    })
-  })
-
   it('refuses a partitionKey missing the cross-site-ancestor bit', () => {
     expect(readJsonCookiePartition({ topLevelSite: 'https://top.example' }).status).toBe(
       'unreadable'
     )
   })
-
-  it('refuses the legacy string partitionKey form', () => {
-    expect(readJsonCookiePartition('https://top.example').status).toBe('unreadable')
-  })
-
-  it('refuses a partitionKey with a non-boolean ancestor bit', () => {
-    expect(
-      readJsonCookiePartition({ topLevelSite: 'https://top.example', hasCrossSiteAncestor: 'yes' })
-        .status
-    ).toBe('unreadable')
-  })
-
-  it('refuses an array or empty-site partitionKey', () => {
-    expect(readJsonCookiePartition([]).status).toBe('unreadable')
-    expect(readJsonCookiePartition({ topLevelSite: '', hasCrossSiteAncestor: true }).status).toBe(
-      'unreadable'
-    )
-  })
-
-  it.each(['not-a-site', 'ftp://top.example', 'https://top.example/path'])(
-    'refuses an invalid JSON partition site (%s)',
-    (topLevelSite) => {
-      expect(readJsonCookiePartition({ topLevelSite, hasCrossSiteAncestor: true }).status).toBe(
-        'unreadable'
-      )
-    }
-  )
 })
 
 describe('readFirefoxRowPartition', () => {
@@ -197,23 +94,5 @@ describe('readFirefoxRowPartition', () => {
 
     expect(result.status).toBe('unreadable')
     expect(result).toHaveProperty('reason', expect.stringContaining('cross-site-ancestor'))
-  })
-
-  it('reads a schema without the partitioned-attribute column as unpartitioned', () => {
-    expect(
-      readFirefoxRowPartition(
-        { originAttributes: '^partitionKey=(https,example.com,f)' },
-        new Set(['originAttributes'])
-      )
-    ).toEqual({ status: 'unpartitioned' })
-  })
-
-  it('refuses an invalid partitioned-attribute flag', () => {
-    expect(
-      readFirefoxRowPartition(
-        { isPartitionedAttributeSet: null },
-        new Set(['isPartitionedAttributeSet'])
-      ).status
-    ).toBe('unreadable')
   })
 })

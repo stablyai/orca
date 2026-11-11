@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { FolderOpen } from 'lucide-react'
+import { floatingWorkspaceUnavailableReason } from '@/components/floating-terminal/floating-workspace-availability'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { FloatingTerminalTriggerLocation } from '../../../../../shared/ui-chrome-types'
 import { Button } from '../../ui/button'
@@ -10,8 +11,8 @@ import { SettingsRow, SettingsSwitchRow } from '../form-controls/SettingsFormCon
 import { getFloatingWorkspaceSearchEntries } from './floating-workspace-search'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { useAppStore } from '../../../store/index'
-import { translate } from '@/i18n/i18n'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { useTranslate } from '@/i18n/use-translate'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 
 type FloatingWorkspacePaneProps = {
   settings: GlobalSettings
@@ -36,8 +37,11 @@ export function FloatingWorkspacePane({
   settings,
   updateSettings
 }: FloatingWorkspacePaneProps): React.JSX.Element | null {
+  const t = useTranslate()
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const includeBrowser = !isWebClientLocation()
+  // Pass the component's translator so a language change re-renders the reason.
+  const unavailableReason = floatingWorkspaceUnavailableReason(t)
   const [resolvedFloatingWorkspacePath, setResolvedFloatingWorkspacePath] = useState('')
 
   useEffect(() => {
@@ -82,11 +86,8 @@ export function FloatingWorkspacePane({
   return (
     <section className="space-y-4">
       <SearchableSetting
-        title={translate(
-          'auto.components.settings.FloatingWorkspacePane.1f67f39384',
-          'Floating Workspace'
-        )}
-        description={translate(
+        title={t('auto.components.settings.FloatingWorkspacePane.2374e81dd8', 'Floating workspace')}
+        description={t(
           'auto.components.settings.FloatingWorkspacePane.37df688d6f',
           'Enable the floating workspace and choose where new tabs start.'
         )}
@@ -104,14 +105,18 @@ export function FloatingWorkspacePane({
         className="divide-y divide-border/40"
       >
         <SettingsSwitchRow
-          label={translate(
-            'auto.components.settings.FloatingWorkspacePane.5136813663',
-            'Enable Floating Workspace'
+          label={t(
+            'auto.components.settings.FloatingWorkspacePane.172d1d75c3',
+            'Enable floating workspace'
           )}
-          description={translate(
-            'auto.components.settings.FloatingWorkspacePane.41eb95f7f0',
-            'Shows the floating workspace button and panel.'
-          )}
+          description={
+            unavailableReason ??
+            t(
+              'auto.components.settings.FloatingWorkspacePane.41eb95f7f0',
+              'Shows the floating workspace button and panel.'
+            )
+          }
+          disabled={unavailableReason !== null}
           checked={settings.floatingTerminalEnabled}
           onChange={() => {
             if (!settings.floatingTerminalEnabled) {
@@ -127,11 +132,11 @@ export function FloatingWorkspacePane({
 
         <SettingsRow
           alignTop
-          label={translate(
-            'auto.components.settings.FloatingWorkspacePane.12aa09f10c',
-            'Terminal Directory'
+          label={t(
+            'auto.components.settings.FloatingWorkspacePane.7cedc178d6',
+            'Terminal directory'
           )}
-          description={translate(
+          description={t(
             'auto.components.settings.FloatingWorkspacePane.81afb79785',
             "New floating terminal tabs start here. Markdown notes are saved in Orca's app-owned floating workspace."
           )}
@@ -147,7 +152,7 @@ export function FloatingWorkspacePane({
                 type="button"
                 variant="outline"
                 size="icon"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.settings.FloatingWorkspacePane.505001823e',
                   'Choose floating workspace directory'
                 )}
@@ -160,11 +165,11 @@ export function FloatingWorkspacePane({
         />
 
         <SettingsRow
-          label={translate(
-            'auto.components.settings.FloatingWorkspacePane.5e5a8da236',
-            'Toggle Button Location'
+          label={t(
+            'auto.components.settings.FloatingWorkspacePane.b9c2a85346',
+            'Toggle button location'
           )}
-          description={translate(
+          description={t(
             'auto.components.settings.FloatingWorkspacePane.3c900e26e5',
             'The keyboard shortcut works regardless of where the toggle is shown.'
           )}
@@ -183,16 +188,10 @@ export function FloatingWorkspacePane({
               }}
             >
               <ToggleGroupItem value="floating-button">
-                {translate(
-                  'auto.components.settings.FloatingWorkspacePane.9fb225f2d7',
-                  'Floating Button'
-                )}
+                {t('auto.components.settings.FloatingWorkspacePane.73ac917638', 'Floating button')}
               </ToggleGroupItem>
               <ToggleGroupItem value="status-bar">
-                {translate(
-                  'auto.components.settings.FloatingWorkspacePane.aeaf76fda9',
-                  'Status Bar'
-                )}
+                {t('auto.components.settings.FloatingWorkspacePane.dd7eb9270a', 'Status bar')}
               </ToggleGroupItem>
             </ToggleGroup>
           }

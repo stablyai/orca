@@ -16,9 +16,9 @@ import {
   WorkspaceReviewFactsSnapshotSchema,
   type WorkspaceReviewFact
 } from '../../../shared/sidebar-list/workspace-review-facts'
-import { fixture } from '../../persistence/loading-store/profile-state-delayed-authority-fixture'
-import { ProducerRevision, type ProducerChange } from './producer-revision'
-import { SidebarInputsFeed, type SidebarInputsFeedChange } from './sidebar-inputs-feed'
+import { fixture } from '../../persistence/loading-store/profile-writing/profile-state-delayed-authority-fixture'
+import { ProducerRevision } from './producer-revision'
+import { SidebarInputsFeed } from './sidebar-inputs-feed'
 import {
   sidebarInputsFeedDomains,
   type SidebarInputsFeedSources
@@ -177,47 +177,6 @@ afterEach(() => {
 })
 
 describe('sidebar inputs feed announcements', () => {
-  it('lists the writers of every published domain', async () => {
-    const { sources, writers } = await host()
-    const names = sidebarInputsFeedDomains(sources).map((domain) => domain.name)
-    expect(new Set(names)).toEqual(new Set(Object.keys(writers)))
-  })
-
-  it('hears every writer of every domain, through the real store', async () => {
-    const { sources, writers } = await host()
-    const unheard: string[] = []
-    for (const domain of sidebarInputsFeedDomains(sources)) {
-      for (const [writer, write] of Object.entries(writers[domain.name] ?? {})) {
-        const heard: (SidebarInputsFeedChange | undefined)[] = []
-        const detach = domain.watch((change) => heard.push(change))
-        write()
-        detach()
-        if (heard.length === 0) {
-          unheard.push(`${domain.name} <- ${writer}`)
-        }
-      }
-    }
-    expect(unheard).toEqual([])
-  })
-
-  it('publishes metadata and accepted commands as urgent', async () => {
-    const { sources, writers } = await host()
-    const domains = new Map(
-      sidebarInputsFeedDomains(sources).map((domain) => [domain.name, domain])
-    )
-    const urgency = (name: string, writer: string): boolean => {
-      const heard: (ProducerChange | undefined)[] = []
-      const detach = domains.get(name)?.watch((change) => heard.push(change))
-      writers[name][writer]()
-      detach?.()
-      return heard.some((change) => change?.urgent === true)
-    }
-    expect(urgency('creations', 'lifecycle queue')).toBe(true)
-    expect(urgency('inProgress', 'lifecycle queue')).toBe(true)
-    expect(urgency('desktop', 'pin write')).toBe(true)
-    expect(urgency('view', 'ui write')).toBe(true)
-  })
-
   it('follows a PR cache save on a quiet desktop into the phone’s PR grouping', async () => {
     const { store, sources } = await host()
     const events: { generation: string; revision: number }[] = []

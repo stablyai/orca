@@ -1,6 +1,9 @@
 /** Hold an unwritten bridge as liveness watch/port probe: orcad closes it on socket loss or distro stop. Measured exits arrive ~69ms/~40ms respectively; exit codes still require independent liveness evidence. */
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
-import { openOrcadStdioBridgeChannel, resolveOrcadStdioBridge } from '../../ssh/orcad-stdio-bridge'
+import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
+import {
+  openOrcadStdioBridgeChannel,
+  resolveOrcadStdioBridge
+} from '../../managed-server/lifecycle/orcad-stdio-bridge'
 import {
   OrcadStdioBridgeDecoder,
   type OrcadStdioBridgeSignal

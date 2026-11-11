@@ -1,4 +1,8 @@
-import type { Automation, AutomationRun, AutomationRunUsage } from '../../shared/automations-types'
+import type { Automation } from '../../shared/automations/automation-definition'
+import type {
+  AutomationRun,
+  AutomationRunUsage
+} from '../../shared/automations/history/automation-run'
 import type { Store } from '../persistence/loading-store/store'
 import type { AutomationRunWriter } from './automation-run-writer'
 import type { ClaudeUsageStore } from '../claude-usage/store'

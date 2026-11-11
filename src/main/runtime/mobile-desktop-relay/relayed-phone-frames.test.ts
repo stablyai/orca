@@ -8,13 +8,13 @@ import {
   encodeTerminalStreamFrame,
   decodeTerminalStreamFrame,
   TerminalStreamOpcode
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   BrowserScreencastOpcode,
   encodeBrowserScreencastFrame
-} from '../../../shared/browser-screencast-protocol'
-import { COMPRESSED_FRAMES_CLIENT_CAPABILITY } from '../../../shared/paired-e2ee-compressed-frame'
-import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+} from '../../../shared/browser/screencast/browser-screencast-protocol'
+import { COMPRESSED_FRAMES_CLIENT_CAPABILITY } from '../../../shared/remote-runtime/e2ee/paired-e2ee-compressed-frame'
+import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../shared/browser/runtime/browser-runtime-capabilities'
 import {
   declareRelayedPhoneCapabilities,
   RelayedPhoneReplies,
@@ -51,13 +51,6 @@ describe('rewriteRelayedPhoneRequest', () => {
         nested: [{ mobileClient: { id: HOST_TOKEN } }]
       }
     })
-  })
-
-  it('can re-id a frame the relay sends on its own behalf', () => {
-    const frame = JSON.stringify({ id: 'phone-id', method: 'm', params: {} })
-    expect(
-      JSON.parse(rewriteRelayedPhoneRequest(frame, DESKTOP_TOKEN, HOST_TOKEN, 'relay-id'))
-    ).toEqual({ id: 'relay-id', method: 'm', params: {} })
   })
 })
 

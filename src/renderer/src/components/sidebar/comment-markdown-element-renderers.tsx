@@ -1,3 +1,4 @@
+import { GitHubBodyImageUrlsContext } from './comment-markdown-github-image-urls'
 import React from 'react'
 import { jiraImageReference } from '../../../../shared/jira/jira-attachment-image'
 import type { Components } from 'react-markdown'
@@ -14,7 +15,7 @@ import {
 } from './comment-markdown-github-attachment-media'
 import { ExpandableMarkdownImage } from './MarkdownImageLightbox'
 import { MarkdownGitHubCallout } from '@/components/markdown-github-callout'
-import { readGitHubCalloutKind } from '@/lib/remark-github-callouts'
+import { readGitHubCalloutKind } from '../../../../shared/github/github-callouts'
 
 export type CommentMarkdownLinkClickHandler = (
   event: React.MouseEvent<HTMLElement>,
@@ -228,6 +229,57 @@ export function createCompactCommentMarkdownComponents(
   } satisfies Components
 }
 
+function DocumentMarkdownImage({
+  alt,
+  src,
+  onLinkClick
+}: {
+  alt?: string
+  src?: string
+  onLinkClick?: CommentMarkdownLinkClickHandler
+}): React.JSX.Element | null {
+  const imageUrls = React.useContext(GitHubBodyImageUrlsContext)
+
+  const mapped = Boolean(src && imageUrls?.[src])
+  const [attachment, setAttachment] = React.useState({ src, mapped })
+  if (attachment.src !== src || (mapped && !attachment.mapped)) {
+    setAttachment({ src, mapped })
+  }
+  // Removing access data must not unmount an already-loaded attachment with the same identity.
+  if (
+    src &&
+    (isGitHubUserAttachmentUrl(src) || mapped || (attachment.src === src && attachment.mapped))
+  ) {
+    return <GitHubUserAttachmentImage src={src} alt={alt} />
+  }
+  if (!src) {
+    return alt ? <span>{alt}</span> : null
+  }
+  // Show document screenshots in a viewport lightbox rather than constraining them to the drawer.
+  if (onLinkClick) {
+    const imageClassName = [
+      'my-3 max-h-96 max-w-full rounded-md object-contain',
+      'outline outline-1 outline-black/10 dark:outline-white/10',
+      'cursor-pointer'
+    ].join(' ')
+    return (
+      <img
+        src={src}
+        alt={alt ?? ''}
+        className={imageClassName}
+        onClick={(e) => handleMarkdownImageClick(e, src, onLinkClick)}
+      />
+    )
+  }
+  return (
+    <ExpandableMarkdownImage
+      src={src}
+      alt={alt}
+      className="max-h-96 max-w-full rounded-md object-contain outline outline-1 outline-black/10 dark:outline-white/10"
+    />
+  )
+}
+
 export function createDocumentCommentMarkdownComponents(
   onLinkClick?: CommentMarkdownLinkClickHandler,
   renderCodeBlock?: DocumentCodeBlockRenderer
@@ -293,38 +345,7 @@ export function createDocumentCommentMarkdownComponents(
         </blockquote>
       )
     },
-    img: ({ alt, src }) => {
-      if (isGitHubUserAttachmentUrl(src)) {
-        // Private attachments need GitHub session cookies; top-level links reach authenticated tabs when inline loads fail.
-        return <GitHubUserAttachmentImage src={src} alt={alt} />
-      }
-      if (!src) {
-        return alt ? <span>{alt}</span> : null
-      }
-      // Show document screenshots in a viewport lightbox rather than constraining them to the drawer.
-      if (onLinkClick) {
-        const imageClassName = [
-          'my-3 max-h-96 max-w-full rounded-md object-contain',
-          'outline outline-1 outline-black/10 dark:outline-white/10',
-          'cursor-pointer'
-        ].join(' ')
-        return (
-          <img
-            src={src}
-            alt={alt ?? ''}
-            className={imageClassName}
-            onClick={(e) => handleMarkdownImageClick(e, src, onLinkClick)}
-          />
-        )
-      }
-      return (
-        <ExpandableMarkdownImage
-          src={src}
-          alt={alt}
-          className="max-h-96 max-w-full rounded-md object-contain outline outline-1 outline-black/10 dark:outline-white/10"
-        />
-      )
-    },
+    img: ({ alt, src }) => <DocumentMarkdownImage alt={alt} src={src} onLinkClick={onLinkClick} />,
     // Contain document GFM tables even in wider dashboard dialogs.
     table: ({ children }) => (
       <div className="my-3 max-w-full overflow-x-auto rounded-md border border-border/60">

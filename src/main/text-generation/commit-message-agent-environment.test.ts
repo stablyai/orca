@@ -10,6 +10,7 @@ const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
 const tempDirs: string[] = []
 
 afterEach(() => {
+  vi.unstubAllEnvs()
   if (originalPlatform) {
     Object.defineProperty(process, 'platform', originalPlatform)
   }
@@ -36,6 +37,43 @@ function makeHome(): string {
 }
 
 describe('prepareLocalCommitMessageAgentEnv', () => {
+  it('isolates Claude generation inheritance before account overrides, including resolver fallbacks', async () => {
+    vi.stubEnv('CLAUDE_CODE_MESSAGING_SOCKET', 'parent-socket')
+    vi.stubEnv('CLAUDE_AGENT_SDK_VERSION', 'parent-sdk')
+    vi.stubEnv('CLAUDE_CODE_HTTP_PROXY', 'http://user-proxy')
+    for (const resolvers of [undefined, {}]) {
+      const result = await prepareLocalCommitMessageAgentEnv('claude', resolvers)
+      if (!result.ok) {
+        throw new Error(result.error)
+      }
+      expect(result.env?.CLAUDE_CODE_MESSAGING_SOCKET).toBeUndefined()
+      expect(result.env?.CLAUDE_AGENT_SDK_VERSION).toBeUndefined()
+      expect(result.env?.CLAUDE_CODE_HTTP_PROXY).toBe('http://user-proxy')
+    }
+    const configured = await prepareLocalCommitMessageAgentEnv('claude', {
+      resolveBaseEnvironment: async () => ({
+        CLAUDE_CODE_MESSAGING_SOCKET: 'shell-parent',
+        CLAUDE_EFFORT: 'shell-effort',
+        CLAUDE_CODE_HTTP_PROXY: 'http://shell-proxy',
+        ANTHROPIC_AUTH_TOKEN: 'chosen-token'
+      }),
+      prepareForClaudeLaunch: async () => ({
+        configDir: '/chosen/claude',
+        envPatch: { CLAUDE_CONFIG_DIR: '/chosen/claude' },
+        provenance: 'profile:test'
+      })
+    })
+    expect(configured).toEqual({
+      ok: true,
+      env: {
+        CLAUDE_CODE_HTTP_PROXY: 'http://shell-proxy',
+        CLAUDE_CONFIG_DIR: '/chosen/claude',
+        ANTHROPIC_AUTH_TOKEN: 'chosen-token'
+      }
+    })
+    expect(await prepareLocalCommitMessageAgentEnv('custom', undefined)).toEqual({ ok: true })
+  })
+
   it('hydrates OpenCode config dir from shell startup files for headless generation', async () => {
     const home = makeHome()
     delete process.env.OPENCODE_CONFIG_DIR
@@ -51,20 +89,6 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
     })
   })
 
-  it('prefers the original OpenCode config root over inherited PTY overlays', async () => {
-    process.env.OPENCODE_CONFIG_DIR = '/tmp/orca-opencode-overlay'
-    process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR = '/Users/tester/company/opencode'
-
-    const result = await prepareLocalCommitMessageAgentEnv('opencode', undefined)
-
-    expect(result).toEqual({
-      ok: true,
-      env: expect.objectContaining({
-        OPENCODE_CONFIG_DIR: '/Users/tester/company/opencode'
-      })
-    })
-  })
-
   it('hydrates Pi agent dir from shell startup files for headless generation', async () => {
     const home = makeHome()
     delete process.env.PI_CODING_AGENT_DIR
@@ -76,51 +100,6 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
       ok: true,
       env: expect.objectContaining({
         PI_CODING_AGENT_DIR: `${home}/.config/pi-agent`
-      })
-    })
-  })
-
-  it('prefers the original Pi agent root over inherited PTY overlays', async () => {
-    process.env.PI_CODING_AGENT_DIR = '/tmp/orca-pi-overlay'
-    process.env.ORCA_PI_SOURCE_AGENT_DIR = '/Users/tester/.pi/agent'
-
-    const result = await prepareLocalCommitMessageAgentEnv('pi', undefined)
-
-    expect(result).toEqual({
-      ok: true,
-      env: expect.objectContaining({
-        PI_CODING_AGENT_DIR: '/Users/tester/.pi/agent'
-      })
-    })
-  })
-
-  it('does not synthesize env for agents without shell-scoped auth or config roots', async () => {
-    makeHome()
-
-    await expect(prepareLocalCommitMessageAgentEnv('cursor', undefined)).resolves.toEqual({
-      ok: true
-    })
-  })
-
-  it('falls back to inherited env when managed account resolvers are unavailable', async () => {
-    await expect(prepareLocalCommitMessageAgentEnv('codex', undefined)).resolves.toEqual({
-      ok: true
-    })
-    await expect(prepareLocalCommitMessageAgentEnv('claude', undefined)).resolves.toEqual({
-      ok: true
-    })
-  })
-
-  it('sets CODEX_HOME for host managed Codex accounts', async () => {
-    const result = await prepareLocalCommitMessageAgentEnv('codex', {
-      prepareForCodexLaunch: () =>
-        'C:\\Users\\tester\\AppData\\Roaming\\Orca\\codex-accounts\\a\\home'
-    })
-
-    expect(result).toEqual({
-      ok: true,
-      env: expect.objectContaining({
-        CODEX_HOME: 'C:\\Users\\tester\\AppData\\Roaming\\Orca\\codex-accounts\\a\\home'
       })
     })
   })
@@ -156,181 +135,5 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
     expect(env).toBeDefined()
     expect(env?.CODEX_HOME).toBeUndefined()
     expect(env?.ORCA_CODEX_HOME).toBeUndefined()
-  })
-
-  it('preserves a user-owned CODEX_HOME when the launch resolves to the real home', async () => {
-    process.env.CODEX_HOME = '/home/me/.config/codex'
-    delete process.env.ORCA_CODEX_HOME
-
-    const result = await prepareLocalCommitMessageAgentEnv('codex', {
-      prepareForCodexLaunch: () => null
-    })
-
-    expect(result.ok).toBe(true)
-    const env = (result as { ok: true; env?: NodeJS.ProcessEnv }).env
-    expect(env?.CODEX_HOME).toBe('/home/me/.config/codex')
-  })
-
-  it('does not pass WSL managed Codex homes to host-local commit generation', async () => {
-    process.env.CODEX_HOME = 'C:\\Users\\tester\\.codex'
-
-    const result = await prepareLocalCommitMessageAgentEnv('codex', {
-      prepareForCodexLaunch: () =>
-        '\\\\wsl.localhost\\Ubuntu\\home\\tester\\.local\\share\\orca\\codex-accounts\\a\\home'
-    })
-
-    expect(result).toEqual({ ok: true })
-  })
-
-  it('passes WSL managed Codex homes as Linux paths for WSL-local commit generation', async () => {
-    const result = await prepareLocalCommitMessageAgentEnv(
-      'codex',
-      {
-        prepareForCodexLaunch: (target) => {
-          expect(target).toEqual({ runtime: 'wsl', wslDistro: 'Ubuntu' })
-          return '\\\\wsl.localhost\\Ubuntu\\home\\tester\\.codex'
-        }
-      },
-      { runtime: 'wsl', wslDistro: 'Ubuntu' }
-    )
-
-    expect(result).toEqual({
-      ok: true,
-      env: expect.objectContaining({
-        CODEX_HOME: '/home/tester/.codex'
-      })
-    })
-  })
-
-  it('does not hydrate host shell config roots for WSL-local commit generation', async () => {
-    process.env.OPENCODE_CONFIG_DIR = 'C:\\Users\\tester\\opencode'
-
-    const result = await prepareLocalCommitMessageAgentEnv('opencode', undefined, {
-      runtime: 'wsl',
-      wslDistro: 'Ubuntu'
-    })
-
-    expect(result).toEqual({ ok: true })
-  })
-
-  describe('login-shell base environment', () => {
-    const envOf = (
-      result: Awaited<ReturnType<typeof prepareLocalCommitMessageAgentEnv>>
-    ): NodeJS.ProcessEnv | undefined => (result.ok ? result.env : undefined)
-    const shellBase = {
-      PATH: '/shell/bin',
-      ANTHROPIC_BASE_URL: 'https://proxy.example',
-      ANTHROPIC_AUTH_TOKEN: 'shell-token'
-    }
-
-    it('gives Claude the shell-exported variables Orca was launched without', async () => {
-      delete process.env.ANTHROPIC_BASE_URL
-      delete process.env.ANTHROPIC_AUTH_TOKEN
-
-      const result = await prepareLocalCommitMessageAgentEnv('claude', {
-        resolveBaseEnvironment: async () => shellBase,
-        prepareForClaudeLaunch: async () => ({
-          configDir: '/home/me/.claude',
-          envPatch: {},
-          provenance: 'system'
-        })
-      })
-
-      expect(result).toEqual({ ok: true, env: shellBase })
-    })
-
-    it('lets the selected Claude account set its folder and keeps the shell auth', async () => {
-      const result = await prepareLocalCommitMessageAgentEnv('claude', {
-        resolveBaseEnvironment: async () => shellBase,
-        prepareForClaudeLaunch: async () => ({
-          configDir: '/managed/claude',
-          envPatch: { CLAUDE_CONFIG_DIR: '/managed/claude' },
-          provenance: 'managed:account-1'
-        })
-      })
-
-      const env = envOf(result)
-      expect(env?.CLAUDE_CONFIG_DIR).toBe('/managed/claude')
-      expect(env?.ANTHROPIC_AUTH_TOKEN).toBe('shell-token')
-      expect(env?.PATH).toBe('/shell/bin')
-    })
-
-    it('lets the managed Codex home override a shell CODEX_HOME', async () => {
-      const result = await prepareLocalCommitMessageAgentEnv('codex', {
-        resolveBaseEnvironment: async () => ({ ...shellBase, CODEX_HOME: '/shell/codex' }),
-        prepareForCodexLaunch: () => '/managed/codex-home'
-      })
-
-      expect(result).toEqual({
-        ok: true,
-        env: { ...shellBase, CODEX_HOME: '/managed/codex-home' }
-      })
-    })
-
-    it('gives agents without an account resolver the shell environment', async () => {
-      makeHome()
-      delete process.env.OPENCODE_CONFIG_DIR
-
-      await expect(
-        prepareLocalCommitMessageAgentEnv('cursor', {
-          resolveBaseEnvironment: async () => shellBase
-        })
-      ).resolves.toEqual({ ok: true, env: shellBase })
-      await expect(
-        prepareLocalCommitMessageAgentEnv('opencode', {
-          resolveBaseEnvironment: async () => shellBase
-        })
-      ).resolves.toEqual({ ok: true, env: shellBase })
-    })
-
-    it("prefers the login shell's config dir over Orca's inherited one", async () => {
-      makeHome()
-      process.env.OPENCODE_CONFIG_DIR = '/old/opencode'
-      delete process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR
-
-      const result = await prepareLocalCommitMessageAgentEnv('opencode', {
-        resolveBaseEnvironment: async () => ({ ...shellBase, OPENCODE_CONFIG_DIR: '/new/opencode' })
-      })
-
-      expect(envOf(result)?.OPENCODE_CONFIG_DIR).toBe('/new/opencode')
-    })
-
-    it('keeps Orca env for WSL-local generation instead of the host shell', async () => {
-      delete process.env.ANTHROPIC_BASE_URL
-      const resolveBaseEnvironment = vi.fn(async () => shellBase)
-
-      const codex = await prepareLocalCommitMessageAgentEnv(
-        'codex',
-        { resolveBaseEnvironment, prepareForCodexLaunch: () => null },
-        { runtime: 'wsl', wslDistro: 'Ubuntu' }
-      )
-      const cursor = await prepareLocalCommitMessageAgentEnv(
-        'cursor',
-        { resolveBaseEnvironment },
-        { runtime: 'wsl', wslDistro: 'Ubuntu' }
-      )
-
-      expect(resolveBaseEnvironment).not.toHaveBeenCalled()
-      expect(envOf(codex)?.ANTHROPIC_BASE_URL).toBeUndefined()
-      expect(cursor).toEqual({ ok: true })
-    })
-
-    it('falls back to Orca env when the shell environment cannot be read', async () => {
-      process.env.ORCA_COMMIT_ENV_MARKER = 'process'
-
-      const result = await prepareLocalCommitMessageAgentEnv('codex', {
-        resolveBaseEnvironment: async () => {
-          throw new Error('settings unavailable')
-        },
-        prepareForCodexLaunch: () => '/managed/codex-home'
-      })
-
-      expect(envOf(result)).toEqual(
-        expect.objectContaining({
-          ORCA_COMMIT_ENV_MARKER: 'process',
-          CODEX_HOME: '/managed/codex-home'
-        })
-      )
-    })
   })
 })

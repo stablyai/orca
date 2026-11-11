@@ -141,7 +141,7 @@ async function runMove(
         migrationId
       ).catch(() => {})
       if (!quiesced.fenceLifted) {
-        return putBack(deps, host, migrationId, `pause:${quiesced.reason}`)
+        return await putBack(deps, host, migrationId, `pause:${quiesced.reason}`)
       }
       return quiesced.reason === 'terminals-blocked'
         ? refusal('wsl_move_terminals_blocked', { blockers: quiesced.blockers ?? [] })
@@ -152,7 +152,7 @@ async function runMove(
     try {
       return await moveQuiesced(deps, host, quiesced.cutover, prepared, running, slept)
     } catch (error) {
-      return putBack(deps, host, migrationId, describe(error))
+      return await putBack(deps, host, migrationId, describe(error))
     }
   } finally {
     slept.dispose()

@@ -1,4 +1,4 @@
-import type { AutomationRun } from '../../shared/automations-types'
+import type { AutomationRun } from '../../shared/automations/history/automation-run'
 
 const RETRY_INTERVAL_MS = 2_000
 /** Allow restored panes and SSH/WSL PTYs to reattach after surface readiness. */

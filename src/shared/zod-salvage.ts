@@ -1,5 +1,5 @@
 // Zod transforms lack paths, so salvage combinators track bounded diagnostics during parsing.
-import { z } from 'zod'
+import * as z from 'zod'
 
 const MAX_REPORTED_SALVAGE_PATHS = 100
 
@@ -66,7 +66,7 @@ function parseEntryAt<T extends z.ZodType>(
 
 /** Match z.record string-key acceptance, rejecting non-plain objects/enumerable symbols, without allocating a throwaway copy before revalidating entries. */
 function recordEntryKeys(raw: unknown): string[] | null {
-  if (!z.core.util.isPlainObject(raw)) {
+  if (!z.util.isPlainObject(raw)) {
     return null
   }
   for (const symbol of Object.getOwnPropertySymbols(raw)) {
