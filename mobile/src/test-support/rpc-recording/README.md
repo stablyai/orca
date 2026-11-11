@@ -172,8 +172,8 @@ order byte-identical and moves only the ordinals.
 payloads and effects against sends, never against each other, so it saw nothing at all in a family
 that sends no requests: `host-worktree-refresh` sends none, every `sent` in its goldens was `0`
 across all eight checkpoints, and moving that file's two initial snapshot reads from after
-`client.subscribe` to before it moved no golden. Under the shared ordinal the same reorder fails
-five — the family's own golden and its four matrix variants. Sender args have three
+`client.subscribe` to before it moved no golden. Under the shared ordinal the same reorder changes
+the family's pilot golden. Sender args have three
 positional slots; absent, undefined and null are distinct `$rpc` tags. Literal objects containing
 `$rpc` are escaped. Only object keys are sorted; array/effect order, options, budgets, settlement
 times and errors stay observable. Errors contain category, message and `isRpcDeliveryUnknown`, never
@@ -480,11 +480,8 @@ the drop happened under, and records a non-empty report as a `reply-salvage` eff
 operation, the method, the decoded variant, the dropped paths and the count. Nothing in the product
 tree changes: the report was already being built and thrown away.
 
-44 of the goldens carried one when this was written, and every other checked read in the corpus decodes its reply
-whole (`grep -l reply-salvage mobile/rpc-foundation/goldens/*.json | wc -l`). The matrix varies the
-envelope a host sends rather than the shape of a row inside a result, so on most families this
-observation pins an absence rather than a recorded drop. What it buys is the next tightening: an element or member schema narrowed so a recorded row stops parsing moves the
-golden even where nothing downstream reads the row. `salvage-observation.test.ts` is what keeps the
+A narrowed element or member schema changes a golden when a recorded row stops parsing, even
+where nothing downstream reads the row. `salvage-observation.test.ts` is what keeps the
 observation itself honest, driving a malformed row and a malformed optional through the real
 `git.status` reply schema, because a refactor that stopped reporting would otherwise leave every
 golden comparing clean.
@@ -526,15 +523,10 @@ deleting its cleanup's `unsubscribeStream()` used to fail one golden, the cutove
 for it, and this observation made it fail seven, so the next builder-less method needs no scenario
 of its own.
 
-An empty set is not recorded, so the corpus stays quiet and a family that starts leaking gains a
-checkpoint. Five goldens report a non-empty set today, and all five are the same non-leak: the two
-`runtime.clientEvents.subscribe` matrices and the `notifications.subscribe` matrix, on every
-partition whose subscribe reply is not a well-formed `ready`, plus the client-event partitions
-where the shared stream opens again after a refused frame and the script answers no `ready` for
-the reopened subscribe. With no `subscriptionId` to unsubscribe with, `disposeServerSubscription` marks
-the record cancelled and keeps it until the id arrives — the retention the per-session registry
-paragraph above describes. `cancelled` is in the observation so those are legible as what they are:
-a product cleanup that never ran records `cancelled: false`, and because the drain precedes the
-read, a cleanup that deferred its close to a timer already due records nothing at all. `flush()`
+An empty set is not recorded. A subscription whose `ready` reply has not arrived has no
+`subscriptionId` to unsubscribe with: `disposeServerSubscription` marks it cancelled and keeps it
+until the id arrives. A product cleanup that never ran records `cancelled: false`. Because the
+drain precedes the read, a cleanup that deferred its close to a timer already due records nothing
+at all. `flush()`
 only runs work due at the current virtual time, so a close parked on a later timer is still
 registered at the read and records `cancelled: false` like any other.
