@@ -15,6 +15,7 @@ import {
 } from './preview-terminal-shortcuts'
 import { readTerminalClipboardSelection } from '@/components/terminal-pane/clipboard/terminal-clipboard-selection-text'
 import { isAppOwnedCopyChord } from '@/components/terminal-pane/input/keyboard/xterm-bypass-policy'
+import { isSpatialFocusDirection } from '@/lib/pane-manager/pane-spatial-focus'
 
 /** Compose IME, clipboard and pane policy in xterm’s single custom handler; defer macOS Cmd+V to its menu accelerator to avoid double paste. Dispose Option-location listeners on teardown. */
 export function installPreviewTerminalKeyHandler(args: {
@@ -196,12 +197,14 @@ export function installPreviewTerminalKeyHandler(args: {
       case 'closeActivePane':
         args.requestClose?.()
         return consumeEvent(event)
+      // Why: there is no pane layout here, so arrow chords keep xterm's encoding as they did before spatial focus.
+      case 'focusPane':
+        return isSpatialFocusDirection(action.direction) ? true : consumeEvent(event)
       // Swallow pane-only actions rather than encoding shell bytes such as Ctrl+D; list each so new actions require explicit classification.
       case 'clearActivePane':
       case 'clearPaneTitle':
       case 'copySelection':
       case 'equalizePaneSizes':
-      case 'focusPane':
       case 'setTitle':
       case 'splitActivePane':
       case 'toggleExpandActivePane':

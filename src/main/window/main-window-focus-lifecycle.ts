@@ -27,12 +27,14 @@ import { registerRendererDocumentNavigation } from './renderer-document-navigati
 import { createRendererRecoveryReloadWatchdog } from './renderer-recovery-reload-watchdog'
 import { createRendererLaunchFailureBackoff } from './renderer-launch-failure-backoff'
 import { trackRendererLivenessAtDeath } from './renderer-liveness-at-death'
+import { mirrorNativeChatCoverFocus } from './main-window-native-chat-cover-focus'
 
 export type MainWindowFocusLifecycle = {
   dispose: () => void
   isFloatingPanelFocused: () => boolean
   isFloatingTerminalInputFocused: () => boolean
   isMarkdownEditorFocused: () => boolean
+  isNativeChatCoverFocused: () => boolean
   isRendererProcessGone: () => boolean
   isShortcutRecorderFocused: () => boolean
   isTerminalInputFocused: () => boolean
@@ -76,6 +78,7 @@ export function installMainWindowFocusLifecycle(args: {
     terminalInputFocused = focused === true
   }
   ipcMain.on(terminalInputFocusChannel, onTerminalInputFocused)
+  const nativeChatCoverFocus = mirrorNativeChatCoverFocus(rendererWebContents)
   const floatingFocusChannel = 'ui:setFloatingFocus'
   // Publish both focus bits atomically; terminal selects keybinding context and implies panel routing ownership.
   const onFloatingFocus = (event: Electron.IpcMainEvent, state: unknown): void => {
@@ -159,6 +162,7 @@ export function installMainWindowFocusLifecycle(args: {
     retireBrowserClientPageRenderer(rendererWebContents)
     resetMarkdownEditorFocus()
     resetTerminalInputFocus()
+    nativeChatCoverFocus.reset()
     resetFloatingTerminalInputFocus()
     resetShortcutRecorderFocus()
     return () => {
@@ -298,6 +302,7 @@ export function installMainWindowFocusLifecycle(args: {
     resetTerminalInputFocus()
     resetFloatingTerminalInputFocus()
     resetShortcutRecorderFocus()
+    nativeChatCoverFocus.dispose()
     clearRendererRecoveryTimer()
     recoveryReloadWatchdog.clear()
     ipcMain.removeListener(markdownFocusChannel, onMarkdownEditorFocused)
@@ -312,6 +317,7 @@ export function installMainWindowFocusLifecycle(args: {
     isFloatingPanelFocused: () => floatingPanelFocused,
     isFloatingTerminalInputFocused: () => floatingTerminalInputFocused,
     isMarkdownEditorFocused: () => markdownEditorFocused,
+    isNativeChatCoverFocused: nativeChatCoverFocus.isFocused,
     isRendererProcessGone: () => rendererProcessGone,
     isShortcutRecorderFocused: () => shortcutRecorderFocused,
     isTerminalInputFocused: () => terminalInputFocused,

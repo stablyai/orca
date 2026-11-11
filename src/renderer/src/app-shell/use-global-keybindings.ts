@@ -19,7 +19,7 @@ import {
 import { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { useAppStore } from '../store/index'
 import { keybindingMatchesAction, type KeybindingActionId } from '../../../shared/keybindings'
-import { PLUGIN_COMMAND_ALIAS_ACTION_IDS } from '../../../shared/plugins/contributions/plugin-command-actions'
+import { dispatchGlobalPluginAliasActions } from './global-plugin-alias-dispatch'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
@@ -233,10 +233,17 @@ export function useGlobalKeybindings(args: {
       if (matchAppShortcut('view.plugins') && handlers.get('view.plugins')?.()) {
         return
       }
-      for (const actionId of PLUGIN_COMMAND_ALIAS_ACTION_IDS) {
-        if (matchAppShortcut(actionId) && handlers.get(actionId)?.()) {
-          return
-        }
+      // The terminal resolves shared chords before history, regardless of listener order.
+      if (
+        dispatchGlobalPluginAliasActions({
+          context,
+          target: input.target,
+          isPhysicalKey: input.doubleTapModifier === undefined,
+          matchShortcut: matchAppShortcut,
+          runAction: (actionId) => handlers.get(actionId)?.() ?? false
+        })
+      ) {
+        return
       }
 
       // Run this unbound alias after built-ins; claim it only when unsent review notes exist.

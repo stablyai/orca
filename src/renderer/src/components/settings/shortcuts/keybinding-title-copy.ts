@@ -133,6 +133,13 @@ const STATIC_TITLE_COPY = {
     translate('keybindings.title.terminalFocusNextPane', 'Focus next pane'),
   'terminal.focusPreviousPane': () =>
     translate('keybindings.title.terminalFocusPreviousPane', 'Focus previous pane'),
+  'terminal.focusPaneLeft': () =>
+    translate('keybindings.title.terminalFocusPaneLeft', 'Focus pane left'),
+  'terminal.focusPaneRight': () =>
+    translate('keybindings.title.terminalFocusPaneRight', 'Focus pane right'),
+  'terminal.focusPaneUp': () => translate('keybindings.title.terminalFocusPaneUp', 'Focus pane up'),
+  'terminal.focusPaneDown': () =>
+    translate('keybindings.title.terminalFocusPaneDown', 'Focus pane down'),
   'terminal.equalizePaneSizes': () =>
     translate('keybindings.title.terminalEqualizePaneSizes', 'Equalize pane sizes'),
   'terminal.expandPane': () =>

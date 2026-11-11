@@ -8,6 +8,7 @@ import { deleteActiveWorkspaceFromShortcut } from '@/components/sidebar/workspac
 import { isFloatingWorkspacePanelFocused } from '@/components/floating-terminal/floating-workspace-terminal-actions'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { runBuiltInOrReplacement } from '@/lib/plugins/commands/plugin-command-replacements'
+import { navigateWorktreeHistoryFromShortcut } from '@/lib/keyboard/worktree-history-shortcut'
 import { useAppStore } from '../../store/index'
 import { toggleAgentDashboardFromShortcut } from './agent-dashboard-command'
 import { openNewWorkspaceFromShortcut } from './new-workspace-command'
@@ -117,16 +118,7 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
 
   unsubs.push(
     window.api.ui.onWorktreeHistoryNavigate((direction) => {
-      const store = useAppStore.getState()
-      // Why: mirror button visibility — worktree history nav is only meaningful in the terminal view, so no-op elsewhere.
-      if (store.activeView !== 'terminal') {
-        return
-      }
-      if (direction === 'back') {
-        runBuiltInOrReplacement('worktree.history.back', () => store.goBackWorktree())
-      } else {
-        runBuiltInOrReplacement('worktree.history.forward', () => store.goForwardWorktree())
-      }
+      navigateWorktreeHistoryFromShortcut(direction)
     })
   )
 

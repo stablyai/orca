@@ -207,6 +207,40 @@ describe('keybindings', () => {
     )
   })
 
+  it('does not report history rebound onto a spatial focus chord, since main yields it to a focused terminal', () => {
+    expect(
+      findInterceptionConflicts('linux', { 'worktree.history.back': ['Mod+Alt+ArrowUp'] })
+    ).not.toContainEqual(
+      expect.objectContaining({
+        actionIds: expect.arrayContaining(['worktree.history.back', 'terminal.focusPaneUp'])
+      })
+    )
+  })
+
+  it('reports double-tap history against spatial focus, since main never yields double taps', () => {
+    expect(
+      findInterceptionConflicts('darwin', {
+        'worktree.history.back': ['DoubleTap+Shift'],
+        'terminal.focusPaneLeft': ['DoubleTap+Shift']
+      })
+    ).toContainEqual({
+      binding: 'DoubleTap+Shift',
+      actionIds: expect.arrayContaining(['worktree.history.back', 'terminal.focusPaneLeft'])
+    })
+  })
+
+  it('reports a non-history main action against spatial focus, since main yields only history', () => {
+    expect(
+      findInterceptionConflicts('linux', {
+        'worktree.history.back': [],
+        'app.settings': ['Mod+Alt+ArrowLeft']
+      })
+    ).toContainEqual({
+      binding: 'Mod+Alt+ArrowLeft',
+      actionIds: expect.arrayContaining(['app.settings', 'terminal.focusPaneLeft'])
+    })
+  })
+
   it('reports main-process shortcuts against renderer actions in other scopes', () => {
     expect(
       findInterceptionConflicts('linux', {

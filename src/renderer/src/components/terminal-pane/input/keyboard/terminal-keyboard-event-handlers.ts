@@ -23,8 +23,20 @@ import { getLayoutCharacterForCode } from '@/lib/keyboard-layout/layout-base-cha
 import { createTerminalKeyboardReleaseHandlers } from './terminal-keyboard-release-handlers'
 import { synchronizeTerminalKeyboardPane } from './terminal-keyboard-pane-resolution'
 import { isInsideNativeChatCover } from '../../chat/native-chat-covered-pane'
+import { isSpatialFocusDirection } from '@/lib/pane-manager/pane-spatial-focus'
+import { dispatchSpatialPaneFocus } from './terminal-spatial-focus-dispatch'
+import { nativeChatPromptClaimsShortcut } from '../../../../../../shared/text-input-shortcut-policy'
 
 const MAX_OBSERVED_ENTER_KEYDOWNS_PER_CODE = 8
+
+// Why: Mod+Alt+Arrow edits nothing, so like xterm it walks even mid-composition; a chat input keeps any chord it edits with.
+function chatInputKeepsChord(e: KeyboardEvent, platform: KeybindingPlatform): boolean {
+  const modAltArrow =
+    e.altKey &&
+    (platform === 'darwin' ? e.metaKey : e.ctrlKey) &&
+    (e.key.startsWith('Arrow') || (e.key === 'Process' && e.code.startsWith('Arrow')))
+  return !modAltArrow && nativeChatPromptClaimsShortcut(e, platform)
+}
 
 type Runtime = ReturnType<typeof createTerminalKeyboardRuntime>
 type EventContext = KeyboardHandlersDeps & {
@@ -50,29 +62,13 @@ type EventContext = KeyboardHandlersDeps & {
 
 export function createTerminalKeyboardEventHandlers(context: EventContext) {
   const {
-    tabId,
-    worktreeId,
     isMac,
     isWindows,
     shortcutPlatform,
     keyboardScopeRef,
     managerRef,
-    paneTransportsRef,
-    paneCwdRef,
-    fallbackCwd,
-    expandedPaneIdRef,
-    setExpandedPane,
-    restoreExpandedLayout,
-    refreshPaneSizes,
-    persistLayoutSnapshot,
-    toggleExpandPane,
-    setSearchOpen,
     focusSearchInput,
     onSearchSelectedText,
-    onRequestClosePane,
-    onClearPaneScrollback,
-    onSetTitle,
-    onClearPaneTitle,
     searchOpenRef,
     searchStateRef,
     paneKittyKeyboardModesRef,
@@ -88,8 +84,7 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
     deferredNewlineSender,
     deferredChordSender,
     modifiedEnterChordOwner,
-    observedEnterKeydownTimeStamps,
-    getKeyboardSplitTelemetrySource
+    observedEnterKeydownTimeStamps
   } = context
 
   const onKeyDown = (e: KeyboardEvent): void => {
@@ -188,6 +183,13 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
         if (!e.repeat) {
           focusSearchInput()
         }
+      }
+      const coverAction =
+        isInsideNativeChatCover(e.target) && !chatInputKeepsChord(e, shortcutPlatform)
+          ? resolveShortcutEvent(e)
+          : null
+      if (coverAction?.type === 'focusPane' && isSpatialFocusDirection(coverAction.direction)) {
+        dispatchSpatialPaneFocus(coverAction.direction, e, manager, context)
       }
       return
     }
@@ -291,26 +293,7 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
     }
 
     dispatchTerminalShortcutAction(action, e, manager, {
-      tabId,
-      worktreeId,
-      fallbackCwd,
-      expandedPaneIdRef,
-      setExpandedPane,
-      restoreExpandedLayout,
-      refreshPaneSizes,
-      persistLayoutSnapshot,
-      toggleExpandPane,
-      setSearchOpen,
-      focusSearchInput,
-      searchOpenRef,
-      onRequestClosePane,
-      onClearPaneScrollback,
-      onSetTitle,
-      onClearPaneTitle,
-      paneTransportsRef,
-      paneCwdRef,
-      managerRef,
-      getKeyboardSplitTelemetrySource,
+      ...context,
       armNativeOnlyShortcut: (event) => nativeOnlyShortcutTracker.armKeyDown(event)
     })
   }

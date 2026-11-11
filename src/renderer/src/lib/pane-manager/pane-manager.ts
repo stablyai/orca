@@ -9,7 +9,7 @@ import type {
 } from './pane-manager-types'
 import type { SplitPaneAroundLeafIdsOptions } from './pane-subtree-split'
 import type { PaneManagerHost } from './pane-manager-host'
-import { disposeDividersIn } from './pane-divider'
+import { disposeDividersIn, getDividerHitSize } from './pane-divider'
 import { cancelActivePaneDrag, createDragReorderState, handlePaneDrop } from './pane-drag-reorder'
 import { beginPaneDragFromPointerDown } from './pane-drag-pointer'
 import { setLigaturesEnabled, disposePane } from './pane-lifecycle'
@@ -227,6 +227,10 @@ export class PaneManager {
       return
     }
     activateManagedPane(this.host, pane, opts)
+  }
+
+  getPaneDividerHitSize(): number {
+    return getDividerHitSize(this.styleOptions)
   }
 
   setPaneStyleOptions(opts: PaneStyleOptions): void {
