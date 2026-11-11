@@ -3,6 +3,7 @@ import type {
   CloudWorkspaceGrant,
   CloudWorkspaceListQuery,
   CloudWorkspacePatch,
+  CloudWorkspaceRoutineRuns,
   OrgPrompts
 } from '../../shared/cloud-workspaces/cloud-workspaces-wire'
 import type { PokeInbox, TeammateProfile } from '../../shared/cloud-workspaces/team-presence-wire'
@@ -10,6 +11,11 @@ import type { CloudReadSnapshotState } from '../../shared/cloud-workspaces/read-
 
 export type CloudWorkspacesResult<T> =
   | { ok: true; value: T }
+  | { ok: false; error: string; reason?: string; status?: number }
+
+/** A list read, plus what Home's Routine runs switch hides (absent from older control planes). */
+export type CloudWorkspaceListResult =
+  | { ok: true; value: CloudWorkspace[]; routineRuns?: CloudWorkspaceRoutineRuns }
   | { ok: false; error: string; reason?: string; status?: number }
 
 export type LocalCloudWorkspace = {
@@ -24,7 +30,7 @@ export type CloudWorkspaceBinding = { environmentId: string; grantId: string | n
 export type CloudWorkspacesApi = {
   /** False when this build has no Orca Cloud control plane configured. */
   available: () => Promise<boolean>
-  list: (query: CloudWorkspaceListQuery) => Promise<CloudWorkspacesResult<CloudWorkspace[]>>
+  list: (query: CloudWorkspaceListQuery) => Promise<CloudWorkspaceListResult>
   get: (id: string) => Promise<CloudWorkspacesResult<CloudWorkspace>>
   patch: (id: string, patch: CloudWorkspacePatch) => Promise<CloudWorkspacesResult<CloudWorkspace>>
   resolveLink: (

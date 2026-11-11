@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from 'react'
-import { GitBranch, Loader2, Lock } from 'lucide-react'
+import { CalendarClock, GitBranch, Loader2, Lock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { type Translate, useIntlLocale, useTranslate } from '@/i18n/use-translate'
@@ -255,10 +255,39 @@ export function CloudWorkspaceRow({
                 </TooltipContent>
               </Tooltip>
             )}
+            {w.fromRoutine === true && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <CalendarClock
+                    role="img"
+                    className="size-3 shrink-0 text-muted-foreground"
+                    aria-label={t('auto.components.cloudWorkspaces.routineRun', 'Routine run')}
+                  />
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {t(
+                    'auto.components.cloudWorkspaces.routineRunTooltip',
+                    "Started by a routine. It's deleted when the run ends."
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            )}
           </span>
           <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
             <MemberAvatar userId={w.ownerUserId} directory={directory} selfId={selfId} size="sm" />
             <span className="shrink-0">{ownerName}</span>
+            {w.fromRoutine === true && (
+              <>
+                <span aria-hidden>·</span>
+                <span className="truncate">
+                  {w.routineName
+                    ? t('auto.components.cloudWorkspaces.routineRunOf', 'Routine · {{name}}', {
+                        name: w.routineName
+                      })
+                    : t('auto.components.cloudWorkspaces.routineRun', 'Routine run')}
+                </span>
+              </>
+            )}
             {showStatus && (
               <>
                 <span aria-hidden>·</span>
