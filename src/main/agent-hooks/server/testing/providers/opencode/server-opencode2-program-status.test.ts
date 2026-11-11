@@ -1,12 +1,14 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { AgentHookServer } from '../../../agent-hook-server'
-import { buildBody, PANE, postHookEvent } from '../../server.test-fixtures'
+import { HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS } from '../../../program-status/hook-precedence'
+import { buildBody, ingestProgramStatusOsc, PANE, postHookEvent } from '../../server.test-fixtures'
 
 vi.mock('../../../../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../../../../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
 
 let server: AgentHookServer | undefined
 afterEach(() => {
+  vi.useRealTimers()
   server?.stop()
 })
 
@@ -41,6 +43,29 @@ it('keeps OpenCode 2 hooks and their session on a pane its OSC 7501 reports as o
   oscStatus('done')
   expect(server.getStatusSnapshot()[0]).toMatchObject({
     agentType: 'opencode2',
+    state: 'done',
+    providerSession: { id: 'ses_opencode2' }
+  })
+})
+
+it('keeps an idle OpenCode 2 pane done while another session in its folder works', async () => {
+  server = new AgentHookServer()
+  await server.start({ env: 'production' })
+  await hook('SessionBusy', 'rename the branch')
+  await hook('SessionIdle')
+
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+  vi.advanceTimersByTime(1)
+  // Captured from an idle OpenCode 2.2.6 TUI while another TUI in its folder ran a turn.
+  const otherSession = Buffer.from('Title PARENTSPAWN').toString('base64')
+  ingestProgramStatusOsc(
+    server,
+    `\x1b]7501;state=working:app=opencode:title=${otherSession}\x1b\\` +
+      `\x1b]7501;state=working:id=ses_e37f56b97ffeLXB4e0RO7uYUBV:app=opencode:title=${otherSession}\x1b\\`
+  )
+  vi.advanceTimersByTime(HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
+
+  expect(server.getStatusSnapshot()[0]).toMatchObject({
     state: 'done',
     providerSession: { id: 'ses_opencode2' }
   })
