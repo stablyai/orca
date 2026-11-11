@@ -19,6 +19,7 @@ import { setAntigravityNativeCredentialChangeListener } from '../../antigravity/
 import { createAccountRuntimeTargetSettingsSync } from '../../rate-limits/account-runtime-target-sync'
 import { normalizeCodexRuntimeSelection } from '../../codex-accounts/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from '../../claude-accounts/runtime-selection'
+import { isTuiAgentEnabled } from '../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
 
 export type ProviderAccountServices = {
@@ -133,6 +134,13 @@ export function createProviderAccountServices(
   // Reuse the meter switch so hidden Antigravity usage does not spawn agy.
   rateLimits.setAntigravityUsageEnabledResolver(() =>
     store.getUI().statusBarItems.includes('antigravity')
+  )
+  // Disabled agents must not incur background usage requests to their providers.
+  rateLimits.setClaudeAgentEnabledResolver(() =>
+    isTuiAgentEnabled('claude', store.getSettings().disabledTuiAgents)
+  )
+  rateLimits.setCodexAgentEnabledResolver(() =>
+    isTuiAgentEnabled('codex', store.getSettings().disabledTuiAgents)
   )
   setAntigravityNativeCredentialChangeListener(() =>
     rateLimits.invalidateAntigravityCredentialState()

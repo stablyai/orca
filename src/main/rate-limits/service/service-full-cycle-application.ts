@@ -129,8 +129,13 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
             status: 'error'
           } satisfies ProviderRateLimits)
 
-    const latestCodexHome = await this.resolveCodexHome(codexTarget)
-    const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
+    // Gated cycles apply nothing, so their re-checks (runtime probes, auth reads) are skippable too.
+    const latestCodexHome = codexFetchGated
+      ? { skip: false, homePath: null }
+      : await this.resolveCodexHome(codexTarget)
+    const latestClaudeAuthPreparation = claudeFetchGated
+      ? undefined
+      : await this.claudeAuthPreparationResolver?.(claudeTarget)
     if (signal.aborted) {
       return
     }

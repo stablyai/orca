@@ -8,6 +8,7 @@ import { readCursorAuthSession } from '../cursor-auth'
 import { fetchZcodeRateLimits } from '../zcode-usage-fetcher'
 import { fetchAntigravityRateLimits } from '../antigravity-usage-fetcher'
 import { antigravityUsageDisabledSnapshot } from '../antigravity-usage-snapshot'
+import { disabledUsageSnapshot } from '../disabled-usage-snapshot'
 import { ZCODE_PLAN_SITE_BASE_URLS } from '../../../shared/zcode-plan-sites'
 import { fetchMiniMaxRateLimits } from '../minimax/minimax-fetcher'
 import { createHash } from 'node:crypto'
@@ -63,24 +64,30 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     if (signal.aborted) {
       return null
     }
+    // A disabled agent's meter makes no attempts: no auth reads, no runtime probes, no usage requests.
+    const claudeAgentEnabled = this.claudeAgentEnabledResolver?.() ?? true
+    const codexAgentEnabled = this.codexAgentEnabledResolver?.() ?? true
     const claudeTarget = this.claudeFetchTarget
     // Capture before await so a switch invalidates both attribution and result application.
     const claudeGeneration = this.claudeFetchGeneration
-    const claudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
+    const claudeAuthPreparation = claudeAgentEnabled
+      ? await this.claudeAuthPreparationResolver?.(claudeTarget)
+      : undefined
     if (signal.aborted) {
       return null
     }
+    // Local display attribution only; a disabled agent skips the auth reads above, not this.
     this.rememberClaudeAuthSnapshot(claudeAuthPreparation, claudeGeneration, claudeTarget)
     const claudeProvenance = claudeAuthPreparation?.provenance ?? 'system'
     const codexTarget = this.codexFetchTarget
     // Capture before await so a reset invalidates this cycle.
     const codexGeneration = this.codexFetchGeneration
     // Gate only Codex, never siblings, when its runtime is skipped (#STA-4422).
-    const codexHome = await this.resolveCodexHome(codexTarget)
+    const codexHome = codexAgentEnabled ? await this.resolveCodexHome(codexTarget) : null
     const previousState = this.state
     const antigravityGeneration = this.antigravityFetchGeneration
-    const codexFetchGated = codexHome.skip
-    const codexHomePath = codexHome.homePath
+    const codexFetchGated = !codexHome || codexHome.skip
+    const codexHomePath = codexHome?.homePath ?? null
     const codexStateBeforeFetch =
       previousState.codex?.status === 'fetching' ? null : previousState.codex
     const codexProvenance = codexFetchGated
@@ -148,11 +155,16 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
 
     this.updateState({
       ...previousState,
-      claude: this.withFetchingStatus(previousState.claude, 'claude'),
+      // A disabled agent settles its meter instead of flashing a fetching chip it can never fill.
+      claude: claudeAgentEnabled
+        ? this.withFetchingStatus(previousState.claude, 'claude')
+        : (previousState.claude ?? disabledUsageSnapshot('claude')),
       // A gated slot makes no attempt and cannot settle a fetching chip.
-      codex: codexFetchGated
-        ? codexStateBeforeFetch
-        : this.withFetchingStatus(previousState.codex, 'codex'),
+      codex: codexAgentEnabled
+        ? codexFetchGated
+          ? codexStateBeforeFetch
+          : this.withFetchingStatus(previousState.codex, 'codex')
+        : (previousState.codex ?? disabledUsageSnapshot('codex')),
       gemini: this.withFetchingStatus(previousState.gemini, 'gemini'),
       opencodeGo: opencodeConfigChanged
         ? this.withFetchingStatus(null, 'opencode-go')
@@ -213,12 +225,13 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
 
     // Live display does not waive automated Retry-After gates.
     const claudeFetchGated =
-      !options?.force && this.shouldSkipAutomatedFetch('claude', previousState.claude)
+      !claudeAgentEnabled ||
+      (!options?.force && this.shouldSkipAutomatedFetch('claude', previousState.claude))
 
     const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult] =
       await Promise.allSettled([
         claudeFetchGated
-          ? Promise.resolve(previousState.claude as ProviderRateLimits)
+          ? Promise.resolve(previousState.claude ?? disabledUsageSnapshot('claude'))
           : fetchClaudeRateLimits({
               authPreparation: claudeAuthPreparation,
               allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
@@ -227,7 +240,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
               signal
             }),
         codexFetchGated
-          ? Promise.resolve(previousState.codex as ProviderRateLimits)
+          ? Promise.resolve(previousState.codex ?? disabledUsageSnapshot('codex'))
           : (missingWslCodexHome ??
             fetchCodexRateLimits({
               codexHomePath,

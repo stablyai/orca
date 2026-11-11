@@ -10,6 +10,10 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     if (signal.aborted) {
       return
     }
+    // A disabled agent's meter makes no attempts, including account-switch refreshes.
+    if (!(this.codexAgentEnabledResolver?.() ?? true)) {
+      return
+    }
     const codexTarget = this.codexFetchTarget
     const codexGeneration = this.codexFetchGeneration
     const codexHome = await this.resolveCodexHome(codexTarget)
@@ -83,6 +87,10 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     options?: { force?: boolean }
   ): Promise<void> {
     if (signal.aborted) {
+      return
+    }
+    // A disabled agent's meter makes no attempts, including account-switch refreshes.
+    if (!(this.claudeAgentEnabledResolver?.() ?? true)) {
       return
     }
     // Why: automated checks must honor the endpoint's Retry-After even when live display is available.

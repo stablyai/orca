@@ -85,6 +85,9 @@ export type ZcodePlanResolvedConfig = {
 export type GeminiCliOAuthEnabledResolver = () => boolean
 
 export type AntigravityUsageEnabledResolver = () => boolean
+
+/** Answers whether the provider's agent is enabled in the Agents settings pane. */
+export type AgentEnabledResolver = () => boolean
 export type ActiveRateLimitProvider = ProviderRateLimits['provider']
 export type ActiveProviderState = {
   provider: ActiveRateLimitProvider

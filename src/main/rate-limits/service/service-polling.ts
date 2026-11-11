@@ -82,10 +82,23 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
       cursor: this.state.cursor,
       zcode: this.state.zcode
     }
-    return Object.entries(byProvider).map(([provider, limits]) => ({
-      provider: provider as ActiveRateLimitProvider,
-      limits
-    }))
+    // Disabled agents keep settled snapshots; they must not force full refresh cycles.
+    const claudeAgentEnabled = this.claudeAgentEnabledResolver?.() ?? true
+    const codexAgentEnabled = this.codexAgentEnabledResolver?.() ?? true
+    return Object.entries(byProvider)
+      .filter(([provider]) => {
+        if (provider === 'claude') {
+          return claudeAgentEnabled
+        }
+        if (provider === 'codex') {
+          return codexAgentEnabled
+        }
+        return true
+      })
+      .map(([provider, limits]) => ({
+        provider: provider as ActiveRateLimitProvider,
+        limits
+      }))
   }
 
   protected getActiveWindowRefreshPlan(now: number): ActiveWindowRefreshPlan {
