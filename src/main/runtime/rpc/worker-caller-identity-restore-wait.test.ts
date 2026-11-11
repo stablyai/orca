@@ -78,14 +78,18 @@ async function startRestartingOrca() {
     })
   const restore = async (identity: { paneKey: string; process: string }): Promise<void> => {
     // Let a report that does not wait run to completion first, as it would against a slow restore.
-    for (let turn = 0; turn < 20; turn += 1) {
-      await new Promise<void>((resolve) => setImmediate(resolve))
-    }
+    await settleTurns()
     restored.paneKey = identity.paneKey
     restored.process = identity.process
     runtime.startupWorkerAuthority.finish()
   }
-  return { db, runtime, task, dispatch, workerDone, restore }
+  return { db, runtime, dispatcher, task, dispatch, workerDone, restore }
+}
+
+async function settleTurns(): Promise<void> {
+  for (let turn = 0; turn < 20; turn += 1) {
+    await new Promise<void>((resolve) => setImmediate(resolve))
+  }
 }
 
 describe('a worker report during an Orca restart', () => {
@@ -138,6 +142,28 @@ describe('a worker report during an Orca restart', () => {
 
     expect(await pending).toMatchObject(REJECTED)
     expect(orca.db.getDispatchContextById(newer.id)?.status).toBe('dispatched')
+  })
+
+  it('does not hold ordinary mail from a terminal Orca has not restored yet', async () => {
+    const orca = await startRestartingOrca()
+    db = orca.db
+    let answered = false
+    const pending = orca.dispatcher
+      .dispatch({
+        id: 'rpc_mail',
+        authToken: 'token',
+        method: 'orchestration.send',
+        params: { from: 'term_restoring', to: `dispatch:${orca.dispatch.id}`, subject: 'note' },
+        orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION
+      })
+      .finally(() => {
+        answered = true
+      })
+    await settleTurns()
+
+    expect(answered).toBe(true)
+    orca.runtime.startupWorkerAuthority.finish()
+    await pending
   })
 
   it('is rejected when the terminal is still unknown after the wait', async () => {

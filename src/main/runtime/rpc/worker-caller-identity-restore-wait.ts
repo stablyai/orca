@@ -1,6 +1,7 @@
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { RpcRequest } from './core'
 import type { OrchestrationCallerField } from './methods/orchestration/access/orchestration-method-access'
+import { isDispatchMutationMessageType } from '../../../shared/rpc-contract/orchestration-params'
 
 // The calls a worker makes as itself, each fenced on its terminal's pane and process.
 const WORKER_REPORT_METHODS: ReadonlySet<string> = new Set([
@@ -27,9 +28,12 @@ export function waitForRestoredWorkerCallerIdentity(
   const params: Record<string, unknown> =
     raw && typeof raw === 'object' && !Array.isArray(raw) ? { ...raw } : {}
   const handle = params[callerField]
-  // A long-poll check would spend this wait from the CLI's request budget; its handler re-resolves anyway.
-  const longPollCheck = request.method === 'orchestration.check' && params.wait === true
-  if (typeof handle !== 'string' || !handle || longPollCheck) {
+  // Only worker reports run the identity check; a long-poll check would also spend the CLI's budget.
+  const skipsIdentityCheck =
+    request.method === 'orchestration.send'
+      ? typeof params.type !== 'string' || !isDispatchMutationMessageType(params.type)
+      : request.method === 'orchestration.check' && params.wait === true
+  if (typeof handle !== 'string' || !handle || skipsIdentityCheck) {
     return null
   }
   if (
