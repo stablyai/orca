@@ -10,19 +10,23 @@ import type { DictationState } from '../../../../shared/speech-types'
 import { dispatchDictationControl } from './dictation-control-events'
 import { pressDictationTerminalEnter } from './dictation-insertion-target'
 import type { DictationKeptRecording } from './dictation-kept-recording'
+import { isAppActive, watchComposerTakeover } from './dictation-composer-takeover'
 
 export type DictationQueuedSendKind = 'chat' | 'terminal'
 
-/** "Sending in Ns": when the dictated message sends, and the whole wait, which is announced once. */
 export type DictationAutoSendCountdown = { deadline: number; delayMs: number }
+
+/** True once, when the composer's render reaches the countdown's send and no one took over meanwhile. */
+type AutoSendClaim = () => boolean
 
 type QueuedSend = (stillQueued: () => boolean) => void | Promise<void>
 
 type ComposerSendQueue = (root: HTMLElement, send: () => void) => boolean
 let composerSendQueue: ComposerSendQueue | null = null
 
-// Composers whose Send may run on its own once a dictation into them ends.
-const composerAutoSends = new WeakMap<HTMLElement, () => void>()
+const composerAutoSends = new WeakMap<HTMLElement, (claim: AutoSendClaim) => void>()
+
+type PendingSend<Intent> = { intent?: Intent; claim?: AutoSendClaim }
 
 /**
  * A composer's Send: while it's being dictated into, it waits for the last words to land and render,
@@ -33,17 +37,17 @@ export function useSendAfterDictation<Intent>(
   sendMessage: (intent?: Intent) => void,
   sendsWhenDictationEnds: boolean
 ): (intent?: Intent) => void {
-  const pendingRef = useRef<{ intent?: Intent } | null>(null)
+  const pendingRef = useRef<PendingSend<Intent> | null>(null)
   const [landedTick, setLandedTick] = useState(0)
   useEffect(() => {
     const pending = pendingRef.current
     pendingRef.current = null
-    if (pending) {
+    if (pending && (!pending.claim || pending.claim())) {
       sendMessage(pending.intent)
     }
   }, [landedTick, sendMessage])
-  const sendOnceRendered = useCallback((intent?: Intent) => {
-    pendingRef.current = { intent }
+  const sendOnceRendered = useCallback((pending: PendingSend<Intent>) => {
+    pendingRef.current = pending
     setLandedTick((tick) => tick + 1)
   }, [])
   useEffect(() => {
@@ -51,7 +55,7 @@ export function useSendAfterDictation<Intent>(
     if (!sendsWhenDictationEnds || !element) {
       return
     }
-    const autoSend = (): void => sendOnceRendered()
+    const autoSend = (claim: AutoSendClaim): void => sendOnceRendered({ claim })
     composerAutoSends.set(element, autoSend)
     return () => {
       if (composerAutoSends.get(element) === autoSend) {
@@ -60,7 +64,7 @@ export function useSendAfterDictation<Intent>(
     }
   }, [root, sendsWhenDictationEnds, sendOnceRendered])
   return (intent) => {
-    if (!root.current || !composerSendQueue?.(root.current, () => sendOnceRendered(intent))) {
+    if (!root.current || !composerSendQueue?.(root.current, () => sendOnceRendered({ intent }))) {
       sendMessage(intent)
     }
   }
@@ -76,61 +80,14 @@ async function sendIfStillQueued(
   }
 }
 
-// Dictation's own insertion fires input, so input counts only once the countdown shows.
-const COMPOSER_TAKEOVER_EVENTS = [
-  'keydown',
-  'paste',
-  'drop',
-  'compositionstart',
-  'focusout',
-  'input'
-]
-const MODIFIER_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta'])
-
-function isAppActive(): boolean {
-  return document.visibilityState === 'visible' && document.hasFocus()
-}
-
-/** Calls onTakeover when the user types, pastes, drops, composes, presses anywhere, or leaves the composer or app. */
-function watchComposerTakeover(
-  root: HTMLElement,
-  countingDown: () => boolean,
-  onTakeover: () => void
-): () => void {
-  const listening = new AbortController()
-  const options = { capture: true, signal: listening.signal }
-  const onComposerEvent = (event: Event): void => {
-    const notTakeover =
-      (event.type === 'input' && !countingDown()) ||
-      (event instanceof KeyboardEvent && MODIFIER_KEYS.has(event.key)) ||
-      (event instanceof FocusEvent &&
-        event.relatedTarget instanceof Node &&
-        root.contains(event.relatedTarget))
-    if (!notTakeover) {
-      onTakeover()
-    }
-  }
-  const onAppLeave = (): void => {
-    if (!isAppActive()) {
-      onTakeover()
-    }
-  }
-  for (const type of COMPOSER_TAKEOVER_EVENTS) {
-    root.addEventListener(type, onComposerEvent, options)
-  }
-  // Caret clicks, suggestion picks and clicks elsewhere fire none of the composer's own events.
-  document.addEventListener('pointerdown', onTakeover, options)
-  window.addEventListener('blur', onAppLeave, options)
-  document.addEventListener('visibilitychange', onAppLeave, options)
-  return () => listening.abort()
-}
-
 type AutoSendWatch = {
   run: number
   root: HTMLElement
-  takenOver: boolean
-  /** Set while the pill counts down; ends the wait early. */
+  /** False once the user took over, the run was dropped, or its send was claimed. */
+  live: boolean
   endCountdown: (() => void) | null
+  /** The send is waiting for the composer's render, so the watch outlives the session. */
+  handedOff: boolean
   stopWatching: () => void
 }
 
@@ -150,10 +107,10 @@ export function useDictationQueuedSend(
   /** Keeps the dictated draft unsent; true when the countdown was showing, so the finished session can end now. */
   const takeOverAutoSend = useCallback((): boolean => {
     const watch = autoSendRef.current
-    if (!watch || watch.takenOver) {
+    if (!watch?.live) {
       return false
     }
-    watch.takenOver = true
+    watch.live = false
     watch.stopWatching()
     const countingDown = watch.endCountdown !== null
     watch.endCountdown?.()
@@ -174,7 +131,6 @@ export function useDictationQueuedSend(
       }
       queuedRef.current = { run, send }
       setQueuedKind(kind)
-      // A Send during the countdown sends now.
       autoSendRef.current?.endCountdown?.()
       dispatchDictationControl('stop')
       return true
@@ -191,6 +147,15 @@ export function useDictationQueuedSend(
       composerSendQueue = null
     }
   }, [keptRef, queue])
+
+  useEffect(
+    () => () => {
+      queuedRef.current = null
+      takeOverAutoSend()
+      autoSendRef.current = null
+    },
+    [takeOverAutoSend]
+  )
 
   /** Plain Enter typed in the pane being dictated into; true when it's held until the words land. */
   const queueTerminalEnter = useCallback(
@@ -211,8 +176,10 @@ export function useDictationQueuedSend(
   const clear = useCallback(() => {
     queuedRef.current = null
     setQueuedKind(null)
-    takeOverAutoSend()
-    autoSendRef.current = null
+    if (!autoSendRef.current?.handedOff) {
+      takeOverAutoSend()
+      autoSendRef.current = null
+    }
   }, [takeOverAutoSend])
 
   // Only a chat composer that sends on its own, still focused in the active app when dictation stops.
@@ -233,21 +200,18 @@ export function useDictationQueuedSend(
       const watch: AutoSendWatch = {
         run,
         root: target.root,
-        takenOver: false,
+        live: true,
         endCountdown: null,
+        handedOff: false,
         stopWatching: () => {}
       }
-      watch.stopWatching = watchComposerTakeover(
-        target.root,
-        () => watch.endCountdown !== null,
-        takeOverAutoSend
-      )
+      watch.stopWatching = watchComposerTakeover(target.root, takeOverAutoSend)
       return watch
     },
     [keptRef, takeOverAutoSend]
   )
 
-  /** Tracks each session change: drops the send once the session is gone, and watches for a takeover from Stop on. */
+  /** Drops the send once the session is gone, and watches for a takeover from Stop on. */
   const follow = useCallback(
     (session: DictationSession): void => {
       if (session.phase === 'idle' || session.phase === 'error') {
@@ -260,15 +224,27 @@ export function useDictationQueuedSend(
     [clear, takeOverAutoSend, watchForAutoSend]
   )
 
-  /** The pill counts down, then the deadline queues the composer's Send as Enter would. */
   const countDownToAutoSend = useCallback((watch: AutoSendWatch): Promise<void> => {
+    const claim = (): boolean => {
+      const wanted = watch.live
+      watch.live = false
+      watch.stopWatching()
+      if (autoSendRef.current === watch) {
+        autoSendRef.current = null
+      }
+      return wanted
+    }
     const delayMs = dictationAutoSendDelayMs(useAppStore.getState().settings?.voice)
     setAutoSend({ deadline: performance.now() + delayMs, delayMs })
     return new Promise<void>((resolve) => {
       const timer = window.setTimeout(() => {
         const send = composerAutoSends.get(watch.root)
         if (send) {
-          queuedRef.current = { run: watch.run, send }
+          const handOff = (): void => {
+            watch.handedOff = true
+            send(claim)
+          }
+          queuedRef.current = { run: watch.run, send: handOff }
         }
         resolve()
       }, delayMs)
@@ -294,10 +270,8 @@ export function useDictationQueuedSend(
       const landed = await delivery.settled()
       // A cancel or failure while the words were landing drops the send.
       const stillQueued = (): boolean => sessionRef.current.run === run
-      // Enter or Send while dictating already queued the send; with no speech there's nothing to send.
       if (
-        watch &&
-        !watch.takenOver &&
+        watch?.live &&
         queuedRef.current?.run !== run &&
         landed &&
         sessionRef.current.heardFinalText &&
@@ -319,7 +293,7 @@ export function useDictationQueuedSend(
     [keptRef, sessionRef, clear, countDownToAutoSend]
   )
 
-  /** A new dictation can start once the session is done, or while only its countdown is left to take over. */
+  /** A new dictation may also start during the countdown, which it takes over. */
   const canStart = useCallback(
     (phase: DictationState) =>
       canStartDictation(phase) || Boolean(autoSendRef.current?.endCountdown),
