@@ -253,11 +253,17 @@ describe('RelayAssignmentStore', () => {
       cellId: 'cell-b',
       assignmentEpoch: migration.assignmentEpoch
     })
-    if (releaseSourceControl) await store.releaseActivity(identity, sourceControl)
-    if (disableSource) await store.setCellEnabled('cell-a', false)
+    if (releaseSourceControl) {
+      await store.releaseActivity(identity, sourceControl)
+    }
+    if (disableSource) {
+      await store.setCellEnabled('cell-a', false)
+    }
     // The desktop leaves the half-migrated target, then an operator disables that cell.
     await store.releaseActivity(identity, targetControl)
-    if (disableTarget) await store.setCellEnabled('cell-b', false)
+    if (disableTarget) {
+      await store.setCellEnabled('cell-b', false)
+    }
     return { store, identity }
   }
 
