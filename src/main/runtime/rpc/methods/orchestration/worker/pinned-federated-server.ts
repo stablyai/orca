@@ -11,11 +11,11 @@ export function resolvePinnedFederatedServer(
   try {
     server = runtime.resolveOrchestrationWorkerServer(federated.environment_id)
   } catch (error) {
-    // Re-pairing adds the server as a new environment, so the one this worker ran on is gone.
-    if (error instanceof RuntimeEnvironmentStoreError) {
+    // Not found: removed, or re-paired, which adds the server as a new environment.
+    if (error instanceof RuntimeEnvironmentStoreError && error.code === 'invalid_argument') {
       throw new OrchestrationError(
         'peer_changed',
-        `Saved environment ${federated.environment_name} was removed or re-paired since this worker started, so this Orca can no longer reach it.`
+        `Saved environment ${federated.environment_name} is no longer a paired server here, so this Orca cannot reach this worker. Re-pairing adds the server as a new environment.`
       )
     }
     throw error
