@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { noteRemoteDesktopBeforeSleep } from '@/lib/cloud-remote-desktop/desktop-sleep-reopen'
+import { destroyWorktreeBrowserGuests } from '@/store/slices/browser/cleanup/browser-webview-cleanup'
 import {
   captureWorkspaceSelection,
   restoreWorkspaceSelection,
@@ -56,10 +56,6 @@ export function followWorkspaceSleep(
     const state = useAppStore.getState()
     const wasActive = state.activeWorktreeId === worktreeId
     const selectionBeforeSleep = wasActive ? captureWorkspaceSelection(state) : null
-    if (!options.keepBrowserTabs) {
-      // Before the selection clears: whether the desktop tab was in front decides how it comes back.
-      noteRemoteDesktopBeforeSleep(worktreeId)
-    }
     // Why first: clearing the active workspace unmounts its panes, whose exits must not stamp activity.
     markWorktreeSleepIntent(worktreeId)
     if (wasActive) {
@@ -68,7 +64,14 @@ export function followWorkspaceSleep(
       restoreSidebarPosition()
     }
     if (!options.keepBrowserTabs) {
-      state.shutdownWorktreeBrowsers(worktreeId)
+      // Sleep never changes the tab layout (NEW-01): the tabs, their order and the active one stay;
+      // only their pages are dropped to free memory, and each reloads in place when shown after
+      // the wake. A remote desktop tab reconnects itself the same way (its chrome).
+      destroyWorktreeBrowserGuests(
+        state.browserTabsByWorktree,
+        state.browserPagesByWorkspace,
+        worktreeId
+      )
     }
     let settle!: (stop: HostTerminalStop) => void
     const hostStop = new Promise<HostTerminalStop>((resolve) => (settle = resolve))

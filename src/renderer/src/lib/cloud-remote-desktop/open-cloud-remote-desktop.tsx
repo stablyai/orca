@@ -139,23 +139,6 @@ function showDesktopTab(
   })
 }
 
-/**
- * Reopens a desktop tab that sleep closed, once the workspace is awake again: no toasts (the tab's
- * own state says how it goes) and it only comes to the front if it was in front when it slept.
- */
-export function reopenCloudRemoteDesktopQuietly(
-  worktreeId: string,
-  environmentId: string,
-  activate: boolean
-): Promise<void> {
-  return exclusive(worktreeId, async () => {
-    const result = await requestCloudRemoteDesktop(environmentId)
-    if (result.ok) {
-      showDesktopTab(worktreeId, environmentId, result.url, activate)
-    }
-  })
-}
-
 /** One open or wake at a time per workspace: a second click while one runs does nothing. */
 async function exclusive(worktreeId: string, work: () => Promise<void>): Promise<void> {
   if (typeof window.api?.ephemeralVm?.openCloudRemoteDesktop !== 'function') {
