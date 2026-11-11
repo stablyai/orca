@@ -9,10 +9,10 @@ import { playHapticFeedback } from '../settings/HapticFeedback';
 import { loadMobileOnboardingSteps } from '../onboarding/MobileOnboardingPlan';
 import { refreshDesktopConnection } from '../transport/DesktopConnections';
 import { PairingConnection, PAIRING_CODE_REFUSED } from '../pairing/PairingConnection';
-import { beginRelayPairing, cancelRelayPairing, exchangeJournalTicket, finishRelayPairing, rememberRelayPairingMove, prepareRelayPairing, commitRelayPairing } from '../transport/RelayPairing';
+import { beginRelayPairing, cancelRelayPairing, commitConnectedPairing, finishRelayPairing, rememberRelayPairingMove } from '../transport/RelayPairing';
 import { parsePairingOffer, PairingOffer } from '../transport/E2eeV2Session';
 import { RelayMove } from '../transport/RelayProtocol';
-import { hostIdFor, hostRemovalTimestamp, hostPairingTimestamp, saveHost, clearHostPairingJournal, HostMeta, PairingJournal } from '../storage/HostStore';
+import { hostIdFor, hostRemovalTimestamp, hostPairingTimestamp, HostMeta, PairingJournal } from '../storage/HostStore';
 import { readHostMachineDescriptor } from '../storage/HostMachine';
 
 const CAMERA_PERMISSION = 'ohos.permission.CAMERA';
@@ -297,7 +297,6 @@ struct PairScan {
       });
       if (this.disposed) { return; }
       if (this.timedOut) { throw new Error('Pairing timed out'); }
-      let client = connected.client;
       let hostName = endpoint;
       let status = connected.status;
       let reportedName = status?.['machineName'];
@@ -310,20 +309,11 @@ struct PairScan {
         let descriptor = readHostMachineDescriptor(status);
         meta.hostPlatform = descriptor.hostPlatform; meta.hostMachine = descriptor.hostMachine;
       }
-      let prepared = await prepareRelayPairing(context, journal, meta, client, isActive);
-      if (this.disposed) { return; }
-      if (this.timedOut) { throw new Error('Pairing timed out'); }
       if (!journal) { throw new Error('Pairing journal is unavailable'); }
-      let token = await exchangeJournalTicket(context, journal, connected, (line: string): void => {
+      await commitConnectedPairing(context, journal, meta, connected, (line: string): void => {
         if (!this.disposed) { this.appendLog(line); }
       }, isActive);
       if (this.disposed) { return; }
-      if (this.timedOut) { throw new Error('Pairing timed out'); }
-      if (prepared) { await commitRelayPairing(context, meta, token, prepared, isActive); }
-      else {
-        await saveHost(context, meta, token, undefined, pairingStartedAt, false, journal ?? undefined, isActive);
-        if (journal) { await clearHostPairingJournal(context, hostId, journal).catch(() => {}); }
-      }
       this.pendingPairingHostId = '';
       refreshDesktopConnection(meta.id, 'paired');
       if (this.disposed) { return; }

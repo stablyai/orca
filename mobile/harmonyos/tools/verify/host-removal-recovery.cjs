@@ -225,6 +225,7 @@ function hostStorage() {
         'cancelRelayPairing',
         'finishRelayPairing',
         'exchangeJournalTicket',
+        'commitConnectedPairing',
         'prepareRelayPairing',
         'commitRelayPairing',
         'recoverRelayPairings'
@@ -349,6 +350,9 @@ function confirmedResumeClient(fixture) {
   return {
     getRelayAcceptedVersion: () => 1,
     async request(method, raw) {
+      if (method === 'status.get') {
+        return fixture.installedReply({})
+      }
       assert.equal(method, 'pairing.getEndpoints')
       const { installReqId, resumeConfirmReqId } = JSON.parse(raw)
       return fixture.status(installReqId, fixture.installResult(installReqId), {
@@ -362,6 +366,136 @@ function confirmedResumeClient(fixture) {
     }
   }
 }
+
+function relayPairingDesktop(fixture, exchangeTicket) {
+  let installed
+  const desktop = {
+    resumeTokenHash: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+    client: {
+      isRelay: () => false,
+      async request(method, raw) {
+        if (method === 'status.get') {
+          return fixture.installedReply({ capabilities: ['pairing.ticket-exchange.v1'] })
+        }
+        const params = JSON.parse(raw)
+        if (method === 'pairing.exchangeTicket') {
+          return exchangeTicket(params.deviceToken)
+        }
+        if (method === 'pairing.getEndpoints') {
+          return fixture.status(params.installReqId, installed)
+        }
+        assert.equal(method, 'pairing.provisionRelay')
+        desktop.resumeTokenHash = params.newResumeTokenHash
+        installed = fixture.installResult(params.reqId)
+        return fixture.installedReply(installed)
+      }
+    }
+  }
+  return desktop
+}
+
+test('a competing pairing cannot replace the owner’s Relay credential after its ticket claim is refused', async () => {
+  const fixture = hostStorage()
+  const { host, pairing, offer, meta, advance } = fixture
+  const journal = await pairing.beginRelayPairing({}, offer, advance(), active)
+  const desktop = relayPairingDesktop(fixture, async () => ({
+    errorCode: 'runtime_error',
+    errorMessage: 'ticket_exchange_pending'
+  }))
+
+  await assert.rejects(
+    pairing.commitConnectedPairing(
+      {},
+      journal,
+      meta,
+      { client: desktop.client, status: { capabilities: ['pairing.ticket-exchange.v1'] } },
+      () => {},
+      active
+    ),
+    /desktop rejected the pairing code/
+  )
+  assert.equal(desktop.resumeTokenHash, 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
+  assert.deepEqual(Array.from(await host.listHosts({})), [])
+  assert.equal(await host.getDeviceToken({}, meta.id), null)
+  assert.equal(await host.getRelayCredential({}, meta.id), null)
+})
+
+test('a lost exchange reply preserves its candidate without replacing Relay credentials and recovers the same claim', async () => {
+  const fixture = hostStorage()
+  const { host, pairing, offer, meta, advance, installedReply } = fixture
+  const journal = await pairing.beginRelayPairing({}, offer, advance(), active)
+  let claimedToken
+  const desktop = relayPairingDesktop(fixture, async (token) => {
+    if (claimedToken === undefined) {
+      claimedToken = token
+      throw new Error('Exchange reply lost')
+    }
+    return token === claimedToken
+      ? installedReply({ deviceId: 'confirmed-device' })
+      : { errorCode: 'runtime_error', errorMessage: 'ticket_exchange_pending' }
+  })
+
+  await assert.rejects(
+    pairing.commitConnectedPairing(
+      {},
+      journal,
+      meta,
+      { client: desktop.client, status: { capabilities: ['pairing.ticket-exchange.v1'] } },
+      () => {},
+      active
+    ),
+    /Exchange reply lost/
+  )
+  assert.equal(desktop.resumeTokenHash, 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
+  const saved = await host.readHostPairingJournal({}, meta.id)
+  assert.equal(saved.deviceToken, 'paired-device-token')
+  assert.equal(saved.replacementToken, 'abababababababababababababababababababababababab')
+  assert.deepEqual(Array.from(await host.listHosts({})), [])
+
+  fixture.onRecoveryDial(async (_offer, _relay, kind) => {
+    if (kind === 'resume') {
+      throw new Error('relay rejected the pairing credential')
+    }
+    return { ...desktop.client, isRelay: () => true }
+  })
+  await fixture.openPairing().recoverRelayPairings({})
+  assert.equal(desktop.resumeTokenHash, 'VtX6czP210fbQsI5QH5dpMMvTHnzXQkrE0_TWkAtnFw')
+  assert.equal(
+    await host.getDeviceToken({}, meta.id),
+    'abababababababababababababababababababababababab'
+  )
+  assert.equal(
+    (await host.getRelayCredential({}, meta.id)).token,
+    'AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE'
+  )
+  assert.deepEqual(
+    Array.from(await host.listHosts({})).map((item) => item.name),
+    ['Example desktop']
+  )
+  assert.equal(await host.readHostPairingJournal({}, meta.id), null)
+})
+
+test('restart recovery cannot replace another owner’s Relay credential before proposing its first ticket candidate', async () => {
+  const fixture = hostStorage()
+  const { host, pairing, offer, meta, advance } = fixture
+  await pairing.beginRelayPairing({}, offer, advance(), active)
+  const desktop = relayPairingDesktop(fixture, async () => ({
+    errorCode: 'runtime_error',
+    errorMessage: 'ticket_exchange_pending'
+  }))
+  fixture.onRecoveryDial(async (_offer, _relay, kind) => {
+    if (kind === 'resume') {
+      throw new Error('relay rejected the pairing credential')
+    }
+    return { ...desktop.client, isRelay: () => true }
+  })
+
+  assert.deepEqual(Array.from(await fixture.openPairing().recoverRelayPairings({})), [])
+  assert.equal(desktop.resumeTokenHash, 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
+  assert.deepEqual(Array.from(await host.listHosts({})), [])
+  assert.equal(await host.getDeviceToken({}, meta.id), null)
+  assert.equal(await host.getRelayCredential({}, meta.id), null)
+})
 
 test('an explicitly cancelled pairing stays unpaired after process restart', async () => {
   const fixture = hostStorage()
@@ -675,6 +809,9 @@ test('interrupted relay installation and confirmation recover with the same inst
     return {
       getRelayAcceptedVersion: () => 1,
       async request(method, raw) {
+        if (method === 'status.get') {
+          return fixture.installedReply({})
+        }
         assert.equal(method, 'pairing.getEndpoints')
         const { installReqId, resumeConfirmReqId } = JSON.parse(raw)
         assert.equal(installReqId, journal.reqId)
@@ -713,6 +850,9 @@ test('invite recovery retries the original install only after an authenticated n
     return {
       isRelay: () => true,
       async request(method, raw) {
+        if (method === 'status.get') {
+          return installedReply({})
+        }
         const args = JSON.parse(raw)
         if (method === 'pairing.getEndpoints') {
           return disconnected ? { errorCode: 'closed' } : status(args.installReqId, installed)
@@ -775,14 +915,22 @@ test('removing a desktop while invite recovery checks its status prevents a new 
   const pending = new Promise((resolve) => {
     resolveStatus = resolve
   })
-  const requests = []
+  let remoteCredential = null
   fixture.onRecoveryDial(async (_offer, _relay, kind) => {
     if (kind === 'resume') {
       throw new Error('relay rejected the pairing credential')
     }
     return {
-      async request(method) {
-        requests.push(method)
+      async request(method, raw) {
+        if (method === 'status.get') {
+          return fixture.installedReply({})
+        }
+        if (method === 'pairing.provisionRelay') {
+          const params = JSON.parse(raw)
+          remoteCredential = params.newResumeTokenHash
+          return fixture.installedReply(fixture.installResult(params.reqId))
+        }
+        assert.equal(method, 'pairing.getEndpoints')
         requestStarted()
         return pending
       }
@@ -794,7 +942,7 @@ test('removing a desktop while invite recovery checks its status prevents a new 
   await host.deleteHost({}, meta.id)
   resolveStatus(status(journal.reqId, null))
   assert.deepEqual(Array.from(await recovery), [])
-  assert.deepEqual(requests, ['pairing.getEndpoints'])
+  assert.equal(remoteCredential, null)
   assert.equal((await host.listHosts({})).length, 0)
   await host.retryPendingHostCredentialCleanup({})
   assert.equal(await host.readHostPairingJournal({}, meta.id), null)

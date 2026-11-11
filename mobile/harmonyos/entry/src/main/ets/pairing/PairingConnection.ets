@@ -38,6 +38,7 @@ export async function exchangePairingTicket(connection: PairingConnectionResult,
     return newToken;
   }
   let refusal = reply.errorCode === 'runtime_error' ? reply.errorMessage : reply.errorCode;
+  if (refusal === 'ticket_exchange_pending' || refusal === 'device_not_found') { throw new Error(PAIRING_CODE_REFUSED); }
   if (['unknown_method', 'method_not_found', 'not_supported', 'forbidden', 'not_a_ticket', 'delegated_device',
     'ticket_already_exchanged', 'ticket_window_closed', 'device_token_in_use']
     .includes(refusal)) {

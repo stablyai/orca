@@ -189,6 +189,21 @@ export async function commitRelayPairing(context: common.Context, meta: HostMeta
   await publishCommitted(context, committed, isActive);
 }
 
+export async function commitConnectedPairing(context: common.Context, journal: PairingJournal, meta: HostMeta,
+  connection: PairingConnectionResult, log: (line: string) => void, isActive: () => boolean): Promise<void> {
+  assertPairingActive(isActive);
+  journal.draft = meta;
+  let token = await exchangeJournalTicket(context, journal, connection, log, isActive);
+  assertPairingActive(isActive);
+  let relayPairing = await prepareRelayPairing(context, journal, meta, connection.client, isActive);
+  assertPairingActive(isActive);
+  if (relayPairing) { await commitRelayPairing(context, meta, token, relayPairing, isActive); }
+  else {
+    await saveHost(context, meta, token, undefined, journal.startedAt, false, journal, isActive);
+    await clearHostPairingJournal(context, meta.id, journal).catch(() => {});
+  }
+}
+
 async function publishCommitted(context: common.Context, journal: PairingJournal, isActive?: () => boolean): Promise<void> {
   let meta = journal.committedMeta;
   let credential = journal.credential;
@@ -252,12 +267,10 @@ async function recoverPending(context: common.Context, journal: PairingJournal, 
         let client = await connection.connectRecoveryRelay(offer, latest, kind, kind === 'resume' ? journal.token : relay.inviteToken,
           (move: RelayMove): Promise<void> => rememberRelayPairingMove(context, journal, move, isActive));
         assertPairingActive(isActive);
-        if (journal.replacementToken) {
-          let reply = await client.request('status.get', null, RPC_TIMEOUT_MS);
-          if (!(reply instanceof RpcSuccess)) { throw new Error('Desktop status unavailable'); }
-          let status = JSON.parse(reply.result) as Record<string, Object>;
-          recoveredDeviceToken = await exchangeJournalTicket(context, journal, { client: client, status: status }, (): void => {}, isActive);
-        }
+        let reply = await client.request('status.get', null, RPC_TIMEOUT_MS);
+        if (!(reply instanceof RpcSuccess)) { throw new Error('Desktop status unavailable'); }
+        let status = JSON.parse(reply.result) as Record<string, Object>;
+        recoveredDeviceToken = await exchangeJournalTicket(context, journal, { client: client, status: status }, (): void => {}, isActive);
         recovered = kind === 'resume' ? await resumeInstall(client, journal, observeCommitted)
           : await inviteInstall(client, journal, isActive, observeCommitted);
       } catch (e) {

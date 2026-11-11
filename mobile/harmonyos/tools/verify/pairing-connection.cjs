@@ -174,7 +174,7 @@ test('ticket exchange keeps compatible credentials and rejects unconfirmed owner
     connection.client.request = async () => reply
     await assert.rejects(
       exchangePairingTicket(connection, 'original-ticket', () => {}, remember),
-      /unresolved/
+      /desktop rejected the pairing code/
     )
     assert.equal(persisted, '070707070707070707070707070707070707070707070707')
   }
