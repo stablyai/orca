@@ -56,7 +56,12 @@ function closeOnPairingChange(
   ) {
     const now = runtime.resolveOrchestrationWorkerServer(link.environment_id)
     if (!remoteRunLinkPinMatches(link, remoteServerPin(now))) {
-      closeRemoteRunLink(runtime.getOrchestrationDb(), link.conversation_id, error.message)
+      closeRemoteRunLink(
+        runtime.getOrchestrationDb(),
+        link.conversation_id,
+        `The pairing with ${now.name} was re-made.`,
+        (handle, type) => runtime.notifyMessageArrived(handle, type)
+      )
       return true
     }
   }

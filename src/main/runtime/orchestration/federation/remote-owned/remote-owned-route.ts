@@ -28,7 +28,7 @@ import { inServerTerms, serverNeverAnswered } from './remote-owned-answers'
 import { remoteWorkerShow, remoteServerName } from './remote-owned-reads'
 import { explainRemoteServerFailure } from './remote-server-unreachable'
 import { serverOwnsPlacedWorkers, startRemoteOwnedWorker } from './remote-owned-start'
-import { settleUnansweredStop, stopRemoteWorker } from './remote-owned-stop'
+import { settleUnansweredAbandon, stopRemoteWorker } from './remote-owned-stop'
 
 type Routed = { handled: false } | { handled: true; result: unknown }
 
@@ -100,11 +100,9 @@ export async function routeRemoteOwnedCall(
       if (!serverNeverAnswered(error) || !getOpenRemoteRunLink(db, subject.link.conversation_id)) {
         throw error
       }
-      // As an unanswered stop: settled here at once, with a stop owed for the worker there.
-      const intent = `abandon:${forward?.key ?? randomUUID()}`
       return {
         handled: true,
-        result: settleUnansweredStop(runtime, subject.link, subject.dispatchId, intent)
+        result: settleUnansweredAbandon(runtime, subject.link, subject.dispatchId)
       }
     }
   }

@@ -8,6 +8,7 @@ import {
 } from '../lifecycle-transition'
 import type { OrchestrationDb } from '../orchestration-db'
 import { writtenRow } from './written-row'
+import { escalateWorkerFailure } from '../../workers/reports/worker-failure-escalation'
 
 export type RemoteRunLinkRow = {
   conversation_id: string
@@ -75,7 +76,8 @@ export function getOpenRemoteRunLink(
 export function openRemoteRunLink(
   db: OrchestrationDb,
   runId: string,
-  server: OrchestrationWorkerServer
+  server: OrchestrationWorkerServer,
+  notify?: (handle: string, messageType: string) => void
 ): RemoteRunLinkRow {
   const pin = remoteServerPin(server)
   const transaction = beginLifecycleWriteTransaction(db.db, 'open_remote_run_link')
@@ -89,7 +91,12 @@ export function openRemoteRunLink(
     let link = open
     if (open && !remoteRunLinkPinMatches(open, pin)) {
       // Nothing can reach that link's work any more: the server knows this Orca by another pairing now.
-      closeRemoteRunLink(db, open.conversation_id, `The pairing with ${server.name} was re-made.`)
+      closeRemoteRunLink(
+        db,
+        open.conversation_id,
+        `The pairing with ${server.name} was re-made.`,
+        notify
+      )
       link = undefined
     }
     if (!link) {
@@ -160,27 +167,45 @@ export const OWE_REMOTE_RUN_CANCELS_SQL = `
 export function closeRemoteRunLink(
   db: OrchestrationDb,
   conversationId: string,
-  reason: string
+  reason: string,
+  notify: (handle: string, messageType: string) => void = () => undefined
 ): void {
   const transaction = beginLifecycleWriteTransaction(db.db, 'close_remote_run_link')
   try {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT of one column returns exactly that column.
     const held = db.db
       .prepare(
-        `SELECT placement.task_id FROM remote_placements placement
+        `SELECT placement.task_id, placement.run_id, placement.dispatch_id FROM remote_placements placement
          JOIN tasks task ON task.id = placement.task_id
          WHERE placement.conversation_id = ? AND task.status = 'dispatched'`
       )
-      .all(conversationId) as { task_id: string }[]
+      .all(conversationId) as { task_id: string; run_id: string; dispatch_id: string | null }[]
     const now = new Date().toISOString()
-    for (const { task_id: taskId } of held) {
+    const result = `${reason} Its worker may still run there.`
+    for (const placement of held) {
       transitionLifecycleWithDb(db.db, {
         entity: 'task',
-        id: taskId,
+        id: placement.task_id,
         from: 'dispatched',
         to: 'failed',
-        projection: { result: `${reason} Its worker may still run there.`, completed_at: now }
+        projection: { result, completed_at: now }
       })
+      // As a local worker's failure is: the Run's coordinator is told.
+      const dispatchId = placement.dispatch_id ?? placement.task_id
+      escalateWorkerFailure(
+        db,
+        { id: dispatchId, run_id: placement.run_id, task_id: placement.task_id },
+        {
+          id: `msg_unlinked_${conversationId}_${placement.task_id}`,
+          from: `dispatch:${dispatchId}`,
+          describe: (task) => ({
+            subject: 'Worker unreachable: its server no longer answers here',
+            body: `Task ${task} failed here: ${result}`
+          }),
+          payload: { taskId: placement.task_id, dispatchId: placement.dispatch_id }
+        },
+        notify
+      )
     }
     db.db.prepare('DELETE FROM remote_placements WHERE conversation_id = ?').run(conversationId)
     db.db
@@ -206,7 +231,8 @@ export function closeRemoteRunLink(
 export function closeRemoteRunLinksOfRemovedServer(
   db: OrchestrationDb,
   environmentId: string,
-  reason: string
+  reason: string,
+  notify: (handle: string, messageType: string) => void
 ): void {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT of one column returns exactly that column.
   const links = db.db
@@ -215,7 +241,7 @@ export function closeRemoteRunLinksOfRemovedServer(
     )
     .all(environmentId) as { conversation_id: string }[]
   for (const link of links) {
-    closeRemoteRunLink(db, link.conversation_id, reason)
+    closeRemoteRunLink(db, link.conversation_id, reason, notify)
   }
 }
 

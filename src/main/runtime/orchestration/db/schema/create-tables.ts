@@ -14,6 +14,17 @@ export function createTables(this: OrchestrationDb): void {
   if (this.hasColumn('structured_mail_sends', 'fence')) {
     this.db.exec('ALTER TABLE structured_mail_sends DROP COLUMN fence')
   }
+  // Unreleased builds of remote-owned workers kept an orphan-lookup fence on placements and had no settled-here mark.
+  for (const column of ['reserved_by_runtime', 'outcome_unknown']) {
+    if (this.hasColumn('remote_placements', column)) {
+      this.db.exec(`ALTER TABLE remote_placements DROP COLUMN ${column}`)
+    }
+  }
+  if (!this.hasColumn('remote_dispatches', 'task_settled_here')) {
+    this.db.exec(
+      'ALTER TABLE remote_dispatches ADD COLUMN task_settled_here INTEGER NOT NULL DEFAULT 0'
+    )
+  }
   this.createMailboxDeliveryIndexesIfPossible()
   this.db.exec(DERIVED_DELIVERY_SCHEMA_SQL)
 }

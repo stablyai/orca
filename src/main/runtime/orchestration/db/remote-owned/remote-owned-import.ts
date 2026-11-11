@@ -46,7 +46,11 @@ export type ImportedRemoteOwnedMail = { to: string; type: MessageType }
 export function importRemoteOwnedItem(
   db: OrchestrationDb,
   server: RemoteServerPin,
-  item: PulledRemoteOwnedItem
+  item: PulledRemoteOwnedItem,
+  /** For a link a re-pair closed: the server's name, and how to wake the Run's coordinator. */
+  onClose: { name: string; notify?: (handle: string, messageType: string) => void } = {
+    name: server.environment_id
+  }
 ): ImportedRemoteOwnedMail | undefined {
   const parsed = parseRemoteOwnedItem(item)
   return runLifecycleWriteTransaction(db.db, 'import_remote_owned_item', () => {
@@ -60,7 +64,12 @@ export function importRemoteOwnedItem(
     advanceImportPosition(db, link, item.sequence)
     // A reset or re-pair since then: the item is read and acknowledged, and records nothing.
     if (link.state === 'open' && !remoteRunLinkPinMatches(link, server)) {
-      closeRemoteRunLink(db, link.conversation_id, 'The pairing with this server was re-made.')
+      closeRemoteRunLink(
+        db,
+        link.conversation_id,
+        `The pairing with ${onClose.name} was re-made.`,
+        onClose.notify
+      )
     }
     if (link.state !== 'open' || !remoteRunLinkPinMatches(link, server)) {
       return undefined

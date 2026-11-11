@@ -618,7 +618,7 @@ describe('commands about a worker a paired server owns', () => {
   })
 
   it('fails the Task a worker held when its pairing is re-made, with the reason', async () => {
-    const { taskId } = await startOnB()
+    const { taskId, runId } = await startOnB()
     server = { ...server, homePeerFingerprint: 'cred_a_new', pairingRevision: 2 }
 
     await call('orchestration.workerRead', { dispatch: 'ctx_b1' })
@@ -627,6 +627,12 @@ describe('commands about a worker a paired server owns', () => {
       result: 'The pairing with devB was re-made. Its worker may still run there.'
     })
     expect(getRemotePlacement(db, taskId)).toBeUndefined()
+    // As a local worker's failure, the Run's coordinator is told.
+    expect(
+      db.db
+        .prepare(`SELECT type, body FROM messages WHERE to_handle = ? AND type = 'escalation'`)
+        .get(`run:${runId}`)
+    ).toMatchObject({ body: expect.stringContaining('The pairing with devB was re-made.') })
   })
 
   it('fails the Task a worker held once its server is removed from this Orca', async () => {
@@ -685,8 +691,12 @@ describe('commands about a worker a paired server owns', () => {
       })
 
       const stopped = await call(method, { dispatch: 'ctx_b1' })
-      expect(stopped.ok ? stopped.result : undefined).toMatchObject({ state: 'stop_requested' })
-      expect(getRemoteDispatch(db, 'ctx_b1')).toMatchObject({ stop_owed: 1 })
+      // A stop stays owed; an abandon, as a local one, stops nothing.
+      const stop = method === 'orchestration.workerStop'
+      expect(stopped.ok ? stopped.result : undefined).toMatchObject({
+        state: stop ? 'stop_requested' : 'abandoned'
+      })
+      expect(getRemoteDispatch(db, 'ctx_b1')).toMatchObject({ stop_owed: stop ? 1 : 0 })
       // As a local stop leaves it: blocked, so it can be retried.
       expect(db.getTask(taskId)?.status).toBe('blocked')
 
@@ -698,6 +708,11 @@ describe('commands about a worker a paired server owns', () => {
         result: 'done'
       })
       expect(db.getTask(taskId)?.status).toBe('blocked')
+      expect(getRemoteDispatch(db, 'ctx_b1')).toMatchObject({
+        status: 'completed',
+        worker_state: 'succeeded',
+        task_settled_here: 1
+      })
 
       answers['orchestration.workerStart'] = [started('ctx_b2')]
       const retry = await call('orchestration.workerStart', {

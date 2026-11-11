@@ -42,27 +42,40 @@ export async function stopRemoteWorker(
   }
 }
 
-/**
- * The server did not answer a stop or abandon: the Task half runs here at once, as a local stop's
- * does, and the stop stays owed until the server proves it. Its worker may still run there.
- */
-export function settleUnansweredStop(
+/** The server did not answer a stop: the Task half runs here at once, as a local stop's does, and the stop stays owed until the server proves it. */
+function settleUnansweredStop(
   runtime: OrcaRuntimeService,
   link: RemoteRunLinkRow,
-  dispatchId: string,
-  intentKey?: string
+  dispatchId: string
 ) {
-  const db = runtime.getOrchestrationDb()
   const server = remoteServerName(runtime, link.environment_id)
-  if (intentKey) {
-    oweRemoteDispatchStop(db, dispatchId, intentKey)
-    runtime.ensureOrchestrationFederationRelay(link.run_id)
-  }
-  settleRemoteAttemptHere(db, dispatchId)
+  settleRemoteAttemptHere(runtime.getOrchestrationDb(), dispatchId)
   return {
     dispatchId,
     state: 'stop_requested',
     server,
     next: `${server} did not answer, so its worker may still run there. Its Task is settled here, so it can be retried, and the stop is owed: this Orca sends it again until ${server} confirms the worker stopped.`
+  }
+}
+
+/**
+ * The server did not answer an abandon: as a local abandon, nothing is stopped; the Task half runs
+ * here at once, so the Task can be retried, and the worker there is left to run.
+ */
+export function settleUnansweredAbandon(
+  runtime: OrcaRuntimeService,
+  link: RemoteRunLinkRow,
+  dispatchId: string
+) {
+  const server = remoteServerName(runtime, link.environment_id)
+  settleRemoteAttemptHere(runtime.getOrchestrationDb(), dispatchId)
+  return {
+    dispatchId,
+    state: 'abandoned',
+    alreadySettled: false,
+    stale: false,
+    processAction: 'none',
+    warning: `${server} did not answer, so it was not told and its worker may still run there. The Task is settled here, so it can be retried; no process was stopped.`,
+    residualResources: []
   }
 }

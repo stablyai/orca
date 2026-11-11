@@ -112,11 +112,19 @@ export class PeerMailRelay {
       } catch {
         if (this.isEnvironmentRemoved(environmentId)) {
           // A removed server cannot answer for its Runs' work again; their Tasks here fail with why.
-          closeRemoteRunLinksOfRemovedServer(
-            loop.db,
-            environmentId,
-            `${serverName} was removed from this Orca's paired servers.`
-          )
+          try {
+            closeRemoteRunLinksOfRemovedServer(
+              loop.db,
+              environmentId,
+              `${serverName} was removed from this Orca's paired servers.`,
+              (handle, type) => this.runtime.notifyMessageArrived(handle, type)
+            )
+          } catch (error) {
+            console.warn(
+              `[orchestration] Settling the Runs on removed server ${environmentId} failed:`,
+              error
+            )
+          }
           break
         }
         failures += 1
@@ -236,7 +244,10 @@ export class PeerMailRelay {
   ): { to: string; type: MessageRow['type'] } | undefined {
     if (getRemoteRunLink(db, item.conversationId)) {
       const server = this.runtime.resolveOrchestrationWorkerServer(environmentId)
-      return importRemoteOwnedItem(db, remoteServerPin(server), item)
+      return importRemoteOwnedItem(db, remoteServerPin(server), item, {
+        name: server.name,
+        notify: (handle, type) => this.runtime.notifyMessageArrived(handle, type)
+      })
     }
     const stored = this.importReply(db, environmentId, item)
     return stored ? { to: stored.to_handle, type: stored.type } : undefined

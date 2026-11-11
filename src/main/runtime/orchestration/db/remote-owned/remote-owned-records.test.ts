@@ -13,7 +13,8 @@ import {
   getRemotePlacement,
   recordRemoteStart,
   releaseRemotePlacement,
-  reserveRemotePlacement
+  reserveRemotePlacement,
+  settleRemoteAttemptHere
 } from './remote-placements'
 import {
   getRemoteRunLink,
@@ -147,6 +148,27 @@ describe('remote-owned records on the coordinating Orca', () => {
   }
 
   const importItem = (pulled: PulledRemoteOwnedItem) => importRemoteOwnedItem(db, PIN, pulled)
+
+  describe('a database an unreleased build made', () => {
+    it('repairs the placement and record tables on open, so starts and settlements work', () => {
+      db.db.exec(`
+        DROP TABLE remote_placements;
+        CREATE TABLE remote_placements (
+          task_id TEXT PRIMARY KEY, run_id TEXT NOT NULL, environment_id TEXT NOT NULL,
+          conversation_id TEXT NOT NULL, state TEXT NOT NULL, request_key TEXT NOT NULL,
+          prior_task_status TEXT NOT NULL, dispatch_id TEXT, reserved_by_runtime TEXT NOT NULL,
+          outcome_unknown INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        ALTER TABLE remote_dispatches DROP COLUMN task_settled_here;
+      `)
+      db.createTables()
+
+      startedOnB('task_t', 'ctx_b1')
+      settleRemoteAttemptHere(db, 'ctx_b1')
+      expect(getRemoteDispatch(db, 'ctx_b1')).toMatchObject({ task_settled_here: 1 })
+    })
+  })
 
   describe('#5 placement fence', () => {
     it('refuses a local start of a Task being placed on a server, with the ordinary text', () => {

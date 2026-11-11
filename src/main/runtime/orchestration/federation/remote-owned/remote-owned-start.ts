@@ -91,7 +91,9 @@ export async function startRemoteOwnedWorker(
   const forward = remoteForwardKey(runtime, ctx, params.from, callerRequestId ?? randomUUID())!
   const taskId = existingTask?.id ?? adoptedTaskId(forward.key)
   const budgets = resolveFederatedWorkerStartBudgets(params.timeoutMs)
-  const link = openRemoteRunLink(db, run.id, server)
+  const link = openRemoteRunLink(db, run.id, server, (handle, type) =>
+    runtime.notifyMessageArrived(handle, type)
+  )
   const { task } = reserveRemotePlacement(db, {
     link,
     taskId,
