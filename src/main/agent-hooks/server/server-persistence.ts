@@ -112,10 +112,13 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
   ): void {
     this.scheduleStatusPersist(
       next.payload.prompt !== previous?.payload.prompt ||
-        (next.payload.state === 'done' &&
-          (previous?.payload.state !== 'done' ||
-            next.turnEndedAt !== previous.turnEndedAt ||
-            next.payload.lastAssistantMessage !== previous.payload.lastAssistantMessage))
+        ((next.payload.state === 'done' || next.payload.mainAgent?.state === 'done') &&
+          (next.payload.state !== previous?.payload.state ||
+            next.payload.mainAgent?.state !== previous?.payload.mainAgent?.state ||
+            next.payload.mainAgent?.outcome !== previous?.payload.mainAgent?.outcome ||
+            next.payload.interrupted !== previous?.payload.interrupted ||
+            next.turnEndedAt !== previous?.turnEndedAt ||
+            next.payload.lastAssistantMessage !== previous?.payload.lastAssistantMessage))
     )
   }
 

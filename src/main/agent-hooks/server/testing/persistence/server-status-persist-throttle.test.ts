@@ -73,6 +73,50 @@ describe('saved agent status cadence', () => {
     })
   })
 
+  it('commits a finished lead reply while its child still holds the session working', async () => {
+    const identity = {
+      paneKey: PANE,
+      source: 'codex' as const,
+      providerSession: { key: 'session_id' as const, id: 'child-held-session' }
+    }
+    server.ingestRemote(
+      {
+        ...identity,
+        hookEventName: 'UserPromptSubmit',
+        hasExplicitPrompt: true,
+        payload: {
+          agentType: 'codex',
+          state: 'working',
+          prompt: 'inspect the workspace',
+          mainAgent: { state: 'working', stateStartedAt: 1_000 }
+        }
+      },
+      'ssh-a'
+    )
+    await vi.advanceTimersByTimeAsync(1)
+    server.ingestRemote(
+      {
+        ...identity,
+        hookEventName: 'Stop',
+        payload: {
+          agentType: 'codex',
+          state: 'working',
+          prompt: 'inspect the workspace',
+          mainAgent: { state: 'done', stateStartedAt: 2_000 },
+          subagents: [{ id: 'child', state: 'working', startedAt: 1_000 }],
+          lastAssistantMessage: 'lead inspection finished'
+        }
+      },
+      'ssh-a'
+    )
+    await vi.advanceTimersByTimeAsync(1)
+    expect(JSON.parse(readSavedStatus(lastStatusPath())).entries[PANE].payload).toMatchObject({
+      state: 'working',
+      mainAgent: { state: 'done' },
+      lastAssistantMessage: 'lead inspection finished'
+    })
+  })
+
   it('saves an authority change within seconds once a held lock clears', async () => {
     await prompt('first')
     await vi.advanceTimersByTimeAsync(1)
