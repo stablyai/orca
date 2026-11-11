@@ -1,5 +1,4 @@
-import { Readable, pipeline } from 'node:stream'
-import { StringDecoder } from 'node:string_decoder'
+import { pipeline, type Readable } from 'node:stream'
 import { createZstdDecompress } from 'node:zlib'
 
 export function isZstdTranscriptPath(path: string): boolean {
@@ -7,30 +6,11 @@ export function isZstdTranscriptPath(path: string): boolean {
 }
 
 /** Pipes raw compressed bytes through the zstd decoder; errors on the raw stream surface on the output. */
-export function zstdTranscriptStream(raw: Readable, encoding?: BufferEncoding): Readable {
+export function zstdTranscriptStream(raw: Readable): Readable {
   const decoder = createZstdDecompress()
   // pipeline links lifetimes so an early close of the decoded stream releases the raw stream's fd.
   pipeline(raw, decoder, () => undefined)
-  const decoded = decoder
-  if (!encoding) {
-    return decoded
-  }
-  // Decode across chunk boundaries to avoid replacement characters on split codepoints.
-  const stringDecoder = new StringDecoder(encoding)
-  return Readable.from(
-    (async function* (): AsyncGenerator<Buffer | string> {
-      for await (const chunk of decoded) {
-        const text = stringDecoder.write(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
-        if (text) {
-          yield text
-        }
-      }
-      const trailing = stringDecoder.end()
-      if (trailing) {
-        yield trailing
-      }
-    })()
-  )
+  return decoder
 }
 
 /** Collects at most `length` decompressed bytes; compressed transcripts are small enough to keep in memory. */

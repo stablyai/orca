@@ -127,7 +127,8 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     // Codex archives rollouts idle 7+ days as .jsonl.zst (#40312); only rollout-named archives.
     extensions: ['.jsonl', '.zst'],
     filePredicate: (filePath) =>
-      !filePath.endsWith('.zst') || /^rollout-.+\.jsonl\.zst$/i.test(basename(filePath))
+      !filePath.toLowerCase().endsWith('.zst') ||
+      /^rollout-.+\.jsonl\.zst$/.test(basename(filePath))
   },
   gemini: {
     rootDirs: (options, wslHomeDirs) =>

@@ -15,6 +15,11 @@ function lastPathSegment(filePath: string): string {
   return filePath.split(/[\\/]/).at(-1) ?? ''
 }
 
+// Codex archives idle rollouts as .jsonl.zst and restores the .jsonl on resume, so both names alias one rollout.
+function codexRolloutAliasName(fileName: string): string {
+  return fileName.endsWith('.zst') ? fileName.slice(0, -'.zst'.length) : fileName
+}
+
 export function codexRolloutHardlinkIdentity(file: {
   dev?: number
   ino?: number
@@ -105,39 +110,8 @@ export async function dedupeCodexRolloutAliases<T>(
   readSessionMetaId: (filePath: string) => Promise<string | null>,
   signal?: AbortSignal
 ): Promise<T[]> {
-  const twinDeduped = dropCompressedCodexRolloutTwins(candidates, accessors)
-  const hardlinkDeduped = dedupeCodexRolloutFileAliases(twinDeduped, accessors)
+  const hardlinkDeduped = dedupeCodexRolloutFileAliases(candidates, accessors)
   return dedupeCodexRolloutCopyAliases(hardlinkDeduped, accessors, readSessionMetaId, signal)
-}
-
-/** Codex decompresses a rollout back to .jsonl when it resumes it; list only the live plain file. */
-export function dropCompressedCodexRolloutTwins<T>(
-  candidates: readonly T[],
-  accessors: {
-    isCodex: (candidate: T) => boolean
-    getFilePath: (candidate: T) => string
-  }
-): T[] {
-  const plainTwinPaths = new Set<string>()
-  for (const candidate of candidates) {
-    if (!accessors.isCodex(candidate)) {
-      continue
-    }
-    const filePath = accessors.getFilePath(candidate)
-    if (
-      CODEX_ROLLOUT_FILE_NAME_PATTERN.test(lastPathSegment(filePath)) &&
-      !filePath.endsWith('.zst')
-    ) {
-      plainTwinPaths.add(filePath)
-    }
-  }
-  return candidates.filter((candidate) => {
-    if (!accessors.isCodex(candidate)) {
-      return true
-    }
-    const filePath = accessors.getFilePath(candidate)
-    return !filePath.endsWith('.zst') || !plainTwinPaths.has(filePath.slice(0, -'.zst'.length))
-  })
 }
 
 // Match parse batch width; the WSL transcript gate separately serializes UNC reads.
@@ -164,7 +138,7 @@ export async function dedupeCodexRolloutCopyAliases<T>(
     if (!CODEX_ROLLOUT_FILE_NAME_PATTERN.test(fileName)) {
       continue
     }
-    const key = `${sessionFileExecutionNamespace(filePath)}\0${fileName}`
+    const key = `${sessionFileExecutionNamespace(filePath)}\0${codexRolloutAliasName(fileName)}`
     const group = groups.get(key)
     if (group) {
       group.push(candidate)
@@ -204,6 +178,7 @@ export async function dedupeCodexRolloutCopyAliases<T>(
       const filePath = accessors.getFilePath(candidate)
       const rank = codexSessionRootRank(accessors.getCodexHome(candidate))
       const best = bestById.get(id)
+      // A plain twin sorts before its .zst archive, so the live file wins within a home.
       if (!best || rank < best.rank || (rank === best.rank && filePath < best.filePath)) {
         bestById.set(id, { candidate, rank, filePath })
       }
@@ -226,7 +201,7 @@ export function codexSessionAliasKey(session: AiVaultSession): string | null {
   if (!CODEX_ROLLOUT_FILE_NAME_PATTERN.test(fileName)) {
     return null
   }
-  return `${session.executionHostId}\0${sessionFileExecutionNamespace(session.filePath)}\0${session.sessionId}\0${fileName}`
+  return `${session.executionHostId}\0${sessionFileExecutionNamespace(session.filePath)}\0${session.sessionId}\0${codexRolloutAliasName(fileName)}`
 }
 
 export function codexSessionAliasBeats(candidate: AiVaultSession, best: AiVaultSession): boolean {
@@ -234,6 +209,10 @@ export function codexSessionAliasBeats(candidate: AiVaultSession, best: AiVaultS
   const bestRank = codexSessionRootRank(best.codexHome)
   if (candidateRank !== bestRank) {
     return candidateRank < bestRank
+  }
+  const candidateArchived = candidate.filePath.endsWith('.zst')
+  if (candidateArchived !== best.filePath.endsWith('.zst')) {
+    return !candidateArchived
   }
   const candidateTime = sessionSortTime(candidate)
   const bestTime = sessionSortTime(best)
