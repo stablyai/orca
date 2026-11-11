@@ -122,8 +122,8 @@ export function renderAgentAccountsSettingsSection(
       id="agent-accounts"
       title={t('settings.agentAccounts.title', 'Agent accounts')}
       description={t(
-        'settings.agentAccounts.description',
-        'Use your Claude and ChatGPT accounts in every cloud workspace. Set up once on this computer.'
+        'settings.agentAccounts.hubDescription',
+        'Where Claude and Codex are signed in: Orca Cloud, this computer and your hosts.'
       )}
       searchEntries={navigation.getSectionSearchEntries('agent-accounts')}
     >
