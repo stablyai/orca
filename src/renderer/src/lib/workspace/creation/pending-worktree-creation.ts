@@ -328,7 +328,9 @@ export function getCreationProgressLabel(
         ? null
         : orcaCloudCloneProgress(entry.provisioningLog ?? '', [])
       if (clone && !clone.ended) {
-        return t('auto.lib.pendingWorktreeCreation.cloningRepository', 'Cloning the repository…')
+        return clone.mode === 'update'
+          ? t('auto.lib.pendingWorktreeCreation.updatingRepository', 'Updating the repository…')
+          : t('auto.lib.pendingWorktreeCreation.cloningRepository', 'Cloning the repository…')
       }
       return entry.environmentCheck || clone
         ? t('auto.lib.pendingWorktreeCreation.preparingCloudEnvironment', 'Preparing environment…')

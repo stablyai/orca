@@ -248,7 +248,7 @@ export function VmBuildSheet({
                     cloud && step.id === 'provision' && step.state === 'running'
                       ? latestOrcaCloudPhaseLabel(entry.provisioningLog ?? '', t)
                       : step.id === 'clone' && step.state === 'running'
-                        ? cloneStageLabel(step.stage, t)
+                        ? cloneStageLabel(step.stage, t, step.cloneMode)
                         : null
                   }
                   timing={timings[step.id] ?? null}

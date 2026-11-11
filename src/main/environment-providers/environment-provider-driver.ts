@@ -18,6 +18,8 @@ export type EnvironmentProviderPhase =
   | 'booting'
   /** The repo clones in the VM after it is up; `percent` is git's overall progress. */
   | 'cloning'
+  /** The repo came prebuilt (an environment build): only what changed is fetched. */
+  | 'updating'
   | 'connecting'
   | 'suspending'
   | 'resuming'

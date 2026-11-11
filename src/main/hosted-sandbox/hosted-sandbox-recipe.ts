@@ -170,7 +170,7 @@ export function createHostedSandboxStepProvider(
         message?: string
       }) =>
         onStderr?.(
-          phase === 'cloning' && percent !== undefined
+          (phase === 'cloning' || phase === 'updating') && percent !== undefined
             ? `[orca-cloud] clone-progress ${percent} ${message === 'checkout' ? 'checkout' : 'download'}\n`
             : `[orca-cloud] ${phase}\n`
         )

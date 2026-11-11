@@ -7,6 +7,7 @@ import { deriveVmBuildSteps } from './vm-build-steps'
 import { classifyVmBuildFailure } from './vm-build-failure'
 import { holdRunningSteps } from './use-minimum-running-steps'
 import { humanizeOrcaCloudLogLine } from './orca-cloud-build-log'
+import { cloneStageLabel, stepLabel } from './vm-build-sheet-copy'
 import type { Translate } from '@/i18n/use-translate'
 
 const base = {
@@ -277,6 +278,27 @@ describe('Orca Cloud clone step', () => {
         cloud: true
       })
     ).toEqual({ kind: 'cloneFailed', reason: 'clone_timeout' })
+  })
+
+  it('a prebuilt repo (environment build) shows as an update, not a clone', () => {
+    const t: Translate = (_key, fallback) => fallback
+    const steps = deriveVmBuildSteps(
+      {
+        ...base,
+        ...lines(['[orca-cloud] updating', 4000], ['[orca-cloud] clone-progress 40 download', 4500])
+      },
+      5000,
+      { cloud: true }
+    )
+    expect(steps[1]).toMatchObject({
+      id: 'clone',
+      state: 'running',
+      percent: 40,
+      cloneMode: 'update'
+    })
+    expect(stepLabel(steps[1]!, true, t)).toBe('Update repository')
+    expect(cloneStageLabel(steps[1]!.stage, t, steps[1]!.cloneMode)).toBe('Fetching changes…')
+    expect(humanizeOrcaCloudLogLine('[orca-cloud] updating', t)).toBe('Updating the repository…')
   })
 
   it('shows counting (no frozen 0%) until git reports a percent', () => {
