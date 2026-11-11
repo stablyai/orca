@@ -10,6 +10,7 @@ import {
 import { useRef, useState } from 'react'
 import { useSetupModelHighlight } from './use-setup-model-highlight'
 import { AgentPickerLegacyModelsToggle } from './AgentPickerLegacyModelsToggle'
+import { useLegacyModelsExpanded } from './use-legacy-models-expanded'
 import { Check, ChevronDown, ChevronRight } from 'lucide-react'
 import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import {
@@ -73,7 +74,6 @@ export function AgentLaunchSetupPanel({
     }
   }
   const [modelQuery, setModelQuery] = useState('')
-  const [legacyExpanded, setLegacyExpanded] = useState(false)
   const [argumentsOpen, setArgumentsOpen] = useState(entry.defaultSurface === 'terminal')
   const argumentsKnown = agentPickerArgumentsKnown(entry, draft)
   const effective = agentPickerEffectiveChoices(entry, draft)
@@ -95,6 +95,9 @@ export function AgentLaunchSetupPanel({
   const { hasModels, catalogPending, catalogMessage } = catalogOf(entry, models, currentModel, mode)
   const modelInArguments = textActionArgumentsOwnModel(entry, draft)
   const modelDisabled = disabled || defaultsPending || catalogPending
+  const [legacyExpanded, toggleLegacy] = useLegacyModelsExpanded(
+    models.some((model) => model.id === currentModel && model.isLegacy)
+  )
   const modelRows = agentLaunchSetupModelRows(
     models,
     currentModel,
@@ -274,7 +277,7 @@ export function AgentLaunchSetupPanel({
                 total={modelRows.legacyCount}
                 expanded={legacyExpanded}
                 disabled={disabled}
-                onToggle={() => setLegacyExpanded((expanded) => !expanded)}
+                onToggle={toggleLegacy}
               />,
               ...modelRows.legacyRows.map(renderModelRow)
             ]}

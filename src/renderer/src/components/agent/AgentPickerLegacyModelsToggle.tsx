@@ -8,11 +8,14 @@ export function AgentPickerLegacyModelsToggle({
   total,
   expanded,
   disabled,
+  selection,
   onToggle
 }: {
   total: number
   expanded: boolean
   disabled?: boolean
+  /** Match the neighbouring rows' highlight style. */
+  selection?: 'default' | 'palette'
   onToggle: () => void
 }): React.JSX.Element | null {
   const t = useTranslate()
@@ -23,6 +26,7 @@ export function AgentPickerLegacyModelsToggle({
     <CommandItem
       value="__legacy__"
       disabled={disabled}
+      selection={selection}
       aria-expanded={expanded}
       onSelect={onToggle}
     >

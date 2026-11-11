@@ -278,9 +278,11 @@ export function agentLaunchSetupModelRows(
 ) {
   type Row = { id: string; label: string; unlisted?: true }
   const listed = models.filter((model) => !model.hidden)
-  const folded = (model: AgentPickerModel) => !query && model.isLegacy && model.id !== currentModel
+  // Membership ignores the selection, so picking a model never moves rows in the open list.
+  const folded = (model: AgentPickerModel) => !query && Boolean(model.isLegacy)
   const rows: Row[] = listed.filter((model) => !folded(model))
   const legacyRows: Row[] = listed.filter(folded)
+  const shownLegacy = legacyExpanded ? legacyRows : []
   // Why one keyed list: when the catalog later lists an unlisted current model, its row keeps
   // its identity, so the highlight stays on it instead of jumping to the first model.
   if (currentModel && !models.some((model) => model.id === currentModel)) {
@@ -288,10 +290,12 @@ export function agentLaunchSetupModelRows(
   }
   // An Arguments-owned text action has no current model row, so it starts on its default as before.
   const start =
-    !modelInArguments && rows.some((row) => row.id === currentModel) ? currentModel : undefined
+    !modelInArguments && [...rows, ...shownLegacy].some((row) => row.id === currentModel)
+      ? currentModel
+      : undefined
   return {
     rows,
-    legacyRows: legacyExpanded ? legacyRows : [],
+    legacyRows: shownLegacy,
     legacyCount: legacyRows.length,
     start
   }

@@ -49,7 +49,7 @@ it('uses the shared AI-author picker without saving on cancel and preserves Cust
     ctrlKey: false
   })
   fireEvent.click(screen.getByRole('button', { name: 'Configure Codex' }))
-  fireEvent.click(screen.getByRole('option', { name: /^Legacy models/ }))
+  // The draft still names legacy GPT-5.4, so its section opens by itself.
   fireEvent.click(screen.getByRole('option', { name: 'GPT-5.4' }))
   fireEvent.click(screen.getByRole('radio', { name: 'Low' }))
   fireEvent.click(screen.getByRole('button', { name: /^Use$/ }))

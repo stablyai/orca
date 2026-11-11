@@ -16,6 +16,7 @@ import { sayNativeChatSessionOptionTranslated as say } from './native-chat-sessi
 import { NativeChatSessionOptionChoiceBody } from './NativeChatSessionOptionChoiceBody'
 import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
 import { AgentPickerLegacyModelsToggle } from '../../../../agent/AgentPickerLegacyModelsToggle'
+import { useLegacyModelsExpanded } from '../../../../agent/use-legacy-models-expanded'
 
 type NativeChatModelComboboxProps = {
   choices: readonly SessionOptionSelectChoice[]
@@ -48,10 +49,12 @@ export function NativeChatModelCombobox({
   const searchLabel = t('components.native-chat.composer.searchModels', 'Search models…')
   const search = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
-  const [legacyExpanded, setLegacyExpanded] = useState(false)
+  const [legacyExpanded, toggleLegacy] = useLegacyModelsExpanded(
+    choices.some((choice) => choice.value === currentValue && choice.legacy)
+  )
   const searching = Boolean(query.trim())
-  const folded = (choice: SessionOptionSelectChoice) =>
-    !searching && Boolean(choice.legacy) && choice.value !== currentValue
+  // Membership ignores the selection, so picking a model never moves rows in the open list.
+  const folded = (choice: SessionOptionSelectChoice) => !searching && Boolean(choice.legacy)
   const legacyChoices = choices.filter(folded)
   const renderChoice = (choice: SessionOptionSelectChoice) => {
     const label = nativeChatSessionChoiceLabel(choice, say)
@@ -116,7 +119,8 @@ export function NativeChatModelCombobox({
                 key="legacy-toggle"
                 total={legacyChoices.length}
                 expanded={legacyExpanded}
-                onToggle={() => setLegacyExpanded((expanded) => !expanded)}
+                selection="palette"
+                onToggle={toggleLegacy}
               />,
               ...(legacyExpanded ? legacyChoices.map(renderChoice) : [])
             ]}

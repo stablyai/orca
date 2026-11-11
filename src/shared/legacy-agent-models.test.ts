@@ -37,4 +37,39 @@ describe('legacyAgentModelIds', () => {
   it('leaves other agents untouched', () => {
     expect(legacy('grok', [{ id: 'grok-4.5' }, { id: 'grok-4.6' }])).toEqual([])
   })
+
+  it('reads each row a bounded number of times on a fresh list', () => {
+    for (const size of [20, 200]) {
+      for (const agent of ['claude', 'codex']) {
+        let reads = 0
+        const rows = Array.from(
+          { length: size },
+          (_, index) =>
+            new Proxy(
+              agent === 'claude'
+                ? { id: `claude-family${index}-5-5`, resolvedModel: `claude-family${index}-5-5` }
+                : { id: `gpt-6.1-family${index}` },
+              {
+                get: (target, key, receiver) => {
+                  reads += 1
+                  return Reflect.get(target, key, receiver)
+                }
+              }
+            )
+        )
+        legacy(agent, rows)
+        // Index pass, legacy test and result pass each read at most three fields of a row.
+        expect(reads).toBeLessThanOrEqual(9 * size)
+      }
+    }
+  })
+
+  it("keeps each agent's classification of the same list apart", () => {
+    const rows: Row[] = [
+      { id: 'claude-opus-5-5', resolvedModel: 'claude-opus-5-5' },
+      { id: 'opus', resolvedModel: 'claude-opus-5-5' }
+    ]
+    expect(legacy('claude', rows)).toEqual(['opus'])
+    expect(legacy('codex', rows)).toEqual([])
+  })
 })

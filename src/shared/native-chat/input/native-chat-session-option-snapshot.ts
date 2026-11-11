@@ -218,6 +218,9 @@ export function nativeChatSessionOptionDescriptors(args: {
   agent: string
   catalog: AgentSessionOptionCatalog
   models: readonly CatalogModel[]
+  /** Listed rows legacy folding classifies, so a stable catalog is classified once; defaults to models.
+   *  A tracked-only stand-in never marks listed rows legacy. */
+  legacyInventory?: readonly CatalogModel[]
   mode: NativeChatSessionOptionMode
   modelLabel: string
   liveTransport: NativeChatLiveOptionTransport
@@ -228,13 +231,13 @@ export function nativeChatSessionOptionDescriptors(args: {
 }): SessionOptionDescriptor[] {
   const { agent, catalog, models, mode, modelLabel, liveTransport, model } = args
   // Callers reconcile tracked models into choices first; the trigger must never show an unlisted selection.
-  // Legacy rows fold away like the launch picker's, unless the chat is on one.
-  const legacy = legacyAgentModelIds(agent, models)
+  // Legacy rows fold away like the launch picker's; a picker opens the section when the chat is on one.
+  const legacy = legacyAgentModelIds(agent, args.legacyInventory ?? models)
   const modelChoices = models.map(({ id, label, description }) => ({
     value: id,
     label,
     ...(description ? { description } : {}),
-    ...(id !== model.currentId && legacy.has(id) ? { legacy: true as const } : {})
+    ...(legacy.has(id) ? { legacy: true as const } : {})
   }))
   const modelAction = actionForApply(catalog.modelApply, model.tracked, mode, liveTransport)
   const snapshot: SessionOptionDescriptor[] = [

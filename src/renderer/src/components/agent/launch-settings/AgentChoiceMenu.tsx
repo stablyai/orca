@@ -16,6 +16,7 @@ import {
 } from './AgentChoiceOptionField'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
+import { useLegacyModelsExpanded } from '../use-legacy-models-expanded'
 
 const LEGACY_TOGGLE = '__legacy__'
 
@@ -42,12 +43,14 @@ export function AgentChoiceMenu({
   onOpenChange?: (open: boolean) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const [legacyExpanded, setLegacyExpanded] = useState(false)
+  const [legacyExpanded, toggleLegacy] = useLegacyModelsExpanded(
+    choices.some((choice) => choice.value === value && choice.legacy)
+  )
   const [selectOpen, setSelectOpen] = useState(false)
   // Radix Select closes after every pick; picking the legacy row keeps it open.
   const toggledLegacy = useRef(false)
   const current = choices.find((choice) => choice.value === value)?.label ?? value
-  const folded = (choice: AgentChoice) => Boolean(choice.legacy) && choice.value !== value
+  const folded = (choice: AgentChoice) => Boolean(choice.legacy)
   const mainChoices = choices.filter((choice) => !folded(choice))
   const legacyChoices = choices.filter(folded)
   const shownLegacy = legacyExpanded ? legacyChoices : []
@@ -98,10 +101,11 @@ export function AgentChoiceMenu({
               {mainChoices.map(radioItem)}
               {legacyChoices.length > 0 ? (
                 <DropdownMenuItem
+                  inset
                   aria-expanded={legacyExpanded}
                   onSelect={(event) => {
                     event.preventDefault()
-                    setLegacyExpanded((expanded) => !expanded)
+                    toggleLegacy()
                   }}
                 >
                   {toggleBody}
@@ -127,8 +131,9 @@ export function AgentChoiceMenu({
         open={selectOpen}
         onValueChange={(next) => {
           if (next === LEGACY_TOGGLE) {
-            toggledLegacy.current = true
-            setLegacyExpanded((expanded) => !expanded)
+            // Typeahead on the closed trigger selects without a close to swallow.
+            toggledLegacy.current = selectOpen
+            toggleLegacy()
             return
           }
           onChange(next)
