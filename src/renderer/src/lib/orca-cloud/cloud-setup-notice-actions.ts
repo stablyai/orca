@@ -7,7 +7,10 @@ import { translate } from '@/i18n/i18n'
 import { checkRuntimeHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
 import { runVmEnvironmentCheck } from '@/lib/ephemeral-vm-environment-check'
 import { cloudWorkspaceApi } from './orca-cloud-workspace-store'
-import { fetchOrcaCloudRepoAccess, invalidateOrcaCloudRepoAccess } from './use-orca-cloud-repo-access'
+import {
+  fetchOrcaCloudRepoAccess,
+  invalidateOrcaCloudRepoAccess
+} from './use-orca-cloud-repo-access'
 import {
   dismissCloudSetupNotice,
   getCloudSetupNoticesRecord,

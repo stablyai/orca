@@ -178,9 +178,8 @@ async function prepareEphemeralVmRecipeRequest(
     await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest, creationId)
     if (gate === 'restart' && useAppStore.getState().pendingWorktreeCreations[creationId]) {
       // Lazy: the creation flow imports this module.
-      const { retryBackgroundWorktreeCreation } = await import(
-        '@/lib/workspace/creation/worktree-creation-flow'
-      )
+      const { retryBackgroundWorktreeCreation } =
+        await import('@/lib/workspace/creation/worktree-creation-flow')
       retryBackgroundWorktreeCreation(creationId)
     }
     return null
