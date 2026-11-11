@@ -1,3 +1,4 @@
+import { AGENT_SESSION_FAILURE_COPY } from '../../../../../src/shared/agent-session/failures/agent-session-failure-copy'
 import type {
   AgentSessionFailureCopyId,
   AgentSessionFailureCopyValues
@@ -8,76 +9,77 @@ export const START_FAILURE_COPY = {
   savedConversationMissing: (values) =>
     translate(
       'session.failure.savedConversationMissing',
-      "{{agent}} couldn't find this chat's saved conversation.",
+      AGENT_SESSION_FAILURE_COPY.savedConversationMissing,
       values
     ),
-  theAgent: (values) => translate('session.failure.theAgent', 'The agent', values),
+  theAgent: (values) =>
+    translate('session.failure.theAgent', AGENT_SESSION_FAILURE_COPY.theAgent, values),
   providerStartFailed: (values) =>
     translate(
       'session.failure.providerStartFailed',
-      '{{agent}} stopped before it finished starting.',
+      AGENT_SESSION_FAILURE_COPY.providerStartFailed,
       values
     ),
   runCommandAgain: (values) =>
-    translate('session.failure.runCommandAgain', 'Run /{{command}} again.', values),
+    translate(
+      'session.failure.runCommandAgain',
+      AGENT_SESSION_FAILURE_COPY.runCommandAgain,
+      values
+    ),
   sendToTryAgain: (values) =>
-    translate('session.failure.sendToTryAgain', 'Send your message to try again.', values),
+    translate('session.failure.sendToTryAgain', AGENT_SESSION_FAILURE_COPY.sendToTryAgain, values),
   sendAgainToTryOnceMore: (values) =>
     translate(
       'session.failure.sendAgainToTryOnceMore',
-      'Send your message again to try once more.',
+      AGENT_SESSION_FAILURE_COPY.sendAgainToTryOnceMore,
       values
     ),
   couldNotStart: (values) =>
-    translate('session.failure.couldNotStart', "{{agent}} couldn't start.", values),
+    translate('session.failure.couldNotStart', AGENT_SESSION_FAILURE_COPY.couldNotStart, values),
   couldNotRestart: (values) =>
-    translate('session.failure.couldNotRestart', "{{agent}} couldn't restart.", values),
+    translate(
+      'session.failure.couldNotRestart',
+      AGENT_SESSION_FAILURE_COPY.couldNotRestart,
+      values
+    ),
   cliTooOld: (values) =>
-    translate(
-      'session.failure.cliTooOld',
-      '{{agent}} {{installedVersion}} is too old for chats. Update to {{minimumVersion}} or newer.',
-      values
-    ),
+    translate('session.failure.cliTooOld', AGENT_SESSION_FAILURE_COPY.cliTooOld, values),
   startTimedOut: (values) =>
-    translate(
-      'session.failure.startTimedOut',
-      '{{agent}} took too long to start (no response to {{method}} after {{seconds}}s).',
-      values
-    ),
+    translate('session.failure.startTimedOut', AGENT_SESSION_FAILURE_COPY.startTimedOut, values),
   startTimedOutKeepsHappening: (values) =>
     translate(
       'session.failure.startTimedOutKeepsHappening',
-      'If this keeps happening, the computer running this chat may be overloaded.',
+      AGENT_SESSION_FAILURE_COPY.startTimedOutKeepsHappening,
       values
     ),
   argumentsUnsupportedOption: (values) =>
     translate(
       'session.failure.argumentsUnsupportedOption',
-      'Saved Arguments contain an unsupported option ({{option}}).',
+      AGENT_SESSION_FAILURE_COPY.argumentsUnsupportedOption,
       values
     ),
   argumentsMissingValue: (values) =>
     translate(
       'session.failure.argumentsMissingValue',
-      'Saved Arguments need a value for {{option}}.',
+      AGENT_SESSION_FAILURE_COPY.argumentsMissingValue,
       values
     ),
   argumentsMultipleValues: (values) =>
     translate(
       'session.failure.argumentsMultipleValues',
-      'Saved Arguments give {{option}} more than one value.',
+      AGENT_SESSION_FAILURE_COPY.argumentsMultipleValues,
       values
     ),
   argumentsPositionalPrompt: (values) =>
     translate(
       'session.failure.argumentsPositionalPrompt',
-      'Saved Arguments include a prompt.',
+      AGENT_SESSION_FAILURE_COPY.argumentsPositionalPrompt,
       values
     ),
   editSavedArguments: (values) =>
     translate(
       'session.failure.editSavedArguments',
-      'Edit them in Settings > Agents > Arguments.',
+      AGENT_SESSION_FAILURE_COPY.editSavedArguments,
       values
     ),
   terminalAgentHoldsChat: (values) =>
@@ -95,114 +97,115 @@ export const START_FAILURE_COPY = {
   startNewChat: (values) =>
     translate('session.failure.startNewChat', 'Start a new chat to continue.', values),
   notSignedIn: (values) =>
-    translate('session.failure.notSignedIn', '{{agent}} is not signed in.', values),
+    translate('session.failure.notSignedIn', AGENT_SESSION_FAILURE_COPY.notSignedIn, values),
   claudeSystemNotSignedIn: (values) =>
     translate(
       'session.failure.claudeSystemNotSignedIn',
-      "Claude isn't signed in. Run `{{loginCommand}}`, or choose an account in Claude Accounts settings.",
+      AGENT_SESSION_FAILURE_COPY.claudeSystemNotSignedIn,
       values
     ),
   claudeManagedNotSignedIn: (values) =>
     translate(
       'session.failure.claudeManagedNotSignedIn',
-      "This Claude account isn't signed in. Sign in again in Claude Accounts settings.",
+      AGENT_SESSION_FAILURE_COPY.claudeManagedNotSignedIn,
       values
     ),
   codexSystemNotSignedIn: (values) =>
     translate(
       'session.failure.codexSystemNotSignedIn',
-      "Codex isn't signed in. Run `{{loginCommand}}`.",
+      AGENT_SESSION_FAILURE_COPY.codexSystemNotSignedIn,
       values
     ),
   codexManagedNotSignedIn: (values) =>
     translate(
       'session.failure.codexManagedNotSignedIn',
-      "This Codex account isn't signed in. Sign in again in Codex Accounts settings.",
+      AGENT_SESSION_FAILURE_COPY.codexManagedNotSignedIn,
       values
     ),
   antigravityNotSignedIn: (values) =>
     translate(
       'session.failure.antigravityNotSignedIn',
-      "Antigravity isn't signed in. Sign in under Settings → Accounts → Antigravity. Then send your message again.",
+      AGENT_SESSION_FAILURE_COPY.antigravityNotSignedIn,
       values
     ),
   antigravitySystemNotSignedIn: (values) =>
     translate(
       'session.failure.antigravitySystemNotSignedIn',
-      "Antigravity isn't signed in. Sign in by running `agy` on the computer running this chat, then send your message again.",
+      AGENT_SESSION_FAILURE_COPY.antigravitySystemNotSignedIn,
       values
     ),
   agentCommandNotSignedIn: (values) =>
     translate(
       'session.failure.agentCommandNotSignedIn',
-      'Sign in to {{agent}} with `{{loginCommand}}` on the computer running this chat.',
+      AGENT_SESSION_FAILURE_COPY.agentCommandNotSignedIn,
       values
     ),
   interactiveAgentNotSignedIn: (values) =>
     translate(
       'session.failure.interactiveAgentNotSignedIn',
-      'Sign in to {{agent}} by running `{{loginCommand}}` and using `{{slashCommand}}` on the computer running this chat.',
+      AGENT_SESSION_FAILURE_COPY.interactiveAgentNotSignedIn,
       values
     ),
   agentNotSignedIn: (values) =>
-    translate('session.failure.agentNotSignedIn', 'Sign in to {{agent}}.', values),
-  cliMissing: (values) =>
     translate(
-      'session.failure.cliMissing',
-      "{{agent}} wasn't found on the computer running this chat. Install it, or check its Command in Settings → Agents.",
+      'session.failure.agentNotSignedIn',
+      AGENT_SESSION_FAILURE_COPY.agentNotSignedIn,
       values
     ),
+  cliMissing: (values) =>
+    translate('session.failure.cliMissing', AGENT_SESSION_FAILURE_COPY.cliMissing, values),
   cliMissingInWslDistro: (values) =>
     translate(
       'session.failure.cliMissingInWslDistro',
-      "{{agent}} isn't installed in the WSL distro {{distro}}. Install it inside {{distro}}, or check its Command in Settings → Agents.",
+      AGENT_SESSION_FAILURE_COPY.cliMissingInWslDistro,
       values
     ),
-  signInFirst: (values) => translate('session.failure.signInFirst', 'Sign in first.', values),
+  signInFirst: (values) =>
+    translate('session.failure.signInFirst', AGENT_SESSION_FAILURE_COPY.signInFirst, values),
   signInThenRunCommand: (values) =>
     translate(
       'session.failure.signInThenRunCommand',
-      'Sign in, then run /{{command}} again.',
+      AGENT_SESSION_FAILURE_COPY.signInThenRunCommand,
       values
     ),
   signInThenSend: (values) =>
-    translate('session.failure.signInThenSend', 'Sign in, then send your message again.', values),
+    translate('session.failure.signInThenSend', AGENT_SESSION_FAILURE_COPY.signInThenSend, values),
   thenSendAgain: (values) =>
-    translate('session.failure.thenSendAgain', 'Then send your message again.', values),
+    translate('session.failure.thenSendAgain', AGENT_SESSION_FAILURE_COPY.thenSendAgain, values),
   historyTooLarge: (values) =>
     translate(
       'session.failure.historyTooLarge',
-      "This conversation's history is too large to restore here.",
+      AGENT_SESSION_FAILURE_COPY.historyTooLarge,
       values
     ),
   managedAccountEnvOverride: (values) =>
     translate(
       'session.failure.managedAccountEnvOverride',
-      'This Claude launch sets its own Anthropic sign-in variables. Remove them to use a managed Claude account.',
+      AGENT_SESSION_FAILURE_COPY.managedAccountEnvOverride,
       values
     ),
   accountSwitchInProgress: (values) =>
     translate(
       'session.failure.accountSwitchInProgress',
-      "{{agent}}'s setup is changing on this host. Try again after it finishes.",
+      AGENT_SESSION_FAILURE_COPY.accountSwitchInProgress,
       values
     ),
   managedAccountUnsupported: (values) =>
     translate(
       'session.failure.managedAccountUnsupported',
-      'While a Claude account is added in WSL, Claude chats need a Windows Claude account.',
+      AGENT_SESSION_FAILURE_COPY.managedAccountUnsupported,
       values
     ),
   launchFolderMissing: (values) =>
     translate(
       'session.failure.launchFolderMissing',
-      'The folder this chat ran in no longer exists. Restore it to continue this chat.',
+      AGENT_SESSION_FAILURE_COPY.launchFolderMissing,
       values
     ),
   historyInOtherAccount: (values) =>
     translate(
       'session.failure.historyInOtherAccount',
-      "This chat's history is in another Claude account. Switch back to that account to continue it.",
+      AGENT_SESSION_FAILURE_COPY.historyInOtherAccount,
       values
     ),
   claudeAccountFolderMissing: (values) =>
@@ -226,49 +229,49 @@ export const START_FAILURE_COPY = {
   runtimeNotInstalled: (values) =>
     translate(
       'session.failure.runtimeNotInstalled',
-      "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
+      AGENT_SESSION_FAILURE_COPY.runtimeNotInstalled,
       values
     ),
   fullAccessAsRoot: (values) =>
     translate(
       'session.failure.fullAccessAsRoot',
-      "{{agent}} won't use Full access while it runs as root. Choose another permission for {{agent}} in Settings → Agents for the computer running this chat, then start a new chat.",
+      AGENT_SESSION_FAILURE_COPY.fullAccessAsRoot,
       values
     ),
   launchPreparationFailed: (values) =>
     translate(
       'session.failure.launchPreparationFailed',
-      "Orca couldn't prepare {{agent}} to start on the computer running this chat.",
+      AGENT_SESSION_FAILURE_COPY.launchPreparationFailed,
       values
     ),
   conversationOpenElsewhere: (values) =>
     translate(
       'session.failure.conversationOpenElsewhere',
-      'Codex is still holding this conversation open. Try again in a moment, or close other Codex terminals.',
+      AGENT_SESSION_FAILURE_COPY.conversationOpenElsewhere,
       values
     ),
   conversationOpenInTerminal: (values) =>
     translate(
       'session.failure.conversationOpenInTerminal',
-      '{{agent}} is already running this conversation in another terminal. Quit {{agent}} there or close that terminal to continue here.',
+      AGENT_SESSION_FAILURE_COPY.conversationOpenInTerminal,
       values
     ),
   chooseClaudeAccount: (values) =>
     translate(
       'session.failure.chooseClaudeAccount',
-      'Choose or add one in Claude Accounts settings.',
+      AGENT_SESSION_FAILURE_COPY.chooseClaudeAccount,
       values
     ),
   chooseClaudeAccountThenRunCommand: (values) =>
     translate(
       'session.failure.chooseClaudeAccountThenRunCommand',
-      'Choose or add one in Claude Accounts settings, then run /{{command}} again.',
+      AGENT_SESSION_FAILURE_COPY.chooseClaudeAccountThenRunCommand,
       values
     ),
   chooseClaudeAccountThenSend: (values) =>
     translate(
       'session.failure.chooseClaudeAccountThenSend',
-      'Choose or add one in Claude Accounts settings, then send your message again.',
+      AGENT_SESSION_FAILURE_COPY.chooseClaudeAccountThenSend,
       values
     )
 } satisfies Partial<
