@@ -247,7 +247,7 @@ export function registerCoreHandlers(
   registerSessionHandlers(store, runtime)
   registerUIHandlers(store, { isDashboardPopoutRenderer })
   registerEmulatorFrameStreamHandlers()
-  registerEmulatorVideoStreamHandlers()
+  registerEmulatorVideoStreamHandlers((id) => runtime.getEmulatorBridge()?.getIosVideoStreamUrl(id))
   registerEmulatorScrcpyTouchHandler()
   registerEmulatorScrcpyKeyboardHandler()
   registerWorkspaceSpaceHandlers(store)

@@ -12,6 +12,7 @@ import { useAppStore } from '@/store'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { useShortcutKeyDetails, useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { localizeUnassignedDisplay } from '@/i18n/unassigned-label'
 import { Button } from '../../ui/button'
 import { Switch } from '../../ui/switch'
 import { SettingsRow, SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
@@ -75,7 +76,7 @@ export function VoiceDictationSettings(props: VoiceDictationSettingsProps): Reac
   const { voiceSettings, permissionPending, onToggleVoiceDictation, onUpdateVoiceSettings } = props
   const t = useTranslate()
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
-  const shortcut = useShortcutLabel('voice.dictation')
+  const shortcut = localizeUnassignedDisplay(useShortcutLabel('voice.dictation'))
   const shortcutKeys = useShortcutKeyDetails('voice.dictation')
   const mode = dictationShortcutMode(voiceSettings)
   const dictationLabel = t('components.settings.voice.dictation.label', 'Dictation')

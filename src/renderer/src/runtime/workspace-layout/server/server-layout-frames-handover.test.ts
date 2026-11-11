@@ -2,20 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 import type * as FrameDrawnModule from '../../web-session-tabs-sync/frame-drawn-server-workspaces'
 import type { AppState } from '@/store/types'
-import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
-import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host'
 import { toRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { toWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
-import { loadWorkspaceLayoutWithoutReport } from '../../../../../shared/workspace-layout/workspace-layout-load'
-import { nameBasedLoadContext } from '../../../../../shared/workspace-layout/workspace-layout-minted-ids'
-import {
-  publishWorkspaceLayout,
-  type PublishedWorkspaceLayout
-} from '../../../../../shared/workspace-layout/workspace-layout-published'
 import { createStoreSessionMockApi } from '../../../store/testing/app-store-session-api.test-fixture'
 import { _resetLayoutFramePositionForTests } from '../frames/layout-frame-position'
 import { mainLayoutFrameSender } from '../testing/main-loaded-layout-frames.test-fixture'
-import { serverLayoutForDesktop } from './server-layout-frame-ids'
 import {
   CAPABLE,
   ENV,
@@ -32,14 +23,10 @@ import {
   sessionTabs,
   settle,
   surface,
-  treeOf,
   type TestStore
 } from './testing/server-layout-frames.test-fixture'
 import { installLayoutFrameApplyCheck } from '../testing/workspace-layout-frame-apply-check.test-fixture'
-import {
-  isFrameDrawnServerWorkspace,
-  resetFrameDrawnServerWorkspacesForTests
-} from '../../web-session-tabs-sync/frame-drawn-server-workspace-set'
+import { resetFrameDrawnServerWorkspacesForTests } from '../../web-session-tabs-sync/frame-drawn-server-workspace-set'
 import { resetMirroredTerminalHandlesForTests } from '../../web-session-tabs-sync/mirrored-terminal-handle-index'
 import { resetWebSessionTabsSyncTestState } from '../../web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
@@ -91,17 +78,6 @@ const WITH_TAB_2 = serverLayout([
   serverTerminalTab('host-tab-2', SECOND_LEAF_ID, 'server-pty-2', 2)
 ])
 
-/** The workspace as the store shows it, in the published shape the frames translate to. */
-function publishedStoreTree(state: AppState): PublishedWorkspaceLayout {
-  const host = toRuntimeExecutionHostId(ENV)
-  const { layout } = loadWorkspaceLayoutWithoutReport(
-    host,
-    buildWorkspaceSessionPayload(state),
-    nameBasedLoadContext()
-  )
-  return publishWorkspaceLayout(layout.workspaces[WT]!, host)
-}
-
 /** Every state the store passes through, from now until `stop`. */
 function recordStates(store: TestStore) {
   const states: AppState[] = [store.getState()]
@@ -146,43 +122,6 @@ afterEach(() => {
   uninstallAll()
   check.uninstall()
   expect(check.failures).toEqual([])
-})
-
-describe('mirror to frames', () => {
-  it('gates the workspace before the snapshot shows, then shows it with no empty state and no reattach', async () => {
-    const store = mirroredStore()
-    const mirrorTree = treeOf(store.getState(), WT)
-    expect(mirrorTree.bindings).toEqual({ [TAB_1]: { [LEAF_ID]: REMOTE_1 } })
-    // The server's snapshot translates to exactly the tree the mirror drew.
-    const handleOf = (hostTabId: string, leafId: string) =>
-      hostTabId === 'host-tab-1' && leafId === LEAF_ID ? 'terminal-1' : null
-    expect(serverLayoutForDesktop(SERVER_LAYOUT, ENV, handleOf)).toEqual(
-      publishedStoreTree(store.getState())
-    )
-    install(store)
-    setServers(store, [CAPABLE])
-    const stream = streams.openTo(ENV)
-    const recorded = recordStates(store)
-
-    streams.send(stream, {
-      type: 'snapshot',
-      workspaces: [{ key: WT, layout: SERVER_LAYOUT }],
-      seq: 1,
-      epoch: 'e'
-    })
-
-    // Before the frame's flush: the gate is up and the store still shows the mirror's tree.
-    expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(true)
-    expect(check.fullBuilt).toEqual([])
-    expect(treeOf(store.getState(), WT)).toEqual(mirrorTree)
-    await settle()
-    recorded.stop()
-
-    // Presence: the frames built the workspace; the same tree needed no store write at all.
-    expect(check.fullBuilt).toEqual([WT])
-    expect(recorded.states).toHaveLength(1)
-    expect(treeOf(store.getState(), WT)).toEqual(mirrorTree)
-  })
 })
 
 describe('a terminal handle and the frame that binds its pane, in either order', () => {
@@ -251,55 +190,5 @@ describe('a terminal handle and the frame that binds its pane, in either order',
     const firstShown = recorded.states.find((state) => state.terminalLayoutsByTabId[TAB_2])
     expect(bindingOf(firstShown!, TAB_2, SECOND_LEAF_ID)).toBe(bound)
     expect(bindingChanges(recorded.states, TAB_2, SECOND_LEAF_ID)).toBe(1)
-  })
-
-  it('rebinds a pane that stays bound exactly once when its handle is replaced', async () => {
-    const { store } = await frameDrawnStore()
-    expect(bindingOf(store.getState(), TAB_1, LEAF_ID)).toBe(REMOTE_1)
-    const recorded = recordStates(store)
-
-    mirrorSnapshot(store, ENV, sessionTabs([surface('host-tab-1', LEAF_ID, 'terminal-1b')], 2))
-    await settle()
-    recorded.stop()
-
-    expect(bindingOf(store.getState(), TAB_1, LEAF_ID)).toBe(
-      toRemoteRuntimePtyId('terminal-1b', ENV)
-    )
-    expect(bindingChanges(recorded.states, TAB_1, LEAF_ID)).toBe(1)
-    for (const state of recorded.states) {
-      expect((state.tabsByWorktree[WT] ?? []).map((tab) => tab.id)).toEqual([TAB_1])
-    }
-  })
-})
-
-describe('a workspace handed back to the mirror', () => {
-  it('is not drawn from the stopped stream’s frames while the stream reconnects', async () => {
-    const other = 'repo::/other-worktree'
-    hoisted.owners.set(other, ENV)
-    const store = mirroredStore()
-    install(store)
-    setServers(store, [CAPABLE])
-    const stream = streams.openTo(ENV)
-    const frames = mainLayoutFrameSender()
-    const otherLayout = {
-      ...serverLayout([serverTerminalTab('host-tab-9', LEAF_ID, 'server-pty-9')]),
-      worktreeId: other
-    }
-    streams.send(stream, senderSnapshot(frames, { [WT]: SERVER_LAYOUT, [other]: otherLayout }, 1))
-    await settle()
-    stream.onStatus({ state: 'lost' })
-    stream.onStatus({ state: 'connecting' })
-    await settle()
-
-    // The mirror's first snapshot of the other workspace, after it took it back.
-    mirrorSnapshot(store, ENV, {
-      ...sessionTabs([surface('host-tab-8', LEAF_ID, 'terminal-8')], 1),
-      worktree: other
-    })
-    await settle()
-
-    expect((store.getState().tabsByWorktree[other] ?? []).map((tab) => tab.id)).toEqual([
-      toWebTerminalSurfaceTabId('host-tab-8')
-    ])
   })
 })

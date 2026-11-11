@@ -1,10 +1,11 @@
 import { wireRecipeWorkspaceRemoval } from '../ephemeral-vm/recipe-workspace-removal-wiring'
+import { wireGitHubIssueLinkTitleFill } from '../github/github-issue-link-title-wiring'
 import {
   applySessionSearchSettingsChange,
   installChildSessionSearchService
 } from '../ai-vault-search/session-search-enablement'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import { sessionSearchScopeCatalogFromStore } from '../ai-vault-search/session-search-store-scope-catalog'
+import { sessionSearchScopeCatalogFromStore } from '../ai-vault-search/scope/session-search-store-scope-catalog'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { app } from 'electron'
 import { translateMain } from '../i18n/main-i18n'
@@ -159,6 +160,9 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     recordDurableCrashBreadcrumb('agent_state_rules_active', rules)
   )
   wireRecipeWorkspaceRemoval(runtime, store, () => app.getPath('userData'))
+  // Each host titles its own workspaces' untitled GitHub issue links once, when they are linked.
+  const disposeIssueLinkTitleFill = wireGitHubIssueLinkTitleFill(store, runtime)
+  app.once('will-quit', disposeIssueLinkTitleFill)
   state.runtime = runtime
   // Opening a recipe VM's workspace from a client wakes the VM through the runtime's one owner.
   registerRecipeVmWaker({
@@ -179,6 +183,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched, runtime)
   )
   agentHookServer.setCliWriterExecutionMatcher(observedPaneIdentities, runtime)
+  agentHookServer.setClaudePermissionHolds(runtime.terminalWorkerApprovals)
   // Main records pane resume state from accepted status.
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     agentHookServer.subscribeEnrichedStatus((enriched) =>
@@ -199,6 +204,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     )
   )
   browserSessionRegistry.onProfilesChanged = () => runtime.notifyBrowserProfilesChanged()
+  runtime.startupWorkerAuthority.begin()
   return runtime
 }
 

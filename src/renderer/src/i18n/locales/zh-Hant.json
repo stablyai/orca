@@ -216,23 +216,19 @@
     }
   },
   "browser": {
-    "passwords": {
-      "savePrompt": {
-        "open": "儲存密碼提示",
-        "updateTitle": "更新密碼？",
-        "saveTitle": "儲存密碼？",
-        "username": "使用者名稱",
-        "password": "密碼",
-        "never": "永不儲存此網站的密碼",
-        "notNow": "暫時不要",
-        "update": "更新",
-        "save": "儲存"
-      },
-      "fill": {
-        "noUsername": "（沒有使用者名稱）",
-        "title": "已儲存的登入資料",
-        "otherLogins": "此網站的其他登入資料"
-      }
+    "googleCookieClear": {
+      "signInKeyword": "登入",
+      "unavailable": "所選主機上的此設定檔無法使用。",
+      "explanation": "Google 會將登入狀態綁定在登入時所用的瀏覽器上，因此 Orca 不會從其他瀏覽器匯入 Google Cookie。如果 Google 卡在錯誤的帳戶，或反覆讓您登出，請清除目前設定檔中的 Google Cookie，然後在 Orca 中重新登入 Google。其他網站仍保持登入狀態。",
+      "action": "清除 Google Cookie…",
+      "confirmTitle": "要清除「{{profile}}」中的 Google Cookie 嗎？",
+      "confirmDescription": "此設定檔在 Orca 瀏覽器中將登出 Google，其他網站仍保持登入狀態。",
+      "clear": "清除",
+      "cancel": "取消",
+      "cleared": "已清除「{{profile}}」中的 Google Cookie。",
+      "empty": "「{{profile}}」中沒有可清除的 Google Cookie。",
+      "remaining": "無法從「{{profile}}」中移除部分 Google Cookie，請再試一次。",
+      "unverified": "無法檢查「{{profile}}」的 Google Cookie，請再試一次。"
     },
     "loadFailure": {
       "connectionNotSecure": "連線不安全",
@@ -446,6 +442,24 @@
         "imported_other": "已為 {{domains}} 匯入 {{count}} 個 Cookie。請重新載入頁面以使用這些 Cookie。",
         "failed": "Cookie 匯入失敗：{{reason}}"
       }
+    },
+    "passwords": {
+      "savePrompt": {
+        "open": "儲存密碼提示",
+        "updateTitle": "更新密碼？",
+        "saveTitle": "儲存密碼？",
+        "username": "使用者名稱",
+        "password": "密碼",
+        "never": "永不儲存此網站的密碼",
+        "notNow": "暫時不要",
+        "update": "更新",
+        "save": "儲存"
+      },
+      "fill": {
+        "noUsername": "（沒有使用者名稱）",
+        "title": "已儲存的登入資料",
+        "otherLogins": "此網站的其他登入資料"
+      }
     }
   },
   "editor": {
@@ -633,6 +647,21 @@
         "sharper": "更清晰",
         "terminalControlledHint": "由終端機介面設定。",
         "terminalControlledTooltip": "目前與終端機介面一致。若要變更此項，請關閉「與終端機介面一致」。"
+      },
+      "editorTheme": {
+        "light": "淺色編輯器主題",
+        "lightDescription": "應用程式使用淺色主題時的程式碼編輯器、差異檢視和筆記本顏色。",
+        "dark": "深色編輯器主題",
+        "darkDescription": "應用程式使用深色主題時的程式碼編輯器、差異檢視和筆記本顏色。",
+        "followApp": "與應用程式主題相同",
+        "title": "編輯器主題",
+        "description": "獨立於應用程式主題設定程式碼編輯器、差異檢視和筆記本的顏色。",
+        "keyword": {
+          "editor": "編輯器",
+          "code": "程式碼",
+          "monaco": "monaco",
+          "syntax": "語法"
+        }
       }
     },
     "browser": {
@@ -833,6 +862,7 @@
       "defaultSurfaceSetAllChat": "全部設為聊天",
       "defaultSurfaceSetAllTerminal": "全部設為終端機",
       "sameAsChoice": "與 {{agent}} 相同 · {{choice}}",
+      "modelListFallback": "內建清單。Orca 無法從此主機取得模型清單。",
       "chatUnavailableOnWindows": "{{value0}} Chat 尚不支援 Windows，因此 {{value0}} 會在此主機的終端機中開啟。macOS 或 Linux 主機上的聊天仍可正常使用。",
       "undetectedCommandHint": "如果 {{agent}} CLI 安裝在 PATH 之外，請輸入其在此主機上的可執行檔完整路徑。"
     },
@@ -1857,6 +1887,46 @@
         "title": "在這台電腦上新增 Windows 磁碟機中的資料夾",
         "descriptionWithPath": "{{value0}} 位於 Windows 磁碟機上。WSL 中的 Git 會在此位置誤報行尾字元變更、漏掉從 Windows 進行的編輯，搜尋速度也較慢。",
         "description": "此資料夾位於 Windows 磁碟機上。WSL 中的 Git 會在此位置誤報行尾字元變更、漏掉從 Windows 進行的編輯，搜尋速度也較慢。"
+      },
+      "cli": {
+        "detail": {
+          "registerForWsl": "註冊 {{path}} 以從 WSL 使用 Orca。",
+          "registerForTerminal": "註冊 {{path}} 以從終端機使用 Orca。",
+          "registerForWindowsShell": "註冊 {{path}} 以從命令提示字元或 PowerShell 使用 Orca。",
+          "devLauncherOnly": "開發模式僅使用產生的啟動器進行驗證。",
+          "differentLauncher": "{{path}} 指向其他啟動器。",
+          "launcherMissing": "此 Orca 版本缺少隨附的 CLI 啟動器。",
+          "noWslDistro": "沒有可用的 WSL 發行版。",
+          "notOrcaLauncherScript": "{{path}} 已存在，但不是 Orca 啟動器指令碼。",
+          "notOrcaSymlink": "{{path}} 已存在，但不是 Orca 符號連結。",
+          "olderLauncher": "{{path}} 包含舊版 Orca 啟動器。",
+          "platformUnsupported": "此平台尚未實作 CLI 註冊。",
+          "readlinkPermissionDenied": "Orca 沒有權限檢查 {{path}}。請檢查該路徑及其父目錄的權限，然後再試一次。",
+          "registeredAt": "已註冊至 {{path}}。",
+          "registeredInDistroAt": "已在 {{distro}} 中註冊至 {{path}}。",
+          "registrationUnavailable": "此組建版本不支援 CLI 註冊。",
+          "unreadableSymlink": "無法讀取 {{path}}。請重新註冊以修復。",
+          "windowsLauncherMissing": "缺少 Windows 版 Orca CLI 啟動器。",
+          "windowsPathCheckFailed": "Orca 啟動器已存在，但 Orca 無法檢查您的 Windows 使用者 PATH。",
+          "windowsPathTimedOut": "Windows PATH 命令在 {{ms}} 毫秒後逾時。",
+          "wslCommandTimedOut": "WSL 命令在 {{ms}} 毫秒後逾時。",
+          "wslDistroUnreachable": "無法連線到 WSL 發行版。請再試一次。",
+          "wslHomeUnresolved": "無法解析 WSL 主目錄。",
+          "wslInteropUnavailable": "WSL 的 Windows 互通功能無法使用；Orca 無法從 WSL 啟動 Windows CLI。",
+          "wslRegistrationUnavailable": "WSL CLI 註冊無法使用。",
+          "wslWindowsOnly": "WSL CLI 註冊僅適用於 Windows。"
+        }
+      },
+      "projectHostSetupOptions": {
+        "locationNotSet": "尚未設定專案位置"
+      },
+      "workspacePortScan": {
+        "serverSshUpdateRequired": "請更新伺服器以查看其 SSH 主機上的連接埠。",
+        "hostMismatch": "伺服器掃描的主機與此工作區執行所在的主機不同。"
+      },
+      "workspacePortBrowserOpen": {
+        "systemBrowserHint": "按住 {{shortcut}} 並點擊以在系統瀏覽器中開啟",
+        "tooltip": "{{label}}。{{hint}}"
       }
     },
     "hooks": {
@@ -2433,7 +2503,6 @@
         "23886c7eec": "新增標籤",
         "7f7b89b631": "標籤： {{value0}}",
         "b2376d0179": "正在載入成員",
-        "866316f22c": "未指派",
         "b5675b0694": "儲存",
         "ceeb8c6153": "清除",
         "fbb90300e2": "自訂估計值",
@@ -3596,7 +3665,6 @@
               "f4c79cff5f": "檢視下面的工作區錯誤，然後重新整理。",
               "ef90b21366": "未找到任何檢視",
               "c0a50f96a4": "無法載入檢視",
-              "df4bd63c1d": "未指派",
               "30402d2c6e": "嘗試搜尋或重新整理。",
               "a2f31c4cd6": "未找到 Linear 專案",
               "c9b6e9f90d": "無法載入 Linear 專案",
@@ -7130,6 +7198,19 @@
           "needsInput": "需要輸入",
           "running": "執行中",
           "idle": "閒置"
+        },
+        "hostSection": {
+          "localWindows": "本機 Windows",
+          "localMac": "本機 Mac",
+          "localLinux": "本機 Linux",
+          "thisComputer": "這台電腦",
+          "host": "主機"
+        },
+        "workspaceBoardStatus": {
+          "todo": "待處理",
+          "inProgress": "進行中",
+          "inReview": "審核中",
+          "done": "已完成"
         }
       },
       "shared": {
@@ -7196,6 +7277,21 @@
         }
       },
       "settings": {
+        "keep": {
+          "local": {
+            "main": {
+              "up": {
+                "to": {
+                  "date": {
+                    "setting": {
+                      "f4c23aee76": "保持本機 main 最新"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
         "AccountsPane": {
           "locationSaveFailed": "無法儲存帳戶位置。請再試一次。",
           "dbb9626ed1": "取消",
@@ -7421,7 +7517,6 @@
           "5f5142a62a": "上一個圖示"
         },
         "AppearancePane": {
-          "3057983501": "未指派",
           "b707773a0d": "啟用後，關閉視窗會讓 Orca 繼續在系統匣中執行，而不是結束程式。",
           "0cd9b8228f": "選擇 Dock 和視窗切換器中顯示的應用程式圖示。",
           "61d842eca0": "在側邊欄中顯示 Orca Mobile 捷徑。仍可從工具箱開啟。",
@@ -7548,6 +7643,9 @@
           "79209b37b9": "如果 cookie 匯入不合適，「電腦使用」可以控制本機應用程式，並可視情況使用瀏覽器現有的已登入工作階段。安裝 Orca Computer Use 技能； macOS 還需要隱私權限。",
           "333984cf90": "使用現有的瀏覽器工作階段",
           "9895ed44de": "開啟電腦使用"
+        },
+        "BrowserUseEnableSwitch": {
+          "ce4d6f80d8": "啟用代理程式使用瀏覽器"
         },
         "BrowserUseExamples": {
           "1199258ace": "複製",
@@ -7789,10 +7887,6 @@
             "modeAriaLabel": "代理程式儀表板開啟模式",
             "modeInWindow": "視窗內",
             "modePopout": "彈出視窗"
-          },
-          "browserExtensions": {
-            "copy": "為本機瀏覽器設定檔新增「設定 › 瀏覽器 › 擴充功能」。",
-            "toggleLabel": "切換瀏覽器擴充功能"
           }
         },
         "FloatingWorkspacePane": {
@@ -8552,6 +8646,9 @@
           "14f1eb99d0": "開啟「建立 PR」時產生詳細資訊",
           "d32b87e754": "可用時使用審查範本",
           "981eae7e14": "預設草稿"
+        },
+        "RepositorySourceControlAiSection": {
+          "112f3b934f": "原始碼控制 AI"
         },
         "RuntimeAccessGrantList": {
           "sshAccessCaveat": "在此撤銷存取權，無法阻止擁有此電腦 SSH 存取權限的人再次配對。若要阻止其存取，請移除其 SSH 存取權限。",
@@ -9955,13 +10052,6 @@
               "inWindow": "視窗內",
               "worktrees": "工作樹",
               "eaf17a7214": "代理程式儀表板"
-            },
-            "browserExtensions": {
-              "title": "瀏覽器擴充功能",
-              "description": "在 Orca 瀏覽器分頁中執行 Chrome 擴充功能，例如密碼管理工具。",
-              "extension": "擴充功能",
-              "chrome": "chrome",
-              "password": "密碼管理工具"
             }
           }
         },
@@ -11128,7 +11218,7 @@
         },
         "agent-workspace-trust-copy": {
           "title": "Orca 啟動代理程式時信任該資料夾",
-          "description": "Orca 啟動的代理程式可以略過「是否信任此資料夾？」的詢問，因此專案的代理程式鉤子和設定會立即執行。Orca 會在每個存放庫中首次啟動代理程式時詢問一次，你可以在該存放庫的設定中變更回答。關閉此項可讓代理程式一律自行詢問。在你沒有看著時執行的代理程式（例如編排工作行程、自動化以及從手機啟動的代理程式）若發出詢問，會一直等待，直到你在它的終端機中作答。已信任的資料夾仍保持信任。"
+          "description": "Orca 啟動的代理程式可以略過「是否信任此資料夾？」的詢問，因此專案的代理程式鉤子和設定會立即執行。你可以在某個存放庫的設定中為該存放庫關閉此項。關閉此項可讓代理程式一律自行詢問。在你沒有看著時執行的代理程式（例如編排工作行程、自動化以及從手機啟動的代理程式）若發出詢問，會一直等待，直到你在它的終端機中作答。已信任的資料夾仍保持信任。"
         },
         "agent-generated-tab-title-copy": {
           "19ad21615a": "自動產生分頁標題",
@@ -11719,12 +11809,12 @@
             "storage": "在外掛自己的儲存資料夾中儲存資料",
             "secrets": "在外掛自己的加密保險庫中儲存和讀取機密資料",
             "settingsOwn": "讀取和變更外掛自己的設定",
-            "agentsRead": "在代理狀態變更時收到通知",
-            "terminalRun": "在你的終端機中執行命令，包括 SSH"
+            "agentsRead": "代理程式狀態變更時收到通知",
+            "terminalRun": "在您的終端機中執行命令，包括 SSH"
           },
           "decisionFailed": "無法儲存權限決定。請重試。",
           "fullAccessWarning": "完整存取：以一般程式執行，可以讀取你的檔案、使用網路、執行其他程式，並控制 Orca（包括你的終端機和代理程式）。",
-          "uiWarning": "在 Orca 內執行發布者的程式碼來繪製其畫面。Orca 會顯示它能存取的內容，並在啟用前先詢問你。"
+          "uiWarning": "在 Orca 中執行發佈者的程式碼來繪製其檢視畫面。Orca 會顯示它能存取什麼，並在啟用前徵求您的同意。"
         },
         "PluginConsentProvenance": {
           "official": "官方",
@@ -12225,7 +12315,7 @@
               "tokenHint": "存放庫、專案與工作區的存取權杖須在對應的 Bitbucket 設定頁面建立，並具備 PR 讀取權限。",
               "basicHint": "為您的帳戶建立 Atlassian API 權杖，再搭配該帳戶的電子郵件地址使用。",
               "scopesTitle": "請選擇下列 Bitbucket API 權杖範圍：",
-              "scopeUser": "驗證您的帳戶",
+              "scopeUser": "顯示您的帳戶名稱",
               "scopeRepository": "讀取建置狀態",
               "scopeReadPullRequest": "讀取 PR",
               "scopeWritePullRequest": "建立 PR",
@@ -12887,8 +12977,8 @@
         "PluginCardAction": {
           "installed": "已安裝",
           "installing": "正在安裝…",
-          "reviewLabel": "審查並安裝 {{value0}}",
-          "review": "審查並安裝",
+          "reviewLabel": "檢閱並安裝 {{value0}}",
+          "review": "檢閱並安裝",
           "retry": "再試一次"
         },
         "PluginContributionActionLanguage": {
@@ -12976,7 +13066,7 @@
           "commands": "命令和面板",
           "catalogLabel": "依目錄篩選",
           "editors": "編輯器",
-          "remoteVms": "遠端/虛擬機器",
+          "remoteVms": "遠端/虛擬機",
           "games": "遊戲",
           "agents": "代理程式",
           "integrations": "整合"
@@ -12989,11 +13079,11 @@
           "use": "使用"
         },
         "PluginInstallConsent": {
-          "noOtherAccess": "沒有其他存取權限",
-          "replacesShortcut": "{{value0}}（{{value1}}）會取代你的「{{value2}}」快捷鍵。",
-          "updatesKeepApproval": "更新只會針對新的存取權限再次詢問",
-          "fullAccessUpdates": "更新可能會在未詢問的情況下變更其程式碼",
-          "editsFileTypes": "在 Orca 中開啟並編輯 {{value0}} 檔案。它可以讀取自己開啟的檔案。",
+          "noOtherAccess": "無其他存取權限",
+          "replacesShortcut": "{{value0}}（{{value1}}）將取代你為 {{value2}} 設定的快速鍵",
+          "updatesKeepApproval": "僅在需要新權限時，更新才會再次詢問",
+          "fullAccessUpdates": "更新可在不詢問的情況下變更其程式碼",
+          "editsFileTypes": "在 Orca 中開啟並編輯 {{value0}} 檔案，並可讀取它所開啟的檔案",
           "install": "安裝並啟用",
           "keepOff": "保持關閉"
         },
@@ -13073,8 +13163,8 @@
           "addsCommands": "新增命令",
           "addsPanel": "新增面板",
           "contentOnly": "僅內容",
-          "fullAccess": "完整存取",
-          "addsVmRecipes": "新增虛擬機器配方",
+          "fullAccess": "完整存取權限",
+          "addsVmRecipes": "新增虛擬機配方",
           "opensAndEditsFiles": "開啟並編輯檔案",
           "runsPluginCode": "執行外掛程式碼"
         },
@@ -13154,11 +13244,11 @@
           "autoUpdateHint": "只有在需要新的存取權限時才會再次詢問"
         },
         "PluginPageHero": {
-          "screenshots": "螢幕截圖",
-          "openScreenshot": "開啟螢幕截圖：{{value0}}",
-          "position": "{{value0}} / {{value1}}",
-          "previous": "上一張螢幕截圖",
-          "next": "下一張螢幕截圖"
+          "screenshots": "螢幕擷取畫面",
+          "openScreenshot": "開啟螢幕擷取畫面：{{value0}}",
+          "position": "第 {{value0}} 張，共 {{value1}} 張",
+          "previous": "上一張螢幕擷取畫面",
+          "next": "下一張螢幕擷取畫面"
         },
         "PluginContributionActionCommand": {
           "run": "執行",
@@ -13219,27 +13309,6 @@
           "shownPluginCount_one": "顯示 {{count}} 個符合的外掛，包括此外掛",
           "shownPluginCount_other": "顯示 {{count}} 個符合的外掛，包括此外掛",
           "samePublisher": "更多列為 {{value0}} 的外掛"
-        },
-        "RepositorySourceControlAiSection": {
-          "112f3b934f": "原始碼控制 AI"
-        },
-        "keep": {
-          "local": {
-            "main": {
-              "up": {
-                "to": {
-                  "date": {
-                    "setting": {
-                      "f4c23aee76": "保持本機 main 最新"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "BrowserUseEnableSwitch": {
-          "ce4d6f80d8": "啟用代理程式使用瀏覽器"
         }
       },
       "right": {
@@ -17278,13 +17347,10 @@
         },
         "AutomationDetail": {
           "host": "主機",
-          "a1d52c2189": "用量資料涵蓋率",
-          "449fc83bf7": "token",
           "401f40ae79": "預估花費",
           "a7c312430d": "最後一次執行",
           "2df8970cd5": "代理程式",
           "e353ab9516": "預檢查",
-          "620b22145e": "寬限期",
           "15ea446b93": "工作階段",
           "5405a09b1f": "執行位置",
           "2f8baf5360": "建立自",
@@ -17294,7 +17360,6 @@
           "1f6026358e": "刪除自動化",
           "d79452fb30": "恢復自動化",
           "91a4155e95": "暫停自動化",
-          "4b1ea02d2e": "編輯自動化",
           "2fb1605beb": "立即執行",
           "221916d93c": "建立自動化來開始安排代理程式工作。",
           "b09b2384fd": "已暫停",
@@ -17304,7 +17369,6 @@
           "noGrace": "無寬限期",
           "graceMinutes_other": "{{count}} 分鐘",
           "graceHours_other": "{{count}} 小時",
-          "usageCoverageRuns_other": "{{known}}/{{count}} 次執行",
           "usageUnavailable": "無法使用",
           "noRuns": "無執行紀錄",
           "projectDefault": "專案預設值",
@@ -18209,7 +18273,6 @@
         "status": "狀態",
         "priority": "優先順序",
         "assignee": "負責人",
-        "unassigned": "未指派",
         "labels": "標籤",
         "countSelected": "已選擇 {{count}} 個",
         "partialCoverageMarker": "· 部分",
@@ -18304,7 +18367,9 @@
         "failingChip": "{{value0}} 失敗",
         "pendingChip": "{{value0}} 個等待中",
         "needsActionChip": "{{value0}} 個需要操作",
-        "unresolvedChip": "{{value0}} 個未解決"
+        "unresolvedChip": "{{value0}} 個未解決",
+        "noChecks": "找不到檢查項目",
+        "passingSummary": "{{value0}}/{{value1}} 項檢查通過"
       },
       "BrowserPane": {
         "streamConnectionLost": "已與遠端伺服器斷線。",
@@ -18726,14 +18791,10 @@
         }
       },
       "agent-workspace-trust-decision": {
-        "prompt-title": "要為代理程式信任 {{repo}} 嗎？",
-        "prompt-description": "Claude Code 和 Codex 等代理程式在載入專案自帶的代理程式設定和鉤子（可以執行命令）之前，會詢問「是否信任此資料夾？」。Orca 可以在此存放庫的每個工作樹中替你回答「是」。",
-        "prompt-remembered": "Orca 會記住你對此存放庫的回答。你可以在存放庫設定中變更。",
         "trust-repository": "信任存放庫",
         "let-agents-ask": "讓代理程式詢問",
         "setting-title": "代理程式資料夾信任",
         "setting-description": "Orca 在此存放庫的工作樹中啟動的代理程式是否略過「是否信任此資料夾？」的詢問，並立即載入專案的代理程式設定和鉤子。",
-        "setting-undecided": "尚未決定。下次你在這裡啟動代理程式時，Orca 會詢問。",
         "setting-global-off": "已在代理程式設定中關閉資料夾信任，因此代理程式一律會詢問。",
         "keyword-trust": "信任",
         "keyword-hooks": "鉤子"
@@ -18893,7 +18954,6 @@
           "browsePlugins": "瀏覽外掛程式",
           "browseThemePlugins": "瀏覽主題外掛程式",
           "colorMode": "色彩模式",
-          "colorModeCaption": "淺色、深色或跟隨系統。",
           "darkLook": "深色外觀",
           "darkLooks": "深色外觀",
           "lightLook": "淺色外觀",
@@ -18909,10 +18969,8 @@
           "slotLabel": "要編輯的外觀",
           "sourceBuiltIn": "內建",
           "sourceCommunity": "終端機調色盤",
-          "themes": "主題",
-          "themesCaption": "選用。使用 App 主題和終端機調色盤進一步自訂。"
-        },
-        "subtitle": "選擇淺色或深色，也可以再選一個主題。兩者都能隨時在設定中變更。"
+          "themes": "主題"
+        }
       },
       "integrations": {
         "capabilities": {
@@ -20634,6 +20692,10 @@
     },
     "dictation": {
       "stoppedAfterSilenceSeconds": "靜音 {{seconds}} 秒後已停止"
+    },
+    "toastFallbacks": {
+      "worktreeCreateFailed": "無法建立工作樹。",
+      "missingBaseBranchHelp": "請建立初始提交（例如在 main 上），或在「建立來源」中選擇現有分支，然後重試。"
     }
   },
   "dashboardPopout": {

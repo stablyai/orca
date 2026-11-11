@@ -1,12 +1,15 @@
 import { resolve } from 'node:path'
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
-import { getStatus as getLinearStatus } from '../../../linear/client'
-import { listTeamsOrThrow as listLinearTeamsOrThrow } from '../../../linear/teams'
-import { LinearAgentAccessError, linearError } from '../../../linear/issue-context/errors'
+import { getStatus as getLinearStatus } from '../../../linear/accounts/linear-account-client'
+import { listTeamsOrThrow as listLinearTeamsOrThrow } from '../../../linear/teams/linear-team-queries'
+import {
+  LinearAgentAccessError,
+  linearError
+} from '../../../linear/issues/context/linear-access-errors'
 import {
   getLinearCurrentIssueFromWorktree,
   resolveLegacyLinearLinkWorkspace
-} from '../../../linear/issue-context/current'
+} from '../../../linear/issues/context/worktree-current-issue'
 import type {
   LinearCurrentIssueContextHints,
   LinearErrorCode

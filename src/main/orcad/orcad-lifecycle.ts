@@ -20,7 +20,7 @@ import { holdOrcadTerminalAdmissionUntilExit } from './orcad-stop-terminal-admis
 import {
   acquireProfileStateRuntimeAdmission,
   type ProfileStateRuntimeAdmission
-} from '../persistence/profile-state/profile-state-access'
+} from '../persistence/profile-state/access/profile-state-access'
 
 const bundledLauncherChannel = process.env[ORCAD_BUNDLED_LAUNCHER_ENV] === '1'
 delete process.env[ORCAD_BUNDLED_LAUNCHER_ENV]

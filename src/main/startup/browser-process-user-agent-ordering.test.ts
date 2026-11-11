@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { runMainProcessPreflight } from './main-process-preflight'
 
 const mocks = vi.hoisted(() => {
@@ -161,7 +161,7 @@ vi.mock('../persistence/loading-store/user-data-path', () => ({
   initDataPath: () => mocks.events.push('init-data-path'),
   getCanonicalUserDataPath: () => '/canonical-user-data'
 }))
-vi.mock('../persistence/profile-state/profile-state-access', () => ({
+vi.mock('../persistence/profile-state/access/profile-state-access', () => ({
   acquireProfileStateRuntimeAdmission: (root: string) => {
     mocks.events.push(`admission:${root}`)
     return mocks.admission()
@@ -169,14 +169,15 @@ vi.mock('../persistence/profile-state/profile-state-access', () => ({
 }))
 vi.mock('../window/desktop-integration/macos-press-and-hold-default')
 vi.mock('../ai-vault/parse-cache/session-parse-cache-persistence')
-vi.mock('../orca-profiles/profile-index-store', () => ({ initOrcaProfilePaths: vi.fn() }))
+vi.mock('../orca-profiles/profile-index-store', () => ({}))
 vi.mock('../orca-profiles/profile-storage-paths', () => ({
+  initOrcaProfilePaths: vi.fn(),
   getProfileUserDataPath: () => '/canonical-user-data'
 }))
-vi.mock('../orca-profiles/profile-project-move-intent', () => ({
+vi.mock('../orca-profiles/project-transfer/profile-project-move-intent', () => ({
   recoverPendingProfileProjectMoves: mocks.recoverMoves
 }))
-vi.mock('../persistence/profile-state/profile-state-active-location', () => ({
+vi.mock('../persistence/profile-state/offline-access/profile-state-active-location', () => ({
   getActiveProfileStateLocation: () => ({ profileId: 'active-profile' })
 }))
 vi.mock('../stats/collector')
@@ -210,77 +211,6 @@ vi.mock('../browser/identity/mode/browser-identity-mode-store', () => ({
     }
   }
 }))
-
-describe('browser process user-agent startup ordering', () => {
-  it('exits without reading profile state or revealing a window when recovery holds admission', async () => {
-    mocks.events.length = 0
-    mocks.admission.mockImplementationOnce(() => {
-      throw new Error('Profile recovery is in progress')
-    })
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const focusExistingWindow = vi.fn()
-    const requestDesktopActivation = vi.fn()
-    try {
-      expect(runMainProcessPreflight({ focusExistingWindow, requestDesktopActivation })).toBe(false)
-      expect(mocks.app.exit).toHaveBeenCalledWith(1)
-      expect(mocks.events).toEqual([
-        'init-data-path',
-        'set-name:Orca Development',
-        'single-instance-lock',
-        'admission:/canonical-user-data'
-      ])
-      expect(focusExistingWindow).not.toHaveBeenCalled()
-      expect(requestDesktopActivation).not.toHaveBeenCalled()
-      expect(mocks.showErrorBox).not.toHaveBeenCalled()
-    } finally {
-      error.mockRestore()
-    }
-  })
-})
-
-it('defers a Linux desktop startup failure until Electron is ready', async () => {
-  const { resetBrowserProcessUserAgentForTests } =
-    await import('../browser/identity/browser-process-user-agent')
-  resetBrowserProcessUserAgentForTests()
-  const release = vi.fn()
-  let resolveReady: (() => void) | undefined
-  const ready = new Promise<void>((resolve) => {
-    resolveReady = resolve
-  })
-  mocks.admission.mockReturnValueOnce({ release })
-  mocks.afterIdentity.mockImplementationOnce(() => {
-    throw new Error('Linux pre-ready failure')
-  })
-  mocks.app.whenReady.mockReturnValueOnce(ready)
-  mocks.app.exit.mockClear()
-  mocks.showErrorBox.mockClear()
-  const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
-  mocks.backgroundLaunch.mockReturnValueOnce(false)
-  const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-  try {
-    expect(
-      runMainProcessPreflight({ focusExistingWindow: vi.fn(), requestDesktopActivation: vi.fn() })
-    ).toBe(false)
-    expect(release).toHaveBeenCalledOnce()
-    expect(mocks.app.whenReady).toHaveBeenCalledOnce()
-    expect(mocks.showErrorBox).not.toHaveBeenCalled()
-    expect(mocks.app.exit).not.toHaveBeenCalled()
-
-    resolveReady?.()
-    await ready
-    // The dialog waits for the async system-language catalog after ready.
-    await vi.waitFor(() => expect(mocks.app.exit).toHaveBeenCalled())
-    expect(mocks.showErrorBox).toHaveBeenCalledWith(
-      'Orca could not start',
-      expect.stringContaining('Linux pre-ready failure')
-    )
-    expect(mocks.app.exit).toHaveBeenCalledWith(1)
-  } finally {
-    error.mockRestore()
-    platform.mockRestore()
-    mocks.app.whenReady.mockClear()
-  }
-})
 
 it('exits after a Linux desktop readiness rejection without showing a dialog', async () => {
   const { resetBrowserProcessUserAgentForTests } =

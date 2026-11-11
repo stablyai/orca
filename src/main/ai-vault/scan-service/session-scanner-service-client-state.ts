@@ -1,5 +1,5 @@
 import { recordRelayedSpan } from '../../observability/tracer'
-import type { SessionSearchScanRoots } from '../../ai-vault-search/session-search-scan-roots'
+import type { SessionSearchScanRoots } from '../../ai-vault-search/discovery/session-search-scan-roots'
 import type { ChildProcess } from 'node:child_process'
 import { createAiVaultScanCancelledError } from '../ai-vault-scan-cancellation'
 import type { AiVaultServiceScanListener } from './session-scanner-service-request-deadline'

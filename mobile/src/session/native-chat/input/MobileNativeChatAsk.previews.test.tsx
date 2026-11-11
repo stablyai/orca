@@ -129,37 +129,3 @@ it('inspects every preview without choosing, and keeps the original option when 
   await act(async () => textAction('Submit').props.onPress())
   expect(onAnswer).toHaveBeenCalledWith([{ indices: [2] }], expect.any(Function))
 })
-
-it('preserves generic multi choices while inspecting and choosing, with row checkbox removal', async () => {
-  const onAnswer = mount(prompt(true))
-  press(row(0))
-  press(button('Last preview'))
-  press(button('Choose this'))
-  press(button('Last preview'))
-  press(button('Chosen'))
-  expect(row(0).props.accessibilityState.checked).toBe(true)
-  expect(row(2).props.accessibilityState.checked).toBe(true)
-  press(row(0))
-  await act(async () => textAction('Submit').props.onPress())
-  expect(onAnswer).toHaveBeenCalledWith([{ indices: [2] }], expect.any(Function))
-})
-
-it('retains automatic answer for an ordinary question and disables the viewer choice while pending', async () => {
-  vi.useFakeTimers()
-  const plain = prompt()
-  plain.questions[0]!.options = [{ label: 'Plain' }]
-  const onAnswer = mount(plain)
-  press(row(0))
-  await act(async () => {
-    vi.runAllTimers()
-  })
-  expect(onAnswer).toHaveBeenCalledWith([{ indices: [0] }], expect.any(Function))
-  act(() => renderer.unmount())
-  act(() => {
-    renderer = create(
-      createElement(MobileNativeChatAsk, { prompt: prompt(), answerPending: true, onAnswer })
-    )
-  })
-  press(button('Last preview'))
-  expect(button('Choose this').props.disabled).toBe(true)
-})

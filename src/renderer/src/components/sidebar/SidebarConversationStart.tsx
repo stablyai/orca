@@ -17,9 +17,9 @@ import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTar
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
-import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
+import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
-import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+import { createNonSecureContextUuid } from '../../../../shared/non-secure-context-uuid'
 import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import { workspaceKindForWorktreeId } from '../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
@@ -61,8 +61,8 @@ export function SidebarConversationStart({
     ) {
       return
     }
-    launchAgentInNewTab({
-      requestId: newAgentLaunchRequestId(),
+    launchAgentInNewTabWithOutcome({
+      requestId: createNonSecureContextUuid(),
       focusIntent: captureNativeChatComposerFocusIntent(),
       agent: row.agent,
       worktreeId,

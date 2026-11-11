@@ -147,7 +147,7 @@ export function buildDefaultSettings(args: {
     terminalLinkActionPopoverEnabled: true,
     terminalLinkClickBehavior: 'actions',
     terminalUrlMiddleClickBehavior: 'open',
-    experimentalBrowserExtensions: false,
+    browserExtensionsEnabled: true,
     agentDefaultSurface: 'terminal',
     nativeChatResumeWorkOnRestart: true,
     nativeChatQueueFollowUps: true,
@@ -174,7 +174,8 @@ export function buildDefaultSettings(args: {
     showTasksButton: false,
     showAutomationsButton: false,
     artifactsEnabled: true,
-    artifactSharingEnabled: false,
+    // New profiles only; stored profiles without the key load as false (normalizeLoadedGlobalSettings).
+    artifactSharingEnabled: true,
     agentSkillSharingEnabled: false,
     nestedWorkerMaxDepth: NESTED_WORKER_MAX_DEPTH_DEFAULT,
     nestedWorkerMaxDepthDefaultedToFour: true,

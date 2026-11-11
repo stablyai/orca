@@ -1,5 +1,5 @@
 import { useLayoutEffect } from 'react'
-import { bindPanePtyId } from '@/lib/pane-manager/mobile-fit-overrides'
+import { bindPanePtyId } from '@/lib/pane-manager/terminal-fit/mobile-fit-overrides'
 import type { TerminalPaneCloseController } from '../close/use-terminal-pane-close-actions'
 
 export function useSavedPanePtyBindings({
