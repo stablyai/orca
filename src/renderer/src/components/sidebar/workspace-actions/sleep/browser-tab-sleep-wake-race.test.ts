@@ -43,10 +43,18 @@ function moment(args: {
   goingToSleep?: boolean
   suspendCommitted?: boolean
 }) {
+  const waking: Record<string, boolean> = {}
+  const asleep: Record<string, number> = {}
+  if (args.waking) {
+    waking[WT] = true
+  }
+  if (args.asleepMark) {
+    asleep[WT] = 1
+  }
   const state = {
     ephemeralVmRuntimesByWorkspaceId: { [WT]: { status: args.vm } },
-    wakingEphemeralVmWorkspaceIds: args.waking ? { [WT]: true } : {},
-    asleepBrowserWorktreeIds: args.asleepMark ? { [WT]: 1 } : {}
+    wakingEphemeralVmWorkspaceIds: waking,
+    asleepBrowserWorktreeIds: asleep
   }
   const sleep = {
     sleepIntent: Boolean(args.sleepIntent),
