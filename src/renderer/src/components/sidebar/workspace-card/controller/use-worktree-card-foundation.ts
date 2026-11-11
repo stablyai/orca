@@ -3,10 +3,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../../../shared/constants'
 import { getWorktreeCardDetails } from '../../../../../../shared/worktree/row-display/card-properties'
 import {
-  getWorktreeCardStyle,
-  isExperimentalWorktreeCardStyle
-} from '../../../../../../shared/worktree/card-style'
-import {
   isRuntimeOwnedSshTargetId,
   parseExecutionHostId,
   toRuntimeExecutionHostId
@@ -47,8 +43,7 @@ export function useWorktreeCardFoundation({
   const agentActivityDisplayMode =
     useAppStore((s) => s.agentActivityDisplayMode) ?? DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
   const projectGroups = useAppStore((s) => s.projectGroups)
-  const worktreeCardStyle = getWorktreeCardStyle(settings)
-  const newCardStyle = isExperimentalWorktreeCardStyle(worktreeCardStyle)
+  const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
   const compactWorktreeCards = settings?.compactWorktreeCards === true
   const cardDetails = useMemo(
     () => getWorktreeCardDetails(cardProps, { compactWorktreeCards, newCardStyle }),
@@ -230,7 +225,6 @@ export function useWorktreeCardFoundation({
     cardProps,
     agentActivityDisplayMode,
     projectGroups,
-    worktreeCardStyle,
     newCardStyle,
     compactCards,
     cardDetails,

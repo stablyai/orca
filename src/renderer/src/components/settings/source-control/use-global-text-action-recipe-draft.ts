@@ -110,6 +110,7 @@ export function useGlobalTextActionRecipeDraft({
           : {}),
         ...(customCommandDirty ? { customAgentCommand: customCommand } : {})
       }))
+      setIsSaving(false)
       if (!isMountedRef.current) {
         return
       }
@@ -121,9 +122,8 @@ export function useGlobalTextActionRecipeDraft({
       setCustomCommandDraft(hasNewCommandEdits ? latestValue.customCommand : null)
       onDirtyChangeRef.current?.(hasNewEdits || hasNewCommandEdits)
     } catch (error) {
-      onSaveError(error)
-    } finally {
       setIsSaving(false)
+      onSaveError(error)
     }
   }
 

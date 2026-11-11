@@ -1,7 +1,3 @@
-import {
-  getWorktreeCardStyle,
-  isExperimentalWorktreeCardStyle
-} from '../../../../../../shared/worktree/card-style'
 import type { AppState } from '@/store/types'
 import type { WorktreeCardProperty } from '../../../../../../shared/ui-chrome-types'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
@@ -30,7 +26,7 @@ export function selectWorktreeListReviewCacheInputs(
   cardProperties: readonly WorktreeCardProperty[]
 ): WorktreeListReviewCacheInputs {
   const hasFolderWorkspaces = selectFolderWorkspaces(state).length > 0
-  const newCardStyle = isExperimentalWorktreeCardStyle(getWorktreeCardStyle(state.settings))
+  const newCardStyle = state.settings?.experimentalNewWorktreeCardStyle === true
   const folderCardsNeedReview =
     hasFolderWorkspaces &&
     (newCardStyle ? cardProperties.includes('status') : cardProperties.includes('pr'))

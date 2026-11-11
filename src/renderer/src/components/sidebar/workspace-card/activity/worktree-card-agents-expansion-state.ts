@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useSyncExternalStore } from 'react'
 
 export type WorktreeAgentExpansionState = {
   // Child lists start collapsed so spawning subagents cannot grow the card and shift the sidebar.
@@ -26,6 +26,7 @@ function trimPersistedExpansions(): void {
       break
     }
     expansionByWorktreeId.delete(oldest)
+    notifyExpansion(oldest)
   }
 }
 
@@ -98,31 +99,18 @@ export type WorktreeAgentExpansionControls = {
 
 /** Restore each worktree’s disclosures across virtualizer and sibling-lineage remounts. */
 export function useWorktreeAgentExpansionState(worktreeId: string): WorktreeAgentExpansionControls {
-  const [rendered, setRendered] = useState<{
-    worktreeId: string
-    state: WorktreeAgentExpansionState
-  }>(() => ({ worktreeId, state: readExpansionState(worktreeId) }))
-
-  // Memoized bodies can change worktree without remounting; avoid displaying the previous card’s disclosure.
-  const current =
-    rendered.worktreeId === worktreeId ? rendered.state : readExpansionState(worktreeId)
+  const subscribe = useCallback(
+    (listener: () => void) => subscribeExpansion(worktreeId, listener),
+    [worktreeId]
+  )
+  const getSnapshot = useCallback(() => readExpansionState(worktreeId), [worktreeId])
+  const current = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
   const commit = useCallback(
     (next: WorktreeAgentExpansionState) => {
       persistExpansionState(worktreeId, next)
-      setRendered({ worktreeId, state: next })
-      // The agent list and the title's roll-up both read this state; keep every mounted reader in step.
       notifyExpansion(worktreeId)
     },
-    [worktreeId]
-  )
-
-  // A mounted card picks up an outside unfold; an unmounted one reads it from the cache on mount.
-  useEffect(
-    () =>
-      subscribeExpansion(worktreeId, () =>
-        setRendered({ worktreeId, state: readExpansionState(worktreeId) })
-      ),
     [worktreeId]
   )
 
@@ -162,10 +150,6 @@ export function useWorktreeAgentExpansionState(worktreeId: string): WorktreeAgen
 
 export function clearWorktreeAgentExpansionStateForTests(): void {
   expansionByWorktreeId.clear()
-}
-
-export function getWorktreeAgentExpansionCountForTests(): number {
-  return expansionByWorktreeId.size
 }
 
 export function seedWorktreeAgentExpansionStateForTests(

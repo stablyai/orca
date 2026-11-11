@@ -1,4 +1,3 @@
-import { collectRenderedSidebarRowKeys } from './rendered-row-keys'
 import React, { useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppStore } from '@/store/index'
@@ -162,11 +161,6 @@ const WorktreeList = React.memo(function WorktreeList({
     prCache,
     agentSendTargetWorktreeId
   })
-  const disclosedSectionRows = rowModel.sectionRows
-  const disclosedRowKeys = useMemo(
-    () => collectRenderedSidebarRowKeys(disclosedSectionRows),
-    [disclosedSectionRows]
-  )
   const visibleProjectRepoIdsBySection = useMemo(
     () => new Map(rowModel.occurrencePlan.sections.map(({ key, group }) => [key, group.repoIds])),
     [rowModel.occurrencePlan]
@@ -200,7 +194,7 @@ const WorktreeList = React.memo(function WorktreeList({
     )
   }, [allProjectsCollapsed, projectCollapseKeys, setCollapsedGroups])
   const selection = useSidebarWorktreeSelection({
-    sectionRows: disclosedSectionRows,
+    sectionRows: rowModel.sectionRows,
     pinnedDisplayPolicy
   })
   const statusMutations = useWorktreeStatusMutations({
@@ -253,7 +247,7 @@ const WorktreeList = React.memo(function WorktreeList({
 
   useSidebarRevealRequests({
     groupBy,
-    renderedSidebarRowKeys: disclosedRowKeys,
+    renderedSidebarRowKeys: rowModel.renderedSidebarRowKeys,
     visibleWorktrees,
     visibleFolderWorkspaces: visibleScope.visibleFolderWorkspacesForRows,
     currentSidebarWorktreeId,
@@ -326,7 +320,7 @@ const WorktreeList = React.memo(function WorktreeList({
       <VirtualizedWorktreeViewport
         // Wake moves status headers; preserve viewport identity across those changes.
         key={`group:${groupBy}:host:${filterState.visibleWorkspaceHostIds?.join(',') ?? 'all'}:lineage`}
-        rows={disclosedSectionRows}
+        rows={rowModel.sectionRows}
         hostOptions={rowModel.hostOptions}
         occurrencePlan={rowModel.occurrencePlan}
         visibleProjectRepoIdsBySection={visibleProjectRepoIdsBySection}

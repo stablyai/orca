@@ -137,21 +137,3 @@ export function deriveWorktreeCardPrDisplay(
   )
   return { prDisplay, cachedBranchFallbackGitHubPRNumber }
 }
-
-/** A worktree's review read straight from the store, for cards that aren't mounted (hidden children). */
-export function selectWorktreeCardPrDisplay(
-  state: AppState,
-  worktree: Worktree,
-  repo: Repo | undefined
-): WorktreeCardPrDisplay | null {
-  const { hostedReviewCacheKey, prCacheKey } = getWorktreeReviewCacheKeys(
-    worktree,
-    repo,
-    state.settings
-  )
-  return deriveWorktreeCardPrDisplay(
-    worktree,
-    hostedReviewCacheKey ? state.hostedReviewCache[hostedReviewCacheKey] : undefined,
-    prCacheKey ? state.prCache?.[prCacheKey] : undefined
-  ).prDisplay
-}

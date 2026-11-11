@@ -19,7 +19,7 @@ import { activateWorktreeAgentPane } from './workspace-card/activity/use-worktre
 import { activateRetainedAgentRow } from './workspace-card/activity/activate-retained-agent-row'
 import { expandWorktreeAgentList } from './workspace-card/activity/worktree-card-agents-expansion-state'
 import type { SlotAgentSignals } from './worktree-card-slot-agent-signals'
-import type { SlotLineKind, SlotLineSignal, SlotSignal } from './worktree-card-slot-signal'
+import type { SlotLineKind, SlotLineSignal } from './worktree-card-slot-signal'
 
 /** The agent (or unread workspace) behind a rolled-up slot signal, so clicking the slot can open it. */
 export type SlotTarget = SlotLineSignal & {
@@ -44,7 +44,7 @@ export function slotTargetsFromAgentLines(
   executionHostId?: ExecutionHostId
 ): SlotTarget[] {
   const targets: SlotTarget[] = []
-  for (const { agent, signal } of signals.lineByPaneKey.values()) {
+  for (const { agent, signal } of signals.lines) {
     if (!TARGET_KINDS.has(signal.kind)) {
       continue
     }
@@ -182,20 +182,5 @@ function activateUnreadTab(
       flashFocusedPane: true,
       scrollToBottomIfOutputSinceLastView: true
     })
-  }
-}
-
-/** The line kind a slot points at, or null when the slot is a time, quiet, or offline. */
-export function slotTargetKind(signal: SlotSignal): SlotLineKind | null {
-  switch (signal.kind) {
-    case 'needs':
-    case 'failed':
-    case 'unread':
-    case 'working':
-      return signal.kind
-    case 'offline':
-    case 'quiet':
-    case 'time':
-      return null
   }
 }

@@ -1,8 +1,3 @@
-import {
-  getWorktreeCardStyle,
-  worktreeCardStyleSettingsUpdate,
-  type WorktreeCardStyle
-} from '../../../../../shared/worktree/card-style'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { Label } from '../../ui/label'
 import { Switch } from '../../ui/switch'
@@ -54,7 +49,6 @@ export function ExperimentalPane({
     getExperimentalSearchEntry().newWorktreeCardStyle
   ])
   const agentHibernationEnabled = settings.experimentalAgentHibernation === true
-  const worktreeCardStyle = getWorktreeCardStyle(settings)
   // Use the planner’s clamped millisecond value/default while editing minutes.
   const agentHibernationIdleMinutes = Math.round(
     getEffectiveAgentHibernationIdleMs(settings.agentHibernationIdleMs) / MS_PER_MINUTE
@@ -239,10 +233,14 @@ export function ExperimentalPane({
                   )}
                 </p>
               </div>
-              <SettingsSegmentedControl<WorktreeCardStyle>
+              <SettingsSegmentedControl<'classic' | 'experimental'>
                 size="sm"
-                value={worktreeCardStyle}
-                onChange={(style) => updateSettings(worktreeCardStyleSettingsUpdate(style))}
+                value={
+                  settings.experimentalNewWorktreeCardStyle === true ? 'experimental' : 'classic'
+                }
+                onChange={(style) =>
+                  updateSettings({ experimentalNewWorktreeCardStyle: style === 'experimental' })
+                }
                 ariaLabel={t(
                   'auto.components.settings.ExperimentalPane.worktreeCardStyle.ariaLabel',
                   'Card style'
@@ -256,7 +254,7 @@ export function ExperimentalPane({
                     )
                   },
                   {
-                    value: 'experimental-1',
+                    value: 'experimental',
                     label: t(
                       'auto.components.settings.ExperimentalPane.worktreeCardStyle.experimental',
                       'Experimental'

@@ -266,7 +266,6 @@
       "needsYou": "Needs you",
       "failed": "Failed",
       "detailsRow": "Details row",
-      "orcaServer": "Orca server",
       "workspaceUnread": "Unread in this workspace",
       "unreadTab": "Unread tab"
     }
@@ -8709,12 +8708,6 @@
             "title": "Agent sleep",
             "toggleLabel": "Toggle agent sleep"
           },
-          "newWorktreeCardStyle": {
-            "copy": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
-            "description": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
-            "title": "New card style",
-            "toggleLabel": "Toggle new card style"
-          },
           "ca2219fe5e": "Shows a small animated pet pinned to the bottom-right corner. Pick a character (Claudino, OpenCode, Gremlin) or upload your own PNG, APNG, GIF, WebP, JPG, or SVG from the status-bar pet menu. Hide it any time from the same menu without disabling this setting.",
           "dd6f0a1d45": "Pet",
           "0e89a574ae": "Floating animated pet in the bottom-right corner.",
@@ -10922,11 +10915,9 @@
             "newWorktreeCardStyle": {
               "card": "card",
               "cards": "cards",
-              "description": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
               "menu": "menu",
               "metadata": "metadata",
               "status": "status",
-              "title": "New card style",
               "worktree": "worktree",
               "worktrees": "worktrees"
             },

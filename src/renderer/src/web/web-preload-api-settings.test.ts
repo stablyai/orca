@@ -25,7 +25,6 @@ describe('web settings preload API', () => {
             ok: true,
             result: {
               settings: {
-                worktreeCardStyle: 'experimental-2',
                 worktreeCardDetailsRow: method === 'settings.update'
               }
             },

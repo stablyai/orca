@@ -659,14 +659,6 @@
           "4d03dec2d0": "Read app interface trees and perform requested actions.",
           "6b5a2cd3a5": "Accessibility"
         },
-        "ExperimentalPane": {
-          "newWorktreeCardStyle": {
-            "copy": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
-            "description": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
-            "title": "New card style",
-            "toggleLabel": "Toggle new card style"
-          }
-        },
         "McpConfigSection": {
           "detectedServers_one": "{{detected}} detected · {{count}} server",
           "detectedServers_other": "{{detected}} detected · {{count}} servers"
@@ -830,14 +822,6 @@
         "computerUseSummary": {
           "permissionsRequired_one": "{{value0}} permission required before agents can operate app windows.",
           "permissionsRequired_other": "{{value0}} permissions required before agents can operate app windows."
-        },
-        "experimental": {
-          "search": {
-            "newWorktreeCardStyle": {
-              "description": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
-              "title": "New card style"
-            }
-          }
         },
         "repository": {
           "search": {

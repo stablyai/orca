@@ -16,10 +16,15 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import {
   collectLineageSlotTargets,
-  selectCollapsedLineageSlot,
+  selectCollapsedLineageSlots,
   selectLineageLatestAt
 } from './worktree-card-slot-rollup'
 import { slotTargetsOfKind, workspaceUnreadTarget } from './worktree-card-slot-targets'
+import { fromLineageSlotRecord } from './worktree-card-slot-summary'
+
+function collapsedSlot(...args: Parameters<typeof selectCollapsedLineageSlots>) {
+  return fromLineageSlotRecord(selectCollapsedLineageSlots(...args))[0] ?? null
+}
 
 const original = useAppStore.getState()
 const LEAF = '11111111-1111-4111-8111-111111111111'
@@ -93,7 +98,7 @@ it('includes migration blocks, terminal-derived agents and blocked subagents in 
   })
   const state = useAppStore.getState()
   const targets = collectLineageSlotTargets(state, [identity])
-  expect(selectCollapsedLineageSlot(state, [identity])).toEqual({ kind: 'needs', count: 2 })
+  expect(collapsedSlot(state, [identity])).toEqual({ kind: 'needs', count: 2 })
   expect(
     targets
       .filter((target) => target.kind === 'needs')
@@ -131,10 +136,10 @@ it('expires hidden working evidence on the same freshness tick as agent rows', (
     tabsByWorktree: { child: [makeTab({ id: 'parent', worktreeId: 'child', title: '' })] },
     agentStatusByPaneKey: { [pane('parent')]: entry('parent') }
   })
-  expect(selectCollapsedLineageSlot(useAppStore.getState(), [identity])?.kind).toBe('working')
+  expect(collapsedSlot(useAppStore.getState(), [identity])?.kind).toBe('working')
   vi.setSystemTime(20_000_000)
   useAppStore.setState({ agentStatusEpoch: 2 })
-  expect(selectCollapsedLineageSlot(useAppStore.getState(), [identity])).toBeNull()
+  expect(collapsedSlot(useAppStore.getState(), [identity])).toBeNull()
 })
 
 it('updates hidden subtree attention after status changes, acknowledgement, and freshness expiry', () => {
@@ -175,14 +180,14 @@ it('updates hidden subtree attention after status changes, acknowledgement, and 
     agentStatusByPaneKey: { [pane('agent')]: entry('agent', { worktreeId: 'grandchild' }) }
   })
   expect(selectLineageLatestAt(useAppStore.getState(), source)).toBe(1_950_000)
-  expect(selectCollapsedLineageSlot(useAppStore.getState(), source)?.kind).toBe('working')
+  expect(collapsedSlot(useAppStore.getState(), source)?.kind).toBe('working')
   useAppStore.setState({
     agentStatusByPaneKey: {
       [pane('agent')]: entry('agent', { worktreeId: 'grandchild', state: 'blocked' })
     },
     agentStatusEpoch: 2
   })
-  expect(selectCollapsedLineageSlot(useAppStore.getState(), source)).toEqual({
+  expect(collapsedSlot(useAppStore.getState(), source)).toEqual({
     kind: 'needs',
     count: 1
   })
@@ -192,21 +197,21 @@ it('updates hidden subtree attention after status changes, acknowledgement, and 
     },
     agentStatusEpoch: 3
   })
-  expect(selectCollapsedLineageSlot(useAppStore.getState(), source)).toEqual({
+  expect(collapsedSlot(useAppStore.getState(), source)).toEqual({
     kind: 'unread',
     at: 1_900_000,
     manual: false
   })
   useAppStore.setState({ acknowledgedAgentsByPaneKey: { [pane('agent')]: 1_900_000 } })
-  expect(selectCollapsedLineageSlot(useAppStore.getState(), source)).toBeNull()
+  expect(collapsedSlot(useAppStore.getState(), source)).toBeNull()
   useAppStore.setState({
     agentStatusByPaneKey: { [pane('agent')]: entry('agent', { worktreeId: 'grandchild' }) },
     agentStatusEpoch: 4
   })
-  expect(selectCollapsedLineageSlot(useAppStore.getState(), source)?.kind).toBe('working')
+  expect(collapsedSlot(useAppStore.getState(), source)?.kind).toBe('working')
   vi.setSystemTime(20_000_000)
   useAppStore.setState({ agentStatusEpoch: 5 })
-  expect(selectCollapsedLineageSlot(useAppStore.getState(), source)).toBeNull()
+  expect(collapsedSlot(useAppStore.getState(), source)).toBeNull()
 })
 
 it('refreshes unstamped structured agent summaries when workspace ownership changes', () => {
@@ -227,14 +232,14 @@ it('refreshes unstamped structured agent summaries when workspace ownership chan
     runtimeEnvironments: [publicRuntimeEnvironment({ id: 'box' })],
     agentStatusByPaneKey: { [paneKey]: entry('legacy-native', { paneKey, state: 'blocked' }) }
   })
-  expect(selectCollapsedLineageSlot(useAppStore.getState(), [identity])).toEqual({
+  expect(collapsedSlot(useAppStore.getState(), [identity])).toEqual({
     kind: 'needs',
     count: 1
   })
-  expect(selectCollapsedLineageSlot(useAppStore.getState(), [remoteIdentity])).toBeNull()
+  expect(collapsedSlot(useAppStore.getState(), [remoteIdentity])).toBeNull()
   useAppStore.setState({ repos: [{ ...TEST_REPO, executionHostId: 'runtime:box' }] })
-  expect(selectCollapsedLineageSlot(useAppStore.getState(), [identity])).toBeNull()
-  expect(selectCollapsedLineageSlot(useAppStore.getState(), [remoteIdentity])).toEqual({
+  expect(collapsedSlot(useAppStore.getState(), [identity])).toBeNull()
+  expect(collapsedSlot(useAppStore.getState(), [remoteIdentity])).toEqual({
     kind: 'needs',
     count: 1
   })

@@ -7335,12 +7335,6 @@
             "title": "Agent のスリープ",
             "toggleLabel": "Agent のスリープを切り替え"
           },
-          "newWorktreeCardStyle": {
-            "copy": "更新されたワークツリーカードのレイアウト、メタデータ配置、カード表示メニュー項目、ステータス表示をプレビューします。",
-            "description": "更新されたワークツリーカードのレイアウト、メタデータ配置、カード表示メニュー項目、ステータス表示をプレビューします。",
-            "title": "新規カードスタイル",
-            "toggleLabel": "新規カードスタイルを切り替え"
-          },
           "nativeChat": {
             "shellEnvNamesLabel": "シェルから渡す変数",
             "shellEnvNamePlaceholder": "変数名",
@@ -9496,11 +9490,9 @@
             "newWorktreeCardStyle": {
               "card": "カード",
               "cards": "カード",
-              "description": "更新されたワークツリーカードのレイアウト、メタデータ配置、カード表示メニュー項目、ステータス表示をプレビューします。",
               "menu": "メニュー",
               "metadata": "メタデータ",
               "status": "状態",
-              "title": "新規カードスタイル",
               "worktree": "ワークツリー",
               "worktrees": "ワークツリー"
             },

@@ -1,14 +1,13 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { isWorktreeCardStyle } from '../../../../shared/worktree/card-style'
 import { webRuntimeState } from './web-runtime-session'
 
 type CardStyleSettings = Pick<
   Partial<GlobalSettings>,
-  'experimentalNewWorktreeCardStyle' | 'worktreeCardStyle' | 'worktreeCardDetailsRow'
+  'experimentalNewWorktreeCardStyle' | 'worktreeCardDetailsRow' | 'compactWorktreeCards'
 >
 
-/** Mirror the host's card style, and remember whether this host accepts the three-way field. */
-export function readHostWorktreeCardStyle(
+/** Mirror card preferences and remember whether this host accepts the details-row field. */
+export function read(
   host: CardStyleSettings,
   environmentId: string,
   environmentStillActive: boolean
@@ -16,39 +15,30 @@ export function readHostWorktreeCardStyle(
   if (environmentStillActive) {
     webRuntimeState.worktreeCardDetailsRowRuntimeEnvironmentId =
       typeof host.worktreeCardDetailsRow === 'boolean' ? environmentId : null
-    webRuntimeState.worktreeCardStyleRuntimeEnvironmentId = isWorktreeCardStyle(
-      host.worktreeCardStyle
-    )
-      ? environmentId
-      : null
   }
   return {
     worktreeCardDetailsRow: host.worktreeCardDetailsRow !== false,
+    ...(typeof host.compactWorktreeCards === 'boolean'
+      ? { compactWorktreeCards: host.compactWorktreeCards }
+      : {}),
     ...(typeof host.experimentalNewWorktreeCardStyle === 'boolean'
       ? { experimentalNewWorktreeCardStyle: host.experimentalNewWorktreeCardStyle }
-      : {}),
-    ...(isWorktreeCardStyle(host.worktreeCardStyle)
-      ? { worktreeCardStyle: host.worktreeCardStyle }
       : {})
   }
 }
 
-/** Older hosts reject unknown setting keys, so send the style only to a host that advertised it. */
-export function hostWorktreeCardStyleUpdate(
-  updates: CardStyleSettings,
-  environmentId: string
-): CardStyleSettings {
+/** Older hosts reject unknown setting keys; only send the details preference when advertised. */
+export function updates(patch: CardStyleSettings, environmentId: string): CardStyleSettings {
   return {
-    ...(typeof updates.worktreeCardDetailsRow === 'boolean' &&
+    ...(typeof patch.worktreeCardDetailsRow === 'boolean' &&
     webRuntimeState.worktreeCardDetailsRowRuntimeEnvironmentId === environmentId
-      ? { worktreeCardDetailsRow: updates.worktreeCardDetailsRow }
+      ? { worktreeCardDetailsRow: patch.worktreeCardDetailsRow }
       : {}),
-    ...(typeof updates.experimentalNewWorktreeCardStyle === 'boolean'
-      ? { experimentalNewWorktreeCardStyle: updates.experimentalNewWorktreeCardStyle }
+    ...(typeof patch.compactWorktreeCards === 'boolean'
+      ? { compactWorktreeCards: patch.compactWorktreeCards }
       : {}),
-    ...(isWorktreeCardStyle(updates.worktreeCardStyle) &&
-    webRuntimeState.worktreeCardStyleRuntimeEnvironmentId === environmentId
-      ? { worktreeCardStyle: updates.worktreeCardStyle }
+    ...(typeof patch.experimentalNewWorktreeCardStyle === 'boolean'
+      ? { experimentalNewWorktreeCardStyle: patch.experimentalNewWorktreeCardStyle }
       : {})
   }
 }

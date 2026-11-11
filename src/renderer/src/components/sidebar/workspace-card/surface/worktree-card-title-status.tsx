@@ -9,7 +9,6 @@ import { selectAgentRowsUnread } from '../activity/worktree-card-agent-ack-input
 import { selectSendTargetControlInputs } from '../activity/worktree-card-send-target-inputs'
 import { useWorktreeAgentExpansionState } from '../activity/worktree-card-agents-expansion-state'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
-import { getWorktreeCardHost } from '../../worktree-card-host-name'
 import {
   collectLineageSlotTargets,
   useCollapsedLineageSlots,
@@ -41,7 +40,6 @@ type TitleStatus = {
   /** What the title speaks for: hidden agents, collapsed child workspaces, the workspace's own unread. */
   exceptions: readonly SlotException[]
   at: number | null
-  now: number
   resolveTargets: (kind: SlotException['kind']) => SlotTarget[]
 }
 
@@ -67,9 +65,7 @@ export function WorktreeCardTitleStatusProvider({
   const { worktree, showInlineAgentList, lineageCollapsed, lineageDescendantIdentities } = card
   const agents = card.inlineAgentRows
   const signals = useSlotAgentSignals(agents)
-  const now = useNow(30_000)
-  const host = getWorktreeCardHost(card)
-  const offline = card.isRuntimeDisconnected || (host?.kind === 'ssh' && host.down)
+  const offline = card.isRuntimeDisconnected || card.isSshDisconnected
   const markedByUser = useAppStore((s) => Boolean(s.workspacesMarkedUnreadByUser[worktree.id]))
   const pickingSendTarget = useAppStore(
     (s) => selectSendTargetControlInputs(s, worktree.id).targetMode !== null
@@ -78,10 +74,10 @@ export function WorktreeCardTitleStatusProvider({
   // Compact mode folds two or more agents behind a summary row until it is expanded.
   const foldedBehindSummary =
     card.agentActivityDisplayMode === 'compact' &&
-    signals.rootLines.length > 1 &&
+    signals.rootCount > 1 &&
     !compactRootListExpanded &&
     !pickingSendTarget
-  const linesShown = showInlineAgentList && signals.rootLines.length > 0 && !foldedBehindSummary
+  const linesShown = showInlineAgentList && signals.rootCount > 0 && !foldedBehindSummary
   const descendants = lineageDescendantIdentities ?? NO_DESCENDANTS
   const hiddenDescendants = lineageCollapsed ? descendants : NO_DESCENDANTS
   const collapsedLineage = useCollapsedLineageSlots(hiddenDescendants)
@@ -126,8 +122,8 @@ export function WorktreeCardTitleStatusProvider({
   const exceptions = slot.kind === 'status' ? slot.exceptions : NO_EXCEPTIONS
   const at = slot.kind === 'status' ? slot.at : null
   const value = useMemo<TitleStatus>(
-    () => ({ offline, exceptions, at, now, resolveTargets }),
-    [at, exceptions, now, offline, resolveTargets]
+    () => ({ offline, exceptions, at, resolveTargets }),
+    [at, exceptions, offline, resolveTargets]
   )
   return <TitleStatusContext.Provider value={value}>{children}</TitleStatusContext.Provider>
 }
@@ -141,11 +137,12 @@ export function useWorktreeCardRolledUpUnread(): boolean {
 /** The title row's right edge: a pill per loud status the card speaks for, then the time. */
 export function WorktreeCardTitleStatus(): React.JSX.Element | null {
   const status = useContext(TitleStatusContext)
+  const now = useNow(30_000)
   if (!status) {
     return null
   }
   if (status.offline) {
-    return <WorktreeCardSlot signal={{ kind: 'offline' }} now={status.now} />
+    return <WorktreeCardSlot signal={{ kind: 'offline' }} now={now} />
   }
   return (
     <>
@@ -153,12 +150,7 @@ export function WorktreeCardTitleStatus(): React.JSX.Element | null {
         exceptions={status.exceptions}
         resolveTargets={status.resolveTargets}
       />
-      <WorktreeCardTitleTime
-        exceptions={status.exceptions}
-        at={status.at}
-        now={status.now}
-        toggle={null}
-      />
+      <WorktreeCardTitleTime exceptions={status.exceptions} at={status.at} now={now} />
     </>
   )
 }

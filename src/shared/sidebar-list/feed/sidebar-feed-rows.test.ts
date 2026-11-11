@@ -166,7 +166,7 @@ describe('buildSidebarFeedRows nests each paired server’s own lineage', () => 
     expect([...lineageIdentities(parent.lineageDescendantIdentities ?? [])]).toEqual([
       'runtime:a|r::/r/c'
     ])
-    expect(parent.lineageDescendantsHidden).toBe(collapsed)
+    expect(parent.lineageCollapsed).toBe(collapsed)
     expect(outline(built.sectionRows).includes('runtime:a|r::/r/c@1')).toBe(!collapsed)
   })
 

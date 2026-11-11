@@ -4,7 +4,7 @@ import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-reco
 import {
   toLineageSlotRecord,
   fromLineageSlotRecord,
-  mergeRecord
+  type LineageSlotRecord
 } from './worktree-card-slot-summary'
 import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
@@ -29,21 +29,14 @@ import {
 } from './workspace-card/activity/worktree-agent-rows-projection'
 import { selectAgentRowsUnread } from './workspace-card/activity/worktree-card-agent-ack-inputs'
 import { buildSlotAgentSignals } from './worktree-card-slot-agent-signals'
+import { slotExceptionsFor, type SlotException } from './worktree-card-slot-signal'
 import {
-  slotExceptionFor,
-  slotExceptionsFor,
-  type SlotException,
-  type SlotSignal
-} from './worktree-card-slot-signal'
-import {
-  expandWorkspaceUnreadTargets,
   slotTargetsFromAgentLines,
-  slotTargetsOfKind,
   workspaceUnreadTarget,
   type SlotTarget
 } from './worktree-card-slot-targets'
 
-export function worktreeForIdentity(
+function worktreeForIdentity(
   state: AppState,
   identity: HostScopedWorktreeKey
 ): Worktree | undefined {
@@ -155,31 +148,30 @@ export function collectLineageSlotTargets(
   return source.flatMap((identity) => ownSlot(state, identity).targets)
 }
 
-export function selectCollapsedLineageSlot(
+export function selectCollapsedLineageSlots(
   state: AppState,
   source: WorktreeLineageSource
-): SlotSignal | null {
+): LineageSlotRecord {
   return isLineageRange(source)
-    ? (fromLineageSlotRecord(descendantSlot(state, source.tree, source.index).record)[0] ?? null)
-    : slotExceptionFor(collectLineageSlotTargets(state, source))
+    ? descendantSlot(state, source.tree, source.index).record
+    : toLineageSlotRecord(slotExceptionsFor(collectLineageSlotTargets(state, source)))
+}
+
+function createCollapsedLineageSlotsSelector(source: WorktreeLineageSource) {
+  let inputs: readonly unknown[] = []
+  let record = toLineageSlotRecord([])
+  return (state: AppState) => {
+    const next = worktreeAgentProjectionInputs(state)
+    if (!next.every((value, index) => value === inputs[index])) {
+      inputs = next
+      record = selectCollapsedLineageSlots(state, source)
+    }
+    return record
+  }
 }
 
 export function useCollapsedLineageSlots(source: WorktreeLineageSource): SlotException[] {
-  const select = useMemo(() => {
-    let inputs: readonly unknown[] = []
-    let record = toLineageSlotRecord([])
-    return (state: AppState) => {
-      const next = worktreeAgentProjectionInputs(state)
-      if (next.every((value, index) => value === inputs[index])) {
-        return record
-      }
-      inputs = next
-      record = isLineageRange(source)
-        ? descendantSlot(state, source.tree, source.index).record
-        : toLineageSlotRecord(slotExceptionsFor(collectLineageSlotTargets(state, source)))
-      return record
-    }
-  }, [source])
+  const select = useMemo(() => createCollapsedLineageSlotsSelector(source), [source])
   const record = useAppStore(useShallow(select))
   return useMemo(() => fromLineageSlotRecord(record), [record])
 }
@@ -201,95 +193,5 @@ export function selectLineageLatestAt(
 export function useLineageLatestAt(source: WorktreeLineageSource): number | null {
   return useAppStore(
     useCallback((state: AppState) => selectLineageLatestAt(state, source), [source])
-  )
-}
-
-function childRange(source: WorktreeLineageSource | undefined, identity: HostScopedWorktreeKey) {
-  if (!source || !isLineageRange(source)) {
-    return null
-  }
-  const index = source.tree.indexByIdentity.get(identity)
-  return index === undefined
-    ? null
-    : { tree: source.tree, index, length: source.tree.ends[index]! - index - 1 }
-}
-
-function childSlot(
-  state: AppState,
-  identity: HostScopedWorktreeKey,
-  source?: WorktreeLineageSource
-) {
-  const range = childRange(source, identity)
-  if (!range) {
-    return slotExceptionFor(ownSlot(state, identity).targets)
-  }
-  const slots = slotsForTree(state, range.tree)
-  const record = { ...slots.own[range.index]!.record }
-  mergeRecord(record, descendantSlot(state, range.tree, range.index).record)
-  return fromLineageSlotRecord(record)[0] ?? null
-}
-
-export type LineageChildCounts = { needs: number; failed: number; unread: number; working: number }
-export function selectLineageChildCounts(
-  state: AppState,
-  children: readonly HostScopedWorktreeKey[],
-  source?: WorktreeLineageSource
-): LineageChildCounts {
-  const counts: LineageChildCounts = { needs: 0, failed: 0, unread: 0, working: 0 }
-  for (const child of children) {
-    const signal = childSlot(state, child, source)
-    if (
-      signal?.kind === 'needs' ||
-      signal?.kind === 'failed' ||
-      signal?.kind === 'unread' ||
-      signal?.kind === 'working'
-    ) {
-      counts[signal.kind]++
-    }
-  }
-  return counts
-}
-
-export function useLineageChildCounts(
-  children: readonly HostScopedWorktreeKey[],
-  source?: WorktreeLineageSource
-): LineageChildCounts {
-  const select = useMemo(() => {
-    let inputs: readonly unknown[] = []
-    let counts: LineageChildCounts = { needs: 0, failed: 0, unread: 0, working: 0 }
-    return (state: AppState) => {
-      const next = worktreeAgentProjectionInputs(state)
-      if (next.every((value, index) => value === inputs[index])) {
-        return counts
-      }
-      inputs = next
-      counts = selectLineageChildCounts(state, children, source)
-      return counts
-    }
-  }, [children, source])
-  return useAppStore(useShallow(select))
-}
-
-export function collectLineageChildTargetsOfKind(
-  state: AppState,
-  children: readonly HostScopedWorktreeKey[],
-  kind: keyof LineageChildCounts,
-  source?: WorktreeLineageSource
-): SlotTarget[] {
-  return slotTargetsOfKind(
-    expandWorkspaceUnreadTargets(
-      state,
-      children.flatMap((child) => {
-        if (childSlot(state, child, source)?.kind !== kind) {
-          return []
-        }
-        const range = childRange(source, child)
-        return [
-          ...ownSlot(state, child).targets,
-          ...(range ? collectLineageSlotTargets(state, range) : [])
-        ]
-      })
-    ),
-    kind
   )
 }

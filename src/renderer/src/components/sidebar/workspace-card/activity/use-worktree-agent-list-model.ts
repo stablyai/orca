@@ -6,7 +6,7 @@ import { useAppStore } from '@/store'
 import { deriveRunningAgentSendTargets } from '@/lib/agent-session/messaging/running-agent-targets'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { buildAgentRowLineageTree } from '@/components/dashboard/agent-row-lineage-model'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { agentSendDisabledReasonLabel } from '@/lib/agent-session/messaging/agent-send-disabled-reason-label'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import {
@@ -40,6 +40,7 @@ export function useWorktreeAgentListModel(
   agents: DashboardAgentRowData[],
   executionHostId?: ExecutionHostId
 ) {
+  const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   const { agentActivityDisplayMode, showAgentModels } = useWorktreeAgentDisplay()
   const dropAgentStatus = useAppStore((s) => s.dropAgentStatus)
@@ -73,7 +74,7 @@ export function useWorktreeAgentListModel(
   const sendTargetsByPaneKey = useMemo(
     () =>
       recomputeOn([agentStatusEpoch, languageRevision], () => {
-        if (!isAgentSendTargetModeActive) {
+        if (!agentSendPopoverTargetMode) {
           return new Map<
             string,
             { status: 'eligible' | 'disabled' | 'sending'; disabledReason?: string }
@@ -87,7 +88,7 @@ export function useWorktreeAgentListModel(
             agentSendPopoverTargetMode.sendingPaneKey === target.paneKey
               ? {
                   status: 'sending' as const,
-                  disabledReason: translate(
+                  disabledReason: t(
                     'auto.components.sidebar.WorktreeCardAgents.sendingTarget',
                     'Sending...'
                   )
@@ -105,9 +106,8 @@ export function useWorktreeAgentListModel(
       // Freshness timers advance this epoch without replacing the status map.
       agentStatusEpoch,
       languageRevision,
-      agentSendPopoverTargetMode?.sendingPaneKey,
-      agentSendPopoverTargetMode?.status,
-      isAgentSendTargetModeActive,
+      t,
+      agentSendPopoverTargetMode,
       sendTargetInputs,
       worktreeId
     ]
@@ -162,7 +162,7 @@ export function useWorktreeAgentListModel(
     isAgentSendTargetModeActive
       ? (sendTargetsByPaneKey.get(paneKey) ?? {
           status: 'disabled' as const,
-          disabledReason: translate(
+          disabledReason: t(
             'auto.components.sidebar.WorktreeCardAgents.agentUnavailable',
             'Agent is not available'
           )

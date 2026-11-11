@@ -2,7 +2,7 @@ import type { AgentDotState } from '@/components/AgentStateDot'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
 
-/** What one agent line means for the Experimental 2.0 card, in slot priority order. */
+/** What one agent line means for the experimental card, in slot priority order. */
 export type SlotLineKind = 'needs' | 'failed' | 'unread' | 'working' | 'seen' | 'idle'
 
 /** `monitoring`: working, but watching rather than taking turns; drawn with its own glyph. */
@@ -17,15 +17,6 @@ export type SlotSignal =
   | { kind: 'offline' }
   | { kind: 'time'; at: number | null }
   | { kind: 'quiet' }
-
-const LINE_KIND_RANK: Record<SlotLineKind, number> = {
-  needs: 0,
-  failed: 1,
-  unread: 2,
-  working: 3,
-  seen: 4,
-  idle: 5
-}
 
 export function classifySlotLine(args: {
   dotState: AgentDotState
@@ -63,10 +54,6 @@ export function slotLineAt(
     return stateStartedAt ?? (agent.startedAt > 0 ? agent.startedAt : null)
   }
   return lastEnteredDoneAt(agent) ?? stateStartedAt
-}
-
-export function compareSlotLines(a: SlotLineSignal, b: SlotLineSignal): number {
-  return LINE_KIND_RANK[a.kind] - LINE_KIND_RANK[b.kind] || (b.at ?? 0) - (a.at ?? 0)
 }
 
 function latest(lines: readonly SlotLineSignal[]): number | null {
@@ -114,15 +101,6 @@ export function slotExceptionsFor(lines: readonly SlotLineSignal[]): SlotExcepti
     })
   }
   return exceptions
-}
-
-/** The most urgent exception a set of lines reports, or null when every line is quiet. */
-export function slotExceptionFor(lines: readonly SlotLineSignal[]): SlotSignal | null {
-  return slotExceptionsFor(lines)[0] ?? null
-}
-
-export function slotForLine(line: SlotLineSignal): SlotSignal {
-  return slotExceptionFor([line]) ?? { kind: 'time', at: line.at }
 }
 
 function mergeSameKind(a: SlotException, b: SlotException): SlotException {

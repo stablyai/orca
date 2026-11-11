@@ -168,7 +168,6 @@ export type RuntimeStore = {
     defaultLinearTeamSelection?: GlobalSettings['defaultLinearTeamSelection']
     githubProjects?: GlobalSettings['githubProjects']
     experimentalNewWorktreeCardStyle?: GlobalSettings['experimentalNewWorktreeCardStyle']
-    worktreeCardStyle?: GlobalSettings['worktreeCardStyle']
     worktreeCardDetailsRow?: GlobalSettings['worktreeCardDetailsRow']
     compactWorktreeCards?: GlobalSettings['compactWorktreeCards']
     minimaxGroupId?: GlobalSettings['minimaxGroupId']

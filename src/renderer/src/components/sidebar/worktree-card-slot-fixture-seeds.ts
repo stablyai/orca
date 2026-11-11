@@ -8,7 +8,6 @@ import type {
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { worktreeCardStyleSettingsUpdate } from '../../../../shared/worktree/card-style'
 import * as agentExpansion from './workspace-card/activity/worktree-card-agents-expansion-state'
 import { getWorktreeReviewCacheKeys } from './workspace-card/review/worktree-card-pr-derivation'
 
@@ -191,7 +190,7 @@ export function seedWorkspaces(seeds: readonly WorkspaceSeed[], now: number): vo
     settings: state.settings
       ? {
           ...state.settings,
-          ...worktreeCardStyleSettingsUpdate('experimental-1')
+          experimentalNewWorktreeCardStyle: true
         }
       : state.settings,
     worktreeCardProperties: ['status', 'inline-agents'],

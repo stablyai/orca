@@ -7,8 +7,6 @@ export const FLUSH_CARD_CONTENT_PULLBACK = 4
 export const NEW_CARD_STYLE_STATUS_LANE_EXTRA_PULLBACK = 8
 // Why: keeps a zero-indent flush card off the sidebar edge.
 export const FLUSH_CARD_MIN_CONTENT_INSET = 2
-// Why: 2.0 nested cards have no indent, so their content needs its own breathing room off the card edge.
-export const SLOT_CARD_MIN_CONTENT_INSET = 6
 export const WORKTREE_CARD_SURFACE_MARGIN = 4
 // Why: level-1 lineage keeps the grouped-card anchor; deeper levels advance evenly, not cumulatively.
 export const LINEAGE_IMMEDIATE_PARENT_STEP =
@@ -16,8 +14,6 @@ export const LINEAGE_IMMEDIATE_PARENT_STEP =
 export const LINEAGE_NESTED_ROW_SURFACE_INSET = 0
 export const LINEAGE_CHILDREN_INLINE_OFFSET =
   LINEAGE_IMMEDIATE_PARENT_STEP - FLUSH_CARD_MIN_CONTENT_INSET
-// 2.0 children start on the parent's title column after its leading icon and gap.
-export const SLOT_LINEAGE_TITLE_COLUMN_SHIFT = 7
 // Why: header icon+gap (22) vs. card margin+border+legacy lane+gap (23) minus pullback lands the title on the header label.
 const GROUPED_CARD_TITLE_HEADER_LABEL_OFFSET = 3
 export const PROJECT_GROUP_HEADER_BASE_PADDING = 10
@@ -136,15 +132,14 @@ export function getWorktreeCardSurfaceInset(args: {
 
 export function getFlushWorktreeCardPaddingLeft(
   contentIndent: number,
-  applyNewCardStyleStatusLaneOffset = false,
-  minContentInset = FLUSH_CARD_MIN_CONTENT_INSET
+  applyNewCardStyleStatusLaneOffset = false
 ): string {
   const pullback =
     FLUSH_CARD_CONTENT_PULLBACK +
     (applyNewCardStyleStatusLaneOffset ? NEW_CARD_STYLE_STATUS_LANE_EXTRA_PULLBACK : 0)
   return contentIndent > 0
-    ? `max(${minContentInset}px, calc(${contentIndent}px - ${pullback}px))`
-    : `${minContentInset}px`
+    ? `max(${FLUSH_CARD_MIN_CONTENT_INSET}px, calc(${contentIndent}px - ${pullback}px))`
+    : `${FLUSH_CARD_MIN_CONTENT_INSET}px`
 }
 
 export function getNewCardStyleParentContentMarginLeft(contentIndent: number): number {

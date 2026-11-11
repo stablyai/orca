@@ -5,10 +5,7 @@ import { useAppStore } from '@/store'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import type { RenderRow } from '../listing/render-row'
-import { lineageIdentities } from '../../../../../../shared/sidebar-list/worktree-lineage-range'
-import { getWorktreeIdFromHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
-import type { WorktreeItemRow, FolderWorkspaceItemRow } from '../listing/renderable-rows'
+import type { WorktreeItemRow } from '../listing/renderable-rows'
 import { getMountedWorktreeOptionsById } from '../rows/option-dom'
 
 export function installWorktreeVisibleRefreshVisibilityListener(onChange: () => void): () => void {
@@ -46,34 +43,18 @@ export function visibleReviewCardIds(args: {
   viewportHeight: number
 }): string[] {
   const bottom = args.viewportTop + args.viewportHeight
-  const ids = new Set<string>()
-  for (const item of args.virtualItems) {
-    if (item.start >= bottom || item.end <= args.viewportTop) {
-      continue
-    }
-    const row = args.renderRows[item.index]
-    const cards: (WorktreeItemRow | FolderWorkspaceItemRow)[] =
-      row?.type === 'item' || row?.type === 'folder-workspace' ? [row] : []
-    for (const card of cards) {
-      const worktree =
-        card.type === 'item' ? card.worktree : folderWorkspaceToWorktree(card.folderWorkspace)
-      if (
-        card.type === 'item' &&
-        (card.repo?.kind ?? 'git') === 'git' &&
-        !worktree.isBare &&
-        !worktree.isArchived &&
-        worktree.branch
-      ) {
-        ids.add(worktree.id)
-      }
-      if (card.lineageDescendantsHidden && card.lineageDescendantIdentities) {
-        for (const identity of lineageIdentities(card.lineageDescendantIdentities)) {
-          ids.add(getWorktreeIdFromHostIdentity(identity))
-        }
-      }
-    }
-  }
-  return [...ids]
+  return args.virtualItems
+    .filter((item) => item.start < bottom && item.end > args.viewportTop)
+    .map((item) => args.renderRows[item.index])
+    .flatMap((row): WorktreeItemRow[] => (row?.type === 'item' ? [row] : []))
+    .filter(
+      (row) =>
+        (row.repo?.kind ?? 'git') === 'git' &&
+        !row.worktree.isBare &&
+        !row.worktree.isArchived &&
+        Boolean(row.worktree.branch)
+    )
+    .map((row) => row.worktree.id)
 }
 
 export function useVisiblePrRefreshReporting(args: {

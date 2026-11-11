@@ -238,7 +238,6 @@ function Card({
         lineageCollapsed={collapsed}
         lineageDescendantIdentities={descendantIdentities}
         lineageChildWorktreeIds={descendantIds}
-        lineageChildIdentities={descendantIdentities}
         lineageChildren={children}
         lineageChildrenStyle={rows.getLineageChildrenInlineStyle(
           rows.LINEAGE_CHILDREN_INLINE_OFFSET

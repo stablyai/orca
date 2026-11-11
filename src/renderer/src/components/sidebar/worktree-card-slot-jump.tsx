@@ -79,10 +79,10 @@ function SlotTargetMenuItem({
   target: SlotTarget
   now: number
 }): React.JSX.Element {
-  // The menu is transient, so a snapshot of the name is enough.
-  const workspaceName =
-    useAppStore.getState().getKnownWorktreeById(target.worktreeId, target.executionHostId)
-      ?.displayName ?? ''
+  const workspaceName = useAppStore(
+    (state) =>
+      state.getKnownWorktreeById(target.worktreeId, target.executionHostId)?.displayName ?? ''
+  )
   return (
     <DropdownMenuItem onSelect={() => openSlotTarget(target)}>
       <div className="grid w-full grid-cols-[10px_12px_minmax(0,1fr)_auto] gap-x-1.5 gap-y-0.5 text-xs">

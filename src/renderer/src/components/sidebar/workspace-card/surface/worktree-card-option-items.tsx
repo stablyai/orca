@@ -19,7 +19,6 @@ import {
   getWorktreeCardDisplayOptions
 } from '../../worktree-list/controls/sidebar-workspace-option-items'
 import { useTranslate } from '@/i18n/use-translate'
-import { getWorktreeCardStyle } from '../../../../../../shared/worktree/card-style'
 
 type CardMenuItemProps = {
   preserveWorkspaceBoardOpen: boolean
@@ -69,7 +68,7 @@ export function WorktreeCardDisplayMenuItem({
   const hasProjectGroups = useAppStore((s) => s.projectGroups.length > 0)
   const toggleProperty = useToggleCardProperty()
   const options = useMemo(() => getWorktreeCardDisplayOptions(hasProjectGroups), [hasProjectGroups])
-  const experimentalCard = useAppStore((s) => getWorktreeCardStyle(s.settings) !== 'classic')
+  const experimentalCard = useAppStore((s) => s.settings?.experimentalNewWorktreeCardStyle === true)
   const detailsRow = useAppStore((s) => s.settings?.worktreeCardDetailsRow !== false)
   const updateSettings = useAppStore((s) => s.updateSettings)
   return (

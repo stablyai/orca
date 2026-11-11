@@ -7830,12 +7830,6 @@
             "title": "代理程式睡眠",
             "toggleLabel": "切換代理程式睡眠"
           },
-          "newWorktreeCardStyle": {
-            "copy": "預覽更新後的工作樹卡片版面配置、後設資料位置、卡片顯示選單選項和狀態呈現。",
-            "description": "預覽更新後的工作樹卡片版面配置、後設資料位置、卡片顯示選單選項和狀態呈現。",
-            "title": "新卡片樣式",
-            "toggleLabel": "切換新卡片樣式"
-          },
           "ca2219fe5e": "顯示固定在右下角的小動畫寵物。從狀態列寵物選單中選擇一個角色（Claudino、OpenCode、Gremlin）或上傳您自己的 PNG、APNG、GIF、WebP、JPG 或 SVG。隨時從同一選單隱藏它，而不停用此設定。",
           "dd6f0a1d45": "寵物",
           "0e89a574ae": "右下角漂浮的動畫寵物。",
@@ -9995,11 +9989,9 @@
             "newWorktreeCardStyle": {
               "card": "卡片",
               "cards": "卡片",
-              "description": "預覽更新後的工作樹卡片版面配置、後設資料位置、卡片顯示選單選項和狀態呈現。",
               "menu": "選單",
               "metadata": "後設資料",
               "status": "狀態",
-              "title": "新卡片樣式",
               "worktree": "工作樹",
               "worktrees": "工作樹"
             },

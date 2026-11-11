@@ -401,7 +401,6 @@
 1 src/renderer/src/components/settings/browser/extensions/BrowserExtensionsSection.tsx
 1 src/renderer/src/components/settings/browser/extensions/BrowserExtensionsWebStoreInstall.tsx
 1 src/renderer/src/components/settings/browser/profiles/BrowserNewProfileDialog.tsx
-1 src/renderer/src/components/settings/chat/ChatNamingSetting.tsx
 1 src/renderer/src/components/settings/cli/install/CliSection.tsx
 3 src/renderer/src/components/settings/cli/install/WslCliRegistration.tsx
 2 src/renderer/src/components/settings/cli/install/use-cli-registration-actions.ts
@@ -509,8 +508,6 @@
 1 src/renderer/src/components/sidebar/workspace-board/viewport/WorkspaceKanbanLaneCardList.tsx
 1 src/renderer/src/components/sidebar/workspace-board/viewport/WorkspaceKanbanLaneGrid.tsx
 3 src/renderer/src/components/sidebar/workspace-board/viewport/use-workspace-kanban-column-resize.ts
-1 src/renderer/src/components/sidebar/workspace-card/activity/WorktreeCardAgents.tsx
-1 src/renderer/src/components/sidebar/workspace-card/activity/useWorktreeAgentRows.ts
 3 src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row.tsx
 2 src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-compact-agents.tsx
 1 src/renderer/src/components/sidebar/workspace-card/identity/AutoRenameFailedDialog.tsx

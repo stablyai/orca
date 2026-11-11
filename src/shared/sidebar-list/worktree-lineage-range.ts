@@ -8,11 +8,7 @@ import {
 export type WorktreeLineageTree = {
   identities: HostScopedWorktreeKey[]
   worktrees: Worktree[]
-  parents: number[]
   ends: number[]
-  indexByIdentity: Map<HostScopedWorktreeKey, number>
-  indexByWorktreeId: Map<string, number | null>
-  rangesByOccurrence: Map<string, WorktreeLineageRange>
 }
 
 export type WorktreeLineageRange = {
@@ -55,25 +51,15 @@ export function buildWorktreeLineageRanges(
     const tree: WorktreeLineageTree = {
       identities: [],
       worktrees: [],
-      parents: [],
-      ends: [],
-      indexByIdentity: new Map(),
-      indexByWorktreeId: new Map(),
-      rangesByOccurrence: result
+      ends: []
     }
     const stack: number[] = []
     occurrences.forEach((occurrence, index) => {
       while (stack.length && occurrences[stack.at(-1)!]!.depth >= occurrence.depth) {
         tree.ends[stack.pop()!] = index
       }
-      tree.parents.push(stack.at(-1) ?? -1)
       tree.identities.push(getWorktreeHostIdentity(occurrence.row))
       tree.worktrees.push(occurrence.row)
-      tree.indexByIdentity.set(getWorktreeHostIdentity(occurrence.row), index)
-      tree.indexByWorktreeId.set(
-        occurrence.row.id,
-        tree.indexByWorktreeId.has(occurrence.row.id) ? null : index
-      )
       stack.push(index)
     })
     for (const index of stack) {
