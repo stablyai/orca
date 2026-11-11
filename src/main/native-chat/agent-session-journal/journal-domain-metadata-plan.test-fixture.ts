@@ -39,7 +39,7 @@ export function assertJournalMetadataPlan(db: Database.Database, sql: string): v
   expect(reads.length).toBeGreaterThan(0)
   for (const row of reads) {
     // SQLite's length-only Column flag avoids fetching the payload's content.
-    if ((Number(row.p5) & 0x40) === 0) {
+    if ((Number(row.p5) & 0x80) === 0) {
       expect(Number(row.p2)).toBeLessThan(firstBody)
     }
   }
