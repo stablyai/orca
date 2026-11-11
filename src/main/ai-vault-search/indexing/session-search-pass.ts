@@ -234,11 +234,15 @@ export async function runSessionSearchPass(
           true,
           observation.metadata ? new Set([path]) : new Set()
         )
-        state.queue.update(
-          await state.candidates.admitChanges(refreshed.receipts, !args.full, state.recovering)
+        const admitted = await state.candidates.admitChanges(
+          refreshed.receipts,
+          !args.full,
+          state.recovering,
+          { path, delivery: observation.receipt }
         )
-        await state.discovery.acknowledgeRead(candidate, rootDir, args.roots, observation.receipt)
-        return state.queue.get(path)
+        state.queue.update(admitted)
+        state.discovery.acceptReadCounts(admitted.scopeCounts)
+        return admitted.work
       }
     })
     await state.candidates.reconcilePublications(

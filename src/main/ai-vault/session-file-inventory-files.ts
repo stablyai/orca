@@ -15,6 +15,11 @@ import { recordSessionScanIssue } from './session-scan-issues'
 import { retainRecentSessionFile } from './session-file-observation'
 import { sidecarEnrichesWithoutReparse } from './parse-cache/session-scanner-sidecar-enrichment'
 
+type ReadableObservation = {
+  file: FileWithMtime
+  delivery?: { revision: number; force: boolean; metadata?: boolean }
+}
+
 export type SessionFileChange = { file: FileWithMtime; force: boolean; metadata?: boolean }
 
 /** Accepted file facts and retry debt survive both directory epochs and delivered events. */
@@ -73,7 +78,7 @@ export class SessionInventoryFiles {
     }[],
     args: DiscoverSessionFilesArgs,
     limit: number
-  ): Promise<Map<string, FileWithMtime>> {
+  ): Promise<Map<string, ReadableObservation>> {
     this.handoffs.clear()
     const readable = await this.resume(limit)
     for (const page of sessionSearchRecordPages(inputs)) {
@@ -101,7 +106,7 @@ export class SessionInventoryFiles {
     prepared: SessionSearchPreparedObservation[],
     args: DiscoverSessionFilesArgs,
     limit: number
-  ): Promise<Map<string, FileWithMtime>> {
+  ): Promise<Map<string, ReadableObservation>> {
     const outcomes: SessionSearchObservationOutcome[] = []
     for (const input of prepared) {
       if (!input.attempt) {
@@ -152,8 +157,8 @@ export class SessionInventoryFiles {
   get applying(): boolean {
     return !!this.pending
   }
-  async resume(limit: number): Promise<Map<string, FileWithMtime>> {
-    const readable = new Map<string, FileWithMtime>()
+  async resume(limit: number): Promise<Map<string, ReadableObservation>> {
+    const readable = new Map<string, ReadableObservation>()
     while (this.pending?.outcomes.length) {
       const page = sessionSearchRecordPages(this.pending.outcomes).next().value!
       const accepted = await this.files.transition({
@@ -180,7 +185,7 @@ export class SessionInventoryFiles {
         }
         retainRecentSessionFile(this.recent, file, limit)
         if (observation.readable) {
-          readable.set(observation.path, file)
+          readable.set(observation.path, { file, delivery: observation.delivery })
         }
       }
     }

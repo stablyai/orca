@@ -493,18 +493,15 @@ it.each([40, 400])(
       queue.beginPass()
       const first = await queue.next()
       expect(first?.candidate.file.path).toBe(candidates[0].file.path)
+      const successor = {
+        ...candidates[0],
+        file: { ...candidates[0].file, mtimeMs: 20000, modifiedAt: '1970-01-01T00:00:20.000Z' }
+      }
       await store.candidates({
         kind: 'batch',
         rows: [
           {
-            candidate: {
-              ...candidates[0],
-              file: {
-                ...candidates[0].file,
-                mtimeMs: 20000,
-                modifiedAt: '1970-01-01T00:00:20.000Z'
-              }
-            },
+            candidate: successor,
             root: prefix,
             group: candidates[0].file.path,
             alias: candidates[0].file.path,
@@ -548,10 +545,10 @@ it.each([40, 400])(
       queue.beginPass()
       const retry = await queue.next()
       expect(retry?.candidate.file.path).toBe(candidates[0].file.path)
-      await queue.enqueue(candidates[0], store, false, true, true)
+      await queue.enqueue(successor, store, false, true, true)
       await queue.acknowledge(retry!, false)
       const latest = await queue.next()
-      expect(latest).toMatchObject({ candidate: candidates[0], metadata: true })
+      expect(latest).toMatchObject({ candidate: successor, metadata: true })
       await queue.acknowledge(latest!, false)
       expect(await queue.next()).toBeUndefined()
       expect(largestResponse).toBeLessThanOrEqual(256 * 1024)

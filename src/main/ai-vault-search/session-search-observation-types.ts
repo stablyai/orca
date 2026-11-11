@@ -57,6 +57,7 @@ export type SessionSearchInventoryResult = {
     force: boolean
     readable: boolean
     metadata?: boolean
+    delivery?: { revision: number; force: boolean; metadata?: boolean }
   }[]
   filesDelta?: number
   failuresDelta?: number

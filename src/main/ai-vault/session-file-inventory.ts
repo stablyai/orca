@@ -164,7 +164,7 @@ export class SessionFileInventory extends SessionInventoryDirtyInputs {
     metadataOnly = false,
     metadataOwed = false
   ) {
-    const file = await this.observations.observe(
+    const observed = await this.observations.observe(
       path,
       args,
       false,
@@ -174,14 +174,14 @@ export class SessionFileInventory extends SessionInventoryDirtyInputs {
     )
     const change = this.observations.changes.get(path)
     this.observations.changes.delete(path)
-    const delivery = await this.observations.delivery.get(path)
+    const { file, delivery } = observed ?? {}
     return file
       ? {
           file,
           force: change?.force || delivery?.force || false,
           metadata: change?.metadata || delivery?.metadata,
           changed: change !== undefined || !!delivery,
-          receipt: delivery ? { path, revision: delivery.revision } : undefined
+          receipt: delivery ? { scope: this.scope, path, revision: delivery.revision } : undefined
         }
       : {
           handoff: this.observations.handoffs.has(path)

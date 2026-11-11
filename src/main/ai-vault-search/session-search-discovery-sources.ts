@@ -1,6 +1,7 @@
 import type { SessionSearchRemovalReceipt } from './session-search-observation-authority'
 import {
   SessionSearchCatalogClient,
+  recordSessionSearchCatalogCounts,
   type SessionSearchCatalogRequest
 } from './session-search-catalog-client'
 import type { SessionSearchDependencyInventory } from './session-search-dependency-inventory'
@@ -202,17 +203,10 @@ export class SessionSearchDiscoverySources {
     }
   }
 
-  async acknowledgeRead(
-    candidate: SessionFileCandidate,
-    logicalRoot: string,
-    roots: SessionSearchScanRoots,
-    receipt: { path: string; revision: number } | undefined
-  ): Promise<void> {
-    if (!receipt) {
-      return
+  acceptReadCounts(scopeCounts: [string, number, number][] | undefined): void {
+    if (this.request) {
+      recordSessionSearchCatalogCounts(this.request, { scopeCounts })
     }
-    const root = await this.fileOwner(candidate, logicalRoot, roots)
-    await root?.inventory.acknowledge([receipt])
   }
 
   async end(): Promise<void> {

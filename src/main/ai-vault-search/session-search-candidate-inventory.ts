@@ -1,5 +1,6 @@
 import type { SessionSearchContainerRemoval } from './session-search-container-transition'
 import type { SessionSearchRemovalReceipt } from './session-search-observation-authority'
+import type { SessionSearchCandidateCommand } from './session-search-catalog-candidates'
 import type { SessionSearchCatalogCandidate } from './session-search-catalog-candidates'
 import type { SessionSearchWorkResult } from './session-search-work-queue'
 import { sessionSearchRecordPages } from './session-search-catalog-pages'
@@ -75,15 +76,17 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
   async admitChanges(
     receipts: { key: string; revision: number }[],
     recent: boolean,
-    recovering: boolean
+    recovering: boolean,
+    read?: Extract<SessionSearchCandidateCommand, { kind: 'admit' }>['read']
   ) {
     const response = await this.request!({
       kind: 'admit',
+      read,
       recent,
       recovering,
       rows: receipts
     })
-    return response.work!
+    return { ...response.work!, scopeCounts: response.scopeCounts }
   }
   async acknowledgeChanges(receipts: { key: string; revision: number }[]): Promise<void> {
     for (const row of receipts) {

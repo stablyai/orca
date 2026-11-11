@@ -8,10 +8,9 @@ import {
   sessionSearchCandidateFacts,
   type SessionSearchFactReference
 } from './session-search-candidate-facts'
-import type {
-  SessionSearchFileRow,
-  SessionSearchIndexStore
-} from './storage/session-search-store-types'
+import type { SessionSearchFileRow } from './storage/session-search-store-types'
+import type { SessionSearchStore } from './storage/session-search-store'
+import { recordSessionSearchPrimaryFailure } from './session-search-primary-retries'
 
 export type SessionSearchWork = {
   candidate: SessionFileCandidate
@@ -60,14 +59,20 @@ export class SessionSearchWorkCatalog {
       metadata: row.metadata === 1
     }
   }
-  async enqueue(
+  enqueue(
     candidate: SessionFileCandidate,
-    store: SessionSearchIndexStore,
+    store: SessionSearchStore,
     force = false,
     recent = true,
     metadata = false
-  ): Promise<void> {
+  ): void {
     const path = candidate.file.path
+    if (store.fileRow(path)?.state === 'failed') {
+      recordSessionSearchPrimaryFailure(this.catalog, path, true, true)
+    }
+    if (force) {
+      store.catalogCandidates.execute({ kind: 'require', path, reason: 'force' })
+    }
     const row = store.fileRow(path)
     const decision = sessionSearchReadDecision({
       candidate,
@@ -159,7 +164,7 @@ export class SessionSearchWorkCatalog {
     }
     return works
   }
-  async get(path: string): Promise<SessionSearchWork | undefined> {
+  get(path: string): SessionSearchWork | undefined {
     const row = this.entry(path)
     return row && this.project(row)
   }

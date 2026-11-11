@@ -1,7 +1,7 @@
+export { requireSessionSearchCandidateReason } from './session-search-candidate-reason'
+import { admitSessionSearchCandidatePage } from './session-search-candidate-admission-page'
 import { validSessionSearchContainerRemoval } from './session-search-container-transition'
 import { SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT } from './indexing/session-search-read-decision'
-import { recordSessionSearchPrimaryFailure } from './session-search-primary-retries'
-import { wakeSessionSearchMetadataWrite } from './session-search-store-write'
 import { stepSessionSearchPublication } from './session-search-publication-step'
 import type { SessionSearchWorkCatalog } from './session-search-work-catalog'
 import type { SessionSearchWorkCommand, SessionSearchWorkResult } from './session-search-work-queue'
@@ -10,41 +10,6 @@ import type {
   SessionSearchCandidateResult
 } from './session-search-catalog-candidates'
 import type { SessionSearchStore } from './storage/session-search-store'
-
-function wakeFailedFile(store: SessionSearchStore, path: string): void {
-  const previous = store.fileRow(path)
-  if (previous?.state !== 'failed') {
-    return
-  }
-  store.setFileState(path, 'current')
-  const row = store.fileRow(path)
-  if (row) {
-    store.onSourceWake(previous, row)
-  }
-}
-
-export function requireSessionSearchCandidateReason(
-  store: SessionSearchStore,
-  path: string,
-  reason: 'force' | 'metadata'
-): boolean {
-  const selected = store.catalogCandidates
-    .execute({ kind: 'path', path })
-    .rows.some((row) => row.selected)
-  if (selected) {
-    if (
-      reason === 'metadata' &&
-      wakeSessionSearchMetadataWrite(store.connection, path, store.fileRow(path))
-    ) {
-      wakeFailedFile(store, path)
-    }
-    if (reason === 'force' && store.fileRow(path)?.state === 'failed') {
-      wakeFailedFile(store, path)
-    }
-    store.catalogCandidates.execute({ kind: 'require', path, reason, delivered: true })
-  }
-  return selected
-}
 
 export async function transitionSessionSearchCandidates(
   store: SessionSearchStore,
@@ -118,50 +83,7 @@ export async function transitionSessionSearchCandidates(
     }
     return result
   }
-  for (const receipt of command.rows) {
-    let row = store.catalogCandidates.entry(receipt.key)
-    if (!row || row.revision !== receipt.revision) {
-      continue
-    }
-    if (row.selected) {
-      const debt = (
-        await store.catalog({
-          kind: 'get',
-          scope: 'discovery-metadata',
-          key: row.candidate.file.path
-        })
-      ).rows?.[0]
-      if (debt) {
-        requireSessionSearchCandidateReason(store, row.candidate.file.path, 'metadata')
-        row = store.catalogCandidates.entry(receipt.key)!
-        await store.catalog({
-          kind: 'ack-values',
-          scope: 'discovery-metadata',
-          rows: [{ key: debt.key, value: debt.value }]
-        })
-      }
-      await store.work({
-        kind: 'enqueue',
-        candidate: row.candidate,
-        force: command.recovering || row.forced,
-        recent: command.recent,
-        metadata: row.metadata
-      })
-    } else if (
-      !store.catalogCandidates
-        .execute({ kind: 'path', path: row.candidate.file.path })
-        .rows.some((member) => member.selected)
-    ) {
-      await store.work({ kind: 'remove', path: row.candidate.file.path })
-    }
-    store.catalogCandidates.execute({
-      kind: 'consumed',
-      key: receipt.key,
-      revision: row.revision
-    })
-  }
-  const work = await store.work({ kind: 'stats' })
-  return { ...store.catalogCandidates.execute({ kind: 'batch', rows: [] }), work }
+  return admitSessionSearchCandidatePage(store, store.catalogWork, command)
 }
 
 export async function transitionSessionSearchWork(
@@ -174,21 +96,6 @@ export async function transitionSessionSearchWork(
   let eligibleThrough
   switch (command.kind) {
     case 'enqueue':
-      if (store.fileRow(command.candidate.file.path)?.state === 'failed') {
-        recordSessionSearchPrimaryFailure(
-          store.catalogStorage,
-          command.candidate.file.path,
-          true,
-          true
-        )
-      }
-      if (command.force) {
-        store.catalogCandidates.execute({
-          kind: 'require',
-          path: command.candidate.file.path,
-          reason: 'force'
-        })
-      }
       await queue.enqueue(command.candidate, store, command.force, command.recent, command.metadata)
       break
     case 'get':

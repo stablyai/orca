@@ -154,8 +154,11 @@ export class SessionSearchStore {
     return transitionSessionSearchCandidates(this, command)
   }
   work(command: SessionSearchWorkCommand): Promise<SessionSearchWorkResult> {
+    return transitionSessionSearchWork(this, this.catalogWork, command)
+  }
+  get catalogWork(): SessionSearchWorkCatalog {
     this.workCatalog ??= new SessionSearchWorkCatalog(this.db, this.catalogStorage)
-    return transitionSessionSearchWork(this, this.workCatalog, command)
+    return this.workCatalog
   }
   onSourceWake(previous: SessionSearchFileRow, row: SessionSearchFileRow): void {
     this.effects.wake(previous, row)

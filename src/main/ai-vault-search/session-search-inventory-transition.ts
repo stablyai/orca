@@ -213,13 +213,21 @@ export function transitionSessionSearchInventory(
           revision: catalog.nextRevision()
         })
       }
+      const pendingDelivery = decode<{ revision: number; force: boolean; metadata?: boolean }>(
+        get(delivery, outcome.path)
+      )
       observations.push({
         path: outcome.path,
         file: { ...facts, modifiedAt: new Date(facts.mtimeMs).toISOString() },
         changed: force || !same || dependencyChanged || !!metadata,
         metadata,
         force: dependencyChanged || (force && same),
-        readable: !unknown
+        readable: !unknown,
+        delivery: pendingDelivery && {
+          revision: pendingDelivery.revision,
+          force: pendingDelivery.force,
+          metadata: pendingDelivery.metadata
+        }
       })
     } finally {
       authority.settle(outcome.path)

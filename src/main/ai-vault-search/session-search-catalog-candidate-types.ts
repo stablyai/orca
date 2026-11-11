@@ -26,6 +26,7 @@ export type SessionSearchCandidateCommand =
       rows: { key: string; revision: number }[]
       recent: boolean
       recovering: boolean
+      read?: { path: string; delivery?: { scope: string; path: string; revision: number } }
     }
   | { kind: 'put'; row: SessionSearchCatalogCandidate }
   | {
@@ -71,4 +72,5 @@ export type SessionSearchCandidateResult = SessionSearchPublicationResult & {
   contested?: string[]
   work?: SessionSearchWorkResult
   unowned?: string[]
+  scopeCounts?: [string, number, number][]
 }
