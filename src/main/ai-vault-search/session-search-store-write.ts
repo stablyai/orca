@@ -6,9 +6,17 @@ import type SyncDatabase from '../sqlite/sync-database'
 import type { SessionSearchFileRow } from './session-search-store-types'
 import type { SessionSearchFileWrite } from './session-search-index-writer'
 
-function identity(row: SessionSearchFileRow | undefined): string {
+function identity(row: SessionSearchFileRow | undefined, failedCommit = false): string {
   return JSON.stringify(
-    row && [row.mtimeMs, row.sizeBytes, row.byteOffset, row.prefixHash, row.dev, row.ino]
+    row && [
+      row.mtimeMs,
+      row.sizeBytes,
+      row.byteOffset,
+      row.prefixHash,
+      row.dev,
+      row.ino,
+      row.failCount + Number(failedCommit)
+    ]
   )
 }
 const initialized = new WeakSet<SyncDatabase>()
@@ -63,7 +71,7 @@ export function trackSessionSearchMetadataWrite(
         if (metadataOnly && !accepted) {
           db.prepare(
             'INSERT OR REPLACE INTO temp.search_metadata_write_failures(path,identity) VALUES(?,?)'
-          ).run(path, identity(row()))
+          ).run(path, identity(row(), true))
         } else if (accepted) {
           db.prepare('DELETE FROM temp.search_metadata_write_failures WHERE path=?').run(path)
         }

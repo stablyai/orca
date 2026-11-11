@@ -226,6 +226,9 @@ export class SessionInventoryDirectoryWalks {
         ? undefined
         : await this.request({ kind: 'directory-end', scope: this.scope, path, epoch, remove })
     await this.walks.delete(path)
+    if (remove && !result?.directoryProtected) {
+      await this.failures.delete(path)
+    }
     if (result?.directoryProtected || (await this.trailing.get(path))) {
       await this.trailing.delete(path)
       await this.schedule(path)

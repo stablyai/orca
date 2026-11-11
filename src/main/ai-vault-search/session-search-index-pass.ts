@@ -141,12 +141,20 @@ export async function runSessionSearchIndexPass(
       await store.flush?.()
       row = store.fileRow(path)
     }
-    const decision = sessionSearchReadDecision({
+    let decision = sessionSearchReadDecision({
       candidate,
       row,
       cursor,
       cutoffMs: store.retentionCutoff
     })
+    if (
+      decision === 'skip' &&
+      work.metadata &&
+      row?.state === 'current' &&
+      (store.retentionCutoff === null || candidate.file.mtimeMs >= store.retentionCutoff)
+    ) {
+      decision = 'any'
+    }
     consumed++
     if (decision === 'skip') {
       await queue.acknowledge(work, false)
