@@ -27,7 +27,7 @@ export class DestroyedGuestTestManager extends BrowserManager {
 
 export class DestroyedGuestTestContents extends EventEmitter {
   readonly debugger = Object.assign(new EventEmitter(), {
-    isAttached: () => false,
+    isAttached: (): boolean => false,
     sendCommand: async () => undefined
   })
   readonly session = session

@@ -1,4 +1,5 @@
 import { BROWSING_GUEST_POLICY } from './browser-guest-policy-profile'
+import { webContents } from 'electron'
 import type { BrowserGuestPolicy } from './browser-guest-policy-profile'
 import type { PopupOwnerContext } from '../../popups/browser-popup-ownership'
 import { BrowserManagerGuestCleanup } from './browser-manager-guest-cleanup'
@@ -43,6 +44,16 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
         this.notifyGuestDiscardProtection(pageId, guest)
       }
     })
+    const invalidate = (): void => this.invalidateGuestMemoryProtection(guest)
+    const inPageNavigation = (_event: Electron.Event, _url: string, mainFrame: boolean): void => {
+      if (mainFrame) {
+        invalidate()
+      }
+    }
+    guest.on('did-stop-loading', invalidate)
+    guest.on('did-navigate', invalidate)
+    guest.on('did-navigate-in-page', inPageNavigation)
+    guest.on('devtools-closed', invalidate)
     const forwardAudioState = (
       event: Electron.Event<Electron.WebContentsAudioStateChangedEventParams>
     ): void => {
@@ -72,6 +83,10 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
       disposePopupPolicy()
       disposeNavigationPolicy()
       disposeDiscardProtection()
+      guest.off('did-stop-loading', invalidate)
+      guest.off('did-navigate', invalidate)
+      guest.off('did-navigate-in-page', inPageNavigation)
+      guest.off('devtools-closed', invalidate)
       disposeDevToolsCloseShortcut()
       disposeEscapeForwarding()
       if (!guest.isDestroyed()) {
@@ -93,13 +108,24 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     if (this.webContentsIdByTabId.get(browserPageId) !== guest.id) {
       return
     }
-    this.resolveRendererForBrowserTab(browserPageId)?.send(
-      'browser:guest-discard-protection-changed',
-      {
-        browserPageId,
-        ...readBrowserGuestDiscardProtection(guest)
-      }
-    )
+    try {
+      this.resolveRendererForBrowserTab(browserPageId)?.send(
+        'browser:guest-discard-protection-changed',
+        {
+          browserPageId,
+          ...readBrowserGuestDiscardProtection(guest)
+        }
+      )
+    } catch {
+      // A disposed renderer must not fail a lifecycle terminal.
+    }
+  }
+
+  invalidateGuestMemoryProtection(guest: Electron.WebContents): void {
+    const pageId = this.tabIdByWebContentsId.get(guest.id)
+    if (pageId && !guest.isDestroyed() && webContents.fromId(guest.id) === guest) {
+      this.notifyGuestDiscardProtection(pageId, guest)
+    }
   }
 
   /** Closes the page's DevTools wherever they are: docked in the pane or in their own window. */

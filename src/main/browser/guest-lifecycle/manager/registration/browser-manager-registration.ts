@@ -1,4 +1,8 @@
-import { closeBrowserMemoryPage, isRetiredBrowserGuest } from '../../browser-page-memory'
+import {
+  closeBrowserMemoryPage,
+  isRetiredBrowserGuest,
+  bindBrowserPageMemoryInvalidation
+} from '../../browser-page-memory'
 import { webContents } from 'electron'
 import { browserDownloadDestinationReservations } from '../../../downloads/browser-download-destination'
 import { isWorkspaceDocPageId } from '../../../document-preview/doc-preview-guest-policy'
@@ -81,6 +85,9 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     }
     this.sessionProfileIdByPageId.set(browserTabId, sessionProfileId ?? null)
     this.rendererWebContentsIdByTabId.set(browserTabId, rendererWebContentsId)
+    bindBrowserPageMemoryInvalidation(browserTabId, guest, rendererWebContentsId, () =>
+      this.notifyGuestDiscardProtection(browserTabId, guest)
+    )
     if (worktreeId) {
       this.worktreeIdByTabId.set(browserTabId, worktreeId)
     }

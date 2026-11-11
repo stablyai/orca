@@ -1,4 +1,4 @@
-import type { Session } from 'electron'
+import type { Session, WebContents } from 'electron'
 import type {
   BrowserRoutePageAuthority,
   BrowserRoutePageOwnerIdentity
@@ -16,5 +16,6 @@ export type BrowserRouteWebContentsRegistryDependencies = {
   retirePreparedPagesOwnedByRenderer(rendererWebContentsId: number): number
   /** Route-guest popup denials need an explicit notice on the owning page. */
   reportBlockedPopup?(input: { openerWebContentsId: number; url: string }): void
+  popupReleased?(opener: WebContents): void
   maxGuests?: number
 }

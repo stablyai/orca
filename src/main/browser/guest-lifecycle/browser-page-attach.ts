@@ -118,7 +118,9 @@ export function associateBrowserPageAttach(guest: Electron.WebContents): boolean
   attach.page.guest = guest
   renewHeldThrottle(attach.page)
   guest.once('destroyed', () => {
-    attach.page.retired.delete(guest.id)
+    if (attach.page.retired.delete(guest.id)) {
+      attach.page.invalidation?.notify()
+    }
     retiredGuests.delete(guest.id)
     if (attach.page.guest === guest) {
       attach.page.releaseThrottle?.()
@@ -164,6 +166,7 @@ export function startBrowserPageAttach(guest: Electron.WebContents, url?: string
     .finally(() => {
       if (page.restoring === promise) {
         page.restoring = null
+        page.invalidation?.notify()
       }
       if (guestLoads.get(guest) === promise) {
         guestLoads.delete(guest)

@@ -236,7 +236,54 @@ describe('tab identity ownership', () => {
     expect(opened.handle.webContentsUserAgent()).toBe(GUEST_CLEAN_UA)
   })
 
-  // Changing UA while the error page loads can replay the failed request.
+  it.each([false, true])(
+    'preserves detached auth identity correction (failure=%s)',
+    async (fail) => {
+      mocks.processUserAgentMode = 'clean'
+      mocks.processUserAgent = GUEST_CLEAN_UA
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const opened = openTab(AUTH_URL)
+      opened.handle.debuggerIsAttached.mockReturnValue(false)
+      await expect(browserManager.setViewportOverride(opened.tab, null)).resolves.toBe(true)
+      expect(opened.handle.debuggerAttach).not.toHaveBeenCalled()
+      navigate(`${ORDINARY_URL}callback`, { inPlace: true })
+      if (fail) {
+        opened.handle.debuggerSendCommand.mockRejectedValue(new Error('Identity write failed'))
+      }
+      await expect(browserManager.setViewportOverride(opened.tab, null)).resolves.toBe(!fail)
+      expect(opened.handle.debuggerAttach).toHaveBeenCalledWith('1.3')
+      expect(opened.handle.webContentsUserAgent()).toBe(googleAuthUserAgent())
+      const observed = await observe(opened, ORDINARY_URL)
+      expect(observed.presented).toBe(fail ? googleAuthUserAgent() : GUEST_CLEAN_UA)
+    }
+  )
 
-  // A failed attachment must not advertise mobile identity on requests alone.
+  it('serializes a detached mobile apply before clearing to the default identity', async () => {
+    mocks.processUserAgentMode = 'clean'
+    mocks.processUserAgent = GUEST_CLEAN_UA
+    const opened = openTab(ORDINARY_URL)
+    opened.handle.debuggerIsAttached.mockReturnValue(false)
+    let finish = (): void => {}
+    opened.handle.debuggerSendCommand.mockImplementation((method: string) =>
+      method === 'Emulation.setDeviceMetricsOverride'
+        ? new Promise<void>((resolve) => {
+            finish = resolve
+          })
+        : Promise.resolve(undefined)
+    )
+    const mobile = browserManager.setViewportOverride(opened.tab, PRESETS.mobile)
+    const reset = browserManager.setViewportOverride(opened.tab, null)
+    await flushViewportOps()
+    finish()
+    await expect(mobile).resolves.toBe(true)
+    await expect(reset).resolves.toBe(true)
+    expect(opened.handle.debuggerSendCommand).toHaveBeenCalledWith(
+      'Emulation.clearDeviceMetricsOverride',
+      {}
+    )
+    const observed = await observe(opened, ORDINARY_URL)
+    expect(observed.presented).toBe(GUEST_CLEAN_UA)
+    expect(observed.standingOverride).toBeNull()
+    expect(observed.requestIdentity).toEqual({ kind: 'process', userAgent: GUEST_CLEAN_UA })
+  })
 })

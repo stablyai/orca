@@ -134,6 +134,12 @@ export abstract class BrowserManagerViewport extends BrowserManagerDevTools {
 
     try {
       if (!guest.debugger.isAttached()) {
+        if (override === null) {
+          this.recordAppliedViewportOverride(browserTabId, webContentsId, null)
+          if (!this.hasTabIdentityOverrideWork(guest, this.resolveTabNavigationUrl(guest))) {
+            return true
+          }
+        }
         guest.debugger.attach('1.3')
       }
     } catch (err) {

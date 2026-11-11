@@ -21,6 +21,37 @@ export {
   hasPendingBrowserPageAttach
 } from './browser-page-attach'
 
+export function bindBrowserPageMemoryInvalidation(
+  pageId: string,
+  guest: Electron.WebContents,
+  rendererId: number,
+  changed: () => void
+): void {
+  const page = pages.get(pageId)
+  if (page?.guest !== guest || page.rendererId !== rendererId) {
+    return
+  }
+  page.invalidation = {
+    guest,
+    notify: () => {
+      if (pages.get(pageId) === page && page.guest === guest && page.rendererId === rendererId) {
+        try {
+          changed()
+        } catch {
+          // A disposed renderer must not fail a page operation's release.
+        }
+      }
+    }
+  }
+}
+
+export function clearBrowserPageMemoryInvalidation(pageId: string, guestId: number): void {
+  const page = pages.get(pageId)
+  if (page?.invalidation?.guest.id === guestId) {
+    delete page.invalidation
+  }
+}
+
 export function claimBrowserMemoryPage(pageId: string): () => void {
   let claim = claims.get(pageId)
   if (!claim) {
@@ -42,6 +73,10 @@ export function claimBrowserMemoryPage(pageId: string): () => void {
     }
     released = true
     claim.operations--
+    const current = pages.get(pageId)
+    if (!claim.operations && current?.claim === claim) {
+      current.invalidation?.notify()
+    }
     if (
       !claim.operations &&
       !pages.has(pageId) &&
@@ -130,6 +165,7 @@ export function reserveBrowserPageDiscard(pageId: string, guest: Electron.WebCon
   page.retired.set(guest.id, { guest, rendererId: page.rendererId })
   retiredGuests.set(guest.id, { pageId, guest, rendererId: page.rendererId })
   page.guest = null
+  delete page.invalidation
   page.releaseThrottle?.()
   page.releaseThrottle = null
   return true
@@ -156,7 +192,9 @@ export async function acknowledgeBrowserPageRemoval(
       guest.close({ waitForBeforeUnload: false })
     })
   }
-  page?.retired.delete(guest.id)
+  if (page?.retired.delete(guest.id)) {
+    page.invalidation?.notify()
+  }
   retiredGuests.delete(guest.id)
   return true
 }

@@ -136,7 +136,7 @@ describe('accepted saved browser page inventory', () => {
       send: (channel: string, payload: { browserPageId: string; worktreeId: string }) => {
         if (channel === 'browser:activateView') {
           activated.push(payload)
-          if (!workspace.pageIds.includes(payload.browserPageId)) {
+          if (!workspace.pageIds?.includes(payload.browserPageId)) {
             return
           }
           live.set(payload.browserPageId, 31)

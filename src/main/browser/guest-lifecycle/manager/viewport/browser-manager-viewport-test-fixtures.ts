@@ -50,7 +50,9 @@ export function createViewportGuestFactory(
   return function makeGuest(id: number, url = 'https://example.com/'): ViewportGuestHandle {
     const debuggerSendCommand = vi.fn(rejectInvalidTouchPoints)
     const debuggerIsAttached = vi.fn(() => true)
-    const debuggerAttach = vi.fn()
+    const debuggerAttach = vi.fn(() => {
+      debuggerIsAttached.mockReturnValue(true)
+    })
     let currentUa = mocks.processUserAgent ?? GUEST_ELECTRON_UA
     let rendererCrashed = false
     // getURL() changes on commit, not did-start-navigation.

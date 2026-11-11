@@ -88,7 +88,8 @@ export const browserRouteWebContentsRegistry = new BrowserRouteWebContentsRegist
   retirePreparedPage: (page) => browserRouteSessionRegistry.retirePreparedPage(page),
   retirePreparedPagesOwnedByRenderer: (rendererWebContentsId) =>
     browserRouteSessionRegistry.retirePreparedPagesOwnedByRenderer(rendererWebContentsId),
-  reportBlockedPopup: (blocked) => browserManager.reportRouteGuestPopupBlocked(blocked)
+  reportBlockedPopup: (blocked) => browserManager.reportRouteGuestPopupBlocked(blocked),
+  popupReleased: (opener) => browserManager.invalidateGuestMemoryProtection(opener)
 })
 routeWebContentsRegistryRef.current = browserRouteWebContentsRegistry
 

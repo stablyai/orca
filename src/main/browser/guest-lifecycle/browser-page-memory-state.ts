@@ -13,6 +13,7 @@ export type Page = {
   restoring: Promise<void> | null
   retired: Map<number, { guest: Electron.WebContents; rendererId: number }>
   token: string | null
+  invalidation?: { guest: Electron.WebContents; notify: () => void }
 }
 export const claims = new Map<string, Claim>()
 export const pages = new Map<string, Page>()
