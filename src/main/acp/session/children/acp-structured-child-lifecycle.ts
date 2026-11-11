@@ -1,0 +1,249 @@
+import '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { AgentSessionAcquisitionRootExitObservedError } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
+import { ProviderAcquisitionStarts } from '../../../provider-process/provider-acquisition-starts'
+import { isAcpReadySession, type AcpStructuredChild } from './acp-structured-child'
+import type { AcpStructuredConnection } from '../../process/acp-structured-connection'
+import { closeAcpSessionJournal, endAcpStructuredSession } from '../acp-session-ending'
+import {
+  agentSessionFailureFact,
+  providerDiagnostic,
+  type SubmissionRejectionFact
+} from '../../../../shared/agent-session/failures/agent-session-failure'
+import { withProviderSpawnAbsence } from '../../../provider-process/provider-executable-missing'
+import { providerStartupFailureFact } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
+import {
+  ACP_STOP_GRACE_MS,
+  type AcpStructuredSessionAdapterDeps
+} from '../acp-structured-session-adapter-deps'
+import {
+  createStructuredAgentSessionLogger,
+  neverThrowingStructuredAgentSessionLogger
+} from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
+import { windDownAcpTurn } from '../../turns/acp-structured-stop'
+import { AcpAgentExitedError } from '../../transport/acp-errors'
+import { AgentSessionStartEndings } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
+import { acpRefusedStart, acpStartFailure } from '../start/acp-startup-outcome'
+
+/** An agent that never ran names its missing CLI or folder; any other end while starting is its exit. */
+function acpStartupEndFailure(session: AcpStructuredChild): SubmissionRejectionFact {
+  const stderr = session.connection.stderrTail()
+  if (session.closeRequested) {
+    return agentSessionFailureFact('hostStopped', { detail: providerDiagnostic(stderr, 'person') })
+  }
+  const absence = session.connection.spawnAbsence
+  return absence
+    ? providerStartupFailureFact(withProviderSpawnAbsence(new Error(stderr), absence))
+    : agentSessionFailureFact('providerExited', { detail: providerDiagnostic(stderr, 'person') })
+}
+
+export class AcpStructuredChildren {
+  readonly sessions = new Map<string, AcpStructuredChild>()
+  /** Children that ended before they were ready answer for that ending, open included. */
+  readonly endings = new AgentSessionStartEndings()
+  readonly starts = new ProviderAcquisitionStarts<AcpStructuredConnection>()
+  constructor(private readonly deps: AcpStructuredSessionAdapterDeps) {}
+  capturePendingOutput: StructuredAgentSessionAdapter['capturePendingOutput'] = (input) => {
+    const session = this.sessions.get(input.sessionId)
+    if (
+      !session ||
+      !isAcpReadySession(session) ||
+      session.fence !== input.fence ||
+      session.acquisitionGeneration !== input.generation
+    ) {
+      return undefined
+    }
+    const { turns, lane } = session
+    const pending = turns.capturePendingSend(input.clientMessageId)
+    return () =>
+      session.journalClosed === null &&
+      (pending() || lane.hasPendingDiagnostic(input.clientMessageId))
+  }
+
+  stopAfterFailure(sessionId: string, reason: string): void {
+    const session = this.sessions.get(sessionId)
+    // An ending already under way (agent exit, requested close) keeps its own attribution.
+    if (session && !session.ended && !session.closeRequested) {
+      session.failureClose ??= reason
+    }
+    void this.stop(sessionId, false).catch((error: unknown) => {
+      const logger = neverThrowingStructuredAgentSessionLogger(
+        this.deps.logger ?? createStructuredAgentSessionLogger()
+      )
+      logger.warn('ACP failed-child cleanup failed', {
+        scope: 'acp-child-cleanup',
+        sessionId,
+        error
+      })
+    })
+  }
+
+  /** Requires root exit; reports unproven descendant cleanup separately. */
+  async close(sessionId: string, requested = true): Promise<boolean> {
+    const connection = this.sessions.get(sessionId)?.connection
+    const failed = this.starts.failedConnection(sessionId)
+    const closed = await this.stop(sessionId, requested)
+    const result = connection?.lastCloseResult ?? failed?.lastCloseResult
+    if (closed && result?.killDelivered && result.root !== 'exited') {
+      throw new AgentSessionAcquisitionRootExitObservedError(
+        new Error('ACP writer killed'),
+        'kill-delivered'
+      )
+    }
+    if (closed && connection?.processTreeUnproven) {
+      throw new AgentSessionAcquisitionRootExitObservedError(
+        new Error(
+          `${this.deps.spec.agent} ACP agent exited, but its process tree was not proven gone`
+        )
+      )
+    }
+    return closed
+  }
+
+  /** Requires exit of both the failed-start child and the session child, if present. */
+  async stop(sessionId: string, requested = true): Promise<boolean> {
+    const [failedStart, session] = await Promise.all([
+      this.starts.stopFailed(sessionId),
+      this.stopSession(sessionId, requested)
+    ])
+    return failedStart && session
+  }
+
+  async closeAll(tasks: (Promise<boolean | void> | undefined)[]): Promise<void> {
+    const ids = new Set([...this.sessions.keys(), ...this.starts.failedSessionIds()])
+    // The host aborts in-progress starts before this teardown.
+    const results = await Promise.allSettled([
+      ...[...ids].map((sessionId) => this.stop(sessionId, true)),
+      ...tasks
+    ])
+    const failure = results.find((result) => result.status === 'rejected')
+    if (failure?.status === 'rejected') {
+      throw failure.reason
+    }
+    if (results.some((result) => result.status === 'fulfilled' && result.value === false)) {
+      throw new Error('an ACP agent child could not be proven stopped')
+    }
+  }
+
+  private async stopSession(sessionId: string, requested: boolean): Promise<boolean> {
+    const session = this.sessions.get(sessionId)
+    if (!session || session.ended) {
+      return true
+    }
+    if (!isAcpReadySession(session)) {
+      session.closeRequested ||= requested && session.journalClosed === null
+      session.dispose()
+      session.closing ??= session.connection
+        .close()
+        .then((proven) => {
+          if (proven) {
+            this.finish(session, session.exitObservedAt ?? this.now())
+          }
+          return proven
+        })
+        .finally(() => {
+          session.closing = undefined
+        })
+      return session.closing
+    }
+    if (requested && session.journalClosed === null) {
+      // Allow the running turn to settle before closing the process.
+      session.closeRequested = true
+      await windDownAcpTurn(session, this.stopGraceMs())
+      if (session.ended) {
+        return true
+      }
+    }
+    // Preserve a connection loss's cause across later Stop calls.
+    if (session.journalClosed === null) {
+      session.closeRequested ||= requested
+      session.lane.flush()
+    }
+    const proven = await session.connection.close()
+    if (proven) {
+      this.finish(session, session.exitObservedAt ?? this.now())
+    }
+    return proven
+  }
+
+  finish(session: AcpStructuredChild, observedAt: number): void {
+    if (isAcpReadySession(session)) {
+      endAcpStructuredSession(session, observedAt, this.deps.onEvent)
+    } else if (!session.ended) {
+      session.ended = true
+      session.exitObservedAt = observedAt
+      session.dispose()
+      this.deps.onEvent?.({
+        type: 'ended',
+        ...(session.connection.lastCloseResult?.killDelivered && !session.connection.exited
+          ? { deathEvidenceKind: 'kill-delivered' as const }
+          : {}),
+        sessionId: session.sessionId,
+        fence: session.fence,
+        acquisitionGeneration: session.acquisitionGeneration,
+        observedAt,
+        cause: session.closeRequested ? 'requested-close' : 'unexpected-exit',
+        reason:
+          session.connection.stderrTail() || `${session.spec.agent} ACP agent ended while starting`,
+        failure: acpStartupEndFailure(session)
+      })
+    }
+    if (this.sessions.get(session.sessionId) === session) {
+      this.sessions.delete(session.sessionId)
+    }
+  }
+
+  /** Taken when the process exit is first seen, so a start settling meanwhile cannot miss it. A
+   *  connection Orca closed first keeps that cause; only a bare exit is the agent's own. */
+  recordExit(
+    sessionId: string,
+    generation: string,
+    connection: AcpStructuredConnection,
+    lost?: Error
+  ): void {
+    const detail =
+      connection.stderrTail() || `${this.deps.spec.agent} ACP agent ended while starting`
+    const exited = withProviderSpawnAbsence(
+      lost ?? new AcpAgentExitedError(detail, connection.stderrTail()),
+      connection.spawnAbsence
+    )
+    this.endings.record(
+      sessionId,
+      generation,
+      lost ? acpRefusedStart(exited) : acpStartFailure(exited)
+    )
+  }
+
+  private recordEnding(session: AcpStructuredChild, error: Error): void {
+    this.endings.record(session.sessionId, session.acquisitionGeneration, acpStartFailure(error))
+  }
+
+  /** Close the journal on protocol loss; notify the host after process exit is proven. */
+  connectionLost(session: AcpStructuredChild | null, error: Error): void {
+    if (
+      !session ||
+      this.sessions.get(session.sessionId) !== session ||
+      session.journalClosed !== null
+    ) {
+      return
+    }
+    // Orca refusing what the agent wrote outranks the exit its cleanup then causes.
+    this.recordEnding(session, error)
+    if (!isAcpReadySession(session)) {
+      session.journalClosed = error.message || error.name
+      return
+    }
+    const reason = `${session.spec.agent} ACP connection closed: ${error.message || error.name}`
+    // Record the cause first: publishing the close can re-enter cleanup through a refused write.
+    session.failureClose ??= reason
+    closeAcpSessionJournal(session, reason, error)
+    this.stopAfterFailure(session.sessionId, reason)
+  }
+
+  private stopGraceMs(): number {
+    return this.deps.stopGraceMs ?? ACP_STOP_GRACE_MS
+  }
+  private now(): number {
+    return (this.deps.now ?? Date.now)()
+  }
+}

@@ -1,5 +1,5 @@
-import type { AiVaultAgent } from '../../shared/ai-vault-types'
-import type { AiVaultScanReadingProgress } from '../../shared/ai-vault-scan-progress'
+import type { AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-types'
+import type { AiVaultScanReadingProgress } from '../../shared/ai-vault/scanning/ai-vault-scan-progress'
 import type { SessionFileCandidate } from './session-scanner-types'
 
 type Ownership = { globalRemaining: number; owners: number; parsed: boolean }

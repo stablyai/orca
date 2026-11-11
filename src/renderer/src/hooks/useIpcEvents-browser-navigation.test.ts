@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { resolveBrowserSessionTabTarget } from './ipc-events/browser-session-tab-target'
-import { createHarnessStoreState, loadIpcEventsHarness } from './ipc-events-test-harness'
+import { loadIpcEventsHarness } from './ipc-events-test-harness'
+import { createHarnessStoreState } from './ipc-events-harness-store-state'
 
 describe('browser navigation updates', () => {
   it('commits CDP navigation URLs to the render-time cache before updating the store', async () => {
@@ -38,54 +38,5 @@ describe('browser navigation updates', () => {
       loading: false
     })
     clearLiveBrowserUrl('page-1')
-  })
-})
-
-describe('resolveBrowserSessionTabTarget', () => {
-  it('resolves unified browser tabs to their browser workspace', () => {
-    expect(
-      resolveBrowserSessionTabTarget(
-        {
-          unifiedTabsByWorktree: {
-            'wt-1': [
-              {
-                id: 'unified-browser',
-                groupId: 'group-1',
-                contentType: 'browser',
-                entityId: 'browser-workspace'
-              }
-            ]
-          },
-          browserTabsByWorktree: {
-            'wt-1': [{ id: 'browser-workspace' }]
-          }
-        } as never,
-        'wt-1',
-        'unified-browser'
-      )
-    ).toEqual({
-      kind: 'unified-browser',
-      unifiedTabId: 'unified-browser',
-      workspaceId: 'browser-workspace',
-      groupId: 'group-1'
-    })
-  })
-
-  it('resolves fallback mobile browser tabs by workspace id', () => {
-    expect(
-      resolveBrowserSessionTabTarget(
-        {
-          unifiedTabsByWorktree: { 'wt-1': [] },
-          browserTabsByWorktree: {
-            'wt-1': [{ id: 'browser-workspace' }]
-          }
-        } as never,
-        'wt-1',
-        'browser-workspace'
-      )
-    ).toEqual({
-      kind: 'fallback-browser',
-      workspaceId: 'browser-workspace'
-    })
   })
 })

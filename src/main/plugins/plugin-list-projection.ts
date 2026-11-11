@@ -3,6 +3,7 @@ import { needsReconsent } from '../../shared/plugins/approval/plugin-consent-sta
 import { pluginPanelTabKey } from '../../shared/plugins/manifest/plugin-manifest'
 import type { PluginLockfile } from '../../shared/plugins/installation/plugin-install-lockfile'
 import { isInvalidDiscoveredPlugin, type DiscoveredPlugin } from './plugin-discovery'
+import { pluginFontSlot } from '../../shared/plugins/contributions/plugin-font-contribution'
 import {
   pluginInstalledImageUrl,
   type PluginHostImages
@@ -47,6 +48,17 @@ function lockEntrySource(
             : lockEntry.source.kind === 'marketplace'
               ? pluginSourceLabel(lockEntry.source.plugin)
               : `bundled:${lockEntry.source.bundleId}`,
+      ...(lockEntry.source.kind === 'git'
+        ? { url: lockEntry.source.url }
+        : lockEntry.source.kind === 'marketplace'
+          ? {
+              url: lockEntry.source.plugin.url,
+              ...(lockEntry.source.plugin.path ? { path: lockEntry.source.plugin.path } : {}),
+              ...(lockEntry.authorRepository
+                ? { authorRepository: lockEntry.authorRepository }
+                : {})
+            }
+          : {}),
       resolvedCommit: lockEntry.resolvedCommit,
       contentHash: lockEntry.contentHash,
       ...(lockEntry.source.kind === 'marketplace'
@@ -196,6 +208,20 @@ export async function buildPluginList(
           extension: newFile.extension,
           ...contributionIcon(`new-file-${index}`, newFile.icon)
         })),
+        fonts: plugin.manifest.contributes.fonts.map((font, familyIndex) => ({
+          family: font.family,
+          faces: font.faces.map((face, faceIndex) => ({
+            // Why the change count for dev folders: their URL is otherwise fixed, so an edited
+            // font would keep its loaded face.
+            url: `${pluginInstalledImageUrl(
+              plugin.pluginKey,
+              plugin.contentHash ?? 'dev',
+              pluginFontSlot(familyIndex, faceIndex)
+            )}${plugin.isDev ? `?v=${plugin.devChangeCount ?? 0}` : ''}`,
+            weight: face.weight ?? '400',
+            style: face.style ?? 'normal'
+          }))
+        })),
         commands: service.contentPacks.commands.preview(plugin.pluginKey).map((command) => ({
           id: command.id,
           title: command.title,
@@ -205,6 +231,7 @@ export async function buildPluginList(
           ...(command.replaces ? { replaces: command.replaces } : {})
         })),
         statusBarItems: plugin.manifest.contributes.statusBarItems,
+        hooks: plugin.manifest.contributes.hooks.map((hook) => hook.event),
         hasWorker: Boolean(plugin.manifest.main),
         vmRecipes: service.contentPacks.vmRecipes.preview(plugin.pluginKey).map(({ recipe }) => ({
           id: recipe.id,

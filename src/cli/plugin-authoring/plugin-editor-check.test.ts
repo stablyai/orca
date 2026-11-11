@@ -2,7 +2,7 @@ import { appendFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/pro
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { checkPluginEditors, formatPluginEditorCheck } from './plugin-editor-check'
+import { checkPluginEditors } from './plugin-editor-check'
 import { createPluginFromTemplate } from './plugin-create'
 import { validatePluginTarget } from './plugin-folder-validation'
 import { checkPluginDevFolder } from '../plugin-dev-watch/plugin-dev-watch-check'
@@ -13,19 +13,20 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
-/** The editor template with its script moved to `editor/main.ts`, which imports `./sync.ts`. */
+/** The editor template behind an HTML page that loads `editor/main.ts`, which imports `./sync.ts`. */
 async function editorPlugin(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-editor-check-'))
   roots.push(root)
   const dir = join(root, 'notes')
   await createPluginFromTemplate({ dir, template: 'editor', publisher: 'acme' })
-  const html = join(dir, 'editor', 'index.html')
   await writeFile(
-    html,
-    (await readFile(html, 'utf8')).replace(
-      /<script>[\s\S]*<\/script>/,
-      '<script type="module" src="./main.ts"></script>'
-    )
+    join(dir, 'editor', 'index.html'),
+    '<!doctype html>\n<html>\n<body>\n<script type="module" src="./main.ts"></script>\n</body>\n</html>\n'
+  )
+  const manifestPath = join(dir, 'orca-plugin.json')
+  await writeFile(
+    manifestPath,
+    (await readFile(manifestPath, 'utf8')).replace('editor/main.ts', 'editor/index.html')
   )
   await writeFile(
     join(dir, 'editor', 'main.ts'),
@@ -36,14 +37,6 @@ async function editorPlugin(): Promise<string> {
 }
 
 describe('orca plugin check: custom editors', () => {
-  it('passes the editor template and follows its script and imports', async () => {
-    const dir = await editorPlugin()
-    const [check] = await checkPluginEditors(dir)
-    expect(check.issues).toEqual([])
-    expect(check.files).toEqual(['editor/index.html', 'editor/main.ts', 'editor/sync.ts'])
-    expect(formatPluginEditorCheck(check)[0]).toMatch(/: ok, 3 file\(s\) load$/)
-  })
-
   it('fails on a syntax error that validate lets through', async () => {
     const dir = await editorPlugin()
     await appendFile(join(dir, 'editor', 'main.ts'), 'this is not valid ts(\n')

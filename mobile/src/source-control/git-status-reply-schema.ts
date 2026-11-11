@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { openEnum, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 
 // Require only unguarded consumer fields; unread host metadata must not become a compatibility gate.
@@ -44,7 +44,7 @@ const gitStatusEntrySchema = z.looseObject({
   removed: z.number().optional()
 })
 
-const gitUpstreamStatusSchema = z.looseObject({
+export const gitUpstreamStatusSchema = z.looseObject({
   hasUpstream: z.boolean(),
   ahead: z.number(),
   behind: z.number(),
@@ -59,7 +59,9 @@ export const gitStatusHostPayloadSchema = z.looseObject({
   conflictOperation: salvagedOptional('conflictOperation', gitConflictOperationSchema),
   branch: salvagedOptional('branch', z.string()),
   head: salvagedOptional('head', z.string()),
-  upstreamStatus: salvagedOptional('upstreamStatus', gitUpstreamStatusSchema)
+  upstreamStatus: salvagedOptional('upstreamStatus', gitUpstreamStatusSchema),
+  // The host's own failure reading status, sent with whatever entries it got.
+  readError: salvagedOptional('readError', z.string())
 })
 
 export type MobileGitStatusEntry = z.output<typeof gitStatusEntrySchema>

@@ -6,7 +6,7 @@ import { WslHostStoppedNotice } from './WslHostStoppedNotice'
 
 const start = vi.hoisted(() => vi.fn<(environmentId: string) => Promise<boolean>>())
 
-vi.mock('@/lib/wsl-host-user-start', () => ({
+vi.mock('@/runtime/hosts/wsl/wsl-host-user-start', () => ({
   startWslHostAndReloadProjects: start
 }))
 
@@ -28,6 +28,11 @@ describe('WslHostStoppedNotice', () => {
       <WslHostStoppedNotice environmentId="wsl:ubuntu" distro="Ubuntu" onStarted={onStarted} />
     )
     expect(view.getByText('Ubuntu is stopped')).toBeTruthy()
+    // The penguin leads, decorative: the text already names the distro.
+    const icon = view.container.querySelector('[data-wsl-host-stopped-icon]')
+    expect(icon?.getAttribute('aria-hidden')).toBe('true')
+    expect(icon?.getAttribute('class')).toContain('text-muted-foreground')
+    expect(view.getByRole('status').firstElementChild).toBe(icon)
     expect(start).not.toHaveBeenCalled()
 
     const button = view.getByRole('button', { name: 'Start' })

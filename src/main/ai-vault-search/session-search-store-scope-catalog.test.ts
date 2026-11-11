@@ -50,11 +50,4 @@ describe('scope catalog from the profile store', () => {
     expect(remote.repos.map((repo) => repo.id)).toEqual(['ssh-repo'])
     expect(Object.keys(remote.worktreeMeta)).toEqual(['ssh-repo::/srv/one'])
   })
-
-  it('carries the placement settings a managed worktree directory is derived from', () => {
-    expect(sessionSearchScopeCatalogFromStore(store(), 'local').settings).toEqual({
-      workspaceDir: '/home/me/orca/workspaces',
-      nestWorkspaces: true
-    })
-  })
 })

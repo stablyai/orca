@@ -3,7 +3,7 @@
 import {
   attachFingerprintFields,
   type AgentSessionAttachParams
-} from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-attach'
+} from '../../../src/main/native-chat/agent-session-wire/acquisition/structured-agent-session-attach'
 import { computeAgentSessionPayloadFingerprint } from '../../../src/shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
   structuredAgentSessionMessageSendMutation,
@@ -216,6 +216,8 @@ export function paramsFor(method: string): unknown {
       return {}
     case 'agentSession.continueInterrupted':
       return { sessionId: SESSION, turnItemId: 'legacy:codex:s:turn-1' }
+    case 'agentSession.cancelUsageLimitContinue':
+      return { sessionId: SESSION, turnItemId: 'orca:limited-turn', resetsAt: NOW }
     default:
       return { sessionId: SESSION }
   }

@@ -1,10 +1,10 @@
 import { translate } from '../i18n/mobile-i18n'
-import type { RpcSendParams } from '../transport/rpc-params-contract'
+import type { RpcSendParams } from '../../../src/shared/rpc-contract/rpc-send-params'
 import {
   hostReplyErrorTextOrFallback,
   refusedRpcMessageOrFallback
-} from '../transport/rpc-refusal-message'
-import type { RpcResponse } from '../transport/types'
+} from '../transport/rpc/rpc-refusal-message'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import {
   gitBulkStageRun,
   gitCommitRun,
@@ -13,7 +13,7 @@ import {
 } from './mobile-git-mutation-operations'
 import { gitStatusProjectionRead } from './mobile-git-read-operations'
 import type { MobileGitStatusResult } from './mobile-git-status'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 
 export type MobileHostedReviewStatusReadResult =
   | { ok: true; status: MobileGitStatusResult | null }
@@ -22,7 +22,7 @@ export type MobileHostedReviewStatusReadResult =
 export type MobileHostedReviewMutationResult = { ok: true } | { ok: false; error: string }
 
 export async function readMobileHostedReviewGitStatus(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string
 ): Promise<MobileHostedReviewStatusReadResult> {
   const reply = await gitStatusProjectionRead.request(client, { worktree: `id:${worktreeId}` })
@@ -71,7 +71,7 @@ async function settleMobileHostedReviewMutation(
 }
 
 export function pushMobileHostedReviewBranch(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   params: RpcSendParams<'git.push'>,
   fallback: string
 ): Promise<MobileHostedReviewMutationResult> {
@@ -83,7 +83,7 @@ export function pushMobileHostedReviewBranch(
 }
 
 export function fastForwardMobileHostedReviewBranch(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string
 ): Promise<MobileHostedReviewMutationResult> {
   return settleMobileHostedReviewMutation(
@@ -97,7 +97,7 @@ export function fastForwardMobileHostedReviewBranch(
 }
 
 export function stageMobileHostedReviewPaths(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   filePaths: string[]
 ): Promise<MobileHostedReviewMutationResult> {
@@ -109,7 +109,7 @@ export function stageMobileHostedReviewPaths(
 }
 
 export async function commitMobileHostedReviewStagedChanges(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   message: string
 ): Promise<MobileHostedReviewMutationResult> {

@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { shareClaudeProfileHistory } from './claude-profile-history'
 import {
   claudeProfileMarkerPath,
@@ -31,7 +31,6 @@ export async function provisionClaudeAccountProfile(args: {
 }): Promise<ClaudeProfileSetupReport> {
   const platform = args.platform ?? process.platform
   const report = createClaudeProfileReport()
-  const firstSetup = !existsSync(claudeProfileMarkerPath(args.profile))
   let markSetUp: () => void
   try {
     if (args.profile.target.runtime === 'wsl' && platform === 'win32') {
@@ -48,6 +47,7 @@ export async function provisionClaudeAccountProfile(args: {
     warnClaudeProfile(report, 'profile', error)
     return { outcome: 'refused', ...report }
   }
+  const firstSetup = !existsSync(claudeProfileMarkerPath(args.profile))
   const home = args.profile.home
   const shared = { profileHome: home, userHome: args.userHome, userConfigDir: args.userConfigDir }
   for (const step of [

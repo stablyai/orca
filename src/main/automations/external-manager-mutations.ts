@@ -2,7 +2,7 @@ import type {
   ExternalAutomationAction,
   ExternalAutomationActionInput,
   ExternalAutomationProvider
-} from '../../shared/automations-types'
+} from '../../shared/automations/external/external-automation'
 import { assertExternalAutomationJobId } from './external-manager-job-id'
 import { runLocalAutomationCommand } from './external-manager-local-command'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'

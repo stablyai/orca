@@ -1,6 +1,6 @@
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { DashboardFilters, DashboardReviewFilter } from './agent-board-filtering'
 
 type FilterLabel = { id: string; label: string }
@@ -12,13 +12,14 @@ function ActiveChip({
   label: string
   onRemove: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <span className="inline-flex h-[22px] items-center gap-1 rounded-full border border-border bg-muted/55 pr-1 pl-2 text-[11px]">
       {label}
       <button
         type="button"
         onClick={onRemove}
-        aria-label={translate('dashboardPopout.filters.remove', 'Remove {{label}} filter', {
+        aria-label={t('dashboardPopout.filters.remove', 'Remove {{label}} filter', {
           label
         })}
         className="rounded-full text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
@@ -48,10 +49,11 @@ export function AgentDashboardFilterChips({
   onReviewToggle: (id: DashboardReviewFilter) => void
   onClear: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-border px-3 py-2">
       <span className="mr-0.5 text-[10px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-        {translate('dashboardPopout.filters.active', 'Filters')}
+        {t('dashboardPopout.filters.active', 'Filters')}
       </span>
       {filters.projects.map((id) => (
         <ActiveChip
@@ -80,7 +82,7 @@ export function AgentDashboardFilterChips({
         onClick={onClear}
         className="h-[22px] px-1 text-[11px] text-muted-foreground"
       >
-        {translate('dashboardPopout.filters.clear', 'Clear')}
+        {t('dashboardPopout.filters.clear', 'Clear')}
       </Button>
     </div>
   )

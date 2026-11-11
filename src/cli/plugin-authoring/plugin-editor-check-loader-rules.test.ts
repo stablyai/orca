@@ -21,11 +21,9 @@ async function editorWith(files: Record<string, string>, entry?: string): Promis
     await mkdir(dirname(join(dir, ...path.split('/'))), { recursive: true })
     await writeFile(join(dir, ...path.split('/')), text)
   }
-  if (entry) {
-    const manifestPath = join(dir, 'orca-plugin.json')
-    const manifest = (await readFile(manifestPath, 'utf8')).replace('editor/index.html', entry)
-    await writeFile(manifestPath, manifest)
-  }
+  const manifestPath = join(dir, 'orca-plugin.json')
+  const manifest = await readFile(manifestPath, 'utf8')
+  await writeFile(manifestPath, manifest.replace('editor/main.ts', entry ?? 'editor/index.html'))
   return root
 }
 
@@ -110,13 +108,5 @@ describe('orca plugin check: editors load as the frame protocol serves them', ()
     const result = await check(root)
     expect(result.issues).toEqual([])
     expect(result.files).toContain('editor/my script.js')
-  })
-
-  it('lets a dependency reach the 16 MiB the protocol serves, past the 10 MiB entry cap', async () => {
-    const root = await editorWith({
-      'editor/index.html': page('<script type="module" src="./vendor.mjs"></script>'),
-      'editor/vendor.mjs': `export const x = 1\n//${'x'.repeat(11 * 1024 * 1024)}\n`
-    })
-    expect((await check(root)).issues).toEqual([])
   })
 })

@@ -1,16 +1,16 @@
-import type { AiVaultPrepareSessionResumeResult } from '../../../../shared/ai-vault-resume-preparation'
+import type { AiVaultPrepareSessionResumeResult } from '../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import type { MobileTerminalCommand } from './mobile-terminal-startup'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   type AgentLaunchRuntime,
   agentLaunchQuotingShell
-} from '../../../../shared/agent-launch-runtime'
+} from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import { isWslShellName } from '../../../../shared/local-windows-terminal-runtime'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { AgentStartupShell } from '../../../../shared/tui-agent-startup-shell'
-import { resolveWslHostAgentCmdOverrides } from '../../wsl-host-agent-terminal-launch'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { AgentStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import { resolveWslHostAgentCmdOverrides } from './wsl-host-agent-terminal-launch'
 import {
   type AiVaultResumeLaunchSettings,
   assertAiVaultCopiedSessionStoreAllowed,
@@ -18,7 +18,7 @@ import {
   buildAiVaultLocalResumeStartup,
   getAiVaultResumeCodexHome,
   resolveAiVaultCopiedSessionAgentArgs
-} from '../../../../shared/ai-vault-resume-startup'
+} from '../../../../shared/ai-vault/resume/ai-vault-resume-startup'
 
 /** One native execution fact builds the line and chooses the shell that receives it. */
 export function buildMobileTerminalChatFork(args: {

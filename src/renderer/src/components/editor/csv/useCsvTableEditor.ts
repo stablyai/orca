@@ -18,6 +18,7 @@ import {
 import { useCsvPendingCell } from './useCsvPendingCell'
 import { CsvPreviewError } from './csv-preview-error'
 import { formatCsvPreviewError } from './csv-preview-error-message'
+import { useTranslate } from '../../../i18n/use-translate'
 
 export function useCsvTableEditor({
   document,
@@ -38,6 +39,7 @@ export function useCsvTableEditor({
   onSave?: (content: string) => Promise<boolean>
   onStructureChange: (mutation: CsvTableMutation) => void
 }) {
+  const t = useTranslate()
   const ownerId = useId()
   const [selected, setSelected] = useState<CsvCellSelection | null>(null)
   const [editing, setEditing] = useState<CsvCellEditSession | null>(null)
@@ -244,7 +246,7 @@ export function useCsvTableEditor({
   return {
     interaction,
     selection,
-    error: error === null ? null : formatCsvPreviewError(error),
+    error: error === null ? null : formatCsvPreviewError(error, t),
     saving,
     apply,
     save,

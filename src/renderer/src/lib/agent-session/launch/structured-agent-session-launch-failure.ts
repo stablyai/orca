@@ -22,7 +22,8 @@ export type StructuredLaunchFailure = AgentSessionWriteRefusal & {
   /** Words that replace the refusal's generic cause: the host's sign-in guidance, or why this
    *  workspace can't run the chat. */
   causeText?: string
-  owner?: AgentSessionConversationOwner
+  /** The chat the refusal named as holding the conversation; null when it named none. */
+  owner?: AgentSessionConversationOwner | null
 }
 
 /** A WSL distro added as a host runs chat itself, so point there once this desktop can add one. */
@@ -53,10 +54,15 @@ export function structuredChatUnavailableText(reason?: string): string {
           'components.native-chat.explicitChatSsh',
           'Chat is not available over SSH. Open the agent in a terminal instead.'
         )
-      : translate(
-          'components.native-chat.explicitChatUnavailable',
-          'This workspace cannot run the chat. Check the agent installation or open it in a terminal.'
-        )
+      : reason === 'windows'
+        ? translate(
+            'components.native-chat.explicitChatWindows',
+            "This agent's chat isn't available on Windows yet. Open it in a terminal instead."
+          )
+        : translate(
+            'components.native-chat.explicitChatUnavailable',
+            'This workspace cannot run the chat. Check the agent installation or open it in a terminal.'
+          )
 }
 
 /** The host's refusal behind a failed launch; undefined when the failure carried none. */
@@ -79,13 +85,12 @@ export function structuredLaunchFailure(error: unknown): StructuredLaunchFailure
   if (!refusal) {
     return undefined
   }
-  const owner =
+  // Kept here because the write failure drops the owner, which alone tells a chat from a terminal.
+  const holds =
     refusal.code === 'agent_session_conflict' || refusal.code === 'agent_session_ownership_unknown'
-      ? refusal.details?.owner
-      : undefined
   const failure = {
     ...agentSessionRefusalFailure(refusal),
-    ...(owner ? { owner } : {})
+    ...(holds ? { owner: refusal.details?.owner ?? null } : {})
   }
   const message = error instanceof Error ? error.message : undefined
   return failure.code === 'agent_session_operation_invalid' &&

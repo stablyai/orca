@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { OrchestrationDb } from '../../db'
+import { OrchestrationDb } from '../orchestration-db'
+import '../contract-constants'
+import '../messages/mailbox-routing-page'
+import '../dispatch-row-writer'
+import '../attempt-outcome-projection'
 
 describe('federated Dispatch observation fence', () => {
   let db: OrchestrationDb | undefined

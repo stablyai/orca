@@ -16,9 +16,9 @@ import {
   SquareTerminal,
   Workflow
 } from 'lucide-react-native'
-import type { AgentChildRowModel } from '../../../../../src/shared/agent-child-row-model'
+import type { AgentChildRowModel } from '../../../../../src/shared/agent-status/presentation/agent-child-row-model'
 import type { AgentSessionBackgroundTask } from '../../../../../src/shared/agent-session/agent-session-background-task-wire'
-import { sayMobileBackgroundTask as say } from '../../mobile-background-task-copy'
+import { sayMobileBackgroundTask as say } from './mobile-background-task-copy'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import {
   backgroundTasksHeaderContent,
@@ -38,18 +38,31 @@ import { useNow } from '../../../hooks/use-now'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import type { MobileStructuredBackgroundTasks } from '../../use-mobile-structured-background-tasks'
+import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
 import {
   useMobileBackgroundTaskStops,
   type MobileBackgroundTaskStopping as Stopping
-} from '../../use-mobile-background-task-stops'
-import { mobileAgentChildRowName, mobileAgentChildRowText } from '../../mobile-agent-child-row-text'
+} from './use-mobile-background-task-stops'
+import {
+  mobileAgentChildRowName,
+  mobileAgentChildRowText
+} from '../../../worktree/mobile-agent-child-row-text'
+import { trayStripStyles as strip } from './mobile-native-chat-tray-strip-styles'
 
 type TaskKind = AgentSessionBackgroundTask['kind']
 
-function KindIcon({ kind, size }: { kind: TaskKind; size: number }): React.JSX.Element {
+export function BackgroundTaskKindIcon({
+  kind,
+  size,
+  color
+}: {
+  kind: TaskKind
+  size: number
+  /** Defaults to the strip's tone, where a monitor reads as live. */
+  color?: string
+}): React.JSX.Element {
   useMobileColorScheme()
-  const props = { size, color: kindIconColor(kind), strokeWidth: 2 }
+  const props = { size, color: color ?? kindIconColor(kind), strokeWidth: 2 }
   switch (kind) {
     case 'agent':
       return <Bot {...props} />
@@ -95,7 +108,7 @@ function TaskRow({
   return (
     <>
       <View testID="background-task-row" style={styles.row}>
-        <KindIcon kind={row.kind} size={14} />
+        <BackgroundTaskKindIcon kind={row.kind} size={14} />
         <AgentStateDot state={row.displayState} />
         <Text style={styles.rowText} numberOfLines={1} ellipsizeMode="tail">
           <Text style={styles.lead}>{lead}</Text>
@@ -116,7 +129,7 @@ function TaskRow({
             hitSlop={6}
             style={({ pressed }) => [
               styles.textAction,
-              pressed && styles.pressed,
+              pressed && strip.pressed,
               busy && styles.disabled
             ]}
             onPress={() => onStop(stopId)}
@@ -180,14 +193,14 @@ function MobileNativeChatBackgroundTasksImpl({
   }
 
   return (
-    <View style={styles.list} onLayout={onLayout} testID="background-tasks-strip">
-      <View style={styles.box}>
+    <View style={strip.list} onLayout={onLayout} testID="background-tasks-strip">
+      <View style={strip.box}>
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ expanded }}
           accessibilityLabel={backgroundTasksHeaderText(header)}
           hitSlop={spacing.xs}
-          style={({ pressed }) => [styles.header, pressed && styles.pressed]}
+          style={({ pressed }) => [strip.header, pressed && strip.pressed]}
           onPress={() => setExpanded(!expanded)}
         >
           <View style={styles.headerText}>
@@ -197,7 +210,7 @@ function MobileNativeChatBackgroundTasksImpl({
                   {index > 0 ? <Text style={styles.separator}>·</Text> : null}
                   {segment.kind ? (
                     <View style={view.isMonitoring ? undefined : styles.dimmed}>
-                      <KindIcon kind={segment.kind} size={12} />
+                      <BackgroundTaskKindIcon kind={segment.kind} size={12} />
                     </View>
                   ) : null}
                   <Text style={styles.segmentText} numberOfLines={1} ellipsizeMode="tail">
@@ -212,7 +225,7 @@ function MobileNativeChatBackgroundTasksImpl({
               </Text>
             ) : null}
           </View>
-          <View style={expanded ? styles.caretOpen : undefined}>
+          <View style={expanded ? strip.caretOpen : undefined}>
             <ChevronDown size={14} color={colors.textMuted} strokeWidth={2} />
           </View>
         </Pressable>
@@ -251,7 +264,7 @@ function MobileNativeChatBackgroundTasksImpl({
                 style={({ pressed }) => [
                   styles.textAction,
                   styles.stopAll,
-                  pressed && styles.pressed,
+                  pressed && strip.pressed,
                   stopping.all && styles.disabled
                 ]}
                 onPress={() => onStop()}
@@ -272,24 +285,6 @@ export const MobileNativeChatBackgroundTasks = memo(MobileNativeChatBackgroundTa
 const MIN_TOUCH_TARGET = 44
 
 const styles = themedStyleSheet(() => ({
-  list: {
-    marginHorizontal: spacing.lg,
-    marginVertical: spacing.xs
-  },
-  box: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    overflow: 'hidden'
-  },
-  header: {
-    minHeight: 36,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md
-  },
   headerText: {
     flex: 1,
     minWidth: 0,
@@ -323,9 +318,6 @@ const styles = themedStyleSheet(() => ({
   },
   dimmed: {
     opacity: 0.4
-  },
-  caretOpen: {
-    transform: [{ rotate: '180deg' }]
   },
   body: {
     maxHeight: 220,
@@ -392,9 +384,6 @@ const styles = themedStyleSheet(() => ({
     color: colors.textPrimary,
     fontSize: typography.metaSize,
     fontWeight: '500'
-  },
-  pressed: {
-    backgroundColor: colors.bgRaised
   },
   disabled: {
     opacity: 0.5

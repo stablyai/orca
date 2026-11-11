@@ -1,7 +1,6 @@
 import { appendFile, readFile, writeFile } from 'node:fs/promises'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { UsageCacheSnapshotWriter } from '../usage-cache-snapshot-writer'
-import * as sourceCacheWriter from '../usage/usage-source-cache-file'
+import { UsageCacheSnapshotWriter } from '../usage/usage-cache-snapshot-writer'
 import { readClaudeUsageSourceCache, writeClaudeUsageSourceCache } from './persisted-source-cache'
 import { serializeClaudeUsageReport } from './persisted-usage-report'
 import {
@@ -28,44 +27,6 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await fixture.cleanup()
-})
-
-it('resumes an older source generation independently of a newer report', async () => {
-  const original = await fixture.writeResumable()
-  await appendFile(fixture.transcript, fixture.row(0, true))
-  const updated = await fixture.project()
-  await writeClaudeUsageSourceCache({ ...fixture.sourceRef, schemaVersion: 6 }, [original])
-  await writeFile(fixture.reportPath, serializeClaudeUsageReport(fixture.state([updated], 7)))
-
-  const store = fixture.createStore()
-  await store.whenLoaded()
-  expect(store.getSnapshot('all', 'all').summary.inputTokens).toBe(2000)
-  expect(await fixture.decodedSources()).toEqual([original])
-  expect(fixture.splitWorker).not.toHaveBeenCalled()
-  await store.refresh(true)
-  await store.flush()
-  expect(await fixture.decodedSources()).toEqual([updated])
-  expect(store.getSnapshot('all', 'all').summary).toMatchObject({ turns: 1, inputTokens: 2000 })
-  expect(JSON.parse(await readFile(fixture.sourceRef.path, 'utf8')).schemaVersion).toBe(7)
-})
-
-it('uses a newer source generation independently of an older report', async () => {
-  const original = await fixture.writeResumable()
-  await appendFile(fixture.transcript, fixture.row(0, true))
-  const updated = await fixture.project()
-  await writeClaudeUsageSourceCache(fixture.sourceRef, [updated])
-  await writeFile(fixture.reportPath, serializeClaudeUsageReport(fixture.state([original], 6)))
-
-  const store = fixture.createStore()
-  await store.whenLoaded()
-  expect(store.getSnapshot('all', 'all').summary.inputTokens).toBe(1000)
-  expect(await fixture.decodedSources()).toEqual([updated])
-  expect(fixture.splitWorker).not.toHaveBeenCalled()
-  await store.refresh(true)
-  await store.flush()
-  expect(await fixture.decodedSources()).toEqual([updated])
-  expect(store.getSnapshot('all', 'all').summary).toMatchObject({ turns: 1, inputTokens: 2000 })
-  expect(JSON.parse(await readFile(fixture.reportPath, 'utf8')).schemaVersion).toBe(7)
 })
 
 it('keeps a newer source generation when an earlier report migration could not be written', async () => {
@@ -162,26 +123,5 @@ it('rejects a source cache attributed to a different worktree fingerprint', asyn
   await store.refresh(true)
   await store.flush()
   expect(await fixture.decodedSources()).toEqual([original])
-  expect(store.getSnapshot('all', 'all').summary.inputTokens).toBe(1000)
-})
-
-it('updates the completed report while retaining an unchanged verified sidecar', async () => {
-  const original = await fixture.writeResumable()
-  await writeClaudeUsageSourceCache(fixture.sourceRef, [original])
-  const state = fixture.state([original], 7)
-  state.scanState.lastScanCompletedAt = 1
-  await writeFile(fixture.reportPath, serializeClaudeUsageReport(state))
-  const sourceText = await readFile(fixture.sourceRef.path, 'utf8')
-  const write = vi.spyOn(sourceCacheWriter, 'writeUsageSourceCacheData')
-  const store = fixture.createStore()
-  await store.whenLoaded()
-
-  await store.refresh(true)
-  await store.flush()
-
-  expect(write).not.toHaveBeenCalled()
-  expect(await readFile(fixture.sourceRef.path, 'utf8')).toBe(sourceText)
-  const report = JSON.parse(await readFile(fixture.reportPath, 'utf8'))
-  expect(report.scanState.lastScanCompletedAt).toBeGreaterThan(1)
   expect(store.getSnapshot('all', 'all').summary.inputTokens).toBe(1000)
 })

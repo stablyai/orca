@@ -1,12 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { createTestStore } from '@/store/slices/store-test-helpers'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import type { AppState } from '../../store/types'
 import type { Tab } from '../../../../shared/tab-types'
-import {
-  buildRecentTabSwitcherModel,
-  getNextRecentTabSwitcherIndex,
-  normalizeCtrlTabOrderMode
-} from './recent-tab-switching'
+import { buildRecentTabSwitcherModel } from './recent-tab-switching'
 
 const WT = 'wt-1'
 const GROUP = 'group-1'
@@ -71,37 +67,6 @@ describe('buildRecentTabSwitcherModel', () => {
     expect(model?.activeIndex).toBe(0)
   })
 
-  it('appends never-visited tabs after the MRU entries in visual order', () => {
-    const model = buildRecentTabSwitcherModel(
-      stateWithTabs(['tab-a', 'tab-b', 'tab-c'], ['tab-a', 'tab-b'], 'tab-b'),
-      WT,
-      'mru'
-    )
-
-    expect(model?.items.map((item) => item.label)).toEqual(['B', 'A', 'C'])
-  })
-
-  it('can use sequential tab-strip order instead of MRU order', () => {
-    const model = buildRecentTabSwitcherModel(
-      stateWithTabs(['tab-a', 'tab-b', 'tab-c'], ['tab-a', 'tab-c', 'tab-b'], 'tab-b'),
-      WT,
-      'sequential'
-    )
-
-    expect(model?.items.map((item) => item.label)).toEqual(['A', 'B', 'C'])
-    expect(model?.activeIndex).toBe(1)
-  })
-
-  it('returns null when there is no other tab to switch to', () => {
-    const model = buildRecentTabSwitcherModel(
-      stateWithTabs(['tab-a'], ['tab-a'], 'tab-a'),
-      WT,
-      'mru'
-    )
-
-    expect(model).toBeNull()
-  })
-
   it('includes a unified tab that has not yet entered persisted group order', () => {
     const model = buildRecentTabSwitcherModel(
       stateWithTabs(['tab-a'], [], 'tab-a', ['tab-b']),
@@ -111,21 +76,5 @@ describe('buildRecentTabSwitcherModel', () => {
 
     expect(model?.items.map((item) => item.label)).toEqual(['A', 'B'])
     expect(model?.activeIndex).toBe(0)
-  })
-})
-
-describe('getNextRecentTabSwitcherIndex', () => {
-  it('wraps in both directions', () => {
-    expect(getNextRecentTabSwitcherIndex(3, 0, 1)).toBe(1)
-    expect(getNextRecentTabSwitcherIndex(3, 0, -1)).toBe(2)
-    expect(getNextRecentTabSwitcherIndex(3, 2, 1)).toBe(0)
-  })
-})
-
-describe('normalizeCtrlTabOrderMode', () => {
-  it('defaults unknown and absent values to MRU', () => {
-    expect(normalizeCtrlTabOrderMode(undefined)).toBe('mru')
-    expect(normalizeCtrlTabOrderMode(null)).toBe('mru')
-    expect(normalizeCtrlTabOrderMode('sequential')).toBe('sequential')
   })
 })

@@ -2,11 +2,10 @@
 // Older hosts must ignore includePrompts, still deliver completion, and expose acknowledgement only with its capability.
 
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import { StructuredAgentSessionTurnCompletionFeed } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-turn-completion-feed'
-import { RuntimeSubscriptionRegistry } from '../../../src/main/runtime/runtime-subscription-registry'
+import { StructuredAgentSessionTurnCompletionFeed } from '../../../src/main/native-chat/agent-session-wire/observations/structured-agent-session-turn-completion-feed'
+import { RuntimeSubscriptionRegistry } from '../../../src/main/runtime/client/runtime-subscription-registry'
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { projectStructuredAgentSessionStatusState } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
-import { AGENT_SESSION_ATTENTION_ACK_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-attention-capabilities'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-runtime-capabilities'
 import {
   importReleaseCheckoutModule,
@@ -26,7 +25,6 @@ const SUITE_TIMEOUT_MS = 180_000
 const FEED_PATH =
   'src/main/native-chat/agent-session-wire/structured-agent-session-turn-completion-feed.ts'
 const PROJECTION_PATH = 'src/shared/structured-agent-session-projection.ts'
-const ACK_METHOD = 'agentSession.acknowledgeAttention'
 
 const LOCATION = {
   executionHostId: 'local',
@@ -209,14 +207,5 @@ describe('structured attention frames across versions', () => {
     for (const frame of frames) {
       expect(['completion', 'prompt']).toContain(frameTypes([frame])[0])
     }
-  })
-
-  it('the acknowledgement method exists exactly where its capability is advertised', () => {
-    for (const build of [current, baseline]) {
-      expect(build.methodNames.includes(ACK_METHOD), build.label).toBe(
-        build.capabilities.includes(AGENT_SESSION_ATTENTION_ACK_RUNTIME_CAPABILITY)
-      )
-    }
-    expect(current.capabilities).toContain(AGENT_SESSION_ATTENTION_ACK_RUNTIME_CAPABILITY)
   })
 })

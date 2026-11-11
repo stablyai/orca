@@ -1,3 +1,4 @@
+import { ClaudeJournalBoundDelivery } from '../claude-journal-bound-delivery'
 import { vi, type Mock } from 'vitest'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { retireClaudeDispatchWaiters } from './claude-structured-dispatch'
@@ -6,6 +7,7 @@ import { ClaudeBackgroundTaskTracker } from '../claude-background-task-tracker'
 import { ClaudeChildWorkDecoder } from '../claude-child-work-decoder'
 import { ClaudeSlashCommandCatalog } from '../claude-slash-command-catalog'
 import { createClaudeInitProof } from './claude-structured-init-proof'
+import { createClaudeStartupOutcome } from './claude-structured-startup-outcome'
 import { claudeProviderHandleLink } from './claude-structured-owner-identity'
 
 export function sessionFor(send: Mock = vi.fn().mockResolvedValue(undefined)): ClaudeSession {
@@ -20,6 +22,7 @@ export function sessionFor(send: Mock = vi.fn().mockResolvedValue(undefined)): C
     dispatchWaiters: [],
     retiredDispatchWaiters: [],
     replayContentFallbackBlocked: false,
+    delivery: new ClaudeJournalBoundDelivery(),
     backgroundTasks: new ClaudeBackgroundTaskTracker(),
     childWork: new ClaudeChildWorkDecoder(),
     commands: new ClaudeSlashCommandCatalog(),
@@ -48,7 +51,8 @@ export function sessionFor(send: Mock = vi.fn().mockResolvedValue(undefined)): C
       claudeConfigDir: '/claude-home',
       cwd: '/work',
       history: { leafUuid: null, covered: true, contextActivity: 0 },
-      onLateRefusal: () => {}
+      onLateRefusal: () => {},
+      startup: createClaudeStartupOutcome()
     }
   }
 }

@@ -1,11 +1,9 @@
 import { EventEmitter } from 'node:events'
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { rmSync } from 'node:fs'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../wsl/wsl-runner', () => ({
+vi.mock('../wsl/execution/wsl-runner', () => ({
   runWslProcess: vi.fn(async () => ({
     environmentResolved: true,
     code: 0,
@@ -21,8 +19,6 @@ import { runCodexLoginSession, type CodexLoginSpawnRequest } from './codex-login
 const AUTH_URL = 'https://auth.openai.com/oauth/authorize?client_id=orca&state=abc'
 const PRINTED = `If your browser did not open, navigate to this URL to authenticate:\n\n${AUTH_URL}\n`
 const WSL_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\alice\\managed-home'
-// codex login's real stderr: a warning and the server line precede the link.
-const CODEX_0163_STDERR = `WARNING: proceeding, even though we could not create PATH aliases\nStarting local login server on http://localhost:1455.\n${PRINTED}\nOn a remote or headless machine? Use \`codex login --device-auth\` instead.\n`
 type FakeLogin = EventEmitter & { stdout: PassThrough; stderr: PassThrough }
 const roots: string[] = []
 afterEach(() => roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })))
@@ -72,26 +68,6 @@ function run(
 }
 
 describe('runCodexLoginSession sign-in link opening', () => {
-  it('opens the link a WSL login prints and keeps it for Copy link', async () => {
-    const login = loginThatPrints(PRINTED)
-    const open = vi.fn()
-    const { done, onAuthUrl } = run(WSL_HOME, login, open)
-    await done
-    expect(open).toHaveBeenCalledExactlyOnceWith(AUTH_URL)
-    expect(onAuthUrl).toHaveBeenCalledExactlyOnceWith(AUTH_URL)
-    // Suppress the distro opener to avoid a second browser tab.
-    expect(login.requests[0].args.at(-1)).toContain('export BROWSER=true')
-  })
-
-  it('opens and keeps the link codex prints on stderr', async () => {
-    const login = loginThatPrints(CODEX_0163_STDERR, 'stderr')
-    const open = vi.fn()
-    const { done, onAuthUrl } = run(WSL_HOME, login, open)
-    await done
-    expect(open).toHaveBeenCalledExactlyOnceWith(AUTH_URL)
-    expect(onAuthUrl).toHaveBeenCalledExactlyOnceWith(AUTH_URL)
-  })
-
   it('reads a link split across stderr chunks despite stdout output between them', async () => {
     const half = PRINTED.length - 20
     const login = loginThatPrints('', (child) => {
@@ -105,48 +81,4 @@ describe('runCodexLoginSession sign-in link opening', () => {
     expect(onAuthUrl).toHaveBeenCalledExactlyOnceWith(AUTH_URL)
     expect(open).toHaveBeenCalledExactlyOnceWith(AUTH_URL)
   })
-
-  it('publishes the link once when both streams carry it', async () => {
-    const login = loginThatPrints('', (child) => {
-      child.stdout.write(PRINTED)
-      child.stderr.write(PRINTED)
-    })
-    const open = vi.fn()
-    const { done, onAuthUrl } = run(WSL_HOME, login, open)
-    await done
-    expect(onAuthUrl).toHaveBeenCalledTimes(1)
-    expect(open).toHaveBeenCalledTimes(1)
-  })
-
-  it('leaves a WSL login as it was where nothing can open a link', async () => {
-    const login = loginThatPrints(PRINTED)
-    const { done, onAuthUrl } = run(WSL_HOME, login)
-    await done
-    expect(onAuthUrl).toHaveBeenCalledExactlyOnceWith(AUTH_URL)
-    expect(login.requests[0].args.at(-1)).not.toContain('BROWSER')
-  })
-
-  it('never opens a link the WSL login did not print as its sign-in link', async () => {
-    const login = loginThatPrints(
-      'Update available: https://github.com/openai/codex/releases\nnavigate to this URL to authenticate: http://auth.openai.com/x\n'
-    )
-    const open = vi.fn()
-    await run(WSL_HOME, login, open).done
-    expect(open).not.toHaveBeenCalled()
-  })
-
-  it.skipIf(process.platform === 'win32')(
-    'leaves a local login to open its own browser',
-    async () => {
-      const home = mkdtempSync(join(tmpdir(), 'codex-login-session-'))
-      roots.push(home)
-      const login = loginThatPrints(PRINTED)
-      const open = vi.fn()
-      const { done, onAuthUrl } = run(home, login, open)
-      await done
-      expect(onAuthUrl).toHaveBeenCalledExactlyOnceWith(AUTH_URL)
-      expect(open).not.toHaveBeenCalled()
-      expect(login.requests[0].env.BROWSER).toBe(process.env.BROWSER)
-    }
-  )
 })

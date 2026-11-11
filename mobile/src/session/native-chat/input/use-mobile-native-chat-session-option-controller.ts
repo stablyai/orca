@@ -1,5 +1,5 @@
-import type { RpcClient } from '../../../transport/rpc-client'
-import { useMobileNativeChatModelDiscovery } from '../../use-mobile-native-chat-model-discovery'
+import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
+import { useMobileNativeChatModelDiscovery } from './use-mobile-native-chat-model-discovery'
 import { writeMobileNativeChatSessionOptions } from './mobile-native-chat-session-option-persistence'
 import { getAgentSessionOptionCatalog } from '../../../../../src/shared/agent-session/options/agent-session-option-catalog'
 import type { AgentSessionOptionCatalog } from '../../../../../src/shared/agent-session/options/agent-session-option-catalog-types'
@@ -12,7 +12,7 @@ import type {
   SessionOptionsSurface
 } from '../../../../../src/shared/native-chat/input/native-chat-session-options'
 import { mobileNativeChatScopeKey } from '../mobile-native-chat-scope-key'
-import type { MobileNativeChatSendOutcome } from '../mobile-native-chat-send'
+import type { MobileNativeChatSendOutcome } from '../composer/mobile-native-chat-send'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
 import {
   useMobileNativeChatSessionOptions,
@@ -37,9 +37,12 @@ export function useMobileNativeChatSessionOptionController(args: {
   structured: {
     optionSurface?: SessionOptionsSurface
     conversationCommands?: readonly AgentSessionConversationCommand[]
+    compactInstructions?: boolean
     optionPickerRequest?: { id: string; sequence: number } | null
     snapshot: SessionOptionDescriptor[]
     pendingId: string | null
+    appliesOnAttach?: boolean
+    heldPick?: boolean
     setOption: (id: string, value: SessionOptionValue) => Promise<boolean>
     invokeAction: (id: string) => Promise<boolean>
   }
@@ -115,7 +118,10 @@ export function useMobileNativeChatSessionOptionController(args: {
             optionPickerRequest: structured.optionPickerRequest,
             optionSurface: structured.optionSurface,
             conversationCommands: structured.conversationCommands,
+            compactInstructions: structured.compactInstructions,
             pendingId: structuredPendingId,
+            appliesOnAttach: structured.appliesOnAttach,
+            heldPick: structured.heldPick,
             setOption: setStructuredOption,
             invokeAction: invokeStructuredAction,
             recordCommand: () => {}
@@ -127,6 +133,9 @@ export function useMobileNativeChatSessionOptionController(args: {
       setStructuredOption,
       structuredPendingId,
       structuredSnapshot,
+      structured.appliesOnAttach,
+      structured.heldPick,
+      structured.compactInstructions,
       structured.conversationCommands,
       structured.optionPickerRequest,
       structured.optionSurface

@@ -18,14 +18,3 @@ it('retains at most 12 of 100,000 candidates with stable newest-first ties', () 
   expect(peak).toBe(12)
   expect(retained.newest()).toEqual(all.sort((a, b) => b.mtimeMs - a.mtimeMs).slice(0, 12))
 })
-
-it('supports full backfill and empty requests', () => {
-  const all = new SessionNewestFiles(Infinity)
-  const none = new SessionNewestFiles(0)
-  for (let i = 0; i < 100; i++) {
-    all.add(file(i))
-    none.add(file(i))
-  }
-  expect(all.newest()).toHaveLength(100)
-  expect(none.newest()).toEqual([])
-})

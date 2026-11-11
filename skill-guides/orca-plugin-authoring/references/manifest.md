@@ -35,19 +35,20 @@
 
 - `panels` (PanelContribution[], since 1.4.160): Sidebar panels. At most 64.
 - `commands` (CommandContribution[], since 1.4.160): Command palette entries. At most 256.
-- `events` (EventContribution[], since 1.4.160): Events delivered to the plugin worker. At most 4.
-- `hooks` (HookContribution[], since 1.4.248): Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 7.
+- `events` (EventContribution[], since 1.4.160): Events delivered to the plugin worker. At most 5.
+- `hooks` (HookContribution[], since 1.4.248): Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 8.
 - `languagePacks` (LanguagePackContribution[], since 1.4.160): Interface translations. At most 16.
 - `keybindings` (KeybindingContribution[], since 1.4.160): Keyboard shortcuts for contributed commands. At most 256.
 - `vmRecipes` (VmRecipeContribution[], since 1.4.160): Virtual machine environment recipes. At most 64.
 - `themes` (ThemeContribution[], since 1.4.245): App color themes. At most 64.
 - `terminalThemes` (ThemeContribution[], since 1.4.245): Terminal ANSI palettes. At most 64.
 - `iconThemes` (ThemeContribution[], since 1.4.245): File icon themes. At most 32.
+- `fonts` (FontContribution[], since 1.4.253): Font families for the terminal, editor and interface font pickers. At most 8.
 - `syntaxes` (SyntaxContribution[], since 1.4.245): Syntax highlighting for editor languages. At most 16.
 - `customEditors` (CustomEditorContribution[], since 1.4.245): Editors that open files of given types in the editor tab. At most 16.
 - `newFiles` (NewFileContribution[], since 1.4.245): Untitled files the user can create from the + menu and the command palette. At most 16.
 - `settings` (SettingContribution[], since 1.4.246): Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`). At most 64.
-- `statusBarItems` (StatusBarItemContribution[], since 1.4.248): Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. At most 8.
+- `statusBarItems` (StatusBarItemContribution[], since 1.4.248): Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled. At most 8.
 
 Reserved (must stay empty arrays): `agentHarnesses`, `skills`, `mcpServers`, `taskSources`, `connections`, `sidebarCards`.
 
@@ -73,15 +74,15 @@ A command palette entry. Requires the `declarative` execution profile or higher.
 
 ## EventContribution
 
-An event subscription. Requires `main`, the `trusted-worker` execution profile and the capability of the event's domain: `workspace:read` for workspace events, `agent:read` for agent events.
+An event subscription. Requires `main`, the `trusted-worker` execution profile and the capability of the event's domain: `workspace:read` for workspace events, `agent:read` for agent events. Editor events need no capability.
 
-- `on` ("workspace.created" | "workspace.removed" | "agent.status.changed" | "workspace.changed", required, since 1.4.160): Event delivered to the plugin worker.
+- `on` ("workspace.created" | "workspace.removed" | "agent.status.changed" | "workspace.changed" | "editor.typography.changed", required, since 1.4.160): Event delivered to the plugin worker.
 
 ## HookContribution
 
 A hook Orca runs through the worker before (or after) it acts. Requires `main` and the `trusted-worker` execution profile.
 
-- `event` ("terminal.send" | "workspace.create.before" | "workspace.create.after" | "agent.launch.before" | "agent.prompt.before" | "agent.tool.before" | "agent.tool.after", required, since 1.4.248): Hook the worker handles with `orca.hooks.on`.
+- `event` ("terminal.send" | "workspace.create.before" | "workspace.create.after" | "agent.launch.before" | "agent.prompt.before" | "agent.tool.before" | "agent.tool.after" | "editor.save.before", required, since 1.4.248): Hook the worker handles with `orca.hooks.on`.
 - `onError` ("pass" | "deny", since 1.4.248): What Orca does when this plugin's hook throws, times out, crashes or does not start: `pass` (the default) carries on as if it passed; `deny` refuses the action, naming the plugin, so a guard fails closed. Ignored for hooks that only observe.
 
 ## LanguagePackContribution
@@ -113,6 +114,21 @@ A titled theme file.
 - `id` (string, required, since 1.4.245): Theme id, unique within its family in this plugin. The reserved names `constructor` and `prototype` are refused.
 - `title` (string, required, since 1.4.245): Name shown in the theme picker.
 - `path` (string, required, since 1.4.245): JSON theme file, at most 16 KiB.
+
+## FontContribution
+
+A font family the user can pick for the terminal, editor or interface. It applies only once picked.
+
+- `family` (string, required, since 1.4.253): Family name shown in the font pickers. Orca adds the plugin id, so a plugin font never replaces an installed or built-in font of the same name.
+- `faces` (FontFaceContribution[], required, since 1.4.253): The family's files, at most 8. All of a plugin's font files together may be at most 8 MB.
+
+## FontFaceContribution
+
+One file of a font family.
+
+- `path` (string, required, since 1.4.253): WOFF or WOFF2 file, at most 2 MB; its first bytes must match its extension. TTF, OTF and font collections are refused.
+- `weight` (string, since 1.4.253): CSS weight this file draws, or a range for a variable font. Defaults to `400`.
+- `style` ("normal" | "italic", since 1.4.253): Whether this file is the italic face. Defaults to `normal`.
 
 ## SyntaxContribution
 
@@ -182,7 +198,7 @@ An item in the status bar. Requires the `declarative` profile; a `trusted-worker
 
 A host API the plugin may call once the user consents.
 
-- `kind` (one of workspace:read, workspace:write, agent:read, agent:launch, terminal:send, terminal:read, notifications:show, storage:own, secrets:own, settings:own, required, since 1.4.160): Capability granted on user consent.
+- `kind` (one of workspace:read, workspace:write, agent:read, agent:launch, terminal:send, terminal:read, notifications:show, storage:own, secrets:own, settings:own, appearance:write, required, since 1.4.160): Capability granted on user consent.
 
 ## Screenshot
 

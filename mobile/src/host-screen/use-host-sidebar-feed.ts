@@ -10,7 +10,7 @@ import {
   type SidebarFeedSnapshot
 } from '../../../src/shared/sidebar-feed-client/sidebar-feed-snapshot'
 import { RememberedSidebarFeeds } from '../../../src/shared/sidebar-feed-client/remembered-sidebar-feeds'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   createHostSidebarFeedReader,
   type HostSidebarFeedTriggers

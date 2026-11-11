@@ -6,15 +6,15 @@ import {
   resolvePullRequestRepo,
   type ItemDialogTab
 } from '@/components/github/github-work-item-identity'
-import { canUseGitHubRepoContext } from '@/lib/github-source-runtime-context'
-import { translate } from '@/i18n/i18n'
+import { canUseGitHubRepoContext } from '@/lib/work-items/github/github-source-runtime-context'
+import { useTranslate } from '@/i18n/use-translate'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
 } from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { ChecksTab } from '../inspect-pull-request/checks-tab'
 import { ConversationTab } from '../discuss-item/conversation-tab'
 import type { GitHubItemDialogProjectOrigin } from '../load-item-details/github-item-dialog-types'
@@ -66,9 +66,10 @@ export function GitHubItemDialogPRTabs({
   ) => void
   tab: ItemDialogTab
   setTab: (tab: ItemDialogTab) => void
-  pendingViewedPaths: Set<string>
+  pendingViewedPaths: ReadonlySet<string>
   onViewedChange: (path: string, viewed: boolean) => Promise<boolean>
 }): React.JSX.Element {
+  const t = useTranslate()
   const body = details?.body ?? ''
   const comments = details?.comments ?? []
   const timelineItems = details?.timelineItems ?? []
@@ -89,20 +90,20 @@ export function GitHubItemDialogPRTabs({
       >
         <TabsTrigger value="conversation" className="px-2">
           <MessageSquare className="size-3.5" />
-          {translate('auto.components.GitHubItemDialog.e30a5470c9', 'Conversation')}
+          {t('auto.components.GitHubItemDialog.e30a5470c9', 'Conversation')}
         </TabsTrigger>
         {workItem.type === 'pr' && (
           <>
             <TabsTrigger value="checks" className="px-2">
               <ListChecks className="size-3.5" />
-              {translate('auto.components.GitHubItemDialog.4bd1f5b055', 'Checks')}
+              {t('auto.components.GitHubItemDialog.4bd1f5b055', 'Checks')}
               {checks.length > 0 && (
                 <span className="ml-1 text-[10px] text-muted-foreground">{checks.length}</span>
               )}
             </TabsTrigger>
             <TabsTrigger value="files" className="px-2">
               <FileText className="size-3.5" />
-              {translate('auto.components.GitHubItemDialog.999b5ad7d9', 'Files')}
+              {t('auto.components.GitHubItemDialog.999b5ad7d9', 'Files')}
               {files.length > 0 && (
                 <span className="ml-1 text-[10px] text-muted-foreground">{files.length}</span>
               )}
@@ -114,11 +115,13 @@ export function GitHubItemDialogPRTabs({
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
         <TabsContent value="conversation" className="mt-0">
           <ConversationTab
+            key={detailsCacheKey}
             item={displayWorkItem ?? workItem}
             repoPath={repoPath}
             repoId={effectiveRepoId}
             sourceContext={sourceContext}
             body={body}
+            bodyImageUrls={details?.bodyImageUrls}
             comments={comments}
             timelineItems={timelineItems}
             files={files}
@@ -136,9 +139,9 @@ export function GitHubItemDialogPRTabs({
                 patchCachedPRChecks(detailsCacheKey, nextChecks)
               }
             }}
-            onBodyUpdated={(nextBody) => {
+            onBodyUpdated={(nextBody, representation) => {
               if (detailsCacheKey) {
-                patchCachedWorkItemBody(detailsCacheKey, nextBody)
+                patchCachedWorkItemBody(detailsCacheKey, nextBody, representation)
               }
             }}
             onCommentAdded={onCommentAdded}
@@ -175,14 +178,14 @@ export function GitHubItemDialogPRTabs({
             </TabsContent>
 
             <TabsContent value="files" className="mt-0 h-full min-h-0 overflow-hidden">
-              {loading && files.length === 0 ? (
+              {(loading || !detailsLoaded) && files.length === 0 ? (
                 <div className="flex items-center justify-center py-10">
                   <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
                 </div>
               ) : !canUseFilesRepoContext ? (
                 // Why: without a repo path or runtime host the viewer would call IPC with empty ids; diff loads and review comments both fail silently.
                 <div className="px-4 py-10 text-center text-[12px] text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.GitHubItemDialog.00f55cc17b',
                     'Repository access is unavailable for this pull request.'
                   )}
@@ -191,19 +194,19 @@ export function GitHubItemDialogPRTabs({
                 // Why: file fetch failed (rate limit, auth, unresolved remote); offer a retry instead of implying the PR is empty.
                 <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
                   <div className="text-[12px] text-muted-foreground">
-                    {translate(
+                    {t(
                       'auto.components.GitHubItemDialog.filesUnavailable',
                       "Couldn't load changed files."
                     )}
                   </div>
                   <Button variant="outline" size="sm" onClick={onMutated}>
                     <RefreshCw className="size-3.5" />
-                    {translate('auto.components.GitHubItemDialog.filesRetry', 'Retry')}
+                    {t('auto.components.GitHubItemDialog.filesRetry', 'Retry')}
                   </Button>
                 </div>
               ) : files.length === 0 ? (
                 <div className="px-4 py-10 text-center text-[12px] text-muted-foreground">
-                  {translate('auto.components.GitHubItemDialog.3cd5ae5b7b', 'No files changed.')}
+                  {t('auto.components.GitHubItemDialog.3cd5ae5b7b', 'No files changed.')}
                 </div>
               ) : (
                 <PRFilesCombinedDiffViewer

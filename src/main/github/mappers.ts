@@ -1,6 +1,6 @@
 import type { PRCheckDetail } from '../../shared/github/check-types'
 import type { CheckStatus, IssueInfo, PRInfo } from '../../shared/github/pull-request-types'
-import { derivePRCheckStatusFromRollup } from '../../shared/pr-check-status'
+import { derivePRCheckStatusFromRollup } from '../../shared/source-control/checks/pr-check-status'
 
 // REST check runs separate status/conclusion; gh pr checks combines them into one state.
 

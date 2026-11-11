@@ -1,23 +1,27 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { translate } from '@/i18n/i18n'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { useTranslate } from '@/i18n/use-translate'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import {
   useCustomEditorViewStore,
   type ActivePluginCustomEditor
-} from '@/store/plugin-custom-editors'
+} from '@/store/plugins/file-editors/plugin-custom-editors'
 import { PLUGIN_PANEL_FRAME_NAME_PREFIX } from '../../../../shared/plugins/frames/plugin-frame-bridge'
 import { CUSTOM_EDITOR_LARGE_DOCUMENT_BYTES } from '../../../../shared/plugins/frames/plugin-custom-editor-bridge'
-import { fillPluginPanelShell } from '../right-sidebar/plugin-panel-design-token-css'
+import { fillPluginPanelShell } from '../plugins/frames/plugin-panel-design-token-css'
 import {
   PluginFrameView,
   pluginFrameWindowOf,
   usablePluginFrameGuest,
   type PluginFrameElement
-} from '../right-sidebar/plugin-frame-element'
-import { usePluginFrameHost } from '../right-sidebar/use-plugin-frame-host'
-import { usePluginFrameEntry } from '../right-sidebar/use-plugin-frame-entry'
+} from '../plugins/frames/plugin-frame-element'
+import { usePluginFrameHost } from '../plugins/frames/use-plugin-frame-host'
+import { usePluginFrameEntry } from '../plugins/frames/use-plugin-frame-entry'
 import { editorShortcutMatches } from './editor-shortcuts'
-import { registerEditorFrameFlush } from './editor-pending-flush'
+import {
+  countCustomEditorMergingView,
+  useCustomEditorOutsideMerge
+} from './use-custom-editor-outside-merge'
+import { registerEditorFrameFlush } from './save/flush/editor-pending-flush'
 import { useCustomEditorReloadFlush } from './use-custom-editor-reload-flush'
 import { PluginEditorNeedsDesktopNotice } from './PluginEditorNeedsDesktopNotice'
 import {
@@ -65,6 +69,7 @@ export default function PluginCustomEditorFrame({
   binaryDocument,
   onBytesChange
 }: PluginCustomEditorFrameProps): React.JSX.Element {
+  const t = useTranslate()
   const [refusal, setRefusal] = useState<CustomEditorEditRefusal | null>(null)
   const [saveBlocked, setSaveBlocked] = useState(false)
   const frameRef = useRef<PluginFrameElement | null>(null)
@@ -104,6 +109,8 @@ export default function PluginCustomEditorFrame({
     remountGone
   } = usePluginFrameEntry('editor', editor.pluginKey, editor.id)
   const progressRef = useRef<(step: 'delivered' | 'subscribed') => void>(() => {})
+  const mergingRef = useRef<(merging: boolean) => void>(() => {})
+  const countedRef = useRef(false)
 
   const host = useMemo(() => {
     const created = createCustomEditorHost({
@@ -130,6 +137,7 @@ export default function PluginCustomEditorFrame({
         }
       },
       onFrameProgress: (step) => progressRef.current(step),
+      onMergesOutside: () => mergingRef.current(true),
       onKeyChord: (chord, context) => {
         const event = new KeyboardEvent('keydown', chord)
         // Why: chords are posted by frame code, so only one riding real user input may save.
@@ -167,7 +175,15 @@ export default function PluginCustomEditorFrame({
   )
   useLayoutEffect(() => {
     progressRef.current = reportProgress
+    // Counts this view once while its session merges; text editors only.
+    mergingRef.current = (merging) => {
+      if (fileId !== undefined && !isBinary && merging !== countedRef.current) {
+        countedRef.current = merging
+        countCustomEditorMergingView(fileId, merging ? 1 : -1)
+      }
+    }
   })
+  useCustomEditorOutsideMerge(isBinary ? undefined : fileId, host, content)
 
   const { onFrameLoad } = usePluginFrameHost({
     surface: 'editor',
@@ -187,7 +203,10 @@ export default function PluginCustomEditorFrame({
     if (!frameKey) {
       return
     }
-    return () => host.reset()
+    return () => {
+      host.reset()
+      mergingRef.current(false)
+    }
   }, [frameKey, host])
 
   useEffect(() => {
@@ -208,14 +227,14 @@ export default function PluginCustomEditorFrame({
   if (entry.status === 'loading') {
     return (
       <FrameMessage>
-        {translate('auto.components.editor.PluginCustomEditorFrame.loading', 'Loading editor…')}
+        {t('auto.components.editor.PluginCustomEditorFrame.loading', 'Loading editor…')}
       </FrameMessage>
     )
   }
   if (entry.status === 'unresponsive') {
     return (
       <FrameMessage>
-        {translate(
+        {t(
           'auto.components.editor.PluginCustomEditorFrame.unresponsive',
           '{{value0}} stopped responding. Switch to Source to keep editing.',
           { value0: editor.title }
@@ -239,7 +258,7 @@ export default function PluginCustomEditorFrame({
   if (entry.status === 'error') {
     return (
       <FrameMessage>
-        {translate(
+        {t(
           'auto.components.editor.PluginCustomEditorFrame.loadFailed',
           '{{value0}} could not be loaded. Switch to Source to edit this file.',
           { value0: editor.title }
@@ -255,7 +274,7 @@ export default function PluginCustomEditorFrame({
     >
       {saveBlocked ? (
         <div className="border-b border-border px-3 py-1.5 text-xs text-destructive">
-          {translate(
+          {t(
             'auto.components.editor.PluginCustomEditorFrame.saveBlocked',
             "Couldn't save the latest changes from {{value0}}.",
             { value0: editor.title }
@@ -264,12 +283,12 @@ export default function PluginCustomEditorFrame({
       ) : refusal ? (
         <div className="border-b border-border px-3 py-1.5 text-xs text-destructive">
           {refusal === 'oversized'
-            ? translate(
+            ? t(
                 'auto.components.editor.PluginCustomEditorFrame.editTooLarge',
                 'This file is too large for {{value0}} to save changes. Use Source instead.',
                 { value0: editor.title }
               )
-            : translate(
+            : t(
                 'auto.components.editor.PluginCustomEditorFrame.editsHeld',
                 '{{value0}} is sending changes too quickly; Orca applies the latest one shortly.',
                 { value0: editor.title }
@@ -277,7 +296,7 @@ export default function PluginCustomEditorFrame({
         </div>
       ) : isLarge ? (
         <div className="border-b border-border px-3 py-1.5 text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.editor.PluginCustomEditorFrame.largeFile',
             'Large file — may take a moment.'
           )}

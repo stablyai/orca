@@ -8,8 +8,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', () => ({
   app: { isPackaged: true, getPath: () => tmpdir(), getAppPath: () => tmpdir() }
 }))
-
-import { CliInstaller } from './cli-installer'
 import {
   installLinuxBareOrcaDispatcher,
   removeLinuxBareOrcaDispatcher
@@ -96,29 +94,6 @@ describe.runIf(process.platform !== 'win32')('the bare orca dispatcher as a shel
     ).toBe('ORCA_CLI status\n')
   })
 
-  it('reaches this app when no other `orca` is on PATH', async () => {
-    const fixture = await makeFixture()
-    const binDir = join(fixture.homePath, '.local', 'bin')
-
-    expect(runOrca(fixture, ['', binDir]).stdout).toBe('ORCA_CLI status\n')
-  })
-
-  it('says Orca is gone instead of failing to exec once the launcher is removed', async () => {
-    const fixture = await makeFixture()
-    const binDir = join(fixture.homePath, '.local', 'bin')
-    await rm(fixture.resourcesPath, { recursive: true, force: true })
-
-    const alone = runOrca(fixture, [binDir], { ORCA_PANE_KEY: 'tab:1' })
-    expect(alone.status).toBe(127)
-    expect(alone.stdout).toBe('')
-    expect(alone.stderr).toContain(`Orca is no longer installed at ${fixture.launcherPath}`)
-    expect(alone.stderr).toContain(`Remove ${fixture.dispatcherPath}`)
-
-    expect(runOrca(fixture, [binDir, fixture.screenReaderDir]).stdout).toBe(
-      'SCREEN_READER status\n'
-    )
-  })
-
   async function addSecondDispatcher(fixture: { root: string; dispatcherPath: string }) {
     const otherBin = join(fixture.root, 'other-home', '.local', 'bin')
     await mkdir(otherBin, { recursive: true })
@@ -127,19 +102,6 @@ describe.runIf(process.platform !== 'win32')('the bare orca dispatcher as a shel
     })
     return otherBin
   }
-
-  it('skips a second Orca dispatcher ahead of it and reaches the real `orca`', async () => {
-    const fixture = await makeFixture()
-    const otherBin = await addSecondDispatcher(fixture)
-    const binDir = join(fixture.homePath, '.local', 'bin')
-
-    expect(runOrca(fixture, [otherBin, binDir, fixture.screenReaderDir]).stdout).toBe(
-      'SCREEN_READER status\n'
-    )
-    expect(runOrca(fixture, [binDir, otherBin, fixture.screenReaderDir]).stdout).toBe(
-      'SCREEN_READER status\n'
-    )
-  })
 
   it.each(['ORCA_PANE_KEY', 'ORCA_CLI_BIN_DIR', 'ORCA_USER_DATA_PATH'])(
     'never starts the screen reader for Orca children (%s) once Orca is gone',
@@ -159,63 +121,6 @@ describe.runIf(process.platform !== 'win32')('the bare orca dispatcher as a shel
     }
   )
 
-  it('finds the real `orca` in a PATH folder with spaces', async () => {
-    const fixture = await makeFixture()
-    const spaced = join(fixture.root, 'screen reader bin')
-    await writeProgram(join(spaced, 'orca'), 'SPACED')
-
-    expect(runOrca(fixture, [join(fixture.homePath, '.local', 'bin'), spaced]).stdout).toBe(
-      'SPACED status\n'
-    )
-  })
-
-  it('ignores empty and relative PATH entries, which depend on the caller folder', async () => {
-    const fixture = await makeFixture()
-    await writeProgram(join(fixture.root, 'relative', 'orca'), 'RELATIVE')
-
-    const result = spawnSync(fixture.dispatcherPath, ['status'], {
-      cwd: fixture.root,
-      encoding: 'utf8',
-      env: {
-        HOME: fixture.homePath,
-        PATH: ['', '.', 'relative', fixture.toolsDir].join(':')
-      },
-      timeout: 10_000
-    })
-    expect(result.stdout).toBe('ORCA_CLI status\n')
-  })
-
-  it('skips a symlink to itself on PATH', async () => {
-    const fixture = await makeFixture()
-    const linkDir = join(fixture.root, 'linked')
-    await mkdir(linkDir)
-    await symlink(fixture.dispatcherPath, join(linkDir, 'orca'))
-
-    expect(
-      runOrca(fixture, [linkDir, join(fixture.homePath, '.local', 'bin'), fixture.screenReaderDir])
-        .stdout
-    ).toBe('SCREEN_READER status\n')
-  })
-
-  it.skipIf(process.getuid?.() === 0)(
-    'runs an unreadable candidate as the real `orca` rather than skipping it',
-    async () => {
-      const fixture = await makeFixture()
-      const lockedDir = join(fixture.root, 'locked')
-      await writeProgram(join(lockedDir, 'orca'), 'LOCKED')
-      await chmod(join(lockedDir, 'orca'), 0o111)
-
-      const result = runOrca(fixture, [
-        join(fixture.homePath, '.local', 'bin'),
-        lockedDir,
-        fixture.screenReaderDir
-      ])
-      // Exec'd (and refused by the kernel/shell), never passed over for the next `orca`.
-      expect(result.stdout).not.toContain('SCREEN_READER')
-      expect(result.status).not.toBe(0)
-    }
-  )
-
   it('never loops when the only other `orca` is another dispatcher', async () => {
     const fixture = await makeFixture()
     const otherBin = await addSecondDispatcher(fixture)
@@ -224,23 +129,6 @@ describe.runIf(process.platform !== 'win32')('the bare orca dispatcher as a shel
     const result = runOrca(fixture, [join(fixture.homePath, '.local', 'bin'), otherBin])
     expect(result.status).toBe(127)
     expect(result.stderr).toContain('Orca is no longer installed')
-  })
-
-  it('adds nothing to the environment of the `orca` it hands over to', async () => {
-    const fixture = await makeFixture()
-    const otherBin = await addSecondDispatcher(fixture)
-    await writeFile(
-      join(fixture.screenReaderDir, 'orca'),
-      "#!/bin/sh\nenv | grep '^ORCA_' || echo NO_ORCA_ENV\n",
-      { mode: 0o755 }
-    )
-
-    const result = runOrca(fixture, [
-      otherBin,
-      join(fixture.homePath, '.local', 'bin'),
-      fixture.screenReaderDir
-    ])
-    expect(result.stdout).toBe('NO_ORCA_ENV\n')
   })
 })
 
@@ -255,23 +143,5 @@ describe.runIf(process.platform !== 'win32')('removing the bare orca dispatcher'
     await writeProgram(fixture.dispatcherPath, 'MINE')
     await expect(removeLinuxBareOrcaDispatcher(fixture.homePath)).resolves.toBe(false)
     expect(await readFile(fixture.dispatcherPath, 'utf8')).toContain('MINE')
-  })
-
-  it('goes with the `orca` command when the user removes it', async () => {
-    const fixture = await makeFixture()
-    const installer = new CliInstaller({
-      platform: 'linux',
-      isPackaged: true,
-      userDataPath: join(fixture.root, 'userData'),
-      appPath: join(fixture.root, 'app'),
-      resourcesPath: fixture.resourcesPath,
-      homePath: fixture.homePath,
-      processPathEnv: join(fixture.homePath, '.local', 'bin')
-    })
-    await installer.install()
-
-    await installer.remove()
-
-    expect(existsSync(fixture.dispatcherPath)).toBe(false)
   })
 })

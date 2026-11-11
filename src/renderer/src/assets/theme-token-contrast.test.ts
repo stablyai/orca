@@ -1,19 +1,23 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { contrastRatio, type Rgba } from '../lib/plugin-theme-tokens'
+import { contrastRatio, type Rgba } from '../../../shared/color/rgba-contrast'
 
 const css = readFileSync(new URL('./main.css', import.meta.url), 'utf8').replace(
   /\/\*[\s\S]*?\*\//g,
   ''
 )
 
+/** Bodies of every top-level block whose selector list starts with `selector`. */
+function themeBlocks(selector: ':root' | '.dark'): string[] {
+  return [...css.matchAll(/(?:^|\n)([^{}\n][^{}]*)\{([^{}]*)\}/g)]
+    .filter(([, selectors]) => selectors.trim().split(/\s*,\s*/)[0] === selector)
+    .map(([, , body]) => body)
+}
+
 /** Last-wins hex tokens from every top-level block whose selector list starts with `selector`. */
 function themeTokens(selector: ':root' | '.dark'): Map<string, Rgba> {
   const tokens = new Map<string, Rgba>()
-  for (const [, selectors, body] of css.matchAll(/(?:^|\n)([^{}\n][^{}]*)\{([^{}]*)\}/g)) {
-    if (selectors.trim().split(/\s*,\s*/)[0] !== selector) {
-      continue
-    }
+  for (const body of themeBlocks(selector)) {
     for (const [, name, hex] of body.matchAll(/(--[\w-]+):\s*#([0-9a-f]{3}|[0-9a-f]{6});/gi)) {
       const digits = hex.length === 3 ? hex.replace(/./g, '$&$&') : hex
       const [r, g, b] = [0, 2, 4].map((i) => Number.parseInt(digits.slice(i, i + 2), 16))
@@ -47,7 +51,9 @@ describe.each([':root', '.dark'] as const)('built-in %s token pairs', (selector)
     ['--muted-foreground', '--background'],
     ['--muted-foreground', '--muted'],
     ['--muted-foreground', '--accent'],
-    ['--muted-foreground', '--card']
+    ['--muted-foreground', '--card'],
+    // File Explorer paints ignored names on the right sidebar.
+    ['--git-decoration-ignored', '--sidebar']
   ])('%s on %s meets WCAG AA', (text, surface) => {
     expect(contrastRatio(token(text), token(surface))).toBeGreaterThanOrEqual(4.5)
   })

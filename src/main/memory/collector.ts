@@ -1,4 +1,4 @@
-import { exec } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import os from 'node:os'
 import { getAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
@@ -62,7 +62,7 @@ export async function collectMemorySnapshot(store: MemorySnapshotStore): Promise
   return inflight
 }
 
-const execAsync = promisify(exec)
+const execFileAsync = promisify(execFile)
 const PS_EXEC_TIMEOUT_MS = 5_000
 const PS_MAX_BUFFER = 10 * 1024 * 1024
 
@@ -78,7 +78,7 @@ async function enumerateProcesses(): Promise<ProcIndex> {
 async function enumerateUnix(): Promise<ProcRow[]> {
   // Force dot decimals: parseFloat silently truncates locale-formatted comma values.
   try {
-    const { stdout } = await execAsync('ps -eo pid=,ppid=,pcpu=,rss=', {
+    const { stdout } = await execFileAsync('ps', ['-eo', 'pid=,ppid=,pcpu=,rss='], {
       maxBuffer: PS_MAX_BUFFER,
       timeout: PS_EXEC_TIMEOUT_MS,
       env: { ...process.env, LC_ALL: 'C', LANG: 'C' }

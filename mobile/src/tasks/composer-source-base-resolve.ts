@@ -1,4 +1,4 @@
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { GitHubPrStartPoint } from '../../../src/shared/worktree/types'
 import { worktreeMrBaseResolve, worktreePrBaseResolve } from './mobile-workspace-create-operations'
 import type { ComposerBaseState } from './mobile-composer-source-types'

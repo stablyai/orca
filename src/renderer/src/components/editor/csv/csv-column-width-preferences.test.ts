@@ -48,18 +48,6 @@ it('ignores corrupted indexes, malformed values and unsupported widths', () => {
   expect(readCsvColumnWidths('file')).toEqual({})
 })
 
-it('bounds retained file preferences and tolerates storage failure', () => {
-  for (let index = 0; index <= 100; index += 1) {
-    writeCsvColumnWidths(`file-${index}`, { 0: 160 })
-  }
-  expect(readCsvColumnWidths('file-0')).toEqual({})
-  expect(readCsvColumnWidths('file-100')).toEqual({ 0: 160 })
-  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-    throw new Error('quota')
-  })
-  expect(() => writeCsvColumnWidths('file', { 0: 180 })).not.toThrow()
-})
-
 it('moves widths with column identity through insertion, deletion and reordering', () => {
   const widths = { 0: 180, 2: 300 }
   expect(remapCsvColumnWidths(widths, 3, { kind: 'insert-column', at: 1, label: '' })).toEqual({

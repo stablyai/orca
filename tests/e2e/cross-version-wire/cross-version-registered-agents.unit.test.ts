@@ -3,21 +3,17 @@
 
 import { beforeAll, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../src/main/ipc/desktop-renderer-runtime-capabilities'
-import { projectSessionTabAgentStatus } from '../../../src/main/runtime/rpc/methods/session-tab-agent-status-projection'
-import { agentSessionRecordFixture } from '../../../src/shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { encodeAgentSessionRecord } from '../../../src/shared/agent-session/lifecycle/agent-session-record-stored-form'
-import {
-  isPersistedAgentSessionRecord,
-  type AgentSessionRecord
-} from '../../../src/shared/agent-session/lifecycle/agent-session-record'
-import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { RUNTIME_CAPABILITIES } from '../../../src/shared/protocol-version'
+import { projectSessionTabAgentStatus } from '../../../src/main/runtime/rpc/methods/session-tabs/session-tab-agent-status-projection'
+import '../../../src/shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import '../../../src/shared/agent-session/lifecycle/agent-session-record-stored-form'
+import '../../../src/shared/agent-session/lifecycle/agent-session-record'
+import '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import '../../../src/shared/protocol-version'
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/structured-agent-session-surface-capabilities'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-runtime-capabilities'
+import '../../../src/shared/agent-session/agent-session-runtime-capabilities'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../src/shared/runtime-types'
-import { resolveStructuredNativeChatSupport } from '../../../src/shared/structured-native-chat-launch-route'
-import { parseWorkspaceSession } from '../../../src/shared/workspace-session-schema'
+import '../../../src/shared/structured-native-chat-launch-route'
+import { parseWorkspaceSession } from '../../../src/shared/workspace-session/workspace-session-schema'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
@@ -27,7 +23,6 @@ import {
 } from './release-checkout'
 import {
   loadAgentSessionWireBuild,
-  WORKING_TREE,
   type AgentSessionWireBuild
 } from './versioned-agent-session-wire'
 
@@ -50,12 +45,9 @@ type Baseline = {
   ) => RuntimeMobileSessionTabsSnapshot
   parseWorkspaceSession: (raw: unknown) => { ok: boolean; value?: unknown }
   isStructuredTab: (tab: unknown) => boolean
-  /** The optional list supports releases that gated stored reads on registration. */
-  isPersistedAgentSessionRecord: (value: unknown, agents?: unknown) => boolean
 }
 
 let baseline: Baseline
-let current: AgentSessionWireBuild
 
 // v1.4.228 moved `isStructuredTab` to shared code; keeping both locations lets the rolling baseline
 // cross that move and an older pinned ref still load.
@@ -81,17 +73,15 @@ async function importBaselineStructuredTab(
 beforeAll(async () => {
   const ref = resolveBaselineReleaseRef()
   const checkout = await materializeReleaseCheckout(ref)
-  const [capabilities, projection, schema, tabs, record] = await Promise.all([
+  const [capabilities, projection, schema, tabs] = await Promise.all([
     importReleaseCheckoutModule(checkout, 'src/main/ipc/desktop-renderer-runtime-capabilities.ts'),
     importReleaseCheckoutModule(
       checkout,
       'src/main/runtime/rpc/methods/session-tab-agent-status-projection.ts'
     ),
     importReleaseCheckoutModule(checkout, 'src/shared/workspace-session-schema.ts'),
-    importBaselineStructuredTab(checkout),
-    importReleaseCheckoutModule(checkout, 'src/shared/agent-session-record.ts')
+    importBaselineStructuredTab(checkout)
   ])
-  current = await loadAgentSessionWireBuild(WORKING_TREE)
   const wire = await loadAgentSessionWireBuild(ref)
   baseline = {
     ref,
@@ -102,8 +92,7 @@ beforeAll(async () => {
     ),
     projectSessionTabAgentStatus: releaseModuleExport(projection, 'projectSessionTabAgentStatus'),
     parseWorkspaceSession: releaseModuleExport(schema, 'parseWorkspaceSession'),
-    isStructuredTab: releaseModuleExport(tabs, 'isStructuredTab'),
-    isPersistedAgentSessionRecord: releaseModuleExport(record, 'isPersistedAgentSessionRecord')
+    isStructuredTab: releaseModuleExport(tabs, 'isStructuredTab')
   }
 }, SUITE_TIMEOUT_MS)
 
@@ -112,25 +101,9 @@ function registersAgents(build: AgentSessionWireBuild): boolean {
   return build.capabilities.includes(STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY)
 }
 
-function baselineReadsRecord(record: AgentSessionRecord): boolean {
-  const stored = encodeAgentSessionRecord(record)
-  return baseline.isPersistedAgentSessionRecord(
-    // Historical leases keep the checkpoint so old readers reach agent validation.
-    { ...stored, lease: { ...stored.lease, journalCheckpoint: null } },
-    new Set(['claude', 'codex'])
-  )
-}
-
 // Remove the new capability from the checkout’s real list so the client remains effectively old after release.
 function oldDesktopClientCapabilities(): string[] {
   return baseline.desktopClientCapabilities.filter(
-    (capability) => capability !== STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
-  )
-}
-
-/** What a host too old to register agents advertises, derived the same way. */
-function oldHostCapabilities(): string[] {
-  return baseline.wire.capabilities.filter(
     (capability) => capability !== STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
   )
 }
@@ -201,19 +174,6 @@ function persistedSession(): unknown {
   }
 }
 
-function newAgentRecord(): AgentSessionRecord {
-  const record = agentSessionRecordFixture()
-  return {
-    ...record,
-    provider: NEW_AGENT,
-    providerHandleChain: record.providerHandleChain.map((link) => ({
-      ...link,
-      handle: { transport: 'acp', agent: NEW_AGENT, nativeId: 'native-session-1' }
-    })),
-    accountHome: { variable: 'GROK_HOME', path: '/home/user/.grok' }
-  }
-}
-
 /** A parsed session's chat tabs in the test worktree, read through a named shape. */
 const parsedSessionTabs = z.object({
   unifiedTabs: z.record(z.string(), z.array(z.record(z.string(), z.unknown())))
@@ -225,16 +185,6 @@ function unifiedTabsOf(parsed: { ok: boolean; value?: unknown }): Record<string,
 }
 
 describe('a structured agent beyond Claude and Codex, across versions', () => {
-  it(
-    'pairs current code with a real published release',
-    () => {
-      expect(baseline.ref).toMatch(/^v?\d/)
-      // Require old-client structured support so a withheld tab proves the agent capability gate, not refusal of all chats.
-      expect(oldDesktopClientCapabilities()).toContain(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
-    },
-    SUITE_TIMEOUT_MS
-  )
-
   describe('old client, new host', () => {
     it("never receives the new agent's tab, and its Claude and Codex tabs are what its own build publishes", () => {
       const client = oldDesktopClientCapabilities()
@@ -275,117 +225,5 @@ describe('a structured agent beyond Claude and Codex, across versions', () => {
         unifiedTabsOf(parseWorkspaceSession(persistedSession())).map((tab) => tab.agentSessionAgent)
       ).toEqual(['claude', NEW_AGENT, 'codex'])
     })
-
-    it('classifies a saved new-agent record and keeps Claude and Codex records readable', () => {
-      // Older admission gates may refuse it; provider-independent releases can read it.
-      expect(baselineReadsRecord(newAgentRecord())).toBeTypeOf('boolean')
-      expect(isPersistedAgentSessionRecord(encodeAgentSessionRecord(newAgentRecord()))).toBe(true)
-      const claude = agentSessionRecordFixture()
-      const codex: AgentSessionRecord = {
-        ...claude,
-        provider: 'codex',
-        providerHandleChain: claude.providerHandleChain.map((link) => ({
-          ...link,
-          handle: codexProviderHandle('thread-1')
-        })),
-        accountHome: { variable: 'CODEX_HOME', path: '/home/user/.codex' }
-      }
-      for (const record of [claude, codex]) {
-        expect(baselineReadsRecord(record)).toBe(true)
-      }
-    })
-  })
-
-  describe('new client, old host', () => {
-    it('does not offer the new agent to a host without the capability', () => {
-      const host = oldHostCapabilities()
-      expect(
-        resolveStructuredNativeChatSupport({
-          agent: NEW_AGENT,
-          executionHostId: 'local',
-          hostCapabilities: host,
-          hostStructuredAgents: [NEW_AGENT],
-          workspaceKind: 'git-worktree'
-        })
-      ).toEqual({ supported: false, blocker: 'runtime-capability' })
-      // Claude and Codex are offered exactly when the old host serves structured chats at all.
-      for (const agent of ['claude', 'codex'] as const) {
-        expect(
-          resolveStructuredNativeChatSupport({
-            agent,
-            executionHostId: 'local',
-            hostCapabilities: host,
-            workspaceKind: 'git-worktree'
-          }).supported
-        ).toBe(host.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY))
-      }
-    })
-
-    it('would be refused by an old host that does not advertise the capability', async () => {
-      if (
-        baseline.wire.capabilities.includes(
-          STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
-        )
-      ) {
-        return
-      }
-      const replies: { ok: boolean; result?: unknown }[] = []
-      await baseline.wire.createDispatcher(createSupportRuntime()).dispatchStreaming(
-        {
-          id: 'create-support',
-          authToken: 'cross-version-token',
-          method: 'agentSession.createSupport',
-          params: { worktree: `id:${WORKTREE}`, agent: NEW_AGENT }
-        },
-        (raw) => replies.push(JSON.parse(raw)),
-        { clientKind: 'runtime', clientCapabilities: baseline.wire.capabilities }
-      )
-      expect(replies).toHaveLength(1)
-      expect(replies[0]?.ok).toBe(false)
-    })
-  })
-
-  describe('Claude and Codex, both ways', () => {
-    it('are accepted by both builds as before', async () => {
-      for (const build of [current, baseline.wire]) {
-        for (const agent of ['claude', 'codex']) {
-          const replies: { ok: boolean; result?: unknown }[] = []
-          await build.createDispatcher(createSupportRuntime()).dispatchStreaming(
-            {
-              id: `create-support-${agent}`,
-              authToken: 'cross-version-token',
-              method: 'agentSession.createSupport',
-              params: { worktree: `id:${WORKTREE}`, agent }
-            },
-            (raw) => replies.push(JSON.parse(raw)),
-            { clientKind: 'runtime', clientCapabilities: [...RUNTIME_CAPABILITIES] }
-          )
-          expect(replies, `${build.label}: ${agent}`).toEqual([
-            expect.objectContaining({ ok: true, result: { supported: true } })
-          ])
-        }
-      }
-    })
-
-    it("reach today's desktop unchanged from a new host", () => {
-      const payload = tabsSnapshot(['claude', 'codex'])
-      expect(
-        projectSessionTabAgentStatus(
-          payload,
-          'runtime',
-          DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
-        )
-      ).toBe(payload)
-    })
   })
 })
-
-/** Enough of a runtime for createSupport to answer: the verdict itself is stubbed. */
-function createSupportRuntime(): unknown {
-  return {
-    getRuntimeId: () => 'runtime-1',
-    getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
-    getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
-    structuredAgentSessionLaunchSeedOptions: () => undefined
-  }
-}

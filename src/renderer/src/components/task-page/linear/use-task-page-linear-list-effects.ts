@@ -1,10 +1,10 @@
 import {
   observeLinearIssueRead,
   type LinearIssueRead
-} from '@/store/slices/linear/linear-issue-publication'
+} from '@/store/slices/linear/linear-issue-read-lifecycle'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type { LinearCollectionResult } from '../../../../../shared/linear/workspace-types'
-import { taskProviderErrorText } from '@/lib/task-provider-error-copy'
+import { taskProviderErrorText } from '@/lib/work-items/task-provider-error-copy'
 import type { TaskPageGlobalEffectsModel } from '../use-task-page-global-effects'
 import { useEffect } from 'react'
 import { isIntegrationCredentialDecryptionError } from '../../../../../shared/integration-credential-errors'
@@ -18,7 +18,7 @@ import {
   buildLinearIssueListRequestSignature
 } from '@/components/task-page/linear/task-page-linear-issue-request'
 import { linearIssueAttributeFilterSignature } from '../../../../../shared/linear/issue-attribute-filter'
-import { linearIssueReadError } from '@/lib/linear-read-error'
+import { linearIssueReadError } from '@/lib/work-items/linear/linear-read-error'
 import {
   taskPageLinearIssuesHaveMore,
   reconcileTaskPageLinearIssuesAfterLandingRefresh

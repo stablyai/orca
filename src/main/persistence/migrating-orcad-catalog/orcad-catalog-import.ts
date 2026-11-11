@@ -1,4 +1,5 @@
 import { MAX_ORCAD_MIGRATION_STAGED_CATALOGS } from '../../../shared/orcad-migration/orcad-migration-staged-catalog-validation'
+import { ORCAD_CATALOG_COMMIT_DOMAINS } from './orcad-catalog-commit-domains'
 import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../../shared/orcad-migration/orcad-migration-manifest-validation'
 import type {
   OrcadMigrationCatalogAbortResult,
@@ -53,6 +54,7 @@ import {
   pruneOrcadMigrationBlobStaging,
   stageOrcadMigrationBlobChunk
 } from './orcad-migration-blob-staging'
+import { withStagedAutomationRunHistory } from './orcad-staged-automation-run-history'
 import { assertOrcadMigrationBlobContentsValid } from './orcad-migration-blob-installers'
 import {
   abortOrcadMigrationCatalogByReference,
@@ -71,6 +73,7 @@ type OrcadCatalogImportContext = {
 }
 
 // Manifests arrive parsed; the RPC boundary verified the digest over the bytes as sent.
+
 export class OrcadCatalogImportPersistence {
   readonly [orcadCatalogImportContext]: OrcadCatalogImportContext
 
@@ -89,7 +92,7 @@ export class OrcadCatalogImportPersistence {
     const context = this[orcadCatalogImportContext]
     const now = options.now ?? (() => new Date())
     if (expireOrcadMigrationStages(context.runtime.state, now().getTime())) {
-      scheduleSave(context.scheduling)
+      scheduleSave(context.scheduling, ['orcadMigrationStagedCatalogs'])
     }
     pruneOrcadMigrationSnapshotStaging(
       stagedManifests(context.runtime.state),
@@ -121,7 +124,7 @@ export class OrcadCatalogImportPersistence {
         stagedAt
       }
     ]
-    scheduleSave(context.scheduling)
+    scheduleSave(context.scheduling, ['orcadMigrationStagedCatalogs'])
     return stagedCatalogState(manifest, stagedAt, context.runtime)
   }
 
@@ -166,7 +169,6 @@ export class OrcadCatalogImportPersistence {
     if (current.state !== 'staged') {
       throw new Error('orcad_migration_catalog_not_staged')
     }
-    const prepared = prepareOrcadMigrationCatalog(manifest, context.runtime.state)
     const blobRoot = context.runtime.orcadMigrationBlobRoot
     assertOrcadMigrationSnapshotsReady(manifest, context.runtime.terminalScrollbackSnapshotStorage)
     if (options.expectedBlobs) {
@@ -174,11 +176,15 @@ export class OrcadCatalogImportPersistence {
     }
     assertOrcadMigrationBlobsReady(manifest, blobRoot)
     assertOrcadMigrationBlobContentsValid(manifest, blobRoot)
+    const prepared = prepareOrcadMigrationCatalog(
+      withStagedAutomationRunHistory(manifest, blobRoot),
+      context.runtime.state
+    )
     commitOrcadMigrationSnapshots(manifest, context.runtime.terminalScrollbackSnapshotStorage)
     commitOrcadMigrationBlobs(manifest, blobRoot)
     const receipt = commitPreparedCatalog(context, manifest, prepared, options.now)
     const generationBefore = context.runtime.writeGeneration
-    scheduleSave(context.scheduling)
+    scheduleSave(context.scheduling, ORCAD_CATALOG_COMMIT_DOMAINS)
     recordOrcadMigrationCommitWriteGeneration(context.runtime, manifest, generationBefore)
     return committedCatalogState(receipt)
   }
@@ -197,7 +203,7 @@ export class OrcadCatalogImportPersistence {
     ).filter((entry) => entry.manifest.migrationId !== manifest.migrationId)
     abortOrcadMigrationSnapshots(manifest, context.runtime.terminalScrollbackSnapshotStorage)
     abortOrcadMigrationBlobs(manifest, context.runtime.orcadMigrationBlobRoot)
-    scheduleSave(context.scheduling)
+    scheduleSave(context.scheduling, ['orcadMigrationStagedCatalogs'])
     return { ...absentCatalogState(manifest), aborted: true }
   }
 

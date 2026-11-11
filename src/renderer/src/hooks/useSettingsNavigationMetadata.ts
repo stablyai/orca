@@ -1,76 +1,86 @@
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-// Share Settings/Cmd+J visibility without Settings pane UI imports; an architecture test enforces this boundary.
 import {
   getRuntimeEnvironmentsSearchEntry,
   getWebRuntimeEnvironmentsSearchEntry
-} from '@/components/settings/runtime-environments-search'
-import { getTerminalPaneSearchEntries } from '@/components/settings/terminal-search'
-import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
+} from '@/components/settings/runtime-environments/catalog/runtime-environments-search'
+import { getTerminalPaneSearchEntries } from '@/components/settings/terminal/terminal-search'
+import { isMacUserAgent, isWindowsUserAgent } from '@/app-shell/platform/user-agent-platform'
 import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
-import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
-import type { SettingsNavSection } from '@/lib/settings-navigation-types'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { getClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import {
   isWindowsTerminalCapabilityHost,
   useWindowsTerminalCapabilities
-} from '@/lib/windows-terminal-capabilities'
-import { defaultScopeHost } from '@/lib/default-creation-host'
-import { useAppStore } from '@/store'
-import { useProjectHostSetupProjection } from '@/store/selectors'
+} from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
+import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
+import { useAppStore } from '@/store/index'
+import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
 import {
   useChatSettingsOwnPermissions,
   useStructuredAgentSessionHostQueuesMessages
-} from '@/runtime/structured-agent-session-host-capability'
-import type { ProjectGroupingModel } from '../../../shared/project-section-grouping'
-import type { Repo } from '../../../shared/repo-types'
+} from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import {
   buildCapabilitySettingsSections,
   buildSetupSettingsSections
 } from './settings-navigation-capability-sections'
-import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
 import { buildInterfaceSettingsSections } from './settings-navigation-interface-sections'
 import { buildRemoteSettingsSections } from './settings-navigation-remote-sections'
 import { buildWorkflowSettingsSections } from './settings-navigation-workflow-sections'
 import { useWindowsTerminalCapabilityOwnerKey } from './useWindowsTerminalCapabilityOwnerKey'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { useTranslate } from '@/i18n/use-translate'
+import type { Translate } from '@/i18n/use-translate'
+import type { SettingsNavSection } from '@/components/settings/navigation/settings-navigation-types'
+import type { ProjectGroupingModel } from '../../../shared/project-section-grouping'
+import type { Repo } from '../../../shared/repo-types'
+import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
 
-export { isWebClientLocation } from '@/lib/web-client-location'
+// Share Settings/Cmd+J visibility without Settings pane UI imports; an architecture test enforces this boundary.
+// Share Settings/Cmd+J visibility without Settings pane UI imports; an architecture test enforces this boundary.
 
-export function buildSettingsNavigationMetadata({
-  isMac,
-  isWindows,
-  isLocalWindowsHost = isWindows,
-  isWindowsTerminalHost = isWindows,
-  isWebClient,
-  hostQueuesMessages = false,
-  typedChatPermissions = false,
-  managedBrowserCreationEnabled = !isWebClient,
-  mobileEmulatorCreationEnabled = !isWebClient,
-  isDev = import.meta.env.DEV,
-  isLinearConnected = false,
-  repos,
-  projectGrouping
-}: {
-  isMac: boolean
-  isWindows: boolean
-  isLocalWindowsHost?: boolean
-  isWindowsTerminalHost?: boolean
-  isWebClient: boolean
-  hostQueuesMessages?: boolean
-  typedChatPermissions?: boolean
-  managedBrowserCreationEnabled?: boolean
-  mobileEmulatorCreationEnabled?: boolean
-  isDev?: boolean
-  isLinearConnected?: boolean
-  repos: readonly Repo[]
-  projectGrouping?: ProjectGroupingModel
-}): SettingsNavSection[] {
-  const terminalPaneSearchEntries = getTerminalPaneSearchEntries({
+export { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+
+export function buildSettingsNavigationMetadata(
+  {
+    isMac,
     isWindows,
-    isWindowsTerminalHost,
-    isMac
-  })
+    isLocalWindowsHost = isWindows,
+    isWindowsTerminalHost = isWindows,
+    isWebClient,
+    hostQueuesMessages = false,
+    typedChatPermissions = false,
+    managedBrowserCreationEnabled = !isWebClient,
+    mobileEmulatorCreationEnabled = !isWebClient,
+    isDev = import.meta.env.DEV,
+    isLinearConnected = false,
+    repos,
+    projectGrouping
+  }: {
+    isMac: boolean
+    isWindows: boolean
+    isLocalWindowsHost?: boolean
+    isWindowsTerminalHost?: boolean
+    isWebClient: boolean
+    hostQueuesMessages?: boolean
+    typedChatPermissions?: boolean
+    managedBrowserCreationEnabled?: boolean
+    mobileEmulatorCreationEnabled?: boolean
+    isDev?: boolean
+    isLinearConnected?: boolean
+    repos: readonly Repo[]
+    projectGrouping?: ProjectGroupingModel
+  },
+  t?: Translate
+): SettingsNavSection[] {
+  const terminalPaneSearchEntries = getTerminalPaneSearchEntries(
+    {
+      isWindows,
+      isWindowsTerminalHost,
+      isMac
+    },
+    t
+  )
   const runtimeEnvironmentsSearchEntry = isWebClient
     ? getWebRuntimeEnvironmentsSearchEntry()
     : getRuntimeEnvironmentsSearchEntry()
@@ -98,15 +108,16 @@ export function buildSettingsNavigationMetadata({
 
   // Match SETTINGS_NAV_GROUPS order so Settings and Cmd+J keep siblings together.
   return [
-    ...buildCapabilitySettingsSections(options),
-    ...buildSetupSettingsSections(options),
-    ...buildWorkflowSettingsSections(options, terminalPaneSearchEntries),
-    ...buildInterfaceSettingsSections(options),
-    ...buildRemoteSettingsSections(options, runtimeEnvironmentsSearchEntry, reposById)
+    ...buildCapabilitySettingsSections(options, t),
+    ...buildSetupSettingsSections(options, t),
+    ...buildWorkflowSettingsSections(options, terminalPaneSearchEntries, t),
+    ...buildInterfaceSettingsSections(options, t),
+    ...buildRemoteSettingsSections(options, runtimeEnvironmentsSearchEntry, reposById, t)
   ]
 }
 
 export function useSettingsNavigationMetadata(): SettingsNavSection[] {
+  const t = useTranslate()
   // The locale subscription must also invalidate the memo or labels retain the previous language.
   const languageRevision = useUiLanguageRevision()
   const repos = useAppStore((state) => state.repos)
@@ -157,24 +168,27 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
 
   return useMemo(
     () =>
-      buildSettingsNavigationMetadata({
-        isMac,
-        isWindows,
-        isLocalWindowsHost,
-        isWindowsTerminalHost,
-        isWebClient,
-        hostQueuesMessages,
-        typedChatPermissions,
-        managedBrowserCreationEnabled,
-        mobileEmulatorCreationEnabled,
-        isDev: import.meta.env.DEV,
-        isLinearConnected,
-        repos,
-        projectGrouping: {
-          projects: projectHostSetupProjection.projects,
-          projectHostSetups: projectHostSetupProjection.setups
-        }
-      }),
+      buildSettingsNavigationMetadata(
+        {
+          isMac,
+          isWindows,
+          isLocalWindowsHost,
+          isWindowsTerminalHost,
+          isWebClient,
+          hostQueuesMessages,
+          typedChatPermissions,
+          managedBrowserCreationEnabled,
+          mobileEmulatorCreationEnabled,
+          isDev: import.meta.env.DEV,
+          isLinearConnected,
+          repos,
+          projectGrouping: {
+            projects: projectHostSetupProjection.projects,
+            projectHostSetups: projectHostSetupProjection.setups
+          }
+        },
+        t
+      ),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() inside buildSettingsNavigationMetadata reads the UI language and catalogs implicitly.
     [
       isMac,
@@ -189,7 +203,8 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
       isLinearConnected,
       repos,
       projectHostSetupProjection,
-      languageRevision
+      languageRevision,
+      t
     ]
   )
 }

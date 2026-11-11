@@ -1,5 +1,6 @@
+import { GitHistoryRefName } from './git-params'
 import { z } from 'zod'
-import { isFeatureTipId } from '../feature-tips'
+import { isFeatureTipSeenId } from '../feature-tips'
 import {
   WORKTREE_CARD_PROPERTIES,
   normalizeWorktreeCardProperties
@@ -20,7 +21,7 @@ export const NullableString = z.string().nullable()
 export const StringArray = z.array(z.string())
 
 export const FeatureTipIds = z.array(
-  z.custom(isFeatureTipId, { message: 'Unknown feature tip id' })
+  z.custom(isFeatureTipSeenId, { message: 'Unknown feature tip id' })
 )
 
 export const UnknownRecord = z.record(z.string(), z.unknown())
@@ -70,6 +71,7 @@ export const StatusBarItem = z.enum([
   'grok',
   'cursor',
   'zcode',
+  'muse',
   'ssh',
   'resource-usage',
   'ports'
@@ -166,6 +168,12 @@ export const UiUpdateFields = z
     ...ClientUiWorkspaceFilterFields,
     // Part of App.tsx’s debounced writer; missing fields reject the whole paired-client payload.
     explorerDisplayRootByWorktree: z.record(z.string(), z.string()).optional(),
+    gitGraphFiltersByWorktree: z
+      .record(
+        z.string(),
+        z.union([z.literal('head'), z.literal('all'), z.array(GitHistoryRefName).max(1000)])
+      )
+      .optional(),
     showDotfilesByWorktree: z.record(z.string(), z.boolean()).optional(),
     collapsedGroups: StringArray.optional(),
     uiZoomLevel: z.number().finite().optional(),
@@ -190,9 +198,30 @@ export const UiUpdateFields = z
     _grokStatusBarDefaultAdded: z.boolean().optional(),
     _cursorStatusBarDefaultAdded: z.boolean().optional(),
     _zcodeStatusBarDefaultAdded: z.boolean().optional(),
+    _museStatusBarDefaultAdded: z.boolean().optional(),
     statusBarVisible: z.boolean().optional(),
     usagePercentageDisplay: z.enum(['used', 'remaining']).optional(),
     statusBarUsageMode: z.enum(['verbose', 'compact']).optional(),
+    statusBarUsageFormat: z
+      .object({
+        template: z.string(),
+        byProvider: z
+          .object({
+            claude: z.string().optional(),
+            codex: z.string().optional(),
+            gemini: z.string().optional(),
+            'opencode-go': z.string().optional(),
+            kimi: z.string().optional(),
+            minimax: z.string().optional(),
+            grok: z.string().optional(),
+            antigravity: z.string().optional(),
+            cursor: z.string().optional(),
+            zcode: z.string().optional(),
+            muse: z.string().optional()
+          })
+          .optional()
+      })
+      .optional(),
     dismissedUpdateVersion: NullableString.optional(),
     dismissedUnexpectedSignoutVersion: NullableString.optional(),
     lastUpdateCheckAt: z.number().finite().nullable().optional(),
@@ -202,6 +231,7 @@ export const UiUpdateFields = z
     releaseChannelOverride: z.custom<ReleaseChannel>(isReleaseChannel).nullable().optional(),
     notificationPermissionRequested: z.boolean().optional(),
     updateReassuranceSeen: z.boolean().optional(),
+    seenMacosUpdateRequirement: NullableString.optional(),
     osc52ClipboardDefaultOnNoticePending: z.boolean().optional(),
     acknowledgedAgentsByPaneKey: z.record(z.string(), z.number().finite()).optional(),
     activityClearedAtByPaneKey: z.record(z.string(), z.number().finite()).optional(),
@@ -249,6 +279,7 @@ export const UiUpdateFields = z
     pluginsAlphaNoticeDismissed: z.boolean().optional(),
     codexTerminalServerIsolationNoticeSeen: z.boolean().optional(),
     codexSharedSettingsNoticeSeen: z.boolean().optional(),
+    speechModelUpdateNoticeSeen: z.boolean().optional(),
     claudeDiffPanelNoticeSeen: z.boolean().optional(),
     claudeAccountSignInNoticeSeen: z.boolean().optional(),
     petVisible: z.boolean().optional(),

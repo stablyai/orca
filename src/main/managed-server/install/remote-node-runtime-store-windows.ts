@@ -14,13 +14,13 @@ import {
   RUNTIME_STORE_TOMBSTONE_PREFIX,
   runtimeStoreInventoryCommand
 } from './remote-node-runtime-store-inventory'
-import { RELAY_REMOTE_DIR } from '../../ssh/remote-exec/remote-frame-protocol'
+import { RELAY_REMOTE_DIR } from './remote-install-root'
 import {
   isWindowsRemoteHost,
   joinRemotePath,
   type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
-import { powerShellCommand } from '../../ssh/ssh-remote-powershell'
+} from '../../ssh/remote-host/ssh-remote-platform'
+import { powerShellCommand } from '../../ssh/remote-exec/ssh-remote-powershell'
 import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/powershell-native-argument'
 
 const REPARSE = '[IO.FileAttributes]::ReparsePoint'

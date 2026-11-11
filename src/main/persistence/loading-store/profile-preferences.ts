@@ -1,5 +1,5 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { retireAtRestCommandSettings } from '../../native-chat/agent-session-wire/at-rest-command-context'
+import { retireAtRestCommandSettings } from '../../native-chat/agent-session-wire/options/at-rest-command-context'
 import { createAgentModelCatalogSettingsExpiry } from '../../native-chat/agent-model-catalog/agent-model-catalog-account-expiry'
 import { agentModelCatalogStore } from '../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type { OnboardingChecklistState } from '../../../shared/onboarding-state-types'
@@ -23,16 +23,25 @@ import {
 } from '../applying-settings/feature-interaction-recording'
 
 import type { StoreRuntimeState } from './store-runtime-state'
+import { persistGithubCache } from './github-cache-persistence'
 import type { WriteSchedulingOperations } from './write-scheduling'
 import { scheduleSave } from './write-scheduling'
-import { bumpLocalWorktreeScanGeneration } from '../../local-worktree-scan-generation'
+import { bumpLocalWorktreeScanGeneration } from '../../workspaces/catalog/local-worktree-scan-generation'
 
 type ProfilePreferencesRuntime = Pick<
   StoreRuntimeState,
   | 'activeViewPreference'
+  | 'dataFile'
   | 'githubCacheDirty'
-  | 'githubCacheGeneration'
+  | 'githubCachePersistedAt'
+  | 'githubCacheLegacyFileHash'
+  | 'githubCachePersistenceDisabled'
+  | 'githubCachePersistTimer'
+  | 'githubCacheRetryDelayMs'
   | 'githubCacheWriteListeners'
+  | 'profileMaintenancePending'
+  | 'quitFlushStarted'
+  | 'writesFrozen'
   | 'protectedSecrets'
   | 'runDurableMutation'
   | 'settingsChangeListeners'
@@ -177,7 +186,7 @@ export class ProfilePreferences {
         ...updates.checklist
       }
     }
-    scheduleSave(this[profilePreferencesContext].scheduling)
+    scheduleSave(this[profilePreferencesContext].scheduling, ['onboarding'])
     return this.getOnboarding()
   }
 
@@ -197,7 +206,7 @@ export class ProfilePreferences {
     // Cache polls write a sidecar at flush; scheduling a full profile save here amplifies every poll.
     this[profilePreferencesContext].runtime.state.githubCache = cache
     this[profilePreferencesContext].runtime.githubCacheDirty = true
-    this[profilePreferencesContext].runtime.githubCacheGeneration += 1
+    persistGithubCache(this[profilePreferencesContext].runtime, 'routine')
     for (const listener of this[profilePreferencesContext].runtime.githubCacheWriteListeners) {
       listener()
     }
@@ -258,7 +267,7 @@ export function getUIUpdateOperations(owner: ProfilePreferences): UIUpdateOperat
     setActiveView: (activeView) =>
       owner[profilePreferencesContext].runtime.activeViewPreference.set(activeView),
     getUI: () => owner.getUI(),
-    scheduleSave: () => scheduleSave(owner[profilePreferencesContext].scheduling),
+    scheduleSave: () => scheduleSave(owner[profilePreferencesContext].scheduling, ['ui']),
     notifyUIChanged: () => notifyUIChanged(owner)
   }
 }

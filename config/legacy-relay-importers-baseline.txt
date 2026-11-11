@@ -9,7 +9,8 @@ src/main/ipc/ssh/ssh-connect-flow.ts
 src/main/ipc/ssh/ssh-host-server-on-connect-wiring.ts
 src/main/ipc/ssh/ssh-session-teardown.ts
 src/main/ipc/ssh/ssh.ts
-src/main/ssh/orcad-migration-terminal-gate-host-wide.test.ts
 src/main/managed-server/lifecycle/orcad-runtime-conversion-wiring.ts
 tests/e2e/cross-version-wire/legacy-relay-bridge.unit.test.ts
 tests/e2e/helpers/legacy-relay-docker-host.ts
+src/main/managed-server/install/remote-install-model.ts
+src/main/ssh/system-transport/ssh-system-transport.integration.test.ts

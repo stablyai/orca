@@ -21,13 +21,13 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), message: vi.fn() } }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: mocks.call
 }))
 vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({
   refreshLocalStructuredSessionTabs: mocks.refresh
 }))
-vi.mock('@/runtime/web-session-focus-intent', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/navigation/web-session-focus-intent', () => ({
   clearWebSessionFocusIntentIfMatches: vi.fn(),
   recordWebSessionFocusIntent: vi.fn(),
   resolveWebSessionVisibleTabId: vi.fn(() => null)
@@ -38,7 +38,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
-vi.mock('@/lib/agent-catalog', () => ({
+vi.mock('@/lib/agent-catalog/agent-catalog', () => ({
   getAgentLabel: () => 'Codex',
   getAgentCatalog: () => [{ id: 'codex', label: 'Codex' }]
 }))
@@ -54,7 +54,7 @@ import {
   startStructuredAgentLaunch
 } from './structured-agent-session-launch'
 import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
-import { structuredSessionNotices } from '@/components/native-chat/native-chat-structured-session-notices'
+import { structuredSessionNotices } from '../../../components/native-chat/messages/notices/native-chat-structured-session-notices'
 
 const WORKTREE = 'wt-1'
 const EXIT_REASON = 'claude stream-json exited (code 1): stderr tail'
@@ -177,6 +177,36 @@ describe('structured launch after a host-failed create', () => {
     }
   )
 
+  // Only the failed start keeps the refusal's owner, so only it can tell a terminal from a chat.
+  it('says a terminal runs the conversation when the refusal names no chat', async () => {
+    ownershipRefusal = {
+      code: 'agent_session_conflict',
+      details: { reason: 'conversationHeldElsewhere' },
+      message: 'agent_session_conflict',
+      createAttemptRefusedBeforeCommit: true
+    }
+    refuseFirstCall = true
+    const sessionId = launch()
+    await settle(sessionId)
+    expect(
+      structuredSessionNotices({
+        launch: {
+          lifecycle: 'failed',
+          failure: getStructuredAgentSessionLaunchFailure(WORKTREE, sessionId),
+          retry: () => {}
+        },
+        agentLabel: 'Codex',
+        sessionError: null,
+        composerError: null
+      })
+    ).toMatchObject([
+      {
+        // This file's translate mock leaves {{agent}} unfilled.
+        text: expect.stringMatching(/^Chat could not be started\. .* in another terminal\./)
+      }
+    ])
+  })
+
   it('retains a missing-history failed tab with Retry, then starts a new attempt', async () => {
     refuseFirstCall = true
     missingHistory = true
@@ -196,7 +226,12 @@ describe('structured launch after a host-failed create', () => {
         sessionError: null,
         composerError: null
       })
-    ).toMatchObject([{ text: 'Chat could not be started.', action: { label: 'Retry' } }])
+    ).toMatchObject([
+      {
+        text: "Chat could not be started. Orca couldn't open this chat's history right now.",
+        action: { label: 'Retry' }
+      }
+    ])
     expect(createdOperations).toEqual([failedOperation])
     expect(retryStructuredAgentSessionLaunch(WORKTREE, sessionId)).toBe(true)
     await settle(sessionId)

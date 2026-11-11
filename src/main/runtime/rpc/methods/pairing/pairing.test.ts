@@ -1,0 +1,54 @@
+import { describe, expect, it, vi } from 'vitest'
+import type { OrcaRuntimeService } from '../../../orca-runtime'
+import { RpcDispatcher } from '../../dispatcher'
+import { PAIRING_METHODS } from './pairing'
+
+function dispatchPairing(
+  method: string,
+  params: unknown,
+  pairing: NonNullable<Parameters<RpcDispatcher['dispatchStreaming']>[2]>['pairing']
+): Promise<Record<string, unknown>> {
+  return new Promise((resolve) => {
+    const runtime = { getRuntimeId: () => 'test-runtime' }
+    const dispatcher = new RpcDispatcher({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Pairing handlers use the supplied pairing context; the envelope reads only getRuntimeId.
+      runtime: runtime as OrcaRuntimeService,
+      methods: PAIRING_METHODS
+    })
+    void dispatcher.dispatchStreaming(
+      { id: 'request-1', authToken: '', method, params },
+      (response) => resolve(JSON.parse(response) as Record<string, unknown>),
+      { pairing }
+    )
+  })
+}
+
+describe('pairing RPC methods', () => {
+  it('rejects caller-selected identity and authorization metadata', async () => {
+    const pairing = { getEndpoints: vi.fn(), provisionRelay: vi.fn() }
+
+    for (const injected of [
+      { relayDeviceId: 'attacker-device' },
+      { authorization: { mode: 'relay-basis', basisConnId: 'attacker-basis' } },
+      { directAuthId: 'attacker-direct' },
+      { acceptedCredentialVersion: 99 }
+    ]) {
+      await expect(
+        dispatchPairing(
+          'pairing.provisionRelay',
+          { reqId: 'install-1', newResumeTokenHash: 'A'.repeat(43), ...injected },
+          pairing
+        )
+      ).resolves.toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    }
+    await expect(
+      dispatchPairing(
+        'pairing.getEndpoints',
+        { installReqId: 'status-1', basisConnId: 'injected' },
+        pairing
+      )
+    ).resolves.toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(pairing.provisionRelay).not.toHaveBeenCalled()
+    expect(pairing.getEndpoints).not.toHaveBeenCalled()
+  })
+})

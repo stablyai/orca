@@ -1,0 +1,57 @@
+import type {
+  HttpLinkActionDestinations as TerminalHttpLinkActionDestinations,
+  HttpLinkRoutingPreferenceRequester as TerminalLinkRoutingPreferenceRequester
+} from '@/lib/browser/navigation/http-link-destinations'
+import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import type { DeferredSplitPaneHandoffHandle } from '../layout/split/deferred-split-pane-handoff'
+
+import type { PtyConnectionDeps } from '../pty-connection/pty-connection-deps'
+import type { LinkHandlerDeps } from '../links/files/terminal-link-handlers'
+import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
+import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
+import type { TerminalLinkActionContext } from '../links/terminal-link-action-request'
+import type { resolveTerminalHttpLinkSourceOwner } from '../links/http/terminal-http-link-source-owner'
+import type { SessionRestoredBannerReason } from '../session-restore/session-restored-banner-pane-state'
+
+export type TerminalPaneMountContext = {
+  deps: UseTerminalPaneLifecycleDeps
+  refs: TerminalPaneLifecycleRefs
+  ptyDeps: PtyConnectionDeps
+  /** Mount-local: numeric pane ids are remount-scoped, the handles are keyed by tab/leaf identity. */
+  deferredSplitHandoffs: Map<number, DeferredSplitPaneHandoffHandle>
+  startupCwd: string
+  defaultTabCwd: string
+  worktreePath: string
+  terminalHomePath: string | null
+  wslDistro: string | null
+  linkDeps: LinkHandlerDeps
+  fileOpenLinkHint: string
+  getPaneLinkCwd: (paneId: number) => string
+  getUrlOpenLinkHint: (paneId: number) => string
+  getHttpLinkSourceOwnerForPane: (
+    paneId: number
+  ) => ReturnType<typeof resolveTerminalHttpLinkSourceOwner>
+  getHttpLinkActionDestinations: (paneId: number) => TerminalHttpLinkActionDestinations
+  getLinkActionContext: (paneId: number) => TerminalLinkActionContext | null
+  canOpenOwnedBrowserForPane: (paneId: number) => boolean
+  requestOpenLinksInAppPreference: TerminalLinkRoutingPreferenceRequester
+  onShowSessionRestoredBanner: (paneId: number, reason?: SessionRestoredBannerReason) => void
+  queueResizeAll: (focusActive: boolean) => void
+  syncPaneCount: () => void
+  syncPaneLayoutRevision: () => void
+  syncCanExpandState: () => void
+  applyAppearance: (manager: PaneManager) => void
+  releaseWebviewDragPassthrough: { current: (() => void) | null }
+}
+
+/** Additional values captured while constructing a PaneManager's option bag. */
+export type TerminalPaneManagerOptionsContext = TerminalPaneMountContext & {
+  shouldPersistLayout: () => boolean
+  startup: PtyConnectionDeps['startup']
+  osc7UncHost: string | null
+}
+
+export type PaneClosedHandlerContext = TerminalPaneMountContext & {
+  paneId: number
+  closedPane?: { leafId: string; reason?: 'close' | 'detach' | 'retire' }
+}

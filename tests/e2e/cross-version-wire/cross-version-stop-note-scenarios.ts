@@ -6,7 +6,7 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
 } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
-import { HISTORY_PAGE_CONTENT_BUDGET_BYTES } from '../../../src/main/native-chat/agent-session-wire/agent-session-history-page-bounds'
+import { HISTORY_PAGE_CONTENT_BUDGET_BYTES } from '../../../src/main/native-chat/agent-session-wire/publication/history/agent-session-history-page-bounds'
 import {
   createReleasedStopNoteRig,
   noteId,

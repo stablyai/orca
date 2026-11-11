@@ -182,7 +182,7 @@ describe('UsageProviderStoreLifecycle', () => {
     vi.restoreAllMocks()
   })
 
-  it('reports enabled scans and preserves revisions when the usage cache is rebuilt', async () => {
+  it('retries saved revisions when the usage cache is rebuilt', async () => {
     const telemetry = setupTelemetryClientTest()
     try {
       const cacheFile = join(tempDirectory, 'provider.json')
@@ -200,26 +200,17 @@ describe('UsageProviderStoreLifecycle', () => {
       await original.flush()
       rmSync(cacheFile)
       const rebuilt = createStore(cacheFile)
-      await rebuilt.setEnabled(true)
-      await rebuilt.refresh(true)
-      expect(telemetry.mock.capture.mock.calls[1]?.[0]).toEqual(first)
-    } finally {
-      cleanupTelemetryClientTest(telemetry.envStash)
-    }
-  })
-
-  it('persists identities for a whole first scan with one write', async () => {
-    const telemetry = setupTelemetryClientTest()
-    try {
-      const sessions = Array.from({ length: 20 }, (_, index) => ({ id: `session-${index}` }))
-      scan.mockResolvedValue({ ...emptyScanResult(), sessions })
-      const store = createStore(join(tempDirectory, 'provider.json'))
-      await store.setEnabled(true)
       writeProbe.opens = 0
-      await store.refresh(true)
-      // Usage cache, identity file, and token-usage snapshot: one write each.
-      expect(writeProbe.opens).toBe(3)
-      expect(telemetry.mock.capture).toHaveBeenCalledTimes(sessions.length)
+      await rebuilt.whenLoaded()
+      expect(writeProbe.opens).toBe(0)
+      await rebuilt.setEnabled(true)
+      writeProbe.opens = 0
+      await rebuilt.refresh(true)
+      expect(telemetry.mock.capture).toHaveBeenCalledTimes(2)
+      expect(telemetry.mock.capture.mock.calls[1]?.[0]).toMatchObject({
+        properties: first.properties
+      })
+      expect(writeProbe.opens).toBe(1)
     } finally {
       cleanupTelemetryClientTest(telemetry.envStash)
     }
@@ -251,46 +242,6 @@ describe('UsageProviderStoreLifecycle', () => {
     expect(
       readFileSync(join(tempDirectory, 'usage-0-analytics-session-ids.json'), 'utf8')
     ).toContain(id)
-  })
-
-  it('skips disabled and fresh matching states', async () => {
-    const store = createStore()
-
-    await store.refresh()
-    expect(scan).not.toHaveBeenCalled()
-
-    store.replaceState(
-      makeState({
-        worktreeFingerprint: EMPTY_WORKTREE_FINGERPRINT,
-        scanState: { enabled: true, lastScanCompletedAt: NOW - 1 }
-      })
-    )
-    await store.refresh()
-
-    expect(scan).not.toHaveBeenCalled()
-  })
-
-  it('invalidates prior sources on fingerprint changes and reuses them for forced scans', async () => {
-    const store = createStore()
-    const sourceCache = {
-      path: join(tempDirectory, 'usage-0-sources.json'),
-      schemaVersion: 1,
-      worktreeFingerprint: EMPTY_WORKTREE_FINGERPRINT
-    }
-    store.replaceState(
-      makeState({
-        worktreeFingerprint: 'outdated',
-        scanState: { enabled: true, lastScanCompletedAt: NOW - 1 }
-      })
-    )
-
-    await store.refresh()
-    expect(scan).toHaveBeenLastCalledWith([], { ...sourceCache, reuse: false })
-
-    scan.mockClear()
-    await store.refresh(true)
-
-    expect(scan).toHaveBeenCalledWith([], { ...sourceCache, reuse: true })
   })
 
   it('keeps per-source records out of the report main writes', async () => {

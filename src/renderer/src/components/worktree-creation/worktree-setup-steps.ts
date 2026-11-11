@@ -2,7 +2,7 @@ import {
   getVisibleCheckoutProgress,
   type PendingWorktreeCreation,
   type WorktreeCreationPhase
-} from '@/lib/pending-worktree-creation'
+} from '@/lib/workspace/creation/pending-worktree-creation'
 
 export type WorktreeSetupStepId = 'prepare' | 'fetch' | 'create' | 'setup' | 'start-agent'
 
@@ -19,7 +19,13 @@ export type WorktreeSetupStep = {
 
 type SetupStepEntry = Pick<
   PendingWorktreeCreation,
-  'status' | 'phase' | 'indeterminate' | 'phaseLog' | 'startedAt' | 'checkoutProgress'
+  | 'status'
+  | 'phase'
+  | 'indeterminate'
+  | 'phaseLog'
+  | 'startedAt'
+  | 'checkoutProgress'
+  | 'chatHandedOffAt'
 >
 
 const PHASE_STEPS: readonly { phase: WorktreeCreationPhase; id: WorktreeSetupStepId }[] = [
@@ -28,25 +34,35 @@ const PHASE_STEPS: readonly { phase: WorktreeCreationPhase; id: WorktreeSetupSte
   { phase: 'creating', id: 'create' }
 ]
 
-const START_AGENT: WorktreeSetupStep = {
-  id: 'start-agent',
-  state: 'pending',
-  elapsedMs: null,
-  percent: null
+function startAgentStep(entry: SetupStepEntry, now: number): WorktreeSetupStep {
+  const startedAt = entry.chatHandedOffAt
+  if (startedAt === undefined) {
+    return { id: 'start-agent', state: 'pending', elapsedMs: null, percent: null }
+  }
+  return entry.status === 'error'
+    ? { id: 'start-agent', state: 'failed', elapsedMs: null, percent: null }
+    : { id: 'start-agent', state: 'running', elapsedMs: now - startedAt, percent: null }
 }
 
-/** Checklist rows for a pending chat's worktree; the agent row stays pending because this surface ends before it starts. */
+/** Checklist rows for a pending chat's worktree; the agent row runs once the worktree is ready and the chat opens. */
 export function deriveWorktreeSetupSteps(entry: SetupStepEntry, now: number): WorktreeSetupStep[] {
-  const failed = entry.status === 'error'
+  const handedOffAt = entry.chatHandedOffAt
+  // A failure after the worktree exists belongs to the agent row, not to a worktree step.
+  const failed = entry.status === 'error' && handedOffAt === undefined
   if (entry.indeterminate) {
     return [
       {
         id: 'setup',
-        state: failed ? 'failed' : 'running',
-        elapsedMs: failed ? null : now - entry.startedAt,
+        state: handedOffAt !== undefined ? 'done' : failed ? 'failed' : 'running',
+        elapsedMs:
+          handedOffAt !== undefined
+            ? handedOffAt - entry.startedAt
+            : failed
+              ? null
+              : now - entry.startedAt,
         percent: null
       },
-      START_AGENT
+      startAgentStep(entry, now)
     ]
   }
   const log = entry.phaseLog?.length
@@ -66,9 +82,9 @@ export function deriveWorktreeSetupSteps(entry: SetupStepEntry, now: number): Wo
       return
     }
     const record = entered[at]
-    const next = entered[at + 1]
-    if (next) {
-      steps.push({ id, state: 'done', elapsedMs: next.at - record.at, percent: null })
+    const endedAt = entered[at + 1]?.at ?? handedOffAt
+    if (endedAt !== undefined) {
+      steps.push({ id, state: 'done', elapsedMs: endedAt - record.at, percent: null })
       return
     }
     steps.push(
@@ -83,6 +99,6 @@ export function deriveWorktreeSetupSteps(entry: SetupStepEntry, now: number): Wo
           }
     )
   })
-  steps.push(START_AGENT)
+  steps.push(startAgentStep(entry, now))
   return steps
 }

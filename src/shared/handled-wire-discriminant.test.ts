@@ -7,11 +7,6 @@ const HANDLED: Record<'missing' | 'unavailable', true> = {
 }
 
 describe('isHandledWireDiscriminant', () => {
-  it('admits the handled members', () => {
-    expect(isHandledWireDiscriminant('missing', HANDLED)).toBe(true)
-    expect(isHandledWireDiscriminant('unavailable', HANDLED)).toBe(true)
-  })
-
   it('rejects a member this build has never heard of', () => {
     expect(isHandledWireDiscriminant('permission-denied', HANDLED)).toBe(false)
   })

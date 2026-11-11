@@ -2,7 +2,7 @@ import type { AppState } from '@/store/types'
 import {
   collectAgentPaneConversations,
   resolvePaneLastAgentConversation
-} from '@/lib/ai-vault-tab-title-requests'
+} from '@/lib/agent-session/history/title-sync/ai-vault-tab-title-requests'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import {
   adoptsCliConversations,

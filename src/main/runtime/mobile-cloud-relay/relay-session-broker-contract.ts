@@ -1,16 +1,11 @@
 import type WebSocket from 'ws'
 import type { OrcaCloudAuthConfig } from '../../orca-profiles/profile-cloud-auth-config'
-import type {
-  MobileRelayStatus,
-  MobileRelayStatusPublisher
-} from '../../../shared/mobile-relay-status'
-import type { E2EEKeypair } from '../e2ee-keypair'
+import type { MobileRelayStatusPublisher } from '../../../shared/remote-runtime/relay/mobile-relay-status'
+import type { E2EEKeypair } from '../rpc/server/pairing/e2ee-keypair'
 import type { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
 import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
 import type { RelayRegion } from './relay-region-probe'
 import type { RelayRegionDecision, RelayRegionWindow } from './relay-region-correction-protocol'
-
-export type RelayBrokerStatus = MobileRelayStatus
 
 export type RelayIdentity = {
   userId: string

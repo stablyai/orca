@@ -7,18 +7,13 @@ import {
 } from './native-chat/transcript/native-chat-subagent-summary'
 import { subagentFallbackText } from './native-chat/transcript/native-chat-subagent-items'
 import type { NativeChatMessage } from './native-chat/native-chat-types'
+import { isInlineDataUrl } from './native-chat/native-chat-inline-data-url'
 
 export function formatWorkerTranscriptMessage(message: NativeChatMessage): string {
-  // Print roster text twins instead of blocks. Renderer uses the inverse presentation rule (draw groups, hide fallback-shaped text).
-  const standIns = claimSubagentGroupTwins(message.blocks)
-  // Background-task twins require exact text: provider sentences have no reliable fallback shape.
-  const taskTwins = claimBackgroundTaskTwins(message.blocks)
+  const fallbacks = workerTranscriptBlockFallbacks(message.blocks)
   const blocks = message.blocks.map((block, index) => {
     if (block.type === 'text') {
       return block.text
-    }
-    if (block.type === 'background-task') {
-      return taskTwins.unpairedRows.get(index) ?? null
     }
     if (block.type === 'tool-call') {
       return `[tool ${block.name}] ${safeJson(block.input)}`
@@ -27,21 +22,37 @@ export function formatWorkerTranscriptMessage(message: NativeChatMessage): strin
       return `[tool result${block.isError ? ' error' : ''}] ${block.output}`
     }
     if (block.type === 'image-ref') {
-      return block.url ? `[image] ${block.url}` : `[image omitted]`
+      return block.url && !isInlineDataUrl(block.url) ? `[image] ${block.url}` : `[image omitted]`
     }
-    if (block.type === 'subagent-group') {
-      return standIns.get(index) ?? null
-    }
-    if (block.type === 'subagent') {
-      // A subagent's own row is its block and its twin, nothing else.
-      return message.blocks.some((other) => other.type === 'text')
-        ? null
-        : `[subagents] ${subagentFallbackText(block)}`
+    if (
+      block.type === 'background-task' ||
+      block.type === 'subagent-group' ||
+      block.type === 'subagent'
+    ) {
+      return fallbacks.get(index) ?? null
     }
     // Newer hosts may send unknown journal blocks; emit a marker instead of reading nonexistent fields.
     return '[unsupported block]'
   })
   return `[${message.role}] ${blocks.filter((line) => line !== null).join('\n')}`.trimEnd()
+}
+
+/** Plain-text stand-ins for structured blocks that have no frozen text twin. */
+export function workerTranscriptBlockFallbacks(
+  blocks: NativeChatMessage['blocks']
+): ReadonlyMap<number, string> {
+  const fallbacks = claimSubagentGroupTwins(blocks)
+  for (const [index, text] of claimBackgroundTaskTwins(blocks).unpairedRows) {
+    fallbacks.set(index, text)
+  }
+  if (!blocks.some((block) => block.type === 'text')) {
+    blocks.forEach((block, index) => {
+      if (block.type === 'subagent') {
+        fallbacks.set(index, `[subagents] ${subagentFallbackText(block)}`)
+      }
+    })
+  }
+  return fallbacks
 }
 
 /** Claim exact twins for every roster before positional fallback, or an earlier group can steal a later group’s twin.

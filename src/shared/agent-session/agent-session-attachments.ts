@@ -1,6 +1,6 @@
 // The execution host owns chat attachments; paired clients upload bytes, local pastes write in place, and agents receive only host paths.
 
-import type { ImportSkipReason } from '../filesystem-import-result-types'
+import type { ImportSkipReason } from '../file-import/filesystem-import-result'
 
 /** Host userData store name; clients recognize stored paths without a round trip. */
 export const AGENT_SESSION_ATTACHMENTS_DIR_NAME = 'agent-session-attachments'
@@ -48,6 +48,13 @@ export type AgentSessionAttachmentUploadCommitResult = {
 /** Preview routing only; the host still validates real-path access before reading. */
 export function isAgentSessionAttachmentStorePath(filePath: string): boolean {
   return filePath.split(/[\\/]/).includes(AGENT_SESSION_ATTACHMENTS_DIR_NAME)
+}
+
+/** The upload a stored path belongs to, read from the segment after the store's directory. */
+export function agentSessionAttachmentUploadIdOfPath(filePath: string): string | undefined {
+  const segments = filePath.split(/[\\/]/)
+  const store = segments.lastIndexOf(AGENT_SESSION_ATTACHMENTS_DIR_NAME)
+  return store === -1 ? undefined : segments[store + 1]?.toLowerCase()
 }
 
 // Windows refuses these as a file's name whatever its extension, and drops trailing dots and spaces.

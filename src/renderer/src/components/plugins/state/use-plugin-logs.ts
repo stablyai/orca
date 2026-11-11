@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type MutableRefObject } from 'react'
 import type { PluginHostListEntry, PluginHostLogLine } from '../../../../../preload/api-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type PluginLogsState = {
   loading: boolean
@@ -16,6 +16,7 @@ export function usePluginLogs(
   logsByPlugin: Readonly<Record<string, PluginLogsState>>
   showLogs: (pluginKey: string) => void
 } {
+  const t = useTranslate()
   const [logsByPlugin, setLogsByPlugin] = useState<Record<string, PluginLogsState>>({})
   const nextRequestRef = useRef(0)
   const requestsRef = useRef<Record<string, number>>({})
@@ -61,7 +62,7 @@ export function usePluginLogs(
             ...current,
             [pluginKey]: {
               loading: false,
-              error: translate(
+              error: t(
                 'auto.components.settings.PluginsSettingsSection.logsFailed',
                 'Could not load plugin logs.'
               )

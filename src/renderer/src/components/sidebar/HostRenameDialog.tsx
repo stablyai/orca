@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { applyHostRename, getHostDisplayLabelOverride } from './host-rename-remove'
 
@@ -29,17 +29,20 @@ export function HostRenameDialog({
   hostId,
   derivedLabel
 }: HostRenameDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const currentOverride = getHostDisplayLabelOverride(settings, hostId)
   const [value, setValue] = useState(currentOverride ?? '')
 
   // Seed persisted names on every open so canceled drafts cannot reappear.
-  useEffect(() => {
+  const [seededFor, setSeededFor] = useState({ open, currentOverride })
+  if (seededFor.open !== open || seededFor.currentOverride !== currentOverride) {
+    setSeededFor({ open, currentOverride })
     if (open) {
       setValue(currentOverride ?? '')
     }
-  }, [open, currentOverride])
+  }
 
   const submit = (): void => {
     void updateSettings({ hostSettingOverrides: applyHostRename(settings, hostId, value) })
@@ -57,10 +60,10 @@ export function HostRenameDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {translate('auto.components.sidebar.HostRenameDialog.1a2b3c4d5e', 'Rename host')}
+            {t('auto.components.sidebar.HostRenameDialog.1a2b3c4d5e', 'Rename host')}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.sidebar.HostRenameDialog.2b3c4d5e6f',
               'This label is shown only on this computer. Leave it blank to use the default name.'
             )}
@@ -68,7 +71,7 @@ export function HostRenameDialog({
         </DialogHeader>
         <div className="space-y-2">
           <Label htmlFor="host-rename-input">
-            {translate('auto.components.sidebar.HostRenameDialog.3c4d5e6f7a', 'Display name')}
+            {t('auto.components.sidebar.HostRenameDialog.3c4d5e6f7a', 'Display name')}
           </Label>
           <Input
             id="host-rename-input"
@@ -86,14 +89,14 @@ export function HostRenameDialog({
         </div>
         <DialogFooter className="sm:justify-between">
           <Button type="button" variant="ghost" disabled={!currentOverride} onClick={reset}>
-            {translate('auto.components.sidebar.HostRenameDialog.4d5e6f7a8b', 'Reset to default')}
+            {t('auto.components.sidebar.HostRenameDialog.4d5e6f7a8b', 'Reset to default')}
           </Button>
           <div className="flex gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              {translate('auto.components.sidebar.HostRenameDialog.5e6f7a8b9c', 'Cancel')}
+              {t('auto.components.sidebar.HostRenameDialog.5e6f7a8b9c', 'Cancel')}
             </Button>
             <Button type="button" onClick={submit}>
-              {translate('auto.components.sidebar.HostRenameDialog.6f7a8b9c0d', 'Save')}
+              {t('auto.components.sidebar.HostRenameDialog.6f7a8b9c0d', 'Save')}
             </Button>
           </div>
         </DialogFooter>

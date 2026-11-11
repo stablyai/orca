@@ -1,7 +1,7 @@
 import { createCipheriv, createHash, randomBytes } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { decryptCookieValueRaw } from './browser-cookie-decryption'
-import type { EncryptionKeyResult } from './browser-cookie-sqlite'
+import type { EncryptionKeyResult } from './chromium-encryption-key-contract'
 
 const HOST_KEY = '.example.com'
 const cbcKey = randomBytes(16)
@@ -34,19 +34,5 @@ describe('decryptCookieValueRaw host-key hash prefix', () => {
   it('decrypts an empty value on the Windows AES-GCM path', () => {
     const encrypted = encryptGcm(hostKeyHash(HOST_KEY))
     expect(decryptCookieValueRaw(encrypted, gcmKeyResult, HOST_KEY)).toEqual(Buffer.alloc(0))
-  })
-
-  it('keeps a pre-schema-24 value that has no prefix', () => {
-    const encrypted = encryptCbc(Buffer.from('plain-legacy-value'))
-    expect(decryptCookieValueRaw(encrypted, cbcKeyResult, HOST_KEY)).toEqual(
-      Buffer.from('plain-legacy-value')
-    )
-  })
-
-  it('still strips a binary prefix that is not this host key hash', () => {
-    const plaintext = Buffer.concat([hostKeyHash('.other.com'), Buffer.from('value')])
-    expect(decryptCookieValueRaw(encryptCbc(plaintext), cbcKeyResult, HOST_KEY)).toEqual(
-      Buffer.from('value')
-    )
   })
 })

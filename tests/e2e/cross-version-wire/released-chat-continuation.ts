@@ -1,7 +1,7 @@
 import { agentJournalLinkageFields } from '../../../src/shared/agent-session/journal/agent-session-journal-producer'
 import { parseAgentJournalItemKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalMessageItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
-import type { JournalReplacementItem } from '../../../src/main/native-chat/agent-session-journal/journal-epoch-replacement'
+import type { JournalReplacementItem } from '../../../src/main/native-chat/agent-session-journal/context-epochs/journal-epoch-replacement'
 import type { AgentSessionJournal } from '../../../src/main/native-chat/agent-session-journal/journal-store'
 
 // What a user does next with a chat a released build wrote: edit a card it queued (the first write,

@@ -134,6 +134,11 @@
   opacity: 1;
 }
 
+/* An open orchestration panel (z 15) would otherwise hide this pane's drag strip. */
+.pane:has(> [data-orchestration-crew] > aside) .pane-drag-handle {
+  z-index: 16;
+}
+
 .pane-drag-handle:active {
   cursor: grabbing;
 }
@@ -142,7 +147,7 @@
   opacity: 0.4 !important;
 }
 
-.pane.pane-focus-rim-flash::before {
+.pane-focus-rim-flash::before {
   content: '';
   position: absolute;
   inset: 1px;
@@ -188,7 +193,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pane.pane-focus-rim-flash::before {
+  .pane-focus-rim-flash::before {
     animation: none;
   }
 }

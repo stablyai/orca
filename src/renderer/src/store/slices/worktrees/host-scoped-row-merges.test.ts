@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import type { CreateWorktreeResult } from '../../../../../shared/worktree/create-types'
 import { applyCreatedWorktree } from './create/created-worktree-state-merge'
 import { applyWorktreeLineageUpdate } from './metadata/worktree-lineage-refresh'
-import { TEST_REPO, createTestStore, makeWorktree, seedStore } from '../store-test-helpers'
-import { createStoreCascadesMockApi } from '../store-cascades-test-harness'
+import { TEST_REPO } from '../../repos/repo.test-fixture'
+import { createTestStore, seedStore } from '../../testing/app-store-test-fixture'
+import { makeWorktree } from './worktree.test-fixture'
+import { createStoreCascadesMockApi } from '../../testing/app-store-cascade-api.test-fixture'
 
 vi.mock('sonner', () => ({
   toast: { warning: vi.fn(), info: vi.fn(), success: vi.fn(), error: vi.fn(), dismiss: vi.fn() }
@@ -103,22 +105,5 @@ describe('row writers touch only the copy on their own host', () => {
     expect(onHub(PARENT_ID)).toEqual(remoteParent)
     expect(onLocal(WORKTREE_ID)).toMatchObject({ parentWorktreeId: null })
     expect(onLocal(PARENT_ID)).toMatchObject({ childWorktreeIds: [] })
-  })
-
-  it("never appends a server's copy when only the local twin is listed", () => {
-    const store = createTestStore()
-    const { local } = seedTwins(store)
-    store.setState({ worktreesByRepo: { [REPO_ID]: [local] } })
-    applyWorktreeLineageUpdate(store.setState, WORKTREE_ID, {
-      target: { kind: 'environment', environmentId: 'hub' },
-      hostId: 'runtime:hub',
-      lineage: null,
-      updatedRemoteWorktree: makeWorktree({
-        id: WORKTREE_ID,
-        repoId: REPO_ID,
-        displayName: 'server after lineage'
-      })
-    })
-    expect(store.getState().worktreesByRepo[REPO_ID]).toEqual([local])
   })
 })

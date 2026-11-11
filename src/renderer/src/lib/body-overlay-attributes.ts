@@ -1,5 +1,7 @@
-export const MODAL_OVERLAY_CHILD_SELECTOR =
-  ":scope > [data-slot='dialog-overlay'], :scope > [data-slot='sheet-overlay']"
+const MOUNTED_MODAL_OVERLAY_CHILD_SELECTOR =
+  ":scope > :is([data-slot='dialog-overlay'], [data-slot='sheet-overlay'])"
+// Radix keeps a closing overlay mounted through its fade; it must not hold the blur past the dim.
+export const MODAL_OVERLAY_CHILD_SELECTOR = `${MOUNTED_MODAL_OVERLAY_CHILD_SELECTOR}:not([data-state='closed'])`
 const ONBOARDING_OVERLAY_CHILD_SELECTOR = ':scope > [data-onboarding-overlay]'
 
 let disposeInstalledObserver: (() => void) | null = null
@@ -11,7 +13,11 @@ export function installBodyOverlayAttributes(): () => void {
     return disposeInstalledObserver
   }
   const body = document.body
+  const observer = new MutationObserver(() => sync())
   const sync = (): void => {
+    for (const overlay of body.querySelectorAll(MOUNTED_MODAL_OVERLAY_CHILD_SELECTOR)) {
+      observer.observe(overlay, { attributes: true, attributeFilter: ['data-state'] })
+    }
     // toggleAttribute is a no-op when the state is unchanged, so unrelated portals cost no restyle.
     body.toggleAttribute(
       'data-modal-overlay-open',
@@ -23,8 +29,8 @@ export function installBodyOverlayAttributes(): () => void {
     )
   }
   sync()
-  // Overlays portal as direct body children; childList-only keeps the callback off app mutations.
-  const observer = new MutationObserver(sync)
+  // Overlays portal as direct body children; watching only body children and overlay state keeps
+  // the callback off app mutations.
   observer.observe(body, { childList: true })
   disposeInstalledObserver = () => {
     observer.disconnect()

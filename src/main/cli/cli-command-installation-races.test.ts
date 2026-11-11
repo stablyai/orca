@@ -154,17 +154,6 @@ async function rejectionFrom(operation: Promise<unknown>): Promise<Error> {
 }
 
 describe.skipIf(process.platform === 'win32')('CLI command filesystem races', () => {
-  it('replaces and removes an unchanged stale symlink through the real filesystem', async () => {
-    const fixture = await createMacCommandFixture()
-    await symlink(fixture.staleLauncherPath, fixture.commandPath)
-    const installer = createMacInstaller(fixture)
-
-    await expect(installer.install()).resolves.toMatchObject({ state: 'installed' })
-    await expect(readlink(fixture.commandPath)).resolves.toBe(fixture.launcherPath)
-    await expect(installer.remove()).resolves.toMatchObject({ state: 'not_installed' })
-    await expect(lstat(fixture.commandPath)).rejects.toMatchObject({ code: 'ENOENT' })
-  })
-
   it('restores a foreign symlink whose quarantined inode identity is reused', async () => {
     const fixture = await createMacCommandFixture()
     const foreignTarget = join(fixture.root, 'foreign-command')

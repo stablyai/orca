@@ -6,7 +6,7 @@ import {
   recordSshConnectionOpened,
   runAttributedToSshOwner
 } from './ssh-connection-attribution'
-import { unusedSshConnection } from '../unused-host-transport.test-fixture'
+import { unusedSshConnection } from '../../managed-server/testing/managed-host-transport.test-fixture'
 
 const transport = (): SshConnection => unusedSshConnection()
 

@@ -80,24 +80,19 @@
         }
       }
     },
-    "1f01e89e4f5e": {
-      "name": "loading",
-      "ordinal": 10,
-      "value": true
-    },
     "34d17f188229": {
       "name": "refreshing",
       "ordinal": 14,
       "value": false
     },
-    "3989aee13ae3": {
-      "name": "taskListSettled",
-      "ordinal": 16,
-      "value": true
-    },
     "39f99cf479f0": {
       "name": "error",
       "ordinal": 1,
+      "value": ""
+    },
+    "3aefb3006914": {
+      "name": "error",
+      "ordinal": 10,
       "value": ""
     },
     "3edde845aed1": {
@@ -136,6 +131,11 @@
       "loading": false,
       "refreshing": false
     },
+    "411aee2eccd9": {
+      "name": "refreshing",
+      "ordinal": 8,
+      "value": false
+    },
     "57c41659e935": {
       "name": "linear.searchIssues#1",
       "ordinal": 11,
@@ -169,6 +169,11 @@
           "isRpcDeliveryUnknown": true
         }
       }
+    },
+    "5ac1816a09df": {
+      "name": "loading",
+      "ordinal": 7,
+      "value": false
     },
     "5c90b1e0c7b8": {
       "name": "linear.searchIssues#1",
@@ -214,25 +219,10 @@
       "ordinal": 2,
       "value": true
     },
-    "6d7869e6f6ea": {
-      "name": "loading",
-      "ordinal": 6,
-      "value": false
-    },
     "7b6df16c2cf0": {
       "name": "linear.listIssues#1",
       "ordinal": 4,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.listIssues\",\"params\":{\"filter\":\"all\",\"limit\":50,\"workspaceId\":\"linear-workspace\"}}"
-    },
-    "83e72fb8e8cd": {
-      "name": "loading",
-      "ordinal": 14,
-      "value": false
-    },
-    "88d78bf42794": {
-      "name": "refreshing",
-      "ordinal": 7,
-      "value": false
     },
     "898b9173828f": {
       "name": "linear.searchIssues#1",
@@ -309,42 +299,6 @@
         }
       ],
       "loading": false,
-      "refreshing": false
-    },
-    "99f1aeb70deb": {
-      "error": "",
-      "items": [
-        {
-          "key": "linear:linear-workspace:issue-1",
-          "provider": "linear",
-          "source": {
-            "description": "",
-            "id": "issue-1",
-            "identifier": "ENG-1",
-            "labels": [],
-            "priority": 0,
-            "state": {
-              "color": "#000",
-              "name": "Todo",
-              "type": "unstarted"
-            },
-            "team": {
-              "id": "team-1",
-              "key": "ENG",
-              "name": "Engineering"
-            },
-            "title": "A Linear issue",
-            "updatedAt": "2020-01-01T00:00:00.000Z",
-            "url": "",
-            "workspaceId": "linear-workspace"
-          },
-          "status": "Todo",
-          "subtitle": "ENG-1 · Engineering",
-          "title": "A Linear issue",
-          "updatedAt": "2020-01-01T00:00:00.000Z"
-        }
-      ],
-      "loading": true,
       "refreshing": false
     },
     "9c9ce3233b41": {
@@ -427,11 +381,6 @@
         }
       }
     },
-    "9ddfd0ed517d": {
-      "name": "taskListSettled",
-      "ordinal": 8,
-      "value": true
-    },
     "a27078adc061": {
       "name": "items",
       "ordinal": 13,
@@ -506,6 +455,11 @@
           "updatedAt": "2020-01-01T00:00:00.000Z"
         }
       ]
+    },
+    "ba411b67de4b": {
+      "name": "taskListSettled",
+      "ordinal": 9,
+      "value": true
     },
     "bf0de0571310": {
       "name": "taskListSettled",
@@ -608,11 +562,6 @@
         }
       }
     },
-    "d0a895d46972": {
-      "name": "refreshing",
-      "ordinal": 15,
-      "value": false
-    },
     "d7a404a3f73e": {
       "name": "linear.searchIssues#1",
       "ordinal": 11,
@@ -711,11 +660,6 @@
       "ordinal": 12,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.searchIssues\",\"params\":{\"query\":\"bug\",\"limit\":50,\"workspaceId\":\"linear-workspace\"}}"
     },
-    "e492cb3deb38": {
-      "name": "error",
-      "ordinal": 9,
-      "value": ""
-    },
     "e9a14a2190c0": {
       "name": "error",
       "ordinal": 14,
@@ -728,6 +672,11 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "ef8932b03a8c": {
+      "name": "error",
+      "ordinal": 14,
+      "value": ""
     },
     "efa96bafb315": {
       "name": "linear.searchIssues#1",
@@ -764,6 +713,11 @@
           }
         }
       }
+    },
+    "f1dcb0c02c92": {
+      "name": "error",
+      "ordinal": 6,
+      "value": ""
     },
     "f55e7fb7039e": {
       "name": "linear.searchIssues#1",
@@ -817,9 +771,10 @@
             "39f99cf479f0",
             "609f32a21704",
             "b25e7c116f7e",
-            "6d7869e6f6ea",
-            "88d78bf42794",
-            "9ddfd0ed517d"
+            "f1dcb0c02c92",
+            "5ac1816a09df",
+            "411aee2eccd9",
+            "ba411b67de4b"
           ]
         }
       },
@@ -838,9 +793,10 @@
             "39f99cf479f0",
             "609f32a21704",
             "b25e7c116f7e",
-            "6d7869e6f6ea",
-            "88d78bf42794",
-            "9ddfd0ed517d"
+            "f1dcb0c02c92",
+            "5ac1816a09df",
+            "411aee2eccd9",
+            "ba411b67de4b"
           ]
         }
       },
@@ -855,16 +811,16 @@
             "set-query-1": "eb79a9b3682a",
             "load-2": "eb79a9b3682a"
           },
-          "state": "99f1aeb70deb",
+          "state": "94f44b229d7d",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
             "b25e7c116f7e",
-            "6d7869e6f6ea",
-            "88d78bf42794",
-            "9ddfd0ed517d",
-            "e492cb3deb38",
-            "1f01e89e4f5e",
+            "f1dcb0c02c92",
+            "5ac1816a09df",
+            "411aee2eccd9",
+            "ba411b67de4b",
+            "3aefb3006914",
             "8a38ef76313b",
             "34d17f188229"
           ]
@@ -886,15 +842,16 @@
             "39f99cf479f0",
             "609f32a21704",
             "b25e7c116f7e",
-            "6d7869e6f6ea",
-            "88d78bf42794",
-            "9ddfd0ed517d",
-            "e492cb3deb38",
-            "1f01e89e4f5e",
+            "f1dcb0c02c92",
+            "5ac1816a09df",
+            "411aee2eccd9",
+            "ba411b67de4b",
+            "3aefb3006914",
             "a27078adc061",
-            "83e72fb8e8cd",
-            "d0a895d46972",
-            "3989aee13ae3"
+            "ef8932b03a8c",
+            "1a5f65e0078d",
+            "ab9026005b36",
+            "bf0de0571310"
           ]
         }
       },
@@ -914,11 +871,11 @@
             "39f99cf479f0",
             "609f32a21704",
             "b25e7c116f7e",
-            "6d7869e6f6ea",
-            "88d78bf42794",
-            "9ddfd0ed517d",
-            "e492cb3deb38",
-            "1f01e89e4f5e",
+            "f1dcb0c02c92",
+            "5ac1816a09df",
+            "411aee2eccd9",
+            "ba411b67de4b",
+            "3aefb3006914",
             "c73faccc085d",
             "e9a14a2190c0",
             "1a5f65e0078d",
@@ -943,11 +900,11 @@
             "39f99cf479f0",
             "609f32a21704",
             "b25e7c116f7e",
-            "6d7869e6f6ea",
-            "88d78bf42794",
-            "9ddfd0ed517d",
-            "e492cb3deb38",
-            "1f01e89e4f5e",
+            "f1dcb0c02c92",
+            "5ac1816a09df",
+            "411aee2eccd9",
+            "ba411b67de4b",
+            "3aefb3006914",
             "c73faccc085d",
             "e9a14a2190c0",
             "1a5f65e0078d",
@@ -972,11 +929,11 @@
             "39f99cf479f0",
             "609f32a21704",
             "b25e7c116f7e",
-            "6d7869e6f6ea",
-            "88d78bf42794",
-            "9ddfd0ed517d",
-            "e492cb3deb38",
-            "1f01e89e4f5e",
+            "f1dcb0c02c92",
+            "5ac1816a09df",
+            "411aee2eccd9",
+            "ba411b67de4b",
+            "3aefb3006914",
             "c73faccc085d",
             "e9a14a2190c0",
             "1a5f65e0078d",
@@ -1001,11 +958,11 @@
             "39f99cf479f0",
             "609f32a21704",
             "b25e7c116f7e",
-            "6d7869e6f6ea",
-            "88d78bf42794",
-            "9ddfd0ed517d",
-            "e492cb3deb38",
-            "1f01e89e4f5e",
+            "f1dcb0c02c92",
+            "5ac1816a09df",
+            "411aee2eccd9",
+            "ba411b67de4b",
+            "3aefb3006914",
             "c73faccc085d",
             "e9a14a2190c0",
             "1a5f65e0078d",
@@ -1030,11 +987,11 @@
             "39f99cf479f0",
             "609f32a21704",
             "b25e7c116f7e",
-            "6d7869e6f6ea",
-            "88d78bf42794",
-            "9ddfd0ed517d",
-            "e492cb3deb38",
-            "1f01e89e4f5e",
+            "f1dcb0c02c92",
+            "5ac1816a09df",
+            "411aee2eccd9",
+            "ba411b67de4b",
+            "3aefb3006914",
             "c73faccc085d",
             "e9a14a2190c0",
             "1a5f65e0078d",
@@ -1059,11 +1016,11 @@
             "39f99cf479f0",
             "609f32a21704",
             "b25e7c116f7e",
-            "6d7869e6f6ea",
-            "88d78bf42794",
-            "9ddfd0ed517d",
-            "e492cb3deb38",
-            "1f01e89e4f5e",
+            "f1dcb0c02c92",
+            "5ac1816a09df",
+            "411aee2eccd9",
+            "ba411b67de4b",
+            "3aefb3006914",
             "c73faccc085d",
             "e9a14a2190c0",
             "1a5f65e0078d",
@@ -1088,11 +1045,11 @@
             "39f99cf479f0",
             "609f32a21704",
             "b25e7c116f7e",
-            "6d7869e6f6ea",
-            "88d78bf42794",
-            "9ddfd0ed517d",
-            "e492cb3deb38",
-            "1f01e89e4f5e",
+            "f1dcb0c02c92",
+            "5ac1816a09df",
+            "411aee2eccd9",
+            "ba411b67de4b",
+            "3aefb3006914",
             "c73faccc085d",
             "e9a14a2190c0",
             "1a5f65e0078d",
@@ -1117,11 +1074,11 @@
             "39f99cf479f0",
             "609f32a21704",
             "b25e7c116f7e",
-            "6d7869e6f6ea",
-            "88d78bf42794",
-            "9ddfd0ed517d",
-            "e492cb3deb38",
-            "1f01e89e4f5e",
+            "f1dcb0c02c92",
+            "5ac1816a09df",
+            "411aee2eccd9",
+            "ba411b67de4b",
+            "3aefb3006914",
             "c73faccc085d",
             "e9a14a2190c0",
             "1a5f65e0078d",
@@ -1146,11 +1103,11 @@
             "39f99cf479f0",
             "609f32a21704",
             "b25e7c116f7e",
-            "6d7869e6f6ea",
-            "88d78bf42794",
-            "9ddfd0ed517d",
-            "e492cb3deb38",
-            "1f01e89e4f5e",
+            "f1dcb0c02c92",
+            "5ac1816a09df",
+            "411aee2eccd9",
+            "ba411b67de4b",
+            "3aefb3006914",
             "c73faccc085d",
             "e9a14a2190c0",
             "1a5f65e0078d",
@@ -1175,11 +1132,11 @@
             "39f99cf479f0",
             "609f32a21704",
             "b25e7c116f7e",
-            "6d7869e6f6ea",
-            "88d78bf42794",
-            "9ddfd0ed517d",
-            "e492cb3deb38",
-            "1f01e89e4f5e",
+            "f1dcb0c02c92",
+            "5ac1816a09df",
+            "411aee2eccd9",
+            "ba411b67de4b",
+            "3aefb3006914",
             "c73faccc085d",
             "e9a14a2190c0",
             "1a5f65e0078d",

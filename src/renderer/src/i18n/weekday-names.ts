@@ -7,8 +7,8 @@ let cached: { locale: string; names: readonly string[] } | null = null
 const SUNDAY_UTC_MS = Date.UTC(2026, 0, 4)
 const DAY_MS = 24 * 60 * 60 * 1000
 
-export function getUiWeekdayNames(): readonly string[] {
-  const locale = getIntlLocale()
+export function getUiWeekdayNames(intlLocale: string = getIntlLocale()): readonly string[] {
+  const locale = intlLocale
   if (!cached || cached.locale !== locale) {
     const formatter = new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone: 'UTC' })
     cached = {

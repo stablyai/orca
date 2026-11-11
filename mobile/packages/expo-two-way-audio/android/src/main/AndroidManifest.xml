@@ -1,2 +1,5 @@
-<manifest>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+  <!-- On-device speech runs only on API 31+; older devices keep the rest of the module. -->
+  <uses-sdk tools:overrideLibrary="com.google.mlkit.genai.speechrecognition,com.google.mlkit.genai.common" />
 </manifest>

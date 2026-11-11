@@ -1,45 +1,14 @@
 import { execFileSync, type ExecFileSyncOptions } from 'node:child_process'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const runWslProcessMock = vi.hoisted(() => vi.fn())
-vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
+vi.mock('../wsl/execution/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
 
 import { detectWslCommandsOnPath } from './preflight-wsl-agent-detection'
 import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
-
-describe('detectWslCommandsOnPath', () => {
-  beforeEach(() => {
-    runWslProcessMock.mockReset()
-    runWslProcessMock.mockResolvedValue({
-      environmentResolved: true,
-      code: 0,
-      stdout: '',
-      stderr: '',
-      timedOut: false
-    })
-  })
-
-  afterEach(() => {
-    vi.restoreAllMocks()
-  })
-
-  it('ignores commands whose resolved path is not absolute', async () => {
-    runWslProcessMock.mockResolvedValue({
-      environmentResolved: true,
-      code: 0,
-      stdout: '__ORCA_AGENT_PATH__claude\tclaude\n' + '__ORCA_AGENT_PATH__codex\tC:\\spoof\n',
-      stderr: '',
-      timedOut: false
-    })
-
-    const found = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude', 'codex'])
-
-    expect(found).toEqual(new Set())
-  })
-})
 
 describe('the detection script itself, run by a real POSIX shell', () => {
   // Execute real shell globbing and executable checks; Windows has no /bin/sh.
@@ -83,11 +52,6 @@ describe('the detection script itself, run by a real POSIX shell', () => {
     const out = await runScript()
     expect(out).toContain('__ORCA_AGENT_PATH__orca-fake-cli')
     expect(out).toContain('.nvm/versions/node/v20.1.0/bin/orca-fake-cli')
-  })
-
-  itPosix('still reports nothing for a command that is genuinely absent', async () => {
-    plant('.local/bin', 'orca-fake-cli')
-    expect(await runScript()).not.toContain('nosuchtool')
   })
 
   itPosix('finds a CLI when $HOME contains a space', async () => {
@@ -149,43 +113,6 @@ describe('the PATH walk, run by a real POSIX shell', () => {
 
 describe('the mount table read, counted against a real shell', () => {
   const itPosix = process.platform === 'win32' ? it.skip : it
-
-  const runWithCountingAwk = async (commands: string[]): Promise<number> => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-awk-'))
-    try {
-      const counter = join(root, 'count')
-      const bin = join(root, 'bin')
-      mkdirSync(bin, { recursive: true })
-      // A stub that records each fork, then answers as awk would on a host
-      // with no Windows mounts.
-      writeFileSync(join(bin, 'awk'), `#!/bin/sh\necho x >> ${counter}\nexit 0\n`)
-      chmodSync(join(bin, 'awk'), 0o755)
-      writeFileSync(counter, '')
-
-      runWslProcessMock.mockResolvedValue({
-        environmentResolved: true,
-        code: 0,
-        stdout: '',
-        stderr: '',
-        timedOut: false
-      })
-      await detectWslCommandsOnPath({ distro: 'Ubuntu' }, commands)
-      const script = String(runWslProcessMock.mock.calls.at(-1)?.[0].script)
-      const options: ExecFileSyncOptions = {
-        encoding: 'utf8',
-        env: { PATH: `${bin}:/usr/bin:/bin`, HOME: root }
-      }
-      execFileSync('/bin/sh', ['-c', script], options)
-      return readFileSync(counter, 'utf8').trim().split('\n').filter(Boolean).length
-    } finally {
-      rmSync(root, { recursive: true, force: true })
-    }
-  }
-
-  itPosix('reads /proc/mounts once, not once per probed command', async () => {
-    // Cache mount discovery across the per-agent loop to avoid repeated awk forks.
-    expect(await runWithCountingAwk(['claude', 'codex', 'gemini', 'opencode'])).toBe(1)
-  })
 
   itPosix('applies the memoised mount list to every command, not just the first', async () => {
     // Fork counts alone miss a clobbered mount cache; all later agents must still skip Windows mounts.

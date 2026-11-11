@@ -2,7 +2,8 @@ import type React from 'react'
 import { useCallback, useRef, useState } from 'react'
 import { AlertTriangle, Check, Copy } from 'lucide-react'
 import { Trans } from 'react-i18next'
-import { i18n, translate } from '@/i18n/i18n'
+import { i18n } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type QuickOpenInstallRgGuidanceParts = {
   reason: string
@@ -37,6 +38,7 @@ export function QuickOpenInstallRgGuidance({
   command,
   guidance
 }: QuickOpenInstallRgGuidanceParts): React.JSX.Element {
+  const t = useTranslate()
   const [copied, setCopied] = useState(false)
   const copiedResetTimerRef = useRef<number | null>(null)
   // Late clipboard completion must not start timers after unmount.
@@ -88,7 +90,7 @@ export function QuickOpenInstallRgGuidance({
       >
         <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
         <p className="text-[13px] leading-5">
-          {translate('quickOpen.scanTooLarge', 'Quick Open scan too large ({{reason}}).', {
+          {t('quickOpen.scanTooLarge', 'Quick Open scan too large ({{reason}}).', {
             reason
           })}
         </p>
@@ -96,7 +98,7 @@ export function QuickOpenInstallRgGuidance({
       <p>
         <Trans
           i18n={i18n}
-          defaults={translate(
+          defaults={t(
             'quickOpen.installRipgrepOnRemote',
             'Install <code>ripgrep</code> on the remote to enable fast, gitignore-aware listing:'
           )}
@@ -113,12 +115,12 @@ export function QuickOpenInstallRgGuidance({
             type="button"
             onClick={handleCopy}
             className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-            aria-label={translate('auto.components.QuickOpen.73b44e7bde', 'Copy install command')}
+            aria-label={t('auto.components.QuickOpen.73b44e7bde', 'Copy install command')}
           >
             {copied ? <Check size={12} /> : <Copy size={12} />}
             {copied
-              ? translate('auto.components.QuickOpen.cf144856dc', 'Copied')
-              : translate('auto.components.QuickOpen.995be8ea22', 'Copy')}
+              ? t('auto.components.QuickOpen.cf144856dc', 'Copied')
+              : t('auto.components.QuickOpen.995be8ea22', 'Copy')}
           </button>
         </div>
       ) : guidance ? (

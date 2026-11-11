@@ -3,14 +3,16 @@ import { mkdtemp, writeFile, unlink, rmdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
-import type { useMobileStructuredAgentOptions } from '../../../mobile/src/session/use-mobile-structured-agent-options'
+import type { useMobileStructuredAgentOptions } from '../../../mobile/src/session/native-chat/input/use-mobile-structured-agent-options'
 
 /** Execute the real phone hook in root-only workers, which do not install Expo. */
 export async function loadMobileStructuredOptions(): Promise<
   typeof useMobileStructuredAgentOptions
 > {
   const result = await build({
-    entryPoints: [resolve('mobile/src/session/use-mobile-structured-agent-options.ts')],
+    entryPoints: [
+      resolve('mobile/src/session/native-chat/input/use-mobile-structured-agent-options.ts')
+    ],
     bundle: true,
     platform: 'node',
     format: 'cjs',
@@ -30,7 +32,7 @@ export async function loadMobileStructuredOptions(): Promise<
           }))
           builder.onLoad({ filter: /^uuid$/, namespace: 'unit-phone' }, () => ({
             resolveDir: process.cwd(),
-            contents: `export { createBrowserUuid as randomV4Uuid } from ${JSON.stringify(resolve('src/renderer/src/lib/browser-uuid.ts'))}`
+            contents: `export { createNonSecureContextUuid as randomV4Uuid } from ${JSON.stringify(resolve('src/shared/non-secure-context-uuid.ts'))}`
           }))
         }
       }

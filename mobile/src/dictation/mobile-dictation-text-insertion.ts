@@ -1,5 +1,5 @@
 import type { TextInputSelectionChangeEvent } from 'react-native'
-import { dictationJoinsWithoutSpace } from '../../../src/shared/dictation-transcript-spacing'
+import { dictationSeparators } from '../../../src/shared/dictation-transcript-spacing'
 
 // A field's selection, valid only while the field still holds the text it was read from.
 export type MobileDictationAnchor = {
@@ -21,13 +21,7 @@ export function readMobileDictationAnchor(
   return { ...selection, text: typeof text === 'string' ? text : value }
 }
 
-const STRAIGHT_QUOTE_RE = /["'`]/
-// A straight quote opens after a space or the start, and closes before a space, punctuation or the end; anything else is an apostrophe.
-const opensQuote = (before: string): boolean => /(^|[\s([{])["'`]$/.test(before)
-const closesQuote = (after: string): boolean => /^["'`]([^\p{L}\p{N}]|$)/u.test(after)
-
 // Dictated text replaces the selection it started on, like typing; a draft changed since, or never focused, gets it at the end.
-// It is spaced from its neighbours unless desktop's punctuation and CJK rules join them, or it sits just inside a quote.
 export function splitDraftForDictation(
   draft: string,
   text: string,
@@ -38,12 +32,8 @@ export function splitDraftForDictation(
   const end = Math.max(start, Math.min(placed?.end ?? draft.length, draft.length))
   const before = draft.slice(0, start)
   const after = draft.slice(end)
-  const opened = opensQuote(before)
-  const closed = closesQuote(after) && STRAIGHT_QUOTE_RE.test(before)
-  return {
-    before: opened || dictationJoinsWithoutSpace(before, text) ? before : `${before} `,
-    after: closed || dictationJoinsWithoutSpace(text, after) ? after : ` ${after}`
-  }
+  const { leading, trailing } = dictationSeparators(before, text, after)
+  return { before: `${before}${leading}`, after: `${trailing}${after}` }
 }
 
 export function insertDictationText(

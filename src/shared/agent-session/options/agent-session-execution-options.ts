@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 
 /** Freeze choices on acceptance; permission stays a launch setting. Strip unknown keys from free-form send/saved options. */
 export const AgentSessionExecutionOptionsSchema = z.object({
@@ -6,7 +6,8 @@ export const AgentSessionExecutionOptionsSchema = z.object({
   effort: z.string().min(1).max(64).optional(),
   personality: z.string().min(1).max(64).optional(),
   fastMode: z.enum(['true', 'false']).optional(),
-  serviceTier: z.string().min(1).max(64).optional()
+  serviceTier: z.string().min(1).max(64).optional(),
+  interactionMode: z.enum(['default', 'plan']).optional()
 })
 
 export type AgentSessionExecutionOptions = z.infer<typeof AgentSessionExecutionOptionsSchema>

@@ -1,0 +1,61 @@
+// @vitest-environment happy-dom
+
+import { describe, expect, it, vi } from 'vitest'
+import { createClaudeModelSwitchConfirmationObserver } from './claude-model-switch-confirmation'
+
+describe('Claude model switch confirmation detection', () => {
+  it.each([
+    [
+      'quoted model name',
+      'Claude Opus 5.5',
+      'Set model to `Opus 5.5` and saved as your default for new sessions'
+    ],
+    [
+      'matching requested context variant',
+      'Claude Opus 5.5 (1M context)',
+      'Set model to `Opus 5.5 (1M context)` and saved as your default for new sessions'
+    ],
+    ['raw model id fallback', 'claude-opus-5-5', 'Set model to Opus 5.5'],
+    ['alias picker row', 'Opus alias', 'Set model to Opus 5.5']
+  ])('confirms a picker label with %s', async (_name, label, output) => {
+    const dataObserver = { current: (_data: string): void => {} }
+    const observer = createClaudeModelSwitchConfirmationObserver({
+      ptyId: 'pty-1',
+      expectedModelLabel: label,
+      subscribeToData: (watcher) => {
+        dataObserver.current = watcher
+        return () => {}
+      }
+    })
+
+    await observer.ready
+    observer.arm()
+    observer.startDetection()
+    dataObserver.current(output)
+
+    await expect(observer.result).resolves.toBe('applied')
+  })
+
+  it('reports matching success output split across PTY chunks', async () => {
+    const dataObserver = { current: (_data: string): void => {} }
+    const unsubscribe = vi.fn(() => {})
+    const observer = createClaudeModelSwitchConfirmationObserver({
+      ptyId: 'pty-1',
+      expectedModelLabel: 'Fable 5',
+      subscribeToData: (watcher) => {
+        dataObserver.current = watcher
+        return unsubscribe
+      },
+      timeoutMs: 100
+    })
+
+    await observer.ready
+    dataObserver.current('historical Set model to Fable 5')
+    observer.arm()
+    dataObserver.current('\u001b[2mSet\u001b[10Gmo')
+    dataObserver.current('del\u001b[16Gto\u001b[19GFable 5 and saved as your default\u001b[0m')
+
+    await expect(observer.result).resolves.toBe('applied')
+    expect(unsubscribe).toHaveBeenCalledOnce()
+  })
+})

@@ -1,7 +1,7 @@
 import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
-import { contentTypeForExtension } from '../../mobile-web-bundle-manifest.mjs'
+import { contentTypeForExtension } from '../../build/mobile-web-app/mobile-web-bundle-manifest.mjs'
 import { fileURLToPath } from 'node:url'
 
 export const projectDir = fileURLToPath(new URL('../../../..', import.meta.url))
@@ -104,7 +104,7 @@ export async function readBridgeWindowCaps() {
 // Read upload base64 chunk cap/product from source; copied resize budget could pass after upload path changes.
 export async function readClipboardImageUploadChunkBase64Chars() {
   const source = await readFile(
-    join(projectDir, 'mobile/src/session/mobile-clipboard-image-upload-chunk.ts'),
+    join(projectDir, 'mobile/src/files/attachments/mobile-clipboard-image-upload-chunk.ts'),
     'utf8'
   )
   const match = /MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS = ([0-9*\s]+)/.exec(source)
@@ -483,60 +483,6 @@ export function installPageErrorSentinel() {
   }
   globalThis.__orcaSentinel = sentinel
   window.onerror = sentinel
-}
-
-// Tag scheduled work with current terminal container; firing after that element leaves DOM proves callback leaked into replacement.
-// Use actual DOM lifetime, not test mount counter (React schedules independently); retain all schedules to prove work existed before asserting none leaked.
-export function installSchedulerRecorder() {
-  globalThis.__orcaScheduler = { watching: false, scheduled: [], leaked: [], heldFrames: 0 }
-  const state = globalThis.__orcaScheduler
-  const requestFrame = globalThis.requestAnimationFrame.bind(globalThis)
-  const cancelFrame = globalThis.cancelAnimationFrame.bind(globalThis)
-  const heldFrames = new Map()
-  let nextHeldFrame = -2
-  globalThis.__orcaReleaseFrames = () => {
-    state.holdFramesFrom = null
-    for (const callback of heldFrames.values()) {
-      requestFrame(callback)
-    }
-    heldFrames.clear()
-    state.heldFrames = 0
-  }
-  globalThis.cancelAnimationFrame = (id) => {
-    if (heldFrames.delete(id)) {
-      state.heldFrames--
-    } else {
-      cancelFrame(id)
-    }
-  }
-  const wrap = (schedule, kind) =>
-    function (callback, ...rest) {
-      if (!state.watching || typeof callback !== 'function') {
-        return schedule(callback, ...rest)
-      }
-      const caller = ((new Error('scheduled').stack ?? '').split('\n')[2] ?? '').trim()
-      const container = document.getElementById('terminal-container')
-      // Track fired separately: cancelled and pending callbacks can both remain unfired.
-      const entry = { kind, caller, owned: container !== null, fired: false }
-      state.scheduled.push(entry)
-      const recorded = (...args) => {
-        entry.fired = true
-        if (container !== null && !container.isConnected) {
-          state.leaked.push(`${kind} from ${caller}`)
-        }
-        return callback(...args)
-      }
-      if (kind === 'frame' && state.holdFramesFrom && caller.includes(state.holdFramesFrom)) {
-        const id = nextHeldFrame--
-        heldFrames.set(id, recorded)
-        state.heldFrames++
-        return id
-      }
-      return schedule(recorded, ...rest)
-    }
-  globalThis.requestAnimationFrame = wrap(requestFrame, 'frame')
-  globalThis.setTimeout = wrap(globalThis.setTimeout.bind(globalThis), 'timer')
-  globalThis.setInterval = wrap(globalThis.setInterval.bind(globalThis), 'interval')
 }
 
 // Install before bundle so boot-time refusal counts too.

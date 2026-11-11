@@ -9,6 +9,7 @@ import {
   DEFINITIONS_BY_ID,
   KEYBINDING_DEFINITIONS,
   getKeybindingPlatform,
+  getLegacySearchBindings,
   isDigitIndexActionId
 } from './definitions'
 import { keybindingConflictIdentities } from './matching-key'
@@ -84,6 +85,18 @@ export function bindingsOverlap(
   )
 }
 
+export function isDefaultKeybinding(
+  definition: KeybindingDefinition,
+  binding: string,
+  platform: NodeJS.Platform
+): boolean {
+  // Previous defaults retain intentional sharing when profiles inherit or save them.
+  return [
+    ...getDefaultBindings(definition, platform),
+    ...(getLegacySearchBindings(platform)[definition.id] ?? [])
+  ].some((ownDefault) => bindingsOverlap(definition, binding, definition, ownDefault, platform))
+}
+
 export function getEffectiveKeybindingsForAction(
   actionId: KeybindingActionId,
   platform: NodeJS.Platform,
@@ -124,9 +137,7 @@ export function getEffectiveKeybindingsForDefinition(
           getConfiguredBindings(other.id, platform, overrides, other).some(
             (claim) =>
               bindingsOverlap(definition, binding, other, claim, platform) &&
-              !getDefaultBindings(other, platform).some((ownDefault) =>
-                bindingsOverlap(other, claim, other, ownDefault, platform)
-              )
+              !isDefaultKeybinding(other, claim, platform)
           )
       )
   )

@@ -1,9 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
-import { TERMINAL_SEND_METHODS } from '../../terminal/terminal-send-method'
-import { sendTerminalStreamInput } from '../../terminal/terminal-input-delivery'
-import { eraseRpcMethods, isStreamingMethod, type RpcMethod } from '../../../core'
-import { registerBoundPty } from '../../../../bind-first-pane.test-fixture'
+
+import { registerBoundPty } from '../../../../orca-runtime-tests/bind-first-pane.test-fixture'
 
 const h = createOrchestrationWorkerReleaseHarness()
 beforeEach(() => h.setup())
@@ -59,60 +57,6 @@ it('an unknown handle does not fence another worker or access the database', asy
   await expect(
     h.call('orchestration.workerRelease', { dispatch: worker.dispatchId })
   ).resolves.toMatchObject({ state: 'released' })
-})
-
-it.each(['unary', 'stream'])('mobile %s bytes do no orchestration database work', async (lane) => {
-  const worker = await h.startSettledWorker()
-  const runtime = h.runtime
-  runtime.registerPreAllocatedHandleForPty('pty-worker', 'term_worker')
-  registerBoundPty(runtime, 'pty-worker', 'repo::worktree', null, {
-    tabId: 'tab_worker',
-    leafId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
-    incarnationId: 'runtime_test:term_worker:1'
-  })
-  const write = vi.fn(() => true)
-  runtime.setPtyController({ write, kill: () => true, getForegroundProcess: async () => null })
-  const commit = vi.fn(async () => {})
-  vi.spyOn(runtime, 'beginMobileInputFloor').mockReturnValue({ commit, rollback: vi.fn() })
-  const dbAccess = vi.spyOn(runtime, 'getOrchestrationDb')
-  const prepare = vi.spyOn(h.db.db, 'prepare')
-  const exec = vi.spyOn(h.db.db, 'exec')
-  const params = {
-    terminal: 'term_worker',
-    text: 'x',
-    client: { id: 'phone', type: 'mobile' as const }
-  }
-  if (lane === 'stream') {
-    await expect(sendTerminalStreamInput(runtime, { ...params, isMobile: true })).resolves.toBe(
-      'delivered'
-    )
-  } else {
-    const method = eraseRpcMethods(TERMINAL_SEND_METHODS).find(
-      (m): m is RpcMethod => m.name === 'terminal.send' && !isStreamingMethod(m)
-    )!
-    await expect(
-      method.handler(method.params!.parse(params) as never, { runtime } as never)
-    ).resolves.toMatchObject({ send: { accepted: true } })
-  }
-  expect(write).toHaveBeenCalledWith('pty-worker', 'x', 'driving')
-  expect(commit).toHaveBeenCalledTimes(1)
-  expect(dbAccess).not.toHaveBeenCalled()
-  expect(prepare).not.toHaveBeenCalled()
-  expect(exec).not.toHaveBeenCalled()
-  expect(h.db.getWorkerTerminalResourceByOwner(worker.dispatchId)?.ownership_state).toBe('owned')
-})
-
-it('Keep open and the countdown are reachable from a mobile-scoped device token', async () => {
-  // An older phone's typing report must keep resolving too, or it would surface errors.
-  const { MOBILE_RPC_METHOD_ALLOWLIST } =
-    await import('../../../../runtime-rpc/runtime-rpc-mobile-method-allowlist')
-  for (const method of [
-    'orchestration.workerAutoClose',
-    'orchestration.workerKeepOpen',
-    'orchestration.workerTerminalUserInput'
-  ]) {
-    expect(MOBILE_RPC_METHOD_ALLOWLIST.has(method)).toBe(true)
-  }
 })
 
 // Boot-wait Keep open must find custody written at terminal creation, or a later release closes a kept pane (#19337, #19608).

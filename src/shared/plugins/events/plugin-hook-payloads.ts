@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { TERMINAL_INPUT_MAX_BYTES } from '../../terminal-input'
+import { TERMINAL_INPUT_MAX_BYTES } from '../../terminal/input/terminal-input'
 import type { PluginHookName } from '../contributions/plugin-hook-contribution'
 import { PLUGIN_TERMINAL_ID_MAX_LENGTH } from '../workers/plugin-host-api'
 
@@ -112,6 +112,19 @@ export const agentToolAfterHookPayloadSchema = z.object({
   output: z.unknown().optional()
 })
 
+export const editorSaveBeforeHookPayloadSchema = z.object({
+  /** The editor tab's workspace; null for a file outside any workspace. */
+  workspaceId: z.string().min(1).max(2048).nullable(),
+  /** Relative to the workspace root (or the absolute path outside one). */
+  path: z
+    .string()
+    .min(1)
+    .max(32 * 1024),
+  /** The editor's language, e.g. `typescript`, when it has one. */
+  languageId: z.string().min(1).max(128).optional(),
+  text: z.string().max(TERMINAL_INPUT_MAX_BYTES)
+})
+
 export const PLUGIN_HOOK_SPECS = {
   'terminal.send': {
     payload: terminalSendHookPayloadSchema,
@@ -168,6 +181,14 @@ export const PLUGIN_HOOK_SPECS = {
     deadlineMs: PLUGIN_HOOK_DEFAULT_DEADLINE_MS,
     summary:
       'An agent in an Orca terminal finished a tool call (successfully or not). Observe only: Orca does not wait for it.'
+  },
+  'editor.save.before': {
+    payload: editorSaveBeforeHookPayloadSchema,
+    result: denyResultSchema,
+    mutable: ['text'],
+    deadlineMs: PLUGIN_HOOK_DEFAULT_DEADLINE_MS,
+    summary:
+      'The person is about to save a text file from an Orca editor tab (an explicit save, not autosave). Change `text` with `next` (format on save) or return `{ deny }` to refuse the save, which shows your reason. Edits made while the hook ran stay unsaved.'
   }
 } satisfies Record<PluginHookName, PluginHookSpec>
 

@@ -2,25 +2,26 @@ import { useMemo } from 'react'
 import { ArrowDown, ArrowUp, Columns2, Eye, FileText, ListTree, Rows2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useVisibleWorktreeDiffComments } from '../diff-comments/use-visible-worktree-diff-comments'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import EditorViewToggle, {
   CSV_VIEW_MODE_METADATA,
   CUSTOM_EDITOR_SOURCE_METADATA,
   NOTEBOOK_VIEW_MODE_METADATA,
   SVG_VIEW_MODE_METADATA
-} from './EditorViewToggle'
-import type { CustomEditorToggleValue, EditorToggleValue } from './EditorViewToggle'
+} from './view-mode/EditorViewToggle'
+import type { CustomEditorToggleValue, EditorToggleValue } from './view-mode/EditorViewToggle'
+import { MarkdownDefaultViewContextMenu } from './view-mode/MarkdownDefaultViewContextMenu'
 import type { EditorHeaderOpenFileState } from './editor-header'
-import { DiffNotesSendMenu } from './DiffNotesSendMenu'
+import { DiffNotesSendMenu } from './diff/review/DiffNotesSendMenu'
 import { EditorPanelActionsMenu } from './EditorPanelActionsMenu'
 import { EditorFileLocationMenuItems } from './EditorFileLocationMenuItems'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { EditorPanelHeaderPath } from './EditorPanelHeaderPath'
-import { useDiffNavigation } from './diff-navigation-context'
+import { useDiffNavigation } from './diff/review/diff-navigation-context'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
-import type { ArtifactWriteRequest } from '../../../../shared/artifacts'
+import type { ArtifactWriteRequest } from '../../../../shared/artifacts/artifacts'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
 import { editorArtifactSourceKey } from './editor-artifact-upload'
 
@@ -40,7 +41,7 @@ type EditorPanelHeaderProps = {
   hasEditorToggle: boolean
   availableEditorToggleModes: readonly EditorToggleValue[]
   effectiveToggleValue: EditorToggleValue
-  canOpenPreviewToSide: boolean
+  canOpenPreview: boolean
   canShowMarkdownPreview: boolean
   canShowMarkdownTableOfContents: boolean
   isMarkdownTableOfContentsDisabled: boolean
@@ -53,7 +54,7 @@ type EditorPanelHeaderProps = {
   openFileState: EditorHeaderOpenFileState
   onCopyPath: () => void
   onOpenDiffTargetFile: (preferredMarkdownViewMode?: 'rich') => void
-  onOpenPreviewToSide: () => void
+  onOpenPreview: () => void
   onOpenMarkdownPreview: () => void
   onToggleSideBySide: () => void
   onEditorToggleChange: (next: EditorToggleValue) => void
@@ -76,7 +77,7 @@ export function EditorPanelHeader({
   hasEditorToggle,
   availableEditorToggleModes,
   effectiveToggleValue,
-  canOpenPreviewToSide,
+  canOpenPreview,
   canShowMarkdownPreview,
   canShowMarkdownTableOfContents,
   isMarkdownTableOfContentsDisabled,
@@ -89,7 +90,7 @@ export function EditorPanelHeader({
   openFileState,
   onCopyPath,
   onOpenDiffTargetFile,
-  onOpenPreviewToSide,
+  onOpenPreview,
   onOpenMarkdownPreview,
   onToggleSideBySide,
   onEditorToggleChange,
@@ -98,7 +99,11 @@ export function EditorPanelHeader({
   onExportMarkdownToPdf,
   createArtifactRequest
 }: EditorPanelHeaderProps): React.JSX.Element {
-  const { comments: diffComments } = useVisibleWorktreeDiffComments(activeFile.worktreeId)
+  const t = useTranslate()
+  const { owner: commentOwner, comments: diffComments } = useVisibleWorktreeDiffComments(
+    activeFile.worktreeId,
+    activeFile
+  )
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[activeFile.worktreeId])
   const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap === true)
   const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace === true)
@@ -112,6 +117,28 @@ export function EditorPanelHeader({
   const previousChangeShortcut = useShortcutKeyDetails('editor.previousChange')
   const nextChangeShortcut = useShortcutKeyDetails('editor.nextChange')
 
+  // Why: Markdown edit tabs expose the default view on right-click; other files keep a plain switcher.
+  const canSetMarkdownDefaultView = isMarkdown && activeFile.mode === 'edit'
+  const editorViewToggle = (
+    <EditorViewToggle
+      value={effectiveToggleValue}
+      modes={availableEditorToggleModes}
+      onChange={onEditorToggleChange}
+      metadataOverride={
+        isCsv
+          ? CSV_VIEW_MODE_METADATA
+          : isNotebook
+            ? NOTEBOOK_VIEW_MODE_METADATA
+            : isSvg
+              ? SVG_VIEW_MODE_METADATA
+              : Object.keys(customEditorTitles).length > 0
+                ? CUSTOM_EDITOR_SOURCE_METADATA
+                : undefined
+      }
+      customEditorTitles={customEditorTitles}
+    />
+  )
+
   return (
     <div className="editor-header">
       <EditorPanelHeaderPath
@@ -121,43 +148,34 @@ export function EditorPanelHeader({
         onCopyPath={onCopyPath}
         onOpenMarkdownPreview={onOpenMarkdownPreview}
       />
-      {canOpenPreviewToSide && (
-        <TooltipProvider delayDuration={300}>
+      {canOpenPreview && (
+        <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 type="button"
                 className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-                onClick={onOpenPreviewToSide}
-                aria-label={translate(
-                  'auto.components.editor.EditorPanelHeader.fb8331694e',
-                  'Open Preview to the Side'
-                )}
+                onClick={onOpenPreview}
+                aria-label={t('auto.components.editor.EditorViewToggle.0d193dc03c', 'Preview')}
               >
                 <Eye size={14} />
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={4}>
-              {translate(
-                'auto.components.editor.EditorPanelHeader.fb8331694e',
-                'Open Preview to the Side'
-              )}
+              {t('auto.components.editor.EditorViewToggle.0d193dc03c', 'Preview')}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
       )}
       {isSingleDiff && (
-        <TooltipProvider delayDuration={300}>
+        <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 type="button"
                 className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
                 onClick={() => onOpenDiffTargetFile(isMarkdown ? 'rich' : undefined)}
-                aria-label={translate(
-                  'auto.components.editor.EditorPanelHeader.a10d9b8337',
-                  'Open file'
-                )}
+                aria-label={t('auto.components.editor.EditorPanelHeader.a10d9b8337', 'Open file')}
                 disabled={!openFileState.canOpen}
               >
                 <FileText size={14} />
@@ -166,15 +184,12 @@ export function EditorPanelHeader({
             <TooltipContent side="bottom" sideOffset={4}>
               {openFileState.canOpen
                 ? isMarkdown
-                  ? translate(
+                  ? t(
                       'auto.components.editor.EditorPanelHeader.f0fd4174b5',
                       'Open file tab to use rich markdown editing'
                     )
-                  : translate(
-                      'auto.components.editor.EditorPanelHeader.9b80bbe1de',
-                      'Open file tab'
-                    )
-                : translate(
+                  : t('auto.components.editor.EditorPanelHeader.9b80bbe1de', 'Open file tab')
+                : t(
                     'auto.components.editor.EditorPanelHeader.c98ce191da',
                     'This diff has no modified-side file to open'
                   )}
@@ -184,6 +199,7 @@ export function EditorPanelHeader({
       )}
       {isSingleDiff && fileDiffComments.length > 0 && (
         <DiffNotesSendMenu
+          owner={commentOwner}
           worktreeId={activeFile.worktreeId}
           groupId={activeGroupId ?? activeFile.worktreeId}
           comments={diffComments}
@@ -196,7 +212,7 @@ export function EditorPanelHeader({
         />
       )}
       {isDiffSurface && (
-        <TooltipProvider delayDuration={300}>
+        <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -209,11 +225,8 @@ export function EditorPanelHeader({
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={4}>
               {sideBySide
-                ? translate(
-                    'auto.components.editor.EditorPanelHeader.94756f08ba',
-                    'Switch to inline diff'
-                  )
-                : translate(
+                ? t('auto.components.editor.EditorPanelHeader.94756f08ba', 'Switch to inline diff')
+                : t(
                     'auto.components.editor.EditorPanelHeader.e836faacfa',
                     'Switch to side-by-side diff'
                   )}
@@ -225,7 +238,7 @@ export function EditorPanelHeader({
                 type="button"
                 className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
                 onClick={goToPreviousDiff}
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.editor.EditorPanelHeader.2076ecfc9c',
                   'Previous change'
                 )}
@@ -235,7 +248,7 @@ export function EditorPanelHeader({
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={4}>
-              {translate('auto.components.editor.EditorPanelHeader.2076ecfc9c', 'Previous change')}
+              {t('auto.components.editor.EditorPanelHeader.2076ecfc9c', 'Previous change')}
               {previousChangeShortcut.keys.length > 0 && (
                 <ShortcutKeyCombo
                   keys={previousChangeShortcut.keys}
@@ -251,17 +264,14 @@ export function EditorPanelHeader({
                 type="button"
                 className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
                 onClick={goToNextDiff}
-                aria-label={translate(
-                  'auto.components.editor.EditorPanelHeader.631dab0df3',
-                  'Next change'
-                )}
+                aria-label={t('auto.components.editor.EditorPanelHeader.631dab0df3', 'Next change')}
                 disabled={changeCount === 0}
               >
                 <ArrowDown size={14} />
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={4}>
-              {translate('auto.components.editor.EditorPanelHeader.631dab0df3', 'Next change')}
+              {t('auto.components.editor.EditorPanelHeader.631dab0df3', 'Next change')}
               {nextChangeShortcut.keys.length > 0 && (
                 <ShortcutKeyCombo
                   keys={nextChangeShortcut.keys}
@@ -273,27 +283,17 @@ export function EditorPanelHeader({
           </Tooltip>
         </TooltipProvider>
       )}
-      {hasEditorToggle && !activeFile.csvPreviewOnly && (
-        <EditorViewToggle
-          value={effectiveToggleValue}
-          modes={availableEditorToggleModes}
-          onChange={onEditorToggleChange}
-          metadataOverride={
-            isCsv
-              ? CSV_VIEW_MODE_METADATA
-              : isNotebook
-                ? NOTEBOOK_VIEW_MODE_METADATA
-                : isSvg
-                  ? SVG_VIEW_MODE_METADATA
-                  : Object.keys(customEditorTitles).length > 0
-                    ? CUSTOM_EDITOR_SOURCE_METADATA
-                    : undefined
-          }
-          customEditorTitles={customEditorTitles}
-        />
-      )}
+      {hasEditorToggle &&
+        !activeFile.csvPreviewOnly &&
+        (canSetMarkdownDefaultView ? (
+          <MarkdownDefaultViewContextMenu onSelectView={onEditorToggleChange}>
+            {editorViewToggle}
+          </MarkdownDefaultViewContextMenu>
+        ) : (
+          editorViewToggle
+        ))}
       {canShowMarkdownTableOfContents && (
-        <TooltipProvider delayDuration={300}>
+        <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -305,7 +305,7 @@ export function EditorPanelHeader({
                 }`}
                 onClick={onToggleMarkdownTableOfContents}
                 disabled={isMarkdownTableOfContentsDisabled}
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.editor.EditorPanelHeader.5447c4f68f',
                   'Table of Contents'
                 )}
@@ -316,14 +316,11 @@ export function EditorPanelHeader({
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={4}>
               {isMarkdownTableOfContentsDisabled
-                ? translate(
+                ? t(
                     'auto.components.editor.EditorPanelHeader.146cb5473c',
                     'Table of Contents is available in rich or preview mode'
                   )
-                : translate(
-                    'auto.components.editor.EditorPanelHeader.5447c4f68f',
-                    'Table of Contents'
-                  )}
+                : t('auto.components.editor.EditorPanelHeader.5447c4f68f', 'Table of Contents')}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>

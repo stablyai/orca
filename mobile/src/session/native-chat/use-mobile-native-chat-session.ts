@@ -1,8 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import {
-  createNativeChatTranscriptRetention,
-  encodeNativeChatTranscriptIdentity
-} from '../../../../src/shared/native-chat/transcript/native-chat-transcript-retention'
+import { EMPTY_NATIVE_CHAT_TRANSCRIPT } from '../../../../src/shared/native-chat/transcript/native-chat-transcript-retention'
 import {
   createNativeChatMerger,
   replaceList
@@ -11,24 +8,30 @@ import type {
   NativeChatMessage,
   NativeChatTurnLifecycle
 } from '../../../../src/shared/native-chat/native-chat-types'
+import type { NativeChatTranscriptPage } from '../../../../src/shared/native-chat/native-chat-transcript-frames'
 import { buildNativeChatSubscriptionId } from '../../../../src/shared/native-chat/native-chat-stream-unsubscribe'
-import type { RpcClient } from '../../transport/rpc-client'
-import { nativeChatSessionPageRead } from '../mobile-session-read-operations'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import { nativeChatSessionPageRead } from './agent-session/mobile-native-chat-page-read-operations'
 import {
   applyMobileNativeChatStreamFrame,
   type MobileNativeChatStreamFrame
-} from './mobile-native-chat-stream-frame'
+} from './transcript/mobile-native-chat-stream-frame'
 import { randomV4Uuid } from '../../platform/random-v4-uuid'
-import { useMobileOlderPageLoader, type OlderPagePhase } from '../use-mobile-older-page-loader'
+import {
+  useMobileOlderPageLoader,
+  type OlderPagePhase
+} from './transcript/use-mobile-older-page-loader'
+import {
+  cacheMobileNativeChatTranscript,
+  heldMobileNativeChatTranscript,
+  mobileNativeChatResumePoint,
+  mobileNativeChatTranscriptCache
+} from './transcript/mobile-native-chat-transcript-cache'
+import { terminalChatTranscriptIdentity } from './transcript/mobile-native-chat-transcript-store'
+import { noteChatTranscript } from './transcript/mobile-native-chat-transcript-writer'
+import { useStoredChatTranscript } from './transcript/use-stored-chat-transcript'
 
-export type MobileNativeChatStatus =
-  | 'idle'
-  | 'loading'
-  | 'waiting-session'
-  // No transcript file yet: render the empty chat while keeping its read unsettled.
-  | 'awaiting-transcript'
-  | 'ready'
-  | 'error'
+import type { MobileNativeChatStatus } from './mobile-native-chat-session-status'
 
 export type MobileNativeChatSession = {
   messages: NativeChatMessage[]
@@ -39,6 +42,8 @@ export type MobileNativeChatSession = {
   /** The read failed for good (damage, or a newer Orca's chat): the error says why, once, and
    *  there is nothing to send into. */
   readFailedFinally?: boolean
+  /** This phone's /clear is out and its divider has not landed: the old rows are hidden. */
+  clearing?: boolean
   hasMore: boolean
   /** `olderPages === 'loading'`, kept because recorded RPC fixtures read it. */
   loadingEarlier: boolean
@@ -46,6 +51,8 @@ export type MobileNativeChatSession = {
   loadEarlier: () => void
   /** Latest provider turn boundary from the transcript feed; absent from older hosts. */
   transcriptLifecycle?: NativeChatTurnLifecycle
+  /** When the rows on screen were saved, while they are an earlier launch's copy no read has confirmed. */
+  savedAt?: number | null
 }
 
 const INITIAL_LIMIT = 40
@@ -63,7 +70,8 @@ function nextPageWindow(
 }
 
 type ReadSessionResult =
-  | { messages: NativeChatMessage[]; hasMore?: boolean; beforeOffset?: number }
+  | (Pick<NativeChatTranscriptPage, 'messages'> &
+      Partial<Pick<NativeChatTranscriptPage, 'hasMore' | 'beforeOffset'>>)
   | { error: string }
 // Retain paged history across contiguous replay; ordered read windows replace while live appends merge by id.
 export function useMobileNativeChatSession(args: {
@@ -76,12 +84,7 @@ export function useMobileNativeChatSession(args: {
 }): MobileNativeChatSession {
   const { client, sourceIdentity, agent, sessionId, transcriptPath } = args
   const [messages, setMessages] = useState<NativeChatMessage[]>([])
-  const identity = encodeNativeChatTranscriptIdentity([
-    sourceIdentity,
-    agent,
-    sessionId,
-    transcriptPath
-  ])
+  const identity = terminalChatTranscriptIdentity(sourceIdentity, agent, sessionId, transcriptPath)
   // Derive pre-read status from props now; a passive effect would lag one commit.
   const initialStatus: MobileNativeChatStatus =
     !client || !agent ? 'idle' : !sessionId ? 'waiting-session' : 'loading'
@@ -90,6 +93,8 @@ export function useMobileNativeChatSession(args: {
     client: RpcClient
     identity: string
     status: MobileNativeChatStatus
+    // This read failed before it could confirm the cached rows on screen.
+    rowsUnconfirmed?: boolean
   } | null>(null)
   // Discard settled state as soon as identity/client changes; view toggles must not revive ready over cleared rows.
   let current = read
@@ -115,13 +120,26 @@ export function useMobileNativeChatSession(args: {
   sessionIdRef.current = sessionId
   // Only the first real snapshot establishes the base; subsequent snapshots are reconnect replays.
   const snapshotSeenRef = useRef(false)
-  const transcriptRetentionRef = useRef(createNativeChatTranscriptRetention())
   const settledReady = settled?.status === 'ready'
   useEffect(() => {
     if (settledReady) {
-      transcriptRetentionRef.current.capture(identity, messages)
+      const beforeOffset = beforeOffsetRef.current
+      cacheMobileNativeChatTranscript(identity, { messages, hasMore, beforeOffset })
+      noteChatTranscript(
+        identity,
+        messages,
+        () => client?.getState() === 'connected',
+        (savedAt) => ({ kind: 'terminal', savedAt, messages, hasMore, beforeOffset })
+      )
     }
-  }, [identity, messages, settledReady])
+  }, [client, identity, messages, hasMore, settledReady])
+  const readingStore = useStoredChatTranscript({
+    // A tab that names no session (or a structured one) has no copy of its own.
+    identity: agent && sessionId ? identity : null,
+    read: !mobileNativeChatTranscriptCache.has(identity),
+    turnSettled:
+      settledReady && (lifecycle?.identity !== identity || lifecycle.lifecycle?.state !== 'working')
+  })
 
   const setList = useCallback((next: readonly NativeChatMessage[]) => {
     replaceList(mergerRef.current, next)
@@ -134,11 +152,17 @@ export function useMobileNativeChatSession(args: {
     supersede()
     limitRef.current = INITIAL_LIMIT
     snapshotSeenRef.current = false
-    setList([])
+    const cached = readingStore ? undefined : heldMobileNativeChatTranscript(identity)
+    if (cached && !mobileNativeChatTranscriptCache.has(identity)) {
+      cacheMobileNativeChatTranscript(identity, cached)
+    }
+    const resumeAfter = cached ? mobileNativeChatResumePoint(cached.messages) : null
+    const holdsCachedRows = Boolean(cached?.messages.length)
+    setList(cached?.messages ?? EMPTY_NATIVE_CHAT_TRANSCRIPT)
     setError(undefined)
-    setHasMore(false)
-    beforeOffsetRef.current = null
-    if (!client || !agent) {
+    setHasMore(cached?.hasMore ?? false)
+    beforeOffsetRef.current = cached?.beforeOffset ?? null
+    if (!client || !agent || readingStore) {
       return
     }
     if (!sessionId) {
@@ -154,13 +178,19 @@ export function useMobileNativeChatSession(args: {
         // Use a distinct token per screen so another viewer cannot evict this host feed.
         subscriptionId: buildNativeChatSubscriptionId(agent, sessionId, randomV4Uuid()),
         capabilities: { transcriptPending: 1, transcriptSourceOrder: 1 },
-        ...(transcriptPath ? { transcriptPath } : {})
+        ...(transcriptPath ? { transcriptPath } : {}),
+        ...(resumeAfter ? { resumeAfter } : {})
       },
       (raw) => {
         if (cancelled) {
           return
         }
         const frame = raw as MobileNativeChatStreamFrame
+        // No file yet says nothing about rows this subscription already holds: unsettle the read, keep the rows.
+        if (resumeAfter && frame.type === 'snapshot' && frame.pending) {
+          setRead({ client, identity, status: 'awaiting-transcript' })
+          return
+        }
         const applied = applyMobileNativeChatStreamFrame({
           merger: mergerRef.current,
           frame,
@@ -172,7 +202,12 @@ export function useMobileNativeChatSession(args: {
           return
         }
         if (applied.kind === 'error') {
-          setRead({ client, identity, status: 'error' })
+          setRead({
+            client,
+            identity,
+            status: 'error',
+            rowsUnconfirmed: holdsCachedRows && !snapshotSeenRef.current
+          })
           setError(applied.error)
           return
         }
@@ -218,7 +253,7 @@ export function useMobileNativeChatSession(args: {
       supersede()
       unsubscribe()
     }
-  }, [client, agent, sessionId, transcriptPath, identity, setList, supersede])
+  }, [client, agent, sessionId, transcriptPath, identity, readingStore, setList, supersede])
 
   const loadEarlier = useCallback(() => {
     if (!client || !agent || !sessionId || !hasMore) {
@@ -286,23 +321,26 @@ export function useMobileNativeChatSession(args: {
     })
   }, [client, agent, sessionId, transcriptPath, hasMore, setList, loadOlderPages])
 
-  // Retain history through any unsettled read so disconnect/error cannot replace the conversation with a card.
-  const visibleMessages = transcriptRetentionRef.current.visible({
-    identity,
-    messages,
-    settled: settledReady
-  })
+  // Show the cached rows through any unsettled read: a reopen paints at once, and a disconnect or error can't blank the conversation.
+  const held = settledReady ? undefined : heldMobileNativeChatTranscript(identity)
+  const visibleMessages = settledReady ? messages : (held?.messages ?? EMPTY_NATIVE_CHAT_TRANSCRIPT)
 
   return {
     // Withhold rows until they belong to this identity; passive reset otherwise exposes previous-tab history for one commit.
     messages: visibleMessages,
     status,
-    transcriptLoading: status === 'loading' || status === 'awaiting-transcript',
+    // Rows left from an earlier visit or launch can't answer "is this ask still open?" until a read confirms them.
+    transcriptLoading:
+      status === 'loading' ||
+      status === 'awaiting-transcript' ||
+      settled?.rowsUnconfirmed === true ||
+      held?.savedAt !== undefined,
     error,
     hasMore,
     loadingEarlier: olderPages === 'loading',
     olderPages,
     loadEarlier,
-    transcriptLifecycle: lifecycle?.identity === identity ? lifecycle.lifecycle : undefined
+    transcriptLifecycle: lifecycle?.identity === identity ? lifecycle.lifecycle : undefined,
+    savedAt: held?.savedAt ?? null
   }
 }

@@ -18,24 +18,22 @@ import { spawnProcess } from '@orca/process-host'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AgentSessionSubscribeEvent } from '../../shared/agent-session/agent-session-wire'
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { parsePairingCode } from '../../shared/pairing'
+import { parsePairingCode } from '../../shared/remote-runtime/pairing/pairing'
 import {
   pairedRuntimeConnectionFromOffer,
   type PairedRuntimeConnection
-} from '../../shared/paired-runtime-connection'
+} from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import {
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../shared/agent-session/agent-session-runtime-capabilities'
-import {
-  sendRemoteRuntimeRequest,
-  subscribeRemoteRuntimeRequest,
-  type RemoteRuntimeSubscription
-} from '../../shared/remote-runtime/remote-runtime-client'
+import { sendRemoteRuntimeRequestOnSocket } from '../../shared/remote-runtime/requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from '../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
+import type { RemoteRuntimeTransportSubscription } from '../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import { claudeSessionIdForOrcaSession } from '../claude/structured/claude-structured-session-id'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import { materializeOrcadArtifact } from './orcad-artifact-materializer'
 import {
   hostServerTarget,
@@ -141,14 +139,17 @@ async function call<T>(
   method: string,
   params: unknown
 ): Promise<T> {
-  const response = await sendRemoteRuntimeRequest<T>(
+  const response = await sendRemoteRuntimeRequestOnSocket<T>(
     pairing,
     method,
     params,
     20_000,
     undefined,
     undefined,
-    capabilities
+    undefined,
+    capabilities,
+    undefined,
+    undefined
   )
   if (!response.ok) {
     throw new Error(`${method}: ${JSON.stringify(response.error)}`)
@@ -232,7 +233,7 @@ describe.skipIf(skip || process.platform === 'win32')('packaged plain-Node struc
     }
     writeFileSync(join(userData, 'orca-data.json'), JSON.stringify(state))
     const server = launch(slotDir, runtime, userData, home)
-    let subscription: RemoteRuntimeSubscription | undefined
+    let subscription: RemoteRuntimeTransportSubscription | undefined
     try {
       const pairing = await server.ready
       const group = await call<{ group: { id: string } }>(pairing, 'projectGroup.create', {
@@ -259,7 +260,7 @@ describe.skipIf(skip || process.platform === 'win32')('packaged plain-Node struc
       const items = new Map<string, AgentJournalRenderItem>()
       const observedText: string[] = []
       const errors: Error[] = []
-      subscription = await subscribeRemoteRuntimeRequest<AgentSessionSubscribeEvent>(
+      subscription = await subscribeRemoteRuntimeTransport<AgentSessionSubscribeEvent>(
         pairing,
         'agentSession.subscribe',
         { sessionId },
@@ -326,8 +327,7 @@ describe.skipIf(skip || process.platform === 'win32')('packaged plain-Node struc
           '--output-format',
           '--include-partial-messages',
           '--replay-user-messages',
-          '--permission-prompt-tool',
-          'stdio',
+          '--permission-prompt-tool=stdio',
           `--session-id=${claudeSessionIdForOrcaSession(sessionId)}`,
           '--setting-sources=user,project,local',
           '--dangerously-skip-permissions'

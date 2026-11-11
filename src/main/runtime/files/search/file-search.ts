@@ -2,9 +2,9 @@ import {
   QUICK_OPEN_SEARCH_VERSION,
   QuickOpenPathRanker,
   isQuickOpenQueryTooLarge
-} from '../../../../shared/quick-open-path-search'
-import type { RuntimeFileListResult } from '../../../../shared/runtime-types'
-import type { SearchOptions, SearchResult } from '../../../../shared/code-search-types'
+} from '../../../../shared/quick-open/quick-open-path-search'
+import type { RuntimeFileListResult } from '../../../../shared/file-listing/runtime-file-list'
+import type { SearchOptions, SearchResult } from '../../../../shared/file-search/code-search-types'
 import {
   throwIfSignalAborted,
   waitForPromiseWithSignal

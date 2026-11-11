@@ -3,10 +3,12 @@ import type { SessionSearchDegradedRoot } from './session-search-degraded-roots'
 import type { SessionSearchDirectoryReader } from './session-search-directory-listings'
 import { isUnderScanRoot } from './session-search-scan-roots'
 import { splitSyntheticSessionSource } from './session-search-synthetic-sources'
-import type { SessionSearchStore } from './session-search-store'
+import type { SessionSearchIndexStore } from './session-search-store'
 
 // Walk missing directories upward to seek a listing that proves which component disappeared.
 const MISSING_DIRECTORY = new Set(['ENOENT', 'ENOTDIR'])
+// Cached listings retire without awaiting; drain held removals so a huge sweep stays bounded.
+const REMOVALS_PER_FLUSH = 256
 
 export type SessionSearchRetirement = {
   retired: string[]
@@ -19,7 +21,7 @@ export type SessionSearchRetirement = {
 }
 
 export type SessionSearchRetirementArgs = {
-  store: SessionSearchStore
+  store: SessionSearchIndexStore
   /** Indexed paths absent from this pass’s discovery. */
   paths: readonly string[]
   /** Longest containing root bounds each path’s proof walk. */
@@ -82,6 +84,9 @@ export async function retireDeletedSessionSearchSources(
     if (proof.verdict === 'gone') {
       store.removeFile(path)
       retirement.retired.push(path)
+      if (retirement.retired.length % REMOVALS_PER_FLUSH === 0) {
+        await store.flush?.()
+      }
       continue
     }
     if (proof.verdict === 'present') {

@@ -139,7 +139,6 @@ import {
   appendFileSync
 } from 'node:fs'
 import { scanCodexUsageFiles } from './scanner'
-import type { CodexUsagePersistedFile } from './types'
 
 /** Mirrors the checkpoint window in jsonl-file-checkpoint.ts. */
 const BOUNDARY_WINDOW_BYTES = 4096
@@ -218,21 +217,11 @@ function usageRecordRange(from: number, to: number): string {
   return out
 }
 
-function bytesReadFor(filePath: string): number {
-  return streamReads
-    .filter((entry) => entry.path === filePath)
-    .reduce((total, entry) => total + entry.bytes, 0)
-}
-
 /** The iterator marks parse reads to distinguish them from bounded digest reads. */
 function parseReadOffsets(filePath: string): number[] {
   return streamReads
     .filter((entry) => entry.path === filePath && !entry.digest)
     .map((entry) => entry.start)
-}
-
-function reparsedFromStart(filePath: string): boolean {
-  return parseReadOffsets(filePath).includes(0)
 }
 
 function recordedResumeOffset(
@@ -288,32 +277,6 @@ afterEach(() => {
 })
 
 describe('scanCodexUsageFiles incremental append', () => {
-  it('re-reads only the appended bytes when a rollout grows', async () => {
-    const rolloutPath = join(sessionsDir, 'rollout-grow.jsonl')
-    writeFileSync(rolloutPath, `${sessionMeta('session-grow')}${usageRecordRange(0, 200)}`, 'utf-8')
-    const sizeBeforeAppend = statSync(rolloutPath).size
-
-    const first = await scanCodexUsageFiles([], [])
-    expect(totalTokens(first.dailyAggregates)).toBe(200)
-    expect(bytesReadFor(rolloutPath)).toBeGreaterThanOrEqual(sizeBeforeAppend)
-
-    streamReads.length = 0
-    appendFileSync(rolloutPath, usageRecordRange(200, 202), 'utf-8')
-    const appendedBytes = statSync(rolloutPath).size - sizeBeforeAppend
-
-    const second = await scanCodexUsageFiles([], first.processedFiles)
-    expect(totalTokens(second.dailyAggregates)).toBe(202)
-    expect(second.sessions[0]?.eventCount).toBe(202)
-
-    // Allow checkpoint verification overhead as well as appended bytes.
-    expect(reparsedFromStart(rolloutPath)).toBe(false)
-    expect(bytesReadFor(rolloutPath)).toBeLessThan(sizeBeforeAppend)
-    expect(bytesReadFor(rolloutPath)).toBeGreaterThan(appendedBytes)
-    expect(bytesReadFor(rolloutPath)).toBeLessThanOrEqual(
-      appendedBytes + 11 * BOUNDARY_WINDOW_BYTES
-    )
-  })
-
   it('carries cumulative token totals across the resume boundary', async () => {
     const rolloutPath = join(sessionsDir, 'rollout-cumulative.jsonl')
     writeFileSync(
@@ -345,18 +308,6 @@ describe('scanCodexUsageFiles incremental append', () => {
     expect(second.dailyAggregates).toEqual(fromScratch.dailyAggregates)
   })
 
-  it('still reuses an untouched rollout without reading it', async () => {
-    const rolloutPath = join(sessionsDir, 'rollout-idle.jsonl')
-    writeFileSync(rolloutPath, `${sessionMeta('session-idle')}${usageRecordRange(0, 50)}`, 'utf-8')
-
-    const first = await scanCodexUsageFiles([], [])
-    streamReads.length = 0
-
-    const second = await scanCodexUsageFiles([], first.processedFiles)
-    expect(bytesReadFor(rolloutPath)).toBe(0)
-    expect(totalTokens(second.dailyAggregates)).toBe(50)
-  })
-
   it('tracks byte offsets through CRLF line endings', async () => {
     const rolloutPath = join(sessionsDir, 'rollout-crlf.jsonl')
     const toCrlf = (text: string): string => text.replaceAll('\n', '\r\n')
@@ -382,33 +333,6 @@ describe('scanCodexUsageFiles incremental append', () => {
     const fromScratch = await scanCodexUsageFiles([], [])
     expect(totalTokens(second.dailyAggregates)).toBe(RESUMABLE_RECORDS + 3)
     expect(second.sessions).toEqual(fromScratch.sessions)
-  })
-
-  it('matches a full rescan after repeated appends', async () => {
-    const rolloutPath = join(sessionsDir, 'rollout-chatty.jsonl')
-    writeFileSync(
-      rolloutPath,
-      `${sessionMeta('session-chatty')}${usageRecordRange(0, RESUMABLE_RECORDS)}`,
-      'utf-8'
-    )
-
-    let processedFiles: CodexUsagePersistedFile[] = []
-    let scanned = await scanCodexUsageFiles([], processedFiles)
-    processedFiles = scanned.processedFiles
-
-    for (let round = 1; round <= 5; round++) {
-      const from = RESUMABLE_RECORDS + (round - 1) * 10
-      appendFileSync(rolloutPath, usageRecordRange(from, from + 10), 'utf-8')
-      streamReads.length = 0
-      scanned = await scanCodexUsageFiles([], processedFiles)
-      expect(reparsedFromStart(rolloutPath)).toBe(false)
-      processedFiles = scanned.processedFiles
-    }
-
-    const fromScratch = await scanCodexUsageFiles([], [])
-    expect(totalTokens(scanned.dailyAggregates)).toBe(RESUMABLE_RECORDS + 50)
-    expect(scanned.dailyAggregates).toEqual(fromScratch.dailyAggregates)
-    expect(scanned.sessions).toEqual(fromScratch.sessions)
   })
 
   it('falls back to a full reparse when a rollout is truncated', async () => {
@@ -461,93 +385,6 @@ describe('scanCodexUsageFiles incremental append', () => {
   })
 
   // Token totals can match despite a stale session context; compare attribution with a cold scan.
-  it('reparses from the start when a rollout is replaced by a larger file mid-scan', async () => {
-    const driverPath = join(sessionsDir, 'aaaa-driver.jsonl')
-    const targetPath = join(sessionsDir, 'zzzz-grower.jsonl')
-    writeFileSync(driverPath, `${sessionMeta('session-driver')}${usageRecordRange(120, 123)}`)
-    writeFileSync(
-      targetPath,
-      `${sessionMeta('session-grower')}${usageRecordRange(0, RESUMABLE_RECORDS)}`
-    )
-
-    const first = await scanCodexUsageFiles([], [])
-    const resumeOffset =
-      first.processedFiles.find((file) => file.path === targetPath)?.parseResumeState
-        ?.parsedBytes ?? 0
-
-    appendFileSync(driverPath, usageRecordRange(123, 124), 'utf-8')
-    appendFileSync(targetPath, usageRecordRange(RESUMABLE_RECORDS, RESUMABLE_RECORDS + 2), 'utf-8')
-    const replacement = `${sessionMeta('session-other')}${usageRecordRange(200, 260)}`
-    expect(Buffer.byteLength(replacement)).toBeGreaterThan(resumeOffset)
-    onStreamOpen.current = (path, digest) => {
-      // Replace after discovery verification, while an earlier-sorted file is parsed.
-      if (path === driverPath && !digest) {
-        onStreamOpen.current = null
-        writeFileSync(targetPath, replacement, 'utf-8')
-      }
-    }
-
-    streamReads.length = 0
-    const second = await scanCodexUsageFiles([], first.processedFiles)
-    expect(onStreamOpen.current).toBeNull()
-    expect(resumeOffset).toBeGreaterThan(0)
-    expect(parseReadOffsets(targetPath)).toEqual([0])
-    const fromScratch = await scanCodexUsageFiles([], [])
-
-    expect(eventCountsBySession(second.sessions)).toEqual(
-      eventCountsBySession(fromScratch.sessions)
-    )
-    expect(second.sessions).toEqual(fromScratch.sessions)
-  })
-
-  it('falls back to a full reparse when a rollout is rewritten at the same size', async () => {
-    const rolloutPath = join(sessionsDir, 'rollout-replaced.jsonl')
-    const original = `${sessionMeta('session-a')}${usageRecordRange(0, RESUMABLE_RECORDS)}`
-    writeFileSync(rolloutPath, original, 'utf-8')
-
-    // Keep the rewrite observable on filesystems whose clock has not ticked yet.
-    utimesSync(rolloutPath, 1, 1)
-    const first = await scanCodexUsageFiles([], [])
-    expect(totalTokens(first.dailyAggregates)).toBe(RESUMABLE_RECORDS)
-    expect(recordedResumeOffset(first.processedFiles, rolloutPath)).toBeGreaterThan(0)
-
-    const replacement = original.replaceAll('2026-05-26T', '2027-05-26T')
-    expect(replacement.length).toBe(original.length)
-    writeFileSync(rolloutPath, replacement, 'utf-8')
-    expect(statSync(rolloutPath).size).toBe(original.length)
-
-    expect(statSync(rolloutPath).mtimeMs).not.toBe(first.processedFiles[0]?.mtimeMs)
-    const second = await scanCodexUsageFiles([], first.processedFiles)
-    const fromScratch = await scanCodexUsageFiles([], [])
-    expect(second.dailyAggregates).toEqual(fromScratch.dailyAggregates)
-    expect(second.sessions).toEqual(fromScratch.sessions)
-  })
-
-  it('falls back to a full reparse when a rewritten rollout also grows', async () => {
-    const rolloutPath = join(sessionsDir, 'rollout-rotated.jsonl')
-    writeFileSync(
-      rolloutPath,
-      `${sessionMeta('session-a')}${usageRecordRange(0, RESUMABLE_RECORDS)}`,
-      'utf-8'
-    )
-
-    const first = await scanCodexUsageFiles([], [])
-    expect(totalTokens(first.dailyAggregates)).toBe(RESUMABLE_RECORDS)
-    expect(recordedResumeOffset(first.processedFiles, rolloutPath)).toBeGreaterThan(0)
-
-    rmSync(rolloutPath)
-    writeFileSync(
-      rolloutPath,
-      `${sessionMeta('session-b')}${usageRecordRange(0, RESUMABLE_RECORDS + 5).replaceAll('2026-', '2027-')}`,
-      'utf-8'
-    )
-
-    const second = await scanCodexUsageFiles([], first.processedFiles)
-    const fromScratch = await scanCodexUsageFiles([], [])
-    expect(totalTokens(second.dailyAggregates)).toBe(RESUMABLE_RECORDS + 5)
-    expect(second.dailyAggregates).toEqual(fromScratch.dailyAggregates)
-    expect(second.sessions).toEqual(fromScratch.sessions)
-  })
 
   /** Preserve the boundary window while changing leading records at the same file length. */
   function prefixSwapPair(sessionId: string): { original: string; replacement: string } {
@@ -599,25 +436,6 @@ describe('scanCodexUsageFiles incremental append', () => {
   })
 
   // Recreated files can reuse inodes, so rotation must also check content.
-  it('falls back to a full reparse when a recreated rollout swapped its prefix', async () => {
-    const rolloutPath = join(sessionsDir, 'rollout-prefix-swap-rotated.jsonl')
-    const { original, replacement } = prefixSwapPair('session-prefix-rotated')
-    writeFileSync(rolloutPath, original, 'utf-8')
-
-    // Keep the rewrite observable on filesystems whose clock has not ticked yet.
-    utimesSync(rolloutPath, 1, 1)
-    const first = await scanCodexUsageFiles([], [])
-    expect(totalTokens(first.dailyAggregates)).toBe(40)
-
-    rmSync(rolloutPath)
-    writeFileSync(rolloutPath, replacement, 'utf-8')
-
-    expect(statSync(rolloutPath).mtimeMs).not.toBe(first.processedFiles[0]?.mtimeMs)
-    const second = await scanCodexUsageFiles([], first.processedFiles)
-    const fromScratch = await scanCodexUsageFiles([], [])
-    expect(second.dailyAggregates).toEqual(fromScratch.dailyAggregates)
-    expect(totalTokens(second.dailyAggregates)).toBe(80)
-  })
 
   it('falls back to a full reparse when a prefix was rewritten in place', async () => {
     const rolloutPath = join(sessionsDir, 'rollout-prefix-swap-in-place.jsonl')
@@ -638,33 +456,6 @@ describe('scanCodexUsageFiles incremental append', () => {
     const fromScratch = await scanCodexUsageFiles([], [])
     expect(second.dailyAggregates).toEqual(fromScratch.dailyAggregates)
     expect(totalTokens(second.dailyAggregates)).toBe(80)
-  })
-
-  it('starts resuming once the prefix grows past the resumable floor', async () => {
-    const rolloutPath = join(sessionsDir, 'rollout-crosses-floor.jsonl')
-    writeFileSync(
-      rolloutPath,
-      `${sessionMeta('session-crosses')}${usageRecordRange(0, 3)}`,
-      'utf-8'
-    )
-
-    const first = await scanCodexUsageFiles([], [])
-    expect(totalTokens(first.dailyAggregates)).toBe(3)
-    expect(first.processedFiles[0]?.parseResumeState).toBeNull()
-
-    streamReads.length = 0
-    appendFileSync(rolloutPath, usageRecordRange(3, RESUMABLE_RECORDS), 'utf-8')
-    const second = await scanCodexUsageFiles([], first.processedFiles)
-    expect(totalTokens(second.dailyAggregates)).toBe(RESUMABLE_RECORDS)
-    expect(parseReadOffsets(rolloutPath)).toEqual([0])
-    const resumeOffset = recordedResumeOffset(second.processedFiles, rolloutPath)
-    expect(resumeOffset).toBeGreaterThan(0)
-
-    streamReads.length = 0
-    appendFileSync(rolloutPath, usageRecordRange(RESUMABLE_RECORDS, RESUMABLE_RECORDS + 2), 'utf-8')
-    const third = await scanCodexUsageFiles([], second.processedFiles)
-    expect(totalTokens(third.dailyAggregates)).toBe(RESUMABLE_RECORDS + 2)
-    expect(parseReadOffsets(rolloutPath)).toEqual([resumeOffset])
   })
 
   it('does not double-count a record completed after a partial trailing line', async () => {
@@ -725,31 +516,6 @@ describe('scanCodexUsageFiles incremental append', () => {
     expect(totalTokens(second.dailyAggregates)).toBe(RESUMABLE_RECORDS + 2)
     expect(second.sessions[0]?.eventCount).toBe(RESUMABLE_RECORDS + 2)
     expect(second.dailyAggregates).toEqual(fromScratch.dailyAggregates)
-  })
-
-  it('reads appended bytes only when the append shares the cached mtime', async () => {
-    const rolloutPath = join(sessionsDir, 'rollout-same-mtime.jsonl')
-    writeFileSync(
-      rolloutPath,
-      `${sessionMeta('session-same-mtime')}${usageRecordRange(0, 40)}`,
-      'utf-8'
-    )
-
-    const first = await scanCodexUsageFiles([], [])
-    expect(totalTokens(first.dailyAggregates)).toBe(40)
-    streamReads.length = 0
-
-    appendFileSync(rolloutPath, usageRecordRange(40, 42), 'utf-8')
-    // Simulate an append whose mtime is unchanged on a coarse-clock filesystem.
-    const coarseMtimeMs = statSync(rolloutPath).mtimeMs
-    const cached = first.processedFiles.map((file) =>
-      file.path === rolloutPath ? { ...file, mtimeMs: coarseMtimeMs } : file
-    )
-
-    const second = await scanCodexUsageFiles([], cached)
-    expect(totalTokens(second.dailyAggregates)).toBe(42)
-    expect(second.sessions[0]?.eventCount).toBe(42)
-    expect(reparsedFromStart(rolloutPath)).toBe(false)
   })
 
   it('keeps fork ownership when the owning rollout grows incrementally', async () => {

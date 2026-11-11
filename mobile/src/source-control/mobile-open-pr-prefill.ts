@@ -1,4 +1,4 @@
-import { readMobileGitStatusResult } from '../session/mobile-diff-review-rpc'
+import { readMobileGitStatusResult } from './review/mobile-diff-review-rpc'
 import type { MobileGitStatusResult } from './mobile-git-status'
 
 export async function readFreshGitStatus(

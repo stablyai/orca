@@ -1,21 +1,24 @@
+import type { ClaudeTaskInvocations } from './claude-task-invocations'
+import type { ClaudeJournalBoundDelivery } from './claude-journal-bound-delivery'
 import type { AgentSessionContextReport } from '../../shared/agent-session/agent-session-context-usage'
 import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
-} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+} from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { ClaudeChildToolQueries } from './claude-child-tool-queries'
 import type { ClaudeContextReportPart, ClaudeContextReportTarget } from './claude-context-facts'
 import type { ClaudeJournalPrompts } from './structured/journal/claude-structured-journal-prompts'
 import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import type { ClaudeCommandStart } from './claude-command-turn'
 
-import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
+import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
 import type { ClaudeGoalBackgroundWork } from './claude-background-task-tracker'
 import type { AgentSessionAccountKind } from '../../shared/agent-session/agent-session-availability'
 
 export type ClaudeJournalTranslatorDeps = {
   sink: StructuredAgentSessionEventSink
+  delivery?: ClaudeJournalBoundDelivery
   bindPromptItemId?: (journalItemId: string, promptKey: string) => void
   coalesceMs?: number
   schedule?: AgentSessionDeltaCoalescerDeps['schedule']
@@ -24,9 +27,12 @@ export type ClaudeJournalTranslatorDeps = {
   account?: () => AgentSessionAccountKind | undefined
   model?: () => string | undefined
   goalBackgroundWork?: () => ClaudeGoalBackgroundWork
+  /** True when this acquisition's pending startup took a turnless failure result and will fail with it. */
+  acceptStartupFailure?: (message: Record<string, unknown>) => boolean
 }
 
 export type ClaudeJournalTranslator = {
+  readonly taskInvocations: ClaudeTaskInvocations
   handle: (event: ClaudeStructuredSessionEvent) => void
   journalPrompts: Pick<
     ClaudeJournalPrompts,
@@ -43,6 +49,7 @@ export type ClaudeJournalTranslator = {
   readonly openTurnInLiveProviderCycle: boolean
   readonly openTurnHasInputWork: boolean
   flush: () => void
+  childTaskParent?: (taskId: string, run?: string) => string | undefined
   childToolOwner?: ClaudeChildToolQueries['childToolOwner']
   childActivity?: ClaudeChildToolQueries['childActivity']
   retryPendingTaskRows?: () => StructuredAgentSessionSinkAdmission

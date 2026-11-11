@@ -6,11 +6,11 @@ import type {
   BrowserInterceptEnableResult,
   BrowserInterceptedRequest,
   BrowserNetworkLogResult
-} from '../../shared/runtime-browser-contracts'
+} from '../../shared/browser/runtime/runtime-browser-contracts'
 import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
 import { getOptionalPositiveIntegerFlag, getOptionalStringFlag } from '../flags'
-import { getBrowserCommandTarget } from '../selectors'
+import { getBrowserCommandTarget } from './browser-command-target'
 
 export const BROWSER_CAPTURE_HANDLERS: Record<string, CommandHandler> = {
   'intercept enable': async ({ flags, client, cwd, json }) => {

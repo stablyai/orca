@@ -143,3 +143,66 @@ test('keeps long repository names inside the cross-project confirmation dialog',
     rmSync(tempRoot, { recursive: true, force: true })
   }
 })
+
+test('keeps setup controls reachable beside an unbroken setup command', async ({ orcaPage }) => {
+  await waitForSessionReady(orcaPage)
+  await waitForActiveWorktree(orcaPage)
+
+  const tempRoot = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-setup-preview-'))
+  createGitRepository(tempRoot)
+  try {
+    await orcaPage.evaluate(async (repositoryPath) => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store is not available')
+      }
+      const repository = await store.getState().addRepoPath(repositoryPath)
+      if (!repository) {
+        throw new Error('failed to add setup preview repository')
+      }
+      await store.getState().updateRepo(repository.id, {
+        hookSettings: {
+          mode: 'override',
+          setupRunPolicy: 'run-by-default',
+          setupAgentStartupPolicy: 'start-immediately',
+          scripts: { setup: `printf '%s' '${'A'.repeat(2400)}'`, archive: '' }
+        }
+      })
+      store.getState().openModal('new-workspace-composer', { initialRepoId: repository.id })
+    }, tempRoot)
+
+    await orcaPage.setViewportSize({ width: 640, height: 900 })
+    const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
+    await expect(dialog).toBeVisible()
+    await dialog.getByRole('button', { name: 'Advanced', exact: true }).click()
+    const preview = dialog.locator('pre')
+    const startupSwitch = dialog.getByRole('switch', {
+      name: 'Wait for setup to complete before starting agent',
+      exact: true
+    })
+    await expect(preview).toBeVisible()
+    await expect(startupSwitch).toBeEnabled()
+    const layout = await preview.evaluate((element) => {
+      const modal = element.closest('[role="dialog"]')
+      const control = modal?.querySelector('[role="switch"][aria-label^="Wait for setup"]')
+      if (!modal || !control) {
+        throw new Error('setup dialog or startup switch missing')
+      }
+      const bounds = modal.getBoundingClientRect()
+      const previewBounds = element.getBoundingClientRect()
+      const switchBounds = control.getBoundingClientRect()
+      return {
+        previewFits: previewBounds.left >= bounds.left && previewBounds.right <= bounds.right,
+        switchFits: switchBounds.left >= bounds.left && switchBounds.right <= bounds.right,
+        horizontalOverflow: element.scrollWidth > element.clientWidth + 1
+      }
+    })
+    expect(layout).toEqual({ previewFits: true, switchFits: true, horizontalOverflow: false })
+    await expect(startupSwitch).toHaveAttribute('aria-checked', 'false')
+    await startupSwitch.click()
+    await expect(startupSwitch).toHaveAttribute('aria-checked', 'true')
+  } finally {
+    await orcaPage.evaluate(() => window.__store?.getState().closeModal()).catch(() => {})
+    rmSync(tempRoot, { recursive: true, force: true })
+  }
+})

@@ -1,5 +1,10 @@
 import type { AttemptObservationStorageRow } from './attempt-observation-store'
-import type { DispatchContextRow, RemoteDispatchAttachmentRow, RunRow, TaskRow } from '../types'
+import type {
+  DispatchContextRow,
+  RemoteDispatchAttachmentRow,
+  RunRow,
+  TaskRow
+} from './orchestration-records'
 
 // Explicit projections enable SyncDatabase caching; type exhaustiveness and schema tests prevent column drift.
 

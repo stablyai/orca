@@ -1,12 +1,12 @@
 import { getTerminalLiveAccessoryRawSendTarget } from './terminal-live-accessory-raw-send-target'
 import { buildTerminalSendParams, TERMINAL_INPUT_SEND_OPTIONS } from './terminal-send-request'
 import { terminalInputSend } from './mobile-terminal-operations'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
-import type { ConnectionState } from '../transport/types'
+import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
+import type { ConnectionState } from '../transport/connection/connection-state'
 
 type TerminalLiveAccessoryRawSendArgs = {
   readonly sendTerminalUserInput: typeof terminalInputSend.request
-  readonly client: RpcOperationSender | null
+  readonly client: UnvalidatedRpcRequestPort | null
   readonly targetHandle: string
   readonly activeHandle: string | null
   readonly activeSessionTabType: string | null

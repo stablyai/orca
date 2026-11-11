@@ -1,16 +1,22 @@
+import {
+  nativeCopyIds,
+  usableJournalHistoryOrigin,
+  type JournalHistoryOrigin
+} from '../native-chat/agent-session-journal/context-epochs/journal-history-origin'
+import { recoverClaudeTranscript } from './claude-transcript-recovery'
 import { join } from 'node:path'
 import { isRootAgentJournalItem } from '../../shared/agent-session/journal/agent-session-journal-producer'
-import { encodeClaudeProjectPaths } from '../ai-vault/claude-project-dir-encoding'
-import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { runHistoryCatchUp } from '../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
-import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { runHistoryCatchUp } from '../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import { createClaudeTranscriptImportPlan } from './claude-transcript-import-plan'
 import { readClaudeTranscriptTail } from './claude-transcript-tail'
 
 const DEFAULT_CLAUDE_CATCH_UP_TIMEOUT_MS = 30_000
 type ClaudeHistoryView = {
+  origin: JournalHistoryOrigin | null
+  covered?: ReadonlySet<string>
   hasRows: boolean
   newest: { key: string; sequence: number; index: number } | null
 }
@@ -57,30 +63,30 @@ export async function catchUpClaudeTranscript(input: {
           newest = { key, sequence, index }
         }
       })
-      return { hasRows, newest }
+      const origin = history.historyOrigin()
+      const copy = usableJournalHistoryOrigin(origin)
+      const covered =
+        copy?.kind === 'native_copy' &&
+        copy.unit === 'claude-entry' &&
+        copy.agent === 'claude' &&
+        copy.providerHandle.kind === 'claude' &&
+        copy.providerHandle.sessionId === input.providerSessionId
+          ? nativeCopyIds(copy)
+          : undefined
+      return { hasRows, newest, origin, covered }
     },
     sameView: (planned, current) =>
+      planned.origin === current.origin &&
       planned.newest?.key === current.newest?.key &&
       planned.newest?.sequence === current.newest?.sequence &&
       planned.newest?.index === current.newest?.index,
     prepare: async ({ view, journal, signal, check, yieldTurn, warn }) => {
       const claudeProjectsDir = join(input.claudeConfigDir, 'projects')
-      let filePath: string | null = null
-      for (const project of encodeClaudeProjectPaths(input.cwd)) {
-        check()
-        const candidate = join(claudeProjectsDir, project, `${input.providerSessionId}.jsonl`)
-        const info = await wslGatedStat(candidate, 'exact', signal).catch(() => null)
-        check()
-        if (info?.isFile()) {
-          filePath = candidate
-          break
-        }
-      }
-      // A moved project can leave its transcript in the original cwd's bucket.
-      filePath ??= await resolveSessionFilePath(
+      // A moved project can leave its transcript outside the cwd's bucket; the resolver probes both.
+      const filePath = await resolveSessionFilePath(
         'claude',
         input.providerSessionId,
-        { claudeProjectsDir },
+        { claudeProjectsDir, cwd: input.cwd },
         signal
       )
       check()
@@ -88,25 +94,45 @@ export async function catchUpClaudeTranscript(input: {
         return null
       }
       const planned = view()
-      const tail = await readClaudeTranscriptTail({ filePath, leafUuid: input.leafUuid, check })
+      let leafAbsent = input.leafUuid === '' && !!planned.covered
+      const tail = leafAbsent
+        ? null
+        : await readClaudeTranscriptTail({
+            filePath,
+            leafUuid: input.leafUuid,
+            check,
+            onLeafAbsent: () => {
+              leafAbsent = true
+            }
+          })
       check()
-      if (!tail) {
+      if (!tail && !(leafAbsent && planned.covered)) {
         warn('leaf-not-in-tail')
         return null
       }
-      complete = true
       const staging = createClaudeTranscriptImportPlan({
         sessionId: input.sessionId,
         providerSessionId: input.providerSessionId,
         journal,
-        rewound: planned.hasRows ? tail.rewound : null,
+        rewound: planned.hasRows ? (tail?.rewound ?? true) : null,
         check
       })
       try {
-        for (const row of tail.rows) {
-          staging.restore(row)
-          await yieldTurn()
+        const restore = (row: Record<string, unknown>) => {
+          check()
+          if (!planned.covered?.has(String(row.uuid))) {
+            staging.restore(row)
+          }
         }
+        if (tail) {
+          for (const row of tail.rows) {
+            restore(row)
+            await yieldTurn()
+          }
+        } else {
+          await recoverClaudeTranscript({ filePath, signal, restore, yieldTurn })
+        }
+        complete = true
         return staging.finish()
       } finally {
         staging.dispose()

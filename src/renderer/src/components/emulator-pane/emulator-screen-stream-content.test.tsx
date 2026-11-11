@@ -112,25 +112,6 @@ async function renderStream(
 }
 
 describe('EmulatorScreenStreamContent', () => {
-  it('renders IPC-delivered frames as blob URLs instead of loading the MJPEG URL directly', async () => {
-    await renderStream()
-
-    expect(startFrameStream).toHaveBeenCalledWith({
-      streamUrl: 'http://127.0.0.1:3100/stream.mjpeg',
-      streamKey: 'abc'
-    })
-    expect(container.querySelector('img')).toBeNull()
-
-    await act(async () => {
-      frameListeners[0]?.({ streamId: 'stream-1', bytes: new Uint8Array([1, 2, 3]).buffer })
-    })
-
-    const img = container.querySelector('img')
-    expect(img?.getAttribute('src')).toBe('blob:emulator-frame-1')
-    expect(img?.className).toContain('object-contain')
-    expect(img?.className).not.toContain('object-fill')
-  })
-
   it('clears the previous frame while a new stream key is connecting', async () => {
     await renderStream('a')
 

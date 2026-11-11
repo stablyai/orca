@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { RuntimeWorktreePsResult } from '../../../shared/runtime-types'
+import type { RuntimeWorktreePsResult } from '../../../shared/runtime-worktree-contracts'
 import { resolveWorktreeCatalogSnapshot } from './worktree-catalog-snapshot'
 
 function result(totalCount: number): RuntimeWorktreePsResult {

@@ -17,6 +17,9 @@ export type MobileNativeChatDisclosureStore = {
 export const MobileNativeChatDisclosureContext =
   createContext<MobileNativeChatDisclosureStore | null>(null)
 
+/** The transcript row a Markdown body draws in, so reader choices inside it outlive the row's mount. */
+export const MobileNativeChatMarkdownRowKeyContext = createContext<string | undefined>(undefined)
+
 export const MAX_DISCLOSURES = 512
 
 type ScopedDisclosures = {

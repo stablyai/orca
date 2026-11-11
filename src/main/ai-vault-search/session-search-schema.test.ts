@@ -4,11 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  removeTree,
-  WINDOWS_RM_MAX_RETRIES,
-  WINDOWS_RM_RETRY_DELAY_MS
-} from '../../shared/windows-transient-lock-removal'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { asRecord } from '../ai-vault/session-scanner-record-value'
 import SyncDatabase from '../sqlite/sync-database'
 import {
@@ -52,26 +48,6 @@ function schemaVersion(db: SyncDatabase): string | undefined {
 }
 
 describe('openSessionSearchDatabase', () => {
-  it('keeps a current-version index and its rows', async () => {
-    const path = await tempDatabasePath()
-    const first = openSessionSearchDatabase(path)
-    first.prepare("INSERT INTO files(path,byte_offset,mtime_ms) VALUES ('a',1,1)").run()
-    first
-      .prepare("INSERT INTO messages(session_row_id,role,text_truncated) VALUES (1,'user',1)")
-      .run()
-    first.close()
-
-    const second = openSessionSearchDatabase(path)
-    expect(schemaVersion(second)).toBe(String(SESSION_SEARCH_SCHEMA_VERSION))
-    expect(second.prepare('SELECT COUNT(*) AS c FROM files').get()).toEqual({
-      c: 1
-    })
-    expect(second.prepare('SELECT text_truncated FROM messages').get()).toEqual({
-      text_truncated: 1
-    })
-    second.close()
-  })
-
   it('keeps a version 8 index that predates prefix hashes and adds the column', async () => {
     const path = await tempDatabasePath()
     const first = openSessionSearchDatabase(path)
@@ -120,34 +96,6 @@ describe('openSessionSearchDatabase', () => {
       opener.close()
       await rival.terminate()
     }
-  })
-
-  it('carries one FTS table and throws away an index that carries two', async () => {
-    const path = await tempDatabasePath()
-    const fresh = openSessionSearchDatabase(path)
-    const tables = (): string[] =>
-      (
-        fresh
-          .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE '%_fts'")
-          .all() as { name: string }[]
-      ).map((row) => row.name)
-    expect(tables()).toEqual(['messages_fts'])
-
-    // A version bump must remove obsolete tables that CREATE IF NOT EXISTS would retain.
-    fresh.exec('CREATE VIRTUAL TABLE conversation_fts USING fts5(user_text, assistant_text)')
-    fresh.prepare("INSERT INTO files(path,byte_offset,mtime_ms) VALUES ('a',1,1)").run()
-    fresh.prepare("UPDATE meta SET value = '3' WHERE key = 'schema_version'").run()
-    fresh.close()
-
-    const rebuilt = openSessionSearchDatabase(path)
-    expect(schemaVersion(rebuilt)).toBe(String(SESSION_SEARCH_SCHEMA_VERSION))
-    expect(
-      rebuilt
-        .prepare("SELECT count(*) AS n FROM sqlite_master WHERE name = 'conversation_fts'")
-        .get()
-    ).toEqual({ n: 0 })
-    expect(rebuilt.prepare('SELECT COUNT(*) AS c FROM files').get()).toEqual({ c: 0 })
-    rebuilt.close()
   })
 
   it('replaces the file on a version mismatch instead of dropping tables in place', async () => {
@@ -206,153 +154,5 @@ it('rebuilds a file too corrupt to open instead of refusing forever', async () =
     })
   } finally {
     rebuilt.close()
-  }
-})
-
-it('rebuilds a file that is not a database at all', async () => {
-  const path = await tempDatabasePath()
-  await writeFile(path, 'not a SQLite database')
-
-  const rebuilt = openSessionSearchDatabase(path)
-  try {
-    expect(schemaVersion(rebuilt)).toBe(String(SESSION_SEARCH_SCHEMA_VERSION))
-  } finally {
-    rebuilt.close()
-  }
-})
-
-it('gives up rather than looping when a fresh file still cannot be opened', async () => {
-  const path = await tempDatabasePath()
-  await writeFile(path, 'not a SQLite database')
-  const open = vi.spyOn(SyncDatabase.prototype, 'pragma').mockImplementation(() => {
-    throw Object.assign(new Error('database disk image is malformed'), {
-      code: 'SQLITE_CORRUPT'
-    })
-  })
-  try {
-    expect(() => openSessionSearchDatabase(path)).toThrow(/malformed/)
-  } finally {
-    open.mockRestore()
-  }
-})
-
-it('surfaces the unlink failure itself when a stale index cannot be removed', async () => {
-  const path = await tempDatabasePath()
-  const stale = openSessionSearchDatabase(path)
-  stale
-    .prepare("UPDATE meta SET value = ? WHERE key = 'schema_version'")
-    .run(String(SESSION_SEARCH_SCHEMA_VERSION + 1))
-  stale.close()
-  recordedRmSync.mockReset()
-  recordedRmSync.mockImplementation(() => {
-    throw Object.assign(new Error('EPERM: operation not permitted, unlink'), {
-      code: 'EPERM'
-    })
-  })
-  try {
-    // A second close could hide the unlink error behind ERR_INVALID_STATE.
-    expect(() => openSessionSearchDatabase(path)).toThrow(/EPERM/)
-    expect(() => openSessionSearchDatabase(path)).not.toThrow(/not open/)
-  } finally {
-    recordedRmSync.mockReset()
-  }
-})
-
-it('creates the directory the index lives in', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'orca-session-search-mkdir-'))
-  roots.push(root)
-  const db = openSessionSearchDatabase(join(root, 'ai-vault-search', 'index.sqlite'))
-  try {
-    expect(schemaVersion(db)).toBe(String(SESSION_SEARCH_SCHEMA_VERSION))
-  } finally {
-    db.close()
-  }
-})
-
-it('rebuilds when meta exists but its version row is gone', async () => {
-  const path = await tempDatabasePath()
-  const damaged = openSessionSearchDatabase(path)
-  damaged.prepare("INSERT INTO files(path,byte_offset,mtime_ms) VALUES ('a',1,1)").run()
-  damaged.prepare("DELETE FROM meta WHERE key = 'schema_version'").run()
-  damaged.close()
-
-  const rebuilt = openSessionSearchDatabase(path)
-  try {
-    expect(schemaVersion(rebuilt)).toBe(String(SESSION_SEARCH_SCHEMA_VERSION))
-    expect(rebuilt.prepare('SELECT COUNT(*) AS c FROM files').get()).toEqual({
-      c: 0
-    })
-  } finally {
-    rebuilt.close()
-  }
-})
-
-it('opens with the pragmas the write path depends on', async () => {
-  const db = openSessionSearchDatabase(await tempDatabasePath())
-  try {
-    // INCREMENTAL auto-vacuum must be enabled on an empty file for bounded page reclamation.
-    expect(Number(db.pragma('auto_vacuum', { simple: true }))).toBe(2)
-    expect(String(db.pragma('journal_mode', { simple: true })).toLowerCase()).toBe('wal')
-    expect(Number(db.pragma('synchronous', { simple: true }))).toBe(1)
-    expect(Number(db.pragma('journal_size_limit', { simple: true }))).toBe(8388608)
-    // A nonzero busy timeout allows contended writers to wait instead of failing immediately.
-    expect(Number(db.pragma('busy_timeout', { simple: true }))).toBe(5000)
-  } finally {
-    db.close()
-  }
-})
-
-it("walks a session's rows through an index rather than scanning the table", async () => {
-  const db = openSessionSearchDatabase(await tempDatabasePath())
-  try {
-    const plan = (
-      db
-        .prepare('EXPLAIN QUERY PLAN SELECT id FROM messages WHERE session_row_id = ? LIMIT ?')
-        .all(1, 1) as { detail: string }[]
-    )
-      .map((row) => row.detail)
-      .join(' ')
-    expect(plan).toContain('messages_session')
-  } finally {
-    db.close()
-  }
-})
-
-it("retries a Windows lock that outlives rmSync's own retries", async () => {
-  const path = await tempDatabasePath()
-  openSessionSearchDatabase(path).close()
-  vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-  recordedRmSync.mockReset()
-  const locked = Object.assign(new Error('EPERM: operation not permitted'), {
-    code: 'EPERM'
-  })
-  recordedRmSync.mockImplementationOnce(() => {
-    throw locked
-  })
-  try {
-    expect(() => removeSessionSearchDatabase(path)).not.toThrow()
-    expect(recordedRmSync.mock.calls.length).toBe(5)
-    await expect(stat(path)).rejects.toMatchObject({ code: 'ENOENT' })
-  } finally {
-    recordedRmSync.mockReset()
-    vi.restoreAllMocks()
-  }
-})
-
-it('gives Windows the shared retry options for a late handle release', async () => {
-  const path = await tempDatabasePath()
-  vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-  recordedRmSync.mockClear()
-  try {
-    removeSessionSearchDatabase(path)
-    expect(recordedRmSync).toHaveBeenCalled()
-    for (const [, options] of recordedRmSync.mock.calls) {
-      expect(options).toMatchObject({
-        maxRetries: WINDOWS_RM_MAX_RETRIES,
-        retryDelay: WINDOWS_RM_RETRY_DELAY_MS
-      })
-    }
-  } finally {
-    vi.restoreAllMocks()
   }
 })

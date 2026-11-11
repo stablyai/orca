@@ -340,7 +340,12 @@ accepts an edit, and never hands your own accepted edits back through `onReplace
 keeps your draft and rejects `flush()`. On `conflict` it calls `merge(base, outside, mine)` once,
 where `base` is the last accepted value, and sends the result. Without `merge` the outside
 document wins, since an agent may have written the file: the draft is dropped, `onReplace` gets
-the outside value, and `flush()` rejects with `conflict`. Pass `merge` to keep both sides. It answers Orca's `editor.flush`
+the outside value, and `flush()` rejects with `conflict`. Pass `merge` to keep both sides. With
+`merge`, a write to the file on disk while the tab has unsaved edits also reaches the editor:
+Orca calls `merge(base, outside, mine)` with `base` the disk content those edits started from,
+the tab keeps the merged result unsaved, and its Reload/Overwrite banner is not shown. This
+applies to a local file open in one editor view; elsewhere, without `merge`, or when the editor
+does not answer within a second, that banner decides. It answers Orca's `editor.flush`
 itself before a save. Bytes editors pass both `decode` and `encode`. Check `'session' in
 orca.document` to support older Orca.
 
@@ -553,6 +558,8 @@ From a terminal (or a coding agent), `orca plugin dev load <dir>` does the same.
 plugin loads at once; anything that runs code fails with `approval_required`, which lists what it
 would be granted and the command to re-run with `--approve <fingerprint>`. `orca plugin logs
 <publisher.id>` prints its logs and `orca plugin dev unload <dir>` removes it.
+`orca plugin install <owner/repo[@ref]>` installs a published plugin the same way, with the Orca
+host's own Git credentials for private repositories, and `orca plugin update` keeps it current.
 
 Orca watches development folders and reloads the plugin when its manifest or files change.
 Theme, syntax and translation edits show up as you save. Panels and workers are not bound to
