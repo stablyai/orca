@@ -28,17 +28,7 @@ export type SessionSearchCatalogRow = {
   tie?: number
 }
 export type SessionSearchInputReceipt = { consumer: string; revision: number }
-export type SessionSearchCatalogCommand = (
-  | SessionSearchRetryCommand
-  | SessionSearchAuthorityCommand
-  | SessionSearchDirtyCommand
-  | SessionSearchDependencyFanoutCommand
-  | SessionSearchDirectoryFrontierCommand
-  | SessionSearchFrontierCommand
-  | SessionSearchContainerCommand
-  | SessionSearchDependencyCommand
-  | SessionSearchDirectoryCommand
-  | SessionSearchInventoryCommand
+export type SessionSearchCatalogBaseCommand = (
   | { kind: 'get'; scope: string; key: string }
   | { kind: 'get-page'; scope: string; keys: string[] }
   | { kind: 'release-parent'; scope: string; parent: string }
@@ -64,6 +54,20 @@ export type SessionSearchCatalogCommand = (
       limit?: number
       prefix?: string
     }
+) & { receipt?: SessionSearchInputReceipt }
+
+export type SessionSearchCatalogCommand = (
+  | SessionSearchRetryCommand
+  | SessionSearchAuthorityCommand
+  | SessionSearchDirtyCommand
+  | SessionSearchDependencyFanoutCommand
+  | SessionSearchDirectoryFrontierCommand
+  | SessionSearchFrontierCommand
+  | SessionSearchContainerCommand
+  | SessionSearchDependencyCommand
+  | SessionSearchDirectoryCommand
+  | SessionSearchInventoryCommand
+  | SessionSearchCatalogBaseCommand
 ) & { receipt?: SessionSearchInputReceipt }
 export type SessionSearchCatalogResult = SessionSearchDirtyResult &
   SessionSearchInventoryResult &

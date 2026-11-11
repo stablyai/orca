@@ -7,6 +7,7 @@ export const SESSION_SEARCH_CATALOG_PAGE_BYTES = 256 * 1024
 
 import type {
   SessionSearchCatalogCommand,
+  SessionSearchCatalogBaseCommand,
   SessionSearchCatalogResult,
   SessionSearchCatalogRow
 } from './session-search-catalog-types'
@@ -130,18 +131,20 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
     if (transitioned) {
       return transitioned
     }
-    switch (command.kind) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the exhaustive specialized dispatcher returned every non-base operation above.
+    const base = command as SessionSearchCatalogBaseCommand
+    switch (base.kind) {
       case 'release-parent':
         this.db
           .prepare('DELETE FROM temp.search_catalog WHERE scope=? AND parent=?')
-          .run(command.scope, command.parent)
+          .run(base.scope, base.parent)
         return {}
       case 'get-page': {
         const rows: SessionSearchCatalogRow[] = []
         let bytes = 1024,
           processed = 0
-        for (const key of command.keys) {
-          const row = this.read('WHERE scope=? AND key=?', [command.scope, key])[0]
+        for (const key of base.keys) {
+          const row = this.read('WHERE scope=? AND key=?', [base.scope, key])[0]
           const size = row ? this.bytes(row) : 0
           if (rows.length && bytes + size > SESSION_SEARCH_CATALOG_PAGE_BYTES) {
             break
@@ -156,17 +159,17 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
       }
       case 'get':
         return {
-          rows: this.read('WHERE scope = ? AND key = ?', [command.scope, command.key])
+          rows: this.read('WHERE scope = ? AND key = ?', [base.scope, base.key])
         }
       case 'put': {
-        if (command.rows.length > SESSION_SEARCH_CATALOG_PAGE_ROWS) {
+        if (base.rows.length > SESSION_SEARCH_CATALOG_PAGE_ROWS) {
           throw new Error('Session catalog batch exceeds row budget')
         }
         let bytes = 1024
-        for (const row of command.rows) {
+        for (const row of base.rows) {
           bytes += this.bytes(row)
         }
-        if (command.rows.length > 1 && bytes > SESSION_SEARCH_CATALOG_PAGE_BYTES) {
+        if (base.rows.length > 1 && bytes > SESSION_SEARCH_CATALOG_PAGE_BYTES) {
           throw new Error('Session catalog batch exceeds byte budget')
         }
         this.transaction('search_catalog_batch', () => {
@@ -175,9 +178,9 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
             ON CONFLICT(scope,key) DO UPDATE SET value=excluded.value,
             parent=excluded.parent,group_key=excluded.group_key,rank=excluded.rank,
             ready=excluded.ready,tie=excluded.tie`)
-          for (const row of command.rows) {
+          for (const row of base.rows) {
             insert.run(
-              command.scope,
+              base.scope,
               row.key,
               row.value,
               row.parent,
@@ -191,24 +194,24 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
         return {}
       }
       case 'delete-page':
-        for (const key of command.keys) {
-          this.execute({ kind: 'delete', scope: command.scope, key })
+        for (const key of base.keys) {
+          this.execute({ kind: 'delete', scope: base.scope, key })
         }
         return {}
       case 'delete':
         this.db
           .prepare('DELETE FROM temp.search_catalog WHERE scope = ? AND key = ?')
-          .run(command.scope, command.key)
+          .run(base.scope, base.key)
         return {}
       case 'release':
-        this.db.prepare('DELETE FROM temp.search_catalog WHERE scope = ?').run(command.scope)
+        this.db.prepare('DELETE FROM temp.search_catalog WHERE scope = ?').run(base.scope)
         return {}
       case 'release-scopes-page': {
         const rows = this.db
           .prepare(
             'SELECT scope,key FROM temp.search_catalog WHERE scope=? OR (scope>=? AND scope<?) ORDER BY scope,key LIMIT 256'
           )
-          .all(command.scope, `${command.scope}:`, `${command.scope}:\uffff`)
+          .all(base.scope, `${base.scope}:`, `${base.scope}:\uffff`)
         for (const row of rows) {
           this.execute({ kind: 'delete', scope: String(row.scope), key: String(row.key) })
         }
@@ -217,19 +220,19 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
       case 'release-scopes':
         this.db
           .prepare('DELETE FROM temp.search_catalog WHERE scope = ? OR (scope >= ? AND scope < ?)')
-          .run(command.scope, `${command.scope}:`, `${command.scope}:\uffff`)
+          .run(base.scope, `${base.scope}:`, `${base.scope}:\uffff`)
         return {}
       case 'release-prefix': {
         let count = 0
         this.db
           .prepare('DELETE FROM temp.search_catalog WHERE scope = ? AND key = ?')
-          .run(command.scope, command.prefix)
+          .run(base.scope, base.prefix)
         count += Number(this.db.prepare('SELECT changes() AS n').get()?.n ?? 0)
         for (const separator of ['/', '\\']) {
-          const prefix = `${command.prefix}${separator}`
+          const prefix = `${base.prefix}${separator}`
           this.db
             .prepare('DELETE FROM temp.search_catalog WHERE scope = ? AND key >= ? AND key < ?')
-            .run(command.scope, prefix, `${prefix}\uffff`)
+            .run(base.scope, prefix, `${prefix}\uffff`)
           count += Number(this.db.prepare('SELECT changes() AS n').get()?.n ?? 0)
         }
         return { count }
@@ -237,50 +240,49 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
       case 'count': {
         const row = this.db
           .prepare('SELECT n,runnable FROM temp.search_catalog_counts WHERE scope=?')
-          .get(command.scope)
+          .get(base.scope)
         const count = Number(row?.n ?? 0),
           runnable = Number(row?.runnable ?? 0)
         return {
-          count:
-            command.ready === undefined ? count : command.ready === 1 ? runnable : count - runnable
+          count: base.ready === undefined ? count : base.ready === 1 ? runnable : count - runnable
         }
       }
       case 'page': {
         const conditions = ['scope = ?', 'key > ?']
-        const values: (string | number)[] = [command.scope, command.after ?? '']
-        if (command.prefix !== undefined) {
+        const values: (string | number)[] = [base.scope, base.after ?? '']
+        if (base.prefix !== undefined) {
           conditions.push('key >= ?', 'key < ?')
-          values.push(command.prefix, `${command.prefix}\uffff`)
+          values.push(base.prefix, `${base.prefix}\uffff`)
         }
         for (const [column, value] of [
-          ['parent', command.parent],
-          ['group_key', command.group],
-          ['ready', command.ready]
+          ['parent', base.parent],
+          ['group_key', base.group],
+          ['ready', base.ready]
         ] as const) {
           if (value !== undefined) {
             conditions.push(`${column} = ?`)
             values.push(value)
           }
         }
-        if (command.throughRevision !== undefined) {
+        if (base.throughRevision !== undefined) {
           conditions.push('tie <= ?')
-          values.push(command.throughRevision)
+          values.push(base.throughRevision)
         }
-        if (command.beforeRank !== undefined) {
+        if (base.beforeRank !== undefined) {
           conditions.push('rank <= ?')
-          values.push(command.beforeRank)
+          values.push(base.beforeRank)
         }
         const rows: SessionSearchCatalogRow[] = []
         let bytes = 1024
         const iterator = this.db
           .prepare(`SELECT key,value,parent,group_key,rank,ready,tie FROM temp.search_catalog
-            WHERE ${conditions.join(' AND ')} ORDER BY ${command.orderRevision ? 'tie,key' : command.orderRank ? 'rank,tie,key' : 'key'} LIMIT ?`)
+            WHERE ${conditions.join(' AND ')} ORDER BY ${base.orderRevision ? 'tie,key' : base.orderRank ? 'rank,tie,key' : 'key'} LIMIT ?`)
           .iterate(
             ...values,
             Math.max(
               1,
               Math.min(
-                command.limit ?? SESSION_SEARCH_CATALOG_PAGE_ROWS,
+                base.limit ?? SESSION_SEARCH_CATALOG_PAGE_ROWS,
                 SESSION_SEARCH_CATALOG_PAGE_ROWS
               )
             )
@@ -296,8 +298,7 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
         }
         return { rows, after: rows.at(-1)?.key }
       }
-      default:
-        throw new Error('Unsupported session catalog command')
     }
+    throw new Error('Unsupported session catalog command')
   }
 }

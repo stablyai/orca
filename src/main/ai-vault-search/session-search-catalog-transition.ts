@@ -90,7 +90,18 @@ export function transitionSessionSearchCatalog(
         transitionSessionSearchInventory(catalog, command)
       )
     }
-    default:
+    case 'count':
+    case 'delete':
+    case 'delete-page':
+    case 'get':
+    case 'get-page':
+    case 'page':
+    case 'put':
+    case 'release':
+    case 'release-parent':
+    case 'release-prefix':
+    case 'release-scopes':
+    case 'release-scopes-page':
       return undefined
   }
 }
