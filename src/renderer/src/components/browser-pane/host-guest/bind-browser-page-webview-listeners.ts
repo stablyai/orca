@@ -1,4 +1,9 @@
-import { subscribeBrowserGuestMetadata } from './browser-guest-metadata-cache'
+import { useAppStore } from '@/store'
+import {
+  issueBrowserGuestNavigation,
+  browserGuestPreservesRequestedDocument,
+  subscribeBrowserGuestMetadata
+} from './browser-guest-metadata-cache'
 import { getBrowserDisplayTitle } from '../describe-page/browser-page-url-display'
 import { publishNativeChatVisualGuestTheme } from '@/components/native-chat/media/visuals/NativeChatVisualGuestThemePublisher'
 import { normalizeBrowserGuestSrc } from '../../../../../shared/browser/extensions/browser-extension-url'
@@ -160,26 +165,39 @@ export function bindBrowserPageWebviewListeners({
     if (!metadata || metadata.kind === 'retired') {
       return
     }
+    const page = useAppStore
+      .getState()
+      .browserPagesByWorkspace[workspaceId]?.find((page) => page.id === browserTabId)
+    if (!page) {
+      return
+    }
     const { kind, url, title, loading, canGoBack, canGoForward } = metadata
     if (metadata.loadError) {
       activeLoadFailureRef.current = metadata.loadError
     }
+    const presentDocument =
+      Boolean(url) &&
+      !metadata.errorPage &&
+      !metadata.loadError &&
+      !metadata.hasCertificateFailure &&
+      !browserGuestPreservesRequestedDocument(webview, url, page.url)
     if (kind === 'navigation') {
       handleFullDidNavigate({ url })
-    } else if (kind === 'in-page') {
+    } else if (
+      kind === 'in-page' ||
+      (kind === 'snapshot' && loading && presentDocument && !activeLoadFailureRef.current)
+    ) {
       handleDidNavigateInPage({ url })
     }
-    if (kind === 'title' && metadata.navigationRevision > 0) {
+    if (kind === 'title' && presentDocument && !activeLoadFailureRef.current) {
       handleTitleUpdate({ title })
     }
     const settlement =
-      kind === 'stop' || (kind === 'snapshot' && !loading && metadata.navigationRevision > 0)
-        ? handleDidStopLoading()
-        : null
+      kind === 'stop' || (kind === 'snapshot' && !loading) ? handleDidStopLoading() : null
     onUpdatePageStateRef.current(browserTabId, {
       ...settlement,
-      ...(metadata.navigationRevision > 0
-        ? { title: getBrowserDisplayTitle(title, url || browserTabUrlRef.current) }
+      ...(presentDocument && !activeLoadFailureRef.current
+        ? { title: getBrowserDisplayTitle(title, url) }
         : {}),
       canGoBack,
       canGoForward,
@@ -188,7 +206,7 @@ export function bindBrowserPageWebviewListeners({
         : kind === 'navigation'
           ? { loadError: activeLoadFailureRef.current }
           : {}),
-      ...(kind === 'snapshot' && metadata.navigationRevision === 0 ? {} : { loading })
+      loading
     })
   })
 
@@ -198,7 +216,9 @@ export function bindBrowserPageWebviewListeners({
     const initialUrl =
       normalizeBrowserGuestSrc(initialBrowserUrlRef.current) ?? ORCA_BROWSER_BLANK_URL
     lastKnownWebviewUrlRef.current = initialUrl
-    webview.src = initialUrl
+    issueBrowserGuestNavigation(webview, () => {
+      webview.src = initialUrl
+    })
   } else if (isPaintableRef.current) {
     if (isBrowserPageRendererRecoveryPending(browserTabId)) {
       guestRecovery.recoverRenderer()

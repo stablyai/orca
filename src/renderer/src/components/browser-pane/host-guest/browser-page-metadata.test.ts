@@ -60,7 +60,7 @@ function nativeState(patch: Partial<BrowserGuestMetadata> = {}): BrowserGuestMet
   }
 }
 
-function mount(state: BrowserGuestMetadata) {
+function mount(state: BrowserGuestMetadata, initiallyLoading = false) {
   const ref = <T>(current: T) => ({ current })
   const first: BrowserPage = {
     id: 'page-a',
@@ -68,7 +68,7 @@ function mount(state: BrowserGuestMetadata) {
     worktreeId: 'worktree-a',
     url: 'https://example.test/attempted',
     title: 'Saved title',
-    loading: false,
+    loading: initiallyLoading,
     faviconUrl: null,
     canGoBack: true,
     canGoForward: false,
@@ -160,8 +160,9 @@ function mount(state: BrowserGuestMetadata) {
 
 describe('mounted browser metadata application', () => {
   it('keeps the saved title before the first document commits', () => {
-    const view = mount(nativeState({ navigationRevision: 0, url: '', title: '' }))
+    const view = mount(nativeState({ navigationRevision: 0, url: '', title: '', loading: true }))
     expect(view.page().title).toBe('Saved title')
+    expect(view.page().loading).toBe(true)
     acceptBrowserGuestMetadata(
       nativeState({
         revision: 2,
@@ -185,6 +186,24 @@ describe('mounted browser metadata application', () => {
     )
     expect(view.page().title).toBe('Saved title')
     expect(view.page().url).toBe('https://example.test/attempted')
+    expect(view.page().loading).toBe(false)
+  })
+
+  it('adopts a document that predates observation while native loading and saved loading are true', () => {
+    const view = mount(
+      nativeState({
+        navigationRevision: 0,
+        url: 'https://current.test/c',
+        title: 'Current C',
+        loading: true
+      }),
+      true
+    )
+    expect(view.page()).toMatchObject({
+      url: 'https://current.test/c',
+      title: 'Current C',
+      loading: true
+    })
   })
 
   it('reattaches a failed destination without replacing its address or clearing its certificate challenge', () => {

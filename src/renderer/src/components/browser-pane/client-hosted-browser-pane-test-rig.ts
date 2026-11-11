@@ -45,7 +45,9 @@ export function installClientHostedPaneApi(overrides?: {
     configurable: true,
     value: {
       browser: {
-        getGuestMetadata: vi.fn(async () => undefined),
+        getGuestMetadata: vi.fn(async ({ webContentsId }: { webContentsId: number }) =>
+          guestStates.get(webContentsId)
+        ),
         onGuestMetadata: inert,
         onGuestEscape: inert,
         onPopup: inert,

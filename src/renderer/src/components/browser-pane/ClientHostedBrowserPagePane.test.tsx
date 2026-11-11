@@ -57,7 +57,9 @@ import {
 } from './client-hosted-browser-pane-test-rig'
 import { ClientHostedBrowserPagePane } from './ClientHostedBrowserPagePane'
 
-function render(ui: React.ReactElement) {
+function render(ui: React.ReactElement<{ browserTab: BrowserPage }>) {
+  const current = ui.props.browserTab
+  useAppStore.setState({ browserPagesByWorkspace: { [current.workspaceId]: [current] } })
   return renderWithProviders(ui, { wrapper: TooltipProvider })
 }
 
@@ -211,17 +213,11 @@ describe('ClientHostedBrowserPagePane', () => {
     expect(screen.getByPlaceholderText('Find in page...')).not.toBeNull()
     act(() => reportClientHostedGuestMetadata({ webContentsId: 7, kind: 'stop' }))
     expect(screen.getByPlaceholderText('Find in page...')).not.toBeNull()
-    act(() =>
-      reportClientHostedGuestMetadata({
-        webContentsId: 7,
-        kind: 'navigation',
-        navigationRevision: 2
-      })
-    )
+    act(() => webview.dispatchEvent(new Event('did-navigate')))
     expect(screen.queryByPlaceholderText('Find in page...')).toBeNull()
   })
 
-  it('restores the committed address after an attempted navigation is stopped', () => {
+  it('restores the committed address after an attempted navigation is stopped', async () => {
     const { webview } = createWebview()
     reportClientHostedGuestMetadata({
       webContentsId: 7,
@@ -251,7 +247,9 @@ describe('ClientHostedBrowserPagePane', () => {
     )
     act(() => screen.getByLabelText<HTMLInputElement>('Address').blur())
     onSetUrl.mockClear()
-    act(() => reportClientHostedGuestMetadata({ webContentsId: 7, kind: 'stop', loading: false }))
+    await act(async () =>
+      reportClientHostedGuestMetadata({ webContentsId: 7, kind: 'stop', loading: false })
+    )
     expect(screen.getByLabelText<HTMLInputElement>('Address').value).toBe(
       'https://example.internal/a'
     )

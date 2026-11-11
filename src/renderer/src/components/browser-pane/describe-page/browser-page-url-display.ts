@@ -1,3 +1,4 @@
+import { issueBrowserGuestNavigation } from '../host-guest/browser-guest-metadata-cache'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
 import '../../../../../shared/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
@@ -72,5 +73,7 @@ export function retryBrowserTabLoad(
     loading: true,
     title: retryUrl
   })
-  webview.src = retryUrl
+  issueBrowserGuestNavigation(webview, () => {
+    webview.src = retryUrl
+  })
 }

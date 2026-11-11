@@ -4,6 +4,7 @@ import type { BrowserGuestMetadata } from '../../../../../shared/browser/guest-l
 import {
   acceptBrowserGuestMetadata,
   clearBrowserGuestMetadata,
+  issueBrowserGuestNavigation,
   subscribeBrowserGuestMetadata
 } from './browser-guest-metadata-cache'
 
@@ -37,6 +38,25 @@ function tag(id: number): Electron.WebviewTag {
 afterEach(clearBrowserGuestMetadata)
 
 describe('guest metadata lifetime cache', () => {
+  it('initializes a successor after an eventless command returns unchanged native state', async () => {
+    const state = snapshot(1, 1, 'Idle A')
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { browser: { getGuestMetadata: vi.fn(async () => state) } }
+    })
+    acceptBrowserGuestMetadata(state)
+    const webview = tag(1)
+    const first = subscribeBrowserGuestMetadata('page', webview, () => {})
+    issueBrowserGuestNavigation(webview, () => {})
+    first()
+    const observed: (BrowserGuestMetadata | null)[] = []
+    const dispose = subscribeBrowserGuestMetadata('page', webview, (state) => observed.push(state))
+    await vi.waitFor(() =>
+      expect(observed.at(-1)).toMatchObject({ title: 'Idle A', loading: false })
+    )
+    dispose()
+  })
+
   it('discards a late initial read after a newer event and fences a replacement guest', async () => {
     let resolve!: (state: BrowserGuestMetadata) => void
     const getGuestMetadata = vi.fn(
@@ -52,6 +72,7 @@ describe('guest metadata lifetime cache', () => {
     const webview = tag(1)
     const observed: (BrowserGuestMetadata | null)[] = []
     const dispose = subscribeBrowserGuestMetadata('page', webview, (state) => observed.push(state))
+    await Promise.resolve()
     acceptBrowserGuestMetadata(snapshot(1, 2, 'Newer'))
     resolve(snapshot(1, 1, 'Stale'))
     await Promise.resolve()

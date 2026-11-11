@@ -69,7 +69,7 @@ export function createBrowserPageWebviewLoadingHandlers({
     if (!metadata) {
       return null
     }
-    const currentUrl = metadata.url || 'about:blank'
+    const currentUrl = metadata.url
     const browserModelUrl = redactKagiSessionToken(currentUrl)
     const activeLoadFailure = metadata.loadError ?? activeLoadFailureRef.current
     if (metadata.loadError) {
@@ -97,7 +97,7 @@ export function createBrowserPageWebviewLoadingHandlers({
       activeLoadFailureRef.current = failure
       return { loading: false, loadError: failure }
     }
-    if (metadata.navigationRevision === 0) {
+    if (!metadata.url) {
       return { loading: false }
     }
     if (activeLoadFailure?.code === BROWSER_GUEST_RECOVERY_ERROR_CODE) {

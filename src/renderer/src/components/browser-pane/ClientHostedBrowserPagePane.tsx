@@ -6,7 +6,11 @@ import { BrowserLinkStatusBubble } from './assemble-chrome/browser-link-status-b
 import { useAppStore } from '@/store'
 import type { BrowserLoadError } from '../../../../shared/browser-workspace-types'
 import { createBrowserClientPageLoadFailureHandler } from './browser-client-page-guest-metadata'
-import { subscribeBrowserGuestMetadata } from './host-guest/browser-guest-metadata-cache'
+import {
+  issueBrowserGuestNavigation,
+  browserGuestPreservesRequestedDocument,
+  subscribeBrowserGuestMetadata
+} from './host-guest/browser-guest-metadata-cache'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import {
   forgetBrowserClientPageMetadataReports,
@@ -130,14 +134,15 @@ export function ClientHostedBrowserPagePane({
     webviewRef,
     activeLoadFailureRef,
     onUpdatePageState,
+    onSetUrl,
     setAddressBarValue
   })
   const runDeferredNavigation = useEffectEvent(navigateToUrl)
-  const readPendingPageMetadata = useEffectEvent(() => ({
-    url: browserTab.url,
-    title: browserTab.title,
-    loading: browserTab.loading
-  }))
+  const readCurrentPage = useEffectEvent(() =>
+    useAppStore
+      .getState()
+      .browserPagesByWorkspace[workspaceId]?.find((page) => page.id === browserTab.id)
+  )
   // The guest lives in a body-level host that paints above the pane, so the cursor joins it there.
   const getAgentCursorHost = useCallback(
     () => webviewRef.current?.parentElement ?? null,
@@ -197,75 +202,72 @@ export function ClientHostedBrowserPagePane({
     })
     webviewRef.current = webview
     setAttachmentError(null)
-    let appliedUrl: string | null = null
     const receiveMetadata = (state: BrowserGuestMetadata | null): void => {
       if (!state || state.kind === 'retired') {
         guestLoss.lose('unreadable')
         return
       }
+      const pending = readCurrentPage()
+      if (!pending) {
+        guestAvailable = false
+        releaseGuest()
+        return
+      }
       const metadata = {
-        url: redactKagiSessionToken(state.url || 'about:blank'),
+        url: redactKagiSessionToken(state.url),
         title: state.title,
         loading: state.loading,
         canGoBack: state.canGoBack,
         canGoForward: state.canGoForward
       }
+      const validDocument =
+        Boolean(state.url) && !state.errorPage && !state.loadError && !state.hasCertificateFailure
+      const presentDocument =
+        validDocument && !browserGuestPreservesRequestedDocument(webview, state.url, pending.url)
       if (
         state.kind === 'navigation' ||
-        ((state.kind === 'stop' || (state.kind === 'snapshot' && !state.loading)) &&
-          state.navigationRevision > 0 &&
-          !state.loadError &&
-          !state.hasCertificateFailure &&
-          !state.errorPage)
+        ((state.kind === 'stop' || (state.kind === 'snapshot' && !state.loading)) && validDocument)
       ) {
         activeLoadFailureRef.current = null
-      }
-      if (state.kind === 'navigation') {
-        setFindOpen(false)
       }
       if (state.loadError) {
         activeLoadFailureRef.current = state.loadError
       }
       const activeLoadFailure = activeLoadFailureRef.current
       const observeUrl =
-        state.navigationRevision > 0 &&
-        !state.errorPage &&
-        !state.loadError &&
-        !state.hasCertificateFailure &&
+        presentDocument &&
+        !activeLoadFailure &&
         (state.kind === 'navigation' ||
           state.kind === 'in-page' ||
           state.kind === 'stop' ||
-          (state.kind === 'snapshot' && state.navigationRevision > 0 && !state.loading))
-      if (observeUrl && !activeLoadFailure) {
-        if (appliedUrl !== metadata.url) {
-          appliedUrl = metadata.url
+          state.kind === 'snapshot')
+      if (observeUrl) {
+        if (pending.url !== metadata.url) {
           setUrlFromGuest(browserTab.id, metadata.url, { preserveLoadError: true })
         }
         setAddressBarValueFromPage(toDisplayUrl(metadata.url))
       }
       updatePageStateFromGuest(browserTab.id, {
-        ...(state.navigationRevision > 0 ? { title: metadata.title } : {}),
-        ...(state.kind === 'snapshot' && state.navigationRevision === 0
-          ? {}
-          : { loading: metadata.loading }),
+        ...(presentDocument && !activeLoadFailure ? { title: metadata.title } : {}),
+        loading: metadata.loading,
         canGoBack: metadata.canGoBack,
         canGoForward: metadata.canGoForward,
         loadError: activeLoadFailure
       })
-      if (state.navigationRevision > 0) {
-        publisher.publish(metadata)
-      } else if (state.kind !== 'title') {
-        const pending = readPendingPageMetadata()
-        publisher.publish({
-          ...metadata,
-          ...pending,
-          loading: state.kind === 'snapshot' ? pending.loading : state.loading
-        })
+      const current = readCurrentPage()
+      if (!current) {
+        return
       }
-      if (observeUrl || state.kind === 'title') {
+      publisher.publish({
+        ...metadata,
+        ...(presentDocument && !activeLoadFailure ? {} : { url: current.url, title: current.title })
+      })
+      if (observeUrl || (state.kind === 'title' && presentDocument && !activeLoadFailure)) {
         recordHistoryFromGuest(metadata.url, getBrowserDisplayTitle(metadata.title, metadata.url))
       }
     }
+    const onNavigate = (): void => setFindOpen(false)
+    webview.addEventListener('did-navigate', onNavigate)
     const onFailLoad = createBrowserClientPageLoadFailureHandler(webview, (loadError) => {
       activeLoadFailureRef.current = loadError
       updatePageStateFromGuest(browserTab.id, { loading: false, loadError })
@@ -275,20 +277,21 @@ export function ClientHostedBrowserPagePane({
     const cleanupGuest = (): void => {
       unsubscribeMetadata()
       webview.removeEventListener('did-fail-load', onFailLoad)
+      webview.removeEventListener('did-navigate', onNavigate)
       guestLoss.dispose()
       publisher.dispose()
       forgetBrowserClientPageMetadataReports(browserTab.id)
       attachment.detach()
     }
     releaseGuest = cleanupGuest
+    const deferredUrl = consumeBrowserPageDeferredNavigation(browserTab.id)
+    if (deferredUrl) {
+      runDeferredNavigation(deferredUrl)
+    }
     unsubscribeMetadata = subscribeBrowserGuestMetadata(browserTab.id, webview, receiveMetadata)
     if (!guestAvailable) {
       cleanupGuest()
       return cleanupGuest
-    }
-    const deferredUrl = consumeBrowserPageDeferredNavigation(browserTab.id)
-    if (deferredUrl) {
-      runDeferredNavigation(deferredUrl)
     }
     return cleanupGuest
   }, [
@@ -334,8 +337,10 @@ export function ClientHostedBrowserPagePane({
           controls={{
             canGoBack: browserTab.canGoBack,
             canGoForward: browserTab.canGoForward,
-            goBack: () => webviewRef.current?.goBack(),
-            goForward: () => webviewRef.current?.goForward(),
+            goBack: () =>
+              issueBrowserGuestNavigation(webviewRef.current, (webview) => webview.goBack()),
+            goForward: () =>
+              issueBrowserGuestNavigation(webviewRef.current, (webview) => webview.goForward()),
             reload: () => reload.runReloadTrigger('button'),
             navigate: navigateToUrl
           }}
@@ -394,7 +399,7 @@ export function ClientHostedBrowserPagePane({
             <ClientHostedBrowserUnavailableNotice
               runtimeEnvironmentId={runtimeEnvironmentId}
               worktreeId={worktreeId}
-              lastCommittedUrl={browserTab.url}
+              reopenUrl={browserTab.url}
               placementHostClientId={browserHostClientId}
             />
           ) : isBlankBrowserUrl(browserTab.url) ? (

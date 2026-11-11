@@ -1,4 +1,7 @@
-import { cachedBrowserGuestMetadata } from '../host-guest/browser-guest-metadata-cache'
+import {
+  issueBrowserGuestNavigation,
+  cachedBrowserGuestMetadata
+} from '../host-guest/browser-guest-metadata-cache'
 import { useEffect, useLayoutEffect, type MutableRefObject, type RefObject } from 'react'
 import { normalizeBrowserNavigationUrl } from '../../../../../shared/browser-url'
 import '../../../../../shared/constants'
@@ -78,7 +81,9 @@ export function useBrowserPageWebviewUrlSync({
       declaredSrc !== normalizedUrl
     ) {
       lastKnownWebviewUrlRef.current = normalizedUrl
-      webview.src = normalizedUrl
+      issueBrowserGuestNavigation(webview, () => {
+        webview.src = normalizedUrl
+      })
       if (normalizedUrl !== ORCA_BROWSER_BLANK_URL) {
         keepAddressBarFocusRef.current = false
         if (document.activeElement === addressBarInputRef.current) {

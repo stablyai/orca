@@ -61,10 +61,12 @@ export function installBrowserGuestMetadata({
       ...readGuestNavigationState(guest)
     }
   }
-  const publish = (kind: BrowserGuestMetadata['kind'] = 'snapshot'): void => {
+  const publish = (
+    kind: BrowserGuestMetadata['kind'] = 'snapshot'
+  ): BrowserGuestMetadata | null => {
     const next = read(kind)
     if (!next) {
-      return
+      return null
     }
     if (
       previous &&
@@ -82,11 +84,12 @@ export function installBrowserGuestMetadata({
       next.canGoForward === previous.canGoForward &&
       next.navigationRevision === previous.navigationRevision
     ) {
-      return
+      return previous
     }
     next.revision = ++revision
     previous = next
     send(next)
+    return next
   }
   const onNavigate = (_event: Electron.Event, url: string): void => {
     if (isChromiumInternalErrorUrl(url)) {
@@ -125,6 +128,12 @@ export function installBrowserGuestMetadata({
     loading = true
     publish('start')
   }
+  const onStartLoading = (): void => {
+    if (guest.isLoadingMainFrame() && !isChromiumInternalErrorUrl(guest.getURL())) {
+      loading = true
+      publish('start')
+    }
+  }
   const onStop = (): void => {
     if (
       isChromiumInternalErrorUrl(guest.getURL()) &&
@@ -149,11 +158,23 @@ export function installBrowserGuestMetadata({
     loading = false
     publish('failure')
   }
-  projections.set(guest, { read: () => read(), publish: () => publish() })
+  projections.set(guest, {
+    read: () => {
+      if (guest.isDestroyed()) {
+        return null
+      }
+      loading = guest.isLoadingMainFrame()
+      return publish()
+    },
+    publish: () => {
+      publish()
+    }
+  })
   guest.on('did-navigate', onNavigate)
   guest.on('did-navigate-in-page', onInPage)
   guest.on('page-title-updated', onTitle)
   guest.on('did-start-navigation', onStart)
+  guest.on('did-start-loading', onStartLoading)
   guest.on('did-stop-loading', onStop)
   guest.on('did-fail-load', onFail)
   return () => {
@@ -165,6 +186,7 @@ export function installBrowserGuestMetadata({
     guest.off('did-navigate-in-page', onInPage)
     guest.off('page-title-updated', onTitle)
     guest.off('did-start-navigation', onStart)
+    guest.off('did-start-loading', onStartLoading)
     guest.off('did-stop-loading', onStop)
     guest.off('did-fail-load', onFail)
   }
