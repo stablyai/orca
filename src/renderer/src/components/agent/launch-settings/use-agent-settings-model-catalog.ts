@@ -33,7 +33,7 @@ export function useAgentSettingsModelCatalog(
   // A host can change account with no setting changing here, such as a paired host reconnecting.
   const readGeneration = (): number => (target ? hostModelCatalogGeneration(target) : 0)
   const generation = useSyncExternalStore(subscribeHostModelCatalogForgotten, readGeneration)
-  // A paired host's command and environment live in its own settings, not this window's.
+  // A paired host's command and environment live in its own settings; re-read, keeping the shown list meanwhile.
   const [hostRevision, setHostRevision] = useState(0)
   const environmentId = target?.kind === 'environment' ? target.environmentId : null
   useEffect(
@@ -51,7 +51,6 @@ export function useAgentSettingsModelCatalog(
     key: string
     accountSettings: readonly unknown[]
     generation: number
-    hostRevision: number
     catalog: AgentSessionModelCatalogResult | undefined
   } | null>(null)
   useEffect(() => {
@@ -60,31 +59,31 @@ export function useAgentSettingsModelCatalog(
     }
     let stale = false
     // Not recorded in the new-chat snapshot: an account answer there would drop newer workspace answers.
-    const read = (): void => {
+    // Old hosts refuse waitForListing, so wait only once the host says a listing is running.
+    const read = (wait: boolean): void => {
       void callStructuredAgentSession<AgentSessionModelCatalogResult>(
         target,
         'agentSession.modelCatalog',
-        { agent, waitForListing: true }
+        wait ? { agent, waitForListing: true } : { agent }
       )
         .then((catalog) => {
           if (stale) {
             return
           }
-          // A listing still running past the wait budget is not "no list"; wait again.
-          if (catalog.waitExpired) {
-            read()
+          if (wait ? catalog.waitExpired : catalog.listingInProgress) {
+            read(true)
             return
           }
-          setAnswer({ key, accountSettings, generation, hostRevision, catalog })
+          setAnswer({ key, accountSettings, generation, catalog })
         })
         // Why not the snapshot: an unanswered read can't vouch for an older list.
         .catch(() => {
           if (!stale) {
-            setAnswer({ key, accountSettings, generation, hostRevision, catalog: undefined })
+            setAnswer({ key, accountSettings, generation, catalog: undefined })
           }
         })
     }
-    read()
+    read(false)
     return () => {
       stale = true
     }
@@ -93,8 +92,7 @@ export function useAgentSettingsModelCatalog(
   const settled =
     answer?.key === key &&
     answer.accountSettings === accountSettings &&
-    answer.generation === generation &&
-    answer.hostRevision === hostRevision
+    answer.generation === generation
       ? answer
       : null
   // Why not the snapshot once answered: it serves new chats, so it refuses workspace-scoped lists.

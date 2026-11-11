@@ -87,10 +87,7 @@ describe('AgentLaunchChoiceEditor model list', () => {
     renderEditor('gpt-6-astra')
     await waitFor(() => expect(menus.get('Model')).toEqual(['__agent_default__', 'gpt-6-astra']))
     expect(menus.get('Reasoning effort')).toEqual(['__agent_default__', 'low', 'ultra'])
-    expect(call).toHaveBeenCalledWith(HOST, 'agentSession.modelCatalog', {
-      agent: 'codex',
-      waitForListing: true
-    })
+    expect(call).toHaveBeenCalledWith(HOST, 'agentSession.modelCatalog', { agent: 'codex' })
     expect(document.querySelector('[data-agent-model-list-fallback]')).toBeNull()
 
     cleanup()
@@ -138,12 +135,17 @@ describe('AgentLaunchChoiceEditor model list', () => {
     )
   })
 
-  it('waits again when the host listing outlasts one wait', async () => {
+  it('waits for a listing the host is still running, again when one wait runs out', async () => {
+    call.mockResolvedValueOnce({ origin: 'unknown', listingInProgress: true })
     call.mockResolvedValueOnce({ origin: 'unknown', listingInProgress: true, waitExpired: true })
     call.mockResolvedValueOnce(LISTED)
     renderEditor()
     await waitFor(() => expect(menus.get('Model')).toEqual(['__agent_default__', 'gpt-6-astra']))
-    expect(call).toHaveBeenCalledTimes(2)
+    expect(call).toHaveBeenLastCalledWith(HOST, 'agentSession.modelCatalog', {
+      agent: 'codex',
+      waitForListing: true
+    })
+    expect(call).toHaveBeenCalledTimes(3)
     expect(document.querySelector('[data-agent-model-list-fallback]')).toBeNull()
   })
 
