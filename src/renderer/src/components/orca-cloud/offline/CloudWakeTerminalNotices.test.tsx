@@ -13,13 +13,14 @@ vi.mock('@/i18n/use-translate', () => ({
     )
 }))
 afterEach(() => cleanup())
-if (globalThis.ResizeObserver === undefined) {
-  globalThis.ResizeObserver = class {
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
     observe(): void {}
     unobserve(): void {}
     disconnect(): void {}
-  } as unknown as typeof ResizeObserver
-}
+  }
+)
 
 describe('CloudAsleepTerminalNotice', () => {
   it('greys the scrollback and shows the "Asleep since" divider', () => {
@@ -60,7 +61,6 @@ describe('CloudWokeProcessesNotice', () => {
   })
 
   it('goes away once the person types in the pane', () => {
-    vi.useFakeTimers()
     const onDismiss = vi.fn()
     render(
       <CloudWokeProcessesNotice
@@ -70,10 +70,10 @@ describe('CloudWokeProcessesNotice', () => {
         onDismiss={onDismiss}
       />
     )
-    noteUserInputForPane('leaf-x', Date.now() + 1)
-    vi.advanceTimersByTime(600)
+    noteUserInputForPane('leaf-other')
+    expect(onDismiss).not.toHaveBeenCalled()
+    noteUserInputForPane('leaf-x')
     expect(onDismiss).toHaveBeenCalled()
-    vi.useRealTimers()
   })
 })
 

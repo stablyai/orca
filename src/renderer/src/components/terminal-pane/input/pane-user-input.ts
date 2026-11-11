@@ -15,6 +15,17 @@ export function noteUserInputForPane(
   if (workspaceId) {
     lastUserInputByWorkspace.set(workspaceId, at)
   }
+  for (const listener of inputListeners) {
+    listener(paneId)
+  }
+}
+
+const inputListeners = new Set<(paneId: string) => void>()
+
+/** Told the pane (layout leaf) a person typed into; for UI that goes away once typed over. */
+export function subscribePaneUserInput(listener: (paneId: string) => void): () => void {
+  inputListeners.add(listener)
+  return () => inputListeners.delete(listener)
 }
 
 /** True when a person's input reached any pane of this workspace since `since`. */

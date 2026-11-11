@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect } from 'react'
 import { RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { PaneTopWarningBanner } from '@/components/terminal-pane/appearance/pane-top-banner/PaneTopWarningBanner'
-import { paneHadUserInputSince } from '@/components/terminal-pane/input/pane-user-input'
+import { subscribePaneUserInput } from '@/components/terminal-pane/input/pane-user-input'
 
 const MAX_COMMAND_CHARS = 48
 
@@ -36,18 +36,16 @@ export function CloudWokeProcessesNotice({
   onDismiss: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const [shownAt] = useState(() => Date.now())
   useEffect(() => {
     if (!paneLeafId) {
       return
     }
-    const timer = setInterval(() => {
-      if (paneHadUserInputSince(paneLeafId, shownAt)) {
+    return subscribePaneUserInput((paneId) => {
+      if (paneId === paneLeafId) {
         onDismiss()
       }
-    }, 500)
-    return () => clearInterval(timer)
-  }, [paneLeafId, shownAt, onDismiss])
+    })
+  }, [paneLeafId, onDismiss])
   return (
     <PaneTopWarningBanner
       tone="neutral"
