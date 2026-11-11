@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import { useCloudWorkspace, useIsCloudWorkspace } from './orca-cloud-workspace-store'
+import { isWakeReadyAfterRead } from './orca-cloud-workspace-state'
 import { useWakeAfterSleep } from '@/lib/worktree-sleep-wake-request'
 
 export type CloudRecoveryContext = {
@@ -19,7 +20,9 @@ export function useCloudRecoveryContext(
   worktreeId: string | null | undefined
 ): CloudRecoveryContext | null {
   const isCloud = useIsCloudWorkspace(worktreeId)
-  const phase = useCloudWorkspace((s) => (worktreeId ? s.wake[worktreeId]?.phase : undefined))
+  const wake = useCloudWorkspace((s) => (worktreeId ? s.wake[worktreeId] : undefined))
+  const phase = wake?.phase
+  const status = useCloudWorkspace((s) => (worktreeId ? s.status[worktreeId]?.status : undefined))
   // Wake pressed while main still suspends the VM: waking already shows from the press, before
   // main reports, while the connection drops as the VM goes down.
   const wakeAfterSleep = useWakeAfterSleep(worktreeId ?? '')
@@ -43,8 +46,11 @@ export function useCloudRecoveryContext(
     return null
   }
   const waking = phase === 'waking' || phase === 'connecting' || wakeAfterSleep !== undefined
+  // Main said the wake is ready after the last reads: they are stale, and the terminal is about to
+  // attach ("Connecting…"), so no asleep note on the way in.
   const asleep =
     !waking &&
+    !isWakeReadyAfterRead(wake, status) &&
     (reported === 'sleeping' || reported === 'stopping' || reported === 'archived' || vmSuspended)
   return { waking, asleep, workspaceName, asleepSince: asleep || waking ? suspendedAt : null }
 }

@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
 import { useIsWorktreeSleepViewHeld } from '@/lib/worktree-sleep-view'
 import { useCloudWorkspaceView } from '../use-cloud-workspace-view'
+import { isWakeReadyAfterRead } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 
 /**
  * The active workspace when it is an Orca Cloud workspace whose files can't be read right now:
@@ -33,7 +34,10 @@ export function useAsleepCloudWorkspace(): {
   if (view.state === 'archived') {
     return { id: activeWorktreeId, waking: false, archived: true }
   }
-  return view.state === 'sleeping' || view.state === 'wakeFailed' || vmSuspended || viewOnly
+  // A ready wake newer than the reads: the VM record just hasn't caught up (no Wake button while
+  // the terminal is "Connecting…").
+  const staleSuspended = vmSuspended && !isWakeReadyAfterRead(view.wake, view.entry?.status)
+  return view.state === 'sleeping' || view.state === 'wakeFailed' || staleSuspended || viewOnly
     ? { id: activeWorktreeId, waking: false, archived: false }
     : null
 }

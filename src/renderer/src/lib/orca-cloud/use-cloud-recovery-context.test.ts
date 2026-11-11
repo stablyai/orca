@@ -67,6 +67,27 @@ describe('terminal recovery for an asleep Orca Cloud workspace (RA-12)', () => {
     expect(result.current).toMatchObject({ waking: true, asleep: false })
   })
 
+  it('a wake main reported ready after the last reads is not asleep (no note while Connecting…)', () => {
+    act(() => {
+      // The status was read (asleep) at T0; main's ready lands after it, before the re-read.
+      seedCloudWorkspaceSnapshot({
+        ids: new Set(['ws']),
+        idsLoaded: true,
+        status: { ws: { status: status('sleeping'), loading: false, error: null, fetchedAt: T0 } },
+        wake: {
+          ws: { workspaceId: 'ws', phase: 'ready', source: 'open', startedAt: T0, at: T0 + 5_000 }
+        }
+      })
+      useAppStore.setState({
+        ephemeralVmRuntimesByWorkspaceId: {
+          ws: { id: 'vm', workspaceId: 'ws', status: 'suspended', canSuspend: true }
+        }
+      })
+    })
+    const { result } = renderHook(() => useCloudRecoveryContext('ws'))
+    expect(result.current).toMatchObject({ asleep: false, waking: false })
+  })
+
   it('a running workspace whose connection dropped still reconnects', () => {
     act(() => seed('ready'))
     const { result } = renderHook(() => useCloudRecoveryContext('ws'))
