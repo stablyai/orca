@@ -48,6 +48,11 @@ function bindPoint(owner: CombinedDiffViewportOwner, key: string, offset: number
 }
 function wheel(target: HTMLElement, deltaY: number, init: WheelEventInit = {}): WheelEvent {
   const event = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY, ...init })
+  // Happy DOM's WheelEvent extends UIEvent, omitting browser mouse modifiers.
+  Object.defineProperties(event, {
+    ctrlKey: { value: init.ctrlKey ?? false },
+    shiftKey: { value: init.shiftKey ?? false }
+  })
   target.dispatchEvent(event)
   return event
 }
@@ -176,7 +181,8 @@ it('yields to nested scrolling and containment, chaining outward only at an inne
     wheel(textarea, -7.5)
     expect(owner.getScrollTop()).toBe(112.5)
     const horizontal = document.createElement('div')
-    horizontal.style.overflow = 'auto'
+    horizontal.style.overflowX = 'auto'
+    horizontal.style.overflowY = 'auto'
     Object.defineProperties(horizontal, {
       scrollWidth: { value: 500 },
       clientWidth: { value: 100 }
