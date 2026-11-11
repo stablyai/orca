@@ -42,8 +42,13 @@ export type CloudSetupStartRequest = {
   /** The rows still open when the user clicked (account, team, plan, github). */
   needs: CloudSetupStep['id'][]
 }
-/** Null when the session couldn't open; the composer then falls back to today's actions. */
-type SessionStarter = (request: CloudSetupStartRequest) => Promise<{ sessionId: string } | null>
+/**
+ * Null when the session couldn't open; the composer then falls back to today's actions.
+ * `cancelled` when the user cancelled the sign-in: no fallback, nothing else opens.
+ */
+type SessionStarter = (
+  request: CloudSetupStartRequest
+) => Promise<{ sessionId: string } | { cancelled: true } | null>
 
 let source: SessionSource | null = null
 let starter: SessionStarter | null = null
@@ -71,10 +76,7 @@ export function readCloudSetupSession(sessionId: string | null): CloudSetupSessi
 // Bumped on every change, so a read is cached per (session, revision): useSyncExternalStore needs
 // the same object back until something changed.
 let revision = 0
-const cachedReads = new Map<
-  string,
-  { revision: number; value: CloudSetupSessionSnapshot | null }
->()
+const cachedReads = new Map<string, { revision: number; value: CloudSetupSessionSnapshot | null }>()
 
 /** Call after each poll so open composers re-read their session. */
 export function notifyCloudSetupSessionChanged(): void {

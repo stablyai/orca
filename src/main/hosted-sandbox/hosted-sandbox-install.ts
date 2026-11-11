@@ -61,6 +61,14 @@ import {
   installCloudMcpSync,
   registerCloudMcpSyncHandlers
 } from '../agent-mcp-sync/desktop/cloud-mcp-sync-ipc'
+import {
+  installLocalCommands,
+  registerLocalCommandHandlers
+} from '../local-commands/local-command-service'
+import {
+  installCloudAgentConfigSync,
+  registerCloudAgentConfigSyncHandlers
+} from '../agent-config-sync/desktop/cloud-agent-config-sync-ipc'
 
 /** Capability Orca Cloud auth grants per account (stablyai/orca-cloud#689). */
 export const ORCA_CLOUD_SANDBOX_CAPABILITY = 'sandbox'
@@ -87,7 +95,9 @@ export function installHostedSandbox(
     restartHostedWorkspace(args.workspaceId)
   )
   registerCloudMcpSyncHandlers()
+  registerCloudAgentConfigSyncHandlers()
   const userDataPath = app.getPath('userData')
+  registerLocalCommandHandlers()
   const config = getHostedSandboxConfig(
     userDataPath,
     withCloudBuildDefaults(process.env),
@@ -117,10 +127,12 @@ export function installHostedSandbox(
     onListed: (account, listed) => gonePrune.observeList(account, listed),
     relistMs: 10 * 60_000
   })
+  installLocalCommands(userDataPath)
   const mcpSync = installCloudMcpSync(userDataPath, {
     baseUrl: config.controlPlaneUrl,
     getAccessToken: config.getAccessToken
   })
+  const agentConfigSync = installCloudAgentConfigSync(userDataPath)
   // Dev rehearsals shorten idle sleep; packaged builds always use the provider's default.
   const idleOverride = app.isPackaged
     ? Number.NaN
@@ -147,7 +159,11 @@ export function installHostedSandbox(
     userDataPath,
     driver,
     windows: () => BrowserWindow.getAllWindows(),
-    onConnected: (runtimeEnvironmentId) => void mcpSync.sync(runtimeEnvironmentId, 'connect'),
+    // Create and wake both connect: MCP servers, skills and commands follow this computer's.
+    onConnected: (runtimeEnvironmentId) => {
+      void mcpSync.sync(runtimeEnvironmentId, 'connect')
+      void agentConfigSync.sync(runtimeEnvironmentId, 'connect')
+    },
     onRunningChange: (anyRunning) => usageRefresh.setRunning(anyRunning),
     activeAccountId
   })

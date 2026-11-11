@@ -172,12 +172,18 @@ export function stopWatchingCloudSetupSession(sessionId: string): void {
   entries.delete(sessionId)
 }
 
-/** "Set up and start": opens the one browser tab and starts polling. Null when it couldn't. */
+/**
+ * What "Set up and start" got back: the session it opened, `cancelled` when the user cancelled the
+ * sign-in (or it timed out, or a newer one replaced it), or null when setup couldn't open.
+ */
+export type CloudSetupSessionStart = { sessionId: string } | { cancelled: true } | null
+
+/** "Set up and start": opens the one browser tab and starts polling. */
 export async function startCloudSetupSession(request: {
   repo?: string
   needs: CloudSetupNeed[]
   chooseTeam?: boolean
-}): Promise<{ sessionId: string } | null> {
+}): Promise<CloudSetupSessionStart> {
   let result: CloudSetupStartResult
   try {
     result = await window.api.orcaProfiles.cloudSetupStart({
@@ -187,6 +193,10 @@ export async function startCloudSetupSession(request: {
     })
   } catch {
     return null
+  }
+  if (result.status === 'cancelled') {
+    // The user stopped the sign-in: nothing else may open a browser on their behalf.
+    return { cancelled: true }
   }
   if (result.status !== 'opened') {
     return null

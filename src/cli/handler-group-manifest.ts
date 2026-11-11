@@ -252,6 +252,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/secret.js')).SECRET_HANDLERS
   },
   {
+    name: 'local-command',
+    keys: ['local-command run', 'local-command mcp'],
+    load: async () => (await import('./handlers/local-command.js')).LOCAL_COMMAND_HANDLERS
+  },
+  {
     name: 'speech',
     keys: ['speech openai-key status', 'speech openai-key set', 'speech openai-key clear'],
     load: async () => (await import('./handlers/speech.js')).SPEECH_HANDLERS

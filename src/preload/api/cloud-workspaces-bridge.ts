@@ -6,8 +6,8 @@ export const cloudWorkspacesApi = {
   list: (query) => ipcRenderer.invoke('cloudWorkspaces:list', query),
   get: (id) => ipcRenderer.invoke('cloudWorkspaces:get', { id }),
   patch: (id, patch) => ipcRenderer.invoke('cloudWorkspaces:patch', { id, patch }),
-  resolveLink: (workspaceId, chatId) =>
-    ipcRenderer.invoke('cloudWorkspaces:resolveLink', { workspaceId, chatId }),
+  resolveLink: (target, chatId) =>
+    ipcRenderer.invoke('cloudWorkspaces:resolveLink', { target, chatId }),
   openGrant: (id) => ipcRenderer.invoke('cloudWorkspaces:openGrant', { id }),
   readSnapshot: (id) => ipcRenderer.invoke('cloudWorkspaces:readSnapshot', { id }),
   listGrants: (id) => ipcRenderer.invoke('cloudWorkspaces:listGrants', { id }),
@@ -27,6 +27,16 @@ export const cloudWorkspacesApi = {
   getOrgPrompts: () => ipcRenderer.invoke('cloudWorkspaces:getOrgPrompts'),
   putOrgPrompts: (document, revision) =>
     ipcRenderer.invoke('cloudWorkspaces:putOrgPrompts', { document, revision }),
+  getPrefs: () => ipcRenderer.invoke('cloudWorkspaces:getPrefs'),
+  putPrefs: (document, revision) =>
+    ipcRenderer.invoke('cloudWorkspaces:putPrefs', { document, revision }),
+  getOrgSlug: (orgName) => ipcRenderer.invoke('cloudWorkspaces:getOrgSlug', { orgName }),
+  teammateProfile: (userId, utcOffsetMin) =>
+    ipcRenderer.invoke('cloudWorkspaces:teammateProfile', { userId, utcOffsetMin }),
+  poke: (userId) => ipcRenderer.invoke('cloudWorkspaces:poke', { userId }),
+  pokeInbox: () => ipcRenderer.invoke('cloudWorkspaces:pokeInbox'),
+  setPokesEnabled: (enabled) => ipcRenderer.invoke('cloudWorkspaces:setPokesEnabled', { enabled }),
+  markPokesSeen: (ids) => ipcRenderer.invoke('cloudWorkspaces:markPokesSeen', { ids }),
   onOpenLink: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, link: string): void => callback(link)
     ipcRenderer.on('ui:openCloudWorkspaceLink', listener)

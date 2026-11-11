@@ -7,7 +7,7 @@ import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-s
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { PlanBillingSection } from '../../billing/PlanBillingSection'
-import { TeamSettingsLink } from '../../billing/team/TeamSettingsLink'
+import { TeamPageBody } from '../../billing/team/TeamDialogHost'
 import {
   CloudEnvironmentSection,
   useOrcaCloudEnvironmentsAvailability
@@ -18,6 +18,8 @@ import { CloudSecretsSection } from '../cloud-secrets/CloudSecretsSection'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { CloudPredictiveWakeSetting } from './CloudPredictiveWakeSetting'
 import { OrcaCloudMcpServersPane } from './OrcaCloudMcpServersPane'
+import { OrcaCloudLocalCommandsPane } from './OrcaCloudLocalCommandsPane'
+import { OrcaCloudSkillsPane } from './cloud-skills/OrcaCloudSkillsPane'
 
 type OrcaCloudAccount = {
   orgId: string | null
@@ -113,7 +115,19 @@ export function OrcaCloudTeamPane(): React.JSX.Element {
     <OrcaCloudAccountGate>
       {(account) =>
         account.billing ? (
-          <TeamSettingsLink orgId={account.orgId} orgName={account.orgName} />
+          // JA-17: members inline (invite field, then the table); seats and invoices stay on
+          // Plan & billing, linked. Remount per team so row state never carries over.
+          <TeamPageBody
+            key={account.orgId ?? 'none'}
+            arrival={null}
+            inline={{
+              onOpenPlanBilling: () => {
+                const store = useAppStore.getState()
+                store.openSettingsTarget({ pane: 'cloud-billing', repoId: null })
+                store.openSettingsPage()
+              }
+            }}
+          />
         ) : (
           <InlineError
             tone="neutral"
@@ -165,4 +179,12 @@ export function OrcaCloudEnvironmentsPane(): React.JSX.Element {
 
 export function OrcaCloudMcpPane(): React.JSX.Element {
   return <OrcaCloudAccountGate>{() => <OrcaCloudMcpServersPane />}</OrcaCloudAccountGate>
+}
+
+export function OrcaCloudLocalCommandsSettingsPane(): React.JSX.Element {
+  return <OrcaCloudAccountGate>{() => <OrcaCloudLocalCommandsPane />}</OrcaCloudAccountGate>
+}
+
+export function OrcaCloudSkillsSyncPane(): React.JSX.Element {
+  return <OrcaCloudAccountGate>{() => <OrcaCloudSkillsPane />}</OrcaCloudAccountGate>
 }

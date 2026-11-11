@@ -1,29 +1,7 @@
-// "Start in Orca Cloud": what the Run on control shows, which setup rows are missing, and what the
-// composer's primary button says and does. Pure, so every state the spec draws is unit-tested here.
+// Orca Cloud from the composer: whether its Run on option is offered, which setup rows are missing,
+// and the remembered default. Pure, so every state the spec draws is unit-tested here.
 import type { OrcaCloudAvailability } from '../../../../../shared/orca-yaml-hook-types'
 import type { OrcaCloudRunTargetAccess } from '../orca-cloud-run-target-access'
-
-/** The three segments of Run on: this computer, Orca Cloud, and everything else behind "⋯". */
-export type RunOnSegment = 'local' | 'orca-cloud' | 'other'
-
-export function getRunOnSegment({
-  orcaCloudSelected,
-  otherRecipeSelected,
-  selectedHostIsLocal
-}: {
-  orcaCloudSelected: boolean
-  otherRecipeSelected: boolean
-  /** Null when no host is committed (the picker's "Choose where to run" state). */
-  selectedHostIsLocal: boolean | null
-}): RunOnSegment | null {
-  if (orcaCloudSelected) {
-    return 'orca-cloud'
-  }
-  if (otherRecipeSelected || selectedHostIsLocal === false) {
-    return 'other'
-  }
-  return selectedHostIsLocal === null ? null : 'local'
-}
 
 /**
  * How the Orca Cloud segment behaves. `hidden`: this build doesn't ship Orca Cloud.
@@ -47,7 +25,7 @@ export function getOrcaCloudSegmentState(
   }
 }
 
-/** One row of the "Set up Orca Cloud" panel. Shape shared with the setup session (team-billing-ux). */
+/** One step of the Orca Cloud setup page. Shape shared with the setup session (team-billing-ux). */
 export type CloudSetupStepId = 'account' | 'team' | 'plan' | 'github' | 'agent'
 export type CloudSetupStepState =
   | 'done'
@@ -171,79 +149,6 @@ function derivePlanStep(
     case 'payment-issue':
       return { id: 'plan', state: 'needed', need: 'payment', canFix: access.canManageBilling }
   }
-}
-
-/** Required rows still open; `optional` (agent) never counts. */
-export function getOpenSetupSteps(steps: readonly CloudSetupStep[]): CloudSetupStep[] {
-  return steps.filter((step) => step.state !== 'done' && step.state !== 'optional')
-}
-
-/** The panel shows while anything required is open (or still loading). */
-export function isCloudSetupPanelVisible(steps: readonly CloudSetupStep[]): boolean {
-  // An included trial isn't a task: with nothing else open, the hint line carries it (B1).
-  return getOpenSetupSteps(steps).some((step) => step.need !== 'trial')
-}
-
-/** The browser trip is for choosing a plan (T2, lapsed, no plan), not a free trial. */
-export function cloudSetupNeedsPlan(steps: readonly CloudSetupStep[]): boolean {
-  return getOpenSetupSteps(steps).some(
-    (step) => step.need === 'plan' || step.need === 'renew-plan' || step.need === 'trial-used-up'
-  )
-}
-
-/**
- * The same browser trip also gives Orca Cloud access to the repository on GitHub. An owner's
- * approval (D2) or a project not on GitHub (D3) isn't part of the trip; still checking isn't either.
- */
-export function cloudSetupNeedsGitHub(steps: readonly CloudSetupStep[]): boolean {
-  return getOpenSetupSteps(steps).some(
-    (step) => step.id === 'github' && !step.blocksStart && step.state !== 'loading'
-  )
-}
-
-export type CloudPrimaryAction =
-  | 'start'
-  | 'setUpAndStart'
-  | 'choosePlanAndStart'
-  | 'renewAndStart'
-  | 'giveAccessAndStart'
-  /** Only the trial is missing: setup grants it, so the button just says Start (B1). */
-  | 'startTrial'
-  | 'useThisComputer'
-  | 'checking'
-
-/**
- * The composer's primary action while Orca Cloud is selected. The label names where the work runs
- * (spec D10); a member who can't fix a block gets "Use this computer instead" so ⌘↵ always works.
- */
-export function getCloudPrimaryAction(steps: readonly CloudSetupStep[]): CloudPrimaryAction {
-  const open = getOpenSetupSteps(steps)
-  if (open.length === 0) {
-    return 'start'
-  }
-  if (open.some((step) => (step.state === 'needed' && step.canFix === false) || step.blocksStart)) {
-    return 'useThisComputer'
-  }
-  if (open.every((step) => step.state === 'loading')) {
-    return 'checking'
-  }
-  const needed = open.filter((step) => step.state !== 'pending' && step.state !== 'loading')
-  if (needed.length === 1) {
-    const need = needed[0]?.need
-    if (need === 'plan' || need === 'trial-used-up') {
-      return 'choosePlanAndStart'
-    }
-    if (need === 'trial') {
-      return 'startTrial'
-    }
-    if (need === 'renew-plan') {
-      return 'renewAndStart'
-    }
-    if (need === 'github') {
-      return 'giveAccessAndStart'
-    }
-  }
-  return 'setUpAndStart'
 }
 
 export type RunOnPreference = 'last' | 'local' | 'orca-cloud'

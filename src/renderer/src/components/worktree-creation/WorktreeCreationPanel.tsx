@@ -16,6 +16,7 @@ import {
 } from './worktree-creation-clock'
 import { VmBuildSheet } from './VmBuildSheet'
 import { VmDeleteConfirmDialog } from './VmDeleteConfirmDialog'
+import { preloadCloudOpenCover } from './CloudOpenCoverLayer'
 import { composerDataFromRefusedCreate } from './vm-build-composer-return'
 
 /** Debounced in-frame creation placeholder: tab strip names the workspace while body shows status, enabling same-frame handoff without duplicating labels. */
@@ -35,6 +36,13 @@ export default function WorktreeCreationPanel({
   const now = useWorktreeCreationClock(
     entry?.status === 'creating' && entry.waitingSince === undefined
   )
+  const cloudCreate = entry?.request.ephemeralVmRecipe?.provider === 'orca-cloud'
+  React.useEffect(() => {
+    // The open cover takes over from this panel when the create finishes (JA-12).
+    if (cloudCreate) {
+      void preloadCloudOpenCover()
+    }
+  }, [cloudCreate])
   if (!entry) {
     return null
   }
@@ -42,7 +50,7 @@ export default function WorktreeCreationPanel({
   const dismiss = (): void => useAppStore.getState().removePendingWorktreeCreation(creationId)
   // A failed or paused VM build still holds a VM that dismissing deletes, so confirm first.
   const holdsVm =
-    entry.environmentCheck?.status === 'failed' ||
+    (entry.environmentCheck?.status === 'failed' && entry.environmentCheck.sandbox !== 'deleted') ||
     (entry.status === 'error' && Boolean(entry.request.ephemeralVmRuntimeId))
   const leave = holdsVm ? () => setConfirmingDelete(true) : dismiss
   const isError = entry.status === 'error'

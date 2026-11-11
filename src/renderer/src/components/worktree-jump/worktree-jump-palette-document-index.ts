@@ -24,7 +24,8 @@ export function buildWorktreeJumpPaletteDocumentIndex({
   prCache,
   issueCache,
   workspacePortScan,
-  checksReviewByWorktree
+  checksReviewByWorktree,
+  cloudNumberForWorktree
 }: {
   worktrees: readonly Worktree[]
   repoMap: ReadonlyMap<string, Repo>
@@ -35,9 +36,16 @@ export function buildWorktreeJumpPaletteDocumentIndex({
   issueCache: AppState['issueCache'] | null
   workspacePortScan: WorkspacePortScanResult | null
   checksReviewByWorktree: ReadonlyMap<Worktree, HostedReviewInfo | null>
+  /** W-123 for cloud workspaces (null for everything else). */
+  cloudNumberForWorktree?: (worktree: Worktree) => number | null
 }): Map<string, PaletteDocument> {
   const hostLabelByWorktreeId = new Map<string, string>()
+  const cloudNumberByWorktreeId = new Map<string, number>()
   for (const worktree of worktrees) {
+    const cloudNumber = cloudNumberForWorktree?.(worktree)
+    if (cloudNumber) {
+      cloudNumberByWorktreeId.set(getPaletteWorktreeIdentity(worktree), cloudNumber)
+    }
     const repo = resolvePaletteRepoForWorktree(worktree, repoMap, repoByHostIdentity)
     const badge = getPaletteHostBadge(
       getPaletteWorktreeExecutionHostId(worktree) ?? (repo && getRepoExecutionHostId(repo)),
@@ -57,7 +65,8 @@ export function buildWorktreeJumpPaletteDocumentIndex({
       issueCache,
       workspacePortsByWorktreeId: getWorkspacePortsByWorktreeId(workspacePortScan),
       checksReviewByWorktree,
-      hostLabelByWorktreeId
+      hostLabelByWorktreeId,
+      cloudNumberByWorktreeId
     }
   )
 }

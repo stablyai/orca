@@ -1,8 +1,10 @@
 import {
   OrcaCloudBillingPane,
   OrcaCloudEnvironmentsPane,
+  OrcaCloudLocalCommandsSettingsPane,
   OrcaCloudMcpPane,
   OrcaCloudSecretsPane,
+  OrcaCloudSkillsSyncPane,
   OrcaCloudTeamPane
 } from '../orca-cloud/OrcaCloudSettingsPanes'
 import { SettingsSection } from '../section-layout/SettingsSection'
@@ -26,8 +28,10 @@ export function renderOrcaCloudSettingsSections(
     { id: 'cloud-billing', pane: <OrcaCloudBillingPane /> },
     { id: 'cloud-team', pane: <OrcaCloudTeamPane /> },
     { id: 'cloud-secrets', pane: <OrcaCloudSecretsPane /> },
+    { id: 'cloud-skills', pane: <OrcaCloudSkillsSyncPane /> },
     { id: 'cloud-environments', pane: <OrcaCloudEnvironmentsPane /> },
-    { id: 'cloud-mcp', pane: <OrcaCloudMcpPane /> }
+    { id: 'cloud-mcp', pane: <OrcaCloudMcpPane /> },
+    { id: 'cloud-local-commands', pane: <OrcaCloudLocalCommandsSettingsPane /> }
   ]
   return (
     <>

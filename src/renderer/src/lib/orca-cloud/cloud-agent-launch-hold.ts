@@ -6,7 +6,7 @@
 // runs and the strip shows it.
 import { useSyncExternalStore } from 'react'
 import type { HostAgentSignInAgent } from '../../../../shared/host-agent-sign-in-status'
-import { orcaCloudAgentCoverage } from './orca-cloud-agent-accounts-model'
+import { orcaCloudAgentCoverageFromAccounts } from './orca-cloud-agent-accounts-model'
 import {
   ensureFreshOrcaCloudAgentAccounts,
   isOrcaCloudAgentAccountsFresh,
@@ -22,10 +22,9 @@ export function cloudAgentStripReason(
   agent: HostAgentSignInAgent,
   accounts: Pick<OrcaCloudAgentAccountsState, 'load' | 'keyKinds'>
 ): CloudAgentStripReason | null {
-  if (accounts.load.kind !== 'ready') {
-    return null
-  }
-  switch (orcaCloudAgentCoverage(agent, accounts.load.status, accounts.keyKinds[agent]).kind) {
+  switch (orcaCloudAgentCoverageFromAccounts(agent, accounts)?.kind) {
+    case undefined:
+      return null
     case 'expired':
       return 'accountExpired'
     case 'killSwitch':

@@ -81,3 +81,35 @@ export const getOrcaCloudMcpSearchEntries = createLocalizedCatalog(() => [
     ]
   }
 ])
+
+export const getOrcaCloudLocalCommandsSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('localCommands.settings.title', 'Commands on this computer'),
+    description: translate(
+      'localCommands.settings.searchDescription',
+      'Let agents in cloud workspaces ask to run commands on this computer, with your approval.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('localCommands.settings.keywordLocal', 'local command'),
+      ...translateSearchKeyword('localCommands.settings.keywordApprove', 'approve'),
+      ...translateSearchKeyword('settings.orcaCloud.mcp.keywordCloud', 'cloud')
+    ]
+  }
+])
+
+export const getOrcaCloudSkillsSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('cloudSkillsSync.title', 'Skills & commands'),
+    description: translate(
+      'settings.orcaCloud.skills.searchDescription',
+      'Sync Claude and Codex skills and slash commands from this computer to your cloud workspaces.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.orcaCloud.skills.keywordSkills', 'skills'),
+      ...translateSearchKeyword('settings.orcaCloud.skills.keywordCommands', 'slash commands'),
+      ...translateSearchKeyword('settings.orcaCloud.skills.keywordPrompts', 'prompts'),
+      ...translateSearchKeyword('settings.orcaCloud.mcp.keywordSync', 'sync'),
+      ...translateSearchKeyword('settings.orcaCloud.mcp.keywordCloud', 'cloud')
+    ]
+  }
+])

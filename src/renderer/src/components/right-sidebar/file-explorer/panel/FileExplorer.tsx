@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo } from 'react'
+import { useIsCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import { useAsleepCloudWorkspace } from '@/components/orca-cloud/offline/use-asleep-cloud-workspace-id'
 import { useAppStore } from '@/store/index'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
@@ -96,7 +97,10 @@ function FileExplorerFiles(): React.JSX.Element {
     rightSidebarOpen,
     worktreePath
   })
-  const repoName = activeRepo?.displayName ?? (worktreePath ? basename(worktreePath) : '')
+  // An Orca Cloud workspace's files are that workspace's, so the header names it, not its repo (RA-13).
+  const cloudName = useIsCloudWorkspace(activeWorktreeId) ? activeWorktree?.displayName : null
+  const repoName =
+    cloudName || activeRepo?.displayName || (worktreePath ? basename(worktreePath) : '')
   const activeRepoSupportsGit = activeRepo ? isGitRepoKind(activeRepo) : false
 
   const expanded = useMemo(() => activeExpandedDirs ?? new Set<string>(), [activeExpandedDirs])

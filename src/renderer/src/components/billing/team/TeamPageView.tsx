@@ -44,12 +44,15 @@ export type TeamPageViewProps = {
   onResend: (email: string, role: OrcaOrgRole) => void
   onRevoke: (email: string) => void
   onLeave: () => void
+  onOpenProfile?: (userId: string) => void
   onSeePlans: () => void
   onManageBilling: () => void
   onCreateWorkspace: () => void
   onDismissArrival: () => void
   /** Opens the Enterprise contact page (SSO/SCIM are Enterprise; nothing here pretends otherwise). */
   onContactSales: (url: string) => void
+  /** Settings → Team renders the page inline: seats and invoices stay on Plan & billing (linked). */
+  inline?: { onOpenPlanBilling: () => void }
 }
 
 function viewerRoleSentence(role: OrcaOrgRole, t: Translate): string {
@@ -111,15 +114,17 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
   const inviteInput = useRef<HTMLInputElement>(null)
   const ssoTitleId = useId()
   const hasRoster = props.roster !== null
+  const inline = props.inline ?? null
   useEffect(() => {
     const active = document.activeElement
     if (
+      !inline &&
       hasRoster &&
       (!active || active === document.body || active.getAttribute('role') === 'dialog')
     ) {
       document.querySelector<HTMLElement>('[data-team-page-heading]')?.focus()
     }
-  }, [hasRoster])
+  }, [hasRoster, inline])
   const leaveTitleId = useId()
 
   if (!props.org) {
@@ -191,7 +196,18 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
         />
       ) : null}
 
-      {entitlement ? (
+      {inline ? (
+        <p className="flex flex-wrap items-center gap-x-1 text-xs text-muted-foreground">
+          {t('auto.components.billing.team.seatsOnPlanBilling', 'Seats and invoices are in')}
+          <button
+            type="button"
+            className="rounded-sm text-foreground underline underline-offset-2 hover:text-foreground/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={inline.onOpenPlanBilling}
+          >
+            {t('auto.components.billing.title', 'Plan & billing')}
+          </button>
+        </p>
+      ) : entitlement ? (
         <TeamBillingBlock
           entitlement={entitlement}
           members={roster?.members.length ?? 0}
@@ -261,6 +277,7 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
             onResend={props.onResend}
             onRevoke={props.onRevoke}
             onLeave={props.onLeave}
+            onOpenProfile={props.onOpenProfile}
           />
         ) : props.roster === null ? (
           <SkeletonRows />

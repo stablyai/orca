@@ -18,6 +18,7 @@ const actions = (): VmBuildFailureActions => ({
   onRetry: vi.fn(),
   onEditRecipe: vi.fn(),
   onOpenAnyway: vi.fn(),
+  onStartAgain: vi.fn(),
   onDismiss: vi.fn(),
   onSeePlans: vi.fn(),
   onOpenBilling: vi.fn(),

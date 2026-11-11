@@ -3,13 +3,15 @@ import type { WorkspacePort } from '../../../../shared/workspace-ports'
 export function getLocalWorkspacePortSections(
   scan: { ports: WorkspacePort[] } | null | undefined,
   activeRepoId: string | null | undefined,
-  activeWorktreeId: string | null | undefined
+  activeWorktreeId: string | null | undefined,
+  /** Orca Cloud: the sandbox's own services (marked host-managed by the host) are not the user's ports. */
+  hideHostServices = false
 ): {
   activePorts: WorkspacePort[]
   otherWorkspacePorts: WorkspacePort[]
   externalPorts: WorkspacePort[]
 } {
-  const ports = scan?.ports ?? []
+  const ports = (scan?.ports ?? []).filter((port) => !hideHostServices || port.hostManaged !== true)
   return {
     activePorts: ports.filter(
       (port) =>

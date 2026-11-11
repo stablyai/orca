@@ -51,7 +51,8 @@ export function useRunTargetOrcaCloud({
   override,
   open,
   close,
-  selectRecipe
+  selectRecipe,
+  onSelectOrcaCloud
 }: {
   recipes: readonly EphemeralVmRecipeOption[]
   offer: OrcaCloudRunTargetAccess | null
@@ -60,6 +61,8 @@ export function useRunTargetOrcaCloud({
   open: boolean
   close: () => void
   selectRecipe: (recipeId: string) => void
+  /** Picks Orca Cloud whatever setup it still needs (the composer walks it after Start). */
+  onSelectOrcaCloud?: () => void
 }): {
   access: OrcaCloudRunTargetAccess
   /** A pick is waiting on billing; the row shows busy. */
@@ -97,6 +100,11 @@ export function useRunTargetOrcaCloud({
   const pickFor = useCallback(
     (resolved: OrcaCloudRunTargetAccess, recipe: EphemeralVmRecipeOption | null): void => {
       const pick = getOrcaCloudPick(resolved)
+      if (onSelectOrcaCloud && pick.kind !== 'blocked') {
+        close()
+        onSelectOrcaCloud()
+        return
+      }
       if (pick.kind === 'act') {
         close()
         // The fix finishes elsewhere (plans, portal, settings): reread billing on return.
@@ -106,7 +114,7 @@ export function useRunTargetOrcaCloud({
         selectRecipe(recipe.id)
       }
     },
-    [close, selectRecipe]
+    [close, onSelectOrcaCloud, selectRecipe]
   )
   const runBlockedAction = useCallback((): void => pickFor(access, null), [access, pickFor])
   const select = useCallback(

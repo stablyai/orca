@@ -155,6 +155,9 @@ export type TransferOrcaProfileProjectResult =
 /** A sign-in in flight; `link` is set only while the browser has not answered yet. */
 export type OrcaCloudSignInProgress = { link: string | null }
 
+/** Why a sign-in stopped, when the UI should say so ("Sign-in didn’t finish. Try again."). */
+export type OrcaCloudSignInEnd = 'timed-out'
+
 export type ConnectCurrentOrcaProfileResult =
   | {
       status: 'connected'
@@ -252,6 +255,8 @@ export type OrcaOrgMember = {
   userId: string | null
   email: string
   displayName?: string
+  /** Profile picture from the identity provider (https only); avatars fall back to initials. */
+  pictureUrl?: string
   role: OrcaOrgRole
 }
 

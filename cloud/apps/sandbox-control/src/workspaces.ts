@@ -1,10 +1,10 @@
 // Team workspace registry: the cloud-owned list of an org's workspaces (who made it, who owns it,
 // repo/branch, state, last activity, visibility, section, cost) and who is in each one right now.
-//   GET   /v1/team/workspaces?scope=mine|team|all&by=<userId>&repo=<url>&section=<s>&archived=exclude|include|only
+//   GET   /v1/team/workspaces?scope=mine|team|all&by=<userId>&repo=<url>&section=<s>&archived=exclude|include|only&routines=exclude|include
 //   GET   /v1/team/workspaces/:id
 //   PATCH /v1/team/workspaces/:id {title?, branch?, visibility?, section?, archived?, ownerUserId?, tokenUsdMicros?}
 //   POST  /v1/team/workspaces/:id/presence {clientId, state: viewing|typing|left, chatId?}
-//   GET   /v1/team/links/resolve?w=<sandboxId>&c=<chatId>
+//   GET   /v1/team/links/resolve?w=<sandboxId>&c=<chatId>  or  ?org=<slug>&n=<number>&c=<chatId>
 // Access rule: a workspace is visible to its owner, and to every member of the owning org when
 // visibility is `team`. Org owners/admins additionally see private rows' metadata (scope=all) so a
 // departed member's workspaces can be reassigned or archived — metadata only, never access.
@@ -13,8 +13,10 @@ import type { SandboxCaller } from './auth'
 import type { MachineSize } from './entitlements'
 import { getSandbox, touchActivity, updateRegistry, type SandboxRow } from './store'
 import { memberNamesFor } from './member-names'
+import { recordTokenSpend } from './member-usage'
 import { readSnapshotTimes } from './read-snapshots'
 import { sandboxView } from './wire'
+import { accountForSlug, orgIdOf, slugForAccount } from './org-slugs'
 import { ORCA_CLOUD_OVERAGE_CENTS_PER_HOUR } from '../../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
 
 export const PRESENCE_TTL_MS = 45_000
@@ -170,11 +172,12 @@ function repoView(row: SandboxRow) {
 
 export async function workspaceViews(db: D1Database, caller: SandboxCaller, rows: readonly SandboxRow[], now: number) {
   const ids = rows.map((r) => r.id)
-  const [presence, compute, granted, readAt] = await Promise.all([
+  const [presence, compute, granted, readAt, slug] = await Promise.all([
     presenceFor(db, ids, now),
     computeMsFor(db, ids),
     activeGrantUsers(db, ids, caller.userId),
-    readSnapshotTimes(db, ids)
+    readSnapshotTimes(db, ids),
+    rows.length > 0 ? slugForAccount(db, caller.accountId) : Promise.resolve(null)
   ])
   const referenced = (row: SandboxRow, live: readonly PresenceRow[]) =>
     [row.user_id, row.created_by, row.last_activity_by, ...live.map((p) => p.user_id)].filter(
@@ -196,6 +199,10 @@ export async function workspaceViews(db: D1Database, caller: SandboxCaller, rows
     return {
       ...sandboxView(row),
       title: row.name,
+      // W-123 in its account; null only for a row that predates numbering and was never backfilled.
+      number: row.number ?? null,
+      // The link to copy: org slug + number when both exist, else the sandbox id form.
+      link: workspaceLink(row, slug),
       repo: repoView(row),
       visibility: row.visibility,
       section: row.section,
@@ -210,7 +217,9 @@ export async function workspaceViews(db: D1Database, caller: SandboxCaller, rows
       // Display names (token `name` claim) for the ids above; the roster wins where it has one.
       memberNames,
       // When its sleeping read-only copy was saved ("As of"); only for those who may read it.
-      readSnapshotAt: canOpen(caller, row) ? (readAt.get(row.id) ?? null) : null
+      readSnapshotAt: canOpen(caller, row) ? (readAt.get(row.id) ?? null) : null,
+      // Started by a routine run (Home hides these unless its Routine runs filter is on).
+      fromRoutine: isRoutineRun(row)
     }
   })
 }
@@ -220,8 +229,15 @@ const ListQuery = z.object({
   by: z.string().min(1).max(128).optional(),
   repo: z.string().min(1).max(2048).optional(),
   section: z.string().min(1).max(64).optional(),
-  archived: z.enum(['exclude', 'include', 'only']).default('exclude')
+  archived: z.enum(['exclude', 'include', 'only']).default('exclude'),
+  /** Routine runs stay off Home unless asked for (`include`), like Conductor's routine filter. */
+  routines: z.enum(['exclude', 'include']).default('exclude')
 })
+
+/** A routine run's VM: tagged at create, and keyed `routine-…` while it boots. */
+export function isRoutineRun(row: SandboxRow): boolean {
+  return (row as { origin?: string | null }).origin === 'routine' || row.workspace_id.startsWith('routine-')
+}
 
 export async function listWorkspaces(db: D1Database, caller: SandboxCaller, url: URL, now: number) {
   const query = ListQuery.safeParse(Object.fromEntries(url.searchParams))
@@ -236,7 +252,7 @@ export async function listWorkspaces(db: D1Database, caller: SandboxCaller, url:
     .prepare(`SELECT * FROM sandboxes WHERE account_id = ? AND status <> 'destroyed' ORDER BY COALESCE(last_activity_at, updated_at) DESC LIMIT 500`)
     .bind(caller.accountId)
     .all<SandboxRow>()
-  const rows = results.filter((row) => {
+  const matching = results.filter((row) => {
     if (q.scope === 'mine' ? row.user_id !== caller.userId : q.scope === 'team' ? !canSee(caller, row) : false) {
       return false
     }
@@ -246,7 +262,8 @@ export async function listWorkspaces(db: D1Database, caller: SandboxCaller, url:
     if (q.repo && row.repo_url !== q.repo) {
       return false
     }
-    if (row.hidden) {
+    // Hidden rows are machine-made: only routine runs ever come back (below), and only when asked for.
+    if (row.hidden && !isRoutineRun(row)) {
       return false
     }
     if (q.section && row.section !== q.section) {
@@ -254,7 +271,47 @@ export async function listWorkspaces(db: D1Database, caller: SandboxCaller, url:
     }
     return q.archived === 'include' || (q.archived === 'only') === (row.archived_at !== null)
   })
-  return { workspaces: await workspaceViews(db, caller, rows, now) }
+  const runs = matching.filter(isRoutineRun)
+  const rows = q.routines === 'include' ? matching : matching.filter((row) => !isRoutineRun(row))
+  const hidden = q.routines === 'include' ? [] : runs
+  const [views, routineCount, hiddenCompute, routineNames] = await Promise.all([
+    workspaceViews(db, caller, rows, now),
+    db.prepare('SELECT COUNT(*) AS n FROM routines WHERE account_id = ? AND deleted_at IS NULL').bind(caller.accountId).first<{ n: number }>(),
+    computeMsFor(db, hidden.map((row) => row.id)),
+    routineNamesFor(db, caller.accountId, rows.filter(isRoutineRun))
+  ])
+  return {
+    workspaces: views.map((view, i) => ({ ...view, routineName: routineNames.get(rows[i]!.id) ?? null })),
+    // Home: offer the Routine runs switch only when the team has routines, and say what it hides
+    // (its count and hours still belong in the team's totals).
+    routineRuns: {
+      routines: routineCount?.n ?? 0,
+      hidden: hidden.length,
+      hiddenRunning: hidden.filter((row) => row.status === 'running' || row.status === 'creating').length,
+      hiddenComputeMs: hidden.reduce((sum, row) => sum + costView(row, hiddenCompute.get(row.id) ?? 0, now).computeMs, 0)
+    }
+  }
+}
+
+/** sandbox id -> its routine's name, for routine runs being listed. */
+async function routineNamesFor(db: D1Database, accountId: string, rows: readonly SandboxRow[]): Promise<Map<string, string>> {
+  const refs = [...new Set(rows.flatMap((row) => ((row as { origin_ref?: string | null }).origin_ref ? [(row as { origin_ref: string }).origin_ref] : [])))]
+  if (refs.length === 0) {
+    return new Map()
+  }
+  const { results } = await db
+    .prepare(`SELECT id, name FROM routines WHERE account_id = ? AND id IN (${refs.map(() => '?').join(', ')})`)
+    .bind(accountId, ...refs)
+    .all<{ id: string; name: string }>()
+  const byRoutine = new Map(results.map((r) => [r.id, r.name]))
+  const out = new Map<string, string>()
+  for (const row of rows) {
+    const name = byRoutine.get((row as { origin_ref?: string | null }).origin_ref ?? '')
+    if (name) {
+      out.set(row.id, name)
+    }
+  }
+  return out
 }
 
 const SECTION = z.string().trim().min(1).max(64).regex(/^[^\u0000-\u001f]+$/)
@@ -322,6 +379,12 @@ export async function patchWorkspace(
   if (!next) {
     throw new WorkspaceError('not_found')
   }
+  if (patch.tokenUsdMicros !== undefined) {
+    // Dated per reporter for teammate profiles' heatmap; the label above is only a running total.
+    await recordTokenSpend(db, row.account_id, caller.userId, row.token_usd_micros, patch.tokenUsdMicros, now).catch((error: unknown) =>
+      console.warn('member_usage_write_failed', String(error))
+    )
+  }
   const ownerChanged = patch.ownerUserId !== undefined && patch.ownerUserId !== row.user_id
   const wentPrivate = row.visibility === 'team' && next.visibility === 'private'
   const archived = patch.archived === true && row.archived_at === null
@@ -368,27 +431,56 @@ export async function reportPresence(
   return { presence: view!.presence }
 }
 
-const LinkQuery = z.object({
-  w: z.string().regex(/^sbx_[0-9a-f]{24}$/),
-  c: z.string().min(1).max(128).regex(/^[A-Za-z0-9_.:-]+$/).optional()
-})
+const ChatParam = z.string().min(1).max(128).regex(/^[A-Za-z0-9_.:-]+$/).optional()
+const LinkQuery = z.union([
+  z.object({ w: z.string().regex(/^sbx_[0-9a-f]{24}$/), c: ChatParam }),
+  z.object({ org: z.string().min(1).max(40), n: z.coerce.number().int().min(1).max(1e9), c: ChatParam })
+])
 
-/** orca://cloud/w/<id>[/c/<chat>] → the workspace if the caller can see it; otherwise not_found. */
+/** A slug link that names a different org than the caller's current one. */
+export class LinkOtherOrgError extends WorkspaceError {
+  constructor(readonly orgId: string | null) {
+    super('not_found', 'other_org')
+  }
+}
+
+/**
+ * orca://cloud/w/<id>[/c/<chat>] or orca://cloud/<slug>/W-<n>[/c/<chat>] → the workspace if the caller
+ * can see it; otherwise not_found. A slug link for another org answers not_found with reason
+ * `other_org` and that org's id, so a client that belongs to it can offer to switch teams.
+ */
 export async function resolveLink(db: D1Database, caller: SandboxCaller, url: URL, now: number) {
   const query = LinkQuery.safeParse(Object.fromEntries(url.searchParams))
   if (!query.success) {
     throw new WorkspaceError('invalid_request')
   }
-  const row = await getSandbox(db, query.data.w)
+  const q = query.data
+  let row: SandboxRow | null
+  if ('w' in q) {
+    row = await getSandbox(db, q.w)
+  } else {
+    const accountId = await accountForSlug(db, q.org)
+    if (!accountId) {
+      throw new WorkspaceError('not_found')
+    }
+    if (accountId !== caller.accountId) {
+      throw new LinkOtherOrgError(orgIdOf(accountId))
+    }
+    row = await db
+      .prepare('SELECT * FROM sandboxes WHERE account_id = ? AND number = ?')
+      .bind(accountId, q.n)
+      .first<SandboxRow>()
+  }
   if (!row || !canSee(caller, row)) {
     // Private, other org, or gone: the link reveals nothing about which.
     throw new WorkspaceError('not_found')
   }
   const [view] = await workspaceViews(db, caller, [row], now)
-  return { workspace: view, chatId: query.data.c ?? null }
+  return { workspace: view, chatId: q.c ?? null }
 }
 
 /** Canonical deep link for a workspace (and optionally a chat in it). */
-export function workspaceLink(id: string, chatId?: string): string {
-  return `orca://cloud/w/${id}${chatId ? `/c/${encodeURIComponent(chatId)}` : ''}`
+export function workspaceLink(row: Pick<SandboxRow, 'id' | 'number'>, slug: string | null, chatId?: string): string {
+  const chat = chatId ? `/c/${encodeURIComponent(chatId)}` : ''
+  return slug && row.number ? `orca://cloud/${slug}/W-${row.number}${chat}` : `orca://cloud/w/${row.id}${chat}`
 }

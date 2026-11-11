@@ -11,6 +11,7 @@ import type { PaletteComposedEvidence } from '../../../../../../shared/palette-m
 import {
   buildWorktreeAttachmentEvidence,
   buildWorktreeAutomationEvidence,
+  buildWorktreeCloudNumberEvidence,
   buildWorktreeCommentEvidence,
   buildWorktreeIssueEvidence,
   buildWorktreeLinkedTaskEvidence,
@@ -58,6 +59,8 @@ export type WorktreePaletteDocumentSources = {
   >
   checksReviewByWorktree?: ReadonlyMap<Worktree, HostedReviewInfo | null>
   hostLabelByWorktreeId?: ReadonlyMap<string, string>
+  /** Cloud workspace numbers (W-123) by palette identity, then bare worktree id. */
+  cloudNumberByWorktreeId?: ReadonlyMap<string, number>
   evidencePolicy?: WorktreePaletteEvidencePolicy
 }
 
@@ -130,6 +133,10 @@ function buildEvidence(
   const units = [
     comment,
     buildWorktreeAutomationEvidence(worktree),
+    buildWorktreeCloudNumberEvidence(
+      sources.cloudNumberByWorktreeId?.get(getPaletteWorktreeIdentity(worktree)) ??
+        sources.cloudNumberByWorktreeId?.get(worktree.id)
+    ),
     buildWorktreeLinkedTaskEvidence(worktree),
     buildWorktreeReviewEvidence(resolveReviewSource(worktree, repo, sources)),
     buildWorktreeIssueEvidence({

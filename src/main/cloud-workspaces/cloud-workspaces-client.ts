@@ -2,6 +2,7 @@
 // hosted sandbox driver: a short-lived Orca token (aud=orca-sandbox), never a provider credential.
 import { z } from 'zod'
 import { errorMessage } from '../../shared/error-message'
+import { cloudWorkspacePrefsMethods } from './cloud-workspaces-prefs-client'
 import { HOSTED_SANDBOX_STATUSES } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
 import type { SealedReadSnapshot } from '../../shared/cloud-workspaces/read-snapshot'
 import {
@@ -14,10 +15,17 @@ import {
   CloudWorkspacePresenceResponseSchema,
   CloudWorkspaceResponseSchema,
   OrgPromptsSchema,
+  type CloudWorkspaceLinkTarget,
   type CloudWorkspaceListQuery,
   type CloudWorkspacePatch,
   type OrgPrompts
 } from '../../shared/cloud-workspaces/cloud-workspaces-wire'
+import {
+  PokeInboxSchema,
+  PokeSentSchema,
+  PokeSettingsSchema,
+  TeammateProfileResponseSchema
+} from '../../shared/cloud-workspaces/team-presence-wire'
 
 const NoteSentSchema = z.object({ ok: z.literal(true) })
 /** DELETE and POST suspend on /v1/sandboxes/:id answer with the sandbox's new state, not `{ok}`. */
@@ -29,7 +37,9 @@ export class CloudWorkspacesError extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
-    readonly reason?: string
+    readonly reason?: string,
+    /** A slug link for another org (`reason: other_org`) names that org, so a member can switch. */
+    readonly orgId?: string
   ) {
     super(reason ? `${code}:${reason}` : code)
     this.name = 'CloudWorkspacesError'
@@ -112,7 +122,8 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
       throw new CloudWorkspacesError(
         response.status,
         typeof err.error === 'string' ? err.error : 'error',
-        typeof err.reason === 'string' ? err.reason : undefined
+        typeof err.reason === 'string' ? err.reason : undefined,
+        typeof err.orgId === 'string' ? err.orgId.slice(0, 128) : undefined
       )
     }
     const parsed = schema.safeParse(payload)
@@ -125,6 +136,7 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
   const ws = (id: string) => `/v1/team/workspaces/${encodeURIComponent(id)}`
 
   return {
+    ...cloudWorkspacePrefsMethods(call),
     async list(query: CloudWorkspaceListQuery = {}) {
       const params = new URLSearchParams()
       for (const [key, value] of Object.entries(query)) {
@@ -133,13 +145,11 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
         }
       }
       const qs = params.toString()
-      return (
-        await call(
-          'GET',
-          `/v1/team/workspaces${qs ? `?${qs}` : ''}`,
-          CloudWorkspaceListResponseSchema
-        )
-      ).workspaces
+      return call(
+        'GET',
+        `/v1/team/workspaces${qs ? `?${qs}` : ''}`,
+        CloudWorkspaceListResponseSchema
+      )
     },
     async get(id: string) {
       return (await call('GET', ws(id), CloudWorkspaceResponseSchema)).workspace
@@ -204,8 +214,12 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
         CloudWorkspaceGrantListSchema.partial().passthrough()
       )
     },
-    async resolveLink(workspaceId: string, chatId?: string | null) {
-      const params = new URLSearchParams({ w: workspaceId })
+    async resolveLink(target: CloudWorkspaceLinkTarget, chatId?: string | null) {
+      const params = new URLSearchParams(
+        target.kind === 'id'
+          ? { w: target.workspaceId }
+          : { org: target.org, n: String(target.number) }
+      )
       if (chatId) {
         params.set('c', chatId)
       }
@@ -256,6 +270,35 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
     },
     putOrgPrompts(document: OrgPrompts['document'], revision: number): Promise<OrgPrompts> {
       return call('PUT', '/v1/team/prompts', OrgPromptsSchema, { document, revision })
+    },
+    async teammateProfile(userId: string, utcOffsetMin: number) {
+      const qs = new URLSearchParams({ utcOffsetMin: String(utcOffsetMin) })
+      return (
+        await call(
+          'GET',
+          `/v1/team/members/${encodeURIComponent(userId)}/profile?${qs}`,
+          TeammateProfileResponseSchema
+        )
+      ).profile
+    },
+    async poke(userId: string) {
+      return (
+        await call(
+          'POST',
+          `/v1/team/members/${encodeURIComponent(userId)}/poke`,
+          PokeSentSchema,
+          {}
+        )
+      ).poke
+    },
+    pokeInbox() {
+      return call('GET', '/v1/team/pokes', PokeInboxSchema)
+    },
+    async setPokesEnabled(enabled: boolean) {
+      return (await call('PUT', '/v1/team/pokes/settings', PokeSettingsSchema, { enabled })).enabled
+    },
+    async markPokesSeen(ids: string[]) {
+      await call('POST', '/v1/team/pokes/seen', NoteSentSchema, { ids })
     }
   }
 }

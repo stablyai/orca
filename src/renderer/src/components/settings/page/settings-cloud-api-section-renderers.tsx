@@ -4,6 +4,7 @@ import { SettingsSection } from '../section-layout/SettingsSection'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsRenderContext } from './settings-render-context'
+import { CLOUD_ROUTINES_UI_ENABLED } from '../../../../../shared/cloud-api/cloud-routines-ui'
 
 // Orca Cloud programmatic access; only builds with a control plane (private/hosted) show these.
 export function renderCloudApiSettingsSections(
@@ -29,19 +30,21 @@ export function renderCloudApiSettingsSections(
       >
         {view.isSectionMounted('cloud-api-keys') ? <CloudApiKeysPane /> : null}
       </SettingsSection>
-      <SettingsSection
-        id="cloud-routines"
-        title={t('auto.components.settings.cloudRoutines.sectionTitle', 'Routines')}
-        badge="Beta"
-        description={t(
-          'auto.components.settings.cloudRoutines.sectionDescription',
-          'Agents that run in Orca Cloud on a schedule, on GitHub events or from a webhook.'
-        )}
-        searchEntries={navigation.getSectionSearchEntries('cloud-routines')}
-        bodyClassName="rounded-none border-0 bg-transparent p-0 shadow-none"
-      >
-        {view.isSectionMounted('cloud-routines') ? <CloudRoutinesPane /> : null}
-      </SettingsSection>
+      {CLOUD_ROUTINES_UI_ENABLED ? (
+        <SettingsSection
+          id="cloud-routines"
+          title={t('auto.components.settings.cloudRoutines.sectionTitle', 'Routines')}
+          badge="Beta"
+          description={t(
+            'auto.components.settings.cloudRoutines.sectionDescription',
+            'Agents that run in Orca Cloud on a schedule, on GitHub events or from a webhook.'
+          )}
+          searchEntries={navigation.getSectionSearchEntries('cloud-routines')}
+          bodyClassName="rounded-none border-0 bg-transparent p-0 shadow-none"
+        >
+          {view.isSectionMounted('cloud-routines') ? <CloudRoutinesPane /> : null}
+        </SettingsSection>
+      ) : null}
     </>
   )
 }

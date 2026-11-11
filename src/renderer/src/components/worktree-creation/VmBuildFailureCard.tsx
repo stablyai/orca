@@ -7,8 +7,8 @@ import { getLastBillingStatus } from '@/components/billing/billing-summary-store
 import { sandboxLimitFromBilling, vmBuildFailureCopy } from './vm-build-failure-copy'
 import { FailureActionRow, type VmBuildFailureActions } from './VmBuildFailureActions'
 import { CheckRow } from './VmBuildCheckRow'
-import { useOrcaCloudAgentAccounts } from '@/lib/orca-cloud/orca-cloud-agent-accounts-store'
 import { VmBuildErrorDetails } from './VmBuildErrorDetails'
+import { BlockedSandboxHoursNote } from './BlockedSandboxHoursNote'
 
 export type { VmBuildFailureActions }
 
@@ -41,8 +41,6 @@ export function VmBuildFailureCard({
   actions: VmBuildFailureActions
 }): React.JSX.Element {
   const t = useTranslate()
-  // Read only on Orca Cloud with checks to show; recipe VMs keep the host's own sign-in copy.
-  const accounts = useOrcaCloudAgentAccounts(cloud && failure?.kind === 'checks')
   // Why: a closing card still needs its content, or it would empty out before it finishes collapsing.
   const [shown, setShown] = React.useState(failure)
   // Each opening is a new run, so the rows remount and their stagger replays on a repeated failure.
@@ -114,14 +112,7 @@ export function VmBuildFailureCard({
             {visible.kind === 'checks' ? (
               <ul className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-2">
                 {visible.problems.map((check, index) => (
-                  <CheckRow
-                    key={check.id}
-                    check={check}
-                    index={index}
-                    cloud={cloud}
-                    accounts={accounts}
-                    t={t}
-                  />
+                  <CheckRow key={check.id} check={check} index={index} cloud={cloud} t={t} />
                 ))}
               </ul>
             ) : null}
@@ -137,17 +128,16 @@ export function VmBuildFailureCard({
               t={t}
             />
             {visible.kind === 'checks' ? (
-              <p className="text-xs text-muted-foreground">
-                {cloud
-                  ? t(
-                      'auto.components.worktree.creation.VmBuildFailureCard.stillRunningCloud',
-                      'The sandbox is running and using sandbox hours until you choose.'
-                    )
-                  : t(
-                      'auto.components.worktree.creation.VmBuildFailureCard.stillRunningLocal',
-                      'The VM is running and using hours until you choose.'
-                    )}
-              </p>
+              cloud ? (
+                <BlockedSandboxHoursNote sleepsAt={visible.sleepsAt} sandbox={visible.sandbox} />
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    'auto.components.worktree.creation.VmBuildFailureCard.stillRunningLocal2',
+                    'The VM is running until you choose.'
+                  )}
+                </p>
+              )
             ) : null}
           </InlineError>
         </div>

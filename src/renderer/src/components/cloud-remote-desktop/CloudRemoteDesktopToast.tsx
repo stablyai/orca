@@ -21,7 +21,7 @@ export type CloudRemoteDesktopToastState =
   | { kind: 'waking'; via: 'wake' | 'unarchive' }
   | { kind: 'failed'; code: CloudRemoteDesktopToastFailure }
 
-type FailureCopy = {
+export type FailureCopy = {
   title: string
   detail: string
   action: CloudRemoteDesktopNextAction | null
@@ -31,7 +31,7 @@ type FailureCopy = {
   tone?: 'neutral'
 }
 
-function failureCopy(t: Translate, code: CloudRemoteDesktopToastFailure): FailureCopy {
+export function failureCopy(t: Translate, code: CloudRemoteDesktopToastFailure): FailureCopy {
   switch (code) {
     case 'not_cloud':
       return {
@@ -48,7 +48,7 @@ function failureCopy(t: Translate, code: CloudRemoteDesktopToastFailure): Failur
       }
     case 'not_running':
       return {
-        title: t('components.cloudRemoteDesktop.asleepTitle', 'This sandbox is asleep.'),
+        title: t('components.cloudRemoteDesktop.asleepTitle', 'This workspace is asleep.'),
         detail: t(
           'components.cloudRemoteDesktop.asleepDetail',
           'Wake it to open the remote desktop. Your files are safe.'
@@ -77,7 +77,7 @@ function failureCopy(t: Translate, code: CloudRemoteDesktopToastFailure): Failur
       return {
         title: t(
           'components.cloudRemoteDesktop.startingTitle',
-          'The sandbox is still starting or waking.'
+          'The workspace is still starting or waking.'
         ),
         detail: t(
           'components.cloudRemoteDesktop.startingDetail',
@@ -139,10 +139,10 @@ function failureCopy(t: Translate, code: CloudRemoteDesktopToastFailure): Failur
   }
 }
 
-function actionLabel(t: Translate, action: CloudRemoteDesktopNextAction): string {
+export function actionLabel(t: Translate, action: CloudRemoteDesktopNextAction): string {
   switch (action) {
     case 'wake':
-      return t('components.cloudRemoteDesktop.wake', 'Wake sandbox')
+      return t('components.cloudRemoteDesktop.wake', 'Wake workspace')
     case 'unarchive':
       return t('components.cloudRemoteDesktop.unarchive', 'Unarchive')
     case 'sign_in':

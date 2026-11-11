@@ -8,6 +8,7 @@ import {
   formatCents,
   formatDuration,
   formatHours,
+  formatRelative,
   percentOf,
   visibleOom,
   wakeElapsedSeconds
@@ -156,5 +157,19 @@ describe('buildFileTree', () => {
     expect(tree.map((n) => n.name)).toEqual(['src', 'package.json', 'README.md'])
     expect(tree[0]!.children.map((n) => n.name)).toEqual(['a', 'b.ts'])
     expect(tree[0]!.children[0]!.children[0]!.path).toBe('src/a/x.ts')
+  })
+})
+
+describe('formatRelative (DS-g)', () => {
+  const DAY = 86_400_000
+  it('stays relative within about a month', () => {
+    expect(formatRelative(NOW - 5 * 60_000, NOW)).toMatch(/minutes? ago/)
+    expect(formatRelative(NOW - 3 * DAY, NOW)).toMatch(/days? ago/)
+  })
+  it('shows a date, not "5,362 days ago", past about a month', () => {
+    const at = Date.UTC(2012, 2, 6, 12)
+    const text = formatRelative(at, at + 5362 * DAY)
+    expect(text).not.toMatch(/ago|days/)
+    expect(text).toBe(new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(at))
   })
 })

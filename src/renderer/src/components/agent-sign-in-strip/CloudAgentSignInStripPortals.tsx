@@ -2,6 +2,7 @@
 // private launch hold waits, or #40228's per-workspace gate while the Orca-account path is paused or
 // never offered. It overlays the top 56 px of the pane while the agent hasn't started, so the
 // terminal's size never changes. SSH, WSL and paired hosts keep #40228's card.
+import { openOrcaCloudSignInSheet } from '@/components/settings/agent-accounts/sign-in-sheet/orca-cloud-sign-in-sheet-store'
 import React, { useEffect, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppStore } from '@/store'
@@ -55,7 +56,7 @@ export function useCloudGatePaneKeys(controller: TerminalPaneController): Readon
   return new Set(joined ? joined.split('\u0000') : [])
 }
 
-function openSettings(pane: 'accounts' | 'cloud-secrets', sectionId?: string): void {
+function openSettings(pane: 'cloud-secrets', sectionId?: string): void {
   const store = useAppStore.getState()
   store.openSettingsTarget({ pane, repoId: null, ...(sectionId ? { sectionId } : {}) })
   store.openSettingsPage()
@@ -152,7 +153,7 @@ function CloudStripPortal({
       }
       switch (action.kind) {
         case 'renew':
-          openSettings('accounts', 'orca-cloud')
+          openOrcaCloudSignInSheet()
           return
         case 'signIn':
           gateActions.signIn()

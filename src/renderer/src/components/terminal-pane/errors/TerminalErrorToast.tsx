@@ -116,8 +116,8 @@ export function TerminalErrorToast({
     }
   }
 
-  if (cloudOverride) {
-    return cloudOverride === 'hide' ? null : cloudOverride
+  if (cloudOverride === 'hide') {
+    return null
   }
   return (
     <div
