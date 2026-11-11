@@ -239,7 +239,10 @@
       "pairButton": "Pair",
       "connecting": "Connecting…",
       "pairingLog": "Pairing log",
-      "backToHome": "Back to home"
+      "backToHome": "Back to home",
+      "edgeCredentialsFailed": "The host was paired, but its edge credentials could not be saved. Retry saving, or enter them later in Edit Host.",
+      "edgePairingFailed": "Could not finish pairing or save credentials. Check the connection and protected storage, then retry.",
+      "retryCredentials": "Retry saving credentials"
     },
     "pairScan": {
       "invalidQrCode": "Not a valid Orca QR code",
@@ -263,7 +266,8 @@
       "connecting": "Connecting…",
       "pairingLog": "Pairing log",
       "tryAgain": "Try Again",
-      "codeNoLongerValid": "This pairing code expired, was already used, or was replaced. Show a new code on your desktop and scan again."
+      "codeNoLongerValid": "This pairing code expired, was already used, or was replaced. Show a new code on your desktop and scan again.",
+      "secureFailure": "Pairing failed. Check that Orca is reachable and the pairing link is current."
     },
     "pair": {
       "missingCode": "Missing pairing code",
@@ -455,7 +459,8 @@
       "reachable": "Reachable at {{endpoint}}",
       "hosts": "Hosts",
       "hostTestFailed": "Could not test",
-      "platform": "Platform"
+      "platform": "Platform",
+      "upgradeRejected": "WebSocket upgrade rejected (HTTP {{status}}). Check the proxy route and credentials."
     },
     "webShellUpdateFailureCopy": {
       "failedJustNow": "Last update from {{hostName}} failed just now: {{reason}}{{offered}}. {{outcome}}",
@@ -4965,5 +4970,28 @@
       "needsWindow": "Couldn’t update. Open Orca on {{desktop}}.",
       "failed": "Couldn’t update the agent list."
     }
+  },
+  "edgeAuth": {
+    "title": "Edge authentication",
+    "hint": "Optional headers required by your reverse proxy or secure tunnel, such as a custom proxy header or Cloudflare Access service token. Stored in this phone's keychain, never in pairing links. Pair over LAN or Relay before configuring these headers. If the secure host or port changes, save the address, then reopen this form to enter credentials for it. Leave all rows blank for none.",
+    "saved_one": "{{count}} header saved.",
+    "saved_other": "{{count}} headers saved.",
+    "name": "Header {{index}} name",
+    "namePlaceholder": "X-Proxy-Token",
+    "value": "Header {{index}} value",
+    "valuePlaceholder": "Secret value",
+    "remove": "Remove header {{index}}",
+    "add": "Add header",
+    "secureAddressRequired": "Edge authentication needs a wss:// address — headers are never sent over ws://.",
+    "listRequired": "Headers must be a list.",
+    "pairRequired": "Each header must be a name/value pair.",
+    "invalidName": "Invalid header name: \"{{name}}\".",
+    "invalidValue": "Invalid value for header \"{{name}}\".",
+    "tooMany": "At most {{limit}} headers are supported.",
+    "saveFailed": "Could not save edge authentication.",
+    "pairingHint": "Optional headers for this reverse proxy or secure tunnel. Orca verifies the desktop before saving them in this phone's keychain. Never include them in a pairing link.",
+    "saving": "Saving credentials…",
+    "configure": "Configure edge authentication",
+    "loadFailed": "Could not load edge authentication. Unlock protected storage and reopen this form."
   }
 }

@@ -85,7 +85,6 @@
       "connecting": "連線中…",
       "description": "您開啟了來自電腦的配對連結。確認後，即可將該電腦加入主機清單。",
       "pairButton": "配對",
-      "pairingFailed": "配對失敗：{{error}}",
       "pairingLog": "配對記錄",
       "title": "要與這台電腦配對嗎？"
     },
@@ -101,7 +100,6 @@
       "openDesktopStep": "在電腦上開啟 Orca",
       "openMobileSettingsStep": "前往「設定」→「行動版」",
       "openSettings": "開啟設定",
-      "pairingFailed": "配對失敗：{{error}}",
       "pairingLog": "配對記錄",
       "pasteCodeMessage": "複製電腦上 QR Code 下方顯示的配對碼。",
       "pasteCodePlaceholder": "orca://pair?code=... 或貼上配對碼",

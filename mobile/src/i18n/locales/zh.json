@@ -85,7 +85,6 @@
       "connecting": "正在连接…",
       "description": "已打开来自桌面的配对链接。确认后将此桌面添加到主机列表",
       "pairButton": "配对",
-      "pairingFailed": "配对失败：{{error}}",
       "pairingLog": "配对日志",
       "title": "要与此桌面配对吗？"
     },
@@ -101,7 +100,6 @@
       "openDesktopStep": "在电脑上打开 Orca",
       "openMobileSettingsStep": "前往“设置” → “移动端”",
       "openSettings": "打开设置",
-      "pairingFailed": "配对失败：{{error}}",
       "pairingLog": "配对日志",
       "pasteCodeMessage": "复制电脑上二维码下方显示的配对码",
       "pasteCodePlaceholder": "orca://pair?code=... 或粘贴配对码",

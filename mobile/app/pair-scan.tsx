@@ -7,6 +7,7 @@ import {
   Pressable,
   ActivityIndicator,
   Linking,
+  Platform,
   type LayoutChangeEvent
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -40,6 +41,7 @@ import {
   Step,
   waitForBeat
 } from '../src/pairing/pairing-visuals'
+import { PairScanRecovery } from '../src/pairing/pair-scan-recovery'
 import { triggerSuccess } from '../src/platform/haptics'
 import { getPairingFailureMessage } from '../src/pairing/pairing-failure-message'
 
@@ -57,6 +59,7 @@ export default function PairScanScreen() {
   const [decoded, setDecoded] = useState(false)
   const [paired, setPaired] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
+  const [failedSecureCode, setFailedSecureCode] = useState<string | null>(null)
   const [pasteVisible, setPasteVisible] = useState(false)
   const [cameraBounds, setCameraBounds] = useState({ width: 0, height: 0 })
   const [logs, setLogs] = useState<ConnectionLogEntry[]>([])
@@ -101,7 +104,7 @@ export default function PairScanScreen() {
       }
 
       setDecoded(true)
-      void waitForBeat(SCAN_DECODE_BEAT_MS).then(() => testAndSave(offer))
+      void waitForBeat(SCAN_DECODE_BEAT_MS).then(() => testAndSave(offer, data))
     },
     [router, t]
   )
@@ -127,7 +130,7 @@ export default function PairScanScreen() {
         return
       }
 
-      void testAndSave(offer)
+      void testAndSave(offer, input)
     },
     [t]
   )
@@ -145,11 +148,12 @@ export default function PairScanScreen() {
     )
   }, [])
 
-  async function testAndSave(offer: PairingOffer) {
+  async function testAndSave(offer: PairingOffer, originalCode: string) {
     // A decoded QR waits out the reticle beat; the screen may have left meanwhile.
     if (!mountedRef.current) {
       return
     }
+    setFailedSecureCode(null)
     setStatus('connecting')
     logsRef.current = []
     setLogs([])
@@ -201,7 +205,8 @@ export default function PairScanScreen() {
       if (!mountedRef.current || !attemptIsCurrent) {
         return
       }
-      console.warn('[pair] connect failed', err)
+      const secure = Platform.OS !== 'web' && offer.endpoint.toLowerCase().startsWith('wss://')
+      setFailedSecureCode(secure ? originalCode : null)
       setStatus('error')
       setErrorMessage(
         getPairingFailureMessage({
@@ -209,7 +214,13 @@ export default function PairScanScreen() {
           error: err,
           timedOut,
           timeoutMs: PAIRING_OVERALL_TIMEOUT_MS,
-          t
+          t,
+          fallbackMessage: secure
+            ? t(
+                'app.pairScan.secureFailure',
+                'Pairing failed. Check that Orca is reachable and the pairing link is current.'
+              )
+            : undefined
         })
       )
       processingRef.current = false
@@ -217,6 +228,7 @@ export default function PairScanScreen() {
   }
 
   function retry() {
+    setFailedSecureCode(null)
     setStatus('scanning')
     setDecoded(false)
     setErrorMessage('')
@@ -375,38 +387,27 @@ export default function PairScanScreen() {
       )}
 
       {status === 'error' && (
-        <View style={styles.centered}>
-          <Text style={styles.errorText}>{errorMessage}</Text>
-          {logs.length > 0 && (
-            <View style={styles.logSlot}>
-              <ConnectionLog entries={logs} title={t('app.pairScan.pairingLog', 'Pairing log')} />
-            </View>
-          )}
-          <View style={styles.errorActions}>
-            <Pressable
-              style={({ pressed }) => [styles.primaryButton, pressed && pressedStyle]}
-              onPress={retry}
-            >
-              <Text style={styles.primaryButtonText}>
-                {t('app.pairScan.tryAgain', 'Try Again')}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.secondaryButton,
-                pressed && styles.pasteButtonPressed
-              ]}
-              onPress={() => {
-                retry()
-                setPasteVisible(true)
-              }}
-            >
-              <Text style={styles.secondaryButtonText}>
-                {t('app.pairScan.pasteInstead', 'Paste code instead')}
-              </Text>
-            </Pressable>
-          </View>
-        </View>
+        <PairScanRecovery
+          errorMessage={errorMessage}
+          logs={logs}
+          onConfigure={
+            failedSecureCode
+              ? () => {
+                  activePairingAttemptRef.current?.dispose()
+                  activePairingAttemptRef.current = null
+                  router.replace({
+                    pathname: '/pair-confirm',
+                    params: { code: failedSecureCode }
+                  })
+                }
+              : undefined
+          }
+          onRetry={retry}
+          onPaste={() => {
+            retry()
+            setPasteVisible(true)
+          }}
+        />
       )}
 
       <TextInputModal

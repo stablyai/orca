@@ -85,7 +85,6 @@
       "connecting": "연결 중…",
       "description": "데스크톱의 페어링 링크를 열었습니다. 확인하면 이 데스크톱이 호스트 목록에 추가됩니다.",
       "pairButton": "페어링",
-      "pairingFailed": "페어링 실패: {{error}}",
       "pairingLog": "페어링 로그",
       "title": "이 데스크톱과 페어링하시겠습니까?"
     },
@@ -101,7 +100,6 @@
       "openDesktopStep": "컴퓨터에서 Orca를 실행하세요",
       "openMobileSettingsStep": "설정 → 모바일로 이동하세요",
       "openSettings": "설정 열기",
-      "pairingFailed": "페어링 실패: {{error}}",
       "pairingLog": "페어링 로그",
       "pasteCodeMessage": "컴퓨터의 QR 코드 아래에 표시된 코드를 복사하세요.",
       "pasteCodePlaceholder": "orca://pair?code=... 또는 코드 붙여넣기",

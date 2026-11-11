@@ -85,7 +85,6 @@
       "connecting": "接続中…",
       "description": "デスクトップのペアリングリンクを開きました。確認すると、このデスクトップがホスト一覧に追加されます。",
       "pairButton": "ペアリング",
-      "pairingFailed": "ペアリングに失敗しました：{{error}}",
       "pairingLog": "ペアリングログ",
       "title": "このデスクトップとペアリングしますか？"
     },
@@ -101,7 +100,6 @@
       "openDesktopStep": "コンピュータで Orca を開く",
       "openMobileSettingsStep": "「設定」→「モバイル」を開く",
       "openSettings": "設定を開く",
-      "pairingFailed": "ペアリングに失敗しました：{{error}}",
       "pairingLog": "ペアリングログ",
       "pasteCodeMessage": "コンピュータの QR コードの下に表示されているコードをコピーしてください。",
       "pasteCodePlaceholder": "orca://pair?code=... またはコードを貼り付け",

@@ -8,6 +8,10 @@ import { unregisterPushForRemovedHost } from '../notifications/push-registration
 import { forgetNativeHostQueries } from '../query/native-query-persistence'
 import { forgetHostDescriptor } from '../host-descriptors/host-descriptor-store'
 import { removeHost } from './host-store'
+import {
+  clearEndpointAuthHeadersCache,
+  noteEndpointAuthHeadersChanged
+} from '../transport/endpoint-auth-headers'
 
 export async function removeHostAndCloseClient(
   hostId: string,
@@ -24,6 +28,8 @@ export async function removeHostAndCloseClient(
     throw error
   }
   forgetHostClient(hostId)
+  noteEndpointAuthHeadersChanged(hostId)
+  clearEndpointAuthHeadersCache(hostId)
   forgetHostDescriptor(hostId)
   // Before the wipe, so nothing this world still holds is written back after it.
   forgetNativeHostQueries(queryClient, hostId)

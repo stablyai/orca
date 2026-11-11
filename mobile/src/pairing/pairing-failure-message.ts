@@ -5,6 +5,7 @@ import { PairingCodeRejectedError } from './pairing-candidate-race'
 export function getPairingFailureMessage(args: {
   screen: 'scan' | 'confirm'
   error: unknown
+  fallbackMessage?: string
   timedOut: boolean
   timeoutMs: number
   t: Translate
@@ -32,7 +33,10 @@ export function getPairingFailureMessage(args: {
       'This pairing code expired, was already used, or was replaced. Show a new code on your desktop and scan again.'
     )
   }
-  return screen === 'scan'
-    ? t('app.pairScan.pairingFailed', 'Pairing failed: {{error}}', { error: detail })
-    : t('app.pairConfirm.pairingFailed', 'Pairing failed: {{error}}', { error: detail })
+  return (
+    args.fallbackMessage ??
+    (screen === 'scan'
+      ? t('app.pairScan.pairingFailed', 'Pairing failed: {{error}}', { error: detail })
+      : t('app.pairConfirm.pairingFailed', 'Pairing failed: {{error}}', { error: detail }))
+  )
 }

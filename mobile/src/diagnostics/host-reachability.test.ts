@@ -28,7 +28,40 @@ describe('unreachableHostDetail', () => {
 })
 
 describe('testHostReachability', () => {
-  it('returns false without leaving timers when WebSocket rejects a malformed endpoint', async () => {
+  it.each(['wss://orca.example', 'ws://192.168.1.10:6768'])(
+    'uses edge headers only for secure probes to %s',
+    async (endpoint) => {
+      const calls: unknown[][] = []
+      const sockets: ProbeSocket[] = []
+      class ProbeSocket {
+        onopen: (() => void) | null = null
+        onerror: (() => void) | null = null
+        close = vi.fn()
+        constructor(...args: unknown[]) {
+          calls.push(args)
+          sockets.push(this)
+        }
+      }
+      vi.stubGlobal('WebSocket', ProbeSocket)
+      try {
+        const headers = { 'X-Token': 'synthetic-secret' }
+        const result = testHostReachability(endpoint, headers)
+        expect(calls).toEqual([
+          endpoint.startsWith('wss://')
+            ? [endpoint, undefined, { headers, followRedirects: false }]
+            : [endpoint]
+        ])
+        const socket = sockets[0]
+        socket?.onopen?.()
+        await expect(result).resolves.toEqual({ reachable: true })
+        expect(socket?.close).toHaveBeenCalledOnce()
+      } finally {
+        vi.unstubAllGlobals()
+      }
+    }
+  )
+
+  it('reports an unreachable host without leaving timers when WebSocket rejects a malformed endpoint', async () => {
     vi.useFakeTimers()
     vi.stubGlobal(
       'WebSocket',
@@ -40,7 +73,7 @@ describe('testHostReachability', () => {
     )
 
     try {
-      await expect(testHostReachability('not-a-url')).resolves.toBe(false)
+      await expect(testHostReachability('not-a-url')).resolves.toEqual({ reachable: false })
       expect(vi.getTimerCount()).toBe(0)
     } finally {
       vi.unstubAllGlobals()
@@ -48,3 +81,29 @@ describe('testHostReachability', () => {
     }
   })
 })
+
+it.each([
+  [403, { reachable: false, httpStatus: 403 }],
+  ['HTTP 403', { reachable: false }]
+])(
+  'reports only a numeric HTTP upgrade status from a failed probe (%s)',
+  async (status, expected) => {
+    let fail: ((event: unknown) => void) | undefined
+    vi.stubGlobal(
+      'WebSocket',
+      class {
+        set onerror(listener: (event: unknown) => void) {
+          fail = listener
+        }
+        close() {}
+      }
+    )
+    try {
+      const result = testHostReachability('wss://orca.example', { 'X-Proxy-Token': 'synthetic' })
+      fail?.({ httpStatus: status, message: 'synthetic credential echoed by proxy' })
+      await expect(result).resolves.toEqual(expected)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  }
+)
