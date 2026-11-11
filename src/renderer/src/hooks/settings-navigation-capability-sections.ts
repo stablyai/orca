@@ -77,10 +77,10 @@ export function buildCapabilitySettingsSections(
       : []),
     {
       id: 'accounts',
-      title: t('auto.hooks.useSettingsNavigationMetadata.f70ac54d38', 'AI Provider Accounts'),
+      title: t('auto.hooks.useSettingsNavigationMetadata.f70ac54d38', 'Agent accounts'),
       description: t(
         'auto.hooks.useSettingsNavigationMetadata.b1c2f8b0ac',
-        'Optional account switching and usage setup for Claude, Codex, Gemini, OpenCode Go, MiniMax, and Grok.'
+        'Sign-ins, account switching and usage for Claude, Codex, Gemini, OpenCode Go, MiniMax, and Grok.'
       ),
       icon: UserCog,
       searchEntries: getAccountsPaneSearchEntries(),
@@ -142,7 +142,7 @@ export function buildCapabilitySettingsSections(
       ? [
           {
             id: 'computer-use',
-            title: t('auto.hooks.useSettingsNavigationMetadata.b35e92364b', 'Computer Use'),
+            title: t('auto.hooks.useSettingsNavigationMetadata.b35e92364b', 'Computer use'),
             description: t(
               'auto.hooks.useSettingsNavigationMetadata.0059bd17f3',
               'Enable agents to control any app on your computer.'
@@ -177,7 +177,7 @@ export function buildSetupSettingsSections(
       ? [
           {
             id: 'orca-account',
-            title: t('auto.components.settings.orcaAccount.title', 'Orca Account'),
+            title: t('auto.components.settings.orcaAccount.title', 'Orca account'),
             description: isOrcaCloudApiAvailable
               ? t(
                   'settings.orcaAccount.descriptionWithCloud',
