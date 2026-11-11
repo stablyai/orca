@@ -17,7 +17,7 @@ import type {
 import type { LinearAgentWriteTarget } from './linear-agent-write-target'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { RuntimeLinearDedupeCommands } from './runtime-linear-dedupe-commands'
-import { isWslMoveWorktreeBlocked } from '../../../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { isWslMoveWorktreeBlocked } from '../../../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 
 export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands {
