@@ -19989,6 +19989,9 @@
           "pipelinePending": "Pipeline pending",
           "pipelineUnresolved": "Pipeline unresolved"
         }
+      },
+      "NewWorkspaceComposerFooter": {
+        "create": "Create"
       }
     },
     "i18n": {
