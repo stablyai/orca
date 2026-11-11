@@ -114,7 +114,7 @@ test('a revoked device is distinguished from an unsupported handshake', async ()
   }
 })
 
-test('ticket exchange keeps legacy and explicitly refused tickets but rejects ambiguous results', async () => {
+test('ticket exchange keeps compatible credentials and rejects unconfirmed ownership', async () => {
   const { toHex } = loadArkts('transport/crypto/Bytes.ets', ['toHex'])
   class RpcSuccess {
     constructor(result) {
@@ -165,6 +165,19 @@ test('ticket exchange keeps legacy and explicitly refused tickets but rejects am
     await exchangePairingTicket(connection, 'original-ticket', () => {}, remember),
     'original-ticket'
   )
+  for (const reply of [
+    { errorCode: 'ticket_exchange_pending' },
+    { errorCode: 'runtime_error', errorMessage: 'ticket_exchange_pending' },
+    { errorCode: 'device_not_found' },
+    { errorCode: 'runtime_error', errorMessage: 'device_not_found' }
+  ]) {
+    connection.client.request = async () => reply
+    await assert.rejects(
+      exchangePairingTicket(connection, 'original-ticket', () => {}, remember),
+      /unresolved/
+    )
+    assert.equal(persisted, '070707070707070707070707070707070707070707070707')
+  }
   connection.client.request = async () => ({
     errorCode: 'runtime_error',
     errorMessage: 'storage_unavailable'

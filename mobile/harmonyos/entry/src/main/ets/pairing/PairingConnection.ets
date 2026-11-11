@@ -39,7 +39,7 @@ export async function exchangePairingTicket(connection: PairingConnectionResult,
   }
   let refusal = reply.errorCode === 'runtime_error' ? reply.errorMessage : reply.errorCode;
   if (['unknown_method', 'method_not_found', 'not_supported', 'forbidden', 'not_a_ticket', 'delegated_device',
-    'ticket_already_exchanged', 'ticket_window_closed', 'ticket_exchange_pending', 'device_token_in_use', 'device_not_found']
+    'ticket_already_exchanged', 'ticket_window_closed', 'device_token_in_use']
     .includes(refusal)) {
     log('桌面未接受换票，继续使用扫码凭证');
     return ticket;
