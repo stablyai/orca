@@ -137,6 +137,28 @@ describe('repo-backed create', () => {
     expect(h.billing.requests[0]).toMatchObject({ runningSandboxes: 3, runningSandboxesForUser: 3 })
   })
 
+  it('an Idempotency-Key makes one sandbox per intent, for that account and member only (PC-8)', async () => {
+    const h = await createHarness()
+    const key = { 'idempotency-key': 'create-press-0001' }
+    const first = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'w-a', machineSize: 'standard' }, headers: key })
+    expect(first.status).toBe(200)
+    // A re-fired start of the same press (same key, same body): the same sandbox, nothing new.
+    const again = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'w-a', machineSize: 'standard' }, headers: key })
+    expect(again.status).toBe(200)
+    expect(again.body.sandbox.id).toBe(first.body.sandbox.id)
+    expect(h.vercel.boxes.size).toBe(1)
+    // Same key, different request: refused, not silently merged.
+    const other = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'w-b', machineSize: 'standard' }, headers: key })
+    expect(other.status).toBe(422)
+    // Keys are per member: someone else's press with the same key is their own create.
+    const bob = await h.call('POST', '/v1/sandboxes', { as: 'bob', body: { workspaceId: 'w-a', machineSize: 'standard' }, headers: key })
+    expect(bob.status).toBe(200)
+    expect(bob.body.sandbox.id).not.toBe(first.body.sandbox.id)
+    // A bad key is a 400, before anything starts.
+    const bad = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'w-c', machineSize: 'standard' }, headers: { 'idempotency-key': 'x' } })
+    expect(bad.status).toBe(400)
+  })
+
   it('a create whose Worker was cut off is failed after 5 minutes, not 15', async () => {
     const h = await createHarness()
     const { body } = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' } })

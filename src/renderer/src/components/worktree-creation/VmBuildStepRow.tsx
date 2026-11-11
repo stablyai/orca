@@ -3,6 +3,7 @@ import { CircleSlash } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Translate } from '@/i18n/use-translate'
 import { Progress } from '@/components/ui/progress'
+import { Skeleton } from '@/components/ui/skeleton'
 import { StepIcon } from './WorktreeSetupSteps'
 import type { VmBuildStep } from './vm-build-steps'
 import { typicalStepSeconds, type VmBuildStepTiming } from './vm-build-timing'
@@ -48,7 +49,15 @@ export function VmBuildStepRow({
             (step.state === 'pending' || step.skipped) && 'text-muted-foreground'
           )}
         >
-          {stepLabel(step, cloud, t)}
+          {cloud && step.id === 'clone' && step.state === 'pending' && !step.cloneMode ? (
+            // Clone or update is decided in a moment (boot plan); a placeholder never relabels.
+            <>
+              <Skeleton className="inline-block h-3 w-28 align-middle" />
+              <span className="sr-only">{stepLabel(step, cloud, t)}</span>
+            </>
+          ) : (
+            stepLabel(step, cloud, t)
+          )}
         </span>
         <span className="sr-only">
           {step.skipped

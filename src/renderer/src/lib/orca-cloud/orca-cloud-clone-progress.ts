@@ -56,3 +56,9 @@ export function orcaCloudCloneProgress(
   })
   return progress
 }
+
+/** The repository step's mode as announced before the create answered (`[orca-cloud] plan-clone|plan-update`). */
+export function orcaCloudPlannedRepoMode(log: string): 'clone' | 'update' | null {
+  const match = /^\[orca-cloud\] plan-(clone|update)$/m.exec(log)
+  return match ? (match[1] === 'update' ? 'update' : 'clone') : null
+}
