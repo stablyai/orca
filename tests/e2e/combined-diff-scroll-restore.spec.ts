@@ -179,6 +179,8 @@ async function readViewportAnchor(page: Page): Promise<ViewportAnchor | null> {
       return null
     }
     const containerRect = container.getBoundingClientRect()
+    const scene = container.firstElementChild
+    const sceneHeight = scene instanceof HTMLElement ? scene.style.height : undefined
     const visibleRows: ViewportAnchor[] = []
     for (const row of container.querySelectorAll<HTMLElement>('[data-combined-diff-section-row]')) {
       const key = row.dataset.combinedDiffSectionKey
@@ -209,9 +211,7 @@ async function readViewportAnchor(page: Page): Promise<ViewportAnchor | null> {
           top: rect.top - containerRect.top,
           bottom: rect.bottom - containerRect.top,
           scrollTop: (index * 201 + lineIndex) * rect.height - (rect.top - containerRect.top),
-          scrollHeight: Number.parseFloat(
-            (container.firstElementChild as HTMLElement | null)?.style.height ?? '0'
-          ),
+          scrollHeight: Number.parseFloat(sceneHeight ?? '0'),
           clientHeight: container.clientHeight
         })
       }

@@ -160,7 +160,7 @@ export class CombinedDiffNativeBinding implements DiffViewportBinding {
       }
       const original = this.template.editor.getOriginalEditor()
       if (original.getScrollTop() !== item.scrollOffset) {
-        original.setScrollTop(item.scrollOffset, monaco.ScrollType.Immediate)
+        original.setScrollTop(item.scrollOffset, monaco.editor.ScrollType.Immediate)
       }
       this.template.editor.getOriginalEditor().layoutFindWidget()
       this.template.editor.getModifiedEditor().layoutFindWidget()

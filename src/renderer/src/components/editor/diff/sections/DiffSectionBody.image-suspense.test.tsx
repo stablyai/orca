@@ -48,7 +48,6 @@ const props: ComponentProps<typeof DiffSectionBody> = {
   sideBySide: true,
   isDark: false,
   language: 'plaintext',
-  modelPathBase: 'image-suspense',
   isEditable: false,
   typography: {
     fontFamily: 'monospace',

@@ -25,6 +25,7 @@ export function useCombinedDiffViewport(input: {
   renderedIndicesRef?: { current: Set<number> }
   prefix?: boolean
 }): CombinedDiffViewportOwner {
+  const { renderedIndicesRef } = input
   const [owner] = useState(() => new CombinedDiffViewportOwner())
   useLayoutEffect(() => owner.retain(), [owner])
   const [inputs] = useState(() => new CombinedDiffInputs(owner))
@@ -32,11 +33,11 @@ export function useCombinedDiffViewport(input: {
     inputs.update(input.sections, input.sectionHeights, Boolean(input.prefix))
   }, [input.sections, input.sectionHeights, input.prefix, inputs])
   useLayoutEffect(() => {
-    if (!input.renderedIndicesRef) {
+    if (!renderedIndicesRef) {
       return
     }
     const publish = (): void => {
-      input.renderedIndicesRef!.current = new Set(
+      renderedIndicesRef.current = new Set(
         owner
           .getSnapshot()
           .filter((item) => item.index >= 0)
@@ -45,7 +46,7 @@ export function useCombinedDiffViewport(input: {
     }
     publish()
     return owner.subscribe(publish)
-  }, [input.renderedIndicesRef, owner])
+  }, [renderedIndicesRef, owner])
   return owner
 }
 

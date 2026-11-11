@@ -18,3 +18,27 @@ export function untilDiffCommentZoneRemoved(
   }
   return dispose
 }
+
+export function observeDiffCommentZoneSize(
+  signal: AbortSignal | undefined,
+  node: Element,
+  onResize: () => void,
+  onDisconnect?: () => void
+): () => void {
+  const observer = new ResizeObserver(onResize)
+  observer.observe(node)
+  return untilDiffCommentZoneRemoved(signal, () => {
+    observer.disconnect()
+    onDisconnect?.()
+  })
+}
+
+export function listenForDiffCommentZoneMouseDown(
+  signal: AbortSignal | undefined,
+  listener: (event: MouseEvent) => void
+): () => void {
+  document.addEventListener('mousedown', listener)
+  return untilDiffCommentZoneRemoved(signal, () =>
+    document.removeEventListener('mousedown', listener)
+  )
+}

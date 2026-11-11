@@ -27,7 +27,7 @@ export function observeCombinedDiffRowChrome(
     if (!active) {
       return
     }
-    const next = { header: null, conflict: null, body: null } as DiffViewportItem['chrome']
+    const next: DiffViewportItem['chrome'] = { header: null, conflict: null, body: null }
     for (const child of wrapper?.children ?? []) {
       if (!(child instanceof HTMLElement)) {
         continue

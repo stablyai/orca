@@ -128,7 +128,7 @@ function PRFilesCombinedDiffSections({
   const loadedIndicesRef = useRef<Set<number>>(new Set())
   const loadingIndicesRef = useRef<Set<number>>(new Set())
   const sectionsRef = useRef<DiffSection[]>(sections)
-  const modifiedEditorsRef = useRef<Map<number, monacoEditor.IStandaloneCodeEditor>>(new Map())
+  const modifiedEditorsRef = useRef<Map<number, monacoEditor.ICodeEditor>>(new Map())
   const handleSectionSaveRef = useRef<(index: number) => Promise<void>>(async () => {})
 
   // Sync after commit but before passive effects: collapsed sections remount and read this ref during their passive load.

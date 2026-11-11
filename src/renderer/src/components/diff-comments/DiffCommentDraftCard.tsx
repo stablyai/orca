@@ -13,7 +13,11 @@ import {
 } from '@/lib/source-control/review/comments/comment-body-submit-state'
 import { toast } from 'sonner'
 import { installOpenDraftAddReviewNoteGuard } from '../editor/editor-shortcuts'
-import { untilDiffCommentZoneRemoved } from './diff-comment-zone-lifetime'
+import {
+  listenForDiffCommentZoneMouseDown,
+  observeDiffCommentZoneSize,
+  untilDiffCommentZoneRemoved
+} from './diff-comment-zone-lifetime'
 
 export type DiffCommentDraftCardProps = {
   lineNumber: number
@@ -151,11 +155,9 @@ export function DiffCommentDraftCard({
     if (typeof ResizeObserver === 'undefined') {
       return
     }
-    const observer = new ResizeObserver(() => {
+    return observeDiffCommentZoneSize(lifetime, card, () => {
       onContentResizeRef.current?.()
     })
-    observer.observe(card)
-    return untilDiffCommentZoneRemoved(lifetime, () => observer.disconnect())
   }, [lifetime])
 
   useEffect(() => {
@@ -182,10 +184,7 @@ export function DiffCommentDraftCard({
       }
       onCancel()
     }
-    document.addEventListener('mousedown', onDocumentMouseDown)
-    return untilDiffCommentZoneRemoved(lifetime, () =>
-      document.removeEventListener('mousedown', onDocumentMouseDown)
-    )
+    return listenForDiffCommentZoneMouseDown(lifetime, onDocumentMouseDown)
   }, [lifetime, onCancel])
 
   const handleSubmit = async (): Promise<void> => {

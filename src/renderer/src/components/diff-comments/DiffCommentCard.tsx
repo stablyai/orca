@@ -7,7 +7,10 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
-import { untilDiffCommentZoneRemoved } from './diff-comment-zone-lifetime'
+import {
+  observeDiffCommentZoneSize,
+  untilDiffCommentZoneRemoved
+} from './diff-comment-zone-lifetime'
 
 // Render note cards in per-zone React roots; keep persisted DiffComment names while UI says Note to distinguish PR review comments.
 
@@ -96,10 +99,7 @@ export function DiffCommentCard({
       })
     }
     // Initial Monaco estimates miss narrow-pane wrapping; observe actual card height in both diff layouts.
-    const observer = new ResizeObserver(() => notifyResize())
-    observer.observe(card)
-    return untilDiffCommentZoneRemoved(lifetime, () => {
-      observer.disconnect()
+    return observeDiffCommentZoneSize(lifetime, card, notifyResize, () => {
       if (frameId !== null) {
         cancelAnimationFrame(frameId)
       }

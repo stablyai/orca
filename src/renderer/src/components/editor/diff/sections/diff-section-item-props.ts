@@ -34,7 +34,7 @@ export type DiffSectionItemProps = {
   getCommentableLineNumbers?: (section: DiffSection) => readonly number[] | undefined
   setSectionHeights: Dispatch<SetStateAction<Record<number, number>>>
   setSections: Dispatch<SetStateAction<DiffSection[]>>
-  modifiedEditorsRef: MutableRefObject<Map<number, monacoEditor.IStandaloneCodeEditor>>
+  modifiedEditorsRef: MutableRefObject<Map<number, monacoEditor.ICodeEditor>>
   /** `overwrite` comes only from the section's conflict bar. */
   handleSectionSaveRef: MutableRefObject<(index: number, mode?: 'overwrite') => Promise<void>>
 }

@@ -51,11 +51,15 @@ function observeExtentBufferReads(index: CombinedDiffExtentIndex, read: () => vo
       index,
       key,
       new Proxy(value, {
-        get(target, property, receiver) {
+        get(target, property) {
           if (typeof property === 'string' && /^\d+$/.test(property)) {
             read()
           }
-          return Reflect.get(target, property, receiver)
+          const descriptor =
+            Object.getOwnPropertyDescriptor(target, property) ??
+            Object.getOwnPropertyDescriptor(Array.prototype, property) ??
+            Object.getOwnPropertyDescriptor(Object.prototype, property)
+          return descriptor?.value
         }
       })
     )

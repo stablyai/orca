@@ -45,10 +45,12 @@ describe('combined diff resource lifetime', () => {
     ({ files, retainedModels, retainedDiffs }) => {
       native.createdEditors = 0
       native.createdDiffs = 0
-      const owner = {
+      const rawOwner = {
         onDispose: new Set<() => void>(),
         overflow: document.createElement('div')
-      } as CombinedDiffViewportOwner
+      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The pool consumes only onDispose and overflow from its owner in this resource-lifetime test.
+      const owner = rawOwner as CombinedDiffViewportOwner
       const items: DiffViewportItem[] = Array.from({ length: files }, (_, index) => ({
         key: `file-${index}`,
         generation: '1',

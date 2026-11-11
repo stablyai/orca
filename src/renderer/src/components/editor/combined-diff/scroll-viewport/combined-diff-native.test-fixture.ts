@@ -79,20 +79,22 @@ export async function createNativeBindingFixture(transform = 0) {
         offset >= zone.top && offset < zone.top + zone.height ? { ...zone } : null,
       getViewZoneBounds: (id: string) => (id === zone.id ? { ...zone } : null),
       getOption: (option: editor.EditorOption) => {
-        switch (option) {
-          case monaco.editor.EditorOption.lineHeight:
-            return 19
-          case monaco.editor.EditorOption.scrollbar:
-            return { horizontal: 1, horizontalScrollbarSize: 20 }
-          case monaco.editor.EditorOption.stickyScroll:
-            return { enabled: false, maxLineCount: 5 }
-          case monaco.editor.EditorOption.cursorSurroundingLines:
-            return 0
-          case monaco.editor.EditorOption.cursorSurroundingLinesStyle:
-            return 'default'
-          default:
-            throw new Error(`Unexpected option ${option}`)
+        if (option === monaco.editor.EditorOption.lineHeight) {
+          return 19
         }
+        if (option === monaco.editor.EditorOption.scrollbar) {
+          return { horizontal: 1, horizontalScrollbarSize: 20 }
+        }
+        if (option === monaco.editor.EditorOption.stickyScroll) {
+          return { enabled: false, maxLineCount: 5 }
+        }
+        if (option === monaco.editor.EditorOption.cursorSurroundingLines) {
+          return 0
+        }
+        if (option === monaco.editor.EditorOption.cursorSurroundingLinesStyle) {
+          return 'default'
+        }
+        throw new Error(`Unexpected option ${option}`)
       },
       changeViewZones: (update: (accessor: editor.IViewZoneChangeAccessor) => void) => {
         const accessor = {
@@ -127,6 +129,7 @@ export async function createNativeBindingFixture(transform = 0) {
       stopSelectionDrag: () => lifecycle.push('selection-stop'),
       layoutFindWidget: () => {}
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies the pane methods exercised by native binding and anchor tests.
     return value as unknown as editor.ICodeEditor
   }
   const original = pane(true)
@@ -146,6 +149,7 @@ export async function createNativeBindingFixture(transform = 0) {
       fire('scroll')
     }
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies the diff methods exercised by native binding tests.
   const diff = rawDiff as unknown as editor.IStandaloneDiffEditor
   const vm = {
     getDiffState: () => ({
@@ -159,6 +163,7 @@ export async function createNativeBindingFixture(transform = 0) {
   }
   const record: RetainedDiffItem = {
     model: { original: originalModel, modified: modifiedModel },
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Binding tests consume only these readiness and option-update methods.
     viewModel: vm as unknown as editor.IIndependentDiffEditorViewModel,
     viewState: null
   }
@@ -200,7 +205,7 @@ export async function createNativeBindingFixture(transform = 0) {
         minimalReveal,
         verticalType: 0,
         revealHorizontal: true,
-        scrollType: monaco.ScrollType.Immediate
+        scrollType: monaco.editor.ScrollType.Immediate
       }),
     dispose: () => {
       unbind()

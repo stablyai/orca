@@ -79,6 +79,7 @@ function createMeasurementFixture(count: number) {
       })
     }
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture implements the pane methods consumed by comment measurement and geometry.
   const pane = raw as unknown as editor.ICodeEditor
   const geometry = new CombinedDiffCommentGeometry({
     item,

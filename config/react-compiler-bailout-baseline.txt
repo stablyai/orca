@@ -81,7 +81,7 @@
 1 src/renderer/src/components/dashboard/useLiveDashboardSnapshot.ts
 2 src/renderer/src/components/diff-comments/DiffCommentCard.tsx
 5 src/renderer/src/components/diff-comments/DiffCommentPopover.tsx
-2 src/renderer/src/components/diff-comments/diff-comment-draft-zone.ts
+1 src/renderer/src/components/diff-comments/diff-comment-draft-zone.ts
 1 src/renderer/src/components/diff-comments/useDiffCommentDecorator.tsx
 1 src/renderer/src/components/editor/EditorPanelShell.tsx
 5 src/renderer/src/components/editor/MonacoEditor.tsx
@@ -171,7 +171,6 @@
 1 src/renderer/src/components/github-item-dialog/discuss-item/gh-comment-composer.tsx
 1 src/renderer/src/components/github-item-dialog/edit-item-fields/gh-edit-section.tsx
 3 src/renderer/src/components/github-item-dialog/inspect-pull-request/checks-tab.tsx
-1 src/renderer/src/components/github-item-dialog/inspect-pull-request/pr-files-combined-diff-viewer.tsx
 3 src/renderer/src/components/github-item-dialog/land-pull-request/pr-actions-panel.tsx
 1 src/renderer/src/components/github-item-dialog/load-item-details/use-github-task-refresh.ts
 1 src/renderer/src/components/github-item-dialog/load-item-details/use-github-work-item-details.ts

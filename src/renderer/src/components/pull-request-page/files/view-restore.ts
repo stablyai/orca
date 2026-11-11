@@ -18,13 +18,14 @@ export function usePRFilesDiffViewPersistence(args: {
   viewport: CombinedDiffViewportOwner
   pendingRestoreAnchorRef: MutableRefObject<{ anchor: DiffReadingAnchor | null } | null>
 }): void {
+  const { pendingRestoreAnchorRef } = args
   useLayoutEffect(() => {
-    const pending = args.pendingRestoreAnchorRef.current
+    const pending = pendingRestoreAnchorRef.current
     if (pending && args.sections.length > 0) {
       args.viewport.importView(pending.anchor, 0)
-      args.pendingRestoreAnchorRef.current = null
+      pendingRestoreAnchorRef.current = null
     }
-  }, [args.pendingRestoreAnchorRef, args.sections, args.viewport])
+  }, [pendingRestoreAnchorRef, args.sections, args.viewport])
 
   useEffect(() => {
     if (args.sections.length === 0 && args.entriesLength > 0) {
