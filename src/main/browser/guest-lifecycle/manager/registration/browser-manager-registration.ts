@@ -1,3 +1,4 @@
+import { closeBrowserMemoryPage, isRetiredBrowserGuest } from '../../browser-page-memory'
 import { webContents } from 'electron'
 import { browserDownloadDestinationReservations } from '../../../downloads/browser-download-destination'
 import { isWorkspaceDocPageId } from '../../../document-preview/doc-preview-guest-policy'
@@ -32,7 +33,11 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
   ): boolean {
     const browserTabId = browserPageId ?? legacyBrowserTabId
     // Keep document IDs out of browsing maps: tool authorization checks documents first.
-    if (!browserTabId || isWorkspaceDocPageId(browserTabId)) {
+    if (
+      !browserTabId ||
+      isWorkspaceDocPageId(browserTabId) ||
+      isRetiredBrowserGuest(browserTabId, webContentsId)
+    ) {
       return false
     }
     // Cancel grabs bound to the previous surface before replacing its guest.
@@ -108,6 +113,9 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     // Document pages retire by grant revocation; this path must not cancel their grabs.
     if (isWorkspaceDocPageId(browserTabId)) {
       return
+    }
+    if (reason === 'page-closed') {
+      closeBrowserMemoryPage(browserTabId)
     }
     // Resolve pending grabs before removing their registration.
     this.cancelGrabOp(browserTabId, 'evicted')

@@ -1,4 +1,7 @@
-import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
+import type {
+  BrowserCommandTargetParams,
+  RuntimeBrowserCommandHost
+} from './browser-command-contracts'
 import { RuntimeBrowserCommandTargets } from './browser-command-targets'
 import { RuntimeBrowserTabCatalog } from '../tabs/browser-tab-catalog'
 import { RuntimeBrowserNavigation } from './browser-navigation'
@@ -13,6 +16,14 @@ import { RuntimeBrowserTabClose } from '../tabs/browser-tab-close'
 import { RuntimeBrowserProfiles } from './browser-profiles'
 import { RuntimeBrowserScreencasts } from '../screencast/browser-screencasts'
 import { RuntimeBrowserDialogs } from './browser-dialogs'
+
+type BrowserPageCommand = (
+  params: BrowserCommandTargetParams & { index?: number },
+  ...rest: unknown[]
+) => unknown
+function isBrowserPageCommand(value: unknown): value is BrowserPageCommand {
+  return typeof value === 'function'
+}
 
 export class RuntimeBrowserCommands {
   readonly browserSnapshot: RuntimeBrowserCommandTargets['browserSnapshot']
@@ -202,5 +213,54 @@ export class RuntimeBrowserCommands {
     this.browserScreencast = screencasts.browserScreencast.bind(screencasts)
     this.browserDialogAccept = dialogs.browserDialogAccept.bind(dialogs)
     this.browserDialogDismiss = dialogs.browserDialogDismiss.bind(dialogs)
+    const passive = new Set([
+      'browserTabList',
+      'browserTabCurrent',
+      'browserTabAnnotations',
+      'browserTabClose',
+      'browserTabCreate',
+      'browserOpenUrlOnClient',
+      'browserProfileList',
+      'browserProfileCreate',
+      'browserProfileDelete',
+      'browserProfileDetectBrowsers',
+      'browserProfileImportFromBrowser',
+      'browserProfileClearGoogleCookies',
+      'browserProfileClearDefaultCookies',
+      'browserDialogAccept',
+      'browserDialogDismiss',
+      'browserProceedCertificate'
+    ])
+    for (const [name, value] of Object.entries(this)) {
+      if (passive.has(name)) {
+        continue
+      }
+      if (!isBrowserPageCommand(value)) {
+        continue
+      }
+      const command = value
+      Reflect.set(
+        this,
+        name,
+        async (params: BrowserCommandTargetParams & { index?: number }, ...rest: unknown[]) => {
+          let target = params
+          if (name === 'browserTabSwitch' && !params.page) {
+            const listed = await queries.browserTabList(params)
+            const page = listed.tabs[params.index ?? -1]?.browserPageId
+            if (page) {
+              target = { ...params, page }
+            }
+          }
+          if (target.page && host.getRuntimeBrowserPageRegistry().getPage(target.page)) {
+            return command.call(this, target, ...rest)
+          }
+          return targets.withPageOperation(
+            target,
+            (admitted) => Promise.resolve(command.call(this, { ...target, ...admitted }, ...rest)),
+            name === 'browserReload' || name === 'browserGoto'
+          )
+        }
+      )
+    }
   }
 }

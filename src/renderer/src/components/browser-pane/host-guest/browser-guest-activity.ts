@@ -4,11 +4,28 @@ export type BrowserGuestActivity = {
   webview: Electron.WebviewTag
   visible: boolean
   revision: number
+  lastSelectedAt: number
   lastUsed: number
   protection?: BrowserGuestDiscardProtectionChange['protection']
 }
 
 export const browserGuestActivity = new Map<string, BrowserGuestActivity>()
+export const retiredBrowserGuestResources = new Set<number>()
+export function setBrowserGuestResourceRetired(
+  pageId: string,
+  guestId: number,
+  retired: boolean
+): void {
+  if (retired) {
+    retiredBrowserGuestResources.add(guestId)
+  } else {
+    retiredBrowserGuestResources.delete(guestId)
+  }
+  for (const listener of listeners) {
+    listener(pageId)
+  }
+}
+
 const listeners = new Set<(pageId: string) => void>()
 let useSequence = 0
 
@@ -38,7 +55,13 @@ export function touchBrowserGuestActivity(pageId: string): void {
 }
 
 export function registerBrowserGuestActivity(pageId: string, webview: Electron.WebviewTag): void {
-  browserGuestActivity.set(pageId, { webview, visible: true, revision: 0, lastUsed: ++useSequence })
+  browserGuestActivity.set(pageId, {
+    webview,
+    visible: false,
+    revision: 0,
+    lastUsed: ++useSequence,
+    lastSelectedAt: 0
+  })
   touchBrowserGuestActivity(pageId)
 }
 
@@ -54,6 +77,7 @@ export function setBrowserGuestVisible(pageId: string, visible: boolean): void {
   if (!entry || entry.visible === visible) {
     return
   }
+  entry.lastSelectedAt = Date.now()
   entry.visible = visible
   touchBrowserGuestActivity(pageId)
 }

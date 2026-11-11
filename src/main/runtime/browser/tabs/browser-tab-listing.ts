@@ -1,3 +1,4 @@
+import { browserMemoryGeneration } from '../../../browser/guest-lifecycle/browser-page-memory'
 import type { BrowserTabInfo } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-session-contracts'
 
@@ -117,11 +118,12 @@ export function mergeBrowserTabListing(input: {
   const clients = input.clientTabs.map((tab) => ({ ...tab, loaded: true }))
   const tabs = [...fromBar, ...unlisted, ...clients]
   // Why live order: with nothing active, a pageless command acts on the first live page.
-  const fallbackId = (serverTabs[0] ?? input.clientTabs[0])?.browserPageId
+  const fallbackId = (serverTabs[0] ?? input.clientTabs[0] ?? tabs[0])?.browserPageId
   const noneActive = !tabs.some((tab) => tab.active)
   return tabs.map((tab, index) => ({
     ...tab,
     index,
+    generation: browserMemoryGeneration(tab.browserPageId),
     active: tab.active || (noneActive && tab.browserPageId === fallbackId)
   }))
 }

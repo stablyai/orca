@@ -1,4 +1,4 @@
-import { destroyPersistentWebview } from '@/components/browser-pane/host-guest/webview-registry'
+import { replacePersistentWebview } from '@/components/browser-pane/host-guest/webview-registry'
 import { translate } from '@/i18n/i18n'
 import { closeBrowserTabWithReply } from './browser-tab-close-with-reply'
 import { useAppStore } from '../../store'
@@ -172,11 +172,11 @@ export function registerBrowserRequestIpcBridge(unsubs: (() => void)[]): void {
           for (const page of workspacePages) {
             // Document previews use a fixed partition, so profile changes must preserve their guests.
             if (!page.docLocation) {
-              destroyPersistentWebview(page.id)
+              replacePersistentWebview(page.id)
             }
           }
         } else {
-          destroyPersistentWebview(data.browserPageId)
+          replacePersistentWebview(data.browserPageId)
         }
         store.switchBrowserTabProfile(owningWorkspace.id, data.profileId, data.sessionPartition)
         window.api.ui.replyTabSetProfile({ requestId: data.requestId })

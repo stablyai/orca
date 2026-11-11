@@ -8,7 +8,8 @@ import {
   updateBrowserGuestProtection
 } from './browser-pane/host-guest/browser-guest-activity'
 import { installBrowserGuestPageRetention } from './browser-pane/host-guest/browser-guest-page-retention'
-import { destroyRemovedBrowserWebview } from '../store/slices/browser/cleanup/browser-webview-cleanup'
+import { discardPersistentWebview } from './browser-pane/host-guest/webview-registry'
+import { releaseBrowserPageMount } from './browser-pane/host-guest/browser-page-mount-admission'
 import type { TerminalParkingFoundation } from './use-terminal-parking-foundation'
 
 export function useTerminalBrowserRetention({
@@ -39,9 +40,13 @@ export function useTerminalBrowserRetention({
     }
     return installBrowserGuestPageRetention({
       isBlocked: browserPageVetoesGuestEviction,
-      getProtection: (browserPageId, webContentsId) =>
-        window.api.browser.getGuestDiscardProtection({ browserPageId, webContentsId }),
-      destroy: destroyRemovedBrowserWebview
+      discard: (pageId, webview, webContentsId) => {
+        const discarded = discardPersistentWebview(pageId, webview, webContentsId)
+        if (discarded) {
+          releaseBrowserPageMount(pageId)
+        }
+        return discarded
+      }
     })
   }, [browserGuestRetentionBudgetEnabled])
 }

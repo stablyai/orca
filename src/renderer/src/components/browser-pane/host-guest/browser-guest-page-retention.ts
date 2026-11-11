@@ -1,139 +1,120 @@
-import type { BrowserGuestDiscardProtection } from '../../../../../shared/browser/guest-lifecycle/browser-guest-discard-protection'
 import {
   browserGuestActivity,
+  retiredBrowserGuestResources,
   onBrowserGuestActivity,
   type BrowserGuestActivity
 } from './browser-guest-activity'
 
-export const BROWSER_GUEST_HIDDEN_PAGE_RETENTION_LIMIT = 20
+export const BROWSER_GUEST_HIDDEN_PAGE_RETENTION_LIMIT = 32
+const RECENT_SELECTION_MS = 30 * 60_000
 
-/** One ordered pool, updated only for the page that changed; parked guests own no timers. */
+/** Refused owners park until their own lifecycle changes; recency has one window-level wake. */
 export function installBrowserGuestPageRetention(args: {
   isBlocked: (pageId: string) => boolean
-  getProtection: (
-    pageId: string,
-    webContentsId: number
-  ) => Promise<BrowserGuestDiscardProtection | null>
-  destroy: (pageId: string) => void
+  discard: (pageId: string, webview: Electron.WebviewTag, webContentsId: number) => boolean
   limit?: number
 }): () => void {
-  const eligible = new Map<string, BrowserGuestActivity>()
-  const pending = new Set<string>()
+  const hidden = new Set<string>()
+  const candidates = new Map<string, { entry: BrowserGuestActivity; lastUsed: number }>()
+  const recent = new Map<string, { entry: BrowserGuestActivity; expires: number }>()
+  const limit = args.limit ?? BROWSER_GUEST_HIDDEN_PAGE_RETENTION_LIMIT
   let disposed = false
   let scheduled = false
-  let running = false
-  let followup = false
-  const limit = args.limit ?? BROWSER_GUEST_HIDDEN_PAGE_RETENTION_LIMIT
-  const isCurrent = (pageId: string, entry: BrowserGuestActivity, revision: number): boolean =>
-    !disposed &&
-    browserGuestActivity.get(pageId) === entry &&
-    entry.revision === revision &&
-    !entry.visible &&
-    !args.isBlocked(pageId)
-
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const overBudget = (): boolean => hidden.size + retiredBrowserGuestResources.size > limit
   const schedule = (): void => {
-    if (disposed || eligible.size <= limit) {
-      return
-    }
-    if (running) {
-      followup = true
-      return
-    }
-    if (scheduled) {
+    if (disposed || scheduled || !overBudget()) {
       return
     }
     scheduled = true
     queueMicrotask(() => {
       scheduled = false
-      if (disposed) {
+      if (disposed || retiredBrowserGuestResources.size >= 4) {
         return
       }
-      running = true
-      const cursor = [...eligible.entries()]
-        .map(([pageId, entry]) => ({ pageId, entry, lastUsed: entry.lastUsed }))
-        .sort((left, right) => left.lastUsed - right.lastUsed)
-        .values()
-      let admitted = 0
-      const excess = eligible.size - limit
-      const worker = async (): Promise<void> => {
-        while (!disposed && eligible.size > limit && admitted < excess) {
-          const next = cursor.next()
-          if (next.done) {
-            return
+      if (timer) {
+        clearTimeout(timer)
+        timer = null
+      }
+      const now = Date.now()
+      for (const [pageId, parked] of recent) {
+        if (parked.expires > now) {
+          break
+        }
+        recent.delete(pageId)
+        candidates.set(pageId, { entry: parked.entry, lastUsed: parked.entry.lastUsed })
+      }
+      for (const [pageId, { entry }] of candidates) {
+        if (!overBudget() || retiredBrowserGuestResources.size >= 4) {
+          break
+        }
+        candidates.delete(pageId)
+        if (browserGuestActivity.get(pageId) !== entry || entry.visible || args.isBlocked(pageId)) {
+          continue
+        }
+        try {
+          if (args.discard(pageId, entry.webview, entry.webview.getWebContentsId())) {
+            hidden.delete(pageId)
           }
-          const { pageId, entry, lastUsed } = next.value
-          if (pending.has(pageId) || entry.lastUsed !== lastUsed) {
-            continue
-          }
-          const revision = entry.revision
-          if (!isCurrent(pageId, entry, revision)) {
-            continue
-          }
-          let webContentsId: number
-          try {
-            webContentsId = entry.webview.getWebContentsId()
-          } catch {
-            eligible.delete(pageId)
-            continue
-          }
-          admitted += 1
-          pending.add(pageId)
-          let protection: BrowserGuestDiscardProtection | null = null
-          try {
-            protection = await args.getProtection(pageId, webContentsId)
-          } catch {
-            // Unknown state parks until a real lifecycle or observer transition.
-          } finally {
-            pending.delete(pageId)
-          }
-          if (!isCurrent(pageId, entry, revision)) {
-            continue
-          }
-          try {
-            if (entry.webview.getWebContentsId() !== webContentsId) {
-              continue
-            }
-          } catch {
-            continue
-          }
-          if (
-            !protection ||
-            protection.webContentsId !== webContentsId ||
-            protection.protection !== 'discardable'
-          ) {
-            eligible.delete(pageId)
-            continue
-          }
-          if (eligible.size > limit) {
-            eligible.delete(pageId)
-            args.destroy(pageId)
-          }
+        } catch {
+          // A detached/unknown owner remains counted and parked until its own lifecycle update.
         }
       }
-      void Promise.all(Array.from({ length: 4 }, worker)).finally(() => {
-        running = false
-        if (followup) {
-          followup = false
-          schedule()
-        }
-      })
+      const first = recent.values().next().value
+      if (overBudget() && first) {
+        timer = setTimeout(
+          () => {
+            timer = null
+            schedule()
+          },
+          Math.max(1, first.expires - Date.now())
+        )
+      }
     })
   }
   const update = (pageId: string): void => {
-    eligible.delete(pageId)
     const entry = browserGuestActivity.get(pageId)
-    if (entry && !entry.visible && !args.isBlocked(pageId)) {
-      eligible.set(pageId, entry)
+    if (entry && !entry.visible) {
+      hidden.add(pageId)
+    } else {
+      hidden.delete(pageId)
+    }
+    if (!entry || entry.visible || args.isBlocked(pageId)) {
+      candidates.delete(pageId)
+      recent.delete(pageId)
+    } else {
+      const expires = entry.lastSelectedAt + RECENT_SELECTION_MS
+      if (expires > Date.now()) {
+        candidates.delete(pageId)
+        if (recent.get(pageId)?.expires !== expires) {
+          recent.delete(pageId)
+          recent.set(pageId, { entry, expires })
+        }
+      } else {
+        recent.delete(pageId)
+        if (candidates.get(pageId)?.lastUsed !== entry.lastUsed) {
+          candidates.delete(pageId)
+        }
+        candidates.set(pageId, { entry, lastUsed: entry.lastUsed })
+      }
     }
     schedule()
   }
   const removeListener = onBrowserGuestActivity(update)
-  for (const pageId of browserGuestActivity.keys()) {
+  // Only initial installation needs to order already-existing selection times.
+  for (const [pageId] of [...browserGuestActivity].sort(
+    (a, b) => a[1].lastSelectedAt - b[1].lastSelectedAt
+  )) {
     update(pageId)
   }
   return () => {
     disposed = true
     removeListener()
-    eligible.clear()
+    hidden.clear()
+    candidates.clear()
+    recent.clear()
+    if (timer) {
+      clearTimeout(timer)
+    }
   }
 }

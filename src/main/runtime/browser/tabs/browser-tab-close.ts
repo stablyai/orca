@@ -1,3 +1,4 @@
+import { closeBrowserMemoryPage } from '../../../browser/guest-lifecycle/browser-page-memory'
 import type { RuntimeBrowserTabQueries } from './browser-tab-queries'
 import {
   resolveClientPageToClose,
@@ -137,6 +138,9 @@ export class RuntimeBrowserTabClose {
 
     const win = authoritativeWindow ?? this.host.getAuthoritativeWindow()
     await closeBrowserTabInRenderer(win, tabId, worktreeId)
+    if (tabId) {
+      closeBrowserMemoryPage(tabId)
+    }
 
     return { closed: true }
   }

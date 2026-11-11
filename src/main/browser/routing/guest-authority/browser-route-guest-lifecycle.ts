@@ -1,3 +1,7 @@
+import {
+  startBrowserPageAttach,
+  waitForBrowserPageReady
+} from '../../guest-lifecycle/browser-page-memory'
 import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
 import '../../../../shared/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/browser/browser-blank-page'
@@ -117,7 +121,9 @@ export async function navigateBrowserRouteGuest(
     return false
   }
   try {
-    await state.guest.loadURL(normalized)
+    await (startBrowserPageAttach(state.guest, normalized)
+      ? waitForBrowserPageReady(registration.browserPageId, state.guest)
+      : state.guest.loadURL(normalized))
     return true
   } catch {
     return false

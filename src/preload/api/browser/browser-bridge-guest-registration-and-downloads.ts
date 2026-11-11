@@ -20,6 +20,9 @@ import { browserClientPageRendererRequests } from '../../preload-runtime-support
 import type { PreloadApi } from '../../api-types'
 
 export const browserGuestRegistrationAndDownloadsApi = {
+  preparePageAttach: (args) => ipcRenderer.invoke('browser:preparePageAttach', args),
+  reserveGuestDiscard: (args) => ipcRenderer.sendSync('browser:reserveGuestDiscard', args) === true,
+  acknowledgeGuestRemoval: (args) => ipcRenderer.invoke('browser:acknowledgeGuestRemoval', args),
   getGuestDiscardProtection: (args) =>
     ipcRenderer.invoke('browser:getGuestDiscardProtection', args),
   onGuestDiscardProtectionChanged: (callback): (() => void) => {
@@ -48,8 +51,11 @@ export const browserGuestRegistrationAndDownloadsApi = {
     sessionProfileId?: string | null
     webContentsId: number
   }): Promise<boolean> => ipcRenderer.invoke('browser:repairGuestRegistration', args),
-  unregisterGuest: (args: { browserPageId: string }): Promise<void> =>
-    ipcRenderer.invoke('browser:unregisterGuest', args),
+  unregisterGuest: (args: {
+    browserPageId: string
+    webContentsId?: number
+    replacement?: boolean
+  }): Promise<void> => ipcRenderer.invoke('browser:unregisterGuest', args),
   onWebAuthnAccountRequest: (
     callback: (request: BrowserWebAuthnAccountRequest) => void
   ): (() => void) => {

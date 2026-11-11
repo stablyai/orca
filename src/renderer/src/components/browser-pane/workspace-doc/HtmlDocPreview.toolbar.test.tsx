@@ -228,26 +228,18 @@ describe('HtmlDocPreview browser chrome', () => {
     container.remove()
   })
 
-  it('reclaims hidden document guests through the page pool and restores only on activation', async () => {
+  it('keeps hidden document guests mounted until their page closes', async () => {
     const { hasLiveBrowserGuest, webviewRegistry } = await import('../host-guest/webview-registry')
-    const { installBrowserGuestPageRetention } =
-      await import('../host-guest/browser-guest-page-retention')
     const { destroyRemovedBrowserWebview } =
       await import('@/store/slices/browser/cleanup/browser-webview-cleanup')
     const guest = await renderPreview(container, root)
     Object.defineProperty(guest, 'getWebContentsId', { value: () => 1 })
     expect(hasLiveBrowserGuest('preview-1')).toBe(true)
     expect(await renderPreview(container, root, { isActive: false })).toBe(guest)
-    const stopPool = installBrowserGuestPageRetention({
-      limit: 0,
-      isBlocked: () => false,
-      getProtection: async () => ({ webContentsId: 1, protection: 'discardable', reason: 'clean' }),
-      destroy: destroyRemovedBrowserWebview
-    })
+    expect(guest.isConnected).toBe(true)
     await act(async () => {
-      await vi.waitFor(() => expect(hasLiveBrowserGuest('preview-1')).toBe(false))
+      destroyRemovedBrowserWebview('preview-1')
     })
-    stopPool()
     expect(guest.isConnected).toBe(false)
     expect(hasLiveBrowserGuest('preview-1')).toBe(false)
     expect(container.querySelector('webview')).toBeNull()

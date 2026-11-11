@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { ipcMain } from 'electron'
+import { captureActiveRpcCall } from '../../rpc/rpc-active-caller'
+import { retainBrowserMemoryPageForAgent } from '../../../browser/guest-lifecycle/browser-page-memory'
 import type { RuntimeBrowserCommandHost } from '../commands/browser-command-contracts'
 import type { BrowserTabSplitDirection } from '../../../../shared/browser-tab-split-direction'
 import type { BrowserTabCreateRequest } from '../../../../shared/browser-tab-create-request'
@@ -18,6 +20,7 @@ export async function createBrowserTabInRenderer(
 ): Promise<{ browserPageId: string }> {
   const rendererWebContents = host.getAuthoritativeWindow().webContents
   const requestId = randomUUID()
+  const withCaller = captureActiveRpcCall()
 
   const browserPageId = await new Promise<string>((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -37,6 +40,7 @@ export async function createBrowserTabInRenderer(
       if (reply.error) {
         reject(new Error(reply.error))
       } else {
+        withCaller(() => retainBrowserMemoryPageForAgent(reply.browserPageId!, rendererWebContents))
         resolve(reply.browserPageId!)
       }
     }

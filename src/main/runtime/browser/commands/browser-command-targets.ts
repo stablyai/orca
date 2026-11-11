@@ -1,3 +1,8 @@
+import {
+  claimBrowserMemoryPage,
+  retainBrowserMemoryPageForAgent,
+  waitForBrowserPageReady
+} from '../../../browser/guest-lifecycle/browser-page-memory'
 import type { BrowserSnapshotOptions } from '../../../../shared/rpc-contract/browser-observation-params'
 import type { AgentBrowserBridge } from '../../../browser/agent-browser/agent-browser-bridge'
 import { BrowserError } from '../../../browser/browser-error'
@@ -28,8 +33,39 @@ export class RuntimeBrowserCommandTargets {
       | 'getAuthoritativeWindow'
       | 'retireRuntimeOwnedBrowserSessionTab'
       | 'serveBrowserTabs'
+      | 'readBrowserTabBar'
     >
   ) {}
+
+  async withPageOperation<T>(
+    params: BrowserCommandTargetParams,
+    execute: (params: BrowserCommandTargetParams) => Promise<T>,
+    recoverFromLoadError = false
+  ): Promise<T> {
+    const explicitRelease = params.page ? claimBrowserMemoryPage(params.page) : null
+    let release = explicitRelease
+    try {
+      const worktreeId = params.worktree
+        ? (await this.host.resolveWorkspaceSelector(params.worktree)).id
+        : undefined
+      const bridge = this.host.getAgentBrowserBridge()
+      const browserPageId =
+        params.page ??
+        bridge?.getActivePageId(worktreeId) ??
+        this.host.readBrowserTabBar?.(worktreeId)[0]?.browserPageId
+      if (!browserPageId) {
+        return await execute(params)
+      }
+      release ??= claimBrowserMemoryPage(browserPageId)
+      await this.ensureBrowserPageActive(worktreeId, browserPageId)
+      const target = this.resolveBrowserPageWebContents(worktreeId, browserPageId)
+      retainBrowserMemoryPageForAgent(browserPageId)
+      await waitForBrowserPageReady(browserPageId, target.webContents, recoverFromLoadError)
+      return await execute({ ...params, page: browserPageId })
+    } finally {
+      release?.()
+    }
+  }
 
   requireAgentBrowserBridge(): AgentBrowserBridge {
     const bridge = this.host.getAgentBrowserBridge()
@@ -176,6 +212,10 @@ export class RuntimeBrowserCommandTargets {
     browserPageId: string,
     options: { waitForFirstLoad?: boolean } = {}
   ): Promise<void> {
+    const bridge = this.host.getAgentBrowserBridge()
+    if (bridge && this.hasLiveRegisteredBrowserPage(bridge, worktreeId, browserPageId)) {
+      return
+    }
     if (!(await this.host.serveBrowserTabs?.start(worktreeId, browserPageId))) {
       await this.sendActivateView(worktreeId ? { worktreeId, browserPageId } : { browserPageId })
       await waitForTabRegistration(browserPageId)

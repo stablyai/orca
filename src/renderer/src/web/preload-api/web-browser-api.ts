@@ -15,6 +15,9 @@ function desktopOnlyExtensionsResult(): { ok: false; error: string } {
 export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial stub; withFallback in web-preload-api answers every browser member it omits.
   return {
+    preparePageAttach: () => Promise.reject(new Error('Browser pages require desktop')),
+    reserveGuestDiscard: () => false,
+    acknowledgeGuestRemoval: async () => false,
     registerGuest: () => Promise.resolve(false),
     isGuestRegistered: () => Promise.resolve(false),
     repairGuestRegistration: () => Promise.resolve(false),

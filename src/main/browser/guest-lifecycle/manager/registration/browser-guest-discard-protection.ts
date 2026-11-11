@@ -1,16 +1,23 @@
 import { randomUUID } from 'node:crypto'
 import {
+  installBrowserGuestHistoryProvenance,
+  type BrowserGuestHistoryProtection
+} from './browser-guest-history-provenance'
+import {
   BROWSER_GUEST_PROTECTION_CHALLENGE,
   BROWSER_GUEST_PROTECTION_REPORT,
   type BrowserGuestDiscardProtection
 } from '../../../../../shared/browser/guest-lifecycle/browser-guest-discard-protection'
 
-type ProtectionOwner = {
+type ProtectionOwner = BrowserGuestHistoryProtection & {
   generation: string | null
-  dirty: boolean | null
   unavailable: boolean
-  navigating: boolean
 }
+const initialGuests = new WeakSet<Electron.WebContents>()
+export function markInitialBrowserGuest(guest: Electron.WebContents): void {
+  initialGuests.add(guest)
+}
+
 const owners = new WeakMap<Electron.WebContents, ProtectionOwner>()
 
 export function readBrowserGuestDiscardProtection(
@@ -37,26 +44,33 @@ export function readBrowserGuestDiscardProtection(
   if (guest.isCurrentlyAudible()) {
     return result('protected', 'audio')
   }
-  try {
-    // URL recovery cannot restore earlier documents or their drafts.
-    if (guest.navigationHistory.length() > 1) {
-      return result('protected', 'history')
-    }
-  } catch {
-    return result('unknown', 'observer')
+  if (owner.mediaGranted) {
+    return result('protected', 'capture')
+  }
+  if (owner.historyEdits || owner.historyMethodUnknown || !owner.knownGet) {
+    return result('protected', 'history')
   }
   return result('discardable', 'clean')
 }
 
 export function installBrowserGuestDiscardProtection(
   guest: Electron.WebContents,
-  changed: () => void
+  changed: () => void,
+  initial = initialGuests.has(guest)
 ): () => void {
   const owner: ProtectionOwner = {
     generation: null,
     dirty: null,
     unavailable: false,
-    navigating: false
+    navigating: false,
+    currentEdited: false,
+    coverageUnknown: !initial,
+    documentSeen: !initial,
+    knownGet: false,
+    historyEdits: !initial,
+    historyMethodUnknown: !initial,
+    mediaGranted: false,
+    episode: null
   }
   owners.set(guest, owner)
   let published: BrowserGuestDiscardProtection | undefined
@@ -90,6 +104,22 @@ export function installBrowserGuestDiscardProtection(
       // Missing observers stay protected until a real readiness event rebinds them.
     }
   }
+  const rederiveSoleHistory = (): void => {
+    // Only a proved sole clean GET can retire earlier, now absent obligations.
+    if (owner.dirty === false && owner.knownGet && !owner.unavailable && !owner.coverageUnknown) {
+      try {
+        if (
+          guest.navigationHistory.length() === 1 &&
+          guest.navigationHistory.getActiveIndex() === 0
+        ) {
+          owner.historyEdits = false
+          owner.historyMethodUnknown = false
+        }
+      } catch {
+        owner.historyMethodUnknown = true
+      }
+    }
+  }
   const report = (event: Electron.IpcMainEvent, channel: string, payload: unknown): void => {
     if (
       channel !== BROWSER_GUEST_PROTECTION_REPORT ||
@@ -116,21 +146,21 @@ export function installBrowserGuestDiscardProtection(
     ) {
       return
     }
-    if (owner.dirty !== payload.dirty) {
-      owner.dirty = payload.dirty
-      publish()
+    if (payload.dirty) {
+      owner.historyEdits = true
+      owner.currentEdited = true
     }
+    owner.dirty = owner.currentEdited || payload.dirty
+    rederiveSoleHistory()
+    publish()
   }
-  const navigation = (
-    details: Electron.Event<Electron.WebContentsDidStartNavigationEventParams>
-  ): void => {
-    if (details.isMainFrame && !details.isSameDocument) {
-      owner.navigating = true
-      invalidate()
-    } else if (!details.isMainFrame) {
-      publish()
-    }
-  }
+  const stopHistory = installBrowserGuestHistoryProvenance(
+    guest,
+    owner,
+    publish,
+    invalidate,
+    rederiveSoleHistory
+  )
   const settled = (): void => {
     owner.navigating = false
     owner.unavailable = false
@@ -147,6 +177,8 @@ export function installBrowserGuestDiscardProtection(
   }
   const unresponsive = (): void => {
     owner.unavailable = true
+    owner.historyEdits = true
+    owner.coverageUnknown = true
     invalidate()
   }
   const responsive = (): void => {
@@ -154,6 +186,7 @@ export function installBrowserGuestDiscardProtection(
     snapshot()
   }
   const frameCreated = (): void => {
+    owner.coverageUnknown = true
     publish()
   }
   const audioChanged = (): void => publish()
@@ -163,7 +196,6 @@ export function installBrowserGuestDiscardProtection(
     }
   }
   guest.on('ipc-message', report)
-  guest.on('did-start-navigation', navigation)
   guest.on('dom-ready', settled)
   guest.on('did-stop-loading', loadStopped)
   guest.on('responsive', responsive)
@@ -173,11 +205,11 @@ export function installBrowserGuestDiscardProtection(
   guest.on('audio-state-changed', audioChanged)
   guest.on('did-navigate-in-page', inPageNavigation)
   return () => {
+    stopHistory()
     if (owners.get(guest) === owner) {
       owners.delete(guest)
     }
     guest.off('ipc-message', report)
-    guest.off('did-start-navigation', navigation)
     guest.off('dom-ready', settled)
     guest.off('did-stop-loading', loadStopped)
     guest.off('responsive', responsive)
@@ -186,5 +218,12 @@ export function installBrowserGuestDiscardProtection(
     guest.off('frame-created', frameCreated)
     guest.off('audio-state-changed', audioChanged)
     guest.off('did-navigate-in-page', inPageNavigation)
+  }
+}
+
+export function protectBrowserGuestMedia(guest: Electron.WebContents): void {
+  const owner = owners.get(guest)
+  if (owner) {
+    owner.mediaGranted = true
   }
 }

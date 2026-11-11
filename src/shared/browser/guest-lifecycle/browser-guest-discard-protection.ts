@@ -4,7 +4,7 @@ export const BROWSER_GUEST_PROTECTION_REPORT = 'browser:guest-protection-report'
 export type BrowserGuestDiscardProtection = {
   webContentsId: number
   protection: 'discardable' | 'protected' | 'unknown' | 'gone'
-  reason: 'clean' | 'edits' | 'audio' | 'frames' | 'history' | 'observer' | 'gone'
+  reason: 'clean' | 'edits' | 'audio' | 'frames' | 'capture' | 'history' | 'observer' | 'gone'
 }
 
 export type BrowserGuestDiscardProtectionChange = BrowserGuestDiscardProtection & {
@@ -12,6 +12,16 @@ export type BrowserGuestDiscardProtectionChange = BrowserGuestDiscardProtection 
 }
 
 export type BrowserGuestDiscardApi = {
+  preparePageAttach: (args: {
+    browserPageId: string
+    partition: string
+    url: string
+  }) => Promise<string>
+  reserveGuestDiscard: (args: { browserPageId: string; webContentsId: number }) => boolean
+  acknowledgeGuestRemoval: (args: {
+    browserPageId: string
+    webContentsId: number
+  }) => Promise<boolean>
   getGuestDiscardProtection: (args: {
     browserPageId: string
     webContentsId: number

@@ -2,7 +2,6 @@ import '../../../../../shared/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import { ORCA_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../../shared/browser/guest-lifecycle/browser-guest-web-preferences'
 import {
-  destroyPersistentWebview,
   registerPersistentWebview,
   replacePersistentWebview,
   webviewRegistry
@@ -39,7 +38,7 @@ export function ensureBrowserPageWebview({
     if (parentDrifted) {
       void replacePersistentWebview(browserTabId, { preserveViewport: true })
     } else {
-      void destroyPersistentWebview(browserTabId)
+      void replacePersistentWebview(browserTabId)
     }
     webview = undefined
     const refreshedContainer = resolveContainer()

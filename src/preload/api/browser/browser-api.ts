@@ -100,7 +100,11 @@ export type BrowserApi = {
     sessionProfileId?: string | null
     webContentsId: number
   }) => Promise<boolean>
-  unregisterGuest: (args: { browserPageId: string }) => Promise<void>
+  unregisterGuest: (args: {
+    browserPageId: string
+    webContentsId?: number
+    replacement?: boolean
+  }) => Promise<void>
   onWebAuthnAccountRequest: (
     callback: (request: BrowserWebAuthnAccountRequest) => void
   ) => () => void

@@ -2,6 +2,7 @@ import { clearLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
 import {
   registerBrowserGuestActivity,
   unregisterBrowserGuestActivity,
+  setBrowserGuestResourceRetired,
   invalidateBrowserGuestActivity
 } from './browser-guest-activity'
 import {
@@ -253,7 +254,7 @@ export function moveFocusToRendererBeforeWebviewDetach(webview: Electron.Webview
 
 function removePersistentWebview(
   browserTabId: string,
-  { preserveViewport }: { preserveViewport: boolean }
+  { preserveViewport, replacement }: { preserveViewport: boolean; replacement: boolean }
 ): Promise<void> {
   const webview = webviewRegistry.get(browserTabId)
   if (!webview) {
@@ -264,10 +265,17 @@ function removePersistentWebview(
     }
     registeredWebContentsIds.delete(browserTabId)
     clearLiveBrowserUrl(browserTabId)
+    if (!replacement) {
+      return window.api.browser.unregisterGuest({ browserPageId: browserTabId }).catch(() => {})
+    }
     return Promise.resolve()
   }
   const unregisterGuest = Promise.resolve(
-    window.api.browser.unregisterGuest({ browserPageId: browserTabId })
+    window.api.browser.unregisterGuest({
+      browserPageId: browserTabId,
+      webContentsId: registeredWebContentsIds.get(browserTabId),
+      replacement
+    })
   ).catch(() => {})
   moveFocusToRendererBeforeWebviewDetach(webview)
   webview.remove()
@@ -282,12 +290,43 @@ function removePersistentWebview(
 }
 
 export function destroyPersistentWebview(browserTabId: string): Promise<void> {
-  return removePersistentWebview(browserTabId, { preserveViewport: false })
+  return removePersistentWebview(browserTabId, { preserveViewport: false, replacement: false })
 }
 
 export function replacePersistentWebview(
   browserTabId: string,
   { preserveViewport = false }: { preserveViewport?: boolean } = {}
 ): Promise<void> {
-  return removePersistentWebview(browserTabId, { preserveViewport })
+  return removePersistentWebview(browserTabId, { preserveViewport, replacement: true })
+}
+
+/** Main has reserved this exact guest; no await may separate reservation from removal. */
+export function discardPersistentWebview(
+  browserTabId: string,
+  webview: Electron.WebviewTag,
+  webContentsId: number
+): boolean {
+  if (
+    webviewRegistry.get(browserTabId) !== webview ||
+    webview.getWebContentsId() !== webContentsId
+  ) {
+    return false
+  }
+  if (!window.api.browser.reserveGuestDiscard({ browserPageId: browserTabId, webContentsId })) {
+    return false
+  }
+  setBrowserGuestResourceRetired(browserTabId, webContentsId, true)
+  webview.remove()
+  unregisterPersistentWebview(browserTabId)
+  registeredWebContentsIds.delete(browserTabId)
+  clearLiveBrowserUrl(browserTabId)
+  void window.api.browser
+    .acknowledgeGuestRemoval({ browserPageId: browserTabId, webContentsId })
+    .then((destroyed) => {
+      if (destroyed) {
+        setBrowserGuestResourceRetired(browserTabId, webContentsId, false)
+      }
+    })
+    .catch(() => {})
+  return true
 }
