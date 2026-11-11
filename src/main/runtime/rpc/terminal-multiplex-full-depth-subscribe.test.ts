@@ -48,7 +48,7 @@ describe('desktop subscribe history depth', () => {
   })
 
   it('a reconnect storm gets the 1000-row cut every time', async () => {
-    const depths: Array<number | undefined> = []
+    const depths: (number | undefined)[] = []
     for (let i = 0; i < 6; i++) {
       depths.push(await subscribeDepth())
     }

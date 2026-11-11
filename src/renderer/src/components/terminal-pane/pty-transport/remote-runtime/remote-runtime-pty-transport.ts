@@ -330,7 +330,7 @@ export function createRemoteRuntimePtyTransport(
   // only that subscribe asks for full depth; reconnects already hold the history and fill the gap
   // from the 1000-row cut.
   let fullHistoryReceived = false
-  const FULL_HISTORY_DEPTH: 'full' = 'full'
+  const FULL_HISTORY_DEPTH = 'full' as const
   // A terminal this pane just created has no history, so an empty first image there is not a gap.
   let spawnedHandle: string | null = null
   let inputReadySubscription: number | null = null
