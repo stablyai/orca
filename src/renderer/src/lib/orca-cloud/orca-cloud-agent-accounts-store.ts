@@ -180,6 +180,11 @@ export function subscribeOrcaCloudAgentAccounts(listener: () => void): () => voi
 }
 
 /** Reads again when the last read is stale or missing, for a launch about to decide. */
+/** A ready read from within the last 30 s; older reads may miss a revoke (RA-1). */
+export function isOrcaCloudAgentAccountsFresh(): boolean {
+  return state.load.kind === 'ready' && Date.now() - loadedAt <= FRESH_MS
+}
+
 export async function ensureFreshOrcaCloudAgentAccounts(): Promise<OrcaCloudAgentAccountsState> {
   if (state.load.kind !== 'ready' || Date.now() - loadedAt > FRESH_MS) {
     await reloadOrcaCloudAgentAccounts()
