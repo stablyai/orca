@@ -127,17 +127,14 @@ export function RoutineRow({
     setNotice(null)
     const failure = await onRunNow()
     setRunning(false)
-    setNotice(
-      failure
-        ? { tone: 'error', text: failure }
-        : {
-            tone: 'ok',
-            text: t(
-              'auto.components.settings.cloudRoutines.queued',
-              'Run queued. It shows up in the history below.'
-            )
-          }
-    )
+    if (failure) {
+      setNotice({ tone: 'error', text: failure })
+      return
+    }
+    // The new run's status lives in the pill and the history; open the history so it is in view.
+    if (!expanded) {
+      onToggleHistory()
+    }
   }
 
   return (
@@ -218,7 +215,7 @@ export function RoutineRow({
             variant="ghost"
             size="xs"
             aria-disabled={running && !active}
-            aria-busy={running || active}
+            aria-busy={running}
             aria-expanded={active ? expanded : undefined}
             aria-controls={active ? historyId : undefined}
             onClick={() => void runNow()}
@@ -246,14 +243,9 @@ export function RoutineRow({
                 : undefined
             }
           >
-            {running || active ? (
-              <Loader2 className="animate-spin motion-reduce:animate-none" />
-            ) : (
-              <Play />
-            )}
-            {active
-              ? t('auto.components.settings.cloudRoutines.runningNow', 'Running…')
-              : t('auto.components.settings.cloudRoutines.runNow', 'Run now')}
+            {/* Spins only while the request is in flight; the run's own status is the pill's job. */}
+            {running ? <Loader2 className="animate-spin motion-reduce:animate-none" /> : <Play />}
+            {t('auto.components.settings.cloudRoutines.runNow', 'Run now')}
           </Button>
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>

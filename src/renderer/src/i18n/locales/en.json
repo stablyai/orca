@@ -14601,7 +14601,6 @@
           "sectionDescription": "For the Orca Cloud API, the orca CLI and MCP clients. Claude or Codex keys go in Cloud secrets."
         },
         "cloudRoutines": {
-          "queued": "Run queued. It shows up in the history below.",
           "pausedSr": "(paused)",
           "createdByPerson": "by <person></person>",
           "lastRun": "Last run:",
@@ -14610,7 +14609,6 @@
           "runningShowHistory": "{{routineName}} is running. Show run history",
           "runNowLabel": "Run {{routineName}} now",
           "alreadyRunning": "A run is already in progress.",
-          "runningNow": "Running…",
           "runNow": "Run now",
           "more": "More actions for {{routineName}}",
           "hideHistory": "Hide run history",
