@@ -26,8 +26,8 @@ import {
 } from '../../../../../../shared/program-status/presentation'
 import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { useCloudAgentRowSignIn } from '@/components/orca-cloud/use-cloud-agent-row-sign-in'
-import { cloudAgentRowSignInLabel } from '@/lib/orca-cloud/cloud-agent-row-sign-in'
+import { useCloudAgentRowStatus } from '@/components/orca-cloud/use-cloud-agent-row-sign-in'
+import { CloudAgentRowSignInTarget } from '@/components/orca-cloud/CloudAgentRowSignInTarget'
 
 function getCompactAgentPrimary(
   agent: DashboardAgentRowData,
@@ -143,12 +143,11 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const { presentation, dotStateOverride } = resolveRowProgramStatus(agent)
   const reportedDotState = dotStateOverride ?? getAgentDotState(agent)
   // Orca Cloud only: an agent that started without a sign-in never ran, so it is not "Done".
-  const cloudSignIn = useCloudAgentRowSignIn(agent, reportedDotState)
-  const dotState = cloudSignIn ? 'permission' : reportedDotState
+  const cloudStatus = useCloudAgentRowStatus(agent, reportedDotState, sendTargetStatus)
+  const dotState = cloudStatus?.dotState ?? reportedDotState
   const conversationName = useAgentRowConversationName(agent)
-  const primary = cloudSignIn
-    ? cloudAgentRowSignInLabel(cloudSignIn, t)
-    : getCompactAgentPrimary(agent, conversationName)
+  const primary = cloudStatus?.label ?? getCompactAgentPrimary(agent, conversationName)
+  const signInTooltip = cloudStatus?.tooltip ?? null
   const isLineageChild = agent.lineage?.depth === 1
   // Hold assistant text per positive turn clock; commit in an effect so discarded renders cannot cache messages.
   const turn = agent.entry.stateStartedAt
@@ -241,13 +240,19 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       ) : (
         <>
           {/* Show the actionable disabled reason over every hit area. */}
-          <AgentStateDot
-            state={dotState}
-            size="sm"
-            title={sendTargetDisabledReason ? null : undefined}
-            tooltipSide="right"
-            progress={presentation.progress}
-          />
+          {signInTooltip ? (
+            <CloudAgentRowSignInTarget tooltip={null}>
+              <AgentStateDot state={dotState} size="sm" title={signInTooltip} tooltipSide="right" />
+            </CloudAgentRowSignInTarget>
+          ) : (
+            <AgentStateDot
+              state={dotState}
+              size="sm"
+              title={sendTargetDisabledReason ? null : undefined}
+              tooltipSide="right"
+              progress={presentation.progress}
+            />
+          )}
           {!hideIcon && (
             <span className="inline-flex shrink-0" title={formatAgentTypeLabel(agent.agentType)}>
               <AgentTypeIcon agentType={agent.agentType} size={13} />
@@ -257,7 +262,16 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
             className="min-w-0 flex-1 truncate"
             title={sendTargetDisabledReason ? undefined : rowTitle}
           >
-            <span className={leadClassName}>{leadingText}</span>
+            {signInTooltip ? (
+              <CloudAgentRowSignInTarget
+                tooltip={signInTooltip}
+                className={cn('inline hover:underline', leadClassName)}
+              >
+                {leadingText}
+              </CloudAgentRowSignInTarget>
+            ) : (
+              <span className={leadClassName}>{leadingText}</span>
+            )}
             {trailingText && (
               <span className={highlighted ? 'text-foreground/70' : 'text-muted-foreground/65'}>
                 {' '}

@@ -5,8 +5,11 @@ import type { AgentDotState } from '@/components/AgentStateDot'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import { resolveWorktreeRowOpenInRuntimeOwner } from '@/lib/workspace/ownership/worktree-row-open-in-owner'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   cloudAgentRowSignIn,
+  cloudAgentRowSignInLabel,
+  cloudAgentRowSignInTooltip,
   cloudRowSignInAgent,
   isCloudRowSignInCandidate,
   type CloudAgentRowSignIn
@@ -79,4 +82,30 @@ export function useCloudAgentRowSignIn(
     return null
   }
   return cloudAgentRowSignIn(signInAgent, accounts, hostAgentSignInEntry(report, signInAgent))
+}
+
+export type CloudAgentRowStatus = {
+  dotState: AgentDotState
+  label: string
+  /** Null in send-target mode, which owns row clicks; otherwise the status links to Settings. */
+  tooltip: string | null
+}
+
+/** What a sign-in-needed cloud row shows in place of its state: attention dot, label and link tooltip. */
+export function useCloudAgentRowStatus(
+  agent: Pick<DashboardAgentRow, 'agentType' | 'entry' | 'tab' | 'childRow'>,
+  dotState: AgentDotState,
+  /** Set while send-target mode owns row clicks. */
+  sendTargetStatus: string | undefined
+): CloudAgentRowStatus | null {
+  const t = useTranslate()
+  const signIn = useCloudAgentRowSignIn(agent, dotState)
+  if (!signIn) {
+    return null
+  }
+  return {
+    dotState: 'permission',
+    label: cloudAgentRowSignInLabel(signIn, t),
+    tooltip: sendTargetStatus ? null : cloudAgentRowSignInTooltip(signIn, t)
+  }
 }

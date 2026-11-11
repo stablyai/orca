@@ -114,14 +114,14 @@ afterEach(() => {
   _resetHostAgentSignInReportsForTest()
 })
 
-function renderRow(agent: DashboardAgentRowData): HTMLElement {
+function renderRow(agent: DashboardAgentRowData, onActivate = () => {}): HTMLElement {
   const container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
   act(() => {
     root!.render(
       <TooltipProvider>
-        <CompactAgentRow agent={agent} now={2000} onActivate={() => {}} />
+        <CompactAgentRow agent={agent} now={2000} onActivate={onActivate} />
       </TooltipProvider>
     )
   })
@@ -129,9 +129,9 @@ function renderRow(agent: DashboardAgentRowData): HTMLElement {
 }
 
 describe('CompactAgentRow on an Orca Cloud workspace whose agent is not signed in', () => {
-  it('shows Not signed in instead of Done when Claude is not set up', () => {
+  it('shows Needs sign-in instead of Done when Claude is not set up', () => {
     const container = renderRow(makeAgent(CLOUD_WORKTREE, true))
-    expect(container.textContent).toContain('Not signed in - Claude')
+    expect(container.textContent).toContain('Needs sign-in - Claude')
     expect(container.textContent).not.toContain('Done')
   })
 
@@ -141,14 +141,14 @@ describe('CompactAgentRow on an Orca Cloud workspace whose agent is not signed i
     expect(container.textContent).toContain('Sign-in expired - Claude')
   })
 
-  it('trusts the sandbox report: signedOut shows Not signed in even when the account covers it', () => {
+  it('trusts the sandbox report: signedOut shows Needs sign-in even when the account covers it', () => {
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'active' }))
     rememberHostAgentSignInReport(CLOUD_ENV, {
       checkedAt: 1,
       agents: [{ agent: 'claude', state: 'signedOut' }]
     })
     const container = renderRow(makeAgent(CLOUD_WORKTREE, true))
-    expect(container.textContent).toContain('Not signed in - Claude')
+    expect(container.textContent).toContain('Needs sign-in - Claude')
   })
 
   it('keeps Done when the sandbox reports Claude signed in (a /login there)', () => {
@@ -174,18 +174,18 @@ describe('CompactAgentRow on an Orca Cloud workspace whose agent is not signed i
   it('leaves a local workspace unchanged', () => {
     const container = renderRow(makeAgent(LOCAL_WORKTREE, true))
     expect(container.textContent).toContain('Done - Claude')
-    expect(container.textContent).not.toContain('Not signed in')
+    expect(container.textContent).not.toContain('Needs sign-in')
   })
 })
 
-function renderFullRow(agent: DashboardAgentRowData): HTMLElement {
+function renderFullRow(agent: DashboardAgentRowData, onActivate = () => {}): HTMLElement {
   const container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
   act(() => {
     root!.render(
       <TooltipProvider>
-        <DashboardAgentRow agent={agent} now={2000} onActivate={() => {}} onDismiss={() => {}} />
+        <DashboardAgentRow agent={agent} now={2000} onActivate={onActivate} onDismiss={() => {}} />
       </TooltipProvider>
     )
   })
@@ -193,13 +193,13 @@ function renderFullRow(agent: DashboardAgentRowData): HTMLElement {
 }
 
 function fullRowLabel(container: HTMLElement): string | null {
-  return container.querySelector('span.flex-1[title]')?.textContent ?? null
+  return container.querySelector('span.flex-1')?.textContent ?? null
 }
 
 describe('DashboardAgentRow (full row) on an Orca Cloud workspace', () => {
-  it('shows Not signed in instead of Done when Claude is not set up', () => {
+  it('shows Needs sign-in instead of Done when Claude is not set up', () => {
     const container = renderFullRow(makeAgent(CLOUD_WORKTREE, true))
-    expect(fullRowLabel(container)).toBe('Not signed in')
+    expect(fullRowLabel(container)).toBe('Needs sign-in')
     expect(container.querySelector('[aria-label="Needs attention"]')).not.toBeNull()
   })
 
@@ -216,6 +216,63 @@ describe('DashboardAgentRow (full row) on an Orca Cloud workspace', () => {
   it('leaves a local workspace unchanged', () => {
     const container = renderFullRow(makeAgent(LOCAL_WORKTREE, true))
     expect(fullRowLabel(container)).toBe('Done')
-    expect(container.textContent).not.toContain('Not signed in')
+    expect(container.textContent).not.toContain('Needs sign-in')
+    expect(container.querySelector('button[title*="Agent accounts"]')).toBeNull()
+  })
+})
+
+function click(element: Element): void {
+  act(() => {
+    element.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  })
+}
+
+describe.each([
+  ['compact', renderRow],
+  ['full', renderFullRow]
+] as const)('%s row: the sign-in status links to Settings → Agent accounts', (_name, render) => {
+  beforeEach(() => {
+    useAppStore.setState({ activeView: 'terminal', settingsNavigationTarget: null })
+  })
+
+  it('names where to set up, and clicking the status opens Agent accounts, not the pane', () => {
+    const onActivate = vi.fn()
+    const container = render(makeAgent(CLOUD_WORKTREE, true), onActivate)
+    const text = container.querySelector('button[title]')
+    expect(text?.getAttribute('title')).toBe('Set up once in Settings → Agent accounts')
+    expect(text?.textContent).toBe('Needs sign-in')
+    click(text!)
+    expect(onActivate).not.toHaveBeenCalled()
+    expect(useAppStore.getState().activeView).toBe('settings')
+    expect(useAppStore.getState().settingsNavigationTarget).toMatchObject({
+      pane: 'agent-accounts',
+      sectionId: 'orca-cloud'
+    })
+  })
+
+  it('opens Agent accounts from the dot too', () => {
+    const onActivate = vi.fn()
+    const container = render(makeAgent(CLOUD_WORKTREE, true), onActivate)
+    const dot = container.querySelector('button:not([title])')
+    expect(dot).not.toBeNull()
+    click(dot!)
+    expect(onActivate).not.toHaveBeenCalled()
+    expect(useAppStore.getState().activeView).toBe('settings')
+  })
+
+  it('tells an expired sign-in to renew', () => {
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'expired' }))
+    const container = render(makeAgent(CLOUD_WORKTREE, true))
+    expect(container.querySelector('button[title]')?.getAttribute('title')).toBe(
+      'Renew in Settings → Agent accounts'
+    )
+  })
+
+  it('still activates the pane when the rest of the row is clicked', () => {
+    const onActivate = vi.fn()
+    const container = render(makeAgent(CLOUD_WORKTREE, true), onActivate)
+    click(container.firstElementChild!)
+    expect(onActivate).toHaveBeenCalledWith('tab-1', 'tab-1:leaf-1')
+    expect(useAppStore.getState().activeView).toBe('terminal')
   })
 })

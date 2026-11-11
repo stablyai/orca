@@ -61,5 +61,12 @@ export function cloudAgentRowSignIn(
 export function cloudAgentRowSignInLabel(signIn: CloudAgentRowSignIn, t: Translate): string {
   return signIn === 'expired'
     ? t('agentSignInStrip.rowExpired', 'Sign-in expired')
-    : t('agentSignInStrip.rowNotSignedIn', 'Not signed in')
+    : t('agentSignInStrip.rowNeedsSignIn', 'Needs sign-in')
+}
+
+/** Where the fix lives; the row's status opens it (Settings → Agent accounts). */
+export function cloudAgentRowSignInTooltip(signIn: CloudAgentRowSignIn, t: Translate): string {
+  return signIn === 'expired'
+    ? t('agentSignInStrip.rowExpiredTooltip', 'Renew in Settings → Agent accounts')
+    : t('agentSignInStrip.rowNeedsSignInTooltip', 'Set up once in Settings → Agent accounts')
 }

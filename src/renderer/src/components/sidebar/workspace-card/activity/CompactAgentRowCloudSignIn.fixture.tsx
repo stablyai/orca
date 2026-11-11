@@ -124,7 +124,7 @@ function cloudRowFixture(
 }
 
 /** Cloud Claude started without an Orca-account sign-in: it sits at its login screen. */
-export const claudeNotSignedIn = cloudRowFixture(
+export const claudeNeedsSignIn = cloudRowFixture(
   accounts({ state: 'none' }, { state: 'none' }),
   row('claude', null)
 )
@@ -135,7 +135,7 @@ export const claudeSignInExpired = cloudRowFixture(
   row('claude', null)
 )
 
-export const codexNotSignedIn = cloudRowFixture(
+export const codexNeedsSignIn = cloudRowFixture(
   accounts({ state: 'active' }, { state: 'none' }),
   row('codex', null)
 )
@@ -147,7 +147,7 @@ export const claudeCoveredDone = cloudRowFixture(
 )
 
 // The dashboard's full row reads the same sign-in state.
-export const fullClaudeNotSignedIn = cloudRowFixture(
+export const fullClaudeNeedsSignIn = cloudRowFixture(
   accounts({ state: 'none' }, { state: 'none' }),
   row('claude', null),
   'full'
@@ -159,7 +159,7 @@ export const fullClaudeSignInExpired = cloudRowFixture(
   'full'
 )
 
-export const fullCodexNotSignedIn = cloudRowFixture(
+export const fullCodexNeedsSignIn = cloudRowFixture(
   accounts({ state: 'active' }, { state: 'none' }),
   row('codex', null),
   'full'

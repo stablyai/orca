@@ -47,8 +47,11 @@ import {
 } from '@/components/agent-child-row-text'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { useCloudAgentRowSignIn } from '@/components/orca-cloud/use-cloud-agent-row-sign-in'
-import { cloudAgentRowSignInLabel } from '@/lib/orca-cloud/cloud-agent-row-sign-in'
+import { useCloudAgentRowStatus } from '@/components/orca-cloud/use-cloud-agent-row-sign-in'
+import {
+  CloudAgentRowSignInDot,
+  CloudAgentRowSignInLabel
+} from '@/components/orca-cloud/CloudAgentRowSignInTarget'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 function formatTimeAgo(ts: number, now: number, t: Translate = translate): string {
@@ -218,9 +221,10 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   // Surface failed main-agent outcomes even while subagents continue running.
   const reportedDotState: AgentDotState = dotStateOverride ?? agentRowDisplayDotState(agent)
   // Orca Cloud only: an agent that started without a sign-in never ran, so it is not "Done".
-  const cloudSignIn = useCloudAgentRowSignIn(agent, reportedDotState)
-  const dotState: AgentDotState = cloudSignIn ? 'permission' : reportedDotState
-  const displayLabel = cloudSignIn ? cloudAgentRowSignInLabel(cloudSignIn, t) : promptLabel
+  const cloudStatus = useCloudAgentRowStatus(agent, reportedDotState, sendTargetStatus)
+  const dotState: AgentDotState = cloudStatus?.dotState ?? reportedDotState
+  const displayLabel = cloudStatus?.label ?? promptLabel
+  const signInTooltip = cloudStatus?.tooltip ?? null
   const dotTooltipLabel = agentStateProgressLabel(
     dotState,
     presentation.progress,
@@ -308,24 +312,28 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       ) : null}
       <div className="flex items-center gap-1.5">
         {/* Why: state dot sits in the leading gutter so the eye can scan one column for row state. */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span
-              className="inline-flex shrink-0 items-center justify-center"
-              aria-label={dotTooltipLabel}
-            >
-              <AgentStateDot
-                state={dotState}
-                size={stateDotSize}
-                title={null}
-                progress={presentation.progress}
-              />
-            </span>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4}>
-            {dotTooltipLabel}
-          </TooltipContent>
-        </Tooltip>
+        {signInTooltip ? (
+          <CloudAgentRowSignInDot tooltip={signInTooltip} size={stateDotSize} />
+        ) : (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                className="inline-flex shrink-0 items-center justify-center"
+                aria-label={dotTooltipLabel}
+              >
+                <AgentStateDot
+                  state={dotState}
+                  size={stateDotSize}
+                  title={null}
+                  progress={presentation.progress}
+                />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {dotTooltipLabel}
+            </TooltipContent>
+          </Tooltip>
+        )}
         {/* Why: subagent rows skip the icon — agentType holds a child's name, which AgentTypeIcon would draw as a misleading letter; nesting conveys identity. */}
         {!hideIdentityIcon && agent.rowSource !== 'subagent' && (
           <span className="inline-flex shrink-0" title={identityTitle}>
@@ -333,19 +341,27 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
           </span>
         )}
         {/* Why: interpolate-size:allow-keywords is the only way to animate height to/from auto without measuring in JS; falls back to an instant swap where unsupported. */}
-        <span
-          className={cn(
-            'block min-w-0 flex-1 overflow-hidden text-[11px] leading-snug',
-            'transition-[height] duration-200 ease-out [interpolate-size:allow-keywords]',
-            expanded ? 'h-auto whitespace-pre-wrap break-words' : 'h-[1lh] truncate',
-            isUnvisited ? 'font-semibold text-foreground' : 'font-normal text-muted-foreground',
-            // Why: the selected-row fill washes out muted text — keep it readable.
-            highlighted && !isUnvisited && 'text-foreground/90'
-          )}
-          title={displayLabel}
-        >
-          {displayLabel}
-        </span>
+        {signInTooltip ? (
+          <CloudAgentRowSignInLabel
+            label={displayLabel}
+            tooltip={signInTooltip}
+            emphasis={isUnvisited ? 'unvisited' : highlighted ? 'highlighted' : 'muted'}
+          />
+        ) : (
+          <span
+            className={cn(
+              'block min-w-0 flex-1 overflow-hidden text-[11px] leading-snug',
+              'transition-[height] duration-200 ease-out [interpolate-size:allow-keywords]',
+              expanded ? 'h-auto whitespace-pre-wrap break-words' : 'h-[1lh] truncate',
+              isUnvisited ? 'font-semibold text-foreground' : 'font-normal text-muted-foreground',
+              // Why: the selected-row fill washes out muted text — keep it readable.
+              highlighted && !isUnvisited && 'text-foreground/90'
+            )}
+            title={displayLabel}
+          >
+            {displayLabel}
+          </span>
+        )}
         {showModel && model && (
           <span
             className={cn(
