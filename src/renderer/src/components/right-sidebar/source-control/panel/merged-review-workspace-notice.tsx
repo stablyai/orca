@@ -82,7 +82,7 @@ export function SourceControlMergedReviewNotice({
       className="flex items-start gap-2 rounded-md border border-border bg-card px-2 py-1.5 text-[11px] text-muted-foreground"
       role="status"
     >
-      <GitMerge className="mt-0.5 size-3.5 shrink-0 text-purple-500/80" aria-hidden="true" />
+      <GitMerge className="mt-0.5 size-3.5 shrink-0 text-callout-important" aria-hidden="true" />
       <div className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
         <span>{message}</span>
         {canDelete ? (
@@ -90,7 +90,7 @@ export function SourceControlMergedReviewNotice({
             type="button"
             variant="outline"
             size="xs"
-            className="cursor-pointer text-[11px]"
+            className="cursor-pointer"
             disabled={isDeleting}
             onClick={() =>
               runWorktreeDelete(

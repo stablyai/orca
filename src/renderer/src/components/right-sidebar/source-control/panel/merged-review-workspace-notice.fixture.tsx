@@ -1,6 +1,6 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { Worktree } from '../../../../../../shared/worktree/types'
+import { makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 import { SourceControlMergedReviewNotice } from './merged-review-workspace-notice'
 
 const review: HostedReviewInfo = {
@@ -15,12 +15,9 @@ const review: HostedReviewInfo = {
   headSha: 'a1b2c3d'
 }
 
-const worktree = {
-  id: 'repo-1::/work/app-sync',
-  path: '/work/app-sync',
-  branch: 'refs/heads/feature/sync-retry',
-  isMainWorktree: false
-} as Worktree
+const worktree = makeWorktree('repo-1::/work/app-sync', 'app-sync', {
+  branch: 'refs/heads/feature/sync-retry'
+})
 
 function Frame({ children }: { children: React.ReactNode }) {
   return <div className="bg-sidebar p-2 text-foreground">{children}</div>
