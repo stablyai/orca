@@ -42,13 +42,28 @@ describe('workspace document guest input', () => {
       browserPageId: 'doc-page-1'
     })
     const url = buildDocPreviewUrl(grant.id, grant.entryRelativePath)
-    const guest = Object.assign(new DestroyedGuestTestContents(7), { getURL: () => url })
+    const guest = Object.assign(new DestroyedGuestTestContents(7), {
+      getURL: () => url,
+      isCrashed: () => false
+    })
     const send = vi.fn()
     const host = Object.assign(new DestroyedGuestTestContents(5001), { send })
     new DestroyedGuestTestManager().attachGuestPolicies(guest.asWebContents(), null, {
       profile: 'workspace-doc',
       host: host.asWebContents()
     })
+    expect(send.mock.calls).toEqual([
+      [
+        'browser:guest-discard-protection-changed',
+        {
+          browserPageId: 'doc-page-1',
+          webContentsId: 7,
+          protection: 'unknown',
+          reason: 'observer'
+        }
+      ]
+    ])
+    send.mockClear()
     guests.push(guest)
     return { guest, send }
   }
