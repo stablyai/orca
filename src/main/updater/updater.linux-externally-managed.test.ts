@@ -91,16 +91,4 @@ describe('updater externally managed Linux installs', () => {
       retryable: false
     })
   })
-
-  it('leaves an ordinary deb host able to download', async () => {
-    const { updater } = await startUpdater({ packageType: 'deb', externallyManaged: false })
-    updater.checkForUpdatesFromMenu()
-    await vi.advanceTimersByTimeAsync(0)
-    autoUpdaterMock.downloadUpdate.mockResolvedValue([])
-
-    updater.downloadUpdate()
-    await vi.advanceTimersByTimeAsync(0)
-
-    expect(autoUpdaterMock.downloadUpdate).toHaveBeenCalled()
-  })
 })

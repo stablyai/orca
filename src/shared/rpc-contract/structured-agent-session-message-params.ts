@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { isAgentSessionOptions } from '../agent-session/lifecycle/agent-session-record'
 import { measureUtf8ByteLength } from '../utf8-byte-limits'
 

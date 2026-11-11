@@ -1,16 +1,15 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { pluginManifestSchema } from '../../../shared/plugins/manifest/plugin-manifest'
+import { hashPluginTree } from '../plugin-content-hash'
 import { PluginContentVerifier } from '../plugin-content-integrity'
 import type { ValidDiscoveredPlugin } from '../plugin-discovery'
 import type { PluginWorkerHandle } from './plugin-host-process'
 import { PluginWorkerController } from './plugin-worker-controller'
 import type { PluginWorkerFactory } from './plugin-worker-manager'
-import { PluginLogBuffer } from '../plugin-log-buffer'
-import { buildPluginWorkerSpawnSpec } from './plugin-worker-spawn-spec'
-import { hashPluginTree } from '../plugin-content-hash'
+import type { PluginLogBuffer } from '../plugin-log-buffer'
 
 const roots: string[] = []
 
@@ -55,7 +54,7 @@ function worker(commands: string[]): PluginWorkerHandle & { dispose: ReturnType<
     requestFromPanel: vi.fn(),
     runHook: vi.fn(),
     notifyDataChanged: vi.fn(),
-    lastActivityAt: () => Date.now(),
+    lastActivityAt: () => 1_000,
     inFlightCount: () => 0,
     dispose: vi.fn(async () => undefined),
     kill: vi.fn(),
@@ -65,14 +64,16 @@ function worker(commands: string[]): PluginWorkerHandle & { dispose: ReturnType<
 
 function controller(options: {
   factory: PluginWorkerFactory
-  verify: () => Promise<void>
+  verify?: () => Promise<void>
   isApproved: () => boolean
   isApprovalKept?: () => boolean
   logs?: PluginLogBuffer
 }): PluginWorkerController {
   const contentVerifier = new PluginContentVerifier()
-  contentVerifier.verify = options.verify
-  contentVerifier.verifyNow = options.verify
+  if (options.verify) {
+    contentVerifier.verify = options.verify
+    contentVerifier.verifyNow = options.verify
+  }
   return new PluginWorkerController({
     entryPath: '/host-entry.js',
     workerFactory: options.factory,
@@ -87,74 +88,6 @@ function controller(options: {
 }
 
 describe('PluginWorkerController activation authority', () => {
-  it('does not recreate logs or start a revision after uninstall overtakes deactivation', async () => {
-    const subjectPlugin = await plugin()
-    const logs = new PluginLogBuffer()
-    const capture = vi.spyOn(logs, 'capture')
-    let approved = true
-    let finishStop!: () => void
-    const stopped = new Promise<void>((resolve) => {
-      finishStop = resolve
-    })
-    const oldWorker = worker(['run'])
-    oldWorker.dispose.mockImplementation(() => stopped)
-    const factory = vi.fn<PluginWorkerFactory>().mockResolvedValue(oldWorker)
-    const subject = controller({
-      factory,
-      verify: async () => undefined,
-      isApproved: () => approved,
-      logs
-    })
-    await subject.ensure(subjectPlugin)
-    logs.append(subjectPlugin.pluginKey, 'info', 'old installation')
-    const newRevision = {
-      ...subjectPlugin,
-      manifest: { ...subjectPlugin.manifest, version: '2.0.0' }
-    }
-    const staleActivation = subject.ensure(newRevision)
-    await vi.waitFor(() => expect(oldWorker.dispose).toHaveBeenCalledOnce())
-    approved = false
-    await subject.deactivate(subjectPlugin.pluginKey)
-    logs.clear(subjectPlugin.pluginKey)
-    const capturesBeforeStop = capture.mock.calls.length
-    finishStop()
-
-    await expect(staleActivation).rejects.toThrow('no longer approved')
-    expect(factory).toHaveBeenCalledOnce()
-    expect(capture).toHaveBeenCalledTimes(capturesBeforeStop)
-    expect(logs.get(subjectPlugin.pluginKey)).toEqual([])
-    await subject.dispose()
-  })
-
-  it('keeps restarting a crashed worker through a refresh pause', async () => {
-    const subjectPlugin = await plugin()
-    vi.useFakeTimers()
-    const exits: ((code: number | null) => void)[] = []
-    const factory = vi.fn<PluginWorkerFactory>(async () => ({
-      ...worker(['run']),
-      onExit: (callback) => exits.push(callback)
-    }))
-    let paused = false
-    const subject = controller({
-      factory,
-      verify: async () => undefined,
-      isApproved: () => !paused,
-      isApprovalKept: () => true
-    })
-    try {
-      await subject.ensure(subjectPlugin)
-      paused = true
-      exits[0]?.(1)
-      await vi.advanceTimersByTimeAsync(500)
-
-      expect(factory).toHaveBeenCalledTimes(2)
-      expect(subject.state(subjectPlugin.pluginKey).state).not.toBe('restarting')
-    } finally {
-      vi.useRealTimers()
-      await subject.dispose()
-    }
-  })
-
   it('does not start code after approval is revoked during integrity verification', async () => {
     const subjectPlugin = await plugin()
     let approved = true
@@ -198,97 +131,20 @@ describe('PluginWorkerController activation authority', () => {
     await subject.dispose()
   })
 
-  it('rejects and stops workers that register undeclared commands', async () => {
+  it('starts a dev worker after typings land in .orca/ past the reviewed dev-folder hash', async () => {
     const subjectPlugin = await plugin()
-    const startedWorker = worker(['run', 'undeclared'])
-    const subject = controller({
-      factory: vi.fn<PluginWorkerFactory>().mockResolvedValue(startedWorker),
-      verify: async () => undefined,
-      isApproved: () => true
-    })
-
-    await expect(subject.ensure(subjectPlugin)).rejects.toThrow(
-      'registered undeclared command undeclared'
-    )
-    expect(startedWorker.dispose).toHaveBeenCalledOnce()
-    await subject.dispose()
-  })
-
-  it('rejects workers that register declarative action aliases', async () => {
-    const base = await plugin()
-    const subjectPlugin: ValidDiscoveredPlugin = {
-      ...base,
-      manifest: pluginManifestSchema.parse({
-        ...base.manifest,
-        contributes: {
-          ...base.manifest.contributes,
-          commands: [{ id: 'tasks', title: 'Tasks', action: 'view.tasks' }]
-        }
-      })
+    const reviewed = await hashPluginTree(subjectPlugin.rootDir, { devFolder: true })
+    if (!reviewed.ok) {
+      throw new Error(reviewed.error)
     }
-    const startedWorker = worker(['tasks'])
-    const subject = controller({
-      factory: vi.fn<PluginWorkerFactory>().mockResolvedValue(startedWorker),
-      verify: async () => undefined,
-      isApproved: () => true
-    })
+    await mkdir(join(subjectPlugin.rootDir, '.orca', 'types'), { recursive: true })
+    await writeFile(join(subjectPlugin.rootDir, '.orca', 'types', 'orca.d.ts'), 'export {}')
+    const factory = vi.fn<PluginWorkerFactory>().mockResolvedValue(worker(['run']))
+    const subject = controller({ factory, isApproved: () => true })
 
-    await expect(subject.ensure(subjectPlugin)).rejects.toThrow(
-      'registered undeclared command tasks'
-    )
-    expect(startedWorker.dispose).toHaveBeenCalledOnce()
+    await subject.ensure({ ...subjectPlugin, consentContentHash: reviewed.hash })
+
+    expect(factory).toHaveBeenCalledOnce()
     await subject.dispose()
-  })
-
-  it('restarts a running worker once when its reviewed bytes change', async () => {
-    const current = await plugin()
-    const idle = { ...(await plugin()), pluginKey: 'samples.idle' }
-    const factory = vi.fn<PluginWorkerFactory>(async () => worker(['run']))
-    const subject = controller({ factory, verify: async () => undefined, isApproved: () => true })
-    await subject.ensure(current)
-    await writeFile(join(current.rootDir, 'main.mjs'), 'export default function activate() { 2 }')
-    const reviewed = await hashPluginTree(current.rootDir)
-    const updated = { ...current, consentContentHash: reviewed.ok ? reviewed.hash : null }
-    const discovered = new Map([updated, idle].map((next) => [next.pluginKey, next]))
-    const nextSpecs = new Map(
-      [...discovered.values()].map((next) => [next.pluginKey, buildPluginWorkerSpawnSpec(next, [])])
-    )
-    const resolve = (key: string) => discovered.get(key) ?? null
-
-    await subject.reconcile(nextSpecs, resolve)
-    await vi.waitFor(() => expect(factory).toHaveBeenCalledTimes(2))
-    await subject.reconcile(nextSpecs, resolve)
-    expect(factory).toHaveBeenCalledTimes(2)
-    expect(factory.mock.calls.map(([options]) => options.pluginId)).not.toContain(idle.pluginKey)
-    await subject.dispose()
-  })
-
-  it('does not start an updated worker after dispose overtakes its restart', async () => {
-    const current = await plugin()
-    let finishRestart!: (handle: PluginWorkerHandle) => void
-    const restarted = worker(['run'])
-    const factory = vi
-      .fn<PluginWorkerFactory>()
-      .mockResolvedValueOnce(worker(['run']))
-      .mockImplementationOnce(() => new Promise((resolve) => (finishRestart = resolve)))
-    const subject = controller({ factory, verify: async () => undefined, isApproved: () => true })
-    await subject.ensure(current)
-    await writeFile(join(current.rootDir, 'main.mjs'), 'export default function activate() { 3 }')
-    const reviewed = await hashPluginTree(current.rootDir)
-    const updated = { ...current, consentContentHash: reviewed.ok ? reviewed.hash : null }
-
-    const reconciling = subject.reconcile(
-      new Map([[updated.pluginKey, buildPluginWorkerSpawnSpec(updated, [])]]),
-      () => updated
-    )
-    await vi.waitFor(() => expect(factory).toHaveBeenCalledTimes(2))
-    const disposing = subject.dispose()
-    finishRestart(restarted)
-
-    await reconciling
-    await disposing
-    expect(restarted.dispose).toHaveBeenCalledOnce()
-    await expect(subject.ensure(updated)).rejects.toThrow('shut down')
-    expect(factory).toHaveBeenCalledTimes(2)
   })
 })

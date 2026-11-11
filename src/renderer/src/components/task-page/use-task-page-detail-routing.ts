@@ -4,7 +4,7 @@ import {
   projectLinearIssue,
   registerLinearIssueConsumer
 } from '@/store/slices/linear/linear-issue-write-publication'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 import type { TaskPageGitHubIssueDraftModel } from './github/use-task-page-github-issue-draft'
 import { useState, useMemo, useCallback, useLayoutEffect, useRef } from 'react'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'

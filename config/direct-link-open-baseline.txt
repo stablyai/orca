@@ -1,6 +1,6 @@
 # Direct system-browser opens (shell.openUrl / window.open) per renderer file.
 # This is a RATCHET: counts may only go DOWN. Open web links with openAppHttpLink
-# (src/renderer/src/lib/app-http-link-open.ts). Only sign-in, API-token and star-Orca
+# (src/renderer/src/lib/browser/navigation/app-http-link-open.ts). Only sign-in, API-token and star-Orca
 # pages, explicit "open in default browser" actions, Orca installer recovery, port
 # opens that route themselves, chat links whose owner is unresolved and windows
 # without a workspace browser stay here.
@@ -18,7 +18,8 @@
 1 src/renderer/src/components/dashboard-popout/preview-terminal-links.ts
 1 src/renderer/src/components/jira-connect-credential-guide.tsx
 2 src/renderer/src/components/linear-api-key-dialog.tsx
-1 src/renderer/src/components/native-chat/NativeChatMarkdownImage.tsx
+1 src/renderer/src/components/native-chat/media/images/NativeChatMarkdownImage.tsx
+1 src/renderer/src/components/onboarding/ThemeLookCarousel.tsx
 1 src/renderer/src/components/right-sidebar/ssh-forwarded-ports-section.tsx
 1 src/renderer/src/components/right-sidebar/ssh-ports-panel.tsx
 1 src/renderer/src/components/settings/accounts/codex/CodexLoginLinkNotice.tsx
@@ -30,7 +31,7 @@
 1 src/renderer/src/components/stats/ShareUsageButton.tsx
 1 src/renderer/src/components/star-nag/StarNagToastHost.tsx
 1 src/renderer/src/components/tab-bar/BrowserTab.tsx
-1 src/renderer/src/lib/http-link-routing.ts
+1 src/renderer/src/lib/browser/navigation/http-link-routing.ts
 1 src/renderer/src/lib/workspace-ports/workspace-port-actions.ts
-1 src/renderer/src/runtime/antigravity-chat-sign-in-status.ts
+1 src/renderer/src/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status.ts
 3 src/renderer/src/web/preload-api/web-shell-api.ts

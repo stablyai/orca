@@ -4,7 +4,7 @@
  * at idle, flood throughput unchanged). glibc reads GLIBC_TUNABLES only at exec, so the launch sets it
  * and each host process removes it at once: shells, agents and git must keep the user's malloc.
  */
-import type { OrcadLaunchEnvEntry } from '../ssh/orcad-host-transport'
+import type { OrcadLaunchEnvEntry } from '../managed-server/install/orcad-host-transport'
 
 export const HOST_MALLOC_TUNABLES = 'glibc.malloc.mmap_threshold=16384'
 const GLIBC_TUNABLES = 'GLIBC_TUNABLES'

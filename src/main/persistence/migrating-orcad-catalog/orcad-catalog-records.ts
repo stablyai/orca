@@ -1,4 +1,4 @@
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import {
   serializeOrcadMigrationValue,
   type OrcadMigrationImportReceipt,
@@ -17,7 +17,7 @@ import {
 import {
   syncProjectHostSetupCompatibilityState,
   type RepoLifecycleOperations
-} from '../loading-store/repo-lifecycle-operations'
+} from '../loading-store/project-catalog/repo-lifecycle-operations'
 import type { StoreRuntimeState } from '../loading-store/store-runtime-state'
 import {
   applyPreparedOrcadMigrationDormantState,

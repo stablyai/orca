@@ -3,7 +3,7 @@ import { translate } from '@/i18n/i18n'
 import {
   cancelHostAccountSignIn,
   isLostHostAnswer
-} from '@/runtime/runtime-host-account-sign-in-client'
+} from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
 import type { HostAccountSignInProvider } from '../../../../../../shared/host-account-sign-in-types'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 

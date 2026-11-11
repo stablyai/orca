@@ -1,4 +1,4 @@
-import { AgentHookStartup } from '../shared/agent-hook-startup'
+import { AgentHookStartup } from '../shared/agent-hook-listener/transport/agent-hook-startup'
 import { bindRelayHookServer } from './agent-hook-server-bind'
 import {
   inferRelayClaudeInterrupt,
@@ -21,7 +21,7 @@ import { join } from 'node:path'
 import {
   ORCA_HOOK_PROTOCOL_VERSION,
   ORCA_HOOK_RAW_JSON_TRANSPORT
-} from '../shared/agent-hook-types'
+} from '../shared/agent-hook-listener/configuration/agent-hook-types'
 import {
   clearAllListenerCaches,
   clearPaneCacheState,
@@ -30,13 +30,14 @@ import {
 import {
   getEndpointFileName,
   writeEndpointFile
-} from '../shared/agent-hook-listener/endpoint-publication'
+} from '../shared/agent-hook-listener/transport/endpoint-publication'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
 import {
   createHookTransportInterferenceTracker,
   describeHookTransportInterference
-} from '../shared/agent-hook-transport-interference'
-import { REMOTE_AGENT_HOOK_ENV, type AgentHookSource } from '../shared/agent-hook-relay'
+} from '../shared/agent-hook-listener/transport/agent-hook-transport-interference'
+import { REMOTE_AGENT_HOOK_ENV } from '../shared/agent-hook-listener/transport/agent-hook-relay'
+import type { AgentHookSource } from '../shared/agent-hook-listener/transport/agent-hook-relay'
 import { buildRelayHookPtyEnv, defaultEndpointDir } from './agent-hook-endpoint-coordinates'
 import { drainRelayHookSpool } from './agent-hook-spool-ingest'
 import { AgentHookResultRetryScheduler } from './agent-hook-result-retry-scheduler'

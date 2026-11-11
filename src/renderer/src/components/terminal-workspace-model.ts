@@ -1,7 +1,7 @@
 import type { Tab } from '../../../shared/tab-types'
 import type { KeybindingContext } from '../../../shared/keybindings'
 import { useAppStore } from '../store'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 
 export const CLOSE_DIALOG_DEBOUNCE_MS = 200

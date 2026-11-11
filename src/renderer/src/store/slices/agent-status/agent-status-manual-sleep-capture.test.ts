@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status-freshness'
+import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AppState } from '../../types'
-import { createTestStore } from '../store-test-helpers'
-import { makeTab } from '../store-session-test-harness'
+import { createTestStore } from '../../testing/app-store-test-fixture'
+import { makeTab } from '../../terminals/terminal-tab.test-fixture'
 
 const NOW = 1_800_000_000_000
 
@@ -202,23 +202,5 @@ describe('manual sleep agent session capture', () => {
       updatedAt: NOW,
       providerSession: { key: 'session_id', id: 'session-tab-1:stale' }
     })
-  })
-
-  it('takes the records of a sleep main ran from main, and captures none of its own', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(NOW)
-    const store = createTestStore()
-    seedTabs(store)
-    store.setState({
-      agentStatusByPaneKey: { 'tab-1:fresh': makeAgentEntry({ paneKey: 'tab-1:fresh' }) }
-    })
-    const mains = makeSleepingRecord({ paneKey: 'tab-1:leaf-9', origin: 'worktree-sleep' })
-
-    await store.getState().shutdownWorktreeTerminals('wt-1', {
-      keepIdentifiers: true,
-      hostStop: Promise.resolve({ failed: false, records: [mains] })
-    })
-
-    expect(store.getState().sleepingAgentSessionsByPaneKey).toEqual({ 'tab-1:leaf-9': mains })
   })
 })

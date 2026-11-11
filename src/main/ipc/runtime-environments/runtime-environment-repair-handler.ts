@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import type { VerifyAndAddRuntimeEnvironmentResult } from '../../../shared/remote-pairing-verification'
+import type { VerifyAndAddRuntimeEnvironmentResult } from '../../../shared/remote-runtime/pairing/remote-pairing-verification'
 import { verifyAndRepairRuntimeEnvironmentFromPairingCode } from './runtime-environment-pairing-verification'
 import { publishVerifiedPairing } from './runtime-environment-verified-pairing-publish'
 

@@ -1,9 +1,14 @@
+import { AgentLaunchTextModelDefault } from './AgentLaunchTextModelDefault'
+import { textActionArgumentsOwnModel } from '../../../../shared/agent-launch/picker/agent-launch-picker-text-action'
 import type { AgentLaunchSetupPanelProps } from './AgentLaunchSetupButton'
 import {
   agentLaunchSetupOptionRows,
-  agentLaunchSetupCatalogState as catalogState
+  agentLaunchSetupRowGroups,
+  agentLaunchSetupCatalogState as catalogOf,
+  agentLaunchSetupModelRows
 } from './agent-launch-setup-option-rows'
 import { useRef, useState } from 'react'
+import { useSetupModelHighlight } from './use-setup-model-highlight'
 import { Check, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import {
@@ -14,35 +19,38 @@ import {
   CommandGroup,
   CommandItem
 } from '@/components/ui/command'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { agentModelChoiceChips } from './launch-settings/agent-model-choice-chips'
-import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
+import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
+import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { AgentDefaultArgsInput } from './launch-settings/AgentLaunchDefaultsEditor'
-import { NativeChatSessionOptionRows } from '../native-chat/NativeChatSessionOptionRows'
+import { NativeChatSessionOptionRows } from '../native-chat/session/options/controls/NativeChatSessionOptionRows'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
-import { AgentPermissionMenu } from './launch-settings/AgentPermissionChoiceControls'
+import { AgentPermissionMenu } from './launch-settings/AgentPermissionMenu'
 import {
   AgentLaunchSetupFooter,
   agentLaunchSetupArgumentsNote,
-  AgentLaunchSurfaceButtons,
   type AgentLaunchSetupFooterHandle
 } from './AgentLaunchSetupFooter'
-import { agentPickerPanelArguments } from '../../../../shared/agent-launch-picker-arguments'
+import { AgentLaunchSetupActions } from './AgentLaunchSetupActions'
+import { agentPickerPanelArguments } from '../../../../shared/agent-launch/picker/agent-launch-picker-arguments'
 import {
   acceptAgentPickerArguments,
   applyAgentPickerEdit,
   type AgentPickerEdit
-} from '../../../../shared/agent-launch-picker-edits'
+} from '../../../../shared/agent-launch/picker/agent-launch-picker-edits'
 import {
   agentPickerArgumentsKnown,
-  agentPickerEffectiveChoices,
+  agentPickerCatalogAuthoritative
+} from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
+import { agentPickerEffectiveChoices } from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import type { AgentPickerSurface } from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import {
   agentPickerModels,
   agentPickerEntryOptions,
-  agentPickerPermissions,
-  type AgentPickerSurface
-} from '../../../../shared/agent-launch-picker'
+  agentPickerPermissions
+} from '../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
 
 export function AgentLaunchSetupPanel({
   entry,
@@ -50,14 +58,17 @@ export function AgentLaunchSetupPanel({
   getDraft,
   mode = 'launch',
   disabled,
+  autoFocus = true,
+  terminalBlocked,
   onDraftChange,
   onUse
 }: AgentLaunchSetupPanelProps) {
+  const t = useTranslate()
   const footer = useRef<AgentLaunchSetupFooterHandle>(null)
   const editDraft = (edit: AgentPickerEdit) => {
     const current = getDraft()
     if (current) {
-      onDraftChange(applyAgentPickerEdit(entry, current, edit))
+      onDraftChange(applyAgentPickerEdit(entry, current, edit), edit.kind)
     }
   }
   const [modelQuery, setModelQuery] = useState('')
@@ -80,8 +91,18 @@ export function AgentLaunchSetupPanel({
       ? models.find((model) => model.isDefault)?.id
       : undefined)
   // Settled with nothing chosen still lets the user pick; nothing is checked and the agent keeps its own default.
-  const { hasModels, catalogPending, catalogMessage } = catalogState(entry, models, currentModel)
+  const { hasModels, catalogPending, catalogMessage } = catalogOf(entry, models, currentModel, mode)
+  const modelInArguments = textActionArgumentsOwnModel(entry, draft)
   const modelDisabled = disabled || defaultsPending || catalogPending
+  const modelRows = agentLaunchSetupModelRows(
+    models,
+    currentModel,
+    modelQuery,
+    legacy,
+    modelInArguments
+  )
+  const modelList = useRef<HTMLDivElement>(null)
+  const highlight = useSetupModelHighlight(modelList, modelRows.start, modelQuery)
   const options = agentPickerEntryOptions(entry, currentModel, draft.surface)
   const optionRows = agentLaunchSetupOptionRows({
     options,
@@ -94,38 +115,30 @@ export function AgentLaunchSetupPanel({
     disabled,
     argumentsKnown
   })
-  const renderOptions = (rows: SessionOptionDescriptor[]) =>
+  const renderOptions = (rows: SessionOptionDescriptor[], layout?: 'inline') =>
     rows.length ? (
       <NativeChatSessionOptionRows
         options={rows}
         shownReason={null}
         pendingIds={new Set()}
         divided={false}
-        layout="settings"
-        onSet={(option, value) =>
+        layout={layout ?? 'settings'}
+        onSet={(option, value) => {
+          if (entry.textGeneration && value === 'arguments') {
+            return
+          }
           editDraft(
             option.id === 'fastMode' || option.id === 'serviceTier'
-              ? {
-                  kind: 'speed',
-                  key: option.id,
-                  value: String(value),
-                  model: currentModel
-                }
-              : {
-                  kind: 'choice',
-                  patch: { options: { [option.id]: String(value) } }
-                }
+              ? { kind: 'speed', key: option.id, value: String(value), model: currentModel }
+              : { kind: 'choice', patch: { options: { [option.id]: String(value) } } }
           )
-        }
+        }}
         onAction={() => {}}
       />
     ) : null
   const handleUse = (surface: AgentPickerSurface) => {
     const current = getDraft()
-    if (current) {
-      return onUse({ ...acceptAgentPickerArguments(entry, current), surface })
-    }
-    return false
+    return current ? onUse({ ...acceptAgentPickerArguments(entry, current), surface }) : false
   }
   const use = (surface: AgentPickerSurface) =>
     mode === 'select' ? handleUse(surface) : footer.current?.launch(surface)
@@ -145,6 +158,9 @@ export function AgentLaunchSetupPanel({
     },
     argumentsView.context
   )
+  const rowGroups = agentLaunchSetupRowGroups(optionRows, mode === 'launch')
+  // Launch leaves Permissions and Arguments to Agent settings; select mode edits a saved setup.
+  const editsDefaults = mode === 'select' && !entry.textGeneration
   const note = agentLaunchSetupArgumentsNote(entry.label, options, !seed?.modelApply.cli?.length)
   const legacyCount = models.filter((model) => model.isLegacy && !model.hidden).length
   return (
@@ -162,6 +178,7 @@ export function AgentLaunchSetupPanel({
         }
       }}
       onKeyDown={(event) => {
+        highlight.endKey()
         event.stopPropagation()
         if (
           !disabled &&
@@ -177,6 +194,8 @@ export function AgentLaunchSetupPanel({
       <Command
         surface="inline"
         density="model"
+        ref={modelList}
+        {...highlight.command}
         onKeyDownCapture={(event) => {
           if (
             !disabled &&
@@ -192,19 +211,20 @@ export function AgentLaunchSetupPanel({
           }
         }}
         onKeyDown={(event) => {
+          highlight.onKeyDown(event)
           if (event.key === 'Enter') {
             event.stopPropagation()
           }
         }}
       >
         <CommandInput
-          autoFocus
+          autoFocus={autoFocus}
           disabled={modelDisabled}
           aria-busy={catalogPending}
           value={modelQuery}
           onValueChange={setModelQuery}
-          aria-label={translate('agentPicker.searchModels', 'Search models')}
-          placeholder={translate('agentPicker.searchAgentModels', 'Search {{agent}} models…', {
+          aria-label={t('agentPicker.searchModels', 'Search models')}
+          placeholder={t('agentPicker.searchAgentModels', 'Search {{agent}} models…', {
             agent: entry.label
           })}
         />
@@ -214,53 +234,50 @@ export function AgentLaunchSetupPanel({
               {catalogMessage}
             </div>
           ) : null}
-          {hasModels &&
-          modelQuery &&
-          entry.catalog.origin !== 'unknown' &&
-          !entry.catalog.listingInProgress &&
-          entry.catalogRead !== 'pending' &&
-          entry.catalogRead !== 'failed' &&
-          entry.catalogRead !== 'unsupported' ? (
-            <CommandEmpty>
-              {translate('agentPicker.noModels', 'No models match your search.')}
-            </CommandEmpty>
+          {hasModels && modelQuery && agentPickerCatalogAuthoritative(entry) ? (
+            <CommandEmpty>{t('agentPicker.noModels', 'No models match your search.')}</CommandEmpty>
           ) : null}
           <CommandGroup>
+            <AgentLaunchTextModelDefault
+              entry={entry}
+              disabled={modelDisabled}
+              modelInArguments={modelInArguments}
+              onSelect={editDraft}
+            />
             {legacy && !modelQuery ? (
               <CommandItem value="__back__" disabled={disabled} onSelect={() => setLegacy(false)}>
                 <ChevronLeft className="size-3.5 text-muted-foreground" />
-                {translate('agentPicker.legacyModels', 'Legacy models')}
+                {t('agentPicker.legacyModels', 'Legacy models')}
               </CommandItem>
             ) : null}
-            {models
-              .filter(
-                (model) =>
-                  !model.hidden &&
-                  (model.id === currentModel || modelQuery || Boolean(model.isLegacy) === legacy)
-              )
-              .map((model) => (
+            {modelRows.rows.map((model) => {
+              const current = model.unlisted || (currentModel === model.id && !modelInArguments)
+              return (
                 <CommandItem
                   key={model.id}
                   value={model.id}
                   keywords={[model.label]}
                   disabled={modelDisabled}
-                  data-current={currentModel === model.id}
-                  onSelect={() => editDraft({ kind: 'choice', patch: { model: model.id } })}
+                  data-current={current}
+                  onSelect={() => {
+                    if (!model.unlisted) {
+                      editDraft({ kind: 'choice', patch: { model: model.id } })
+                    }
+                  }}
                 >
                   {model.label}
                   <span className="ml-auto flex size-3.5 shrink-0 items-center justify-center">
-                    {currentModel === model.id ? (
-                      <Check className="size-3.5 text-muted-foreground" />
-                    ) : null}
+                    {current ? <Check className="size-3.5 text-muted-foreground" /> : null}
                   </span>
                 </CommandItem>
-              ))}
+              )
+            })}
             {!legacy && !modelQuery && legacyCount > 0 ? (
               <CommandItem value="__legacy__" disabled={disabled} onSelect={() => setLegacy(true)}>
                 <span className="flex min-w-0 flex-col">
-                  <span>{translate('agentPicker.legacyModels', 'Legacy models')}</span>
+                  <span>{t('agentPicker.legacyModels', 'Legacy models')}</span>
                   <span className="text-muted-foreground">
-                    {translate('agentPicker.legacyModelCount', '{{total}} models', {
+                    {t('agentPicker.legacyModelCount', '{{total}} models', {
                       total: legacyCount
                     })}
                   </span>
@@ -268,62 +285,50 @@ export function AgentLaunchSetupPanel({
                 <ChevronRight className="ml-auto size-3.5 text-muted-foreground" />
               </CommandItem>
             ) : null}
-            {currentModel && !models.some((model) => model.id === currentModel) ? (
-              <CommandItem
-                value={currentModel}
-                disabled={modelDisabled}
-                onSelect={() => {}}
-                data-current="true"
-              >
-                {currentModel}
-                <Check className="ml-auto size-3.5 text-muted-foreground" />
-              </CommandItem>
-            ) : null}
           </CommandGroup>
         </CommandList>
       </Command>
       <div className="grid min-w-0 grid-cols-1 gap-2.5 border-t border-border px-3 pt-2.5 pb-1">
-        {renderOptions(
-          optionRows.filter((row) => row.id !== 'fastMode' && row.id !== 'serviceTier')
-        )}
-        <div>
-          <AgentPermissionMenu
-            agentId={entry.agent}
-            label={entry.label}
-            layout="row"
-            showInherited={false}
-            rawValue={argumentsView.selectedPermission ? undefined : argumentsView.permission}
-            disabled={
-              disabled ||
-              defaultsPending ||
-              !argumentsView.permission ||
-              (entry.surfaces.includes('terminal') && !argumentsKnown)
-            }
-            permission={{
-              choice: argumentsView.selectedPermission ?? 'own',
-              defaultChoice: argumentsView.selectedPermission ?? 'own',
-              choices: agentPickerPermissions(entry.agent, draft.surface),
-              source: 'agent',
-              flag: '',
-              argsSetPermission: false,
-              onSelect: (choice) => {
-                if (choice !== 'default') {
-                  editDraft({ kind: 'permission', value: choice })
-                }
+        {mode === 'launch' && renderOptions([...rowGroups.level, ...rowGroups.speed], 'inline')}
+        {renderOptions(rowGroups.rest)}
+        {editsDefaults ? (
+          <div>
+            <AgentPermissionMenu
+              agentId={entry.agent}
+              label={entry.label}
+              layout="row"
+              showInherited={false}
+              rawValue={argumentsView.selectedPermission ? undefined : argumentsView.permission}
+              disabled={
+                disabled ||
+                defaultsPending ||
+                !argumentsView.permission ||
+                (entry.surfaces.includes('terminal') && !argumentsKnown)
               }
-            }}
-          />
-        </div>
-        {renderOptions(
-          optionRows.filter((row) => row.id === 'fastMode' || row.id === 'serviceTier')
-        )}
-        {entry.surfaces.includes('terminal') ? (
+              permission={{
+                choice: argumentsView.selectedPermission ?? 'own',
+                defaultChoice: argumentsView.selectedPermission ?? 'own',
+                choices: agentPickerPermissions(entry.agent, draft.surface),
+                source: 'agent',
+                flag: '',
+                argsSetPermission: false,
+                onSelect: (choice) => {
+                  if (choice !== 'default') {
+                    editDraft({ kind: 'permission', value: choice })
+                  }
+                }
+              }}
+            />
+          </div>
+        ) : null}
+        {mode === 'select' ? renderOptions(rowGroups.speed) : null}
+        {editsDefaults && entry.surfaces.includes('terminal') ? (
           <div>
             <Collapsible open={argumentsOpen} onOpenChange={setArgumentsOpen}>
               <CollapsibleTrigger asChild>
                 <button
                   type="button"
-                  aria-label={translate('agentPicker.toggleArguments', 'Toggle Arguments')}
+                  aria-label={t('agentPicker.toggleArguments', 'Toggle Arguments')}
                   className="flex min-h-7 w-full items-center gap-1.5 text-left text-xs"
                 >
                   <span className="flex size-3.5 shrink-0 items-center justify-center text-muted-foreground">
@@ -334,10 +339,10 @@ export function AgentLaunchSetupPanel({
                     )}
                   </span>
                   <span className="text-muted-foreground">
-                    {translate('agentPicker.arguments', 'Arguments')}
+                    {t('agentPicker.arguments', 'Arguments')}
                   </span>
                   <span className="ml-auto truncate text-muted-foreground/70">
-                    {translate(
+                    {t(
                       'agentPicker.argumentsTerminalHint',
                       'Only applies to terminal (CLI) launches'
                     )}
@@ -352,7 +357,6 @@ export function AgentLaunchSetupPanel({
                     argsOverride={argumentsView.text}
                     disabled={disabled || !argumentsKnown}
                     note={note}
-                    onSaveArgs={() => editDraft({ kind: 'accept-arguments' })}
                     onDraftChange={(text) =>
                       editDraft({ kind: 'arguments', text, model: currentModel })
                     }
@@ -365,20 +369,19 @@ export function AgentLaunchSetupPanel({
         ) : null}
       </div>
       {mode === 'select' ? (
-        <div className="flex items-center justify-end gap-2 border-t border-border px-2.5 py-2">
-          <AgentLaunchSurfaceButtons
-            entry={entry}
-            disabled={disabled}
-            primary={draft.surface}
-            onSelect={(surface) => {
-              void handleUse(surface)
-            }}
-          />
-        </div>
+        <AgentLaunchSetupActions
+          entry={entry}
+          disabled={disabled}
+          surface={draft.surface}
+          onUse={(surface) => {
+            void handleUse(surface)
+          }}
+        />
       ) : (
         <AgentLaunchSetupFooter
           ref={footer}
           entry={entry}
+          terminalBlocked={terminalBlocked}
           disabled={disabled}
           onLaunch={(surface, prompt) => {
             const current = getDraft()

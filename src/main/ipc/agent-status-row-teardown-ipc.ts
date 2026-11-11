@@ -1,11 +1,12 @@
 import { ipcMain } from 'electron'
-import { agentHookServer, isValidPaneKey } from '../agent-hooks/server'
-import type { AgentStatusCacheIdentity } from '../../shared/agent-status-types'
-import { parseLegacyNumericPaneKey } from '../../shared/stable-pane-id'
+import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
+import { isValidPaneKey } from '../agent-hooks/server/server-status-identity'
+import type { AgentStatusCacheIdentity } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { parseLegacyNumericPaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import {
   clearMigrationUnsupportedPtysByTabPrefix,
   clearMigrationUnsupportedPtysForPaneKey
-} from '../agent-hooks/migration-unsupported-pty-state'
+} from '../agent-hooks/observations/migration-unsupported-pty-state'
 import { isValidAgentStatusDropTabId } from './agent-status-ipc-boundary'
 
 /** Dismissal preserves live pane caches; confirmed exits must clear latches that could revive a stale working row. */

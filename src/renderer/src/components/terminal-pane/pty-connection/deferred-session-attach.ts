@@ -1,7 +1,7 @@
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
-import { runDeferredSessionReattachChoice } from './deferred-session-reattach-choice'
-import { connectUnservedSshPaneTarget } from './unserved-ssh-pane-connect'
-import { startDeferredSessionReattach } from './deferred-session-reattach-connect'
+import { runDeferredSessionReattachChoice } from './reattach/deferred-session-reattach-choice'
+import { connectUnservedSshPaneTarget } from './host-ownership/unserved-ssh-pane-connect'
+import { startDeferredSessionReattach } from './reattach/deferred-session-reattach-connect'
 
 export function runDeferredSessionAttach(session: ConnectPanePtySession): void {
   // COMPAT(legacy-relay-bridge, revisit 2027-01-15): reattach the relay-era terminal it still runs.

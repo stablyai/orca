@@ -1,7 +1,7 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import { refreshLocalRuntimeCapabilities } from '../local-runtime-capabilities'
+import { refreshLocalRuntimeCapabilities } from '../hosts/capabilities/local-runtime-capabilities'
 import {
   isCurrentLocalStructuredSessionGeneration,
   localStructuredSessionGeneration

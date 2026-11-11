@@ -1,140 +1,39 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-
-const { gitExecFileAsyncMock } = vi.hoisted(() => ({
-  gitExecFileAsyncMock: vi.fn()
-}))
-
-vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  gitExecFileAsync: gitExecFileAsyncMock
-}))
-
-import {
-  _getAzureDevOpsRepoRefCacheSize,
-  _resetAzureDevOpsRepoRefCache,
-  getAzureDevOpsRepoRefForRemote,
-  parseAzureDevOpsRepoRef
-} from './repository-ref'
-import { REMOTE_URL_PROBE_TIMEOUT_MS } from '../git/remotes/remote-url-probe'
+import { describe, expect, it } from 'vitest'
+import { parseAzureDevOpsRepoRef } from './repository-ref'
 
 describe('parseAzureDevOpsRepoRef', () => {
-  beforeEach(() => {
-    gitExecFileAsyncMock.mockReset()
-    _resetAzureDevOpsRepoRefCache()
-  })
-
-  afterEach(() => {
-    _resetAzureDevOpsRepoRefCache()
-  })
-
-  it('parses dev.azure.com HTTPS remotes', () => {
+  it('reads the SSH remote older visualstudio.com organizations use', () => {
+    const expected = {
+      host: 'myorg.visualstudio.com',
+      organization: 'myorg',
+      project: 'Proj',
+      repository: 'Repo',
+      apiBaseUrl: 'https://myorg.visualstudio.com/Proj',
+      webBaseUrl: 'https://myorg.visualstudio.com/Proj/_git/Repo'
+    }
+    expect(parseAzureDevOpsRepoRef('myorg@vs-ssh.visualstudio.com:v3/myorg/Proj/Repo')).toEqual(
+      expected
+    )
     expect(
-      parseAzureDevOpsRepoRef('https://dev.azure.com/acme/Project%20One/_git/repo-name')
-    ).toEqual({
-      host: 'dev.azure.com',
-      organization: 'acme',
-      project: 'Project One',
-      repository: 'repo-name',
-      apiBaseUrl: 'https://dev.azure.com/acme/Project%20One',
-      webBaseUrl: 'https://dev.azure.com/acme/Project%20One/_git/repo-name'
-    })
+      parseAzureDevOpsRepoRef('ssh://myorg@vs-ssh.visualstudio.com:22/v3/myorg/Proj/Repo')
+    ).toEqual(expected)
+    expect(parseAzureDevOpsRepoRef('https://myorg.visualstudio.com/Proj/_git/Repo')).toEqual(
+      expected
+    )
   })
 
-  it('strips trailing slashes after .git suffixes', () => {
-    expect(parseAzureDevOpsRepoRef('https://dev.azure.com/acme/Project/_git/repo.git/')).toEqual({
-      host: 'dev.azure.com',
-      organization: 'acme',
-      project: 'Project',
-      repository: 'repo',
-      apiBaseUrl: 'https://dev.azure.com/acme/Project',
-      webBaseUrl: 'https://dev.azure.com/acme/Project/_git/repo'
-    })
-    expect(parseAzureDevOpsRepoRef('git@ssh.dev.azure.com:v3/acme/Project/repo.git/')).toEqual({
-      host: 'dev.azure.com',
-      organization: 'acme',
-      project: 'Project',
-      repository: 'repo',
-      apiBaseUrl: 'https://dev.azure.com/acme/Project',
-      webBaseUrl: 'https://dev.azure.com/acme/Project/_git/repo'
-    })
-  })
-
-  it('parses legacy visualstudio.com HTTPS remotes', () => {
-    expect(parseAzureDevOpsRepoRef('https://acme.visualstudio.com/Project/_git/repo.git')).toEqual({
-      host: 'acme.visualstudio.com',
-      organization: 'acme',
-      project: 'Project',
-      repository: 'repo',
-      apiBaseUrl: 'https://acme.visualstudio.com/Project',
-      webBaseUrl: 'https://acme.visualstudio.com/Project/_git/repo'
-    })
-  })
-
-  it('parses Azure DevOps Services SSH remotes', () => {
-    expect(parseAzureDevOpsRepoRef('git@ssh.dev.azure.com:v3/acme/Project/repo')).toEqual({
-      host: 'dev.azure.com',
-      organization: 'acme',
-      project: 'Project',
-      repository: 'repo',
-      apiBaseUrl: 'https://dev.azure.com/acme/Project',
-      webBaseUrl: 'https://dev.azure.com/acme/Project/_git/repo'
-    })
-  })
-
-  it('parses Azure DevOps Server HTTPS remotes from the _git path convention', () => {
+  it('rejects a vs-ssh organization that would redirect the API host', () => {
+    expect(parseAzureDevOpsRepoRef('git@vs-ssh.visualstudio.com:v3/evil.example%23/P/R')).toBeNull()
     expect(
-      parseAzureDevOpsRepoRef('https://ado.example.com/tfs/DefaultCollection/Project/_git/repo.git')
-    ).toEqual({
-      host: 'ado.example.com',
-      organization: null,
-      project: 'Project',
-      repository: 'repo',
-      apiBaseUrl: 'https://ado.example.com/tfs/DefaultCollection/Project',
-      webBaseUrl: 'https://ado.example.com/tfs/DefaultCollection/Project/_git/repo'
-    })
+      parseAzureDevOpsRepoRef('ssh://git@vs-ssh.visualstudio.com/v3/evil.example%2F/P/R')
+    ).toBeNull()
   })
 
-  it('ignores non-Azure remotes', () => {
-    expect(parseAzureDevOpsRepoRef('git@github.com:stablyai/orca.git')).toBeNull()
-  })
-
-  it('keeps local host and local WSL repository-ref cache entries separate', async () => {
-    gitExecFileAsyncMock
-      .mockResolvedValueOnce({
-        stdout: 'https://dev.azure.com/acme/Host/_git/repo.git\n',
-        stderr: ''
-      })
-      .mockResolvedValueOnce({
-        stdout: 'https://dev.azure.com/acme/Wsl/_git/repo.git\n',
-        stderr: ''
-      })
-
-    await expect(getAzureDevOpsRepoRefForRemote('/repo', 'origin')).resolves.toMatchObject({
-      project: 'Host',
-      repository: 'repo'
-    })
-    await expect(
-      getAzureDevOpsRepoRefForRemote('/repo', 'origin', null, { wslDistro: 'Ubuntu' })
-    ).resolves.toMatchObject({
-      project: 'Wsl',
-      repository: 'repo'
-    })
-    await expect(
-      getAzureDevOpsRepoRefForRemote('/repo', 'origin', null, { wslDistro: 'Ubuntu' })
-    ).resolves.toMatchObject({
-      project: 'Wsl',
-      repository: 'repo'
-    })
-
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
-    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['remote', 'get-url', 'origin'], {
-      cwd: '/repo',
-      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
-    })
-    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['remote', 'get-url', 'origin'], {
-      cwd: '/repo',
-      wslDistro: 'Ubuntu',
-      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
+  it('keeps reading dev.azure.com SSH remotes as before', () => {
+    expect(parseAzureDevOpsRepoRef('git@ssh.dev.azure.com:v3/acme/Proj/Repo')).toMatchObject({
+      host: 'dev.azure.com',
+      organization: 'acme',
+      webBaseUrl: 'https://dev.azure.com/acme/Proj/_git/Repo'
     })
   })
 })

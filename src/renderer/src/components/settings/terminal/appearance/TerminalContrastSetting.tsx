@@ -7,13 +7,13 @@ import {
   SettingsSegmentedControl
 } from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import { LIGHT_BG_MIN_CONTRAST } from '../../../../../../shared/terminal-contrast-correction'
+import { LIGHT_BG_MIN_CONTRAST } from '../../../../../../shared/terminal-themes/terminal-contrast-correction'
 import {
   MIN_TERMINAL_CONTRAST_RATIO,
   MAX_TERMINAL_CONTRAST_RATIO,
   normalizeTerminalMinimumContrastRatio
-} from '../../../../../../shared/terminal-minimum-contrast-settings'
-import { translate } from '@/i18n/i18n'
+} from '../../../../../../shared/terminal-themes/terminal-minimum-contrast-settings'
+import { useTranslate } from '@/i18n/use-translate'
 
 type ContrastMode = 'auto' | 'off' | 'custom'
 
@@ -23,6 +23,7 @@ type Props = {
 }
 
 export function TerminalContrastSetting({ settings, updateSettings }: Props): React.JSX.Element {
+  const t = useTranslate()
   const value = normalizeTerminalMinimumContrastRatio(settings.terminalMinimumContrastRatio)
   const mode: ContrastMode = value === undefined ? 'auto' : value === 1 ? 'off' : 'custom'
   const lastCustomValue = useRef(LIGHT_BG_MIN_CONTRAST)
@@ -32,12 +33,12 @@ export function TerminalContrastSetting({ settings, updateSettings }: Props): Re
     setPreviousValue(value)
     setDraft(value ?? LIGHT_BG_MIN_CONTRAST)
   }
-  const title = translate('auto.components.settings.contrast.title', 'Color Contrast')
-  const description = translate(
+  const title = t('auto.components.settings.contrast.aa914efccf', 'Color contrast')
+  const description = t(
     'auto.components.settings.contrast.description',
     'Improve text readability or preserve the colors chosen by terminal programs.'
   )
-  const ratioLabel = translate('auto.components.settings.contrast.ratio', 'Contrast target')
+  const ratioLabel = t('auto.components.settings.contrast.ratio', 'Contrast target')
   const selectMode = (next: ContrastMode): void => {
     if (mode === 'custom' && value !== undefined) {
       lastCustomValue.current = value
@@ -71,16 +72,16 @@ export function TerminalContrastSetting({ settings, updateSettings }: Props): Re
         label={title}
         description={
           mode === 'auto'
-            ? translate(
+            ? t(
                 'auto.components.settings.contrast.autoDescription',
                 'Balances readability with your terminal theme. Recommended.'
               )
             : mode === 'off'
-              ? translate(
+              ? t(
                   'auto.components.settings.contrast.offDescription',
                   'Keeps program colors unchanged, including dim text and Powerline separators.'
                 )
-              : translate(
+              : t(
                   'auto.components.settings.contrast.customDescription',
                   'Choose how much to increase contrast between text and its background.'
                 )
@@ -94,12 +95,12 @@ export function TerminalContrastSetting({ settings, updateSettings }: Props): Re
             options={[
               {
                 value: 'auto',
-                label: translate('auto.components.settings.contrast.auto', 'Automatic')
+                label: t('auto.components.settings.contrast.auto', 'Automatic')
               },
-              { value: 'off', label: translate('auto.components.settings.contrast.off', 'Off') },
+              { value: 'off', label: t('auto.components.settings.contrast.off', 'Off') },
               {
                 value: 'custom',
-                label: translate('auto.components.settings.contrast.custom', 'Custom')
+                label: t('auto.components.settings.contrast.custom', 'Custom')
               }
             ]}
           />
@@ -109,7 +110,7 @@ export function TerminalContrastSetting({ settings, updateSettings }: Props): Re
         <div className="space-y-3 pb-4">
           <NumberField
             label={ratioLabel}
-            description={translate(
+            description={t(
               'auto.components.settings.contrast.targetDescription',
               'Higher values increase contrast where possible. Background colors stay unchanged.'
             )}
@@ -131,8 +132,8 @@ export function TerminalContrastSetting({ settings, updateSettings }: Props): Re
             onValueCommit={([ratio]) => updateSettings({ terminalMinimumContrastRatio: ratio })}
           />
           <div className="flex justify-between text-xs text-muted-foreground">
-            <span>{translate('auto.components.settings.contrast.subtle', 'Subtle')}</span>
-            <span>{translate('auto.components.settings.contrast.strong', 'Strong')}</span>
+            <span>{t('auto.components.settings.contrast.subtle', 'Subtle')}</span>
+            <span>{t('auto.components.settings.contrast.strong', 'Strong')}</span>
           </div>
         </div>
       )}

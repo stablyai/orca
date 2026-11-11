@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import { applyEdits, modify, parse as parseJsonc, type ParseError } from 'jsonc-parser'
-import { isPlainObject } from '../agent-hooks/installer-utils'
+import { isPlainObject } from '../agent-hooks/installation/configuration/hooks-json-read'
 
 // Muse strips nonstandard environment variables from managed hooks unless allowlisted.
 export const MUSE_MANAGED_HOOK_ENV_VARS = [

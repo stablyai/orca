@@ -1,3 +1,4 @@
+import { useAppStore } from '@/store'
 import { SessionHistorySettingsPane } from '../session-history/SessionHistorySettingsPane'
 import { ArtifactsSettingsPane } from '../artifacts/ArtifactsSettingsPane'
 import { AutomationsSettingsPane } from '../automations/AutomationsSettingsPane'
@@ -9,17 +10,19 @@ import { SettingsSetupGuidePane } from '../setup-guide/SettingsSetupGuidePane'
 import { ShareSkillsSettingsPane } from '../skills/sharing/ShareSkillsSettingsPane'
 import { SettingsSection } from '../section-layout/SettingsSection'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { SettingsRenderContext } from './settings-render-context'
 
 export function renderOrcaAccountSettingsSection(
-  context: SettingsRenderContext
+  context: SettingsRenderContext,
+  t: Translate = translate
 ): React.JSX.Element | null {
   const { model, navigation, view } = context
   return model.showDesktopOnlySettings ? (
     <SettingsSection
       id="orca-account"
-      title={translate('auto.components.settings.orcaAccount.title', 'Orca Account')}
-      description={translate(
+      title={t('auto.components.settings.orcaAccount.title', 'Orca Account')}
+      description={t(
         'auto.components.settings.orcaAccount.description',
         'Share work instantly and reach your desktop from Orca Mobile wherever you are.'
       )}
@@ -30,13 +33,16 @@ export function renderOrcaAccountSettingsSection(
   ) : null
 }
 
-export function renderSetupGuideSettingsSection(context: SettingsRenderContext): React.JSX.Element {
+export function renderSetupGuideSettingsSection(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.JSX.Element {
   const { navigation, view } = context
   return (
     <SettingsSection
       id="setup-guide"
-      title={translate('auto.components.settings.Settings.6d119427ef', 'Onboarding checklist')}
-      description={translate(
+      title={t('auto.components.settings.Settings.6d119427ef', 'Onboarding checklist')}
+      description={t(
         'auto.components.settings.Settings.6855b0f77d',
         'Finish the core workflows that make Orca useful for parallel agent work.'
       )}
@@ -48,13 +54,18 @@ export function renderSetupGuideSettingsSection(context: SettingsRenderContext):
   )
 }
 
-export function renderGeneralSettingsSection(context: SettingsRenderContext): React.JSX.Element {
+export function renderGeneralSettingsSection(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.JSX.Element {
   const { model, interactions, navigation, terminal, view } = context
   return (
     <SettingsSection
       id="general"
-      title={translate('auto.components.settings.Settings.7807c11c4d', 'General')}
-      description={translate(
+      grouped
+      hideHeader
+      title={t('auto.components.settings.Settings.7807c11c4d', 'General')}
+      description={t(
         'auto.components.settings.Settings.f9b77539fd',
         'Workspace defaults, app setup, and maintenance.'
       )}
@@ -62,6 +73,19 @@ export function renderGeneralSettingsSection(context: SettingsRenderContext): Re
     >
       {view.isSectionMounted('general') ? (
         <GeneralPane
+          subPage={model.generalSubPage}
+          onSelectSubPage={(page, sectionId) => {
+            if (sectionId) {
+              useAppStore
+                .getState()
+                .openSettingsTarget({ pane: 'general', repoId: null, sectionId })
+              return
+            }
+            model.setGeneralSubPage(page)
+            model.setHighlightedSettingsTarget(null)
+            model.setSettingsSearchQuery('')
+            interactions.contentScrollRef.current?.scrollTo({ top: 0 })
+          }}
           settings={model.settings}
           updateSettings={model.updateSettings}
           updateSettingsOrThrow={model.updateSettingsOrThrow}
@@ -78,14 +102,16 @@ export function renderGeneralSettingsSection(context: SettingsRenderContext): Re
 }
 
 export function renderIntegrationsSettingsSection(
-  context: SettingsRenderContext
+  context: SettingsRenderContext,
+  t: Translate = translate
 ): React.JSX.Element {
   const { navigation, view } = context
   return (
     <SettingsSection
       id="integrations"
-      title={translate('auto.components.settings.Settings.c9ca101a3b', 'Integrations')}
-      description={translate(
+      grouped
+      title={t('auto.components.settings.Settings.c9ca101a3b', 'Integrations')}
+      description={t(
         'auto.components.settings.Settings.b07041697f',
         'Connect GitHub, GitLab, Linear, and source-hosting services.'
       )}
@@ -98,15 +124,17 @@ export function renderIntegrationsSettingsSection(
 }
 
 export function renderMobileSettingsSection(
-  context: SettingsRenderContext
+  context: SettingsRenderContext,
+  t: Translate = translate
 ): React.JSX.Element | null {
   const { model, navigation, view } = context
   return model.showDesktopOnlySettings ? (
     <SettingsSection
       id="mobile"
-      title={translate('auto.components.settings.Settings.c40dadaac8', 'Mobile')}
+      grouped
+      title={t('auto.components.settings.Settings.c40dadaac8', 'Mobile')}
       badge="Beta"
-      description={translate(
+      description={t(
         'auto.components.settings.Settings.c6c01ac209',
         'Control terminals and agents from your phone.'
       )}
@@ -118,14 +146,16 @@ export function renderMobileSettingsSection(
 }
 
 export function renderAutomationsSettingsSection(
-  context: SettingsRenderContext
+  context: SettingsRenderContext,
+  t: Translate = translate
 ): React.JSX.Element {
   const { model, navigation, view } = context
   return (
     <SettingsSection
       id="automations"
-      title={translate('auto.components.settings.automations.title', 'Automations')}
-      description={translate(
+      grouped
+      title={t('auto.components.settings.automations.title', 'Automations')}
+      description={t(
         'auto.components.settings.automations.description',
         'Schedule agent work and choose whether Automations appears in the sidebar.'
       )}
@@ -138,14 +168,18 @@ export function renderAutomationsSettingsSection(
   )
 }
 
-export function renderArtifactsSettingsSection(context: SettingsRenderContext): React.JSX.Element {
+export function renderArtifactsSettingsSection(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.JSX.Element {
   const { model, navigation, view } = context
   return (
     <SettingsSection
       id="artifacts"
-      title={translate('auto.components.settings.artifacts.title', 'Artifacts')}
+      grouped
+      title={t('auto.components.settings.artifacts.title', 'Artifacts')}
       badge="Beta"
-      description={translate(
+      description={t(
         'auto.components.settings.artifacts.description',
         'Share HTML and Markdown files with your team and manage their public links.'
       )}
@@ -159,15 +193,17 @@ export function renderArtifactsSettingsSection(context: SettingsRenderContext): 
 }
 
 export function renderShareSkillsSettingsSection(
-  context: SettingsRenderContext
+  context: SettingsRenderContext,
+  t: Translate = translate
 ): React.JSX.Element {
   const { navigation, view } = context
   return (
     <SettingsSection
       id="share-skills"
-      title={translate('auto.components.settings.shareSkills.title', 'Share Skills')}
+      grouped
+      title={t('auto.components.settings.shareSkills.ca754fefa1', 'Share skills')}
       badge="Beta"
-      description={translate(
+      description={t(
         'auto.components.settings.shareSkills.description',
         'Share your skills with an unlisted link. Anyone who has it can install them.'
       )}
@@ -179,14 +215,16 @@ export function renderShareSkillsSettingsSection(
 }
 
 export function renderSessionHistorySettingsSection(
-  context: SettingsRenderContext
+  context: SettingsRenderContext,
+  t: Translate = translate
 ): React.JSX.Element {
   const { model, navigation, view } = context
   return (
     <SettingsSection
       id="session-history"
-      title={translate('sessionHistory.settings.title', 'Agent Session Search')}
-      description={translate(
+      grouped
+      title={t('sessionHistory.settings.title', 'Agent Session Search')}
+      description={t(
         'sessionHistory.settings.description',
         'Search everything your agents have said and done, on this computer and on any paired Orca server.'
       )}

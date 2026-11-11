@@ -1,7 +1,7 @@
 import {
   DEVICE_KEY_EPHEMERAL_RUNTIME_CAPABILITY,
   DEVICE_KEY_RUNTIME_CAPABILITY
-} from '../../../shared/device-key-capability'
+} from '../../../shared/remote-runtime/pairing/device-key-capability'
 import {
   createSessionDeviceSigningKey,
   getOrCreatePendingWebDeviceKey,
@@ -35,11 +35,17 @@ export type WebRuntimeCredentialSource = {
   migrationUnavailable(): void
   /** A sealed device_revoked naming `deviceId`: delete the key only if it is ours. */
   deviceRevoked(deviceId: string): Promise<boolean>
+  /** Send the token over v2 to hosts that take it (falling back for older hosts); keyed pages use keys instead. */
+  tryV2Token?: boolean
 }
 
-/** Today's behaviour: a bearer token over legacy framing. */
-export function tokenOnlyCredentialSource(deviceToken: string): WebRuntimeCredentialSource {
+/** A bearer token; legacy framing unless `tryV2Token` (pages that can never hold a device key). */
+export function tokenOnlyCredentialSource(
+  deviceToken: string,
+  options: { tryV2Token?: boolean } = {}
+): WebRuntimeCredentialSource {
   return {
+    tryV2Token: options.tryV2Token === true,
     nextPlan: () => ({ kind: 'legacy-token', deviceToken }),
     migrated: async () => {},
     migrationUnavailable: () => {},

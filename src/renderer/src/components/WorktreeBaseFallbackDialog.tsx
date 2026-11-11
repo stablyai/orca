@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import {
   dismissWorktreeBaseFallbackNotice,
@@ -18,6 +18,7 @@ import {
 } from './worktree-base-fallback-notice'
 
 export default function WorktreeBaseFallbackDialog(): React.JSX.Element {
+  const t = useTranslate()
   const notice = useSyncExternalStore(
     subscribeWorktreeBaseFallbackNotice,
     getWorktreeBaseFallbackNotice,
@@ -55,14 +56,14 @@ export default function WorktreeBaseFallbackDialog(): React.JSX.Element {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-sm">
             <TriangleAlert className="size-4 text-muted-foreground" aria-hidden="true" />
-            {translate(
+            {t(
               'auto.components.WorktreeBaseFallbackDialog.title',
               'Workspace created from a local base'
             )}
           </DialogTitle>
           {displayedNotice ? (
             <DialogDescription className="text-xs leading-relaxed">
-              {translate(
+              {t(
                 'auto.components.WorktreeBaseFallbackDialog.description',
                 'The remote-tracking ref "{{value0}}" was unavailable, so Orca used local "{{value1}}" instead. This workspace may not include the latest remote changes.',
                 { value0: displayedNotice.requestedRef, value1: displayedNotice.localRef }
@@ -72,7 +73,7 @@ export default function WorktreeBaseFallbackDialog(): React.JSX.Element {
         </DialogHeader>
         <DialogFooter>
           <Button type="button" size="sm" autoFocus onClick={dismissWorktreeBaseFallbackNotice}>
-            {translate('auto.components.WorktreeBaseFallbackDialog.dismiss', 'Got it')}
+            {t('auto.components.WorktreeBaseFallbackDialog.dismiss', 'Got it')}
           </Button>
         </DialogFooter>
       </DialogContent>

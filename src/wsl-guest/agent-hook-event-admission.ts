@@ -1,18 +1,22 @@
-import { previewHookPresence } from '../shared/agent-hook-presence-transition'
-import { hasOtherAgentProcessOwner, isSameAgentProcess } from '../shared/agent-process-presence'
+import { previewHookPresence } from '../shared/agent-hook-listener/presence/agent-hook-presence-transition'
+import {
+  hasOtherAgentProcessOwner,
+  isSameAgentProcess
+} from '../shared/agent-status/process/agent-process-presence'
 import {
   readHookProcessEvidence,
-  restateHookRoot,
-  type HookRootAcquisition
-} from '../shared/agent-hook-owner-presence'
-import type { HookRootEvidenceReader } from '../shared/hook-process-root-evidence'
-import { sameAgentStatusTerminalOwner } from '../shared/agent-status-terminal-owner'
-import { cacheRelayLegacyAgentStatus } from '../shared/agent-status-legacy-relay-cache'
+  restateHookRoot
+} from '../shared/agent-hook-listener/presence/agent-hook-owner-presence'
+import type { HookRootAcquisition } from '../shared/agent-hook-listener/presence/hook-root-attempts'
+import type { HookRootEvidenceReader } from '../shared/agent-hook-listener/presence/hook-process-root-evidence'
+import { sameAgentStatusTerminalOwner } from '../shared/agent-status/identity/agent-status-terminal-owner'
+import { cacheRelayLegacyAgentStatus } from '../shared/agent-status/transport/agent-status-legacy-relay-cache'
 import type { HookListenerState } from '../shared/agent-hook-listener/listener-state'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
-import type { AgentHookSource } from '../shared/agent-hook-relay'
+import type { AgentHookSource } from '../shared/agent-hook-listener/transport/agent-hook-relay'
 import { retainClaudeSettledRequests } from '../shared/agent-hook-listener/claude-settled-permission-requests'
-import { reduceHostTurnEnd } from '../shared/agent-hook-turn-end-timing'
+import { reduceHostTurnEnd } from '../shared/agent-hook-listener/state/agent-hook-turn-end-timing'
+import { previousCodexTurnContext } from '../shared/agent-hook-listener/providers/codex-session-start'
 import { buildRelayHookEnvelope } from './agent-hook-envelope-build'
 import type { RelayHookForward } from './agent-hook-server-contract'
 import { MAX_CACHED_PANES, type CachedPaneEnvelopeMeta } from './agent-hook-cached-pane-status'
@@ -124,7 +128,12 @@ export function applyRelayHookEvent(
   } = revised
   const event: AgentHookEventPayload = {
     ...unflagged,
-    ...reduceHostTurnEnd(previous, revised, Date.now(), options.isReplay !== true)
+    ...reduceHostTurnEnd(
+      previousCodexTurnContext(previous, revised),
+      revised,
+      Date.now(),
+      options.isReplay !== true
+    )
   }
   // Drop retired-pane posts and cached status so clients cannot auto-resume a ghost pane onto an orphan’s live transcript (#12447).
   if (host.isPaneSurfaceRetired(event.paneKey)) {

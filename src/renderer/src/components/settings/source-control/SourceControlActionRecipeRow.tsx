@@ -1,47 +1,56 @@
+import { SourceControlTextActionAgentPicker } from './text-actions/SourceControlTextActionAgentPicker'
+import type { SourceControlAiModelEdits } from '../../../../../shared/source-control/ai/settings/source-control-ai-action-model-edits'
+import type {
+  SourceControlAiSettings,
+  SourceControlAiModelChoice,
+  SourceControlAiSettingsPatch
+} from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import {
   useAgentPickerDraftScope,
   invalidateAgentPickerDrafts
 } from '../../agent/agent-launch-picker-drafts'
-import { canonicalSourceControlActionSelection } from '../../../../../shared/source-control-action-selection'
-import type { ActionArgumentChoices } from '../../../../../shared/source-control-action-argument-document'
+import { canonicalSourceControlActionSelection } from '../../../../../shared/source-control/ai/recipes/source-control-action-selection'
+import type { ActionArgumentChoices } from '../../../../../shared/source-control/ai/recipes/source-control-action-argument-document'
 import { SourceControlActionAgentPicker } from './SourceControlActionAgentPicker'
-import { Terminal } from 'lucide-react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
-
-import {
-  type CustomAgentId,
-  CUSTOM_AGENT_ID,
-  isCustomAgentId
-} from '../../../../../shared/commit-message-agent-spec'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import type { CustomAgentId } from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
+import { isCustomAgentId } from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import {
   SOURCE_CONTROL_ACTION_LABELS,
   type SourceControlActionRecipe,
   type AiActionId,
   type SourceControlActionLaunchPreferences
-} from '../../../../../shared/source-control-ai-actions'
-import { AgentIcon } from '@/lib/agent-catalog'
+} from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { SourceControlActionVariableChips } from '../../source-control/SourceControlActionVariableChips'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import type { ActionRecipeDraftValue } from './source-control-ai-action-recipe-draft'
 import {
   getActionDescriptions,
   AI_TEXT_ACTION_ID_SET,
-  getAgentCatalogForAction,
   getSourceControlActionAgentSupportText,
   getSourceControlActionAgentWarningText,
   getSourceControlAgentArgsPlaceholder
 } from './source-control-action-recipe-options'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { SourceControlActionOptionField } from '../../agent/launch-settings/AgentChoiceOptionField'
 
 const DEFAULT_AGENT_VALUE = '__default_agent__'
 
 type SourceControlActionRecipeRowProps<ActionId extends AiActionId> = {
   actionId: ActionId
+  source?: SourceControlAiSettings
+  /** Lets the text picker save model lists the CLI reports. */
+  writeSourceControlAiSettings?: (patch: SourceControlAiSettingsPatch) => Promise<void>
+  onTextModelChoiceChange?: (
+    actionId: ActionId,
+    choice: SourceControlAiModelChoice | undefined,
+    agentArgs: string,
+    edits: SourceControlAiModelEdits | undefined
+  ) => void
   setupDiscardSignal?: number
   selectedAgent: TuiAgent | CustomAgentId | null
   draftValue: ActionRecipeDraftValue
@@ -84,14 +93,17 @@ function resolveAgentArgsPlaceholderAgent(
   return defaultTuiAgent && defaultTuiAgent !== 'blank' ? defaultTuiAgent : null
 }
 
-function getActionLabel(actionId: AiActionId): string {
+function getActionLabel(actionId: AiActionId, t: Translate = translate): string {
   return actionId === 'conversationName'
-    ? translate('settings.chat.names.recipe', 'Chat name')
+    ? t('settings.chat.names.recipe', 'Chat name')
     : SOURCE_CONTROL_ACTION_LABELS[actionId]
 }
 
 export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
   actionId,
+  source,
+  onTextModelChoiceChange,
+  writeSourceControlAiSettings,
   setupDiscardSignal,
   selectedAgent,
   draftValue,
@@ -113,6 +125,7 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
   onDiscard,
   onSave
 }: SourceControlActionRecipeRowProps<ActionId>): React.JSX.Element {
+  const t = useTranslate()
   const draftScope = useAgentPickerDraftScope(setupDiscardSignal)
   const isLaunchAction = !AI_TEXT_ACTION_ID_SET.has(actionId)
   const templateDirty =
@@ -122,17 +135,26 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
     getSourceControlAgentArgsPlaceholder(
       resolveAgentArgsPlaceholderAgent(selectedAgent, defaultTuiAgent)
     )
-  const agentOptions = getAgentCatalogForAction(actionId, selectedAgent)
-  const agentWarningText = getSourceControlActionAgentWarningText(actionId, selectedAgent)
+  const agentWarningText = getSourceControlActionAgentWarningText(actionId, selectedAgent, t)
   const agentSupportText =
-    (!selectedAgent && defaultAgentSupportText) || getSourceControlActionAgentSupportText(actionId)
+    (!selectedAgent && defaultAgentSupportText) ||
+    getSourceControlActionAgentSupportText(actionId, t)
 
   return (
     <div className="rounded-md border border-border px-3 py-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-0.5">
-          <p className="text-xs font-medium text-foreground">{getActionLabel(actionId)}</p>
+          <p className="text-xs font-medium text-foreground">{getActionLabel(actionId, t)}</p>
           <p className="text-[11px] text-muted-foreground">{getActionDescriptions()[actionId]}</p>
+          {actionId === 'commitMessage' ? (
+            // The global Commit message model is also the other text actions' fallback.
+            <p className="text-[11px] text-muted-foreground">
+              {t(
+                'auto.components.settings.source.control.action.recipe.options.commitMessageSharedModel',
+                'Pull request details, Branch name and Chat name can also use this model when they don’t pick their own; their “Same as default” option shows which model they use.'
+              )}
+            </p>
+          ) : null}
         </div>
         <div className="w-full shrink-0 space-y-1 sm:w-[220px]">
           {isLaunchAction ? (
@@ -164,45 +186,20 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
               }
             />
           ) : (
-            <Select
-              value={selectedAgent ?? DEFAULT_AGENT_VALUE}
-              onValueChange={(value) => onAgentChange(actionId, value)}
-            >
-              <SelectTrigger size="sm" density="compact" className="h-8 w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={DEFAULT_AGENT_VALUE}>
-                  <span className="flex items-center gap-2">
-                    <Terminal className="size-3.5 text-muted-foreground" />
-                    {defaultAgentLabel ??
-                      translate(
-                        'auto.components.settings.SourceControlAiActionRecipeDefaults.ee0e5c2a48',
-                        'Use default agent'
-                      )}
-                  </span>
-                </SelectItem>
-                {AI_TEXT_ACTION_ID_SET.has(actionId) ? (
-                  <SelectItem value={CUSTOM_AGENT_ID}>
-                    <span className="flex items-center gap-2">
-                      <Terminal className="size-3.5 text-muted-foreground" />
-                      {translate(
-                        'auto.components.settings.SourceControlAiActionRecipeDefaults.0740d30915',
-                        'Custom command'
-                      )}
-                    </span>
-                  </SelectItem>
-                ) : null}
-                {agentOptions.map((agent) => (
-                  <SelectItem key={agent.id} value={agent.id}>
-                    <span className="flex items-center gap-2">
-                      <AgentIcon agent={agent.id} size={14} />
-                      {agent.label}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SourceControlTextActionAgentPicker
+              actionId={actionId}
+              agent={selectedAgent}
+              source={source}
+              draft={draftValue}
+              draftScope={draftScope}
+              disabled={isSavingTemplate}
+              defaultAgentLabel={defaultAgentLabel}
+              onAgentChange={(value) => onAgentChange(actionId, value)}
+              onChange={(choice, agentArgs, edits) =>
+                onTextModelChoiceChange?.(actionId, choice, agentArgs, edits)
+              }
+              writeSourceControlAiSettings={writeSourceControlAiSettings}
+            />
           )}
           {agentWarningText ? (
             <p className="text-[11px] text-destructive">{agentWarningText}</p>
@@ -214,7 +211,7 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
       <div className="mt-3 grid min-w-0 grid-cols-1 items-start gap-3">
         {!isLaunchAction ? (
           <SourceControlActionOptionField
-            label={translate('auto.components.settings.AgentsPane.cfb3f35775', 'Arguments')}
+            label={t('auto.components.settings.AgentsPane.cfb3f35775', 'Arguments')}
           >
             <Input
               value={draftValue.agentArgs ?? ''}
@@ -228,7 +225,7 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
         ) : null}
         <div className="min-w-0 space-y-2">
           <Label variant="settings">
-            {translate(
+            {t(
               'auto.components.settings.SourceControlAiActionRecipeDefaults.fb09da4345',
               'Command template'
             )}
@@ -251,11 +248,11 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
         <div className="flex items-center justify-between gap-3">
           <p className="text-[11px] text-muted-foreground">
             {templateDirty
-              ? translate(
+              ? t(
                   'auto.components.settings.SourceControlAiActionRecipeDefaults.817128d94e',
                   'Unsaved changes'
                 )
-              : translate(
+              : t(
                   'auto.components.settings.SourceControlAiActionRecipeDefaults.9d3cc627f8',
                   'Saved'
                 )}
@@ -272,7 +269,7 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
                 }}
                 disabled={isSavingTemplate}
               >
-                {translate(
+                {t(
                   'auto.components.settings.SourceControlAiActionRecipeDefaults.b3914ecbbc',
                   'Discard'
                 )}
@@ -286,11 +283,11 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
               disabled={!templateDirty || isSavingTemplate}
             >
               {isSavingTemplate
-                ? translate(
+                ? t(
                     'auto.components.settings.SourceControlAiActionRecipeDefaults.4f549a5fa8',
                     'Saving...'
                   )
-                : translate(
+                : t(
                     'auto.components.settings.SourceControlAiActionRecipeDefaults.d18d665e12',
                     'Save'
                   )}

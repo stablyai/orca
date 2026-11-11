@@ -6,7 +6,7 @@ import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orc
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { getOrcadMigrationReceivedBlobPath } from './orcad-migration-blob-staging'
 import { buildWslMoveShellHistoryBlobs } from '../moving-wsl-projects/wsl-move-shell-history-blobs'
-import { commitStagedOrcadMigrationCatalogDurably } from '../../runtime/orcad-migration-catalog-import'
+import { commitStagedOrcadMigrationCatalogDurably } from '../../runtime/hosts/migration/orcad-migration-catalog-import'
 import { getHistoryRoot } from '../../pty/history/terminal-history-paths'
 import { hashWorktreeId } from '../../pty/history/terminal-history-id'
 import { FOLDER_WORKSPACE } from './persistence-orcad-migration-catalog-fixture'

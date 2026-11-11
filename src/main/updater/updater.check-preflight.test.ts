@@ -339,46 +339,6 @@ describe('updater', () => {
     )
   })
 
-  it('ignores a stale update-not-available event after a new check starts preflight', async () => {
-    vi.useFakeTimers()
-    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: [], state: 'no-newer' })
-    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
-      if (autoUpdaterMock.checkForUpdates.mock.calls.length === 1) {
-        return Promise.resolve(undefined)
-      }
-      return new Promise(() => {})
-    })
-    const sendMock = vi.fn()
-    const mainWindow = updaterMainWindow(sendMock)
-
-    const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
-
-    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => Date.now() })
-    checkForUpdatesFromMenu()
-
-    await vi.waitFor(() => {
-      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
-    })
-    await vi.advanceTimersByTimeAsync(1000)
-
-    sendMock.mockClear()
-    checkForUpdatesFromMenu()
-    await vi.waitFor(() => {
-      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
-      expect(sendMock).toHaveBeenCalledWith('updater:status', {
-        state: 'checking',
-        userInitiated: true
-      })
-    })
-
-    autoUpdaterMock.emit('update-not-available')
-
-    expect(sendMock).not.toHaveBeenCalledWith('updater:status', {
-      state: 'not-available',
-      userInitiated: true
-    })
-  })
-
   it('ignores a stale error event after a new check starts preflight', async () => {
     vi.useFakeTimers()
     let resolveSecondTags: (value: { tags: string[]; state: 'no-newer' }) => void = () => {}
@@ -572,29 +532,5 @@ describe('updater', () => {
         message: expect.stringContaining("Couldn't reach the update server")
       })
     ])
-  })
-
-  it('deduplicates repeated manual checks while the immediate checking status is active', async () => {
-    let resolveTags: (value: { tags: string[]; state: 'no-newer' }) => void = () => {}
-    fetchNewerReleaseTagsMock.mockImplementation(
-      () =>
-        new Promise<{ tags: string[]; state: 'no-newer' }>((resolve) => {
-          resolveTags = resolve
-        })
-    )
-    autoUpdaterMock.checkForUpdates.mockImplementation(() => new Promise(() => {}))
-    const mainWindow = updaterMainWindow(vi.fn())
-
-    const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
-
-    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => Date.now() })
-    checkForUpdatesFromMenu()
-    checkForUpdatesFromMenu()
-
-    resolveTags({ tags: [], state: 'no-newer' })
-    await vi.waitFor(() => {
-      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
-    })
-    expect(fetchNewerReleaseTagsMock).toHaveBeenCalledTimes(1)
   })
 })

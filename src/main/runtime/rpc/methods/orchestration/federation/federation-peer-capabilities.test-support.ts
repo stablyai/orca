@@ -2,8 +2,9 @@ import {
   ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_STRUCTURED_READ_RUNTIME_CAPABILITY,
+  ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_AUTO_RELEASE_RUNTIME_CAPABILITY
-} from '../../../../../../shared/protocol-version'
+} from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 
 /** Capabilities a simulated older execution host leaves out of its status.get. */
@@ -13,6 +14,8 @@ function withheldPeerCapabilities(host: {
   autoRelease: boolean
 }): ReadonlySet<string> {
   return new Set([
+    // These suites drive today's remote attachments, which a server that owns its workers never gets.
+    ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY,
     ...(host.newCapabilities
       ? []
       : [
@@ -41,4 +44,11 @@ export function olderPeerStatusResponse(
     },
     _meta: { runtimeId: runtime.getRuntimeId() }
   }
+}
+
+/** A host's capabilities as one that keeps today's remote attachments advertises them. */
+export function attachmentHostCapabilities(runtime: OrcaRuntimeService): string[] {
+  return (runtime.getStatus().capabilities ?? []).filter(
+    (capability) => capability !== ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY
+  )
 }

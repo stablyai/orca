@@ -1,5 +1,5 @@
 import React from 'react'
-import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
+import { WORKSPACE_FILE_PATH_MIME } from '@/lib/files/drop/workspace-file-drag'
 
 export function useComposerFileDragOver(): {
   isFileDragOver: boolean

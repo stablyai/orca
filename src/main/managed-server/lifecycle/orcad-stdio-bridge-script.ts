@@ -1,5 +1,5 @@
 // Sentinels skip noisy login profiles; base64 framing prevents PowerShell text decoding from corrupting bytes.
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { orcadPosixNodeRuntimeGlobs } from '../install/orcad-node-runtime-globs'
 
 export type OrcadStdioBridgeMode = 'raw' | 'base64'
@@ -19,7 +19,7 @@ export const ORCAD_STDIO_BRIDGE_FUNCTION = `function orcadStdioBridge(port, mode
   const exit = () => out.write('', () => process.exit(0))
   out.on('error', () => process.exit(0))
   let connected = false
-  const socket = net.connect({ host: '127.0.0.1', port })
+  const socket = net.connect({ host: '127.0.0.1', port, noDelay: true })
   socket.on('error', (error) => {
     if (!connected) out.write(${text(`${ORCAD_STDIO_BRIDGE_REFUSED} `)} + String(error.code || 'ERROR') + '\\n', () => process.exit(0))
   })

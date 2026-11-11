@@ -1,7 +1,7 @@
 import type { BrowserLoadError } from '../../../../shared/browser-workspace-types'
 import type { BrowserPageFailLoadEvent } from './describe-page/browser-page-types'
 import { resolveBrowserWebviewLoadFailure } from './navigate/browser-webview-load-failure'
-import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import type { BrowserClientPageMetadataSnapshot } from './browser-client-page-metadata-publisher'
 

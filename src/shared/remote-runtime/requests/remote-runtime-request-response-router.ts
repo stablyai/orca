@@ -1,4 +1,4 @@
-import type { PairedE2EEClientHandshake } from '../../paired-e2ee-client-handshake'
+import type { PairedE2EEClientHandshake } from '../e2ee/paired-e2ee-client-handshake'
 import type { RemoteRuntimeHandshakeState } from '../remote-runtime-client-handshake'
 import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import {
@@ -8,6 +8,11 @@ import {
 } from '../../runtime-rpc-envelope'
 import { parseRemoteRuntimeJsonText } from './remote-runtime-request-frames'
 import type { RuntimeStatus } from '../../runtime-session-contracts'
+import {
+  acceptSealedReady,
+  openSealedText,
+  type RemoteRuntimeSealedFrame
+} from '../remote-runtime-sealed-frame'
 
 type RequestResponseRouterOptions<TResult> = {
   handshake: PairedE2EEClientHandshake
@@ -42,25 +47,22 @@ export class RemoteRuntimeRequestResponseRouter<TResult> {
         : 'runtime'
   }
 
-  handleTextFrame(frame: string): void {
+  handleFrame(frame: RemoteRuntimeSealedFrame): void {
     if (this.state === 'awaiting_ready') {
       this.handleReadyFrame(frame)
       return
     }
-    const plaintext = this.options.handshake.channel.openText(frame)
-    if (plaintext === null) {
+    const opened = openSealedText(this.options.handshake, frame)
+    if (opened.kind === 'failed') {
       this.options.finishError(
-        new RemoteRuntimeClientError(
-          'invalid_runtime_response',
-          'Remote Orca runtime returned an undecryptable frame.',
-          {
-            pairingStage:
-              this.state === 'awaiting_authenticated' ? 'host-identity' : this.pairingStage
-          }
-        )
+        new RemoteRuntimeClientError('invalid_runtime_response', opened.message, {
+          pairingStage:
+            this.state === 'awaiting_authenticated' ? 'host-identity' : this.pairingStage
+        })
       )
       return
     }
+    const plaintext = opened.text
     if (this.state === 'awaiting_authenticated') {
       this.handleAuthenticatedFrame(plaintext)
       return
@@ -68,8 +70,8 @@ export class RemoteRuntimeRequestResponseRouter<TResult> {
     this.handleRpcFrame(plaintext)
   }
 
-  private handleReadyFrame(frame: string): void {
-    const readyFrame = this.options.handshake.acceptReadyText(frame)
+  private handleReadyFrame(frame: RemoteRuntimeSealedFrame): void {
+    const readyFrame = acceptSealedReady(this.options.handshake, frame)
     if (readyFrame !== 'accepted') {
       this.options.finishError(
         new RemoteRuntimeClientError(

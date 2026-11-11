@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store'
 import type { FloatingTerminalTriggerLocation } from '../../../../shared/ui-chrome-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 type FloatingTerminalIconContextMenuProps = {
@@ -25,6 +25,7 @@ export function FloatingTerminalIconContextMenu({
   className,
   style
 }: FloatingTerminalIconContextMenuProps): React.JSX.Element {
+  const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   const updateSettings = useAppStore((s) => s.updateSettings)
   const [open, setOpen] = useState(false)
@@ -44,7 +45,7 @@ export function FloatingTerminalIconContextMenu({
     if (currentLocation === 'floating-button') {
       return {
         icon: <PanelBottom className="size-3.5" />,
-        label: translate(
+        label: t(
           'auto.components.floating.terminal.FloatingTerminalIconContextMenu.0ee79e0674',
           'Move to Status Bar'
         ),
@@ -53,14 +54,14 @@ export function FloatingTerminalIconContextMenu({
     }
     return {
       icon: <PanelTop className="size-3.5" />,
-      label: translate(
+      label: t(
         'auto.components.floating.terminal.FloatingTerminalIconContextMenu.763f5fa2c1',
         'Move to Floating Button'
       ),
       location: 'floating-button' as const
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
-  }, [currentLocation, languageRevision])
+  }, [currentLocation, languageRevision, t])
 
   return (
     <>
@@ -117,7 +118,7 @@ export function FloatingTerminalIconContextMenu({
             }}
           >
             <EyeOff className="size-3.5" />
-            {translate(
+            {t(
               'auto.components.floating.terminal.FloatingTerminalIconContextMenu.8e7d775287',
               'Hide Floating Workspace'
             )}

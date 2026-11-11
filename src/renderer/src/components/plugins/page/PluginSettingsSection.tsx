@@ -1,5 +1,5 @@
 import { useId, useState } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
@@ -110,6 +110,7 @@ function SettingRow({
   error: string | undefined
   onWrite: (value: PluginJsonValue) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const id = useId()
   const changed = value !== undefined && value !== (setting.default ?? undefined)
   const stacked = setting.multiline === true
@@ -129,7 +130,7 @@ function SettingRow({
           <SettingControl id={id} setting={setting} value={value} onCommit={onWrite} />
           {changed && setting.default !== undefined ? (
             <Button variant="ghost" size="xs" onClick={() => onWrite(null)}>
-              {translate('auto.components.settings.PluginSettingsSection.reset', 'Reset')}
+              {t('auto.components.settings.PluginSettingsSection.reset', 'Reset')}
             </Button>
           ) : null}
         </div>
@@ -148,14 +149,13 @@ export function PluginSettingsSection({
   /** Re-reads when the installed plugin changes. */
   revision: string
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const { snapshot, errors, write } = usePluginDeclaredSettings(pluginKey, revision)
   if (!snapshot || snapshot.settings.length === 0) {
     return null
   }
   return (
-    <DetailSection
-      title={translate('auto.components.settings.PluginSettingsSection.title', 'Settings')}
-    >
+    <DetailSection title={t('auto.components.settings.PluginSettingsSection.title', 'Settings')}>
       {snapshot.settings.map((setting) => (
         <SettingRow
           key={setting.key}

@@ -1,5 +1,8 @@
-import type { AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-types'
-import { aiVaultScanIssueText } from '../../shared/ai-vault-scan-issue-copy'
+import type {
+  AiVaultListResult,
+  AiVaultSession
+} from '../../shared/ai-vault/contracts/ai-vault-types'
+import { aiVaultScanIssueText } from '../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
 import { isWslUncPath } from '../../shared/wsl-paths'
 
 // The WSL rows of the last scan whose WSL roots a confirmed running list named, per scope key.

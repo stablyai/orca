@@ -1,18 +1,18 @@
 import { getClaudeAgentViewService } from '../claude/agent-view/agent-view-service'
 import { getAppEnvironment } from '../../shared/app-environment'
-import { startCodexHooks } from '../codex/codex-hook-reconcile'
-import { adoptLoginShellAgentHomes } from '../agent-hooks/agent-home-login-shell'
-import { hydrateAgentCliShellPath } from '../agent-hooks/local-agent-cli-presence'
+import { startCodexHooks } from '../codex/hooks/reconciliation/codex-hook-reconcile'
+import { adoptLoginShellAgentHomes } from '../agent-hooks/installation/agent-home-login-shell'
+import { hydrateAgentCliShellPath } from '../agent-hooks/installation/local-agent-cli-presence'
 import {
   isAgentStatusHooksEnabled,
   isAgentStatusHooksEnabledForAgent
-} from '../agent-hooks/managed-agent-hook-controls'
-import { reconcileStartupManagedAgentHooks } from '../agent-hooks/managed-agent-hook-startup'
+} from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
+import { reconcileStartupManagedAgentHooks } from '../agent-hooks/installation/managed-agent-hook-startup'
 import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/opencode-status-plugin-startup-refresh'
-import type { ProfilePreferences } from '../persistence/loading-store/profile-preferences'
+import type { ProfilePreferences } from '../persistence/loading-store/profile-preferences/profile-preferences'
 import type { OrcadRuntimeCleanup } from './orcad-runtime-lifetime'
-import type { AgentHookServer } from '../agent-hooks/server'
-import { installLocalHookRootEvidence } from '../agent-hooks/local-hook-root-evidence'
+import type { AgentHookServer } from '../agent-hooks/server/agent-hook-server'
+import { installLocalHookRootEvidence } from '../agent-hooks/observations/local-hook-root-evidence'
 
 /** SSH and WSL-host panes run beside this host, so it proves which agent owns each pane, from the
  *  first record its startup replay reads. */

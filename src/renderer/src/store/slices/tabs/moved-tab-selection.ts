@@ -1,4 +1,4 @@
-import { retireRemovedNativeChatDraftPositions } from '@/components/native-chat/native-chat-draft-cache'
+import { retireRemovedNativeChatDraftPositions } from '@/components/native-chat/drafts/native-chat-draft-position-retirement'
 // Select moved tabs with the frame showing the move (L120); a later reply may already be superseded by another drag.
 
 import type { AppState } from '../../types'
@@ -6,7 +6,7 @@ import {
   dropMovedTabSelection,
   pendingMovedTabSelections,
   type MovedTabSelection
-} from '@/runtime/layout-owner-pane-intents'
+} from '@/runtime/workspace-layout/intents/layout-owner-pane-intents'
 import { tabActivationPatch } from './tabs-focus-actions'
 import { endsPreviewHere } from './preview-tab-promotion'
 import { buildActiveSurfacePatch } from './tabs-surface'

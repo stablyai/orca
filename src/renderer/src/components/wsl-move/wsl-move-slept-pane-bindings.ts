@@ -1,4 +1,4 @@
-import { makePaneKey, isTerminalLeafId } from '../../../../shared/stable-pane-id'
+import { makePaneKey, isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 
 type SleptPaneBinding = { paneKey: string; sessionId: string }
 

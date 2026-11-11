@@ -141,8 +141,9 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
         )
       }
       setShowCreateTask(false)
-      setCreateTitle('')
-      setCreateBody('')
+      // Text typed while the create ran, here or in a reopened sheet, is not what it sent.
+      setCreateTitle((current) => (current === createTitle ? '' : current))
+      setCreateBody((current) => (current === createBody ? '' : current))
       await loadTasks({ silent: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create task')

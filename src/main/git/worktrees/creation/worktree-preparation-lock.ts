@@ -1,10 +1,12 @@
-import { readFile, unlink, writeFile } from 'node:fs/promises'
-import { posix, win32 } from 'node:path'
+import { canonicalWorktreePath } from '../catalog/worktree-path-comparison'
+import type { WorktreePreparationOperation } from './worktree-preparation-operation'
+import { readFile, realpath, unlink, writeFile } from 'node:fs/promises'
+import { dirname, posix, win32 } from 'node:path'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import {
   resolveGitMetadataPath,
   type GitMetadataPathOptions
-} from '../../../../shared/git-metadata-path'
+} from '../../../../shared/git/metadata/git-metadata-path'
 import { toHostFilesystemPath } from '../../../filesystem/host-tree-removal'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import {
@@ -14,7 +16,10 @@ import {
 } from '../worktree-operation-options'
 
 export class WorktreePreparationLockOwnershipError extends Error {
-  constructor(cause?: unknown) {
+  constructor(
+    cause?: unknown,
+    readonly replaced = false
+  ) {
     super('The prepared worktree lock owner changed', { cause })
   }
 }
@@ -74,13 +79,15 @@ async function readPreparationLockPath(
 export async function lockWorktreePreparation(
   worktreePath: string,
   lockReason: string,
-  options: GitWorktreeExecOptions
+  options: GitWorktreeExecOptions,
+  operation?: WorktreePreparationOperation
 ): Promise<string> {
   const lockPath = await readPreparationLockPath(worktreePath, options)
   options.signal?.throwIfAborted()
   // Git's own lock marker is a reason plus newline; exclusive creation preserves another owner.
   try {
-    await writeFile(lockPath, `${lockReason}\n`, { flag: 'wx' })
+    const writing = writeFile(lockPath, `${lockReason}\n`, { flag: 'wx' })
+    await (operation ? operation.trackWriter(writing) : writing)
   } catch (error) {
     if (getErrorCode(error) === 'EEXIST') {
       throw new WorktreePreparationLockOwnershipError()
@@ -103,10 +110,12 @@ export async function unlockWorktreePreparation(
 export async function unlockWorktreePreparationAtPath(
   lockPath: string,
   expectedLockReason: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  operation?: WorktreePreparationOperation
 ): Promise<void> {
   await verifyWorktreePreparationLockAtPath(lockPath, expectedLockReason, signal)
-  await unlink(lockPath).catch((error: unknown) => {
+  const writing = unlink(lockPath)
+  await (operation ? operation.trackWriter(writing) : writing).catch((error: unknown) => {
     throw new WorktreePreparationLockOwnershipError(error)
   })
 }
@@ -130,7 +139,20 @@ export async function verifyWorktreePreparationLockAtPath(
     throw new WorktreePreparationLockOwnershipError(error)
   })
   if (lockReason !== `${expectedLockReason}\n`) {
-    throw new WorktreePreparationLockOwnershipError()
+    throw new WorktreePreparationLockOwnershipError(undefined, true)
   }
   signal?.throwIfAborted()
+}
+
+export async function verifyOriginalPreparationDirectory(
+  gitDir: string,
+  originalLockPath: string
+): Promise<void> {
+  const [actual, original] = await Promise.all([
+    realpath(gitDir),
+    realpath(dirname(originalLockPath))
+  ])
+  if (canonicalWorktreePath(actual) !== canonicalWorktreePath(original)) {
+    throw new WorktreePreparationLockOwnershipError(undefined, true)
+  }
 }

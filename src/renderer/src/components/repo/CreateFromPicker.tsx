@@ -15,16 +15,17 @@ import {
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
   getRuntimeRepoBaseRefDefault,
   searchRuntimeRepoBaseRefs
-} from '@/runtime/runtime-repo-client'
-import { isRuntimeRepoRefSearchQueryWithinLimit } from '@/runtime/runtime-repo-search-bounds'
+} from '@/runtime/source-control/references/runtime-repo-client'
+import { isRuntimeRepoRefSearchQueryWithinLimit } from '@/runtime/source-control/references/runtime-repo-search-bounds'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { FilePathCursorTooltip } from '@/components/file-path-cursor-tooltip'
 
 const DEFAULT_VALUE = '__project_default__'
@@ -54,6 +55,7 @@ export function CreateFromPicker({
   onValueChange: (baseBranch: string) => void
   onSetDefault?: (baseBranch: string) => void | Promise<void>
 }): React.JSX.Element {
+  const t = useTranslate()
   const repo = repoMap.get(repoId)
   const repoHostId = repo ? getRepoExecutionHostId(repo) : undefined
   const [open, setOpen] = React.useState(false)
@@ -66,7 +68,7 @@ export function CreateFromPicker({
   const listId = React.useId()
   const effectiveDefault = repo?.worktreeBaseRef ?? defaultBaseRef
   const selectedValue = value || DEFAULT_VALUE
-  const projectDefaultLabel = translate(
+  const projectDefaultLabel = t(
     'auto.components.automations.CreateFromPicker.ef6d762538',
     'Project default'
   )
@@ -228,7 +230,7 @@ export function CreateFromPicker({
   const trigger = compact ? (
     readOnly ? (
       <span
-        aria-label={`${translate('auto.components.automations.CreateFromPicker.dd3841b442', 'Branch from')}: ${compactLabel}`}
+        aria-label={`${t('auto.components.automations.CreateFromPicker.dd3841b442', 'Branch from')}: ${compactLabel}`}
         className={cn(
           'inline-flex h-6 max-w-44 items-center gap-1 rounded-md border border-border bg-muted/30 px-1.5 text-[11px] text-muted-foreground opacity-70',
           triggerClassName
@@ -242,10 +244,7 @@ export function CreateFromPicker({
         role="combobox"
         aria-expanded={open}
         aria-controls={listId}
-        aria-label={translate(
-          'auto.components.automations.CreateFromPicker.dd3841b442',
-          'Branch from'
-        )}
+        aria-label={t('auto.components.automations.CreateFromPicker.dd3841b442', 'Branch from')}
         className={cn(
           'inline-flex h-6 max-w-44 items-center gap-1 rounded-md border border-border bg-muted/30 px-1.5 text-[11px] text-muted-foreground',
           'cursor-pointer hover:bg-accent hover:text-foreground',
@@ -266,7 +265,7 @@ export function CreateFromPicker({
     >
       <span className="flex min-w-0 items-center gap-1.5">
         <span className="shrink-0 text-muted-foreground">
-          {translate('auto.components.automations.CreateFromPicker.dd3841b442', 'Branch from')}
+          {t('auto.components.automations.CreateFromPicker.dd3841b442', 'Branch from')}
         </span>
         <span className="truncate">{selectedLabel}</span>
       </span>
@@ -294,7 +293,7 @@ export function CreateFromPicker({
                 ref={setInputNode}
                 value={query}
                 onValueChange={setQuery}
-                placeholder={translate(
+                placeholder={t(
                   'auto.components.automations.CreateFromPicker.f061f49e3f',
                   'Search repo branches...'
                 )}
@@ -302,11 +301,11 @@ export function CreateFromPicker({
               <CommandList id={listId} className="max-h-72">
                 <CommandEmpty>
                   {isSearching
-                    ? translate(
+                    ? t(
                         'auto.components.automations.CreateFromPicker.9ce96621f4',
                         'Searching branches...'
                       )
-                    : translate(
+                    : t(
                         'auto.components.automations.CreateFromPicker.79512f22a7',
                         'No branches found.'
                       )}
@@ -329,12 +328,12 @@ export function CreateFromPicker({
                     <FilePathCursorTooltip path={effectiveDefault ?? projectDefaultLabel}>
                       <span className="min-w-0 truncate">
                         {effectiveDefault
-                          ? translate(
+                          ? t(
                               'auto.components.automations.CreateFromPicker.e53d306056',
                               '{{value0}} (default)',
                               { value0: effectiveDefault }
                             )
-                          : translate(
+                          : t(
                               'auto.components.automations.CreateFromPicker.ef6d762538',
                               'Project default'
                             )}

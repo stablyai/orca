@@ -3,25 +3,42 @@ import { getUtf8ChunkEndIndex } from '../../../../shared/utf8-byte-limits'
 import {
   TEXT_CONTROL_PASTE_CHUNK_MAX_BYTES,
   TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES,
-  TEXT_CONTROL_PASTE_MAX_BYTES,
+  TEXT_CONTROL_PASTE_MAX_BYTES
+} from '@/lib/text-input/paste/text-control-paste-model'
+import {
   measureTextControlPasteByteLength,
   measureTextControlPasteByteLengthWithYield,
   pasteTextIntoTextControl
-} from '@/lib/text-control-paste'
+} from '@/lib/text-input/paste/text-control-paste'
+import {
+  DICTATION_TEXT_BLOCK_SELECTOR,
+  dictationSeparators
+} from '../../../../shared/dictation-transcript-spacing'
+import { focusedBrowserPageId } from '@/hooks/resolve-zoom-target'
 import { DICTATION_FOCUS_INPUT_EVENT } from './dictation-control-events'
 
+/** Each returns whether the text landed. */
+type ComposerInsert = (text: string) => boolean
+type TerminalInput = {
+  insert: (text: string, paneId: number) => Promise<boolean>
+  /** Enter as if typed, once the pane has taken the dictated text and if the send still stands. */
+  pressEnter: (paneId: number, stillQueued: () => boolean) => Promise<void>
+}
+
 export type DictationInsertionTarget =
-  | { kind: 'composer'; insert: (text: string) => void }
-  | { kind: 'terminal'; tabId: string; paneId: number }
+  | { kind: 'composer'; insert: ComposerInsert; root: HTMLElement }
+  | { kind: 'terminal'; tabId: string; paneId: number; pane: HTMLElement }
+  | { kind: 'browser'; browserPageId: string }
   | { kind: 'text'; element: HTMLInputElement | HTMLTextAreaElement }
   | { kind: 'contentEditable'; element: HTMLElement }
 
-const composerTargets = new WeakMap<HTMLElement, (text: string) => void>()
+const composerTargets = new WeakMap<HTMLElement, ComposerInsert>()
+const terminalTargets = new Map<string, TerminalInput>()
 
-/** Capture a draft destination so a late transcript can follow an inline edit's hand-back. */
+/** A late transcript lands in the composer's draft even after focus left its editor; the composer spaces it. */
 export function registerDictationComposerTarget(
   root: HTMLElement,
-  insert: (text: string) => void
+  insert: ComposerInsert
 ): () => void {
   composerTargets.set(root, insert)
   return () => {
@@ -29,6 +46,23 @@ export function registerDictationComposerTarget(
       composerTargets.delete(root)
     }
   }
+}
+
+/** A late transcript lands in the pane it started in, even after its tab was switched away. */
+export function registerDictationTerminalTarget(tabId: string, input: TerminalInput): () => void {
+  terminalTargets.set(tabId, input)
+  return () => {
+    if (terminalTargets.get(tabId) === input) {
+      terminalTargets.delete(tabId)
+    }
+  }
+}
+
+export async function pressDictationTerminalEnter(
+  target: Extract<DictationInsertionTarget, { kind: 'terminal' }>,
+  stillQueued: () => boolean
+): Promise<void> {
+  await terminalTargets.get(target.tabId)?.pressEnter(target.paneId, stillQueued)
 }
 
 export function captureInsertionTarget(): DictationInsertionTarget | null {
@@ -49,8 +83,8 @@ function readFocusedInsertionTarget(): DictationInsertionTarget | null {
 
   for (let root: Element | null = activeElement; root; root = root.parentElement) {
     const insert = root instanceof HTMLElement ? composerTargets.get(root) : undefined
-    if (insert) {
-      return { kind: 'composer', insert }
+    if (insert && root instanceof HTMLElement) {
+      return { kind: 'composer', insert, root }
     }
   }
 
@@ -59,10 +93,19 @@ function readFocusedInsertionTarget(): DictationInsertionTarget | null {
     const tabElement = activeElement.closest('[data-terminal-tab-id]') as HTMLElement | null
     const paneId = Number(paneElement?.dataset.paneId)
     const tabId = tabElement?.dataset.terminalTabId
-    if (tabId && Number.isFinite(paneId)) {
-      return { kind: 'terminal', tabId, paneId }
+    if (paneElement && tabId && Number.isFinite(paneId)) {
+      return { kind: 'terminal', tabId, paneId, pane: paneElement }
     }
     return null
+  }
+
+  if (activeElement.tagName === 'WEBVIEW') {
+    const browserPageId =
+      focusedBrowserPageId(activeElement) ??
+      activeElement
+        .closest('[data-browser-client-page-id]')
+        ?.getAttribute('data-browser-client-page-id')
+    return browserPageId ? { kind: 'browser', browserPageId } : null
   }
 
   if (activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement) {
@@ -76,36 +119,81 @@ function readFocusedInsertionTarget(): DictationInsertionTarget | null {
   return null
 }
 
-export function insertText(text: string, target: DictationInsertionTarget): void {
+function spaced(text: string, before: string, after: string): string {
+  const { leading, trailing } = dictationSeparators(before, text, after)
+  return `${leading}${text}${trailing}`
+}
+
+function readSelectionRangeIn(element: HTMLElement): Range | null {
+  const selection = element.ownerDocument.getSelection()
+  const range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
+  return range && element.contains(range.commonAncestorContainer) ? range : null
+}
+
+/** The selection's neighbours within its own block, so a new paragraph's start has none. */
+function readContentEditableNeighbours(element: HTMLElement): { before: string; after: string } {
+  const range = readSelectionRangeIn(element)
+  if (!range) {
+    return { before: '', after: '' }
+  }
+  const blockOf = (node: Node): Node => {
+    const block = (node instanceof Element ? node : node.parentElement)?.closest(
+      DICTATION_TEXT_BLOCK_SELECTOR
+    )
+    return block && element.contains(block) ? block : element
+  }
+  const before = element.ownerDocument.createRange()
+  before.selectNodeContents(blockOf(range.startContainer))
+  before.setEnd(range.startContainer, range.startOffset)
+  const after = element.ownerDocument.createRange()
+  after.selectNodeContents(blockOf(range.endContainer))
+  after.setStart(range.endContainer, range.endOffset)
+  return { before: before.toString(), after: after.toString() }
+}
+
+/**
+ * Spaces dictated text from the text around where it lands, inserts it, and resolves whether it landed.
+ * A terminal's line can't be read, so `previousText` (the session's last landed text) stands in for it.
+ */
+export async function insertText(
+  text: string,
+  target: DictationInsertionTarget,
+  previousText = ''
+): Promise<boolean> {
   if (target.kind === 'composer') {
-    target.insert(text)
-    return
+    return target.insert(text)
   }
   if (target.kind === 'terminal') {
-    document.dispatchEvent(
-      new CustomEvent('dictation:insertText', {
-        detail: { text, tabId: target.tabId, paneId: target.paneId }
-      })
-    )
-    return
+    const input = terminalTargets.get(target.tabId)
+    return input ? input.insert(spaced(text, previousText, ''), target.paneId) : false
   }
-
+  if (target.kind === 'browser') {
+    // The page spaces the text from its own field.
+    return (
+      window.api.browser?.insertDictationText({ browserPageId: target.browserPageId, text }) ??
+      false
+    )
+  }
   if (target.kind === 'text') {
     const element = target.element
     if (!element.isConnected) {
-      return
+      return false
     }
-    void pasteTextIntoTextControl(element, text, {
-      source: 'programmatic',
-      inputType: 'insertText',
-      canContinue: (candidate) => candidate.ownerDocument.activeElement === candidate
-    }).catch(() => {})
-    return
+    const start = element.selectionStart ?? element.value.length
+    const end = element.selectionEnd ?? start
+    const result = await pasteTextIntoTextControl(
+      element,
+      spaced(text, element.value.slice(0, start), element.value.slice(end)),
+      {
+        source: 'programmatic',
+        inputType: 'insertText',
+        canContinue: (candidate) => candidate.ownerDocument.activeElement === candidate
+      }
+    )
+    return result.status === 'pasted'
   }
-
-  if (target.kind === 'contentEditable') {
-    void insertTextIntoContentEditableTarget(target.element, text).catch(() => {})
-  }
+  const { before, after } = readContentEditableNeighbours(target.element)
+  return insertTextIntoContentEditableTarget(target.element, spaced(text, before, after))
 }
 
 function findClosestEditorElement(element: HTMLElement): HTMLElement | null {
@@ -115,46 +203,46 @@ function findClosestEditorElement(element: HTMLElement): HTMLElement | null {
 async function insertTextIntoContentEditableTarget(
   element: HTMLElement,
   text: string
-): Promise<void> {
+): Promise<boolean> {
   const directByteLength = measureTextControlPasteByteLength(text, {
     stopAfterBytes: TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES
   })
   if (directByteLength.byteLength === 0) {
-    return
+    return true
   }
   if (!isContentEditableDictationTargetCurrent(element)) {
-    return
+    return false
   }
   const editorElement = findClosestEditorElement(element) ?? element
   if (!directByteLength.exceededLimit) {
-    insertContentEditableDictationChunk(element, editorElement, text)
-    return
+    return insertContentEditableDictationChunk(element, editorElement, text)
   }
 
   const maxByteLength = await measureTextControlPasteByteLengthWithYield(text, {
     stopAfterBytes: TEXT_CONTROL_PASTE_MAX_BYTES
   })
   if (maxByteLength.exceededLimit) {
-    return
+    return false
   }
 
   let textIndex = 0
   // Chunk paste-sized dictation while preserving editor beforeinput/input semantics.
   while (textIndex < text.length) {
     if (!isContentEditableDictationTargetCurrent(element)) {
-      return
+      return false
     }
     const nextIndex = getUtf8ChunkEndIndex(text, textIndex, TEXT_CONTROL_PASTE_CHUNK_MAX_BYTES)
     if (
       !insertContentEditableDictationChunk(element, editorElement, text.slice(textIndex, nextIndex))
     ) {
-      return
+      return false
     }
     textIndex = nextIndex
     if (textIndex < text.length) {
       await yieldToEventLoop()
     }
   }
+  return true
 }
 
 function insertContentEditableDictationChunk(
@@ -174,17 +262,18 @@ function insertContentEditableDictationChunk(
   if (element.ownerDocument.execCommand?.('insertText', false, text) === true) {
     return true
   }
-  const selection = element.ownerDocument.getSelection()
-  if (selection && selection.rangeCount > 0) {
-    const range = selection.getRangeAt(0)
-    range.deleteContents()
-    const textNode = element.ownerDocument.createTextNode(text)
-    range.insertNode(textNode)
-    range.setStartAfter(textNode)
-    range.collapse(true)
-    selection.removeAllRanges()
-    selection.addRange(range)
+  const range = readSelectionRangeIn(element)
+  if (!range) {
+    return false
   }
+  range.deleteContents()
+  const textNode = element.ownerDocument.createTextNode(text)
+  range.insertNode(textNode)
+  range.setStartAfter(textNode)
+  range.collapse(true)
+  const selection = element.ownerDocument.getSelection()
+  selection?.removeAllRanges()
+  selection?.addRange(range)
   editorElement.dispatchEvent(
     new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text })
   )

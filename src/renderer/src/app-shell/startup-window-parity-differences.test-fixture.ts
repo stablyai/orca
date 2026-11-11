@@ -2,7 +2,7 @@
 
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import { sweepUnattachedTerminalRows } from '../../../shared/workspace-layout/unattached-terminal-row-sweep'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 
 export const GIT = 'repo-1::/Users/dev/orca'
 

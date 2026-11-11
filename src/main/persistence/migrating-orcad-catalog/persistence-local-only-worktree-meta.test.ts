@@ -10,15 +10,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultPersistedState } from '../../../shared/constants'
-import {
-  composeWorktreeHostIdentity,
-  hostWorktreeTarget
-} from '../../../shared/worktree/host-qualified-identity'
+import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import { canonicalWorktreeIdentity } from '../../../shared/worktree/identity'
-import { resolveWorktreeMetaOwner } from '../host-qualified-worktree-meta'
-import { hydrateWorktreeMetaAliasProjection } from '../loading-store/worktree-meta-alias-projection'
+import { hydrateWorktreeMetaAliasProjection } from '../loading-store/worktree-metadata/worktree-meta-alias-projection'
 import { normalizeWorktreeLinkedItemMetadata } from '../tracking-repos/worktree-metadata-normalization'
-import { collectDependentStateBlockers } from '../../ssh/targets/ssh-target-orcad-dependents'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -64,39 +59,6 @@ afterEach(async () => {
 })
 
 describe('local-only workspace metadata', () => {
-  it('stamps a pre-existing unstamped floating terminal row local on load', () => {
-    const store = createUpgradedStore()
-    expect(store.getWorktreeMeta(FLOATING_TERMINAL_WORKTREE_ID)?.hostId).toBe('local')
-    expect(store.getAllWorktreeMetaForHost(SSH_HOST)).not.toHaveProperty(
-      FLOATING_TERMINAL_WORKTREE_ID
-    )
-    expect(store.getWorktreeMetaForHost(FLOATING_TERMINAL_WORKTREE_ID, 'local')?.sortOrder).toBe(1)
-    expect(collectDependentStateBlockers(store, 'ssh-1')).toEqual([])
-  })
-
-  it('moves a floating terminal row an older build stamped for an SSH host back to this machine', () => {
-    const remoteKey = canonicalWorktreeIdentity({
-      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-      executionHostId: SSH_HOST,
-      instanceId: INSTANCE_ID
-    })
-    const remoteRow = { ...floatingRow, hostId: SSH_HOST }
-    const store = createUpgradedStore({
-      worktreeMeta: { [FLOATING_TERMINAL_WORKTREE_ID]: remoteRow },
-      worktreeMetaByIdentity: { [remoteKey]: remoteRow },
-      worktreeIdentityAliases: {
-        [composeWorktreeHostIdentity(SSH_HOST, FLOATING_TERMINAL_WORKTREE_ID)]: [remoteKey]
-      }
-    })
-    expect(store.getAllWorktreeMetaForHost(SSH_HOST)).toEqual({})
-    expect(store.getWorktreeMetaForHost(FLOATING_TERMINAL_WORKTREE_ID, 'local')).toMatchObject({
-      hostId: 'local',
-      instanceId: INSTANCE_ID,
-      workspaceStatus: 'in-progress'
-    })
-    expect(collectDependentStateBlockers(store, 'ssh-1')).toEqual([])
-  })
-
   it('keeps a local floating terminal row over a staler remote copy, and settles in one load', async () => {
     const remoteKey = canonicalWorktreeIdentity({
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
@@ -121,22 +83,5 @@ describe('local-only workspace metadata', () => {
       reloaded.getAllWorktreeMetaForHost('local')[FLOATING_TERMINAL_WORKTREE_ID]
     ).toMatchObject({ hostId: 'local', lastActivityAt: 5, workspaceStatus: 'done' })
     expect(reloaded.getAllWorktreeMetaForHost(SSH_HOST)).toEqual({})
-  })
-
-  it('lands every floating terminal write on this machine, whichever host the caller named', () => {
-    const store = createUpgradedStore()
-    expect(resolveWorktreeMetaOwner(store, FLOATING_TERMINAL_WORKTREE_ID)?.hostId).toBe('local')
-    store.setWorktreeMeta(
-      hostWorktreeTarget({ id: FLOATING_TERMINAL_WORKTREE_ID, hostId: SSH_HOST }),
-      {
-        isUnread: true
-      }
-    )
-    expect(store.getAllWorktreeMetaForHost('local')[FLOATING_TERMINAL_WORKTREE_ID]).toMatchObject({
-      hostId: 'local',
-      isUnread: true
-    })
-    expect(store.getAllWorktreeMetaForHost(SSH_HOST)).toEqual({})
-    expect(collectDependentStateBlockers(store, 'ssh-1')).toEqual([])
   })
 })

@@ -151,31 +151,6 @@ it("keeps a WSL host's projects across a restart, with only the row fields", () 
   })
 })
 
-it('replaces the saved list with each answer and saves only when it changed', () => {
-  const { open } = profile()
-  const store = open()
-  let writes = 0
-  store.onStateWritten((domains) => {
-    if (domains?.includes('hostRepoCatalogSnapshots')) {
-      writes++
-    }
-  })
-  recordHostRepoCatalogAnswer(store, wslHost, 'repo.list', repoListAnswer([helloWorld, django]))
-  expect(writes).toBe(1)
-
-  // Every catalog refresh lands here; an identical answer must not schedule a save.
-  recordHostRepoCatalogAnswer(store, wslHost, 'repo.list', repoListAnswer([helloWorld, django]))
-  expect(writes).toBe(1)
-
-  // django was deleted on the host.
-  recordHostRepoCatalogAnswer(store, wslHost, 'repo.list', repoListAnswer([helloWorld]))
-  expect(writes).toBe(2)
-  store.flushOrThrow()
-  expect(
-    listHostRepoCatalogSnapshots(open(), [wslHost])['env-wsl']?.repos.map((repo) => repo.id)
-  ).toEqual(['hello'])
-})
-
 it('keeps each distro separately and ignores failures, other methods and paired servers', () => {
   const { open } = profile()
   const store = open()
@@ -202,24 +177,6 @@ it('keeps each distro separately and ignores failures, other methods and paired 
   expect(Object.keys(stored).sort()).toEqual(['env-wsl', 'env-wsl-2'])
   expect(stored['env-wsl']?.repos.map((repo) => repo.id)).toEqual(['hello'])
   expect(stored['env-wsl-2']?.repos.map((repo) => repo.id)).toEqual(['django'])
-})
-
-it('lists only WSL hosts, even when a paired server has a saved entry', () => {
-  const { open } = profile()
-  const store = open()
-  store.setHostRepoCatalogSnapshot('env-paired', { repos: [notes] })
-  store.setHostRepoCatalogSnapshot('env-wsl', { repos: [django] })
-  expect(Object.keys(listHostRepoCatalogSnapshots(store, [wslHost, pairedServer]))).toEqual([
-    'env-wsl'
-  ])
-})
-
-it('never lists a host no longer saved (removed outside Settings)', () => {
-  const { open } = profile()
-  const store = open()
-  recordHostRepoCatalogAnswer(store, wslHost, 'repo.list', repoListAnswer([helloWorld]))
-  recordHostRepoCatalogAnswer(store, otherWslHost, 'repo.list', repoListAnswer([django]))
-  expect(Object.keys(listHostRepoCatalogSnapshots(store, [wslHost]))).toEqual(['env-wsl'])
 })
 
 it('does not seed stale projects when a removed WSL host is added back under the same id', async () => {

@@ -1,5 +1,5 @@
-import { ORCA_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../shared/browser-guest-web-preferences'
-import { isBlankBrowserUrl } from '@/lib/browser-palette-search'
+import { ORCA_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../shared/browser/guest-lifecycle/browser-guest-web-preferences'
+import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
 
 export function createBrowserClientPageRetainedRoot(document: Document): HTMLDivElement {
   const root = document.createElement('div')
@@ -36,7 +36,9 @@ export function hideRetainedHostWhileGuestIsBlank(
 ): (event: Electron.LoadCommitEvent) => void {
   return (event) => {
     if (event.isMainFrame) {
-      host.style.visibility = isBlankBrowserUrl(event.url) ? 'hidden' : ''
+      const blank = isBlankBrowserUrl(event.url)
+      host.dataset.browserClientPageBlank = String(blank)
+      host.style.visibility = blank ? 'hidden' : ''
     }
   }
 }

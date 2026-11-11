@@ -1,4 +1,5 @@
-import { normalizeForgeWebHost } from '../../../shared/git-remote-host-alias'
+import { normalizeForgeWebHost } from '../../../shared/git/remotes/git-remote-host-alias'
+import { getPublicForgeProviderForHost } from '../../../shared/git/remotes/public-forge-host'
 
 // Scoped local fork of the hosted-git-info@9.0.3 behavior Orca used.
 // Keep only the provider parsing and file/commit URL construction needed by source links.
@@ -23,14 +24,14 @@ const shorthandHosts: Record<string, { host: string; provider: HostedRemoteProvi
 
 function providerForHost(host: string): HostedRemoteHost | null {
   const normalized = normalizeForgeWebHost(host)
-  if (normalized === 'github.com') {
-    return { host: 'github.com', provider: 'github' }
-  }
-  if (normalized === 'gitlab.com') {
-    return { host: 'gitlab.com', provider: 'gitlab' }
-  }
-  if (normalized === 'bitbucket.org') {
-    return { host: 'bitbucket.org', provider: 'bitbucket' }
+  const provider = getPublicForgeProviderForHost(normalized)
+  if (
+    (normalized === 'github.com' ||
+      normalized === 'gitlab.com' ||
+      normalized === 'bitbucket.org') &&
+    (provider === 'github' || provider === 'gitlab' || provider === 'bitbucket')
+  ) {
+    return { host: normalized, provider }
   }
   return null
 }

@@ -1,0 +1,76 @@
+import type { WorkspaceAttachmentMetadata } from '../../../../../../shared/workspace-attachments/workspace-attachment-legacy'
+import type { SourceControlAiSettingsInput } from '../../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type {
+  RuntimeGeneratePullRequestFieldsOverrides,
+  RuntimeGitContext
+} from '@/runtime/source-control/git/runtime-git-client-context'
+import type { Repo } from '../../../../../../shared/repo-types'
+import type { HostedReviewCreationEligibility } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import type { SourceControlAiPrCreationDefaults } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
+import type {
+  PullRequestFieldRevisions,
+  PullRequestGenerationFields
+} from '@/store/slices/hosted-review/generation/pull-request-generation-state'
+import type { PullRequestGenerationOptions } from '@/store/slices/hosted-review/generation/pull-request-generation-auto-submit'
+
+export type PullRequestGenerationOutcome = { result: PullRequestGenerationFields | null }
+
+export type PullRequestDraftFields = {
+  base: string
+  title: string
+  body: string
+  draft: boolean
+}
+
+export type UseCreatePullRequestDialogFieldsOptions = {
+  open: boolean
+  repoId: string
+  worktreeId: string | null
+  worktreePath: string
+  branch: string
+  workspace?: WorkspaceAttachmentMetadata | null
+  eligibility: HostedReviewCreationEligibility | null
+  currentBaseRef?: string | null
+  repo?: Pick<Repo, 'sourceControlAi'> | null
+  /** Generation preferences; routing comes from `target`. */
+  settings: SourceControlAiSettingsInput | null
+  /** The worktree owner's transport. */
+  target: RuntimeClientTarget | null
+  submitting: boolean
+  prCreationDefaults?: SourceControlAiPrCreationDefaults
+  sourceControlAiActionsVisible?: boolean
+  // Retain drafts across temporary same-context hiding; different eligibility contexts still reseed.
+  retainDraftWhenClosed?: boolean
+  onBranchChangedByGeneration?: () => Promise<void>
+  generation?: {
+    generating: boolean
+    generateError: string | null
+    seedRestoreKey?: string | null
+    seed?: PullRequestDraftFields | null
+    seedFieldRevisions?: PullRequestFieldRevisions | null
+    onSeedRestored?: (seedRestoreKey: string) => void
+    onGenerate: (
+      fields: PullRequestDraftFields,
+      fieldRevisions: PullRequestFieldRevisions,
+      overrides?: RuntimeGeneratePullRequestFieldsOverrides,
+      options?: PullRequestGenerationOptions
+    ) => void | Promise<PullRequestGenerationOutcome | undefined>
+    onCancelGenerate: () => void
+  }
+}
+
+export type GenerationSeed = {
+  requestId: number
+  fieldRevisions: PullRequestFieldRevisions
+  context: RuntimeGitContext
+}
+
+export function createInitialPullRequestFieldRevisions(): PullRequestFieldRevisions {
+  return {
+    base: 0,
+    title: 0,
+    body: 0,
+    draft: 0
+  }
+}

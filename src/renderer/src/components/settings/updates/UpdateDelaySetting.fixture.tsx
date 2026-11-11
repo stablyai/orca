@@ -32,7 +32,7 @@ export const off = defineFixture({
 export const infoTooltip = defineFixture({
   ...off,
   interact: (frame) => {
-    frame.querySelector<HTMLButtonElement>('button[aria-label="About Update Delay"]')?.focus()
+    frame.querySelector<HTMLButtonElement>('button[aria-label="About update delay"]')?.focus()
   }
 })
 

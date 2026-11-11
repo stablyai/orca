@@ -1,15 +1,15 @@
 import type { OrcaSessionId } from '../../../../shared/orca-session-address'
-import type { OrchestrationCoordinatorKey } from '../orchestration-caller-identity'
+import type { OrchestrationCoordinatorKey } from '../addressing/orchestration-caller-identity'
 import {
   structuredWorkerIdentities,
   structuredWorkerIdentityFromRow,
   structuredWorkerProcessIncarnation,
   structuredWorkerRecordIsCurrent,
   type StructuredWorkerIdentity
-} from '../../structured-worker-identity'
-import { deriveWorkerTerminalListState } from '../worker-terminal-ownership'
-import type { createLineageRunningSessionResolver } from '../structured-session-lineage'
-import { sessionPartyFromWorkerIdentity } from '../orchestration-party'
+} from '../terminal-authority/structured-sessions/structured-worker-identity'
+import { deriveWorkerTerminalListState } from '../terminal-authority/release/worker-terminal-ownership'
+import type { createLineageRunningSessionResolver } from '../addressing/session-lineage/structured-session-lineage'
+import { sessionPartyFromWorkerIdentity } from '../addressing/orchestration-party'
 import type { crewRecipientOwnerQueries, DispatchInput } from './crew-recipient-owner-queries'
 
 export type CrewRecipientKey = OrchestrationCoordinatorKey & { address: string; sourceKey?: string }

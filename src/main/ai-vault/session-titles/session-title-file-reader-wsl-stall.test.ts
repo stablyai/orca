@@ -81,6 +81,8 @@ describe('AI Vault session titles with a stalled WSL transcript lstat', () => {
     await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS + 1)
 
     const { titles } = await pending
-    expect(titles).toEqual([{ agent: 'claude', sessionId: LOCAL_SESSION_ID, title: 'hello world' }])
+    expect(titles).toEqual([
+      { agent: 'claude', sessionId: LOCAL_SESSION_ID, title: 'hello world', kind: 'fallback' }
+    ])
   })
 })

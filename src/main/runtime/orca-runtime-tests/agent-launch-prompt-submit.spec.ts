@@ -1,11 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  AGENT_PROMPT_BRACKETED_PASTE_END,
-  OrcaRuntimeService,
-  acknowledgeAgentPromptSubmit
-} from '../orca-runtime-test-mocks.spec'
-import { TEST_WORKTREE_PATH, store } from '../orca-runtime-test-fixtures.spec'
-import { wrapTerminalBracketedPasteText } from '../../../shared/terminal-bracketed-paste-text'
+import './runtime-test-module-registration.spec'
+import { AGENT_PROMPT_BRACKETED_PASTE_END } from '../../../shared/agent-launch/startup/agent-prompt-injection'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { acknowledgeAgentPromptSubmit } from '../orca-runtime-test-mocks/setup.spec'
+import { TEST_WORKTREE_PATH, store } from './orca-runtime-test-fixtures.spec'
+import { wrapTerminalBracketedPasteText } from '../../../shared/terminal/input/terminal-bracketed-paste-text'
 
 // Match desktop paste: submit Enter one turn after paste, without waiting for render quiescence.
 async function launchedAgentPane(agent: 'claude' | 'codex' | 'qwen-code', startsTurn = true) {

@@ -1,9 +1,9 @@
 // Unreadable journals fail closed; source-specific directories preserve older-build compatibility.
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { writeSecureJsonFileWithinLimit } from '../../../shared/bounded-secure-json-file'
+import { writeSecureJsonFileWithinLimit } from '../../../shared/secure-storage/bounded-secure-json-file'
 import { errorMessage } from '../../../shared/error-message'
-import { readNodeFileSyncWithinLimit } from '../../../shared/node-bounded-file-reader'
+import { readNodeFileSyncWithinLimit } from '../../../shared/file-content/node-bounded-file-reader'
 import { syncDirectoryDurablySync } from '../../filesystem/durable-file-write'
 
 const JOURNAL_FILE = /^[A-Za-z0-9_-]{1,128}\.json$/

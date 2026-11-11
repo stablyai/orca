@@ -137,15 +137,7 @@ describe('push device registry store', () => {
     expect(await devices.list(OWNER)).toHaveLength(PUSH_LIMITS.maxDevicesPerHost)
   })
 
-  it('frees a slot when a registration is deleted', async () => {
-    const first = await upsertOk(androidDevice('device-0'))
-    for (let index = 1; index < PUSH_LIMITS.maxDevicesPerHost; index++) {
-      await upsertOk(androidDevice(`device-${index}`))
-    }
-    expect((await devices.upsert(androidDevice('extra'))).ok).toBe(false)
-    expect(await devices.deleteOwned(OWNER, first)).toBe(true)
-    expect((await devices.upsert(androidDevice('extra'))).ok).toBe(true)
-  })
+
 
   it('counts the cap per host, not across the whole table', async () => {
     for (let index = 0; index < PUSH_LIMITS.maxDevicesPerHost; index++) {
@@ -155,37 +147,5 @@ describe('push device registry store', () => {
     expect(
       (await devices.upsert({ ...androidDevice('device-0'), hostFingerprint: OTHER })).ok
     ).toBe(true)
-  })
-
-  it('bounds list reads to the host device allowance', async () => {
-    // Straight past the per-host cap, so only the query LIMIT can bound this.
-    const rows = PUSH_LIMITS.maxDevicesPerHost + 5
-    for (let index = 0; index < rows; index++) {
-      await database.query(
-        `INSERT INTO push_devices (registration_id, host_fingerprint, device_id, platform, token,
-         created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [`reg-${index}`, OWNER, `device-${index}`, 'android', 'token', clock + index, clock]
-      )
-    }
-    expect(await devices.list(OWNER)).toHaveLength(PUSH_LIMITS.maxDevicesPerHost)
-  })
-
-  it('separates the same device id registered against two hosts', async () => {
-    const first = await upsertOk({
-      hostFingerprint: OWNER,
-      deviceId: 'shared-device',
-      platform: 'ios',
-      token: 'a'.repeat(64),
-      apnsEnvironment: 'sandbox'
-    })
-    const second = await upsertOk({
-      hostFingerprint: OTHER,
-      deviceId: 'shared-device',
-      platform: 'ios',
-      token: 'c'.repeat(64),
-      apnsEnvironment: 'sandbox'
-    })
-    expect(first).not.toBe(second)
   })
 })

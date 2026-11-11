@@ -1,4 +1,4 @@
-import { createUsageWorktreeResolver } from '../usage/usage-worktree-resolver'
+import { createUsageWorktreeResolver } from '../usage/worktree-attribution/usage-worktree-resolver'
 import {
   getLegacySourceSkipBytesByPath,
   listCodexSessionFiles,

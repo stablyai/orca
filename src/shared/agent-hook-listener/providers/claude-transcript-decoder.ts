@@ -2,6 +2,7 @@ import parser, { type Token } from 'stream-json/core/parser.js'
 import exec from 'stream-chain/exec.js'
 import { none } from 'stream-chain/defs.js'
 import { isKnownHarnessInjectedUserTurnText } from '../../harness-injected-user-turns'
+import { isClaudeToolResultContent } from '../../claude-tool-content'
 
 type Scope = 'root' | 'message' | 'content' | 'block' | 'result' | 'discard'
 type Frame = {
@@ -221,7 +222,7 @@ export class ClaudeTranscriptDecoder {
         if (frame.scope === 'root') {
           this.value = frame.object
         } else if (frame.scope === 'block' && parent?.scope === 'content') {
-          if (frame.object.type === 'tool_use' || frame.object.type === 'tool_result') {
+          if (frame.object.type === 'tool_use' || isClaudeToolResultContent(frame.object)) {
             parent.facts[factIndex] = frame.object
             parent.facts.length = factIndex + 1
           } else if (frame.object.type === 'text' && frame.object.text === 'x') {

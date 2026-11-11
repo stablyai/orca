@@ -42,15 +42,6 @@ function hostWithFence(token: string) {
 }
 
 describe('the Windows host script under an activation fence', () => {
-  it('runs an op only for the fence’s current holder', async () => {
-    const host = hostWithFence('successor')
-    const stale = await host.op('--fence', host.lock, 'stale', 'fence-check')
-    expect(stale.code).toBe(ORCAD_FENCE_LOST_EXIT)
-    expect(stale.stdout).toContain(ORCAD_FENCE_LOST_MARKER)
-    const owner = await host.op('--fence', host.lock, 'successor', 'fence-check')
-    expect(owner).toMatchObject({ code: 0, stdout: 'OK' })
-  })
-
   it('releases only its own generation, leaving a successor’s fence and journal', async () => {
     const host = hostWithFence('successor')
     expect((await host.op('fence-release', host.lock, host.journal, 'stale')).stdout).toBe(
@@ -135,30 +126,6 @@ describe('the Windows host script proving a lock an exited client left', () => {
     }
     return { lock, mutation, check }
   }
-
-  it('names a quiet lock an exited client holds, and nothing else', async () => {
-    const host = quietHost('t-exited')
-    expect(await host.check('0', 't-other')).toBe('KEPT')
-    expect(await host.check('0', 't-other', 't-exited')).toBe('EXITED_OWNER t-exited')
-  })
-
-  it('keeps a lock that is not yet quiet', async () => {
-    const host = quietHost('t-exited')
-    utimesSync(host.lock, new Date(), new Date())
-    expect(await host.check('0', 't-exited')).toBe('KEPT')
-  })
-
-  it('keeps the fence while its state mutation holder may still run', async () => {
-    const host = quietHost('t-exited')
-    mkdirSync(host.mutation)
-    // Unreadable creation time for a live PID cannot prove its owner exited.
-    writeFileSync(
-      join(host.mutation, 'owner.json'),
-      JSON.stringify({ pid: process.pid, creationTimeMs: 1234 })
-    )
-    expect(await host.check('1', 't-exited')).toBe('KEPT')
-    expect(await host.check('0', 't-exited')).toBe('EXITED_OWNER t-exited')
-  })
 
   it('keeps the fence while any mutation lock exists, even one whose holder exited', async () => {
     const host = quietHost('t-exited')

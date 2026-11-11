@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
-import { markRuntimeEnvironmentCompatible } from '@/runtime/runtime-rpc-client'
+import { markRuntimeEnvironmentCompatible } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { useAppStore } from '@/store'
 import { i18n } from '@/i18n/i18n'
 import { OnboardingLanguageLoading } from './OnboardingLanguageLoading'

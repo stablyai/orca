@@ -1,6 +1,7 @@
 import { renderOrchestrationArgv, type OrchestrationAgentView } from './agent-view'
 import type { WorkerListRunScope } from './worker-list-run-scope'
-import { isActionableOrchestrationFleetAttention } from '../../../shared/orchestration-fleet-attention'
+import { isActionableOrchestrationFleetAttention } from '../../../shared/orchestration/fleet/orchestration-fleet-attention'
+import { formatPrCommentRelativeTime } from '../../../shared/source-control/review-comments/pr-comment-time'
 
 type WorkerProjection = {
   runId?: string
@@ -9,7 +10,8 @@ type WorkerProjection = {
   host: { id: string }
   workspace?: { id: string } | null
   stage: { activity: string }
-  liveness: { verdict: string }
+  liveness: { verdict: string; detail?: string }
+  evidence?: { lastObservedAt: number | null }
   nextAction: { argv: string[] }
   attention?: { categories: string[] }
   resource?: { terminalState?: string | null } | null
@@ -37,9 +39,17 @@ export type WorkerShowResult = {
     releaseState?: string | null
     terminalHandle?: string | null
   } | null
-  observation?: { agentWait?: { source: string; reason?: string } | null }
+  observation?: { agentWait?: { source: string; reason?: string } | null; reason?: string }
+  /** Present only for a worker a paired server runs, which this Orca's record answers. */
+  server?: RemoteWorkerServer & { reachable?: boolean }
+  lastReport?: string | null
   autoReleaseAt?: string | null
+  /** The paired Orca whose Run here coordinates this worker. */
+  coordinatedFrom?: string | null
 }
+
+/** A worker a paired server runs, as this Orca names that server and last heard from it. */
+type RemoteWorkerServer = { name: string; asOf: string; repaired?: true }
 
 type WorkerShowFields = {
   dispatchId: string
@@ -49,13 +59,20 @@ type WorkerShowFields = {
   state: string
   stage: string
   liveness?: string
+  activity?: string
+  lastActivity?: string
   terminal?: string
   terminalState?: string
   workspace?: string
+  server?: string
+  asOf?: string
+  lastReport?: string
+  note?: string
   attention?: string[]
   waitingOnHuman?: string
   lastError?: string
   autoReleaseAt?: string
+  coordinatedFrom?: string
   next?: string
 }
 
@@ -69,7 +86,9 @@ export const WORKER_SHOW_VIEW: OrchestrationAgentView<WorkerShowResult, WorkerSh
       followUpOf: value.dispatch?.followUpOf ?? undefined,
       state: value.worker.state,
       stage: value.worker.stage,
-      liveness: value.projection?.liveness.verdict,
+      liveness: livenessField(value.projection),
+      activity: knownActivity(value.projection),
+      lastActivity: lastActivity(value.projection),
       terminal:
         value.worker.agentTerminalHandle ?? value.terminalResource?.terminalHandle ?? undefined,
       // The projection's accounting state matches worker-list; releaseState is the raw column.
@@ -78,6 +97,10 @@ export const WORKER_SHOW_VIEW: OrchestrationAgentView<WorkerShowResult, WorkerSh
         value.terminalResource?.releaseState ??
         undefined,
       workspace: value.projection?.workspace?.id ?? value.worker.worktreeId ?? undefined,
+      server: value.server?.name,
+      asOf: value.server?.asOf,
+      lastReport: value.lastReport ?? undefined,
+      note: value.server ? value.observation?.reason : undefined,
       attention: actionableAttention(value.projection),
       // Silence means checked and clear; an older host or unreadable pane never evaluated it.
       waitingOnHuman:
@@ -88,6 +111,7 @@ export const WORKER_SHOW_VIEW: OrchestrationAgentView<WorkerShowResult, WorkerSh
             : undefined,
       lastError: value.worker.lastError ?? undefined,
       autoReleaseAt: value.autoReleaseAt ?? undefined,
+      coordinatedFrom: value.coordinatedFrom ?? undefined,
       next: value.projection ? renderOrchestrationArgv(value.projection.nextAction.argv) : undefined
     }
   }
@@ -102,8 +126,11 @@ export type WorkerListResult = {
     dispatchStatus: string
     agentTerminalHandle: string | null
     terminalState: string | null
+    coordinatedFrom?: string | null
     resource?: { worktreeId?: string | null; autoReleaseAt?: string | null } | null
     projection?: WorkerProjection
+    /** Only on a worker a paired server runs, listed from this Orca's record of it. */
+    server?: RemoteWorkerServer
   }[]
   counts: Record<string, number>
   page?: { hasMore: boolean; nextCursor: string | null; total: number }
@@ -127,6 +154,8 @@ type WorkerListRow = {
   terminalState?: string
   workspace?: string
   host?: string
+  coordinatedFrom?: string
+  asOf?: string
   attention?: string[]
   autoReleaseAt?: string
   next?: string
@@ -161,7 +190,9 @@ export const WORKER_LIST_VIEW: OrchestrationAgentView<ScopedWorkerList, WorkerLi
         terminalState: worker.terminalState ?? undefined,
         // Older runtimes send no projection; the terminal resource row still names both.
         workspace: projection?.workspace?.id ?? worker.resource?.worktreeId ?? undefined,
-        host: projection?.host.id,
+        host: projection?.host.id ?? remoteHost(worker.server),
+        coordinatedFrom: worker.coordinatedFrom ?? undefined,
+        asOf: worker.server?.asOf,
         attention: actionableAttention(projection),
         autoReleaseAt: projection?.autoReleaseAt ?? worker.resource?.autoReleaseAt ?? undefined,
         next: projection
@@ -183,6 +214,11 @@ export const WORKER_LIST_VIEW: OrchestrationAgentView<ScopedWorkerList, WorkerLi
         }
       : undefined
   }
+}
+
+/** A re-made pairing leaves the record, but its server no longer reports the worker here. */
+export function remoteHost(server: RemoteWorkerServer | undefined): string | undefined {
+  return server && (server.repaired ? `${server.name} (pairing re-made)` : server.name)
 }
 
 // Older runtimes send no projection and cannot close finished workers on their own.
@@ -211,4 +247,25 @@ function actionableAttention(
 
 function nonEmpty<T>(values: T[] | undefined): T[] | undefined {
   return values && values.length > 0 ? values : undefined
+}
+
+/** Name what could not be verified, so a lost host never reads like a stuck worker. */
+function livenessField(projection: WorkerProjection | null | undefined): string | undefined {
+  const liveness = projection?.liveness
+  return liveness?.detail ? `${liveness.verdict} (${liveness.detail})` : liveness?.verdict
+}
+
+/** Only a live worker's activity is known; a finished turn is an idle agent, not finished work. */
+function knownActivity(projection: WorkerProjection | null | undefined): string | undefined {
+  if (projection?.liveness.verdict !== 'live' || projection.stage.activity === 'unknown') {
+    return undefined
+  }
+  return projection.stage.activity === 'done' ? 'idle' : projection.stage.activity
+}
+
+function lastActivity(projection: WorkerProjection | null | undefined): string | undefined {
+  const at = projection?.evidence?.lastObservedAt
+  return knownActivity(projection) && typeof at === 'number'
+    ? formatPrCommentRelativeTime(new Date(at).toISOString(), Date.now())
+    : undefined
 }

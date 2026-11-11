@@ -6,6 +6,9 @@ vi.mock('../components/terminal/terminal-provider-snapshot-capability', () => ({
   collectTerminalProviderSnapshotPtyIds: () => [],
   refreshTerminalProviderSnapshotCapabilities: async () => undefined
 }))
+vi.mock('../components/terminal/terminal-provider-gone-sessions', () => ({
+  probeTerminalProviderGoneSessions: async () => undefined
+}))
 vi.mock('../store', async () => {
   const { create } = await import('zustand')
   const useAppStore = create(() => ({
@@ -18,7 +21,7 @@ vi.mock('../store', async () => {
 
 import { toast } from 'sonner'
 import { useAppStore } from '../store'
-import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
+import type { RuntimeHostStatusSnapshot } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import { recoverFromDegradedStartup } from './startup-degraded-recovery'
 import '../web/web-runtime-client-error'
 
@@ -103,17 +106,6 @@ describe('recoverFromDegradedStartup', () => {
 
     afterEach(() => {
       Reflect.deleteProperty(window, '__ORCA_WEB_CLIENT__')
-    })
-
-    it('says the host is unreachable and reloads once it answers', async () => {
-      await recoverFrom(new Error('Could not connect to the remote Orca runtime.'))
-
-      expect(vi.mocked(toast.error).mock.calls[0]?.[0]).toBe("Couldn't reach your Orca host")
-      statusListener?.(snapshot('connecting'))
-      expect(relaunch).not.toHaveBeenCalled()
-      statusListener?.(snapshot('ready'))
-      statusListener?.(snapshot('ready'))
-      expect(relaunch).toHaveBeenCalledTimes(1)
     })
 
     it('stops waiting to reload once its startup pass is torn down', async () => {

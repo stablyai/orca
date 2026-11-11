@@ -1,5 +1,6 @@
 // Apply pure layout commands synchronously so runtime arrival order remains authoritative.
 
+import { clientLayoutCommand } from './workspace-layout-client-command'
 import {
   closeBrowserPage,
   openBrowserPage,
@@ -76,7 +77,11 @@ export function applyLayoutCommand(
   command: LayoutCommand,
   context: LayoutContext
 ): Applied {
-  const result = applyCommand(model, command, context)
+  const result = applyCommand(
+    model,
+    clientLayoutCommand(model, command, context.visibility),
+    context
+  )
   if (!result.ok) {
     return result
   }
@@ -119,7 +124,7 @@ function applyCommand(
     case 'closeTabs':
       return closeTabs(model, command, context)
     case 'moveTab':
-      return moveTab(model, command)
+      return moveTab(model, command, context)
     case 'splitGroup':
       return splitGroup(model, command, context)
     case 'setGroupRatios':

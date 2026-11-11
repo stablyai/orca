@@ -3,7 +3,7 @@ import { requestMobileCommitMessage } from './mobile-commit-message-ai'
 import { getStageablePaths, type MobileGitStatusResult } from './mobile-git-status'
 import { getMobilePrEligibilityReadiness } from './mobile-open-pr-prefill'
 import { resolveMobilePrPrefill, type MobilePrPrefill } from './mobile-pr-create'
-import { isBehindOnlyUpstream } from '../../../src/shared/git-upstream-status'
+import { isBehindOnlyUpstream } from '../../../src/shared/git/remotes/git-upstream-status'
 import {
   commitMobileHostedReviewStagedChanges,
   fastForwardMobileHostedReviewBranch,
@@ -12,7 +12,7 @@ import {
   stageMobileHostedReviewPaths
 } from './mobile-hosted-review-git-preparation'
 import { applyMobileHostedReviewRemotePrerequisite } from './mobile-hosted-review-remote-prerequisite'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 
 export { mobileHostedReviewCreateIntentProgressMessage } from './hosted-review-copy'
 
@@ -60,7 +60,7 @@ function hasUnresolvedConflicts(status: MobileGitStatusResult | null): boolean {
 }
 
 async function resolvePrefillFromStatus(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   input: Pick<PrepareInput, 'branch' | 'title' | 'base'>,
   status: MobileGitStatusResult | null
@@ -74,7 +74,7 @@ async function resolvePrefillFromStatus(
 }
 
 async function ensureLocalChangesCommitted(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   input: PrepareInput,
   currentStatus: MobileGitStatusResult | null
@@ -211,7 +211,7 @@ async function ensureLocalChangesCommitted(
 }
 
 export async function prepareMobileHostedReviewCreateIntent(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   input: PrepareInput
 ): Promise<MobileHostedReviewCreateIntentOutcome> {

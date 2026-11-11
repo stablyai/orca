@@ -1,13 +1,11 @@
 import { StaleRelayBrokerError } from './relay-session-broker-contract'
-import { relayStatusCellUrl } from '../../../shared/mobile-relay-status'
-import type { PairingRelay } from '../../../shared/mobile-relay-pairing-offer'
-import type {
-  DeviceCredentialInstalled,
-  DeviceCredentialInstallStatusResult,
-  DeviceResumeConfirmed,
-  MobileRelayEndpoint,
-  PairingProvisionRelayParams
-} from '../../../shared/mobile-relay-credential-contract'
+import type { RelaySessionBrokerOptions } from './relay-session-broker-contract'
+import {
+  relayStatusCellUrl,
+  type MobileRelayStatus as RelayBrokerStatus
+} from '../../../shared/remote-runtime/relay/mobile-relay-status'
+import type { PairingRelay } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
+import type * as RelayCredentials from '../../../shared/remote-runtime/relay/mobile-relay-credential-contract'
 import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
 import type { DeviceCredentialInstallAuthorization } from './relay-control-requests'
 import {
@@ -21,7 +19,7 @@ import { relayIdentityKey } from './relay-auth-identity'
 import { RelayOriginPool } from './relay-origin-pool'
 import { RelayRegionRefresh } from './relay-region-refresh'
 import { relayRenewalDelayMs } from './relay-renewal-jitter'
-import type { RelayBrokerStatus, RelaySessionBrokerOptions } from './relay-session-broker-contract'
+import { RelayWallClockTimer } from './relay-wall-clock-timer'
 
 export class RelaySessionBroker {
   private readonly options: RelaySessionBrokerOptions
@@ -29,11 +27,12 @@ export class RelaySessionBroker {
   private readonly originPool: RelayOriginPool
   private readonly regionRefresh: RelayRegionRefresh | null
   private authorization: RelayAuthorization | null = null
-  private refreshTimer: ReturnType<typeof setTimeout> | null = null
+  private readonly refreshTimer: RelayWallClockTimer
   private closed = false
 
   private constructor(options: RelaySessionBrokerOptions) {
     this.options = options
+    this.refreshTimer = new RelayWallClockTimer(options.now)
     this.relayHostId = deriveRelayHostId(options.keypair.publicKey)
     this.originPool = new RelayOriginPool({
       directorUrl: options.authConfig.relayDirectorUrl,
@@ -95,7 +94,7 @@ export class RelaySessionBroker {
     return !this.closed && this.originPool.hasLiveControl()
   }
 
-  get endpoint(): MobileRelayEndpoint | null {
+  get endpoint(): RelayCredentials.MobileRelayEndpoint | null {
     const assignment = this.originPool.activeAssignment
     if (!assignment) {
       return null
@@ -148,9 +147,9 @@ export class RelaySessionBroker {
 
   async installCredential(
     relayDeviceId: string,
-    params: PairingProvisionRelayParams,
+    params: RelayCredentials.PairingProvisionRelayParams,
     authorization: DeviceCredentialInstallAuthorization
-  ): Promise<DeviceCredentialInstalled> {
+  ): Promise<RelayCredentials.DeviceCredentialInstalled> {
     const control =
       authorization.mode === 'relay-basis'
         ? this.originPool.controlForBasis(authorization.basisConnId)
@@ -171,7 +170,7 @@ export class RelaySessionBroker {
   async credentialInstallStatus(
     relayDeviceId: string,
     reqId: string
-  ): Promise<DeviceCredentialInstallStatusResult> {
+  ): Promise<RelayCredentials.DeviceCredentialInstallStatusResult> {
     const control = this.originPool.activeControl
     if (!control) {
       throw new Error('relay_control_not_active')
@@ -182,7 +181,10 @@ export class RelaySessionBroker {
     return result
   }
 
-  async confirmResume(basisConnId: string, reqId: string): Promise<DeviceResumeConfirmed> {
+  async confirmResume(
+    basisConnId: string,
+    reqId: string
+  ): Promise<RelayCredentials.DeviceResumeConfirmed> {
     const control = this.originPool.controlForBasis(basisConnId)
     if (!control) {
       throw new Error('relay_basis_origin_not_found')
@@ -199,10 +201,7 @@ export class RelaySessionBroker {
     }
     const publishOffline = this.options.isCurrent()
     this.closed = true
-    if (this.refreshTimer) {
-      clearTimeout(this.refreshTimer)
-      this.refreshTimer = null
-    }
+    this.refreshTimer.cancel()
     this.originPool.closeNow(hostCloseReason)
     this.regionRefresh?.close()
     if (publishOffline) {
@@ -259,11 +258,10 @@ export class RelaySessionBroker {
     const now = (this.options.now ?? Date.now)()
     const random = this.options.random ?? Math.random
     const delay = relayRenewalDelayMs(authorization.expiresAt, now, random)
-    this.refreshTimer = setTimeout(() => void this.refreshAuthorization(), delay)
+    this.refreshTimer.schedule(delay, () => void this.refreshAuthorization())
   }
 
   private async refreshAuthorization(): Promise<void> {
-    this.refreshTimer = null
     try {
       const refresh = await this.options.refreshAccessToken()
       this.assertCurrent()
@@ -287,9 +285,9 @@ export class RelaySessionBroker {
       const now = (this.options.now ?? Date.now)()
       if (!this.closed && this.options.isCurrent() && now <= expiry + 60_000) {
         const random = this.options.random ?? Math.random
-        this.refreshTimer = setTimeout(
-          () => void this.refreshAuthorization(),
-          5_000 + Math.floor(random() * 10_001)
+        this.refreshTimer.schedule(
+          5_000 + Math.floor(random() * 10_001),
+          () => void this.refreshAuthorization()
         )
         return
       }

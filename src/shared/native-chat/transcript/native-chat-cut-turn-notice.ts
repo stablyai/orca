@@ -19,7 +19,7 @@ import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
 } from '../../agent-session/lifecycle/agent-session-turn-record'
-import { agentTurnVerdict } from '../../agent-turn-outcome'
+import { agentTurnVerdict } from '../../agent-status/lifecycle/agent-turn-outcome'
 import {
   PROVIDER_EXIT_ROW_PREFIX,
   RESTART_CONTINUATION_ROW_PREFIX,

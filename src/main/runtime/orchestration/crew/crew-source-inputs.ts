@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { OrchestrationDb } from '../db'
+import type { OrchestrationDb } from '../db/orchestration-db'
 import {
   readCrewParentInputs,
   type CrewParentClaim,
@@ -10,12 +10,13 @@ import {
   readCrewOwnedRunAddresses,
   readCrewTraffic,
   readCrewQuestions,
+  readCrewApprovals,
   type CrewAssignmentRow
 } from './crew-query'
-import type { OrchestrationCoordinatorKey } from '../orchestration-caller-identity'
+import type { OrchestrationCoordinatorKey } from '../addressing/orchestration-caller-identity'
 import { exposeUtcTimestamp } from '../db/utc-timestamp'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-freshness'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { paneKeyMatchSuffix } from '../db/pane-key-match'
 
 type ProvenanceRow = Pick<CrewParentClaim, 'id' | 'handle' | 'pane' | 'session' | 'process'>
@@ -175,6 +176,7 @@ export function createCrewSourceInputs(db: OrchestrationDb | null, capacity = ()
         validThrough: number
       }
       questions?: ReturnType<typeof readCrewQuestions>
+      approvals?: ReturnType<typeof readCrewApprovals>
     }
   >()
   const retain = <T>(cache: Map<string, T>, key: string, value: T): T => {
@@ -220,6 +222,13 @@ export function createCrewSourceInputs(db: OrchestrationDb | null, capacity = ()
     const input = mailbox(aliases)
     return (input.questions ??= db ? readCrewQuestions(db, aliases) : [])
   }
+  // Closed approvals stay as receipts for as long as traffic counts as recent.
+  const approvals = (aliases: string[], now: number) => {
+    const input = mailbox(aliases)
+    return (input.approvals ??= db
+      ? readCrewApprovals(db, aliases, new Date(now - AGENT_STATUS_STALE_AFTER_MS).toISOString())
+      : [])
+  }
   const invalidateTraffic = (addresses?: ReadonlySet<string>) => {
     for (const [key, input] of mail) {
       if (!addresses || input.aliases.some((address) => addresses.has(address))) {
@@ -236,6 +245,7 @@ export function createCrewSourceInputs(db: OrchestrationDb | null, capacity = ()
     ownedRuns,
     traffic,
     questions,
+    approvals,
     invalidateTraffic
   }
 }

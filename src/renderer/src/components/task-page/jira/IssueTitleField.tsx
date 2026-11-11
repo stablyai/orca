@@ -1,7 +1,7 @@
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { Sparkles, Square } from 'lucide-react'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
@@ -11,6 +11,7 @@ export function TaskPageJiraIssueTitleField({
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element {
+  const t = useTranslate()
   const {
     newJiraIssueTitle,
     handleNewJiraIssueTitleChange,
@@ -32,7 +33,7 @@ export function TaskPageJiraIssueTitleField({
         htmlFor="new-jira-issue-title"
         className="text-[11px] font-medium text-muted-foreground"
       >
-        {translate('auto.components.TaskPage.16cba35bee', 'Title')}
+        {t('auto.components.TaskPage.16cba35bee', 'Title')}
       </label>
       <div className="flex items-center gap-1">
         <Input
@@ -46,7 +47,7 @@ export function TaskPageJiraIssueTitleField({
               void handleCreateNewJiraIssue()
             }
           }}
-          placeholder={translate('auto.components.TaskPage.578f730c16', 'Short summary')}
+          placeholder={t('auto.components.TaskPage.578f730c16', 'Short summary')}
           disabled={newJiraIssueSubmitting}
         />
         {!newJiraIssueSummaryAvailable ? null : newJiraIssueSummaryGenerating ? (
@@ -57,10 +58,7 @@ export function TaskPageJiraIssueTitleField({
                 variant="ghost"
                 size="icon"
                 onClick={() => handleCancelNewJiraIssueSummaryGeneration()}
-                aria-label={translate(
-                  'components.jiraIssueTitleField.stop',
-                  'Stop generating title'
-                )}
+                aria-label={t('components.jiraIssueTitleField.stop', 'Stop generating title')}
                 className="group"
               >
                 <LoadingSpinner className="size-3.5 group-hover:hidden group-focus-visible:hidden" />
@@ -68,10 +66,7 @@ export function TaskPageJiraIssueTitleField({
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>
-              {translate(
-                'components.jiraIssueTitleField.generating',
-                'Generating title. Click to stop.'
-              )}
+              {t('components.jiraIssueTitleField.generating', 'Generating title. Click to stop.')}
             </TooltipContent>
           </Tooltip>
         ) : (
@@ -83,7 +78,7 @@ export function TaskPageJiraIssueTitleField({
                 size="icon"
                 disabled={generateDisabled}
                 onClick={() => void handleGenerateNewJiraIssueSummary()}
-                aria-label={translate(
+                aria-label={t(
                   'components.jiraIssueTitleField.generate',
                   'Generate title from description'
                 )}
@@ -92,10 +87,7 @@ export function TaskPageJiraIssueTitleField({
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>
-              {translate(
-                'components.jiraIssueTitleField.generate',
-                'Generate title from description'
-              )}
+              {t('components.jiraIssueTitleField.generate', 'Generate title from description')}
             </TooltipContent>
           </Tooltip>
         )}

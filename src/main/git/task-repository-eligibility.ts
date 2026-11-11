@@ -1,8 +1,9 @@
-import { parseGitRemoteVerboseOutput } from '../../shared/git-remote-identity'
+import { parseGitRemoteVerboseOutput } from '../../shared/git/remotes/git-remote-identity'
 import { isDefaultGitHubHost } from '../../shared/github/repository-identity-key'
 import { isGitHubHostAuthenticated } from '../github/github-enterprise-repository'
 import { parseGitHubRemoteIdentity } from '../github/github-remote-identity-parsing'
-import { parseGitLabProjectRef } from '../gitlab/project-ref-parser'
+import { getGlabKnownHosts, getGlabPartialHosts } from '../gitlab/projects/gitlab-known-host-probe'
+import { parseGitLabProjectRef } from '../gitlab/projects/project-ref-parser'
 import { REMOTE_URL_PROBE_TIMEOUT_MS } from './remotes/remote-url-probe'
 import { gitExecFileAsync } from './runner'
 import type { RemoteRefLocalGitOptions } from './remotes/remote-ref-probe-cache'
@@ -28,9 +29,17 @@ export async function isTaskRepositoryIneligible(
     if (remotes.length === 0) {
       return false
     }
+    // A glab partial-auth failure (e.g. tokenless gitlab.com) still proves the hosts that did log in.
+    const gitLabHosts =
+      provider === 'github'
+        ? [
+            ...(await getGlabKnownHosts(connectionId, localGitOptions)),
+            ...getGlabPartialHosts(connectionId, localGitOptions)
+          ]
+        : []
     for (const remote of remotes) {
       if (provider === 'github') {
-        if (!parseGitLabProjectRef(remote.url)) {
+        if (!parseGitLabProjectRef(remote.url, gitLabHosts)) {
           return false
         }
       } else {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { TriangleAlert } from 'lucide-react'
 import { Button } from '../../ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { openTerminalManageSessions } from '../terminal/session-management/open-terminal-manage-sessions'
 
 /** Updates delete the daemon’s responsible app binary, silently severing macOS TCC grants for terminals (osascript -25211); surface recovery beside affected permissions (STA-3491). */
@@ -36,6 +36,7 @@ export function TerminalTccAttributionNotice(props: {
   /** Increment after a daemon replacement attempt so the remedy state is re-checked. */
   refreshRevision?: number
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const severed = useMacTccAttributionSevered(props.refreshRevision)
 
   if (!severed) {
@@ -51,13 +52,13 @@ export function TerminalTccAttributionNotice(props: {
         <TriangleAlert className="mt-0.5 size-4 shrink-0" />
         <div className="min-w-0 space-y-1">
           <p className="text-sm font-medium">
-            {translate(
+            {t(
               'auto.components.settings.TerminalTccAttributionNotice.title',
               'macOS permission grants aren’t reaching terminals'
             )}
           </p>
           <p className="text-xs leading-snug">
-            {translate(
+            {t(
               'auto.components.settings.TerminalTccAttributionNotice.body',
               'The terminal daemon was started by an Orca install that no longer exists, so macOS can’t attribute its commands to Orca — Accessibility and Automation grants are silently ignored (osascript fails with error -25211). Restarting the daemon fixes this; running terminal sessions will close.'
             )}
@@ -71,9 +72,9 @@ export function TerminalTccAttributionNotice(props: {
           className="shrink-0"
           onClick={openTerminalManageSessions}
         >
-          {translate(
-            'auto.components.settings.TerminalTccAttributionNotice.openManageSessions',
-            'Open Manage Sessions'
+          {t(
+            'auto.components.settings.TerminalTccAttributionNotice.63b8513f1e',
+            'Open manage sessions'
           )}
         </Button>
       )}

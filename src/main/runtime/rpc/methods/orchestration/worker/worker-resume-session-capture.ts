@@ -1,11 +1,11 @@
-import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
+import { isStructuredWorkerHandle } from '../../../../../../shared/orchestration/workers/structured-worker-handle'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import {
   findHeldWorkerResourceForPane,
   recordWorkerResumeSession
 } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
-import type { WorkerTerminalResourceRow } from '../../../../orchestration/worker-terminal-ownership'
+import type { WorkerTerminalResourceRow } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import { orchestrationTimestampToMs } from './worker-output'
 
 /** Save the terminal agent's conversation while its hook rows still name it: at its report, and before stop or release closes it. */

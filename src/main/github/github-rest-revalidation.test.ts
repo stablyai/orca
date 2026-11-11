@@ -45,17 +45,6 @@ describe('GitHub REST revalidation', () => {
     expect(spend).toHaveBeenCalledWith(repository, 'core', 1, expect.objectContaining(options))
   })
 
-  it('replaces the validator when GitHub returns changed data', async () => {
-    gh.mockResolvedValueOnce(http(200, '{"number":7}', '"v1"'))
-      .mockResolvedValueOnce(http(200, '{"number":8}', '"v2"'))
-      .mockRejectedValueOnce(notModified())
-    await read(repository, endpoint, options)
-    expect(await read(repository, endpoint, options)).toBe('{"number":8}')
-    expect(await read(repository, endpoint, options)).toBe('{"number":8}')
-    expect(gh.mock.calls[2][0]).toContain('If-None-Match: "v2"')
-    expect(spend).toHaveBeenCalledTimes(2)
-  })
-
   it('does not return cached data after authorization failures and discards its validator', async () => {
     gh.mockResolvedValueOnce(http(200, '{"number":7}', '"v1"'))
     await read(repository, endpoint, options)

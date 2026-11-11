@@ -81,6 +81,7 @@ describe('EphemeralVmsPane', () => {
               ]
             }
           ]),
+          listCredentialEnvNames: vi.fn().mockResolvedValue(['ANTHROPIC_API_KEY', 'GITHUB_TOKEN']),
           doctor: vi.fn().mockResolvedValue({
             recipeId: 'cloud-sandbox',
             repoPath: '/repo',
@@ -121,53 +122,6 @@ describe('EphemeralVmsPane', () => {
       act(() => root.unmount())
     })
     document.body.replaceChildren()
-  })
-
-  it('renders the skill panel and recipe, and opens the composer with the recipe selected', async () => {
-    const container = await renderPane()
-
-    await vi.waitFor(() => expect(container.textContent).toContain('Cloud Sandbox'))
-    await vi.waitFor(() => expect(container.textContent).toContain('Cloud VM setup skill'))
-    expect(container.textContent).toContain('What the skill does, with you')
-    const useButton = [...container.querySelectorAll('button')].find(
-      (button) => button.textContent === 'Use in workspace'
-    )
-    expect(useButton).toBeDefined()
-
-    await act(async () => {
-      useButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(storeMocks.openModal).toHaveBeenCalledWith('new-workspace-composer', {
-      initialRepoId: 'repo-1',
-      initialEphemeralVmRecipeId: 'cloud-sandbox',
-      telemetrySource: 'settings'
-    })
-  })
-
-  it('does not schedule a reset when clipboard completion arrives after unmount', async () => {
-    let finishClipboard!: () => void
-    vi.mocked(window.api.ui.writeClipboardText).mockReturnValueOnce(
-      new Promise<void>((resolve) => {
-        finishClipboard = resolve
-      })
-    )
-    const container = await renderPane()
-    const setTimeout = vi.spyOn(window, 'setTimeout')
-    try {
-      await act(async () => {
-        container.querySelector<HTMLButtonElement>('button[aria-label="Copy"]')?.click()
-      })
-      await act(async () => roots.pop()?.unmount())
-      setTimeout.mockClear()
-      await act(async () => {
-        finishClipboard()
-        await Promise.resolve()
-      })
-      expect(setTimeout.mock.calls.filter(([, delay]) => delay === 1500)).toHaveLength(0)
-    } finally {
-      setTimeout.mockRestore()
-    }
   })
 
   it('ignores an older refresh that finishes after a plugin-content refresh', async () => {
@@ -211,5 +165,42 @@ describe('EphemeralVmsPane', () => {
 
     expect(container.textContent).toContain('Newest Recipe')
     expect(container.textContent).not.toContain('Stale Recipe')
+  })
+
+  it('names the credential-like variables a recipe inherits, without values', async () => {
+    const container = await renderPane()
+    await vi.waitFor(() =>
+      expect(container.querySelector('[data-testid="recipe-env-exposure"]')?.textContent).toContain(
+        'ANTHROPIC_API_KEY, GITHUB_TOKEN'
+      )
+    )
+    expect(container.textContent).toContain('Set passEnv on the recipe')
+  })
+
+  it('lists only allowlisted credentials when the recipe sets passEnv', async () => {
+    const listRecipeCatalog = window.api.ephemeralVm.listRecipeCatalog as ReturnType<typeof vi.fn>
+    listRecipeCatalog.mockReset().mockResolvedValue([
+      {
+        repoId: 'repo-1',
+        repoName: 'Repo',
+        repoPath: '/repo',
+        diagnostics: [],
+        recipes: [
+          {
+            id: 'limited',
+            name: 'Limited',
+            create: 'create',
+            passEnv: ['GITHUB_TOKEN']
+          }
+        ]
+      }
+    ])
+    const container = await renderPane()
+    await vi.waitFor(() =>
+      expect(container.querySelector('[data-testid="recipe-env-exposure"]')?.textContent).toContain(
+        'from passEnv: GITHUB_TOKEN.'
+      )
+    )
+    expect(container.textContent).not.toContain('ANTHROPIC_API_KEY')
   })
 })

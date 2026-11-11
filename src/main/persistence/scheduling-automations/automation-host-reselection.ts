@@ -1,18 +1,21 @@
-import type { Automation, AutomationUpdateInput } from '../../../shared/automations-types'
+import type {
+  Automation,
+  AutomationUpdateInput
+} from '../../../shared/automations/automation-definition'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   AUTOMATION_ORPHAN_ISSUES,
   projectAutomationSelector,
   type AutomationProjectionContext
-} from '../../../shared/automation-list-scope'
-import type { AutomationDestination } from '../../../shared/automation-owner-precondition'
+} from '../../../shared/automations/ownership/automation-list-scope'
+import type { AutomationDestination } from '../../../shared/automations/ownership/automation-owner-precondition'
 import {
   AUTOMATION_OWNER_CONFLICT_CODES,
   AutomationOwnerConflictError
-} from '../../../shared/automation-owner-conflict'
-import { findAutomationRepo } from '../../../shared/automation-repo-target'
+} from '../../../shared/automations/ownership/automation-owner-conflict'
+import { findAutomationRepo } from '../../../shared/automations/ownership/automation-repo-target'
 import { parseExecutionHostId } from '../../../shared/execution-host'
-import { areTaskSourceContextsEqual } from '../../../shared/task-source-context'
+import { areTaskSourceContextsEqual } from '../../../shared/work-items/task-source-context'
 
 /** Verify the original physical target in the same transaction that adopts its registration. */
 export function retainAutomationReselectionContexts(
