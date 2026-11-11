@@ -23211,6 +23211,13 @@
       "workspaceApiKeyHint": "Einen persönlichen API-Schlüssel für {{workspace}} einfügen. Ist dieser Arbeitsbereich bereits verbunden, ersetzt Orca den gespeicherten Schlüssel."
     }
   },
+  "editorGitChangePeek": {
+    "previous": "Vorherige Änderung",
+    "next": "Nächste Änderung",
+    "copy": "Ursprüngliche Zeilen kopieren",
+    "revert": "Änderung zurücksetzen",
+    "close": "Schließen"
+  },
   "editorConflicts": {
     "kind": {
       "addedByUs": "Auf eigener Seite hinzugefügt",

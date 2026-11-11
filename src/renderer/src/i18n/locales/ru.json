@@ -23805,6 +23805,13 @@
       "sessions_many": "{{count}} сессий"
     }
   },
+  "editorGitChangePeek": {
+    "previous": "Предыдущее изменение",
+    "next": "Следующее изменение",
+    "copy": "Копировать исходные строки",
+    "revert": "Отменить изменение",
+    "close": "Закрыть"
+  },
   "editorConflicts": {
     "kind": {
       "addedByUs": "Добавлен у нас",

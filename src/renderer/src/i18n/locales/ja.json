@@ -22807,6 +22807,13 @@
       }
     }
   },
+  "editorGitChangePeek": {
+    "previous": "前の変更",
+    "next": "次の変更",
+    "copy": "元の行をコピー",
+    "revert": "変更を元に戻す",
+    "close": "閉じる"
+  },
   "editorConflicts": {
     "kind": {
       "addedByUs": "こちらで追加",

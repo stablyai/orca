@@ -24668,6 +24668,13 @@
       }
     }
   },
+  "editorGitChangePeek": {
+    "previous": "Previous change",
+    "next": "Next change",
+    "copy": "Copy original lines",
+    "revert": "Revert change",
+    "close": "Close"
+  },
   "editorConflicts": {
     "kind": {
       "addedByUs": "Added by us",

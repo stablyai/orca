@@ -22720,6 +22720,13 @@
       "workspaceApiKeyHint": "請貼上 {{workspace}} 的個人 API 金鑰。若此工作區已連線，Orca 會取代已儲存的金鑰。"
     }
   },
+  "editorGitChangePeek": {
+    "previous": "上一個變更",
+    "next": "下一個變更",
+    "copy": "複製原始行",
+    "revert": "還原變更",
+    "close": "關閉"
+  },
   "editorConflicts": {
     "kind": {
       "addedByUs": "我們新增",

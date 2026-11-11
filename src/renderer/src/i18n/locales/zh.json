@@ -23147,6 +23147,13 @@
       }
     }
   },
+  "editorGitChangePeek": {
+    "previous": "上一处更改",
+    "next": "下一处更改",
+    "copy": "复制原始行",
+    "revert": "还原更改",
+    "close": "关闭"
+  },
   "editorConflicts": {
     "kind": {
       "addedByUs": "我们添加",

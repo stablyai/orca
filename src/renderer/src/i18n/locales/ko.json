@@ -22799,6 +22799,13 @@
       }
     }
   },
+  "editorGitChangePeek": {
+    "previous": "이전 변경",
+    "next": "다음 변경",
+    "copy": "원본 줄 복사",
+    "revert": "변경 되돌리기",
+    "close": "닫기"
+  },
   "editorConflicts": {
     "kind": {
       "addedByUs": "우리 쪽에서 추가됨",

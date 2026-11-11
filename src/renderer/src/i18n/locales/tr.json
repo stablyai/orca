@@ -23024,6 +23024,13 @@
       "workspaceApiKeyHint": "{{workspace}} için bir Kişisel API anahtarı yapıştırın. Bu çalışma alanı zaten bağlıysa Orca kayıtlı anahtarını değiştirir."
     }
   },
+  "editorGitChangePeek": {
+    "previous": "Önceki değişiklik",
+    "next": "Sonraki değişiklik",
+    "copy": "Özgün satırları kopyala",
+    "revert": "Değişikliği geri al",
+    "close": "Kapat"
+  },
   "editorConflicts": {
     "kind": {
       "addedByUs": "Bizim tarafımızdan eklendi",
