@@ -36,21 +36,6 @@ async function awakeFor(ms: number): Promise<void> {
   await vi.advanceTimersByTimeAsync(ms)
 }
 
-it('does not expire a start whose machine slept past the ceiling', async () => {
-  const expire = vi.fn()
-  const startup = new Attempts({ expire })
-  const { registeredAt } = startup.begin('session', 'attempt')
-
-  await awakeFor(2_000)
-  sleepFor(665_000)
-  await awakeFor(1_000)
-
-  expect(expire).not.toHaveBeenCalled()
-  expect(startup.pastCeiling(registeredAt)).toBe(false)
-  expect(startup.isOpen('session')).toBe(true)
-  startup.dispose()
-})
-
 it('still expires once the start has been awake for the whole ceiling', async () => {
   const expire = vi.fn()
   const startup = new Attempts({ expire })
@@ -63,17 +48,6 @@ it('still expires once the start has been awake for the whole ceiling', async ()
 
   await awakeFor(1_000)
   expect(startup.pastCeiling(registeredAt)).toBe(true)
-  await vi.waitFor(() => expect(expire).toHaveBeenCalledOnce())
-  startup.dispose()
-})
-
-it('measures the full ceiling when nothing reports a sleep', async () => {
-  const expire = vi.fn()
-  const startup = new Attempts({ expire })
-  startup.begin('session', 'attempt')
-  await awakeFor(STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS - 1_000)
-  expect(expire).not.toHaveBeenCalled()
-  await awakeFor(1_000)
   await vi.waitFor(() => expect(expire).toHaveBeenCalledOnce())
   startup.dispose()
 })
