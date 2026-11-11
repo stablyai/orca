@@ -75,9 +75,10 @@ describe('Antigravity effort through CLI argv, RPC and worker admission', () => 
         peerFingerprint: 'peer',
         pairingRevision: 7
       })
+      const dest = destination()
       const call = vi
         .spyOn(h.runtime, 'callOrchestrationWorkerServer')
-        .mockImplementation(async (_host, method) => {
+        .mockImplementation(async (_host, method, params) => {
           if (method === 'status.get') {
             return {
               capabilities: modern
