@@ -123,7 +123,7 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
     'pi-branch-import',
   'src/main/native-chat/agent-session-journal/queued-messages/queued-message-schema.ts':
     'agent-session-journal',
-  'src/main/persistence/profile-state/profile-state-database-schema.ts': 'profile-state',
+  'src/main/persistence/profile-state/database/profile-state-database-schema.ts': 'profile-state',
   'src/main/runtime/orchestration/db/schema/create-core-tables-sql.ts': 'orchestration',
   'src/main/runtime/orchestration/db/schema/create-graph-tables-sql.ts': 'orchestration',
   'src/main/runtime/orchestration/db/schema/migrate-legacy-contract-storage.ts': 'orchestration',

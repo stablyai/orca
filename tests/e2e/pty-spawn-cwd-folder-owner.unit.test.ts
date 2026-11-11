@@ -59,7 +59,7 @@ vi.mock('../../src/main/telemetry/client', () =>
 vi.mock('../../src/main/telemetry/classify-error', () =>
   import('../../src/main/ipc/pty/pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
-vi.mock('../../src/main/cli/linux-terminal-orca-cli-shim', () =>
+vi.mock('../../src/main/cli/launchers/linux-terminal-orca-cli-shim', () =>
   import('../../src/main/ipc/pty/pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../../src/main/memory/pty-registry', () =>
