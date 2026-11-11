@@ -1,6 +1,7 @@
 import type {
   SessionSearchPreparedObservation,
-  SessionSearchObservationOutcome
+  SessionSearchObservationOutcome,
+  SessionSearchObservationInput
 } from '../ai-vault-search/session-search-inventory-transition'
 import { sessionSearchRecordPages } from '../ai-vault-search/session-search-catalog-pages'
 import {
@@ -62,20 +63,15 @@ export class SessionInventoryFiles {
     force: boolean,
     limit: number,
     readOwed = false,
-    metadataOwed = false
+    metadataOwed = false,
+    readContext?: Pick<SessionSearchObservationInput, 'requireMembership' | 'dependencyOwners'>
   ) {
-    return (await this.observePage([{ path, force, readOwed, metadataOwed }], args, limit)).get(
-      path
-    )
+    return (
+      await this.observePage([{ path, force, readOwed, metadataOwed, ...readContext }], args, limit)
+    ).get(path)
   }
   async observePage(
-    inputs: {
-      path: string
-      force: boolean
-      readOwed?: boolean
-      metadataOwed?: boolean
-      dirtyRevision?: number
-    }[],
+    inputs: SessionSearchObservationInput[],
     args: DiscoverSessionFilesArgs,
     limit: number
   ): Promise<Map<string, ReadableObservation>> {

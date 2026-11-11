@@ -33,7 +33,7 @@ export type SessionSearchCatalogRow = {
 export type SessionSearchInputReceipt = { consumer: string; revision: number }
 export type SessionSearchCatalogPosition = { key: string; rank: number; tie: number }
 export type SessionSearchCatalogBaseCommand = (
-  | { kind: 'get'; scope: string; key: string }
+  | { kind: 'get'; scope: string; key: string; physicalScope?: string }
   | { kind: 'get-page'; scope: string; keys: string[] }
   | { kind: 'release-parent'; scope: string; parent: string }
   | { kind: 'put'; scope: string; rows: SessionSearchCatalogRow[] }

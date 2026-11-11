@@ -139,8 +139,9 @@ export class SessionSearchDependencyInventory {
     this.staging = undefined
   }
 
-  async addFile(path: string): Promise<void> {
-    await this.addFiles([path])
+  fileOwner(path: string): { scope: string; key: string } | undefined {
+    const key = this.dependency.fileKey?.(path)
+    return key ? { scope: this.keys.scope, key } : undefined
   }
   async addFiles(paths: string[]): Promise<void> {
     await this.keys.putPage(

@@ -18,6 +18,8 @@ export type SessionSearchObservationInput = {
   readOwed?: boolean
   metadataOwed?: boolean
   dirtyRevision?: number
+  requireMembership?: boolean
+  dependencyOwners?: { scope: string; key: string }[]
 }
 export type SessionSearchPreparedObservation = SessionSearchObservationInput & {
   accepted?: SessionSearchObservedFacts

@@ -29,8 +29,8 @@ export class SessionSearchCatalogRetries {
       await this.wake()
     }
   }
-  async force(path: string): Promise<boolean> {
-    return (await this.catalog.get(path))?.force ?? false
+  async force(path: string, physicalScope?: string): Promise<boolean> {
+    return (await this.catalog.get(path, physicalScope))?.force ?? false
   }
   async requireRead(path: string): Promise<void> {
     await this.catalog.transition({ kind: 'retry-require', scope: this.catalog.scope, path })

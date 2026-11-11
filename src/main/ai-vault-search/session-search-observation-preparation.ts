@@ -52,6 +52,10 @@ export function prepareSessionSearchObservations(
   const prepared = boundedSessionSearchPage(
     command.inputs,
     (input) => {
+      const accepted = get(files, input.path)
+      if (input.requireMembership && !accepted) {
+        throw new Error('Session search read has no physical inventory owner')
+      }
       const refusal = get(failures, input.path)
       const debt = authorityValue<SessionSearchObservationDebt>(refusal)
       const dirty = get(`${command.scope}:dirty`, input.path)
@@ -76,7 +80,6 @@ export function prepareSessionSearchObservations(
         !attempt &&
         debt &&
         (((input.force || input.readOwed) && !debt.force) || (input.metadataOwed && !debt.metadata))
-      const accepted = get(files, input.path)
       return {
         ...input,
         authority: revision,

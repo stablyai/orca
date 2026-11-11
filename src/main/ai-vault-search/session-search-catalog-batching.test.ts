@@ -91,6 +91,11 @@ it.each([40, 400])(
       expect(localRows).toBeLessThanOrEqual(30 * population + 100)
       expect(invalidEnvelope).toBeUndefined()
     }
+    const unclaimed = () => {
+      for (const suffix of ['authority', 'authority-garbage']) {
+        expect(execute({ kind: 'count', scope: `physical:batch-control:${suffix}` }).count).toBe(0)
+      }
+    }
     const reset = () => {
       envelopes = 0
       localRows = 0
@@ -106,6 +111,7 @@ it.each([40, 400])(
       await inventory.begin(false, args)
       expect(await drain()).toHaveLength(population)
       check()
+      unclaimed()
       reset()
       await inventory.reconcile()
       expect(await drain()).toEqual([])
@@ -114,6 +120,7 @@ it.each([40, 400])(
       await inventory.invalidate(root)
       expect(await drain()).toEqual([])
       check()
+      unclaimed()
       const metadata = join(harness.root, 'titles.jsonl')
       const observer = createSessionSearchJsonlDependency(
         metadata,

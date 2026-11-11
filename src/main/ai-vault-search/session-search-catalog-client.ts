@@ -95,8 +95,9 @@ export class SessionSearchCatalogClient<T> {
       await this.request({ kind: 'delete-page', scope: this.scope, keys: page })
     }
   }
-  async get(key: string): Promise<T | undefined> {
-    const row = (await this.request({ kind: 'get', scope: this.scope, key })).rows?.[0]
+  async get(key: string, physicalScope?: string): Promise<T | undefined> {
+    const row = (await this.request({ kind: 'get', scope: this.scope, key, physicalScope }))
+      .rows?.[0]
     return row ? this.decode(row) : undefined
   }
 

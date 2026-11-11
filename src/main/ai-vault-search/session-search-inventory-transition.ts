@@ -213,6 +213,23 @@ export function transitionSessionSearchInventory(
           revision: catalog.nextRevision()
         })
       }
+      if (!unknown) {
+        for (const owner of outcome.dependencyOwners ?? []) {
+          const previous = get(owner.scope, outcome.path)
+          if (!previous || JSON.parse(previous.value) !== owner.key) {
+            const row = {
+              key: outcome.path,
+              value: JSON.stringify(owner.key),
+              parent: owner.key,
+              group: '',
+              rank: 0,
+              ready: 0
+            }
+            catalog.execute({ kind: 'put', scope: owner.scope, rows: [row] })
+            authority.changed(owner.scope, outcome.path, row)
+          }
+        }
+      }
       const pendingDelivery = decode<{ revision: number; force: boolean; metadata?: boolean }>(
         get(delivery, outcome.path)
       )

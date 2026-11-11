@@ -24,7 +24,6 @@ export function initializeSessionSearchInventory(db: SyncDatabase): void {
     id INTEGER PRIMARY KEY, source INTEGER NOT NULL, path TEXT NOT NULL, parent TEXT NOT NULL,
     authority_self INTEGER, authority_tree INTEGER, reclaimable INTEGER,
     observation_file INTEGER, observation_dirty INTEGER, observation_authority INTEGER,
-    observation_epoch INTEGER,
     delivery_revision INTEGER, delivery_removed INTEGER, delivery_force INTEGER,
     delivery_metadata INTEGER, delivery_authority INTEGER,
     delivery_mtime REAL, delivery_size REAL, delivery_dev REAL, delivery_ino REAL,
@@ -33,15 +32,16 @@ export function initializeSessionSearchInventory(db: SyncDatabase): void {
   );
   CREATE INDEX temp.search_inventory_reclaim ON search_inventory_activity(source,reclaimable,authority_tree,path)
     WHERE authority_self IS NOT NULL;
-  CREATE INDEX temp.search_inventory_observation_floor ON search_inventory_activity(source,observation_epoch,path)
-    WHERE observation_epoch IS NOT NULL;
   CREATE INDEX temp.search_inventory_delivery ON search_inventory_activity(source,path)
     WHERE delivery_revision IS NOT NULL;
   CREATE TEMP TABLE search_inventory_epochs (
     id INTEGER PRIMARY KEY, source INTEGER NOT NULL, kind TEXT NOT NULL, path TEXT NOT NULL,
-    revision INTEGER NOT NULL, cutoff INTEGER NOT NULL, sealed INTEGER NOT NULL,
-    UNIQUE(source,kind,path)
+    revision INTEGER NOT NULL, cutoff INTEGER NOT NULL, sealed INTEGER NOT NULL
   );
+  CREATE UNIQUE INDEX temp.search_inventory_epoch_path ON search_inventory_epochs(source,kind,path)
+    WHERE kind<>'observation-epochs';
+  CREATE UNIQUE INDEX temp.search_inventory_epoch_revision ON search_inventory_epochs(source,kind,revision)
+    WHERE kind='observation-epochs';
   CREATE INDEX temp.search_inventory_epoch_floor ON search_inventory_epochs(source,kind,cutoff,path);`)
   for (const [name, table, suffix, present, ready] of [
     ['files', 'entries', "'files'", 'file_revision IS NOT NULL', '0'],
@@ -55,13 +55,12 @@ export function initializeSessionSearchInventory(db: SyncDatabase): void {
       'COALESCE(reclaimable,0)'
     ],
     ['observing', 'activity', "'observing'", 'observation_authority IS NOT NULL', '0'],
-    ['observations', 'activity', "'observation-epochs'", 'observation_epoch IS NOT NULL', '0'],
     ['delivery', 'activity', "'delivery'", 'delivery_revision IS NOT NULL', '0'],
     ['epochs', 'epochs', 'kind', '1', '0']
   ]) {
     const qualify = (text: string, prefix: string) =>
       text.replace(
-        /\b(file_revision|directory|authority_self|reclaimable|observation_authority|observation_epoch|delivery_revision|kind)\b/g,
+        /\b(file_revision|directory|authority_self|reclaimable|observation_authority|delivery_revision|kind)\b/g,
         `${prefix}.$1`
       )
     const current = qualify(present, 'NEW'),

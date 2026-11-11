@@ -90,6 +90,9 @@ export class SessionInventoryDirectoryWalks {
   async has(path: string): Promise<boolean> {
     return (await this.observations.files.get(path)) !== undefined
   }
+  hasPublicationDebt(path: string): Promise<boolean> {
+    return this.observations.failures.force(path, this.scope)
+  }
   get catalogRequest(): SessionSearchCatalogRequest {
     return this.request
   }

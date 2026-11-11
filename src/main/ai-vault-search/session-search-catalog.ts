@@ -173,6 +173,9 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
         return { rows, processed }
       }
       case 'get':
+        if (base.physicalScope && !this.read(`${base.physicalScope}:files`, base.key).length) {
+          throw new Error('Session search read has no physical inventory owner')
+        }
         return {
           rows: this.read(base.scope, base.key)
         }

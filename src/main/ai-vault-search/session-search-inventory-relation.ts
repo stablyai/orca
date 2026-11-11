@@ -40,11 +40,12 @@ export function sessionSearchInventoryRelation(
   if (member === 'directory-input') {
     return { ...base, table: 'search_inventory_staging', present: '1', group: 'epoch' }
   }
-  if (member === 'epochs' || member === 'removal-epochs') {
+  if (member === 'epochs' || member === 'removal-epochs' || member === 'observation-epochs') {
     return {
       ...base,
       table: 'search_inventory_epochs',
       present: `kind='${member}'`,
+      key: member === 'observation-epochs' ? 'CAST(revision AS TEXT)' : 'path',
       parent: "''",
       rank: 'cutoff'
     }
@@ -57,15 +58,6 @@ export function sessionSearchInventoryRelation(
       parent: "''",
       rank: 'authority_tree',
       ready: 'reclaimable'
-    }
-  }
-  if (member === 'observation-epochs') {
-    return {
-      ...active,
-      present: 'observation_epoch IS NOT NULL',
-      key: 'CAST(observation_epoch AS TEXT)',
-      parent: "''",
-      rank: 'observation_epoch'
     }
   }
   return {

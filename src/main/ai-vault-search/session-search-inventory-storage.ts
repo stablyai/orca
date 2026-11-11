@@ -56,7 +56,7 @@ export class SessionSearchInventoryStorage {
   }
   get(owner: SessionSearchInventoryOwner, key: string): SessionSearchCatalogRow | undefined {
     const relation = sessionSearchInventoryRelation(owner.member)
-    const keyColumn = owner.member === 'observation-epochs' ? 'observation_epoch' : relation.key
+    const keyColumn = owner.member === 'observation-epochs' ? 'revision' : relation.key
     const row = this.db.prepare(`${this.select(owner)} AND ${keyColumn}=?`).get(owner.source, key)
     return row ? decodeSessionSearchInventoryRow(owner.member, row) : undefined
   }
@@ -123,7 +123,7 @@ export class SessionSearchInventoryStorage {
       }
       case 'observation-epochs':
         path = JSON.parse(row.value)
-        fields = { observation_epoch: Number(row.key) }
+        fields = { kind: owner.member, revision: Number(row.key), cutoff: row.rank, sealed: 0 }
         break
       case 'epochs':
         fields = {
@@ -167,10 +167,20 @@ export class SessionSearchInventoryStorage {
       ...Object.values(fields)
     ]
     const identity =
-      relation.table === 'search_inventory_epochs' ? 'source,kind,path' : 'source,path'
+      relation.table === 'search_inventory_epochs'
+        ? owner.member === 'observation-epochs'
+          ? 'source,kind,revision'
+          : 'source,kind,path'
+        : 'source,path'
+    const predicate =
+      relation.table === 'search_inventory_epochs'
+        ? owner.member === 'observation-epochs'
+          ? "WHERE kind='observation-epochs'"
+          : "WHERE kind<>'observation-epochs'"
+        : ''
     this.db
       .prepare(`INSERT INTO temp.${relation.table} (${columns.join(',')}) VALUES (${columns.map(() => '?').join(',')})
-      ON CONFLICT(${identity}) DO UPDATE SET ${Object.keys(fields)
+      ON CONFLICT(${identity}) ${predicate} DO UPDATE SET ${Object.keys(fields)
         .map((column) => `${column}=excluded.${column}`)
         .join(',')}`)
       .run(...values)
@@ -184,11 +194,12 @@ export class SessionSearchInventoryStorage {
     if (
       owner.member === 'directory-input' ||
       owner.member === 'epochs' ||
-      owner.member === 'removal-epochs'
+      owner.member === 'removal-epochs' ||
+      owner.member === 'observation-epochs'
     ) {
       this.db
         .prepare(
-          `DELETE FROM temp.${relation.table} WHERE source=? AND ${relation.present} AND path=?`
+          `DELETE FROM temp.${relation.table} WHERE source=? AND ${relation.present} AND ${owner.member === 'observation-epochs' ? 'revision' : 'path'}=?`
         )
         .run(owner.source, key)
     } else {
@@ -211,17 +222,15 @@ export class SessionSearchInventoryStorage {
               ? ['authority_self', 'authority_tree', 'reclaimable']
               : owner.member === 'observing'
                 ? ['observation_file', 'observation_dirty', 'observation_authority']
-                : owner.member === 'observation-epochs'
-                  ? ['observation_epoch']
-                  : [
-                      'delivery_revision',
-                      'delivery_removed',
-                      'delivery_force',
-                      'delivery_metadata',
-                      'delivery_authority',
-                      ...SESSION_SEARCH_FILE_COLUMNS.map((column) => `delivery_${column}`)
-                    ]
-      const path = owner.member === 'observation-epochs' ? JSON.parse(previous.value) : key
+                : [
+                    'delivery_revision',
+                    'delivery_removed',
+                    'delivery_force',
+                    'delivery_metadata',
+                    'delivery_authority',
+                    ...SESSION_SEARCH_FILE_COLUMNS.map((column) => `delivery_${column}`)
+                  ]
+      const path = key
       this.db
         .prepare(
           `UPDATE temp.${relation.table} SET ${fields.map((column) => `${column}=${column === 'directory' ? '0' : 'NULL'}`).join(',')} WHERE source=? AND path=?`
@@ -230,7 +239,7 @@ export class SessionSearchInventoryStorage {
       const empty =
         relation.table === 'search_inventory_entries'
           ? 'file_revision IS NULL AND directory=0'
-          : 'authority_self IS NULL AND observation_authority IS NULL AND observation_epoch IS NULL AND delivery_revision IS NULL'
+          : 'authority_self IS NULL AND observation_authority IS NULL AND delivery_revision IS NULL'
       this.db
         .prepare(`DELETE FROM temp.${relation.table} WHERE source=? AND path=? AND ${empty}`)
         .run(owner.source, path)

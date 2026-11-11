@@ -135,11 +135,7 @@ export class SessionSearchDiscoverySources {
     }))
   }
 
-  private async fileOwner(
-    candidate: SessionFileCandidate,
-    root: string,
-    roots: SessionSearchScanRoots
-  ) {
+  private fileOwner(candidate: SessionFileCandidate, root: string, roots: SessionSearchScanRoots) {
     const {
       agent,
       file: { path }
@@ -149,7 +145,7 @@ export class SessionSearchDiscoverySources {
       return null
     }
     const owner = rootDir === undefined ? undefined : this.roots.get(`${agent}:${rootDir}`)
-    if (!(await owner?.inventory.has(path))) {
+    if (!owner) {
       throw new Error('Session search read has no physical inventory owner')
     }
     return owner
@@ -161,7 +157,7 @@ export class SessionSearchDiscoverySources {
     roots: SessionSearchScanRoots
   ): Promise<boolean> {
     return (
-      (await this.fileOwner(candidate, logicalRoot, roots))?.inventory.hasPublicationDebt(
+      this.fileOwner(candidate, logicalRoot, roots)?.inventory.hasPublicationDebt(
         candidate.file.path
       ) ?? false
     )
@@ -174,7 +170,7 @@ export class SessionSearchDiscoverySources {
     metadataOnly = false,
     metadataOwed = false
   ) {
-    const root = await this.fileOwner(candidate, logicalRoot, roots)
+    const root = this.fileOwner(candidate, logicalRoot, roots)
     if (!root) {
       return null
     }
@@ -184,13 +180,14 @@ export class SessionSearchDiscoverySources {
       root.args,
       this.recentLimit,
       metadataOnly,
-      metadataOwed
+      metadataOwed,
+      [...root.dependencies.values()].flatMap((observer) => {
+        const owner = observer.fileOwner(path)
+        return owner ? [owner] : []
+      })
     )
     if (change.file === undefined) {
       return change
-    }
-    for (const observer of root.dependencies.values()) {
-      await observer.addFile(path)
     }
     return {
       ...change,

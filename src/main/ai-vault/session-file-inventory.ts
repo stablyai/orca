@@ -154,15 +154,13 @@ export class SessionFileInventory extends SessionInventoryDirtyInputs {
       }
     }
   }
-  hasPublicationDebt(path: string): Promise<boolean> {
-    return this.observations.failures.force(path)
-  }
   async observeForRead(
     path: string,
     args: DiscoverSessionFilesArgs,
     limit: number,
     metadataOnly = false,
-    metadataOwed = false
+    metadataOwed = false,
+    dependencyOwners?: { scope: string; key: string }[]
   ) {
     const observed = await this.observations.observe(
       path,
@@ -170,7 +168,8 @@ export class SessionFileInventory extends SessionInventoryDirtyInputs {
       false,
       limit,
       !metadataOnly,
-      metadataOnly || metadataOwed
+      metadataOnly || metadataOwed,
+      { requireMembership: true, dependencyOwners }
     )
     const change = this.observations.changes.get(path)
     this.observations.changes.delete(path)
