@@ -736,6 +736,20 @@ describe('commands about a worker a paired server owns', () => {
     ).toBeDefined()
   })
 
+  it('keeps a Task an abandon blocked as it is when its pairing is re-made', async () => {
+    const { taskId, runId } = await startOnB()
+    importState(runId, taskId, 1, {
+      status: 'dispatched',
+      workerState: 'ready',
+      taskStatus: 'dispatched'
+    })
+    await call('orchestration.workerAbandon', { dispatch: 'ctx_b1' })
+    server = { ...server, homePeerFingerprint: 'cred_a_new', pairingRevision: 2 }
+
+    await call('orchestration.workerRead', { dispatch: 'ctx_b1' })
+    expect(db.getTask(taskId)?.status).toBe('blocked')
+  })
+
   it("fails the Task when the server's reset removes an attempt whose Task it had readied", async () => {
     const { taskId, runId } = await startOnB()
     importState(runId, taskId, 1, {

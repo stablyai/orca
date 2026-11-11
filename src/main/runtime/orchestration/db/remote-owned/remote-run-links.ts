@@ -181,7 +181,9 @@ export function closeRemoteRunLink(
       .prepare(
         `SELECT placement.task_id, placement.run_id, placement.dispatch_id, task.status
          FROM remote_placements placement JOIN tasks task ON task.id = placement.task_id
-         WHERE placement.conversation_id = ? AND task.status IN ('dispatched', 'blocked')`
+         LEFT JOIN remote_dispatches attempt ON attempt.dispatch_id = placement.dispatch_id
+         WHERE placement.conversation_id = ?
+           AND (task.status = 'dispatched' OR (task.status = 'blocked' AND attempt.stop_owed = 1))`
       )
       .all(conversationId) as {
       task_id: string
@@ -195,7 +197,7 @@ export function closeRemoteRunLink(
       transitionLifecycleWithDb(db.db, {
         entity: 'task',
         id: placement.task_id,
-        // Blocked by a stop the server never proved, which nothing can prove now.
+        // Blocked by a stop the server never proved, which nothing can prove now; a proven stop or an abandon stays blocked.
         from: placement.status,
         to: 'failed',
         projection: { result, completed_at: now }
