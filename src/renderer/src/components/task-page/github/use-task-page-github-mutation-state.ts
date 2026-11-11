@@ -11,7 +11,7 @@ import type { TaskPageGitHubPatchWorkItem } from '@/components/task-page/github/
 import { useAppStore } from '@/store/index'
 import { useTaskPageGitHubWorkItemMutation } from '@/hooks/useTaskPageGitHubWorkItemMutation'
 import { rebuildSoftHiddenKeysFromPendingAndSticky } from '@/components/task-page/github/task-page-github-work-item-mutation-composition'
-import { getTaskPageRepoSourceContext } from '../../../lib/task-repo-source-context'
+import { getTaskPageRepoSourceContext } from '../../../lib/work-items/task-repo-source-context'
 import { useTaskPageSourceDisplay } from '../use-task-page-source-display'
 export function useTaskPageGitHubMutationState(model: TaskPageLinearCreationStateModel) {
   const {

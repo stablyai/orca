@@ -12,8 +12,7 @@ import { useSavedSourceControlActionStart } from './use-saved-source-control-act
 import type { SourceControlAgentActionDialogProps } from './SourceControlAgentActionDialog'
 import { useCallback, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
-import { getRuntimeGitScope } from '@/runtime/source-control/git/runtime-git-client-context'
-import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../../../shared/source-control/ai/generation/commit-message-host-key'
+import { getRuntimeGitRepoDiscoveryHostKey } from '@/runtime/source-control/git/runtime-git-client-context'
 import { DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { resolveSourceControlAiForOperation } from '../../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import type { SourceControlLaunchActionId } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
@@ -57,8 +56,10 @@ export function useSourceControlAi({
   const [commitGenerationDialogOpen, setCommitGenerationDialogOpen] = useState(false)
   const [pullRequestGenerationDialogOpen, setPullRequestGenerationDialogOpen] = useState(false)
 
-  const sourceControlAiDiscoveryHostKey = getCommitMessageModelDiscoveryHostKeyForScope(
-    getRuntimeGitScope(target ?? { kind: 'local' }, activeConnectionId)
+  const sourceControlAiDiscoveryHostKey = getRuntimeGitRepoDiscoveryHostKey(
+    target ?? { kind: 'local' },
+    activeRepo,
+    activeConnectionId
   )
   const sourceControlAiActionsVisible = useMemo(
     () => (settings ? resolveSourceControlAiEnabled({ settings, repo: activeRepo }) : false),

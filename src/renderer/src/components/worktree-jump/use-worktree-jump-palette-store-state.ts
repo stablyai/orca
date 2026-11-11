@@ -10,7 +10,7 @@ import {
   readHiddenVmCheckouts,
   subscribeHiddenVmCheckouts,
   withoutHiddenVmWorktreesByRepo
-} from '@/lib/vm-create-hidden-checkouts'
+} from '@/runtime/ephemeral-vm/vm-create-hidden-checkouts'
 import {
   selectPaletteIndexStatusSnapshot,
   selectPaletteStatusInputs

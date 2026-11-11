@@ -38,7 +38,17 @@ const assetSchema = z.looseObject({
   path: MobileWebBundleAssetPathSchema,
   sha256: z.string().regex(SHA256_PATTERN),
   byteLength: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES),
-  contentType: z.string().min(1)
+  contentType: z.string().min(1),
+  // An unreadable length means no brotli copy, never a refused bundle; the reader also requires it under byteLength.
+  brotliByteLength: z
+    .number()
+    .int()
+    .nonnegative()
+    .max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES)
+    .optional()
+    .catch(undefined),
+  // A kind this build cannot read is a plain asset, downloaded like any other.
+  kind: z.string().optional().catch(undefined)
 })
 
 // Read unknown schema versions as numbers so compatibility can name the required update.
@@ -115,6 +125,20 @@ export const MobileWebBundleRangeReplySchema = z.looseObject({
   dataBase64: z.string().max(MOBILE_WEB_BUNDLE_RANGE_MAX_DATA_BASE64_LENGTH)
 })
 
+// Windows of the brotli copy are its raw bytes; the header still names the inflated asset.
+export const MobileWebBundleBrotliRangeReplySchema = z.looseObject({
+  ...windowHeaderFields,
+  dataBase64: z.string().max(MOBILE_WEB_BUNDLE_RANGE_MAX_DATA_BASE64_LENGTH)
+})
+
 export type MobileWebBundleManifestReply = z.output<typeof MobileWebBundleManifestReplySchema>
 export type MobileWebBundleManifestRead = MobileWebBundleManifestReply['manifest']
 export type MobileWebBundleAssetRead = MobileWebBundleManifestRead['assets'][number]
+
+// Language-catalog chunks stay on the desktop: this shell grants the page hostCatalogs, and the
+// page reads its one catalog over RPC. Everything else is the generation, on disk.
+export function shellDownloadedAssets<Asset extends { readonly kind?: string }>(manifest: {
+  readonly assets: readonly Asset[]
+}): Asset[] {
+  return manifest.assets.filter((asset) => asset.kind !== 'catalog')
+}

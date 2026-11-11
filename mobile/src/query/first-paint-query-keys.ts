@@ -1,5 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query'
 import { normalizeExecutionHostId } from '../../../src/shared/execution-host'
+import { accountsSnapshotFamily, accountsSnapshotKey } from '../accounts/accounts-snapshot-stream'
 import {
   HOST_LIST_TARGET,
   hostRepoCatalogQuery,
@@ -15,7 +16,7 @@ import { hostProjectSectionsQuery } from '../host-screen/use-host-project-sectio
 import { sessionTabsFamily, sessionTabsKey } from '../session/tabs/mobile-session-last-tabs'
 import type { MobileSessionTab } from '../session/tabs/mobile-session-tabs'
 import { activeSessionTabOf } from '../session/tabs/active-session-tab'
-import { storedTabChatTranscriptIdentity } from '../session/native-chat/mobile-native-chat-transcript-store'
+import { storedTabChatTranscriptIdentity } from '../session/native-chat/transcript/mobile-native-chat-transcript-store'
 import { gitStatusQuery } from '../source-control/mobile-git-status-query'
 import { firstPaintTaskKeys } from '../tasks/task-query-storage'
 import { hostQueryKey } from './host-query-key'
@@ -43,6 +44,11 @@ export function firstPaintQueryKeys(hostId: string, route: URL): PersistedHostQu
   }
   if (screen === 'tasks') {
     return firstPaintTaskKeys(hostId)
+  }
+  if (screen === 'accounts') {
+    return [persistedHostQueryKey(accountsSnapshotFamily, accountsSnapshotKey(hostId))].filter(
+      (key) => key !== null
+    )
   }
   if (screen === 'new-workspace') {
     // The drawer's existing-workspace check and host labels.

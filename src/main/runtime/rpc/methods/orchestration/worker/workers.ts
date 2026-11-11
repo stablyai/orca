@@ -1,8 +1,9 @@
 import { stopHelperAfterStart } from './worker-stop'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { z } from 'zod'
-import { defineMethod, type RpcContext } from '../../../core'
-import { startFederatedWorker } from '../federation/federated-worker-start'
+import type { RpcContext } from '../../../core'
+import { defineOrchestrationMethod } from '../access/orchestration-method-access'
+import { startFederatedWorker } from '../../../../orchestration/legacy-remote-home/legacy-remote-home'
 import { startLocalWorker } from './local-worker-start'
 import type { WorkerFollowUp } from './worker-follow-up-placement'
 import { withWorkerStartNext } from '../receipt-next'
@@ -34,8 +35,22 @@ type WorkerStartContext = Pick<
 >
 
 export const ORCHESTRATION_WORKER_START_METHODS = [
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.workerStart',
+    access: {
+      kind: 'writes',
+      caller: 'from',
+      server: 'on',
+      targets: {
+        task: 'task',
+        parent: 'task',
+        deps: 'task',
+        run: 'run',
+        retryOf: 'dispatch',
+        terminal: 'worker',
+        adoptTaskId: 'task'
+      }
+    },
     requires: ['accounts'],
     permission: 'workspace',
     params: WorkerStartParams,
@@ -45,15 +60,62 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
 
 /** worker-start, and a follow-up sent to a finished worker, which is worker-start run for the sender. */
 export async function startWorker(
+  startParams: z.infer<typeof WorkerStartParams>,
+  ctx: WorkerStartContext,
+  startFollowUp?: WorkerFollowUp
+): Promise<unknown> {
+  const { runtime, orchestrationMutation, orchestrationCaller } = ctx
+  const prepared = await prepareWorkerStart(startParams, ctx, startFollowUp)
+  const { params, followUp, coordinator, bindRun, helperCreator, taskDeps, existingTask, withRun } =
+    prepared
+  const db = runtime.getOrchestrationDb()
+  const mode = decideWorkerStartMode({
+    params,
+    settings: readWorkerStartModeSettings(runtime)
+  })
+  if (params.on) {
+    // Remote workers are terminal-only; carry the mode receipt to explain structured-preference fallback.
+    const receipt = await startFederatedWorker({
+      params,
+      runtime,
+      db,
+      bindRunId: () => bindRun().run.id,
+      task: existingTask,
+      taskDeps,
+      orchestrationMutation,
+      callerSession: orchestrationCaller
+    })
+    await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
+    return withRun(receipt && typeof receipt === 'object' ? { ...receipt, mode } : receipt)
+  }
+  const receipt = await startLocalWorker({
+    params: { ...params, timeoutMs: resolveWorkerStartReadinessTimeoutMs(params.timeoutMs) },
+    runtime,
+    db,
+    bindRun: () => bindRun().run,
+    taskDeps,
+    coordinator,
+    callerSession: orchestrationCaller,
+    existingTask,
+    orchestrationMutation,
+    mode,
+    helperCreator,
+    followUp
+  })
+  await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
+  return withRun(withWorkerStartNext(receipt))
+}
+
+/** What every start checks and binds before it is placed, here or on a paired server. */
+export async function prepareWorkerStart(
   params: z.infer<typeof WorkerStartParams>,
   {
     runtime,
-    orchestrationMutation,
     orchestrationCompatibilityEvidence,
     orchestrationCaller
-  }: WorkerStartContext,
+  }: Omit<WorkerStartContext, 'orchestrationMutation'>,
   followUp?: WorkerFollowUp
-): Promise<unknown> {
+) {
   if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
     throw new OrchestrationError(
       'invalid_argument',
@@ -68,7 +130,26 @@ export async function startWorker(
       { effectsApplied: false }
     )
   }
-  const readinessTimeoutMs = resolveWorkerStartReadinessTimeoutMs(params.timeoutMs)
+  if (params.adoptTaskId !== undefined && orchestrationCaller?.kind !== 'peer') {
+    throw new OrchestrationError(
+      'invalid_argument',
+      'Only the paired Orca coordinating a Run names its Task IDs. No effects were applied.',
+      { effectsApplied: false }
+    )
+  }
+  const placement = params.worktree ?? 'current'
+  if (
+    orchestrationCaller?.kind === 'peer' &&
+    !followUp &&
+    !params.terminal &&
+    /^(current|new-child)$/.test(placement)
+  ) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      `--on requires an exact remote worktree selector or new-top-level: ${orchestrationCaller.peerRun.home_label} has no workspace on this server for --worktree ${placement}. No effects were applied.`,
+      { effectsApplied: false }
+    )
+  }
   const db = runtime.getOrchestrationDb()
   const coordinator = resolveOrchestrationCaller(runtime, {
     callerTerminalHandle: params.from,
@@ -165,39 +246,14 @@ export async function startWorker(
     followUp = { ...followUp, reopen: placement.reopen, earlierWork: placement.earlierWork }
     await assertWorkerStartTaskSpecWithinPromptBudget(spec)
   }
-  const mode = decideWorkerStartMode({
+  return {
     params,
-    settings: readWorkerStartModeSettings(runtime)
-  })
-  if (params.on) {
-    // Remote workers are terminal-only; carry the mode receipt to explain structured-preference fallback.
-    const receipt = await startFederatedWorker({
-      params,
-      runtime,
-      db,
-      bindRunId: () => bindRun().run.id,
-      task: existingTask,
-      taskDeps,
-      orchestrationMutation,
-      callerSession: orchestrationCaller
-    })
-    await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
-    return withRun(receipt && typeof receipt === 'object' ? { ...receipt, mode } : receipt)
-  }
-  const receipt = await startLocalWorker({
-    params: { ...params, timeoutMs: readinessTimeoutMs },
-    runtime,
-    db,
-    bindRun: () => bindRun().run,
-    taskDeps,
+    followUp,
     coordinator,
-    callerSession: orchestrationCaller,
-    existingTask,
-    orchestrationMutation,
-    mode,
+    bindRun,
     helperCreator,
-    followUp
-  })
-  await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
-  return withRun(withWorkerStartNext(receipt))
+    taskDeps,
+    existingTask,
+    withRun
+  }
 }

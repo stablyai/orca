@@ -1,24 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { getDefaultSettings } from '../../../../../shared/constants'
-import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
-import type * as localPreflightContext from '@/lib/local-preflight-context'
 import { resolveAgentResumeLaunchTarget } from '@/lib/agent-session/resume/agent-resume-launch-target'
 import { makeTerminalTab } from '@/store/terminals/terminal-row.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
-import {
-  buildPaneAccountRestartStartup,
-  type AgentAccountRestartStartup
-} from './agent-account-restart-startup'
+import { buildPaneAccountRestartStartup } from './agent-account-restart-startup'
+import type { AgentAccountRestartStartup } from './agent-account-restart-startup'
+import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
+import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
+import type * as localPreflightContext from '@/runtime/hosts/preflight/local-preflight-context'
 
 let projectRuntimeContext: ProjectExecutionRuntimeResolution | undefined
 
 vi.mock('@/lib/agent-session/resume/agent-resume-launch-target', { spy: true })
 
-vi.mock('@/lib/local-preflight-context', async (importOriginal) => ({
+vi.mock('@/runtime/hosts/preflight/local-preflight-context', async (importOriginal) => ({
   ...(await importOriginal<typeof localPreflightContext>()),
   getLocalProjectExecutionRuntimeContext: () => projectRuntimeContext
 }))

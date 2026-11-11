@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store/index'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
-import { getWindowsPathAccess } from '@/lib/windows-path-access'
+import { getWindowsPathAccess } from '@/lib/files/os-open/windows-path-access'
 import { browseRuntimeServerDirectory } from '@/runtime/files/reads/runtime-server-directory-browser'
 import type { AddRepoDialogStep } from '../dialog/add-repo-dialog-types'
 import { pickWslHostFolder, type DroppedHostPath } from './add-repo-wsl-host-folder-picker'

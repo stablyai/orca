@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState, type Ref } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { Laptop, Mic, Smartphone, Square, X } from 'lucide-react-native'
+import { CircleAlert, Laptop, Mic, RotateCcw, Smartphone, Square, X } from 'lucide-react-native'
 import type { MobileDictationMeter } from '../hooks/mobile-dictation-meter'
 import type { MobileDictationEngineShown } from '../hooks/mobile-dictation-session-state'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
   COMPOSER_CONTROL_HIT_SLOP,
+  COMPOSER_CONTROL_SIZE,
   composerInputStyles
 } from '../components/composer-input/composer-input-styles'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
@@ -27,11 +28,14 @@ const FINISHING_NOTE_DELAY_MS = 300
 export function MobileDictationCancelButton({
   onCancel,
   targetRef,
-  compact = false
+  compact = false,
+  discards = false
 }: {
   onCancel: () => void
   targetRef?: Ref<View>
   compact?: boolean
+  // After a failure, ✕ throws the kept recording away.
+  discards?: boolean
 }): React.JSX.Element {
   useMobileColorScheme()
   useMobileTranslation()
@@ -39,7 +43,9 @@ export function MobileDictationCancelButton({
     <Pressable
       ref={targetRef}
       accessibilityRole="button"
-      accessibilityLabel={dictationControlsCopy.cancel()}
+      accessibilityLabel={
+        discards ? dictationControlsCopy.discard() : dictationControlsCopy.cancel()
+      }
       style={({ pressed }) => [
         composerInputStyles.controlButton,
         compact && styles.compactCancel,
@@ -83,6 +89,77 @@ export function MobileDictationMicIcon({
     />
   ) : (
     <Mic pointerEvents="none" size={micSize} color={colors.textSecondary} strokeWidth={micStroke} />
+  )
+}
+
+// The failure that kept its recording: a reason and "Recording kept", on two lines in chat and one in the terminal.
+export function MobileDictationFailureNote({
+  reason,
+  compact = false
+}: {
+  reason: string
+  compact?: boolean
+}): React.JSX.Element {
+  useMobileColorScheme()
+  useMobileTranslation()
+  const kept = dictationControlsCopy.recordingKept()
+  return (
+    <View style={styles.row} accessible accessibilityLabel={`${reason}. ${kept}.`}>
+      <CircleAlert
+        pointerEvents="none"
+        size={compact ? 15 : 17}
+        color={colors.statusRed}
+        strokeWidth={2.2}
+      />
+      {compact ? (
+        <Text style={styles.failureCompact} numberOfLines={1}>
+          {`${reason} · ${kept}`}
+        </Text>
+      ) : (
+        <View style={styles.failureLines}>
+          <Text style={styles.failureReason} numberOfLines={1}>
+            {reason}
+          </Text>
+          <Text style={styles.failureKept} numberOfLines={1}>
+            {kept}
+          </Text>
+        </View>
+      )}
+    </View>
+  )
+}
+
+// Retry sits where Stop was: a labelled pill in chat, the round control in the terminal.
+export function MobileDictationRetryButton({
+  onRetry,
+  labelled
+}: {
+  onRetry: () => void
+  labelled: boolean
+}): React.JSX.Element {
+  useMobileColorScheme()
+  useMobileTranslation()
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={dictationControlsCopy.retry()}
+      style={({ pressed }) => [
+        labelled ? styles.retryPill : composerInputStyles.controlButton,
+        pressed && composerInputStyles.pressed
+      ]}
+      hitSlop={COMPOSER_CONTROL_HIT_SLOP}
+      onPress={onRetry}
+    >
+      <RotateCcw
+        pointerEvents="none"
+        size={15}
+        color={labelled ? colors.bgBase : colors.textPrimary}
+        strokeWidth={2.4}
+      />
+      {labelled ? (
+        <Text style={styles.retryLabel}>{dictationControlsCopy.retryShort()}</Text>
+      ) : null}
+    </Pressable>
   )
 }
 
@@ -190,5 +267,38 @@ const styles = themedStyleSheet(() => ({
     flexShrink: 1,
     color: colors.textSecondary,
     fontSize: typography.metaSize + 1
+  },
+  failureLines: {
+    flexShrink: 1,
+    minWidth: 0
+  },
+  failureReason: {
+    color: colors.textPrimary,
+    fontSize: typography.metaSize + 1,
+    fontWeight: '500'
+  },
+  failureKept: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize
+  },
+  failureCompact: {
+    flexShrink: 1,
+    color: colors.textPrimary,
+    fontSize: typography.metaSize
+  },
+  retryPill: {
+    height: COMPOSER_CONTROL_SIZE,
+    borderRadius: radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surfaceBright
+  },
+  retryLabel: {
+    color: colors.bgBase,
+    fontSize: typography.bodySize,
+    fontWeight: '600'
   }
 }))

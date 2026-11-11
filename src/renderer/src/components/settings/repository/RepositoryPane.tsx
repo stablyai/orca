@@ -5,6 +5,7 @@ import type { Project, ProjectUpdateArgs } from '../../../../../shared/project-t
 import type { Repo } from '../../../../../shared/repo-types'
 import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../../shared/repo-kind'
+import { useFolderSetupSupport } from '@/lib/workspace/creation/setup/folder-setup-support'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
 import { Label } from '../../ui/label'
 import { useShallow } from 'zustand/react/shallow'
@@ -21,14 +22,11 @@ import { matchesSettingsSearch } from '../search/settings-search'
 import { useAppStore } from '@/store/index'
 import { getRepositoryIconSectionId } from './repository-settings-targets'
 import { RepositoryIconPicker } from './identity/RepositoryIconPicker'
-import { getRepositoryPaneSearchEntries } from './repository-search'
+import { getRepositoryPaneSearchMetadata } from './repository-search'
 import { RepositoryHostSetupsSection } from './hosts/RepositoryHostSetupsSection'
 import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
 import { RepositoryForkSyncSection } from './source-control/RepositoryForkSyncSection'
-import {
-  getRepositoryAgentTrustSearchEntry,
-  RepositoryAgentTrustSection
-} from './RepositoryAgentTrustSection'
+import { RepositoryAgentTrustSection } from './RepositoryAgentTrustSection'
 import { RepositoryGitHubAccountSection } from './source-control/RepositoryGitHubAccountSection'
 import { useTranslate } from '@/i18n/use-translate'
 import { RepositoryWindowsRuntimeSection } from './runtime/RepositoryWindowsRuntimeSection'
@@ -104,6 +102,7 @@ export function RepositoryPane({
 }: RepositoryPaneProps): React.JSX.Element {
   const t = useTranslate()
   const isFolder = isFolderRepo(repo)
+  const hooksSupported = useFolderSetupSupport(repo) === 'supported'
   // Bind writes to the switcher-selected owner; same-ID/self-paired repos must not use focused-host fallback.
   const selectedHostId = getRepoExecutionHostId(repo)
   const updateSelectedRepo = useCallback(
@@ -178,41 +177,20 @@ export function RepositoryPane({
     }, 1500)
   }
 
-  const allEntries = getRepositoryPaneSearchEntries(repo, { isLocalWindowsProject }, t)
-  const identityEntryTitles = new Set([
-    t('auto.components.settings.repository.search.7e1e456a95', 'Display Name'),
-    t('auto.components.settings.repository.search.b24f00294a', 'Project Icon'),
-    t('components.RepositoryJiraProjectSection.title', 'Default Jira project'),
-    t('auto.components.settings.repository.search.githubAccount', 'GitHub Account'),
-    getRepositoryAgentTrustSearchEntry().title,
-    t('auto.components.settings.repository.search.keepForkUpToDate', 'Keep Fork Up to Date'),
-    t('auto.components.settings.repository.search.094adbe930', 'Default Worktree Base'),
-    t('auto.components.settings.repository.search.443d127b5a', 'Worktree Location'),
-    t('auto.components.settings.repository.search.externalWorktrees', 'External worktrees'),
-    t('auto.components.settings.repository.search.projectRuntime', 'Project Runtime'),
-    t('auto.components.settings.repository.search.c5266c2c9d', 'Remove Project')
-  ])
-  const identityEntries = allEntries.filter((entry) => identityEntryTitles.has(entry.title))
-  const sparsePresetEntries = allEntries.filter((entry) =>
-    ['Sparse Checkout Presets'].includes(entry.title)
-  )
-  const hooksEntries = allEntries.filter((entry) =>
-    [
-      'Setup Script',
-      'Archive Script',
-      'Advanced',
-      'When to Run Setup',
-      'Custom GitHub Issue Command'
-    ].includes(entry.title)
-  )
-  const mcpEntries = allEntries.filter((entry) => entry.title === 'MCP Configs')
-  const symlinkEntries = allEntries.filter((entry) => entry.title === 'Worktree Shared Paths')
-  const sourceControlAiEntries = allEntries.filter((entry) => entry.title === 'Git AI Author')
-  const hostSetupEntries = allEntries.filter((entry) => entry.title === 'Available Hosts')
-  const projectRuntimeEntries = allEntries.filter((entry) => entry.title === 'Project Runtime')
+  const {
+    identity: identityEntries,
+    sparsePresets: sparsePresetEntries,
+    hooks: hooksEntries,
+    mcp: mcpEntries,
+    sharedPaths: symlinkEntries,
+    sourceControlAi: sourceControlAiEntries,
+    hostSetups: hostSetupEntries,
+    projectRuntime: projectRuntimeEntries
+  } = getRepositoryPaneSearchMetadata(repo, { isLocalWindowsProject }, t)
 
   const hooksSection =
-    !isFolder && (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, hooksEntries)) ? (
+    hooksSupported &&
+    (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, hooksEntries)) ? (
       <RepositoryHooksSection
         key="hooks"
         repo={repo}
@@ -263,7 +241,7 @@ export function RepositoryPane({
         }
       >
         <SearchableSetting
-          title={t('auto.components.settings.RepositoryPane.c7ef4415de', 'Display Name')}
+          title={t('auto.components.settings.RepositoryPane.07deadaa00', 'Display name')}
           description={t(
             'auto.components.settings.RepositoryPane.b0a0c14a1c',
             'Project-specific display details for the sidebar and tabs.'
@@ -273,7 +251,7 @@ export function RepositoryPane({
           forceVisible={forceFullPaneForRepoMatch}
         >
           <Label htmlFor={`repo-display-name-${repo.id}`} className="text-sm font-semibold">
-            {t('auto.components.settings.RepositoryPane.c7ef4415de', 'Display Name')}
+            {t('auto.components.settings.RepositoryPane.07deadaa00', 'Display name')}
           </Label>
           <RepoSettingsDraftInput
             id={`repo-display-name-${repo.id}`}
@@ -285,7 +263,7 @@ export function RepositoryPane({
         </SearchableSetting>
 
         <SearchableSetting
-          title={t('auto.components.settings.RepositoryPane.26fef02bf3', 'Project Icon')}
+          title={t('auto.components.settings.RepositoryPane.e856e61455', 'Project icon')}
           description={t(
             'auto.components.settings.RepositoryPane.e641c359de',
             'Project icon and color used in the sidebar and tabs.'

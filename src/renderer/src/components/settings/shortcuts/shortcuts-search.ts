@@ -8,8 +8,8 @@ import { localizeKeybindingDefinition } from './keybinding-title-copy'
 export const getTerminalShortcutPolicySearchEntry = createLocalizedCatalog(
   (): SettingsSearchEntry => ({
     title: translate(
-      'auto.components.settings.shortcuts.search.f052906167',
-      'Shortcuts in Terminal'
+      'auto.components.settings.shortcuts.search.d6b5c7dd6d',
+      'Shortcuts in terminal'
     ),
     description: translate(
       'auto.components.settings.shortcuts.search.ebd7d81e1d',

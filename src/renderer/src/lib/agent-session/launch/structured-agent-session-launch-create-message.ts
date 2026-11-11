@@ -9,13 +9,13 @@ import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../../shared/agen
 import {
   type StructuredLaunchState,
   notifyStructuredLaunchListeners
-} from './structured-agent-session-launch-registry'
+} from './structured-agent-session-launch-state-store'
 import {
   prepareStructuredLaunchPromptForCreate,
   hasStagedStructuredLaunchPrompt,
   issueStructuredLaunchPromptForCreate,
   prepareLegacyStructuredLaunchPrompts
-} from './structured-agent-session-launch-prompt'
+} from './structured-agent-session-staged-prompt'
 import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
 import {
   structuredAgentSessionMessageSelection,
@@ -56,7 +56,7 @@ export function prepareStructuredLaunchCreateMessage(
   if (intent.createMessageSupport !== true) {
     prepareLegacyStructuredLaunchPrompts(intent.sessionId)
     intent.createPrepared = true
-    notifyStructuredLaunchListeners()
+    notifyStructuredLaunchListeners(intent.sessionId)
     return
   }
   const hadPrompt = hasStagedStructuredLaunchPrompt(intent.sessionId)
@@ -94,7 +94,7 @@ export function prepareStructuredLaunchCreateMessage(
     }
   }
   intent.createPrepared = true
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchListeners(intent.sessionId)
 }
 
 /** Hosts before options-mode may refuse an action's mode (older permission tables): the chat takes

@@ -28,6 +28,7 @@ import {
   type PluginRuntimeRpc
 } from './plugin-host-workspace-method-bindings'
 import type { PluginAppearanceService } from '../appearance/plugin-appearance-service'
+import type { PluginEditorTypographySource } from '../appearance/plugin-editor-typography'
 import { PluginHostCallError } from './plugin-host-call-scope'
 
 export type { PluginHostCallScope } from './plugin-host-call-scope'
@@ -55,6 +56,8 @@ export type PluginDesktopFrameServices = {
 
 export type PluginHostServices = {
   appearance?: PluginAppearanceService | null
+  /** This Orca's own editor settings; absent where no profile is loaded (relay conformance). */
+  editorTypography?: PluginEditorTypographySource | null
   resolveActiveWorktreeContext(): Promise<PluginWorktreeContext | null>
   listWorktreeTerminals(worktreeId: string): Promise<PluginWorkspaceTerminal[]>
   listAgentStatuses(): readonly PluginAgentStatusRow[]
@@ -130,6 +133,12 @@ const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
       return services.appearance.apply(pluginId, params, scope)
     }
   ),
+  'editor.readTypography': bind(api['editor.readTypography'], async (_params, { services }) => {
+    if (!services.editorTypography) {
+      throw new PluginHostCallError('unavailable', 'editor settings are unavailable on this host')
+    }
+    return services.editorTypography.read()
+  }),
   'workspace.readContext': bind(api['workspace.readContext'], async (_params, { services }) => {
     const context = await services.resolveActiveWorktreeContext()
     // A remote host may be unreachable; its workspace context still exists, so omit only its terminals.

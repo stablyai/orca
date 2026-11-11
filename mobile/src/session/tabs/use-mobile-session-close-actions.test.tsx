@@ -14,7 +14,14 @@ import {
   readMobileNativeChatDraftInputs,
   updateMobileNativeChatDraftInputs
 } from '../native-chat/composer/mobile-native-chat-draft-inputs'
-import { resetMobileNativeChatDraftStoreForTests } from '../native-chat/composer/mobile-native-chat-draft-store'
+import { closeMobileNativeChatTabDraft } from '../native-chat/composer/mobile-native-chat-draft-store'
+
+import { loadMobileNativeChatDrafts } from '../native-chat/composer/mobile-native-chat-draft-persistence'
+
+vi.mock('@react-native-async-storage/async-storage', async () => {
+  const { createInMemoryAsyncStorage } = await import('../../test-support/in-memory-async-storage')
+  return { default: createInMemoryAsyncStorage() }
+})
 
 const initial: Terminal[] = ['a', 'b', 'c'].map((handle) => ({
   handle,
@@ -24,10 +31,16 @@ const initial: Terminal[] = ['a', 'b', 'c'].map((handle) => ({
 
 describe('legacy terminal close acknowledgments', () => {
   let renderer: ReactTestRenderer | null = null
-  afterEach(() => {
+  let queries: ReturnType<typeof documentQueryClient> | null = null
+  afterEach(async () => {
     act(() => renderer?.unmount())
     renderer = null
-    resetMobileNativeChatDraftStoreForTests()
+    await queries?.end()
+    queries = null
+    await loadMobileNativeChatDrafts('host', 'workspace')
+    closeMobileNativeChatTabDraft('queued-editor')
+    closeMobileNativeChatTabDraft('host\0workspace\0closed')
+    await loadMobileNativeChatDrafts('host', 'workspace')
   })
 
   async function mount(renameTarget: Terminal | null = null) {
@@ -127,8 +140,9 @@ describe('legacy terminal close acknowledgments', () => {
       }
       return null
     }
+    queries = documentQueryClient()
     await act(async () => {
-      renderer = create(documentQueryClient().wrap(createElement(Harness)))
+      renderer = create(queries!.wrap(createElement(Harness)))
     })
     return {
       read() {

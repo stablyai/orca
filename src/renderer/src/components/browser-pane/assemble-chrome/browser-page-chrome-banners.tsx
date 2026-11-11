@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { CircleCheck, Copy, Crosshair, Send, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {

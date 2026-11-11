@@ -1,4 +1,4 @@
-import { Copy, FileCode2, MoreHorizontal, RefreshCw, RotateCcw } from 'lucide-react'
+import { Copy, ExternalLink, FileCode2, MoreHorizontal, RefreshCw, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -8,16 +8,14 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
-import {
-  BrowserChromeFoldedMenuItems,
-  type BrowserChromeOverflowMenuProps
-} from '../assemble-chrome/browser-chrome-folded-tools'
+import type { BrowserChromeOverflowMenuProps } from '../assemble-chrome/browser-chrome-toolbar'
 
 /** Preview grants have no browsing session or device emulation; expose document actions instead. */
 export function DocPreviewOverflowMenu({
   onReload,
   onHardReload,
   onOpenSource,
+  onOpenExternally,
   onCopyPath,
   onCopyRelativePath,
   overflow
@@ -25,6 +23,7 @@ export function DocPreviewOverflowMenu({
   onReload: () => void
   onHardReload: () => void
   onOpenSource: () => void
+  onOpenExternally: () => void
   onCopyPath: () => void
   /** Why it lives here: the preview hides the editor's path header, which was the only way to copy it. */
   onCopyRelativePath: () => void
@@ -48,10 +47,6 @@ export function DocPreviewOverflowMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" onCloseAutoFocus={overflow.onMenuCloseAutoFocus}>
-        <BrowserChromeFoldedMenuItems
-          tools={overflow.tools}
-          deferUntilClose={overflow.deferUntilClose}
-        />
         <DropdownMenuItem onSelect={onReload}>
           <RefreshCw className="size-3.5" />
           {t('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
@@ -64,6 +59,13 @@ export function DocPreviewOverflowMenu({
         <DropdownMenuItem onSelect={onOpenSource}>
           <FileCode2 className="size-3.5" />
           {t('auto.components.editor.HtmlDocPreview.openSourceControl', 'Open source file')}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onOpenExternally}>
+          <ExternalLink className="size-3.5" />
+          {t(
+            'auto.components.editor.HtmlDocPreview.openExternallyControl',
+            'Open with default app'
+          )}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onCopyPath}>
           <Copy className="size-3.5" />

@@ -102,7 +102,9 @@ export function workspaceSettingsMounts(
         getAgentLaunchSupport: async () => false,
         transitionDrawer: (view: unknown) => context.effect('drawer', view),
         onCreated: (id: unknown, name: unknown) => context.effect('created', { id, name }),
-        onClose: () => context.effect('close', null)
+        onClose: () => context.effect('close', null),
+        // Not opened from a folder.
+        folderLaunch: undefined
       })
       let state: ReturnType<typeof useSubmit>
       const hook = hookMount(() => {

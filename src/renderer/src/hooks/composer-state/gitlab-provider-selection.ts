@@ -41,7 +41,7 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { reviewStartPointErrorText } from '@/lib/code-host-error-copy'
+import { reviewStartPointErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 export function useGitLabProviderSelection(input: GitLabProviderSelectionInput) {
   const {

@@ -17,7 +17,7 @@ import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../shared/s
 import { normalizeNativeChatShellEnvironmentVariables } from '../../../shared/native-chat/native-chat-shell-environment'
 import { publishedLegacyChatPermissionMode } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
-  expandWorkspaceDirHome,
+  normalizeLoadedWorkspaceDirSetting,
   stripRetiredGlobalSettings
 } from '../applying-settings/terminal-settings-migrations'
 import { readLegacySidekickFlag } from '../applying-settings/onboarding-normalization'
@@ -88,13 +88,18 @@ export function normalizeLoadedGlobalSettings(
   return {
     ...defaults.settings,
     // Legacy stored booleans cannot distinguish opt-in from the old default; retain explicit true.
-    ...expandWorkspaceDirHome(stripRetiredGlobalSettings(parsed.settings)),
+    ...normalizeLoadedWorkspaceDirSetting(
+      stripRetiredGlobalSettings(parsed.settings),
+      defaults.settings
+    ),
     agentDefaultSurface: normalizeAgentDefaultSurface(parsed.settings?.agentDefaultSurface),
     nativeChatAppearance: normalizeNativeChatAppearanceSettings(
       parsed.settings?.nativeChatAppearance
     ),
     worktreeVisibilityDefaults: migratedExternalVisibility.defaults,
     prBotAuthorOverrides: normalizePRBotAuthorOverrides(parsed.settings?.prBotAuthorOverrides),
+    // Only fresh profiles take the on default; a stored profile saved before the key existed was off.
+    artifactSharingEnabled: parsed.settings?.artifactSharingEnabled === true,
     // Carry the retired sidekick flag into pet settings.
     experimentalPet: parsed.settings?.experimentalPet ?? readLegacySidekickFlag(parsed) ?? false,
     // Migrate old platform defaults once; retain later opt-outs.

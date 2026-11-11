@@ -1,7 +1,7 @@
 import * as React from 'react'
 import * as SliderPrimitive from 'radix-ui/slider'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 type SliderProps = React.ComponentProps<typeof SliderPrimitive.Root> & {
   thumbLabels?: readonly string[]

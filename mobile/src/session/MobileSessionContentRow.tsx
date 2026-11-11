@@ -9,7 +9,6 @@ import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { MobileSessionActiveContent } from './MobileSessionActiveContent'
 import { MobileSessionCommandDock } from './MobileSessionCommandDock'
-import { MobileDictationStatusAnnouncement } from '../dictation/MobileDictationStatusAnnouncement'
 import { MobileDictationLiveContext } from '../dictation/mobile-dictation-live-context'
 import { useMobileDictationLive } from '../dictation/use-mobile-dictation-live'
 
@@ -56,7 +55,6 @@ export function MobileSessionContentRow({ controller }: { controller: MobileSess
           {/* Why: translate instead of resize so keyboard toggles don't trigger a server-side PTY viewport change. */}
           <MobileSessionCommandDock controller={controller} />
         </MobileDictationLiveContext.Provider>
-        <MobileDictationStatusAnnouncement dictation={dictation} />
       </View>
       {canDockPanel && activePanel !== null && (
         <SessionDockColumn

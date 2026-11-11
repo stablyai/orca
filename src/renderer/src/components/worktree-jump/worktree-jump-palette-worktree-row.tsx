@@ -7,8 +7,8 @@ import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
 import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
-} from '@/lib/worktree-default-display-name'
-import { cn } from '@/lib/utils'
+} from '@/lib/workspace/display/worktree-default-display-name'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   getRepoExecutionHostId,

@@ -1,5 +1,5 @@
 /** Invoke can survive dead main → renderer push delivery; ACK probes use that same dead push channel, so detect and pull-restore through invoke. Skip IPC while output flows or no PTY expects delivery. */
-import { e2eConfig } from '@/lib/e2e-config'
+import { e2eConfig } from '@/app-shell/startup/e2e-config'
 import type { PtyRendererDeliveryHealthReply } from '../../../../../../shared/terminal/pty/diagnostics/pty-renderer-delivery-health'
 import { redactPtyIdForDiagnostics } from '../../../../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 import { deliverPulledPtyModelRestoreMarkers } from './pty-model-restore-channel'

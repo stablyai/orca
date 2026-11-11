@@ -1,10 +1,10 @@
 import { useContext, useMemo } from 'react'
 import { queuedMessageCardLine } from '../../../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import type { MobileQueuedMessageCard } from '../../mobile-structured-queued-message-cards'
+import type { MobileQueuedMessageCard } from './mobile-structured-queued-message-cards'
 import type { MobileNativeChatOfflineQueue as Queue } from '../composer/use-mobile-native-chat-offline-sends'
 import { MobileNativeChatQueuedMessages } from './MobileNativeChatQueuedMessages'
-import { MobileNativeChatNoticeContext } from '../../mobile-native-chat-notice-context'
+import { MobileNativeChatNoticeContext } from '../transcript/mobile-native-chat-notice-context'
 
 const PAUSED = { reason: 'failed' } as const
 

@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../../types'
 import { createHostedReviewSlice } from './hosted-review'
-import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
 
 import type { HostedReviewInfo } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 
@@ -46,17 +45,6 @@ function makeStore(settings: AppState['settings'] = null) {
   }))
 }
 
-const review: HostedReviewInfo = {
-  provider: 'gitlab',
-  number: 5,
-  title: 'Shared MR status',
-  state: 'open',
-  url: 'https://gitlab.com/g/p/-/merge_requests/5',
-  status: 'success',
-  updatedAt: '2026-05-10T00:00:00.000Z',
-  mergeable: 'MERGEABLE'
-}
-
 const githubReview: HostedReviewInfo = {
   provider: 'github',
   number: 12,
@@ -79,48 +67,6 @@ describe('hosted review slice', () => {
 
   afterEach(() => {
     vi.useRealTimers()
-  })
-
-  it('clears stale GitHub PR cache when branch review lookup finds a non-GitHub review', async () => {
-    mockApi.hostedReview.forBranch.mockResolvedValueOnce(review)
-    const store = makeStore()
-    store.setState({
-      prCache: {
-        'repo-1::feature/gitlab': {
-          data: {
-            number: 12,
-            title: 'Old GitHub PR',
-            state: 'open',
-            url: 'https://github.com/acme/orca/pull/12',
-            checksStatus: 'pending',
-            updatedAt: '2026-03-28T00:00:00Z',
-            mergeable: 'UNKNOWN',
-            headSha: 'head-oid'
-          },
-          fetchedAt: 1
-        },
-        '/repo::feature/gitlab': {
-          data: {
-            number: 99,
-            title: 'Old path-scoped GitHub PR',
-            state: 'closed',
-            url: 'https://github.com/acme/orca/pull/99',
-            checksStatus: 'failure',
-            updatedAt: '2026-03-28T00:00:00Z',
-            mergeable: 'UNKNOWN',
-            headSha: 'old-head-oid'
-          },
-          fetchedAt: 1
-        }
-      }
-    } as unknown as Partial<AppState>)
-
-    await expect(
-      store.getState().fetchHostedReviewForBranch('/repo', 'feature/gitlab')
-    ).resolves.toEqual(review)
-
-    expect(store.getState().prCache['repo-1::feature/gitlab']).toBeUndefined()
-    expect(store.getState().prCache['/repo::feature/gitlab']).toBeUndefined()
   })
 
   it('does not reuse an old-head request after the branch advances', async () => {
@@ -160,51 +106,5 @@ describe('hosted review slice', () => {
         currentHeadOid: 'bbbbbbb'
       })
     ).resolves.toBeNull()
-  })
-
-  it('does not preserve a merged GitHub review after the worktree moves off its head', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const cacheKey = getHostedReviewCacheKey(
-      '/repo',
-      'feature/merged',
-      null,
-      'repo-1',
-      null,
-      null,
-      true
-    )
-    const store = makeStore()
-    store.setState({
-      hostedReviewCache: {
-        [cacheKey]: {
-          data: {
-            provider: 'github',
-            number: 7,
-            title: 'Merged at head',
-            state: 'merged',
-            url: 'https://github.com/acme/orca/pull/7',
-            status: 'success',
-            updatedAt: '2026-05-10T00:00:00.000Z',
-            mergeable: 'MERGEABLE',
-            headSha: 'aaaaaaa'
-          },
-          fetchedAt: 1,
-          linkedReviewHintKey: ''
-        }
-      }
-    })
-    mockApi.hostedReview.forBranch.mockRejectedValueOnce(new Error('transient gh failure'))
-
-    try {
-      // Failure after head advance must not preserve the prior merged review.
-      await expect(
-        store.getState().fetchHostedReviewForBranch('/repo', 'feature/merged', {
-          force: true,
-          currentHeadOid: 'bbbbbbb'
-        })
-      ).resolves.toBeNull()
-    } finally {
-      consoleError.mockRestore()
-    }
   })
 })

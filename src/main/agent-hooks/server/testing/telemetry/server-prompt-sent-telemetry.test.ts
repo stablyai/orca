@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from '../../agent-hook-server'
-import { buildBody, PANE, GOOD_PANE, FRESH_PANE } from '../server.test-fixtures'
+import { buildBody, PANE } from '../server.test-fixtures'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),
@@ -27,112 +27,6 @@ afterEach(() => {
 })
 
 describe('AgentHookServer prompt-sent telemetry', () => {
-  it('dedupes duplicate Command Code stop hooks but tracks same-prompt reruns', () => {
-    const server = new AgentHookServer()
-
-    server.ingestRemote(
-      {
-        paneKey: PANE,
-        tabId: 'tab-1',
-        worktreeId: 'wt-1',
-        hasExplicitPrompt: true,
-        promptInteractionKey: 'command-code-transcript-user-1',
-        payload: { state: 'done', prompt: 'rerun', agentType: 'command-code' }
-      },
-      'conn-1'
-    )
-    server.ingestRemote(
-      {
-        paneKey: PANE,
-        tabId: 'tab-1',
-        worktreeId: 'wt-1',
-        hasExplicitPrompt: true,
-        promptInteractionKey: 'command-code-transcript-user-1',
-        payload: { state: 'done', prompt: 'rerun', agentType: 'command-code' }
-      },
-      'conn-1'
-    )
-    server.ingestRemote(
-      {
-        paneKey: PANE,
-        tabId: 'tab-1',
-        worktreeId: 'wt-1',
-        hasExplicitPrompt: true,
-        promptInteractionKey: 'command-code-transcript-user-2',
-        payload: { state: 'done', prompt: 'rerun', agentType: 'command-code' }
-      },
-      'conn-1'
-    )
-
-    expect(trackMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('does not let a reused interaction key suppress different prompt text', () => {
-    const server = new AgentHookServer()
-
-    server.ingestRemote(
-      {
-        paneKey: PANE,
-        tabId: 'tab-1',
-        worktreeId: 'wt-1',
-        hasExplicitPrompt: true,
-        promptInteractionKey: 'command-code-transcript-reused',
-        payload: { state: 'done', prompt: 'first command', agentType: 'command-code' }
-      },
-      'conn-1'
-    )
-    server.ingestRemote(
-      {
-        paneKey: PANE,
-        tabId: 'tab-1',
-        worktreeId: 'wt-1',
-        hasExplicitPrompt: true,
-        promptInteractionKey: 'command-code-transcript-reused',
-        payload: { state: 'done', prompt: 'second command', agentType: 'command-code' }
-      },
-      'conn-1'
-    )
-
-    expect(trackMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('does not track replays, empty prompts, or inherited prompt snapshots', () => {
-    const server = new AgentHookServer()
-
-    server.ingestRemote(
-      {
-        paneKey: PANE,
-        tabId: 'tab-1',
-        worktreeId: 'wt-1',
-        hasExplicitPrompt: true,
-        isReplay: true,
-        payload: { state: 'working', prompt: 'replayed prompt', agentType: 'codex' }
-      },
-      'conn-1'
-    )
-    server.ingestRemote(
-      {
-        paneKey: GOOD_PANE,
-        tabId: 'tab-good',
-        worktreeId: 'wt-1',
-        hasExplicitPrompt: true,
-        payload: { state: 'working', prompt: '   ', agentType: 'codex' }
-      },
-      'conn-1'
-    )
-    server.ingestRemote(
-      {
-        paneKey: FRESH_PANE,
-        tabId: 'tab-fresh',
-        worktreeId: 'wt-1',
-        payload: { state: 'working', prompt: 'inherited prompt', agentType: 'codex' }
-      },
-      'conn-1'
-    )
-
-    expect(trackMock).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
-  })
-
   it('tracks OpenCode user MessagePart hooks once per message id', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })

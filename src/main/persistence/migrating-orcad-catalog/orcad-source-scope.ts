@@ -22,7 +22,7 @@ import {
   isWorktreeHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
 import type { Repo } from '../../../shared/repo-types'
-import { ownerKeyBelongsToRepo } from '../../orca-profiles/profile-project-worktree-identity'
+import { ownerKeyBelongsToRepo } from '../../orca-profiles/project-transfer/profile-project-worktree-identity'
 import { repoBelongsToOrcadSource } from './orcad-source-ownership'
 
 type OrcadMigrationScopeRows = {

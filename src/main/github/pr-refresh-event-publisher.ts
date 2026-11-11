@@ -1,4 +1,5 @@
 import type {
+  GitHubPRRefreshAlias,
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEvent,
   GitHubPRRefreshReason,
@@ -8,9 +9,11 @@ import type {
 import { recordCoalescedCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { prRefreshRenderers } from './pr-refresh-renderer-port'
 
+// `aliases`: every checkout the read stood for (one read can serve several linked to the same PR).
 export type PRRefreshOutcomeObserver = (
   candidate: GitHubPRRefreshCandidate,
-  outcome: PRRefreshOutcome
+  outcome: PRRefreshOutcome,
+  aliases: readonly GitHubPRRefreshAlias[]
 ) => void
 
 const DIAGNOSTIC_BREADCRUMB_MIN_INTERVAL_MS = 30_000
@@ -27,10 +30,14 @@ export class PRRefreshEventPublisher {
   }
 
   /** Every read of a PR reaches every observer once, whatever surface caused it. */
-  observe(candidate: GitHubPRRefreshCandidate, outcome: PRRefreshOutcome): void {
+  observe(
+    candidate: GitHubPRRefreshCandidate,
+    outcome: PRRefreshOutcome,
+    aliases: readonly GitHubPRRefreshAlias[] = []
+  ): void {
     for (const observer of this.observers) {
       try {
-        observer(candidate, outcome)
+        observer(candidate, outcome, aliases)
       } catch (error) {
         // One observer's failure must not hide the read from the others or fail the refresh.
         console.warn('[pr-refresh] outcome observer failed', error)

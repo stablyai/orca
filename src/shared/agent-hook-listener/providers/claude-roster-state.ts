@@ -13,6 +13,7 @@ import type { AgentHookEventPayload } from '../listener-event'
 import type { HookListenerState } from '../listener-state'
 import type { ClaudeLeadTurnState } from '../main-agent-turn-state'
 import { readString } from '../tool-input-preview'
+import { CLAUDE_NEW_SESSION_START_SOURCES } from './claude-session-start-sources'
 import { resolveClaudePaneStatus } from './claude-pane-hold-evidence'
 
 /** Only attributable lead events may re-anchor ownership; unknown/child events void nothing. */
@@ -47,9 +48,7 @@ export function voidClaimsOfReplacedClaudeSession(
   // Ignored compact/unknown SessionStart must not advance ownership or hide the next real replacement.
   if (
     eventName === 'SessionStart' &&
-    hookPayload['source'] !== 'startup' &&
-    hookPayload['source'] !== 'resume' &&
-    hookPayload['source'] !== 'clear'
+    !CLAUDE_NEW_SESSION_START_SOURCES.has(hookPayload['source'])
   ) {
     return
   }

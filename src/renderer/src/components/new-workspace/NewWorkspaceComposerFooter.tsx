@@ -2,7 +2,7 @@ import React from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SwitchIndicator } from '@/components/ui/switch'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { ButtonKeyHint } from '@/components/ButtonKeyHint'
 import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
@@ -77,9 +77,11 @@ export function NewWorkspaceComposerFooter({
           disabled={createDisabled}
           size="sm"
           className="text-xs"
+          // Why: the title already says what is created; the button keeps the full name for AT.
+          aria-label={primaryActionLabel}
         >
           {creating ? <LoaderCircle className="size-4 animate-spin" /> : null}
-          {primaryActionLabel}
+          {t('auto.components.NewWorkspaceComposerFooter.create', 'Create')}
           <ButtonKeyHint modifierLabel={submitShortcutModifierLabel} />
         </Button>
       </div>

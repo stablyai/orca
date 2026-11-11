@@ -1,3 +1,4 @@
+import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 
@@ -32,10 +33,7 @@ export function createTerminalStartupQueueActions(
     queueTabStartupCommand: (tabId, startup) => {
       const normalized = normalizeTabStartupCommand(startup)
       set((s) => ({
-        pendingStartupByTabId: {
-          ...s.pendingStartupByTabId,
-          [tabId]: normalized
-        }
+        pendingStartupByTabId: replaceRecordEntries(s.pendingStartupByTabId, [[tabId, normalized]])
       }))
     },
     queueTabInitialCwd: (tabId, cwd) => {
@@ -69,9 +67,11 @@ export function createTerminalStartupQueueActions(
         if (s.pendingStartupByTabId[tabId] !== pending) {
           return s
         }
-        const next = { ...s.pendingStartupByTabId }
-        delete next[tabId]
-        return { pendingStartupByTabId: next }
+        return {
+          pendingStartupByTabId: replaceRecordEntries<TabStartupCommand>(s.pendingStartupByTabId, [
+            [tabId, null]
+          ])
+        }
       })
       return pending
     },

@@ -1,8 +1,5 @@
-import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
-import type { Worktree } from '../../../../shared/worktree/types'
-import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import {
   getRepoExecutionHostId,
   getRepoRoutingConnectionId,
@@ -12,14 +9,17 @@ import {
   selectRuntimeAwareSshStatus,
   type RuntimeAwareSshStatusState
 } from '@/store/slices/ssh/runtime-environment-ssh-selectors'
-import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
+import { getClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
 import {
   canRunNativeChatSplitTarget,
   resolveActiveNativeChatSplitTarget,
   runActiveNativeChatSplit
 } from '@/components/native-chat/pane/routing/native-chat-layout-actions'
-import type { NativeChatSplitDirection } from '@/components/native-chat/pane/routing/native-chat-pane-shortcut'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import type { AppState } from '@/store/types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import type { SshConnectionStatus } from '../../../../shared/ssh-types'
+import type { NativeChatSplitDirection } from '@/components/native-chat/pane/routing/native-chat-pane-shortcut'
 import type { TabSplitDirection } from '@/store/slices/tabs/tabs-slice-contract'
 
 export type CmdJUnavailableReason =

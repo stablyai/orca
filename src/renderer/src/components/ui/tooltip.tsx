@@ -2,7 +2,7 @@ import * as React from 'react'
 import * as TooltipPrimitive from 'radix-ui/tooltip'
 
 import { cva, type VariantProps } from 'class-variance-authority'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { PortalContainerContext, usePortalContainer } from './portal-container-context'
 
 function TooltipProvider({

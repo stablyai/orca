@@ -1,11 +1,14 @@
-import { ImeTextarea } from '@/lib/ime-text-field'
+import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import { useEffect, useState } from 'react'
 import { CornerDownLeft, MessageSquarePlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
-import { getScreenSubmitModifierLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import {
+  getScreenSubmitModifierLabel,
+  isScreenSubmitShortcut
+} from '@/lib/keyboard/screen-submit-shortcut'
 import {
   GRAB_BUDGET,
   type BrowserAnnotationIntent,

@@ -30,6 +30,7 @@ export function emitClaudeStructuredSessionEvent({
     deps.onEvent?.(event)
   }
   if (event.type === 'ended' || event.type === 'retiring') {
+    session?.delivery.dispose()
     session?.childWork.clear()
     session?.backgroundTasks.clear()
   } else if (event.type === 'message') {
@@ -56,19 +57,18 @@ export function deliverClaudeConnectionEvent(
   exits: ReadonlyMap<string, ClaudeSessionExit>,
   attempt: ClaudeAcquisitionAttempt,
   sessionId: string,
-  event: () => void
+  event: () => void,
+  payload?: unknown
 ): void {
-  if (!attempt.published) {
-    attempt.buffered.push(event)
-    return
-  }
-  if (exits.get(sessionId)?.error instanceof ClaudePluginInputError) {
-    return
-  }
-  if (
-    sessions.get(sessionId)?.connection === attempt.connection ||
-    exits.get(sessionId)?.connection === attempt.connection
-  ) {
-    event()
-  }
+  attempt.delivery.deliver(() => {
+    if (attempt.cancelled || exits.get(sessionId)?.error instanceof ClaudePluginInputError) {
+      return
+    }
+    if (
+      sessions.get(sessionId)?.connection === attempt.connection ||
+      exits.get(sessionId)?.connection === attempt.connection
+    ) {
+      event()
+    }
+  }, payload)
 }

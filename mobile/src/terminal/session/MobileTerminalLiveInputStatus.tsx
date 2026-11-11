@@ -12,6 +12,7 @@ import {
 import { MobileDictationLiveContext } from '../../dictation/mobile-dictation-live-context'
 import {
   MobileDictationCancelButton,
+  MobileDictationFailureNote,
   MobileDictationFinishingNote,
   MobileDictationRecordingMeter
 } from '../../dictation/MobileDictationLiveControls'
@@ -37,6 +38,16 @@ export function MobileTerminalLiveInputStatus({
   const t = useMobileTranslation()
   const live = useContext(MobileDictationLiveContext)
   const dictationTitle = mobileDictationStatusTitle(dictation)
+  if (live?.failureReason != null) {
+    return (
+      <View style={[styles.status, styles.dictating]} pointerEvents="box-none">
+        <MobileDictationCancelButton onCancel={live.cancel} compact discards />
+        <View style={styles.dictationLine} pointerEvents="none">
+          <MobileDictationFailureNote reason={live.failureReason} compact />
+        </View>
+      </View>
+    )
+  }
   if (!dictationTitle) {
     return isAttaching ? (
       <View style={styles.status} pointerEvents="none">
