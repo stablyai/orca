@@ -97,7 +97,8 @@ export function admitSessionSearchStoreWrite(
   previousByteOffset: number,
   identity: (() => TranscriptSessionIdentity | null) | undefined,
   metadataOnly: boolean,
-  row: () => SessionSearchFileRow | undefined
+  row: () => SessionSearchFileRow | undefined,
+  closed: () => boolean
 ): SessionSearchFileWrite | null {
   const admission = candidates?.admission(candidate)
   if (admission?.allowed === false || (metadataOnly && admission?.contentRequired)) {
@@ -115,7 +116,8 @@ export function admitSessionSearchStoreWrite(
     metadataOnly
   )
   const valid = () =>
-    !candidates || candidates.admission(candidate).revision === (admission?.revision ?? '')
+    !closed() &&
+    (!candidates || candidates.admission(candidate).revision === (admission?.revision ?? ''))
   return {
     ...write,
     cancelled: () => !valid() || (write.cancelled?.() ?? false),

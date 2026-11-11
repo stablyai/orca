@@ -220,7 +220,8 @@ export class SessionSearchStore {
         previousByteOffset,
         identity,
         metadataOnly,
-        () => this.fileRow(candidate.file.path)
+        () => this.fileRow(candidate.file.path),
+        () => this.closed
       )
     } catch (error) {
       this.reportWriteFailure(error)

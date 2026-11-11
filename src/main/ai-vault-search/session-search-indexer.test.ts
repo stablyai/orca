@@ -276,7 +276,8 @@ it.skipIf(!CAN_DENY_READ)('stops re-reading a transcript it cannot read', async 
   try {
     await newIndexer().start()
     for (let cycle = 0; cycle < 4; cycle++) {
-      await nextCycle()
+      clock.advance(INTERVAL_MS)
+      await indexer?.settled()
     }
 
     expect(indexer?.status()).toMatchObject({ filesDue: 0, filesFailed: 1, phase: 'degraded' })
@@ -576,7 +577,8 @@ it('holds out a repeatedly rejected write while other files continue indexing', 
   )
   await subject.start()
   for (let pass = 0; pass < 3; pass++) {
-    await subject.reconcile({ full: true })
+    clock.advance(INTERVAL_MS)
+    await subject.settled()
   }
   expect(rowFor(broken)).toEqual({ state: 'failed', failCount: 3 })
   expect(sessionsMatching('healthyneedle')).toEqual([OTHER_SESSION_ID])
@@ -585,7 +587,9 @@ it('holds out a repeatedly rejected write while other files continue indexing', 
     transcriptPath(OTHER_SESSION_ID),
     `${claudeLines(['continuedneedle'], OTHER_SESSION_ID, 10).join('\n')}\n`
   )
-  await subject.reconcile({ full: true })
+  notifySessionSearchFileChange(transcriptPath(OTHER_SESSION_ID))
+  clock.advance(INTERVAL_MS)
+  await subject.settled()
   expect(sessionsMatching('continuedneedle')).toEqual([OTHER_SESSION_ID])
   expect(rowFor(broken)).toEqual({ state: 'failed', failCount: 3 })
 })

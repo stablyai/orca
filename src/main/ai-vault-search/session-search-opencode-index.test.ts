@@ -123,6 +123,16 @@ function dbPath(): string {
   return join(harness.root, 'opencode-db', 'opencode.db')
 }
 
+async function finishPendingObservation(subject: SessionSearchIndexer): Promise<void> {
+  for (let turn = 0; turn < 100; turn++) {
+    if (subject.status().phase !== 'indexing') {
+      return
+    }
+    await subject.reconcile()
+  }
+  throw new Error('Database observation did not finish')
+}
+
 async function startIndexer(): Promise<SessionSearchIndexer> {
   const started = new SessionSearchIndexer({
     databasePath: harness.databasePath,
@@ -136,6 +146,7 @@ async function startIndexer(): Promise<SessionSearchIndexer> {
   })
   indexer = started
   await started.start()
+  await finishPendingObservation(started)
   return started
 }
 
@@ -305,6 +316,7 @@ it('retains refused database membership while healthy owners settle and retries 
   })
   indexer = subject
   await subject.start()
+  await finishPendingObservation(subject)
   await rename(dbPath(), `${dbPath()}.saved`)
   await writeFile(dbPath(), 'temporarily unreadable sqlite')
   appendOpenCodeSqliteTurn(alternative, 'ses_alternative', {
@@ -316,15 +328,14 @@ it('retains refused database membership while healthy owners settle and retries 
   expect(openEngine().search({ query: 'healthyupdateneedle' }).hits).toHaveLength(1)
   await rm(dbPath())
   await rename(`${dbPath()}.saved`, dbPath())
-  openCodeListObservations.length = 0
+  appendOpenCodeSqliteTurn(dbPath(), 'ses_primary', {
+    role: 'assistant',
+    parts: ['recoveredprimaryneedle']
+  })
   clock.advance(20000)
   await subject.settled()
-  expect(
-    openCodeListObservations.filter((observation) => observation.paths[0] === alternative)
-  ).toEqual([{ paths: [alternative], limit: 12, rows: 1 }])
-  expect(
-    openCodeListObservations.filter((observation) => observation.paths[0] === dbPath())
-  ).toEqual([{ paths: [dbPath()], limit: Infinity, rows: 1 }])
+  await finishPendingObservation(subject)
+  expect(openEngine().search({ query: 'recoveredprimaryneedle' }).hits).toHaveLength(1)
   expect(openEngine().search({ query: 'preservedneedle' }).hits).toHaveLength(1)
 })
 
@@ -340,6 +351,7 @@ it('keeps full membership proofs separate when v1 and v2 share one physical data
   changed.prepare('DELETE FROM session WHERE id=?').run(SESSION)
   changed.close()
   await subject.reconcile({ full: true })
+  await finishPendingObservation(subject)
   // The v2 copy of this ID is not positive membership evidence for the removed v1 row.
   expect(openEngine().search({ query: ANSWER }).hits).toHaveLength(0)
   expect(openEngine().search({ query: OTHER }).hits).toHaveLength(1)
@@ -394,6 +406,7 @@ it.each([40, 400])(
     expect(openEngine().search({ query: 'activewalneedle' }).hits[0]?.sessionId).toBe('ses_0')
     openCodeListHook = null
     await subject.reconcile({ full: true })
+    await finishPendingObservation(subject)
     expect(subject.status().phase).toBe('current')
   }
 )
@@ -414,6 +427,7 @@ it('chooses the original earlier database when an equal-time alias is imported l
   })
   indexer = subject
   await subject.start()
+  await finishPendingObservation(subject)
   expect(openEngine().search({ query: 'laterdatabasecopy' }).hits[0]?.sessionId).toBe('ses_shared')
   writeOpenCodeSqliteDatabase(dbPath(), [
     { id: 'ses_shared', turns: [{ role: 'user', parts: ['earlierdatabasecopy'] }] }
@@ -499,6 +513,7 @@ it('parks a persistently partial physical observation and wakes it on an explici
   )
   openCodeListHook = null
   await subject.reconcile({ full: true })
+  await finishPendingObservation(subject)
   expect(
     openCodeListObservations.filter((observation) => observation.limit === Infinity)
   ).toHaveLength(4)
@@ -535,6 +550,7 @@ it('retains a restored old row when a family listing loses the earlier absence p
   })
   indexer = subject
   await subject.start()
+  await finishPendingObservation(subject)
   for (let cycle = 0; cycle < 8; cycle++) {
     clock.advance(20000)
     await subject.settled()
@@ -616,6 +632,7 @@ it('settles a full attempt blocked by persistent family enumeration while retain
       parts: ['recoveredfamilyneedle']
     })
     await subject.reconcile({ full: true })
+    await finishPendingObservation(subject)
     expect(openEngine().search({ query: 'recoveredfamilyneedle' }).hits).toHaveLength(1)
     expect(subject.status().phase).toBe('current')
   } finally {

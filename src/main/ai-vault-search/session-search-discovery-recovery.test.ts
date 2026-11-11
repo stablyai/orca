@@ -545,6 +545,7 @@ it.each([40, 400])(
         found.push(
           ...(await inventory.drain(args, () => true, 12)).changes.map((change) => change.file.path)
         )
+        await inventory.retryFailures()
       }
       expect(inventory.pending).toBe(false)
       expect(found).toContain(join(kept, 'kept.jsonl'))
