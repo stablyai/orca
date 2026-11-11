@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { handlers, resetFilesystemIpcMocks } from './filesystem-test-harness'
-import type { StateWriteListener } from '../../persistence/loading-store/write-scheduling'
+import type { StateWriteListener } from '../../persistence/loading-store/profile-writing/write-scheduling'
 
 const read = vi.hoisted(() =>
   vi.fn(async () => ({ entries: [], conflictOperation: 'unknown', repositoryStatuses: [] }))

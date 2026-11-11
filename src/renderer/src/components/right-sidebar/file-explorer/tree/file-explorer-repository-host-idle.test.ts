@@ -1,5 +1,3 @@
-// oxlint-disable-next-line typescript/triple-slash-reference -- The host globals are ambient declarations, not an importable module.
-/// <reference path="../../../../../../types/build-constants.d.ts" />
 import { afterEach, expect, it, vi } from 'vitest'
 import type { GitRepositoryStatusRequest } from '../../../../../../shared/git/status/git-repository-status'
 import { getRepositoryStatuses } from '../../../../../../main/git/source-control/repository-status'
