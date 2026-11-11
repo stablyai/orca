@@ -39,12 +39,22 @@ import {
 } from '@/lib/orca-cloud/cloud-agent-restart-attempt'
 import { selectReadyAccountRestartPtyIds } from './pane-account-restart-readiness'
 import { runReadyPaneAccountRestarts } from './use-ready-pane-account-restarts'
+import { resolveTuiAgentLaunchRawArgs } from '../../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 
 const TAB = 'tab-1'
 const LEAF = '11111111-1111-4111-8111-111111111111'
 const PTY = 'env-1@@pty-1'
 const PANE_KEY = makePaneKey(TAB, LEAF)
 /** The terminal a resume ensure placed in the pane's leaf. */
+/** RA-11d defaults as a fresh launch would project them now (configured args + permission choice). */
+function projectedDefaults(): string {
+  return resolveTuiAgentLaunchRawArgs(
+    'claude',
+    useAppStore.getState().settings,
+    undefined,
+    'posix'
+  ).trim()
+}
 const RESUMED = { handle: 'term_resumed', disposition: 'created' as const }
 
 function seed(state: AgentStatusEntry['state']): void {
@@ -458,10 +468,12 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
     await vi.waitFor(() => expect(freshIfResumeFoundNothing).toHaveBeenCalledTimes(1))
     expect(resumeRemotePane).toHaveBeenCalledWith(
       expect.objectContaining({
-        launchConfig: { agentArgs: '--model opus --effort high', agentEnv: {} }
+        launchConfig: { agentArgs: projectedDefaults(), agentEnv: {} }
       })
     )
-    expect(buildFreshCommand).toHaveBeenCalledWith('claude', LEAF, '--model opus --effort high')
+    expect(buildFreshCommand).toHaveBeenCalledWith('claude', LEAF, projectedDefaults())
+    // RST-FLAGS: the substituted defaults keep the launch profile's permission flag.
+    expect(projectedDefaults()).toContain('--model opus --effort high')
   })
 
   function runWithRecorded(launchConfig: { agentArgs: string; agentEnv: Record<string, string> }) {
@@ -510,10 +522,10 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
     await vi.waitFor(() => expect(freshIfResumeFoundNothing).toHaveBeenCalledTimes(1))
     expect(resumeRemotePane).toHaveBeenCalledWith(
       expect.objectContaining({
-        launchConfig: { agentArgs: '--model opus --effort high', agentEnv: { ORCA_X: '1' } }
+        launchConfig: { agentArgs: projectedDefaults(), agentEnv: { ORCA_X: '1' } }
       })
     )
-    expect(buildFreshCommand).toHaveBeenCalledWith('claude', LEAF, '--model opus --effort high')
+    expect(buildFreshCommand).toHaveBeenCalledWith('claude', LEAF, projectedDefaults())
   })
 
   it('RA-11d: recorded launch args win over the defaults', async () => {
