@@ -79,6 +79,19 @@ type Front = {
 } | null
 let front: Front = null
 
+/**
+ * ⌘⌥⇧L: the workspace's own link (its W-number), like the tab-bar chip and Home's "Copy link to
+ * W-n". A link to the focused chat or terminal is a separate menu item, never the shortcut.
+ */
+export function copyShortcutLink(sandboxId: string): Promise<boolean> {
+  return copyCloudWorkspaceLink(sandboxId, null)
+}
+
+/** What a focused chat id points at: `t:` terminals, anything else an agent chat. */
+export function focusedKind(chatId: string | null | undefined): 'chat' | 'terminal' | null {
+  return !chatId ? null : chatId.startsWith('t:') ? 'terminal' : 'chat'
+}
+
 /** The cloud workspace in front and the chat focused in it, for "Copy link" with the chat. */
 export function frontCloudChat(): { sandboxId: string; chatId: string | null } | null {
   return front ? { sandboxId: front.sandboxId, chatId: front.chatId } : null
@@ -253,7 +266,7 @@ export function installCloudWorkspaceLinks(): () => void {
       )
     ) {
       event.preventDefault()
-      void copyCloudWorkspaceLink(front.sandboxId, front.chatId)
+      void copyShortcutLink(front.sandboxId)
       return
     }
     const editing = target?.isContentEditable || target?.tagName === 'TEXTAREA'

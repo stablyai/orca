@@ -28,7 +28,7 @@ import { refreshCloudMessageSenders } from '@/lib/cloud-message-sender'
 import { describeError } from './cloud-workspace-errors'
 import { focusCloudChat } from './cloud-chat-focus'
 import * as homeArchive from './cloud-workspace-home-archive'
-import { frontCloudChat } from './cloud-workspace-links'
+import { focusedKind, frontCloudChat } from './cloud-workspace-links'
 import {
   cloudWorkspaceTitle,
   copyCloudWorkspaceLink,
@@ -228,11 +228,17 @@ export function CloudWorkspacesHome({
     () => ({
       open: (w: CloudWorkspace) => void open(w),
       read: (w: CloudWorkspace) => setReadingId(w.id),
-      copyLink: (w: CloudWorkspace) => {
+      copyLink: (w: CloudWorkspace) => void copyCloudWorkspaceLink(w.id),
+      copyWorkspaceLink: (w: CloudWorkspace) => {
         const front = frontCloudChat()
-        void copyCloudWorkspaceLink(w.id, front?.sandboxId === w.id ? front.chatId : null)
+        if (front?.sandboxId === w.id && front.chatId) {
+          void copyCloudWorkspaceLink(w.id, front.chatId)
+        }
       },
-      copyWorkspaceLink: (w: CloudWorkspace) => void copyCloudWorkspaceLink(w.id),
+      focusedItem: (w: CloudWorkspace) => {
+        const front = frontCloudChat()
+        return front?.sandboxId === w.id ? focusedKind(front.chatId) : null
+      },
       goToChat: (w: CloudWorkspace, member: CloudWorkspacePresence) => void open(w, member.chatId),
       patch: (w: CloudWorkspace, change: CloudWorkspacePatch) => void patch(w, change),
       setPinned: arrangement.pin,
