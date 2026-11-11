@@ -19,6 +19,8 @@ export type VisibleWorktreeOptions = {
   tabsByWorktree: Record<string, Pick<TerminalTab, 'id'>[]> | null
   ptyIdsByTabId: Record<string, string[]> | null
   browserTabsByWorktree?: Record<string, { id: string }[]> | null
+  /** Workspaces whose browser tabs Sleep put to rest: those tabs are not activity (NEW-01). */
+  asleepBrowserWorktreeIds?: Record<string, number>
   worktreeIdsWithLiveAgent: ReadonlySet<string>
   worktreeIdsWithStructuredChat?: ReadonlySet<string>
   hideDefaultBranchWorkspace: boolean

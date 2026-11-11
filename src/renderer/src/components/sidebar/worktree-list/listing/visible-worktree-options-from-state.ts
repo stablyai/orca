@@ -1,4 +1,3 @@
-import { selectAwakeBrowserTabsByWorktree } from '@/components/sidebar/workspace-actions/sleep/browser-tab-sleep'
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { getSettingsFocusedExecutionHostId } from '../../../../../../shared/execution-host'
@@ -21,7 +20,8 @@ export function buildVisibleWorktreeOptionsFromState(
     showSleepingWorkspaces: state.showSleepingWorkspaces,
     tabsByWorktree: state.tabsByWorktree,
     ptyIdsByTabId: state.ptyIdsByTabId,
-    browserTabsByWorktree: selectAwakeBrowserTabsByWorktree(state),
+    browserTabsByWorktree: state.browserTabsByWorktree,
+    asleepBrowserWorktreeIds: state.asleepBrowserWorktreeIds,
     worktreeIdsWithLiveAgent: getWorktreeIdsWithLiveAgent(
       state.agentStatusByPaneKey,
       state.tabsByWorktree,
