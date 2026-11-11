@@ -22,7 +22,10 @@ import {
   type RemoteBrowserStreamBridge
 } from './remote-browser-page-input-model'
 import { subscribeRuntimeEnvironment } from '@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
-import { createRemoteBrowserPageObservation } from './remote-browser-page-observation'
+import {
+  readRemoteBrowserPage,
+  readRemoteBrowserPageObservation
+} from './remote-browser-page-observation'
 
 export function useRemoteBrowserPageLifecycle({
   browserTab,
@@ -87,24 +90,27 @@ export function useRemoteBrowserPageLifecycle({
   ])
 
   if (!lifecycleRef.current) {
-    const observation = createRemoteBrowserPageObservation({
-      readState: useAppStore.getState,
-      getWorkspaceId: () => currentWorkspaceIdRef.current,
-      getPageId: () => currentBrowserTabIdRef.current
-    })
     lifecycleRef.current = new RemoteBrowserStreamLifecycle({
       identity: {
         isMounted: () => mountedRef.current,
         isActive: () => isActiveRef.current,
         getTabId: () => currentBrowserTabIdRef.current,
         getEnvironmentId: () => activeRuntimeEnvironmentIdRef.current,
-        browserPageExists: observation.browserPageExists
+        browserPageExists: (pageId) =>
+          Boolean(
+            readRemoteBrowserPage(useAppStore.getState(), currentWorkspaceIdRef.current, pageId)
+          )
       },
       callRpc: callRuntimeRpc,
       subscribeScreencast: (args, callbacks) => subscribeRuntimeEnvironment(args, callbacks),
       getWorktreeSelector: () => runtimeWorktreeRef.current,
       getCurrentUrl: () => currentBrowserTabUrlRef.current,
-      readCurrentObservation: observation.readCurrentObservation,
+      readCurrentObservation: () =>
+        readRemoteBrowserPageObservation(
+          useAppStore.getState(),
+          currentWorkspaceIdRef.current,
+          currentBrowserTabIdRef.current
+        ),
       readStoredHandle: () =>
         useAppStore.getState().remoteBrowserPageHandlesByPageId[currentBrowserTabIdRef.current] ??
         null,

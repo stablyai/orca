@@ -8,7 +8,10 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { BrowserPage } from '../../../../../shared/browser-workspace-types'
 import type { BrowserTabInfo } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
 import { useRemoteBrowserPageNavigation } from './use-remote-browser-page-navigation'
-import { createRemoteBrowserPageObservation } from './remote-browser-page-observation'
+import {
+  readRemoteBrowserPage,
+  readRemoteBrowserPageObservation
+} from './remote-browser-page-observation'
 import { RemoteBrowserPageSession } from './remote-browser-page-session'
 import { RemoteBrowserOperationTokens } from './remote-browser-stream-tokens'
 import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
@@ -91,17 +94,13 @@ function renderNavigation(count = 1) {
     }
   })
   const identity = { mounted: true, active: true, environmentId: 'environment-a' }
-  const observation = createRemoteBrowserPageObservation({
-    readState: useAppStore.getState,
-    getWorkspaceId: () => 'workspace-a',
-    getPageId: () => 'page-a'
-  })
   const tokens = new RemoteBrowserOperationTokens({
     isMounted: () => identity.mounted,
     isActive: () => identity.active,
     getTabId: () => 'page-a',
     getEnvironmentId: () => identity.environmentId,
-    browserPageExists: observation.browserPageExists
+    browserPageExists: (pageId) =>
+      Boolean(readRemoteBrowserPage(useAppStore.getState(), 'workspace-a', pageId))
   })
   tokens.setRemotePage('remote-page-a')
   let project: (tab: BrowserTabInfo) => void = () => {}
@@ -110,7 +109,8 @@ function renderNavigation(count = 1) {
     callRpc: callRuntimeRpc,
     getWorktreeSelector: () => 'worktree-a',
     getCurrentUrl: () => currentPage().url,
-    readCurrentObservation: observation.readCurrentObservation,
+    readCurrentObservation: () =>
+      readRemoteBrowserPageObservation(useAppStore.getState(), 'workspace-a', 'page-a'),
     readStoredHandle: () => ({ environmentId: 'environment-a', remotePageId: 'remote-page-a' }),
     writeStoredHandle: vi.fn(),
     removeStoredHandle: vi.fn(),

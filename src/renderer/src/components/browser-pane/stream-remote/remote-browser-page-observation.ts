@@ -8,22 +8,21 @@ type BrowserObservationState = {
   browserCertificateFailuresByPageId: Record<string, BrowserCertificateFailure>
 }
 
-export function createRemoteBrowserPageObservation({
-  readState,
-  getWorkspaceId,
-  getPageId
-}: {
-  readState: () => BrowserObservationState
-  getWorkspaceId: () => string
-  getPageId: () => string
-}) {
-  const readPage = (pageId: string): BrowserPage | undefined =>
-    readState().browserPagesByWorkspace[getWorkspaceId()]?.find((page) => page.id === pageId)
-  return {
-    browserPageExists: (pageId: string): boolean => Boolean(readPage(pageId)),
-    readCurrentObservation: (): readonly unknown[] => [
-      readPage(getPageId()),
-      readState().browserCertificateFailuresByPageId[getPageId()]
-    ]
-  }
+export function readRemoteBrowserPage(
+  state: BrowserObservationState,
+  workspaceId: string,
+  pageId: string
+): BrowserPage | undefined {
+  return state.browserPagesByWorkspace[workspaceId]?.find((page) => page.id === pageId)
+}
+
+export function readRemoteBrowserPageObservation(
+  state: BrowserObservationState,
+  workspaceId: string,
+  pageId: string
+): readonly unknown[] {
+  return [
+    readRemoteBrowserPage(state, workspaceId, pageId),
+    state.browserCertificateFailuresByPageId[pageId]
+  ]
 }
