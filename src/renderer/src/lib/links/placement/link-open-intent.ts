@@ -73,7 +73,8 @@ export function canOpenLinkInSourceGroup(
   state: Partial<Pick<LinkPlacementState, 'groupsByWorktree' | 'layoutByWorktree'>> &
     LinkSourceState,
   workspaceId: string,
-  sourceTabId: string | null | undefined
+  sourceTabId: string | null | undefined,
+  allowSplit = true
 ): boolean {
   const tab = sourceTabId
     ? findLinkSourceTab(state.unifiedTabsByWorktree?.[workspaceId] ?? [], sourceTabId)
@@ -84,7 +85,8 @@ export function canOpenLinkInSourceGroup(
   const placement = resolveLinkOpenSidePlacement({
     layout: state.layoutByWorktree?.[workspaceId],
     groups: state.groupsByWorktree?.[workspaceId] ?? [],
-    sourceGroupId: tab.groupId
+    sourceGroupId: tab.groupId,
+    allowSplit
   })
   return placement !== null && ('split' in placement || placement.groupId !== tab.groupId)
 }

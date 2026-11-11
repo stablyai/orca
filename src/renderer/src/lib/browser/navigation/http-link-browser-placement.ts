@@ -20,7 +20,9 @@ export type HttpLinkBrowserTabState = Partial<
     string,
     readonly (Pick<Tab, 'id'> & Partial<Pick<Tab, 'contentType' | 'groupId' | 'lastFocusedAt'>>)[]
   >
-  settings?: Partial<Pick<GlobalSettings, 'openLinksInAppInBackground'>> | null
+  settings?: Partial<
+    Pick<GlobalSettings, 'openLinksInAppInBackground' | 'openLinksInAppInSplit'>
+  > | null
   createBrowserTab: (
     worktreeId: string,
     url: string,
@@ -45,9 +47,14 @@ export function resolveHttpLinkBrowserPlacement(
   const placement = resolveLinkOpenSidePlacement({
     layout: state.layoutByWorktree?.[worktreeId],
     groups: state.groupsByWorktree?.[worktreeId] ?? [],
-    sourceGroupId: state.activeGroupIdByWorktree?.[worktreeId]
+    sourceGroupId: state.activeGroupIdByWorktree?.[worktreeId],
+    allowSplit: allowsHttpLinkSplit(state)
   })
   return placement && ('groupId' in placement ? { targetGroupId: placement.groupId } : placement)
+}
+
+export function allowsHttpLinkSplit(state: Pick<HttpLinkBrowserTabState, 'settings'>): boolean {
+  return state.settings?.openLinksInAppInSplit !== false
 }
 
 export function isHttpLinkBackgroundOpen(

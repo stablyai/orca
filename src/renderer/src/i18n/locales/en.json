@@ -10690,7 +10690,11 @@
             "5a70844e54": "Default search engine",
             "f1da035bcb": "Session & cookies",
             "f6de9e25a0": "Default zoom",
-            "1c2aff8f82": "Default home page"
+            "1c2aff8f82": "Default home page",
+            "linkRoutingSplit": {
+              "split": "split",
+              "pane": "pane"
+            }
           },
           "use": {
             "search": {
@@ -14247,6 +14251,10 @@
             "buckets": "Gemini model buckets",
             "optional": "dropped when a placeholder inside is empty"
           }
+        },
+        "BrowserLinkRoutingSplitSetting": {
+          "title": "Open links in a split",
+          "description": "When the pane you clicked is the only one, a link opens in a new pane beside it. When off, it opens as a new tab in that pane. A visible browser or another pane still takes the link."
         }
       },
       "right": {
