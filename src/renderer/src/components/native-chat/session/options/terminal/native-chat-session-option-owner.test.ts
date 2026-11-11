@@ -2,12 +2,15 @@
 
 import { createElement } from 'react'
 import { act, render } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import type { Repo } from '../../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../../shared/worktree/types'
 import { makeTab } from '../../../../../store/terminals/terminal-tab.test-fixture'
 import { useNativeChatSessionOptionOwner } from './native-chat-session-option-owner'
+
+// The sidebar's separate catalog index is outside the owner-index measurement.
+vi.mock('@/store/slices/ui/settled-sort-epoch', () => ({ installSettledSortEpoch: vi.fn() }))
 
 const initialState = useAppStore.getInitialState()
 

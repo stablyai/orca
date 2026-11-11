@@ -289,8 +289,11 @@ describe('useNativeChatSessionOptions model reporting', () => {
         }
       })
       expect(modelDescriptor(reopened.result.current.snapshot).currentValue).toBe(
-        nextSession === 'A' ? 'grok-4.7-fast' : undefined
+        nextSession === 'A' ? 'grok-4.7-fast' : 'grok-4.7'
       )
+      if (nextSession === 'B') {
+        expect(modelDescriptor(reopened.result.current.snapshot).valueSource).toBe('default')
+      }
       reopened.unmount()
     }
   )
