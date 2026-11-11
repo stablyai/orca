@@ -229,6 +229,16 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     expect(unread(`run:${runId}`)).toHaveLength(1)
   })
 
+  async function refusedMailSettled(runId: string): Promise<void> {
+    await vi.waitFor(async () => {
+      const [attempt] = db.getStructuredMailSends(`run:${runId}`)
+      expect(attempt).toBeDefined()
+      expect(await host.sendAnswer(COORDINATOR, attempt!.operation_id)).toMatchObject({
+        kind: 'rejected'
+      })
+    }, WAIT)
+  }
+
   /** Mail for a chat whose agent is stopped and whose every start is refused; resolves after it. */
   async function refusedStartsFor(
     refusal: () => Error
@@ -241,6 +251,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     const before = providerFaults.starts
     await finishWorker(taskId)
     await vi.waitFor(() => expect(providerFaults.starts).toBe(before + 1), WAIT)
+    await refusedMailSettled(runId)
     await vi.waitFor(() => expect(unread(`run:${runId}`)).toHaveLength(1), WAIT)
     // A fixed window, not a poll: a retry loop would start it several times in it.
     await observationClock.observe(1_500)
@@ -329,6 +340,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     const before = providerFaults.starts
     await finishWorker(taskId)
     await vi.waitFor(() => expect(providerFaults.starts).toBe(before + 1), WAIT)
+    await refusedMailSettled(runId)
     for (let edge = 0; edge < 4; edge += 1) {
       await edgesAnswered()
       await observationClock.observe(100)
@@ -337,6 +349,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
 
     await clearChat(COORDINATOR)
     await vi.waitFor(() => expect(providerFaults.starts).toBe(before + 2), WAIT)
+    await refusedMailSettled(runId)
     for (let edge = 0; edge < 4; edge += 1) {
       await edgesAnswered()
       await observationClock.observe(100)
