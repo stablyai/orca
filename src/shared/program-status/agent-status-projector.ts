@@ -173,7 +173,9 @@ export function createProgramStatusProjector(now: () => number = Date.now): Prog
     const at = now()
     const live = new Set<string>()
     const children: AgentSubagentSnapshot[] = []
-    for (const record of records.descendants()) {
+    // OpenCode keys its records by peer root sessions (its own and other panes'), never by child sessions.
+    const subagentRecords = records.root()?.app === 'opencode' ? [] : records.descendants()
+    for (const record of subagentRecords) {
       const state = subagentState(record)
       if (record.id === null || state === null) {
         continue

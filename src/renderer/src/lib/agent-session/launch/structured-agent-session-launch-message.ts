@@ -1,15 +1,14 @@
 // A message sent to a chat whose start failed: it restarts the chat and goes as the restart's first
 // message, holding the chat's one send slot from now until the chat exists, as a launch prompt does.
 
-import { addStructuredLaunchCaller } from './structured-agent-session-launch-callers'
 import {
-  stageStructuredLaunchPrompt,
+  addStructuredLaunchCaller,
   type StructuredPromptDeliveryResult
-} from './structured-agent-session-launch-prompt'
-import {
-  getStructuredAgentSessionLaunchLifecycle,
-  getStructuredLaunchStateBySessionId
-} from './structured-agent-session-launch-registry'
+} from './structured-agent-session-launch-callers'
+import { stageStructuredLaunchPrompt } from './structured-agent-session-staged-prompt'
+
+import { getStructuredAgentSessionLaunchLifecycle } from './structured-agent-session-launch-registry'
+import { getStructuredLaunchStateBySessionId } from './structured-agent-session-launch-state-store'
 import { retryStructuredAgentSessionLaunch } from './structured-agent-session-launch'
 import { newAgentLaunchRequestId } from './routing/agent-launch-request-id'
 import { trackStructuredLaunchPromptOutcome } from './structured-agent-session-launch-prompt-outcome'

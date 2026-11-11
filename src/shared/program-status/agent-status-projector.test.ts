@@ -28,4 +28,18 @@ describe('createProgramStatusProjector', () => {
       { state: 'done', sessionBoundary: undefined }
     ])
   })
+
+  it('does not list the OpenCode sessions sharing a folder as subagents', () => {
+    const projector = createProgramStatusProjector(() => 1000)
+    const msg = Buffer.from('2 sessions working').toString('base64')
+    const payload = projector
+      .process(
+        osc(`state=working:app=opencode:msg=${msg}`) +
+          osc('state=working:id=ses_4sxfcEbQ8hnQuO:app=opencode') +
+          osc('state=working:id=ses_9kLmNpQrSpJQGKF:app=opencode')
+      )
+      .payloads.at(-1)?.payload
+    expect(payload).toMatchObject({ state: 'working', toolInput: '2 sessions working' })
+    expect(payload?.subagents).toBeUndefined()
+  })
 })

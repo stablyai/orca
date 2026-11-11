@@ -129,7 +129,11 @@ describe('projectGroups IPC validation', () => {
         mode: 'group'
       })
 
-      expect(result).toMatchObject({ importedCount: 0, failedCount: 1 })
+      expect(result).toMatchObject({
+        importedCount: 0,
+        failedCount: 1,
+        projects: [{ errorCode: 'not_in_scan' }]
+      })
       expect(mockStore.addRepo).not.toHaveBeenCalled()
     })
   })

@@ -1,5 +1,6 @@
 import { useTranslate } from '@/i18n/use-translate'
 import { getLocalExecutionHostLabel } from '../../../../../shared/execution-host'
+import { translateLocalExecutionHostLabel } from '../../sidebar/execution-host-label'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
@@ -42,7 +43,7 @@ export function SettingsHostScopePicker({
   const options: SettingsSearchableSelectOption[] = [
     {
       value: LOCAL_VALUE,
-      label: getLocalExecutionHostLabel()
+      label: translateLocalExecutionHostLabel(getLocalExecutionHostLabel())
     },
     ...environments
       .filter((environment) => scope.available || environment.id !== scopeEnvironmentId)

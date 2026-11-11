@@ -16,6 +16,7 @@ import {
 import { IDLE_WORKSPACE_ACTIVITY } from './workspace-activity-facts'
 import { composeWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 import { buildWorkspaceRows } from './workspace-rows'
+import { buildFeedHostOptions } from './sidebar-feed-index'
 import { folderWorkspaceRepoId } from '../folder-workspaces/folder-workspace-worktree'
 
 function worktree(id: string, overrides: Partial<Worktree> = {}): Worktree {
@@ -398,4 +399,29 @@ it('keeps bare storage out of local and paired rows, including parent synthesis'
     'local|r::/r/main@0',
     'runtime:a|r::/r/main@0'
   ])
+})
+
+it('preserves a renamed paired host and marks the default local label', () => {
+  const hosts = buildFeedHostOptions(
+    domains({
+      pairedServerHosts: new Map([
+        [
+          'runtime:a',
+          {
+            freshness: 'live',
+            host: {
+              label: 'Server',
+              health: 'available',
+              compatibility: null,
+              pairedDeviceId: null
+            }
+          }
+        ]
+      ])
+    }),
+    [],
+    view({ hostLabelOverrides: new Map([['runtime:a', 'Local Mac']]) })
+  )
+  expect(hosts.find((host) => host.id === 'runtime:a')?.label).toBe('Local Mac')
+  expect(hosts.find((host) => host.id === 'local')?.isDefaultLocalLabel).toBe(true)
 })
