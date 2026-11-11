@@ -158,6 +158,9 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       _event,
       args: { selector: string; name: string }
     ): { environment: PublicKnownRuntimeEnvironment } => {
+      if (typeof args.name !== 'string') {
+        throw new Error('Renaming a server requires a name.')
+      }
       // Resolve merged first: an unreadable sidecar hides the record rather than lose its links.
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
       const renamed = renameEnvironment(getUserDataPath(), environment.id, { name: args.name })
