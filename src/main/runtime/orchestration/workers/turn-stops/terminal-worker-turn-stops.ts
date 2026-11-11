@@ -89,7 +89,7 @@ export class TerminalWorkerTurnStops {
         stopKey: `${stop.paneKey}:${stop.row.stateStartedAt}`,
         reason,
         lastOutput,
-        ...(approval ? { waitingOn: 'approval' as const, approval } : {})
+        ...(approval ? { approval } : {})
       },
       this.deps
     )

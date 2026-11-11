@@ -9,6 +9,7 @@ import type {
 import { escalateWorkerFailure } from '../reports/worker-failure-escalation'
 import { replaceDispatchCapabilities } from '../../terminal-authority/views/worker-terminal-redaction'
 import type { WorkerApprovalPayload } from '../approvals/worker-approval'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/orca-session-address-prefix'
 
 // One screenful: enough to show the agent's last words or error banner without flooding the inbox.
 const LAST_OUTPUT_MAX_CHARS = 2_000
@@ -24,10 +25,9 @@ export type WorkerTurnStop = {
   lastOutput: string | undefined
   /** Why the process ended, for an `exited` stop. */
   exitCause?: string
-  /** For `needs-input`: what the worker waits on. A prompt only a person (or a deny) can clear,
-   *  a permission prompt Orca can answer, or the end of a turn that asked for a reply. */
-  waitingOn?: 'prompt' | 'approval' | 'reply'
-  /** The open approval, when `waitingOn` is `approval`; its id keys the report. */
+  /** For `needs-input`: the turn ended asking for a reply, which a message answers; else a prompt does. */
+  awaitsReply?: boolean
+  /** A permission prompt Orca can answer; its id keys the report. */
   approval?: WorkerApprovalPayload
 }
 
@@ -102,16 +102,22 @@ function describeNextStep(
   }
   if (stop.approval) {
     const { summary, approvalId, allowedActions } = stop.approval
+    const where = stop.from.startsWith(ORCA_SESSION_ADDRESS_PREFIX) ? 'chat' : 'terminal'
+    const shown = allowedActions.map((action) => (action === 'allow' ? 'Allow' : 'Deny')).join('/')
     return [
       ...(summary.detail ? [summary.detail] : []),
       ...(summary.reason ? [`Reason given: ${summary.reason}`] : []),
-      `${chatCoordinator ? 'The user has been shown Allow/Deny.' : 'A person must answer it in Orca or the worker.'} Don't block on it: carry on with other work. You'll get a message when it's answered. Don't message this worker until then.`,
+      `${
+        chatCoordinator
+          ? `The user has been shown ${shown} in your chat in Orca.`
+          : `No one has been shown this prompt in Orca. Tell the user that worker ${stop.from} is waiting for permission in its ${where}.`
+      } Don't block on it: carry on with other work. You'll get a message when it's answered. Don't message this worker until then.`,
       allowedActions.includes('deny')
         ? `If this is holding up the task, deny it with a reason so the worker continues another way: \`orchestration deny --dispatch ${dispatchId} --prompt ${approvalId} --reason "<what to do instead>"\`.`
         : 'If this is holding up the task, stop the worker or tell the user.'
     ]
   }
-  if (stop.reason === 'needs-input' && stop.waitingOn !== 'reply') {
+  if (stop.reason === 'needs-input' && !stop.awaitsReply) {
     return [
       'A message does not answer it: a person must, where the worker runs. The Dispatch is still open; retry it or stop the worker if it stays stuck.'
     ]
@@ -242,7 +248,9 @@ function describeApprovalClosed(approval: WorkerApprovalPayload): string {
               ])
         ]
       : []),
-    ...(outcome?.by === 'terminal-only' ? [] : ['Nothing to do unless the worker stays stuck.'])
+    outcome?.by === 'terminal-only'
+      ? "Tell the user to answer it in the worker's terminal."
+      : 'Nothing to do unless the worker stays stuck.'
   ].join('\n')
 }
 
@@ -276,7 +284,8 @@ export function reportWorkerApprovalClosed(
         handle: closed.from,
         approval
       },
-      notice: true
+      // Only a person at the worker's terminal can answer it now: that needs the coordinator to act.
+      ...(approval.outcome?.by === 'terminal-only' ? {} : { notice: true as const })
     },
     refines ? () => {} : deps.notify
   )

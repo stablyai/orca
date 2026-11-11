@@ -4,7 +4,12 @@ import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-ses
 import { structuredAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import type { AgentJournalApprovalItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { mintAgentSessionOperationId } from '../../mailbox/structured-pointer/structured-pointer-operation-id'
-import { workerApprovalOption, type WorkerApprovalDecision } from './worker-approval'
+import {
+  workerApprovalDecisionOf,
+  workerApprovalOption,
+  type WorkerApprovalDecision,
+  type WorkerApprovalOutcome
+} from './worker-approval'
 
 /** Marks a prompt Orca answered for a coordinator or a person, so the chat's own closer leaves it alone. */
 export const ORCHESTRATION_APPROVAL_CALLER_PREFIX = 'trusted-local:orchestration:approval:'
@@ -25,6 +30,26 @@ export const readChatWorkerPrompt: ChatWorkerPromptReader = async (sessionId, it
   const snapshot = await host.journalCurrentRead(sessionId)
   const item = snapshot.items.find((candidate) => candidate.itemId === itemId)
   return item?.body.kind === 'approval' ? { revision: item.revision, body: item.body } : null
+}
+
+/** How a reported chat approval closed, from its journal item; null while it is still open, or when
+ *  Orca answered it, since that answer writes its own closing line with the reason. */
+export function chatApprovalCloseOutcome(
+  prompt: ChatWorkerPrompt | null
+): WorkerApprovalOutcome | null {
+  const resolution = prompt?.body.resolution
+  if (
+    resolution?.state === 'pending' ||
+    resolution?.resolvedBy?.startsWith(ORCHESTRATION_APPROVAL_CALLER_PREFIX)
+  ) {
+    return null
+  }
+  return {
+    by: resolution?.state === 'resolved' ? 'worker-chat' : 'unknown',
+    decision: prompt ? workerApprovalDecisionOf(prompt.body) : null,
+    reason: null,
+    reasonDelivered: false
+  }
 }
 
 export type ChatWorkerApprovalAnswer =

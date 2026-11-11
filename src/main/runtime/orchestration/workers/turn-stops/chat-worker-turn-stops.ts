@@ -3,43 +3,38 @@ import type { AgentSessionTurnCompletionEvent } from '../../../../../shared/agen
 import { AGENT_DONE_QUIET_MS } from '../../../../../shared/agent-status/lifecycle/agent-transitions'
 import { chatWorkerDispatches } from './chat-worker-error-escalation'
 import {
-  reportWorkerApprovalClosed,
   reportWorkerTurnStop,
-  type WorkerTurnStop,
   type WorkerTurnStopReason,
   type WorkerTurnStopReportDeps
 } from './worker-turn-stop-report'
 import {
-  ORCHESTRATION_APPROVAL_CALLER_PREFIX,
   readChatWorkerPrompt,
   type ChatWorkerPromptReader
 } from '../approvals/chat-worker-approval-prompt'
-import { workerApprovalDecisionOf, workerApprovalPayload } from '../approvals/worker-approval'
+import {
+  ChatWorkerApprovalWatch,
+  type ChatJournalWatch
+} from '../approvals/chat-worker-approval-watch'
+import { workerApprovalPayload } from '../approvals/worker-approval'
 import type { AgentJournalApprovalItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+
+// Why a delay: the reporter is built with the chat host, which registers just after.
+const ADOPT_AFTER_MS = 5_000
 
 type ChatStop = {
   sessionId: string
   stopKey: string
   reason: WorkerTurnStopReason
-  waitingOn?: WorkerTurnStop['waitingOn']
+  awaitsReply?: boolean
   /** A prompt event's journal item id. */
   promptId?: string
 }
-
-/** An approval reported open, still to be closed once its prompt settles. */
-type ReportedApproval = { dispatchIds: Set<string> }
 
 /** Failures already escalate as chat errors; a stopped or replaced turn is the user's own doing. */
 function chatStop(event: AgentSessionTurnCompletionEvent): ChatStop | null {
   if (event.type === 'prompt') {
     const { sessionId, promptId } = event.prompt
-    return {
-      sessionId,
-      stopKey: `prompt:${promptId}`,
-      reason: 'needs-input',
-      waitingOn: 'prompt',
-      promptId
-    }
+    return { sessionId, stopKey: `prompt:${promptId}`, reason: 'needs-input', promptId }
   }
   if (event.type !== 'completion' || event.completion.outcome !== 'success') {
     return null
@@ -49,7 +44,7 @@ function chatStop(event: AgentSessionTurnCompletionEvent): ChatStop | null {
     sessionId,
     stopKey: `turn:${turnId}`,
     reason: awaitingUser ? 'needs-input' : 'finished',
-    ...(awaitingUser ? { waitingOn: 'reply' as const } : {})
+    ...(awaitingUser ? { awaitsReply: true } : {})
   }
 }
 
@@ -61,77 +56,16 @@ export function chatWorkerTurnStopReporter(
   setTimer: (run: () => void, delayMs: number) => void = (run, delayMs) => {
     setTimeout(run, delayMs).unref?.()
   },
-  readPrompt: ChatWorkerPromptReader = readChatWorkerPrompt
+  readPrompt: ChatWorkerPromptReader = readChatWorkerPrompt,
+  watchJournal?: ChatJournalWatch
 ) {
   const generations = new Map<string, number>()
-  const reported = new Map<string, Map<string, ReportedApproval>>()
-
-  // Any later edge is a chance to see that a reported approval was answered elsewhere.
-  const closeSettledApprovals = async (sessionId: string): Promise<void> => {
-    const open = reported.get(sessionId)
-    for (const [approvalId, approval] of open ?? []) {
-      // An unreadable chat proves nothing: keep watching for the next edge.
-      const prompt = await readPrompt(sessionId, approvalId).catch(() => undefined)
-      if (prompt === undefined || prompt?.body.resolution.state === 'pending') {
-        continue
-      }
-      open?.delete(approvalId)
-      // One closer each: Orca's own answer writes its closing line, with the reason; a vanished prompt has nothing to say.
-      if (
-        !prompt ||
-        prompt.body.resolution.resolvedBy?.startsWith(ORCHESTRATION_APPROVAL_CALLER_PREFIX)
-      ) {
-        continue
-      }
-      closeEach(approval, approvalId, prompt.body)
-    }
-    // An overlapping call may have replaced this session's map; remove only the one this call read.
-    if (open?.size === 0 && reported.get(sessionId) === open) {
-      reported.delete(sessionId)
-    }
-  }
-
-  const closeEach = (
-    approval: ReportedApproval,
-    approvalId: string,
-    body: AgentJournalApprovalItem
-  ): void => {
-    const db = deps.getDb()
-    if (!db) {
-      return
-    }
-    for (const dispatchId of approval.dispatchIds) {
-      const dispatch = db.getDispatchContextById(dispatchId)
-      const handle = dispatch?.assignee_handle
-      if (!dispatch || !handle) {
-        continue
-      }
-      const decision = workerApprovalDecisionOf(body)
-      reportWorkerApprovalClosed(
-        db,
-        dispatch,
-        {
-          from: handle,
-          approval: workerApprovalPayload({
-            approvalId,
-            item: body,
-            worker: {
-              handle,
-              dispatchId,
-              taskId: dispatch.task_id
-            },
-            outcome: {
-              by: body.resolution.state === 'resolved' ? 'worker-chat' : 'unknown',
-              decision,
-              reason: null,
-              reasonDelivered: false
-            }
-          })
-        },
-        deps
-      )
-    }
-  }
+  const approvals = new ChatWorkerApprovalWatch({ ...deps, readPrompt, watchJournal })
+  setTimer(() => {
+    approvals.adopt().catch((error: unknown) => {
+      console.warn('[orchestration] chat worker approval adoption failed', error)
+    })
+  }, ADOPT_AFTER_MS)
 
   return (
     event: AgentSessionTurnCompletionEvent,
@@ -148,11 +82,6 @@ export function chatWorkerTurnStopReporter(
             : undefined
       if (!sessionId) {
         return
-      }
-      if (reported.has(sessionId)) {
-        void closeSettledApprovals(sessionId).catch((error: unknown) => {
-          console.warn('[orchestration] chat worker approval close failed', error)
-        })
       }
       // Any later edge, even one not reported (a failed or cancelled turn), supersedes a pending stop.
       const generation = (generations.get(sessionId) ?? 0) + 1
@@ -192,7 +121,7 @@ export function chatWorkerTurnStopReporter(
             return
           }
           for (const { dispatch, from } of open) {
-            const payload =
+            const candidate =
               approval && stop.promptId
                 ? workerApprovalPayload({
                     approvalId: stop.promptId,
@@ -200,6 +129,8 @@ export function chatWorkerTurnStopReporter(
                     worker: { handle: from, dispatchId: dispatch.id, taskId: dispatch.task_id }
                   })
                 : undefined
+            // A prompt Orca can't answer either way is a plain prompt: only the worker's chat can.
+            const payload = candidate?.allowedActions.length ? candidate : undefined
             reportWorkerTurnStop(
               current,
               { kind: 'local', dispatch },
@@ -209,17 +140,15 @@ export function chatWorkerTurnStopReporter(
                 reason: stop.reason,
                 // The payload names the prompt; the agent's prose before it adds nothing.
                 lastOutput: payload ? undefined : status?.lastAssistantMessage,
-                ...(stop.waitingOn ? { waitingOn: payload ? 'approval' : stop.waitingOn } : {}),
+                ...(stop.awaitsReply ? { awaitsReply: true } : {}),
                 ...(payload ? { approval: payload } : {})
               },
               deps
             )
-            if (payload && stop.promptId) {
-              const tracked = reported.get(stop.sessionId) ?? new Map<string, ReportedApproval>()
-              reported.set(stop.sessionId, tracked)
-              const entry = tracked.get(stop.promptId) ?? { dispatchIds: new Set<string>() }
-              entry.dispatchIds.add(dispatch.id)
-              tracked.set(stop.promptId, entry)
+            if (payload) {
+              approvals.track(stop.sessionId, payload.approvalId, dispatch.id)
+              // Answered between the read and this report: no later journal change would say so.
+              void approvals.check(stop.sessionId)
             }
           }
         } catch (error) {

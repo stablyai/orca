@@ -13,6 +13,7 @@ import '../../db/attempt-outcome-projection'
 import { createRootDispatch } from '../../db/root-dispatch-test-fixture'
 import { TerminalWorkerApprovalHolds } from './terminal-worker-approval-holds'
 import { closeOrphanedTerminalApprovals } from './terminal-approval-orphans'
+import { approvalReportId } from './worker-approval-report'
 import type { ClaudeToolResult } from './claude-tool-result-close'
 
 const PANE = makePaneKey('tab-worker', '11111111-1111-4111-8111-111111111111')
@@ -101,12 +102,12 @@ function setup(options: { canAnswer?: boolean } = {}) {
       await new Promise((resolve) => setImmediate(resolve))
     }
   }
-  const closing = () =>
+  const closings = () =>
     db
       .getUnreadRunMailbox(run.id, 100)
-      .filter((message) => message.type === 'status')
-      .map((message) => message.body)
-  return { db, dispatch, screen, holds, tick, closing }
+      .filter((message) => message.subject.startsWith('Worker approval '))
+  const closing = () => closings().map((message) => message.body)
+  return { db, dispatch, screen, holds, tick, closing, closings }
 }
 
 function hook(
@@ -300,8 +301,12 @@ describe('terminal worker approval holds', () => {
 
     asked.end('hook-gone')
     await ctx.tick(80)
-    expect(ctx.closing()).toEqual([
-      expect.stringContaining("a person must answer it in the worker's terminal")
+    // Only a person at the terminal can answer it now, so the coordinator is asked to act.
+    expect(ctx.closings().map(({ type, body }) => [type, body])).toEqual([
+      [
+        'escalation',
+        expect.stringContaining("Tell the user to answer it in the worker's terminal.")
+      ]
     ])
   })
   it("carries the warning Claude prints under a flagged command as the card's reason", () => {
@@ -320,14 +325,19 @@ describe('terminal worker approval holds', () => {
     const ctx = setup()
     ctx.holds.admit(hook('tool-1').request)
     const approval = ctx.holds.takeOpenApproval(PANE, ctx.dispatch.id)!
-    ctx.db.insertMessage({
-      from: HANDLE,
-      to: 'term_coordinator',
-      subject: 'Worker is waiting on approval',
-      type: 'escalation',
-      payload: JSON.stringify({ handle: HANDLE, dispatchId: ctx.dispatch.id, approval }),
-      runId: ctx.dispatch.run_id
-    })
+    const escalate = (id: string | undefined, carried: typeof approval) =>
+      ctx.db.insertMessage({
+        ...(id ? { id } : {}),
+        from: HANDLE,
+        to: 'term_coordinator',
+        subject: 'Worker is waiting for permission',
+        type: 'escalation',
+        payload: JSON.stringify({ handle: HANDLE, dispatchId: ctx.dispatch.id, approval: carried }),
+        runId: ctx.dispatch.run_id
+      })
+    escalate(approvalReportId(ctx.dispatch.id, approval.approvalId, 'open'), approval)
+    // A worker's own escalation carrying an approval is not Orca's, so the sweep leaves it alone.
+    escalate(undefined, { ...approval, approvalId: 'apr_forged' })
 
     closeOrphanedTerminalApprovals(ctx.db)
     closeOrphanedTerminalApprovals(ctx.db)

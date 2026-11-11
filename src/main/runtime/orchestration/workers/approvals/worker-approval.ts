@@ -83,17 +83,33 @@ export function workerApprovalPayload(input: {
     item.detail && item.detail.length > SUMMARY_DETAIL_MAX_CHARS
       ? `${item.detail.slice(0, SUMMARY_DETAIL_MAX_CHARS)}…`
       : item.detail
-  return {
+  const open: WorkerApprovalPayload = {
     v: 1,
     approvalId: input.approvalId,
-    state: outcome ? (outcome.decision === null ? 'expired' : 'answered') : 'open',
+    state: 'open',
     worker: input.worker,
     summary: {
       title: item.displayName ? `Allow ${item.displayName}?` : item.title,
       detail,
       reason: item.decisionReason ?? null
     },
-    allowedActions: outcome ? [] : workerApprovalActions(item.options),
-    ...(outcome ? { outcome } : {})
+    allowedActions: workerApprovalActions(item.options)
   }
+  return outcome ? closedApproval(open, outcome) : open
+}
+
+/** The same approval once closed: nothing left to answer, and how it closed. */
+export function closedApproval(
+  open: WorkerApprovalPayload,
+  outcome: WorkerApprovalOutcome
+): WorkerApprovalPayload {
+  const closed: WorkerApprovalPayload = {
+    ...open,
+    state: outcome.decision === null ? 'expired' : 'answered',
+    allowedActions: [],
+    outcome
+  }
+  // A countdown means nothing once the prompt is closed.
+  delete closed.expiresAt
+  return closed
 }

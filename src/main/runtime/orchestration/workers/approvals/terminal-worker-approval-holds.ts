@@ -23,11 +23,13 @@ import type {
   TerminalWorkerApprovalHoldsDeps
 } from './terminal-worker-approval-hold'
 import { reportWorkerApprovalClosed } from '../turn-stops/worker-turn-stop-report'
-import type {
-  WorkerApprovalDecision,
-  WorkerApprovalOutcome,
-  WorkerApprovalPayload
+import {
+  closedApproval,
+  type WorkerApprovalDecision,
+  type WorkerApprovalOutcome,
+  type WorkerApprovalPayload
 } from './worker-approval'
+import { TERMINAL_APPROVAL_ID_PREFIX } from './worker-approval-report'
 
 // Why 500 ms: Esc posts no hook, so only the screen says the dialog left; a click is refused within it.
 const DIALOG_POLL_MS = 500
@@ -72,7 +74,7 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
       return false
     }
     const hold: Hold = {
-      approvalId: `apr_${createHash('sha256')
+      approvalId: `${TERMINAL_APPROVAL_ID_PREFIX}${createHash('sha256')
         .update(JSON.stringify([promptId, toolUseId]))
         .digest('hex')
         .slice(0, 16)}`,
@@ -135,9 +137,14 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
   }
 
   /** The open approval this pane's worker waits on, for its one escalation. */
+  /** Whether Orca still holds this prompt's hook, answering or not. */
+  isHeld(approvalId: string): boolean {
+    return this.byApprovalId.has(approvalId)
+  }
+
   takeOpenApproval(paneKey: string, dispatchId: string): WorkerApprovalPayload | null {
     const hold = this.openByPane.get(paneKey)
-    if (!hold || hold.state !== 'open' || hold.dispatch.id !== dispatchId) {
+    if (hold?.state !== 'open' || hold.dispatch.id !== dispatchId) {
       return null
     }
     hold.reported = true
@@ -178,8 +185,11 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
     const result = written ? await this.toolResult(hold) : null
     const ours = input.decision === 'deny' ? 'hook-denied' : 'ran'
     if (!result || claudeToolClose(result, input.message) !== ours || hold.state !== 'answering') {
-      hold.state = 'open'
-      await this.settle(hold, result)
+      // A quit or budget end that closed it meanwhile stays closed: the state only moves forward.
+      if (hold.state === 'answering') {
+        hold.state = 'open'
+        await this.settle(hold, result)
+      }
       return notOpen
     }
     hold.state = 'answered'
@@ -309,15 +319,15 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
   }
 
   private payload(hold: Hold, outcome?: WorkerApprovalOutcome): WorkerApprovalPayload {
-    return {
+    const open: WorkerApprovalPayload = {
       v: 1,
       approvalId: hold.approvalId,
-      state: outcome ? (outcome.decision === null ? 'expired' : 'answered') : 'open',
+      state: 'open',
       worker: { handle: hold.handle, dispatchId: hold.dispatch.id, taskId: hold.dispatch.task_id },
       summary: hold.summary,
-      allowedActions: outcome ? [] : ['allow', 'deny'],
-      ...(hold.expiresAt && !outcome ? { expiresAt: hold.expiresAt } : {}),
-      ...(outcome ? { outcome } : {})
+      allowedActions: ['allow', 'deny'],
+      ...(hold.expiresAt ? { expiresAt: hold.expiresAt } : {})
     }
+    return outcome ? closedApproval(open, outcome) : open
   }
 }
