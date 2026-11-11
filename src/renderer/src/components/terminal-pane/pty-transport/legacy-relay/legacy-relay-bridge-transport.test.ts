@@ -3,6 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LegacyRelayBridgedPane } from '../../../../../../shared/legacy-relay-bridge-contract'
 import type { PtyTransport } from '../pty-transport-types'
 
+const relayCopy = vi.hoisted(() => ({ message: vi.fn(() => 'unreachable in language A') }))
+vi.mock('./legacy-relay-bridge-copy', () => ({
+  legacyRelayBridgeUnreachableMessage: relayCopy.message
+}))
+
 const PTY = 'ssh:ssh-box@@pty-1'
 
 const bridge = vi.hoisted(() => ({
@@ -102,6 +107,7 @@ function callbacks() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  relayCopy.message.mockReset().mockReturnValue('unreachable in language A')
   publishPanes([])
 })
 
@@ -255,6 +261,20 @@ describe('a runtime pane bridged to an older relay’s terminal', () => {
       expect(cb.onReplayData).toHaveBeenCalledWith('BACK', { clearBeforeReplay: true })
     )
     expect(cb.onErrorCleared).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears the emitted error after the language changes', async () => {
+    bridge.attach.mockResolvedValueOnce({ status: 'unverifiable' })
+    relayCopy.message.mockReturnValueOnce('unreachable in language A')
+    const transport = createLegacyRelayBridgeTransport(PTY, innerTransport())
+    const cb = callbacks()
+    await transport.connect({ url: '', sessionId: PTY, callbacks: cb })
+    relayCopy.message.mockReturnValue('unreachable in language B')
+    bridge.attach.mockImplementationOnce(attachedWithScreen('BACK'))
+    publishPanes([{ ptyId: PTY, targetId: 'ssh-box', tabId: 'tab-1', state: 'live' }])
+    await vi.waitFor(() =>
+      expect(cb.onErrorCleared).toHaveBeenCalledWith('unreachable in language A')
+    )
   })
 
   it('reattaches after a disconnect hung the bridge up, so the pane is never left deaf', async () => {

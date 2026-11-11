@@ -45,6 +45,8 @@ export function registerRuntimeWindowLifecycle(
       }
       send('worktrees:changed', renamed ? { repoId, renamed } : { repoId })
     },
+    // Why: interim transport for the workspaceMetadata set record; the record shape, not this channel, is the contract.
+    workspaceMetadataSet: (set) => send('worktrees:metadataSet', set),
     worktreeBaseStatus: (event) => send('worktree:baseStatus', event),
     worktreeRemoteBranchConflict: (event) => send('worktree:remoteBranchConflict', event),
     reposChanged: () => send('repos:changed'),
