@@ -48,6 +48,7 @@ describe('commands about a worker a paired server owns', () => {
   let whileSending: () => Promise<void>
   let sleeping: boolean
   let pulls: unknown[][]
+  let paired: boolean
   let sequence = 0
   let server: OrchestrationWorkerServer = {
     environmentId: 'env_b',
@@ -59,7 +60,7 @@ describe('commands about a worker a paired server owns', () => {
 
   const transport = (): OrchestrationEnvironmentTransport => ({
     resolve: () => server,
-    hasEnvironment: () => true,
+    hasEnvironment: () => paired,
     call: async (_selector, method, params, timeoutMs, envelope, _revision, send) => {
       const ok = (result: unknown): RuntimeRpcResponse<unknown> => ({
         id: method,
@@ -67,6 +68,9 @@ describe('commands about a worker a paired server owns', () => {
         result,
         _meta: { runtimeId: 'runtime_b' }
       })
+      if (!paired) {
+        throw new Error('Unknown environment: env_b')
+      }
       if (sleeping) {
         // A sleeping laptop keeps its socket open, so only each call's own timeout ends the wait.
         return new Promise((_, reject) =>
@@ -125,6 +129,7 @@ describe('commands about a worker a paired server owns', () => {
     whileSending = async () => undefined
     sleeping = false
     pulls = []
+    paired = true
     capabilities = [
       ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
       ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY
@@ -383,7 +388,7 @@ describe('commands about a worker a paired server owns', () => {
     expect(forwarded.params).toMatchObject({ task: receipt.taskId, retryOf: 'ctx_b1' })
   })
 
-  it('frees the Task when the pairing is re-made while its start waits', async () => {
+  it('fails the Task when the pairing is re-made while its start waits', async () => {
     whileSending = async () => {
       server.pairingRevision = 2
       closeRemoteRunLink(
@@ -403,7 +408,7 @@ describe('commands about a worker a paired server owns', () => {
     )
 
     expect(response.ok).toBe(false)
-    expect(db.getTask(String(sent[0].params.adoptTaskId))?.status).toBe('ready')
+    expect(db.getTask(String(sent[0].params.adoptTaskId))?.status).toBe('failed')
   })
 
   it("shows this Orca's record of a worker whose pairing was re-made", async () => {
@@ -589,6 +594,31 @@ describe('commands about a worker a paired server owns', () => {
     expect(updated.ok).toBe(true)
     expect(db.getTask(taskId)?.status).toBe('failed')
     expect(sent.map((s) => s.method)).not.toContain('orchestration.taskUpdate')
+  })
+
+  it('fails the Task a worker held when its pairing is re-made, with the reason', async () => {
+    const { taskId } = await startOnB()
+    server = { ...server, homePeerFingerprint: 'cred_a_new', pairingRevision: 2 }
+
+    await call('orchestration.workerRead', { dispatch: 'ctx_b1' })
+    expect(db.getTask(taskId)).toMatchObject({
+      status: 'failed',
+      result: 'The pairing with devB was re-made. Its worker may still run there.'
+    })
+    expect(getRemotePlacement(db, taskId)).toBeUndefined()
+  })
+
+  it('fails the Task a worker held once its server is removed from this Orca', async () => {
+    const { taskId, runId } = await startOnB()
+    paired = false
+    runtime.ensureOrchestrationFederationRelay(runId)
+
+    await vi.waitFor(() =>
+      expect(db.getTask(taskId)).toMatchObject({
+        status: 'failed',
+        result: "devB was removed from this Orca's paired servers. Its worker may still run there."
+      })
+    )
   })
 
   /** devB's queue item saying where its Dispatch and Task now stand. */

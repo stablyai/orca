@@ -10,12 +10,14 @@ import { peerMailLocalRecipient } from './peer-mail-delivery'
 import { presentImportedPeerItem } from '../../mailbox/formatting/imported-peer-item-presentation'
 import { importRemoteOwnedItem } from '../../db/remote-owned/remote-owned-import'
 import {
+  closeRemoteRunLinksOfRemovedServer,
   getRemoteRunLink,
   listLiveRemoteRunLinkEnvironments,
   noteRemoteRunLinkError,
   remoteServerPin
 } from '../../db/remote-owned/remote-run-links'
 import { resendOwedRemoteActions } from '../remote-owned/remote-owed-actions'
+import { remoteServerName } from '../remote-owned/remote-owned-reads'
 import { isRemoteServerUnreachable } from '../remote-owned/remote-server-unreachable'
 
 // Under the relay edge's idle cutoff, so an idle pull ends by itself instead of being dropped.
@@ -101,13 +103,20 @@ export class PeerMailRelay {
 
   private async run(environmentId: string, loop: Loop): Promise<void> {
     let failures = 0
+    // Named while it is still paired, so a removal can say which server went.
+    const serverName = remoteServerName(this.runtime, environmentId)
     while (this.isCurrent(environmentId, loop)) {
       try {
         await this.pullOnce(environmentId, loop)
         failures = 0
       } catch {
         if (this.isEnvironmentRemoved(environmentId)) {
-          // A removed server cannot answer; the next ensure re-arms it if it is added back.
+          // A removed server cannot answer for its Runs' work again; their Tasks here fail with why.
+          closeRemoteRunLinksOfRemovedServer(
+            loop.db,
+            environmentId,
+            `${serverName} was removed from this Orca's paired servers.`
+          )
           break
         }
         failures += 1

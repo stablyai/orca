@@ -3,7 +3,8 @@ import { generateId } from '../generated-id'
 import {
   beginLifecycleWriteTransaction,
   commitLifecycleWriteTransaction,
-  rollbackLifecycleWriteTransaction
+  rollbackLifecycleWriteTransaction,
+  transitionLifecycleWithDb
 } from '../lifecycle-transition'
 import type { OrchestrationDb } from '../orchestration-db'
 import { writtenRow } from './written-row'
@@ -88,7 +89,7 @@ export function openRemoteRunLink(
     let link = open
     if (open && !remoteRunLinkPinMatches(open, pin)) {
       // Nothing can reach that link's work any more: the server knows this Orca by another pairing now.
-      closeRemoteRunLink(db, open.conversation_id, 'The pairing with this server was re-made.')
+      closeRemoteRunLink(db, open.conversation_id, `The pairing with ${server.name} was re-made.`)
       link = undefined
     }
     if (!link) {
@@ -152,24 +153,70 @@ export const OWE_REMOTE_RUN_CANCELS_SQL = `
   DELETE FROM remote_owned_questions;
 `
 
-/** The server can no longer be reached for this link's work (its pairing was re-made): nothing more is sent or held for it. */
+/**
+ * The server can no longer answer for this link's work (its pairing was re-made, or it was removed): nothing more is sent for it, each Task it held fails here
+ * through the ordinary Task half with the reason, and its placements go.
+ */
 export function closeRemoteRunLink(
   db: OrchestrationDb,
   conversationId: string,
   reason: string
 ): void {
-  db.db
+  const transaction = beginLifecycleWriteTransaction(db.db, 'close_remote_run_link')
+  try {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT of one column returns exactly that column.
+    const held = db.db
+      .prepare(
+        `SELECT placement.task_id FROM remote_placements placement
+         JOIN tasks task ON task.id = placement.task_id
+         WHERE placement.conversation_id = ? AND task.status = 'dispatched'`
+      )
+      .all(conversationId) as { task_id: string }[]
+    const now = new Date().toISOString()
+    for (const { task_id: taskId } of held) {
+      transitionLifecycleWithDb(db.db, {
+        entity: 'task',
+        id: taskId,
+        from: 'dispatched',
+        to: 'failed',
+        projection: { result: `${reason} Its worker may still run there.`, completed_at: now }
+      })
+    }
+    db.db.prepare('DELETE FROM remote_placements WHERE conversation_id = ?').run(conversationId)
+    db.db
+      .prepare(
+        `UPDATE remote_run_links SET state = 'closed', last_error = ?
+         WHERE conversation_id = ? AND state <> 'closed'`
+      )
+      .run(reason, conversationId)
+    // Nothing there can prove a stop now, and nothing here may send one.
+    db.db
+      .prepare(
+        `UPDATE remote_dispatches SET stop_owed = 0, stop_retry_at = NULL WHERE conversation_id = ?`
+      )
+      .run(conversationId)
+    commitLifecycleWriteTransaction(db.db, transaction)
+  } catch (error) {
+    rollbackLifecycleWriteTransaction(db.db, transaction)
+    throw error
+  }
+}
+
+/** Every link to a server this Orca no longer pairs with: none of their work can be reached again. */
+export function closeRemoteRunLinksOfRemovedServer(
+  db: OrchestrationDb,
+  environmentId: string,
+  reason: string
+): void {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT of one column returns exactly that column.
+  const links = db.db
     .prepare(
-      `UPDATE remote_run_links SET state = 'closed', last_error = ?
-       WHERE conversation_id = ? AND state <> 'closed'`
+      `SELECT conversation_id FROM remote_run_links WHERE environment_id = ? AND state <> 'closed'`
     )
-    .run(reason, conversationId)
-  // Nothing there can prove a stop now, and nothing here may send one.
-  db.db
-    .prepare(
-      `UPDATE remote_dispatches SET stop_owed = 0, stop_retry_at = NULL WHERE conversation_id = ?`
-    )
-    .run(conversationId)
+    .all(environmentId) as { conversation_id: string }[]
+  for (const link of links) {
+    closeRemoteRunLink(db, link.conversation_id, reason)
+  }
 }
 
 /** Why the link's queue stopped being read; shown with the link, cleared by its next import. */

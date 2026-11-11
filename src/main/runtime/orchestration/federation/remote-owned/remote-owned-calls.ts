@@ -45,7 +45,7 @@ export async function callRemoteOwnedServer(
       current.state !== 'closed' &&
       !remoteRunLinkPinMatches(current, remoteServerPin(now))
     ) {
-      closeRemoteRunLink(db, current.conversation_id, 'The pairing with this server was re-made.')
+      closeRemoteRunLink(db, current.conversation_id, `The pairing with ${now.name} was re-made.`)
       throw new OrchestrationError(
         'server_pairing_changed',
         `The pairing with ${now.name} was re-made, so it no longer runs Run ${link.run_id}'s workers. No effects were applied.`,
