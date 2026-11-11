@@ -4,7 +4,8 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CloudSyncState } from '../../shared/cloud-sync/cloud-sync-contract'
 import { createFakeVm, VM_ROOT, type FakeVm } from './cloud-sync-fake-vm.test-support'
-import { createCloudSyncSession, safetyIntervalMs } from './cloud-sync-session'
+import { safetyIntervalMs } from './cloud-sync-plan'
+import { createCloudSyncSession } from './cloud-sync-session'
 import { createCloudSyncStore, type CloudSyncChoice } from './cloud-sync-store'
 
 const dirs: string[] = []

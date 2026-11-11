@@ -13,6 +13,8 @@ import {
 import { isContextPath, isSafeSyncPath } from './cloud-sync-paths'
 import {
   emptySyncState,
+  safetyIntervalMs,
+  SAFETY_TICK_MS,
   limitsFor,
   limitsInfo,
   planSync,
@@ -38,16 +40,6 @@ import {
 
 export type { WatchSubscribe, WatchSubscription }
 
-/**
- * Safety net for anything the watch missed. The VM's watcher can miss a directory created along
- * with its parent (`mkdir -p .context/shots`), so small folders are re-checked often (a few
- * calls each) and large mirrors less often: 30 ms per file, between 30 s and 10 min, and never
- * more than 5% of the time (a slow pass, e.g. on an image without files.statMany, waits longer).
- */
-const SAFETY_TICK_MS = 30_000
-export function safetyIntervalMs(files: number, lastPassMs = 0): number {
-  return Math.min(10 * 60_000, Math.max(SAFETY_TICK_MS, files * 30, lastPassMs * 20))
-}
 const WATCH_RETRY_MIN_MS = 5_000
 const WATCH_RETRY_MAX_MS = 5 * 60_000
 
@@ -76,7 +68,7 @@ export function createCloudSyncSession(deps: CloudSyncSessionDeps) {
   let watch: WatchSubscription | null = null
   let watchRetryMs = WATCH_RETRY_MIN_MS
   let watchRetryTimer: ReturnType<typeof setTimeout> | null = null
-  let safetyTimer: ReturnType<typeof setInterval> | null = null
+  let safetyTimer: ReturnType<typeof setTimeout> | null = null
   let lastFullPassAt = 0
   let lastFullPassMs = 0
   const abort = new AbortController()
@@ -274,6 +266,20 @@ export function createCloudSyncSession(deps: CloudSyncSessionDeps) {
     }
   }
 
+  /** One check per tick while running; stop() ends the chain. */
+  function scheduleSafetyCheck(): void {
+    if (stopped) {
+      return
+    }
+    safetyTimer = setTimeout(() => {
+      if (now() - lastFullPassAt >= safetyIntervalMs(state.files, lastFullPassMs)) {
+        void requestFullPass()
+      }
+      scheduleSafetyCheck()
+    }, SAFETY_TICK_MS)
+    safetyTimer.unref?.()
+  }
+
   function scheduleWatchRetry(): void {
     if (stopped || watchRetryTimer) {
       return
@@ -295,18 +301,11 @@ export function createCloudSyncSession(deps: CloudSyncSessionDeps) {
       await loadIndex()
       await requestFullPass()
       await openWatch()
-      safetyTimer = setInterval(() => {
-        if (now() - lastFullPassAt >= safetyIntervalMs(state.files, lastFullPassMs)) {
-          void requestFullPass()
-        }
-      }, SAFETY_TICK_MS)
-      safetyTimer.unref?.()
+      scheduleSafetyCheck()
     },
     /** This computer woke, or the connection came back: anything may have changed meanwhile. */
     resync(): Promise<void> {
-      if (!watch) {
-        void openWatch()
-      }
+      void openWatch()
       return requestFullPass()
     },
     setChoice(next: CloudSyncChoice): Promise<void> {
@@ -321,14 +320,10 @@ export function createCloudSyncSession(deps: CloudSyncSessionDeps) {
       watch?.close()
       watch = null
       changes.dispose()
-      if (watchRetryTimer) {
-        clearTimeout(watchRetryTimer)
-      }
-      if (safetyTimer) {
-        clearInterval(safetyTimer)
-      }
-      watchRetryTimer = null
-      safetyTimer = null
+      // clearTimeout ignores null.
+      clearTimeout(watchRetryTimer ?? undefined)
+      clearTimeout(safetyTimer ?? undefined)
+      watchRetryTimer = safetyTimer = null
       return chain
     }
   }

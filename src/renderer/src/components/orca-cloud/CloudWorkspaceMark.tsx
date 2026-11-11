@@ -131,8 +131,7 @@ function CloudWorkspaceMarkInner({
         align="start"
         sideOffset={10}
         focusRing
-        // Taller than a short window once the sync section is open: scroll instead of clipping.
-        className="scrollbar-sleek max-h-(--radix-popover-content-available-height) w-72 overflow-y-auto"
+        className="w-72"
         aria-label={label}
         tabIndex={-1}
         onPointerEnter={() => clearTimer()}
@@ -147,7 +146,8 @@ function CloudWorkspaceMarkInner({
         }}
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="p-3">
+        {/* Taller than a short window once the sync section is open: scroll instead of clipping. */}
+        <div className="scrollbar-sleek max-h-(--radix-popover-content-available-height) overflow-y-auto p-3">
           <CloudWorkspaceStatusPanel
             workspaceId={workspaceId}
             state={view.state}

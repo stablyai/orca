@@ -161,12 +161,23 @@ export function installCloudSync(deps: {
       }
     }
   })
-  const beat = setInterval(() => void sync.reconcile(), BEAT_MS)
-  beat.unref?.()
-  void sync.reconcile()
+  // One reconcile per beat, scheduled after the last one finished (never stacked).
+  let beat: ReturnType<typeof setTimeout> | null = null
+  let stopped = false
+  const scheduleBeat = (): void => {
+    if (stopped) {
+      return
+    }
+    beat = setTimeout(() => void sync.reconcile().finally(scheduleBeat), BEAT_MS)
+    beat.unref?.()
+  }
+  void sync.reconcile().finally(scheduleBeat)
 
   return () => {
-    clearInterval(beat)
+    stopped = true
+    if (beat) {
+      clearTimeout(beat)
+    }
     offRuntimes()
     offPower()
     for (const channel of [CH.getState, CH.setChoice, CH.openFolder, CH.retry, CH.removalPreview]) {

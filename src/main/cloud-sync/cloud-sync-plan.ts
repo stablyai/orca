@@ -160,3 +160,14 @@ export function planSync(input: {
   }
   return { download, remove, editedHere, skippedLarge, overLimit, totalBytes, totalFiles }
 }
+
+/**
+ * Safety net for anything the watch missed. The VM's watcher can miss a directory created along
+ * with its parent (`mkdir -p .context/shots`), so small folders are re-checked often (a few
+ * calls each) and large mirrors less often: 30 ms per file, between 30 s and 10 min, and never
+ * more than 5% of the time (a slow pass, e.g. on an image without files.statMany, waits longer).
+ */
+export const SAFETY_TICK_MS = 30_000
+export function safetyIntervalMs(files: number, lastPassMs = 0): number {
+  return Math.min(10 * 60_000, Math.max(SAFETY_TICK_MS, files * 30, lastPassMs * 20))
+}

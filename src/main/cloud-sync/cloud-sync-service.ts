@@ -201,7 +201,9 @@ export function createCloudSyncService(deps: CloudSyncServiceDeps) {
         do {
           again = false
           await reconcileOnce().catch((error: unknown) =>
-            log(`[cloud-sync] reconcile failed: ${error instanceof Error ? error.message : error}`)
+            log(
+              `[cloud-sync] reconcile failed: ${error instanceof Error ? error.message : String(error)}`
+            )
           )
         } while (again && !disposed)
       } finally {

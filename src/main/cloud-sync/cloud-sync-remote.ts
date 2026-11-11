@@ -30,6 +30,11 @@ export class SyncRemoteError extends Error {
   }
 }
 
+function isNotFound(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /ENOENT|not.?found|no such/i.test(message)
+}
+
 /** Transport answers for a sandbox that is asleep, waking or unreachable right now. */
 const WAITING_CODES = new Set([
   'runtime_environment_asleep',
@@ -45,11 +50,8 @@ export function isWaitingError(error: unknown): boolean {
 }
 
 export function errorCode(error: unknown): string | null {
-  if (error && typeof error === 'object' && 'code' in error) {
-    const code = (error as { code: unknown }).code
-    return typeof code === 'string' ? code : null
-  }
-  return null
+  const code: unknown = error && typeof error === 'object' ? Reflect.get(error, 'code') : undefined
+  return typeof code === 'string' ? code : null
 }
 
 const WorktreeRows = z.looseObject({
@@ -125,7 +127,7 @@ async function listContext(
       )
     } catch (error) {
       // No .context folder is the common case, not a failure.
-      if (depth === 0 && /ENOENT|not.?found|no such/i.test(String((error as Error)?.message))) {
+      if (depth === 0 && isNotFound(error)) {
         return
       }
       throw error
@@ -292,7 +294,7 @@ async function statOneByOne(
         }
       } catch (error) {
         // Deleted between listing and stat: simply not in the manifest.
-        if (!/ENOENT|not.?found|no such/i.test(String((error as Error)?.message))) {
+        if (!isNotFound(error)) {
           throw error
         }
       }

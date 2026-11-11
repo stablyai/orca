@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CloudSyncView } from '../../shared/cloud-sync/cloud-sync-contract'
 import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
-import { createFakeVm, VM_ROOT } from './cloud-sync-fake-vm.test-support'
+import { createFakeVm } from './cloud-sync-fake-vm.test-support'
 import { createCloudSyncService } from './cloud-sync-service'
 import { createCloudSyncStore } from './cloud-sync-store'
 
@@ -25,10 +25,7 @@ function runtime(status: EphemeralVmRuntimeRecord['status']): EphemeralVmRuntime
     status,
     cleanupStatus: 'not_started',
     createdAt: 1,
-    updatedAt: 1,
-    recipeResult: {
-      connection: { type: 'orca-server', pairingCode: 'x', projectRoot: VM_ROOT }
-    } as unknown as EphemeralVmRuntimeRecord['recipeResult']
+    updatedAt: 1
   }
 }
 

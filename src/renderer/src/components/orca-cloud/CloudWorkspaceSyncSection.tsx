@@ -50,7 +50,6 @@ function PathWithBreaks({ path }: { path: string }): React.JSX.Element {
   return (
     <>
       {parts.map((part, i) => (
-        // oxlint-disable-next-line react/no-array-index-key -- path segments can repeat; their order is the identity
         <React.Fragment key={i}>
           {part}
           {i < parts.length - 1 ? (
