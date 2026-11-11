@@ -77,6 +77,13 @@ describe('detectForegroundCommand', () => {
     expect(detectForegroundCommand(['ubuntu@sbx:~$ '], { cursorBelowText: true })).toBeNull()
   })
 
+  it('a finished silent command (`true`, then a fresh prompt) offers nothing', () => {
+    const tail = ['ubuntu@sbx:~/project$ true', 'ubuntu@sbx:~/project$ ']
+    expect(detectForegroundCommand(tail, { cursorBelowText: false })).toBeNull()
+    // Even read with the cursor below, the last text is a bare prompt: nothing was running.
+    expect(detectForegroundCommand(tail, { cursorBelowText: true })).toBeNull()
+  })
+
   it('a silent agent launch or launch script is still never offered', () => {
     expect(detectForegroundCommand(['$ claude'], { cursorBelowText: true })).toBeNull()
     expect(
