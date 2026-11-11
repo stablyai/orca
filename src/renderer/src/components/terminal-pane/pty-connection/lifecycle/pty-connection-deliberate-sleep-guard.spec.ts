@@ -94,6 +94,60 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
       expect(transport.connect).not.toHaveBeenCalled()
     })
 
+    // RA-13b: an Orca Cloud workspace that was asleep and selected when Orca quit comes back
+    // selected; its restored panes must not reattach (that would wake the sandbox) until Wake.
+    it('restored asleep cloud panes never attach after a restart', async () => {
+      const { connectPanePty } = await import('../connect-pane-pty')
+      const titles = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
+      const { holdRestoredAsleepCloudSelection } =
+        await import('@/components/sidebar/workspace-actions/sleep/workspace-sleep-view-hold')
+      const { cloudVmRecord } =
+        await import('@/components/sidebar/workspace-actions/sleep/cloud-vm-record.test-fixture')
+      const { resetWorktreeSleepViewForTests } = await import('@/lib/worktree-sleep-view')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      mockStoreState = { ...mockStoreState, activeWorktreeId: 'wt-1' }
+      expect(holdRestoredAsleepCloudSelection([cloudVmRecord('wt-1', 'suspended')])).toBe('wt-1')
+      const deps = createDeps({
+        tabId: 'tab-restored',
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: 'wt-1@@slept' }
+      })
+      connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, titles)
+      )
+      await flushAsyncTicks()
+      expect(transport.connect).not.toHaveBeenCalled()
+      resetWorktreeSleepViewForTests()
+    })
+
+    it('a restored running cloud workspace attaches as before', async () => {
+      const { connectPanePty } = await import('../connect-pane-pty')
+      const titles = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
+      const { holdRestoredAsleepCloudSelection } =
+        await import('@/components/sidebar/workspace-actions/sleep/workspace-sleep-view-hold')
+      const { cloudVmRecord } =
+        await import('@/components/sidebar/workspace-actions/sleep/cloud-vm-record.test-fixture')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      mockStoreState = { ...mockStoreState, activeWorktreeId: 'wt-1' }
+      expect(holdRestoredAsleepCloudSelection([cloudVmRecord('wt-1', 'running')])).toBeNull()
+      const deps = createDeps({ tabId: 'tab-running', isVisibleRef: { current: false } })
+      connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, titles)
+      )
+      await flushAsyncTicks()
+      expect(transport.connect).toHaveBeenCalledTimes(1)
+    })
+
     it('re-arms after a wake so a second sleep can hold the pane again', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
       const agentTitleMocks6 = await vi.importMock<PtyConnectionAgentTitleMocks>(

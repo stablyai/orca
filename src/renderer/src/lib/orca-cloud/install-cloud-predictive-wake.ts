@@ -20,6 +20,7 @@ import {
   isCloudWorkspaceArchived,
   refreshCloudWorkspaceStatus
 } from './orca-cloud-workspace-store'
+import { isWorktreeSleepViewHeld } from '@/lib/worktree-sleep-view'
 
 /** A fresh status (cheap while asleep: no VM probe) and billing's caps, read just before waking. */
 async function serverAllowsPredictiveWake(workspaceId: string): Promise<boolean> {
@@ -52,7 +53,9 @@ export function installCloudPredictiveWake(): () => void {
           snapshot.ids.has(workspaceId) &&
           snapshot.status[workspaceId]?.status?.state === 'sleeping' &&
           !isCloudWorkspaceArchived(workspaceId) &&
-          !snapshot.wake[workspaceId]
+          !snapshot.wake[workspaceId] &&
+          // Kept on screen read-only after its Sleep: only an explicit Wake wakes it.
+          !isWorktreeSleepViewHeld(workspaceId)
         )
       },
       preflight: serverAllowsPredictiveWake,
