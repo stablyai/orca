@@ -16,17 +16,15 @@ describe('cloudSetupPageModel', () => {
     expect(sessionNeedsFrom(steps)).toEqual(['plan', 'github'])
   })
 
-  it('a skipped agent finishes setup', () => {
+  it('the agent is never a page step and never holds the start (PC-1)', () => {
     const steps: CloudSetupStep[] = [
       { id: 'account', state: 'done' },
       { id: 'plan', state: 'done' },
       { id: 'agent', state: 'optional' }
     ]
-    expect(cloudSetupPageModel(steps).action).toBe('agent')
-    expect(cloudSetupPageModel(steps, { agentSkipped: true })).toMatchObject({
-      current: null,
-      action: 'done'
-    })
+    const model = cloudSetupPageModel(steps)
+    expect(model.steps.map((step) => step.id)).toEqual(['account', 'plan'])
+    expect(model).toMatchObject({ current: null, action: 'done' })
   })
 
   it('maps each blocker to its one action', () => {
@@ -39,16 +37,5 @@ describe('cloudSetupPageModel', () => {
     )
     expect(actionForStep({ id: 'team', state: 'needed' }, { teamSwitch: true })).toBe('switch-team')
     expect(actionForStep({ id: 'github', state: 'loading' })).toBe('checking')
-  })
-})
-
-describe('page settles before it starts', () => {
-  it('a still-loading agent row reads Checking, not All set', () => {
-    const steps: CloudSetupStep[] = [
-      { id: 'account', state: 'done' },
-      { id: 'plan', state: 'done' },
-      { id: 'agent', state: 'loading' }
-    ]
-    expect(cloudSetupPageModel(steps).action).toBe('checking')
   })
 })

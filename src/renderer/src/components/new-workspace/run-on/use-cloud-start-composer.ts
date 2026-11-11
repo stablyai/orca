@@ -2,15 +2,18 @@
 // dialog: Start either creates the workspace (everything is set up) or saves the draft, closes the
 // dialog and opens the full-page setup, which starts the prompt by itself when done. Also: where
 // each project last started (O5), the remembered default (D7) and GitHub-only repositories (D4).
-import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { toast } from 'sonner'
+import { useCallback, useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store/index'
-import { translate } from '@/i18n/i18n'
 import { clearCloudStartDraft, saveCloudStartDraft } from '@/lib/orca-cloud/cloud-start-draft'
 import {
-  isCloudSetupAgentSkipped,
+  getCloudSetupPageRequest,
   openCloudSetupPage
 } from '@/lib/orca-cloud/cloud-setup-page-store'
+import {
+  armCloudCreateIdempotency,
+  consumeCloudCreateIntent,
+  startCloudCreate
+} from '@/lib/orca-cloud/cloud-create-intent'
 import { recordSuccessfulRunOn } from '@/lib/orca-cloud/run-on-memory'
 import { ORCA_CLOUD_RECIPE_ID } from '../../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
 import type { OrcaCloudAvailability } from '../../../../../shared/orca-yaml-hook-types'
@@ -18,7 +21,6 @@ import { useOrcaCloudRunTargetAccess } from '../orca-cloud-billing-cache'
 import type { OrcaCloudRunTargetAccess } from '../orca-cloud-run-target-access'
 import type { ComposerModalData } from '../composer-modal-data'
 import { getOrcaCloudSegmentState } from './cloud-start-model'
-import { getOrcaCloudStartToast } from './orca-cloud-hours-copy'
 import { useCloudStartSteps } from './use-cloud-start-steps'
 import { useSwitchTeamSteps } from '../cloud-setup/use-cloud-setup-tracker'
 import { cloudSetupRequired } from '../../orca-cloud-setup/cloud-setup-page-model'
@@ -46,7 +48,7 @@ export function useCloudStartComposer({
   prompt,
   agent,
   initialTargetFixed,
-  autoStart = false,
+  autoStartIntent = null,
   createReady = true,
   composerSnapshot,
   onCreate: createWorkspace,
@@ -63,8 +65,11 @@ export function useCloudStartComposer({
   agent: string | null
   /** The composer was opened on an explicit target (Landing card, a recovery). */
   initialTargetFixed: boolean
-  /** Reopened by the setup page once everything is done: submit as soon as the form is ready. */
-  autoStart?: boolean
+  /**
+   * Reopened by the setup page once everything is done: the Create press's intent, submitted once
+   * the form is ready (and only if nothing has used it yet).
+   */
+  autoStartIntent?: string | null
   /** The composer's own create would run now (project picked, agent resolved). */
   createReady?: boolean
   /** The composer as it is now, for the setup page's Back and its auto-start. */
@@ -104,10 +109,7 @@ export function useCloudStartComposer({
     githubOverride: cloudOnly.githubStep
   })
   const { steps, held: switchTeam } = useSwitchTeamSteps(rowSteps, cloudSelected)
-  const setupNeeded = cloudSetupRequired(steps, {
-    teamSwitch: switchTeam !== null,
-    agentSkipped: isCloudSetupAgentSkipped(agent)
-  })
+  const setupNeeded = cloudSetupRequired(steps, { teamSwitch: switchTeam !== null })
   // The agent has no Orca Cloud account (the user skipped setting it up): never launch it into its
   // /login. Start a plain terminal and say how to set the agent up once.
   const agentUnset =
@@ -118,7 +120,6 @@ export function useCloudStartComposer({
     prompt,
     agent: agentUnset ? null : agent,
     profileId,
-    hoursToast: getOrcaCloudStartToast(access, translate, navigator.language),
     onClose
   })
   const onCreate = useCallback(() => {
@@ -151,40 +152,54 @@ export function useCloudStartComposer({
   }, [markTouched, setRecipeId])
 
   // Start with setup still open: the dialog closes and the page takes over, prompt kept (N6).
-  const openSetup = useCallback(() => {
-    saveCloudStartDraft(profileId, {
-      prompt,
-      repoId,
-      agent,
-      target: 'orca-cloud',
-      setupSessionId: null,
-      createdAt: Date.now()
-    })
-    openCloudSetupPage({
-      prompt,
-      repoId,
-      agent,
-      availability,
-      cloudOnlyRepo: cloudOnly.picked?.fullName ?? null,
-      composer: composerSnapshot()
-    })
-    onClose?.()
-  }, [agent, availability, cloudOnly.picked, composerSnapshot, onClose, profileId, prompt, repoId])
+  const openSetup = useCallback(
+    (intentId: string) => {
+      saveCloudStartDraft(profileId, {
+        prompt,
+        repoId,
+        agent,
+        target: 'orca-cloud',
+        setupSessionId: null,
+        createdAt: Date.now()
+      })
+      openCloudSetupPage({
+        prompt,
+        repoId,
+        agent,
+        availability,
+        cloudOnlyRepo: cloudOnly.picked?.fullName ?? null,
+        composer: composerSnapshot(),
+        intentId
+      })
+      onClose?.()
+    },
+    [agent, availability, cloudOnly.picked, composerSnapshot, onClose, profileId, prompt, repoId]
+  )
 
   // Reopened by the setup page: submit once the account and form are ready. Anything still open
   // (a race, a revoked grant) leaves the composer for the user, never a second trip on its own.
-  const autoStartedRef = useRef(false)
+  // One Create press is one server create (P0): the intent is consumed here or nowhere.
   const stepsSettled = !steps.some((step) => step.state === 'loading' && step.id !== 'agent')
   useEffect(() => {
-    if (!autoStart || autoStartedRef.current || !cloudSelected || !createReady || !stepsSettled) {
+    if (!autoStartIntent || !cloudSelected || !createReady || !stepsSettled || setupNeeded) {
       return
     }
-    if (setupNeeded) {
-      return
+    if (consumeCloudCreateIntent(autoStartIntent)) {
+      armCloudCreateIdempotency(autoStartIntent)
+      onCreate()
     }
-    autoStartedRef.current = true
-    onCreate()
-  }, [autoStart, cloudSelected, createReady, onCreate, setupNeeded, stepsSettled])
+  }, [autoStartIntent, cloudSelected, createReady, onCreate, setupNeeded, stepsSettled])
+
+  const onCloudPrimary = useCallback(
+    () =>
+      startCloudCreate({
+        setupOpen: getCloudSetupPageRequest() !== null,
+        setupNeeded,
+        openSetup,
+        create: () => onCreate()
+      }),
+    [onCreate, openSetup, setupNeeded]
+  )
 
   const recordCreated = useCallback(() => {
     if (!repoId) {
@@ -195,12 +210,8 @@ export function useCloudStartComposer({
       return
     }
     clearCloudStartDraft(profileId)
-    // O4: the start always says which hours it spends.
-    const message = getOrcaCloudStartToast(access, translate, navigator.language)
-    if (message) {
-      toast.message(message)
-    }
-  }, [access, cloudSelected, profileId, repoId])
+    // PC-5: no "Using sandbox hours" toast on start; hours live in billing (Neil: noise).
+  }, [cloudSelected, profileId, repoId])
 
   const view = useMemo<CloudStartView | null>(
     () =>
@@ -217,5 +228,5 @@ export function useCloudStartComposer({
   if (!view || !cloudSelected) {
     return { view, onPrimary: null, recordCreated }
   }
-  return { view, onPrimary: setupNeeded ? openSetup : onCreate, recordCreated }
+  return { view, onPrimary: onCloudPrimary, recordCreated }
 }

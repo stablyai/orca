@@ -37,37 +37,6 @@ export function getOrcaCloudHoursChip(
       })
 }
 
-/** The start toast: "Using sandbox hours · 2 sandbox hours left in your trial". */
-export function getOrcaCloudStartToast(
-  access: OrcaCloudRunTargetAccess,
-  t: Translate,
-  locale: string
-): string | null {
-  if (access.state !== 'entitled') {
-    return null
-  }
-  const args = hoursArgs(access.remainingSeconds, locale)
-  return access.trial
-    ? t(
-        'components.newWorkspace.cloudHours.trialToast',
-        'Using sandbox hours · {{hours}} sandbox hours left in your trial',
-        {
-          count: args.count,
-          hours: args.hours,
-          defaultValue_one: 'Using sandbox hours · {{hours}} sandbox hour left in your trial'
-        }
-      )
-    : t(
-        'components.newWorkspace.cloudHours.planToast',
-        'Using sandbox hours · {{hours}} sandbox hours left',
-        {
-          count: args.count,
-          hours: args.hours,
-          defaultValue_one: 'Using sandbox hours · {{hours}} sandbox hour left'
-        }
-      )
-}
-
 /** T1: under half an hour of trial left, the hint turns to a warning with the fix. */
 export const ORCA_CLOUD_TRIAL_LOW_SECONDS = 30 * 60
 

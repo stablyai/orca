@@ -2,7 +2,6 @@
 // repositories with no clone here. Picking one keeps Orca Cloud and starts it from GitHub.
 import { useCallback, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
-import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { clearCloudStartDraft } from '@/lib/orca-cloud/cloud-start-draft'
 import {
@@ -102,7 +101,6 @@ export function useCloudOnlyCreate({
   prompt,
   agent,
   profileId,
-  hoursToast,
   onClose
 }: {
   cloudOnly: CloudOnlyRepo
@@ -110,8 +108,6 @@ export function useCloudOnlyCreate({
   prompt: string
   agent: string | null
   profileId: string | null
-  /** "Using sandbox hours · …", or null before billing answers. */
-  hoursToast: string | null
   onClose?: () => void
 }): () => void {
   const { picked, start } = cloudOnly
@@ -121,12 +117,9 @@ export function useCloudOnlyCreate({
       return
     }
     clearCloudStartDraft(profileId)
-    if (hoursToast) {
-      toast.message(hoursToast)
-    }
     void start({ prompt, agent })
     onClose?.()
-  }, [agent, createWorkspace, hoursToast, onClose, picked, profileId, prompt, start])
+  }, [agent, createWorkspace, onClose, picked, profileId, prompt, start])
 }
 
 /**

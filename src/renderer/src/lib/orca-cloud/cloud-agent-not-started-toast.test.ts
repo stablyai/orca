@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const toastMock = vi.hoisted(() => ({ message: vi.fn(), dismiss: vi.fn() }))
@@ -77,5 +78,33 @@ describe('cloud agent not-started toast', () => {
     expect(toastMock.dismiss).not.toHaveBeenCalled()
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'active' }))
     expect(toastMock.dismiss).toHaveBeenCalledWith('orca-cloud-agent-not-started')
+  })
+
+  it('"Set up Claude once" starts the sign-in right from the toast, which stays up', () => {
+    const start = vi.fn(async () => undefined)
+    Object.assign(window, {
+      api: { ...(window as { api?: object }).api, orcaCloudAgents: { start } }
+    })
+    showCloudAgentNotStartedToast('claude', 'w')
+    const options: {
+      duration: number
+      action: { onClick: (event: { preventDefault: () => void }) => void }
+    } = toastMock.message.mock.calls.at(-1)?.[1]
+    expect(options.duration).toBe(Number.POSITIVE_INFINITY)
+    const preventDefault = vi.fn()
+    options.action.onClick({ preventDefault })
+    expect(preventDefault).toHaveBeenCalled()
+    expect(start).toHaveBeenCalledWith({ agent: 'claude' })
+  })
+
+  it('in the workspace itself it stays hidden (its pane strip asks); away, it names it', () => {
+    showCloudAgentNotStartedToast('claude', 'fix-readme-typo', { onlyWhenAway: true })
+    expect(toastMock.message).not.toHaveBeenCalled()
+    useAppStore.setState({ activeWorktreeId: 'repo::new' })
+    useAppStore.setState({ activeWorktreeId: 'repo::other' })
+    expect(toastMock.message).toHaveBeenLastCalledWith(
+      'Claude isn’t set up for Orca Cloud, so it didn’t start in fix-readme-typo.',
+      expect.anything()
+    )
   })
 })

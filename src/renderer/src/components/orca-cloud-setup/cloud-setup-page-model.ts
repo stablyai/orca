@@ -22,8 +22,6 @@ export type CloudSetupPageAction =
   | 'needs-repository'
   /** A member can't fix billing; an owner or admin has to. */
   | 'ask-owner'
-  /** Optional agent account: set it up once, or skip. */
-  | 'agent'
   /** Still reading account, plan or repository state. */
   | 'checking'
   /** Every step is done: the prompt starts. */
@@ -33,17 +31,6 @@ export type CloudSetupPageModel = {
   steps: readonly CloudSetupStep[]
   current: CloudSetupStep | null
   action: CloudSetupPageAction
-}
-
-function isFinished(step: CloudSetupStep, agentSkipped: boolean): boolean {
-  if (step.state === 'done') {
-    return true
-  }
-  if (step.id === 'agent') {
-    // Still loading reads "Checking": the page only says All set once every row has answered.
-    return agentSkipped && step.state !== 'loading'
-  }
-  return false
 }
 
 export function actionForStep(
@@ -90,23 +77,23 @@ export function actionForStep(
       }
       return 'github-install'
     case 'agent':
-      return 'agent'
+      // Never a page step (PC-1): agent sign-in is offered after create.
+      return 'done'
   }
 }
 
 /**
- * The page's state from the setup rows. Steps come in walk order (account, team, plan, GitHub,
- * agent); the first unfinished one is current. A signed-out plan row is "pending" until sign-in, so
- * account stays current until then.
+ * The page's state from the setup rows. Steps come in walk order (account, team, plan, GitHub); the
+ * first unfinished one is current. The agent row is never a step (PC-1): it never gates a start, and
+ * its sign-in is offered after create. A signed-out plan row is "pending" until sign-in, so account
+ * stays current until then.
  */
 export function cloudSetupPageModel(
-  steps: readonly CloudSetupStep[],
-  {
-    agentSkipped = false,
-    teamSwitch = false
-  }: { agentSkipped?: boolean; teamSwitch?: boolean } = {}
+  rows: readonly CloudSetupStep[],
+  { teamSwitch = false }: { teamSwitch?: boolean } = {}
 ): CloudSetupPageModel {
-  const current = steps.find((step) => !isFinished(step, agentSkipped)) ?? null
+  const steps = rows.filter((step) => step.id !== 'agent')
+  const current = steps.find((step) => step.state !== 'done') ?? null
   if (!current) {
     return { steps, current: null, action: 'done' }
   }
@@ -121,23 +108,16 @@ export function sessionNeedsFrom(steps: readonly CloudSetupStep[]): CloudSetupSt
 }
 
 /**
- * Pressing Start goes straight to create only when nothing is open. An agent without an account
- * counts until the user skips it once; a still-loading agent row never holds a start.
+ * Pressing Start opens the setup page only when the account, team, plan or GitHub is missing. The
+ * agent never holds a start (PC-1): without an Orca Cloud account it starts as a plain terminal and
+ * the post-create prompt offers the sign-in.
  */
 export function cloudSetupRequired(
   steps: readonly CloudSetupStep[],
-  {
-    teamSwitch = false,
-    agentSkipped = false
-  }: { teamSwitch?: boolean; agentSkipped?: boolean } = {}
+  { teamSwitch = false }: { teamSwitch?: boolean } = {}
 ): boolean {
   if (teamSwitch) {
     return true
   }
-  return steps.some((step) => {
-    if (step.id === 'agent') {
-      return step.state === 'optional' && !agentSkipped
-    }
-    return step.state !== 'done'
-  })
+  return steps.some((step) => step.id !== 'agent' && step.state !== 'done')
 }

@@ -40,4 +40,6 @@ export type ComposerModalData = {
   setupGuideTourRequestId?: string
   /** Orca Cloud setup finished on its page: submit without showing the dialog (falls back to it). */
   cloudAutoStart?: boolean
+  /** The Create press's intent the auto-start may use, once (one press, one server create). */
+  cloudCreateIntent?: string
 }

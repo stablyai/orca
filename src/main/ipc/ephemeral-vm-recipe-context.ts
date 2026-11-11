@@ -36,6 +36,8 @@ export type EphemeralVmProvisionArgs = {
   branch?: string
   ref?: string
   provisionId?: string
+  /** Orca Cloud: the Create press's key; a re-fired create gets the first one's sandbox. */
+  idempotencyKey?: string
 }
 
 export type EphemeralVmRecipeCatalogEntry = {
