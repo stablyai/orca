@@ -26958,7 +26958,6 @@
       "since": "Archived {{when}}",
       "keptUntilShort": "kept until {{date}}",
       "title": "Archived workspace",
-      "readOnly": "A read-only snapshot. Unarchive to open terminals and agents again.",
       "unarchiving": "Unarchiving…",
       "loadFailed": "Couldn’t load the archive details.",
       "nothing": "Nothing was captured.",
@@ -27165,7 +27164,9 @@
     "archivedDetailLocalCopy": "It goes to sleep and stays browsable: PRs, last changes and files. The copy on this computer is removed too.",
     "archiveSnapshot": {
       "definitionUntil": "Archive keeps a snapshot of this workspace (its files, chats and terminal history) until {{date}}, then deletes it. Unarchive it from its menu before then. Like a sleeping workspace, it doesn’t use sandbox hours.",
-      "definition": "Archive keeps a snapshot of this workspace (its files, chats and terminal history) for 30 days, then deletes it. Unarchive it from its menu before then. Like a sleeping workspace, it doesn’t use sandbox hours."
+      "definition": "Archive keeps a snapshot of this workspace (its files, chats and terminal history) for 30 days, then deletes it. Unarchive it from its menu before then. Like a sleeping workspace, it doesn’t use sandbox hours.",
+      "archivedUntil": "A read-only snapshot of its files, chats and terminal history. Unarchive before {{date}} to open terminals and agents again; after that it’s deleted.",
+      "archived": "A read-only snapshot of its files, chats and terminal history. Unarchive within 30 days of archiving to open terminals and agents again; after that it’s deleted."
     }
   },
   "cloudAgentSetup": {

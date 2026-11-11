@@ -33,3 +33,21 @@ export function archiveSnapshotDefinition(
         'Archive keeps a snapshot of this workspace (its files, chats and terminal history) for 30 days, then deletes it. Unarchive it from its menu before then. Like a sleeping workspace, it doesn’t use sandbox hours.'
       )
 }
+
+/**
+ * The same definition in the archived voice, for a workspace that is already archived (its archived
+ * view and its state line everywhere): what the snapshot holds and the date it is deleted. Without a
+ * kept-until date (older control plane) it names the 30-day rule instead of inventing a date.
+ */
+export function archivedSnapshotLine(t: Translate, keptUntil?: number | null): string {
+  return keptUntil
+    ? t(
+        'orcaCloudWorkspace.archiveSnapshot.archivedUntil',
+        'A read-only snapshot of its files, chats and terminal history. Unarchive before {{date}} to open terminals and agents again; after that it’s deleted.',
+        { date: formatShortDate(keptUntil) }
+      )
+    : t(
+        'orcaCloudWorkspace.archiveSnapshot.archived',
+        'A read-only snapshot of its files, chats and terminal history. Unarchive within 30 days of archiving to open terminals and agents again; after that it’s deleted.'
+      )
+}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { translate } from '@/i18n/i18n'
 import { formatShortDate } from '@/lib/orca-cloud/orca-cloud-workspace-state'
-import { archiveSnapshotDefinition } from './archive-snapshot-copy'
+import { archivedSnapshotLine, archiveSnapshotDefinition } from './archive-snapshot-copy'
 import { cloudStateDetail } from './cloud-state-copy'
 
 const NOW = Date.UTC(2026, 10, 11, 12)
@@ -27,11 +27,17 @@ describe('archiveSnapshotDefinition (one definition of "snapshot")', () => {
     expect(text).not.toContain('until')
   })
 
-  it('the archived state line is the definition, never a bare "snapshot"', () => {
+  it('an archived workspace reads in the archived voice everywhere: what it holds, the day it is deleted', () => {
     const keptUntil = NOW + 3 * DAY
-    expect(cloudStateDetail('archived', translate, keptUntil)).toBe(
-      archiveSnapshotDefinition(translate, { keptUntil })
+    const line = archivedSnapshotLine(translate, keptUntil)
+    expect(line).toBe(
+      `A read-only snapshot of its files, chats and terminal history. Unarchive before ${formatShortDate(keptUntil)} to open terminals and agents again; after that it’s deleted.`
     )
-    expect(cloudStateDetail('archived', translate)).toContain('for 30 days')
+    // The status and hovercard state line say the same words as the archived view.
+    expect(cloudStateDetail('archived', translate, keptUntil)).toBe(line)
+    // No sandbox-hours sentence for a workspace that's already archived.
+    expect(line).not.toContain('sandbox hours')
+    // An older control plane without a date: the 30-day rule, never an invented date.
+    expect(cloudStateDetail('archived', translate)).toContain('within 30 days of archiving')
   })
 })

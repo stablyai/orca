@@ -24,7 +24,7 @@ export function CloudWorkspaceHeader({
   /** Hover text for the state line (e.g. the absolute time behind "As of 5 minutes ago"). */
   stateTitle?: string
   /** One quieter sentence under the state line. */
-  note?: React.ReactNode
+  note?: string
   action?: React.ReactNode
   /** Overlays focus the heading when they cover a live pane. */
   headingRef?: React.Ref<HTMLHeadingElement>
