@@ -6,13 +6,23 @@ import {
   getOrcaCloudBillingSearchEntries,
   getOrcaCloudEnvironmentsSearchEntries,
   getOrcaCloudMcpSearchEntries,
+  getOrcaCloudSkillsSearchEntries,
   getOrcaCloudSecretsSearchEntries,
   getOrcaCloudTeamSearchEntries
 } from '@/components/settings/orca-cloud/orca-cloud-settings-search'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
-import { Boxes, CreditCard, KeySquare, LockKeyhole, Plug, Users, Workflow } from 'lucide-react'
+import {
+  BookOpenText,
+  Boxes,
+  CreditCard,
+  KeySquare,
+  LockKeyhole,
+  Plug,
+  Users,
+  Workflow
+} from 'lucide-react'
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
 import { CLOUD_ROUTINES_UI_ENABLED } from '../../../shared/cloud-api/cloud-routines-ui'
 
@@ -57,6 +67,17 @@ export function buildOrcaCloudSettingsSections(
       ),
       icon: LockKeyhole,
       searchEntries: getOrcaCloudSecretsSearchEntries(),
+      group
+    },
+    {
+      id: 'cloud-skills',
+      title: t('cloudSkillsSync.title', 'Skills & commands'),
+      description: t(
+        'settings.orcaCloud.skills.description',
+        'Skills and slash commands from Claude and Codex on this computer, synced to your cloud workspaces.'
+      ),
+      icon: BookOpenText,
+      searchEntries: getOrcaCloudSkillsSearchEntries(),
       group
     },
     {

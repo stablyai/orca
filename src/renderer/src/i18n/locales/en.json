@@ -1391,6 +1391,13 @@
         "keywordUsage": "usage",
         "keywordOverage": "overage",
         "description": "Your Orca Cloud plan, sandbox hours and payment."
+      },
+      "skills": {
+        "searchDescription": "Sync Claude and Codex skills and slash commands from this computer to your cloud workspaces.",
+        "keywordSkills": "skills",
+        "keywordCommands": "slash commands",
+        "keywordPrompts": "prompts",
+        "description": "Skills and slash commands from Claude and Codex on this computer, synced to your cloud workspaces."
       }
     },
     "groups": {
@@ -28225,5 +28232,71 @@
     "description": "Set up Claude and Codex once. Every cloud workspace uses them, including new, cloned and restarted ones.",
     "footerLabel": "Related settings",
     "allAccounts": "All agent accounts"
+  },
+  "cloudSkillsSync": {
+    "title": "Skills & commands",
+    "appliesEverywhere": "Applies to every cloud workspace",
+    "toggleItem": "Sync {{name}} ({{kind}}) to cloud workspaces",
+    "loading": "Loading skills and commands…",
+    "syncedAgo": "synced {{time}}",
+    "syncing": "Syncing skills and commands…",
+    "syncingShort": "Syncing…",
+    "syncNow": "Sync now",
+    "syncAgain": "Sync again",
+    "manualOnly": "Not synced automatically. Sync now copies them once.",
+    "group": {
+      "synced": "Synced",
+      "pending": "Not synced yet",
+      "notSynced": "Not synced"
+    },
+    "autoSync": "Sync when a workspace starts or wakes",
+    "autoSyncHint": "Copies your Claude and Codex skills and slash commands into each cloud workspace. Anything that looks like a key stays on this computer, and nothing made in the sandbox is overwritten.",
+    "shareAcrossAgents": "Share between Claude and Codex",
+    "shareAcrossAgentsHint": "In cloud workspaces, Codex also gets your Claude skills and commands, and Claude gets your Codex skills and prompts. An agent keeps its own if it has one with that name.",
+    "startFailed": "Couldn’t start the sync.",
+    "saveFailed": "Couldn’t save the change.",
+    "emptyBody": "Skills and commands sync to a cloud workspace while it runs. Start or wake one to see what it gets.",
+    "workspaceLabel": "Skills and commands in {{name}}",
+    "unavailable": "Skill sync isn’t available in this build.",
+    "kind": {
+      "skill": "{{agent}} skill",
+      "prompt": "Codex prompt",
+      "command": "{{agent}} command",
+      "project": "{{kind}}, this project"
+    },
+    "summary": {
+      "none": "None found in Claude or Codex on this computer",
+      "notSynced_one": "{{count}} found, not synced yet",
+      "notSynced_other": "{{count}} found, not synced yet",
+      "synced_one": "{{count}} synced",
+      "synced_other": "{{count}} synced",
+      "skipped_one": "{{count}} not synced",
+      "skipped_other": "{{count}} not synced",
+      "pair": "{{synced}}, {{skipped}}"
+    },
+    "error": {
+      "hostOutdated": "This workspace was created before skills sync. Create a new workspace to use it.",
+      "hostUnreachable": "Couldn’t reach the sandbox. Skills already there still work.",
+      "failed": "The last sync didn’t finish. Skills already in the sandbox still work."
+    },
+    "row": {
+      "withheld_one": "Synced without 1 file that looks like a key or credential",
+      "withheld_other": "Synced without {{count}} files that look like keys or credentials",
+      "converted": "Copied from {{agent}} so both agents have it",
+      "turnedOff": "Turned off",
+      "inRepo": "Committed to the repo, so the sandbox already has it",
+      "tooLarge": "Too large to sync (256 KB a file, 512 KB a skill)",
+      "overLimit": "Over the 8 MB a workspace can receive",
+      "secret": "Looks like it contains a key or token, so it stays on this computer",
+      "invalid": "Its name or files can’t be copied",
+      "keptHost": "The sandbox has its own {{name}}, so it’s left alone",
+      "noProject": "The sandbox has no project checkout for it",
+      "failed": "Couldn’t write it in the sandbox"
+    },
+    "state": {
+      "synced": "Synced",
+      "pending": "Not synced yet",
+      "skipped": "Not synced"
+    }
   }
 }
