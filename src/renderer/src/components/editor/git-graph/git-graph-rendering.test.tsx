@@ -9,6 +9,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { GitGraphTab } from './git-graph-tab'
 import { GitGraphFilter } from './git-graph-filter'
+import * as graphSvg from '@/components/right-sidebar/source-control/sync/git-history-graph-svg'
 import * as commitSupport from '@/runtime/source-control/git/git-commit-actions-capability'
 import { useGitGraphHistory } from './use-git-graph-history'
 import type { GitHistoryResult } from '../../../../../shared/git/history/git-history-types'
@@ -16,7 +17,7 @@ import type { GitHistoryResult } from '../../../../../shared/git/history/git-his
 const { getHistory, getRefs, viewport } = vi.hoisted(() => ({
   getHistory: vi.fn(),
   getRefs: vi.fn(),
-  viewport: { rows: 20, rendered: Infinity }
+  viewport: { rows: 20 }
 }))
 vi.mock('@/runtime/source-control/git/runtime-git-status-client', async (original) => ({
   ...(await original<object>()),
@@ -27,33 +28,35 @@ vi.mock('@/runtime/source-control/git/runtime-git-diff-client', async (original)
   ...(await original<object>()),
   getRuntimeGitCommitCompare: vi.fn(async () => ({ summary: { status: 'ready' }, entries: [] }))
 }))
-vi.mock('@tanstack/react-virtual', () => ({
-  useVirtualizer: (options: { count: number; getScrollElement: () => HTMLElement | null }) => ({
-    getTotalSize: () => options.count * 28,
-    getVirtualItems: () =>
-      Array.from({ length: Math.min(options.count, viewport.rendered) }, (_, index) => ({
-        index,
-        start: index * 28
-      })),
-    get range() {
-      return options.count
-        ? { startIndex: 0, endIndex: Math.min(options.count, viewport.rows) - 1 }
-        : null
-    },
-    measureElement: () => {},
-    scrollToIndex: (index: number) => {
-      const element = options.getScrollElement()
-      if (element) {
-        element.scrollTop = index * 28
-      }
-    }
-  })
-}))
 const container = document.createElement('div')
 document.body.appendChild(container)
 let root = createRoot(container)
+let resize: (() => void) | undefined
 const initialState = useAppStore.getState()
 beforeEach(() => {
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(
+    () => viewport.rows * 24
+  )
+  vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (
+    this: HTMLElement
+  ) {
+    return (
+      Number.parseFloat(
+        this.firstElementChild?.getAttribute('style')?.match(/height: ([\d.]+)px/)?.[1] ?? '0'
+      ) + 48
+    )
+  })
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(callback: () => void) {
+        resize = callback
+      }
+      observe() {}
+      disconnect() {}
+      unobserve() {}
+    }
+  )
   useAppStore.setState({
     repos: [repo],
     worktreesByRepo: { r: [local] },
@@ -66,7 +69,6 @@ afterEach(async () => {
   await act(async () => root.unmount())
   root = createRoot(container)
   viewport.rows = 20
-  viewport.rendered = Infinity
   disposeGitGraphHistory(`${workspaceId}::git-graph`)
   useAppStore.setState(initialState, true)
   vi.restoreAllMocks()
@@ -180,11 +182,11 @@ it('keeps an older selection, loaded depth and scroll through refresh', async ()
   })
   const scroll = container.querySelector<HTMLDivElement>('div.overflow-y-auto')!
   await act(async () => {
-    Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent === 'Commit 110')!
-      .click()
     scroll.scrollTop = 2400
     scroll.dispatchEvent(new Event('scroll'))
+  })
+  await act(async () => {
+    container.querySelector<HTMLButtonElement>('button[title="Commit 110"]')!.click()
   })
   const refreshed = [
     { id: 'new-tip', subject: 'New commit', message: 'New commit', parentIds: ['commit-0'] },
@@ -211,13 +213,13 @@ it('keeps an older selection, loaded depth and scroll through refresh', async ()
     container.querySelector<HTMLButtonElement>('button[aria-label="Refresh commits"]')!.click()
   })
   expect(container.querySelector('[data-current="true"]')?.textContent).toContain('Commit 110')
-  expect(container.querySelectorAll('[data-current]')).toHaveLength(150)
+  expect(loadedCount()).toBe(150)
   await act(async () => {
     finish(refreshedPage(50))
     await controller.loadMore()
   })
   expect(container.querySelector('[data-current="true"]')?.textContent).toContain('Commit 110')
-  expect(container.querySelectorAll('[data-current]')).toHaveLength(150)
+  expect(loadedCount()).toBe(150)
   expect(scroll.scrollTop).toBe(2400)
 
   getHistory
@@ -229,7 +231,7 @@ it('keeps an older selection, loaded depth and scroll through refresh', async ()
     await controller.loadMore()
   })
   expect(container.querySelector('[data-current="true"]')?.textContent).toContain('Commit 110')
-  expect(container.querySelectorAll('[data-current]')).toHaveLength(150)
+  expect(loadedCount()).toBe(150)
   expect(scroll.scrollTop).toBe(2400)
 
   getHistory
@@ -241,7 +243,7 @@ it('keeps an older selection, loaded depth and scroll through refresh', async ()
     await controller.loadMore()
   })
   expect(container.querySelector('[data-current="true"]')?.textContent).toContain('Commit 110')
-  expect(container.querySelectorAll('[data-current]')).toHaveLength(150)
+  expect(loadedCount()).toBe(150)
   expect(scroll.scrollTop).toBe(2400)
 })
 
@@ -273,10 +275,13 @@ async function loadOlderHistory() {
     await controller.loadMore()
   })
   await act(async () => {
-    Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent === 'Commit 110')!
-      .click()
+    const scroll = container.querySelector<HTMLDivElement>('div.overflow-y-auto')!
+    scroll.scrollTop = 2400
+    scroll.dispatchEvent(new Event('scroll'))
   })
+  await act(async () =>
+    container.querySelector<HTMLButtonElement>('button[title="Commit 110"]')!.click()
+  )
   getHistory.mockClear()
   return { controller, items, page }
 }
@@ -297,7 +302,7 @@ it('bounds refresh to one extra page when the selected commit has vanished', asy
     await controller.refresh()
   })
   expect(getHistory).toHaveBeenCalledTimes(4)
-  expect(container.querySelectorAll('[data-current]')).toHaveLength(200)
+  expect(loadedCount()).toBe(200)
   expect(container.querySelector('[data-current="true"] button[title="Commit 0"]')).not.toBeNull()
   expect(container.querySelector('aside h2')?.textContent).toBe('Commit 0')
   expect(scroll.scrollTop).toBe(0)
@@ -323,7 +328,7 @@ it('keeps a newer selection and its details during refresh and after a partial f
     finish(page(50))
     await refreshing
   })
-  expect(container.querySelectorAll('[data-current]')).toHaveLength(150)
+  expect(loadedCount()).toBe(150)
   expect(container.querySelector('[data-current="true"] button[title="Commit 120"]')).not.toBeNull()
   expect(container.querySelector('aside h2')?.textContent).toBe('Commit 120')
 
@@ -333,7 +338,7 @@ it('keeps a newer selection and its details during refresh and after a partial f
   await act(async () => {
     await controller.refresh()
   })
-  expect(container.querySelectorAll('[data-current]')).toHaveLength(150)
+  expect(loadedCount()).toBe(150)
   expect(container.querySelector('[data-current="true"] button[title="Commit 120"]')).not.toBeNull()
   expect(container.querySelector('aside h2')?.textContent).toBe('Commit 120')
 })
@@ -563,13 +568,15 @@ it('pages a pane taller than the loaded commits until they overflow it, and agai
   await renderTab()
   expect(loadedCount()).toBe(150)
   viewport.rows = 400
-  await renderTab()
+  await act(async () => {
+    resize?.()
+  })
   expect(loadedCount()).toBe(200)
   expect(container.textContent).not.toContain('Load more')
 })
 
 it('leaves a failed page to Load more, even after switching tabs away and back', async () => {
-  viewport.rows = Infinity
+  viewport.rows = 1000
   getHistory
     .mockReset()
     .mockResolvedValueOnce(longPage(0))
@@ -589,7 +596,7 @@ it('leaves a failed page to Load more, even after switching tabs away and back',
 })
 
 it('stops paging on a page that adds no commits, and ends on an empty last page', async () => {
-  viewport.rows = Infinity
+  viewport.rows = 1000
   getHistory.mockReset().mockResolvedValue(longPage(0))
   await renderTab()
   await renderTab()
@@ -605,8 +612,8 @@ it('stops paging on a page that adds no commits, and ends on an empty last page'
 it.each([50_000, 500_000])(
   'releases %i commits of replaced history while the pane stays mounted',
   async (count) => {
-    viewport.rows = Infinity
-    viewport.rendered = 40
+    viewport.rows = 40
+    const renderedGraph = vi.spyOn(graphSvg, 'GitHistoryGraphSvg')
     getHistory
       .mockReset()
       .mockImplementationOnce(async () => ({
@@ -623,10 +630,22 @@ it.each([50_000, 500_000])(
       .mockRejectedValueOnce(new Error('network down'))
       .mockResolvedValue({ ...result, refs: 'head' })
     await renderTab()
+    await act(async () => {
+      const scroll = container.querySelector<HTMLDivElement>('div.overflow-y-auto')!
+      scroll.scrollTop = (count - 40) * 24
+      scroll.dispatchEvent(new Event('scroll'))
+    })
+    expect(getHistory).toHaveBeenCalledTimes(2)
+    expect(container.textContent).toContain('network down')
     const replaced = (() => {
       const loaded = gitGraphHistoryForTab(workspaceId).view.getState().result!
       expect(loaded.items).toHaveLength(count)
-      return new WeakRef(loaded)
+      return [
+        new WeakRef(renderedGraph.mock.calls[0]![0].viewModel),
+        new WeakRef(loaded),
+        new WeakRef(loaded.items),
+        new WeakRef(loaded.items[count - 1]!)
+      ]
     })()
     await act(async () =>
       useAppStore.setState({ gitGraphFiltersByWorktree: { [workspaceId]: 'head' } })
@@ -636,13 +655,64 @@ it.each([50_000, 500_000])(
     })
     expect(loadedCount()).toBe(1)
     getHistory.mockReset()
-    if (typeof globalThis.gc !== 'function') {
-      throw new Error('Run with the repository Vitest --expose-gc config')
+    renderedGraph.mockClear()
+    await expectReleased(replaced)
+    if (count === 500_000) {
+      let controller = gitGraphHistoryForTab(workspaceId)
+      const loadDisposable = async () => {
+        getHistory.mockImplementationOnce(async () => ({
+          ...result,
+          items: [{ id: 'disposable', subject: 'Disposable', message: 'Body', parentIds: [] }]
+        }))
+        await act(async () => {
+          await controller.refresh()
+        })
+        const payload = controller.view.getState().result!.items[0]!
+        const row = renderedGraph.mock.calls.find(
+          ([props]) => props.viewModel.historyItem.id === 'disposable'
+        )![0].viewModel
+        const weak = [new WeakRef(payload), new WeakRef(row)]
+        getHistory.mockReset()
+        renderedGraph.mockClear()
+        return weak
+      }
+      const empty = await loadDisposable()
+      getHistory.mockResolvedValueOnce({ ...result, items: [] })
+      await act(async () => {
+        await controller.refresh()
+      })
+      await expectReleased(empty)
+      const missing = await loadDisposable()
+      getHistory.mockRejectedValueOnce(new Error('failed filter'))
+      await act(async () =>
+        useAppStore.setState({ gitGraphFiltersByWorktree: { [workspaceId]: 'all' } })
+      )
+      await act(async () => {
+        await controller.settledResult()
+      })
+      expect(loadedCount()).toBeUndefined()
+      await expectReleased(missing)
+      const unmounted = await loadDisposable()
+      await act(async () => {
+        disposeGitGraphHistory(`${workspaceId}::git-graph`)
+        root.unmount()
+      })
+      root = createRoot(container)
+      controller = gitGraphHistoryForTab(workspaceId)
+      await expectReleased(unmounted)
     }
-    for (let round = 0; round < 3; round++) {
-      await new Promise<void>((resolve) => setImmediate(resolve))
-      globalThis.gc()
-    }
-    expect(replaced.deref()).toBeUndefined()
   }
 )
+
+async function expectReleased(obsolete: WeakRef<object>[]) {
+  if (typeof globalThis.gc !== 'function') {
+    throw new Error('Run with the repository Vitest --expose-gc config')
+  }
+  for (let round = 0; round < 3; round++) {
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    globalThis.gc()
+  }
+  for (const value of obsolete) {
+    expect(value.deref()).toBeUndefined()
+  }
+}

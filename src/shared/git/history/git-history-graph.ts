@@ -63,7 +63,7 @@ function findLastNodeIndex(nodes: readonly GitHistoryGraphNode[], id: string): n
   return findLastIndex(nodes, (node) => node.id === id)
 }
 
-function getLabelColorIdentifier(
+export function getGitHistoryLabelColor(
   historyItem: GitHistoryItem,
   colorMap: Map<string, GitHistoryGraphColorId | undefined>
 ): GitHistoryGraphColorId | undefined {
@@ -108,25 +108,26 @@ export function compareGitHistoryRefs(
   return order(ref1) - order(ref2)
 }
 
-export function buildGitHistoryViewModels(
-  historyItems: GitHistoryItem[],
-  colorMap = new Map<string, GitHistoryGraphColorId | undefined>(),
+export type GitHistoryGraphState = {
+  colorIndex: number
+  frontier: GitHistoryGraphNode[]
+}
+
+export function appendGitHistoryViewModels(
+  historyItems: readonly GitHistoryItem[],
+  state: GitHistoryGraphState,
+  parentById: (id: string) => GitHistoryItem | undefined,
+  colorMap: Map<string, GitHistoryGraphColorId | undefined>,
   currentRef?: GitHistoryItemRef,
   remoteRef?: GitHistoryItemRef,
-  baseRef?: GitHistoryItemRef,
-  addIncomingChanges?: boolean,
-  addOutgoingChanges?: boolean,
-  mergeBase?: string
+  baseRef?: GitHistoryItemRef
 ): GitHistoryItemViewModel[] {
-  let colorIndex = -1
   const viewModels: GitHistoryItemViewModel[] = []
-  let historyItemsById: Map<string, GitHistoryItem> | undefined
-
   for (const historyItem of historyItems) {
     const historyItemId = historyItem.id
     const firstParentId = historyItem.parentIds[0]
     const kind = historyItemId === currentRef?.revision ? 'HEAD' : 'node'
-    const inputSwimlanes = (viewModels.at(-1)?.outputSwimlanes ?? []).map(cloneNode)
+    const inputSwimlanes = state.frontier.map(cloneNode)
     const outputSwimlanes: GitHistoryGraphNode[] = []
     let firstParentAdded = false
 
@@ -135,7 +136,7 @@ export function buildGitHistoryViewModels(
         if (!firstParentAdded && firstParentId !== undefined) {
           outputSwimlanes.push({
             id: firstParentId,
-            color: getLabelColorIdentifier(historyItem, colorMap) ?? node.color
+            color: getGitHistoryLabelColor(historyItem, colorMap) ?? node.color
           })
           firstParentAdded = true
         }
@@ -147,26 +148,15 @@ export function buildGitHistoryViewModels(
     for (let index = firstParentAdded ? 1 : 0; index < historyItem.parentIds.length; index += 1) {
       let colorIdentifier: GitHistoryGraphColorId | undefined
       if (index === 0) {
-        colorIdentifier = getLabelColorIdentifier(historyItem, colorMap)
+        colorIdentifier = getGitHistoryLabelColor(historyItem, colorMap)
       } else {
-        // Side-parent colors need a lookup; defer indexing so linear histories pay no map cost.
-        if (!historyItemsById) {
-          historyItemsById = new Map()
-          for (const candidate of historyItems) {
-            // Array#find returns the first duplicate, so retain first-wins ordering here.
-            const candidateId = candidate.id
-            if (!historyItemsById.has(candidateId)) {
-              historyItemsById.set(candidateId, candidate)
-            }
-          }
-        }
-        const parent = historyItemsById.get(historyItem.parentIds[index]!)
-        colorIdentifier = parent ? getLabelColorIdentifier(parent, colorMap) : undefined
+        const parent = parentById(historyItem.parentIds[index]!)
+        colorIdentifier = parent ? getGitHistoryLabelColor(parent, colorMap) : undefined
       }
 
       if (!colorIdentifier) {
-        colorIndex = rotate(colorIndex + 1, GIT_HISTORY_LANE_COLORS.length)
-        colorIdentifier = GIT_HISTORY_LANE_COLORS[colorIndex]!
+        state.colorIndex = rotate(state.colorIndex + 1, GIT_HISTORY_LANE_COLORS.length)
+        colorIdentifier = GIT_HISTORY_LANE_COLORS[state.colorIndex]!
       }
 
       outputSwimlanes.push({
@@ -190,6 +180,7 @@ export function buildGitHistoryViewModels(
       })
       .sort((ref1, ref2) => compareGitHistoryRefs(ref1, ref2, currentRef, remoteRef, baseRef))
 
+    state.frontier = outputSwimlanes
     viewModels.push({
       historyItem: { ...historyItem, references },
       kind,
@@ -197,6 +188,41 @@ export function buildGitHistoryViewModels(
       outputSwimlanes
     })
   }
+
+  return viewModels
+}
+
+export function buildGitHistoryViewModels(
+  historyItems: GitHistoryItem[],
+  colorMap = new Map<string, GitHistoryGraphColorId | undefined>(),
+  currentRef?: GitHistoryItemRef,
+  remoteRef?: GitHistoryItemRef,
+  baseRef?: GitHistoryItemRef,
+  addIncomingChanges?: boolean,
+  addOutgoingChanges?: boolean,
+  mergeBase?: string
+): GitHistoryItemViewModel[] {
+  let historyItemsById: Map<string, GitHistoryItem> | undefined
+  const viewModels = appendGitHistoryViewModels(
+    historyItems,
+    { colorIndex: -1, frontier: [] },
+    (id) => {
+      // Linear histories need no index; side-parent lookups retain first-wins ordering.
+      if (!historyItemsById) {
+        historyItemsById = new Map()
+        for (const item of historyItems) {
+          if (!historyItemsById.has(item.id)) {
+            historyItemsById.set(item.id, item)
+          }
+        }
+      }
+      return historyItemsById.get(id)
+    },
+    colorMap,
+    currentRef,
+    remoteRef,
+    baseRef
+  )
 
   addIncomingOutgoingChangesHistoryItems(
     viewModels,
