@@ -26,6 +26,9 @@ export type MobileNativeChatIdentity = {
 
 export type MobileNativeChatTab = {
   type: string
+  terminal?: string | null
+  ptyId?: string | null
+  incarnationId?: string | null
   launchAgent?: string | null
   agentStatus?: AgentStatusEntry | null
   nativeChatIdentity?: MobileNativeChatIdentity

@@ -3,15 +3,14 @@ import {
   AGENT_STATUS_STALE_AFTER_MS,
   agentStatusAuthorityObservedAt
 } from '../../../../shared/agent-status/contracts/agent-status-freshness'
-import {
-  pickHostTurnEnd,
-  pickParsedAgentStatusPayload,
-  type AgentStatusEntry
-} from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { terminalTitleBlocksExplicitAgentStatus } from '../../workspaces/process-listing/runtime-worktree-status-projection'
-import type { HookLiveAgentRow } from '../../workspaces/process-listing/hook-live-agent-row'
+import {
+  toHookLiveAgentRow,
+  type HookLiveAgentRow
+} from '../../workspaces/process-listing/hook-live-agent-row'
 import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 import { codexAsyncQuestionOutlivesWorkingTitle } from './codex-async-question-title-hold'
 
@@ -289,18 +288,6 @@ export function selectRuntimeHookAgentRowForPane(
     agentIsLive: agent != null && agent.state !== 'done',
     live: live ? toHookLiveAgentRow(live) : null,
     restored: restored ? toHookLiveAgentRow(restored) : null
-  }
-}
-
-function toHookLiveAgentRow(row: AgentStatusIpcPayload): HookLiveAgentRow {
-  return {
-    payload: pickParsedAgentStatusPayload(row),
-    updatedAt: row.receivedAt,
-    ...(row.evidenceObservedAt !== undefined ? { evidenceObservedAt: row.evidenceObservedAt } : {}),
-    stateStartedAt: row.stateStartedAt ?? row.receivedAt,
-    ...pickHostTurnEnd(row),
-    ...(row.worktreeId ? { worktreeId: row.worktreeId } : {}),
-    ...(row.programStatus ? { programStatus: row.programStatus } : {})
   }
 }
 

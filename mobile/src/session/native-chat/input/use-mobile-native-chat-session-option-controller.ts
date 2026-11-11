@@ -1,3 +1,8 @@
+import type { MobileNativeChatTab } from '../mobile-native-chat-eligibility'
+import type { MobileSessionTab } from '../../tabs/mobile-session-tabs'
+import type { NativeChatSessionOptionOwner } from '../../../../../src/shared/native-chat/input/native-chat-session-option-cache'
+import type { NativeChatSessionOptionBinding } from '../../../../../src/shared/native-chat/input/native-chat-session-option-binding'
+import type { MutableRefObject } from 'react'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import { useMobileNativeChatModelDiscovery } from '../../use-mobile-native-chat-model-discovery'
 import { writeMobileNativeChatSessionOptions } from './mobile-native-chat-session-option-persistence'
@@ -26,6 +31,9 @@ function isAuthoritativeListing(catalog: AgentSessionOptionCatalog | null): bool
 export function useMobileNativeChatSessionOptionController(args: {
   client?: RpcClient | null
   activeChatStructured: boolean
+  activeSessionTab?: MobileNativeChatTab | null
+  readSessionTab?: (tabId: string) => MobileSessionTab | null
+  activeHandleRef?: MutableRefObject<string | null>
   activeSessionTabId: string | null
   agent: string | null
   dispatchCommand: (text: string) => Promise<MobileNativeChatSendOutcome>
@@ -99,7 +107,50 @@ export function useMobileNativeChatSessionOptionController(args: {
     },
     [client]
   )
+  const selectedTab = args.activeSessionTab
+  const owner = useMemo<NativeChatSessionOptionOwner | undefined>(() => {
+    if (!args.readSessionTab || !activeSessionTabId || !agent || selectedTab?.type !== 'terminal') {
+      return undefined
+    }
+    const bindingFor = (tab: MobileNativeChatTab): NativeChatSessionOptionBinding => ({
+      agent: tab.agentStatus?.agentType ?? tab.launchAgent ?? agent,
+      connectionId: hostId,
+      worktreeId,
+      terminalHandle: tab.terminal ?? tab.agentStatus?.terminalHandle,
+      ptyId: tab.ptyId,
+      incarnationId: tab.incarnationId,
+      providerSession: tab.agentStatus?.providerSession
+    })
+    return {
+      binding: { ...bindingFor(selectedTab), agent },
+      readCurrentBinding: () => {
+        const tab = args.readSessionTab?.(activeSessionTabId)
+        return tab?.type === 'terminal' ? bindingFor(tab) : null
+      }
+    }
+  }, [
+    args.readSessionTab,
+    activeSessionTabId,
+    agent,
+    hostId,
+    worktreeId,
+    selectedTab?.type,
+    selectedTab?.terminal,
+    selectedTab?.ptyId,
+    selectedTab?.incarnationId,
+    selectedTab?.launchAgent,
+    selectedTab?.agentStatus?.agentType,
+    selectedTab?.agentStatus?.terminalHandle,
+    selectedTab?.agentStatus?.providerSession?.key,
+    selectedTab?.agentStatus?.providerSession?.id,
+    selectedTab?.agentStatus?.providerSession?.transcriptPath
+  ])
   const sessionOptions = useMobileNativeChatSessionOptions({
+    owner,
+    isDispatchTargetCurrent: () =>
+      !owner ||
+      !args.activeHandleRef ||
+      args.activeHandleRef.current === owner.binding.terminalHandle,
     discoveredModels,
     modelSwitchCommand: args.modelSwitchCommand,
     agent: activeChatStructured ? null : agent,

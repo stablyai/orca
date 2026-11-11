@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import { useNativeChatSessionOptionOwner } from './native-chat-session-option-owner'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
 import { getAgentSessionOptionCatalog } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog'
 import { matchNativeChatCatalogModelId } from '../../../../../../../shared/native-chat/input/native-chat-session-option-state'
@@ -65,6 +66,7 @@ export function useNativeChatSessionOptions(args: {
     () => resolveNativeChatModelDiscoveryContext(terminalTabId),
     [terminalTabId]
   )
+  const owner = useNativeChatSessionOptionOwner({ agent, terminalTabId, targetPtyId, paneKey })
   const surface = useMemo(() => {
     // Chat attaches after startup is queued, so a draft picker could no longer change its command.
     if (!targetPtyId) {
@@ -83,6 +85,7 @@ export function useNativeChatSessionOptions(args: {
         : null
     return createNativeChatPtySessionOptions({
       agent,
+      owner,
       scopeKey,
       ...(targetPtyId ? { fallbackScopeKey: terminalTabId } : {}),
       // Version-neutral family seeds keep the picker available while host discovery runs or fails.
@@ -107,6 +110,7 @@ export function useNativeChatSessionOptions(args: {
     dispatchCommand,
     discoveryContext,
     onAgentPicker,
+    owner,
     readTerminalScreen,
     targetPtyId,
     terminalTabId
@@ -160,7 +164,7 @@ export function useNativeChatSessionOptions(args: {
   // Scope survives surface rebuilds; reapplying an unchanged report would revert the user’s pick.
   useEffect(() => {
     appliedReportedModelRef.current = null
-  }, [agent, targetPtyId, terminalTabId])
+  }, [agent, owner, targetPtyId, terminalTabId])
 
   useEffect(() => {
     // Claude uses terminal-frame evidence; other agents report model IDs in status hooks.

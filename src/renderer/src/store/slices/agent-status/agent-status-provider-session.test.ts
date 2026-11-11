@@ -18,6 +18,32 @@ function makePiCompatibleProviderSession(agent: 'pi' | 'omp' | 'prime-agent') {
 }
 
 describe('recordAgentProviderSession', () => {
+  it('retains a model within its provider session and clears it at known replacement', () => {
+    const store = createTestStore()
+    const set = (id: string, model?: string): void => {
+      store.getState().setAgentStatus(
+        'tab-1:leaf-1',
+        {
+          agentType: 'claude',
+          state: 'working',
+          prompt: 'continue',
+          ...(model ? { model } : {})
+        },
+        undefined,
+        undefined,
+        undefined,
+        { providerSession: { key: 'session_id', id } }
+      )
+    }
+    set('A', 'claude-opus-5-5[1m]')
+    set('A')
+    expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']?.model).toBe('claude-opus-5-5[1m]')
+    set('B')
+    expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']?.model).toBeUndefined()
+    set('B', 'claude-sonnet-5')
+    expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']?.model).toBe('claude-sonnet-5')
+  })
+
   it('does not capture a structured native owner for terminal resume on restart', () => {
     const store = createTestStore()
     const paneKey = 'structured-tab:leaf-1'

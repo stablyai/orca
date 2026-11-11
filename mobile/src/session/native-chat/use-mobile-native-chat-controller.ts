@@ -1,3 +1,4 @@
+import type { MobileSessionTab } from '../tabs/mobile-session-tabs'
 import { asyncQuestionSourceScope } from '../../../../src/shared/native-chat/input/native-chat-ask'
 import { useCallback, useLayoutEffect, useMemo, useRef, type MutableRefObject } from 'react'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
@@ -21,11 +22,12 @@ import { useMobileNativeChatCiResultLines } from '../use-mobile-native-chat-ci-r
 
 export function useMobileNativeChatController(args: {
   client: RpcClient | null
-  /** The route's paired host; differs from `client` only when a server executes the workspace. */
+  /** The route’s paired host; differs from `client` only when a server executes the workspace. */
   pairedHostClient: RpcClient | null
   hostId: string
   worktreeId: string
   activeSessionTab: MobileNativeChatTab | null
+  readSessionTab?: (tabId: string) => MobileSessionTab | null
   activeSessionTabId: string | null
   activeHandleRef: MutableRefObject<string | null>
   deviceTokenRef: MutableRefObject<string | null>
@@ -85,7 +87,7 @@ export function useMobileNativeChatController(args: {
     onActionResolved: onSendResolved
   })
   const { structuredSession: structuredNativeChat, session: nativeChatSession } = nativeChatLane
-  // CI result lines come only from structured sessions' journals, so a terminal chat reads nothing.
+  // CI result lines come only from structured sessions’ journals, so a terminal chat reads nothing.
   const readsCiLines = showNativeChat && activeChatStructured
   const showsCiResultLines = useMobileNativeChatCiResultLines(args.pairedHostClient, readsCiLines)
   const {
@@ -222,12 +224,10 @@ export function useMobileNativeChatController(args: {
 
   const { nativeChatSessionOptions, recordCommand: recordNativeChatSessionOptionCommand } =
     useMobileNativeChatSessionOptionController({
-      client,
+      ...args,
       activeChatStructured,
-      activeSessionTabId,
       agent: activeChatResolution?.agent ?? null,
       dispatchCommand: handleNativeChatDispatchCommand,
-      hostId,
       isTabChatView,
       isWorking: nativeChatAgentWorking,
       reportedModel: activeSessionTab?.agentStatus?.model ?? null,
@@ -244,8 +244,7 @@ export function useMobileNativeChatController(args: {
         setOption: structuredNativeChat.setStructuredOption,
         invokeAction: structuredNativeChat.invokeStructuredOption
       },
-      toggleTabChatView,
-      worktreeId
+      toggleTabChatView
     })
   useLayoutEffect(() => {
     recordSessionOptionCommandRef.current = recordNativeChatSessionOptionCommand

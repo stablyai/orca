@@ -130,3 +130,11 @@ export function isReadOnlySessionOptionValue(descriptor: SessionOptionDescriptor
     descriptor.kind.choices.length === 1
   )
 }
+
+export type NativeChatPersistSelection = (args: {
+  modelId: string
+  optionId: string
+  value: SessionOptionValue
+  /** False leaves the model scoping this value only, never a persisted launch flag. */
+  adoptModelAsLaunchDefault: boolean
+}) => Promise<void> | void

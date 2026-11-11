@@ -32,6 +32,9 @@ import {
 
 type SessionOptionApplyContext = {
   mode: NativeChatSessionOptionMode
+  runOperation?: <T>(run: () => Promise<T>) => Promise<T>
+  canCommit: () => boolean
+  settle: <T>(mutate: () => T) => T | undefined
   catalog: AgentSessionOptionCatalog
   getModels: () => CatalogModel[]
   getRecord: () => NativeChatSessionOptionRecord
@@ -97,7 +100,7 @@ function finish(
   const snapshot = ctx.publish()
   const record = ctx.getRecord()
   const draftModelId = trackedModelId(record)
-  if (ctx.mode === 'draft' && draftModelId !== null) {
+  if (ctx.canCommit() && ctx.mode === 'draft' && draftModelId !== null) {
     ctx.onDraftValuesChanged?.(flattenNativeChatSessionOptionRecord(record, draftModelId))
   }
   return { snapshot }
@@ -110,9 +113,11 @@ async function handleAgentPicker(
   await (midSession.delivery
     ? ctx.dispatchCommand(midSession.command, { delivery: midSession.delivery })
     : ctx.dispatchCommand(midSession.command))
-  ctx.clearModelTruth()
+  ctx.settle(() => ctx.clearModelTruth())
   const snapshot = ctx.publish()
-  ctx.onAgentPicker?.()
+  if (ctx.canCommit()) {
+    ctx.onAgentPicker?.()
+  }
   return { snapshot }
 }
 
@@ -165,7 +170,7 @@ function applyDispatchOutcome(
     throw new SessionOptionApplyError('modelRejected')
   }
   if (dispatchResult?.outcome === 'unknown') {
-    ctx.clearModelTruth()
+    ctx.settle(() => ctx.clearModelTruth())
     ctx.publish()
     throw new SessionOptionApplyError('modelUnverified')
   }
@@ -225,40 +230,50 @@ async function applySetOption(
     return early
   }
 
-  const record = ctx.getRecord()
-  if (id === 'model' && previousModelId !== value) {
-    record.model = undefined
-    if (ctx.mode === 'live' && typeof value === 'string') {
-      // Model switches can reset destination effort and toggles.
-      delete record.valuesByModel[value]
-    }
-  }
+  return (
+    ctx.settle(() => {
+      const record = ctx.getRecord()
+      if (id === 'model' && previousModelId !== value) {
+        record.model = undefined
+        if (ctx.mode === 'live' && typeof value === 'string') {
+          // Model switches can reset destination effort and toggles.
+          delete record.valuesByModel[value]
+        }
+      }
 
-  if (liveFlipOnly) {
-    // Mid-dispatch reports, typed flips or model changes supersede this target’s baseline.
-    if (trackedModelId(record) !== trackedModelBeforeDispatch) {
-      return finish(ctx, { modelId: previousModelId, optionId: id, value, skipPersist: true })
-    }
-    if (getTrackedOption(record, previousModelId, id) !== trackedToggle) {
-      return finish(ctx, { modelId: previousModelId, optionId: id, value, skipPersist: true })
-    }
-    // Keep unconfirmed flip-only state out of durable defaults.
-    ctx.setTrackedValue(id, value, source)
-    return finish(ctx, { modelId: previousModelId, optionId: id, value, skipPersist: true })
-  }
+      if (liveFlipOnly) {
+        // Mid-dispatch reports, typed flips or model changes supersede this target’s baseline.
+        if (trackedModelId(record) !== trackedModelBeforeDispatch) {
+          return finish(ctx, { modelId: previousModelId, optionId: id, value, skipPersist: true })
+        }
+        if (getTrackedOption(record, previousModelId, id) !== trackedToggle) {
+          return finish(ctx, { modelId: previousModelId, optionId: id, value, skipPersist: true })
+        }
+        // Keep unconfirmed flip-only state out of durable defaults.
+        ctx.setTrackedValue(id, value, source)
+        return finish(ctx, { modelId: previousModelId, optionId: id, value, skipPersist: true })
+      }
 
-  if (ctx.mode === 'live' && id !== 'model') {
-    // Newer model/option records supersede this dispatch; never persist its value under the new model.
-    if (
-      trackedModelId(record) !== trackedModelBeforeDispatch ||
-      getTrackedOption(record, previousModelId, id) !== trackedBeforeDispatch
-    ) {
-      return finish(ctx, { modelId: previousModelId, optionId: id, value, skipPersist: true })
-    }
-  }
+      if (ctx.mode === 'live' && id !== 'model') {
+        // Newer model/option records supersede this dispatch; never persist its value under the new model.
+        if (
+          trackedModelId(record) !== trackedModelBeforeDispatch ||
+          getTrackedOption(record, previousModelId, id) !== trackedBeforeDispatch
+        ) {
+          return finish(ctx, { modelId: previousModelId, optionId: id, value, skipPersist: true })
+        }
+      }
 
-  const modelId = ctx.setTrackedValue(id, value, source)
-  return finish(ctx, { modelId: modelId ?? previousModelId, optionId: id, value })
+      const modelId = ctx.setTrackedValue(id, value, source)
+      return finish(ctx, { modelId: modelId ?? previousModelId, optionId: id, value })
+    }) ??
+    finish(ctx, {
+      modelId: id === 'model' && typeof value === 'string' ? value : previousModelId,
+      optionId: id,
+      value,
+      skipPersist: liveFlipOnly
+    })
+  )
 }
 
 async function applyInvokeAction(
@@ -296,7 +311,17 @@ export function createSessionOptionAppliers(ctx: SessionOptionApplyContext): {
 } {
   const serialize = createSerializedApplyQueue()
   return {
-    setOption: (id, value) => serialize(() => applySetOption(ctx, id, value)),
-    invokeAction: (id) => serialize(() => applyInvokeAction(ctx, id))
+    setOption: (id, value) =>
+      serialize(() =>
+        ctx.runOperation
+          ? ctx.runOperation(() => applySetOption(ctx, id, value))
+          : applySetOption(ctx, id, value)
+      ),
+    invokeAction: (id) =>
+      serialize(() =>
+        ctx.runOperation
+          ? ctx.runOperation(() => applyInvokeAction(ctx, id))
+          : applyInvokeAction(ctx, id)
+      )
   }
 }

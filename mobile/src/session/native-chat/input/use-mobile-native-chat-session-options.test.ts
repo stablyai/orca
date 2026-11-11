@@ -1,3 +1,4 @@
+import type { NativeChatSessionOptionBinding } from '../../../../../src/shared/native-chat/input/native-chat-session-option-binding'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -23,12 +24,30 @@ describe('useMobileNativeChatSessionOptions', () => {
   let renderer: ReactTestRenderer | null = null
   let api: MobileNativeChatSessionOptionsController | null = null
   let hookArgs: HookArgs
+  const liveBindings = new Map<string, NativeChatSessionOptionBinding>()
+  let session = 0
   const dispatchCommand = vi.fn<HookArgs['dispatchCommand']>()
   const onAgentPicker = vi.fn()
 
   function Probe(): null {
     api = useMobileNativeChatSessionOptions(hookArgs)
     return null
+  }
+
+  function ownerFor(agent: string | null, scopeKey: string | null): HookArgs['owner'] {
+    if (!agent || !scopeKey) {
+      return undefined
+    }
+    let binding = liveBindings.get(scopeKey)
+    if (!binding || binding.agent !== agent) {
+      binding = {
+        agent,
+        terminalHandle: scopeKey,
+        providerSession: { key: 'session_id', id: String(++session) }
+      }
+      liveBindings.set(scopeKey, binding)
+    }
+    return { binding, readCurrentBinding: () => liveBindings.get(scopeKey) ?? null }
   }
 
   const mount = (overrides: Partial<HookArgs> = {}): void => {
@@ -40,13 +59,20 @@ describe('useMobileNativeChatSessionOptions', () => {
       onAgentPicker,
       ...overrides
     }
+    hookArgs.owner ??= ownerFor(hookArgs.agent, hookArgs.scopeKey)
     act(() => {
       renderer = create(createElement(Probe))
     })
   }
 
   const update = (overrides: Partial<HookArgs>): void => {
-    hookArgs = { ...hookArgs, ...overrides }
+    hookArgs = {
+      ...hookArgs,
+      ...overrides,
+      owner:
+        overrides.owner ??
+        ownerFor(overrides.agent ?? hookArgs.agent, overrides.scopeKey ?? hookArgs.scopeKey)
+    }
     act(() => {
       renderer!.update(createElement(Probe))
     })
@@ -54,6 +80,8 @@ describe('useMobileNativeChatSessionOptions', () => {
 
   beforeEach(() => {
     clearMobileSessionOptionRecordsForTests()
+    liveBindings.clear()
+    session = 0
     dispatchCommand.mockReset()
     dispatchCommand.mockResolvedValue('accepted')
     onAgentPicker.mockReset()
@@ -126,7 +154,7 @@ describe('useMobileNativeChatSessionOptions', () => {
     expect(api!.snapshot[0]!.kind).toMatchObject({ currentValue: 'sonnet' })
   })
 
-  it('drops a write that lands after the tab started another agent', async () => {
+  it('returns the accepted original result without changing its successor', async () => {
     let resolveModel!: (outcome: MobileNativeChatSendOutcome) => void
     dispatchCommand.mockImplementationOnce(
       () =>
@@ -143,7 +171,7 @@ describe('useMobileNativeChatSessionOptions', () => {
     update({ agent: 'codex', reportedModel: 'gpt-5.5' })
     await act(async () => {
       resolveModel('accepted')
-      await expect(picked).resolves.toBe(false)
+      await expect(picked).resolves.toBe(true)
     })
     act(() => renderer!.unmount())
     mount({ agent: 'codex', reportedModel: 'gpt-5.5' })
@@ -192,6 +220,53 @@ describe('useMobileNativeChatSessionOptions', () => {
     const effort = api!.snapshot.find((descriptor) => descriptor.id === 'effort')
     expect(effort?.kind).not.toMatchObject({ currentValue: 'low' })
   })
+
+  it.each(['grok', 'codex'] as const)(
+    'isolates a same-agent %s successor from old pending UI and picker effects',
+    async (agent) => {
+      let accept!: (outcome: MobileNativeChatSendOutcome) => void
+      dispatchCommand.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            accept = resolve
+          })
+      )
+      const writeOriginal = vi.fn()
+      const writeSuccessor = vi.fn()
+      const initialModel = agent === 'grok' ? 'grok-4.7' : 'gpt-5.5'
+      const successorModel = agent === 'grok' ? 'grok-4.7-fast' : 'gpt-5.5-mini'
+      mount({ agent, reportedModel: initialModel, writeSettings: writeOriginal })
+      let accepted!: Promise<boolean>
+      await act(async () => {
+        accepted =
+          agent === 'codex' ? api!.invokeAction('model') : api!.setOption('model', 'grok-4.7-fast')
+        await Promise.resolve()
+      })
+      expect(api!.pendingId).toBe('model')
+      const scope = hookArgs.scopeKey!
+      liveBindings.set(scope, {
+        ...liveBindings.get(scope)!,
+        providerSession: { key: 'session_id', id: 'successor' }
+      })
+      update({ reportedModel: successorModel, writeSettings: writeSuccessor })
+      expect(api!.pendingId).toBeNull()
+      await act(async () => {
+        accept('accepted')
+        expect(await accepted).toBe(true)
+      })
+      expect(api!.snapshot[0].kind).toMatchObject({ currentValue: successorModel })
+      expect(onAgentPicker).not.toHaveBeenCalled()
+      expect(writeSuccessor).not.toHaveBeenCalled()
+      if (agent === 'grok') {
+        expect(writeOriginal).toHaveBeenCalledOnce()
+      } else {
+        await act(async () => {
+          expect(await api!.invokeAction('model')).toBe(true)
+        })
+        expect(onAgentPicker).toHaveBeenCalledOnce()
+      }
+    }
+  )
 
   it('does not revive a stale session-start report over a newer local pick', async () => {
     mount({ reportedModel: 'claude-sonnet-5' })

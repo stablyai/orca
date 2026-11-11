@@ -1,3 +1,4 @@
+import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   normalizeCompatibleAgentStatusEntryForOwner,
   normalizeCompatibleAgentTitleForOwner
@@ -184,6 +185,15 @@ export function buildRuntimeMobileAgentStatus(
     const liveStatus = normalizeCompatibleAgentStatusEntryForOwner(
       {
         ...liveRow.payload,
+        model:
+          providerSession.providerSession &&
+          !agentProviderSessionsEqual(
+            ownerAgent ?? liveRow.payload.agentType,
+            liveRow.providerSession,
+            providerSession.providerSession
+          )
+            ? undefined
+            : liveRow.payload.model,
         paneKey,
         updatedAt: liveRow.updatedAt,
         ...(liveRow.evidenceObservedAt !== undefined
