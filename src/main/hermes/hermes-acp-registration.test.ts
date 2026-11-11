@@ -34,7 +34,9 @@ describe('Hermes ACP registration', () => {
     expect(registration?.launchCheck).toBeUndefined()
     const spec = acpLaunchSpecFor('hermes')
     expect(spec?.args({ fullAccess: false, pluginDir: '/plugin' })).toEqual(['acp'])
-    expect(spec?.args({ fullAccess: true, pluginDir: '/plugin' })).toEqual(['--yolo', 'acp'])
+    // Hermes freezes --yolo into the session it creates, so a chat switched back to asking would
+    // keep skipping approvals; Orca answers full-access requests itself instead.
+    expect(spec?.args({ fullAccess: true, pluginDir: '/plugin' })).toEqual(['acp'])
     expect(spec?.historyCatchUp).toBeUndefined()
     expect(spec?.permissionModeConfig).toBeUndefined()
     expect(spec?.transcriptImport).toBeNull()

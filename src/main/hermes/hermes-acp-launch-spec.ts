@@ -4,11 +4,12 @@ import { agentSessionSignInFor } from '../../shared/agent-session/lifecycle/agen
 import { hermesAcpAccountBinding } from './hermes-acp-account'
 import { HERMES_SESSION_HISTORY } from './hermes-session-history'
 
-// `hermes acp --yolo` is rejected; the parent CLI consumes `--yolo` before `acp`.
 export const HERMES_LAUNCH_SPEC: AcpLaunchSpec = {
   agent: 'hermes',
   command: 'hermes',
-  args: ({ fullAccess }) => (fullAccess ? ['--yolo', 'acp'] : ['acp']),
+  // No --yolo: Hermes freezes it into the session it creates, so a chat switched back to asking
+  // would keep skipping approvals. Full access approves each request in Orca instead.
+  args: () => ['acp'],
   env: {},
   dialect: HERMES_ACP_DIALECT,
   loginCommand: agentSessionSignInFor('hermes')?.loginCommand ?? [],

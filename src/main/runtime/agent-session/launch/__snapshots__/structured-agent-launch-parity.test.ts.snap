@@ -2302,7 +2302,6 @@ exports[`native-chat launch parity > hermes worktree fresh configured 1`] = `
 {
   "child": {
     "args": [
-      "--yolo",
       "acp",
     ],
     "command": "<root>/custom-bin/hermes-custom",
@@ -2503,7 +2502,6 @@ exports[`native-chat launch parity > hermes worktree resumed configured 1`] = `
 {
   "child": {
     "args": [
-      "--yolo",
       "acp",
     ],
     "command": "<root>/custom-bin/hermes-custom",
