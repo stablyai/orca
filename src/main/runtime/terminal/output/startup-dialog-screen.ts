@@ -10,7 +10,7 @@ import { findTerminalWaitBlockedSignal } from '../../agent-state-rules/blocked-t
 
 // A live dialog ends on its key footer; quoted dialog text in a reply does not.
 const TRUST_DIALOG_FOOTER_RE =
-  /^(?:enter to confirm \u00b7 esc to cancel|enter(?:\/esc)? (?:continue|confirm) \u00b7 (?:esc (?:quit|skip)|ctrl\+c quit))$/
+  /^(?:enter to confirm \u00b7 esc to cancel|space to select \u00b7 esc to reject all|enter(?:\/esc)? (?:continue|confirm) \u00b7 (?:esc (?:quit|skip)|ctrl\+c quit))$/
 const TRUST_REASONS: ReadonlySet<RuntimeTerminalWaitBlockedReason> = new Set([
   'agent-trust-workspace',
   'codex-trust-workspace'
@@ -31,6 +31,11 @@ const CLAUDE_MENU_CHOICE_COUNTS: readonly (readonly [RegExp, number])[] = [
   [/running in bypass permissions mode/, 2],
   [/allow external claude\.md file imports/, 2]
 ]
+// Claude's multi-select for several new .mcp.json servers (2.1.322): ticked rows, then the submit row.
+const CLAUDE_MCP_SERVERS_HEADING_RE = /^(\d+) new mcp servers found/
+const INK_CHECKBOX_ROW_RE = /^ {2}([\u276f ]) \[([\u2714 ])\] (\S.*?)\s*$/
+const INK_SUBMIT_ROW_RE = /^ {2}([\u276f ]) {4}(\S.*?)\s*$/
+const ESCAPE = '\x1b'
 const DIALOG_RULE_RE = /^\u2500+$/
 const TRUST_DIALOG_CHOICE_RE =
   /^(?:[\u276f\u203a]\s*)?(?:\d+\.\s*)?(?:yes, i trust this folder|trust and continue)$/
@@ -92,10 +97,39 @@ function inkMenuChoices(choiceRows: string[], heading: string): NativeChatStartu
   ) {
     return []
   }
-  return matches.map((match, index) => {
-    const arrow = index > cursor ? '\x1b[B' : '\x1b[A'
-    return { label: match![2], send: `${arrow.repeat(Math.abs(index - cursor))}\r` }
-  })
+  return matches.map((match, index) => ({ label: match![2], send: menuKeys(cursor, index) }))
+}
+
+/** Arrow keys from the highlighted row to the target row, then Return. */
+function menuKeys(cursor: number, target: number): string {
+  const arrow = target > cursor ? '\x1b[B' : '\x1b[A'
+  return `${arrow.repeat(Math.abs(target - cursor))}\r`
+}
+
+/** Claude's server multi-select: its submit row enables the ticked servers, and Esc (the footer's action) rejects all. */
+function inkMultiSelectMenu(
+  choiceRows: string[],
+  heading: string
+): { servers: string[]; choices: NativeChatStartupMenuChoice[] } | null {
+  const count = Number(CLAUDE_MCP_SERVERS_HEADING_RE.exec(heading.toLowerCase())?.[1])
+  const servers = choiceRows.slice(0, -1).map((row) => INK_CHECKBOX_ROW_RE.exec(row))
+  const submit = INK_SUBMIT_ROW_RE.exec(choiceRows.at(-1) ?? '')
+  // A wrapped server name adds a row that reads as neither, so the menu is not aimable.
+  if (servers.length !== count || !submit || servers.some((match) => !match)) {
+    return null
+  }
+  const cursors = [...servers.map((match) => match![1]), submit[1]]
+  const cursor = cursors.indexOf('\u276f')
+  if (cursor === -1 || cursors.lastIndexOf('\u276f') !== cursor) {
+    return null
+  }
+  return {
+    servers: servers.map((match) => `[${match![2]}] ${match![3]}`),
+    choices: [
+      { label: submit[2], send: menuKeys(cursor, servers.length) },
+      { label: 'Reject all', send: ESCAPE }
+    ]
+  }
 }
 
 /** Rows joined into paragraphs: wrapped rows rejoin with a space, blank rows separate paragraphs. */
@@ -157,10 +191,16 @@ export function startupDialogPrompt(
     return { prompt: buildNativeChatStartupMenuPrompt({ choices: [] }), aimed: true }
   }
   const menu = inkMenu(rows)
-  const choices = menu ? inkMenuChoices(menu.choiceRows, menu.heading) : []
+  const multiSelect = menu ? inkMultiSelectMenu(menu.choiceRows, menu.heading) : null
+  const choices =
+    multiSelect?.choices ?? (menu ? inkMenuChoices(menu.choiceRows, menu.heading) : [])
+  // The ticked rows are what "Enable selected" enables, so the card shows them with its warning.
+  const description = multiSelect
+    ? `${menu!.description}\n\n${multiSelect.servers.join('\n')}`
+    : menu?.description
   return {
     prompt: buildNativeChatStartupMenuPrompt({
-      ...(menu ? { description: menu.description } : {}),
+      ...(description ? { description } : {}),
       choices
     }),
     aimed: choices.length > 0
@@ -176,6 +216,5 @@ function trustChoiceKeys(lines: string[]): string | null {
   if (cursor === -1 || trust === -1 || Math.abs(trust - cursor) > 1) {
     return null
   }
-  const arrow = trust > cursor ? '\x1b[B' : '\x1b[A'
-  return `${arrow.repeat(Math.abs(trust - cursor))}\r`
+  return menuKeys(cursor, trust)
 }

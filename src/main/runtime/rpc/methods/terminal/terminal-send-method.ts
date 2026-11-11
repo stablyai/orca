@@ -174,16 +174,28 @@ export const TERMINAL_SEND_METHODS = [
             return refusedSend(params.terminal, refusedReason)
           }
         }
+        const { requireStartupDialog } = params
+        // Checked right before the bytes go out: the card's keys are aimed from the screen it was read off.
+        const assertStartupDialogCurrent =
+          requireStartupDialog !== undefined
+            ? (ptyId?: string): void => {
+                if (!ptyId || !runtime.isStartupDialogCardCurrent(ptyId, requireStartupDialog)) {
+                  throw new Error('terminal_guard_not_writable')
+                }
+              }
+            : undefined
         const mobileFloorClientId = resolveMobileFloorClientId(driver, params.client)
         const mobileFloorClaim: MobileInputFloorClaimHolder = { current: null }
         const beforeWrite =
           assertSequenceBinding ||
           assertSendPreconditions ||
+          assertStartupDialogCurrent ||
           (orchestrationMutation && params.agentPrompt === true)
             ? async (ptyId?: string): Promise<void> => {
                 assertSequenceBinding?.(ptyId)
                 await assertSendPreconditions?.(ptyId)
                 assertSequenceBinding?.(ptyId)
+                assertStartupDialogCurrent?.(ptyId)
                 if (orchestrationMutation && params.agentPrompt === true) {
                   markMutationEffectPossible?.()
                 }

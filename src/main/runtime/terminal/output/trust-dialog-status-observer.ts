@@ -6,7 +6,7 @@ import type { LaunchedAgentForeground } from '../wait/launched-agent-foreground'
 import { startupDialogPrompt, startupDialogReason } from './startup-dialog-screen'
 
 // Cell-diff painters (Claude's Ink) replace spaces with cursor moves, so match one key-row word, not the phrase.
-const TRUST_KEYWORD_RE = /trust|confirm|continue|skip/i
+const TRUST_KEYWORD_RE = /trust|confirm|continue|skip|reject/i
 const TRUST_KEYWORD_CARRY_CHARS = 'continue'.length - 1
 const TRUST_DIALOG_PAINT_BYTES = 4096
 /** Screen reads while our row is up are throttled to this; a working agent's output cannot hold the row. */
@@ -94,6 +94,16 @@ export class TrustDialogStatusObserver {
       }
     }
     void this.deps.refreshForegroundAgent(ptyId).then(resolved, resolved)
+  }
+
+  /** Whether our card's dialog still reads as `prompt` on screen; its keys are aimed from that screen's highlight. */
+  showsPrompt(ptyId: string, prompt: string): boolean {
+    const agent = this.panes.get(ptyId)?.owned?.agent
+    const emulator = this.deps.getEmulator(ptyId)
+    if (!agent || !emulator || emulator.isSynchronizedOutput) {
+      return false
+    }
+    return startupDialogPrompt(emulator, agent)?.prompt === prompt
   }
 
   forget(ptyId: string): void {
