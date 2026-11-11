@@ -23,6 +23,7 @@ import type {
 import type { HostedWorkspaceStatus } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 import { WAKE_FAILED_STALE_MS, WAKE_STALE_MS } from './orca-cloud-workspace-state'
 import { isSilentPredictiveWake, predictiveWakeStartedAt } from './cloud-predictive-wake'
+import { wakeAfterSleepStartedAt } from '@/lib/worktree-sleep-wake-request'
 
 export type CloudStatusEntry = {
   status: HostedWorkspaceStatus | null
@@ -258,7 +259,10 @@ export function noteCloudWakeProgress(reported: CloudWakeProgressEvent): void {
   // A wake started on intent counts from the intent, not from the resume after its server checks.
   const event = {
     ...reported,
-    startedAt: predictiveWakeStartedAt(reported.workspaceId, reported.startedAt)
+    startedAt: wakeAfterSleepStartedAt(
+      reported.workspaceId,
+      predictiveWakeStartedAt(reported.workspaceId, reported.startedAt)
+    )
   }
   // A wake started on intent that nobody opened yet fails quietly (seat cap, plan): no card, no
   // failed dot; the workspace just stays asleep until it is opened.

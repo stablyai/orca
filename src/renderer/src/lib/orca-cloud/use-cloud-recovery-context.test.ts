@@ -6,6 +6,10 @@ import { useAppStore } from '@/store'
 import type { HostedWorkspaceStatus } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 import { seedCloudWorkspaceSnapshot } from './orca-cloud-workspace-store'
 import { useCloudRecoveryContext } from './use-cloud-recovery-context'
+import {
+  requestWakeAfterSleep,
+  resetWakeAfterSleepForTests
+} from '@/lib/worktree-sleep-wake-request'
 
 const T0 = 1_800_000_000_000
 
@@ -32,6 +36,7 @@ afterEach(() => {
   cleanup()
   seedCloudWorkspaceSnapshot({})
   useAppStore.setState({ ephemeralVmRuntimesByWorkspaceId: {} })
+  resetWakeAfterSleepForTests()
 })
 
 describe('terminal recovery for an asleep Orca Cloud workspace (RA-12)', () => {
@@ -52,6 +57,14 @@ describe('terminal recovery for an asleep Orca Cloud workspace (RA-12)', () => {
     })
     const { result } = renderHook(() => useCloudRecoveryContext('ws'))
     expect(result.current?.asleep).toBe(true)
+  })
+
+  it('Wake pressed while the VM is still suspending reads as waking: no "Reconnecting…" as it drops', () => {
+    act(() => seed('ready'))
+    const { result } = renderHook(() => useCloudRecoveryContext('ws'))
+    expect(result.current?.waking).toBe(false)
+    act(() => requestWakeAfterSleep('ws', T0))
+    expect(result.current).toMatchObject({ waking: true, asleep: false })
   })
 
   it('a running workspace whose connection dropped still reconnects', () => {

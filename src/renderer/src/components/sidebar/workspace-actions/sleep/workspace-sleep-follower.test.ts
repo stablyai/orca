@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => {
     shutdownWorktreeTerminals: vi.fn<AppState['shutdownWorktreeTerminals']>(),
     notePredictiveWakeSlept: vi.fn(),
     activateWorktreeFromSidebar: vi.fn(async () => ({ ok: true })),
+    endWorkspaceWake: vi.fn(),
     cloudIds: new Set<string>()
   }
 })
@@ -57,6 +58,10 @@ vi.mock('./sleep-worktree-flow', () => ({ toastWorkspaceSleepOutcome: vi.fn() })
 vi.mock('@/lib/workspace/activation/sidebar-worktree-activation', () => ({
   activateWorktreeFromSidebar: mocks.activateWorktreeFromSidebar
 }))
+vi.mock('@/components/terminal-pane/input/wake-input-buffer', () => ({
+  beginWorkspaceWake: vi.fn(),
+  endWorkspaceWake: mocks.endWorkspaceWake
+}))
 vi.mock('./browser-tab-sleep', () => ({
   sleepWorktreeBrowserTabs: vi.fn(),
   wakeWorktreeBrowserTabs: vi.fn()
@@ -64,6 +69,11 @@ vi.mock('./browser-tab-sleep', () => ({
 
 import { followWorkspaceSleep, keepWorkspaceAwakeDuringSleep } from './workspace-sleep-follower'
 import { forgetWorktreeSleepIntent, hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import {
+  hasWakeAfterSleepRequest,
+  requestWakeAfterSleep,
+  resetWakeAfterSleepForTests
+} from '@/lib/worktree-sleep-wake-request'
 import {
   holdWorktreeSleepView,
   isWorktreeGoingToSleep,
@@ -119,6 +129,7 @@ describe('sleeping the workspace on screen', () => {
 
   afterEach(() => {
     resetWorktreeSleepViewForTests()
+    resetWakeAfterSleepForTests()
     forgetWorktreeSleepIntent(CLOUD)
     forgetWorktreeSleepIntent('local-wt')
     vi.unstubAllGlobals()
@@ -249,5 +260,53 @@ describe('sleeping the workspace on screen', () => {
     expect(sleepReopened).not.toHaveBeenCalled()
     await ended(true)
     expect(isWorktreeSuspendCommitted(CLOUD)).toBe(false)
+  })
+
+  describe('Wake to continue while main suspends the VM', () => {
+    const PRESS = 1_800_000_000_000
+    const pressWake = (): void => {
+      started()
+      followWorkspaceSleep({ worktreeId: CLOUD, phase: 'suspending' })
+      // What activation does for a press past the commit (see worktree-sleep-wake-request).
+      requestWakeAfterSleep(CLOUD, PRESS)
+    }
+
+    it('waits for the sleep, then wakes it the ordinary way, kept on screen meanwhile', async () => {
+      pressWake()
+      await flush()
+      // Not a reopen (too late for main) and no wake yet: the VM is still going down.
+      expect(sleepReopened).not.toHaveBeenCalled()
+      expect(mocks.activateWorktreeFromSidebar).not.toHaveBeenCalled()
+      expect(isWorktreeSleepViewHeld(CLOUD)).toBe(true)
+      await ended(true)
+      expect(mocks.activateWorktreeFromSidebar).toHaveBeenCalledTimes(1)
+      expect(mocks.activateWorktreeFromSidebar).toHaveBeenCalledWith(CLOUD)
+      // Asleep until that wake runs: the panes don't reconnect on their own.
+      expect(hasWorktreeSleepIntent(CLOUD)).toBe(true)
+      expect(mocks.setActiveWorktree).not.toHaveBeenCalled()
+      await flush()
+      expect(hasWakeAfterSleepRequest(CLOUD)).toBe(false)
+      expect(sleepReopened).not.toHaveBeenCalled()
+    })
+
+    it('a failed sleep leaves it awake: no wake, and held typing goes through', async () => {
+      pressWake()
+      await ended(false)
+      expect(mocks.activateWorktreeFromSidebar).not.toHaveBeenCalled()
+      expect(mocks.endWorkspaceWake).toHaveBeenCalledWith(CLOUD, 'ready')
+      expect(hasWakeAfterSleepRequest(CLOUD)).toBe(false)
+      expect(hasWorktreeSleepIntent(CLOUD)).toBe(false)
+      expect(mocks.setActiveWorktree).toHaveBeenCalledWith(CLOUD)
+    })
+
+    it('one the user left before the sleep ended is not woken behind their back', async () => {
+      pressWake()
+      select('local-wt')
+      await ended(true)
+      expect(mocks.activateWorktreeFromSidebar).not.toHaveBeenCalled()
+      expect(mocks.endWorkspaceWake).toHaveBeenCalledWith(CLOUD, 'failed')
+      expect(hasWakeAfterSleepRequest(CLOUD)).toBe(false)
+      expect(mocks.selection.activeWorktreeId).toBe('local-wt')
+    })
   })
 })

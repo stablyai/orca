@@ -23,6 +23,12 @@ import {
   subscribeWorktreeSleepView
 } from '@/lib/worktree-sleep-view'
 import { notePredictiveWakeSlept } from '@/lib/orca-cloud/cloud-predictive-wake'
+import {
+  clearWakeAfterSleepRequest,
+  hasWakeAfterSleepRequest,
+  noteWakeAfterSleepSleepEnded
+} from '@/lib/worktree-sleep-wake-request'
+import { endWorkspaceWake } from '@/components/terminal-pane/input/wake-input-buffer'
 import { activateWorktreeFromSidebar } from '@/lib/workspace/activation/sidebar-worktree-activation'
 import type { HostTerminalStop } from '@/store/terminals/terminal-actions'
 import type { WorkspaceSleepNotice } from '../../../../../../shared/workspace-sleep'
@@ -84,6 +90,22 @@ function watchReopenDuringSleep(worktreeId: string): () => void {
     offView()
   }
   return stop
+}
+
+/**
+ * The sleep a "Wake to continue" waited on ended. Still on screen and slept: wake it the ordinary
+ * way (its reports take over the waking view, counted from the press). A failed sleep left it
+ * awake (held typing goes through); one the user left meanwhile is not woken behind their back.
+ */
+function finishWakeAfterSleep(worktreeId: string, slept: boolean, stillShown: boolean): void {
+  if (slept && stillShown) {
+    void activateWorktreeFromSidebar(worktreeId).finally(() =>
+      clearWakeAfterSleepRequest(worktreeId)
+    )
+    return
+  }
+  clearWakeAfterSleepRequest(worktreeId)
+  endWorkspaceWake(worktreeId, slept ? 'failed' : 'ready')
 }
 
 /** On main’s started notice, guard panes before exits; on ended, commit teardown or restore failed sleeps. */
@@ -163,6 +185,11 @@ export function followWorkspaceSleep(
   followed.delete(worktreeId)
   entry?.stopWatchingReopen()
   const keptAwake = isWorktreeKeptAwake(worktreeId)
+  // "Wake to continue" pressed while main was suspending: the wake starts now the VM is down.
+  const wakeRequested = hasWakeAfterSleepRequest(worktreeId)
+  if (wakeRequested) {
+    noteWakeAfterSleepSleepEnded(worktreeId, Date.now())
+  }
   clearWorktreeKeptAwake(worktreeId)
   clearWorktreeSuspendCommitted(worktreeId)
   clearWorktreeGoingToSleep(worktreeId)
@@ -186,7 +213,12 @@ export function followWorkspaceSleep(
     }
     // Put the awake workspace back after a failed sleep, or one kept awake from the view:
     // re-activating it in place respawns its stopped panes. One the user left is not pulled back.
-    if (keptAwake && notice.slept && state.activeWorktreeId === worktreeId) {
+    if (wakeRequested) {
+      finishWakeAfterSleep(worktreeId, notice.slept, state.activeWorktreeId === worktreeId)
+    }
+    if (wakeRequested && notice.slept) {
+      // Woken above (or, left meanwhile, not pulled back); nothing to restore.
+    } else if (keptAwake && notice.slept && state.activeWorktreeId === worktreeId) {
       // Keep awake can land after main already began suspending (it checks just before): open it
       // the ordinary way, which re-activates it and wakes the sandbox only if it did go to sleep.
       void activateWorktreeFromSidebar(worktreeId)
