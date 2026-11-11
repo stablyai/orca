@@ -8,6 +8,11 @@ import '../orchestration/db/dispatch-row-writer'
 import '../orchestration/db/attempt-outcome-projection'
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
 import type { RpcResponse } from './core'
+
+const REJECTED = {
+  ok: true,
+  result: { lifecycle: { action: 'rejected', code: 'worker_identity_changed' } }
+}
 import { RpcDispatcher } from './dispatcher'
 import { ORCHESTRATION_METHODS } from './methods/orchestration/orchestration'
 
@@ -83,10 +88,6 @@ async function startRestartingOrca() {
   return { db, runtime, task, dispatch, workerDone, restore }
 }
 
-function lifecycleOf(response: RpcResponse): unknown {
-  return response.ok ? (response.result as { lifecycle?: unknown }).lifecycle : response
-}
-
 describe('a worker report during an Orca restart', () => {
   let db: OrchestrationDb | undefined
   afterEach(() => {
@@ -100,11 +101,13 @@ describe('a worker report during an Orca restart', () => {
     db = orca.db
     const pending = orca.workerDone()
     await orca.restore({ paneKey: WORKER_PANE, process: WORKER_PROCESS })
-    const response = await pending
 
-    expect(response.ok).toBe(true)
-    const { message } = (response as { result: { message: { id: string } } }).result
-    expect(orca.db.getMessageById(message.id)?.sender_pane_key).toBe(WORKER_PANE)
+    expect(await pending).toMatchObject({ ok: true, result: { message: { type: 'worker_done' } } })
+    expect(
+      orca.db.db
+        .prepare(`SELECT subject, sender_pane_key FROM messages WHERE type = 'worker_done'`)
+        .all()
+    ).toEqual([{ subject: 'Done', sender_pane_key: WORKER_PANE }])
     expect(orca.db.getWorkerDispatch(orca.dispatch.id)?.state).not.toBe('dispatched')
   })
 
@@ -114,10 +117,7 @@ describe('a worker report during an Orca restart', () => {
     const pending = orca.workerDone()
     await orca.restore({ paneKey: WORKER_PANE, process: 'pty_worker:incarnation_2' })
 
-    expect(lifecycleOf(await pending)).toMatchObject({
-      action: 'rejected',
-      code: 'worker_identity_changed'
-    })
+    expect(await pending).toMatchObject(REJECTED)
   })
 
   it('is still rejected when the terminal was handed to another dispatch', async () => {
@@ -136,10 +136,7 @@ describe('a worker report during an Orca restart', () => {
     const pending = orca.workerDone()
     await orca.restore({ paneKey: WORKER_PANE, process: 'pty_worker:incarnation_2' })
 
-    expect(lifecycleOf(await pending)).toMatchObject({
-      action: 'rejected',
-      code: 'worker_identity_changed'
-    })
+    expect(await pending).toMatchObject(REJECTED)
     expect(orca.db.getDispatchContextById(newer.id)?.status).toBe('dispatched')
   })
 
@@ -150,9 +147,6 @@ describe('a worker report during an Orca restart', () => {
     const pending = orca.workerDone()
     await vi.advanceTimersByTimeAsync(30_000)
 
-    expect(lifecycleOf(await pending)).toMatchObject({
-      action: 'rejected',
-      code: 'worker_identity_changed'
-    })
+    expect(await pending).toMatchObject(REJECTED)
   })
 })
