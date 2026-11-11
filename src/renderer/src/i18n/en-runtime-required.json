@@ -126,10 +126,13 @@
           "threadListOptionsActiveFilters_other": "Thread list options ({{count}} filters active)"
         },
         "ActivityThreadContextMenu": {
+          "clearMany": "Clear {{count}} Agents from List",
           "clearMany_one": "Clear {{count}} Agent from List",
           "clearMany_other": "Clear {{count}} Agents from List",
+          "markManyRead": "Mark {{count}} Agents Read",
           "markManyRead_one": "Mark {{count}} Agent Read",
           "markManyRead_other": "Mark {{count}} Agents Read",
+          "markManyUnread": "Mark {{count}} Agents Unread",
           "markManyUnread_one": "Mark {{count}} Agent Unread",
           "markManyUnread_other": "Mark {{count}} Agents Unread"
         },
@@ -247,6 +250,7 @@
           "moreNotesInSourceControl_other": "{{count}} more notes in Source Control",
           "showAiNotes_one": "Show {{count}} AI note",
           "showAiNotes_other": "Show {{count}} AI notes",
+          "skippedConflictsExcluded": "{{count}} unresolved conflicts were excluded from this diff view.",
           "skippedConflictsExcluded_one": "{{count}} unresolved conflict was excluded from this diff view.",
           "skippedConflictsExcluded_other": "{{count}} unresolved conflicts were excluded from this diff view."
         },
@@ -346,6 +350,7 @@
       },
       "onboarding": {
         "AgentStep": {
+          "showMoreAgents": "Show {{value0}} more agents →",
           "showMoreAgents_one": "Show {{count}} more agent →",
           "showMoreAgents_other": "Show {{count}} more agents →"
         }
@@ -511,6 +516,10 @@
                     "body": "This repository's execution host is disconnected, so Orca cannot refresh {{reviewLabel}} status.",
                     "title": "Host disconnected"
                   },
+                  "host_off": {
+                    "body": "Orca refreshes {{reviewLabel}} status through this project’s WSL host, which is off. Reconnect it to refresh.",
+                    "title": "WSL host is off"
+                  },
                   "not_git": {
                     "body": "Orca could not treat this folder as a Git repository for {{reviewLabel}} status.",
                     "title": "Not a Git repository"
@@ -620,6 +629,10 @@
           "worktreeCountLabel_one": "{{count}} worktree",
           "worktreeCountLabel_other": "{{count}} worktrees"
         },
+        "FolderWorkspaceSourceControl": {
+          "changeCount_one": "{{count}} change",
+          "changeCount_other": "{{count}} changes"
+        },
         "FolderWorkspaceWorktreesPanel": {
           "attachedCount_one": "{{count}} attached worktree",
           "attachedCount_other": "{{count}} attached worktrees"
@@ -702,8 +715,10 @@
           "syncedServerSingular": "Synced {{count}} server"
         },
         "WarpThemeImportModal": {
+          "found_theme": "Found {{value0}} themes",
           "found_theme_one": "Found {{value0}} theme",
           "found_theme_other": "Found {{value0}} themes",
+          "import_theme": "Import {{value0}} Themes",
           "import_theme_one": "Import {{value0}} Theme",
           "import_theme_other": "Import {{value0}} Themes"
         },
@@ -784,11 +799,18 @@
           "permissionsRequired_one": "{{value0}} permission required before agents can operate app windows.",
           "permissionsRequired_other": "{{value0}} permissions required before agents can operate app windows."
         },
+        "repository": {
+          "search": {
+            "keepForkUpToDate": "Keep Fork Up to Date"
+          }
+        },
         "sshHostServer": {
           "automationsLeftDisabled_one": "This host’s Orca server took over {{count}} automation but couldn’t turn it back on. Turn it on in Automations.",
           "automationsLeftDisabled_other": "This host’s Orca server took over {{count}} automations but couldn’t turn them back on. Turn them on in Automations.",
+          "linkedProjects": "This host’s Orca server already had {{paths}}, so this desktop now uses the server’s copy. This desktop’s tabs and {{count}} automations there were not moved, and worktrees it created there show as external worktrees.",
           "linkedProjects_one": "This host’s Orca server already had {{paths}}, so this desktop now uses the server’s copy. This desktop’s tabs and {{count}} automation there were not moved, and worktrees it created there show as external worktrees.",
           "linkedProjects_other": "This host’s Orca server already had {{paths}}, so this desktop now uses the server’s copy. This desktop’s tabs and {{count}} automations there were not moved, and worktrees it created there show as external worktrees.",
+          "olderTerminals": "{{count}} terminals started by an older version of Orca are still running on this host, and they don’t stop on their own. Close them in that version of Orca or end them on the host, then reconnect.",
           "olderTerminals_one": "{{count}} terminal started by an older version of Orca is still running on this host, and it doesn’t stop on its own. Close it in that version of Orca or end it on the host, then reconnect.",
           "olderTerminals_other": "{{count}} terminals started by an older version of Orca are still running on this host, and they don’t stop on their own. Close them in that version of Orca or end them on the host, then reconnect."
         },
@@ -829,6 +851,7 @@
       },
       "sidebar": {
         "AddRemoteHostDialog": {
+          "sshImportSynced": "Added {{value0}} host{{value1}} to Orca.",
           "sshImportSynced_one": "Added {{count}} host to Orca.",
           "sshImportSynced_other": "Added {{count}} hosts to Orca."
         },
@@ -853,6 +876,7 @@
         "DeleteWorktreeDirtyChangeHint": {
           "changesLost_one": "{{count}} uncommitted change will be lost",
           "changesLost_other": "{{count}} uncommitted changes will be lost",
+          "moreLoadedPaths": "and {{value0}} more loaded paths",
           "moreLoadedPaths_one": "and {{count}} more loaded path",
           "moreLoadedPaths_other": "and {{count}} more loaded paths"
         },
@@ -891,6 +915,7 @@
           "reviewHiddenWorktrees_other": "Review {{count}} hidden worktrees in {{scope}}"
         },
         "PreservedBranchBatchReviewDialog": {
+          "a0f9863597": "Force Delete {{count}} Branches",
           "a0f9863597_one": "Force Delete {{count}} Branch",
           "a0f9863597_other": "Force Delete {{count}} Branches"
         },
@@ -962,14 +987,19 @@
           "branch": {
             "batch": {
               "toast": {
+                "0e0379f24a": "{{count}} branches kept",
                 "0e0379f24a_one": "{{count}} branch kept",
                 "0e0379f24a_other": "{{count}} branches kept",
+                "6310412304": "Review {{count}} Branches",
                 "6310412304_one": "Review {{count}} Branch",
                 "6310412304_other": "Review {{count}} Branches",
+                "a3cdd9d9e6": "Git kept {{count}} local branches because they may contain unmerged commits. Kept branches do not retain workspace folders; their commits remain in the repository. Orca may continue freeing workspace disk space in the background.",
                 "a3cdd9d9e6_one": "Git kept {{count}} local branch because it may contain unmerged commits. Kept branches do not retain workspace folders; their commits remain in the repository. Orca may continue freeing workspace disk space in the background.",
                 "a3cdd9d9e6_other": "Git kept {{count}} local branches because they may contain unmerged commits. Kept branches do not retain workspace folders; their commits remain in the repository. Orca may continue freeing workspace disk space in the background.",
+                "cea24c2b7d": "{{count}} workspaces removed",
                 "cea24c2b7d_one": "{{count}} workspace removed",
                 "cea24c2b7d_other": "{{count}} workspaces removed",
+                "d42f1f14e0": "Retry {{count}} Branches",
                 "d42f1f14e0_one": "Retry {{count}} Branch",
                 "d42f1f14e0_other": "Retry {{count}} Branches"
               }
@@ -1134,6 +1164,7 @@
             "moreSshHosts_other": "Find among {{count}} more SSH hosts…"
           },
           "StatusBar": {
+            "codexSignInError": "Codex sign-in failed. Please try again.",
             "rateLimitResetsAvailable_one": "{{count}} rate-limit reset available",
             "rateLimitResetsAvailable_other": "{{count}} rate-limit resets available",
             "staleCodexSessions_one": "{{count}} Codex session is still on the old account.",
@@ -1191,6 +1222,7 @@
         "project": {
           "source": {
             "combobox": {
+              "hostCount": "{{value0}} hosts",
               "hostCount_one": "{{count}} host",
               "hostCount_other": "{{count}} hosts"
             }
@@ -1235,15 +1267,43 @@
     },
     "hooks": {
       "useComposerState": {
+        "dropPartiallyAttached": "{{failureCount}} of {{count}} items could not be attached.",
         "dropPartiallyAttached_one": "{{failureCount}} of {{count}} item could not be attached.",
         "dropPartiallyAttached_other": "{{failureCount}} of {{count}} items could not be attached."
       },
       "useGlobalFileDrop": {
+        "nativeDropTempCopyFailed": "Orca couldn't copy {{count}} dropped files.",
         "nativeDropTempCopyFailed_one": "Orca couldn't copy {{count}} dropped file.",
         "nativeDropTempCopyFailed_other": "Orca couldn't copy {{count}} dropped files."
       }
     },
     "lib": {
+      "cli": {
+        "detail": {
+          "devLauncherOnly": "Development mode uses a generated launcher for validation only.",
+          "differentLauncher": "{{path}} points to a different launcher.",
+          "launcherMissing": "The bundled CLI launcher is missing from this Orca build.",
+          "noWslDistro": "No WSL distribution is available.",
+          "notOrcaLauncherScript": "{{path}} exists but is not an Orca launcher script.",
+          "notOrcaSymlink": "{{path}} exists but is not an Orca symlink.",
+          "olderLauncher": "{{path}} contains an older Orca launcher.",
+          "platformUnsupported": "CLI registration is not implemented on this platform.",
+          "readlinkPermissionDenied": "Orca does not have permission to inspect {{path}}. Check the path and its parent directory permissions, then try again.",
+          "registeredAt": "Registered at {{path}}.",
+          "registeredInDistroAt": "Registered in {{distro}} at {{path}}.",
+          "registrationUnavailable": "CLI registration is unavailable on this build.",
+          "unreadableSymlink": "{{path}} cannot be read. Register again to repair it.",
+          "windowsLauncherMissing": "The Windows Orca CLI launcher is missing.",
+          "windowsPathCheckFailed": "The Orca launcher exists, but Orca could not check your Windows user PATH.",
+          "windowsPathTimedOut": "Windows PATH command timed out after {{ms}}ms.",
+          "wslCommandTimedOut": "WSL command timed out after {{ms}}ms.",
+          "wslDistroUnreachable": "Could not reach the WSL distro. Try again.",
+          "wslHomeUnresolved": "Unable to resolve the WSL home directory.",
+          "wslInteropUnavailable": "WSL Windows interop is unavailable; Orca cannot launch the Windows CLI from WSL.",
+          "wslRegistrationUnavailable": "WSL CLI registration is unavailable.",
+          "wslWindowsOnly": "WSL CLI registration is only available on Windows."
+        }
+      },
       "dropFailureReason": {
         "changed": "The file changed while it was uploading. Try again.",
         "disconnected": "The host is disconnected.",
@@ -1256,6 +1316,91 @@
         "permissionDenied": "Permission denied.",
         "symlink": "Symbolic links cannot be attached.",
         "unsupported": "Unsupported file type."
+      },
+      "emulator": {
+        "androidSdkNotFound": "Android SDK not found. Install Android Studio and set ANDROID_HOME.",
+        "xcodeSimulatorToolsUnavailable": "Xcode Simulator tools are unavailable. Install full Xcode, open it once, then select it with `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer`."
+      },
+      "rateLimits": {
+        "errors": {
+          "chatgptAuthRequired": "ChatGPT authentication required to read rate limits",
+          "claudeKeychainUnavailable": "Claude Keychain credentials unavailable",
+          "claudeOauthTokenUnavailable": "Claude OAuth access token unavailable",
+          "claudePlanUsageUnavailable": "Claude plan usage is unavailable for this Claude CLI session.",
+          "claudeRateLimited": "Claude usage is rate limited right now.",
+          "claudeUsageUnavailable": "Claude usage is unavailable right now.",
+          "claudeWaitingCredentialRotate": "Claude usage refresh is waiting for the live Claude terminal to rotate its credentials.",
+          "cliExitedBeforeStatus": "CLI exited before status was available",
+          "cliExitedBeforeUsage": "CLI exited before /usage rendered",
+          "codexCliCannotRun": "Codex CLI found but could not run — Node.js may not be in your PATH",
+          "codexCliNotFound": "Codex CLI not found",
+          "codexHomeUnavailable": "Codex home unavailable",
+          "codexNotSignedIn": "Codex not signed in",
+          "codexRebuildingIndex": "Codex is rebuilding its session index; usage will refresh when recovery finishes",
+          "codexResetFailedHttp": "Codex reset failed: HTTP {{status}}",
+          "codexResetIdempotencyRequired": "Codex reset idempotency key is required",
+          "codexResetUnknownOutcome": "Unknown Codex reset outcome",
+          "codexSignInCheckTimeout": "Timed out while checking Codex sign-in status",
+          "codexSignInStatusUnavailable": "Codex sign-in status is unavailable",
+          "couldNotParseUsageAnyWorkspace": "Could not parse usage data from any available workspace",
+          "couldNotParseUsagePage": "Could not parse usage data from page",
+          "failedToLoadUsage": "Failed to load usage data",
+          "failedToParseCliOutput": "Failed to parse CLI output",
+          "fetchAborted": "Rate-limit fetch aborted",
+          "geminiCredentialsNotFound": "Gemini CLI credentials not found",
+          "geminiOauthDisabled": "Gemini CLI OAuth is disabled in settings",
+          "geminiProjectIdLoadFailed": "Failed to load Gemini project ID (HTTP {{status}})",
+          "geminiProjectIdMissingInResponse": "Gemini project ID not found in API response",
+          "geminiProjectIdNotFound": "Gemini project ID not found",
+          "grokAuthInvalid": "Grok auth file is invalid",
+          "grokAuthUnreadable": "Unable to read Grok auth file",
+          "grokBillingConfigMissing": "Grok billing response did not include config",
+          "grokBillingUsageMissing": "Grok billing response did not include credit usage",
+          "grokNotSignedIn": "Not signed in to Grok — run grok login",
+          "grokSignInExpired": "Grok sign-in expired — run grok on the computer running Orca; sign in if prompted. No chat message is needed.",
+          "grokUsageFailedHttp": "Grok usage request failed (HTTP {{status}})",
+          "grokUsageRequestFailed": "Grok usage request failed",
+          "grokUsageUnauthorizedHttp": "Grok usage request unauthorized (HTTP {{status}})",
+          "kimiCredentialsInvalid": "Kimi credentials file is invalid",
+          "kimiCredentialsMissingToken": "Kimi credentials file is missing an access token",
+          "kimiCredentialsUnreadable": "Unable to read Kimi credentials",
+          "kimiNotSignedIn": "Not signed in to Kimi Code",
+          "kimiQuotaWindowsMissing": "Kimi usage response did not include quota windows",
+          "kimiSessionExpired": "Kimi session expired — run kimi {{where}}, then retry usage.",
+          "kimiUsageFailedHttp": "Kimi usage request failed (HTTP {{status}})",
+          "kimiUsageRequestFailed": "Kimi usage request failed",
+          "kimiUsageUnauthorizedHttp": "Kimi usage request unauthorized (HTTP {{status}})",
+          "minimaxAuthCookieMissing": "MiniMax auth cookie not found — paste a Cookie header with _token",
+          "minimaxCookieDecryptFailed": "MiniMax session cookie could not be decrypted",
+          "minimaxCookieNotConfigured": "MiniMax session cookie not configured",
+          "minimaxInvalidUsageResponse": "Invalid MiniMax usage response",
+          "minimaxModelUsageMissing": "MiniMax usage data for the configured model was not found",
+          "minimaxReturnedError": "MiniMax returned an error",
+          "minimaxSessionExpired": "MiniMax session expired. Replace the MiniMax cookie in Settings.",
+          "minimaxUnknownUsageError": "Unknown MiniMax usage error",
+          "minimaxUsageFetchFailed": "MiniMax usage fetch failed ({{status}})",
+          "noCredentials": "No credentials",
+          "noSubscriptionApiKeyBilling": "No subscription plan — API key billing",
+          "opencodeNoAuthCookie": "No auth cookie found — paste the full Cookie header from opencode.ai DevTools",
+          "opencodeNoWorkspaceId": "No workspace ID found — set a Workspace ID override in settings",
+          "opencodeNoWorkspaceIdShort": "No workspace ID found",
+          "ptyTimeout": "PTY timeout",
+          "ptyUsageTimeout": "PTY timeout — /usage panel did not render",
+          "quotaFetchFailed": "Quota fetch failed ({{status}})",
+          "rpcFailed": "RPC failed",
+          "rpcProcessExited": "RPC process exited unexpectedly",
+          "rpcTimeout": "RPC timeout",
+          "sessionCookieNotConfigured": "Session cookie not configured",
+          "signInWithChatgpt": "Sign in with ChatGPT",
+          "tokenRefreshFailed": "Token refresh failed",
+          "unknown": "Unknown error",
+          "usagePageFetchFailed": "Usage page fetch failed ({{status}})",
+          "waitingForClaudeSession": "Waiting for Claude session",
+          "workspacesFetchFailed": "Workspaces fetch failed ({{status}})",
+          "wslClaudeConfigUnavailable": "WSL Claude config unavailable for {{distro}}",
+          "wslCodexHomeUnavailable": "WSL Codex home unavailable for {{distro}}",
+          "wslKimiHomeUnavailable": "WSL Kimi home unavailable for {{distro}}"
+        }
       }
     },
     "runtime": {
@@ -1462,6 +1607,7 @@
         "asked": "Asked:",
         "awaiting": "Awaiting user input:",
         "awaitingUnnamed": "Awaiting user input",
+        "questionCount": "{{value0}} questions",
         "questionCount_one": "{{count}} question",
         "questionCount_other": "{{count}} questions"
       },
@@ -1485,6 +1631,7 @@
         "groupShell": "Shell",
         "groupTasks": "Tasks",
         "groupWorkflows": "Workflows",
+        "headerTotal": "{{value0}} background tasks",
         "headerTotal_one": "{{count}} background task",
         "headerTotal_other": "{{count}} background tasks",
         "monitor": "Background monitor",
@@ -1493,24 +1640,31 @@
         "reasonBlocked": "failed",
         "reasonWaiting": "needs approval",
         "stateBlocked": "blocked",
+        "stateBlockedCount": "{{value0}} blocked",
         "stateBlockedCount_one": "{{value0}} blocked",
         "stateBlockedCount_other": "{{value0}} blocked",
         "stateDone": "done",
+        "stateDoneCount": "{{value0}} done",
         "stateDoneCount_one": "{{value0}} done",
         "stateDoneCount_other": "{{value0}} done",
         "stateIdle": "stopped",
+        "stateIdleCount": "{{value0}} stopped",
         "stateIdleCount_one": "{{value0}} stopped",
         "stateIdleCount_other": "{{value0}} stopped",
         "stateMonitoring": "monitoring",
+        "stateMonitoringCount": "{{value0}} monitoring",
         "stateMonitoringCount_one": "{{value0}} monitoring",
         "stateMonitoringCount_other": "{{value0}} monitoring",
         "stateUnverifiable": "status unavailable",
+        "stateUnverifiableCount": "{{value0}} with status unavailable",
         "stateUnverifiableCount_one": "{{value0}} with status unavailable",
         "stateUnverifiableCount_other": "{{value0}} with status unavailable",
         "stateWaiting": "waiting",
+        "stateWaitingCount": "{{value0}} waiting",
         "stateWaitingCount_one": "{{value0}} waiting",
         "stateWaitingCount_other": "{{value0}} waiting",
         "stateWorking": "working",
+        "stateWorkingCount": "{{value0}} working",
         "stateWorkingCount_one": "{{value0}} working",
         "stateWorkingCount_other": "{{value0}} working",
         "stop": "Stop",
@@ -1701,6 +1855,7 @@
         "editFailed": "This message can't be edited.",
         "editGone": "This message was already sent or removed. Your edit is in the chat box.",
         "editGonePrompt": "This message was already sent or removed. Your edit will be in the chat box after you answer the agent.",
+        "imageCount": "{{count}} images",
         "imageCount_one": "{{count}} image",
         "imageCount_other": "{{count}} images"
       },
@@ -1759,24 +1914,30 @@
         "state": {
           "completed": "completed",
           "failed": "failed",
+          "failedCount": "{{value0}} failed",
           "failedCount_one": "{{count}} failed",
           "failedCount_other": "{{count}} failed",
           "idle": "idle",
+          "idleCount": "{{value0}} idle",
           "idleCount_one": "{{count}} idle",
           "idleCount_other": "{{count}} idle",
           "stopped": "stopped",
+          "stoppedCount": "{{value0}} stopped",
           "stoppedCount_one": "{{count}} stopped",
           "stoppedCount_other": "{{count}} stopped",
           "unverifiable": "status unavailable",
+          "unverifiableCount": "{{value0}} with status unavailable",
           "unverifiableCount_one": "{{count}} with status unavailable",
           "unverifiableCount_other": "{{count}} with status unavailable",
           "working": "working",
+          "workingCount": "{{value0}} working",
           "workingCount_one": "{{count}} working",
           "workingCount_other": "{{count}} working"
         },
         "tokens": "{{value0}} tokens"
       },
       "taskList": {
+        "progress": "{{completed}} of {{total}} tasks completed",
         "progress_one": "{{completed}} of {{count}} task completed",
         "progress_other": "{{completed}} of {{count}} tasks completed"
       },
@@ -2078,7 +2239,15 @@
     "liveTerminals_other": "{{count}} live terminals will reconnect after restart."
   },
   "menu": {
-    "quitApp": "Quit {{appName}}"
+    "about": "About Orca",
+    "hide": "Hide Orca",
+    "hideOthers": "Hide Others",
+    "minimize": "Minimize",
+    "quitApp": "Quit {{appName}}",
+    "services": "Services",
+    "toggleFullScreen": "Toggle Full Screen",
+    "unhide": "Show All",
+    "zoom": "Zoom"
   },
   "pet": {
     "defaultLabels": {
@@ -2213,6 +2382,11 @@
       }
     },
     "shortcuts": {
+      "actions": {
+        "tab": {
+          "newAgent": "New agent tab (default agent)"
+        }
+      },
       "diagnostics": {
         "conflictingOverrides": "Conflicting custom shortcuts were ignored: {{actions}}.",
         "platformsNotObject": "platforms must be an object with darwin, linux, or win32 sections.",
@@ -2222,15 +2396,48 @@
         "unknownAction": "Unknown keybinding action \"{{actionId}}\" was ignored.",
         "unknownPlatform": "Unknown platform \"{{platform}}\" was ignored."
       },
+      "groups": {
+        "agents": "Agents",
+        "browser": "Browser",
+        "chat": "Chat",
+        "editors": "Editors",
+        "fileExplorer": "File Explorer",
+        "global": "Global",
+        "quickCommands": "Quick Commands",
+        "settings": "Settings",
+        "tabNavigation": "Tab Navigation",
+        "tabs": "Tabs",
+        "terminalPanes": "Terminal Panes"
+      },
       "validation": {
+        "digitIndex": "Pick a number key 1–9 with a modifier, like Cmd+1 or Ctrl+1.",
         "digitKeyRequired": "Pick a number key 1–9 with a modifier, like Cmd+1 or Ctrl+1.",
+        "exampleChord": "Use a shortcut like Ctrl+Shift+P or Cmd+K.",
         "fileNotObject": "Keybindings file must contain a JSON object.",
         "invalidBindingValue": "Use a string, string array, null, or false.",
         "invalidFormat": "Use a shortcut like Ctrl+Shift+P or Cmd+K.",
         "mixedModifiers": "Use either Mod or a platform-specific modifier, not both.",
+        "modOrPlatform": "Use either Mod or a platform-specific modifier, not both.",
         "modifierOnly": "Press a key, not only a modifier.",
         "modifierRequired": "Include at least one modifier key.",
+        "needModifier": "Include at least one modifier key.",
+        "needNonModifier": "Press a key, not only a modifier.",
         "stringArrayRequired": "Use a string array."
+      }
+    },
+    "ssh": {
+      "errors": {
+        "authMethodsFailed": "All configured authentication methods failed",
+        "badPassphrase": "Cannot parse privateKey: OpenSSH key integrity check failed -- bad passphrase?",
+        "connectionRefused": "Connection refused",
+        "connectionTimedOut": "Connection timed out",
+        "handshakeLost": "Connection lost before handshake",
+        "handshakeTimeout": "Timed out while waiting for handshake",
+        "hostKeyVerificationFailed": "Host key verification failed",
+        "hostNotFound": "Host not found",
+        "passphraseRequired": "Cannot parse privateKey: Encrypted private OpenSSH key detected, but no passphrase given",
+        "permissionDenied": "Permission denied",
+        "permissionDeniedPublickey": "Permission denied (publickey)"
       }
     }
   },
@@ -2480,14 +2687,18 @@
   },
   "terminal": {
     "newerDaemonBanner": {
+      "reopenTerminal": "Reopen {{count}} terminals",
       "reopenTerminal_one": "Reopen terminal",
       "reopenTerminal_other": "Reopen {{count}} terminals",
+      "reopened": "Reopened {{count}} terminals",
       "reopened_one": "Reopened {{count}} terminal",
       "reopened_other": "Reopened {{count}} terminals",
+      "resumed": "{{count}} agent sessions resumed.",
       "resumed_one": "{{count}} agent session resumed.",
       "resumed_other": "{{count}} agent sessions resumed."
     },
     "severedDaemonBanner": {
+      "count": "{{count}} running terminals",
       "count_one": "{{count}} running terminal",
       "count_other": "{{count}} running terminals"
     }

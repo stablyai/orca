@@ -8,10 +8,10 @@ import {
   resolveTaskPageGitHubStatusStateDraft,
   updateTaskPageGitHubStatusLocalState
 } from '@/components/task-page/github/task-page-github-status-state'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useShallow } from 'zustand/react/shallow'
-import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
-import { parseGitHubIssueOrPRLink } from '@/lib/github-links'
+import { getGitHubRepoRoutingTarget } from '@/lib/work-items/github/github-source-runtime-context'
+import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/links'
 import {
   getTaskPageGitHubDuplicateCandidates,
   validateTaskPageGitHubDuplicateTarget,
@@ -26,7 +26,7 @@ import { gitHubSlugApiForTarget } from '@/runtime/repository-github/github-slug-
 import { githubProjectHost } from '../../../../../shared/github/project-identity'
 import { TaskPageGitHubWorkItemStateBadge } from '@/components/task-page/github/task-page-github-work-item-status-badge'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { CircleDot, ChevronDown, Copy, CheckCircle2, Ban, ChevronRight } from 'lucide-react'
 import type { TaskPageGitHubWorkItemMutationRunner } from '../linear/task-page-linear-jira-list-model'
 import { TaskPageGitHubDuplicatePicker } from './DuplicatePicker'

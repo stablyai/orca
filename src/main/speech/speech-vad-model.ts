@@ -19,10 +19,7 @@ export function downloadSileroVadInBackground(models: Pick<ModelManager, 'downlo
 // Settings never lists the VAD, so once its file is in place it stays; only a new models folder rechecks.
 let verifiedVadPath: string | undefined
 
-/** The downloaded Silero VAD file; when it's missing, starts fetching it and returns undefined. */
-export function sileroVadModelPath(
-  models: Pick<ModelManager, 'downloadModel' | 'getModelDir'>
-): string | undefined {
+function placedSileroVadPath(models: Pick<ModelManager, 'getModelDir'>): string | undefined {
   const [file] = SILERO_VAD_MODEL.downloadFiles
   const path = join(models.getModelDir(SILERO_VAD_MODEL.id), file.name)
   if (path === verifiedVadPath) {
@@ -36,6 +33,24 @@ export function sileroVadModelPath(
   } catch {
     // Not downloaded yet, e.g. the model came before VAD support.
   }
-  downloadSileroVadInBackground(models)
   return undefined
+}
+
+/** Whether a model-state change for `modelId` means the Silero VAD file is now in place. */
+export function sileroVadLanded(
+  models: Pick<ModelManager, 'getModelDir'>,
+  modelId: string
+): boolean {
+  return modelId === SILERO_VAD_MODEL.id && placedSileroVadPath(models) !== undefined
+}
+
+/** The downloaded Silero VAD file; when it's missing, starts fetching it and returns undefined. */
+export function sileroVadModelPath(
+  models: Pick<ModelManager, 'downloadModel' | 'getModelDir'>
+): string | undefined {
+  const path = placedSileroVadPath(models)
+  if (!path) {
+    downloadSileroVadInBackground(models)
+  }
+  return path
 }

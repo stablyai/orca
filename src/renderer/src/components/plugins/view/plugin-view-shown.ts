@@ -1,4 +1,4 @@
-import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
+import { canShowRightSidebarForView } from '@/components/right-sidebar/visibility/right-sidebar-visibility'
 import type { AppState } from '@/store/types'
 
 /** Why the panel is not on screen now, or null when it is the open right-sidebar tab. */

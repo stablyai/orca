@@ -19,7 +19,6 @@ import {
   deviceStoreDraftBackend,
   durableDraftRow,
   durableDraftRowKey,
-  resetDurableDraftRowsForTests,
   type DurableDraftRow,
   type DurableDraftRowBackend
 } from '../../../drafts/durable-draft-rows'
@@ -203,9 +202,4 @@ export function closeSavedMobileNativeChatDraft(scope: string): void {
     }
     tab.workspace.row.save('immediate')
   }
-}
-
-export function resetMobileNativeChatDraftPersistenceForTests(): void {
-  resetDurableDraftRowsForTests()
-  workspaces.clear()
 }

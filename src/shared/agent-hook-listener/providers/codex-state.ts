@@ -20,7 +20,6 @@ import {
   hasTrackedCodexTranscriptSubagents,
   type CodexSubagentTranscriptState
 } from '../../codex-subagent-transcript'
-import type { AgentHookEventPayload } from '../listener-event'
 import type { HookListenerState } from '../listener-state'
 import type { CodexLeadTurnState } from '../main-agent-turn-state'
 
@@ -172,12 +171,12 @@ export function codexHookEventState(
   switch (eventName) {
     case 'Stop':
     case 'Interrupt':
+    case 'SessionStart':
       return 'done'
     case 'PermissionRequest':
       return 'waiting'
     case 'PreToolUse':
       return isAskUserQuestionTool(toolName) ? 'waiting' : 'working'
-    case 'SessionStart':
     case 'UserPromptSubmit':
     case 'PostToolUse':
       return 'working'
@@ -270,6 +269,9 @@ export function reconcileRemoteCodexState(
       setCodexMainAgentTurnState(state, paneKey, {
         state: leadState,
         ...codexLeadOutcomeForEvent(eventName, previousLead, leadState),
+        ...(eventName === 'UserPromptSubmit' && payload.mainAgent?.state === 'working'
+          ? { stateStartedAt: payload.mainAgent.stateStartedAt }
+          : {}),
         model: payload.model ?? previousLead?.model
       })
     }
@@ -303,33 +305,5 @@ export function reconcileRemoteCodexState(
     subagents: codexRosterToSnapshots(roster),
     // Why: main's cache outlives a relay restart, so it is the main agent fact for a relayed row too.
     mainAgent: codexMainAgentStatusForPayload(lead)
-  }
-}
-
-/** Relayed rows and unlabelled root polls merge into main's Codex cache; local hooks already wrote it. */
-export function reconcileCodexStatusEvent<T extends AgentHookEventPayload>(
-  state: HookListenerState,
-  event: T,
-  previous: ParsedAgentStatusPayload | undefined,
-  remoteRosterAuthority?: CodexRemoteRosterAuthority
-): T {
-  if (
-    (!event.connectionId && event.hookEventName) ||
-    event.payload.agentType !== 'codex' ||
-    (!event.hookEventName && !event.payload.mainAgent)
-  ) {
-    return event
-  }
-  return {
-    ...event,
-    payload: reconcileRemoteCodexState(
-      state,
-      event.paneKey,
-      event.hookEventName,
-      event.toolAgentId,
-      event.payload,
-      previous,
-      remoteRosterAuthority
-    )
   }
 }

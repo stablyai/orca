@@ -138,7 +138,7 @@ describe('connectPanePty owner hydration and backend retention', () => {
     const { createTerminalPaneManagerOptions } =
       await import('../../mounting/terminal-pane-manager-options')
     const { clearTerminalTabsParkedOnUnresolvedHost, getTabIdsAwaitingHostHydrationRemount } =
-      await import('@/lib/parked-terminal-host-hydration')
+      await import('@/components/terminal-pane/mounting/parked-terminal-host-hydration')
     clearTerminalTabsParkedOnUnresolvedHost()
     const worktree = makeWorktree({ id: 'wt-hydrating', repoId: TEST_REPO.id, hostId: undefined })
     const tab = makeTab({ id: 'tab-1', worktreeId: worktree.id, ptyId: null })

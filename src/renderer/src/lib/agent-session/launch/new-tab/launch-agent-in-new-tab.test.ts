@@ -208,7 +208,7 @@ describe('launchAgentInNewTab', () => {
       }
       const startup = queuedStartups()[0]
       expect(startup).toBeDefined()
-      expect(tokenizeStartupCommand(startup.command, 'posix')).toMatchObject({
+      expect(tokenizeStartupCommand(startup.command ?? '', 'posix')).toMatchObject({
         ok: true,
         tokens: ['cx', '-c', 'model="true"', '-c', 'model_reasoning_effort=high']
       })

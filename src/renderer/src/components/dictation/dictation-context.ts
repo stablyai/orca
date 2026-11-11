@@ -11,5 +11,9 @@ export function captureDictationContext(): DictationContext {
     return {}
   }
   const repo = selectRepoByIdForActiveWorkspace(state, getRepoIdFromWorktreeId(worktreeId))
-  return { worktreeId, ...(repo?.dictationTerms ? { repoTerms: repo.dictationTerms } : {}) }
+  return {
+    worktreeId,
+    ...(repo?.dictationTerms ? { repoTerms: repo.dictationTerms } : {}),
+    ...(repo ? { repoName: repo.displayName } : {})
+  }
 }

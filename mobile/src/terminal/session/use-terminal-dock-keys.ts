@@ -49,6 +49,10 @@ export function useTerminalDockKeys({ activeHandle, sendInput }: UseTerminalDock
     return modifiers
   }
 
+  /** A row key with the held modifiers, or null when none is held or the key takes no modifier. */
+  const chordInput = (key: string): TerminalLiveAccessoryInput | null =>
+    hasStickyModifier(modifiers) ? terminalDockKeyInput(key, modifiers) : null
+
   /** Sends a special key id (`arrowUp`, `tab`, `f5`…) or a printable character with the held modifiers. */
   const sendKey = (key: string): void => {
     const input = terminalDockKeyInput(key, takeModifiers())
@@ -75,7 +79,7 @@ export function useTerminalDockKeys({ activeHandle, sendInput }: UseTerminalDock
     return true
   }
 
-  return { modifiers, tapModifier, sendKey, interceptTypedCharacter }
+  return { modifiers, tapModifier, takeModifiers, chordInput, sendKey, interceptTypedCharacter }
 }
 
 function terminalDockKeyInput(

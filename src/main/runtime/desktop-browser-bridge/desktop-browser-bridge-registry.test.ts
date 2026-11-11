@@ -6,6 +6,28 @@ import {
 } from './desktop-browser-bridge-registry'
 import { routeDesktopBrowserBridgeRpc } from './desktop-browser-bridge-route'
 
+describe('tab annotations through the desktop bridge', () => {
+  it('never sends them to an older desktop, which would drop its whole bridge', async () => {
+    const registry = new DesktopBrowserBridgeRegistry()
+    const emit = vi.fn()
+    registry.attach({ connectionId: 'new', pairedDeviceId: 'd', readsTabAnnotations: true, emit })
+    registry.attach({ connectionId: 'old', pairedDeviceId: 'd', emit })
+
+    await expect(
+      routeDesktopBrowserBridgeRpc({
+        method: 'browser.tabAnnotations',
+        params: { page: 'page-1' },
+        caller: { kind: 'local-cli' },
+        hostEnabled: true,
+        registry,
+        localBrowserAvailable: false,
+        resolveWorkspace: async (selector) => ({ id: selector })
+      })
+    ).rejects.toMatchObject({ code: 'desktop_browser_bridge_not_forwarded' })
+    expect(emit).not.toHaveBeenCalled()
+  })
+})
+
 describe('--expect-url through the desktop bridge', () => {
   const route = (registry: DesktopBrowserBridgeRegistry) =>
     routeDesktopBrowserBridgeRpc({

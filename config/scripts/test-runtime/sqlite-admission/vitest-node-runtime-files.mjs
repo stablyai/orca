@@ -27,8 +27,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/browser/extensions/native-messaging/browser-extension-native-host-process-backpressure.test.ts',
   'src/main/daemon/providers/lifecycle/testing/daemon-init-provider-installation.test.ts',
   'src/renderer/src/components/terminal-pane/pty-transport/input/pty-input-write-queue.test.ts',
-  'src/renderer/src/lib/react-commit-cascade-observer.test.ts',
-  'src/renderer/src/lib/react-commit-cascade-telemetry.test.ts',
   // Asserts payloads are collected; Bun's GC scans the stack conservatively and may keep one alive.
   'src/shared/ws-inbound-message-queue.test.ts',
   'src/renderer/src/lib/agent-session/history/title-sync/ai-vault-tab-title-sync-inputs.test.ts',
@@ -36,6 +34,7 @@ const NODE_RUNTIME_INCLUDE = [
   // Asserts an observer survives a forced collection; conservative retention would hide a lost one.
   'config/scripts/test-runtime/dom/happy-dom-mutation-observer-retention.test.ts',
   // These reach Node SQLite through a shared helper or a dynamic import, which the scan skips.
+  'src/main/agent-hooks/server/testing/providers/codex/server-codex-session-start.test.ts',
   'src/main/claude/claude-transcript-catch-up.test.ts',
   'src/main/claude/claude-transcript-duration.test.ts',
   'tests/e2e/native-chat-startup-option-pickers.unit.test.ts',
@@ -136,7 +135,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/gitlab/gitlab-known-host-retirement.test.ts',
   'src/main/window/main-window-updater-deferred-setup.test.ts',
   'src/renderer/src/components/terminal-pane/host-state/terminal-pane-host-state-memo.test.ts',
-  'src/renderer/src/components/automations/use-automation-runs-dashboard-payload.test.tsx',
+  'src/renderer/src/components/automations/runs/use-automation-runs-dashboard-payload.test.tsx',
   'src/main/native-chat/agent-session-journal/**/*.test.ts',
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-terminal-writer-acquire.test.ts',
   'src/main/runtime/agent-session/records/agent-session-conversation-name-store.test.ts',
@@ -168,7 +167,14 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/claude/claude-agent-sdk-contract-pins.test.ts',
   'config/scripts/orcad-distribution/server-bundle/profile-state-worker-smoke.test.mjs',
   'config/scripts/desktop-distribution/runtime-verification/process-host-dev-rebuild.test.ts',
-  'config/scripts/test-runtime/node-worker/vitest-node-runtime-pool.test.ts'
+  'config/scripts/test-runtime/node-worker/vitest-node-runtime-pool.test.ts',
+  // Reopen WAL-backed row caches read-only, which Bun on macOS cannot.
+  'src/main/agent-hooks/server/testing/identity/server-hook-session-binding.test.ts',
+  'tests/e2e/helpers/persisted-profile-state.unit.test.ts',
+  'src/main/runtime/push/notifications/mobile-notification-dismissal-store.test.ts',
+  'src/main/runtime/push/notifications/mobile-notification-dismissal-read-failure.test.ts',
+  'src/main/ipc/notifications-subject-retirement.test.ts',
+  'src/main/ipc/notifications-external-acknowledgement.test.ts'
 ]
 
 /** `filters` limits the SQLite import scan to the tests a filtered CLI run can select. */

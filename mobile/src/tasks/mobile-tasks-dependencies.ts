@@ -145,5 +145,6 @@ export type { SshConnectionState } from '../../../src/shared/ssh-types'
 
 export {
   githubProjectHost,
-  githubProjectIdentityKey as githubProjectKey
+  githubProjectIdentityKey as githubProjectKey,
+  toGitHubProjectIdentity
 } from '../../../src/shared/github/project-identity'

@@ -78,8 +78,10 @@ vi.mock('@/hooks/useAgentDetectionTarget', () => ({
   useAgentDetectionTargetForWorktree: () => null
 }))
 vi.mock('@/components/agent/AgentLaunchPicker', () => ({ AgentLaunchPicker: mocks.picker }))
-vi.mock('@/lib/host-chat-program', () => ({ agentsOfferedForLaunch: () => ['claude'] }))
-vi.mock('@/lib/host-chat-program-acquisition', () => ({
+vi.mock('@/lib/agent-session/launch/inventory/host-chat-program', () => ({
+  agentsOfferedForLaunch: () => ['claude']
+}))
+vi.mock('@/lib/agent-session/launch/inventory/host-chat-program-acquisition', () => ({
   acquireAgentLaunchChoices: async () => ({ detected: ['claude'], offered: ['claude'] })
 }))
 vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
@@ -113,7 +115,7 @@ vi.mock('../../../web-session-tabs-sync/tracking-mappings', () => ({
   resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
 }))
 
-vi.mock('@/lib/feature-education-telemetry', () => ({
+vi.mock('@/diagnostics/telemetry/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
 }))
 

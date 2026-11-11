@@ -1,3 +1,4 @@
+import { GENERAL_SETTING_ANCHORS } from './general-setting-anchors'
 import React, { useEffect, useId, useRef, useState } from 'react'
 import { FolderOpen, RotateCcw } from 'lucide-react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
@@ -9,14 +10,14 @@ import {
 } from '../../../../../shared/host-setting-overrides'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { normalizeWorkspaceDirInput } from '../../../../../shared/worktree/workspace-dir-input'
-import { isWindowsUserAgent } from '@/lib/user-agent-platform'
+import { isWindowsUserAgent } from '@/app-shell/platform/user-agent-platform'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
 import { HostCombobox } from '../../host-picker/HostCombobox'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { useSidebarHostScopeOptions } from '../../sidebar/worktree-list/controls/use-sidebar-host-scope-options'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
+import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import {
   buildHostScopeChoices,
   CLIENT_DEFAULT_SCOPE,
@@ -145,9 +146,10 @@ export function WorkspaceDirectorySetting({
 
   return (
     <SearchableSetting
+      id={GENERAL_SETTING_ANCHORS.folder}
       title={t(
-        'auto.components.settings.GeneralWorkspaceSettingsSection.0e9fc0eadc',
-        'Workspace Directory'
+        'auto.components.settings.GeneralWorkspaceSettingsSection.9d0ef6a2a6',
+        'Workspace directory'
       )}
       description={t(
         'auto.components.settings.GeneralWorkspaceSettingsSection.a246f5ce6f',
@@ -159,8 +161,8 @@ export function WorkspaceDirectorySetting({
       <div className="flex items-center justify-between gap-2">
         <Label htmlFor={inputId}>
           {t(
-            'auto.components.settings.GeneralWorkspaceSettingsSection.0e9fc0eadc',
-            'Workspace Directory'
+            'auto.components.settings.GeneralWorkspaceSettingsSection.9d0ef6a2a6',
+            'Workspace directory'
           )}
         </Label>
         {showScopePicker && (

@@ -15,7 +15,7 @@ export function BrowserExtensionsExperimentalSetting({
   updateSettings
 }: BrowserExtensionsExperimentalSettingProps): React.JSX.Element {
   const t = useTranslate()
-  const entry = getExperimentalSearchEntry(t).browserExtensions
+  const entry = getExperimentalSearchEntry().browserExtensions
   const enabled = settings.experimentalBrowserExtensions === true
 
   return (

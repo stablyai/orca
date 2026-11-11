@@ -1,6 +1,6 @@
 import { describe, expect, it, afterEach, vi } from 'vitest'
 
-import { getRuntimeTargetForWorktreeOwner } from '@/lib/file-owner-runtime-target'
+import { getRuntimeTargetForWorktreeOwner } from '@/lib/files/access/file-owner-runtime-target'
 
 describe('shouldUploadRemoteEditorFileDrop', () => {
   it('uses the worktree owner runtime instead of the focused runtime', () => {

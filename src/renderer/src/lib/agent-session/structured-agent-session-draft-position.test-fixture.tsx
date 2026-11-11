@@ -8,7 +8,7 @@ import {
   type NativeChatComposerFieldProps
 } from '@/components/native-chat/composer/editor/NativeChatComposerField'
 import type { NativeChatComposerInput } from '@/components/native-chat/composer/editor/native-chat-composer-input'
-import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
+import { useImeEnterGestureOwnership } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { useAppStore } from '@/store/index'

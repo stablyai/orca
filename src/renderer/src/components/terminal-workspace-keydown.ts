@@ -1,22 +1,24 @@
 import { toast } from 'sonner'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
-import type { KeybindingActionId } from '../../../shared/keybindings'
 import { keybindingMatchesAction } from '../../../shared/keybindings'
+import type { KeybindingActionId } from '../../../shared/keybindings'
 import { matchesRecentTabSwitcherChord } from '../../../shared/window-shortcut-policy'
-import { useAppStore } from '../store'
+import { useAppStore } from '../store/index'
 import {
-  createFloatingWorkspaceBrowserTab,
-  createFloatingWorkspaceMarkdownTab,
-  createFloatingWorkspaceTerminalTab,
   handleEmptyFloatingWorkspacePanelCloseShortcut,
   isEventTargetInsideFloatingWorkspacePanel,
   isFloatingWorkspacePanelFocused
-} from '@/lib/floating-workspace-terminal-actions'
-import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
+} from '@/components/floating-terminal/floating-workspace-terminal-actions'
+import {
+  createFloatingWorkspaceBrowserTab,
+  createFloatingWorkspaceMarkdownTab,
+  createFloatingWorkspaceTerminalTab
+} from '@/components/floating-terminal/floating-workspace-tab-creation'
+import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/terminal-shortcut-capture-notification'
 import {
   ensureClientCreationActionAllowed,
   showClientCreationActionError
-} from '@/lib/client-creation-action-error'
+} from '@/lib/workspace/creation/surface-policy/client-creation-action-error'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { translate } from '@/i18n/i18n'
 import { getKeybindingContext } from './terminal-workspace-model'

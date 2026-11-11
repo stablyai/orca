@@ -1,4 +1,5 @@
 import type { ParsedAgentStatusPayload } from '../../agent-status/contracts/agent-status-types'
+import { CLAUDE_NEW_SESSION_START_SOURCES } from './claude-session-start-sources'
 import {
   heldTurnCountsAsFinished,
   isAgentStatusHeldOpenByChildWork
@@ -58,12 +59,7 @@ export function normalizeClaudeEvent(
   if (eventName === 'SessionStart') {
     // SessionStart supplies resume identity before prompts; mark idle/sessionBoundary to avoid phantom work/completion notifications (STA-3386).
     const sessionStartSource = hookPayload['source']
-    if (
-      eventAgentId !== undefined ||
-      (sessionStartSource !== 'startup' &&
-        sessionStartSource !== 'resume' &&
-        sessionStartSource !== 'clear')
-    ) {
+    if (eventAgentId !== undefined || !CLAUDE_NEW_SESSION_START_SOURCES.has(sessionStartSource)) {
       // Only known idle sources qualify; compact restarts and child SessionStart cannot settle a live lead.
       return null
     }

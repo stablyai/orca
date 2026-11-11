@@ -59,6 +59,7 @@ import '@/i18n/i18n'
 import { withEditorBufferRecords } from '../slices/editor/buffers/editor-buffer-record-lifecycle'
 import { withAgentConversationRetention } from '../slices/agent-status/agent-conversation-retention'
 import { TEST_REPO } from '../repos/repo.test-fixture'
+import { resetProviderRuntimeSessionGenerationForTests } from '@/runtime/hosts/observations/provider-runtime-context'
 
 const withTestStorePolicies = (creator: StateCreator<AppState, [], []>, check: boolean) =>
   withEditorBufferRecords(withAgentConversationRetention(creator), check)
@@ -66,6 +67,8 @@ const withTestStorePolicies = (creator: StateCreator<AppState, [], []>, check: b
 export function createTestStore(
   isClaudeAgent: Parameters<typeof createTerminalSlice>[3] = undefined
 ) {
+  // Why: the session generation is module state; a shared test worker would carry another file's bumps into this store.
+  resetProviderRuntimeSessionGenerationForTests()
   // Why the record middleware: views of one file share a record only through it, as in the app.
   return create<AppState>()(
     withTestStorePolicies(

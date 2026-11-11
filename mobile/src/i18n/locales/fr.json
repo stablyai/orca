@@ -1380,7 +1380,18 @@
     },
     "announce": {
       "typedInto": "Saisi dans {{target}}",
-      "insertedIn": "Inséré dans {{target}}"
+      "insertedIn": "Inséré dans {{target}}",
+      "listeningOnPhone": "Écoute. Transcription sur ce téléphone.",
+      "listeningOn": "Écoute. Transcription sur {{computer}}.",
+      "listeningOnComputer": "Écoute. Transcription sur l’ordinateur.",
+      "finishing": "Finalisation.",
+      "inserted": "Inséré.",
+      "cancelled": "Dictée annulée.",
+      "movedTo": "Ce téléphone a arrêté de transcrire. Suite sur {{computer}}.",
+      "movedToComputer": "Ce téléphone a arrêté de transcrire. Suite sur l’ordinateur.",
+      "stoppedKept": "Dictée arrêtée. {{reason}}. Votre enregistrement est conservé.",
+      "stoppedKeptGeneric": "Dictée arrêtée. Votre enregistrement est conservé.",
+      "stillListening": "Toujours à l’écoute."
     },
     "pill": {
       "open": "Ouvrir",
@@ -2627,8 +2638,8 @@
       "insertFailed": "Impossible d'insérer la dictée",
       "insertFailedCopied": "Impossible d'insérer la dictée ; elle a été copiée dans le presse-papiers",
       "inserted": "Dictée insérée",
-      "stoppedAfterSilence": "Arrêt après une minute de silence",
-      "stoppedAtCloudLimit": "Dictée arrêtée à la limite cloud de 10 minutes."
+      "stoppedAtCloudLimit": "Dictée arrêtée à la limite cloud de 10 minutes.",
+      "stoppedAfterSilenceSeconds": "Arrêté après {{seconds}} secondes de silence"
     },
     "useNativeChatStop": {
       "stopNotSent": "Commande d'arrêt non envoyée",
@@ -3441,6 +3452,27 @@
     }
   },
   "tasks": {
+    "hostedMerge": {
+      "confirmGitHubMerge": "Fusionner la PR nº {{number}} ?",
+      "confirmGitHubSquash": "Compresser les commits et fusionner la PR nº {{number}} ?",
+      "confirmGitHubRebase": "Rebaser et fusionner la PR nº {{number}} ?",
+      "confirmGitLabMerge": "Fusionner la demande de fusion nº {{number}} ?",
+      "confirmGitLabSquash": "Compresser les commits et fusionner la demande de fusion nº {{number}} ?",
+      "confirmGitLabRebase": "Rebaser et fusionner la demande de fusion nº {{number}} ?",
+      "merged": "Fusionné",
+      "closed": "Fermé",
+      "conflicts": "Conflits",
+      "behind": "En retard",
+      "blocked": "Bloqué",
+      "checksPending": "Vérifications en attente",
+      "ableToMerge": "Fusion possible",
+      "unknown": "Inconnu"
+    },
+    "pagination": {
+      "pageUnreachable": "La page {{page}} dépasse la limite des résultats de recherche GitHub.",
+      "loadPageFailed": "La page {{page}} n’a pas pu être chargée depuis GitHub.",
+      "noMoreResults": "Aucun autre résultat sur la page {{page}}."
+    },
     "composerSource": {
       "baseFailed": "Échec de la résolution de la branche de base.",
       "forkPushWarning": "L'option « Autoriser les modifications des mainteneurs » est désactivée pour cette PR ; le push vers le fork peut être refusé par GitHub."

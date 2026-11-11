@@ -1421,7 +1421,18 @@
     },
     "announce": {
       "typedInto": "Введено в {{target}}",
-      "insertedIn": "Вставлено в {{target}}"
+      "insertedIn": "Вставлено в {{target}}",
+      "listeningOnPhone": "Слушаю. Распознавание на этом телефоне.",
+      "listeningOn": "Слушаю. Распознавание на {{computer}}.",
+      "listeningOnComputer": "Слушаю. Распознавание на компьютере.",
+      "finishing": "Завершение.",
+      "inserted": "Вставлено.",
+      "cancelled": "Диктовка отменена.",
+      "movedTo": "Этот телефон перестал распознавать. Продолжение на {{computer}}.",
+      "movedToComputer": "Этот телефон перестал распознавать. Продолжение на компьютере.",
+      "stoppedKept": "Диктовка остановлена. {{reason}}. Запись сохранена.",
+      "stoppedKeptGeneric": "Диктовка остановлена. Запись сохранена.",
+      "stillListening": "Продолжаю слушать."
     },
     "pill": {
       "open": "Открыть",
@@ -2697,8 +2708,8 @@
       "insertFailed": "Не удалось вставить текст диктовки",
       "insertFailedCopied": "Не удалось вставить текст диктовки — он скопирован в буфер обмена",
       "inserted": "Текст диктовки вставлен",
-      "stoppedAfterSilence": "Остановлено после минуты тишины",
-      "stoppedAtCloudLimit": "Диктовка остановлена: достигнут 10-минутный облачный лимит."
+      "stoppedAtCloudLimit": "Диктовка остановлена: достигнут 10-минутный облачный лимит.",
+      "stoppedAfterSilenceSeconds": "Остановлено после {{seconds}} с тишины"
     },
     "useNativeChatStop": {
       "stopNotSent": "Команда остановки не отправлена",
@@ -3529,6 +3540,27 @@
     }
   },
   "tasks": {
+    "hostedMerge": {
+      "confirmGitHubMerge": "Слить PR #{{number}}?",
+      "confirmGitHubSquash": "Объединить коммиты и слить PR #{{number}}?",
+      "confirmGitHubRebase": "Выполнить rebase и слить PR #{{number}}?",
+      "confirmGitLabMerge": "Слить запрос на слияние #{{number}}?",
+      "confirmGitLabSquash": "Объединить коммиты и слить запрос на слияние #{{number}}?",
+      "confirmGitLabRebase": "Выполнить rebase и слить запрос на слияние #{{number}}?",
+      "merged": "Слито",
+      "closed": "Закрыто",
+      "conflicts": "Конфликты",
+      "behind": "Отстаёт",
+      "blocked": "Заблокировано",
+      "checksPending": "Проверки ожидаются",
+      "ableToMerge": "Можно слить",
+      "unknown": "Неизвестно"
+    },
+    "pagination": {
+      "pageUnreachable": "Страница {{page}} выходит за пределы результатов поиска GitHub.",
+      "loadPageFailed": "Не удалось загрузить страницу {{page}} из GitHub.",
+      "noMoreResults": "На странице {{page}} больше нет результатов."
+    },
     "composerSource": {
       "baseFailed": "Не удалось определить базовую ветку.",
       "forkPushWarning": "В этом PR отключена настройка «Разрешить правки сопровождающим»; GitHub может отклонить отправку в форк."

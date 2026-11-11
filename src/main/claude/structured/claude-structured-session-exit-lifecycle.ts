@@ -255,3 +255,19 @@ export function finishClaudeCloseAfterExit(input: {
       })
     )
 }
+
+export function liveClaudeSession(
+  lifecycle: ClaudeExitLifecycle,
+  sessionId: string
+): ClaudeSession {
+  const session = lifecycle.sessions.get(sessionId)
+  if (!session) {
+    // A child that just exited is named by its own diagnostic, not by its absence.
+    throw (
+      lifecycle.exits.get(sessionId)?.error ??
+      lifecycle.settledExitErrors.get(sessionId) ??
+      new Error(`no live claude stream-json session for ${sessionId}`)
+    )
+  }
+  return session
+}

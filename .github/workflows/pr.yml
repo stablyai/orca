@@ -512,6 +512,10 @@ jobs:
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: bun config/scripts/localization/source-extraction/audit-localization-coverage.mjs --check
 
+      - name: Verify startup and worktree localization coverage
+        if: needs.code_paths.outputs.static_analysis == 'true'
+        run: bun run verify:startup-worktree-localization-coverage
+
       - name: Verify mobile localization
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: bun config/scripts/localization/catalog-validation/verify-mobile-localization.mjs

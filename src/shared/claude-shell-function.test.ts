@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { getPosixClaudeShellFunction, getFishClaudeShellFunction } from './claude-shell-function'
+import { agentSessionSignInCommand } from './agent-session/lifecycle/agent-session-setup-commands'
 // Skip missing zsh/fish instead of failing with exit 127 on CI images.
 const POSIX_SHELLS = ['/bin/bash', '/bin/zsh'].filter((shell) => existsSync(shell))
 const FISH = ['/opt/homebrew/bin/fish', '/usr/local/bin/fish', '/usr/bin/fish'].find(existsSync)
@@ -40,7 +41,8 @@ function fixture() {
     shell: string,
     env: string[] = [],
     fakeKind: 'summary' | 'printenv' = 'summary',
-    userSetup = ''
+    userSetup = '',
+    command = 'claude'
   ) => {
     if (fakeKind === 'printenv') {
       writeFileSync(fake, '#!/bin/sh\nenv\n')
@@ -63,7 +65,7 @@ function fixture() {
         shell,
         ...(fish ? ['--no-config'] : shell.endsWith('zsh') ? ['-f'] : ['--norc', '--noprofile']),
         '-c',
-        `${guard}\n${userSetup}\n${fn}\nclaude`
+        `${guard}\n${userSetup}\n${fn}\n${command}`
       ],
       { encoding: 'utf8', cwd: root }
     )
@@ -79,6 +81,21 @@ const injected = (home: string) => [
 ]
 
 describe.each(SHELLS)('the claude function in %s', (shell) => {
+  it('signs the system account in while a managed profile is selected, preserving later routing', () => {
+    const f = fixture()
+    writeFileSync(f.pointer, f.a)
+    const command = agentSessionSignInCommand('claude', { account: 'system', remote: false })
+    const env = [...injected(f.a), 'ORCA_CLAUDE_USER_CONFIG_DIR=/user/system account/']
+    const result = f.run(shell, env, 'summary', '', `${command}; claude`)
+    expect(result.stdout).toBe(
+      `HOME=/user/system account/ KEY=fake TWIN=none\nHOME=${f.a} KEY=fake TWIN=${f.a}\n`
+    )
+    expect(result.status).toBe(23)
+    expect(f.run(shell, injected(f.a), 'summary', '', command!).stdout).toBe(
+      'HOME=default KEY=fake TWIN=none\n'
+    )
+  })
+
   it("re-reads the selection on every launch and keeps the shell's auth for an account", () => {
     const f = fixture()
     writeFileSync(f.pointer, f.a)

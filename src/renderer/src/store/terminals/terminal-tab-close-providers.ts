@@ -8,7 +8,7 @@ import { ensureRuntimeEnvironmentCompatible } from '@/runtime/rpc/compatibility/
 import {
   resolveTerminalPtyOwner,
   resolveTerminalWorktreeRoute
-} from '@/lib/terminal-worktree-route'
+} from '@/lib/workspace/ownership/terminal-worktree-route'
 import {
   classifyTerminalRetirementWorktree,
   type TerminalTabRetirementPlan

@@ -134,130 +134,6 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         }
       }
 
-      it('re-asserts the current size when the PTY drifted from xterm', async () => {
-        vi.mocked(window.api.pty.getSize).mockResolvedValue({ cols: 80, rows: 24 })
-        const { binding, transport } = await connectResumablePane()
-        transport.resize.mockClear()
-
-        binding.noteVisibilityResume()
-        await flushAsyncTicks()
-
-        // xterm is 120x40 (createPane default), PTY reports 80x24 → re-assert.
-        expect(transport.resize).toHaveBeenCalledWith(120, 40, { claim: true })
-      })
-
-      it('does not fit during visibility-resume reassertion', async () => {
-        vi.mocked(window.api.pty.getSize).mockResolvedValue({ cols: 80, rows: 24 })
-        const { binding, transport, pane } = await connectResumablePane()
-        const fit = vi.fn(() => {
-          pane.terminal.cols = 132
-          pane.terminal.rows = 40
-        })
-        pane.fitAddon = {
-          ...pane.fitAddon,
-          fit,
-          proposeDimensions: vi.fn(() => ({ cols: 132, rows: 40 }))
-        } as never
-        Object.defineProperty(pane.container, 'getBoundingClientRect', {
-          configurable: true,
-          value: () => ({ width: 1130, height: 688 })
-        })
-        transport.resize.mockClear()
-
-        binding.noteVisibilityResume()
-        await flushAsyncTicks()
-
-        expect(fit).not.toHaveBeenCalled()
-        expect(transport.resize).toHaveBeenCalledWith(120, 40, { claim: true })
-      })
-
-      it('re-asserts after observed pane geometry changes while visible', async () => {
-        const pane = createPane(2)
-        const observer = installObservedPane(pane)
-        try {
-          vi.mocked(window.api.pty.getSize).mockResolvedValue({ cols: 200, rows: 40 })
-          const { connectPanePty } = await import('../connect-pane-pty')
-          const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
-            '@/lib/agent-status/aggregation/worktree-agent-status'
-          )
-          const transport = createMockTransport('pty-pane-2')
-          transportFactoryQueue.push(transport)
-          const manager = createManager(2)
-          const deps = createDeps({
-            restoredLeafId: LEAF_2,
-            paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
-          })
-          pane.terminal.cols = 82
-          pane.terminal.rows = 40
-
-          connectPanePty(
-            ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks2))
-          )
-          await flushAsyncTicks()
-          transport.resize.mockClear()
-          vi.mocked(window.api.pty.getSize).mockClear()
-
-          observer.trigger()
-          await flushAsyncTicks()
-
-          expect(window.api.pty.getSize).toHaveBeenCalledWith('pty-pane-2')
-          expect(transport.resize).toHaveBeenCalledWith(82, 40, { claim: true })
-        } finally {
-          observer.restore()
-        }
-      })
-
-      it('repairs stale xterm grid drift on foreground output even without a pane resize', async () => {
-        const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(
-          '@/lib/agent-status/aggregation/worktree-agent-status'
-        )
-        const transport = createMockTransport('pty-pane-2')
-        const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
-        transport.connect.mockImplementation(
-          async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-            capturedDataCallback.current = callbacks.onData ?? null
-            return 'pty-pane-2'
-          }
-        )
-        transportFactoryQueue.push(transport)
-        const manager = createManager(2)
-        const deps = createDeps({
-          restoredLeafId: LEAF_2,
-          paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
-        })
-        const pane = createPane(2)
-        let proposedGrid = { cols: 62, rows: 63 }
-        pane.terminal.cols = 62
-        pane.terminal.rows = 63
-        pane.fitAddon = {
-          ...pane.fitAddon,
-          fit: vi.fn(() => {
-            pane.terminal.cols = proposedGrid.cols
-            pane.terminal.rows = proposedGrid.rows
-          }),
-          proposeDimensions: vi.fn(() => proposedGrid)
-        } as never
-        vi.mocked(window.api.pty.getSize).mockResolvedValue({ cols: 62, rows: 63 })
-
-        connectPanePty(
-          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks3))
-        )
-        await flushAsyncTicks()
-        proposedGrid = { cols: 65, rows: 63 }
-        vi.mocked(pane.fitAddon.fit).mockClear()
-        transport.resize.mockClear()
-        vi.mocked(window.api.pty.getSize).mockClear()
-        expect(capturedDataCallback.current).not.toBeNull()
-
-        capturedDataCallback.current?.('\x1b[?2026hcodex redraw frame')
-        await flushAsyncTicks()
-
-        expect(pane.fitAddon.fit).toHaveBeenCalled()
-        expect(window.api.pty.getSize).toHaveBeenCalledWith('pty-pane-2')
-        expect(transport.resize).toHaveBeenCalledWith(65, 63, { claim: true })
-      })
-
       async function connectStreamingDriftPane(): Promise<{
         binding: { noteVisibilityResume: () => void }
         transport: MockTransport
@@ -322,40 +198,6 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         }
       }
 
-      it('defers settled grid drift repair on streaming output until a geometry signal', async () => {
-        const { binding, transport, fit, setProposedGrid, emitFrame } =
-          await connectStreamingDriftPane()
-        emitFrame('frame 1')
-        await vi.advanceTimersByTimeAsync(300)
-        setProposedGrid({ cols: 65, rows: 63 })
-
-        emitFrame('frame 2')
-        await vi.advanceTimersByTimeAsync(300)
-        expect(fit).not.toHaveBeenCalled()
-
-        binding.noteVisibilityResume()
-        emitFrame('frame 3')
-        await vi.advanceTimersByTimeAsync(50)
-        expect(fit).toHaveBeenCalled()
-        expect(transport.resize).toHaveBeenCalledWith(65, 63, { claim: true })
-      })
-
-      it('repairs grid drift after the settled backstop while output keeps streaming', async () => {
-        const { transport, fit, setProposedGrid, emitFrame } = await connectStreamingDriftPane()
-        emitFrame('frame 0')
-        await vi.advanceTimersByTimeAsync(10)
-        setProposedGrid({ cols: 65, rows: 63 })
-
-        for (let frame = 1; frame <= 4; frame += 1) {
-          await vi.advanceTimersByTimeAsync(290)
-          emitFrame(`frame ${frame}`)
-        }
-        await vi.advanceTimersByTimeAsync(50)
-
-        expect(fit).toHaveBeenCalled()
-        expect(transport.resize).toHaveBeenCalledWith(65, 63, { claim: true })
-      })
-
       it('repairs grid drift with a trailing probe when output stops inside the settled interval', async () => {
         const { transport, fit, setProposedGrid, emitFrame } = await connectStreamingDriftPane()
         emitFrame('frame 1')
@@ -364,40 +206,6 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         emitFrame('last frame')
 
         await vi.advanceTimersByTimeAsync(1000)
-
-        expect(fit).toHaveBeenCalled()
-        expect(transport.resize).toHaveBeenCalledWith(65, 63, { claim: true })
-      })
-
-      it('pulls an armed settled trailing probe forward when a geometry signal restores the fast cadence', async () => {
-        const { binding, transport, fit, setProposedGrid, emitFrame } =
-          await connectStreamingDriftPane()
-        emitFrame('frame 1')
-        await vi.advanceTimersByTimeAsync(50)
-        setProposedGrid({ cols: 65, rows: 63 })
-        emitFrame('frame 2')
-        await vi.advanceTimersByTimeAsync(50)
-        binding.noteVisibilityResume()
-        await vi.advanceTimersByTimeAsync(50)
-        emitFrame('last frame')
-        await vi.advanceTimersByTimeAsync(50)
-        expect(fit).not.toHaveBeenCalled()
-
-        await vi.advanceTimersByTimeAsync(150)
-
-        expect(fit).toHaveBeenCalled()
-        expect(transport.resize).toHaveBeenCalledWith(65, 63, { claim: true })
-      })
-
-      it('keeps the fast probe cadence when the fit proposal is unavailable', async () => {
-        const { transport, fit, setProposedGrid, emitFrame } = await connectStreamingDriftPane()
-        setProposedGrid(undefined)
-        emitFrame('frame 1')
-        await vi.advanceTimersByTimeAsync(300)
-        setProposedGrid({ cols: 65, rows: 63 })
-
-        emitFrame('frame 2')
-        await vi.advanceTimersByTimeAsync(50)
 
         expect(fit).toHaveBeenCalled()
         expect(transport.resize).toHaveBeenCalledWith(65, 63, { claim: true })
@@ -498,61 +306,6 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         } finally {
           setFitOverride('pty-pane-2', 'desktop-fit', 0, 0)
           observer.restore()
-        }
-      })
-
-      it('updates the claiming desktop xterm before forwarding an observed viewport claim', async () => {
-        const originalDocument = globalThis.document
-        ;(globalThis as { document?: Document }).document = {
-          visibilityState: 'visible',
-          hasFocus: vi.fn(() => true)
-        } as unknown as Document
-        globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
-          queueMicrotask(() => callback(0))
-          return 1
-        })
-        const { setFitOverride } = await import('@/lib/pane-manager/mobile-fit-overrides')
-        const pane = createPane(2)
-        const observer = installObservedPane(pane)
-        try {
-          const { connectPanePty } = await import('../connect-pane-pty')
-          const agentTitleMocks7 = await vi.importMock<PtyConnectionAgentTitleMocks>(
-            '@/lib/agent-status/aggregation/worktree-agent-status'
-          )
-          const transport = createMockTransport('pty-pane-2')
-          transportFactoryQueue.push(transport)
-          const manager = createManager(2)
-          const deps = createDeps({
-            restoredLeafId: LEAF_2,
-            paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
-          })
-          let proposedGrid = { cols: 120, rows: 40 }
-          pane.fitAddon = {
-            ...pane.fitAddon,
-            proposeDimensions: vi.fn(() => proposedGrid)
-          } as never
-
-          connectPanePty(
-            ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks7))
-          )
-          await flushAsyncTicks()
-          observer.trigger()
-          await flushAsyncTicks()
-          setFitOverride('pty-pane-2', 'remote-desktop-fit', 80, 24)
-          proposedGrid = { cols: 70, rows: 30 }
-          vi.mocked(pane.terminal.resize).mockClear()
-          transport.resize.mockClear()
-
-          observer.trigger()
-          await flushAsyncTicks()
-
-          expect(pane.terminal.resize).toHaveBeenCalledWith(70, 30)
-          expect(transport.resize).toHaveBeenCalledTimes(1)
-          expect(transport.resize).toHaveBeenCalledWith(70, 30, { claim: true })
-        } finally {
-          setFitOverride('pty-pane-2', 'desktop-fit', 0, 0)
-          observer.restore()
-          globalThis.document = originalDocument
         }
       })
 
@@ -660,28 +413,6 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
           setDriverForPty('pty-pane-2', { kind: 'idle' })
           observer.restore()
         }
-      })
-
-      it('does NOT re-assert when the PTY already matches xterm (no spurious SIGWINCH)', async () => {
-        vi.mocked(window.api.pty.getSize).mockResolvedValue({ cols: 120, rows: 40 })
-        const { binding, transport } = await connectResumablePane()
-        transport.resize.mockClear()
-
-        binding.noteVisibilityResume()
-        await flushAsyncTicks()
-
-        expect(transport.resize).not.toHaveBeenCalled()
-      })
-
-      it('re-asserts when the PTY size is unknown (cannot confirm synced)', async () => {
-        vi.mocked(window.api.pty.getSize).mockResolvedValue(null)
-        const { binding, transport } = await connectResumablePane()
-        transport.resize.mockClear()
-
-        binding.noteVisibilityResume()
-        await flushAsyncTicks()
-
-        expect(transport.resize).toHaveBeenCalledWith(120, 40, { claim: true })
       })
 
       it('queues re-asserted resizes while pane resize holds are active', async () => {

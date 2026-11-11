@@ -1,8 +1,8 @@
 import { useEffect } from 'react'
 import type { AgentDashboardSurface } from '../../../../shared/telemetry-agent-dashboard-event-schemas'
-import { getConsentState, track, trackWithResult } from '@/lib/telemetry'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
-import { useAppStore } from '@/store'
+import { getConsentState, track, trackWithResult } from '@/diagnostics/telemetry/telemetry'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
+import { useAppStore } from '@/store/index'
 
 export function useAgentDashboardTelemetry(surface: AgentDashboardSurface): void {
   const optedIn = useAppStore((state) => state.settings?.telemetry?.optedIn)

@@ -1,4 +1,4 @@
-import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
 
 export const TERMINAL_STARTUP_TIMING_KEY = 'orca:terminal-startup-timing'
 type Disposable = { dispose(): void }

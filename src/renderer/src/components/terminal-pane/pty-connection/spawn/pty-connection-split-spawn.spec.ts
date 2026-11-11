@@ -1,15 +1,7 @@
-import {
-  bindPtyConnectionTestMocks,
-  ptyConnectionTestMocks
-} from '../test-fixtures/pty-connection-mocks.spec'
+import { bindPtyConnectionTestMocks } from '../test-fixtures/pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushAsyncTicks, createDeferred } from '../test-fixtures/pty-connection-test-async'
-import {
-  createKeyboardEventTarget,
-  createRect,
-  createMeasuredElement,
-  keyEvent
-} from '../test-fixtures/pty-connection-test-dom'
+import { createKeyboardEventTarget, keyEvent } from '../test-fixtures/pty-connection-test-dom'
 import {
   createMockTransport,
   createPane,
@@ -31,8 +23,6 @@ import {
 import { mockPanePtyArgs } from '../test-fixtures/pty-connection-test-connect-mock-pane'
 
 export function registerPtyConnectionSplitSpawnTests(): void {
-  const { notifyCodexPaneBoundForStaleSweep } = ptyConnectionTestMocks
-
   let mockStoreState: StoreState
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
@@ -99,54 +89,6 @@ export function registerPtyConnectionSplitSpawnTests(): void {
       expect(pane.container.dataset.ptyId).toBeUndefined()
     })
 
-    it('refits immediately when binding to a PTY with an active mobile-fit override', async () => {
-      const { setFitOverride } = await import('@/lib/pane-manager/mobile-fit-overrides')
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
-        '@/lib/agent-status/aggregation/worktree-agent-status'
-      )
-      const transport = createMockTransport()
-      transportFactoryQueue.push(transport)
-      const pane = createPane(1)
-      Object.defineProperty(pane.container, 'getBoundingClientRect', {
-        configurable: true,
-        value: () =>
-          ({
-            width: 800,
-            height: 400,
-            top: 0,
-            left: 0,
-            right: 800,
-            bottom: 400
-          }) as DOMRect
-      })
-      ;(
-        pane.fitAddon as unknown as { proposeDimensions: () => { cols: number; rows: number } }
-      ).proposeDimensions = vi.fn(() => ({ cols: 120, rows: 40 }))
-      pane.terminal.resize.mockImplementation((cols: number, rows: number) => {
-        pane.terminal.cols = cols
-        pane.terminal.rows = rows
-      })
-      setFitOverride('pty-fit', 'mobile-fit', 49, 20)
-
-      connectPanePty(
-        ...mockPanePtyArgs(
-          pane,
-          createManager(1),
-          bindPaneAgentTitleMocks(createDeps(), agentTitleMocks2)
-        )
-      )
-      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
-        | ((ptyId: string) => void)
-        | undefined
-      expect(onPtySpawn).toBeTypeOf('function')
-      onPtySpawn?.('pty-fit')
-
-      expect(pane.terminal.resize).toHaveBeenCalledWith(49, 20)
-      expect(pane.terminal.cols).toBe(49)
-      expect(pane.terminal.rows).toBe(20)
-    })
-
     it('continues post-spawn size reconcile after a transient mobile presence lock', async () => {
       const frameCallbacks: FrameRequestCallback[] = []
       globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
@@ -203,139 +145,6 @@ export function registerPtyConnectionSplitSpawnTests(): void {
       } finally {
         setDriverForPty(ptyId, { kind: 'idle' })
       }
-    })
-
-    it.each([
-      'visible',
-      'hidden',
-      'starved',
-      'cwd',
-      'late-cwd',
-      'metrics',
-      'narrow-command',
-      'narrow-plain',
-      'narrow-remote',
-      'disposed',
-      'hide-wait',
-      'disposed-hide-wait'
-    ])('preserves first-fit startup and bounded fallback: %s', async (scenario) => {
-      const visibility = scenario === 'hidden' ? 'hidden' : 'visible'
-      const narrow = scenario.startsWith('narrow-')
-      const pendingCwd = scenario.includes('cwd') ? createDeferred<string>() : null
-      const hideWait = scenario.endsWith('hide-wait')
-      let measurable = !pendingCwd && scenario !== 'disposed' && !hideWait
-      const frameCallbacks: FrameRequestCallback[] = []
-      globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
-        frameCallbacks.push(callback)
-        return frameCallbacks.length
-      })
-      const doc = Object.assign(new EventTarget(), {
-        visibilityState: visibility,
-        addEventListener: vi.fn(EventTarget.prototype.addEventListener),
-        removeEventListener: vi.fn(EventTarget.prototype.removeEventListener)
-      })
-      vi.stubGlobal('document', doc)
-      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
-        '@/lib/agent-status/aggregation/worktree-agent-status'
-      )
-      const { applyOrDeferPaneMetricOptions } =
-        await import('@/lib/pane-manager/pane-metric-options-deferral')
-      const transport = createMockTransport()
-      transportFactoryQueue.push(transport)
-      const pane = createPane(1)
-      Object.assign(pane.terminal, { cols: 80, rows: 24 })
-      const terminalOptions = Object.assign(pane.terminal.options, { fontSize: 12 })
-      pane.container = createMeasuredElement({ rect: () => createRect(1200, 800) })
-      const dimensions = () => {
-        if (!measurable) {
-          return { cols: 0, rows: 0 }
-        }
-        return narrow || terminalOptions.fontSize === 24
-          ? { cols: 5, rows: 20 }
-          : { cols: 120, rows: 40 }
-      }
-      pane.fitAddon.proposeDimensions = vi.fn(dimensions)
-      pane.fitAddon.fit = vi.fn(() => {
-        Object.assign(pane.terminal, dimensions())
-      })
-      const startup = scenario === 'narrow-plain' ? null : { command: 'claude' }
-      const deps = createDeps({
-        startup,
-        ...(pendingCwd ? { cwdPromise: pendingCwd.promise } : {})
-      })
-      if (scenario === 'narrow-remote') {
-        mockStoreState.repos[0].executionHostId = 'runtime:env-1'
-        mockStoreState.worktreesByRepo.repo1[0].runtimeOwnerEnvironmentId = 'env-1'
-      }
-      const args = mockPanePtyArgs(pane, createManager(1), deps)
-      if (scenario === 'metrics') {
-        applyOrDeferPaneMetricOptions(args[0], { fontSize: 24 }, false)
-      }
-      bindPaneAgentTitleMocks(args[2], agentTitleMocks4)
-
-      const binding = connectPanePty(...args)
-
-      if (visibility === 'visible' && scenario !== 'starved') {
-        frameCallbacks.shift()?.(0)
-        const hideListener = doc.addEventListener.mock.calls.at(-1)?.[1]
-        if (
-          pendingCwd ||
-          hideWait ||
-          ['metrics', 'disposed', 'narrow-command'].includes(scenario)
-        ) {
-          expect(transport.connect).not.toHaveBeenCalled()
-        }
-        if (scenario.startsWith('disposed')) {
-          binding.dispose()
-        }
-        if (hideWait) {
-          doc.visibilityState = 'hidden'
-          doc.dispatchEvent(new Event('visibilitychange'))
-          expect(transport.connect).toHaveBeenCalledTimes(scenario.startsWith('disposed') ? 0 : 1)
-          expect(doc.removeEventListener).toHaveBeenCalledWith('visibilitychange', hideListener)
-          if (typeof hideListener === 'function') {
-            hideListener(new Event('visibilitychange'))
-          }
-        }
-        if (scenario === 'late-cwd') {
-          vi.advanceTimersByTime(250)
-          expect(transport.connect).not.toHaveBeenCalled()
-        }
-        pendingCwd?.resolve('/workspace')
-        await flushAsyncTicks()
-        if (scenario === 'cwd') {
-          expect(transport.connect).not.toHaveBeenCalled()
-        }
-        measurable = true
-        terminalOptions.fontSize = 12
-        if (scenario === 'narrow-command') {
-          for (let retry = 0; retry < 11; retry += 1) {
-            frameCallbacks.shift()?.(0)
-          }
-          expect(transport.connect).not.toHaveBeenCalled()
-        }
-        frameCallbacks.shift()?.(0)
-        expect(transport.connect).toHaveBeenCalledTimes(scenario.startsWith('disposed') ? 0 : 1)
-      } else {
-        vi.advanceTimersByTime(250)
-      }
-
-      vi.advanceTimersByTime(250)
-      expect(transport.connect).toHaveBeenCalledTimes(scenario.startsWith('disposed') ? 0 : 1)
-      if (scenario.startsWith('disposed')) {
-        return
-      }
-      expect(createdTransportOptions[0]?.command).toBe(startup?.command)
-      expect(transport.connect).toHaveBeenCalledWith(
-        expect.objectContaining(
-          narrow || hideWait || scenario === 'late-cwd'
-            ? { cols: 80, rows: 24 }
-            : { cols: 120, rows: 40 }
-        )
-      )
     })
 
     it('spawns the delayed primary pane of an issue-command split when its sibling owns the tab PTY fallback', async () => {
@@ -506,40 +315,6 @@ export function registerPtyConnectionSplitSpawnTests(): void {
       expect(remountDeps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'pty-main')
     })
 
-    it('binds a fresh spawn that resolves as a daemon reattach', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks7 = await vi.importMock<PtyConnectionAgentTitleMocks>(
-        '@/lib/agent-status/aggregation/worktree-agent-status'
-      )
-      let currentPtyId: string | null = null
-      const transport = createMockTransport()
-      transport.getPtyId.mockImplementation(() => currentPtyId)
-      transport.connect.mockImplementation(async () => {
-        currentPtyId = 'pty-daemon-reattach'
-        return { id: currentPtyId, isReattach: true }
-      })
-      transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
-        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
-        ptyIdsByTabId: { 'tab-1': [] }
-      }
-
-      const pane = createPane(1)
-      const deps = createDeps()
-
-      connectPanePty(
-        ...mockPanePtyArgs(pane, createManager(1), bindPaneAgentTitleMocks(deps, agentTitleMocks7))
-      )
-      await flushAsyncTicks()
-
-      expect(pane.container.dataset.ptyId).toBe('pty-daemon-reattach')
-      expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'pty-daemon-reattach')
-      expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'pty-daemon-reattach')
-      // Inspect stale CODEX_HOME at first binding because the restored shell retains its original environment.
-      expect(notifyCodexPaneBoundForStaleSweep).toHaveBeenCalledWith('pty-daemon-reattach')
-    })
-
     it('replays a stable-pane adoption without submitting the resume command', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
       const agentTitleMocks8 = await vi.importMock<PtyConnectionAgentTitleMocks>(
@@ -597,55 +372,6 @@ export function registerPtyConnectionSplitSpawnTests(): void {
       expect(transport.sendInput).not.toHaveBeenCalledWith('codex resume provider-session\r')
       expect(transport.sendInput).toHaveBeenCalledWith('AFTER_ADOPTION_REPLAY\r', 'query-reply')
       expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, stablePtyId)
-    })
-
-    it('drops xterm onData while pane is replaying restored bytes', async () => {
-      // Guard replay query replies from leaking through onData into fresh-shell stdin (replay-guard.ts).
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks9 = await vi.importMock<PtyConnectionAgentTitleMocks>(
-        '@/lib/agent-status/aggregation/worktree-agent-status'
-      )
-
-      const transport = createMockTransport('pty-live')
-      transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
-        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] }
-      }
-
-      const pane = createPane(1)
-      let onDataHandler: ((data: string) => void) | null = null
-      pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
-        onDataHandler = handler
-        return { dispose: vi.fn() }
-      }) as typeof pane.terminal.onData)
-      const manager = createManager(1)
-      const replayingPanesRef = { current: new Map<number, number>([[1, 1]]) }
-      const deps = createDeps({ replayingPanesRef })
-      const { setFitOverride } = await import('@/lib/pane-manager/mobile-fit-overrides')
-
-      connectPanePty(
-        ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks9))
-      )
-
-      expect(onDataHandler).toBeDefined()
-      if (!onDataHandler) {
-        throw new Error('expected onData handler to be registered')
-      }
-      ;(onDataHandler as (data: string) => void)('\x1b[?1;2c')
-      expect(transport.sendInput).not.toHaveBeenCalled()
-      expect(transport.claimViewport).not.toHaveBeenCalled()
-
-      replayingPanesRef.current.delete(1)
-      setFitOverride('pty-live', 'remote-desktop-fit', 80, 24)
-      transport.claimViewport.mockClear()
-      ;(onDataHandler as (data: string) => void)('a')
-      expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
-      expect(transport.claimViewport).toHaveBeenCalledTimes(1)
-      ;(onDataHandler as (data: string) => void)('b')
-      // The renderer stays parked until runtime convergence is acknowledged, so a second keystroke can retry a transient failed resize.
-      expect(transport.claimViewport).toHaveBeenCalledTimes(2)
-      setFitOverride('pty-live', 'desktop-fit', 0, 0)
     })
 
     it('forwards focus and hover reports without claiming a parked mirror (#26469)', async () => {

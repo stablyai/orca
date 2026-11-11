@@ -29,3 +29,7 @@ export function bumpProviderRuntimeSessionGeneration(): number {
   providerRuntimeSessionGeneration += 1
   return providerRuntimeSessionGeneration
 }
+
+export function resetProviderRuntimeSessionGenerationForTests(): void {
+  providerRuntimeSessionGeneration = 0
+}

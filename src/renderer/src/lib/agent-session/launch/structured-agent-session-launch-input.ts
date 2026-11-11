@@ -6,7 +6,7 @@ import {
   getStructuredLaunchStateBySessionId,
   getPersistedStructuredAgentLaunchRecord,
   notifyStructuredLaunchListeners
-} from './structured-agent-session-launch-registry'
+} from './structured-agent-session-launch-state-store'
 
 /** Existing opening content is correlation after uncertainty, not an active create. */
 export function structuredAgentSessionLaunchHasRetainedInput(

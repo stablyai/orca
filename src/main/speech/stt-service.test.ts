@@ -1,6 +1,9 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { ModelManager } from './model-manager'
 import type { SpeechModelState } from '../../shared/speech-types'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 
 const { MockWorker, getCreatedWorkerCount, getLastWorker, resetWorkers } = vi.hoisted(() => {
   class HoistedMockWorker extends EventTarget {
@@ -10,6 +13,8 @@ const { MockWorker, getCreatedWorkerCount, getLastWorker, resetWorkers } = vi.ho
     terminated = false
     emitStoppedOnStop = true
     answerDiscard = true
+    /** False: a decode for the canceled stream never ends, so the queue never reaches its discard. */
+    reachDiscard = true
     emitReadyOnInit = HoistedMockWorker.emitReadyOnInit
     emitExitOnTerminate = true
     terminatePromise: Promise<number> | null = null
@@ -61,6 +66,11 @@ const { MockWorker, getCreatedWorkerCount, getLastWorker, resetWorkers } = vi.ho
       ) {
         queueMicrotask(() => this.emit('message', { type: 'stopped', streamId: message.streamId }))
       }
+      if (message.type === 'discard' && this.answerDiscard && this.reachDiscard) {
+        queueMicrotask(() =>
+          this.emit('message', { type: 'discarded', streamId: message.streamId })
+        )
+      }
     }
 
     attachAudioPort(streamId: string, port: unknown): boolean {
@@ -104,9 +114,16 @@ const stoppedReply = (worker: InstanceType<typeof MockWorker>) => ({
   streamId: worker.messages.findLast((message) => message.type === 'stop')?.streamId
 })
 
-const testModels = (models: Pick<ModelManager, 'getModelState' | 'getModelDir'>): ModelManager =>
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SttService reads getModelState and getModelDir, and fetches the VAD with downloadModel.
-  ({ ...models, downloadModel: vi.fn().mockResolvedValue(undefined) }) as never
+const testModels = (
+  models: Pick<ModelManager, 'getModelState' | 'getModelDir'>,
+  onModelStateChange: ModelManager['setProgressCallback'] = () => () => {}
+): ModelManager =>
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SttService reads getModelState and getModelDir, fetches the VAD with downloadModel and watches it land.
+  ({
+    ...models,
+    downloadModel: vi.fn().mockResolvedValue(undefined),
+    setProgressCallback: onModelStateChange
+  }) as never
 
 const readyModels = (): ModelManager =>
   testModels({
@@ -122,6 +139,7 @@ async function flushMicrotasks(): Promise<void> {
 }
 
 vi.mock('./model-catalog', () => ({
+  isLocalSpeechModel: (manifest: { provider: string }) => manifest.provider === 'local',
   getCatalogModel: (id: string) =>
     id === 'openai-model'
       ? {
@@ -172,6 +190,31 @@ const DEFAULT_IDLE_UNLOAD_MS = 15 * 60 * 1000
 describe('SttService', () => {
   beforeEach(() => {
     resetWorkers()
+  })
+
+  it('reloads a recognizer loaded before the VAD landed once the dictation using it ends', async () => {
+    const modelsDir = mkdtempSync(join(tmpdir(), 'stt-vad-'))
+    onTestFinished(() => rmSync(modelsDir, { recursive: true, force: true }))
+    const watchModels = vi.fn<ModelManager['setProgressCallback']>(() => () => {})
+    const models = testModels(
+      { getModelState: readyModels().getModelState, getModelDir: (id) => join(modelsDir, id) },
+      watchModels
+    )
+    const service = new SttService(models, spawnMockWorker)
+    await service.startDictation('model-a', vi.fn<SttEventSink>(), undefined, 'desktop')
+    const initOf = (worker = getLastWorker()) => worker?.messages.find((m) => m.type === 'init')
+    expect(initOf()).toMatchObject({ vadModelPath: undefined })
+
+    const vadPath = join(modelsDir, 'silero-vad-v6.2', 'silero-vad-v6.2-F32.gguf')
+    mkdirSync(join(modelsDir, 'silero-vad-v6.2'))
+    writeFileSync(vadPath, Buffer.alloc(1_241_056))
+    watchModels.mock.calls[0]?.[0]('silero-vad-v6.2', -1)
+    await flushMicrotasks()
+    expect(getCreatedWorkerCount()).toBe(1)
+
+    await service.stopDictation('desktop')
+    await vi.waitFor(() => expect(getCreatedWorkerCount()).toBe(2))
+    expect(initOf()).toMatchObject({ vadModelPath: vadPath })
   })
 
   it('gives each device dictating at once only its own text from one recognizer', async () => {
@@ -426,6 +469,41 @@ describe('SttService', () => {
     service.feedAudio(new Float32Array([1]), 16000, 'desktop:1')
 
     expect(worker!.messages.filter((message) => message.type === 'feed')).toHaveLength(0)
+  })
+
+  it('ends a finishing dictation at once when it is canceled, without waiting for its decode', async () => {
+    const service = new SttService(readyModels(), spawnMockWorker)
+    const sink = vi.fn()
+    await service.startDictation('model-a', sink, undefined, 'desktop')
+    const worker = getLastWorker()!
+    worker.emitStoppedOnStop = false
+
+    const finishing = service.stopDictation('desktop')
+    await service.stopDictation('desktop', { discard: true })
+    await finishing
+
+    expect(worker.terminated).toBe(false)
+    expect(sink).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'error' }))
+  })
+
+  it('restarts the speech process when a canceled decode is still running as the next dictation starts', async () => {
+    vi.useFakeTimers()
+    try {
+      const service = new SttService(readyModels(), spawnMockWorker)
+      await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
+      const hung = getLastWorker()!
+      hung.reachDiscard = false
+      await service.stopDictation('desktop', { discard: true })
+
+      const next = service.startDictation('model-a', vi.fn(), undefined, 'desktop')
+      await vi.advanceTimersByTimeAsync(2_000)
+      await next
+
+      expect(hung.terminated).toBe(true)
+      expect(getLastWorker()).not.toBe(hung)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('drops in-flight audio while stop is waiting for the worker', async () => {
@@ -739,15 +817,19 @@ describe('SttService', () => {
     async (event) => {
       vi.useFakeTimers()
       try {
-        const models: Pick<ModelManager, 'getModelState' | 'getModelDir' | 'downloadModel'> = {
+        const models: Pick<
+          ModelManager,
+          'getModelState' | 'getModelDir' | 'downloadModel' | 'setProgressCallback'
+        > = {
           getModelState: vi.fn<ModelManager['getModelState']>().mockResolvedValue({
             id: 'model-a',
             status: 'ready'
           }),
           getModelDir: vi.fn<ModelManager['getModelDir']>().mockReturnValue('/tmp/model-a'),
-          downloadModel: vi.fn().mockResolvedValue(undefined)
+          downloadModel: vi.fn().mockResolvedValue(undefined),
+          setProgressCallback: () => () => {}
         }
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This lifecycle reads getModelState/getModelDir and downloadModel (VAD) on the model manager.
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This lifecycle reads getModelState/getModelDir, downloadModel (VAD) and setProgressCallback on the model manager.
         const service = new SttService(models as ModelManager, spawnMockWorker)
         const sink = vi.fn<SttEventSink>()
         await service.startDictation('model-a', sink, undefined, 'desktop')

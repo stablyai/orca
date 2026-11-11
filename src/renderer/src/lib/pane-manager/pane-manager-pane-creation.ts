@@ -7,7 +7,8 @@ import type {
 } from './pane-manager-types'
 import type { PaneManagerHost } from './pane-manager-host'
 import { applyPaneOpacity, applyDividerStyles, applyRootBackground } from './pane-divider'
-import { createPaneDOM, openTerminal } from './pane-lifecycle'
+import { openTerminal } from './pane-lifecycle'
+import { createPaneDOM } from '@/lib/pane-manager/pane-dom-creation'
 import { shouldFollowMouseFocus } from './focus-follows-mouse'
 import { toPublicPane } from './pane-public-view'
 

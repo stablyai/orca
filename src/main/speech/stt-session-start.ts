@@ -154,6 +154,10 @@ async function acquireSttEngine(
     const current = state.engine
     // Bound in the same step it is chosen, so an idle teardown never sees it unused.
     if (current && sameSttRecognizerConfig(current, config)) {
+      if (current.draining) {
+        await current.draining
+        continue
+      }
       clearSttIdleTeardownTimer(state)
       return bindSttEngine(session, current)
     }
@@ -187,7 +191,7 @@ export function spawnSttEngine(
   if (!speechModulesDir) {
     throw new Error(LOCAL_SPEECH_UNAVAILABLE_ERROR)
   }
-  // A VAD fetched now serves the next engine start.
+  // A VAD fetched now reloads this engine once it is idle (SttService).
   const vadModelPath = sileroVadModelPath(state.modelManager)
   clearSttIdleTeardownTimer(state)
   const worker = state.spawnWorker()
@@ -210,7 +214,9 @@ export function spawnSttEngine(
     worker,
     detach,
     retired: false,
+    vadModelPath,
     onUnloaded: [],
+    draining: null,
     ready: readyPromise.catch((error: unknown) => {
       failSttEngine(state, engine, STT_WORKER_EXITED_ERROR)
       throw error

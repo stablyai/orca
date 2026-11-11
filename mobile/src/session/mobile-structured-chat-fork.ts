@@ -7,7 +7,7 @@ import type {
   StructuredAgentSessionForkSource
 } from '../../../src/shared/agent-session/structured-agent-session-create'
 import { AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-create-capabilities'
-import { createMobileStructuredAgentSession } from './mobile-structured-agent-session-launch'
+import { createMobileStructuredAgentSession } from './native-chat/agent-session/mobile-structured-agent-session-launch'
 import {
   launchedSelection,
   withLaunchReply,

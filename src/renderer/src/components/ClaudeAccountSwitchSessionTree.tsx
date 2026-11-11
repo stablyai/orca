@@ -13,15 +13,15 @@ import {
 import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
-} from '@/lib/worktree-default-display-name'
+} from '@/lib/workspace/display/worktree-default-display-name'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import { useAppStore } from '../store'
-import { ResumeTreeRow } from './NativeChatResumeTreeRow'
+import { useAppStore } from '../store/index'
+import { ResumeTreeRow } from './native-chat-recovery/tree/NativeChatResumeTreeRow'
 import {
   resumeSelectionState,
   toggleResumeSelection
-} from './native-chat-resume-on-restart-grouping'
-import { moveInTree } from './native-chat-resume-tree-keys'
+} from './native-chat-recovery/tree/native-chat-resume-on-restart-grouping'
+import { moveInTree } from './native-chat-recovery/tree/native-chat-resume-tree-keys'
 
 type SessionRowData = ClaudeSessionMoveCandidate & { reason?: string }
 

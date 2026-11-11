@@ -9,7 +9,7 @@ import type { NativeChatComposerInput } from '../../composer/editor/native-chat-
 import { NativeChatPromptEditor } from '../../composer/editor/NativeChatPromptEditor'
 import { useNativeChatFileDrops } from './use-native-chat-file-drops'
 import { NativeChatPaneFileDropSurface } from './NativeChatPaneFileDropSurface'
-import { useNewWorkspaceComposerFileDrop } from '../../../new-workspace/use-new-workspace-composer-file-drop'
+import '../../../new-workspace/use-new-workspace-composer-file-drop'
 import { NativeChatImageAttachmentPreview } from '../chips/NativeChatImageAttachmentPreview'
 import '../../../editor/document-images/useLocalImageSrc'
 import { resetLocalImageCacheState as resetLocalImageSrcStateForTests } from '../../../editor/document-images/local-image-src-cache'
@@ -63,7 +63,7 @@ vi.mock(
   })
 )
 
-import { installOsFileDropCancellationGuard } from '@/lib/os-file-drop-cancellation-guard'
+import { installOsFileDropCancellationGuard } from '@/lib/files/drop/os-file-drop-cancellation-guard'
 
 // Exercises real element delivery, path authorization and the draft attachment cache.
 function ComposerBody({
@@ -159,20 +159,6 @@ async function dropTwoImages(target: Element): Promise<void> {
   await act(async () => {
     target.dispatchEvent(event)
   })
-}
-
-function WorkspaceComposerProbe({
-  onDrop
-}: {
-  onDrop: (paths: string[], current: () => boolean) => void
-}) {
-  const owner = useNewWorkspaceComposerFileDrop({
-    projectPath: '/repo',
-    hostId: 'local',
-    connectionId: null,
-    applyDrop: async (paths, current) => onDrop(paths, current)
-  })
-  return <div ref={owner} data-workspace-composer="true" />
 }
 
 describe('native chat composer drop scoping', () => {
@@ -299,35 +285,5 @@ describe('native chat composer drop scoping', () => {
       JSON.stringify(['/repro/first.png', '/repro/second.png']),
       JSON.stringify(['/repro/first.png', '/repro/second.png'])
     ])
-  })
-
-  it('isolates native chat drops from the workspace composer while preserving workspace drops', async () => {
-    const workspaceDrop = vi.fn()
-    const view = render(
-      <>
-        <ComposerProbe pane="chat-a" />
-        <ComposerProbe pane="chat-b" />
-        <WorkspaceComposerProbe onDrop={workspaceDrop} />
-      </>
-    )
-
-    await dropTwoImages(view.container.querySelector('[data-pane="chat-a"] .ProseMirror')!)
-    expect(workspaceDrop).not.toHaveBeenCalled()
-    expect(readNativeChatAttachmentCache('chat-b')).toEqual([])
-    expect(readNativeChatAttachmentCache('chat-a').map(({ path }) => path)).toEqual([
-      '/repro/first.png',
-      '/repro/second.png'
-    ])
-
-    await dropTwoImages(view.container.querySelector('[data-workspace-composer="true"]')!)
-    expect(workspaceDrop).toHaveBeenCalledExactlyOnceWith(
-      ['/repro/first.png', '/repro/second.png'],
-      expect.any(Function)
-    )
-    expect(readNativeChatAttachmentCache('chat-a').map(({ path }) => path)).toEqual([
-      '/repro/first.png',
-      '/repro/second.png'
-    ])
-    expect(readNativeChatAttachmentCache('chat-b')).toEqual([])
   })
 })

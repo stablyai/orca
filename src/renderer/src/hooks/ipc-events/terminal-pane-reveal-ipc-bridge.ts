@@ -1,4 +1,4 @@
-import { revealTerminalPane } from '@/lib/reveal-terminal-pane'
+import { revealTerminalPane } from '@/lib/workspace/activation/reveal-terminal-pane'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
 import { useAppStore } from '../../store'
 import { parseExecutionHostId } from '../../../../shared/execution-host'

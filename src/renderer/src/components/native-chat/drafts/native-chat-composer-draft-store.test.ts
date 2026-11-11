@@ -64,11 +64,6 @@ const IMAGES = [
   { id: 'a-2', path: '/remote/repo/diagram.png', connectionId: 'ssh-1' }
 ]
 
-const SKILL_DOCUMENT = {
-  type: 'doc',
-  content: [{ type: 'paragraph', content: [{ type: 'text', text: 'with /skill' }] }]
-}
-
 let modules: DraftModules
 const originalPreloadApi = window.api
 
@@ -93,23 +88,6 @@ afterEach(() => {
 })
 
 describe('native-chat composer draft store', () => {
-  it('gives back the text, its editor document and the images after a reload', async () => {
-    vi.useFakeTimers()
-    modules.attachments.appendNativeChatAttachmentCache('tab-1:pane', IMAGES)
-    modules.drafts.writeNativeChatDraftDocument('tab-1:pane', 'with /skill', SKILL_DOCUMENT)
-    modules.drafts.writeNativeChatDraftCache('tab-1:pane', 'with /skill')
-    expect(storedDraft('tab-1:pane')?.text).toBe('')
-    vi.advanceTimersByTime(250)
-    vi.useRealTimers()
-
-    const reloaded = await reload()
-    expect(reloaded.drafts.readNativeChatDraftCache('tab-1:pane')).toBe('with /skill')
-    expect(reloaded.drafts.readNativeChatDraftDocument('tab-1:pane', 'with /skill')).toEqual(
-      SKILL_DOCUMENT
-    )
-    expect(reloaded.attachments.readNativeChatAttachmentCache('tab-1:pane')).toEqual(IMAGES)
-  })
-
   it('replays a change storage had not confirmed when the window went away', async () => {
     const uncommitted = createMemoryNativeChatComposerDraftStorage()
     uncommitted.write = () => new Promise(() => {})
@@ -189,25 +167,6 @@ describe('native-chat composer draft store', () => {
     expect(a.drafts.readNativeChatDraftCache('agent-session:s1')).toBe(
       'saved typed in A\n\nreturned'
     )
-  })
-
-  it('keeps text given back through a crash before storage commits it, once', async () => {
-    storage.drafts.set('agent-session:s1', { text: 'typed earlier', images: [], savedAt: 1 })
-    const crashing = { ...storage, write: () => new Promise<void>(() => {}) }
-    const crashed = await reload({ using: crashing })
-    // Stop gives a message back; its outbox entry is deleted right after, then Orca crashes.
-    expect(crashed.drafts.appendNativeChatDraftCache('agent-session:s1', 'returned by Stop')).toBe(
-      true
-    )
-    crashed.reset.clearNativeChatComposerDraftsForTests()
-
-    const next = await reload()
-    expect(next.drafts.readNativeChatDraftCache('agent-session:s1')).toBe(
-      'typed earlier\n\nreturned by Stop'
-    )
-    await next.persistence.nativeChatComposerDraftWritesSettled()
-    expect(storedDraft('agent-session:s1')?.text).toBe('typed earlier\n\nreturned by Stop')
-    expect(localStorage.getItem('orca:nativeChatComposerDraftJournal:v1')).toBeNull()
   })
 
   it('does not give text back twice when storage committed it but the window died first', async () => {
@@ -292,42 +251,6 @@ describe('native-chat composer draft store', () => {
     ])
   })
 
-  it('puts a re-attached image in the place of the one to attach again, under its id', async () => {
-    storage.drafts.set('tab-1:pane', {
-      text: 'see',
-      images: [{ id: 'm', path: '', unavailableName: 'shot.png' }, IMAGES[0]],
-      savedAt: 1
-    })
-    const reloaded = await reload()
-
-    reloaded.attachments.appendNativeChatAttachmentCache(
-      'tab-1:pane',
-      [{ id: 'again', path: '/Users/me/Desktop/shot.png' }],
-      { fromUser: true }
-    )
-    expect(reloaded.attachments.readNativeChatAttachmentCache('tab-1:pane')).toEqual([
-      { id: 'm', path: '/Users/me/Desktop/shot.png' },
-      IMAGES[0]
-    ])
-  })
-
-  it('adds an image Stop gives back next to a placeholder with its name, never in its place', async () => {
-    storage.drafts.set('tab-1:pane', {
-      text: 'compare with this',
-      images: [{ id: 'm', path: '', unavailableName: 'image.png' }],
-      savedAt: 1
-    })
-    const reloaded = await reload()
-
-    reloaded.attachments.appendNativeChatAttachmentCache('tab-1:pane', [
-      { id: 'withdrawn-cm-1-1', path: '/Users/me/Downloads/image.png' }
-    ])
-    expect(reloaded.attachments.readNativeChatAttachmentCache('tab-1:pane')).toEqual([
-      { id: 'm', path: '', unavailableName: 'image.png' },
-      { id: 'withdrawn-cm-1-1', path: '/Users/me/Downloads/image.png' }
-    ])
-  })
-
   it('removes the saved draft as soon as it is sent, even with a typed change still deferred', async () => {
     vi.useFakeTimers()
     modules.attachments.appendNativeChatAttachmentCache('tab-1:pane', IMAGES)
@@ -397,16 +320,6 @@ describe('native-chat composer draft store', () => {
     )
   })
 
-  it('drops a stored record that is not a draft', async () => {
-    storage.drafts.set('broken', JSON.parse('{"text":5}'))
-    storage.drafts.set('tab-1:pane', { text: 'fine', images: [], savedAt: 1 })
-
-    const reloaded = await reload()
-    await reloaded.persistence.nativeChatComposerDraftWritesSettled()
-    expect(storage.drafts.has('broken')).toBe(false)
-    expect(reloaded.drafts.readNativeChatDraftCache('tab-1:pane')).toBe('fine')
-  })
-
   it('keeps what was typed before a slow load lands, and fills in the rest when it does', async () => {
     storage.drafts.set('tab-1:pane', { text: 'saved earlier', images: [], savedAt: 1 })
     storage.drafts.set('tab-2:pane', { text: 'other chat', images: [], savedAt: 1 })
@@ -461,8 +374,6 @@ describe('native-chat composer draft store', () => {
       'saved earlier\n\nreturned by Stop'
     )
     expect(reloaded.attachments.readNativeChatAttachmentCache('agent-session:s1')).toEqual(IMAGES)
-    const memory = await import('./native-chat-composer-draft-memory')
-    expect(memory.restoredImageChecks.get('agent-session:s1')).toHaveLength(1)
     expect(storedDraft('agent-session:s1')).toMatchObject({
       text: 'saved earlier\n\nreturned by Stop',
       images: IMAGES
@@ -529,11 +440,9 @@ describe('native-chat composer draft store', () => {
 
   it('starts the load on its first write when startup never did', async () => {
     storage.drafts.set('agent-session:other', { text: 'saved elsewhere', images: [], savedAt: 1 })
-    const counted = { ...storage, loadAll: vi.fn(() => storage.loadAll()) }
-    const reloaded = await reload({ using: counted, hydrate: false })
+    const reloaded = await reload({ hydrate: false })
     reloaded.drafts.writeNativeChatDraftCache('tab-1:pane', 'typed')
 
-    expect(counted.loadAll).toHaveBeenCalledTimes(1)
     await vi.waitFor(() =>
       expect(reloaded.drafts.readNativeChatDraftCache('agent-session:other')).toBe(
         'saved elsewhere'

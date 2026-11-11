@@ -272,6 +272,8 @@ _Or via a package manager:_
 brew install --cask stablyai/orca/orca
 # Upgrade an existing install
 brew upgrade --cask stablyai/orca/orca
+# Release candidates (conflicts with the stable cask; uninstall it first)
+brew install --cask stablyai/orca/orca@rc
 
 # Arch Linux (AUR) — or stably-orca-git to build from source
 yay -S stably-orca-bin
@@ -290,11 +292,9 @@ Pair with your desktop app to monitor and steer your agents from your phone.
 
 - **Discord:** Join the community on **[Discord](https://discord.gg/fzjDKHxv8Q)**.
 - **Twitter / X:** Follow **[@orca_build](https://x.com/orca_build)** for updates and announcements.
-- **WeChat:** Scan to join an Orca community WeChat group. If one group is full, join another.
+- **WeChat:** Scan to join an Orca community WeChat group.
 
-  <img src="docs/assets/wechat-qr-group14.jpg" alt="WeChat QR code for the Orca community" width="160" />
-  <img src="docs/assets/wechat-qr-group15.jpg" alt="WeChat QR code for the Orca community" width="160" />
-  <img src="docs/assets/wechat-qr-group16.jpg" alt="WeChat QR code for the Orca community" width="160" />
+  <img src="docs/assets/wechat-qr.jpg" alt="WeChat QR code for the Orca community" width="160" />
 
 - **Feedback &amp; Ideas:** We ship fast. Missing something? [Request a new feature](https://github.com/stablyai/orca/issues).
 - **Privacy:** See the [privacy &amp; telemetry docs](https://www.onorca.dev/docs/telemetry) for what anonymous usage data Orca collects and how to opt out.

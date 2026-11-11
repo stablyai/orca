@@ -4,7 +4,7 @@ import { resetAndRefreshAllTerminalWebglAtlases } from '@/lib/pane-manager/pane-
 import {
   flushTerminalOutput,
   requestTerminalBacklogRecovery
-} from '@/lib/pane-manager/pane-terminal-output-scheduler'
+} from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
 import {
   enforceTerminalCurrentScrollIntent,
   syncTerminalScrollIntentFromViewport
@@ -17,8 +17,8 @@ import { focusActivePane } from '../../input/focus/mounted-pane-focus'
 import { useAppStore } from '@/store/index'
 import { auditPaneWeightParity } from '../../render-health/terminal-render-desync-weight-probe'
 import { flushDeferredPaneMetricOptionsIfMeasurable } from '@/lib/pane-manager/pane-fit-measurability'
-import { repairPaneWebglCanvasDprMismatch } from '@/lib/pane-manager/terminal-canvas-dpr-repair'
-import { presentPaneViewport } from '@/lib/pane-manager/pane-viewport-present'
+import { repairPaneWebglCanvasDprMismatch } from '@/lib/pane-manager/terminal-rendering/terminal-canvas-dpr-repair'
+import { presentPaneViewport } from '@/lib/pane-manager/terminal-rendering/pane-viewport-present'
 
 const VISIBLE_RESUME_FLUSH_CHARS = 256 * 1024
 const WINDOW_WAKE_FLUSH_CHARS = 64 * 1024

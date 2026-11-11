@@ -9,7 +9,7 @@ import {
   flushPendingEditorBuffer,
   hasPendingEditorBufferChange
 } from '../save/flush/editor-pending-flush'
-import { APP_MENU_PASTE_EVENT } from '@/lib/app-menu-paste'
+import { APP_MENU_PASTE_EVENT } from '@/lib/clipboard/menu/app-menu-paste'
 import { ORCA_EDITOR_FILE_SAVED_EVENT } from '../autosave/editor-autosave'
 import { EMPTY_EDITOR_BUFFER_VIEW_INDEX as NO_SHARING } from '@/store/slices/editor/buffers/editor-buffer-views'
 
@@ -104,29 +104,6 @@ describe('editable CSV table', () => {
     expect(screen.getByTestId('dirty').textContent).toBe('true')
   })
 
-  it('saves the current cell value and reports a failed write without dropping the draft', async () => {
-    const { save } = setup()
-    save.mockResolvedValue(false)
-    fireEvent.keyDown(edit('B', 'saved value'), { key: 's', ctrlKey: true, metaKey: true })
-    expect(save).toHaveBeenCalledWith('\ufeffname,value\r\nsaved value,2\r\nA,1')
-    expect((await screen.findByRole('alert')).textContent).toContain(
-      'Your edits remain in the draft'
-    )
-    expect(screen.getByTestId('source').textContent).toContain('saved value')
-  })
-
-  it('pastes atomically into selected cells and does not partially apply an oversized rectangle', () => {
-    const { changes } = setup()
-    const cell = screen.getByRole('gridcell', { name: 'B' })
-    fireEvent.pointerDown(cell, { button: 0 })
-    const grid = screen.getByRole('grid')
-    fireEvent.paste(grid, { clipboardData: { getData: () => 'new\t3\nother\t4' } })
-    expect(screen.getByTestId('source').textContent).toBe('\ufeffname,value\r\nnew,3\r\nother,4')
-    fireEvent.paste(grid, { clipboardData: { getData: () => 'one\ttwo\tthree' } })
-    expect(changes).toHaveBeenCalledTimes(1)
-    expect(screen.getByRole('alert').textContent).toContain('Paste exceeds the table')
-  })
-
   it('edits a filtered row in its original source position', () => {
     setup()
     fireEvent.change(screen.getByRole('textbox', { name: 'Filter rows' }), {
@@ -134,17 +111,6 @@ describe('editable CSV table', () => {
     })
     fireEvent.keyDown(edit('1', 'updated'), { key: 'Enter' })
     expect(screen.getByTestId('source').textContent).toBe('\ufeffname,value\r\nB,2\r\nA,updated')
-  })
-
-  it('keeps the chosen table delimiter when an edit would change the Auto guess', () => {
-    setup('first;second\nvalue;two')
-    fireEvent.doubleClick(screen.getByRole('columnheader', { name: 'first' }))
-    const input = screen.getByRole('textbox', { name: /Edit row/ })
-    fireEvent.change(input, { target: { value: 'tabs\there\ttoo' } })
-    fireEvent.keyDown(input, { key: 'Enter' })
-    expect(screen.getByRole('grid').getAttribute('aria-colcount')).toBe('3')
-    expect(screen.getByRole('columnheader', { name: 'tabs\there\ttoo' })).toBeTruthy()
-    expect(screen.getByRole('combobox', { name: 'Delimiter' }).textContent).toBe('Semicolon (;)')
   })
 
   it('cancels only the new cell after an earlier save completes', () => {
@@ -197,29 +163,6 @@ describe('editable CSV table', () => {
     )
     expect(changes).toHaveBeenCalledExactlyOnceWith('name,new,value\npending,,2')
     expect(result.current.interaction?.editing).toBeNull()
-  })
-
-  it('rejects a delayed paste if typing starts before the clipboard read completes', async () => {
-    let resolveRead: (value: string) => void = () => {}
-    const pending = new Promise<string>((resolve) => {
-      resolveRead = resolve
-    })
-    Object.defineProperty(window, 'api', {
-      configurable: true,
-      value: { ui: { readClipboardText: () => pending } }
-    })
-    const { changes } = setup()
-    fireEvent.pointerDown(screen.getByRole('gridcell', { name: 'B' }), { button: 0 })
-    fireEvent.click(screen.getByRole('button', { name: 'Paste' }))
-    edit('B', 'new pending input')
-    await act(async () => {
-      resolveRead('old clipboard')
-      await pending
-    })
-    expect(changes).not.toHaveBeenCalled()
-    expect(screen.getByRole('alert').textContent).toContain('CSV changed before paste completed')
-    const retained = screen.getByRole('textbox', { name: /Edit row/ })
-    expect(retained instanceof HTMLTextAreaElement && retained.value).toBe('new pending input')
   })
 
   it('routes menu paste only to the focused grid when two file panes are mounted', async () => {

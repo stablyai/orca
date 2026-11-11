@@ -105,6 +105,8 @@ export type RuntimeEnsureAgentSessionRequest =
   | {
       kind: 'explicit'
       resumeOrigin?: 'saved'
+      /** The pane a saved restore resumes; `placement` names the pane it opens in. */
+      restoreSourcePaneKey?: string
       worktree: string
       agent: ResumableTuiAgent
       providerSession: AgentProviderSessionMetadata

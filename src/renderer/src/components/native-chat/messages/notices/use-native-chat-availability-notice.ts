@@ -1,4 +1,7 @@
-import { nativeChatSignInLabel, type NativeChatSignIn } from '../../host-access/native-chat-sign-in'
+import {
+  nativeChatSetupAction,
+  type NativeChatHostSetup
+} from '../../host-access/native-chat-host-setup'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import { useMemo, useState } from 'react'
 import type { AgentSessionUnavailable } from '../../../../../../shared/agent-session/agent-session-availability'
@@ -61,7 +64,7 @@ function shownRejectionReason(
 
 /** Advisory host verdicts never block Send; dismiss per verdict and omit reasons already explained by a failed start or newest send. */
 export function useNativeChatAvailabilityNotice(input: {
-  signIn?: NativeChatSignIn | null
+  setup?: NativeChatHostSetup | null
   unavailable: AgentSessionUnavailable | null | undefined
   agent: AgentType
   /** The WSL distro the chat's host runs in, to say where the agent is missing. */
@@ -108,15 +111,7 @@ export function useNativeChatAvailabilityNotice(input: {
   const agentName = structuredAgentLabel(input.agent)
   return {
     key: 'availability',
-    action:
-      unavailable.reason === 'notSignedIn' && input.signIn
-        ? {
-            label: nativeChatSignInLabel(input.signIn, t),
-            primary: true,
-            onClick: input.signIn.signIn,
-            disabled: input.signIn.signingIn
-          }
-        : undefined,
+    action: nativeChatSetupAction(unavailable.reason, input.setup, t),
     kind: 'error',
     text:
       unavailable.reason === 'cliMissing'

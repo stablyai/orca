@@ -20,7 +20,7 @@ export function BrowserLinkRoutingSetting({
   const t = useTranslate()
   return (
     <SearchableSetting
-      title={t('auto.components.settings.BrowserPane.d3eb69c0aa', 'Link Routing')}
+      title={t('auto.components.settings.BrowserPane.7a366a05e1', 'Link routing')}
       description={linkRoutingDescription}
       keywords={[
         'browser',
@@ -36,11 +36,11 @@ export function BrowserLinkRoutingSetting({
       className="flex items-center justify-between gap-4 py-3"
     >
       <div className="space-y-0.5">
-        <Label>{t('auto.components.settings.BrowserPane.d3eb69c0aa', 'Link Routing')}</Label>
+        <Label>{t('auto.components.settings.BrowserPane.7a366a05e1', 'Link routing')}</Label>
         <p className="text-xs text-muted-foreground">{linkRoutingDescription}</p>
       </div>
       <Switch
-        aria-label={t('auto.components.settings.BrowserPane.d3eb69c0aa', 'Link Routing')}
+        aria-label={t('auto.components.settings.BrowserPane.7a366a05e1', 'Link routing')}
         checked={settings.openLinksInApp}
         onCheckedChange={(checked) =>
           updateSettings({

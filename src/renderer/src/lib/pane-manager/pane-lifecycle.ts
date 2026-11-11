@@ -15,17 +15,21 @@ import {
 } from './terminal-linkifier-hover-reset-on-mouseleave'
 import { installTerminalLinkifierHoverResetOnWrite } from './terminal-linkifier-hover-reset-on-write'
 import { attachDomRendererFocusClassSync } from './pane-dom-focus-class-sync'
-import { attachDomBlockFill } from './terminal-dom-block-fill'
-import { attachWebgl, cancelPendingWebglRefresh, disposeWebgl } from './pane-webgl-renderer'
-import { rebuildAttachedWebgl } from './pane-webgl-reattach'
-import { configureLazyArabicShapingJoiner } from './terminal-arabic-shaping-joiner'
-import { TerminalLigaturesAddon } from './terminal-ligatures-addon'
-import { attachInlineImages, detachInlineImages } from './pane-inline-images'
+import { attachDomBlockFill } from './terminal-rendering/terminal-dom-block-fill'
+import {
+  attachWebgl,
+  cancelPendingWebglRefresh,
+  disposeWebgl
+} from './terminal-rendering/pane-webgl-renderer'
+import { rebuildAttachedWebgl } from './terminal-rendering/pane-webgl-reattach'
+import { configureLazyArabicShapingJoiner } from './terminal-rendering/terminal-arabic-shaping-joiner'
+import { TerminalLigaturesAddon } from './terminal-rendering/terminal-ligatures-addon'
+import { attachInlineImages, detachInlineImages } from './terminal-rendering/pane-inline-images'
 import { installTerminalImeCandidateAnchor } from './terminal-ime-candidate-anchor'
-import { cancelPendingTerminalViewportPresents } from './pane-viewport-present'
+import { cancelPendingTerminalViewportPresents } from './terminal-rendering/pane-viewport-present'
 import { releaseReplayGuardsForDisposedTerminal } from '@/components/terminal-pane/snapshots/replay-guard'
 
-export { createPaneDOM } from './pane-dom-creation'
+import './pane-dom-creation'
 
 /** Open after DOM insertion; named options prevent silently swapped adjacent booleans. */
 export function openTerminal(

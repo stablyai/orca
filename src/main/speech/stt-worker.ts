@@ -16,6 +16,8 @@ type AudioPortInput = {
 const parentPort = connectSttWorkerParentPort()
 let recognizer: SttRecognizer | null = null
 const audioPorts = new Map<string, AudioPortInput>()
+// Canceled streams whose queued work is skipped instead of decoded; cleared when their discard runs.
+const discarded = new Set<string>()
 
 // transcribe-cpp decodes off the event loop; one queue keeps feeds behind init and stop behind feeds.
 let queue: Promise<void> = Promise.resolve()
@@ -37,6 +39,9 @@ async function handleInit(init: SttRecognizerInit): Promise<void> {
 }
 
 async function handleFeed(msg: Extract<SttWorkerRequest, { type: 'feed' }>): Promise<void> {
+  if (discarded.has(msg.streamId)) {
+    return
+  }
   try {
     await recognizer?.feed(msg.streamId, msg.samples, msg.sampleRate)
   } catch (err) {
@@ -46,6 +51,11 @@ async function handleFeed(msg: Extract<SttWorkerRequest, { type: 'feed' }>): Pro
 
 function attachAudioPort(streamId: string, port: MessagePortMain | undefined): void {
   if (!port) {
+    return
+  }
+  // A cancel that arrived while this attach waited in line must not let the port's frames reopen the stream.
+  if (discarded.has(streamId)) {
+    port.close()
     return
   }
   const input: AudioPortInput = { port, onEnded: null, ending: false }
@@ -83,6 +93,9 @@ function attachAudioPort(streamId: string, port: MessagePortMain | undefined): v
 }
 
 async function handleStop(streamId: string): Promise<void> {
+  if (discarded.has(streamId)) {
+    return
+  }
   const input = audioPorts.get(streamId)
   // Main's stop can overtake the renderer's last frames on the port; finish only after them.
   if (input) {
@@ -98,13 +111,21 @@ async function handleStop(streamId: string): Promise<void> {
   }
 }
 
-// A canceled dictation drops its audio undecoded.
-function handleDiscard(streamId: string): void {
+// A cancel answers at once, even during Finish, and the stream's queued audio is skipped rather than decoded.
+function cancelStream(streamId: string): void {
+  discarded.add(streamId)
+  recognizer?.cancel(streamId)
   const input = audioPorts.get(streamId)
   audioPorts.delete(streamId)
   input?.port.close()
-  recognizer?.discard(streamId)
   parentPort.post({ type: 'stopped', streamId })
+}
+
+// Runs in queue order, after everything queued for the stream before the cancel; the host waits for it.
+function handleDiscard(streamId: string): void {
+  discarded.delete(streamId)
+  recognizer?.discard(streamId)
+  parentPort.post({ type: 'discarded', streamId })
 }
 
 function handleMessage(
@@ -130,5 +151,8 @@ function handleMessage(
 parentPort.onMessage((message, ports) => {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the session host posts here, and it sends SttWorkerRequest.
   const msg = message as SttWorkerRequest
+  if (msg.type === 'discard') {
+    cancelStream(msg.streamId)
+  }
   enqueue(() => handleMessage(msg, ports))
 })

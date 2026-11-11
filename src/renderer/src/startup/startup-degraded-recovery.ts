@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '../store'
-import { getStartupErrorFallbackUI } from '../lib/startup-ui-hydration'
+import { useAppStore } from '../store/index'
+import { getStartupErrorFallbackUI } from '../app-shell/startup/startup-ui-hydration'
 import {
   announceWebHostUnreachableAtStartup,
   isWebHostUnreachableAtStartup
