@@ -69,7 +69,13 @@ function setupText(
       return {
         title,
         tag,
-        detail: t('vmBuildAgents.finishInBrowser', 'Finish in your browser')
+        // This row has no field: the code goes in where setup has one (the pane, Settings).
+        detail: model.setup.acceptsCode
+          ? t(
+              'vmBuildAgents.finishInBrowserPaste',
+              'Finish in your browser, then paste the code in Settings → Agent accounts.'
+            )
+          : t('vmBuildAgents.finishInBrowser', 'Finish in your browser')
       }
     case 'preparing':
       return {

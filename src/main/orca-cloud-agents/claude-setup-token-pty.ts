@@ -69,7 +69,8 @@ export const spawnClaudeSetupTokenPty: SpawnSetupToken = async () => {
     onExit: (listener) => {
       child.onExit(({ exitCode }) => listener(exitCode))
     },
-    kill: () => child.kill()
+    kill: () => child.kill(),
+    write: (data) => child.write(data)
   }
   return handle
 }

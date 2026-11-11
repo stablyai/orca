@@ -27,6 +27,7 @@ function fakeChild() {
       onExit = l
     },
     kill: vi.fn(),
+    write: vi.fn(),
     emit: (c) => onData(c),
     exit: () => onExit(0)
   }

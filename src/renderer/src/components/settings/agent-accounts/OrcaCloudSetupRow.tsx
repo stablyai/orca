@@ -12,6 +12,8 @@ import type {
 import { SecretValueInput } from '../cloud-secrets/SecretValueInput'
 import { ElapsedSuffix, RowShell } from './orca-cloud-account-row-shell'
 import { setupFailureCopy } from './orca-cloud-accounts-copy'
+import { CloudStripPasteForm } from '@/components/agent-sign-in-strip/CloudStripPasteForm'
+import { setupCodePaste } from '@/components/agent-sign-in-strip/cloud-agent-setup-strip-model'
 import type { OrcaCloudAccountsActions } from './orca-cloud-accounts-types'
 
 function PasteTokenForm({
@@ -151,12 +153,33 @@ export function SetupRow({
               <ElapsedSuffix startedAt={setup.startedAt} now={now} />
             </>
           }
-          detail={t(
-            'orcaCloudAccounts.settingUpClaudeDetail',
-            'Orca runs claude setup-token on this computer, then saves the result to your Orca account.'
-          )}
+          detail={
+            setup.code === 'rejected'
+              ? t(
+                  'agentSignInStrip.setupCodeRejected',
+                  'That code didn’t work. Paste the newest code from the sign-in page, or open it again.'
+                )
+              : setup.acceptsCode
+                ? t(
+                    'agentSignInStrip.finishInBrowserPaste',
+                    'Finish in your browser, then paste the code here.'
+                  )
+                : t(
+                    'orcaCloudAccounts.settingUpClaudeDetail',
+                    'Orca runs claude setup-token on this computer, then saves the result to your Orca account.'
+                  )
+          }
+          detailTone={setup.code === 'rejected' ? 'warning' : undefined}
           actions={
             <>
+              {/* Same order on every surface: [Paste code] [Finish setup] [Open again]. */}
+              {setup.acceptsCode ? (
+                <CloudStripPasteForm
+                  paste={setupCodePaste(agent, setup.code, t)}
+                  onSubmitCode={() => undefined}
+                  onSubmitSetupCode={(code) => actions.submitSetupCode?.(code)}
+                />
+              ) : null}
               {setup.canReopen ? (
                 <Button
                   type="button"

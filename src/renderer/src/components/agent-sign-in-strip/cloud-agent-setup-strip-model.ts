@@ -27,6 +27,34 @@ function base(agent: string, t: Translate): CloudStripModel {
   }
 }
 
+export function setupCodePaste(
+  agent: HostAgentSignInAgent,
+  code: 'checking' | 'rejected' | undefined,
+  t: Translate
+): NonNullable<CloudStripModel['paste']> {
+  const name = HOST_AGENT_SIGN_IN_AGENT_NAME[agent]
+  return {
+    submitting: code === 'checking',
+    refusal:
+      code === 'rejected'
+        ? t(
+            'agentSignInStrip.setupCodeRejected',
+            'That code didn’t work. Paste the newest code from the sign-in page, or open it again.'
+          )
+        : null,
+    secretLabel: t('agentSignInStrip.setupCodeLabel', 'Code from {{agent}}’s sign-in page', {
+      agent: name
+    }),
+    setupCode: {
+      placeholder: t('agentSignInStrip.setupCodePlaceholder', 'Paste code'),
+      submitLabel:
+        code === 'checking'
+          ? t('agentSignInStrip.setupCodeChecking', 'Checking the code…')
+          : t('agentSignInStrip.finishSetup', 'Finish setup')
+    }
+  }
+}
+
 export function cloudAgentSetupStripModel(args: {
   agent: HostAgentSignInAgent
   setup: OrcaCloudAgentSetup
@@ -67,7 +95,14 @@ export function cloudAgentSetupStripModel(args: {
       return {
         ...need,
         status: 'busy',
-        detail: t('agentSignInStrip.finishInBrowser', 'Finish in your browser'),
+        detail: setup.acceptsCode
+          ? t(
+              'agentSignInStrip.finishInBrowserPaste',
+              'Finish in your browser, then paste the code here.'
+            )
+          : t('agentSignInStrip.finishInBrowser', 'Finish in your browser'),
+        // Claude's page shows a code to bring back: [Paste code] [Finish setup] [Open again].
+        paste: setup.acceptsCode ? setupCodePaste(args.agent, setup.code, t) : null,
         primary: setup.canReopen
           ? {
               label: t('agentSignInStrip.openAgain', 'Open again'),
@@ -135,10 +170,14 @@ export function cloudAgentSetupStripModel(args: {
         status: 'error',
         title: copy.title,
         detail: copy.detail ?? need.detail,
-        primary: {
-          label: t('agentSignInStrip.tryAgain', 'Try again'),
-          action: { kind: 'setUpOnce' }
-        },
+        // An expired sign-in: "Open again" starts a fresh one with a new link (main restarts it).
+        primary:
+          setup.error === 'timed_out'
+            ? {
+                label: t('agentSignInStrip.openAgain', 'Open again'),
+                action: { kind: 'reopenSetup' }
+              }
+            : { label: t('agentSignInStrip.tryAgain', 'Try again'), action: { kind: 'setUpOnce' } },
         announcement: copy.title
       }
     }

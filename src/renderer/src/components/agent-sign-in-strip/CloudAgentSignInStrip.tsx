@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { CloudStripPasteForm } from './CloudStripPasteForm'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -88,6 +88,8 @@ export function CloudStripLayer({ children }: { children: React.ReactNode }): Re
 export type CloudStripActions = {
   primary: (action: CloudStripPrimary) => void
   submitCode: (code: string) => void
+  /** The code from Claude's sign-in page, for the waiting setup-token (Set up once). */
+  submitSetupCode?: (code: string) => void
   useCode: () => void
   /** From a device code to pasting a code (the gate's code fallback). */
   pasteCode: () => void
@@ -155,7 +157,6 @@ export function CloudAgentSignInStrip({
   const t = useTranslate()
   const titleId = React.useId()
   const detailId = React.useId()
-  const [code, setCode] = useState('')
   const primary = model.primary
   return (
     <section
@@ -236,36 +237,11 @@ export function CloudAgentSignInStrip({
           </code>
         ) : null}
         {model.paste ? (
-          <form
-            className="flex min-w-0 items-center gap-1.5"
-            onSubmit={(event) => {
-              event.preventDefault()
-              if (code.trim()) {
-                actions.submitCode(code.trim())
-              }
-            }}
-          >
-            <Input
-              aria-label={
-                model.paste.secretLabel ?? t('agentSignInStrip.pasteLabel', 'Code from claude.ai')
-              }
-              type={model.paste.secretLabel ? 'password' : undefined}
-              autoComplete={model.paste.secretLabel ? 'off' : undefined}
-              aria-invalid={model.paste.refusal ? true : undefined}
-              value={code}
-              onChange={(event) => setCode(event.target.value)}
-              variant="code"
-              className="h-7 min-w-0"
-            />
-            <Button
-              type="submit"
-              size="xs"
-              aria-busy={model.paste.submitting || undefined}
-              aria-disabled={model.paste.submitting || undefined}
-            >
-              {t('agentSignInStrip.continue', 'Continue')}
-            </Button>
-          </form>
+          <CloudStripPasteForm
+            paste={model.paste}
+            onSubmitCode={actions.submitCode}
+            onSubmitSetupCode={actions.submitSetupCode}
+          />
         ) : null}
         {primary ? (
           <Button

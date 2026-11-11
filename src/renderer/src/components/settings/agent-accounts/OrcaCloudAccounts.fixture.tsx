@@ -17,6 +17,7 @@ const ACTIONS: OrcaCloudAccountsActions = {
   cancel: noop,
   reopen: noop,
   usePaste: noop,
+  submitSetupCode: noop,
   pasteToken: async () => null,
   remove: async () => null,
   setSource: async () => null,
