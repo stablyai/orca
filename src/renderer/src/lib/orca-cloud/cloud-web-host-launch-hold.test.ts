@@ -120,7 +120,8 @@ describe('createWithCloudAgentHold (the one hold for every Orca Cloud agent laun
     releaseCloudAgentHold(key, 'proceed')
     await expect(result).resolves.toBe(AGENT)
     // The original launch, untouched: its command still carries the first prompt.
-    expect(create).toHaveBeenLastCalledWith(CREATE_AGENT)
+    // Started by the person's click: the agent's tab comes forward.
+    expect(create).toHaveBeenLastCalledWith({ ...CREATE_AGENT, activate: true })
     expect(host.close).toHaveBeenCalledWith(
       expect.objectContaining({ tabId: toWebTerminalSurfaceTabId('h1'), reason: 'user' })
     )
@@ -141,7 +142,7 @@ describe('createWithCloudAgentHold (the one hold for every Orca Cloud agent laun
     await expect(result).resolves.toBe(AGENT)
     const agentCreates = create.mock.calls.filter(([args]) => args.launchAgent === 'claude')
     // The prompt rides in the prepared command, delivered once by the one agent create.
-    expect(agentCreates).toEqual([[launch]])
+    expect(agentCreates).toEqual([[{ ...launch, activate: true }]])
     expect(create).toHaveBeenCalledTimes(2)
     expect(readCloudAgentHold(key)).toBeNull()
   })
@@ -159,6 +160,7 @@ describe('createWithCloudAgentHold (the one hold for every Orca Cloud agent laun
     })
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'active' }))
     await expect(result).resolves.toBe(AGENT)
+    // Renew's auto-start: the original args, no focus taken (the tab may be in the background).
     expect(create).toHaveBeenLastCalledWith(args)
   })
 

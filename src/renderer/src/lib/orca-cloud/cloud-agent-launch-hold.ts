@@ -121,7 +121,19 @@ export function readCloudAgentHold(paneKey: string): CloudAgentHold | null {
 }
 
 export function releaseCloudAgentHold(paneKey: string, outcome: 'proceed' | 'cancel'): void {
-  holds.get(paneKey)?.release(outcome)
+  const hold = holds.get(paneKey)
+  if (hold && outcome === 'proceed') {
+    // The strip's Start: the person asked for the agent here and now (a Renew's auto-start didn't).
+    startedByPerson.add(paneKey)
+  }
+  hold?.release(outcome)
+}
+
+const startedByPerson = new Set<string>()
+
+/** Whether this hold was released by the person's Start (read once): its agent should take focus. */
+export function takeCloudAgentHoldStartedByPerson(paneKey: string): boolean {
+  return startedByPerson.delete(paneKey)
 }
 
 // A launch decides within this budget; a slow or failed read never holds the agent.
