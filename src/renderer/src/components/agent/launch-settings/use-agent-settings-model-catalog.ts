@@ -36,6 +36,7 @@ export function useAgentSettingsModelCatalog(
   // A paired host's command and environment live in its own settings; re-read, keeping the shown list meanwhile.
   const [hostRevision, setHostRevision] = useState(0)
   const environmentId = target?.kind === 'environment' ? target.environmentId : null
+  const isLocal = target?.kind === 'local'
   useEffect(
     () =>
       environmentId
@@ -54,7 +55,13 @@ export function useAgentSettingsModelCatalog(
     catalog: AgentSessionModelCatalogResult | undefined
   } | null>(null)
   useEffect(() => {
-    if (!target || !key || !sourceControlActionAgentPicksModel(agent)) {
+    // Rebuilt from primitives: callers pass a new target object every render.
+    const readTarget: RuntimeClientTarget | null = environmentId
+      ? { kind: 'environment', environmentId }
+      : isLocal
+        ? { kind: 'local' }
+        : null
+    if (!readTarget || !key || !sourceControlActionAgentPicksModel(agent)) {
       return
     }
     let stale = false
@@ -62,7 +69,7 @@ export function useAgentSettingsModelCatalog(
     // Old hosts refuse waitForListing, so wait only once the host says a listing is running.
     const read = (wait: boolean): void => {
       void callStructuredAgentSession<AgentSessionModelCatalogResult>(
-        target,
+        readTarget,
         'agentSession.modelCatalog',
         wait ? { agent, waitForListing: true } : { agent }
       )
@@ -87,8 +94,7 @@ export function useAgentSettingsModelCatalog(
     return () => {
       stale = true
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- `key` is the target's identity.
-  }, [agent, key, accountSettings, generation, hostRevision])
+  }, [agent, key, environmentId, isLocal, accountSettings, generation, hostRevision])
   const settled =
     answer?.key === key &&
     answer.accountSettings === accountSettings &&
