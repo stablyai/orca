@@ -9,8 +9,6 @@ import { useTranslate } from '@/i18n/use-translate'
 // Long enough that a pointer crossing the sidebar opens nothing.
 const PEEK_OPEN_DWELL_MS = 400
 
-type PeekTarget = { ptyId: string | null }
-
 /** Lets the user watch a sidebar agent without a tab switch; read-only so no stray key reaches it. */
 export function AgentRowTerminalPeek({
   agent,
@@ -22,7 +20,11 @@ export function AgentRowTerminalPeek({
   const t = useTranslate()
   // Child agents have no pane of their own; peek the pane a click activates.
   const paneKey = agent.activationPaneKey ?? agent.paneKey
-  const [target, setTarget] = useState<PeekTarget | null>(null)
+  const [open, setOpen] = useState(false)
+  // Kept after close so the card fades out with its content, not as an empty frame.
+  const [ptyId, setPtyId] = useState<string | null>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const returnFocusRef = useRef<HTMLElement | null>(null)
   const dwellTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const removeWheelListenerRef = useRef<(() => void) | null>(null)
 
@@ -41,18 +43,26 @@ export function AgentRowTerminalPeek({
     }
     dwellTimerRef.current = setTimeout(() => {
       clearDwell()
+      const focused = document.activeElement
+      returnFocusRef.current = focused instanceof HTMLElement ? focused : null
       // Resolve at open: the pane can rebind to another PTY between hovers.
-      setTarget({ ptyId: getPtyIdForPaneKey(paneKey) })
+      setPtyId(getPtyIdForPaneKey(paneKey))
+      setOpen(true)
     }, PEEK_OPEN_DWELL_MS)
   }, [clearDwell, paneKey])
 
   const close = useCallback((): void => {
     clearDwell()
-    setTarget(null)
+    // A click in the card focuses its xterm; return focus so the user's next keys are not lost.
+    if (contentRef.current?.contains(document.activeElement)) {
+      returnFocusRef.current?.focus()
+    }
+    returnFocusRef.current = null
+    setOpen(false)
   }, [clearDwell])
 
   const handlePointerEnter = (event: React.PointerEvent): void => {
-    if (event.pointerType === 'touch' || target !== null) {
+    if (event.pointerType === 'touch' || open) {
       return
     }
     armDwell()
@@ -70,10 +80,10 @@ export function AgentRowTerminalPeek({
 
   return (
     <HoverCard
-      open={target !== null}
+      open={open}
       // Only the dwell timer opens the card; the primitive still closes it on leave.
-      onOpenChange={(open) => {
-        if (!open) {
+      onOpenChange={(next) => {
+        if (!next) {
           close()
         }
       }}
@@ -88,23 +98,24 @@ export function AgentRowTerminalPeek({
         <div className="min-w-0">{children}</div>
       </HoverCardTrigger>
       <HoverCardContent
+        ref={contentRef}
         side="right"
         align="start"
         className="h-72 w-[480px] max-w-[calc(100vw-2rem)] overflow-hidden p-0"
       >
-        {target?.ptyId ? (
+        {ptyId ? (
           <AgentTerminalPreview
-            ptyId={target.ptyId}
+            ptyId={ptyId}
             claimGrid={false}
             interactive={false}
             className="h-full"
           />
-        ) : target ? (
+        ) : (
           // No live PTY means the agent's terminal exited; say so instead of a blank card.
-          <div className="flex h-full items-center justify-center px-2.5 text-center text-[11px] text-muted-foreground">
+          <div className="flex h-full items-center justify-center px-2.5 text-center text-2xs text-muted-foreground">
             {terminalPreviewUnavailableMessage({ ptyId: null }, t)}
           </div>
-        ) : null}
+        )}
       </HoverCardContent>
     </HoverCard>
   )
