@@ -1,13 +1,3 @@
-import { rm } from 'node:fs/promises'
-import { join } from 'node:path'
-import { expect, it, vi } from 'vitest'
-import { writeOpenCodeSqliteDatabase } from '../ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-fixture'
-import SyncDatabase from '../sqlite/sync-database'
-import { SessionSearchIndexer } from './session-search-indexer'
-import {
-  SessionSearchOperationError,
-  SessionSearchWorkerClient
-} from './session-search-worker-client'
 import {
   harness,
   clock,
@@ -18,6 +8,16 @@ import {
   finishPendingObservation,
   openCodeListObservations
 } from './session-search-opencode-index.test-fixture'
+import { rm } from 'node:fs/promises'
+import { join } from 'node:path'
+import { expect, it, vi } from 'vitest'
+import { writeOpenCodeSqliteDatabase } from '../ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-fixture'
+import SyncDatabase from '../sqlite/sync-database'
+import { SessionSearchIndexer } from './session-search-indexer'
+import {
+  SessionSearchOperationError,
+  SessionSearchWorkerClient
+} from './session-search-worker-client'
 
 it('finishes removing a missing database while its configured path remains', async () => {
   writeOpenCodeSqliteDatabase(dbPath(), [

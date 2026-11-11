@@ -1,3 +1,14 @@
+import {
+  harness,
+  clock,
+  ownIndexer,
+  dbPath,
+  openEngine,
+  startIndexer,
+  finishPendingObservation,
+  openCodeObservation,
+  openCodeListObservations
+} from './session-search-opencode-index.test-fixture'
 import { rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { expect, it, vi } from 'vitest'
@@ -14,17 +25,6 @@ import {
   SessionSearchOperationError,
   SessionSearchWorkerClient
 } from './session-search-worker-client'
-import {
-  harness,
-  clock,
-  ownIndexer,
-  dbPath,
-  openEngine,
-  startIndexer,
-  finishPendingObservation,
-  openCodeObservation,
-  openCodeListObservations
-} from './session-search-opencode-index.test-fixture'
 
 const ANSWER = 'the quokkaTelemetry harness reindexes every shard'
 const OTHER = 'a completely unrelated conversation about typography'
