@@ -124,6 +124,31 @@ describe('deriveCloudDotState', () => {
 })
 
 describe('visibleOom', () => {
+  it('a wake main reported ready after the last status read is running, not the stale read', () => {
+    // The status was read (asleep) before the wake; main's ready lands before the re-read.
+    const asleepBefore = { ...status('sleeping'), checkedAt: NOW - 5_000 }
+    expect(
+      deriveCloudDotState({ status: asleepBefore, wake: wake('ready'), sleeping: false, now: NOW })
+    ).toBe('running')
+    expect(
+      deriveCloudDotState({ status: null, wake: wake('ready'), sleeping: true, now: NOW })
+    ).toBe('running')
+    // A read taken after the ready is the truth again (it slept since).
+    const asleepAfter = { ...status('sleeping'), checkedAt: NOW + 5_000 }
+    expect(
+      deriveCloudDotState({ status: asleepAfter, wake: wake('ready'), sleeping: false, now: NOW })
+    ).toBe('sleeping')
+    // Archived and failed still win over a ready wake.
+    expect(
+      deriveCloudDotState({
+        status: { ...status('archived'), checkedAt: NOW - 5_000 },
+        wake: wake('ready'),
+        sleeping: false,
+        now: NOW
+      })
+    ).toBe('archived')
+  })
+
   it('hides kills the user dismissed and shows newer ones', () => {
     const oom = { workspaceId: 'w', oomKills: 2, victim: 'node', at: NOW }
     expect(visibleOom(oom, undefined)).toBe(oom)
