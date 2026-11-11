@@ -124,7 +124,7 @@ function reconcile(now: number): void {
     const wasShown = sonnerOrder.includes(id)
     if (wasShown) {
       // Take the old card away without its exit animation, then add the new one on top.
-      toast.custom(() => null, {
+      toast.custom(() => <span hidden />, {
         id: entry.internalId,
         unstyled: true,
         className: 'cloud-toast-gone'
