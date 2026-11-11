@@ -256,6 +256,9 @@ it.each(['unknown', 'read-error'] as const)(
     if (mode === 'unknown') {
       expect(calls).toHaveLength(2)
       expect(calls[1] - calls[0]).toBeGreaterThanOrEqual(60_000)
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(calls).toHaveLength(3)
+      expect(calls[2] - calls[1]).toBeGreaterThanOrEqual(60_000)
     } else {
       expect(calls.length).toBeGreaterThanOrEqual(20)
     }
