@@ -1,7 +1,9 @@
 // Mounts the Orca Cloud setup page over the workspace area while a Start is waiting on setup. Other
 // pages (Settings for billing or agent accounts) show over it; coming back shows it again. Opening
 // another workspace from the sidebar puts setup away (Back in the composer still has the prompt).
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { useCloudSetupAutoStart } from './use-cloud-setup-auto-start'
+import { useEscapeExitsSetup } from './use-escape-exits-setup'
+import React, { useCallback, useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 import { toast } from 'sonner'
@@ -29,7 +31,7 @@ const SETTLE_MS = 1_500
  * The × leaves setup. Nothing starts later (JA-01): the page and its auto-start go away, and the
  * on-disk draft is dropped. The draft stays one click away in a toast, as a filled composer.
  */
-function exitSetup(request: CloudSetupPageRequest): void {
+export function exitCloudSetup(request: CloudSetupPageRequest): void {
   cancelCloudCreateIntent(request.intentId)
   closeCloudSetupPage()
   clearCloudStartDraft(useAppStore.getState().activeOrcaProfileId ?? null)
@@ -74,24 +76,29 @@ function reopenComposer(request: CloudSetupPageRequest, autoStart: boolean): voi
   }
 }
 
-function ActiveCloudSetupPage({ request }: { request: CloudSetupPageRequest }): React.JSX.Element {
+function ActiveCloudSetupPage({
+  request,
+  visible
+}: {
+  request: CloudSetupPageRequest
+  /** Shown on the workspace view; hidden under other pages it keeps its state but owns no keys. */
+  visible: boolean
+}): React.JSX.Element {
   const t = useTranslate()
   const flow = useCloudSetupFlow(request, request.debugAccess)
   const projectName = useAppStore(
     (s) => s.repos.find((repo) => repo.id === request.repoId)?.displayName ?? null
   )
   const agentLabel = isOrcaCloudAccountAgent(request.agent) ? agentName(request.agent, t) : null
-  const [starting, setStarting] = useState(false)
   // Rows can all read done for a moment right after a sign-in, before billing, GitHub and agent
-  // accounts answer for the new account. Done must hold for SETTLE_MS before "All set".
+  // accounts answer for the new account. Done must hold for SETTLE_MS before "All set". A hidden
+  // page never starts on its own (RR-b): it waits at "All set" for Start.
   const done = flow.action === 'done'
-  useEffect(() => {
-    if (!done) {
-      return
-    }
-    const timer = window.setTimeout(() => setStarting(true), SETTLE_MS)
-    return () => window.clearTimeout(timer)
-  }, [done])
+  const { starting, heldForStart, start } = useCloudSetupAutoStart({
+    done,
+    visible,
+    settleMs: SETTLE_MS
+  })
   useEffect(() => {
     if (!starting) {
       return
@@ -103,7 +110,8 @@ function ActiveCloudSetupPage({ request }: { request: CloudSetupPageRequest }): 
     return () => window.clearTimeout(timer)
   }, [request, starting])
   const onBackToComposer = useCallback(() => reopenComposer(request, false), [request])
-  const onExit = useCallback(() => exitSetup(request), [request])
+  const onExit = useCallback(() => exitCloudSetup(request), [request])
+  useEscapeExitsSetup(visible, onExit)
   return (
     <CloudSetupPage
       flow={flow}
@@ -114,6 +122,8 @@ function ActiveCloudSetupPage({ request }: { request: CloudSetupPageRequest }): 
       onBackToComposer={onBackToComposer}
       onExit={onExit}
       starting={starting}
+      heldForStart={heldForStart && done}
+      onStart={start}
     />
   )
 }
@@ -164,7 +174,7 @@ export function CloudSetupPageLayer(): React.JSX.Element | null {
       className={onWorkspaceView ? 'absolute inset-0 z-20 flex bg-background' : 'hidden'}
       aria-hidden={!onWorkspaceView}
     >
-      <ActiveCloudSetupPage key={request.openedAt} request={request} />
+      <ActiveCloudSetupPage key={request.openedAt} request={request} visible={onWorkspaceView} />
     </div>
   )
 }
