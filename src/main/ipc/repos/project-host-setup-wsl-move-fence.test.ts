@@ -130,7 +130,10 @@ describe('project host setups under a WSL move', () => {
     store.addRepo(repo('repo-1', { path: oldPath, kind: 'folder' }))
     mkdirSync(newPath)
     seedWslMoveCutover(testState.dir, cutover('move-1', 'source-fenced'))
-    registerProjectHostSetupHandlers(new BrowserWindow(), store)
+    registerProjectHostSetupHandlers(new BrowserWindow(), store, {
+      enqueueRepositoryMetadata: vi.fn(),
+      resolveRepositoryMetadata: vi.fn().mockResolvedValue(true)
+    })
     const projectId = setupFor('repo-1').projectId
 
     await expect(
