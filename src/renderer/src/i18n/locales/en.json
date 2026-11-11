@@ -27011,7 +27011,13 @@
     "deleteFailedNamed": "Couldn’t delete {{name}}",
     "productName": "Orca Cloud",
     "cloudMarkLabel": "Cloud workspace · {{state}}",
-    "statusUnavailableTitle": "Couldn’t get the sandbox status."
+    "statusUnavailableTitle": "Couldn’t get the sandbox status.",
+    "files": {
+      "wakeForAll": "Wake the workspace to browse all its files.",
+      "asleep": "Files aren’t available while the workspace is asleep.",
+      "changedAtSleep": "Changed files when this workspace went to sleep · {{time}}",
+      "changedAtSleepNoTime": "Changed files when this workspace went to sleep"
+    }
   },
   "cloudAgentSetup": {
     "loading": "Checking what agents can use…",
