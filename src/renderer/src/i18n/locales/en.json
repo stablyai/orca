@@ -23242,7 +23242,9 @@
         "signInBrowser": "Finish signing in to {{agent}} in your browser…",
         "signInDevice": "Enter {{code}} at {{host}} to sign in to {{agent}}.",
         "signInPaste": "Paste the {{agent}} setup token in Settings to finish.",
-        "signInSaving": "Saving…"
+        "signInSaving": "Saving…",
+        "agentWillNotStartShort": "{{agent}} isn’t set up for Orca Cloud, so it won’t start.",
+        "agentWillNotStartIn": "{{agent}} isn’t set up for Orca Cloud, so it won’t start in {{workspace}}."
       }
     },
     "JiraIssueWorkspace": {
