@@ -369,6 +369,7 @@ export function ClientHostedBrowserPagePane({
               browserTab={browserTab}
               isActive={isActive}
               onRetry={() => reload.runReloadTrigger('reload')}
+              runtimeEnvironmentId={runtimeEnvironmentId}
             />
           ) : null}
           {attachmentError || restoredPageUnrecovered ? (
