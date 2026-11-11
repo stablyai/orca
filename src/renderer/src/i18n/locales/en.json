@@ -20976,7 +20976,6 @@
         "connected": "{{value0}} is connected. Its projects are in the sidebar.",
         "copyFailed": "Couldn't copy the link. Try again.",
         "copyLink": "Copy link",
-        "copyWorkspaceLink": "Copy workspace link",
         "emptyArchivedBody": "Archived cloud workspaces show up here.",
         "emptyArchivedTitle": "No archived workspaces",
         "emptyFilteredBody": "Try another owner or repository.",
@@ -21119,7 +21118,10 @@
         "restartElsewhere": "Restart it from the computer that created it.",
         "makePrivateSidebar": "Teammates’ devices are disconnected. Only the owner will be able to open it.",
         "shareFailed": "Couldn’t change who can open it. Try again.",
-        "workspaceLinkOption": "Workspace link"
+        "workspaceLinkOption": "Workspace link",
+        "copyLinkToTerminal": "Copy link to this terminal",
+        "copyLinkToChat": "Copy link to this chat",
+        "linkToNumber": "Link to {{number}}"
       },
       "orcaCloud": {
         "QueuedPrompt": {
