@@ -142,6 +142,17 @@ export function buildPaneAccountRestartStartup(
   return startup ? withOrcaCloudSessionEnv(startup, args) : null
 }
 
+/**
+ * RA-11e: the command that starts this pane's agent fresh (a new conversation), with the Orca Cloud
+ * session-env refresh in front. Used when a resume finds no conversation to pick up.
+ */
+export function buildFreshAccountRestartCommand(
+  agent: AccountRestartAgent,
+  args: AccountRestartPane
+): string {
+  return withOrcaCloudSessionEnv(buildFreshAccountRestartStartup(agent, args), args).command
+}
+
 export function buildCodexAccountRestartStartup(
   args: AccountRestartTarget
 ): AgentAccountRestartStartup {

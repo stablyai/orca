@@ -154,6 +154,31 @@ export function dismissCloudAgentRestart(paneKey: string): void {
   notifyCloudRunningStrips()
 }
 
+/** RA-11e: how long the strip says a resume became a new conversation before it clears. */
+export const CLOUD_AGENT_FRESH_NOTICE_MS = 3_000
+const freshNotices = new Map<string, ReturnType<typeof setTimeout>>()
+
+/** The resume found no conversation and the agent started fresh: say so briefly, then clear. */
+export function noteCloudAgentRestartFresh(paneKey: string): void {
+  const previous = freshNotices.get(paneKey)
+  if (previous !== undefined) {
+    clearTimeout(previous)
+  }
+  freshNotices.set(
+    paneKey,
+    setTimeout(() => {
+      freshNotices.delete(paneKey)
+      notifyCloudRunningStrips()
+    }, CLOUD_AGENT_FRESH_NOTICE_MS)
+  )
+  notifyCloudRunningStrips()
+}
+
+/** Whether the pane shows "Started a new conversation." right now (`revision` as for attempts). */
+export function cloudAgentRestartStartedFresh(paneKey: string, _revision: number): boolean {
+  return freshNotices.has(paneKey)
+}
+
 /** Tests only. */
 export function resetCloudAgentRestartsForTest(): void {
   forcedRestarts.clear()
@@ -162,4 +187,8 @@ export function resetCloudAgentRestartsForTest(): void {
   }
   restartTimers.clear()
   restarts.clear()
+  for (const timer of freshNotices.values()) {
+    clearTimeout(timer)
+  }
+  freshNotices.clear()
 }
