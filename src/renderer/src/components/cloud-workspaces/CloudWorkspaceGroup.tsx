@@ -85,7 +85,7 @@ export function CloudWorkspaceGroupView({
   const label =
     group.kind === 'pinned'
       ? t('auto.components.cloudWorkspaces.pinned', 'Pinned')
-      : (group.section ?? t('auto.components.cloudWorkspaces.noSection', 'No section'))
+      : (group.section ?? t('auto.components.cloudWorkspaces.otherWorkspaces', 'Other workspaces'))
   const count = (
     <>
       {/* The bare number is visual; screen readers get the counted phrase. */}

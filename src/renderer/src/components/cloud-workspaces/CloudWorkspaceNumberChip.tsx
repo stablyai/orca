@@ -9,7 +9,6 @@ import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { formatWorkspaceNumber } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { sandboxIdForWorktree, useCloudWorkspaceIdentities } from './cloud-workspace-identity'
-import { frontCloudChat } from './cloud-workspace-links'
 import { copyCloudWorkspaceLink } from './open-cloud-workspace'
 
 const COPIED_MS = 1_500
@@ -46,12 +45,10 @@ export function CloudWorkspaceNumberChip({
           <button
             type="button"
             onClick={() => {
-              const front = frontCloudChat()
-              void copyCloudWorkspaceLink(
-                sandboxId,
-                front?.sandboxId === sandboxId ? front.chatId : null,
-                { quiet: true }
-              ).then((ok) => ok && setCopied(true))
+              // The workspace only: a teammate opening it shouldn't land on your terminal or chat.
+              void copyCloudWorkspaceLink(sandboxId, null, { quiet: true }).then(
+                (ok) => ok && setCopied(true)
+              )
             }}
             aria-label={t('auto.components.cloudWorkspaces.copyLinkTo', 'Copy link to {{number}}', {
               number: label

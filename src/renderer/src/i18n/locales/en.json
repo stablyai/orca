@@ -21059,7 +21059,8 @@
         "movedTo": "Moved {{name}} to position {{position}} in {{group}}",
         "pinLimit": "You can pin up to {{count}} workspaces. Unpin one first.",
         "pinnedName": "Pinned {{name}}",
-        "unpinnedName": "Unpinned {{name}}"
+        "unpinnedName": "Unpinned {{name}}",
+        "otherWorkspaces": "Other workspaces"
       },
       "orcaCloud": {
         "QueuedPrompt": {

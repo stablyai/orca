@@ -35,7 +35,8 @@ function spoken(w: CloudWorkspace | undefined): string {
 function groupName(group: CloudWorkspaceGroup<CloudWorkspace>): string {
   return group.kind === 'pinned'
     ? translate('auto.components.cloudWorkspaces.pinned', 'Pinned')
-    : (group.section ?? translate('auto.components.cloudWorkspaces.noSection', 'No section'))
+    : (group.section ??
+        translate('auto.components.cloudWorkspaces.otherWorkspaces', 'Other workspaces'))
 }
 
 export function useCloudWorkspaceArrangement(visible: readonly CloudWorkspace[]) {
