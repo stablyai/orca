@@ -1,5 +1,3 @@
-// oxlint-disable-next-line typescript/triple-slash-reference -- Main-side fallback imports require the same ambient build constants as their production compilation.
-/// <reference path="../../../types/build-constants.d.ts" />
 import { getDefaultSettings } from '../../../shared/constants'
 import type { Repo } from '../../../shared/repo-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
