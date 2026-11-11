@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
+import { createWebClientUrl } from './runtime-rpc-pairing-types'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { parsePairingCode } from '../../../../shared/remote-runtime/pairing/pairing'
 import { DEVICE_REGISTRY_FILENAME } from './pairing/mobile-pairing-files'
@@ -114,4 +115,15 @@ describe('OrcaRuntimeRpcServer', () => {
       await server.stop()
     }
   })
+})
+
+it('keeps the proxy route on a browser link and reserves pairing credentials for the fragment', () => {
+  expect(
+    createWebClientUrl(
+      'wss://orca.example/proxy?route=%72ed&token=legacy',
+      'orca://pair?code=offer'
+    )
+  ).toBe(
+    'https://orca.example/proxy/web-index.html?route=%72ed#pairing=orca%3A%2F%2Fpair%3Fcode%3Doffer'
+  )
 })

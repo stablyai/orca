@@ -16,7 +16,7 @@ export function normalizePairingUrl(value: string): string | null {
       !endpoint.hostname ||
       endpoint.username ||
       endpoint.password ||
-      endpoint.hash ||
+      value.includes('#') ||
       endpoint.port === '0' ||
       isPairingWildcardHostname(endpoint.hostname)
     ) {

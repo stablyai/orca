@@ -18,6 +18,7 @@ describe('parseServerShareAddress', () => {
   it.each([
     'https://user:secret@orca.example.com',
     'https://orca.example.com/#secret',
+    'https://orca.example.com/#',
     'https://orca.example.com:0',
     'https://orca.example.com:65536',
     'https://0.0.0.0',
