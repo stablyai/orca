@@ -26,6 +26,7 @@ export function useComposerCloudStart({
   handleCreate,
   createDisabled,
   quickAgentPick,
+  noAgentRef,
   recordCreatedRef,
   onClose
 }: {
@@ -33,7 +34,9 @@ export function useComposerCloudStart({
   modalData: ComposerModalData
   cardProps: ComposerCardState
   quickAgent: TuiAgent | null
-  handleCreate: (options?: { withoutAgent?: boolean }) => Promise<void>
+  handleCreate: () => Promise<void>
+  /** Set right before a create to start it with no agent. */
+  noAgentRef: MutableRefObject<boolean>
   createDisabled: boolean
   /** The agent pick (surface, draft) as the composer keeps it, for the setup page's snapshot. */
   quickAgentPick: Omit<NonNullable<ComposerModalData['recovery']>, 'note'>
@@ -44,10 +47,10 @@ export function useComposerCloudStart({
   // The latest handleCreate, never a ref copied after render: a submit right after an edit must
   // see that edit.
   const runCreate = useCallback(() => void handleCreate(), [handleCreate])
-  const runCreateWithoutAgent = useCallback(
-    () => void handleCreate({ withoutAgent: true }),
-    [handleCreate]
-  )
+  const runCreateWithoutAgent = useCallback(() => {
+    noAgentRef.current = true
+    void handleCreate()
+  }, [handleCreate, noAgentRef])
   const composerSnapshot = useCallback(
     () => buildComposerSnapshot(modalData, cardProps, { ...quickAgentPick, agent: quickAgent }),
     [cardProps, modalData, quickAgent, quickAgentPick]

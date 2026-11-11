@@ -16,6 +16,7 @@ import {
   getRunTargetFieldText,
   getRecipeSubmenuItemKey,
   getRunTargetSubmenuItemKeys,
+  closingFirst,
   getRunTargetCurrentRowKey,
   getRunTargetOptionId,
   RUN_TARGET_ADD_HOST_KEY,
@@ -55,19 +56,6 @@ type RunTargetComboboxProps = {
    * happens on a page after Start. Without it, a blocked account's pick runs the fix instead.
    */
   onSelectOrcaCloud?: () => void
-}
-
-/** Add-host actions open dialogs, so the picker closes before they run. */
-function closingFirst(
-  close: () => void,
-  action: (() => void) | undefined
-): (() => void) | undefined {
-  return action
-    ? () => {
-        close()
-        action()
-      }
-    : undefined
 }
 
 const ROOT_ATTRIBUTE = 'data-run-target-combobox-root'

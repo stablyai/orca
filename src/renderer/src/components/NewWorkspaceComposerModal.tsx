@@ -211,69 +211,67 @@ function QuickTabBody({
     [observation.contextKey, orcaCloud]
   )
 
-  // `withoutAgent`: Orca Cloud with an agent that has no account there starts a plain terminal
-  // instead of dropping the user into the agent's /login.
-  const handleCreate = useCallback(
-    async (options?: { withoutAgent?: boolean }): Promise<void> => {
-      if (createDisabled) {
-        return
-      }
-      const agent = options?.withoutAgent ? null : quickAgent
-      await submitQuick(agent, {
-        // Blank Terminal is the setup-only create: no agent, and no extra shell beside setup.
-        setupOnly: agent === null,
-        ...(agent === null ? {} : { launchChoice: launchSelection.choice }),
-        onLegacyPreparationFailure: (error) => {
-          if (isSubmissionCancelled()) {
-            return
-          }
-          const snapshot = {
-            ...modalData,
-            prefilledName: cardProps.name,
-            initialRepoId: cardProps.repoId,
-            initialBaseBranch: cardProps.baseBranch,
-            initialWorkspaceTarget:
-              cardProps.selectedProjectId && cardProps.selectedRepoExecutionHostId
-                ? {
-                    projectId: cardProps.selectedProjectId,
-                    hostId: cardProps.selectedRepoExecutionHostId,
-                    projectHostSetupId: cardProps.selectedProjectHostSetupId ?? null
-                  }
-                : modalData.initialWorkspaceTarget,
-            linkedWorkItem: cardProps.linkedWorkItem,
-            recovery: { ...quickAgentPick, agent: quickAgent, note: cardProps.note }
-          }
-          toast.error(getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error)), {
-            action: {
-              label: translate('auto.lib.composerCreateHandoff.reopen', 'Reopen'),
-              onClick: () => {
-                if (!isSubmissionCancelled() && useAppStore.getState().activeModal === 'none') {
-                  useAppStore.getState().openModal('new-workspace-composer', snapshot)
+  // Orca Cloud with an agent that has no account there starts a plain terminal, never the agent's
+  // /login: the cloud hook sets this for one create.
+  const noAgentRef = useRef(false)
+  const handleCreate = useCallback(async (): Promise<void> => {
+    const agent = noAgentRef.current ? null : quickAgent
+    noAgentRef.current = false
+    if (createDisabled) {
+      return
+    }
+    await submitQuick(agent, {
+      // Blank Terminal is the setup-only create: no agent, and no extra shell beside setup.
+      setupOnly: agent === null,
+      ...(agent === null ? {} : { launchChoice: launchSelection.choice }),
+      onLegacyPreparationFailure: (error) => {
+        if (isSubmissionCancelled()) {
+          return
+        }
+        const snapshot = {
+          ...modalData,
+          prefilledName: cardProps.name,
+          initialRepoId: cardProps.repoId,
+          initialBaseBranch: cardProps.baseBranch,
+          initialWorkspaceTarget:
+            cardProps.selectedProjectId && cardProps.selectedRepoExecutionHostId
+              ? {
+                  projectId: cardProps.selectedProjectId,
+                  hostId: cardProps.selectedRepoExecutionHostId,
+                  projectHostSetupId: cardProps.selectedProjectHostSetupId ?? null
                 }
+              : modalData.initialWorkspaceTarget,
+          linkedWorkItem: cardProps.linkedWorkItem,
+          recovery: { ...quickAgentPick, agent: quickAgent, note: cardProps.note }
+        }
+        toast.error(getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error)), {
+          action: {
+            label: translate('auto.lib.composerCreateHandoff.reopen', 'Reopen'),
+            onClick: () => {
+              if (!isSubmissionCancelled() && useAppStore.getState().activeModal === 'none') {
+                useAppStore.getState().openModal('new-workspace-composer', snapshot)
               }
             }
-          })
-        },
-        ...quickWorkspacePickerInputs(
-          pickerDraft,
-          quickAgentPick.entry,
-          launchSelection.choice?.executionHostId
-        )
-      })
-    },
-    [
-      createDisabled,
-      quickAgent,
-      launchSelection.choice,
-      submitQuick,
-      pickerDraft,
-      quickAgentPick,
-      isSubmissionCancelled,
-      modalData,
-      cardProps
-    ]
-  )
-  // The composer as it is now, for Orca Cloud's setup page (Back, and the start when it's done).
+          }
+        })
+      },
+      ...quickWorkspacePickerInputs(
+        pickerDraft,
+        quickAgentPick.entry,
+        launchSelection.choice?.executionHostId
+      )
+    })
+  }, [
+    createDisabled,
+    quickAgent,
+    launchSelection.choice,
+    submitQuick,
+    pickerDraft,
+    quickAgentPick,
+    isSubmissionCancelled,
+    modalData,
+    cardProps
+  ])
   const { cloudStart, primaryCreateDisabled, onPrimary } = useComposerCloudStart({
     active,
     modalData,
@@ -282,6 +280,7 @@ function QuickTabBody({
     handleCreate,
     createDisabled,
     quickAgentPick,
+    noAgentRef,
     recordCreatedRef,
     onClose
   })
