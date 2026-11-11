@@ -1,8 +1,11 @@
-import type { AgentJournalFreeTextInput, AgentJournalQuestion } from './agent-session-journal-types'
-import type { AgentSessionQuestionAnswer } from './agent-session-question-answer'
-import type { AskAnswerSelection } from './native-chat-ask-answer'
+import type {
+  AgentJournalFreeTextInput,
+  AgentJournalQuestion
+} from './agent-session/journal/agent-session-journal-types'
+import type { AgentSessionQuestionAnswer } from './agent-session/agent-session-question-answer'
+import type { AskAnswerSelection } from './native-chat/input/native-chat-ask-answer'
 import type { AskPrompt } from './native-chat/input/native-chat-ask-types'
-import { askTypedText } from './native-chat-ask-card-rules'
+import { askTypedText } from './native-chat/input/native-chat-ask-card-rules'
 
 /** A structured prompt drawn with the same stepped card as a terminal ask. */
 type StructuredQuestionCard = {
@@ -22,7 +25,8 @@ export function structuredQuestionCard(
         multiSelect: question.multiSelect,
         options: question.options.map((option) => ({
           label: option.label,
-          ...(option.description ? { description: option.description } : {})
+          ...(option.description ? { description: option.description } : {}),
+          ...(option.preview ? { preview: option.preview } : {})
         }))
       }))
     },

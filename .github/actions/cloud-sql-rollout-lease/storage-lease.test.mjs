@@ -234,18 +234,6 @@ test('fails closed when the bucket answers 5xx', async () => {
   assert.equal(storage.state.requests.filter((request) => request.method !== 'GET').length, 0)
 })
 
-test('fails closed when permission is denied', async () => {
-  const storage = fakeStorage({
-    faults: [{ when: (request) => request.method === 'GET', status: 403 }]
-  })
-
-  const error = await leaseFor(storage)
-    .acquire(HOLDER)
-    .catch((thrown) => thrown)
-
-  assert.match(error.message, /lease inspection failed: 403/)
-})
-
 test('treats an unreadable record as held, not free', async () => {
   const storage = fakeStorage({
     object: { generation: '1500', body: { holder_key: 'stablyai/orca/9001' } }

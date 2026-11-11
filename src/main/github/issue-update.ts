@@ -9,6 +9,7 @@ import {
 import { acquire, classifyGhError, ghExecFileAsync, release } from './gh-utils'
 import { codeHostFailure, combinedClassifiedFailure } from '../../shared/code-host-failure-copy'
 import type { ClassifiedError } from '../../shared/classified-error'
+import { githubBodyImageUrls, githubBodyMediaHeaders } from './body-image-urls'
 
 export async function updateIssue(
   repoPath: string,
@@ -18,7 +19,7 @@ export async function updateIssue(
   localGitOptions: LocalGitExecOptions = {},
   preference?: IssueSourcePreference,
   ownerRepoOverride?: GitHubApiRepository | null
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true; bodyImageUrls?: Record<string, string> } | { ok: false; error: string }> {
   const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
     repoPath,
     ownerRepoOverride ??
@@ -40,6 +41,7 @@ export async function updateIssue(
 
   const repo = `${ownerRepo.owner}/${ownerRepo.repo}`
   const errors: ClassifiedError[] = []
+  let bodyImageUrls: Record<string, string> | undefined
 
   if (updates.state) {
     await acquire()
@@ -69,17 +71,26 @@ export async function updateIssue(
   if (updates.body !== undefined) {
     await acquire()
     try {
-      await ghExecFileAsync(
+      const { stdout } = await ghExecFileAsync(
         [
           'api',
           '-X',
           'PATCH',
           `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${issueNumber}`,
+          ...githubBodyMediaHeaders(updates.body),
           '--input',
           '-'
         ],
         { ...ghOptions, stdin: JSON.stringify({ body: updates.body }) }
       )
+      try {
+        const response: { body?: string; body_html?: string } = JSON.parse(stdout)
+        if (response?.body === updates.body) {
+          bodyImageUrls = githubBodyImageUrls(response.body, response.body_html)
+        }
+      } catch {
+        // Optional display data cannot turn an accepted edit into a failed write.
+      }
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
       errors.push(classifyGhError(stderr))
@@ -127,5 +138,5 @@ export async function updateIssue(
   if (errors.length > 0) {
     return combinedClassifiedFailure(errors)
   }
-  return { ok: true }
+  return { ok: true, bodyImageUrls }
 }

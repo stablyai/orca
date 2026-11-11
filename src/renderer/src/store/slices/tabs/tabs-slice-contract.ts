@@ -6,8 +6,8 @@ import type {
   TabGroup,
   TabGroupLayoutNode
 } from '../../../../../shared/tab-types'
-import type { WorkspaceSessionState } from '../../../../../shared/workspace-session-state-types'
-import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace-session-hydration-keys'
+import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
+import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
 
 export type TabSplitDirection = 'left' | 'right' | 'up' | 'down'
 
@@ -28,6 +28,8 @@ export type TabsSlice = {
   unifiedTabsByWorktree: Record<string, Tab[]>
   groupsByWorktree: Record<string, TabGroup[]>
   activeGroupIdByWorktree: Record<string, string>
+  /** Window-only: group id to worktree id for groups a chat split opened as a chooser. Never saved or sent. */
+  splitLandingGroupIds: Record<string, string>
   layoutByWorktree: Record<string, TabGroupLayoutNode>
   createUnifiedTab: (
     worktreeId: string,
@@ -57,6 +59,8 @@ export type TabsSlice = {
         /** false selects an activated tab without stamping its focus time (the group history still updates). */
         recordFocus: boolean
         recordInteraction: boolean
+        /** With activate false: still the tab its pane shows, without becoming the active pane. */
+        showInGroup: boolean
       }
     >
   ) => Tab
@@ -97,6 +101,7 @@ export type TabsSlice = {
     /** recordFocus false skips the focus-time stamp (not a user visit); the group history still updates. */
     opts?: { preservePreview?: boolean; worktreeId?: string; recordFocus?: boolean }
   ) => void
+  closeUnifiedTabs: (tabIds: readonly string[]) => void
   closeUnifiedTab: (
     tabId: string,
     opts?: {
@@ -104,6 +109,8 @@ export type TabsSlice = {
       preserveWorktreeSelection?: boolean
       recordInteraction?: boolean
       terminalRetirementHandled?: boolean
+      /** closeFile/close-all already own content cleanup and reopen capture. */
+      editorRetirementHandled?: boolean
     }
   ) => { closedTabId: string; wasLastTab: boolean; worktreeId: string } | null
   reorderUnifiedTabs: (
@@ -149,7 +156,7 @@ export type TabsSlice = {
     worktreeId: string,
     sourceGroupId: string,
     direction: TabSplitDirection,
-    opts?: { activate?: boolean }
+    opts?: { activate?: boolean; landing?: boolean }
   ) => string | null
   moveUnifiedTabToGroup: (
     tabId: string,

@@ -1,14 +1,25 @@
 import { ArrowUpRight } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import type { PluginListEntry } from '../list/plugin-list-entries'
 import { PluginCategoryBadges } from '../list/PluginCategoryBadge'
 import { pluginFilterKinds } from '../list/plugin-list-filter'
 import { DetailSection } from './PluginDetailSections'
 import { formatPluginReleaseDate } from '../presentation/plugin-release-date'
+import {
+  formatPluginInstallCount,
+  usePluginInstallCount
+} from '../presentation/plugin-install-count'
 import { usePluginRollbackVersion } from '../state/use-plugin-rollback-version'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { pluginRepositoryPageUrl } from '../../../../../shared/plugins/catalog/plugin-repository-link'
+import type { PluginAuthor } from '../presentation/plugin-author'
+import {
+  pluginAuthorGithubUrl,
+  pluginSourceGitUrl,
+  pluginSourceReadmeUrl
+} from '../presentation/plugin-source-links'
+import { PluginAuthorCard } from './PluginAuthor'
 
 function InfoRow({
   label,
@@ -33,7 +44,7 @@ function InfoRow({
   )
 }
 
-function RepositoryLink({ url }: { url: string | null }) {
+function ExternalLink({ url, label }: { url: string | null; label: string }) {
   if (!url) {
     return null
   }
@@ -41,96 +52,130 @@ function RepositoryLink({ url }: { url: string | null }) {
     <Button
       variant="link"
       size="xs"
-      className="-ml-2"
+      className="-ml-1.5"
       onClick={(event) => openAppHttpLink(url, { event })}
     >
-      {translate('auto.components.settings.PluginDetailPage.repository', 'Repository')}
+      {label}
       <ArrowUpRight />
     </Button>
   )
 }
 
-/** The facts column of a plugin page: versions, requirements, identity and links. */
+/** The facts column of a plugin page: its author, then versions, requirements, identity and links. */
 export function PluginDetailInfo({
   entry,
-  version
+  version,
+  author,
+  authorPluginCount
 }: {
   entry: PluginListEntry
   version: string | null
+  author: PluginAuthor | null
+  authorPluginCount: number | null
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const plugin = entry.installed
   const listing = entry.listing
   const rollbackVersion = usePluginRollbackVersion(
     plugin?.source?.kind === 'marketplace' ? plugin.pluginKey : null
   )
-  const updated = formatPluginReleaseDate(listing?.updatedAt)
+  const installCount = usePluginInstallCount(entry)
+  const updated = formatPluginReleaseDate(listing?.updatedAt, intlLocale)
   const license = plugin?.license ?? listing?.license
-  // Why only the install source: manifest and catalog `repository`/`homepage` are author text.
-  const sourceUrl =
-    listing?.source.url ?? (plugin?.source?.kind === 'git' ? plugin.source.reference : null)
+  const sourceUrl = pluginSourceGitUrl(entry)
   const repository = sourceUrl ? pluginRepositoryPageUrl(sourceUrl) : null
+  const readme = pluginSourceReadmeUrl(entry)
 
   return (
-    <aside className="mt-6">
-      <h3 className="mb-2 text-2xs font-semibold tracking-[0.05em] text-muted-foreground uppercase">
-        {translate('auto.components.settings.PluginDetailPage.info', 'Info')}
-      </h3>
-      <dl>
-        {version ? (
-          <InfoRow
-            label={translate('auto.components.settings.PluginDetailPage.version', 'Version')}
-            value={version}
-          />
-        ) : null}
-        {entry.updateVersion ? (
-          <InfoRow
-            label={translate('auto.components.settings.PluginDetailPage.latest', 'Latest')}
-            value={entry.updateVersion}
-          />
-        ) : null}
-        {rollbackVersion ? (
-          <InfoRow
-            label={translate('auto.components.settings.PluginDetailInfo.previous', 'Previous')}
-            value={rollbackVersion}
-          />
-        ) : null}
-        {updated ? (
-          <InfoRow
-            label={translate('auto.components.settings.PluginDetailInfo.updated', 'Updated')}
-            value={updated}
-          />
-        ) : null}
-        {entry.minimumOrca ? (
-          <InfoRow
-            label={translate('auto.components.settings.PluginDetailPage.requires', 'Requires')}
-            value={translate(
-              'auto.components.settings.PluginDetailPage.requiresValue',
-              'Orca {{value0}} or later',
-              { value0: entry.minimumOrca }
-            )}
-          />
-        ) : null}
-        {license ? (
-          <InfoRow
-            label={translate('auto.components.settings.PluginDetailInfo.license', 'License')}
-            value={license}
-          />
-        ) : null}
-        {pluginFilterKinds(entry).size > 0 ? (
-          <InfoRow
-            label={translate('auto.components.settings.PluginDetailPage.categories', 'Categories')}
-            value={<PluginCategoryBadges entry={entry} />}
-          />
-        ) : null}
-        <InfoRow
-          label={translate('auto.components.settings.PluginDetailPage.pluginId', 'Plugin ID')}
-          value={entry.pluginKey}
-          mono
+    <aside className="@max-2xl/plugin-detail:mt-6">
+      {author ? (
+        <PluginAuthorCard
+          author={author}
+          pluginCount={authorPluginCount}
+          profileUrl={pluginAuthorGithubUrl(entry)}
         />
-      </dl>
-      <div className="mt-2 flex flex-col items-start">
-        <RepositoryLink url={repository} />
-      </div>
+      ) : null}
+      <section className="mt-4 rounded-xl border border-border/50 bg-card/50 p-3.5 shadow-xs first:mt-0">
+        <h3 className="mb-2 text-2xs font-semibold tracking-[0.05em] text-muted-foreground uppercase">
+          {t('auto.components.settings.PluginDetailPage.info', 'Info')}
+        </h3>
+        <dl>
+          {version ? (
+            <InfoRow
+              label={t('auto.components.settings.PluginDetailPage.version', 'Version')}
+              value={version}
+            />
+          ) : null}
+          {entry.updateVersion ? (
+            <InfoRow
+              label={t('auto.components.settings.PluginDetailPage.latest', 'Latest')}
+              value={entry.updateVersion}
+            />
+          ) : null}
+          {rollbackVersion ? (
+            <InfoRow
+              label={t('auto.components.settings.PluginDetailInfo.previous', 'Previous')}
+              value={rollbackVersion}
+            />
+          ) : null}
+          {updated ? (
+            <InfoRow
+              label={t('auto.components.settings.PluginDetailInfo.updated', 'Updated')}
+              value={updated}
+            />
+          ) : null}
+          {installCount !== null ? (
+            <InfoRow
+              label={t('auto.components.settings.PluginDetailInfo.installs', 'Installs')}
+              value={formatPluginInstallCount(installCount, intlLocale)}
+            />
+          ) : null}
+          {entry.minimumOrca ? (
+            <InfoRow
+              label={t('auto.components.settings.PluginDetailPage.requires', 'Requires')}
+              value={t(
+                'auto.components.settings.PluginDetailPage.requiresValue',
+                'Orca {{value0}} or later',
+                { value0: entry.minimumOrca }
+              )}
+            />
+          ) : null}
+          {license ? (
+            <InfoRow
+              label={t('auto.components.settings.PluginDetailInfo.license', 'License')}
+              value={license}
+            />
+          ) : null}
+          {pluginFilterKinds(entry).size > 0 ? (
+            <InfoRow
+              label={t('auto.components.settings.PluginDetailPage.categories', 'Categories')}
+              value={<PluginCategoryBadges entry={entry} />}
+            />
+          ) : null}
+          <InfoRow
+            label={t('auto.components.settings.PluginDetailPage.pluginId', 'Plugin ID')}
+            value={entry.pluginKey}
+            mono
+          />
+        </dl>
+        {repository || readme ? (
+          <div className="mt-2 flex flex-col items-start border-t border-border/50 pt-2">
+            <ExternalLink
+              url={repository}
+              label={t('auto.components.settings.PluginDetailPage.repository', 'Repository')}
+            />
+            <ExternalLink
+              url={readme}
+              label={t(
+                'auto.components.settings.PluginDetailInfo.readme',
+                'Read the README on {{value0}}',
+                { value0: readme?.startsWith('https://gitlab.com/') ? 'GitLab' : 'GitHub' }
+              )}
+            />
+          </div>
+        ) : null}
+      </section>
     </aside>
   )
 }
@@ -141,6 +186,7 @@ export function PluginReleaseNotes({
 }: {
   entry: PluginListEntry
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const changelog = entry.listing?.changelog?.trim()
   if (!changelog) {
     return null
@@ -148,7 +194,7 @@ export function PluginReleaseNotes({
   const version = entry.updateVersion ?? entry.version
   return (
     <DetailSection
-      title={translate('auto.components.settings.PluginDetailInfo.whatsNew', 'What’s new')}
+      title={t('auto.components.settings.PluginDetailInfo.whatsNew', 'What’s new')}
       count={version ? `v${version}` : undefined}
     >
       <p className="px-4 py-3 text-sm leading-6 whitespace-pre-line break-words">{changelog}</p>

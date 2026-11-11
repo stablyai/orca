@@ -1,7 +1,10 @@
 import { mobileFileMedia, type MobileFileMedia } from './mobile-file-media'
-import { buildImageDataUri } from '../../../src/shared/image-data-uri'
-import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
-import { buildMobileDiffLines, type MobileDiffLine } from '../session/mobile-diff-lines'
+import { buildImageDataUri } from '../../../src/shared/file-preview/image-data-uri'
+import { classifyMobileArtifact } from './mobile-artifact-kind'
+import {
+  buildMobileDiffLines,
+  type MobileDiffLine
+} from '../source-control/review/mobile-diff-lines'
 import { mobileDiffImageDataUri } from './mobile-diff-image-preview'
 import {
   fileTabDiffRead,
@@ -17,6 +20,7 @@ export type MobileFileTabDoc =
   | { status: 'ready'; kind: 'diff'; lines: MobileDiffLine[]; truncated: boolean }
   | { status: 'ready'; kind: 'image'; dataUri: string }
   | { status: 'ready'; kind: 'html'; content: string }
+  | { status: 'ready'; kind: 'svg'; content: string; truncated: boolean; byteLength: number }
 
 export type MobileFileTabDocRequest = {
   worktreeId: string
@@ -75,7 +79,7 @@ export async function resolveMobileFileTabDoc(
   }
   return {
     status: 'ready',
-    kind: 'file',
+    kind: artifactKind === 'vector' ? 'svg' : 'file',
     content: result.content,
     truncated: result.truncated,
     byteLength: result.byteLength

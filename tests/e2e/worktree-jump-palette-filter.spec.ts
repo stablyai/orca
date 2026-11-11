@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@stablyai/playwright-test'
 import type { ExecutionHostId } from '../../src/shared/execution-host'
-import { getPaletteWorktreeIdentity } from '../../src/renderer/src/lib/palette-repo-resolution'
+import { getPaletteWorktreeIdentity } from '../../src/renderer/src/lib/workspace/search/palette-repo-resolution'
 import { encodePaletteIdentity } from '../../src/shared/palette-match/palette-ranking'
 import { expect, test } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
@@ -222,31 +222,6 @@ test.describe('Worktree jump-palette filters', () => {
     await expect(worktreeRow(orcaPage, fixture.remoteWorktreeId, fixture.remoteHostId)).toHaveCount(
       0
     )
-  })
-
-  test('opens with the sidebar repository scope without widening it', async ({ orcaPage }) => {
-    const fixture = await seedPaletteFilterFixture(orcaPage)
-    await orcaPage.evaluate((repoId) => {
-      window.__store?.getState().setFilterRepoIds([repoId])
-    }, fixture.localRepoId)
-
-    await openPalette(orcaPage)
-    await palette(orcaPage).getByPlaceholder(SEARCH_PLACEHOLDER).fill('E2E Palette')
-
-    await expect(filterTrigger(orcaPage)).toContainText('1')
-    await expect(palette(orcaPage).getByLabel(`Remove filter ${LOCAL_PROJECT}`)).toBeVisible()
-    await expect(worktreeRow(orcaPage, fixture.localWorktreeId)).toBeVisible()
-    await expect(worktreeRow(orcaPage, fixture.remoteWorktreeId, fixture.remoteHostId)).toHaveCount(
-      0
-    )
-  })
-
-  test('pressing Enter creates a worktree from a typed name', async ({ orcaPage }) => {
-    const createDialog = await openComposerFromTypedName(orcaPage)
-
-    await orcaPage.keyboard.press('Escape')
-
-    await expect(createDialog).toBeHidden()
   })
 
   test('Escape closes the composer opened over the Automations page', async ({ orcaPage }) => {

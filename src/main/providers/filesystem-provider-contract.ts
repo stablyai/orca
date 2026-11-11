@@ -1,13 +1,15 @@
-import type { PathExistenceResult } from '../../shared/path-existence-batch'
-import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
+import type { PathExistenceResult } from '../../shared/file-access/path-existence-batch'
+import type { SearchOptions, SearchResult } from '../../shared/file-search/code-search-types'
 import type {
   DocPreviewFileAccessRequest,
   DocPreviewFileAccessResult,
   DocPreviewFileChunk,
   DocPreviewFileTarget
-} from '../../shared/doc-preview-file-access'
-import type { DirEntry, FsChangeEvent, MarkdownDocument } from '../../shared/filesystem-entry-types'
-import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
+} from '../../shared/document-preview/doc-preview-file-access'
+import type { DirEntry } from '../../shared/file-listing/directory-entry'
+import type { FsChangeEvent } from '../../shared/file-watch/filesystem-change-event'
+import type { MarkdownDocument } from '../../shared/file-listing/file-document'
+import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-disk-space/workspace-space-types'
 
 export type FileStat = {
   size: number

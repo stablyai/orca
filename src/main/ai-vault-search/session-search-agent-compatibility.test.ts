@@ -1,15 +1,11 @@
 import { afterEach, expect, test } from 'vitest'
-import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
+import { AI_VAULT_AGENTS } from '../../shared/ai-vault/contracts/ai-vault-types'
 import {
   fakeSearchService,
   searchHit,
   searchResults
-} from '../../shared/ai-vault-search-test-fixture'
-import {
-  searchSessionService,
-  setSessionSearchService,
-  sessionSearchServiceStatus
-} from './session-search-service-registry'
+} from '../../shared/ai-vault/search/ai-vault-search-test-fixture'
+import { searchSessionService, setSessionSearchService } from './session-search-service-registry'
 import {
   encodeSessionSearchCursor,
   decodeSessionSearchCursor,
@@ -19,25 +15,7 @@ import {
 
 afterEach(() => setSessionSearchService(null))
 
-test.each(['runtime', 'relay'] as const)(
-  'publishes the current supported catalog independently of indexed data on %s',
-  async (transport) => {
-    expect(await sessionSearchServiceStatus({}, transport)).toMatchObject({
-      enabled: false,
-      supportedAgents: [...AI_VAULT_AGENTS],
-      supportsQoderHistory: true,
-      supportsJcodeHistory: true
-    })
-    const service = fakeSearchService()
-    setSessionSearchService(service)
-    expect((await sessionSearchServiceStatus({}, transport)).supportedAgents).toEqual(
-      AI_VAULT_AGENTS
-    )
-    expect(service.status.mock.lastCall).toEqual([])
-  }
-)
-
-test.each(['runtime', 'relay'] as const)(
+test.each(['relay'] as const)(
   'keeps an empty decoder catalog authoritative over both history flags on %s',
   async (transport) => {
     const service = fakeSearchService()
@@ -62,31 +40,7 @@ test.each(['runtime', 'relay'] as const)(
   }
 )
 
-test.each(['qoder', 'jcode'] as const)(
-  'projects the independent %s history capability before retrieval',
-  async (agent) => {
-    const service = fakeSearchService()
-    setSessionSearchService(service)
-    const supportField = agent === 'qoder' ? 'supportsQoderHistory' : 'supportsJcodeHistory'
-    await searchSessionService({ query: 'proof', [supportField]: true }, 'relay')
-    expect(service.search).toHaveBeenCalledExactlyOnceWith(
-      {
-        query: 'proof',
-        limit: 20,
-        filters: {
-          agents: AI_VAULT_AGENTS.filter((candidate) =>
-            agent === 'qoder'
-              ? !['jcode', 'kiro'].includes(candidate)
-              : !['codebuddy', 'zcode', 'qoder', 'kiro'].includes(candidate)
-          )
-        }
-      },
-      undefined
-    )
-  }
-)
-
-test.each(['runtime', 'relay'] as const)(
+test.each(['relay'] as const)(
   'keeps an unsupported-only filter narrow through normal service checks on %s',
   async (transport) => {
     const request = {

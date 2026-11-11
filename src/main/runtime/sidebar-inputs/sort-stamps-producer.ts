@@ -1,6 +1,9 @@
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
-import type { AgentPhase, AgentTransition } from '../../../shared/agent-transitions'
+import type {
+  AgentPhase,
+  AgentTransition
+} from '../../../shared/agent-status/lifecycle/agent-transitions'
 import {
   classifySortStampEvent,
   enterAgentPaneState,
@@ -9,14 +12,14 @@ import {
   type AgentPaneState,
   type SortStampEvent
 } from '../../../shared/sidebar-list/sort-stamps'
-import type { TerminalSideEffectBatch } from '../../../shared/terminal-side-effect-facts'
+import type { TerminalSideEffectBatch } from '../../../shared/terminal/output/terminal-side-effect-facts'
 import {
   agentPaneWorkspace,
   sameAgentPaneWorkspace,
   type AgentPaneChange,
   type AgentPaneWorkspace,
   type AgentTransitionDetector
-} from '../../agent-hooks/agent-transition-detector'
+} from '../../agent-hooks/observations/agent-transition-detector'
 import {
   listTieredWorkspaces,
   readSortStamps,
@@ -25,8 +28,6 @@ import {
   writeUnreadFlag,
   type SortStampsStore
 } from './sort-stamp-records'
-
-export type { SortStampsStore } from './sort-stamp-records'
 
 /** What the startup reconcile asks of the host, once its hook rows and PTYs have settled. */
 export type StoredTierEvidence = {

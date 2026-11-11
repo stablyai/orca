@@ -1,9 +1,11 @@
 import { z } from 'zod'
 import {
   isPlausiblePluginIconSvg,
-  parsePluginIconThemeArtifact
+  parsePluginIconThemeArtifact,
+  pluginIconThemeIconRefs
 } from '../artifacts/plugin-icon-theme-artifact'
-import { parsePluginLanguagePackArtifact } from '../artifacts/plugin-language-pack-artifact'
+import { checkPluginLanguagePackForAuthoring } from '../artifacts/plugin-language-pack-artifact'
+import type { EnglishSourceLookup } from '../languages/plugin-translation-string-policy'
 import {
   parsePluginGrammarArtifact,
   parsePluginLanguageConfiguration
@@ -34,11 +36,7 @@ function iconSvgErrors(read: PluginArtifactTextReader, themeText: string | null)
   } catch {
     return []
   }
-  const paths = new Set([
-    ...Object.values(artifact.icons),
-    ...Object.values(artifact.fileNames),
-    ...Object.values(artifact.fileExtensions)
-  ])
+  const paths = new Set(pluginIconThemeIconRefs(artifact))
   return [...paths].flatMap((path) => {
     const svg = read(path)
     if (svg === null) {
@@ -46,6 +44,21 @@ function iconSvgErrors(read: PluginArtifactTextReader, themeText: string | null)
     }
     return isPlausiblePluginIconSvg(svg) ? [] : [`${path}: not an SVG image`]
   })
+}
+
+// Why: Orca skips a missing background image silently at runtime, so authors hear about it here.
+function themeBackgroundErrors(read: PluginArtifactTextReader, themeText: string | null): string[] {
+  if (themeText === null) {
+    return []
+  }
+  try {
+    const background = parsePluginAppThemeArtifact(themeText, 'strict').background
+    return [background?.path, background?.videoPath].flatMap((path) =>
+      path !== undefined && read(path) === null ? [`${path}: file not found`] : []
+    )
+  } catch {
+    return []
+  }
 }
 
 function detail(error: unknown, text: string | null): string {
@@ -76,12 +89,14 @@ function check(read: PluginArtifactTextReader, path: string, parse: (text: strin
 
 /**
  * Author-time checks of every content artifact, strictly. Why: Orca skips unknown theme tokens,
- * icon slots, protected language-pack copy and unsafe syntax settings at load, so authors would
- * only learn about a typo here.
+ * icon slots and unsafe syntax settings at load, so authors would only learn about a typo here.
+ * Protected language-pack copy is a warning instead (see strictPluginArtifactWarnings).
  */
 export function strictPluginArtifactErrors(
   manifest: PluginManifest,
-  read: PluginArtifactTextReader
+  read: PluginArtifactTextReader,
+  // Why optional: the packaged CLI ships no English catalog, so it checks only source-free rules.
+  english?: EnglishSourceLookup
 ): string[] {
   const c = manifest.contributes
   const themeErrors = THEME_POINTS.flatMap((point) =>
@@ -94,7 +109,7 @@ export function strictPluginArtifactErrors(
   )
   const packErrors = c.languagePacks.flatMap((pack) => {
     const error = check(read, pack.path, (text) => {
-      const parsed = parsePluginLanguagePackArtifact(text, 'strict')
+      const parsed = checkPluginLanguagePackForAuthoring(text, english)
       if (!parsed.ok) {
         throw new Error(parsed.error)
       }
@@ -122,5 +137,28 @@ export function strictPluginArtifactErrors(
       (error) => `contributes.iconThemes "${theme.id}" (${theme.path}): ${error}`
     )
   )
-  return [...themeErrors, ...svgErrors, ...packErrors, ...syntaxErrors]
+  const backgroundErrors = c.themes.flatMap((theme) =>
+    themeBackgroundErrors(read, read(theme.path)).map(
+      (error) => `contributes.themes "${theme.id}" (${theme.path}): ${error}`
+    )
+  )
+  return [...themeErrors, ...svgErrors, ...backgroundErrors, ...packErrors, ...syntaxErrors]
+}
+
+/** Problems Orca handles safely at load but authors should know about; never block a release. */
+export function strictPluginArtifactWarnings(
+  manifest: PluginManifest,
+  read: PluginArtifactTextReader
+): string[] {
+  return manifest.contributes.languagePacks.flatMap((pack) => {
+    const text = read(pack.path)
+    const parsed = text === null ? null : checkPluginLanguagePackForAuthoring(text)
+    if (!parsed?.ok || parsed.ignoredProtectedStrings === 0) {
+      return []
+    }
+    const count = parsed.ignoredProtectedStrings
+    return [
+      `contributes.languagePacks "${pack.locale}" (${pack.path}): ${count} protected ${count === 1 ? 'string is' : 'strings are'} ignored; Orca always shows its own text for security dialogs`
+    ]
+  })
 }

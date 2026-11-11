@@ -1,5 +1,5 @@
 import { getRepoRegistrationHostIds } from '../../../shared/repo-host-identity'
-import type { AgentPaneWorkspace } from '../../agent-hooks/agent-transition-detector'
+import type { AgentPaneWorkspace } from '../../agent-hooks/observations/agent-transition-detector'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import type {

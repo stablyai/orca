@@ -1,8 +1,8 @@
 import { useMemo } from 'react'
-import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
-import { compareFileNames } from '../../../../../../shared/file-name-sort'
+import { compareFileNames } from '../../../../../../shared/file-listing/file-name-sort'
 import {
   filterSourceControlPathEntries,
   getSourceControlFileFilterState,
@@ -16,7 +16,7 @@ import {
   flattenSourceControlTree,
   namespaceSourceControlTreeDirectoryKeys,
   type SourceControlTreeNode
-} from '../../source-control-tree'
+} from '../../../../../../shared/source-control/listing/source-control-tree'
 import {
   buildSourceControlDisplaySections,
   groupSourceControlEntries,
@@ -24,7 +24,7 @@ import {
   type SourceControlDisplaySectionId,
   type SourceControlEntryGroups,
   type SourceControlDisplaySectionArea
-} from '../../../../../../shared/source-control-section-order'
+} from '../../../../../../shared/source-control/listing/source-control-section-order'
 import {
   collectListSelectionEntries,
   injectExpandedSubmoduleEntries,
@@ -37,6 +37,7 @@ import type { FlatEntry } from './use-selection'
 import type { GitStatusSourceControlTreeNode } from './directory-action-paths'
 import { getSubmoduleEmptyLabel, getSubmoduleLoadingLabel } from './row-layout'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type SourceControlFileProjection = {
   grouped: SourceControlEntryGroups
@@ -99,6 +100,7 @@ export function useSourceControlFileProjection({
   sourceControlViewMode: SourceControlViewMode
   collapsedSections: Set<string>
 }): SourceControlFileProjection {
+  const t = useTranslate()
   const grouped = useMemo(() => groupSourceControlEntries(entries), [entries])
 
   const fileFilterState = useMemo(() => getSourceControlFileFilterState(filterQuery), [filterQuery])
@@ -168,8 +170,8 @@ export function useSourceControlFileProjection({
         flattenSourceControlTree(treeRootsBySection[section.id] ?? [], collapsedTreeDirs),
         expandedSubmoduleKeys,
         submoduleStatusByKey,
-        getSubmoduleLoadingLabel(),
-        getSubmoduleEmptyLabel()
+        getSubmoduleLoadingLabel(t),
+        getSubmoduleEmptyLabel(t)
       )
     }
     return rows
@@ -181,7 +183,8 @@ export function useSourceControlFileProjection({
     expandedSubmoduleKeys,
     sourceControlViewMode,
     submoduleStatusByKey,
-    languageRevision
+    languageRevision,
+    t
   ])
 
   // List view needs the same lazy submodule expansion as tree view, spliced into the flat entry list.
@@ -195,8 +198,8 @@ export function useSourceControlFileProjection({
         section.items,
         expandedSubmoduleKeys,
         submoduleStatusByKey,
-        getSubmoduleLoadingLabel(),
-        getSubmoduleEmptyLabel()
+        getSubmoduleLoadingLabel(t),
+        getSubmoduleEmptyLabel(t)
       )
     }
     return rows
@@ -206,7 +209,8 @@ export function useSourceControlFileProjection({
     expandedSubmoduleKeys,
     sourceControlViewMode,
     submoduleStatusByKey,
-    languageRevision
+    languageRevision,
+    t
   ])
 
   const branchTreeRoots = useMemo(

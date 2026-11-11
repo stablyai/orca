@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer'
 import * as React from 'react'
 import * as ReactJsxRuntime from 'react/jsx-runtime'
 import { sha256 } from '@noble/hashes/sha256'
+import * as ReactQuery from '@tanstack/react-query'
 import * as i18next from 'i18next'
 import * as lowlight from 'lowlight'
 import * as zod from 'zod'
@@ -35,6 +36,8 @@ export function nativeMountingSubstitutes(): Map<string, unknown> {
   return new Map<string, unknown>([
     ['react', React],
     ['react/jsx-runtime', ReactJsxRuntime],
+    // Real query cache; each mount harness provides its own client (hook-mount.ts).
+    ['@tanstack/react-query', ReactQuery],
     ['zod', zod],
     // Use real highlighting so preview tokens come from product behavior.
     ['lowlight', lowlight],
@@ -66,7 +69,8 @@ export function nativeMountingSubstitutes(): Map<string, unknown> {
         Platform: { OS: 'ios' },
         AppState: { currentState: 'active', addEventListener: silentNativeSubscription },
         BackHandler: { addEventListener: silentNativeSubscription },
-        Keyboard: { dismiss: () => {} },
+        Keyboard: { dismiss: () => {}, addListener: silentNativeSubscription },
+        Dimensions: { get: () => ({ width: 390, height: 844 }) },
         useWindowDimensions: () => ({ width: 390, height: 844 }),
         ...reactNativeScreenMembers()
       })
@@ -98,6 +102,11 @@ export function nativeMountingSubstitutes(): Map<string, unknown> {
         activateKeepAwakeAsync: () => Promise.resolve(),
         deactivateKeepAwake: () => {}
       })
+    ],
+    // Without the reserved-regions module: no fold, and the keyboard reports through Keyboard alone.
+    [
+      'expo-modules-core',
+      partialNativeModule('expo-modules-core', { requireOptionalNativeModule: () => null })
     ],
     ...screenNativeSubstitutes(),
     [

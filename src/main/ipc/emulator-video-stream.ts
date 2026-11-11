@@ -1,11 +1,14 @@
 import { BrowserWindow, ipcMain, type WebContents } from 'electron'
 import { randomUUID } from 'node:crypto'
+import { AvccFrameStream } from '../emulator/avcc-frame-stream'
 import { scrcpyVideoRegistry } from '../emulator/scrcpy-video-registry'
 import { emulatorProbe } from '../emulator/emulator-probe'
+import { errorMessage } from '../../shared/error-message'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
 
-// Relay scrcpy metadata/H.264 units to renderer subscribers, parallel to the MJPEG stream handler.
-export function registerEmulatorVideoStreamHandlers(): void {
+export function registerEmulatorVideoStreamHandlers(
+  resolveIosVideoStreamUrl: (deviceId: string) => string | null | undefined
+): void {
   type Subscription = {
     owner: WebContents
     unsubscribe: () => void
@@ -62,11 +65,46 @@ export function registerEmulatorVideoStreamHandlers(): void {
         if (owner.isDestroyed() || subscriptions.get(streamId) !== pendingSubscription) {
           return
         }
+        const iosVideoStreamUrl = resolveIosVideoStreamUrl(args.deviceId)
+        if (iosVideoStreamUrl) {
+          const fail = (message: string): void => {
+            stopSubscription(streamId, owner)
+            if (!owner.isDestroyed()) {
+              owner.send('emulator:frameStreamError', { streamId, message })
+            }
+          }
+          const stream = new AvccFrameStream(iosVideoStreamUrl, {
+            onFrame: (frame) => {
+              if (!owner.isDestroyed()) {
+                owner.send('emulator:videoStreamFrame', {
+                  streamId,
+                  deviceId: args.deviceId,
+                  ...frame
+                })
+              }
+            },
+            onError: fail
+          })
+          pendingSubscription.unsubscribe = () => stream.stop()
+          try {
+            stream.start()
+          } catch (error) {
+            fail(errorMessage(error))
+          }
+          return
+        }
         const unsubscribe = scrcpyVideoRegistry.subscribe(args.deviceId, (videoEvent) => {
           if (owner.isDestroyed()) {
             return
           }
-          if (videoEvent.type === 'meta') {
+          if (videoEvent.type === 'end') {
+            stopSubscription(streamId, owner)
+            // Shares the MJPEG error channel; the renderer matches it by stream id.
+            owner.send('emulator:frameStreamError', {
+              streamId,
+              message: 'The Android video stream ended.'
+            })
+          } else if (videoEvent.type === 'meta') {
             owner.send('emulator:videoStreamMeta', {
               streamId,
               deviceId: args.deviceId,

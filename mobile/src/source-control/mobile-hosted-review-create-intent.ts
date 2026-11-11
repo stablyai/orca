@@ -3,7 +3,7 @@ import { requestMobileCommitMessage } from './mobile-commit-message-ai'
 import { getStageablePaths, type MobileGitStatusResult } from './mobile-git-status'
 import { getMobilePrEligibilityReadiness } from './mobile-open-pr-prefill'
 import { resolveMobilePrPrefill, type MobilePrPrefill } from './mobile-pr-create'
-import { isBehindOnlyUpstream } from '../../../src/shared/git-upstream-status'
+import { isBehindOnlyUpstream } from '../../../src/shared/git/remotes/git-upstream-status'
 import {
   commitMobileHostedReviewStagedChanges,
   fastForwardMobileHostedReviewBranch,
@@ -12,7 +12,7 @@ import {
   stageMobileHostedReviewPaths
 } from './mobile-hosted-review-git-preparation'
 import { applyMobileHostedReviewRemotePrerequisite } from './mobile-hosted-review-remote-prerequisite'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 
 export { mobileHostedReviewCreateIntentProgressMessage } from './hosted-review-copy'
 
@@ -46,6 +46,8 @@ export type MobileHostedReviewCreateIntentOutcome =
 type PrepareInput = {
   branch: string
   title: string
+  /** The base the user picked; eligibility judges the branch against it. */
+  base?: string
   status: MobileGitStatusResult | null
   commitMessage?: string
   // The live composer text, so a message typed during generation is not overwritten.
@@ -58,21 +60,21 @@ function hasUnresolvedConflicts(status: MobileGitStatusResult | null): boolean {
 }
 
 async function resolvePrefillFromStatus(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
-  branch: string,
-  title: string,
+  input: Pick<PrepareInput, 'branch' | 'title' | 'base'>,
   status: MobileGitStatusResult | null
 ): Promise<MobilePrPrefill> {
   return resolveMobilePrPrefill(client, worktreeId, {
-    branch,
-    title,
+    branch: input.branch,
+    title: input.title,
+    ...(input.base ? { base: input.base } : {}),
     ...getMobilePrEligibilityReadiness(status)
   })
 }
 
 async function ensureLocalChangesCommitted(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   input: PrepareInput,
   currentStatus: MobileGitStatusResult | null
@@ -209,7 +211,7 @@ async function ensureLocalChangesCommitted(
 }
 
 export async function prepareMobileHostedReviewCreateIntent(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   input: PrepareInput
 ): Promise<MobileHostedReviewCreateIntentOutcome> {
@@ -258,13 +260,7 @@ export async function prepareMobileHostedReviewCreateIntent(
   }
   currentStatus = committed.status
 
-  let prefill = await resolvePrefillFromStatus(
-    client,
-    worktreeId,
-    input.branch,
-    input.title,
-    currentStatus
-  )
+  let prefill = await resolvePrefillFromStatus(client, worktreeId, input, currentStatus)
   for (let attempts = 0; attempts < 2; attempts++) {
     const remote = await applyMobileHostedReviewRemotePrerequisite(client, worktreeId, prefill, {
       ...input,
@@ -297,13 +293,7 @@ export async function prepareMobileHostedReviewCreateIntent(
         status: currentStatus
       }
     }
-    prefill = await resolvePrefillFromStatus(
-      client,
-      worktreeId,
-      input.branch,
-      input.title,
-      currentStatus
-    )
+    prefill = await resolvePrefillFromStatus(client, worktreeId, input, currentStatus)
   }
 
   return { ok: true, prefill, status: currentStatus, committed: committed.committed }

@@ -1,10 +1,11 @@
+// @protected-copy: plugin catalog suggestion banner.
 import { useEffect, useState } from 'react'
 import { Puzzle } from 'lucide-react'
 import type { PluginFileTypeHostSuggestion } from '../../../../preload/api/plugin-host-api'
 import { fileTypeOfPath } from '../../../../shared/plugins/contributions/plugin-file-type'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import { requestPluginPreview } from '@/store/plugin-preview-request'
+import { requestPluginPreview } from '@/store/plugins/navigation/plugin-preview-request'
 import { pluginDisplayNameFromKey } from '../plugins/list/plugin-display-name'
 import { Button } from '../ui/button'
 
@@ -20,6 +21,7 @@ export function PluginFileTypeSuggestion({
   filePath: string
   purpose?: 'open' | 'editor'
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const fileType = fileTypeOfPath(filePath)
   const settings = useAppStore((state) => state.settings)
   const updateSettings = useAppStore((state) => state.updateSettings)
@@ -65,12 +67,12 @@ export function PluginFileTypeSuggestion({
         <Puzzle className="size-3.5 shrink-0 text-muted-foreground" />
         <span className="min-w-0 truncate text-foreground">
           {purpose === 'editor'
-            ? translate(
+            ? t(
                 'auto.components.editor.PluginFileTypeSuggestion.editorMessage',
                 'A plugin adds an editor for .{{value0}} files: {{value1}}',
                 { value0: fileType, value1: name }
               )
-            : translate(
+            : t(
                 'auto.components.editor.PluginFileTypeSuggestion.message',
                 'A plugin can open .{{value0}} files: {{value1}}',
                 { value0: fileType, value1: name }
@@ -89,7 +91,7 @@ export function PluginFileTypeSuggestion({
             state.openSettingsPage()
           }}
         >
-          {translate('auto.components.editor.PluginFileTypeSuggestion.view', 'View plugin')}
+          {t('auto.components.editor.PluginFileTypeSuggestion.view', 'View plugin')}
         </Button>
         <Button
           type="button"
@@ -100,7 +102,7 @@ export function PluginFileTypeSuggestion({
             setHiddenFileType(fileType)
           }}
         >
-          {translate('auto.components.editor.PluginFileTypeSuggestion.notNow', 'Not now')}
+          {t('auto.components.editor.PluginFileTypeSuggestion.notNow', 'Not now')}
         </Button>
         <Button
           type="button"
@@ -110,7 +112,7 @@ export function PluginFileTypeSuggestion({
             void updateSettings({ pluginDismissedFileTypes: [...dismissed, fileType] })
           }
         >
-          {translate(
+          {t(
             'auto.components.editor.PluginFileTypeSuggestion.never',
             "Don't suggest for .{{value0}}",
             { value0: fileType }

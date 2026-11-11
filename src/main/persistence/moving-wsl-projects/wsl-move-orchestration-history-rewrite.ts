@@ -5,7 +5,7 @@
  * stays as written; `SQLITE_TABLE_DISPOSITIONS` gives each table's reason.
  */
 import { existsSync } from 'node:fs'
-import { isStructuredWorkerHandle } from '../../../shared/structured-worker-handle'
+import { isStructuredWorkerHandle } from '../../../shared/orchestration/workers/structured-worker-handle'
 import { hardenOrchestrationDatabaseFiles } from '../../runtime/orchestration/db/database-file-permissions'
 import Database from '../../sqlite/sync-database'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'

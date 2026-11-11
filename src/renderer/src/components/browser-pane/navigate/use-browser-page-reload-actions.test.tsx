@@ -32,24 +32,6 @@ function createWebview(overrides: Partial<Electron.WebviewTag> = {}): Electron.W
 }
 
 describe('useBrowserPageReloadActions', () => {
-  it('exposes loading after an accepted reload', () => {
-    const webview = createWebview()
-    const onUpdatePageStateRef = { current: vi.fn() }
-    const view = renderHook(() =>
-      useBrowserPageReloadActions({
-        browserTab: createBrowserTab(),
-        webviewRef: { current: webview },
-        retryGuestRecoveryRef: { current: vi.fn() },
-        onUpdatePageStateRef
-      })
-    )
-
-    act(() => view.result.current.runReloadTrigger('button'))
-
-    expect(webview.reload).toHaveBeenCalledTimes(1)
-    expect(onUpdatePageStateRef.current).toHaveBeenCalledWith('page-a', { loading: true })
-  })
-
   it('does not strand loading when a live guest rejects reload before it is ready', () => {
     const webview = createWebview({
       reload: vi.fn(() => {

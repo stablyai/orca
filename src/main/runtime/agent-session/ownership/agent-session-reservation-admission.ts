@@ -1,7 +1,7 @@
 /** Evaluate reservation identity/replay/CAS without I/O; commit applies the winning record and operation row in one store transaction. */
 
-import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
-import type { AgentSessionAdmissionModels } from '../../agent-session-record-options'
+import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionAdmissionModels } from '../records/agent-session-record-options'
 import { chatAgentsShareConversations } from '../../../../shared/structured-agent-cli-conversation-adoption'
 import {
   agentSessionOperationKey,
@@ -10,13 +10,13 @@ import {
   pruneAgentSessionOperationRows,
   type AgentSessionOperationDecision,
   type AgentSessionOperationRow
-} from '../../../../shared/agent-session-operation-ledger'
+} from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import {
   agentSessionLeaseIsReleased,
   agentSessionLeaseOwnerVerdict,
   evaluateAgentSessionAcquisition,
   type AgentSessionOwnerProbe
-} from '../../../../shared/agent-session-lease-adjudication'
+} from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import {
   agentSessionExecutionLocationsEqual,
   isAgentSessionLaunchEnv,
@@ -25,13 +25,13 @@ import {
   type AgentSessionLaunchArgs,
   type AgentSessionLaunchEnv,
   type AgentSessionRecord
-} from '../../../../shared/agent-session-record'
-import { isAgentSessionLaunchArgs } from '../../../../shared/agent-session-launch-args'
-import { agentSessionProviderHandleRoot } from '../../../../shared/agent-session-provider-handle-encoding'
+} from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import { isAgentSessionLaunchArgs } from '../../../../shared/agent-session/lifecycle/agent-session-launch-args'
+import { agentSessionProviderHandleRoot } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type {
   StructuredAgentId,
   AgentSessionProviderHandleLink
-} from '../../../../shared/agent-session-provider-handle'
+} from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import {
   reserveAgentSessionOwner,
   type AgentSessionReservation
@@ -41,16 +41,16 @@ import {
   selectWritableAgentSessionRecord,
   requireWritableAgentSessionRecord,
   type AgentSessionStoreState
-} from '../../agent-session-store-state'
-import { agentSessionRecordIdentityFields } from '../../agent-session-record-founding'
+} from '../records/agent-session-store-state'
+import { agentSessionRecordIdentityFields } from '../records/agent-session-record-founding'
 import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome
-} from '../../../../shared/agent-session-account-home'
+} from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { assertReservedTabUnheld } from '../agent-session-tab-table'
-export { assertReservedTabUnheld } from '../agent-session-tab-table'
 
 export type AgentSessionReserveRequest = {
+  forkedFrom?: AgentSessionRecord['forkedFrom']
   /** Host-resolved floating directory committed with the first owner reservation. */
   launchDirectory?: string
   sessionId: string
@@ -69,6 +69,8 @@ export type AgentSessionReserveRequest = {
   surfaceTabId?: string
   /** Seed an adopted handle to resume its conversation; absent means a fresh provider conversation. */
   adoptedHandleLink?: AgentSessionProviderHandleLink
+  /** Only an adopting create is named before its first message. */
+  conversationName?: string
   /** Null when the session does not exist yet; otherwise the fence the caller last observed. */
   expectedFence: number | null
   /** A supplier is invoked only when this operation wins a new reservation. */

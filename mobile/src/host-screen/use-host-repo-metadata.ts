@@ -1,21 +1,19 @@
-import { useCallback } from 'react'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../src/shared/execution-host'
-import { setCachedRepos } from '../cache/repo-cache'
-import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
+import { useEffect } from 'react'
+import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
+import { useHostQuery } from '../query/host-query'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { buildRepoHostIdByRepoId } from '../worktree/worktree-host-context-labels'
 import { buildSshHostHealthById } from '../worktree/worktree-host-health'
 import type { SectionRepo } from '../worktree/workspace-list-types'
-import type { HostRepoCatalogRow } from './host-screen-reply-schema'
-import { hostPlatformRead, hostRepoCatalogRead } from './host-screen-operations'
 import {
-  acceptedMetadata,
-  readHostSshTargetLabels,
-  settledMetadataReply
-} from './host-ssh-target-labels-read'
+  catalogNeedsHostLabels,
+  HOST_LIST_TARGET,
+  hostRepoCatalogQuery,
+  hostRepoLabelsQuery,
+  NO_HOST_LIST_INPUT
+} from './host-list-queries'
+import type { HostRepoCatalogRow } from './host-screen-reply-schema'
 import type { HostScreenState } from './use-host-screen-state'
-
-const REPO_METADATA_REFRESH_MS = 60_000
 
 function desktopSectionRepo(repo: HostRepoCatalogRow): SectionRepo {
   return {
@@ -28,91 +26,52 @@ function desktopSectionRepo(repo: HostRepoCatalogRow): SectionRepo {
   }
 }
 
+// The host's repos and their host labels; repo metadata is decorative, so a failed read keeps what is shown.
 export function useHostRepoMetadata(args: {
   client: RpcClient | null
-  connState: ConnectionState
   hostId: string | undefined
   state: HostScreenState
-}) {
-  const { client, connState, hostId, state } = args
+  subscribed: boolean
+}): void {
+  const { client, hostId, state, subscribed } = args
   const {
-    clientRef,
-    fetchRepoMetadataInFlightRef,
-    fetchRepoMetadataPendingRef,
-    repoMetadataFetchedAtRef,
     setHostLabelById,
     setHostHealthById,
     setDesktopRepos,
     setHostPlatform,
     setRepoHostIdByRepoId
   } = state
-
-  const fetchRepoMetadata = useCallback(
-    async (options: { force?: boolean; queueIfInFlight?: boolean } = {}) => {
-      if (!client || connState !== 'connected' || !hostId) {
-        return
-      }
-      if (fetchRepoMetadataInFlightRef.current.has(client)) {
-        if (options.queueIfInFlight) {
-          fetchRepoMetadataPendingRef.current.add(client)
-        }
-        return
-      }
-      const now = Date.now()
-      if (!options.force && now - repoMetadataFetchedAtRef.current < REPO_METADATA_REFRESH_MS) {
-        return
-      }
-      fetchRepoMetadataInFlightRef.current.add(client)
-      const requestClient = client,
-        requestHostId = hostId
-      try {
-        do {
-          fetchRepoMetadataPendingRef.current.delete(requestClient)
-          const repoReply = await settledMetadataReply(() =>
-            hostRepoCatalogRead.request(requestClient)
-          )
-          if (clientRef.current !== requestClient || hostId !== requestHostId) {
-            return
-          }
-          const repos = repoReply && hostRepoCatalogRead.interpret(repoReply)
-          if (!repos || !repos.accepted) {
-            return
-          }
-          const catalog = repos.value
-          repoMetadataFetchedAtRef.current = Date.now()
-          setCachedRepos(requestHostId, catalog)
-          setDesktopRepos(catalog.map(desktopSectionRepo))
-          setRepoHostIdByRepoId(buildRepoHostIdByRepoId(catalog))
-          // Fetch labels only for mixed-host or potentially unhealthy SSH rows. Count repos, not the id-keyed map: the same repo id may exist on two hosts.
-          const hostIds = new Set(catalog.map((repo) => getRepoExecutionHostId(repo)))
-          const hasSshHost = [...hostIds].some((id) => parseExecutionHostId(id)?.kind === 'ssh')
-          if (hostIds.size > 1 || hasSshHost) {
-            const [{ sshTargetSummaries, hostLabelById }, hostPlatform] = await Promise.all([
-              readHostSshTargetLabels(requestClient),
-              settledMetadataReply(() => hostPlatformRead.request(requestClient))
-            ])
-            if (clientRef.current !== requestClient || hostId !== requestHostId) {
-              return
-            }
-            setHostHealthById(buildSshHostHealthById(sshTargetSummaries))
-            setHostLabelById(hostLabelById)
-            setHostPlatform(acceptedMetadata(hostPlatform, hostPlatformRead.interpret) ?? null)
-          } else {
-            // Clear labels for departed hosts so stale metadata cannot badge remaining rows.
-            setHostHealthById(new Map())
-            setHostLabelById(new Map())
-          }
-        } while (fetchRepoMetadataPendingRef.current.has(requestClient))
-      } catch {
-        // Repo metadata is decorative; the next refresh can retry.
-      } finally {
-        fetchRepoMetadataInFlightRef.current.delete(requestClient)
-      }
-    },
-    [client, connState, hostId]
+  const host = { hostId: hostId ?? '', client }
+  const options = { enabled: !!hostId, subscribed, refetchInterval: 60_000 }
+  const repos = useHostQuery(
+    hostRepoCatalogQuery,
+    host,
+    HOST_LIST_TARGET,
+    NO_HOST_LIST_INPUT,
+    options
   )
-
-  return fetchRepoMetadata
+  const needsLabels = repos.data !== undefined && catalogNeedsHostLabels(repos.data.catalog)
+  const labels = useHostQuery(hostRepoLabelsQuery, host, HOST_LIST_TARGET, NO_HOST_LIST_INPUT, {
+    ...options,
+    enabled: options.enabled && needsLabels
+  })
+  // Applied when the catalog changes (structural sharing keeps an unchanged one), and again on a host switch,
+  // which clears the shown repos while the cache keeps them.
+  useEffect(() => {
+    if (repos.data) {
+      setDesktopRepos(repos.data.catalog.map(desktopSectionRepo))
+      setRepoHostIdByRepoId(buildRepoHostIdByRepoId(repos.data.catalog))
+    }
+  }, [repos.data, hostId])
+  useEffect(() => {
+    if (needsLabels && labels.data) {
+      setHostHealthById(buildSshHostHealthById(labels.data.sshTargetSummaries))
+      setHostLabelById(new Map(labels.data.hostLabels))
+      setHostPlatform(labels.data.platform)
+    } else if (repos.data && !needsLabels) {
+      // Clear labels for departed hosts so stale metadata cannot badge remaining rows.
+      setHostHealthById(new Map())
+      setHostLabelById(new Map())
+    }
+  }, [needsLabels, labels.data, repos.data, hostId])
 }
-
-export type FetchHostRepoMetadata = ReturnType<typeof useHostRepoMetadata>

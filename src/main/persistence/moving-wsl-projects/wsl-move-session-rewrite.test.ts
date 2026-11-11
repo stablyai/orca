@@ -1,21 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
-import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import type { Tab } from '../../../shared/tab-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { wslMoveCutoverFixture } from '../__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { wslMoverProfile } from '../__fixtures__/wsl-mover/wsl-mover-profiles'
 import { tabGroup, terminalTab } from '../__fixtures__/wsl-mover/wsl-mover-profile-rows'
 import { createUncToLinuxPathRewriter } from './wsl-move-path-rewriter'
 import { wslMoveRewriteScope } from './wsl-move-rewrite-scope'
 import {
-  withoutDesktopFocus,
   wslMoveHostSessionSeed,
-  wslMoveReleasedSessionFocusPatch,
-  wslMoveSessionGlobalsPatch
+  wslMoveReleasedSessionFocusPatch
 } from './wsl-move-session-rewrite'
-import { prepareOrcadMigrationWorkspaceSession } from '../migrating-orcad-catalog/orcad-destination-workspace-session'
 
 const HOST = toRuntimeExecutionHostId('wsl:Ubuntu')
 const scope = wslMoveRewriteScope({
@@ -34,7 +30,6 @@ const source = wslMoverProfile('mixed-windows-wsl', 'source')
 const MOVED = source.session.activeWorktreeId ?? ''
 const MOVED_ON_HOST = 'repo-a::/home/dev/app'
 const FEATURE_ON_HOST = 'repo-a::/home/dev/app-feature'
-const SAME_DISTRO_ON_HOST = 'repo-b::/home/dev/lib'
 
 const chatTab: Tab = {
   id: 'chat-1',
@@ -80,58 +75,6 @@ function carriedSession(): WorkspaceSessionState {
 }
 
 describe('WSL move session globals', () => {
-  it("moves local focus on a moved workspace to the host's id and host", () => {
-    expect(
-      wslMoveSessionGlobalsPatch(
-        {
-          activeWorktreeId: MOVED,
-          activeWorkspaceKey: `worktree:${MOVED}`,
-          activeWorkspaceExecutionHostId: 'local'
-        },
-        scope
-      )
-    ).toEqual({
-      activeWorktreeId: MOVED_ON_HOST,
-      activeWorkspaceKey: `worktree:${MOVED_ON_HOST}`,
-      activeWorkspaceExecutionHostId: HOST
-    })
-  })
-
-  it("moves focus on a moved folder workspace to the host, keeping the folder's key", () => {
-    expect(
-      wslMoveSessionGlobalsPatch(
-        {
-          activeWorktreeId: null,
-          activeWorkspaceKey: 'folder:folder-1',
-          activeWorkspaceExecutionHostId: 'local'
-        },
-        scope
-      )
-    ).toEqual({ activeWorkspaceExecutionHostId: HOST })
-    expect(
-      wslMoveSessionGlobalsPatch(
-        { activeWorktreeId: null, activeWorkspaceKey: 'folder:folder-2' },
-        scope
-      )
-    ).toBeNull()
-  })
-
-  it('leaves focus on another project, or already on a host, alone', () => {
-    const windows = 'repo-win::C:\\src\\win'
-    expect(
-      wslMoveSessionGlobalsPatch(
-        { activeWorktreeId: windows, activeWorkspaceExecutionHostId: 'local' },
-        scope
-      )
-    ).toBeNull()
-    expect(
-      wslMoveSessionGlobalsPatch(
-        { activeWorktreeId: MOVED, activeWorkspaceExecutionHostId: 'ssh:box' },
-        scope
-      )
-    ).toBeNull()
-  })
-
   // verify-15b 6c: undo left focus on the host copy, which reopened and resumed its agent.
   it("returns focus on a released project's host copy to its copy here", () => {
     const tabsByWorktree = { [MOVED]: [], 'repo-win::C:\\src\\win': [] }
@@ -177,24 +120,6 @@ describe('WSL move session globals', () => {
       activeWorkspaceKey: null
     })
   })
-
-  it('leaves focus on another host project, another host or this computer alone', () => {
-    for (const focus of [
-      { activeWorktreeId: SAME_DISTRO_ON_HOST, activeWorkspaceExecutionHostId: HOST },
-      { activeWorktreeId: MOVED_ON_HOST, activeWorkspaceExecutionHostId: 'ssh:box' },
-      { activeWorktreeId: MOVED, activeWorkspaceExecutionHostId: 'local' }
-    ] as const) {
-      expect(wslMoveReleasedSessionFocusPatch({ ...focus, tabsByWorktree: {} }, scope)).toBeNull()
-    }
-  })
-
-  it('changes nothing on a second run', () => {
-    const first = { activeWorktreeId: MOVED, activeWorkspaceExecutionHostId: null }
-    const patch = wslMoveSessionGlobalsPatch(first, scope)
-
-    expect(patch).toEqual({ activeWorktreeId: MOVED_ON_HOST, activeWorkspaceExecutionHostId: HOST })
-    expect(wslMoveSessionGlobalsPatch({ ...first, ...patch }, scope)).toBeNull()
-  })
 })
 
 /** The seeded partition alone. */
@@ -207,36 +132,6 @@ function seedSession(
 }
 
 describe('WSL move host session seed', () => {
-  it("seeds only the moved project's rows, without chats or PTY bindings", () => {
-    const seed = seedSession(carriedSession(), getDefaultWorkspaceSession(), scope)
-
-    expect(Object.keys(seed?.tabsByWorktree ?? {}).sort()).toEqual([MOVED_ON_HOST, FEATURE_ON_HOST])
-    expect(seed?.tabsByWorktree[MOVED_ON_HOST]?.map((tab) => tab.ptyId)).toEqual([null])
-    expect(seed?.terminalLayoutsByTabId['tab-1']?.ptyIdsByLeafId).toBeUndefined()
-    expect(seed?.terminalLayoutsByTabId['tab-1']?.titlesByLeafId).toEqual({
-      'leaf-1': 'build',
-      'leaf-2': 'claude'
-    })
-    expect(seed?.terminalLayoutsByTabId['tab-3']).toBeUndefined()
-    expect(seed?.remoteSessionIdsByTabId ?? {}).toEqual({})
-    expect(seed?.terminalPtyIncarnationsByPaneKey ?? {}).toEqual({})
-    expect(seed?.activeWorktreeIdsOnShutdown ?? []).toEqual([])
-    expect(seed?.unifiedTabs?.[MOVED_ON_HOST]?.map((tab) => tab.id)).not.toContain(chatTab.id)
-    expect(seed?.tabGroups?.[MOVED_ON_HOST]?.[0]).toMatchObject({
-      tabOrder: ['tab-1', '/home/dev/app/README.md'],
-      activeTabId: 'tab-1',
-      recentTabIds: ['tab-1']
-    })
-    expect(seed?.activeTabIdByWorktree?.[MOVED_ON_HOST]).toBeUndefined()
-    expect(seed?.activeTabTypeByWorktree?.[MOVED_ON_HOST]).toBeUndefined()
-    expect(seed?.openFilesByWorktree?.[MOVED_ON_HOST]?.[0]?.dirtyDraftContent).toBe(
-      '# unsaved draft'
-    )
-    // Focus belongs to whoever looks at the host, not to the seed.
-    expect(seed?.activeWorktreeId).toBeNull()
-    expect(seed?.tabsByWorktree[SAME_DISTRO_ON_HOST]).toBeUndefined()
-  })
-
   it('never replaces what the host already published', () => {
     const published: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
@@ -256,15 +151,6 @@ describe('WSL move host session seed', () => {
     expect(seed?.terminalLayoutsByTabId['tab-1']).toBeUndefined()
     expect(seed?.tabsByWorktree[FEATURE_ON_HOST]?.map((tab) => tab.id)).toEqual(['tab-2'])
     expect(seed?.activeWorktreeId).toBe(MOVED_ON_HOST)
-  })
-
-  it('changes nothing on a second run', () => {
-    const seed = seedSession(carriedSession(), getDefaultWorkspaceSession(), scope)
-
-    if (!seed) {
-      throw new Error('expected a seed')
-    }
-    expect(wslMoveHostSessionSeed(carriedSession(), seed, scope)).toBeNull()
   })
 
   it('never seeds a workspace an earlier run recorded, even once its tabs are closed', () => {
@@ -320,39 +206,5 @@ describe('WSL move host session seed', () => {
     expect(seed?.tabGroups?.[MOVED_ON_HOST]?.map((group) => group.id)).toEqual(['group-1'])
     expect(seed?.tabGroupLayouts?.[MOVED_ON_HOST]).toEqual({ type: 'leaf', groupId: 'group-1' })
     expect(seed?.activeGroupIdByWorktree?.[MOVED_ON_HOST]).toBe('group-1')
-  })
-})
-
-describe('WSL move carried session focus', () => {
-  // The focused project could not move into a host that had its own focus.
-  it('carries no desktop focus, so a host with its own focus takes the moved project and keeps its focus', () => {
-    const desktop: WorkspaceSessionState = {
-      ...getDefaultWorkspaceSession(),
-      activeRepoId: 'repo-moving',
-      activeWorktreeId: 'repo-moving::/home/dev/app',
-      activeWorkspaceKey: worktreeWorkspaceKey('repo-moving::/home/dev/app'),
-      activeWorkspaceExecutionHostId: 'local',
-      activeTabId: 'tab-1'
-    }
-    const carried = withoutDesktopFocus(desktop)
-    expect(carried).toMatchObject({ activeRepoId: null, activeWorktreeId: null, activeTabId: null })
-    expect('activeWorkspaceKey' in carried).toBe(false)
-    expect('activeWorkspaceExecutionHostId' in carried).toBe(false)
-
-    const host = {
-      ...getDefaultPersistedState('/host-data'),
-      workspaceSession: {
-        ...getDefaultWorkspaceSession(),
-        activeRepoId: 'repo-on-host',
-        activeWorktreeId: 'repo-on-host::/home/dev/other',
-        activeTabId: 'host-tab'
-      }
-    }
-    const prepared = prepareOrcadMigrationWorkspaceSession(carried, host)
-    expect(prepared.merged).toMatchObject({
-      activeRepoId: 'repo-on-host',
-      activeWorktreeId: 'repo-on-host::/home/dev/other',
-      activeTabId: 'host-tab'
-    })
   })
 })

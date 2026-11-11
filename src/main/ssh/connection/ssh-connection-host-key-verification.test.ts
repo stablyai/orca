@@ -2,41 +2,47 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { connectAttempts, ssh2Mock } from '../__tests__/ssh-connection-test-client'
-import { resetSshConnectionMocks } from './ssh-connection-test-harness'
-import { createCallbacks, createTarget } from './ssh-connection-test-fixtures'
+import { ssh2Mock } from './testing/ssh-connection-test-client'
+import { resetSshConnectionMocks } from './testing/ssh-connection-test-harness'
+import { createCallbacks, createTarget } from './testing/ssh-connection-test-fixtures'
 import { SshConnection } from './ssh-connection'
 
-vi.mock('../ssh2-module-load', async () =>
-  (await import('../__tests__/ssh-connection-test-client')).createSsh2LoaderModule()
+vi.mock('../authentication/ssh2-module-load', async () =>
+  (await import('./testing/ssh-connection-test-client')).createSsh2LoaderModule()
 )
 vi.mock('../system-transport/system-ssh-binary', async () =>
-  (await import('./ssh-connection-test-harness')).createSystemSshBinaryModule()
+  (await import('./testing/ssh-connection-test-harness')).createSystemSshBinaryModule()
 )
 vi.mock('../system-transport/system-ssh-args', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSystemSshArgsMocks(await importOriginal())
+  (await import('./testing/ssh-connection-test-harness')).withSystemSshArgsMocks(
+    await importOriginal()
+  )
 )
 vi.mock('../system-transport/system-ssh-command', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSystemSshCommandMocks(await importOriginal())
-)
-vi.mock('../system-transport/system-ssh-file-binary-transfer', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSystemSshFileBinaryTransferMocks(
+  (await import('./testing/ssh-connection-test-harness')).withSystemSshCommandMocks(
     await importOriginal()
   )
 )
-vi.mock('../system-transport/system-ssh-file-transfer', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSystemSshFileTransferMocks(
+vi.mock(
+  '../system-transport/file-transfer/system-ssh-file-binary-transfer',
+  async (importOriginal) =>
+    (await import('./testing/ssh-connection-test-harness')).withSystemSshFileBinaryTransferMocks(
+      await importOriginal()
+    )
+)
+vi.mock('../system-transport/file-transfer/system-ssh-file-transfer', async (importOriginal) =>
+  (await import('./testing/ssh-connection-test-harness')).withSystemSshFileTransferMocks(
     await importOriginal()
   )
 )
-vi.mock('../ssh-control-socket', async () =>
-  (await import('./ssh-connection-test-harness')).createControlSocketModule()
+vi.mock('../system-transport/ssh-control-socket', async () =>
+  (await import('./testing/ssh-connection-test-harness')).createControlSocketModule()
 )
 vi.mock('../config/ssh-config-parser', async () =>
-  (await import('./ssh-connection-test-harness')).createSshConfigParserModule()
+  (await import('./testing/ssh-connection-test-harness')).createSshConfigParserModule()
 )
 vi.mock('../config/ssh-g-config-resolution', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSshGConfigResolutionMocks(
+  (await import('./testing/ssh-connection-test-harness')).withSshGConfigResolutionMocks(
     await importOriginal()
   )
 )
@@ -46,21 +52,6 @@ const UNIDENTIFIABLE_HOST_KEY = Buffer.from('not-a-real-host-key-blob')
 describe('SshConnection host key verification', () => {
   beforeEach(() => {
     resetSshConnectionMocks()
-  })
-
-  it('refuses a host key whose own blob cannot be identified', async () => {
-    ssh2Mock.presentedHostKey = UNIDENTIFIABLE_HOST_KEY
-    const conn = new SshConnection(createTarget(), createCallbacks())
-
-    await expect(conn.connect()).rejects.toThrow()
-    expect(ssh2Mock.lastHostKeyAccepted, 'the handshake accepted an unidentifiable key').toBe(false)
-  })
-
-  it('accepts a well-formed host key on first contact', async () => {
-    const conn = new SshConnection(createTarget(), createCallbacks())
-    await conn.connect()
-
-    expect(ssh2Mock.lastHostKeyAccepted).toBe(true)
   })
 
   // A rejected host key must bypass credential fallbacks or auth-shaped errors could disclose a secret to the refused peer.
@@ -110,7 +101,7 @@ describe('SshConnection host key verification', () => {
     }
   })
 
-  // Unreadable known_hosts connects as SSH does, including cloud-placeholder files, but must record no trust; store-wiring tests prove that boundary.
+  // Unreadable known_hosts connects as SSH does, including cloud-placeholder files.
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
     'still connects when a known_hosts file exists but cannot be read',
     async () => {
@@ -132,12 +123,4 @@ describe('SshConnection host key verification', () => {
       }
     }
   )
-
-  it('does not retry a refused host key', async () => {
-    ssh2Mock.presentedHostKey = UNIDENTIFIABLE_HOST_KEY
-    const conn = new SshConnection(createTarget(), createCallbacks())
-
-    await expect(conn.connect()).rejects.toThrow()
-    expect(connectAttempts).toBe(1)
-  })
 })

@@ -1,17 +1,18 @@
 import { rememberLiveBrowserUrl } from '@/components/browser-pane/describe-page/live-browser-url-registry'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
-import { findVisibleBrowserLinkTarget } from '@/lib/visible-browser-link-target'
-import { openUrlInTabBesideBrowserPage } from '@/lib/browser-page-tab-opening'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { findVisibleBrowserLinkTarget } from '@/lib/browser/navigation/visible-browser-link-target'
+import { openUrlInTabBesideBrowserPage } from '@/lib/browser/palette/browser-page-tab-opening'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { useAppStore } from '../../store'
-import { findPage } from '../../store/slices/browser-page-records'
+import { findPage } from '../../store/slices/browser/pages/browser-page-records'
 import {
   acquireBrowserAutomationVisibility,
   releaseBrowserAutomationVisibility
 } from '@/components/browser-pane/host-guest/browser-automation-visibility'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
 import { markBrowserPageOpenedByPage } from '@/components/browser-pane/host-guest/browser-page-window-close'
+import { setBrowserPageAgentViewportSize } from '@/components/browser-pane/host-guest/browser-page-viewport'
 import {
   beginAgentInputFocusGuard,
   clearAgentInputFocusGuards,
@@ -29,6 +30,32 @@ function isClientHostedBrowserPage(browserPageId: string): boolean {
     useAppStore.getState().remoteBrowserPageHandlesByPageId[browserPageId]?.placement?.kind ===
     'client'
   )
+}
+
+/** One automation-visibility lease per page while main reports it held; repeats are ignored. */
+function createMainOwnedPaintHolds(): {
+  set: (browserPageId: string, held: boolean) => void
+  releaseAll: () => void
+} {
+  const tokens = new Map<string, string>()
+  return {
+    set: (browserPageId, held) => {
+      const token = tokens.get(browserPageId)
+      if (held && !token) {
+        tokens.set(browserPageId, acquireBrowserAutomationVisibility(browserPageId))
+      } else if (!held && token) {
+        tokens.delete(browserPageId)
+        releaseBrowserAutomationVisibility(token)
+      }
+    },
+    // A dead hold cannot release later; clear it now so the page cannot remain drawn indefinitely.
+    releaseAll: () => {
+      for (const token of tokens.values()) {
+        releaseBrowserAutomationVisibility(token)
+      }
+      tokens.clear()
+    }
+  }
 }
 
 export function registerBrowserStateIpcBridge(
@@ -99,27 +126,22 @@ export function registerBrowserStateIpcBridge(
     })
   )
   // Why: main owns capture holds and sends each page's first hold and last release; no reply is awaited.
-  const capturePaintHoldTokens = new Map<string, string>()
+  const capturePaintHolds = createMainOwnedPaintHolds()
   const unsubscribeCapturePaintHold = window.api.browser.onCapturePaintHold?.(
-    ({ browserPageId, held }) => {
-      const token = capturePaintHoldTokens.get(browserPageId)
-      if (held && !token) {
-        capturePaintHoldTokens.set(browserPageId, acquireBrowserAutomationVisibility(browserPageId))
-      } else if (!held && token) {
-        capturePaintHoldTokens.delete(browserPageId)
-        releaseBrowserAutomationVisibility(token)
-      }
-    }
+    ({ browserPageId, held }) => capturePaintHolds.set(browserPageId, held)
   )
   if (unsubscribeCapturePaintHold) {
     unsubs.push(() => {
       unsubscribeCapturePaintHold()
-      // A dead hold cannot release later; clear it now so the page cannot remain drawn indefinitely.
-      for (const token of capturePaintHoldTokens.values()) {
-        releaseBrowserAutomationVisibility(token)
-      }
-      capturePaintHoldTokens.clear()
+      capturePaintHolds.releaseAll()
     })
+  }
+  const unsubscribeAgentViewport = window.api.browser.onAgentViewportApplied?.(
+    ({ browserPageId, width, height }) =>
+      setBrowserPageAgentViewportSize(browserPageId, { width, height })
+  )
+  if (unsubscribeAgentViewport) {
+    unsubs.push(unsubscribeAgentViewport)
   }
   const unsubscribeAgentInputFocusGuard = window.api.browser.onAgentInputFocusGuard?.(
     ({ browserPageId, token, active }) => {
@@ -139,13 +161,25 @@ export function registerBrowserStateIpcBridge(
       clearAgentInputFocusGuards()
     })
   }
+  // Why: the bootstrap lease is fixed at creation; an agent's page in a hidden worktree must keep drawing while it drives it.
+  const agentActivityPaintHolds = createMainOwnedPaintHolds()
   const unsubscribeAgentActivity = window.api.browser.onAgentActivity?.(
-    ({ browserPageId, worktreeId, active }) => {
-      setBrowserAgentPageActive(browserPageId, active, worktreeId)
+    ({ browserPageId, worktreeId, active, controllerHostLabel, agentSessionId }) => {
+      setBrowserAgentPageActive(
+        browserPageId,
+        active,
+        worktreeId,
+        controllerHostLabel,
+        agentSessionId
+      )
+      agentActivityPaintHolds.set(browserPageId, active)
     }
   )
   if (unsubscribeAgentActivity) {
-    unsubs.push(unsubscribeAgentActivity)
+    unsubs.push(() => {
+      unsubscribeAgentActivity()
+      agentActivityPaintHolds.releaseAll()
+    })
   }
   const unsubscribeAgentCursor = window.api.browser.onAgentCursor?.((event) => {
     // Main waits for this answer, so a page nobody can see answers at once.

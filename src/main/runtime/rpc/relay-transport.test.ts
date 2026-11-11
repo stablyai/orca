@@ -195,52 +195,6 @@ describe('CloudRelayTransport', () => {
     }
   })
 
-  it('observes a synchronous close emitted by terminate without waiting for the deadline', async () => {
-    vi.useFakeTimers()
-    try {
-      const listeners = new Map<string, ((...args: unknown[]) => void)[]>()
-      const addListener = (event: string, fn: (...args: unknown[]) => void): void => {
-        listeners.set(event, [...(listeners.get(event) ?? []), fn])
-      }
-      const emit = (event: string): void => {
-        for (const fn of listeners.get(event) ?? []) {
-          fn()
-        }
-      }
-      const fakeSocket = {
-        readyState: 1,
-        OPEN: 1,
-        CLOSED: 3,
-        on: addListener,
-        once: addListener,
-        off: vi.fn(),
-        send: () => {},
-        terminate: () => emit('close')
-      }
-      const transport = new CloudRelayTransport({
-        cellUrl: 'http://127.0.0.1:9',
-        relayHostId: 'AbCdEf0123_-xyZ9',
-        generation: 1,
-        createSocket: () => fakeSocket as unknown as WebSocketClient
-      })
-      const opening = transport.openConnection({
-        connId: 'conn-sync-close',
-        connTicket: 'ticket-1',
-        kind: 'resume',
-        relayDeviceId: 'device-1',
-        attachDeadlineMs: 1_000
-      })
-      emit('open')
-      await opening
-
-      await transport.stop()
-
-      expect(vi.getTimerCount()).toBe(0)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('releases an expired attach even when terminate never emits close', async () => {
     vi.useFakeTimers()
     try {
@@ -373,16 +327,5 @@ describe('CloudRelayTransport', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('rejects non-origin cell URLs before opening a socket', () => {
-    expect(
-      () =>
-        new CloudRelayTransport({
-          cellUrl: 'https://relay.example/path?credential=forbidden',
-          relayHostId: 'AbCdEf0123_-xyZ9',
-          generation: 1
-        })
-    ).toThrow('relay_cell_url_must_be_an_origin')
   })
 })

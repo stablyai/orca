@@ -13,7 +13,7 @@ import { codeHostFailure } from '../../shared/code-host-failure-copy'
 
 function githubIssueErrorMessage(error: unknown): string {
   const { stderr, stdout } = extractExecError(error)
-  return stderr.trim() || stdout.trim()
+  return [stderr.trim(), stdout.trim()].filter(Boolean).join('\n')
 }
 
 /** Explicit owner/repo preserves the Tasks-selected source independently of cwd remotes. */

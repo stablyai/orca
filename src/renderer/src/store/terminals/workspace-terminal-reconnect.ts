@@ -1,8 +1,10 @@
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import { buildByIdIndex, buildWorktreeByIdIndex } from '../slices/worktree-by-id-index'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import { buildByIdIndex } from '../../../../shared/first-row-by-id-index'
+import { buildWorktreeByIdIndex } from './workspace-terminal-worktree-index'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
-import { selectWorktreesByRepo } from '../workspace-record-selectors'
+import { selectWorktreesByRepo } from '../workspaces/catalog/workspace-record-fields'
+import { markFullResync, recordDraft, tabBucketDraft } from '../keyed-record-transitions'
 
 export function createWorkspaceTerminalReconnectActions(
   set: TerminalStoreSet,
@@ -27,13 +29,14 @@ export function createWorkspaceTerminalReconnectActions(
           workspaceSessionReady: true,
           pendingReconnectWorktreeIds: [],
           pendingReconnectTabByWorktree: {},
-          pendingReconnectPtyIdByTabId: {}
+          // Cold path: the whole reconnect inventory is consumed.
+          pendingReconnectPtyIdByTabId: markFullResync({}, 'reconnect-inventory')
         })
         return
       }
       // Why: defer daemon attachment for real dimensions; eager 80×24 flushes garble output.
-      let reconnectedTabsByWorktree: Record<string, TerminalTab[]> | null = null
-      let reconnectedPtyIdsByTabId: Record<string, string[]> | null = null
+      const reconnectedTabsByWorktree = tabBucketDraft(tabsByWorktree)
+      const reconnectedPtyIdsByTabId = recordDraft(ptyIdsByTabId)
       // No writes/awaits in the loop, so one store-snapshot index serves every iteration.
       const worktreeById = buildWorktreeByIdIndex(selectWorktreesByRepo(get()))
       const repoById = buildByIdIndex(get().repos)
@@ -64,17 +67,16 @@ export function createWorkspaceTerminalReconnectActions(
               : []
           if (allPtyIds.length > 0) {
             // Why: hide-sleeping reads ptyIdsByTabId for liveness; restored daemon sessions run before their pane remounts, so advertise them.
-            reconnectedPtyIdsByTabId ??= { ...ptyIdsByTabId }
-            reconnectedPtyIdsByTabId[tabId] = allPtyIds
+            reconnectedPtyIdsByTabId.set(tabId, allPtyIds)
           }
           if (tabLevelPtyId) {
-            reconnectedTabsByWorktree ??= { ...tabsByWorktree }
-            const nextTabs = reconnectedTabsByWorktree[worktreeId]
+            const nextTabs = reconnectedTabsByWorktree.get(worktreeId)
             if (!nextTabs) {
               continue
             }
-            reconnectedTabsByWorktree[worktreeId] = nextTabs.map((t) =>
-              t.id === tabId ? { ...t, ptyId: tabLevelPtyId } : t
+            reconnectedTabsByWorktree.set(
+              worktreeId,
+              nextTabs.map((t) => (t.id === tabId ? { ...t, ptyId: tabLevelPtyId } : t))
             )
           }
         }
@@ -109,14 +111,17 @@ export function createWorkspaceTerminalReconnectActions(
       if (signal?.aborted) {
         return
       }
+      const nextTabsByWorktree = reconnectedTabsByWorktree.finish()
+      const nextPtyIdsByTabId = reconnectedPtyIdsByTabId.finish()
       set({
         // Only each row's ptyId changes, a field the frame merge leaves to the window.
-        ...(reconnectedTabsByWorktree ? { tabsByWorktree: reconnectedTabsByWorktree } : {}),
-        ...(reconnectedPtyIdsByTabId ? { ptyIdsByTabId: reconnectedPtyIdsByTabId } : {}),
+        ...(nextTabsByWorktree !== tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {}),
+        ...(nextPtyIdsByTabId !== ptyIdsByTabId ? { ptyIdsByTabId: nextPtyIdsByTabId } : {}),
         workspaceSessionReady: true,
         pendingReconnectWorktreeIds: [],
         pendingReconnectTabByWorktree: {},
-        pendingReconnectPtyIdByTabId: {},
+        // Cold path: the whole reconnect inventory is consumed.
+        pendingReconnectPtyIdByTabId: markFullResync({}, 'reconnect-inventory'),
         deferredSshSessionIdsByTabId
       })
     }

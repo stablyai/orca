@@ -1,6 +1,6 @@
 // Shared-home hosts need per-machine state and runtime GC: a PID can prove ownership only on the machine that issued it (#29059).
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
-import { RELAY_REMOTE_DIR } from '../../ssh/remote-exec/remote-frame-protocol'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
+import { RELAY_REMOTE_DIR } from '../install/remote-install-root'
 import {
   machineKeyOf,
   namedMachineHome,
@@ -14,7 +14,7 @@ import {
   normalizeRemoteHome,
   validateRemoteHome,
   type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
+} from '../../ssh/remote-host/ssh-remote-platform'
 
 export const ORCAD_MACHINE_CLAIM_FILENAME = 'orcad-machine.json'
 export const ORCAD_MACHINE_HOMES_DIRNAME = 'hosts'

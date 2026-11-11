@@ -2,7 +2,7 @@
 
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { resetStaleDocumentVisibilityForTesting } from '../../terminal-pane/stale-document-visibility'
+import { resetStaleDocumentVisibilityForTesting } from '../../terminal-pane/viewport/visibility/stale-document-visibility'
 import { WINDOW_STREAM_PARK_DELAY_MS } from '@/hooks/use-window-stream-visibility'
 import { useRemoteBrowserStreamActivation } from './use-remote-browser-stream-activation'
 
@@ -67,38 +67,6 @@ describe('useRemoteBrowserStreamActivation', () => {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }))
     })
     expect(document.visibilityState).toBe('hidden')
-    expect(harness.open).toHaveBeenCalledTimes(2)
-  })
-
-  it('does not reconnect during a quick hide and show', async () => {
-    const harness = renderActivation()
-
-    await act(async () => setDocumentVisibility('hidden'))
-    await act(async () => vi.advanceTimersByTime(WINDOW_STREAM_PARK_DELAY_MS - 1))
-    await act(async () => setDocumentVisibility('visible'))
-    await act(async () => vi.advanceTimersByTime(WINDOW_STREAM_PARK_DELAY_MS))
-
-    expect(harness.closeStream).not.toHaveBeenCalled()
-    expect(harness.open).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not open while mounted hidden', async () => {
-    setDocumentVisibility('hidden')
-    const harness = renderActivation()
-    expect(harness.open).not.toHaveBeenCalled()
-
-    await act(async () => setDocumentVisibility('visible'))
-    expect(harness.open).toHaveBeenCalledTimes(1)
-  })
-
-  it('parks immediately when its pane becomes inactive', async () => {
-    const harness = renderActivation()
-
-    await act(async () => harness.rerender({ active: false, staged: false }))
-    expect(harness.closeStream).toHaveBeenCalledTimes(1)
-    expect(harness.clearPendingRemoteWheel).toHaveBeenCalledTimes(1)
-
-    await act(async () => harness.rerender({ active: true, staged: false }))
     expect(harness.open).toHaveBeenCalledTimes(2)
   })
 

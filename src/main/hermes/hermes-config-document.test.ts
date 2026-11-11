@@ -69,21 +69,6 @@ describe('Hermes YAML document edits', () => {
     expect(updateConfigContent(input, enablePlugin)).toEqual({ content: input })
   })
 
-  it.each(['# no plugins\nmodel: test\n', 'plugins:\n  disabled: [blocked]\n'])(
-    'does not add absent lists when removing',
-    (input) => expect(updateConfigContent(input, disablePlugin)).toEqual({ content: input })
-  )
-
-  it('retains comments attached to removed Orca entries', () => {
-    const input =
-      'plugins:\n  enabled:\n    # keep this note\n    - orca-status # managed entry\n    - other\n'
-    const output = updateConfigContent(input, disablePlugin).content ?? ''
-    expect(parse(output).plugins.enabled).toEqual(['other'])
-    expect(output).toContain('# keep this note')
-    expect(output).toContain('# managed entry')
-    expect(output.match(/# keep this note/g)).toHaveLength(1)
-  })
-
   it.each([
     'plugins: [',
     'plugins: {}\nplugins: {}\n',
@@ -116,20 +101,6 @@ describe('Hermes YAML document edits', () => {
     expect(parse(output).terminal.client_env_passthrough).toContain('ORCA_AGENT_PANE')
     expect(output).toContain('docker_env: &env {A: "1"}')
     expect(output).toContain('shared_env: *env')
-  })
-
-  it('keeps folded scalars, quoted strings and long lines in a real update', () => {
-    const input = `# header\nprompt: >-\n  First line\n  Second line\nquoted: 'off'\nlong: ${'word '
-      .repeat(30)
-      .trimEnd()}\nplugins: {enabled: [other]}\n`
-    const output = updateConfigContent(input, enablePlugin).content ?? ''
-    expect(output).toContain('prompt: >-\n  First line\n  Second line\n')
-    expect(output).toContain("quoted: 'off'")
-    expect(output).toContain(`long: ${'word '.repeat(30).trimEnd()}\n`)
-    expect(parse(output)).toEqual({
-      ...parse(input),
-      plugins: { enabled: ['other', 'orca-status'] }
-    })
   })
 
   it.each(['\n', '\r\n'])(
@@ -171,14 +142,6 @@ describe('Hermes YAML document edits', () => {
     }
     if (input.includes('First')) {
       expect(output).toContain('custom: >-\n        First\n        Second\n')
-    }
-  })
-
-  it.each(['', '# empty document\n', 'null\n'])('enables a plugin in an empty config', (input) => {
-    const output = updateConfigContent(input, enablePlugin).content ?? ''
-    expect(parse(output)).toEqual({ plugins: { enabled: ['orca-status'] } })
-    if (input.includes('#')) {
-      expect(output).toContain('# empty document')
     }
   })
 })

@@ -1,18 +1,18 @@
 import { Suspense, type JSX, type Ref } from 'react'
 import { useAppStore } from '@/store'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
-import type { OpenFile } from '@/store/slices/editor'
+import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { EditorContent } from './EditorContent'
 import { EditorPanelHeader } from './EditorPanelHeader'
 import { UntitledFileRenameDialog } from './UntitledFileRenameDialog'
 import type { getEditorPanelRenderModel } from './editor-panel-render-model'
 import type { DiffContent, FileContent } from './editor-panel-content-types'
-import type { EditorToggleValue } from './EditorViewToggle'
+import type { EditorToggleValue } from './view-mode/EditorViewToggle'
 import { shouldShowEditorPanelHeader } from './editor-header'
 import { getUntitledFileRoot } from './untitled-file-rename-path'
-import { translate } from '@/i18n/i18n'
-import type { ArtifactWriteRequest } from '../../../../shared/artifacts'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { useTranslate } from '@/i18n/use-translate'
+import type { ArtifactWriteRequest } from '../../../../shared/artifacts/artifacts'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type EditorPanelRenderModel = ReturnType<typeof getEditorPanelRenderModel>
 
@@ -36,7 +36,7 @@ type EditorPanelShellProps = {
   disableRenameBrowse: boolean
   onCopyPath: () => void
   onOpenDiffTargetFile: (preferredMarkdownViewMode?: 'rich') => void
-  onOpenPreviewToSide: () => void
+  onOpenPreview: () => void
   onOpenMarkdownPreview: () => void
   onToggleSideBySide: () => void
   onEditorToggleChange: (next: EditorToggleValue) => void
@@ -76,7 +76,7 @@ export function EditorPanelShell({
   disableRenameBrowse,
   onCopyPath,
   onOpenDiffTargetFile,
-  onOpenPreviewToSide,
+  onOpenPreview,
   onOpenMarkdownPreview,
   onToggleSideBySide,
   onEditorToggleChange,
@@ -106,11 +106,12 @@ export function EditorPanelShell({
           isMarkdown={model.isMarkdown}
           isCsv={model.isCsv}
           isNotebook={model.isNotebook}
+          isSvg={model.isSvg}
           customEditorTitles={model.customEditorTitles}
           hasEditorToggle={model.hasEditorToggle}
           availableEditorToggleModes={model.availableEditorToggleModes}
           effectiveToggleValue={model.effectiveToggleValue}
-          canOpenPreviewToSide={model.canOpenPreviewToSide}
+          canOpenPreview={model.canOpenPreview}
           canShowMarkdownPreview={model.canShowMarkdownPreview}
           canShowMarkdownTableOfContents={model.canShowMarkdownTableOfContents}
           isMarkdownTableOfContentsDisabled={model.isMarkdownTableOfContentsDisabled}
@@ -123,7 +124,7 @@ export function EditorPanelShell({
           openFileState={model.openFileState}
           onCopyPath={onCopyPath}
           onOpenDiffTargetFile={onOpenDiffTargetFile}
-          onOpenPreviewToSide={onOpenPreviewToSide}
+          onOpenPreview={onOpenPreview}
           onOpenMarkdownPreview={onOpenMarkdownPreview}
           onToggleSideBySide={onToggleSideBySide}
           onEditorToggleChange={onEditorToggleChange}
@@ -145,6 +146,7 @@ export function EditorPanelShell({
           resolvedLanguage={model.resolvedLanguage}
           isMarkdown={model.isMarkdown}
           isMermaid={model.isMermaid}
+          isSvg={model.isSvg}
           isCsv={model.isCsv}
           isNotebook={model.isNotebook}
           customEditor={model.activeCustomEditor}
@@ -172,7 +174,7 @@ export function EditorPanelShell({
           renameDialogFile
             ? getUntitledFileRoot(
                 renameDialogFile,
-                findWorktreeById(
+                findFirstIndexedWorktree(
                   selectWorktreesByRepo(useAppStore.getState()),
                   renameDialogFile.worktreeId
                 )?.path
@@ -189,9 +191,10 @@ export function EditorPanelShell({
 }
 
 function EditorLoadingFallback(): JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-      {translate('auto.components.editor.EditorPanelShell.e2c4dec350', 'Loading editor...')}
+      {t('auto.components.editor.EditorPanelShell.e2c4dec350', 'Loading editor...')}
     </div>
   )
 }

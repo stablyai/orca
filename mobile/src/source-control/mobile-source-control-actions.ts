@@ -1,14 +1,16 @@
-import { translate } from '../i18n/mobile-i18n'
-import type { Translate } from '../i18n/mobile-i18n'
+import { translate, type Translate } from '../i18n/mobile-i18n'
+
 import { mobileCommitDropdownCopy } from './mobile-commit-dropdown-copy'
 import { mobileRemoteDropdownCopy } from './mobile-remote-dropdown-copy'
-import type { GitConflictOperation } from '../../../src/shared/git-status-types'
-import { deriveDropdownActionContext } from '../../../src/shared/source-control-dropdown-action-context'
-import { buildCommitDropdownItems } from '../../../src/shared/source-control-dropdown-commit-items'
-import type { DropdownItem } from '../../../src/shared/source-control-dropdown-item-types'
-import { buildRemoteDropdownItems } from '../../../src/shared/source-control-dropdown-remote-items'
-import type { SourceControlCommitAreaPrimaryActionDecision } from '../../../src/shared/source-control-primary-action-decision'
-import type { SourceControlPrimaryActionDecisionInputs } from '../../../src/shared/source-control-primary-action-decision-types'
+import type { GitConflictOperation } from '../../../src/shared/git/status/git-status-types'
+import { deriveDropdownActionContext } from '../../../src/shared/source-control/dropdown/source-control-dropdown-action-context'
+import { buildCommitDropdownItems } from '../../../src/shared/source-control/dropdown/source-control-dropdown-commit-items'
+import type { DropdownItem } from '../../../src/shared/source-control/dropdown/source-control-dropdown-item-types'
+import { buildRemoteDropdownItems } from '../../../src/shared/source-control/dropdown/source-control-dropdown-remote-items'
+import type {
+  SourceControlCommitAreaPrimaryActionDecision,
+  SourceControlPrimaryActionDecisionInputs
+} from '../../../src/shared/source-control/decisions/source-control-primary-action-decision-types'
 
 // String identifiers keep native lucide imports out of this module.
 export type MobileSourceControlActionIcon =
@@ -29,8 +31,10 @@ export type MobileSourceControlAction = {
   iconKey: MobileSourceControlActionIcon
   disabled?: boolean
   hint?: string
+  status?: string
   loading?: boolean
   skipAutoClose?: boolean
+  closeBeforePress?: boolean
   onPress: () => void
 }
 
@@ -40,8 +44,6 @@ export type MobileSourceControlActionArgs = {
   conflictOperation?: GitConflictOperation
   rebaseBaseRef: string | null
   busyAction: string | null
-  openingPath: string | null
-  openingBranchPath: string | null
   prAvailable: boolean
   prHint?: string
   forcePushBlockedReason?: string
@@ -80,11 +82,10 @@ export function buildMobileSourceControlActions(
   )
   const { push, forcePush, pull, fastForward, sync, rebase, fetch, publish } =
     buildRemoteDropdownItems(ctx, mobileRemoteDropdownCopy(t))
-  const busy =
-    args.busyAction !== null || args.openingPath !== null || args.openingBranchPath !== null
+  const busy = args.busyAction !== null
   const blockForce = (item: DropdownItem): DropdownItem =>
     args.forcePushBlockedReason
-      ? { ...item, disabled: true, title: args.forcePushBlockedReason }
+      ? { ...item, disabled: true, title: args.forcePushBlockedReason, status: undefined }
       : item
   const row = (
     item: DropdownItem,
@@ -98,6 +99,7 @@ export function buildMobileSourceControlActions(
     disabled: busy || item.disabled,
     // Mobile has no tooltips: show why a row is disabled, and always what Force Push replaces.
     hint: item.disabled || item.kind === 'force_push' ? item.title : undefined,
+    status: item.status,
     loading: args.busyAction === actionId,
     skipAutoClose: true,
     onPress
@@ -121,7 +123,8 @@ export function buildMobileSourceControlActions(
       disabled: busy || !args.prAvailable,
       hint: args.prHint,
       loading: args.busyAction === 'create-pr',
-      skipAutoClose: true,
+      // The sheet presents only after this one has closed; iOS refuses a second modal mid-close.
+      closeBeforePress: true,
       onPress: handlers.createPr
     },
     {
@@ -131,7 +134,8 @@ export function buildMobileSourceControlActions(
       disabled: busy || push.disabled || !args.prAvailable,
       hint: args.prHint ?? (push.disabled ? push.title : undefined),
       loading: args.busyAction === 'push-create-pr',
-      skipAutoClose: true,
+      // The sheet presents only after this one has closed; iOS refuses a second modal mid-close.
+      closeBeforePress: true,
       onPress: handlers.pushAndCreatePr
     },
     row(pull, 'pull', 'pull', handlers.pull),
@@ -145,17 +149,38 @@ export function buildMobileSourceControlActions(
       label: t('sourceControl.actions.switchBranch', 'Switch branch'),
       iconKey: 'branch',
       disabled: busy,
-      skipAutoClose: true,
+      closeBeforePress: true,
       onPress: handlers.checkout
     },
     {
       id: 'history',
-      label: t('sourceControl.actions.commits', 'Commits'),
+      label: t('sourceControl.actions.openCommits', 'Open commits'),
       iconKey: 'history',
       disabled: busy,
       onPress: handlers.history
     }
   ]
+}
+
+// The ⋯ menu's git actions, grouped; Create PR lives in the next-step bar and the PR tab.
+const MENU_GROUPS: readonly (readonly string[])[] = [
+  ['commit-push', 'commit-sync'],
+  // Push and Publish stay here too: the bar shows the commit box while anything is uncommitted.
+  ['push', 'publish', 'fetch', 'pull', 'fast-forward', 'sync', 'rebase'],
+  ['checkout', 'history']
+]
+
+export function groupMobileSourceControlMenu<T extends { id: string }>(
+  actions: readonly T[]
+): { groups: T[][]; forcePush: T | null } {
+  const byId = new Map(actions.map((action) => [action.id, action]))
+  const groups = MENU_GROUPS.map((ids) =>
+    ids.flatMap((id) => {
+      const action = byId.get(id)
+      return action ? [action] : []
+    })
+  ).filter((group) => group.length > 0)
+  return { groups, forcePush: byId.get('force-push') ?? null }
 }
 
 export function getMobilePrimaryActionHint(

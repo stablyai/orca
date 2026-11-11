@@ -1,8 +1,9 @@
 import { useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Check, CircleHelp } from 'lucide-react-native'
-import { MobileNativeChatCardHeaderAction } from '../../MobileNativeChatCardHeaderAction'
-import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { MobileNativeChatCardHeaderAction } from './MobileNativeChatCardHeaderAction'
+import { MobileNativeChatQuestionText } from '../transcript/MobileNativeChatQuestionText'
+import { colors, concentricRadius, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
@@ -122,7 +123,7 @@ export function MobileNativeChatQuestion({
     >
       <View style={styles.header}>
         <CircleHelp size={15} color={colors.accentBlue} strokeWidth={2.2} />
-        <Text style={styles.question}>{question.question}</Text>
+        <MobileNativeChatQuestionText title content={question.question} style={styles.question} />
         <MobileNativeChatCardHeaderAction
           prompt={question.prompt}
           onCancel={onCancel}
@@ -220,7 +221,7 @@ const styles = themedStyleSheet(() => ({
     marginHorizontal: spacing.lg,
     marginVertical: spacing.sm,
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle
   },
@@ -234,11 +235,7 @@ const styles = themedStyleSheet(() => ({
     gap: spacing.sm
   },
   question: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize + 1,
-    fontWeight: '600',
-    lineHeight: typography.bodySize + 7
+    flex: 1
   },
   options: {
     gap: spacing.xs
@@ -251,7 +248,7 @@ const styles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     backgroundColor: colors.bgRaised,
-    borderRadius: radii.button,
+    borderRadius: concentricRadius(radii.surface, spacing.xs),
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle
   },
@@ -274,7 +271,7 @@ const styles = themedStyleSheet(() => ({
   checkbox: {
     width: 20,
     height: 20,
-    borderRadius: radii.button,
+    borderRadius: radii.mark,
     borderWidth: 1.5,
     borderColor: colors.textMuted,
     alignItems: 'center',
@@ -288,7 +285,7 @@ const styles = themedStyleSheet(() => ({
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.accentBlue
   },
   submitDisabled: {

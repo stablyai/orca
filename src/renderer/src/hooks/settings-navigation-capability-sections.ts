@@ -1,17 +1,18 @@
 import { LinearIcon } from '@/components/icons/LinearIcon'
-import { getAccountsPaneSearchEntries } from '@/components/settings/accounts-search'
-import { getAgentsPaneSearchEntries } from '@/components/settings/agents-search'
-import { getComputerUsePaneSearchEntries } from '@/components/settings/computer-use-search'
-import { getGeneralPaneSearchEntries } from '@/components/settings/general-search'
-import { getIntegrationsPaneSearchEntries } from '@/components/settings/integrations-search'
-import { getLinearAgentSkillPaneSearchEntries } from '@/components/settings/linear-agent-skill-search'
-import { getMobileSettingsPaneSearchEntries } from '@/components/settings/mobile-settings-search'
-import { getOrcaAccountSettingsSearchEntries } from '@/components/settings/orca-account-settings-search'
-import { OrcaLogoSettingsIcon } from '@/components/settings/orca-logo-settings-icon'
-import { getOrchestrationPaneSearchEntries } from '@/components/settings/orchestration-search'
-import { getVoicePaneSearchEntries } from '@/components/settings/voice-pane-search'
+import { getAccountsPaneSearchEntries } from '@/components/settings/accounts/accounts-search'
+import { getAgentsPaneSearchEntries } from '@/components/settings/agents/agents-search'
+import { getComputerUsePaneSearchEntries } from '@/components/settings/computer-use/computer-use-search'
+import { getGeneralPaneSearchEntries } from '@/components/settings/general/general-search'
+import { getIntegrationsPaneSearchEntries } from '@/components/settings/integrations/integrations-search'
+import { getLinearAgentSkillPaneSearchEntries } from '@/components/settings/skills/linear/linear-agent-skill-search'
+import { getMobileSettingsPaneSearchEntries } from '@/components/settings/mobile/mobile-settings-search'
+import { getOrcaAccountSettingsSearchEntries } from '@/components/settings/accounts/orca/orca-account-settings-search'
+import { OrcaLogoSettingsIcon } from '@/components/settings/page/orca-logo-settings-icon'
+import { getOrchestrationPaneSearchEntries } from '@/components/settings/orchestration/orchestration-search'
+import { getVoicePaneSearchEntries } from '@/components/settings/voice/voice-pane-search'
 import { translate } from '@/i18n/i18n'
-import type { SettingsNavSection } from '@/lib/settings-navigation-types'
+import type { Translate } from '@/i18n/use-translate'
+import type { SettingsNavSection } from '@/components/settings/navigation/settings-navigation-types'
 import {
   Blocks,
   Bot,
@@ -25,25 +26,23 @@ import {
 } from 'lucide-react'
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
 
-export function buildCapabilitySettingsSections({
-  isLocalWindowsHost,
-  isWebClient,
-  isLinearConnected,
-  nativeChatEnabled
-}: SettingsNavigationBuildOptions): SettingsNavSection[] {
+export function buildCapabilitySettingsSections(
+  { isLocalWindowsHost, isWebClient, isLinearConnected }: SettingsNavigationBuildOptions,
+  t: Translate = translate
+): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
   return [
     {
       id: 'agents',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.b49abbd2f7', 'Agents'),
-      description: translate(
+      title: t('auto.hooks.useSettingsNavigationMetadata.b49abbd2f7', 'Agents'),
+      description: t(
         'auto.hooks.useSettingsNavigationMetadata.4121f7a0a2',
         'Manage AI agents, set a default, and customize commands.'
       ),
       icon: Bot,
       searchEntries: getAgentsPaneSearchEntries({
         includeAgentAwake: !isWebClient,
-        includeAgentChatChoice: nativeChatEnabled && !isWebClient,
+        includeAgentChatChoice: !isWebClient,
         includeAgentRuntime: isLocalWindowsHost,
         includeAgentWorkspaceTrust: !isWebClient,
         includeCodexTerminalServerIsolation: !isWebClient
@@ -52,23 +51,20 @@ export function buildCapabilitySettingsSections({
     },
     {
       id: 'accounts',
-      title: translate(
-        'auto.hooks.useSettingsNavigationMetadata.f70ac54d38',
-        'AI Provider Accounts'
-      ),
-      description: translate(
+      title: t('auto.hooks.useSettingsNavigationMetadata.f70ac54d38', 'AI Provider Accounts'),
+      description: t(
         'auto.hooks.useSettingsNavigationMetadata.b1c2f8b0ac',
         'Optional account switching and usage setup for Claude, Codex, Gemini, OpenCode Go, MiniMax, and Grok.'
       ),
       icon: UserCog,
       searchEntries: getAccountsPaneSearchEntries(),
       group: 'capabilities',
-      badge: translate('auto.hooks.useSettingsNavigationMetadata.7c79d3b7bf', 'Optional')
+      badge: t('auto.hooks.useSettingsNavigationMetadata.7c79d3b7bf', 'Optional')
     },
     {
       id: 'orchestration',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.58a868e8e4', 'Orchestration'),
-      description: translate(
+      title: t('auto.hooks.useSettingsNavigationMetadata.58a868e8e4', 'Orchestration'),
+      description: t(
         'auto.hooks.useSettingsNavigationMetadata.cd50cec5d7',
         'Coordinate multiple coding agents through Orca.'
       ),
@@ -83,8 +79,8 @@ export function buildCapabilitySettingsSections({
       ? [
           {
             id: 'linear',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.linearTitle', 'Linear'),
-            description: translate(
+            title: t('auto.hooks.useSettingsNavigationMetadata.linearTitle', 'Linear'),
+            description: t(
               'auto.hooks.useSettingsNavigationMetadata.linearDescription',
               'How Linear works in Orca, setup checklist, agent skill, and example prompts.'
             ),
@@ -98,8 +94,8 @@ export function buildCapabilitySettingsSections({
       ? [
           {
             id: 'computer-use',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.b35e92364b', 'Computer Use'),
-            description: translate(
+            title: t('auto.hooks.useSettingsNavigationMetadata.b35e92364b', 'Computer Use'),
+            description: t(
               'auto.hooks.useSettingsNavigationMetadata.0059bd17f3',
               'Enable agents to control any app on your computer.'
             ),
@@ -109,8 +105,8 @@ export function buildCapabilitySettingsSections({
           },
           {
             id: 'voice',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.6a50cdcd7c', 'Voice'),
-            description: translate(
+            title: t('auto.hooks.useSettingsNavigationMetadata.6a50cdcd7c', 'Voice'),
+            description: t(
               'auto.hooks.useSettingsNavigationMetadata.8ac3de82f5',
               'Local speech-to-text dictation with on-device models.'
             ),
@@ -123,18 +119,18 @@ export function buildCapabilitySettingsSections({
   ]
 }
 
-export function buildSetupSettingsSections({
-  isLocalWindowsHost,
-  isWebClient
-}: SettingsNavigationBuildOptions): SettingsNavSection[] {
+export function buildSetupSettingsSections(
+  { isLocalWindowsHost, isWebClient }: SettingsNavigationBuildOptions,
+  t: Translate = translate
+): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
   return [
     ...(showDesktopOnlySettings
       ? [
           {
             id: 'orca-account',
-            title: translate('auto.components.settings.orcaAccount.title', 'Orca Account'),
-            description: translate(
+            title: t('auto.components.settings.orcaAccount.title', 'Orca Account'),
+            description: t(
               'auto.components.settings.orcaAccount.description',
               'Share work instantly and reach your desktop from Orca Mobile wherever you are.'
             ),
@@ -146,32 +142,23 @@ export function buildSetupSettingsSections({
       : []),
     {
       id: 'setup-guide',
-      title: translate(
-        'auto.hooks.useSettingsNavigationMetadata.ded9e9032f',
-        'Onboarding checklist'
-      ),
-      description: translate(
+      title: t('auto.hooks.useSettingsNavigationMetadata.ded9e9032f', 'Onboarding checklist'),
+      description: t(
         'auto.hooks.useSettingsNavigationMetadata.5f32ac08f3',
         'Finish the onboarding checklist for core Orca workflows.'
       ),
       icon: OrcaLogoSettingsIcon,
       searchEntries: [
         {
-          title: translate(
-            'auto.hooks.useSettingsNavigationMetadata.ded9e9032f',
-            'Onboarding checklist'
-          ),
-          description: translate(
+          title: t('auto.hooks.useSettingsNavigationMetadata.ded9e9032f', 'Onboarding checklist'),
+          description: t(
             'auto.hooks.useSettingsNavigationMetadata.17005c73d4',
             'Open the onboarding checklist for setup and milestone steps.'
           ),
           keywords: [
-            translate('auto.hooks.useSettingsNavigationMetadata.ea0b1bc7b8', 'setup guide'),
-            translate(
-              'auto.hooks.useSettingsNavigationMetadata.0505d0df29',
-              'get started with Orca'
-            ),
-            translate('auto.hooks.useSettingsNavigationMetadata.724c440e72', 'getting started')
+            t('auto.hooks.useSettingsNavigationMetadata.ea0b1bc7b8', 'setup guide'),
+            t('auto.hooks.useSettingsNavigationMetadata.0505d0df29', 'get started with Orca'),
+            t('auto.hooks.useSettingsNavigationMetadata.724c440e72', 'getting started')
           ]
         }
       ],
@@ -179,8 +166,8 @@ export function buildSetupSettingsSections({
     },
     {
       id: 'general',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.13241992bd', 'General'),
-      description: translate(
+      title: t('auto.hooks.useSettingsNavigationMetadata.13241992bd', 'General'),
+      description: t(
         'auto.hooks.useSettingsNavigationMetadata.2cd4ea75da',
         'Workspace defaults, app setup, and maintenance.'
       ),
@@ -190,8 +177,8 @@ export function buildSetupSettingsSections({
     },
     {
       id: 'integrations',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.2b043783ef', 'Integrations'),
-      description: translate(
+      title: t('auto.hooks.useSettingsNavigationMetadata.2b043783ef', 'Integrations'),
+      description: t(
         'auto.hooks.useSettingsNavigationMetadata.33a5e1d597',
         'Connect GitHub, GitLab, Linear, and source-hosting services.'
       ),
@@ -203,8 +190,8 @@ export function buildSetupSettingsSections({
       ? [
           {
             id: 'mobile',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.1cd25673df', 'Mobile'),
-            description: translate(
+            title: t('auto.hooks.useSettingsNavigationMetadata.1cd25673df', 'Mobile'),
+            description: t(
               'auto.hooks.useSettingsNavigationMetadata.95a1886d94',
               'Control terminals and agents from your phone.'
             ),

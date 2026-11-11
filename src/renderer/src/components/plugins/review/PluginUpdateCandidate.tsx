@@ -5,9 +5,11 @@ import {
   pluginCapabilityReachable,
   reachablePluginCapabilities
 } from '../../../../../shared/plugins/capabilities/plugin-capability-reach'
+import { builtInActionTitle } from '../page/PluginCommandReplacementRow'
 import type { PluginContributionPoint } from '../../../../../shared/plugins/contributions/plugin-contribution-points'
 import { pluginUpdateGrowsAccess } from '../../../../../shared/plugins/approval/plugin-update-access-growth'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { PluginListEntry } from '../list/plugin-list-entries'
 import { PluginRowArt } from '../list/PluginRowArt'
 import { Button } from '../../ui/button'
@@ -80,8 +82,18 @@ const contributionGrowthLabel = (point: PluginContributionPoint): string => {
   )
 }
 
+const replacementLine = (command: string, action: string, t: Translate = translate): string =>
+  t(
+    'auto.components.settings.PluginUpdateAllDialog.replacesAction',
+    '{{value0}} runs instead of Orca’s {{value1}}',
+    { value0: command, value1: builtInActionTitle(action) }
+  )
+
 /** What main found the update adds over the installed version, as review lines. */
-export function updateChanges(preview: PluginMarketplaceHostInstallPreview): {
+export function updateChanges(
+  preview: PluginMarketplaceHostInstallPreview,
+  t?: Translate
+): {
   capabilities: string[]
   warnings: string[]
 } {
@@ -91,16 +103,23 @@ export function updateChanges(preview: PluginMarketplaceHostInstallPreview): {
         pluginTrust({
           execution: growth.execution,
           points: pluginPointsFromManifest(preview.manifest)
-        })
+        }),
+        t
       )
     : []
   // Why: a panel profile has no trust warning of its own, but its growth still asks again.
   const executionLines =
     growth?.execution && execution.length === 0 ? [contributionGrowthLabel('panels')] : execution
   const contributions = (growth?.contributions ?? []).map(contributionGrowthLabel)
+  // Why named: "Commands" alone would hide that one takes over an Orca action.
+  const replacements = growth?.contributions.includes('commands')
+    ? preview.manifest.contributes.commands.flatMap((command) =>
+        command.replaces ? [replacementLine(command.title, command.replaces, t)] : []
+      )
+    : []
   return {
     capabilities: growth?.capabilities ?? [],
-    warnings: [...new Set([...executionLines, ...contributions])]
+    warnings: [...new Set([...executionLines, ...contributions, ...replacements])]
   }
 }
 
@@ -112,9 +131,10 @@ export function isCurrent(
 }
 
 function NewLine({ children }: { children: string }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <li className="text-status-warning-text">
-      {translate('auto.components.settings.PluginUpdateAllDialog.newAccess', 'New: {{value0}}', {
+      {t('auto.components.settings.PluginUpdateAllDialog.newAccess', 'New: {{value0}}', {
         value0: children
       })}
     </li>
@@ -129,19 +149,21 @@ export function AllAccess({
   preview: PluginMarketplaceHostInstallPreview
   execution: ReturnType<typeof pluginExecutionProfile>
 }): React.JSX.Element {
+  const t = useTranslate()
   const lines = [
     ...pluginTrustWarnings(
-      pluginTrust({ execution, points: pluginPointsFromManifest(preview.manifest) })
+      pluginTrust({ execution, points: pluginPointsFromManifest(preview.manifest) }),
+      t
     ),
     ...reachablePluginCapabilities(preview.manifest.capabilities, execution).map((capability) =>
-      pluginCapabilityDescription(capability.kind, capability.kind)
+      pluginCapabilityDescription(capability.kind, capability.kind, t)
     )
   ]
   return (
     <Collapsible>
       <CollapsibleTrigger asChild>
         <Button variant="ghost" size="xs" className="group -ml-2 mt-1">
-          {translate('auto.components.settings.PluginUpdateAllDialog.allAccess', 'See all access')}
+          {t('auto.components.settings.PluginUpdateAllDialog.allAccess', 'See all access')}
           <ChevronDown className="transition-transform group-data-[state=open]:rotate-180" />
         </Button>
       </CollapsibleTrigger>
@@ -191,9 +213,10 @@ export function CandidateRow({
   /** Set when the update needs its own approval; it replaces the checkbox. */
   onReview?: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const { entry, preview, error, needsOrca } = candidate
   const { capabilities: requestedAdded, warnings } = preview
-    ? updateChanges(preview)
+    ? updateChanges(preview, t)
     : { capabilities: [], warnings: [] }
   const execution = preview ? pluginExecutionProfile(preview.manifest) : 'data'
   const added = requestedAdded.filter((kind) => pluginCapabilityReachable(kind, execution))
@@ -204,13 +227,13 @@ export function CandidateRow({
     note = (
       <p className="flex items-center gap-1 text-xs text-muted-foreground">
         <Check className="size-3" aria-hidden="true" />
-        {translate('auto.components.settings.PluginUpdateAllDialog.updated', 'Updated')}
+        {t('auto.components.settings.PluginUpdateAllDialog.updated', 'Updated')}
       </p>
     )
   } else if (error) {
     note = (
       <p className="text-xs text-destructive">
-        {translate(
+        {t(
           'auto.components.settings.PluginUpdateAllDialog.previewError',
           'Couldn’t read this update'
         )}
@@ -219,7 +242,7 @@ export function CandidateRow({
   } else if (preview?.blockedByKillList) {
     note = (
       <p className="text-xs text-destructive">
-        {translate(
+        {t(
           'auto.components.settings.PluginMarketplaceListingRow.blocked',
           "Blocked by Orca's safety list: {{value0}}",
           { value0: preview.blockedByKillList.reason }
@@ -229,13 +252,13 @@ export function CandidateRow({
   } else if (isCurrent(entry, preview)) {
     note = (
       <p className="text-xs text-muted-foreground">
-        {translate('auto.components.settings.PluginUpdateAllDialog.current', 'Already installed')}
+        {t('auto.components.settings.PluginUpdateAllDialog.current', 'Already installed')}
       </p>
     )
   } else if (needsOrca) {
     note = (
       <p className="text-xs text-status-warning-text">
-        {translate(
+        {t(
           'auto.components.settings.PluginUpdateAllDialog.needsOrca',
           'Needs Orca {{value0}} or later',
           { value0: needsOrca }
@@ -248,7 +271,7 @@ export function CandidateRow({
         <ul className="space-y-0.5 text-xs">
           {movedFrom !== null ? (
             <li className="text-status-warning-text">
-              {translate(
+              {t(
                 'auto.components.settings.PluginUpdateAllDialog.sourceMoved',
                 'New source: {{value0}} (was {{value1}})',
                 { value0: sourceLabel(preview.source), value1: movedFrom }
@@ -259,7 +282,7 @@ export function CandidateRow({
             <NewLine key={warning}>{warning}</NewLine>
           ))}
           {added.map((kind) => (
-            <NewLine key={kind}>{pluginCapabilityDescription(kind, kind)}</NewLine>
+            <NewLine key={kind}>{pluginCapabilityDescription(kind, kind, t)}</NewLine>
           ))}
         </ul>
         <AllAccess preview={preview} execution={execution} />
@@ -278,7 +301,7 @@ export function CandidateRow({
         </label>
         {onReview ? (
           <Button variant="outline" size="xs" disabled={disabled} onClick={onReview}>
-            {translate('auto.components.settings.PluginUpdateAllDialog.review', 'Review')}
+            {t('auto.components.settings.PluginUpdateAllDialog.review', 'Review')}
           </Button>
         ) : (
           <Checkbox

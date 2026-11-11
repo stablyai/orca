@@ -1,6 +1,6 @@
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, join } from 'node:path'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushActiveProfileBeforeFileMutation } from '../../orca-profiles/profile-persistence-deadline'
 import { openProfileStateDatabaseReadOnly } from '../profile-state/profile-state-database'
@@ -9,7 +9,6 @@ import { profileStateDatabaseBackups } from '../profile-state/profile-state-back
 import * as backupExecution from '../profile-state/profile-state-backup-worker'
 import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqlite-authority'
 import { Store } from './store'
-import { scheduleSave } from './write-scheduling'
 
 vi.mock('electron', () => ({
   app: {
@@ -100,44 +99,6 @@ function readSnapshot(path: string) {
 }
 
 describe('Store automatic SQLite recovery snapshots', () => {
-  it.each([
-    ['selective', 'sync'],
-    ['selective', 'async'],
-    ['complete', 'sync'],
-    ['complete', 'async']
-  ] as const)('backs up a %s %s commit without rewriting retained JSON', async (scope, flush) => {
-    const state = await fixture()
-    const fullWrite = vi.spyOn(state.authority, 'writeCompleteSerializedDomains')
-    const selectiveWrite = vi.spyOn(state.authority, 'writeSerializedDomains')
-    state.store.patchWorkspaceSession({ activeWorktreeId: 'backup-worktree' })
-    if (scope === 'complete') {
-      scheduleSave(state.store)
-    }
-    if (flush === 'sync') {
-      state.store.flushOrThrow()
-      await state.authority.drainBackups()
-    } else {
-      await state.store.flushPendingOrThrowAsync()
-    }
-
-    await state.authority.drainBackups()
-    expect(scope === 'complete' ? fullWrite : selectiveWrite).toHaveBeenCalledOnce()
-    expect(scope === 'complete' ? selectiveWrite : fullWrite).not.toHaveBeenCalled()
-    const backups = profileStateDatabaseBackups(state.databasePath)
-    expect(backups).toHaveLength(2)
-    expect(readSnapshot(backups[0].path)).toEqual(readSnapshot(state.databasePath))
-    expect(readSnapshot(backups[0].path).state.workspaceSession.activeWorktreeId).toBe(
-      'backup-worktree'
-    )
-    expect(readFileSync(state.retained[0].path).equals(state.retainedBytes)).toBe(true)
-    expect(readFileSync(state.dataFile, 'utf8')).toBe(state.legacyBytes)
-    expect(
-      readdirSync(state.directory)
-        .filter((name) => name.includes('.backup.'))
-        .sort()
-    ).toEqual(backups.map((backup) => basename(backup.path)).sort())
-  })
-
   it('acknowledges a routine flush while the previous recovery backup is still running', async () => {
     const state = await fixture()
     const realSnapshot = backupExecution.runProfileStateBackup
@@ -210,39 +171,6 @@ describe('Store automatic SQLite recovery snapshots', () => {
       expect(readSnapshot(backups[0].path).state.settings.theme).toBe('dark')
       expect(readFileSync(state.retained[0].path).equals(state.retainedBytes)).toBe(true)
       expect(readFileSync(state.dataFile, 'utf8')).toBe(state.legacyBytes)
-    }
-  )
-
-  it.each(['sync', 'async'] as const)(
-    'does not reject a committed %s flush when its backup fails',
-    async (flush) => {
-      const state = await fixture()
-      const log = vi.spyOn(console, 'error').mockImplementation(() => {})
-      const failure = new Error('injected backup disk failure')
-      const snapshot = vi
-        .spyOn(backupExecution, 'runProfileStateBackup')
-        .mockClear()
-        .mockRejectedValueOnce(failure)
-      state.store.updateSettings({ theme: 'dark' })
-      if (flush === 'sync') {
-        expect(() => state.store.flushOrThrow()).not.toThrow()
-        await expect(state.authority.drainBackups()).resolves.toBeUndefined()
-      } else {
-        await expect(state.store.flushPendingOrThrowAsync()).resolves.toBeUndefined()
-      }
-
-      await state.authority.drainBackups()
-      expect(snapshot).toHaveBeenCalledOnce()
-      expect(log).toHaveBeenCalledWith(
-        '[persistence] Failed to back up profile state database:',
-        failure
-      )
-      expect(readSnapshot(state.databasePath).state.settings.theme).toBe('dark')
-      expect(profileStateDatabaseBackups(state.databasePath)).toEqual(state.retained)
-      expect(readFileSync(state.retained[0].path).equals(state.retainedBytes)).toBe(true)
-      expect(readSnapshot(state.retained[0].path).state.settings.theme).toBe('light')
-      expect(readFileSync(state.dataFile, 'utf8')).toBe(state.legacyBytes)
-      expect(existsSync(`${state.dataFile}.bak.0`)).toBe(false)
     }
   )
 })

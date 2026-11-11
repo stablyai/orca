@@ -30,6 +30,7 @@
     "react/static-components": "error",
     "react/use-memo": "error",
     "react/void-use-memo": "error",
+    "react/no-deriving-state-in-effects": "error",
     "react/jsx-curly-brace-presence": [
       "error",
       { "props": "never", "children": "never", "propElementValues": "always" }
@@ -212,12 +213,46 @@
       "rules": {
         "max-lines": ["error", { "max": 800, "skipBlankLines": true, "skipComments": true }]
       }
+    },
+    {
+      "files": [
+        "src/main/runtime/rpc/dispatcher.ts",
+        "src/main/plugins/plugin-runtime-rpc.ts",
+        "src/main/plugins/plugin-runtime-binding.ts"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@linear/sdk",
+                "allowTypeImports": true,
+                "message": "Value-importing @linear/sdk hoists its ~2.6MB CJS bundle into the eager top-level require block and defeats the lazy loader. Use `import type` plus loadLinearSdk() from src/main/linear/linear-sdk.ts."
+              },
+              {
+                "name": "ssh2",
+                "allowTypeImports": true,
+                "message": "Value-importing ssh2 hoists it into the eager main-process require block and blocks startup (#35731). Use `import type` plus loadSsh2() from src/main/ssh/ssh2-module-load.ts."
+              }
+            ],
+            "patterns": [
+              {
+                "group": ["**/rpc-method-registry"],
+                "allowTypeImports": true,
+                "message": "The registry imports every RPC method (~3.4k modules); take the method list as a parameter so importers stay light."
+              }
+            ]
+          }
+        ]
+      }
     }
   ],
   "ignorePatterns": [
     "src/main/acp/generated/acp-protocol.generated.ts",
     "src/shared/rpc-contract/rpc-params-catalog.generated.ts",
     "src/cli/bundled-skill-guides.ts",
+    "resources/plugins/declarative/*.mjs",
     "**/node_modules",
     "**/dist",
     "**/out",

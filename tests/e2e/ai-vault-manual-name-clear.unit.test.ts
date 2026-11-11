@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
-import type * as StructuredSessionClient from '@/runtime/structured-agent-session-client'
+
+import type * as StructuredAgentSessionSubscriptions from '@/runtime/native-chat/requests/structured-agent-session-subscriptions'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -9,10 +10,13 @@ import { createElement, Fragment } from 'react'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../src/shared/agent-session-record.test-fixture'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session-journal-types'
-import { computeAgentSessionPayloadFingerprint } from '../../src/shared/agent-session-mutation-envelope'
-import type { AiVaultListResult, AiVaultSession } from '../../src/shared/ai-vault-types'
+} from '../../src/shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session/journal/agent-session-journal-types'
+import { computeAgentSessionPayloadFingerprint } from '../../src/shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import type {
+  AiVaultListResult,
+  AiVaultSession
+} from '../../src/shared/ai-vault/contracts/ai-vault-types'
 import {
   projectStructuredAiVaultSessions,
   OPENS_EVERY_STRUCTURED_CHAT
@@ -21,40 +25,43 @@ import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStore
-} from '../../src/main/runtime/agent-session-record-store-test-harness'
+} from '../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
 import { AgentSessionJournal } from '../../src/main/native-chat/agent-session-journal/journal-store'
 import {
   openTestJournalHostDatabase,
   closeTestJournalHostDatabases
-} from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
-import { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
-import { setStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
-import { structuredAgentsDeclaringNothing } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
-import { recordingStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+} from '../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host'
+import { setStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { structuredAgentsDeclaringNothing } from '../../src/main/native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'
+import { recordingStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import { createStructuredChatNamingHandler } from '../../src/main/native-chat/structured-chat-naming'
 import { PI_RPC_AGENT } from '../../src/main/pi/rpc-agent-definition'
-import type { AgentSessionStatusEvent } from '../../src/shared/agent-session-wire'
+import type { AgentSessionStatusEvent } from '../../src/shared/agent-session/agent-session-wire'
 import { useAppStore } from '@/store'
 import {
   getStructuredAgentSessionStatusFeed,
   resetStructuredAgentSessionStatusFeedsForTests
-} from '@/runtime/structured-agent-session-status-feed'
+} from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import {
   resetAiVaultForcedRescanThrottleForTest,
   useAiVaultSessionRefresh
-} from '../../src/renderer/src/components/right-sidebar/ai-vault-session-refresh'
-import { aiVaultSessionRowResumeGating } from '../../src/renderer/src/components/right-sidebar/ai-vault-session-resume'
-import { useAiVaultSessionDisplayTitle } from '../../src/renderer/src/components/right-sidebar/use-ai-vault-session-display-title'
+} from '../../src/renderer/src/components/right-sidebar/ai-vault/scanning/ai-vault-session-refresh'
+import { aiVaultSessionRowResumeGating } from '../../src/renderer/src/components/right-sidebar/ai-vault/session-actions/ai-vault-session-resume'
+import { useAiVaultSessionDisplayTitle } from '../../src/renderer/src/components/right-sidebar/ai-vault/session-list/use-ai-vault-session-display-title'
 
 const mocks = vi.hoisted(() => ({ subscribe: vi.fn() }))
 vi.mock('@/store', async () => {
-  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
   return { useAppStore: createTestStore() }
 })
-vi.mock('@/runtime/structured-agent-session-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof StructuredSessionClient>()),
-  subscribeStructuredAgentSessionStatus: mocks.subscribe
-}))
+vi.mock(
+  '../../src/renderer/src/runtime/native-chat/requests/structured-agent-session-subscriptions',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof StructuredAgentSessionSubscriptions>()),
+    subscribeStructuredAgentSessionStatus: mocks.subscribe
+  })
+)
 
 const SESSION = 'native-pi-history-clear'
 const PROVIDER = '019fd622-3c4d-7e5f-a061-7c8d9e0f1a2b'
@@ -94,7 +101,7 @@ async function disposeHistory() {
   setStructuredAgentSessionHost(null)
   await host?.flushAllStreamedEvents()
   host = null
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   if (directory) {
     await rm(directory, { recursive: true, force: true })
   }

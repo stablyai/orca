@@ -1,12 +1,12 @@
 import { wslDistroForCommand } from '../../shared/wsl-paths'
 import { spawnProcess } from '@orca/process-host'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
+import { ORCA_AGENT_HOOKS_DISABLED_ENV } from '../../shared/agent-hook-listener/transport/agent-hook-suppression-env'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import { resolveCliCommand } from '../codex-cli/command'
-import { createProviderSpawnSpec } from '../provider-process/provider-process-supervisor'
-import { guardSupervisedProviderGroup } from '../provider-process/provider-group-orphan-guard'
-import { SOURCE_CONTROL_KILL_SITE } from './source-control-agent-termination'
 import { wslAwareSpawn } from '../git/runner'
-import { guestNativeSpawnEnv } from '../ipc/wsl-guest-windows-drive-path'
+import { AGENT_PANE_HOOK_ENV_KEYS } from '../ipc/pty/host-env/spawn-env-keys'
+import { spawnSupervisedAgent } from './source-control-supervised-agent-spawn'
 import type {
   SourceControlAgentSpawnInput,
   SpawnedSourceControlAgentProcess,
@@ -24,6 +24,11 @@ const WSL_LAUNCHER_ENV_KEYS = [
   'TMP',
   'WINDIR'
 ] as const
+
+const BACKGROUND_HOOK_ENV_KEYS = new Set<string>([
+  ...AGENT_PANE_HOOK_ENV_KEYS,
+  ORCA_AGENT_HOOKS_DISABLED_ENV
+])
 
 function buildWslLauncherEnv(explicitEnv: NodeJS.ProcessEnv | undefined): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {}
@@ -45,23 +50,36 @@ export const spawnSourceControlAgent: SpawnSourceControlAgent = (input) => {
   const wslDistro = input.preparation
     ? wslDistroForCommand(input.cwd, input.wslDistro)
     : input.wslDistro
-  const spawnEnv = input.env ?? process.env
+  // Background agents cannot report hooks against the terminal that launched Orca.
+  const spawnEnv = { ...(input.env ?? process.env) }
+  for (const key of Object.keys(spawnEnv)) {
+    if (BACKGROUND_HOOK_ENV_KEYS.has(process.platform === 'win32' ? key.toUpperCase() : key)) {
+      delete spawnEnv[key]
+    }
+  }
+  spawnEnv[ORCA_AGENT_HOOKS_DISABLED_ENV] = '1'
   if (process.platform === 'win32' && wslDistro) {
     // Apply command assignments after guest login-shell setup, never to the Windows launcher.
-    const assignments = Object.entries(input.commandEnv ?? {}).map(
-      ([key, value]) => `${key}=${value}`
-    )
+    const assignments = Object.entries(input.commandEnv ?? {})
+      .filter(([key]) => !BACKGROUND_HOOK_ENV_KEYS.has(key))
+      .map(([key, value]) => `${key}=${value}`)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: WSL spawn pipes both output streams and supplies the configured stdin stream.
     return wslAwareSpawn(
       assignments.length ? '/usr/bin/env' : input.binary,
       assignments.length ? [...assignments, input.binary, ...input.args] : input.args,
       {
         cwd: input.cwd,
-        env: buildWslLauncherEnv(input.env),
+        env: buildWslLauncherEnv(spawnEnv),
         stdio: [input.stdinMode, 'pipe', 'pipe'],
         windowsHide: true,
         wslDistro,
         useWslLoginShell: true,
+        // Profiles may restore pane identity; clear it in the guest before invoking the agent.
+        wslShellCommand: [
+          `command unset ${AGENT_PANE_HOOK_ENV_KEYS.join(' ')}`,
+          `command export ${ORCA_AGENT_HOOKS_DISABLED_ENV}=1`,
+          quotePosixShell(assignments.length ? '/usr/bin/env' : input.binary)
+        ].join(' && '),
         ...(input.preparation ? { preparation: input.preparation } : {})
       }
     ) as SpawnedSourceControlAgentProcess
@@ -91,35 +109,4 @@ function spawnWindowsAgent(
     env: withCliRuntimeOnPath(resolvedBinary, spawnEnv),
     ...(input.useCwdForNative ? { cwd: input.cwd } : {})
   })
-}
-
-// Supervisor owns the agent group so parent quit/death still stops generation.
-function spawnSupervisedAgent(
-  input: SourceControlAgentSpawnInput,
-  spawnEnv: NodeJS.ProcessEnv
-): SpawnedSourceControlAgentProcess {
-  const spec = createProviderSpawnSpec(
-    {
-      command: input.binary,
-      args: input.args,
-      ...(input.useCwdForNative && input.cwd !== undefined ? { cwd: input.cwd } : {})
-    },
-    // On a WSL-host orcad, a missing CLI must fail rather than run a Windows shim found via PATH.
-    withCliRuntimeOnPath(input.binary, guestNativeSpawnEnv(spawnEnv)),
-    process.platform,
-    { lifetime: 'one-shot' }
-  )
-  const child = spawnProcess({
-    program: spec.program,
-    args: spec.args,
-    env: spec.env,
-    cwd: spec.cwd,
-    detached: spec.detached,
-    stdio: ['pipe', 'pipe', 'pipe', ...spec.groupReportStdio]
-  })
-  guardSupervisedProviderGroup(child, {
-    site: SOURCE_CONTROL_KILL_SITE,
-    supervised: spec.supervised
-  })
-  return Object.assign(child, { supervised: spec.supervised })
 }

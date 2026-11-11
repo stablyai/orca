@@ -33,20 +33,23 @@ import type {
   SkillShareResolvedOperation
 } from '../../shared/skill-sharing-contract'
 import type {
-  BundledSkillExecuteRequest,
+  BundledSkillAutoUpdateRequest,
+  LocalBundledSkillExecuteRequest,
   BundledSkillInstallResult,
   BundledSkillPlan,
-  BundledSkillPlanRequest
+  LocalBundledSkillPlanRequest
 } from '../../shared/bundled-skill-plan'
 import type { PreloadApi } from '../api-types'
 
 export const skillsApi = {
   discover: (target?: SkillDiscoveryTarget): Promise<SkillDiscoveryResult> =>
     ipcRenderer.invoke('skills:discover', target),
-  bundledPlan: (request?: BundledSkillPlanRequest): Promise<BundledSkillPlan> =>
+  bundledPlan: (request?: LocalBundledSkillPlanRequest): Promise<BundledSkillPlan> =>
     ipcRenderer.invoke('skills:bundledPlan', request ?? {}),
-  bundledExecute: (request: BundledSkillExecuteRequest): Promise<BundledSkillInstallResult> =>
+  bundledExecute: (request: LocalBundledSkillExecuteRequest): Promise<BundledSkillInstallResult> =>
     ipcRenderer.invoke('skills:bundledExecute', request),
+  bundledAutoUpdate: (request: BundledSkillAutoUpdateRequest): Promise<BundledSkillInstallResult> =>
+    ipcRenderer.invoke('skills:bundledAutoUpdate', request),
   prepareShare: (input: {
     skillIds: string[]
     skillDirectories?: string[]

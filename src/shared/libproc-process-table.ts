@@ -38,6 +38,7 @@ export type InProcessPsOptions = {
   maxOutputBytes?: number
   /** A display poll: any ps it needs waits behind interactive and fresh readers in the fork budget. */
   background?: boolean
+  freshArgv?: boolean
   /** Called with when (monotonic ms) the result's oldest recovered argv was read, when that predates this request:
    * evidence built on the result is as old as that input, not as the table read. */
   onArgvReadAt?: (monotonicMs: number) => void
@@ -156,6 +157,7 @@ export async function runPsInProcess(
   try {
     const read = await readFreshNativeTable(addon, nativeQuery, registeredSequence, deadline)
     if (read === 'stalled') {
+      // oxlint-disable-next-line typescript/return-await -- the catch falls back to ps; a failing fallback must not run ps again
       return fallback()
     }
     if (read === DEADLINE_PASSED) {
@@ -170,6 +172,7 @@ export async function runPsInProcess(
       if (devices.size > 0) {
         const named = await nameTerminals(devices, deadline)
         if (named === 'stalled') {
+          // oxlint-disable-next-line typescript/return-await -- the catch falls back to ps; a failing fallback must not run ps again
           return fallback()
         }
         if (named === DEADLINE_PASSED) {
@@ -185,7 +188,8 @@ export async function runPsInProcess(
         ctype,
         env,
         deadline,
-        options.background === true
+        options.background === true,
+        options.freshArgv === true ? requestedAtMs : Number.NEGATIVE_INFINITY
       )
     }
   } catch {

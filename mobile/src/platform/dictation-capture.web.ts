@@ -98,12 +98,21 @@ export function createPageDictationCapture(
   }
 
   // Deliver the final ring tail from stop itself so no extra read can race stop or reenter interruption. Catch refusal because synchronous void cleanup callers cannot catch a rejection.
-  async function endCapture(): Promise<void> {
+  async function stopCapture(): Promise<void> {
     stopDraining()
     const stopped = await verbs.stopAudio().catch(() => null)
     if (stopped !== null) {
       deliverBytes(stopped.base64, stopped.droppedBytes)
     }
+  }
+
+  // A second end joins the stop in flight, so its caller never moves on before that stop's tail lands.
+  let ending: Promise<void> | null = null
+  function endCapture(): Promise<void> {
+    ending ??= stopCapture().finally(() => {
+      ending = null
+    })
+    return ending
   }
 
   return {

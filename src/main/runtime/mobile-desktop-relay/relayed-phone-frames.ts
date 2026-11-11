@@ -1,8 +1,12 @@
-import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import {
+  BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
+  BROWSER_SCREENCAST_RUNTIME_CAPABILITY
+} from '../../../shared/browser/runtime/browser-runtime-capabilities'
+import { COMPRESSED_FRAMES_CLIENT_CAPABILITY } from '../../../shared/remote-runtime/e2ee/paired-e2ee-compressed-frame'
 import {
   readTerminalStreamFrameId,
   writeTerminalStreamFrameId
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 
 const STRIPPED_ENVELOPE_FIELDS = new Set(['deviceToken', 'executionHost'])
 
@@ -25,10 +29,14 @@ export function rewriteRelayedPhoneRequest(
 }
 
 // Servers expose client-placed tabs only with this capability; mobile scope still cannot host them.
+// Withhold compressed frames: they would hide relayed replies and stream ids from the rewriting below.
 export function relayedPhoneCapabilities(capabilities: readonly string[]): readonly string[] {
-  return capabilities.includes(BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY)
-    ? capabilities
-    : [...capabilities, BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY]
+  const forwarded = capabilities.filter(
+    (capability) => capability !== COMPRESSED_FRAMES_CLIENT_CAPABILITY
+  )
+  return forwarded.includes(BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY)
+    ? forwarded
+    : [...forwarded, BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY]
 }
 
 export function declareRelayedPhoneCapabilities(frame: string): string {
@@ -71,20 +79,67 @@ export function withRelayedLaunchChatDefault(
 /** Renumber host stream ids: each host starts at 1, but the phone routes all binary frames on one socket. */
 export class RelayedPhoneReplies {
   // Relay-owned requests have no phone awaiting their replies.
-  private readonly openRequests = new Map<string, { hostStreamIds: number[]; swallow: boolean }>()
+  private readonly openRequests = new Map<
+    string,
+    {
+      hostStreamIds: number[]
+      swallow: boolean
+      browserScreencast?: () => boolean
+      settle?: (reply: unknown) => void
+      cancel?: () => void
+    }
+  >()
   private readonly desktopStreamIds = new Map<number, number>()
 
   constructor(private readonly allocateStreamId: () => number) {}
 
-  noteForwarded(requestId: string, options: { swallowReplies?: boolean } = {}): void {
+  noteForwarded(
+    requestId: string,
+    options: { swallowReplies?: boolean; browserScreencast?: () => boolean } = {}
+  ): void {
     this.openRequests.set(requestId, {
       hostStreamIds: [],
-      swallow: options.swallowReplies === true
+      swallow: options.swallowReplies === true,
+      browserScreencast: options.browserScreencast
+    })
+  }
+
+  request(id: string, send: () => boolean, timeoutMs: number): Promise<unknown> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.openRequests.delete(id)
+        reject(new Error('Timed out confirming the executing Orca server.'))
+      }, timeoutMs)
+      this.openRequests.set(id, {
+        hostStreamIds: [],
+        swallow: true,
+        settle: (reply) => {
+          clearTimeout(timer)
+          resolve(reply)
+        },
+        cancel: () => {
+          clearTimeout(timer)
+          reject(new Error('The executing Orca server connection changed.'))
+        }
+      })
+      try {
+        if (!send()) {
+          this.openRequests.get(id)?.cancel?.()
+          this.openRequests.delete(id)
+        }
+      } catch (error) {
+        clearTimeout(timer)
+        this.openRequests.delete(id)
+        reject(error)
+      }
     })
   }
 
   takeOpenRequestIds(): string[] {
     const ids = [...this.openRequests].filter(([, open]) => !open.swallow).map(([id]) => id)
+    for (const open of this.openRequests.values()) {
+      open.cancel?.()
+    }
     this.openRequests.clear()
     this.desktopStreamIds.clear()
     return ids
@@ -102,11 +157,22 @@ export class RelayedPhoneReplies {
       return plaintext
     }
     const open = this.openRequests.get(parsed.id)
+    open?.settle?.(parsed)
     const result = parsed.result
-    let renumbered = false
+    let rewritten = false
+    if (
+      open?.browserScreencast?.() &&
+      parsed.ok === true &&
+      isRecord(result) &&
+      Array.isArray(result.capabilities) &&
+      !result.capabilities.includes(BROWSER_SCREENCAST_RUNTIME_CAPABILITY)
+    ) {
+      result.capabilities = [...result.capabilities, BROWSER_SCREENCAST_RUNTIME_CAPABILITY]
+      rewritten = true
+    }
     if (open && isRecord(result) && typeof result.streamId === 'number') {
       result.streamId = this.desktopStreamId(result.streamId, open.hostStreamIds)
-      renumbered = true
+      rewritten = true
     }
     // Unsubscribe sends no end; cap retained streams until link closure.
     if (open && (parsed.streaming !== true || (isRecord(result) && result.type === 'end'))) {
@@ -115,7 +181,7 @@ export class RelayedPhoneReplies {
     if (open?.swallow) {
       return null
     }
-    return renumbered ? JSON.stringify(parsed) : plaintext
+    return rewritten ? JSON.stringify(parsed) : plaintext
   }
 
   /** Drop terminal frames for streams never announced to the phone. */

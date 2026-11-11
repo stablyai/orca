@@ -1,12 +1,11 @@
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import { translate } from '../i18n/mobile-i18n'
 import type { RouteHandoff } from '../navigation/route-handoff'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import { useMobileCommitMessageGeneration } from './use-mobile-commit-message-generation'
 import { useMobileSourceControlCommitRunners } from './use-mobile-source-control-commit-runners'
 import { useMobileSourceControlActionSheetRunners } from './use-mobile-source-control-action-sheet-runners'
-import { useMobileCreatePrRunner } from './use-mobile-create-pr-runner'
 import { useMobileStageAllRunner } from './use-mobile-stage-all-runner'
 import { useMobileConflictRunners } from './use-mobile-conflict-runners'
 import type { RuntimeGitLocalBranches } from '../../../src/shared/runtime-types'
@@ -25,7 +24,6 @@ type Params = {
   hostId: string
   worktreeId: string
   status: MobileGitStatusResult | null
-  branchLabel: string
   commitMessage: string
   stagedEntries: MobileCommitFailureRecovery['stagedEntries']
   generatingMessage: boolean
@@ -45,10 +43,10 @@ type Params = {
   setShowActionSheet: (next: boolean) => void
   setLocalBranches: (next: RuntimeGitLocalBranches | null) => void
   setShowBranchPicker: (next: boolean) => void
-  setCreatedPrUrl: (next: string | null) => void
-  setCreatedPrWarning: (next: string | null) => void
   recordCommitFailure: RecordMobileCommitFailure
   onOpenHistory?: () => void
+  /** Every Create PR entry opens the one Create PR sheet. */
+  onCreatePr?: () => void
 }
 
 export function useMobileSourceControlRunners(params: Params) {
@@ -57,7 +55,6 @@ export function useMobileSourceControlRunners(params: Params) {
     hostId,
     worktreeId,
     status,
-    branchLabel,
     commitMessage,
     stagedEntries,
     generatingMessage,
@@ -77,17 +74,16 @@ export function useMobileSourceControlRunners(params: Params) {
     setShowActionSheet,
     setLocalBranches,
     setShowBranchPicker,
-    setCreatedPrUrl,
-    setCreatedPrWarning,
     recordCommitFailure,
-    onOpenHistory
+    onOpenHistory,
+    onCreatePr
   } = params
 
   const runGitWorkflow = useCallback(
     async (
       actionId: string,
       runner: () => Promise<void>,
-      options?: { clearCommitMessage?: boolean }
+      options?: { clearCommitMessage?: string; refreshOnError?: boolean }
     ) => {
       if (busyActionRef.current) {
         return false
@@ -98,14 +94,16 @@ export function useMobileSourceControlRunners(params: Params) {
       recordCommitFailure(null)
       try {
         await runner()
+        // The commit landed, so its message must not come back, even when the screen has left.
+        const committed = options?.clearCommitMessage
+        if (committed !== undefined) {
+          setCommitMessage((current) => (current.trim() === committed ? '' : current))
+        }
         if (!mountedRef.current) {
           return false
         }
-        if (options?.clearCommitMessage) {
-          setCommitMessage('')
-        }
         triggerSuccess()
-        await loadStatus({ preserveReadyOnFailure: true, force: true })
+        await loadStatus({ force: true })
         return true
       } catch (err) {
         if (!mountedRef.current) {
@@ -114,6 +112,13 @@ export function useMobileSourceControlRunners(params: Params) {
         triggerError()
         const text = translate('sourceControl.runners.actionFailed', 'Source control action failed')
         setActionError(err instanceof Error ? err.message : text)
+        if (options?.refreshOnError) {
+          // Keep the reason visible: a successful reload clears the action error by default.
+          await loadStatus({
+            force: true,
+            clearActionErrorOnSuccess: false
+          })
+        }
         return false
       } finally {
         if (busyActionRef.current === actionId) {
@@ -145,7 +150,7 @@ export function useMobileSourceControlRunners(params: Params) {
   )
 
   const runGitSequence = useCallback(
-    async (actionId: string, steps: GitStep[], options?: { clearCommitMessage?: boolean }) => {
+    async (actionId: string, steps: GitStep[], options?: { clearCommitMessage?: string }) => {
       return await runGitWorkflow(
         actionId,
         async () => {
@@ -206,24 +211,24 @@ export function useMobileSourceControlRunners(params: Params) {
     recordCommitFailure
   })
 
-  const createPr = useMobileCreatePrRunner({
-    client,
-    worktreeId,
-    status,
-    branchLabel,
-    commitMessage,
-    stagedEntries,
-    mountedRef,
-    runGitWorkflow,
-    loadStatus,
-    cancelGenerateCommitMessage,
-    setActionError,
-    setCommitMessage,
-    setShowActionSheet,
-    setCreatedPrUrl,
-    setCreatedPrWarning,
-    recordCommitFailure
-  })
+  // pushFirst is kept for the action sheet's two rows; the sheet pushes first whenever it has to.
+  const createPr = useCallback(
+    (_pushFirst: boolean) => {
+      setShowActionSheet(false)
+      if (!status?.branch) {
+        triggerError()
+        setActionError(
+          translate(
+            'sourceControl.useMobileCreatePrRunner.branchRequired',
+            'Check out a branch before creating a pull request.'
+          )
+        )
+        return
+      }
+      onCreatePr?.()
+    },
+    [onCreatePr, setActionError, setShowActionSheet, status?.branch]
+  )
 
   const openBranchPicker = useCallback(() => {
     setShowActionSheet(false)
@@ -273,9 +278,16 @@ export function useMobileSourceControlRunners(params: Params) {
   const checkoutBranch = useCallback(
     async (branch: string) => {
       setShowBranchPicker(false)
-      await runGitAction('checkout', 'git.checkout', { branch })
+      // A host can report a switch that landed with files left behind; show the branch it is on.
+      await runGitWorkflow(
+        'checkout',
+        async () => {
+          await sendGitRequest<unknown>('git.checkout', { branch })
+        },
+        { refreshOnError: true }
+      )
     },
-    [runGitAction, setShowBranchPicker]
+    [runGitWorkflow, sendGitRequest, setShowBranchPicker]
   )
 
   const actionSheetRunners = useMobileSourceControlActionSheetRunners({

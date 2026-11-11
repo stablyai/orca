@@ -1,16 +1,33 @@
 import type SyncDatabase from '../sqlite/sync-database'
 import type { SessionSearchScope } from './session-search-engine-types'
-import { quoteFtsTerm, scopedExpression } from './session-search-query-planner'
+import { orExpression, planSessionSearchQuery, quoteFtsTerm } from './session-search-query-planner'
+import { SessionSearchPostings } from './session-search-postings'
 
 const MIN_TERM_LENGTH = 4
 const MAX_TERM_LENGTH = 40
 const LENGTH_SLACK = 2
 const MIN_DOC_FREQUENCY = 2
 const MIN_SIMILARITY = 0.82
-const MAX_CANDIDATES = 4000
+const MAX_VOCABULARY_SEEKS = 4000
 const MAX_VISIBILITY_PROBES = 8
 // Cap frequency tie-break counts so common terms cannot make repair unbounded.
 const MAX_COUNTED_ROWS = 64
+
+export class SessionSearchVocabularyBudget {
+  private remaining = MAX_VOCABULARY_SEEKS
+
+  get exhausted(): boolean {
+    return this.remaining === 0
+  }
+
+  take(): boolean {
+    if (this.exhausted) {
+      return false
+    }
+    this.remaining--
+    return true
+  }
+}
 
 function commonSubsequenceLength(a: string, b: string): number {
   let previous = Array.from<number>({ length: b.length + 1 }).fill(0)
@@ -35,46 +52,48 @@ function similarity(a: string, b: string): number {
 
 /** Validate against live scoped rows: vocabulary includes other columns and orphans. */
 export class SessionSearchTypoRepair {
-  private readonly liveRows: ReturnType<SyncDatabase['prepare']>
   private readonly candidatesByPrefix: ReturnType<SyncDatabase['prepare']>
 
-  constructor(db: SyncDatabase) {
-    this.liveRows = db.prepare(
-      `SELECT count(*) AS rows FROM (
-         SELECT m.id FROM messages_fts
-         JOIN messages m ON m.id = messages_fts.rowid
-         JOIN sessions s ON s.id = m.session_row_id
-         WHERE messages_fts MATCH ? LIMIT ${MAX_COUNTED_ROWS})`
+  constructor(private readonly db: SyncDatabase) {
+    // Why: row vocabulary computes full doclist counts before returning even one term.
+    db.exec(
+      "CREATE VIRTUAL TABLE IF NOT EXISTS temp.session_search_vocab USING fts5vocab(main,messages_fts,'instance')"
     )
-    // Term order uses the vocab index and keeps the candidate cutoff independent of orphan counts.
     this.candidatesByPrefix = db.prepare(
-      `SELECT term FROM messages_vocab
-       WHERE term >= ? AND term < ? AND length(term) BETWEEN ? AND ?
-       ORDER BY term LIMIT ?`
+      `SELECT term FROM temp.session_search_vocab WHERE term >= ? ORDER BY term LIMIT 1`
     )
   }
 
-  private countRows(term: string, scope: SessionSearchScope): number {
-    const row = this.liveRows.get(scopedExpression(scope, quoteFtsTerm(term))) as { rows: number }
-    return row.rows
+  private countRows(expression: string, postings: SessionSearchPostings): number {
+    let rows = 0
+    for (const _row of postings.matching(expression)) {
+      if (++rows >= MAX_COUNTED_ROWS) {
+        break
+      }
+    }
+    return rows
   }
 
-  hasPostings(term: string, scope: SessionSearchScope): boolean {
-    return this.countRows(term, scope) > 0
-  }
-
-  correct(term: string, scope: SessionSearchScope): string | null {
+  correct(
+    term: string,
+    scope: SessionSearchScope,
+    postings = new SessionSearchPostings(this.db, scope),
+    vocabulary = new SessionSearchVocabularyBudget()
+  ): string | null {
     const lowered = term.toLowerCase()
     if (lowered.length < MIN_TERM_LENGTH || lowered.length > MAX_TERM_LENGTH) {
       return null
     }
-    if (this.hasPostings(lowered, scope)) {
+    const ownExpression = orExpression(
+      planSessionSearchQuery(term).terms.filter((spelling) => spelling.toLowerCase() === lowered)
+    )
+    if (this.countRows(ownExpression, postings) > 0 || postings.exhausted) {
       return null
     }
     // Widen cautiously: common prefix, transposed pair, then first letter.
     const prefixes = [lowered.slice(0, 2), lowered[1] + lowered[0], lowered[0]]
     for (const prefix of prefixes) {
-      const best = this.bestVisible(lowered, prefix, scope)
+      const best = this.bestVisible(lowered, prefix, postings, vocabulary)
       if (best) {
         return best
       }
@@ -83,10 +102,18 @@ export class SessionSearchTypoRepair {
   }
 
   /** Probe several ranked candidates so an invisible best match does not suppress a live repair. */
-  private bestVisible(lowered: string, prefix: string, scope: SessionSearchScope): string | null {
-    const counted = this.ranked(lowered, prefix)
+  private bestVisible(
+    lowered: string,
+    prefix: string,
+    postings: SessionSearchPostings,
+    vocabulary: SessionSearchVocabularyBudget
+  ): string | null {
+    const counted = this.ranked(lowered, prefix, vocabulary)
       .slice(0, MAX_VISIBILITY_PROBES)
-      .map((candidate) => ({ ...candidate, rows: this.countRows(candidate.term, scope) }))
+      .map((candidate) => ({
+        ...candidate,
+        rows: this.countRows(quoteFtsTerm(candidate.term), postings)
+      }))
       .filter((candidate) => candidate.rows >= MIN_DOC_FREQUENCY)
     if (counted.length === 0) {
       return null
@@ -96,22 +123,39 @@ export class SessionSearchTypoRepair {
       .term
   }
 
-  private ranked(lowered: string, prefix: string): { term: string; score: number }[] {
-    return this.candidates(prefix, lowered.length)
+  private ranked(
+    lowered: string,
+    prefix: string,
+    vocabulary: SessionSearchVocabularyBudget
+  ): { term: string; score: number }[] {
+    return this.candidates(prefix, lowered.length, vocabulary)
       .map((row) => ({ term: row.term, score: similarity(lowered, row.term) }))
       .filter((candidate) => candidate.score >= MIN_SIMILARITY)
       .sort((left, right) => right.score - left.score || (left.term < right.term ? -1 : 1))
   }
 
-  private candidates(prefix: string, length: number): { term: string }[] {
-    const last = prefix.charCodeAt(prefix.length - 1)
-    const upper = prefix.slice(0, -1) + String.fromCharCode(last + 1)
-    return this.candidatesByPrefix.all(
-      prefix,
-      upper,
-      Math.max(MIN_TERM_LENGTH - 1, length - LENGTH_SLACK),
-      length + LENGTH_SLACK,
-      MAX_CANDIDATES
-    ) as { term: string }[]
+  private candidates(
+    prefix: string,
+    length: number,
+    vocabulary: SessionSearchVocabularyBudget
+  ): { term: string }[] {
+    const terms: { term: string }[] = []
+    let next = prefix
+    while (vocabulary.take()) {
+      const term = this.candidatesByPrefix.get(next)?.term
+      if (typeof term !== 'string' || !term.startsWith(prefix)) {
+        break
+      }
+      // Why: strict > filters occurrences; the TEXT successor seeks past the whole doclist.
+      next = `${term}\u0000`
+      const termLength = Array.from(term).length
+      if (
+        termLength >= Math.max(MIN_TERM_LENGTH - 1, length - LENGTH_SLACK) &&
+        termLength <= length + LENGTH_SLACK
+      ) {
+        terms.push({ term })
+      }
+    }
+    return terms
   }
 }

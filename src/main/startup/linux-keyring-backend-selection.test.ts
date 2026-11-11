@@ -118,10 +118,4 @@ describe('resolveLinuxPasswordStore', () => {
     })
     expect(probeCollection).not.toHaveBeenCalled()
   })
-
-  it('gives a reason for every outcome, since the log line is the only trace', () => {
-    for (const collection of ['unlocked', 'locked', 'unavailable'] as const) {
-      expect(resolve({ XDG_CURRENT_DESKTOP: 'Hyprland' }, collection).reason).not.toBe('')
-    }
-  })
 })

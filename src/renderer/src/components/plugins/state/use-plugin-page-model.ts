@@ -24,6 +24,8 @@ import type { PluginFileMatch } from '../../../../../shared/plugins/contribution
 
 /** A shortcut a plugin binds, by the key as written and the command it runs. */
 export type PluginPageShortcut = { key: string; command: string }
+/** A command that runs in place of a built-in action (`replaces`), named before consent. */
+export type PluginPageReplacement = { command: string; action: string }
 
 /**
  * Whether a fetched preview is the release the page rendered. Preview reads the current catalog,
@@ -48,6 +50,7 @@ export function previewMatchesListing(
 function listingIdentity(listing: PluginMarketplaceHostListing): string {
   const release = listing.release
   return [
+    listing.marketplaceSourceId,
     listing.marketplaceCommit,
     release?.commit ?? '',
     release?.contentHash ?? '',
@@ -68,8 +71,9 @@ export function usePluginPageModel({
 }) {
   const plugin = entry.installed
   // Why pinned: a catalog refresh mid-view must never swap the rows above an armed button.
-  const [pinned, setPinned] = useState(entry.listing)
-  const listing = plugin ? entry.listing : pinned
+  const [pinned, setPinned] = useState(entry)
+  const shownEntry = plugin ? entry : pinned
+  const listing = shownEntry.listing
   const [preview, setPreview] = useState<PluginMarketplaceHostInstallPreview | null>(null)
   const [previewFailed, setPreviewFailed] = useState(false)
   const [previewAttempt, setPreviewAttempt] = useState(0)
@@ -97,8 +101,8 @@ export function usePluginPageModel({
   const newerListed =
     !plugin &&
     entry.listing !== null &&
-    pinned !== null &&
-    listingIdentity(entry.listing) !== listingIdentity(pinned)
+    pinned.listing !== null &&
+    listingIdentity(entry.listing) !== listingIdentity(pinned.listing)
   // Why a mismatched preview counts too: it is the catalog's newer release, not what is shown.
   const stale = newerListed || previewMatches === false
   // Why disarm while refreshing: the listing under the button may be replaced any moment.
@@ -160,6 +164,13 @@ export function usePluginPageModel({
         .map((item) => ({ key: item.name, command: item.detail ?? item.name })) ?? null
   }
 
+  const replacingCommands = plugin?.commands ?? shownPreview?.manifest.contributes.commands
+  const replacements: PluginPageReplacement[] | null = replacingCommands
+    ? replacingCommands.flatMap((command) =>
+        command.replaces ? [{ command: command.title, action: command.replaces }] : []
+      )
+    : null
+
   // Extensions and file names the plugin's custom editors open and edit, named in the consent.
   const customEditors: readonly PluginFileMatch[] | undefined = plugin
     ? (plugin.customEditors ?? [])
@@ -174,12 +185,13 @@ export function usePluginPageModel({
     plugin?.images ?? listing?.images ?? shownPreview?.images
   )
   return {
+    entry: shownEntry,
     plugin,
     listing,
     preview: shownPreview,
     previewFailed,
     retryPreview: () => setPreviewAttempt((attempt) => attempt + 1),
-    showNewer: () => setPinned(entry.listing),
+    showNewer: () => setPinned(entry),
     stale,
     disarmed,
     execution,
@@ -188,6 +200,7 @@ export function usePluginPageModel({
     trust,
     capabilities,
     shortcuts,
+    replacements,
     editorFileTypes: editorFileTypes ? [...new Set(editorFileTypes)] : null,
     images
   }

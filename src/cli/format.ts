@@ -1,21 +1,10 @@
-import type { CliStatusCaller } from '../shared/orchestration-caller-status'
+import type { CliStatusCaller } from '../shared/orchestration/orchestration-caller-status'
 import type { CliStatusResult } from '../shared/runtime-types'
-import { formatBrowserActionEffects } from './browser-format'
+import { formatBrowserActionEffects } from './browser/browser-format'
 import { prepareComputerCliJsonResult } from './computer-format'
 import type { RuntimeRpcSuccess } from './runtime-client'
 
 export { formatCliError, reportCliError, type CliErrorContext } from './cli-error'
-
-export {
-  formatBrowserProfileList,
-  formatScreenshot,
-  formatSnapshot,
-  formatTabList,
-  formatTabListWithProfiles,
-  formatTabProfileClone,
-  formatTabProfileShow,
-  formatTabShow
-} from './browser-format'
 
 export {
   formatComputerAction,
@@ -140,6 +129,7 @@ export function formatCliStatus(status: CliStatusResult): string {
     `runtimeConnectionState: ${status.runtime.connectionState ?? 'unknown'}`,
     `runtimeId: ${status.runtime.runtimeId ?? 'none'}`,
     `graphState: ${status.graph.state}`,
+    ...(status.runtime.degradations ?? []).map((degradation) => `degraded: ${degradation.message}`),
     ...(status.caller === undefined ? [] : [`orcaSessionId: ${formatStatusCaller(status.caller)}`])
   ].join('\n')
 }

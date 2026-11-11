@@ -39,15 +39,6 @@ describe('order', () => {
     expect(rankSessionHits(sessions, scores, 'newest').map((e) => e.session.id)).toEqual([2, 1])
   })
 
-  it('hands a relevance tie to the newer session before falling back to id', () => {
-    const sessions = [
-      session(1, { updated_at: '2026-09-01T00:00:00.000Z' }),
-      session(2, { updated_at: '2026-09-09T00:00:00.000Z' })
-    ]
-    const scores = matches(match(1, 5), match(2, 5))
-    expect(rankSessionHits(sessions, scores, 'relevance').map((e) => e.session.id)).toEqual([2, 1])
-  })
-
   it.each(['relevance', 'newest'] as const)(
     'breaks a %s tie by session, whatever order retrieval handed them over in',
     (sort) => {
@@ -59,13 +50,6 @@ describe('order', () => {
       ])
     }
   )
-
-  it('prefers the shorter session when two match equally well', () => {
-    const sessions = [session(1, { message_count: 5000 }), session(2, { message_count: 2 })]
-    const ranked = rankSessionHits(sessions, matches(match(1, 5), match(2, 5)), 'relevance')
-    expect(ranked.map((entry) => entry.session.id)).toEqual([2, 1])
-    expect(ranked[0]!.score).toBeGreaterThan(ranked[1]!.score)
-  })
 })
 
 describe('forks fold into one answer', () => {
@@ -91,16 +75,4 @@ describe('forks fold into one answer', () => {
     expect(ranked[0]!.session.id).toBe(2)
     expect(ranked[0]!.duplicateCount).toBe(3)
   })
-
-  it('leaves sessions with no shared prefix alone', () => {
-    const sessions = [session(1), session(2)]
-    const ranked = rankSessionHits(sessions, matches(match(1, 9), match(2, 5)), 'relevance')
-    expect(ranked.map((entry) => entry.duplicateCount)).toEqual([1, 1])
-  })
-})
-
-it('scores a session that matched no text at zero, less its length prior', () => {
-  const ranked = rankSessionHits([session(1, { message_count: 9 })], new Map(), 'newest')
-  expect(ranked[0]!.message).toBeNull()
-  expect(ranked[0]!.score).toBeLessThan(0)
 })

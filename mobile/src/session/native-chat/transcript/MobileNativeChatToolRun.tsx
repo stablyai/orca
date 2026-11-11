@@ -1,12 +1,4 @@
-import {
-  useCallback,
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState
-} from 'react'
+import { useCallback, useContext, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,
   Pressable,
@@ -19,6 +11,8 @@ import {
   type NativeSyntheticEvent
 } from 'react-native'
 import { Check } from 'lucide-react-native'
+import { useWorkingPulse } from '../../../components/use-working-motion'
+import { MobileNativeChatReplyRevealsContext } from './mobile-native-chat-reply-reveals'
 import {
   nativeChatToolActivityCopy,
   nativeChatToolCallCount
@@ -33,13 +27,13 @@ import { buildEditCards } from '../../../../../src/shared/native-chat/tools/nati
 import type {
   NativeChatBlock,
   NativeChatToolCallBlock
-} from '../../../../../src/shared/native-chat-types'
+} from '../../../../../src/shared/native-chat/native-chat-types'
 import { buildNativeChatTaskListRows } from '../../../../../src/shared/native-chat/input/native-chat-task-list-history'
-import { colors } from '../../../theme/mobile-theme'
+import { colors, pressedStyle } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatToolGlyph } from './MobileNativeChatToolIcon'
 import { MobileNativeChatToolLine } from './MobileNativeChatToolLine'
-import { MobileNativeChatDiffCard } from '../../MobileNativeChatDiffCard'
+import { MobileNativeChatDiffCard } from './MobileNativeChatDiffCard'
 import { MobileNativeChatTaskList } from '../input/MobileNativeChatTaskList'
 import { MobileNativeChatOpenedDetailContext } from '../visual/mobile-native-chat-opened-detail'
 import {
@@ -48,8 +42,8 @@ import {
   useMobileNativeChatDisclosure
 } from './mobile-native-chat-disclosure-store'
 import { toolStyles as styles, toolType } from './mobile-native-chat-tool-styles'
-import { mobileNativeChatMemberId } from '../../mobile-native-chat-reading-place'
-import { MobileNativeChatOwnedScrollView } from '../../MobileNativeChatOwnedScrollView'
+import { mobileNativeChatMemberId } from './mobile-native-chat-reading-place'
+import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
 import type {
   MobileNativeChatToolRunAsides,
   MobileNativeChatToolRunProps
@@ -69,23 +63,11 @@ function PulsingText({
   style?: React.ComponentProps<typeof Animated.Text>['style']
   children: React.ReactNode
 }): React.JSX.Element {
-  const opacity = useRef(new Animated.Value(1)).current
-  useEffect(() => {
-    if (!pulsing) {
-      opacity.setValue(1)
-      return
-    }
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 0.5, duration: 1000, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 1, duration: 1000, useNativeDriver: true })
-      ])
-    )
-    animation.start()
-    return () => animation.stop()
-  }, [opacity, pulsing])
+  // The transcript's one Reduce Motion read; without it (unknown) the header holds still.
+  const reducedMotion = useContext(MobileNativeChatReplyRevealsContext)?.reducedMotion ?? true
+  const pulse = useWorkingPulse(pulsing && !reducedMotion)
   return (
-    <Animated.Text style={[style, { opacity }]} numberOfLines={2}>
+    <Animated.Text ref={pulse.ref} style={[style, pulse.style]} numberOfLines={2}>
       {children}
     </Animated.Text>
   )
@@ -193,7 +175,7 @@ export function ToolRun({
   previousTodoWrite,
   previousUpdatePlan,
   fontScale = 1,
-  onOpenFile
+  viewedImages
 }: MobileNativeChatToolRunProps): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -233,7 +215,7 @@ export function ToolRun({
     <View style={styles.run} testID={mobileNativeChatMemberId('run')}>
       {/* Keep one button through live/settled states so accessibility focus survives. */}
       <Pressable
-        style={styles.header}
+        style={({ pressed }) => [styles.header, pressed && pressedStyle]}
         onPress={() => setOpen(!open)}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
@@ -263,6 +245,8 @@ export function ToolRun({
           </Text>
         ) : null}
       </Pressable>
+      {/* A read's result is the image the agent saw, so it shows without opening the run. */}
+      {viewedImages ? <View style={styles.viewedImages}>{viewedImages}</View> : null}
       {open ? (
         <ToolRunMembers
           followKey={blocks.length + asideCount}
@@ -277,7 +261,6 @@ export function ToolRun({
             disclosureId={disclosureId}
             asides={asides}
             fontScale={fontScale}
-            onOpenFile={onOpenFile}
           />
         </ToolRunMembers>
       ) : null}
@@ -292,8 +275,7 @@ function ToolRunMemberList({
   asides,
   previousTodoWrite,
   previousUpdatePlan,
-  fontScale,
-  onOpenFile
+  fontScale
 }: {
   blocks: NativeChatBlock[]
   disclosureId?: string
@@ -301,7 +283,6 @@ function ToolRunMemberList({
   previousTodoWrite?: NativeChatToolCallBlock
   previousUpdatePlan?: NativeChatToolCallBlock
   fontScale: number
-  onOpenFile?: (path: string) => void
 }): React.JSX.Element {
   const taskLists = useMemo(
     () =>
@@ -346,7 +327,6 @@ function ToolRunMemberList({
                 disclosureId === undefined ? undefined : `diff:${disclosureId}:${id}:${fileIndex}`
               }
               fontScale={fontScale}
-              onOpenFile={onOpenFile}
             />
           ))}
         </View>
@@ -371,7 +351,6 @@ function ToolRunMemberList({
           disclosureId === undefined ? undefined : `line:${disclosureId}:${lineIdentity}`
         }
         fontScale={fontScale}
-        onOpenFile={onOpenFile}
       />
     )
   }

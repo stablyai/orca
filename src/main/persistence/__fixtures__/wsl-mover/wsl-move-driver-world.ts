@@ -154,6 +154,10 @@ export function createWslMoveWorld(userDataPath: string): WslMoveWorld {
       },
       stageChunk: async () => {
         throw new Error('unused: the fixture carries no scrollback snapshots')
+      },
+      readCapabilities: async () => host.capabilities,
+      stageBlobChunk: async () => {
+        throw new Error('unused: a WSL move sends blobs through host.blobs')
       }
     },
     commitWithBlobs: async (manifest, expectedBlobs) => {

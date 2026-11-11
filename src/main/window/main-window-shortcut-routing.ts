@@ -16,11 +16,17 @@ import {
   windowShortcutActionCapturesTerminal,
   type WindowShortcutAction
 } from '../../shared/window-shortcut-policy'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { CreateMainWindowOptions } from './main-window-contracts'
 import type { MainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import { sendResolvedWindowShortcutAction } from './main-window-shortcut-actions'
 import { isMacAppPasteInput } from './mac-app-paste-input'
+import { dictationShortcutMode } from '../../shared/dictation-shortcut-mode'
+import {
+  nativeChatPromptClaimsShortcut,
+  textInputOwnsComposition,
+  type TextShortcutInput
+} from '../../shared/text-input-shortcut-policy'
 
 export function installMainWindowShortcutRouting(args: {
   focus: MainWindowFocusLifecycle
@@ -37,9 +43,18 @@ export function installMainWindowShortcutRouting(args: {
     options: {
       isAutoRepeat: boolean
       focusedShortcutContext: KeybindingMatchOptions
+      input: TextShortcutInput
     }
   ): boolean => {
     const { focusedShortcutContext, isAutoRepeat } = options
+    // The IPC carries no key event; preserve prompt editing before consuming a destructive chord.
+    if (
+      action.type === 'deleteCurrentWorkspace' &&
+      focusedShortcutContext.context !== 'terminal' &&
+      nativeChatPromptClaimsShortcut(options.input, process.platform, 'workspace.delete')
+    ) {
+      return false
+    }
     if (
       focus.isFloatingTerminalInputFocused() &&
       (action.type === 'toggleLeftSidebar' || action.type === 'toggleRightSidebar')
@@ -66,15 +81,19 @@ export function installMainWindowShortcutRouting(args: {
         ? getWindowShortcutActionId(action)
         : null
 
-    // Hold dictation needs renderer keyup; consume only single-keydown toggles in main.
+    // Hold and Auto need renderer keyup; consume only single-keydown toggles in main.
     if (action.type === 'dictationKeyDown') {
       const voiceSettings = store?.getSettings().voice
       // No model still forwards: the renderer's startDictation shows the setup toast.
-      if (!voiceSettings?.enabled) {
+      if (!voiceSettings?.enabled || textInputOwnsComposition(options.input)) {
         return false
       }
-      const dictationMode = voiceSettings.dictationMode ?? 'toggle'
-      if (dictationMode === 'hold') {
+      const dictationMode = dictationShortcutMode(voiceSettings)
+      // A double tap has no release to hold, so Auto toggles on it.
+      const toggles =
+        dictationMode === 'toggle' ||
+        (dictationMode === 'auto' && options.input.doubleTapModifier !== undefined)
+      if (!toggles) {
         return false
       }
       if (isAutoRepeat) {
@@ -147,8 +166,12 @@ export function installMainWindowShortcutRouting(args: {
       terminalShortcutPolicy: terminalShortcutContext.terminalShortcutPolicy
     }
 
+    if (textInputOwnsComposition(input)) {
+      doubleTapDetector.reset()
+    }
+
     // Bare modifiers emit no terminal bytes, so raw-stream double taps cannot steal readline input.
-    if (input.type === 'keyDown' || input.type === 'keyUp') {
+    if (!textInputOwnsComposition(input) && (input.type === 'keyDown' || input.type === 'keyUp')) {
       const detected = doubleTapDetector.process(
         toModifierDoubleTapEvent({
           type: input.type,
@@ -173,7 +196,8 @@ export function installMainWindowShortcutRouting(args: {
           doubleTapAction &&
           dispatchResolvedWindowShortcutAction(event, doubleTapAction, {
             isAutoRepeat: false,
-            focusedShortcutContext: terminalShortcutContext
+            focusedShortcutContext: terminalShortcutContext,
+            input: { ...input, doubleTapModifier: detected.modifier }
           })
         ) {
           // preventDefault only the emitting keydown so the renderer detector can't also fire for the same gesture.
@@ -191,14 +215,15 @@ export function installMainWindowShortcutRouting(args: {
       return
     }
 
-    // TipTap owns bare Cmd/Ctrl+B only; preserve modifier variants (docs/markdown-cmd-b-bold-design.md).
-    const modForBold = process.platform === 'darwin' ? input.meta : input.control
+    // TipTap owns bare Cmd/Ctrl+B and Cmd/Ctrl+K; preserve modifier variants.
+    const modForMarkdown = process.platform === 'darwin' ? input.meta : input.control
     if (
       focus.isMarkdownEditorFocused() &&
-      input.code === 'KeyB' &&
+      (input.code === 'KeyB' || input.key.toLowerCase() === 'k') &&
       !input.alt &&
       !input.shift &&
-      modForBold
+      (process.platform === 'darwin' ? !input.control : !input.meta) &&
+      modForMarkdown
     ) {
       return
     }
@@ -220,7 +245,8 @@ export function installMainWindowShortcutRouting(args: {
 
     dispatchResolvedWindowShortcutAction(event, action, {
       isAutoRepeat: Boolean(input.isAutoRepeat),
-      focusedShortcutContext: terminalShortcutContext
+      focusedShortcutContext: terminalShortcutContext,
+      input
     })
   })
 

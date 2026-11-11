@@ -1,11 +1,12 @@
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalRenderItem,
-  type AgentJournalTurnScope
-} from '../../shared/agent-session-journal-types'
-import { HISTORY_CATCH_UP_MAX_OPERATIONS } from '../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
-import type { StructuredAgentSessionTransitionJournal } from '../native-chat/agent-session-wire/structured-agent-session-transition'
-import { parseAgentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+  type AgentJournalItemBody,
+  type AgentJournalRenderItem
+} from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/agent-session-journal-turn-scope'
+import { HISTORY_CATCH_UP_MAX_OPERATIONS } from '../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
+import type { StructuredAgentSessionTransitionJournal } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
+import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { claudePromptUuidForSubmission } from './structured/claude-structured-session-id'
 
 /** Every saved item used by the projection is a conditional commit dependency, even if equal. */
@@ -89,4 +90,20 @@ export function createClaudeTranscriptItemReader(
     return scope
   }
   return { saved, localPrompt, scopeOf, promptScope, dependencies }
+}
+
+/** A restored call cannot undo its saved result or discard its original call metadata. */
+export function claudeRestoredItemBody(
+  body: AgentJournalItemBody,
+  existing: AgentJournalItemBody
+): AgentJournalItemBody {
+  if (body.kind === 'tool-call' && existing.kind === 'tool-call') {
+    return body.state === 'running'
+      ? existing
+      : { ...existing, ...body, name: existing.name, input: existing.input }
+  }
+  if (body.kind === 'message' && body.role === 'reasoning' && existing.kind === 'message') {
+    return { ...existing, ...body }
+  }
+  return body
 }

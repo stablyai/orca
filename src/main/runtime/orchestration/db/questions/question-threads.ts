@@ -1,7 +1,8 @@
-import type { MessageRow, QuestionRow } from '../../types'
+import type { MessageRow, QuestionRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { exposeQuestionTimestamps } from '../utc-timestamp'
 import type { OrchestrationDb } from '../orchestration-db'
+import { generateId } from '../generated-id'
 import { handHelperMailToRun } from '../messages/helper-mailbox-hand-back'
 
 export function createQuestion(
@@ -19,18 +20,19 @@ export function createQuestion(
   this.db.exec('BEGIN IMMEDIATE')
   try {
     this.requireRun(params.runId)
+    // A finished Dispatch still asks: its worker keeps talking to the coordinator after reporting.
     const dispatch = this.getDispatchContextById(params.dispatchId)
-    if (
-      !dispatch ||
-      dispatch.run_id !== params.runId ||
-      (dispatch.status !== 'pending' && dispatch.status !== 'dispatched')
-    ) {
+    if (!dispatch || dispatch.run_id !== params.runId) {
       throw new OrchestrationError(
         'dispatch_inactive',
-        `Dispatch ${params.dispatchId} is not active in Run ${params.runId}.`
+        `Dispatch ${params.dispatchId} is not in Run ${params.runId}.`
       )
     }
+    // A question is its own thread, set at insert so mail queued for a paired coordinator carries it.
+    const id = generateId('msg')
     const message = this.insertMessage({
+      id,
+      threadId: id,
       from: `dispatch:${params.dispatchId}`,
       to: params.to ?? `run:${params.runId}`,
       subject: 'Question',
@@ -42,9 +44,9 @@ export function createQuestion(
         question: params.question,
         options: params.options ?? []
       }),
+      senderDispatchId: dispatch.id,
       runId: params.runId
     })
-    this.db.prepare('UPDATE messages SET thread_id = ? WHERE id = ?').run(message.id, message.id)
     this.db
       .prepare(
         `INSERT INTO question_threads (
@@ -79,6 +81,7 @@ export function answerQuestion(
     messageId: string
     runId: string
     body: string
+    captureSender?: () => string | undefined
   } & (
     | { consumerGeneration: number }
     /** A worker answering its own helper, fenced on its Dispatch instead of the Run's consumer. */
@@ -139,12 +142,15 @@ export function answerQuestion(
       from: byDispatch !== null ? `dispatch:${byDispatch}` : `run:${params.runId}`,
       to: `dispatch:${question.dispatch_id}`,
       subject: 'Re: Question',
+      answerSenderSnapshot: params.captureSender?.(),
       body: params.body,
       threadId: question.message_id,
       runId: params.runId
     })
-    // ask returns the answer directly; mark it read to prevent replay through check.
-    this.markAsRead([message.id])
+    // The answer is the worker's mail; a federated worker's copy lives on its execution host.
+    if (this.getFederatedDispatch(question.dispatch_id)) {
+      this.markAsReadAndDelivered([message.id])
+    }
     this.db
       .prepare(
         `UPDATE question_threads
@@ -165,6 +171,31 @@ export function answerQuestion(
     this.db.exec('ROLLBACK')
     throw error
   }
+}
+
+/** Whether the Dispatch's last turn ended on its own pending question: no mail has reached it since it asked. */
+export function awaitsAnswerToLatestQuestion(this: OrchestrationDb, dispatchId: string): boolean {
+  const row = this.db
+    .prepare(
+      `SELECT EXISTS (
+         SELECT 1 FROM question_threads q JOIN messages asked ON asked.id = q.message_id
+          WHERE q.dispatch_id = ? AND q.status = 'pending'
+            AND NOT EXISTS (
+              SELECT 1 FROM messages m
+               WHERE m.to_handle = 'dispatch:' || q.dispatch_id AND m.sequence > asked.sequence
+            )
+       ) OR EXISTS (
+         -- A paired worker's question lives at its Run home, so only its timestamp orders it here.
+         SELECT 1 FROM remote_questions q
+          WHERE q.dispatch_id = ? AND q.status = 'pending'
+            AND NOT EXISTS (
+              SELECT 1 FROM messages m
+               WHERE m.to_handle = 'dispatch:' || q.dispatch_id AND m.created_at > q.created_at
+            )
+       ) AS pending`
+    )
+    .get(dispatchId, dispatchId)
+  return row?.pending === 1
 }
 
 export function closeQuestionsForDispatch(this: OrchestrationDb, dispatchId: string): string[] {
@@ -189,6 +220,7 @@ export type QuestionThreadsMethods = {
   getQuestion: typeof getQuestion
   getQuestionRaw: typeof getQuestionRaw
   answerQuestion: typeof answerQuestion
+  awaitsAnswerToLatestQuestion: typeof awaitsAnswerToLatestQuestion
   closeQuestionsForDispatch: typeof closeQuestionsForDispatch
 }
 
@@ -198,6 +230,7 @@ export function attachQuestionThreads(ctor: { prototype: object }): void {
     getQuestion,
     getQuestionRaw,
     answerQuestion,
+    awaitsAnswerToLatestQuestion,
     closeQuestionsForDispatch
   })
 }

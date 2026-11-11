@@ -3,7 +3,11 @@ import type { PluginExecutionProfile } from '../contributions/plugin-execution-p
 
 /** Capabilities only a full-access worker can use: panels get no host method for them. */
 const WORKER_ONLY_CAPABILITIES: ReadonlySet<string> = new Set<PluginCapabilityKind>([
-  'terminal:send'
+  'terminal:send',
+  'terminal:read',
+  'workspace:write',
+  'agent:launch',
+  'appearance:write'
 ])
 
 /** Whether a plugin of this profile can ever exercise the capability, so consent may name it. */

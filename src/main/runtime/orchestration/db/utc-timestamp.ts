@@ -1,4 +1,4 @@
-import type { DeliveryRow, MessageRow, QuestionRow, RunRow } from '../types'
+import type { DeliveryRow, MessageRow, QuestionRow, RunRow } from './orchestration-records'
 
 export const SQLITE_UTC_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$/
 
@@ -7,6 +7,11 @@ export function exposeUtcTimestamp(timestamp: string | null): string | null {
     return timestamp
   }
   return `${timestamp.replace(' ', 'T')}Z`
+}
+
+/** SQLite's datetime('now') spelling, so stored deadlines compare against its timestamps. */
+export function toSqliteUtcTimestamp(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 19).replace('T', ' ')
 }
 
 export function exposeMessageTimestamps(message: MessageRow): MessageRow {

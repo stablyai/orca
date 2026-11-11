@@ -13,7 +13,7 @@ import type { WorktreeSliceGet } from '../listing/worktree-slice-types'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '../../../workspace-record-selectors'
+} from '../../../workspaces/catalog/workspace-record-fields'
 
 export const UNFINISHED_WORKTREE_REMOVAL_ERROR = 'The delete did not finish. Try again.'
 

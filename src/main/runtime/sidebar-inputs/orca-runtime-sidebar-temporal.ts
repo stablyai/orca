@@ -1,7 +1,7 @@
 import { getRepoRegistrationHostIds } from '../../../shared/repo-host-identity'
 import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { OrcaRuntimeWithDetectedCheckoutsAndLiveContent } from './orca-runtime-detected-checkouts-live-content'
-import type { OrcaRuntimeWithAgentTransitions } from '../orca-runtime-agent-transitions'
+import type { OrcaRuntimeWithAgentTransitions } from '../construction/orca-runtime-agent-transitions'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
 import { DEFAULT_HIDE_SLEEPING_WORKSPACES } from '../../../shared/constants'
 import {
@@ -21,7 +21,6 @@ import { WorkspaceViewers } from './workspace-viewers'
 import { clientRaisesUnreadFlagItself } from '../../../shared/workspace-unread-raise-capability'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import { TerminalUseProducer } from './terminal-use-producer'
-import { createKeyedTrailingEdgeCoalescer } from '../keyed-trailing-edge-coalescer'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId, worktreeIdentityKey } from '../../../shared/worktree/id'
 import {
@@ -29,8 +28,8 @@ import {
   parseWorktreeHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
 import { anySleepKeyNames } from '../terminal/stop/worktree-terminal-sleep-key'
-import { resolveAgentWorkspaceExecutionHostId } from '../../agent-hooks/restored-status-dead-terminal-sweep'
-import { WORKTREE_METADATA_DOMAINS } from '../../persistence/loading-store/worktree-identity-metadata'
+import { resolveAgentWorkspaceExecutionHostId } from '../../agent-hooks/observations/restored-status-dead-terminal-sweep'
+import { WORKSPACE_RECORD_DOMAINS } from '../../persistence/profile-save-domains'
 import {
   isWslMoveProjectBlocked,
   wslMoveProjectRefForWorkspace
@@ -57,11 +56,6 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
     retentionCandidates: () => this.readSidebarRetentionCandidates()
   })
   readonly workspaceViewers = new WorkspaceViewers(Date.now)
-  // Coalesce streaming-title bursts into one re-list notice; store writes already landed.
-  private readonly sortStampNotices = createKeyedTrailingEdgeCoalescer(
-    (worktreeId) => this.notifySortStampsChanged(worktreeId),
-    { flushMs: 50, maxWaitMs: 250 }
-  )
   readonly sortStamps = new SortStampsProducer({
     store: () => this.store,
     isWriteFenced: (worktreeId) =>
@@ -112,7 +106,7 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
     )
     // Every unread write (window, phone, CLI, activation) lands in a record; a Done may re-tier.
     this.store?.onStateWritten?.((domains) => {
-      if (domains === undefined || WORKTREE_METADATA_DOMAINS.some((d) => domains.includes(d))) {
+      if (domains === undefined || WORKSPACE_RECORD_DOMAINS.some((d) => domains.includes(d))) {
         this.sortStamps.noteRecordsWritten()
       }
     })
@@ -211,16 +205,6 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
           getProjectGroups: () => store.getProjectGroups?.() ?? []
         })
       : null
-  }
-
-  // Metadata only: clients re-list the record, and the cached git scans stay.
-  private notifySortStampsChanged(worktreeId: string): void {
-    if (parseWorkspaceKey(worktreeId)?.type === 'folder') {
-      this.notifyFolderWorkspaceChanged()
-      return
-    }
-    this.invalidateResolvedWorktreeCache()
-    this.notifyWorktreesChanged(getRepoIdFromWorktreeId(worktreeId), { invalidateGitScans: false })
   }
 
   override attachAgentStatusStore(store: AgentStatusStoreView): () => void {

@@ -3,12 +3,13 @@ import {
   providerDiagnostic,
   providerDiagnosticOf,
   type SubmissionRejectionFact
-} from '../../shared/agent-session-failure'
+} from '../../shared/agent-session/failures/agent-session-failure'
+import '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import {
   AgentSessionAcquisitionExitProvenError,
   AgentSessionAcquisitionRootExitObservedError
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { providerStartupFailureFact } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
+} from '../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
+import { providerStartupFailureFact } from '../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import {
   providerSpawnAbsent,
   withProviderSpawnAbsence

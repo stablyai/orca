@@ -1,4 +1,4 @@
-import type { LinearClient, LinearClientOptions } from '@linear/sdk'
+import type { LinearClient, LinearClientOptions, LinearError } from '@linear/sdk'
 import { createRequire } from 'node:module'
 import { recoverLinearQuery } from './linear-request-recovery'
 
@@ -6,6 +6,7 @@ import { recoverLinearQuery } from './linear-request-recovery'
 export type LinearSdkModule = {
   LinearClient: new (options: LinearClientOptions) => LinearClient
   AuthenticationLinearError: new (...args: never[]) => Error
+  LinearError: new (...args: never[]) => LinearError
 }
 
 // Lazy synchronous loading keeps SDK parsing off startup; a separate module lets tests mock createRequire access.

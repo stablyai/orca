@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
 import { OptionalWorkerLaunchPreference } from './orchestration-worker-start-params'
+import { CrossStoreParentRefSchema } from './cross-store-parent-params'
 
 export const FederationAttachStartParams = z.object({
   /** Omitted by v1.4.198 coordinators; the worker host then mints a stub home Run. */
@@ -25,5 +26,12 @@ export const FederationAttachStartParams = z.object({
   model: OptionalWorkerLaunchPreference,
   effort: OptionalWorkerLaunchPreference,
   timeoutMs: OptionalFiniteNumber,
-  devMode: z.boolean().optional()
+  devMode: z.boolean().optional(),
+  /** The coordinator's workspace, for `--on <server> --worktree new-child`; sent only to servers
+   * advertising worktree.lineage.crossMachine. The new worktree nests under it. */
+  crossStoreParent: CrossStoreParentRefSchema.optional(),
+  /** Orchestration picked the parent; omitted by older coordinators, whose children record `cli`. */
+  crossStoreParentInferredFrom: z.literal('orchestration-context').optional()
 })
+
+export type FederationAttachStartInput = z.infer<typeof FederationAttachStartParams>

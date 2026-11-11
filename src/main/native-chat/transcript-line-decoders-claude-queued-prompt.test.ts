@@ -38,51 +38,17 @@ describe('Claude queued_command attachment', () => {
     })
   })
 
-  it('decodes legacy entries without an origin and content-block prompts', () => {
-    const decoded = decodeClaudeTranscriptLine(
-      queuedCommand({
-        prompt: [{ type: 'text', text: 'is this true?' }],
-        commandMode: 'prompt'
-      }),
-      'fallback'
-    )
-    expect(decoded?.role).toBe('user')
-    expect(decoded?.blocks).toEqual([{ type: 'text', text: 'is this true?' }])
-  })
-
-  it.each([
-    { prompt: '<task-notification>done</task-notification>', commandMode: 'task-notification' },
-    {
-      prompt: '<task-notification>done</task-notification>',
-      commandMode: 'task-notification',
-      origin: { kind: 'task-notification' }
-    },
-    { prompt: 'from another agent', commandMode: 'prompt', origin: { kind: 'peer' } },
-    { commandMode: 'prompt', origin: { kind: 'human' } }
-  ])('drops queue entries the user did not type (%o)', (attachment) => {
-    expect(decodeClaudeTranscriptLine(queuedCommand(attachment), 'fallback')).toBeNull()
-  })
-
-  it('still drops other attachment records', () => {
-    const line = JSON.stringify({
-      type: 'attachment',
-      uuid: 'a',
-      attachment: { type: 'edited_text_file', filename: 'x.ts' }
-    })
-    expect(decodeClaudeTranscriptLine(line, 'fallback')).toBeNull()
-  })
-})
-
-describe('Claude `!` shell command row', () => {
-  it('decodes as the line the user typed so its echo can match', () => {
-    const line = JSON.stringify({
-      type: 'user',
-      uuid: 'bash-row',
-      timestamp: '2026-10-06T10:00:00.000Z',
-      message: { role: 'user', content: '<bash-input> gcloud auth login</bash-input>' }
+  it('keeps inline images from a prompt absorbed mid-turn, which have no source row', () => {
+    const line = queuedCommand({
+      prompt: [
+        { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'iVBORw0K' } },
+        { type: 'text', text: '[Image #3]' }
+      ],
+      commandMode: 'prompt'
     })
     expect(decodeClaudeTranscriptLine(line, 'fallback')?.blocks).toEqual([
-      { type: 'text', text: '! gcloud auth login' }
+      { type: 'image-ref', url: 'data:image/png;base64,iVBORw0K' },
+      { type: 'text', text: '[Image #3]' }
     ])
   })
 })

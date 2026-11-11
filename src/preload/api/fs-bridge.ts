@@ -1,29 +1,31 @@
-import type { PathExistenceResult } from '../../shared/path-existence-batch'
+import type { PathExistenceResult } from '../../shared/file-access/path-existence-batch'
 import { ipcRenderer, webUtils } from 'electron'
 import type {
   PrepareDroppedPathsRequest,
   PreparedDroppedPaths
-} from '../../shared/native-file-drop-preparation'
+} from '../../shared/file-import/native-file-drop-preparation'
 import type { SshMutationExpectation } from '../../shared/ssh-types'
-import type { LocalFileAccess } from '../../shared/local-file-access'
-import type { RemoteFilePreviewAddress } from '../../shared/remote-file-preview-address'
-import type { FileBytesWritePrecondition } from '../../shared/file-bytes-write'
+import type { LocalFileAccess } from '../../shared/file-access/local-file-access'
+import type { RemoteFilePreviewAddress } from '../../shared/file-preview/remote-file-preview-address'
+import type { FileBytesWritePrecondition } from '../../shared/file-write/file-bytes-write'
 import type {
   FileWriteDiskPrecondition,
   FileWriteResult
-} from '../../shared/file-write-disk-precondition'
-import type { RuntimeUploadFileStreamRequest } from '../../shared/runtime-upload-staging-contract'
+} from '../../shared/file-write/file-write-disk-precondition'
+import type {
+  RuntimeUploadFileStreamRequest,
+  StagedRuntimeUploadSource as StagedExternalImportSource
+} from '../../shared/file-import/runtime-upload-staging-contract'
 import type {
   AgentSessionAttachmentPathUploadResult,
   AgentSessionAttachmentUploadTarget
-} from '../../shared/agent-session-attachments'
-import type { SearchResult } from '../../shared/code-search-types'
-import type { FsChangedPayload } from '../../shared/filesystem-entry-types'
+} from '../../shared/agent-session/agent-session-attachments'
+import type { SearchResult } from '../../shared/file-search/code-search-types'
+import type { FsChangedPayload } from '../../shared/file-watch/filesystem-change-event'
 import type {
   ImportItemResult,
-  ResolveDroppedPathsResult,
-  StagedExternalImportSource
-} from '../../shared/filesystem-import-result-types'
+  ResolveDroppedPathsResult
+} from '../../shared/file-import/filesystem-import-result'
 import type {
   LocalLogTailChangedPayload,
   LocalLogTailReadArgs,
@@ -190,6 +192,8 @@ export const fsApi = {
     wakeWslDistro?: boolean
   }): Promise<{ size: number; isDirectory: boolean; mtime: number }> =>
     ipcRenderer.invoke('fs:stat', args),
+  hasSymlinkBelowRoot: (args: { rootPath: string; path: string }): Promise<boolean> =>
+    ipcRenderer.invoke('fs:hasSymlinkBelowRoot', args),
   pathsExist: (args: {
     filePaths: string[]
     connectionId?: string

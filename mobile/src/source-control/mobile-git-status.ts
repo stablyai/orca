@@ -1,22 +1,23 @@
 import { translate } from '../i18n/mobile-i18n'
-import type { GitFileStatus, GitStagingArea } from '../../../src/shared/git-status-types'
+import { colors } from '../theme/mobile-theme'
+import type { GitFileStatus, GitStagingArea } from '../../../src/shared/git/status/git-status-types'
 import {
   buildSourceControlDisplaySections,
   groupSourceControlEntries,
   resolveSourceControlGroupOrder,
   type SourceControlDisplaySectionArea,
   type SourceControlDisplaySectionId
-} from '../../../src/shared/source-control-section-order'
-import { getUnstageAllPaths } from '../../../src/shared/source-control-discard-all-sequence'
+} from '../../../src/shared/source-control/listing/source-control-section-order'
+import { getUnstageAllPaths } from '../../../src/shared/source-control/listing/source-control-discard-all-sequence'
 import {
   canDiscardStatusEntry,
   canStageStatusEntry,
   canUnstageStatusEntry,
   getConflictResolutions,
   type ConflictResolution
-} from '../../../src/shared/source-control-entry-actions'
+} from '../../../src/shared/source-control/listing/source-control-entry-actions'
 import type { SourceControlGroupOrder } from '../../../src/shared/ui-chrome-types'
-import type { RpcResponse } from '../transport/types'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import type {
   MobileGitStatusEntry,
   MobileGitStatusHostPayload,
@@ -49,8 +50,8 @@ export type MobileSourceControlSection<TEntry extends MobileGitStatusEntry = Mob
 function sectionTitles(): Record<SourceControlDisplaySectionId, string> {
   return {
     conflicts: translate('sourceControl.gitStatus.conflicts', 'Conflicts'),
-    unstaged: translate('sourceControl.gitStatus.changes', 'Changes'),
-    staged: translate('sourceControl.gitStatus.stagedChanges', 'Staged Changes')
+    unstaged: translate('sourceControl.gitStatus.uncommitted', 'Uncommitted'),
+    staged: translate('sourceControl.gitStatus.staged', 'Staged')
   }
 }
 
@@ -134,4 +135,21 @@ export function isMobileGitTransientRefreshError(
 ) {
   const normalized = message?.trim().toLowerCase()
   return code === 'request_aborted' || normalized === 'aborting' || normalized === 'request_aborted'
+}
+
+export function statusColor(status: MobileGitFileStatus): string {
+  switch (status) {
+    case 'added':
+    case 'copied':
+      return colors.statusGreen
+    case 'deleted':
+      return colors.statusRed
+    case 'renamed':
+      return colors.accentBlue
+    case 'untracked':
+      return colors.statusAmber
+    case 'modified':
+    default:
+      return colors.textSecondary
+  }
 }

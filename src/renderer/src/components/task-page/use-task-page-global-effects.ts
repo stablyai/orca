@@ -1,6 +1,6 @@
 import type { TaskPageJiraSummaryGenerationModel } from './jira/use-task-page-jira-summary-generation'
 import { useEffect } from 'react'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationModel) {
   const {
     closeTaskPage,
@@ -17,7 +17,7 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
     preflightStatusCurrent,
     linearStatusReady,
     jiraStatusReady,
-    tasksLoading,
+    githubListPending,
     tasksRefreshing,
     tasksFiltering,
     dialogWorkItem,
@@ -27,7 +27,7 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
     newLinearIssueOpen,
     newJiraIssueOpen
   } = model
-  const githubTasksBusy = tasksLoading || tasksRefreshing || tasksFiltering
+  const githubTasksBusy = githubListPending || tasksRefreshing || tasksFiltering
   useEffect(() => {
     // Why: when a modal is open, let it own Esc dismissal.
     if (

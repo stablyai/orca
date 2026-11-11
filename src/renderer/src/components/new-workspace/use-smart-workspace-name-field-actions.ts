@@ -2,15 +2,15 @@ import { useCallback } from 'react'
 import type React from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/github-work-item-source-lookup'
+import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
 import {
   applyWorkspaceEmojiSuggestion,
   type WorkspaceEmojiReplacement,
-  type getActiveWorkspaceEmojiShortcode,
-  type WorkspaceEmojiSuggestion
-} from '@/lib/workspace-emoji-shortcodes'
+  type getActiveWorkspaceEmojiShortcode
+} from '@/lib/workspace/display/workspace-emoji-shortcodes'
+import type { StandardEmojiShortcodeEntry } from '../../../../shared/emoji-shortcode-catalog'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import { buildTaskSourceContextFromRepo } from '../../../../shared/task-source-context'
+import { buildTaskSourceContextFromRepo } from '../../../../shared/work-items/task-source-context'
 import type {
   RepoOption,
   RowEntry,
@@ -19,9 +19,9 @@ import type {
 import { getRepoSlugCached, sameSlug } from './smart-workspace-repo-slug'
 import type { useWorkItemSourceSearch } from './use-work-item-source-search'
 import type { useSmartWorkspaceFieldFocusControls } from './use-smart-workspace-field-focus-controls'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import type { useWorkItemSourcePresentation } from './use-work-item-source-presentation'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 type Foundation = ReturnType<typeof useWorkItemSourceSearch> &
   SmartWorkspaceNameFieldProps &
@@ -139,7 +139,7 @@ export function useSmartWorkspaceNameFieldActions(
     ]
   )
   const handleEmojiSelect = useCallback(
-    (suggestion: WorkspaceEmojiSuggestion): void => {
+    (suggestion: StandardEmojiShortcodeEntry): void => {
       if (!activeEmojiShortcode) {
         return
       }

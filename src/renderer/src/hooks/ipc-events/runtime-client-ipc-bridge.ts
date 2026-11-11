@@ -1,27 +1,33 @@
-import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/pty-shutdown-exit-deferral'
-import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
-import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
-import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat-launch-draft-runtime-resolution'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import '@/store/slices/linear/linear-issue-read'
+import { consumeLinearIssueRead } from '@/store/slices/linear/linear-issue-read-lifecycle'
+import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/pty-transport/output/terminal-side-effect-facts-handler'
+import { emitAutomationsChangedWindowEvent } from '@/components/automations/events/automations-changed-window-event'
+import { applyHostWorkspaceRowEvent } from './worktree-metadata-set-events'
+import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat/launch-drafts/native-chat-launch-draft-runtime-resolution'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import {
   refreshRuntimeEnvironmentCatalog,
   setRuntimeEnvironmentCatalogRefresher
-} from '@/runtime/runtime-environment-pairing-refresh'
+} from '@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
 import {
   applyRuntimeEnvironmentSshStateChanged,
   hydrateRuntimeEnvironmentSshState,
   refreshRuntimeEnvironmentSshTargetMetadata
-} from '@/runtime/runtime-environment-ssh-state'
-import { subscribeRuntimeClientEvents } from '@/runtime/runtime-client-events'
+} from '@/runtime/hosts/ssh/runtime-environment-ssh-state'
+import { subscribeRuntimeClientEvents } from '@/runtime/rpc/subscriptions/runtime-client-events'
+import { hostsBrowserPagesFor } from '@/runtime/browser/client-hosting/browser-client-host-request-answer'
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { getEnvironmentSshStateGeneration } from '@/store/slices/runtime-environment-ssh'
-import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
+import { getEnvironmentSshStateGeneration } from '@/store/slices/ssh/runtime-environment-ssh'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { getRepoExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
 import { navigationTargetsClients } from '../../../../shared/runtime-navigation'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import { invalidateRemoteWorktreeLineage } from '../../store/slices/worktrees/metadata/worktree-lineage-readiness'
-import { adoptFromEndpoint, type OwnedWorktreeEvent } from '../../store/adopt-from-endpoint'
+import {
+  adoptFromEndpoint,
+  type OwnedWorktreeEvent
+} from '../../store/host-catalog/endpoint-catalog-adoption'
 import { createRuntimeClientEventsSync } from '../runtime-client-events-sync'
 import {
   createRuntimeProjectRefreshScheduler,
@@ -97,8 +103,15 @@ export function registerRuntimeClientIpcBridge(
     event: RuntimeClientEvent,
     generation = getEnvironmentSshStateGeneration(environmentId)
   ): void => {
-    if (event.type === 'worktreeTerminalSleepState') {
-      applyHostWorktreeTerminalSleepState(environmentId, event)
+    if (event.type === 'notificationAttentionAcknowledged') {
+      void window.api.notifications
+        .acknowledgeAttention(event.acknowledgement, toRuntimeExecutionHostId(environmentId))
+        .catch((error: unknown) =>
+          console.warn('[notifications] Remote acknowledgement failed', error)
+        )
+      return
+    }
+    if (applyHostWorkspaceRowEvent(environmentId, event)) {
       return
     }
     if (event.type === 'terminalSideEffects') {
@@ -165,16 +178,18 @@ export function registerRuntimeClientIpcBridge(
       return
     }
     if (event.type === 'linearLinkedIssueUpdated') {
-      void useAppStore
-        .getState()
-        .refreshLinearIssue(event.identifier, event.workspaceId)
-        .catch((error) => {
-          console.error('Failed to refresh updated Linear issue:', error)
-        })
+      void consumeLinearIssueRead(
+        useAppStore.getState().refreshLinearIssue(event.identifier, event.workspaceId)
+      ).catch((error) => {
+        console.error('Failed to refresh updated Linear issue:', error)
+      })
       return
     }
     // This window builds its sidebar from its own store, never from a host's phone feed.
     if (event.type === 'sidebarInputsChanged') {
+      return
+    }
+    if (event.type !== 'activateWorktree') {
       return
     }
     // Older hosts broadcast local/CLI activation without an address; that is not this viewer's intent.
@@ -221,7 +236,7 @@ export function registerRuntimeClientIpcBridge(
   const runtimeClientEventsSync = createRuntimeClientEventsSync({
     getDesiredEnvironmentIds: () => getRuntimeClientEventEnvironmentIds(useAppStore.getState()),
     getSubscriptionKey: (environmentId) => buildRuntimeClientEventEnvironmentKey([environmentId]),
-    subscribe: (environmentId, onEvent, onError, isCurrent) => {
+    subscribe: (environmentId, onEvent, onError, isCurrent, onClose) => {
       const sshGeneration = getEnvironmentSshStateGeneration(environmentId)
       const runtimeGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
       const runtimeRevision = getRuntimeEnvironmentRevision(environmentId)
@@ -256,9 +271,10 @@ export function registerRuntimeClientIpcBridge(
               useAppStore.getState().markEnvironmentSshStateStale(environmentId),
             hydrateEnvironmentSshState: () =>
               hydrateRuntimeEnvironmentSshState(environmentId, { force: true }),
-            sync: runtimeClientEventsSync.sync
+            sync: () => runtimeClientEventsSync.sync([environmentId])
           })
-        }
+        },
+        { hostsBrowserPages: hostsBrowserPagesFor(environmentId), onClose }
       )
       return subscription
     },

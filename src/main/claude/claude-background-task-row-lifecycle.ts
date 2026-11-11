@@ -1,8 +1,10 @@
+import type { ClaudeTaskInvocation } from './claude-task-invocations'
+import type { AgentJournalProducerLinkage } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   canReplaceBackgroundTaskState,
   isSettledBackgroundTaskState
 } from '../../shared/native-chat/input/native-chat-background-task-row'
-import type { NativeChatBackgroundTaskBlock } from '../../shared/native-chat-types'
+import type { NativeChatBackgroundTaskBlock } from '../../shared/native-chat/native-chat-types'
 import type { ClaudeSubagentIds } from './claude-subagent-id-aliases'
 import {
   classifyClaudeBackgroundTaskKind,
@@ -19,6 +21,8 @@ import {
 
 export type ClaudeBackgroundTaskRow = {
   block: NativeChatBackgroundTaskBlock
+  linkage?: AgentJournalProducerLinkage
+  invocation?: ClaudeTaskInvocation
   lastSerialized: string | null
   /** Immutable alias for persistence/coalescing; the final frame may enrich the block's parent. */
   toolUseId?: string
@@ -207,4 +211,21 @@ export function reviseClaudeBackgroundTaskRow(
     }
   }
   row.block = next
+}
+
+export function attributeClaudeBackgroundTaskRow(id: string, row: ClaudeBackgroundTaskRow): void {
+  const invocation = row.invocation
+  const toolUseId = invocation?.toolUseId
+  if (toolUseId && row.block.parentToolUseId === undefined) {
+    row.block = { ...row.block, parentToolUseId: toolUseId }
+  }
+  const parent = invocation?.reportedParentTaskId
+  if (parent) {
+    row.linkage = {
+      agentId: id,
+      parentAgentId: parent,
+      producerKind: 'background',
+      ...(toolUseId ? { providerParentRef: toolUseId } : {})
+    }
+  }
 }

@@ -1,43 +1,42 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore
-} from 'react'
-import { mobileStructuredSessionStatusFeed } from '../session/mobile-structured-session-status-feed'
-import type { AgentSessionConversationNames } from '../../../src/shared/agent-session-conversation-names'
-import { useForceReconnect } from '../transport/host-client-hooks'
-import { useWorkspaceClient } from '../transport/use-workspace-client'
-import type { RpcClient } from '../transport/rpc-client'
-import { connectionRetryAction } from '../transport/connection-retry-action'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { mobileStructuredSessionStatusFeed } from '../session/native-chat/agent-session/mobile-structured-session-status-feed'
+import type { AgentSessionConversationNames } from '../../../src/shared/agent-session/agent-session-conversation-names'
+import { useForceReconnect } from '../transport/connection/host-client-hooks'
+import { useWorkspaceClient } from '../worktree/use-workspace-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { connectionRetryAction } from '../transport/connection/connection-retry-action'
 import type {
   AiVaultScanIssue,
   AiVaultScope,
   AiVaultSession
-} from '../../../src/shared/ai-vault-types'
+} from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import type { Worktree } from '../worktree/workspace-list-types'
+import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
+import { defineHostQuery, readHostQueryLive, useHostQuery } from '../query/host-query'
+import { hostScreenState } from '../query/host-query-screen-state'
 import {
   deriveMobileAiVaultScopePaths,
-  mobileAiVaultScanScopePaths
+  mobileAiVaultScanScopeArgs
 } from './agent-history-scope-paths'
 import {
-  agentHistoryHostStatusRead,
+  agentHistoryCapabilityRead,
   agentHistorySessionScan
 } from './mobile-agent-history-operations'
-import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
+import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-message'
 import { MOBILE_AI_VAULT_CAPABILITY } from './agent-history-capability'
+import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export { MOBILE_AI_VAULT_CAPABILITY }
 
 // Match desktop SESSION_LIMIT=500 for recency only; host separately caps in-scope union, so large responses still need virtualization/lazy previews.
 const MOBILE_AI_VAULT_SESSION_LIMIT = 500
+const HISTORY_FAMILY = 'aiVault.listSessions'
 const EMPTY_NAMES: AgentSessionConversationNames = new Map()
 const noSubscription = () => () => {}
 const noNames = () => EMPTY_NAMES
+const noRevision = () => 0
 
 export type AgentHistoryScreenState =
   | { kind: 'loading' }
@@ -49,9 +48,74 @@ export type AgentHistoryScreenState =
       issues: AiVaultScanIssue[]
     }
 
-type FetchedHistoryState =
-  | Exclude<AgentHistoryScreenState, { kind: 'ready' }>
-  | (Extract<AgentHistoryScreenState, { kind: 'ready' }> & { hostId: string; client: RpcClient })
+// Rows keep the scope paths they were scanned for, so a revisit filters them before worktree.ps lands.
+type AgentHistoryRead =
+  | { kind: 'unsupported' }
+  | {
+      kind: 'ready'
+      sessions: AiVaultSession[]
+      issues: AiVaultScanIssue[]
+      scopeFilterPaths: string[]
+      activeWorktreePath: string | null
+      // The status feed's association revision when the scan started; a later one makes these rows stale.
+      associationRevision: number
+    }
+
+type ScanScope = { scopeFilterPaths: string[]; activeWorktreePath: string | null }
+
+async function readAgentHistory(
+  client: RpcClient,
+  scope: AiVaultScope,
+  scan: ScanScope,
+  force: boolean,
+  associationRevision: number
+): Promise<AgentHistoryRead> {
+  // Gate capability before calling RPC absent on older hosts.
+  const statusReply = await agentHistoryCapabilityRead.request(client)
+  const status = interpretOrThrowRefusalMessage(
+    () => agentHistoryCapabilityRead.interpret(statusReply),
+    translate('agentHistory.useAgentHistoryState.hostUnreachable', 'Unable to reach host')
+  )
+  if (!status.capabilities?.includes(MOBILE_AI_VAULT_CAPABILITY)) {
+    return { kind: 'unsupported' }
+  }
+  const reply = await agentHistorySessionScan.request(client, {
+    limit: MOBILE_AI_VAULT_SESSION_LIMIT,
+    force,
+    // From the query's own scope key, so rows cached under Workspace are always Workspace-only ones.
+    ...mobileAiVaultScanScopeArgs(scope, scan.scopeFilterPaths)
+  })
+  const result = interpretOrThrowRefusalMessage(
+    () => agentHistorySessionScan.interpret(reply),
+    translate('agentHistory.useAgentHistoryState.loadFailed', 'Unable to load agent sessions')
+  )
+  return {
+    kind: 'ready',
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reader checks both containers; the rows stay the host's own records because `agent` is a vocabulary this client echoes back on resume. aivault-history-screen-listed `normal` records a full row: every member the cards and the resume path read unguarded.
+    sessions: result.sessions as AiVaultSession[],
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same reader, same container check; the issue rows are the host's AiVaultScanIssue, classified by `kind` like desktop History (an unknown kind still reads as a notice).
+    issues: result.issues as AiVaultScanIssue[],
+    ...scan,
+    associationRevision
+  }
+}
+
+// Keyed by workspace and scope, not scan paths: those need worktree.ps, and a revisit paints before it lands.
+// Initial/revisit loads reuse host's 15s cache; only explicit refresh sends force.
+function agentHistoryQuery(
+  scan: ScanScope,
+  force: boolean,
+  startRevision: (scope: AiVaultScope) => number
+) {
+  return defineHostQuery({
+    family: HISTORY_FAMILY,
+    staleTime: 30_000,
+    // No desktop signal for new transcripts, so foreground revalidates once older than 30 s.
+    refetchOnWindowFocus: true,
+    fetch: (client, _target, input: { scope: AiVaultScope }) =>
+      readAgentHistory(client, input.scope, scan, force, startRevision(input.scope))
+  })
+}
 
 export type MobileAgentHistoryStateParams = {
   hostId: string
@@ -66,220 +130,101 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
   const { hostId, worktreeId, worktrees, worktreesLoaded } = params
   const { client, state: connState } = useWorkspaceClient(hostId)
   const forceReconnect = useForceReconnect()
+  const queryClient = useQueryClient()
+  const exec = useWorkspaceExecutionHost() ?? 'local'
   const [scope, setScope] = useState<AiVaultScope>('workspace')
-  const [screenState, setScreenState] = useState<FetchedHistoryState>({ kind: 'loading' })
-  const clientGeneration = client?.getGeneration?.() ?? 0
-  const [hostStatusProbe, setHostStatusProbe] = useState<{
-    hostId: string
-    client: RpcClient
-    generation: number
-    result: unknown
-  } | null>(null)
-  const hostStatusResult =
-    connState === 'connected' &&
-    hostStatusProbe?.hostId === hostId &&
-    hostStatusProbe.client === client &&
-    hostStatusProbe.generation === clientGeneration
-      ? hostStatusProbe.result
-      : null
   const [refreshing, setRefreshing] = useState(false)
-  const generationRef = useRef(0)
-  const mountedRef = useRef(true)
-
-  useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-    }
-  }, [])
 
   const activeWorktree = useMemo(
     () => worktrees.find((worktree) => worktree.worktreeId === worktreeId) ?? null,
     [worktrees, worktreeId]
   )
-  const activeWorktreePath = activeWorktree?.path ?? null
-  // Reuse host hint prefixes for client narrowing: host union only widens; All is not narrowed.
-  const scopeFilterPaths = useMemo(
-    () => deriveMobileAiVaultScopePaths(scope, activeWorktree, worktrees),
+  const liveScan = useMemo(
+    (): ScanScope => ({
+      // Reuse host hint prefixes for client narrowing: host union only widens; All is not narrowed.
+      scopeFilterPaths: deriveMobileAiVaultScopePaths(scope, activeWorktree, worktrees),
+      activeWorktreePath: activeWorktree?.path ?? null
+    }),
     [scope, activeWorktree, worktrees]
   )
-
+  // Subscribed before the query so the feed's stream opens ahead of the first read, on the page bridge as natively.
   const feed = useMemo(() => (client ? mobileStructuredSessionStatusFeed(client) : null), [client])
   const names = useSyncExternalStore(
     feed?.subscribe ?? noSubscription,
     feed?.getNamingSnapshot ?? noNames,
     noNames
   )
-
-  const identity = useMemo(
-    () => ({
-      hostId,
-      client,
-      clientGeneration,
-      connState,
-      worktreeId,
-      worktrees,
-      worktreesLoaded,
-      scope
-    }),
-    [hostId, client, clientGeneration, connState, worktreeId, worktrees, worktreesLoaded, scope]
+  const associationRevision = useSyncExternalStore(
+    feed?.subscribe ?? noSubscription,
+    feed?.getAssociationRevision ?? noRevision,
+    noRevision
   )
-  const identityRef = useRef(identity)
-  useLayoutEffect(() => {
-    identityRef.current = identity
-  }, [identity])
-  const activeLoads = useRef(0)
-  const pendingAssociationLoad = useRef<(() => void) | null>(null)
-
-  const loadSessions = useCallback(
-    async (options: { scope: AiVaultScope; force: boolean }): Promise<void> => {
-      const requestIdentity = identityRef.current
-      const associationRevision = feed?.getAssociationRevision()
-      const generation = generationRef.current + 1
-      generationRef.current = generation
-      const isCurrent = () =>
-        mountedRef.current &&
-        identityRef.current === requestIdentity &&
-        associationRevision === feed?.getAssociationRevision() &&
-        generationRef.current === generation &&
-        (client?.getGeneration?.() ?? 0) === clientGeneration
-
-      if (!client || connState !== 'connected') {
-        if (isCurrent()) {
-          setHostStatusProbe(null)
-          const message = t('agentHistory.useAgentHistoryState.waitingForHost', 'Waiting for host…')
-          // Keep stale rows visible during reconnect reloads instead of replacing them with full-screen error, matching host list.
-          setScreenState((prev) => (prev.kind === 'ready' ? prev : { kind: 'error', message }))
-        }
-        return
-      }
-
-      setScreenState((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }))
-      activeLoads.current += 1
-      try {
-        // Gate capability before calling RPC absent on older hosts.
-        const statusReply = await agentHistoryHostStatusRead.request(client)
-        if (!isCurrent()) {
-          return
-        }
-        const status = interpretOrThrowRefusalMessage(
-          () => agentHistoryHostStatusRead.interpret(statusReply),
-          t('agentHistory.useAgentHistoryState.hostUnreachable', 'Unable to reach host')
-        )
-        setHostStatusProbe({ hostId, client, generation: clientGeneration, result: status })
-        if (!status.capabilities?.includes(MOBILE_AI_VAULT_CAPABILITY)) {
-          setScreenState({ kind: 'unsupported' })
-          return
-        }
-
-        // Wait for worktree list before scoped fetch to avoid unrelated history flash; once loaded, proceed even if workspace is missing to avoid stuck spinner.
-        if (options.scope !== 'all' && !activeWorktree && !worktreesLoaded) {
-          if (isCurrent()) {
-            setScreenState((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }))
-          }
-          return
-        }
-
-        const scopePaths = mobileAiVaultScanScopePaths(
-          deriveMobileAiVaultScopePaths(options.scope, activeWorktree, worktrees)
-        )
-        const reply = await agentHistorySessionScan.request(client, {
-          limit: MOBILE_AI_VAULT_SESSION_LIMIT,
-          force: options.force,
-          scopePaths
-        })
-        if (!isCurrent()) {
-          return
-        }
-        const result = interpretOrThrowRefusalMessage(
-          () => agentHistorySessionScan.interpret(reply),
-          t('agentHistory.useAgentHistoryState.loadFailed', 'Unable to load agent sessions')
-        )
-        setScreenState({
-          kind: 'ready',
-          hostId,
-          client,
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reader checks both containers; the rows stay the host's own records because `agent` is a vocabulary this client echoes back on resume. aivault-history-screen-listed `normal` records a full row: every member the cards and the resume path read unguarded.
-          sessions: result.sessions as AiVaultSession[],
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same reader, same container check; the issue rows are the host's AiVaultScanIssue and are only counted, never read member-wise (MobileAgentSessionHistoryPanel.tsx:335).
-          issues: result.issues as AiVaultScanIssue[]
-        })
-      } catch (err) {
-        if (!isCurrent()) {
-          return
-        }
-        const message =
-          err instanceof Error
-            ? err.message
-            : t('agentHistory.useAgentHistoryState.loadFailed', 'Unable to load agent sessions')
-        setHostStatusProbe(null)
-        setScreenState({ kind: 'error', message })
-      } finally {
-        activeLoads.current -= 1
-        if (activeLoads.current === 0) {
-          const followUp = pendingAssociationLoad.current
-          pendingAssociationLoad.current = null
-          followUp?.()
-        }
-      }
+  // The revision each scope's latest read started at, kept whether that read lands or fails.
+  const startedRef = useRef(new Map<AiVaultScope, number>())
+  const startRevision = useCallback(
+    (forScope: AiVaultScope) => {
+      const revision = feed?.getAssociationRevision() ?? 0
+      startedRef.current.set(forScope, revision)
+      return revision
     },
-    [
-      activeWorktree,
-      client,
-      clientGeneration,
-      connState,
-      feed,
-      hostId,
-      worktrees,
-      worktreesLoaded,
-      t
-    ]
+    [feed]
   )
+  const historyQuery = useMemo(
+    () => agentHistoryQuery(liveScan, false, startRevision),
+    [liveScan, startRevision]
+  )
+  const target = useMemo(() => ({ exec, worktree: worktreeId }), [exec, worktreeId])
+  const input = useMemo(() => ({ scope }), [scope])
+  const host = useMemo(() => ({ hostId, client }), [hostId, client])
+  // Wait for worktree list before fetching to avoid unrelated history; once loaded, proceed even if workspace is missing.
+  // Not gated on the connection: the query keeps its connected-edge watcher, and a read while down fails fast.
+  const enabled = client !== null && worktreesLoaded
+  const result = useHostQuery(historyQuery, host, target, input, { enabled })
+  const { data: read, error, isFetching, isRefetching, refetch } = result
 
-  // Initial/reconnect/scope loads reuse host’s 15s cache; only explicit refresh bypasses it.
+  // A changed association moves rows between providers and chats: a scope whose last read started before it
+  // reads again once nothing is out. Cached rows from an earlier visit carry their own start revision.
+  const cachedRevision = read?.kind === 'ready' ? read.associationRevision : undefined
   useEffect(() => {
-    void loadSessions({ scope, force: false })
-  }, [loadSessions, scope])
-
-  useEffect(() => {
-    if (!feed) {
-      return
+    const started = startedRef.current.get(scope) ?? cachedRevision
+    const canRead = enabled && connState === 'connected'
+    if (canRead && !isFetching && started !== undefined && started !== associationRevision) {
+      void refetch()
     }
-    let revision = feed.getAssociationRevision()
-    const stop = feed.subscribe(() => {
-      const next = feed.getAssociationRevision()
-      if (next === revision) {
-        return
-      }
-      revision = next
-      const reload = () => void loadSessions({ scope, force: false })
-      if (activeLoads.current > 0) {
-        pendingAssociationLoad.current = reload
-      } else {
-        reload()
-      }
-    })
-    return () => {
-      stop()
-      pendingAssociationLoad.current = null
-    }
-  }, [feed, loadSessions, scope])
+  }, [enabled, connState, isFetching, scope, cachedRevision, associationRevision, refetch])
 
   const onSelectScope = useCallback((nextScope: AiVaultScope) => {
     setScope(nextScope)
   }, [])
 
   const onRefresh = useCallback(async () => {
+    // Before worktree.ps lands the scan has no scope paths, and would cache every workspace's rows as this scope's.
+    if (!client || connState !== 'connected' || !worktreesLoaded) {
+      return
+    }
     setRefreshing(true)
     try {
-      // Refresh with force:true bypasses 15s TTL and joins inflight scan; cached result would show no change.
-      await loadSessions({ scope, force: true })
+      // force:true bypasses the host's 15s TTL and joins its inflight scan; a cached result would show no change.
+      const forced = agentHistoryQuery(liveScan, true, startRevision)
+      await readHostQueryLive(queryClient, forced, { hostId, client }, target, input, {
+        replace: true
+      })
+    } catch {
+      // The query keeps its rows and records the error.
     } finally {
-      if (mountedRef.current) {
-        setRefreshing(false)
-      }
+      setRefreshing(false)
     }
-  }, [loadSessions, scope])
+  }, [
+    client,
+    connState,
+    hostId,
+    input,
+    liveScan,
+    queryClient,
+    startRevision,
+    target,
+    worktreesLoaded
+  ])
 
   const retry = useMemo(
     () =>
@@ -287,37 +232,61 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
         hostId,
         needsReconnect: connState !== 'connected',
         forceReconnect,
-        reload: () => void loadSessions({ scope, force: false })
+        reload: () => void refetch()
       }),
-    [connState, forceReconnect, hostId, loadSessions, scope]
+    [connState, forceReconnect, hostId, refetch]
   )
 
-  const namedScreenState = useMemo<AgentHistoryScreenState>(() => {
-    if (screenState.kind !== 'ready') {
-      return screenState
+  const screenState = useMemo((): AgentHistoryScreenState => {
+    if (read?.kind === 'unsupported') {
+      return read
     }
-    const current = screenState.hostId === hostId && screenState.client === client
-    return {
-      kind: 'ready',
-      issues: screenState.issues,
-      sessions: current
-        ? screenState.sessions.map((session) => {
-            const id = session.structuredSession?.sessionId
-            const title = id ? names.get(id)?.conversationName : null
-            return title ? { ...session, title } : session
-          })
-        : screenState.sessions
+    if (read) {
+      return {
+        kind: 'ready',
+        issues: read.issues,
+        sessions: read.sessions.map((session) => {
+          const id = session.structuredSession?.sessionId
+          const title = id ? names.get(id)?.conversationName : null
+          return title ? { ...session, title } : session
+        })
+      }
     }
-  }, [screenState, names, hostId, client])
+    switch (hostScreenState({ data: read, error, isFetching }, connState)) {
+      case 'empty-error':
+        return {
+          kind: 'error',
+          message:
+            error?.message ||
+            t('agentHistory.useAgentHistoryState.loadFailed', 'Unable to load agent sessions')
+        }
+      case 'empty-offline':
+      case 'empty-connecting':
+        if (connState !== 'connected') {
+          return {
+            kind: 'error',
+            message: t('agentHistory.useAgentHistoryState.waitingForHost', 'Waiting for host…')
+          }
+        }
+        return { kind: 'loading' }
+      case 'data':
+      case 'empty-loading':
+        return { kind: 'loading' }
+    }
+  }, [read, names, error, isFetching, connState, t])
+
+  // Until worktree.ps lands, the cached rows' own scope stands in for the live one.
+  const shownScan = !worktreesLoaded && read?.kind === 'ready' ? read : liveScan
 
   return {
     connState,
     scope,
-    screenState: namedScreenState,
+    screenState,
     refreshing,
-    hostStatusResult,
-    activeWorktreePath,
-    scopeFilterPaths,
+    // Shown rows are being re-read in the background; feeds the header's refresh line.
+    revalidating: isRefetching && !refreshing,
+    activeWorktreePath: shownScan.activeWorktreePath,
+    scopeFilterPaths: shownScan.scopeFilterPaths,
     onSelectScope,
     onRefresh,
     retry

@@ -36,11 +36,7 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'global', 'worktree', 'switch', 'jump'],
-    defaultBindings: {
-      darwin: ['Mod+J'],
-      linux: ['Mod+Shift+J'],
-      win32: ['Mod+Shift+J']
-    }
+    defaultBindings: platformBindings(['Mod+K'])
   },
   {
     id: 'worktree.navigateUp',
@@ -186,8 +182,7 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'plugins', 'extensions', 'marketplace'],
-    // Why: mirrors VS Code's Extensions view chord.
-    defaultBindings: platformBindings(['Mod+Shift+X'])
+    defaultBindings: { darwin: ['Mod+Alt+X'], linux: ['Mod+Shift+Y'], win32: ['Mod+Shift+Y'] }
   },
   {
     id: 'sidebar.left.toggle',

@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, vi } from 'vitest'
-import type { AutomationRun } from '../../../shared/automations-types'
+import type { AutomationRun } from '../../../shared/automations/history/automation-run'
 import { buildProfileStateCutoverFixture } from '../profile-state-cutover-fixture'
 import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqlite-authority'
 import { writeVersionedProfileStateExport } from '../profile-state/legacy-json/profile-state-versioned-export'
@@ -109,7 +109,10 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-export async function fixture(legacyOpenCodeGoApiKey?: string) {
+export async function fixture(
+  legacyOpenCodeGoApiKey?: string,
+  retainedChatSetting: Record<string, unknown> = {}
+) {
   const directory = mkdtempSync(join(tmpdir(), 'orca-worker-coordination-'))
   const path = join(directory, 'profile-state.db')
   const inner = new ProfileStateSqliteAuthority(path, 'coordination-test')
@@ -120,6 +123,7 @@ export async function fixture(legacyOpenCodeGoApiKey?: string) {
         ...initial,
         settings: {
           ...initial.settings,
+          ...retainedChatSetting,
           ...(legacyOpenCodeGoApiKey ? { opencodeGoApiKey: legacyOpenCodeGoApiKey } : {})
         }
       })
@@ -145,6 +149,22 @@ export async function fixture(legacyOpenCodeGoApiKey?: string) {
     }
   }
   return { store, authority, readState }
+}
+
+export async function withReopenedProfileStore(
+  saved: { settings: { workspaceDir: string } },
+  filename: string,
+  inspect: (store: Store) => void | Promise<void>
+) {
+  const store = new Store({
+    serializedState: JSON.stringify(saved),
+    dataFile: join(saved.settings.workspaceDir, filename)
+  })
+  try {
+    await inspect(store)
+  } finally {
+    await store.freezeWritesAsync()
+  }
 }
 
 // Runtime spawns bind only a pane admitted before the process starts.

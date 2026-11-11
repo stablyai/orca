@@ -1,4 +1,4 @@
-import type { DispatchContextRow } from '../../types'
+import type { DispatchContextRow } from '../orchestration-records'
 import type { OrchestrationDb } from '../orchestration-db'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
 

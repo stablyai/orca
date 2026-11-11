@@ -1,4 +1,4 @@
-import { markRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
+import { markRpcDeliveryUnknown } from '../../transport/rpc/rpc-delivery-ambiguity'
 import type { BridgeRefusal } from './bridge-caps'
 
 /** A call that needs a session the page is not in yet. Always a mount-order bug, never a retry. */
@@ -83,5 +83,13 @@ export class BridgeRpcEnvelopeInvalidError extends Error {
   constructor() {
     super('extra request fields must be a plain JSON object')
     this.name = 'BridgeRpcEnvelopeInvalidError'
+  }
+}
+
+export function throwIfBridgeSignalAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw signal.reason instanceof Error
+      ? signal.reason
+      : Object.assign(new Error('The operation was aborted.'), { name: 'AbortError' })
   }
 }

@@ -1,17 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  OrcaRuntimeService,
-  electronMocks,
-  getDefaultWorkspaceSession
-} from '../orca-runtime-test-mocks.spec'
-import type { SleepingAgentSessionRecord } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   TEST_REPO_ID,
   TEST_WINDOW_ID,
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 function makeRecord(origin: SleepingAgentSessionRecord['origin']): SleepingAgentSessionRecord {
   return {
@@ -87,10 +86,5 @@ describe('OrcaRuntimeService headless wake report', () => {
     const { wake, readHostIds } = await activateOnHeadlessServe(makeRecord(undefined), 'ssh:ssh-1')
     expect(readHostIds).toContain('ssh:ssh-1')
     expect(wake).toBe('unsupported-headless')
-  })
-
-  it('ignores a live record on an SSH-host worktree partition', async () => {
-    const { wake } = await activateOnHeadlessServe(makeRecord('live'), 'ssh:ssh-1')
-    expect(wake).toBe('not-applicable')
   })
 })

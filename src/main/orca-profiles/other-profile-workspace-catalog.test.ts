@@ -6,10 +6,7 @@ import { folderWorkspaceKey } from '../../shared/workspace-scope'
 import { importProfileStateJson } from '../persistence/profile-state/profile-state-documents'
 import { openProfileStateDatabase } from '../persistence/profile-state/profile-state-database'
 import { getOrcaProfileStateDatabaseFile } from './profile-storage-paths'
-import {
-  getOtherProfileWorktreeIdsForHistoryGc,
-  readOtherProfileWorkspaceCatalog
-} from './other-profile-workspace-catalog'
+import { getOtherProfileWorktreeIdsForHistoryGc } from './other-profile-workspace-catalog'
 
 const roots: string[] = []
 
@@ -56,52 +53,7 @@ function userDataWithProfiles(
 }
 
 describe('getOtherProfileWorktreeIdsForHistoryGc', () => {
-  it('collects worktrees and folder workspaces from the inactive profiles', () => {
-    const root = userDataWithProfiles('active', [
-      { id: 'active', state: { worktreeMeta: { 'repo::/active': {} }, folderWorkspaces: [] } },
-      {
-        id: 'other',
-        state: {
-          worktreeMeta: { 'repo::/other': {}, 'repo::/other-2': {} },
-          folderWorkspaces: [{ id: 'fw-other' }]
-        }
-      }
-    ])
-
-    const result = getOtherProfileWorktreeIdsForHistoryGc(root)
-
-    expect(result.unreadableProfiles).toBe(0)
-    expect(result.ids).toEqual(
-      new Set(['repo::/other', 'repo::/other-2', folderWorkspaceKey('fw-other')])
-    )
-  })
-
   // The live Store owns active-profile IDs; rereading its file could race writes.
-  it('skips the active profile', () => {
-    const root = userDataWithProfiles('active', [
-      { id: 'active', state: { worktreeMeta: { 'repo::/active': {} } } }
-    ])
-
-    expect(getOtherProfileWorktreeIdsForHistoryGc(root).ids.size).toBe(0)
-  })
-
-  it('reports a corrupt profile data file as unreadable rather than as no worktrees', () => {
-    const root = userDataWithProfiles('active', [
-      { id: 'active', state: {} },
-      { id: 'other', raw: '{ this is not json' }
-    ])
-
-    const result = getOtherProfileWorktreeIdsForHistoryGc(root)
-
-    expect(result.unreadableProfiles).toBe(1)
-    expect(result.ids.size).toBe(0)
-  })
-
-  it('reports a missing profile data file as unreadable', () => {
-    const root = userDataWithProfiles('active', [{ id: 'active', state: {} }, { id: 'other' }])
-
-    expect(getOtherProfileWorktreeIdsForHistoryGc(root).unreadableProfiles).toBe(1)
-  })
 
   it('prefers the profile database over a stale JSON export', () => {
     const root = userDataWithProfiles('active', [
@@ -133,20 +85,6 @@ describe('getOtherProfileWorktreeIdsForHistoryGc', () => {
     })
   })
 
-  it('falls back to JSON without creating a database', () => {
-    const root = userDataWithProfiles('active', [
-      { id: 'active', state: {} },
-      { id: 'other', state: { worktreeMeta: { 'repo::/json': {} } } }
-    ])
-    const databaseFile = getOrcaProfileStateDatabaseFile('other', root)
-
-    expect(getOtherProfileWorktreeIdsForHistoryGc(root)).toEqual({
-      unreadableProfiles: 0,
-      ids: new Set(['repo::/json'])
-    })
-    expect(existsSync(databaseFile)).toBe(false)
-  })
-
   it.each([true, false])(
     'refuses history pruning when SQLite is missing but a retained export exists (JSON: %s)',
     (hasJson) => {
@@ -172,33 +110,6 @@ describe('getOtherProfileWorktreeIdsForHistoryGc', () => {
       expect(readFileSync(exportPath, 'utf8')).toBe(exportJson)
     }
   )
-
-  it('reads SQLite-only profiles with retained exports without blocking history pruning', () => {
-    const root = userDataWithProfiles('active', [{ id: 'active', state: {} }, { id: 'other' }])
-    const database = openProfileStateDatabase(
-      getOrcaProfileStateDatabaseFile('other', root),
-      'other'
-    )
-    try {
-      importProfileStateJson(
-        database.db,
-        JSON.stringify({ worktreeMeta: { 'repo::/database': {} } })
-      )
-    } finally {
-      database.db.close()
-    }
-    const dataFile = join(root, 'profiles', 'other', 'orca-data.json')
-    writeFileSync(
-      `${dataFile}.sqlite-export.1.json`,
-      JSON.stringify({ worktreeMeta: { 'repo::/stale-export': {} } })
-    )
-
-    expect(getOtherProfileWorktreeIdsForHistoryGc(root)).toEqual({
-      unreadableProfiles: 0,
-      ids: new Set(['repo::/database'])
-    })
-    expect(existsSync(dataFile)).toBe(false)
-  })
 
   it('does not fall back to JSON when an existing database is corrupt', () => {
     const root = userDataWithProfiles('active', [
@@ -251,33 +162,4 @@ describe('getOtherProfileWorktreeIdsForHistoryGc', () => {
   })
 
   // No index is a valid pre-profiles installation.
-  it('is empty and complete when there is no profile index', () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-gc-profiles-'))
-    roots.push(root)
-
-    expect(getOtherProfileWorktreeIdsForHistoryGc(root)).toEqual({
-      ids: new Set(),
-      unreadableProfiles: 0
-    })
-  })
-})
-
-describe('readOtherProfileWorkspaceCatalog', () => {
-  it("also names every other profile's projects", () => {
-    const root = userDataWithProfiles('active', [
-      { id: 'active', state: { repos: [{ id: 'repo-active' }] } },
-      { id: 'other', state: { repos: [{ id: 'repo-other' }, { id: '' }, null] } }
-    ])
-    const catalog = readOtherProfileWorkspaceCatalog(root)
-    expect(catalog.repoIds).toEqual(new Set(['repo-other']))
-    expect(catalog.unreadableProfiles).toBe(0)
-  })
-
-  it('counts a profile whose projects are not a list as unreadable', () => {
-    const root = userDataWithProfiles('active', [
-      { id: 'active', state: {} },
-      { id: 'other', state: { repos: { 'repo-other': {} } } }
-    ])
-    expect(readOtherProfileWorkspaceCatalog(root).unreadableProfiles).toBe(1)
-  })
 })

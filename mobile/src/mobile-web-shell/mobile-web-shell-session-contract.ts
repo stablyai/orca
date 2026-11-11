@@ -4,13 +4,12 @@ import type {
   MobileWebBundleCompatManifest,
   MobileWebBundleCompatVerdict,
   MobileWebBundleHostStatus
-} from '../transport/mobile-web-bundle-compat'
+} from '../transport/web-bundle/mobile-web-bundle-compat'
 import type {
   MobileWebShellUpdateFailureCause,
   MobileWebShellUpdateFailureFacts
 } from './mobile-web-shell-update-failure'
 
-// Wait for connecting so cache cannot flash before the host’s compatibility check; only settled unreachability opens it unchecked.
 export type MobileWebShellReachability = 'connected' | 'connecting' | 'unreachable'
 
 export type MobileWebShellGates = {
@@ -18,12 +17,15 @@ export type MobileWebShellGates = {
   // Unreadable includes absent/undecodable replies; their empty capabilities must not masquerade as bundle-unavailable.
   readonly statusReadable: boolean
   readonly reachability: MobileWebShellReachability
+  // Unreachable, but still redialing within the attempts the UI calls connecting; absent reads as false.
+  readonly retrying?: boolean
   readonly hostCapabilities: readonly string[]
   readonly hostStatus: MobileWebBundleHostStatus
 }
 
 export type MobileWebShellManifestFacts = MobileWebBundleCompatManifest & {
   readonly buildId: string
+  // A download with nothing to reuse, in fetch progress's unit (each brotli copy where read, else asset bytes).
   readonly totalBytes: number
   readonly totalAssets: number
   // Older desktops omit routes and serve none.
@@ -71,6 +73,8 @@ export type MobileWebShellSessionState =
       readonly buildId: string
       readonly totalBytes: number
       readonly elapsedMs: number
+      // The document's own window, judged against every new connection's status.
+      readonly compat: MobileWebBundleCompatManifest
     }
   // Neither app can be blamed when the path is unknown locally or its manifest pattern is unreadable.
   | { readonly kind: 'route-unavailable' }
@@ -87,6 +91,8 @@ export type MobileWebShellSessionEffect =
   | { readonly kind: 'open-cache' }
   | { readonly kind: 'read-manifest' }
   | { readonly kind: 'download' }
+  // Download behind a running page; it commits at a later open-cache once no page reads the old build.
+  | { readonly kind: 'stage-update' }
   | {
       readonly kind: 'open-generation'
       readonly directory: string
@@ -94,11 +100,14 @@ export type MobileWebShellSessionEffect =
       readonly totalBytes: number
     }
   | { readonly kind: 'delete-cache' }
-  | { readonly kind: 'remount' }
-  // Stamp expiry with its flow; the reducer ignores it once ready arrives, so the runner owns timing without deciding recovery.
+  // A reclaimed renderer reloaded off screen would only be reclaimed again, so it waits for the foreground.
+  | { readonly kind: 'remount'; readonly inForeground?: true }
+  // Stamp expiry with its flow; arming either deadline replaces the armed one, so the runner owns timing without deciding recovery.
   | { readonly kind: 'await-page-ready' }
   // A refused/uncommitted local load may report nothing; only the deadline can end it.
   | { readonly kind: 'await-document-load' }
+  // A ready page makes both deadlines moot; left armed they outlive the document they guard.
+  | { readonly kind: 'cancel-deadlines' }
   // Persist on-device evidence for Troubleshoot because release builds forward no console output.
   | { readonly kind: 'record-update-failure'; readonly failure: MobileWebShellUpdateFailureFacts }
   | { readonly kind: 'forget-update-failures' }
@@ -140,7 +149,12 @@ export type MobileWebShellSessionEvent =
       readonly flow: number
       readonly cause: MobileWebShellUpdateFailureCause
     }
-  | { readonly type: 'shell-failed'; readonly reason: MobileWebShellReportedFailure }
+  | {
+      readonly type: 'shell-failed'
+      readonly reason: MobileWebShellReportedFailure
+      // The OS took the renderer while Orca was off screen or for memory; the page is not at fault.
+      readonly reclaimed?: boolean
+    }
   | { readonly type: 'retry-pressed' }
   | { readonly type: 'document-started' }
   | { readonly type: 'document-loaded' }
@@ -169,7 +183,11 @@ export type MobileWebShellSession = {
   readonly routeGrants: readonly string[]
   readonly state: MobileWebShellSessionState
   readonly retriedOnce: boolean
+  // Renderer loss and page failure each get one remount; neither spends the other's.
   readonly remountedOnce: boolean
+  // A loss the OS reclaimed gets one free remount per painted document, so a hidden crash loop still reaches the budget.
+  readonly reclaimedOnce: boolean
+  readonly pageRemountedOnce: boolean
   // Reset document facts on every new document; the previous page’s ready cannot prove this one ran.
   readonly pageReady: boolean
   readonly pagePainted: boolean
@@ -181,6 +199,10 @@ export type MobileWebShellSession = {
   // Clear on flow entry so the notice cannot outlive the fallback it explains.
   readonly updateNotice: MobileWebShellUpdateNotice | null
   readonly requestedBuildId: string | null
+  // The offered build's window; the download fetches exactly the manifest read, so it is the activated build's.
+  readonly requestedCompat: MobileWebBundleCompatManifest | null
+  // An open verdict reached this flow's document: from then on it may have talked, so a blocked verdict walls rather than reloads.
+  readonly verdicted: boolean
   // Stamp effects/results with the incremented flow to reject superseded work.
   readonly flow: number
 }

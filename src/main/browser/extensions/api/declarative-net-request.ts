@@ -1,17 +1,23 @@
 import { z } from 'zod'
-import { isDnrRegexSupported } from '../declarative-net-request/regex-filter'
-import { hasBrowserExtensionActiveTab } from '../browser-extension-active-tab'
-import { DnrApiError, type DnrExtensionRules } from '../browser-extension-dnr-extension-rules'
-import { DNR_ERRORS } from '../browser-extension-dnr-limits'
-import { getDnrSessionRuntime, type DnrSessionExtension } from '../browser-extension-dnr-session'
+import { isDnrRegexSupported } from '../declarative-net-request/regex/regex-filter'
+import { hasBrowserExtensionActiveTab } from '../permissions/browser-extension-active-tab'
+import {
+  DnrApiError,
+  type DnrExtensionRules
+} from '../declarative-net-request/session/browser-extension-dnr-extension-rules'
+import { DNR_ERRORS } from '../declarative-net-request/session/browser-extension-dnr-limits'
+import {
+  getDnrSessionRuntime,
+  type DnrSessionExtension
+} from '../declarative-net-request/session/browser-extension-dnr-session'
 import {
   BrowserExtensionApiError,
   defineBrowserExtensionMethod,
   extensionHasPermission,
   registerBrowserExtensionNamespace,
   type BrowserExtensionCaller
-} from '../browser-extension-namespace-registry'
-import { resolveBrowserExtensionTab } from '../browser-extension-tab-model'
+} from '../api-runtime/browser-extension-namespace-registry'
+import { resolveBrowserExtensionTab } from '../tabs-and-windows/browser-extension-tab-model'
 import { testDnrMatchOutcome, testMatchRequestSchema } from './declarative-net-request-test-match'
 
 /**

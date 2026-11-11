@@ -2,7 +2,27 @@
 const FILE_OPEN_FOCUS_HELP =
   "--focus                Bring the user to the file (switches Orca's window to its worktree)"
 
+const CHAT_SESSION_HELP =
+  '--session <id>        Chat session id or handle from chat list or agent launch'
+
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
+  'chat rename': {
+    session: '--session <id>        Chat session id from chat list or agent launch'
+  },
+  'chat list': {
+    state: '--state <state>       Only chats in this state: working, blocked, waiting or done'
+  },
+  'chat read': { session: CHAT_SESSION_HELP },
+  'chat send': {
+    session: CHAT_SESSION_HELP,
+    wait: '--wait                 Wait until the chat finishes or needs your answer'
+  },
+  'chat wait': { session: CHAT_SESSION_HELP },
+  'extension reload': {
+    'extension-id':
+      '--extension-id <id>   Installed unpacked extension ID; also accepted positionally',
+    path: '--path <folder>        Source folder of exactly one installed unpacked extension'
+  },
   'reference add': {
     url: '--url <url-or-jira-key> Full review/issue URL or Jira key; use positionals or repeated --url',
     'reference-site': '--reference-site <id> Jira site for bare keys; see orca jira connection'
@@ -34,6 +54,12 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     full: '--full                 Print the full guide with bundled references',
     reference: '--reference <name>     Print one bundled reference by name',
     references: '--references           List the bundled reference names for a topic'
+  },
+  'plugin create': {
+    template: '--template <name>      Template to scaffold from (see Usage)',
+    publisher: '--publisher <name>     Repository owner; only for Orca older than 1.4.246',
+    id: '--id <id>              Plugin id (default: the folder name)',
+    name: '--name <display name>  Plugin name shown in Orca'
   },
   'environment update': {
     force: '--force                Restart over running terminals instead of deferring the update'
@@ -83,6 +109,37 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   },
   ports: {
     all: '--all                  List every listener on the workspace host, not just this workspace'
+  },
+  snapshot: {
+    interactive:
+      '--interactive          Only interactive elements (buttons, inputs, links); no page text',
+    compact: '--compact              Drop empty structural nodes',
+    depth: '--depth <n>            Limit the tree to n levels',
+    selector: '--selector <css>       Snapshot only the element matching this CSS selector',
+    urls: '--urls                 Include link URLs',
+    delta: '--delta                Return only what changed since the last --delta snapshot',
+    full: '--full                 Return the whole tree and reset the --delta baseline'
+  },
+  screenshot: {
+    'if-changed':
+      '--if-changed           Skip saving when the page looks the same as the last capture',
+    annotate: '--annotate             Label interactive elements; label [N] is ref @eN'
+  },
+  exec: {
+    command: '--command <text>       agent-browser command and arguments, e.g. "get text @e3"'
+  },
+  wait: {
+    selector: '--selector <sel>       Wait for an element by ref or CSS selector',
+    timeout: '--timeout <ms>         How long to wait for the condition, or a plain pause',
+    text: '--text <text>          Wait until this text appears on the page',
+    url: '--url <pattern>        Wait until the page URL contains this text or matches a glob',
+    load: '--load <state>         Wait for load or domcontentloaded (networkidle only on quiet pages)',
+    fn: '--fn <js>              Wait until this JavaScript expression is truthy',
+    state: '--state <state>        With --selector, wait for hidden or visible'
+  },
+  download: {
+    selector: '--selector <ref>       Element ref or CSS selector of the download link',
+    path: '--path <path>          File path to save the download to'
   }
 }
 

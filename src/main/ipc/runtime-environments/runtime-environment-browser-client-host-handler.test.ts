@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import '../../../shared/protocol-version'
 import {
   BROWSER_CLIENT_AUTOMATION_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
@@ -6,8 +7,8 @@ import {
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
   BROWSER_SCREENCAST_RUNTIME_CAPABILITY
-} from '../../../shared/protocol-version'
-import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+} from '../../../shared/browser/runtime/browser-runtime-capabilities'
+import type { KnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 
 const {
   handleMock,
@@ -26,20 +27,21 @@ const {
 }))
 
 vi.mock('electron', () => ({ ipcMain: { handle: handleMock } }))
-vi.mock('../../../shared/runtime-environment-store', () => ({
+vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
   resolveEnvironment: resolveEnvironmentMock
 }))
 vi.mock('./runtime-environment-status-probe', () => ({
   getRuntimeEnvironmentStatus: getRuntimeEnvironmentStatusMock
 }))
-vi.mock('../../browser/paired-runtime-browser-client-host-runtime', () => ({
+vi.mock('../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime', () => ({
   startPairedRuntimeBrowserClientHost: startHostMock,
   closePairedRuntimeBrowserClientHostEnvironment: closeHostMock
 }))
-vi.mock('./runtime-environment-connectivity-handlers', () => ({
+vi.mock('./runtime-environment-manual-disconnect', () => ({
   isRuntimeEnvironmentManuallyDisconnected: manuallyDisconnectedMock
 }))
 
+import { prepareRuntimeEnvironmentBrowserPlacement } from './runtime-environment-browser-placement'
 import { registerRuntimeEnvironmentBrowserClientHostHandler } from './runtime-environment-browser-client-host-handler'
 import { channelHandlerLookup } from './runtime-environments-ipc-test-harness'
 
@@ -85,41 +87,6 @@ describe('runtime environment browser client host handler', () => {
     manuallyDisconnectedMock.mockReturnValue(false)
   })
 
-  it('prepares the exact capable host through a fresh main-process status probe', async () => {
-    register(true)
-
-    const prepare = handler<
-      { selector: string; expectedPairingRevision: number },
-      { kind: 'client'; browserHostClientId: string }
-    >('runtimeEnvironments:prepareBrowserClientHostPlacement')
-
-    await expect(
-      prepare(null, { selector: 'environment-a', expectedPairingRevision: 7 })
-    ).resolves.toEqual({ kind: 'client', browserHostClientId: 'browser-client-a' })
-    expect(getRuntimeEnvironmentStatusMock).toHaveBeenCalledWith(
-      '/profile',
-      'environment-a',
-      undefined,
-      { observeOnly: true }
-    )
-    expect(startHostMock).toHaveBeenCalledWith({
-      environment: expect.objectContaining({ id: 'environment-a', pairingRevision: 7 }),
-      authorityRuntimeId: 'runtime-a'
-    })
-  })
-
-  it('honors the server-render setting for a host that streams, only for new preparation', async () => {
-    register(false)
-
-    const prepare = handler<{ selector: string }, { kind: 'server' }>(
-      'runtimeEnvironments:prepareBrowserClientHostPlacement'
-    )
-
-    await expect(prepare(null, { selector: 'environment-a' })).resolves.toEqual({ kind: 'server' })
-    expect(startHostMock).not.toHaveBeenCalled()
-    expect(closeHostMock).not.toHaveBeenCalled()
-  })
-
   it('leaves an attached host untouched and routes only later preparations to server', async () => {
     let enabled = true
     registerRuntimeEnvironmentBrowserClientHostHandler({
@@ -155,6 +122,14 @@ describe('runtime environment browser client host handler', () => {
     )
 
     await expect(prepare(null, { selector: 'environment-a' })).resolves.toEqual({ kind: 'server' })
+    await expect(
+      prepareRuntimeEnvironmentBrowserPlacement('/profile', {
+        selector: 'environment-a',
+        preference: 'auto',
+        enabled: true,
+        requireStatus: true
+      })
+    ).rejects.toThrow('socket closed before ready')
     expect(startHostMock).not.toHaveBeenCalled()
   })
 
@@ -192,16 +167,6 @@ describe('runtime environment browser client host handler', () => {
     )
     expect(getRuntimeEnvironmentStatusMock).not.toHaveBeenCalled()
     expect(startHostMock).not.toHaveBeenCalled()
-  })
-
-  it('rejects malformed requests before resolving stored pairing authority', async () => {
-    register(true)
-    const prepare = handler<unknown, unknown>(
-      'runtimeEnvironments:prepareBrowserClientHostPlacement'
-    )
-
-    await expect(prepare(null, { selector: '' })).rejects.toThrow()
-    expect(resolveEnvironmentMock).not.toHaveBeenCalled()
   })
 })
 

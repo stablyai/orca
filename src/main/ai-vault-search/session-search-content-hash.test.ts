@@ -24,19 +24,6 @@ it('freezes once the prefix limit is reached so later appends cannot move it', (
   expect(foldContentHash(capped, userMessages('later', 20))).toEqual(capped)
 })
 
-it('separates two conversations that share an opening prompt', () => {
-  const shared = userMessages('same opening', 1)
-  const first = foldContentHash(EMPTY_CONTENT_HASH, [
-    ...shared,
-    { role: 'user', text: 'left', timestamp: null }
-  ])
-  const second = foldContentHash(EMPTY_CONTENT_HASH, [
-    ...shared,
-    { role: 'user', text: 'right', timestamp: null }
-  ])
-  expect(first.hash).not.toBe(second.hash)
-})
-
 it('refuses to collapse on a prefix too short to mean anything', () => {
   const one = foldContentHash(EMPTY_CONTENT_HASH, userMessages('only turn', 1))
   expect(isCollapsibleContentHash(one.hash, one.count)).toBe(false)

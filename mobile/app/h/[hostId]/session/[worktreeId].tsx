@@ -11,6 +11,7 @@ import {
   shellScreenRouteKey
 } from '../../../../src/mobile-web-shell/shell-screen-route'
 import { MobileWebShellScreen } from '../../../../src/mobile-web-shell/MobileWebShellScreen'
+import type { BridgeClearableRouteParam } from '../../../../src/mobile-web-shell/bridge/bridge-route-update'
 import { PageRouteUnavailableScreen } from '../../../../src/mobile-web-shell/PageRouteUnavailableScreen'
 
 // paneKey selects a tab within the current session, not a new identity; remounting on it reloads the page and loses repeated taps.
@@ -32,7 +33,7 @@ export default withWorkspaceRoute(function MobileSessionScreen() {
   const paneKey = firstParam(params.paneKey) ?? ''
   // Clear only the paneKey the page applied; a newer tap must survive. Empty equals absent in the route builder (ruling 34).
   const erasePaneKey = useCallback(
-    (param: 'paneKey', value: string) => {
+    (param: BridgeClearableRouteParam, value: string) => {
       if (param !== 'paneKey' || paneKey === '' || value !== paneKey) {
         return
       }

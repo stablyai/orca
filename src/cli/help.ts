@@ -122,10 +122,13 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
     return '--cursor <cursor>      Opaque cursor returned by a previous worker-read page'
   }
   if (command === 'orchestration worker-list' && flag === 'cursor') {
-    return '--cursor <cursor>      Opaque page cursor copied from page.nextCursor'
+    return '--cursor <cursor>      Opaque page cursor copied from nextCursor'
   }
   if (command === 'orchestration worker-list' && flag === 'terminal-state') {
     return '--terminal-state <state> Terminal accounting filter: active, reclaimable, retained, release_pending, release_unknown, or released'
+  }
+  if (command.startsWith('orchestration ') && flag === 'full') {
+    return '--full                 Print the full record Orca returned instead of the concise view'
   }
   if (command === 'skills get' && flag === 'full') {
     return '--full                 Print the full guide with bundled references'
@@ -185,7 +188,13 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
     return '--agent <id>           Account provider: claude, codex, opencode, or devin (default claude)'
   }
   if (command.startsWith('account ') && flag === 'agent') {
-    return '--agent <id>           Account provider: opencode or devin'
+    return '--agent <id>           Account provider: claude, codex, opencode, devin, or antigravity'
+  }
+  if (command === 'chat rename' && flag === 'session') {
+    return '--session <id>        Chat session id (defaults to the chat this runs in)'
+  }
+  if (command === 'chat rename' && flag === 'name') {
+    return '--name <text>         New name for the chat'
   }
   if (flag === 'key' && command === 'computer hotkey') {
     return '--key <key-combo>      Modifier chord with one key, e.g. CmdOrCtrl+A'

@@ -1,8 +1,9 @@
-import { translate } from '@/i18n/i18n'
-import { getConnectionIdForFile } from '@/lib/connection-context'
-import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/slices/editor'
-import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import { useTranslate } from '@/i18n/use-translate'
+import { getConnectionIdForFile } from '@/lib/workspace/ownership/connection-context'
+import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor/types/open-file'
+import type { PendingEditorReveal } from '@/store/slices/editor/types/pending-editor-reveal'
+import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import { ChangesModeView } from './ChangesModeView'
 import { ConflictBanner, ConflictPlaceholderView } from './ConflictComponents'
 import {
@@ -18,12 +19,14 @@ import type { EditorConflictNavigation } from './useEditorConflictNavigation'
 import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
 import { RecoverableRenderErrorBoundary } from '../error-boundaries/RecoverableRenderErrorBoundary'
 import type { FileContent } from './editor-panel-content-types'
-import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
+import { CustomEditorExternalChangeBanner } from './external-changes/CustomEditorExternalChangeBanner'
 import { PluginFileTypeSuggestion } from './PluginFileTypeSuggestion'
-import type { useMarkdownDocuments } from './useMarkdownDocuments'
+import { BinaryFileDefaultAppButton } from './BinaryFileDefaultAppButton'
+import type { useMarkdownDocuments } from './markdown/documents/useMarkdownDocuments'
 import { EditorMarkdownFileSurface } from './EditorMarkdownFileSurface'
-import type { MarkdownRenderState } from './markdown-render-mode'
-import type { ActivePluginCustomEditor } from '@/store/plugin-custom-editors'
+import type { MarkdownRenderState } from './markdown/render-mode/markdown-render-mode'
+import type { ActivePluginCustomEditor } from '@/store/plugins/file-editors/plugin-custom-editors'
+import { PluginEditorSourceFallbackNotice } from './PluginEditorNeedsDesktopNotice'
 import PluginCustomEditorFrame from './PluginCustomEditorFrame'
 import PluginBytesCustomEditorSurface from './PluginBytesCustomEditorSurface'
 
@@ -49,6 +52,7 @@ export function EditorEditFileSurface({
   monacoLanguage,
   isMarkdown,
   isMermaid,
+  isSvg = false,
   isCsv,
   isNotebook,
   customEditor,
@@ -82,6 +86,7 @@ export function EditorEditFileSurface({
   monacoLanguage: string
   isMarkdown: boolean
   isMermaid: boolean
+  isSvg?: boolean
   isCsv: boolean
   isNotebook: boolean
   customEditor?: ActivePluginCustomEditor | null
@@ -106,13 +111,14 @@ export function EditorEditFileSurface({
   handleSave: (content: string) => Promise<boolean>
   reloadContent: (file: OpenFile, options?: { wakeWslDistro?: boolean }) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   if (activeFile.conflict?.kind === 'conflict-placeholder') {
     return <ConflictPlaceholderView file={activeFile} />
   }
   if (!fileContent) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-        {translate('auto.components.editor.EditorContent.b2735221f5', 'Loading...')}
+        {t('auto.components.editor.EditorContent.b2735221f5', 'Loading...')}
       </div>
     )
   }
@@ -132,7 +138,9 @@ export function EditorEditFileSurface({
       <EditorFileLoadErrorView
         message={fileContent.loadError}
         code={fileContent.loadErrorCode}
+        worktreeId={activeFile.worktreeId}
         onRetry={() => reloadContent(activeFile, USER_RETRY)}
+        onHostStarted={() => reloadContent(activeFile)}
       />
     )
   }
@@ -180,11 +188,12 @@ export function EditorEditFileSurface({
     }
     return (
       <div className="flex h-full flex-col">
+        <PluginEditorSourceFallbackNotice fileId={activeFile.id} filePath={activeFile.filePath} />
         <PluginFileTypeSuggestion filePath={activeFile.filePath} />
-        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-          {translate(
-            'auto.components.editor.EditorContent.b9de81ba52',
-            'Binary file — cannot display'
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+          {t('auto.components.editor.EditorContent.b9de81ba52', 'Binary file — cannot display')}
+          {fileContent.byteSource && (
+            <BinaryFileDefaultAppButton key={activeFile.id} source={fileContent.byteSource} />
           )}
         </div>
       </div>
@@ -194,7 +203,7 @@ export function EditorEditFileSurface({
   const currentContent = editBuffer ?? fileContent.content
   const externalChangeBanner =
     activeFile.externalMutation === 'changed' ? (
-      <ExternalFileChangeBanner
+      <CustomEditorExternalChangeBanner
         file={activeFile}
         currentContent={currentContent}
         reloadContent={reloadContent}
@@ -240,6 +249,7 @@ export function EditorEditFileSurface({
         key={monacoRemountKey}
         fileId={activeFile.id}
         filePath={activeFile.filePath}
+        noteSource={activeFile}
         viewStateKey={editorViewStateKey}
         viewStateId={viewStateScopeId}
         relativePath={activeFile.relativePath}
@@ -309,6 +319,13 @@ export function EditorEditFileSurface({
       handleDirtyStateHint={handleDirtyStateHint}
       monacoEditor={monacoEditor}
     />
+  ) : isSvg && mdViewMode === 'rich' ? (
+    <ImageViewer
+      key={activeFile.id}
+      svgSource={currentContent}
+      filePath={activeFile.filePath}
+      mimeType="image/svg+xml"
+    />
   ) : isMermaid && mdViewMode === 'rich' ? (
     <MermaidViewer
       key={activeFile.id}
@@ -348,6 +365,9 @@ export function EditorEditFileSurface({
   return (
     <div className="flex flex-1 min-h-0 flex-col">
       {externalChangeBanner}
+      {customEditor ? null : (
+        <PluginEditorSourceFallbackNotice fileId={activeFile.id} filePath={activeFile.filePath} />
+      )}
       {customEditor ? null : (
         <PluginFileTypeSuggestion
           filePath={activeFile.filePath}

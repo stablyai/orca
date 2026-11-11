@@ -1,8 +1,8 @@
-import type { AgentType } from '../../../../../src/shared/agent-status-types'
+import type { AgentType } from '../../../../../src/shared/agent-status/contracts/agent-status-types'
 import type { NativeChatSessionOptionSettingsMutation } from '../../../../../src/shared/native-chat/input/native-chat-session-options'
-import type { StructuredSessionOptionPick } from '../../../../../src/shared/structured-agent-session-options'
-import type { RpcClient } from '../../../transport/rpc-client'
-import { nativeChatSessionOptionsWrite } from '../../mobile-session-launch-operations'
+import type { StructuredSessionOptionPick } from '../../../../../src/shared/agent-session/options/structured-agent-session-options'
+import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
+import { nativeChatSessionOptionsWrite } from './mobile-native-chat-options-operations'
 
 // Persist on the host that seeds future sessions; best-effort failure only loses that next-session default.
 export function writeMobileNativeChatSessionOptions(

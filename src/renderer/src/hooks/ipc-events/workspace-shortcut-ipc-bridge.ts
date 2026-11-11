@@ -1,13 +1,14 @@
-import { TOGGLE_QUICK_COMMANDS_MENU_EVENT } from '@/lib/quick-commands-menu-events'
-import { TOGGLE_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/useWorkspaceBoardPanel'
-import { activateTabNumberShortcut } from '@/lib/tab-number-shortcuts'
-import { emitCmdJRowIndexJump } from '@/lib/cmd-j-row-index-jump'
-import { getVisibleWorktreeShortcutTargets } from '@/components/sidebar/visible-worktrees'
-import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
-import { deleteHoveredWorkspaceImmediately } from '@/components/sidebar/hovered-workspace-delete'
-import { isFloatingWorkspacePanelFocused } from '@/lib/floating-workspace-terminal-actions'
+import { TOGGLE_QUICK_COMMANDS_MENU_EVENT } from '@/lib/terminal/quick-commands/quick-commands-menu-events'
+import { TOGGLE_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/workspace-board/surface/useWorkspaceBoardPanel'
+import { activateTabNumberShortcut } from '@/lib/keyboard/tab-number-shortcuts'
+import { emitCmdJRowIndexJump } from '@/lib/workspace/search/palette/cmd-j-row-index-jump'
+import { getVisibleWorktreeShortcutTargets } from '@/components/sidebar/worktree-list/listing/visible-worktrees'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
+import { deleteActiveWorkspaceFromShortcut } from '@/components/sidebar/workspace-actions/deletion/active-workspace-delete'
+import { isFloatingWorkspacePanelFocused } from '@/components/floating-terminal/floating-workspace-terminal-actions'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import { useAppStore } from '../../store'
+import { runBuiltInOrReplacement } from '@/lib/plugins/commands/plugin-command-replacements'
+import { useAppStore } from '../../store/index'
 import { toggleAgentDashboardFromShortcut } from './agent-dashboard-command'
 import { openNewWorkspaceFromShortcut } from './new-workspace-command'
 
@@ -40,7 +41,7 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
         if (isFloatingWorkspacePanelFocused()) {
           return
         }
-        deleteHoveredWorkspaceImmediately(useAppStore.getState())
+        deleteActiveWorkspaceFromShortcut(useAppStore.getState())
       })
     )
   }
@@ -52,8 +53,10 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
         if (store.activeView === 'settings') {
           return
         }
-        store.setSidebarOpen(true)
-        window.dispatchEvent(new CustomEvent(TOGGLE_WORKSPACE_BOARD_EVENT))
+        runBuiltInOrReplacement('workspace.openBoard', () => {
+          store.setSidebarOpen(true)
+          window.dispatchEvent(new CustomEvent(TOGGLE_WORKSPACE_BOARD_EVENT))
+        })
       })
     )
   }
@@ -74,7 +77,7 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
       if (store.activeView === 'settings' || !store.repos.some((repo) => isGitRepoKind(repo))) {
         return
       }
-      store.openTaskPage()
+      runBuiltInOrReplacement('view.tasks', () => store.openTaskPage())
     })
   )
 
@@ -120,9 +123,9 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
         return
       }
       if (direction === 'back') {
-        store.goBackWorktree()
+        runBuiltInOrReplacement('worktree.history.back', () => store.goBackWorktree())
       } else {
-        store.goForwardWorktree()
+        runBuiltInOrReplacement('worktree.history.forward', () => store.goForwardWorktree())
       }
     })
   )

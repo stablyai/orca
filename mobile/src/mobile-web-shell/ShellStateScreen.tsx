@@ -1,13 +1,13 @@
 import type { ReactNode } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { Platform, Pressable, Text, View } from 'react-native'
+import { currentWebViewProvider } from '../../modules/orca-mobile-web-shell/src'
 import { ProtocolBlockScreen } from '../components/ProtocolBlockScreen'
-import { SideSafeArea } from '../layout/side-safe-area'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import type { HostDisplaySource } from '../transport/use-host-display'
+import type { HostDisplaySource } from '../host-descriptors/use-host-display'
 import type { DownloadProgressFeed } from './download-progress-feed'
 import type {
   MobileWebShellFailureCause,
@@ -66,11 +66,30 @@ function Failed({
   useMobileColorScheme()
   // Retry cannot change a settled isolation gate or give an unsupported WebView the missing fence.
   const retryable = state.reason !== 'isolation-unavailable' && state.reason !== 'status-unreadable'
+  const provider = state.reason === 'isolation-unavailable' ? currentWebViewProvider() : null
+  // Unknown provider (older binary): a missing feature is still the likely cause.
+  const webViewTooOld =
+    Platform.OS === 'android' &&
+    state.reason === 'isolation-unavailable' &&
+    provider?.hasShellFeatures !== true
   return (
     <Centered>
       <Text style={styles.failedMessage} testID="mobile-web-shell-failed">
-        {failureMessage(state.reason, t)}
+        {webViewTooOld
+          ? t(
+              'webShell.shellStateScreen.isolationUnavailableAndroid',
+              'Orca needs Android System WebView or Chrome 101 or newer. Update it from the Play Store, or pick a newer one in Developer options > WebView implementation.'
+            )
+          : failureMessage(state.reason, t)}
       </Text>
+      {webViewTooOld && provider ? (
+        <Text style={styles.failedDetail}>
+          {t('webShell.shellStateScreen.webViewInUse', 'This device has {{name}} {{version}}.', {
+            name: provider.name,
+            version: provider.version
+          })}
+        </Text>
+      ) : null}
       {retryable ? (
         <Pressable
           style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}
@@ -86,7 +105,8 @@ function Failed({
   )
 }
 
-function StateView({
+// What the shell shows natively until its page is ready.
+export function ShellStateScreen({
   hostId,
   state,
   onRetry,
@@ -140,15 +160,6 @@ function StateView({
   }
 }
 
-// What the shell shows natively until the page is ready; only the page draws in a released Duo rail, so these pad it.
-export function ShellStateScreen(props: Parameters<typeof StateView>[0]) {
-  return (
-    <SideSafeArea>
-      <StateView {...props} />
-    </SideSafeArea>
-  )
-}
-
 const styles = themedStyleSheet(() => ({
   centered: {
     flex: 1,
@@ -169,11 +180,17 @@ const styles = themedStyleSheet(() => ({
     textAlign: 'center',
     marginBottom: spacing.lg
   },
+  failedDetail: {
+    fontSize: typography.metaSize,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: spacing.lg
+  },
   retryButton: {
     backgroundColor: colors.bgRaised,
     paddingVertical: spacing.sm + 2,
     paddingHorizontal: spacing.lg,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   retryLabel: {
     fontSize: typography.bodySize,

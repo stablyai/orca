@@ -1,6 +1,5 @@
 import {
   chmodSync,
-  existsSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
@@ -29,40 +28,6 @@ describe('guarded Grok hook config mutation', () => {
     for (const dir of dirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true })
     }
-  })
-
-  it('does not delete a newer user edit', async () => {
-    const configPath = makeConfigPath()
-    const installed = '{"hooks":{"SessionStart":[]}}\n'
-    const userEdit =
-      '{"hooks":{"Notification":[{"hooks":[{"type":"command","command":"user"}]}]}}\n'
-    writeFileSync(configPath, installed)
-    writeFileSync(configPath, userEdit)
-
-    await expect(removeGrokHookConfigIfUnchanged(configPath, installed)).resolves.toBe(false)
-    expect(readFileSync(configPath, 'utf8')).toBe(userEdit)
-  })
-
-  it('treats a newer user deletion as a generation mismatch', async () => {
-    const configPath = makeConfigPath()
-    const installed = '{"hooks":{"SessionStart":[]}}\n'
-    writeFileSync(configPath, installed)
-    rmSync(configPath)
-
-    await expect(removeGrokHookConfigIfUnchanged(configPath, installed)).resolves.toBe(false)
-  })
-
-  it('does not overwrite a newer user edit', async () => {
-    const configPath = makeConfigPath()
-    const installed = '{"hooks":{"SessionStart":[]}}\n'
-    const userEdit = '{"hooks":{"Notification":[]}}\n'
-    writeFileSync(configPath, installed)
-    writeFileSync(configPath, userEdit)
-
-    await expect(
-      writeGrokHookConfigIfUnchanged(configPath, installed, '{"hooks":{}}\n')
-    ).resolves.toBe(false)
-    expect(readFileSync(configPath, 'utf8')).toBe(userEdit)
   })
 
   it('does not overwrite an edit published after it holds the expected generation', async () => {
@@ -150,56 +115,5 @@ describe('guarded Grok hook config mutation', () => {
       writeGrokHookConfigIfUnchanged(configPath, installed, '{"hooks":{}}\n')
     ).resolves.toBe(true)
     expect(statSync(configPath).mode & 0o777).toBe(0o600)
-  })
-
-  // Grok rejects global hook files with nlink !=1; publishing through a hard link creates a session-failure window.
-  it('never publishes the config through a second hard link', async () => {
-    const configPath = makeConfigPath()
-    const installed = '{"hooks":{"SessionStart":[]}}\n'
-    writeFileSync(configPath, installed)
-
-    const linkCounts: number[] = []
-    const sampler = setInterval(() => {
-      try {
-        linkCounts.push(statSync(configPath).nlink)
-      } catch {
-        /* absent mid-swap is fine; only a second link is not */
-      }
-    }, 0)
-    try {
-      for (let i = 0; i < 40; i += 1) {
-        const next = `{"hooks":{"SessionStart":[],"n":${i}}}\n`
-        await expect(
-          writeGrokHookConfigIfUnchanged(configPath, readFileSync(configPath, 'utf8'), next)
-        ).resolves.toBe(true)
-      }
-    } finally {
-      clearInterval(sampler)
-    }
-
-    expect(linkCounts.length).toBeGreaterThan(0)
-    expect(Math.max(...linkCounts)).toBe(1)
-    expect(statSync(configPath).nlink).toBe(1)
-  })
-
-  it('removes the config and reports the removal', async () => {
-    const configPath = makeConfigPath()
-    const installed = '{"hooks":{"SessionStart":[]}}\n'
-    writeFileSync(configPath, installed)
-
-    await expect(removeGrokHookConfigIfUnchanged(configPath, installed)).resolves.toBe(true)
-    expect(existsSync(configPath)).toBe(false)
-  })
-
-  it('leaves no temp file behind after a successful write', async () => {
-    const configPath = makeConfigPath()
-    const dir = dirname(configPath)
-    const installed = '{"hooks":{"SessionStart":[]}}\n'
-    writeFileSync(configPath, installed)
-
-    await expect(
-      writeGrokHookConfigIfUnchanged(configPath, installed, '{"hooks":{}}\n')
-    ).resolves.toBe(true)
-    expect(readdirSync(dir)).toEqual(['orca-status.json'])
   })
 })

@@ -1,3 +1,4 @@
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { randomUUID } from 'node:crypto'
 import type SyncDatabase from '../sqlite/sync-database'
 import {
@@ -56,6 +57,7 @@ CREATE TABLE IF NOT EXISTS files(
   prefix_hash TEXT
 );
 CREATE INDEX IF NOT EXISTS files_mtime ON files(mtime_ms);
+CREATE INDEX IF NOT EXISTS files_session_mtime ON files(session_row_id, mtime_ms);
 CREATE TABLE IF NOT EXISTS messages(
   id INTEGER PRIMARY KEY,
   session_row_id INTEGER NOT NULL,
@@ -79,6 +81,12 @@ export function openSessionSearchDatabase(path: string): SyncDatabase {
         'index_incarnation',
         randomUUID()
       )
+      db.prepare('INSERT OR IGNORE INTO meta(key, value) VALUES (?, ?)').run(
+        'index_maintenance_generation',
+        '0'
+      )
+      // Each small commit adds an FTS segment; wider merges mean fewer levels rewriting it (#36666).
+      db.prepare("INSERT INTO messages_fts(messages_fts, rank) VALUES ('automerge', 8)").run()
       // Older Cursor rows omitted the file-time fallback; repair metadata without rereading transcripts.
       db.exec(`
         UPDATE sessions SET updated_at = (
@@ -111,4 +119,14 @@ export function addSessionSearchPrefixHashColumn(db: SyncDatabase): void {
 
 export function removeSessionSearchDatabase(path: string): void {
   removeVersionedCacheDatabase(path)
+}
+
+/** Async lock retries keep scanner/server deadlines responsive after all workers have retired. */
+export async function removeSessionSearchDatabaseAsync(path: string): Promise<void> {
+  if (path === ':memory:') {
+    return
+  }
+  for (const suffix of ['', '-wal', '-shm', '-journal']) {
+    await removeTree(`${path}${suffix}`)
+  }
 }

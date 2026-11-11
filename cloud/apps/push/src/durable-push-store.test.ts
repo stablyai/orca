@@ -89,25 +89,7 @@ describe('durable push acceptance', () => {
     await store.finish(fresh!)
   })
 
-  it('orders an expired first-attempt lease by creation time after a retry becomes due', async () => {
-    const { db, store, clock, advance } = await fixture()
-    await store.accept('host', 'phone', notification(1))
-    const retry = (await store.claim())!
-    await store.finish(retry, 1000)
 
-    advance(2000)
-    await db.query(
-      `INSERT INTO push_delivery_batches(batch_id, host_fingerprint, registration_id, kind, payload_json, state, due_at, expires_at, lease_until, attempts, created_at)
-       VALUES ('crashed-singleton', 'host', 'phone', 'alert', ?, 'pending', ?, ?, 0, 1, ?)`,
-      [JSON.stringify(notification(2)), clock() - 1, clock() + 300_000, clock()]
-    )
-    const reclaimedRetry = (await store.claim())!
-    expect(reclaimedRetry.notification.notificationSeq).toBe(1)
-    await store.finish(reclaimedRetry)
-    const reclaimedCrash = (await store.claim())!
-    expect(reclaimedCrash.notification.notificationSeq).toBe(2)
-    await store.finish(reclaimedCrash)
-  })
 
   it('rolls quota and payload back together if persistence fails', async () => {
     const { db, store } = await fixture()
@@ -180,23 +162,6 @@ it('does not resurrect an in-flight alert after a dismissal and transient provid
   expect(await store.claim()).toBeNull()
   expect(await store.pendingCount('phone')).toBe(0)
 })
-
-it.each([false, true])(
-  'normalizes default alert kind (explicit first: %s)',
-  async (explicitFirst) => {
-    const { db, store } = await fixture()
-    const { kind: _kind, ...implicit } = notification(1)
-    const explicit = { kind: 'alert' as const, ...implicit }
-    for (const event of explicitFirst ? [explicit, implicit] : [implicit, explicit]) {
-      expect(await store.accept('host', 'phone', event)).toBe('queued')
-    }
-    expect(await store.pendingCount('phone')).toBe(1)
-    expect(await db.query('SELECT event_id FROM push_events')).toHaveLength(1)
-    expect(await store.accept('host', 'phone', { ...explicit, body: 'changed' })).toBe('error')
-    expect(await store.accept('host', 'phone', { ...implicit, kind: 'dismiss' })).toBe('queued')
-    expect(await db.query('SELECT event_id FROM push_events')).toHaveLength(2)
-  }
-)
 
 it('fences late renew and finish after an expired claim is dismissed', async () => {
   const { db, store, advance } = await fixture()

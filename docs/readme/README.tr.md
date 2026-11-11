@@ -242,7 +242,7 @@ Ajanlarınızı telefonunuzdan izlemek ve yönlendirmek için masaüstü uygulam
 
 - **Discord:** Topluluğa **[Discord](https://discord.gg/fzjDKHxv8Q)** üzerinden katılın.
 - **Twitter / X:** Güncellemeler ve duyurular için **[@orca_build](https://x.com/orca_build)** hesabını takip edin.
-- **WeChat:** Orca topluluğunun WeChat grubuna katılmak için karekodu okutun.
+- **WeChat:** Orca topluluğunun bir WeChat grubuna katılmak için karekodu okutun.
 
   <img src="../assets/wechat-qr.jpg" alt="Orca topluluğunun WeChat grubu karekodu" width="160" />
 

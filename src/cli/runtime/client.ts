@@ -1,13 +1,13 @@
 import { randomUUID } from 'node:crypto'
 import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
-import { runtimeHostConnectionState } from '../../shared/runtime-host-connection-state'
+import { runtimeHostConnectionState } from '../../shared/remote-runtime/host-status/runtime-host-connection-state'
 import {
   isDurableMutation,
   isOrchestrationMutation,
   isTerminalPromptMutation,
   orchestrationMigrationData
-} from '../../shared/orchestration-rpc-contract'
-import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
+} from '../../shared/orchestration/orchestration-rpc-contract'
+import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { openLocalOrca } from './open-local-orca'
 import { getDefaultUserDataPath, readMetadata } from './metadata'
 import {
@@ -17,6 +17,7 @@ import {
   projectRemoteAppStatus
 } from './status'
 import { sendRequest } from './transport'
+import { attachMutationRecovery, isRequestUnsent } from './client-error-recovery'
 import {
   RuntimeClientError,
   RuntimeRpcFailureError,
@@ -29,21 +30,21 @@ import {
   attachUnverifiedTerminalPromptRecovery,
   didAnotherRuntimeHandleTerminalPrompt
 } from './terminal-prompt-mutation-recovery'
-import { markEnvironmentUsed } from './environments'
+import { recordRuntimeEnvironmentUsage } from '../../shared/remote-runtime/host-store/runtime-environment-usage-record'
 import { createRuntimeSourceFence, type RuntimeSourceFence } from './runtime-source-fence'
 import { resolveRemoteConnection } from './runtime-remote-pairing'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_CONTRACT_VERSION
-} from '../../shared/protocol-version'
+} from '../../shared/orchestration/orchestration-runtime-capabilities'
 import { RemoteRuntimeCompatGate } from './remote-runtime-compat-gate'
-import { createOrchestrationCompatibilityEnvelope } from './orchestration-compatibility-envelope'
+import { OrchestrationRequestEvidence } from './orchestration-compatibility-envelope'
 import { getTimeoutMsParam, isWaitingCheck } from './runtime-request-timeout'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartClientTimeoutMs,
   resolveWorkerStartReadinessTimeoutMs
-} from '../../shared/orchestration-timing-budgets'
+} from '../../shared/orchestration/orchestration-timing-budgets'
 import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
 import {
   buildOrchestrationRecoveryCommand,
@@ -51,6 +52,7 @@ import {
 } from './orchestration-recovery-command'
 
 const LONG_POLL_CLIENT_GRACE_MS = 10_000
+// The host records the launched agent in the caller's chat; older hosts ignore the evidence.
 
 const loadWebSocketTransport = async () => await import('./websocket-transport.js')
 
@@ -62,9 +64,7 @@ export class RuntimeClient {
   private readonly originalArgs: readonly string[] | undefined
   private readonly remoteCompat: RemoteRuntimeCompatGate
   private orchestrationContractCheck: Promise<void> | null = null
-  private readonly orchestrationCompatibility = createOrchestrationCompatibilityEnvelope(
-    process.env
-  )
+  private readonly requestEvidence = new OrchestrationRequestEvidence(process.env)
   private readonly runtimeSourceFence: RuntimeSourceFence
 
   // Browser session cold starts can take 15–30 seconds; allow time for initialization.
@@ -99,9 +99,6 @@ export class RuntimeClient {
     const terminalPromptMutation = isTerminalPromptMutation(method, params)
     const legacyTerminalPrompt = options?.legacyTerminalPrompt === true && terminalPromptMutation
     const durableMutation = !legacyTerminalPrompt && isDurableMutation(method, params)
-    if (orchestrationMutation) {
-      await this.ensureOrchestrationContractCompatible(effectiveTimeoutMs)
-    }
     const orchestrationRequestId = durableMutation
       ? (options?.orchestrationRequestId ?? randomUUID())
       : undefined
@@ -125,13 +122,21 @@ export class RuntimeClient {
       }
       return attachDurableMutationRecovery(error, orchestrationRequestId, originalCommand, method)
     }
-    const compatibilityEnvelope = method.startsWith('orchestration.')
-      ? {
-          ...this.orchestrationCompatibility,
-          compatibilityInvocationId:
-            orchestrationRequestId ?? this.orchestrationCompatibility.compatibilityInvocationId
-        }
-      : {}
+    if (orchestrationMutation) {
+      try {
+        await this.ensureOrchestrationContractCompatible(effectiveTimeoutMs)
+      } catch (error) {
+        // A caller-chosen request id is the only rerun handle, so keep it when the probe fails first.
+        throw options?.orchestrationRequestId
+          ? attachMutationRecovery(error, orchestrationRequestId, originalCommand, true)
+          : error
+      }
+    }
+    const compatibilityEnvelope = this.requestEvidence.envelopeFor(method, {
+      remote: this.remote !== null,
+      mutation: orchestrationMutation,
+      requestId: orchestrationRequestId
+    })
     const envelope = {
       orchestrationCapability: options?.orchestrationCapability,
       orchestrationContractVersion: method.startsWith('orchestration.')
@@ -160,7 +165,7 @@ export class RuntimeClient {
         throw recover(new RuntimeRpcFailureError(response), null)
       }
       if (this.environmentSelector) {
-        markEnvironmentUsed(this.userDataPath, this.environmentSelector, {
+        recordRuntimeEnvironmentUsage(this.userDataPath, this.environmentSelector, {
           runtimeId: response._meta.runtimeId
         })
       }
@@ -181,7 +186,8 @@ export class RuntimeClient {
         options?.requestSelection ? { requestSelection: options.requestSelection } : undefined
       )
     } catch (error) {
-      throw recover(error, metadata.runtimeId ?? null)
+      // A pre-send refusal has no outcome to recover; retry advice would resend the same bytes.
+      throw isRequestUnsent(error) ? error : recover(error, metadata.runtimeId ?? null)
     }
     if (response.ok === false) {
       throw recover(new RuntimeRpcFailureError(response), metadata.runtimeId ?? null)
@@ -202,6 +208,10 @@ export class RuntimeClient {
       }
       const readiness = resolveWorkerStartReadinessTimeoutMs(requested)
       return Math.max(resolveWorkerStartClientTimeoutMs(readiness), this.requestTimeoutMs)
+    }
+    // A send to a finished worker starts its follow-up, which waits as worker-start does.
+    if (method === 'orchestration.send') {
+      return Math.max(resolveWorkerStartClientTimeoutMs(), this.requestTimeoutMs)
     }
     if (
       (method === 'orchestration.check' && isWaitingCheck(params)) ||

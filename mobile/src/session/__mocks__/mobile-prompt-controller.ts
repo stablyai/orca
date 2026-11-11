@@ -1,18 +1,20 @@
 import './mobile-prompt-render-mocks'
 import { createElement } from 'react'
 import { Pressable } from 'react-native'
-import type { NativeChatMessage } from '../../../../src/shared/native-chat-types'
-import type { MobileNativeChatSendOutcome } from '../native-chat/mobile-native-chat-send'
-import type { RpcClient } from '../../transport/rpc-client'
-import type { RpcResponse, ConnectionState } from '../../transport/types'
+import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
+import type { MobileNativeChatSendOutcome } from '../native-chat/composer/mobile-native-chat-send'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
+import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { MobileNativeChatTab } from '../native-chat/mobile-native-chat-eligibility'
-import type { MobileNativeChatController } from '../mobile-native-chat-controller-contract'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import type { MobileNativeChatController } from '../native-chat/mobile-native-chat-controller-contract'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../../test-support/query-client-test-renderer'
 import { vi } from 'vitest'
-import { useMobileNativeChatController } from '../use-mobile-native-chat-controller'
-import { MobileNativeChatOverlay } from '../MobileNativeChatOverlay'
+import { useMobileNativeChatController } from '../native-chat/use-mobile-native-chat-controller'
+import { MobileNativeChatOverlay } from '../native-chat/MobileNativeChatOverlay'
 import { MobileNativeChatAsk } from '../native-chat/input/MobileNativeChatAsk'
-import type { AskAnswerSelection } from '../../../../src/shared/native-chat-ask-answer'
+import type { AskAnswerSelection } from '../../../../src/shared/native-chat/input/native-chat-ask-answer'
 import { mobileNativeChatPromptDismissals } from '../native-chat/input/mobile-native-chat-prompt-dismissals'
 import { setMobileNativeChatDraftText } from '../native-chat/composer/mobile-native-chat-draft-store'
 export const visible = { value: true }
@@ -52,7 +54,11 @@ vi.mock('../use-mobile-session-view-mode', () => ({
     toggleTabChatView: () => Object.assign(visible, { value: !visible.value })
   })
 }))
-vi.mock('../use-mobile-native-chat-session-lane', () => ({
+// The chat's per-connection CI setting read isn't a prompt write; these tests count only those.
+vi.mock('../native-chat/preferences/use-mobile-native-chat-ci-result-lines', () => ({
+  useMobileNativeChatCiResultLines: () => false
+}))
+vi.mock('../native-chat/use-mobile-native-chat-session-lane', () => ({
   useMobileNativeChatSessionLane: () => ({ session, structuredSession, sessionCommands })
 }))
 setMobileNativeChatDraftText('draft', 'ordinary message')
@@ -139,6 +145,7 @@ function Harness(props: HarnessProps) {
   const { tab = baseTab, tabId = 'tab-1', connState = 'connected', hostId = 'host' } = props
   const current = useMobileNativeChatController({
     client,
+    pairedHostClient: client,
     hostId,
     worktreeId: 'folder:work',
     activeSessionTab: tab,
@@ -154,9 +161,12 @@ function Harness(props: HarnessProps) {
   captureRenderedController(current)
   return createElement(MobileNativeChatOverlay, {
     controller: current,
+    worktreePath: null,
+    connState,
     onOpenFile: vi.fn(),
+    onRunInTerminal: vi.fn(),
     images: {
-      sendNativeChat: controller.handleNativeChatSend,
+      sendNativeChat: (text: string) => controller.handleNativeChatSend(text),
       attachments: [],
       isAttaching: false,
       attachImage: async () => {},
@@ -186,7 +196,7 @@ export async function render(props: HarnessProps = lastProps ?? {}) {
     if (tree) {
       tree.update(element)
     } else {
-      tree = create(element)
+      tree = createWithQueryClient(element)
     }
   })
 }

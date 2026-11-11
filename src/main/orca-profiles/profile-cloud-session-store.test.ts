@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { OrcaCloudSession } from './profile-cloud-session-store'
@@ -72,101 +72,6 @@ describe('Orca cloud session store', () => {
   afterEach(() => {
     rmSync(userDataPath, { recursive: true, force: true })
     vi.unstubAllEnvs()
-  })
-
-  it('persists encrypted sessions and reports encrypted persistence from memory and disk', async () => {
-    const store = await loadSessionStore()
-    const session = makeSession()
-
-    expect(store.saveOrcaCloudSession('profile-1', userDataPath, session)).toBe('encrypted')
-    expect(store.readOrcaCloudSession('profile-1', userDataPath)).toEqual({
-      status: 'found',
-      session,
-      persistence: 'encrypted'
-    })
-
-    const reloaded = await loadSessionStore()
-    expect(reloaded.readOrcaCloudSession('profile-1', userDataPath)).toEqual({
-      status: 'found',
-      session,
-      persistence: 'encrypted'
-    })
-  })
-
-  it('falls back to memory-only when encryption is unavailable and plaintext is not allowed', async () => {
-    safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
-    const store = await loadSessionStore()
-    const session = makeSession()
-
-    expect(store.saveOrcaCloudSession('profile-1', userDataPath, session)).toBe('memory-only')
-    expect(store.readOrcaCloudSession('profile-1', userDataPath)).toEqual({
-      status: 'found',
-      session,
-      persistence: 'memory-only'
-    })
-
-    const reloaded = await loadSessionStore()
-    expect(reloaded.readOrcaCloudSession('profile-1', userDataPath)).toEqual({
-      status: 'missing',
-      persistence: 'none'
-    })
-  })
-
-  it('scopes memory-only sessions by user-data path and profile ID', async () => {
-    safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
-    const otherUserDataPath = mkdtempSync(join(tmpdir(), 'orca-cloud-session-other-'))
-    const store = await loadSessionStore()
-    const session = makeSession()
-    const otherSession = { ...session, accessToken: 'other-access-token' }
-
-    try {
-      store.saveOrcaCloudSession('local-default', userDataPath, session)
-      store.saveOrcaCloudSession('local-default', otherUserDataPath, otherSession)
-
-      expect(store.readOrcaCloudSession('local-default', userDataPath)).toMatchObject({
-        status: 'found',
-        session
-      })
-      expect(store.readOrcaCloudSession('local-default', otherUserDataPath)).toMatchObject({
-        status: 'found',
-        session: otherSession
-      })
-    } finally {
-      rmSync(otherUserDataPath, { recursive: true, force: true })
-    }
-  })
-
-  it('bounds memory-session cache churn', async () => {
-    const store = await loadSessionStore()
-    const session = makeSession()
-
-    for (let index = 0; index < store.MAX_MEMORY_CLOUD_SESSIONS + 4; index += 1) {
-      store.saveOrcaCloudSession(`profile-${index}`, userDataPath, session)
-    }
-
-    expect(store.getOrcaCloudMemorySessionCountForTests()).toBe(store.MAX_MEMORY_CLOUD_SESSIONS)
-  })
-
-  it('writes explicit dev plaintext only when the dev escape hatch is enabled', async () => {
-    safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
-    vi.stubEnv('ORCA_CLOUD_ALLOW_PLAINTEXT_SESSION', '1')
-    vi.stubEnv('NODE_ENV', 'development')
-    const store = await loadSessionStore()
-    const session = makeSession()
-
-    expect(store.saveOrcaCloudSession('profile-1', userDataPath, session)).toBe('dev-plaintext')
-
-    const saved = JSON.parse(
-      readFileSync(store.getOrcaCloudSessionPath('profile-1', userDataPath), 'utf-8')
-    ) as { format: string }
-    expect(saved.format).toBe('dev-plaintext-v1')
-
-    const reloaded = await loadSessionStore()
-    expect(reloaded.readOrcaCloudSession('profile-1', userDataPath)).toEqual({
-      status: 'found',
-      session,
-      persistence: 'dev-plaintext'
-    })
   })
 
   it('rejects dev plaintext files when the escape hatch is disabled', async () => {

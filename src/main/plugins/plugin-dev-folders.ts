@@ -33,19 +33,30 @@ export type PluginDevFolderWrites = {
 export type PluginDevLoadResult = {
   path: string
   pluginKey: string
-  /** False when the folder was already loaded and this only reloaded it. */
+  /** False when the folder was already loaded and this only reloaded it. A folder added by a
+   *  load that was refused (approval or invalid) counts as added by the next load that succeeds. */
   added: boolean
   approval: PluginCliApprovalOutcome
 }
 
-function assertPluginSystemEnabled(service: PluginDevFolderService): void {
+type PluginDevLoadInput = {
+  service: PluginDevFolderService
+  writes: PluginDevFolderWrites
+  path: string
+  approvalFingerprint?: string
+  caller: RpcCallerIdentity | undefined
+}
+
+export function assertPluginSystemEnabled(service: {
+  options: Pick<PluginDevFolderService['options'], 'isPluginSystemEnabled'>
+}): void {
   if (!service.options.isPluginSystemEnabled()) {
     throw new PluginCliError(
       PLUGIN_SYSTEM_DISABLED_CODE,
       'Plugins are turned off on this Orca host.',
       {
         nextSteps: [
-          'Ask the user to open Orca Settings → Plugins and click "Turn on plugins", then run the command again.'
+          'Ask the user to click "Turn on plugins" in Orca Settings → Plugins (or, on a host with no window such as `orca serve`, to run `orca plugin system on` against it), then run the command again.'
         ]
       }
     )
@@ -57,7 +68,7 @@ async function samePath(path: string): Promise<string> {
 }
 
 /** Host-local folder identity; the caller's string is resolved here, on the machine that loads it. */
-async function resolveDevFolder(path: string): Promise<string> {
+export async function resolveHostPluginFolder(path: string): Promise<string> {
   if (!isAbsolute(path)) {
     throw new PluginCliError(
       'invalid_argument',
@@ -85,7 +96,23 @@ async function findStoredPath(stored: readonly string[], real: string): Promise<
   return null
 }
 
-function discoveredAt(service: PluginDevFolderService, path: string): DiscoveredPlugin | null {
+// Why per service and in memory: `dev watch` re-run with --approve must own (and on Ctrl-C remove)
+// the folder its refused first attempt added; after a restart the folder reads as loaded before.
+const refusedAdds = new WeakMap<PluginDevFolderService, Set<string>>()
+
+function refusedAddsOf(service: PluginDevFolderService): Set<string> {
+  let paths = refusedAdds.get(service)
+  if (!paths) {
+    paths = new Set()
+    refusedAdds.set(service, paths)
+  }
+  return paths
+}
+
+export function discoveredAt(
+  service: Pick<PluginDevFolderLookup, 'getDiscovered'>,
+  path: string
+): DiscoveredPlugin | null {
   return service.getDiscovered().find((plugin) => plugin.isDev && plugin.rootDir === path) ?? null
 }
 
@@ -93,22 +120,36 @@ function discoveredAt(service: PluginDevFolderService, path: string): Discovered
  * Adds a development folder (the same list Settings → Plugins edits) and applies approval rules:
  * content-only plugins run at once; anything else stays loaded but inert until approved.
  */
-export async function loadPluginDevFolder(input: {
-  service: PluginDevFolderService
-  writes: PluginDevFolderWrites
-  path: string
-  approvalFingerprint?: string
-  caller: RpcCallerIdentity | undefined
-}): Promise<PluginDevLoadResult> {
+export async function loadPluginDevFolder(input: PluginDevLoadInput): Promise<PluginDevLoadResult> {
   const { service } = input
   assertPluginSystemEnabled(service)
-  const real = await resolveDevFolder(input.path)
+  const real = await resolveHostPluginFolder(input.path)
   const stored = service.options.getDevPluginPaths()
   const existing = await findStoredPath(stored, real)
   const path = existing ?? real
   if (!existing) {
     input.writes.setDevPluginPaths([...stored, real])
   }
+  const pending = refusedAddsOf(service)
+  const added = !existing || pending.has(path)
+  try {
+    const result = await loadAddedDevFolder(input, path, added)
+    pending.delete(path)
+    return result
+  } catch (error) {
+    if (added) {
+      pending.add(path)
+    }
+    throw error
+  }
+}
+
+async function loadAddedDevFolder(
+  input: PluginDevLoadInput,
+  path: string,
+  added: boolean
+): Promise<PluginDevLoadResult> {
+  const { service } = input
   await service.refresh()
   const plugin = discoveredAt(service, path)
   if (!plugin || isInvalidDiscoveredPlugin(plugin)) {
@@ -131,7 +172,7 @@ export async function loadPluginDevFolder(input: {
       action: 'dev-load',
       caller: input.caller
     })
-    return { path, pluginKey: plugin.pluginKey, added: !existing, approval }
+    return { path, pluginKey: plugin.pluginKey, added, approval }
   } catch (error) {
     if (error instanceof PluginApprovalRequiredError) {
       throw new PluginApprovalRequiredError(
@@ -149,28 +190,40 @@ export async function loadPluginDevFolder(input: {
   }
 }
 
+export type PluginDevFolderTarget = { path: string } | { pluginKey: string }
+export type PluginDevFolderLookup = {
+  options: { getDevPluginPaths: () => string[] }
+  getDiscovered: () => readonly DiscoveredPlugin[]
+}
+
+/** The stored development folder a path or plugin key names, or null when none is loaded. */
+export async function findLoadedDevFolder(
+  service: PluginDevFolderLookup,
+  target: PluginDevFolderTarget
+): Promise<string | null> {
+  const stored = service.options.getDevPluginPaths()
+  if ('pluginKey' in target) {
+    return (
+      service
+        .getDiscovered()
+        .find(
+          (plugin) =>
+            plugin.isDev && plugin.pluginKey === target.pluginKey && stored.includes(plugin.rootDir)
+        )?.rootDir ?? null
+    )
+  }
+  return isAbsolute(target.path) ? findStoredPath(stored, await samePath(target.path)) : null
+}
+
 /** Removing a development folder only takes access away, so it never needs approval. */
 export async function unloadPluginDevFolder(input: {
   service: PluginDevFolderService
   writes: Pick<PluginDevFolderWrites, 'setDevPluginPaths'>
-  target: { path: string } | { pluginKey: string }
+  target: PluginDevFolderTarget
 }): Promise<{ path: string; pluginKey: string | null }> {
   const { service } = input
   const stored = service.options.getDevPluginPaths()
-  let path: string | null
-  if ('pluginKey' in input.target) {
-    const key = input.target.pluginKey
-    path =
-      service
-        .getDiscovered()
-        .find(
-          (plugin) => plugin.isDev && plugin.pluginKey === key && stored.includes(plugin.rootDir)
-        )?.rootDir ?? null
-  } else {
-    path = isAbsolute(input.target.path)
-      ? await findStoredPath(stored, await samePath(input.target.path))
-      : null
-  }
+  const path = await findLoadedDevFolder(service, input.target)
   if (!path) {
     throw new PluginCliError(
       PLUGIN_NOT_FOUND_CODE,
@@ -184,6 +237,7 @@ export async function unloadPluginDevFolder(input: {
     )
   }
   const pluginKey = discoveredAt(service, path)?.pluginKey ?? null
+  refusedAddsOf(service).delete(path)
   input.writes.setDevPluginPaths(stored.filter((entry) => entry !== path))
   await service.refresh()
   return { path, pluginKey }

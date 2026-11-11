@@ -1,43 +1,55 @@
+import type { BrowserWindow } from 'electron'
+import { getRuntimeDesktopSurface } from '../construction/runtime-desktop-surface'
+import {
+  getRepoExecutionHostId,
+  getRepoSshConnectionId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
+import { WORKSPACE_ON_OTHER_RUNTIME } from '../../../shared/preflight-runtime-capabilities'
 import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree as ResolveBrowserNetworkExecutionHostForWorktreeMethods } from '../terminal/launch/terminal-workspace-scope'
 import { OrcaRuntimeWithHasTerminalsForWorktree } from './session-graph-reload-lifecycle'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import {
   assertFolderWorkspacePathUsable,
-  getFolderWorkspacePathStatus,
+  getResolvedFolderWorkspacePathStatus,
   inferFolderWorkspacePathConnection
 } from '../../project-groups/folder-workspace-path-status'
 import {
   blockedWslDistroForPath,
   runAsWslUserAct,
   wslDistroForPath
-} from '../../wsl/wsl-unc-access-gate'
+} from '../../wsl/filesystem/wsl-unc-access-gate'
 import { wslDistroHoldMessage } from '../../../shared/wsl-distro-stopped-hold'
-import type { TerminalWorkspaceLaunchScope } from '../runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalWorkspaceLaunchScope } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
-import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
-import type { BrowserExecutionHostKeyResolution } from '../runtime-browser-client-page-adoption'
-import { browserNetworkExecutionHostKey } from '../../browser/browser-network-execution-route'
-import type { ClientHostedBrowserRpcRoute } from '../runtime-browser-client-automation'
-import { routeRuntimeBrowserClientAutomation } from '../runtime-browser-client-automation'
-import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
-import { getBrowserHostLeaseRegistry } from '../browser-host/browser-host-lease-registry-instance'
 import {
-  routeDesktopBrowserBridgeRpc,
-  type DesktopBrowserBridgeRoute
-} from '../desktop-browser-bridge/desktop-browser-bridge-route'
-import {
-  getDesktopBrowserBridgeRegistry,
-  isDesktopBrowserBridgeHostEnabled
-} from '../desktop-browser-bridge/desktop-browser-bridge-registry'
-import { runtimeBrowserCommandsFactoryIsAvailable } from '../runtime-browser-commands-factory'
-import { hasPairedPageHost } from '../browser/browser-client-page-opening'
-import { resolveRemoteCliBrowserScopeSelector } from '../desktop-browser-bridge/remote-cli-browser-scope'
-import type { RpcContext } from '../rpc/core'
+  folderCatalogOf,
+  resolveKeyedFolderWorkspace,
+  type WorkspaceSelectorOptions
+} from '../workspaces/catalog/workspace-selector-candidates'
+import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
 
 export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extends OrcaRuntimeWithHasTerminalsForWorktree {
+  getAuthoritativeWindow(missingWindowMessage = 'No renderer window available'): BrowserWindow {
+    const win = this.getAvailableAuthoritativeWindow()
+    if (!win || win.isDestroyed()) {
+      throw new Error(missingWindowMessage)
+    }
+    return win
+  }
+
+  protected getAvailableAuthoritativeWindow(): BrowserWindow | null {
+    if (this.authoritativeWindowId === null) {
+      return null
+    }
+    const win = getRuntimeDesktopSurface().findWindowById(this.authoritativeWindowId)
+    return win && !win.isDestroyed() ? win : null
+  }
+
   protected abstract resolveBrowserNetworkExecutionHostForWorktree(
     ...args: Parameters<
       ResolveBrowserNetworkExecutionHostForWorktreeMethods['resolveBrowserNetworkExecutionHostForWorktree']
@@ -54,13 +66,13 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     this.graphStatus = 'unavailable'
     this.setTerminalSideEffectConsumerAvailable(false)
     this.rememberDetachedPreAllocatedLeaves()
-    this.tabs.clear()
-    this.leaves.clear()
+    this.terminalIdentity.clearTabs()
+    this.terminalIdentity.clearLeaves()
     this.leavesByPtyId.clear()
-    this.handles.clear()
-    this.handleByLeafKey.clear()
+    this.terminalIdentity.clearHandles()
+    this.terminalIdentity.clearLeafBindings()
     this.clearPtyIncarnationHandles()
-    this.rejectAllWaiters('terminal_handle_stale')
+    this.terminalWaiters.rejectAll('terminal_handle_stale')
     this.refreshWritableFlags()
   }
 
@@ -69,24 +81,29 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
   }
 
   protected restoreHeadlessGraphAuthority(): void {
-    this.rendererGraphEpoch += 1
+    this.terminalIdentity.advanceRendererEpoch()
     this.authoritativeWindowId = HEADLESS_RUNTIME_WINDOW_ID
     this.graphStatus = 'ready'
     this.rendererGeneration = null
     this.setTerminalSideEffectConsumerAvailable(false)
-    this.tabs.clear()
-    this.leaves.clear()
+    this.terminalIdentity.clearTabs()
+    this.terminalIdentity.clearLeaves()
     this.leavesByPtyId.clear()
-    this.handles.clear()
-    this.handleByLeafKey.clear()
+    this.terminalIdentity.clearHandles()
+    this.terminalIdentity.clearLeafBindings()
     this.clearPtyIncarnationHandles()
-    this.rejectAllWaiters('terminal_handle_stale')
+    this.terminalWaiters.rejectAll('terminal_handle_stale')
     this.refreshWritableFlags()
     this.markSessionTabsInventoryPublished()
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       this.headlessGraphFallbackAvailable = true
       startedMainTerminalSurfaces(this)?.republish({ force: true })
     }
+  }
+
+  /** A reloading graph keeps main-created tabs; only an unavailable one cannot hold a run terminal. */
+  canOpenRunTerminals(): boolean {
+    return this.graphStatus !== 'unavailable'
   }
 
   assertGraphReady(): void {
@@ -126,71 +143,92 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
   /** `wslUserAct`: the user's start, so its folder check may start a stopped WSL distro (E9). */
   protected async resolveFolderWorkspaceLaunchScope(
     selector: string,
-    options: { wslUserAct?: boolean } = {}
+    options: { wslUserAct?: boolean } = {},
+    resolvedFolder?: FolderWorkspace,
+    checkPath = true
   ): Promise<(TerminalWorkspaceLaunchScope & { folderWorkspace: FolderWorkspace }) | null> {
-    const workspace = this.resolveFolderWorkspaceSelector(selector)
+    const workspace = resolvedFolder ?? this.resolveFolderWorkspaceSelector(selector)
     if (!workspace) {
       return null
     }
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
-    const store = this.store
-    const readStatus = () =>
-      getFolderWorkspacePathStatus(store, {
-        scope: 'folder-workspace',
-        folderWorkspaceId: workspace.id
-      })
-    if (options.wslUserAct) {
-      assertFolderWorkspacePathUsable(
-        await runAsWslUserAct(wslDistroForPath(workspace.folderPath), readStatus)
-      )
-    } else {
-      // Background work holds with Start (a pane's card, an automation's hold), never "unavailable".
-      const blocked = await blockedWslDistroForPath(workspace.folderPath)
-      if (blocked) {
-        throw new Error(wslDistroHoldMessage(blocked.distro, blocked.state))
+    const host = parseExecutionHostId(workspace.executionHostId)
+    if (resolvedFolder && host?.kind === 'runtime' && checkPath) {
+      throw new Error(WORKSPACE_ON_OTHER_RUNTIME)
+    }
+    const connectionId = getRepoSshConnectionId(workspace)
+    if (checkPath) {
+      const readStatus = () =>
+        getResolvedFolderWorkspacePathStatus(workspace, getRepoExecutionHostId(workspace))
+      if (options.wslUserAct) {
+        assertFolderWorkspacePathUsable(
+          await runAsWslUserAct(wslDistroForPath(workspace.folderPath), readStatus)
+        )
+      } else {
+        // Background work holds with Start, before any physical folder check.
+        const blocked = await blockedWslDistroForPath(workspace.folderPath)
+        if (blocked) {
+          throw new Error(wslDistroHoldMessage(blocked.distro, blocked.state))
+        }
+        assertFolderWorkspacePathUsable(await readStatus())
       }
-      assertFolderWorkspacePathUsable(await readStatus())
     }
     return {
       id: folderWorkspaceKey(workspace.id),
       path: workspace.folderPath,
-      connectionId: this.resolveFolderWorkspaceConnectionId(workspace),
+      connectionId,
       repo: null,
       folderWorkspace: workspace
     }
   }
 
-  protected resolveFolderWorkspaceSelector(selector: string): FolderWorkspace | null {
-    const workspaceSelector = selector.startsWith('id:') ? selector.slice(3) : selector
-    const parsed = parseWorkspaceKey(workspaceSelector)
-    if (parsed?.type !== 'folder') {
-      return null
-    }
-    const workspace = this.store
-      ?.getFolderWorkspaces?.()
-      .find((entry) => entry.id === parsed.folderWorkspaceId)
-    if (!workspace) {
-      throw new Error('selector_not_found')
-    }
-    return workspace
+  protected resolveFolderWorkspaceSelector(
+    selector: string,
+    requiredHostId?: ExecutionHostId
+  ): FolderWorkspace | null {
+    return resolveKeyedFolderWorkspace(folderCatalogOf(this.store), selector, requiredHostId)
   }
 
   /** Folder workspaces first, then Git worktrees; project-group folders have no repo row (STA-12562). Launching needs the folder on disk; teardown must not. */
   protected async resolveWorkspaceSelector(
     selector: string,
-    options: { requireUsableFolderPath?: boolean } = {}
+    options: WorkspaceSelectorOptions = {}
   ): Promise<ResolvedWorktree> {
+    const candidate = await this.resolveWorkspaceCandidate(selector, options)
+    if (candidate.kind === 'worktree') {
+      return candidate.worktree
+    }
     const folderWorkspace = options.requireUsableFolderPath
-      ? (await this.resolveFolderWorkspaceLaunchScope(selector))?.folderWorkspace
-      : this.resolveFolderWorkspaceSelector(selector)
-    return folderWorkspace
-      ? this.folderWorkspaceToResolvedWorktree(folderWorkspace)
-      : this.resolveGitWorktreeSelector(selector)
+      ? (
+          await this.resolveFolderWorkspaceLaunchScope(
+            folderWorkspaceKey(candidate.folder.id),
+            {},
+            candidate.folder
+          )
+        )?.folderWorkspace
+      : candidate.folder
+    if (!folderWorkspace) {
+      throw new Error('selector_not_found')
+    }
+    return this.folderWorkspaceToResolvedWorktree(folderWorkspace)
   }
 
   protected async resolveEmulatorWorkspaceId(selector: string): Promise<string> {
+    const key = selector.startsWith('id:') ? selector.slice(3) : selector
+    const parsed = parseWorkspaceKey(key)
+    // Emulator association needs a unique folder identity, not a physical launch host.
+    if (parsed?.type === 'folder') {
+      const rows =
+        this.store
+          ?.getFolderWorkspaces?.()
+          .filter((workspace) => workspace.id === parsed.folderWorkspaceId) ?? []
+      if (rows.length !== 1) {
+        throw new Error(rows.length ? 'selector_ambiguous' : 'selector_not_found')
+      }
+      return folderWorkspaceKey(rows[0].id)
+    }
     return (await this.resolveWorkspaceSelector(selector)).id
   }
 
@@ -201,63 +239,5 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
   /** Reconcile client-hosted pages per paired device; one attached client cannot account for another's pages. */
   markClientHostedPagesReconciled(pairedDeviceId: string): void {
     this.clientHostedPageReconciliation.markReconciled(pairedDeviceId)
-  }
-
-  /** Resolve the current host key; native/WSL runtime ids and SSH provider epochs expire on restart. Missing workspaces are gone; reconnect/repair is temporary and never authorizes page retirement. */
-  async resolveBrowserExecutionHostKeyForWorkspace(
-    workspaceId: string
-  ): Promise<BrowserExecutionHostKeyResolution> {
-    let worktree: ResolvedWorktree
-    try {
-      worktree = await this.resolveBrowserWorkspace(`id:${workspaceId}`)
-    } catch {
-      return { status: 'workspace-gone' }
-    }
-    try {
-      return {
-        status: 'resolved',
-        executionHostKey: browserNetworkExecutionHostKey(
-          await this.resolveBrowserNetworkExecutionHostForWorktree(worktree)
-        )
-      }
-    } catch {
-      return { status: 'unavailable' }
-    }
-  }
-
-  routeClientHostedBrowserRpc(
-    method: string,
-    params: unknown
-  ): Promise<ClientHostedBrowserRpcRoute> {
-    return routeRuntimeBrowserClientAutomation({
-      method,
-      params,
-      pages: getRuntimeBrowserPageRegistry(this),
-      leases: getBrowserHostLeaseRegistry(this),
-      resolveWorkspace: (selector) =>
-        resolveRemoteCliBrowserScopeSelector(selector) ?? this.resolveBrowserWorkspace(selector)
-    })
-  }
-
-  /** On orcad, sends this host's CLI browser commands to the desktop that opted in to serve them. */
-  routeDesktopBrowserBridgeRpc(
-    method: string,
-    params: unknown,
-    context: Pick<RpcContext, 'caller' | 'signal'>
-  ): Promise<DesktopBrowserBridgeRoute> {
-    return routeDesktopBrowserBridgeRpc({
-      method,
-      params,
-      caller: context.caller,
-      signal: context.signal,
-      hostEnabled: isDesktopBrowserBridgeHostEnabled(),
-      registry: getDesktopBrowserBridgeRegistry(this),
-      // This runtime lists/retires desktop-hosted pages even while their desktop is gone, so those commands need no bridge.
-      localBrowserAvailable:
-        runtimeBrowserCommandsFactoryIsAvailable() ||
-        getRuntimeBrowserPageRegistry(this).listPages().length > 0 ||
-        hasPairedPageHost({ getBrowserHostLeaseRegistry: () => getBrowserHostLeaseRegistry(this) }),
-      resolveWorkspace: (selector) => this.resolveBrowserWorkspace(selector)
-    })
   }
 }

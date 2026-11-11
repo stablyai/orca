@@ -2,15 +2,15 @@ import {
   agentSessionFailureFact,
   providerDiagnostic,
   withProviderDiagnostic
-} from '../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
-import { ClaudeDispatchContentError } from '../claude/claude-structured-dispatch-content'
+} from '../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
+import { ClaudeDispatchContentError } from '../claude/structured/claude-structured-dispatch-content'
 import { JsonlRpcResponseError } from '../jsonl-rpc/peer'
 import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionAdapter
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
+} from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/options/structured-agent-session-option-error'
 import { applyPiRpcSessionOption } from './rpc-options'
 import { PiRpcPromptError, preparePiRpcPrompt, type PiRpcPrompt } from './rpc-prompt'
 import type { PiRpcSession, PiRpcSessionDeps } from './rpc-session'
@@ -57,38 +57,39 @@ export async function dispatchPiRpcMessage(
     return exited()
   }
   input.onInputPreparation?.()
-  if (!input.executionOptions) {
-    input.signal?.throwIfAborted()
-    return submitPiRpcPrompt(session, input, prompt)
-  }
-  for (const key of ['model', 'effort'] as const) {
-    const value = input.executionOptions[key]
-    if (value === undefined || session.optionProof.current.get(key) === value) {
-      continue
-    }
-    try {
-      await applyPiRpcSessionOption(
-        session.connection,
-        session.selected,
-        key,
-        value,
-        { signal: input.signal },
-        session.optionProof
-      )
-    } catch (error) {
-      input.signal?.throwIfAborted()
-      if (session.connection.closed) {
-        return exited()
+  // Pi refuses prompts during a requested compaction. Wait it out, then reapply this send's
+  // options in case a pick changed them meanwhile, until none started during the option RPCs.
+  do {
+    await session.turns.compaction.waitForEnd(input.signal)
+    for (const key of ['model', 'effort'] as const) {
+      const value = input.executionOptions?.[key]
+      if (value === undefined || session.optionProof.current.get(key) === value) {
+        continue
       }
-      if (error instanceof JsonlRpcResponseError) {
-        throw withProviderDiagnostic(
-          new AgentSessionOptionRejectedError(error),
-          providerDiagnostic(error.message, 'person')
+      try {
+        await applyPiRpcSessionOption(
+          session.connection,
+          session.selected,
+          key,
+          value,
+          { signal: input.signal },
+          session.optionProof
         )
+      } catch (error) {
+        input.signal?.throwIfAborted()
+        if (session.connection.closed) {
+          return exited()
+        }
+        if (error instanceof JsonlRpcResponseError) {
+          throw withProviderDiagnostic(
+            new AgentSessionOptionRejectedError(error),
+            providerDiagnostic(error.message, 'person')
+          )
+        }
+        throw new AgentSessionOptionRejectedError(error)
       }
-      throw new AgentSessionOptionRejectedError(error)
     }
-  }
+  } while (session.turns.compaction.running)
   input.signal?.throwIfAborted()
   if (!isCurrent() || session.connection.closed) {
     return exited()

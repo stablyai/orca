@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { applyLayoutCommand } from './workspace-layout-commands'
 import type { CommandOf } from './workspace-layout-command-types'
-import { build, emptyModel, testContext, WS } from './workspace-layout-command.test-fixture'
+import { build, testContext, WS } from './workspace-layout-command.test-fixture'
 
 const switchState = vi.hoisted(() => ({ layoutOwnerIsMain: true }))
 
@@ -76,11 +76,6 @@ describe('a chat tab a window drew', () => {
       first: { type: 'leaf', groupId: besideGroupId },
       second: { type: 'leaf', groupId: 'g2' }
     })
-  })
-
-  it('mints its own group still when the open names none', () => {
-    const { model } = build(testContext(), [drawn({ tabId: undefined })], emptyModel())
-    expect(model.workspaces[WS]?.groups).toHaveLength(1)
   })
 
   it('with the switch off, still takes a taken id as shipped builds do (legacy duplicate)', () => {

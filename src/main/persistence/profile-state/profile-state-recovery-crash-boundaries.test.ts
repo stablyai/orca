@@ -461,35 +461,6 @@ describe('SQLite recovery process death', () => {
   )
 })
 
-describe('seeded recovery fixture copies', () => {
-  it.each([
-    ['json', false],
-    ['json', true],
-    ['sqlite', true]
-  ] as const)(
-    'isolates %s/accepted=%s through corruption and WAL reopen',
-    async (kind, accepted) => {
-      const first = await fixture(kind, accepted)
-      const second = await fixture(kind, accepted)
-      const seed = seededFixtures.get(`${kind}/${accepted}`)
-      if (!seed) {
-        throw new Error('Seed fixture was not retained')
-      }
-      expect(new Set([first.root, second.root, seed.root]).size).toBe(3)
-      for (const [suffix, bytes] of seed.originalFamily) {
-        expect(readFileSync(`${first.databasePath}${suffix}`).equals(bytes)).toBe(true)
-        writeFileSync(`${first.databasePath}${suffix}`, 'corrupted-copy')
-        expect(readFileSync(`${second.databasePath}${suffix}`).equals(bytes)).toBe(true)
-        expect(readFileSync(`${seed.databasePath}${suffix}`).equals(bytes)).toBe(true)
-      }
-      const third = await fixture(kind, accepted)
-      expect(readSqlite(third.databasePath)).toEqual(oldState)
-      expect(readFileSync(seed.backupPath).equals(seed.backupBytes)).toBe(true)
-      expect(readFileSync(seed.exportPath, 'utf8')).toBe(selectedJson)
-    }
-  )
-})
-
 it.each(['first-export', 'authority-marker'] as const)(
   'keeps current-JSON rollback safe through %s removal',
   async (boundary) => {

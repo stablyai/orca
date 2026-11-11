@@ -1,7 +1,7 @@
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import type { RpcMethodName } from '../transport/rpc-params-contract'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
-import type { RpcCompatibleReader } from '../transport/rpc-operation-contract'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import type { RpcMethodName } from '../../../src/shared/rpc-contract/rpc-params-catalog.generated'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
+import type { RpcCompatibleReader } from '../transport/rpc/rpc-operation-contract'
 import {
   browserCommandUnreadReplySchema,
   browserNavigationSettledSchema

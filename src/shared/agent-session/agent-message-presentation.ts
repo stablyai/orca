@@ -1,8 +1,22 @@
 import type { AgentMessageSender, AgentMessageSource } from './agent-session-message-source'
-import type { AgentStatusEntry } from '../agent-status-types'
+import type { AgentStatusEntry } from '../agent-status/contracts/agent-status-types'
+import type { NativeChatMessage } from '../native-chat/native-chat-types'
+import { agentMessageTranscriptText } from './agent-message-display-text'
 
-export const AGENT_MESSAGE_FOLDED_LINES = 3
-export type AgentMessageHeading = 'started' | 'task' | 'coordinator' | 'worker' | 'generic'
+export function agentMessageIsCompact(
+  message: Pick<NativeChatMessage, 'agentStart' | 'from'>
+): boolean {
+  return message.agentStart === true || message.from?.kind === 'agent'
+}
+
+export type AgentMessageHeading =
+  | 'started'
+  | 'handed-off'
+  | 'started-agent'
+  | 'task'
+  | 'coordinator'
+  | 'worker'
+  | 'generic'
 export type AgentMessageSenderView = Readonly<{
   agentType?: AgentStatusEntry['agentType']
   progress?: number
@@ -20,12 +34,17 @@ export type AgentMessageSenderView = Readonly<{
     | 'permission'
 }>
 
+/** Takes the message's creation flags and text together, and requires them, so no caller can show a
+ *  creation card as a plain message, a handoff as a started worker, or a handoff with no task as work handed over. */
 export function agentMessageHeading(
   from: AgentMessageSource,
-  agentStart = false
+  creation: Pick<NativeChatMessage, 'agentStart' | 'agentHandoff' | 'blocks'>
 ): AgentMessageHeading {
-  if (agentStart) {
-    return 'started'
+  if (creation.agentStart) {
+    if (!creation.agentHandoff) {
+      return 'started'
+    }
+    return agentMessageTranscriptText(creation.blocks, from) ? 'handed-off' : 'started-agent'
   }
   if (from.orchestration?.message === 'task') {
     return 'task'
@@ -57,11 +76,23 @@ export function agentMessageSenderLabel(facts: {
   )
 }
 
-export function agentMessageSenderCanOpen(
-  sender: AgentMessageSender,
-  hasWorkspace: boolean
-): boolean {
-  return hasWorkspace && !sender.party.address.startsWith('dispatch:')
+/** The kind the card saved, when it names one; a saved "unknown" proves nothing, so it is none. */
+export function agentMessageSavedKind(
+  sender: Pick<AgentMessageSender, 'agent'> | undefined
+): AgentMessageSender['agent'] {
+  return sender?.agent === 'unknown' ? undefined : sender?.agent
+}
+
+/** A Dispatch address names work, not a pane; every other sender address can be opened. */
+export function agentMessageSenderCanOpen(sender: AgentMessageSender): boolean {
+  return (
+    !sender.party.address.startsWith('dispatch:') &&
+    !(
+      sender.party.address.startsWith('run:') &&
+      !sender.party.orcaSessionId &&
+      !sender.party.terminalHandle
+    )
+  )
 }
 
 export function agentMessagePrimarySender(
@@ -70,19 +101,17 @@ export function agentMessagePrimarySender(
   return from.senders[0]
 }
 
+/** The sender's own kind is its icon; a live row adds only its status. */
 export function agentMessageSenderView(
   row: AgentMessageSenderView | undefined,
-  chatType: AgentMessageSenderView['agentType']
+  senderType: AgentMessageSenderView['agentType']
 ): AgentMessageSenderView {
-  return row ?? { agentType: chatType }
-}
-
-export function agentMessageOverflows(height: number, lineHeight: number): boolean {
-  return height > lineHeight * AGENT_MESSAGE_FOLDED_LINES + 1
-}
-
-export function agentMessageFoldLabel(open: boolean): 'expanded' | 'collapsed' {
-  return open ? 'expanded' : 'collapsed'
+  if (!row) {
+    return { agentType: senderType }
+  }
+  return senderType === undefined || row.agentType === senderType
+    ? row
+    : { ...row, agentType: senderType }
 }
 
 export function agentMessageCanCopy(text: string): boolean {

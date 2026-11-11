@@ -1,6 +1,9 @@
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
-import { parseWorkspaceSession } from '../workspace-session-schema'
-import { ownedEditorFileId, paneBelongsToTerminalLayout } from '../workspace-session-pane-ownership'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
+import { parseWorkspaceSession } from '../workspace-session/workspace-session-schema'
+import {
+  ownedEditorFileId,
+  paneBelongsToTerminalLayout
+} from '../workspace-session/workspace-session-pane-ownership'
 
 export function parseOrcadMigrationDormantWorkspaceSession(value: unknown): WorkspaceSessionState {
   const parsed = parseWorkspaceSession(value)

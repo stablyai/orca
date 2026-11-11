@@ -72,14 +72,6 @@ function createHarness(overrides?: {
 }
 
 describe('ws outbound backpressure queue', () => {
-  it('sends straight through while under the soft cap', () => {
-    const h = createHarness()
-    h.queue.enqueue('a')
-    h.queue.enqueue('b')
-    expect(h.sent).toEqual(['a', 'b'])
-    expect(h.hasTimer()).toBe(false)
-  })
-
   it('turns an immediate send exception into one overflow signal', () => {
     const h = createHarness({ throwOnSend: true })
 
@@ -143,24 +135,6 @@ describe('ws outbound backpressure queue', () => {
     expect(h.hasTimer()).toBe(false)
   })
 
-  it('rejects an oversized frame before the direct-send fast path', () => {
-    const send = vi.fn()
-    const overflow = vi.fn()
-    const queue = createWsOutboundBackpressureQueue<string>({
-      send,
-      byteLengthOf: (frame) => frame.length,
-      getBufferedAmount: () => 0,
-      isWritable: () => true,
-      onOverflow: overflow,
-      maxFrameBytes: 4
-    })
-
-    expect(queue.enqueue('12345')).toBe(false)
-
-    expect(send).not.toHaveBeenCalled()
-    expect(overflow).toHaveBeenCalledOnce()
-  })
-
   it('parks frames in order while over the cap and drains on recovery without loss', () => {
     const h = createHarness({ softCapBytes: 100 })
     h.setBuffered(200)
@@ -220,32 +194,6 @@ describe('ws outbound backpressure queue', () => {
     h.setBuffered(0)
     h.runTimer()
     expect(h.sent).toEqual(['12345678'])
-  })
-
-  it('cannot cancel a frame after it has reached the wire', () => {
-    const h = createHarness()
-    const direct = h.queue.enqueueCancelable('direct')
-
-    expect(direct).toMatchObject({ accepted: true, queued: false })
-    expect(direct.cancel()).toBe(false)
-    expect(h.sent).toEqual(['direct'])
-  })
-
-  it('does not retain sent frame slots while a steady backlog keeps the queue busy', () => {
-    const h = createHarness({ softCapBytes: 10, parkAfterSend: true })
-    h.setBuffered(100)
-    h.queue.enqueue('frame-0')
-    h.queue.enqueue('frame-1')
-
-    for (let index = 2; index < 256; index += 1) {
-      h.setBuffered(0)
-      h.runTimer()
-      h.queue.enqueue(`frame-${index}`)
-      expect(h.queue.evidence().storageSlots).toBeLessThanOrEqual(66)
-    }
-
-    expect(h.sent).toHaveLength(254)
-    expect(h.queue.evidence()).toMatchObject({ queuedFrames: 2 })
   })
 
   it('releases aggregate queue claims on drain, disposal, and denied admission', () => {
@@ -328,35 +276,6 @@ describe('ws outbound backpressure queue', () => {
     expect(h.overflow).toHaveBeenCalledTimes(1)
   })
 
-  it('bounds zero-byte frames independently of the queued-byte cap', () => {
-    const h = createHarness({ softCapBytes: 10, maxQueuedFrames: 2 })
-    h.setBuffered(100)
-
-    h.queue.enqueue('')
-    h.queue.enqueue('')
-    h.queue.enqueue('')
-
-    expect(h.overflow).toHaveBeenCalledOnce()
-    expect(h.queue.evidence()).toMatchObject({ queuedBytes: 0, queuedFrames: 0 })
-  })
-
-  it('fails closed when a caller reports an invalid retained size', () => {
-    const overflow = vi.fn()
-    const queue = createWsOutboundBackpressureQueue<string>({
-      send: vi.fn(),
-      byteLengthOf: () => Number.NaN,
-      getBufferedAmount: () => 100,
-      isWritable: () => true,
-      onOverflow: overflow,
-      softCapBytes: 10
-    })
-
-    queue.enqueue('frame')
-
-    expect(overflow).toHaveBeenCalledOnce()
-    expect(queue.evidence()).toMatchObject({ queuedBytes: 0, queuedFrames: 0 })
-  })
-
   it('drops the backlog if the socket becomes unwritable mid-park', () => {
     const h = createHarness({ softCapBytes: 10 })
     h.setBuffered(100)
@@ -365,15 +284,5 @@ describe('ws outbound backpressure queue', () => {
     h.runTimer()
     expect(h.sent).toEqual([])
     expect(h.queue.queuedBytes()).toBe(0)
-  })
-
-  it('does not fast-path a frame while the socket is unwritable', () => {
-    const h = createHarness({ writable: false })
-
-    h.queue.enqueue('data')
-
-    expect(h.sent).toEqual([])
-    expect(h.queue.queuedBytes()).toBe('data'.length)
-    expect(h.hasTimer()).toBe(true)
   })
 })

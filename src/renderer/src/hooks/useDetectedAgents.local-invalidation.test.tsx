@@ -1,22 +1,24 @@
 // @vitest-environment happy-dom
+import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import { useNewTabAgentMenuRows } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import {
   useSourceControlActionAgent,
   useSourceControlActionAgentInventory
-} from '@/components/settings/use-source-control-action-agent'
-import { readNativeDetectedAgents } from '@/store/slices/local-detected-agent-store-state'
-import { useHostStructuredAgentsSync } from '@/runtime/host-structured-agents-sync'
+} from '@/components/settings/source-control/use-source-control-action-agent'
+import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
+import { useHostStructuredAgentsSync } from '@/runtime/native-chat/agent-catalogs/host-structured-agents-sync'
 import {
   readHostStructuredAgentsForRuntime,
   resetHostStructuredAgentsForTests
-} from '@/runtime/host-structured-agents'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+} from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
-import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import type { Project } from '../../../shared/project-types'
 import { useDetectedAgents, type AgentDetectionTarget } from './useDetectedAgents'
 
@@ -149,7 +151,7 @@ it('recovers mounted native consumers after availability changes alongside WSL l
   }
   const settings = {
     ...getDefaultSettings('/home/test'),
-    experimentalNativeChat: true,
+    nativeChatProviders: EVERY_AGENT_CHAT,
     localWindowsRuntimeDefault: { kind: 'windows-host' } as const
   }
   useAppStore.setState({

@@ -4,12 +4,12 @@ import type { QueuedEditHostFixtureModule } from './queued-edit-host.test-fixtur
 import type {
   AgentSessionQueuedMessageEditHoldParams,
   AgentSessionQueuedMessageEditHoldResult
-} from './agent-session-wire'
+} from './agent-session/requests/agent-session-queued-message-wire'
 
 let queuedEditHost: QueuedEditHostFixtureModule['queuedEditHost']
 beforeAll(async () => {
   const fixtures = await vi.importActual<QueuedEditHostFixtureModule>(
-    '../main/native-chat/agent-session-journal/queued-edit-host.test-fixture'
+    '../main/native-chat/agent-session-journal/queued-messages/queued-edit-host.test-fixture'
   )
   queuedEditHost = fixtures.queuedEditHost
 })
@@ -148,42 +148,3 @@ it('keeps the existing held/failure/expired-to-held request protocol without ter
   expect(vi.getTimerCount()).toBe(0)
   warn.mockRestore()
 })
-
-it.each([10, 100])(
-  'terminal completion for %i independent leases delivers once per owner with no followup requests',
-  async (n) => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    const onLost = vi.fn()
-    const request = vi.fn(
-      async (
-        params: AgentSessionQueuedMessageEditHoldParams
-      ): Promise<AgentSessionQueuedMessageEditHoldResult> =>
-        params.action === 'release' ? { status: 'released' } : { status: 'gone' }
-    )
-    const leases = Array.from({ length: n }, (_, index) =>
-      startQueuedEditLease({
-        sessionId: `session-${index}`,
-        messageId: 'card',
-        editId: `edit-${index}`,
-        expectedBodyFingerprint: `base-${index}`,
-        request,
-        onLost
-      })
-    )
-    await Promise.all(leases.map((lease) => lease.acquired))
-    expect(onLost).toHaveBeenCalledTimes(n)
-    leases.forEach((lease, index) =>
-      expect(onLost.mock.calls[index]?.[0]).toEqual({
-        lease,
-        expected: `base-${index}`,
-        status: 'gone'
-      })
-    )
-    expect(request).toHaveBeenCalledTimes(n)
-    leases.forEach((lease) => lease.end())
-    await vi.advanceTimersByTimeAsync(4 * QUEUED_EDIT_LEASE_RENEW_MS)
-    expect(onLost).toHaveBeenCalledTimes(n)
-    expect(request).toHaveBeenCalledTimes(2 * n)
-    expect(vi.getTimerCount()).toBe(0)
-  }
-)

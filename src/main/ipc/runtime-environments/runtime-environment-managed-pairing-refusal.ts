@@ -1,7 +1,7 @@
 import { errorMessage } from '../../../shared/error-message'
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
-import { getOrcadSshDeployment } from '../../../shared/runtime-environments'
-import { OrcadManagedPairingRepairFailedError } from '../../managed-server/lifecycle/orcad-managed-pairing-repair-failure'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { getOrcadSshDeployment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { managedOrcadRefusalNeedingUserCode } from '../../managed-server/lifecycle/orcad-managed-tunnel-identity'
 import {
   managedOrcadPairingFailureStands,
   recoverRefusedManagedOrcadPairing
@@ -40,14 +40,13 @@ export function handleManagedSharedControlRefusal(
     (outcome) => (outcome === 'repaired' ? 'stop' : 'retry'),
     (error: unknown) => {
       // A concurrent pairing has a successor owner this failure never judged.
-      if (
-        error instanceof OrcadManagedPairingRepairFailedError &&
-        failureStands(userDataPath, environmentId)
-      ) {
+      const code = managedOrcadRefusalNeedingUserCode(error)
+      if (code && error instanceof Error && failureStands(userDataPath, environmentId)) {
         // Authentication refusal blocks retries until an explicit user connect.
         try {
           getRuntimeEnvironmentStatusOwner(userDataPath, environmentId).authenticationRejected(
-            error.message
+            error.message,
+            code
           )
         } catch {
           // Removed while it re-paired: nothing is left to report on.

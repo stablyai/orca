@@ -1,55 +1,35 @@
-import type { ConnectionState, RpcResponse } from '../transport/types'
-import { BridgeCapExceededError, BridgeReplyUndeliverableError } from './bridge-host-errors'
+import type { ConnectionState } from '../transport/connection/connection-state'
+import { BRIDGE_APP_INACTIVE_FRAME } from './bridge/bridge-app-inactive'
+
+import { BridgeCapExceededError } from './bridge-host-errors'
 import { createNativeVerbServer } from './bridge-host-native-verbs'
 import { BridgeHostRequests } from './bridge-host-requests'
 import { BridgeHostSubscriptions } from './bridge-host-subscriptions'
 import { createBridgeHostStreamFrames } from './bridge-host-stream-frames'
 import {
-  BRIDGE_FAULT_GRANT,
   BRIDGE_PROTOCOL_VERSION,
-  BRIDGE_RPC_ENVELOPE_GRANT,
+  BRIDGE_SHELL_GRANTS,
   readBridgeClientMessage,
-  type BridgeClientMessage,
-  type BridgeColorScheme,
-  type BridgeUiLocale,
-  type BridgeConnectionSnapshot,
-  type BridgeInitRoute
+  type BridgeClientMessage
 } from './bridge/bridge-envelope'
 import { BridgePageRouteGrantsSchema } from './bridge/bridge-page-route-grants'
 import { createBridgeInitFrame } from './bridge/bridge-init-frame'
-import { splitBridgeReply } from './bridge/bridge-reply-chunking'
+import { createBridgeHostReplySender } from './bridge-host-reply-sender'
 import { createBridgeHostFrames } from './bridge-host-frames'
-import { createBridgeHostBack, type BridgeSessionBack } from './bridge-host-back'
+import { createBridgeHostBack } from './bridge-host-back'
 import { createBridgeNotifyForwarder } from './bridge-host-notify'
 import { createBridgeHostRoute } from './bridge-host-route'
-import type { BridgeSafeAreaInsets } from './bridge/bridge-safe-area-insets'
-import type { BridgeHostOptions } from './bridge-host-contract'
+import { pageStorageForReader } from './page-storage-keys'
+import { BRIDGE_TERMINAL_KEY_FRAME } from './bridge/bridge-terminal-key'
+import { createBridgeVerdictHold, isDesktopBound } from './bridge-host-verdict-hold'
+import type { BridgeHost, BridgeHostOptions } from './bridge-host-contract'
 
-export type { BridgeHostDiagnostic, BridgeHostOptions } from './bridge-host-contract'
-
-export type BridgeHost = {
-  receive: (json: string) => void
-  // Hold same-screen param updates even when posting fails; repair from the next ready without delivery tracking. Different pathnames require remount; the page clears consumed params (rulings 33.1/34).
-  publishRoute: (next: BridgeInitRoute) => void
-  publishSafeAreaInsets: (next: BridgeSafeAreaInsets) => void
-  publishKeyboardInset: (next: number) => void
-  publishColorScheme: (next: BridgeColorScheme) => void
-  publishUiLocale: (next: BridgeUiLocale) => void
-  // False leaves Back to native navigation, including pages predating this frame.
-  sendBack: () => boolean
-  // Transfer the session’s Back state on client-driven host rebuild; the mounted page never reclaims it. Ending sessions simply discard it.
-  readSessionBack: () => BridgeSessionBack
-  dispose: () => void
-}
+export type { BridgeHost, BridgeHostDiagnostic, BridgeHostOptions } from './bridge-host-contract'
 
 // Bind the host structurally to one RPC client; the protocol lets pages name no other host. Native origin checks reject expired sessions, and init caps are enforced here.
 export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   const { client, buildId, sessionId, pageRoutes, host } = options
-  const granted: readonly string[] = [
-    BRIDGE_FAULT_GRANT,
-    BRIDGE_RPC_ENVELOPE_GRANT,
-    ...options.routeGrants
-  ]
+  const granted: readonly string[] = [...BRIDGE_SHELL_GRANTS, ...options.routeGrants]
   // Validate manifest pairs like the route: a pair refused by the page would invalidate the entire init.
   const parsedRouteGrants =
     options.pageRouteGrants === undefined
@@ -68,6 +48,9 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     onRefused: (issue) => options.onDiagnostic?.({ kind: 'route-update-refused', issue }),
     ...(options.safeAreaInsets === undefined ? {} : { safeAreaInsets: options.safeAreaInsets }),
     ...(options.keyboardInset === undefined ? {} : { keyboardInset: options.keyboardInset }),
+    ...(options.pageGeometry === undefined ? {} : { pageGeometry: options.pageGeometry }),
+    ...(options.foldDivision === undefined ? {} : { foldDivision: options.foldDivision }),
+    ...(options.terminalKeyRail === undefined ? {} : { terminalKeyRail: options.terminalKeyRail }),
     ...(options.colorScheme === undefined ? {} : { colorScheme: options.colorScheme }),
     ...(options.uiLocale === undefined ? {} : { uiLocale: options.uiLocale })
   })
@@ -76,6 +59,11 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   let serving = true
   // serving initially admits the first ready batch, but only an established session holds grants. Inherit establishment when rebuilding beneath a live page.
   let initSent = options.sessionEstablished
+  // What the page's init reader accepts, carried across a rebuild because the page does not
+  // re-handshake. Null is a page older than `storageKeys`, which gets the legacy keys only.
+  let pageStorageKeys: readonly string[] | null = options.sessionBack?.storageKeys ?? null
+  let pageReadsConnectionPath = options.sessionBack?.connectionPathFrames === true
+  let pageReadsAppInactive = options.sessionBack?.appInactiveFrames === true
 
   const frames = createBridgeHostFrames({
     post: options.post,
@@ -84,8 +72,10 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   })
   const { postJson, sendJson, send, sendError } = frames
 
+  const verdict = createBridgeVerdictHold(options.readHostStatus, sendError)
   const subscriptions = new BridgeHostSubscriptions({
     client,
+    holdReplay: verdict.holdReplay,
     post: sendJson,
     onBinaryFrameDropped: ({ id, bytes, droppedOnStream }) => {
       options.onDiagnostic?.({ kind: 'binary-frame-dropped', id, bytes, dropped: droppedOnStream })
@@ -98,24 +88,31 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   })
 
   // Use the event’s state; listeners can run before the mirrored getter updates.
-  function snapshot(state?: ConnectionState): BridgeConnectionSnapshot {
-    return {
-      state: state ?? client.getState(),
-      reconnectAttempt: client.getReconnectAttempt(),
-      lastConnectedAt: client.getLastConnectedAt(),
-      lastInboundAt: client.getLastInboundAt?.() ?? null,
-      generation: client.getGeneration?.() ?? null
-    }
-  }
+  const snapshot = (state?: ConnectionState) => verdict.snapshot(client, state)
 
-  // Build init synchronously for first-render/golden timing; reread route, client state and storage on every ready, including reloads after writes.
-  // Refused routes send nothing; failed posts produce one diagnostic with no held frame or retry. The page’s next ready repairs state (ruling 34).
-  function sendInit(): void {
+  /**
+   * Posts `init`, and answers nothing (ruling 34).
+   *
+   * Sent every time it is asked for, with the keys read every time it is sent. A page that saw a
+   * `state` older than the one it holds recovers by asking again rather than by living with a
+   * cache it knows is wrong, and the same is true of its storage: a document that reloads inside
+   * one mount — which the fault path produces — would otherwise be primed from before its own
+   * writes, and `publishPageStorage` clears the page's cache to match.
+   *
+   * The frame is built synchronously, because the page refuses every member until `init` lands and
+   * the golden recorder mounts its screen in the same turn it drains one; a frame whose contents
+   * waited on a promise would change what the first render of every replay sees.
+   *
+   * A refused route sends nothing at all, and a post the view would not take is one diagnostic and
+   * no further attempt: nothing here holds a frame, and nothing retries one.
+   */
+  function sendInit(refreshTerminalShortcuts = false): void {
     const route = routes.current()
-    if (route === null) {
+    if (route === null || (refreshTerminalShortcuts && !deliverable())) {
       return
     }
     initSent = true
+    verdict.noteInit()
     void postJson(
       JSON.stringify(
         createBridgeInitFrame({
@@ -125,6 +122,9 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
           route,
           safeAreaInsets: routes.safeAreaInsets(),
           keyboardInset: routes.keyboardInset(),
+          pageGeometry: routes.pageGeometry(),
+          foldDivision: routes.foldDivision(),
+          terminalKeyRail: routes.terminalKeyRail(),
           colorScheme: routes.colorScheme(),
           uiLocale: routes.uiLocale(),
           pageRoutes,
@@ -134,22 +134,15 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
           granted,
           host,
           ownsHostArea: options.ownsHostArea === true,
-          ...options.readStorage()
+          hostStatus: options.readHostStatus?.() ?? null,
+          ...pageStorageForReader(options.readStorage(), pageStorageKeys),
+          refreshTerminalShortcuts
         })
       )
     )
   }
 
-  function sendReply(id: string, payload: RpcResponse): void {
-    const split = splitBridgeReply(id, payload)
-    if (!split.ok) {
-      sendError(id, new BridgeReplyUndeliverableError(split.refusal))
-      return
-    }
-    for (const frame of split.frames) {
-      send(frame)
-    }
-  }
+  const sendReply = createBridgeHostReplySender(sendJson, sendError)
 
   const requests = new BridgeHostRequests({
     client,
@@ -183,17 +176,27 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     ...(options.sessionBack === undefined ? {} : { established: options.sessionBack })
   })
 
+  let railOwner = options.sessionBack?.terminalKeyRailClaim?.inputOwner
+  let railClaimed = options.sessionBack?.terminalKeyRailClaim !== undefined
+  type RailClaim = NonNullable<BridgeHostOptions['onTerminalKeyRailClaim']>
+  const reportRailClaim: RailClaim = (claimed, inputOwner, toolbar) => {
+    railClaimed = claimed
+    railOwner = claimed ? inputOwner : undefined
+    options.onTerminalKeyRailClaim?.(claimed, inputOwner, toolbar)
+  }
   const forwardNotify = createBridgeNotifyForwarder({
     options,
     granted,
     initSent: () => initSent,
     route: () => routes.current(),
-    onBackClaim: back.readClaim
+    onBackClaim: back.readClaim,
+    onTerminalKeyRailClaim: reportRailClaim
   })
 
   function settleAll(notify: boolean): void {
     requests.closeAll(notify)
     subscriptions.closeAll(notify ? 'closed' : null)
+    verdict.settle(notify)
   }
 
   function dispose(): void {
@@ -203,14 +206,22 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     settleAll(true)
     closed = true
     unsubscribeState()
+    unsubscribeConnectionPath()
   }
 
   function dispatch(message: BridgeClientMessage): void {
     // Every ready claims the view, whether a new document or a repeated ask.
     if (message.type === 'ready') {
       serving = true
+      pageStorageKeys = message.storageKeys ?? null
+      pageReadsConnectionPath = message.connectionPathFrames === true
+      pageReadsAppInactive = message.appInactiveFrames === true
       back.readReady()
-      // Answer every ready with current state; this repairs missed frames without host retries (ruling 34).
+      // Dropped like the Back claim: a page still showing a terminal claims again on this `init`.
+      reportRailClaim(false)
+      // Every time it is asked, not once: the page re-asks on a backoff, and each ask is answered
+      // with the route the shell holds now. That is the whole repair path for a frame that never
+      // arrived (ruling 34) — nothing here waits on one, and nothing retries one.
       sendInit()
       options.onPageReady()
       return
@@ -220,9 +231,12 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
       return
     }
     // A session with no handshake has no grants/caps; refuse requests and streams too. Inherited handshake state keeps client-rebuilt hosts serving live pages.
-    if (!initSent && (message.type === 'request' || message.type === 'subscribe')) {
+    if (!initSent && isDesktopBound(message)) {
       options.onDiagnostic?.({ kind: 'notify-refused', name: message.method, why: 'before-ready' })
       sendError(message.id, new BridgeCapExceededError('before-ready'))
+      return
+    }
+    if (!verdict.admit(message)) {
       return
     }
     switch (message.type) {
@@ -251,6 +265,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
         settleAll(false)
         serving = false
         back.drop()
+        reportRailClaim(false)
         return
     }
   }
@@ -258,6 +273,13 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   const unsubscribeState = client.onStateChange((state) => {
     send({ v: BRIDGE_PROTOCOL_VERSION, type: 'state', connection: snapshot(state) })
   })
+  // A relay dial can start or fail without a state change; the page labels the dial from these.
+  const unsubscribeConnectionPath =
+    client.onConnectionPathChange?.(() => {
+      if (pageReadsConnectionPath) {
+        send({ v: BRIDGE_PROTOCOL_VERSION, type: 'connectionPath', connection: snapshot() })
+      }
+    }) ?? (() => {})
 
   if (routes.current() === null) {
     // Report invalid routes at construction so recovery does not depend on a blank page producing a frame.
@@ -279,14 +301,27 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
       }
       dispatch(read.message)
     },
-    publishRoute: (next) => {
-      routes.publish(next, serving && initSent)
-    },
+    publishRoute: (next) => routes.publish(next, serving && initSent),
     publishSafeAreaInsets: (next) => {
       routes.publishSafeAreaInsets(next, deliverable())
     },
-    publishKeyboardInset: (next) => {
-      routes.publishKeyboardInset(next, deliverable())
+    publishKeyboardInset: (next) => routes.publishKeyboardInset(next, deliverable()),
+    publishStorage: () => sendInit(true),
+    publishHostStatus: () => verdict.publish(() => deliverable() && sendInit(), dispatch),
+    publishPageGeometry: (next) => routes.publishPageGeometry(next, deliverable()),
+    publishFoldDivision: (next) => routes.publishFoldDivision(next, deliverable()),
+    publishTerminalKeyRail: (next) => routes.publishTerminalKeyRail(next, deliverable()),
+    sendTerminalKey: (key, inputOwner) => {
+      if (!railClaimed || inputOwner !== railOwner || !deliverable()) {
+        return false
+      }
+      send({
+        v: BRIDGE_PROTOCOL_VERSION,
+        type: BRIDGE_TERMINAL_KEY_FRAME,
+        key,
+        inputOwner
+      })
+      return true
     },
     publishColorScheme: (next) => {
       routes.publishColorScheme(next, deliverable())
@@ -294,8 +329,19 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     publishUiLocale: (next) => {
       routes.publishUiLocale(next, deliverable())
     },
+    sendAppInactive: () => {
+      if (pageReadsAppInactive && deliverable()) {
+        send({ v: BRIDGE_PROTOCOL_VERSION, type: BRIDGE_APP_INACTIVE_FRAME })
+      }
+    },
     sendBack: back.send,
-    readSessionBack: back.read,
+    readSessionBack: () => ({
+      ...back.read(),
+      ...(pageStorageKeys === null ? {} : { storageKeys: pageStorageKeys }),
+      ...(pageReadsConnectionPath ? { connectionPathFrames: true as const } : {}),
+      ...(pageReadsAppInactive ? { appInactiveFrames: true as const } : {}),
+      ...(railClaimed ? { terminalKeyRailClaim: { inputOwner: railOwner } } : {})
+    }),
     dispose
   }
 }

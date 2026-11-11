@@ -8,7 +8,7 @@ import {
   type RuntimeRpcSuccess,
   getDefaultUserDataPath
 } from '../runtime-client'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../shared/orca-profiles'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { ProfileStateOfflineLocation } from '../../main/persistence/profile-state/profile-state-offline-settings'
@@ -142,10 +142,11 @@ function localSuccess<TResult>(result: TResult): RuntimeRpcSuccess<TResult> {
 function formatAgentHookCommandResult(result: AgentHookCommandResult): string {
   // The CLI and app panes may use different homes; identify the one this status describes.
   const statusSummary = result.statuses
-    .map(
-      (status) =>
-        `${status.agent}: ${status.state}${status.configPath ? ` (${status.configPath})` : ''}`
-    )
+    .map((status) => {
+      const showDetail = status.detail && (status.state === 'partial' || status.state === 'error')
+      const path = status.configPath ? ` (${status.configPath})` : ''
+      return `${status.agent}: ${status.state}${path}${showDetail ? ` - ${status.detail}` : ''}`
+    })
     .join('\n')
   return [
     `agentStatusHooksEnabled: ${result.enabled}`,
@@ -162,7 +163,7 @@ async function setAgentHooksEnabled(
   enabled: boolean
 ): Promise<AgentHookCommandResult> {
   const { applyAgentStatusHooksEnabled, getManagedAgentHookStatuses } =
-    await import('../../main/agent-hooks/managed-agent-hook-controls.js')
+    await import('../../main/agent-hooks/installation/managed-agent-hook-controls.js')
   const updatedRuntime = await updateRunningRuntime(client, enabled)
   const offlineUpdate = updatedRuntime ? null : await updateEnabledOnDisk(enabled)
   const settingsPath = offlineUpdate?.settingsPath ?? (await getDataPath())
@@ -201,7 +202,7 @@ export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
   'agent hooks status': async ({ json, flags }) => {
     rejectRemoteHookSelection(flags)
     const { getManagedAgentHookStatuses } =
-      await import('../../main/agent-hooks/managed-agent-hook-controls.js')
+      await import('../../main/agent-hooks/installation/managed-agent-hook-controls.js')
     const result: AgentHookCommandResult = {
       enabled: (await readHookSettingsFromDisk()).agentStatusHooksEnabled,
       settingsPath: await getDataPath(),
