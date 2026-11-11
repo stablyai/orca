@@ -4,18 +4,21 @@ import { spawnProcess } from '@orca/process-host'
 
 export function spawnMenuBarChild(
   spawn = spawnProcess,
-  qa = false
+  qa = false,
+  executable?: string
 ): ChildProcessWithoutNullStreams {
   return spawn({
-    program: join(
-      dirname(process.execPath),
-      '..',
-      'Resources',
-      'Orca Menu Bar.app',
-      'Contents',
-      'MacOS',
-      'orca-menu-bar'
-    ),
+    program:
+      executable ??
+      join(
+        dirname(process.execPath),
+        '..',
+        'Resources',
+        'Orca Menu Bar.app',
+        'Contents',
+        'MacOS',
+        'orca-menu-bar'
+      ),
     args: qa ? ['--qa'] : [],
     stdio: 'pipe'
   })

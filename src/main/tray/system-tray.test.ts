@@ -117,7 +117,7 @@ const macInstances: FakeMacTray[] = []
 class FakeMacTray {
   setImage = vi.fn()
   setToolTip = vi.fn()
-  setMenu = vi.fn()
+  setMenu = vi.fn<(items: MenuItem[]) => void>()
   destroy = vi.fn(() => Promise.resolve())
   isDestroyed = vi.fn(() => false)
   constructor() {
@@ -209,7 +209,7 @@ describe('system tray ownership and actions', () => {
     const options = { ...createOptions(), onQuitAndStopAllSessions: vi.fn() }
     createSystemTray(options)
     expect(trayInstances).toHaveLength(0)
-    const menu = macInstances[0].setMenu.mock.calls.at(-1)?.[0] as MenuItem[]
+    const menu = macInstances[0].setMenu.mock.calls.at(-1)?.[0] ?? []
     for (const [id, callback] of [
       ['open', options.onOpen],
       ['settings', options.onOpenSettings],

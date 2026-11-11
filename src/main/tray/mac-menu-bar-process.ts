@@ -31,6 +31,7 @@ type Options = {
   onCreated?: () => void
   spawn?: typeof spawnProcess
   qa?: boolean
+  executable?: string
 }
 
 /** One disposable native owner; no operation waits for its UI thread. */
@@ -97,7 +98,7 @@ export class MacMenuBarProcess {
     }
     let child: ChildProcessWithoutNullStreams
     try {
-      child = spawnMenuBarChild(this.options.spawn, this.options.qa)
+      child = spawnMenuBarChild(this.options.spawn, this.options.qa, this.options.executable)
     } catch (error) {
       console.warn('[menu-bar] helper could not start', error)
       this.retry()

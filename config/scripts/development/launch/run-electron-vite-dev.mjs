@@ -46,6 +46,7 @@ import { withRolldownThreadLimit } from '../../tool-invocation/rolldown-thread-l
 import { withDevRolldownRuntimeEnv } from './dev-rolldown-runtime-env.mjs'
 import { copyPrivateTree } from '../../artifact-storage/reflink-copy/space-sharing-copy.mjs'
 import { buildDevSwiftCliHelpers } from '../../native-build/macos/swift-cli-helper-macos.mjs'
+import { prepareStandaloneDevMenuBar } from './dev-menu-bar.mjs'
 import * as menuBar from '../../native-build/macos/build-menu-bar-macos.mjs'
 import {
   DEV_BUNDLE_ID,
@@ -221,10 +222,9 @@ function prepareMacDevElectronApp() {
   const identityKey = process.env.ORCA_DEV_INSTANCE_KEY || repoRoot
   // v11 stabilizes Info.plist/cdhash; ignored stale marker fields permit schema narrowing without another bump.
   const bundleLayoutVersion = 'stable-cdhash-dock-name-from-bundle-dir-v11'
-  const menuBarIdentity = menuBar.menuBarBuildIdentity(repoRoot)
   const hash = createHash('sha1')
     .update(
-      `${sourceAppPath}\0${electronVersion ?? ''}\0${title}\0${identityKey}\0${bundleLayoutVersion}\0${menuBarIdentity}`
+      `${sourceAppPath}\0${electronVersion ?? ''}\0${title}\0${identityKey}\0${bundleLayoutVersion}\0${menuBar.menuBarBuildIdentity(repoRoot)}`
     )
     .digest('hex')
     .slice(0, 12)
@@ -245,7 +245,6 @@ function prepareMacDevElectronApp() {
       sourceAppPath,
       electronVersion,
       bundleLayoutVersion,
-      menuBarIdentity,
       plistPatches: [...getDevBundlePlistPatches(), ...getDevHelperPlistPatches()]
     },
     null,
@@ -481,6 +480,7 @@ if (process.env.ORCA_SKIP_DEV_CLI_PREPARE !== '1') {
   prepareDevCliWrapper(devProfile.userDataPath)
 }
 
+prepareStandaloneDevMenuBar(useStableElectronName && !isHelpOrVersion)
 if (!useStableElectronName && process.env.ORCA_SKIP_DEV_ELECTRON_APP_PREPARE !== '1') {
   prepareMacDevElectronApp()
 }

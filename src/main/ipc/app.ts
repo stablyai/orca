@@ -130,22 +130,27 @@ function resolveDevFeatureWallAssetDir(): string {
 export function registerAppHandlers(store: Store, options: RegisterAppHandlersOptions = {}): void {
   if (process.env.ORCA_E2E_MENU_BAR === '1' && process.env.ORCA_E2E_USER_DATA_DIR) {
     ipcMain.handle('e2e:menuBar', (event, command: unknown) => {
-      if (!isTrustedUIRenderer(event.sender) || !command || typeof command !== 'object') {
+      if (
+        !isTrustedUIRenderer(event.sender) ||
+        !command ||
+        typeof command !== 'object' ||
+        !('operation' in command)
+      ) {
         throw new Error('Menu bar QA request unavailable')
       }
-      const request = command as { operation?: unknown; action?: unknown }
-      if (request.operation === 'inspect' || request.operation === 'tracking') {
-        return inspectSystemTrayForQA({ operation: request.operation })
+      if (command.operation === 'inspect' || command.operation === 'tracking') {
+        return inspectSystemTrayForQA({ operation: command.operation })
       }
       if (
-        request.operation === 'invoke' &&
-        (request.action === 'open' ||
-          request.action === 'settings' ||
-          request.action === 'updates' ||
-          request.action === 'quit-completely' ||
-          request.action === 'quit')
+        command.operation === 'invoke' &&
+        'action' in command &&
+        (command.action === 'open' ||
+          command.action === 'settings' ||
+          command.action === 'updates' ||
+          command.action === 'quit-completely' ||
+          command.action === 'quit')
       ) {
-        return inspectSystemTrayForQA({ operation: 'invoke', action: request.action })
+        return inspectSystemTrayForQA({ operation: 'invoke', action: command.action })
       }
       throw new Error('Invalid menu bar QA request')
     })

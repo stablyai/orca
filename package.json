@@ -114,7 +114,7 @@
     "typecheck:tsc:web": "pnpm run build:packages && tsc --noEmit -p config/tsconfig.web.json --composite false",
     "typecheck:tsc": "pnpm run build:packages && tsc --noEmit -p config/tsconfig.node.json --composite false && tsc --noEmit -p config/tsconfig.cli.json --composite false && tsc --noEmit -p config/tsconfig.web.json --composite false",
     "ensure:electron-runtime": "node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=electron",
-    "start": "pnpm run build:packages && pnpm run ensure:electron-runtime && electron-vite preview",
+    "start": "pnpm run build:packages && pnpm run ensure:electron-runtime && node config/scripts/development/launch/run-electron-vite-preview.mjs",
     "dev": "node config/scripts/workspace-package-build/build-workspace-packages.mjs && node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=electron && node config/scripts/development/launch/run-electron-vite-dev.mjs",
     "dev-stable-name": "pnpm run build:packages && pnpm run ensure:electron-runtime && node config/scripts/development/launch/run-electron-vite-dev.mjs --stable-name",
     "dev:fresh": "pnpm run build:packages && node config/scripts/development/profile-seeding/dev-fresh-profile.mjs",

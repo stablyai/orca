@@ -1,4 +1,4 @@
-import { powerMonitor, type NativeImage } from 'electron'
+import { app, powerMonitor, type NativeImage } from 'electron'
 import type {
   MenuBarAction,
   MenuBarItem,
@@ -30,6 +30,7 @@ export class MacMenuBarTray {
     this.image = image
     this.owner = new MacMenuBarProcess({
       qa: process.env.ORCA_E2E_MENU_BAR === '1' && Boolean(process.env.ORCA_E2E_USER_DATA_DIR),
+      executable: app.isPackaged ? undefined : process.env.ORCA_DEV_MENU_BAR_EXECUTABLE,
       onCreated,
       onAction: (action: MenuBarAction) => this.menu.find((item) => item.id === action)?.click?.()
     })

@@ -228,21 +228,21 @@ export function createSystemTray(opts: SystemTrayOptions): SystemTray | null {
     })
   }
 
-  tray =
-    process.platform === 'darwin'
-      ? new MacMenuBarTray(baseTrayImage, opts.onCreated)
-      : new Tray(baseTrayImage)
+  if (process.platform === 'darwin') {
+    tray = new MacMenuBarTray(baseTrayImage, opts.onCreated)
+  } else {
+    const windowsTray = new Tray(baseTrayImage)
+    windowsTray.on(
+      'click',
+      safeMenuAction(() => opts.onOpen())
+    )
+    tray = windowsTray
+  }
   applyTrayImage()
-
   trayOptions = opts
   setTrayMenu(opts)
   if (process.platform === 'win32') {
     tray.setToolTip(baseTooltip())
-    // Windows left-click restores the app; macOS uses its attached menu.
-    ;(tray as Tray).on(
-      'click',
-      safeMenuAction(() => opts.onOpen())
-    )
   } else {
     watchMacAppearance()
   }

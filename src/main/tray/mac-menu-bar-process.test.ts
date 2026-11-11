@@ -46,6 +46,7 @@ function owner(onAction = vi.fn()) {
   })
   const process = new MacMenuBarProcess({
     onAction,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake implements every child/stream member used by this owner; no real process is signaled.
     spawn: spawn as unknown as typeof spawnProcess
   })
   owners.push(process)
@@ -97,26 +98,32 @@ it('routes fresh offered actions to their own parent and ignores duplicates or r
   expect(b.onAction.mock.calls).toEqual([['quit']])
 })
 
-it('retires a broken pipe or oversized partial output without executing commands or overlapping replacement', async () => {
-  const a = owner()
-  const first = helpers[0]
-  first.stdin.emit('error', new Error('EPIPE'))
-  first.stdout.write('x'.repeat(300_000))
-  expect(first.kill).toHaveBeenCalledWith('SIGKILL')
-  vi.advanceTimersByTime(60_000)
-  expect(a.spawn).toHaveBeenCalledOnce()
-  let observed = false
-  const retirement = a.process.destroy().then(() => {
-    observed = true
-  })
-  await Promise.resolve()
-  expect(observed).toBe(false)
-  first.exit()
-  await retirement
-  vi.advanceTimersByTime(60_000)
-  expect(a.spawn).toHaveBeenCalledOnce()
-  expect(a.onAction).not.toHaveBeenCalled()
-})
+it.each(['pipe', 'oversized'])(
+  'retires %s faults without commands or overlapping replacement',
+  async (fault) => {
+    const a = owner()
+    const first = helpers[0]
+    if (fault === 'pipe') {
+      first.stdin.emit('error', new Error('EPIPE'))
+    } else {
+      first.stdout.write('x'.repeat(300_000))
+    }
+    expect(first.kill).toHaveBeenCalledWith('SIGKILL')
+    vi.advanceTimersByTime(60_000)
+    expect(a.spawn).toHaveBeenCalledOnce()
+    let observed = false
+    const retirement = a.process.destroy().then(() => {
+      observed = true
+    })
+    await Promise.resolve()
+    expect(observed).toBe(false)
+    first.exit()
+    await retirement
+    vi.advanceTimersByTime(60_000)
+    expect(a.spawn).toHaveBeenCalledOnce()
+    expect(a.onAction).not.toHaveBeenCalled()
+  }
+)
 
 it('continues UI probes with a pending snapshot and replaces only an unresponsive helper', () => {
   const { process } = owner()
