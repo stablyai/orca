@@ -5,7 +5,11 @@ import type { GlobalSettings } from '../../../../../shared/global-settings-types
 import type { TelemetryConsentState } from '../../../../../shared/telemetry-consent-types'
 import { Label } from '../../ui/label'
 import { Switch } from '../../ui/switch'
-import { PRIVACY_URL, getConsentState, setOptIn as telemetrySetOptIn } from '../../../lib/telemetry'
+import {
+  PRIVACY_URL,
+  getConsentState,
+  setOptIn as telemetrySetOptIn
+} from '../../../diagnostics/telemetry/telemetry'
 import { useAppStore } from '../../../store/index'
 import { PrivacyDiagnosticsSection } from './PrivacyDiagnosticsSection'
 import { useTranslate } from '@/i18n/use-translate'
@@ -108,7 +112,6 @@ export function PrivacyPane({ settings }: PrivacyPaneProps): React.JSX.Element {
             >
               {t('auto.components.settings.PrivacyPane.77410e0566', 'Privacy policy')}
             </button>
-            .
           </p>
         </div>
         <Switch

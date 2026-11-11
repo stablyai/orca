@@ -1,13 +1,15 @@
 import { captureNativeChatEditDraftDestination } from '../../drafts/native-chat-composer-draft-memory'
 import { useCallback, useLayoutEffect, useRef } from 'react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../../../shared/file-import/native-file-drop'
 import {
   isSameComposerWorkspace,
-  nativeChatAttachmentOwnerUnchanged,
-  type ComposerWorkspace,
-  type NativeChatAttachmentFocusOptions,
-  type NativeChatResolvedPathOptions
+  nativeChatAttachmentOwnerUnchanged
+} from '../uploads/native-chat-resolved-path-ownership'
+import type {
+  ComposerWorkspace,
+  NativeChatAttachmentFocusOptions,
+  NativeChatResolvedPathOptions
 } from '../uploads/native-chat-resolved-path-ownership'
 import {
   nativeChatAttachmentOwnerChangedNotice,
@@ -18,22 +20,25 @@ import {
 import {
   resolveNativeChatAttachmentOwner,
   resolveNativeChatAttachmentOwnerForWorktree,
-  resolveNativeChatRuntimeSessionAttachmentOwner,
-  type NativeChatAttachmentOwner,
-  type NativeChatStructuredAttachmentSession
+  resolveNativeChatRuntimeSessionAttachmentOwner
 } from '../uploads/native-chat-attachment-owner'
-
+import type {
+  NativeChatAttachmentOwner,
+  NativeChatStructuredAttachmentSession
+} from '../uploads/native-chat-attachment-owner'
 import {
   attachNativeChatRuntimeTempPaths,
   attachNativeChatSessionAttachmentPaths,
-  reserveNativeChatAttachmentChips,
-  type NativeChatPendingAttachmentChips,
-  type NativeChatReservedAttachment
+  reserveNativeChatAttachmentChips
+} from './native-chat-session-attachment-drop'
+import type {
+  NativeChatPendingAttachmentChips,
+  NativeChatReservedAttachment
 } from './native-chat-session-attachment-drop'
 import { releaseBrowserAttachmentFiles } from '@/lib/files/drop/browser-attachment-files'
 import { attachNativeChatLocalAttachmentPaths } from './native-chat-local-attachment-drop'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { chatWorkspaceByTabId as findTerminalTabWorktreeId } from '../../../../lib/structured-chat-tab-index'
+import { chatWorkspaceByTabId as findTerminalTabWorktreeId } from '../../../../lib/agent-session/tab-identity/structured-chat-tab-index'
 import type { CapturedNativeChatDrop } from './native-chat-pane-file-drop'
 
 export type UseNativeChatExternalAttachmentsArgs = {

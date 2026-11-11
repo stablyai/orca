@@ -10,7 +10,7 @@ import {
   Puzzle,
   SquareTerminal
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { PluginCatalogType } from '../../../../../shared/plugins/catalog/plugin-catalog-release'
 import type { PluginListEntry } from './plugin-list-entries'
 

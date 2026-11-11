@@ -78,7 +78,7 @@ export function listHomePeerMailEnvironments(this: OrchestrationDb): string[] {
 export function listPeerConversationIds(this: OrchestrationDb, peerFingerprint: string): string[] {
   const statement = this.db.prepare(
     `SELECT conversation_id FROM peer_mail_conversations
-     WHERE role = 'peer' AND peer_fingerprint = ?`
+     WHERE role = 'peer' AND peer_fingerprint = ? ORDER BY conversation_id`
   )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT over this table returns exactly these columns.
   const rows = statement.all(peerFingerprint) as { conversation_id: string }[]
@@ -118,6 +118,14 @@ export function insertPeerMailMessage(
   | { message: MessageRow | undefined; duplicate: true } {
   this.db.exec('SAVEPOINT peer_mail_insert')
   try {
+    // A peer Run's conversation keeps its own queue sequence, so it never carries peer mail.
+    if (this.getPeerRunForConversation(params.conversationId)) {
+      throw new OrchestrationError(
+        'request_mismatch',
+        `Conversation ${params.conversationId} belongs to a coordinated Run. Nothing was delivered.`,
+        { effectsApplied: false }
+      )
+    }
     if (params.peerFingerprint !== undefined) {
       const conversation = this.getPeerMailConversation(params.conversationId)
       if (

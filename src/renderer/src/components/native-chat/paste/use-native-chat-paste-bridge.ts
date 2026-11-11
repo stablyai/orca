@@ -10,7 +10,7 @@ import {
   NATIVE_CHAT_PASTE_REQUEST_EVENT
 } from '@/components/native-chat/paste/native-chat-paste-request'
 import { APP_MENU_PASTE_EVENT } from '@/lib/clipboard/menu/app-menu-paste'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { pasteTextIntoTextControl } from '@/lib/text-input/paste/text-control-paste'
 import { TEXT_CONTROL_PASTE_MAX_BYTES } from '@/lib/text-input/paste/text-control-paste-model'
 import type { NativeChatComposerHandle } from '../composer/native-chat-composer-types'

@@ -6,13 +6,13 @@ import type {
   PtyManagementMacTccAttributionHealth
 } from '../../../preload/api-types'
 import { isPluginUiLanguage } from '../../../shared/ui-language'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   usePluginLanguagePackStore,
   usePluginLanguagePacks
 } from '@/store/plugins/localization/plugin-language-packs'
 import { translate } from '@/i18n/i18n'
-import { track } from '@/lib/telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
 import { resolveUiLocale } from '@/i18n/supported-languages'
 import { MANAGE_SESSIONS_SECTION_ID } from '@/components/settings/terminal/session-management/open-terminal-manage-sessions'
 import { macFolderAccessFolderName } from '@/components/shared/mac-folder-access-folder-name'

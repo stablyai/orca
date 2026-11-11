@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { useAppStore } from '@/store'
-import { worktreeCopyPushTarget } from '@/lib/worktree-git-copy'
+import { useAppStore } from '@/store/index'
+import { worktreeCopyPushTarget } from '@/lib/workspace/ownership/worktree-git-copy'
 import type { CreatePrIntentRunToken } from './create-pr-intent-flow'
 import type { SourceControlOperationTarget } from '../listing/operation-target'
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'

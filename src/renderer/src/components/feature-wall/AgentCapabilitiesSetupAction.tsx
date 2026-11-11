@@ -12,8 +12,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, Download, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
+import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store/index'
 import { AgentCapabilityStatusNote, AgentCapabilityStatusPill } from './AgentCapabilityStatusBadges'
 import {
   bundledSkillInstallNeedsAttention,
@@ -41,7 +41,7 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { capabilitiesSetupBusyLabel, capabilityToggleLabel } from './agent-capability-setup-copy'
 import { AGENT_CAPABILITY_SETUP_ROWS } from './agent-capability-setup-rows'
-import { track } from '@/lib/telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
 
 type AgentCapabilitiesSetupActionProps = {
   onOrchestrationSkillInstalledChange: (installed: boolean) => void

@@ -81,6 +81,7 @@ describe('EphemeralVmsPane', () => {
               ]
             }
           ]),
+          listCredentialEnvNames: vi.fn().mockResolvedValue(['ANTHROPIC_API_KEY', 'GITHUB_TOKEN']),
           doctor: vi.fn().mockResolvedValue({
             recipeId: 'cloud-sandbox',
             repoPath: '/repo',
@@ -164,5 +165,42 @@ describe('EphemeralVmsPane', () => {
 
     expect(container.textContent).toContain('Newest Recipe')
     expect(container.textContent).not.toContain('Stale Recipe')
+  })
+
+  it('names the credential-like variables a recipe inherits, without values', async () => {
+    const container = await renderPane()
+    await vi.waitFor(() =>
+      expect(container.querySelector('[data-testid="recipe-env-exposure"]')?.textContent).toContain(
+        'ANTHROPIC_API_KEY, GITHUB_TOKEN'
+      )
+    )
+    expect(container.textContent).toContain('Set passEnv on the recipe')
+  })
+
+  it('lists only allowlisted credentials when the recipe sets passEnv', async () => {
+    const listRecipeCatalog = window.api.ephemeralVm.listRecipeCatalog as ReturnType<typeof vi.fn>
+    listRecipeCatalog.mockReset().mockResolvedValue([
+      {
+        repoId: 'repo-1',
+        repoName: 'Repo',
+        repoPath: '/repo',
+        diagnostics: [],
+        recipes: [
+          {
+            id: 'limited',
+            name: 'Limited',
+            create: 'create',
+            passEnv: ['GITHUB_TOKEN']
+          }
+        ]
+      }
+    ])
+    const container = await renderPane()
+    await vi.waitFor(() =>
+      expect(container.querySelector('[data-testid="recipe-env-exposure"]')?.textContent).toContain(
+        'from passEnv: GITHUB_TOKEN.'
+      )
+    )
+    expect(container.textContent).not.toContain('ANTHROPIC_API_KEY')
   })
 })

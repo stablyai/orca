@@ -4,7 +4,11 @@ import { useState } from 'react'
 import { X } from 'lucide-react'
 
 import { Button } from './ui/button'
-import { acknowledgeBanner, PRIVACY_URL, setOptIn as telemetrySetOptIn } from '../lib/telemetry'
+import {
+  acknowledgeBanner,
+  PRIVACY_URL,
+  setOptIn as telemetrySetOptIn
+} from '../diagnostics/telemetry/telemetry'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'

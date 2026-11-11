@@ -4,7 +4,8 @@ import { ensureAgentStartupInTerminal } from '@/lib/workspace/creation/new-works
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
 import { buildAgentStartupPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-startup'
-import { tuiAgentToAgentKind } from '@/lib/telemetry'
+import '@/diagnostics/telemetry/telemetry'
+import { tuiAgentToAgentKind } from '../../../../../../shared/agent-kind'
 import { activateAndRevealFolderWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { shouldApplyWorkspaceSourceAutoName } from '../../../../../../shared/new-workspace/workspace-source'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
@@ -17,7 +18,7 @@ import {
   planAgentSessionLaunch,
   adoptAgentSessionLaunchVerdict
 } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
-import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import '@/lib/workspace/creation/new-workspace-project-options'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
@@ -139,7 +140,7 @@ export async function submitFolderWorkspaceCreate({
     quickAgent && linkedWorkItem ? resolveFolderWorkspaceLaunchDraft(linkedWorkItem, note) : null
   const launchRequest = quickAgent
     ? {
-        requestId: newAgentLaunchRequestId(),
+        requestId: createBrowserUuid(),
         agent: quickAgent,
         ...(sessionOptions ? { launchOptions: sessionOptions } : {}),
         ...(chatSessionOptions !== undefined ? { chatLaunchOptions: chatSessionOptions } : {}),
