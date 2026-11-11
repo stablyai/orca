@@ -22,6 +22,7 @@ import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-p
 import { toReady } from './hosted-sandbox-driver'
 import { noteWakeTimeline } from './cloud-wake-timeline'
 import { createHostedRuntimeEnvironmentCall } from './hosted-runtime-environment-call'
+import { getCloudSyncService } from '../cloud-sync/cloud-sync-ipc'
 import {
   NOT_CLOUD,
   createOomTracker,
@@ -270,6 +271,8 @@ export function installHostedWorkspaceService(deps: {
           [args.workspaceId],
           'The workspace was archived before this was sent.'
         )
+        // The archive toast said so: the copy synced to this computer goes now, not on the next check.
+        void getCloudSyncService()?.noteArchived(args.workspaceId)
         deps.syncSessions()
         return { ok: true, value: null }
       } catch (error) {

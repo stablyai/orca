@@ -50,6 +50,7 @@ import {
 } from '../ipc/cloud-environments/orca-cloud-environment-handlers'
 import { installCloudTransferHandlers } from './cloud-transfer'
 import { installCloudOfflineService, setCloudOfflineService } from './cloud-offline-service'
+import { getCloudSyncService, installCloudSync } from '../cloud-sync/cloud-sync-ipc'
 import {
   findCloudRuntime,
   isArchivedOnControlPlane,
@@ -147,7 +148,10 @@ export function installHostedSandbox(
     userDataPath,
     driver,
     windows: () => BrowserWindow.getAllWindows(),
-    onConnected: (runtimeEnvironmentId) => void mcpSync.sync(runtimeEnvironmentId, 'connect'),
+    onConnected: (runtimeEnvironmentId) => {
+      void mcpSync.sync(runtimeEnvironmentId, 'connect')
+      getCloudSyncService()?.noteConnected(runtimeEnvironmentId)
+    },
     onRunningChange: (anyRunning) => usageRefresh.setRunning(anyRunning),
     activeAccountId
   })
@@ -205,6 +209,10 @@ export function installHostedSandbox(
     }
   })
   setCloudOfflineService(offline)
+  const disposeCloudSync = installCloudSync({
+    userDataPath,
+    windows: () => BrowserWindow.getAllWindows()
+  })
   // Records land after the step answers and wakes can come from any path, so reconcile on a slow beat too.
   let beat: ReturnType<typeof setTimeout> | null = null
   let beats = 0
@@ -253,6 +261,7 @@ export function installHostedSandbox(
     setOrcaCloudActiveAccountResolver(null)
     offline.dispose()
     setCloudOfflineService(null)
+    disposeCloudSync()
   })
 }
 

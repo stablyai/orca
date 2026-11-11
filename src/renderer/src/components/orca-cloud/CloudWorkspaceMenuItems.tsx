@@ -1,7 +1,8 @@
 import React from 'react'
-import { Archive, ArchiveRestore, RotateCw } from 'lucide-react'
+import { Archive, ArchiveRestore, HardDriveDownload, RotateCw } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
+import { isCloudSyncAvailable, requestCloudSyncFocus } from '@/lib/orca-cloud/cloud-sync-store'
 import { useCloudWorkspaceView } from './use-cloud-workspace-view'
 import { useCloudPanelActions } from './use-cloud-panel-actions'
 
@@ -46,6 +47,12 @@ function CloudMenuRows({
         <DropdownMenuItem disabled={busy} onSelect={actions.onRestart}>
           <RotateCw className="size-3.5" />
           {t('orcaCloudWorkspace.restartSandbox', 'Restart sandbox')}
+        </DropdownMenuItem>
+      ) : null}
+      {isCloudSyncAvailable() ? (
+        <DropdownMenuItem onSelect={() => requestCloudSyncFocus(worktreeId)}>
+          <HardDriveDownload className="size-3.5" />
+          {t('orcaCloudSync.menuItem', 'Mirror to this computer…')}
         </DropdownMenuItem>
       ) : null}
       <DropdownMenuItem disabled={busy || view.state === 'waking'} onSelect={actions.onArchive}>

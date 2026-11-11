@@ -850,6 +850,8 @@
     "localBuild.schemaCompatibility",
     "localBuild.signatureRequirement",
     "localBuild.useButton",
+    "orcaCloudSync.removal",
+    "orcaCloudSync.removalEdited",
     "plugins.frameOpenExternal.alwaysAllow",
     "plugins.frameOpenExternal.cancel",
     "plugins.frameOpenExternal.message",

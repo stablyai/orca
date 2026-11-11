@@ -10,6 +10,11 @@ import {
 } from '../../../shared/file-access/path-existence-batch'
 import { readRuntimeFilePathExistence } from './file-path-existence'
 import {
+  FILE_STAT_MANY_MAX,
+  type FileStatManyEntry,
+  type FileStatManyResult
+} from '../../../shared/file-access/file-stat-many'
+import {
   isMobileBinaryPath,
   isMobileMarkdownPath,
   isSafeMobileRelativePath,
@@ -18,7 +23,10 @@ import {
 import type { RuntimeFileCommandHost } from './file-command-host'
 import type { RuntimeNavigationTarget } from '../../../shared/runtime-navigation'
 import { joinWorktreeRelativePath } from './paths/runtime-relative-paths'
-import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
+import {
+  isENOENT,
+  isPathAbsentError
+} from '../../ipc/filesystem/access/filesystem-path-containment'
 import {
   requireRuntimeFileProvider,
   resolveFileExplorerPath,
@@ -27,6 +35,8 @@ import {
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { FileStat } from '../../providers/filesystem-provider-contract'
 import { assertRuntimeReadWslDistroRunning } from '../integrations/git/runtime-wsl-background-read-gate'
+
+const STAT_MANY_CONCURRENCY = 32
 
 type RuntimeFileAccessHost = Pick<
   RuntimeFileCommandHost,
@@ -139,6 +149,48 @@ export class RuntimeFileAccess {
       await assertRuntimeReadWslDistroRunning(targets[0])
     }
     return readRuntimeFilePathExistence(targets, this.host)
+  }
+
+  /** Stat of many workspace paths in one call (cloud file sync manifests). */
+  async statManyRuntimeFiles(
+    worktreeSelector: string,
+    relativePaths: string[]
+  ): Promise<FileStatManyResult> {
+    if (!Array.isArray(relativePaths) || relativePaths.length > FILE_STAT_MANY_MAX) {
+      throw new Error('Invalid stat batch')
+    }
+    const targets = await resolveFileExplorerPaths(this.host, worktreeSelector, relativePaths)
+    if (targets.length === 0) {
+      return { entries: [] }
+    }
+    await assertRuntimeReadWslDistroRunning(targets[0])
+    const provider = requireRuntimeFileProvider(targets[0], this.host)
+    // Links are followed like every files.* read; one pointing outside the workspace fails the
+    // later chunk read's containment check, so it is never copied.
+    const statOne = provider.stat.bind(provider)
+    const entries: FileStatManyEntry[] = Array.from({ length: targets.length }, () => null)
+    let next = 0
+    const worker = async (): Promise<void> => {
+      while (next < targets.length) {
+        const index = next++
+        try {
+          const stats = await statOne(targets[index].path)
+          entries[index] = {
+            size: stats.size,
+            mtime: stats.mtimeMs ?? stats.mtime,
+            type: stats.type
+          }
+        } catch (error) {
+          entries[index] = isPathAbsentError(error)
+            ? null
+            : { error: error instanceof Error ? error.message.slice(0, 200) : 'stat_failed' }
+        }
+      }
+    }
+    await Promise.all(
+      Array.from({ length: Math.min(STAT_MANY_CONCURRENCY, targets.length) }, worker)
+    )
+    return { entries }
   }
 
   async statRuntimeFile(

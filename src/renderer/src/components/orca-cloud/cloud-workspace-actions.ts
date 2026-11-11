@@ -23,6 +23,7 @@ import {
   isCloudWorkspaceDeleting,
   registerQueuedCloudArchive
 } from '@/lib/orca-cloud/pending-cloud-archive'
+import { cloudSyncRemovalPreview } from '@/lib/orca-cloud/cloud-sync-store'
 
 /** Codes map to plain copy; raw control-plane messages never reach a toast. */
 function failureToast(title: string, result: CloudWorkspaceResult<null>): void {
@@ -115,6 +116,8 @@ export function runArchiveWithUndo(
     commit: () => Promise<CloudWorkspaceResult<null>>
     /** False while the workspace is being deleted: its failure is not worth a toast. */
     reportFailure?: () => boolean
+    /** The copy synced to this computer, which goes with the archive (said in the toast). */
+    localCopy?: { hasLocalCopy: boolean; editedHere: number }
   }
 ): Promise<boolean> {
   return new Promise((resolve) => {
@@ -156,10 +159,7 @@ export function runArchiveWithUndo(
       {
         id: toastId,
         duration: options.undoMs ?? ARCHIVE_UNDO_MS,
-        description: translate(
-          'orcaCloudWorkspace.archivedDetail',
-          'It goes to sleep and stays browsable: PRs, last changes and files.'
-        ),
+        description: archivedDetail(options.localCopy),
         action: {
           label: translate('orcaCloudWorkspace.undo', 'Undo'),
           onClick: cancel
@@ -167,6 +167,30 @@ export function runArchiveWithUndo(
       }
     )
   })
+}
+
+function archivedDetail(localCopy?: { hasLocalCopy: boolean; editedHere: number }): string {
+  if (localCopy?.editedHere) {
+    return translate(
+      'orcaCloudWorkspace.archivedDetailLocalEdits',
+      'It goes to sleep and stays browsable: PRs, last changes and files. {{count}} changed files on this computer will be removed.',
+      {
+        count: localCopy.editedHere,
+        defaultValue_one:
+          'It goes to sleep and stays browsable: PRs, last changes and files. {{count}} changed file on this computer will be removed.'
+      }
+    )
+  }
+  if (localCopy?.hasLocalCopy) {
+    return translate(
+      'orcaCloudWorkspace.archivedDetailLocalCopy',
+      'It goes to sleep and stays browsable: PRs, last changes and files. The copy on this computer is removed too.'
+    )
+  }
+  return translate(
+    'orcaCloudWorkspace.archivedDetail',
+    'It goes to sleep and stays browsable: PRs, last changes and files.'
+  )
 }
 
 /** Sidebar archive: the ordinary Sleep, then the control-plane archive, behind the Undo toast. */
@@ -178,8 +202,10 @@ export async function runArchiveCloudWorkspace(
   // for a workspace that is going away, which is not worth an error toast.
   const sleep = (id: string): Promise<readonly { completed: boolean }[] | void> =>
     isCloudWorkspaceDeleting(id) ? Promise.resolve() : runSleepWorktree(id)
+  const localCopy = await cloudSyncRemovalPreview(workspaceId).catch(() => undefined)
   await runArchiveWithUndo(workspaceId, {
     ...options,
+    ...(localCopy ? { localCopy } : {}),
     commit: () => archiveCloudWorkspace(workspaceId, { sleep }),
     reportFailure: () => !isCloudWorkspaceDeleting(workspaceId)
   })
