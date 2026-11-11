@@ -8,6 +8,7 @@ import {
 
 import { detectAgentStatusFromTitle } from '../../../../../../shared/agent-status/title/agent-title-status'
 import { getAgentLabel } from '../../../../../../shared/agent-status/title/agent-title-identity'
+import { jcodePaneTitleStatus } from '../../../../../../shared/agent-status/title/providers/jcode-terminal-title'
 import { tabHasLivePty } from '../../../../../../shared/tab-has-live-pty'
 import type {
   AgentStatusEntry,
@@ -182,7 +183,7 @@ function buildTitleDerivedAgentRow(args: {
     return null
   }
   // Why: the title sets activity only; a plain title on a process-identified pane is idle.
-  const status = titleStatus ?? 'idle'
+  const status = titleStatus ?? jcodePaneTitleStatus(title, agentType) ?? 'idle'
   const rowLabel =
     agentType === titleAgentType &&
     label &&

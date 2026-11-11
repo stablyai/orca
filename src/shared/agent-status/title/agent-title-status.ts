@@ -1,6 +1,6 @@
 import { getDeepSeekBuildTitleStatus } from './providers/dsb-terminal-title'
 import { qoderTitleStatus } from './providers/qoder-terminal-title'
-import { jcodeTitleStatus } from './providers/jcode-terminal-title'
+import { jcodeIdentityTitleStatus } from './providers/jcode-terminal-title'
 import { cursorTitleStatus } from './providers/cursor-terminal-title'
 import {
   AGY_AGENT_NAME_RE,
@@ -280,7 +280,7 @@ function computeAgentStatusFromTitle(title: string): AgentStatus | null {
   if (title.startsWith(`${CLAUDE_IDLE} `) || title === CLAUDE_IDLE) {
     return 'idle'
   }
-  const jcodeStatus = jcodeTitleStatus(title)
+  const jcodeStatus = jcodeIdentityTitleStatus(title)
   if (jcodeStatus) {
     return jcodeStatus
   }
