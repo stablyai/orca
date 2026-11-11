@@ -2,7 +2,7 @@ import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SettingsGroupHeader } from '@/components/settings/section-layout/SettingsGroup'
 import { useTranslate } from '@/i18n/use-translate'
-import { formatHours } from './plan-billing-format'
+import { formatHoursUsed } from './plan-billing-format'
 import {
   topMemberRows,
   topWorkspaceRows,
@@ -120,7 +120,7 @@ function BreakdownList({
               <span className={row.other ? 'truncate text-muted-foreground' : 'truncate'}>
                 {row.label}
               </span>
-              <span className="shrink-0 tabular-nums">{formatHours(row.seconds)}</span>
+              <span className="shrink-0 tabular-nums">{formatHoursUsed(row.seconds)}</span>
             </div>
             {/* Share of the team's hours: decoration; the number beside it carries the value. */}
             <div aria-hidden className="h-1 w-full rounded-full bg-muted">

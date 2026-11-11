@@ -1404,7 +1404,7 @@
       "orcaCloud": "Orca Cloud"
     },
     "orcaAccount": {
-      "descriptionIdentity": "The Orca account you’re signed in with."
+      "descriptionAccount": "Sign in to Orca and see which account and team you use."
     },
     "agentAccounts": {
       "searchTitle": "Agent accounts",
@@ -1772,7 +1772,6 @@
             "33290e88ed": "Failed to connect profile",
             "9fcb07a796": "Profile connected",
             "2f6c78a039": "Failed to refresh profile auth",
-            "a37b5e6d37": "Signed out of profile",
             "83600521e7": "Failed to sign out",
             "76deec8f58": "Failed to switch organization",
             "7d4bc516ee": "Failed to switch profile",
@@ -28503,5 +28502,10 @@
     "overLimit": "The mirror is limited to {{size}}. Larger files and anything past the limit aren’t copied.",
     "tooLarge": "Files over {{size}} aren’t copied.",
     "removal": "The copy on this computer is removed too."
+  },
+  "store": {
+    "orcaProfiles": {
+      "signedOut": "Signed out of Orca"
+    }
   }
 }

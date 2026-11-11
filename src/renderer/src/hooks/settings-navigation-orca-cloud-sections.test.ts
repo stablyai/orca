@@ -57,7 +57,7 @@ describe('Orca Cloud settings group', () => {
     const setup = buildSetupSettingsSections(options({}))
     expect(setup.some((section) => section.id.startsWith('cloud-'))).toBe(false)
     expect(setup.find((section) => section.id === 'orca-account')?.description).toBe(
-      'The Orca account you’re signed in with.'
+      'Sign in to Orca and see which account and team you use.'
     )
     const local = buildSetupSettingsSections(options({ isOrcaCloudApiAvailable: false }))
     expect(local.find((section) => section.id === 'orca-account')?.description).not.toMatch(

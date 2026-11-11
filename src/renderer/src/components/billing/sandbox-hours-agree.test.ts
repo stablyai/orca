@@ -39,4 +39,18 @@ describe('sandbox hours: one rule on every surface', () => {
       expect(Math.round(total * 10) / 10).toBe(180)
     }
   })
+
+  // JA-07 re-run: member page showed "18 used" beside "17.9 in 30 days" for the same usage.
+  it('usage amounts on Plan & billing round like "used"', async () => {
+    const { usageWindowTotalLine, yourUsageLine } = await import('./plan-billing-usage-history')
+    const t = ((_k: string, fallback: string, values?: Record<string, unknown>) =>
+      fallback.replace(/\{\{(\w+)\}\}/g, (_m, key: string) => String(values?.[key] ?? ''))) as never
+    const seconds = 17.94 * HOUR
+    expect(formatHoursUsed(seconds)).toBe('18')
+    expect(usageWindowTotalLine(seconds, t)).toContain('18 sandbox hours in 30 days')
+    expect(
+      yourUsageLine({ yourSeconds: seconds, totalSeconds: seconds } as never, t)
+    ).toContain('You used 18 of')
+  })
 })
+
