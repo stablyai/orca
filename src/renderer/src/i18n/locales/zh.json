@@ -7601,10 +7601,6 @@
             "modeAriaLabel": "代理仪表盘打开模式",
             "modeInWindow": "窗口内",
             "modePopout": "弹出窗口"
-          },
-          "browserExtensions": {
-            "copy": "为本地浏览器配置文件添加“设置 › 浏览器 › 扩展程序”",
-            "toggleLabel": "切换浏览器扩展程序"
           }
         },
         "FloatingWorkspacePane": {
@@ -9739,13 +9735,6 @@
               "inWindow": "窗口内",
               "worktrees": "工作树",
               "eaf17a7214": "智能体仪表盘"
-            },
-            "browserExtensions": {
-              "title": "浏览器扩展程序",
-              "description": "在 Orca 浏览器标签页中运行 Chrome 扩展程序，例如密码管理器",
-              "extension": "扩展程序",
-              "chrome": "chrome",
-              "password": "密码管理器"
             }
           }
         },
@@ -12131,7 +12120,7 @@
               "tokenHint": "存储库、项目和工作区访问令牌是从匹配的 Bitbucket 设置页面创建的，并且需要读取访问拉取请求的权限",
               "basicHint": "为您的帐户创建 Atlassian API 令牌，然后将其与拥有它的电子邮件地址配对",
               "scopesTitle": "请选择以下 Bitbucket API 令牌范围：",
-              "scopeUser": "验证您的帐户",
+              "scopeUser": "显示您的帐户名称",
               "scopeRepository": "读取构建状态",
               "scopeReadPullRequest": "读取拉取请求",
               "scopeWritePullRequest": "创建拉取请求",
@@ -17203,13 +17192,10 @@
         },
         "AutomationDetail": {
           "host": "主机",
-          "a1d52c2189": "使用范围",
-          "449fc83bf7": "Token",
           "401f40ae79": "预计，花费",
           "a7c312430d": "最后一次运行",
           "2df8970cd5": "代理",
           "e353ab9516": "预检查",
-          "620b22145e": "优雅",
           "15ea446b93": "会话",
           "5405a09b1f": "运行位置",
           "2f8baf5360": "创建自",
@@ -17219,7 +17205,6 @@
           "1f6026358e": "删除自动化",
           "d79452fb30": "恢复自动化",
           "91a4155e95": "暂停自动化",
-          "4b1ea02d2e": "编辑自动化",
           "2fb1605beb": "立即运行",
           "221916d93c": "创建自动化来开始安排代理工作",
           "b09b2384fd": "已暂停",
@@ -17229,7 +17214,6 @@
           "noGrace": "无宽限期",
           "graceMinutes_other": "{{count}} 分钟",
           "graceHours_other": "{{count}} 小时",
-          "usageCoverageRuns_other": "{{known}}/{{count}} 次运行",
           "usageUnavailable": "不可用",
           "noRuns": "无运行记录",
           "projectDefault": "项目默认值",
@@ -20213,7 +20197,6 @@
           "browsePlugins": "浏览插件",
           "browseThemePlugins": "浏览主题插件",
           "colorMode": "颜色模式",
-          "colorModeCaption": "浅色、深色或跟随系统。",
           "darkLook": "深色外观",
           "darkLooks": "深色外观",
           "lightLook": "浅色外观",
@@ -20229,10 +20212,8 @@
           "slotLabel": "要编辑的外观",
           "sourceBuiltIn": "内置",
           "sourceCommunity": "终端调色板",
-          "themes": "主题",
-          "themesCaption": "可选。使用应用主题和终端调色板进一步自定义。"
-        },
-        "subtitle": "选择浅色或深色，也可以再选一个主题。两者都可以随时在设置中更改。"
+          "themes": "主题"
+        }
       },
       "integrations": {
         "capabilities": {

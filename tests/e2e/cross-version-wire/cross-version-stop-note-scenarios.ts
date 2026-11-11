@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
-import { agentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
-import { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemBody
-} from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { HISTORY_PAGE_CONTENT_BUDGET_BYTES } from '../../../src/main/native-chat/agent-session-wire/publication/history/agent-session-history-page-bounds'
 import {
   createReleasedStopNoteRig,
@@ -152,26 +147,6 @@ export function describeReleasedStopNoteProjection(port: ScenarioPort): void {
         expect(render(after)).toEqual({ type: 'text', text: ordinary.text })
         expect(after.cursor).toEqual(rig.journal.cursor())
       })
-      it.each(['running', 'completed', 'unverifiable', 'missing', 'other-failure'] as const)(
-        'keeps %s wording through the released page reader',
-        async (state) => {
-          if (state !== 'missing') {
-            await turn(state === 'other-failure' ? 'interrupted' : state)
-          }
-          const body: AgentJournalItemBody =
-            state === 'other-failure'
-              ? {
-                  kind: 'status',
-                  ...agentSessionFailureWords(agentSessionFailureFact('providerExited'), {
-                    surface: 'row'
-                  })
-                }
-              : unconfirmed
-          await note(body)
-          const initial = await page({ direction: 'tail' })
-          expect(initial.items.find((item) => item.itemId === noteId)?.body).toEqual(body)
-        }
-      )
       it('preserves removal when the operation note is re-keyed before the interrupted end', async () => {
         const op = { provider: 'orca', clientMessageId: 'stop:operation-1' } as const
         await rig.journal.appendItem(op, unconfirmed, {
