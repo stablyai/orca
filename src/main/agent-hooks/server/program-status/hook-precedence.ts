@@ -10,6 +10,13 @@ function isOpenCodeAgent(agentType: string | undefined): boolean {
   return agentType === 'opencode' || agentType === 'opencode2'
 }
 
+/** OpenCode's OSC 7501 covers every session sharing its folder's tabs; its hook covers only the pane's own. */
+export function isOpenCodeHookRow(
+  row: Pick<EnrichedAgentHookEventPayload, 'observation' | 'payload'>
+): boolean {
+  return row.observation?.origin === 'hook' && isOpenCodeAgent(row.payload.agentType)
+}
+
 /** Hook precedence ends at this time; undefined means no yield, Infinity means silence cannot end it. */
 export function programStatusHookYieldEndsAt(
   previous: EnrichedAgentHookEventPayload | undefined,
@@ -19,9 +26,9 @@ export function programStatusHookYieldEndsAt(
   if (previous?.observation?.origin !== 'hook' || previous.providerSessionOnly === true) {
     return undefined
   }
-  // OpenCode's OSC 7501 activity can be another session sharing the folder's tabs; its idle is all sessions resting.
+  // OpenCode's OSC 7501 idle means every session rests, so only that can overrule a silent hook.
   if (
-    isOpenCodeAgent(previous.payload.agentType) &&
+    isOpenCodeHookRow(previous) &&
     isOpenCodeAgent(payload.agentType) &&
     payload.state !== 'done'
   ) {
