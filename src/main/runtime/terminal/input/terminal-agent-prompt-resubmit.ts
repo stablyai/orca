@@ -101,7 +101,9 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
         } else {
           gatedResubmits += 1
         }
-      } while (gated && Date.now() < deadline)
+        // The body arms the hard deadline before any write, so checking it here cannot cut a
+        // launchpad that still holds the prompt off one iteration early.
+      } while (gated && Date.now() < hardDeadline)
     } catch {
       // Why: a refused retry leaves the first Enter's verdict to the verification that follows.
     }
