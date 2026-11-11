@@ -179,18 +179,24 @@ export function closeRemoteRunLink(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT of one column returns exactly that column.
     const held = db.db
       .prepare(
-        `SELECT placement.task_id, placement.run_id, placement.dispatch_id FROM remote_placements placement
-         JOIN tasks task ON task.id = placement.task_id
-         WHERE placement.conversation_id = ? AND task.status = 'dispatched'`
+        `SELECT placement.task_id, placement.run_id, placement.dispatch_id, task.status
+         FROM remote_placements placement JOIN tasks task ON task.id = placement.task_id
+         WHERE placement.conversation_id = ? AND task.status IN ('dispatched', 'blocked')`
       )
-      .all(conversationId) as { task_id: string; run_id: string; dispatch_id: string | null }[]
+      .all(conversationId) as {
+      task_id: string
+      run_id: string
+      dispatch_id: string | null
+      status: 'dispatched' | 'blocked'
+    }[]
     const now = new Date().toISOString()
     const result = `${reason} Its worker may still run there.`
     for (const placement of held) {
       transitionLifecycleWithDb(db.db, {
         entity: 'task',
         id: placement.task_id,
-        from: 'dispatched',
+        // Blocked by a stop the server never proved, which nothing can prove now.
+        from: placement.status,
         to: 'failed',
         projection: { result, completed_at: now }
       })
@@ -278,7 +284,10 @@ export function noteRemoteRunLinkError(
   error: unknown
 ): void {
   db.db
-    .prepare('UPDATE remote_run_links SET last_error = ? WHERE conversation_id = ?')
+    // A closed link keeps why it closed.
+    .prepare(
+      `UPDATE remote_run_links SET last_error = ? WHERE conversation_id = ? AND state <> 'closed'`
+    )
     .run(error instanceof Error ? error.message : String(error), conversationId)
 }
 

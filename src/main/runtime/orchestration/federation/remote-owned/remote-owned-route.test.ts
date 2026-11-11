@@ -375,29 +375,10 @@ describe('commands about a worker a paired server owns', () => {
 
   it("retries a failed remote worker with --on as the server's ordinary retry of its Task", async () => {
     const receipt = await startOnB()
-    const link = record(db.db.prepare('SELECT conversation_id FROM remote_run_links').get())
-    importRemoteOwnedItem(db, remoteServerPin(server), {
-      conversationId: String(link.conversation_id),
-      sequence: 1,
-      messageId: 'state_1',
-      kind: 'worker_state',
-      payload: JSON.stringify({
-        v: 1,
-        id: 'state_1',
-        homeRunId: receipt.runId,
-        peerRunId: 'run_on_b',
-        dispatch: {
-          id: 'ctx_b1',
-          taskId: receipt.taskId,
-          status: 'failed',
-          workerState: 'failed',
-          lastFailure: null,
-          agent: 'claude'
-        },
-        task: { status: 'failed', result: null },
-        correctedUnobservedPrompt: false,
-        removed: null
-      })
+    importState(receipt.runId, receipt.taskId, 1, {
+      status: 'failed',
+      workerState: 'failed',
+      taskStatus: 'failed'
     })
     answers['orchestration.workerStart'] = [started('ctx_b2')]
 
@@ -746,6 +727,45 @@ describe('commands about a worker a paired server owns', () => {
     expect(db.getTask(taskId)?.status).toBe('ready')
   })
 
+  it('fails a Task an unanswered stop blocked when its pairing is re-made, and tells the coordinator', async () => {
+    const { taskId, runId } = await startOnB()
+    importState(runId, taskId, 1, {
+      status: 'dispatched',
+      workerState: 'ready',
+      taskStatus: 'dispatched'
+    })
+    await call('orchestration.workerStop', { dispatch: 'ctx_b1' })
+    expect(db.getTask(taskId)?.status).toBe('blocked')
+    server = { ...server, homePeerFingerprint: 'cred_a_new', pairingRevision: 2 }
+
+    await call('orchestration.workerRead', { dispatch: 'ctx_b1' })
+    expect(db.getTask(taskId)).toMatchObject({
+      status: 'failed',
+      result: 'The pairing with devB was re-made. Its worker may still run there.'
+    })
+    expect(
+      db.db
+        .prepare(`SELECT 1 FROM messages WHERE to_handle = ? AND type = 'escalation'`)
+        .get(`run:${runId}`)
+    ).toBeDefined()
+  })
+
+  it("fails the Task when the server's reset removes an attempt whose Task it had readied", async () => {
+    const { taskId, runId } = await startOnB()
+    importState(runId, taskId, 1, {
+      status: 'dispatched',
+      workerState: 'ready',
+      taskStatus: 'dispatched'
+    })
+    importState(runId, taskId, 2, {
+      status: 'failed',
+      workerState: 'abandoned',
+      taskStatus: 'ready',
+      removed: 'devB was reset.'
+    })
+    expect(db.getTask(taskId)).toMatchObject({ status: 'failed', result: 'devB was reset.' })
+  })
+
   it('fails the Task a worker held once its server is removed from this Orca', async () => {
     const { taskId, runId } = await startOnB()
     paired = false
@@ -781,7 +801,13 @@ describe('commands about a worker a paired server owns', () => {
     runId: string,
     taskId: string,
     sequence: number,
-    state: { status: string; workerState: string; taskStatus: string; result?: string }
+    state: {
+      status: string
+      workerState: string
+      taskStatus: string
+      result?: string
+      removed?: string
+    }
   ) {
     const link = record(db.db.prepare('SELECT conversation_id FROM remote_run_links').get())
     importRemoteOwnedItem(db, remoteServerPin(server), {
@@ -804,7 +830,7 @@ describe('commands about a worker a paired server owns', () => {
         },
         task: { status: state.taskStatus, result: state.result ?? null },
         correctedUnobservedPrompt: false,
-        removed: null
+        removed: state.removed ? { reason: state.removed } : null
       })
     })
   }

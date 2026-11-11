@@ -15,7 +15,11 @@ import {
   recordRemoteDispatchState
 } from '../../db/remote-owned/remote-dispatch-records'
 import { recordRemoteStart, reserveRemotePlacement } from '../../db/remote-owned/remote-placements'
-import { closeRemoteRunLink, openRemoteRunLink } from '../../db/remote-owned/remote-run-links'
+import {
+  closeRemoteRunLink,
+  noteRemoteRunLinkError,
+  openRemoteRunLink
+} from '../../db/remote-owned/remote-run-links'
 import { ORCHESTRATION_WORKER_LIST_METHOD } from '../../../rpc/methods/orchestration/worker/worker-list-method'
 import { remoteWorkerShow } from './remote-owned-reads'
 import { explainRemoteServerFailure } from './remote-server-unreachable'
@@ -142,6 +146,8 @@ describe('reads of workers a paired server runs, from this Orca’s records', ()
   it('says a re-made pairing, not an unreachable server, left the record', async () => {
     const record = remoteWorker('task_1', 'ctx_w1')
     closeRemoteRunLink(db, record.conversation_id, 'The pairing with devB was re-made.')
+    // A later unreadable item on the closed link does not replace why it closed.
+    noteRemoteRunLinkError(db, record.conversation_id, new Error('Queue item x was not imported.'))
 
     const shown = remoteWorkerShow(runtime, record)
     expect(shown.server).toMatchObject({ name: 'devB', repaired: true })

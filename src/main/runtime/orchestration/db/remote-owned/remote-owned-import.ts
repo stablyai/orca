@@ -237,6 +237,7 @@ function importWorkerState(
   // the Task here is ready for a fresh start. Ready is no result, so it applies even if settled here.
   if (
     task.status === 'ready' &&
+    !state.removed &&
     isRemoteDispatchTerminal(record) &&
     currentRemoteAttempt(db, dispatch.taskId)?.dispatch_id === dispatch.id
   ) {
