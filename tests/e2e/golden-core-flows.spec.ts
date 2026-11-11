@@ -121,7 +121,7 @@ async function chooseOppositeTheme(page: Page): Promise<void> {
   )
   const nextTheme = startingTheme === 'dark' ? 'light' : 'dark'
   const tileName = nextTheme === 'light' ? /Bright & crisp/ : /Easy on the eyes/
-  await page.getByRole('button', { name: tileName }).click()
+  await page.getByRole('radio', { name: tileName }).click()
   await expect
     .poll(
       () =>

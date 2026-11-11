@@ -20742,7 +20742,6 @@
           "browsePlugins": "Parcourir les plugins",
           "browseThemePlugins": "Parcourir les plugins de thèmes",
           "colorMode": "Mode de couleur",
-          "colorModeCaption": "Clair, sombre ou selon votre système.",
           "darkLook": "Style sombre",
           "darkLooks": "Styles sombres",
           "lightLook": "Style clair",
@@ -20758,10 +20757,8 @@
           "slotLabel": "Style à modifier",
           "sourceBuiltIn": "Intégré",
           "sourceCommunity": "Palette de terminal",
-          "themes": "Thème",
-          "themesCaption": "Facultatif. Allez plus loin avec des thèmes d’app et des palettes de terminal."
-        },
-        "subtitle": "Choisissez clair ou sombre, puis un thème si vous le souhaitez. Modifiable à tout moment dans les Réglages."
+          "themes": "Thème"
+        }
       },
       "integrations": {
         "capabilities": {

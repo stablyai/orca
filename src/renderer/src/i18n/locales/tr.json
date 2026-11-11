@@ -19191,7 +19191,6 @@
           "browsePlugins": "Eklentilere göz at",
           "browseThemePlugins": "Tema eklentilerine göz at",
           "colorMode": "Renk modu",
-          "colorModeCaption": "Açık, koyu veya sisteminize uygun.",
           "darkLook": "Koyu görünüm",
           "darkLooks": "Koyu görünümler",
           "lightLook": "Açık görünüm",
@@ -19207,10 +19206,8 @@
           "slotLabel": "Düzenlenecek görünüm",
           "sourceBuiltIn": "Yerleşik",
           "sourceCommunity": "Terminal paleti",
-          "themes": "Tema",
-          "themesCaption": "İsteğe bağlı. Uygulama temaları ve terminal paletleriyle daha ileri gidin."
-        },
-        "subtitle": "Açık veya koyu seçin, isterseniz bir tema da seçin. İkisini de istediğiniz zaman Ayarlar’dan değiştirebilirsiniz."
+          "themes": "Tema"
+        }
       },
       "integrations": {
         "capabilities": {

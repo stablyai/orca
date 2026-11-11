@@ -19214,7 +19214,6 @@
           "browsePlugins": "Plugins durchsuchen",
           "browseThemePlugins": "Design-Plugins durchsuchen",
           "colorMode": "Farbmodus",
-          "colorModeCaption": "Hell, dunkel oder wie dein System.",
           "darkLook": "Dunkler Look",
           "darkLooks": "Dunkle Looks",
           "lightLook": "Heller Look",
@@ -19230,10 +19229,8 @@
           "slotLabel": "Zu bearbeitender Look",
           "sourceBuiltIn": "Integriert",
           "sourceCommunity": "Terminal-Palette",
-          "themes": "Design",
-          "themesCaption": "Optional. Geh weiter mit App-Designs und Terminal-Paletten."
-        },
-        "subtitle": "Wähle hell oder dunkel und optional ein Design. Beides kannst du jederzeit in den Einstellungen ändern."
+          "themes": "Design"
+        }
       },
       "integrations": {
         "capabilities": {
