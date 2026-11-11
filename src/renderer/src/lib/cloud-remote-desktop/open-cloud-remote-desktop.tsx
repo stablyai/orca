@@ -110,23 +110,49 @@ export function requestCloudRemoteDesktop(
 }
 
 /** Opens (or reuses) the workspace's desktop tab, unless the workspace moved meanwhile. */
-function showDesktopTab(worktreeId: string, environmentId: string, url: string): void {
+function showDesktopTab(
+  worktreeId: string,
+  environmentId: string,
+  url: string,
+  activate = true
+): void {
   const state = useAppStore.getState()
   // The workspace may have been deleted or moved while the sandbox answered.
   if (selectWorkspaceRuntimeEnvironmentId(state, worktreeId) !== environmentId) {
     return
   }
-  activateAndRevealWorkspace(worktreeId, { providesInitialSurface: true })
+  if (activate) {
+    activateAndRevealWorkspace(worktreeId, { providesInitialSurface: true })
+  }
   const existing = takeDesktopTab(worktreeId, url)
   if (existing) {
-    state.setActiveBrowserTab(existing, worktreeId)
+    if (activate) {
+      state.setActiveBrowserTab(existing, worktreeId)
+    }
     return
   }
   // Client-local: the forwarded port lives on this computer, not on the workspace's host.
   state.createBrowserTab(worktreeId, url, {
     title: translate('components.cloudRemoteDesktop.tabTitle', 'Remote desktop'),
-    activate: true,
+    activate,
     browserRuntimeEnvironmentId: null
+  })
+}
+
+/**
+ * Reopens a desktop tab that sleep closed, once the workspace is awake again: no toasts (the tab's
+ * own state says how it goes) and it only comes to the front if it was in front when it slept.
+ */
+export function reopenCloudRemoteDesktopQuietly(
+  worktreeId: string,
+  environmentId: string,
+  activate: boolean
+): Promise<void> {
+  return exclusive(worktreeId, async () => {
+    const result = await requestCloudRemoteDesktop(environmentId)
+    if (result.ok) {
+      showDesktopTab(worktreeId, environmentId, result.url, activate)
+    }
   })
 }
 
