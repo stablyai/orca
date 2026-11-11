@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { isClientHostedBrowserPageHandle } from '@/store/slices/browser/hosts/browser-host-state'
 import type { BrowserWorkspace as BrowserWorkspaceState } from '../../../../../shared/browser-workspace-types'
-import { destroyPersistentWebview } from '../host-guest/webview-registry'
+import { replacePersistentWebview } from '../host-guest/webview-registry'
 import { useBrowserAutomationVisiblePageIds } from '../host-guest/browser-automation-visibility'
 import { getBrowserPagesForWorkspace } from './browser-pane-page-selection'
 import { BrowserMobileDriverOverlay } from './BrowserMobileDriverOverlay'
@@ -27,10 +27,7 @@ import {
   ManagedBrowserProfileHold,
   useManagedBrowserProfileStatus
 } from './managed-browser-profile-hold'
-import {
-  isBrowserPageMountAdmitted,
-  useAnyBrowserPageMountAdmission
-} from '../host-guest/browser-page-mount-admission'
+import { useBrowserPageMountAdmissions } from '../host-guest/browser-page-mount-admission'
 
 export default function BrowserPane({
   browserTab,
@@ -80,7 +77,7 @@ export default function BrowserPane({
     () => localBrowserPages.map((page) => page.id),
     [localBrowserPages]
   )
-  const hasAdmittedPage = useAnyBrowserPageMountAdmission(localBrowserPageIds)
+  const mountAdmissions = useBrowserPageMountAdmissions(localBrowserPageIds)
   const managedProfileStatus = useManagedBrowserProfileStatus(browserTab.sessionProfileId)
   const pageDriver = useBrowserDriverForPage(activeBrowserPageId)
   // Why: a runtime-backed page is streamed, never locally driven, so its driver must read idle.
@@ -92,7 +89,7 @@ export default function BrowserPane({
     }
     for (const page of browserPages) {
       if (getBrowserPageRuntimeEnvironmentId(page, activeRuntimeEnvironmentId)) {
-        destroyPersistentWebview(page.id)
+        void replacePersistentWebview(page.id)
       }
     }
   }, [activeRuntimeEnvironmentId, browserPages, runtimeEnvironmentActive])
@@ -171,14 +168,14 @@ export default function BrowserPane({
         >
           {(routedPartition) => (
             <div className="relative flex min-h-0 flex-1">
-              {localBrowserPages.map((page) => (
+              {localBrowserPages.map((page, index) => (
                 <DeferredBrowserContent
                   key={page.id}
                   retainMounted={isWorktreeActive}
                   mountEligible={isBrowserPagePanePaintable({
                     isActive:
                       (isActive && page.id === activeBrowserPageId) ||
-                      (hasAdmittedPage && isBrowserPageMountAdmitted(page.id)),
+                      mountAdmissions[index] === '1',
                     isAutomationVisible: automationVisiblePageIds.has(page.id),
                     isMobileDriven: mobileDrivenPageIds.has(page.id),
                     hasRemoteViewer: remotelyViewedPageIds.has(page.id)
@@ -203,6 +200,7 @@ export default function BrowserPane({
                       isAutomationVisible={automationVisiblePageIds.has(page.id)}
                       isMobileDriven={mobileDrivenPageIds.has(page.id)}
                       isRemotelyViewed={remotelyViewedPageIds.has(page.id)}
+                      isMountAdmitted={mountAdmissions[index] === '1'}
                       inputLocked={activeBrowserDriver.kind === 'mobile'}
                       onUpdatePageState={updateBrowserPageState}
                       onSetUrl={setBrowserPageUrl}

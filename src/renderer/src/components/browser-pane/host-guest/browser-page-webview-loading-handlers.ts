@@ -10,6 +10,7 @@ import { isBrowserLoadBlockedByExtension } from '../../../../../shared/browser-l
 import { translate } from '@/i18n/i18n'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from './browser-page-guest-recovery'
 import { releaseBrowserPageMount } from './browser-page-mount-admission'
+import { webviewRegistry } from './webview-registry'
 import { rememberLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
 import { resolveBrowserWebviewLoadFailure } from '../navigate/browser-webview-load-failure'
 import { resolveActiveBrowserLoadFailure } from '../navigate/browser-load-failure-for-url'
@@ -65,7 +66,9 @@ export function createBrowserPageWebviewLoadingHandlers({
 }: BrowserPageWebviewLoadingHandlersArgs): BrowserPageWebviewLoadingHandlers {
   const handleDidStopLoading = (): void => {
     // Admission starts background guests only; after any first load settlement, normal paint-retention rules decide layout.
-    releaseBrowserPageMount(browserTabId)
+    if (webviewRegistry.get(browserTabId) === webview) {
+      releaseBrowserPageMount(browserTabId)
+    }
     const currentUrl = webview.getURL() || webview.src || 'about:blank'
     const browserModelUrl = redactKagiSessionToken(currentUrl)
     const activeLoadFailure = activeLoadFailureRef.current

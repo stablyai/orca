@@ -6,11 +6,18 @@ import {
   type BrowserPageWebviewGuestSession
 } from './browser-page-webview-guest-session'
 import {
-  destroyPersistentWebview,
+  closePersistentBrowserPage,
+  replacePersistentWebview,
   registerPersistentWebview,
   registeredWebContentsIds,
   webviewRegistry
 } from './webview-registry'
+import { createBrowserPageWebviewLoadingHandlers } from './browser-page-webview-loading-handlers'
+import {
+  admitBrowserPageMount,
+  isBrowserPageMountAdmitted,
+  releaseBrowserPageMount
+} from './browser-page-mount-admission'
 
 vi.mock('../describe-page/browser-page-load-error', () => ({ browserPageExists: () => true }))
 
@@ -61,6 +68,10 @@ function createSession(
   let liveGuestId = guestId
   webview.getWebContentsId = () => liveGuestId
   webview.getZoomLevel = () => 0
+  webview.getURL = () => 'https://example.test'
+  webview.getTitle = () => 'Example'
+  webview.canGoBack = () => false
+  webview.canGoForward = () => false
   webview.setZoomLevel = vi.fn()
   if (!previous) {
     document.body.appendChild(webview)
@@ -145,7 +156,7 @@ afterEach(async () => {
   for (const page of sessions.splice(0)) {
     page.session.guestRecovery.dispose()
     page.webviewRef.current = null
-    await destroyPersistentWebview(page.id)
+    await closePersistentBrowserPage(page.id)
     page.webview.remove()
   }
   registeredWebContentsIds.clear()
@@ -156,7 +167,7 @@ describe('renderer registration completion ownership', () => {
     const old = createSession('page', 1)
     old.session.handleDidAttach()
     old.session.guestRecovery.dispose()
-    await destroyPersistentWebview('page')
+    await closePersistentBrowserPage('page')
     const replacement = createSession('page', 2)
     replacement.session.handleDidAttach()
     replies[1].resolve(true)
@@ -218,7 +229,7 @@ describe('renderer registration completion ownership', () => {
   it('does not restore a registry-removed guest before listener disposal runs', async () => {
     const page = createSession('page', 1)
     page.session.handleDidAttach()
-    await destroyPersistentWebview('page')
+    await closePersistentBrowserPage('page')
     replies[0].resolve(true)
     await flush()
     expect(registeredWebContentsIds.has('page')).toBe(false)
@@ -267,7 +278,7 @@ describe('renderer registration completion ownership', () => {
     registeredWebContentsIds.set('page', 1)
     page.session.guestRecovery.validateAfterResume()
     page.session.guestRecovery.dispose()
-    await destroyPersistentWebview('page')
+    await closePersistentBrowserPage('page')
     reply.resolve(false)
     await flush()
     expect(repair).not.toHaveBeenCalled()
@@ -295,4 +306,63 @@ describe('renderer registration completion ownership', () => {
     expect(page.loadFailure.current).toBe(failure)
     expect(page.update).not.toHaveBeenCalled()
   })
+})
+
+it('keeps a reentrant replacement and its native ID when removing the previous guest', async () => {
+  const old = createSession('reentrant', 1)
+  registeredWebContentsIds.set(old.id, 1)
+  const remove = old.webview.remove.bind(old.webview)
+  old.webview.remove = () => {
+    remove()
+    createSession('reentrant', 2)
+    registeredWebContentsIds.set(old.id, 2)
+  }
+  await replacePersistentWebview(old.id)
+  old.webview.remove = remove
+  expect(webviewRegistry.get(old.id)).toBe(sessions.at(-1)!.webview)
+  expect(registeredWebContentsIds.get(old.id)).toBe(2)
+  expect(unregister).toHaveBeenCalledExactlyOnceWith({
+    browserPageId: old.id,
+    webContentsId: 1,
+    replacement: true
+  })
+})
+
+it('never sends page-only native replacement when the element has no known native identity', async () => {
+  const old = createSession('not-attached', 1)
+  old.webview.getWebContentsId = () => {
+    throw new Error('Not attached')
+  }
+  await replacePersistentWebview(old.id)
+  expect(unregister).not.toHaveBeenCalled()
+  expect(webviewRegistry.has(old.id)).toBe(false)
+})
+
+it('lets only the current guest settle a replacement admission', () => {
+  const old = createSession('settlement', 1)
+  const current = createSession('settlement', 2)
+  admitBrowserPageMount(old.id)
+  const ref = <T>(value: T) => ({ current: value })
+  const loading = (webview: Electron.WebviewTag) =>
+    createBrowserPageWebviewLoadingHandlers({
+      webview,
+      browserTabId: old.id,
+      faviconUrlRef: ref(null),
+      browserTabUrlRef: ref('https://example.test'),
+      addressBarValueRef: ref('https://example.test'),
+      addressBarInputRef: ref(null),
+      activeLoadFailureRef: ref(null),
+      lastKnownWebviewUrlRef: ref(null),
+      keepAddressBarFocusRef: ref(false),
+      recoveryNavigationValidationRef: ref(null),
+      onUpdatePageStateRef: ref(vi.fn()),
+      onSetUrlRef: ref(vi.fn()),
+      setAddressBarValue: vi.fn(),
+      focusAddressBarNow: () => false
+    })
+  loading(old.webview).handleDidStopLoading()
+  expect(isBrowserPageMountAdmitted(old.id)).toBe(true)
+  loading(current.webview).handleDidStopLoading()
+  expect(isBrowserPageMountAdmitted(old.id)).toBe(false)
+  releaseBrowserPageMount(old.id)
 })

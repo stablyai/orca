@@ -27,7 +27,7 @@ vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOri
 
 vi.mock('@/components/browser-pane/host-guest/webview-registry', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  destroyPersistentWebview: vi.fn(() => Promise.resolve())
+  closePersistentBrowserPage: vi.fn(() => Promise.resolve())
 }))
 
 // Main answers the window's layout commands; its frames draw the browser tabs.

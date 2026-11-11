@@ -4,6 +4,10 @@ import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktre
 import { useWorktreeHostConnection } from '@/lib/workspace/ownership/worktree-host-connection-phase'
 import { resolveSshWorkspaceBrowserRouteEligibility } from '@/lib/browser/workspace/ssh-workspace-browser-route-eligibility'
 import type { BrowserLoadFailureRoute } from '../../../../shared/browser-load-failure'
+import {
+  sshWorkspaceBrowserRouteKey,
+  verifiedPartitionByRoute
+} from './ssh-workspace-browser-verified-routes'
 
 export type SshWorkspaceBrowserRouteErrorKind = 'forwarding-blocked' | 'ssh-unavailable' | 'unknown'
 
@@ -27,9 +31,6 @@ export function classifySshWorkspaceBrowserRouteError(
   }
   return 'unknown'
 }
-
-// A remounted gate starts from its last verified partition instead of destroying guests already on it.
-const verifiedPartitionByRoute = new Map<string, string>()
 
 function readyRouteState(
   partition: string,
@@ -86,12 +87,12 @@ export function useSshWorkspaceBrowserRoute(
   })
   // Persist “Try anyway”: forwarding may work while the loopback probe is forbidden; do not re-prompt every launch.
   const skipProbe = attempt.skipProbe || probeSkippedTargetIds?.includes(targetId ?? '') === true
-  const routeKey = JSON.stringify([
+  const routeKey = sshWorkspaceBrowserRouteKey(
     targetId,
     browserProfileId,
-    expectedSshTargetGeneration ?? null,
+    expectedSshTargetGeneration,
     skipProbe
-  ])
+  )
   const [state, setState] = useState<SshWorkspaceBrowserRouteState>(() =>
     targetId
       ? (verifiedRouteState(routeKey, targetId, expectedSshTargetGeneration) ?? {
@@ -106,7 +107,8 @@ export function useSshWorkspaceBrowserRoute(
   const routeReady =
     state.kind === 'ready' &&
     state.targetId === targetId &&
-    state.expectedSshTargetGeneration === expectedSshTargetGeneration
+    state.expectedSshTargetGeneration === expectedSshTargetGeneration &&
+    state.partition === verifiedPartitionByRoute.get(routeKey)
   const awaitingHost = routeHost?.phase === 'connecting' && state.kind !== 'error' && !routeReady
   const connectedHostEpoch = routeHost?.connectedEpoch ?? null
   const [seenConnectedHostEpoch, setSeenConnectedHostEpoch] = useState(connectedHostEpoch)
@@ -171,9 +173,13 @@ export function useSshWorkspaceBrowserRoute(
   // Derive target changes synchronously; stale unrouted/other-target state could mount a local-egress guest before the effect corrects it.
   const effectiveState: SshWorkspaceBrowserRouteState = !targetId
     ? { kind: 'unrouted' }
-    : awaitingHost || state.kind === 'unrouted' || (state.kind === 'ready' && !routeReady)
-      ? { kind: 'preparing' }
-      : state
+    : state.kind === 'ready' && !routeReady
+      ? (verifiedRouteState(routeKey, targetId, expectedSshTargetGeneration) ?? {
+          kind: 'preparing'
+        })
+      : awaitingHost || state.kind === 'unrouted'
+        ? { kind: 'preparing' }
+        : state
   const rederive = (nextSkipProbe: boolean): void => {
     // Set preparing with the attempt so the effect can wait for dialing without cancelling its own prepare.
     setState({ kind: 'preparing' })

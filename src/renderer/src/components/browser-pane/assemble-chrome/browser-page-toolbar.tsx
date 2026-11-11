@@ -12,7 +12,6 @@ import { BrowserExtensionToolbar, BrowserExtensionsMenuSub } from './browser-ext
 import { BrowserOpenSourceFileButton, BrowserPageStateChips } from './browser-address-chips'
 import { useBrowserExtensionToolbar } from './use-browser-extension-toolbar'
 import { SshEgressIndicator } from './browser-egress-indicator'
-import { destroyPersistentWebview } from '../host-guest/webview-registry'
 import {
   getShareableBrowserArtifactFile,
   readBrowserHtmlArtifactRequest
@@ -252,7 +251,6 @@ export function BrowserPageToolbar({
           workspaceId={workspaceId}
           browserPageId={browserPageId}
           viewportPresetId={viewportPresetId}
-          onDestroyWebview={() => destroyPersistentWebview(browserPageId)}
           isActive={isActive}
           isBlankTab={isBlankTab}
           pageActions={{

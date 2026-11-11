@@ -2,14 +2,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const registryMocks = vi.hoisted(() => ({
-  destroyPersistentWebview: vi.fn(),
+  closePersistentBrowserPage: vi.fn(),
   registerPersistentWebview: vi.fn(),
   replacePersistentWebview: vi.fn(),
   webviewRegistry: new Map<string, Electron.WebviewTag>()
 }))
 
 vi.mock('../host-guest/webview-registry', () => ({
-  destroyPersistentWebview: registryMocks.destroyPersistentWebview,
+  closePersistentBrowserPage: registryMocks.closePersistentBrowserPage,
   registerPersistentWebview: registryMocks.registerPersistentWebview,
   replacePersistentWebview: registryMocks.replacePersistentWebview,
   webviewRegistry: registryMocks.webviewRegistry
@@ -26,7 +26,7 @@ function createContainer(id: string): HTMLDivElement {
 
 describe('BrowserPane webview preferences', () => {
   beforeEach(() => {
-    registryMocks.destroyPersistentWebview.mockReset()
+    registryMocks.closePersistentBrowserPage.mockReset()
     registryMocks.registerPersistentWebview.mockReset()
     registryMocks.replacePersistentWebview.mockReset()
     registryMocks.webviewRegistry.clear()
