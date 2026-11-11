@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState } from '../../shared/constants'
 import { setSecretStore } from '../../shared/secret-store'
 import { recordRemoteLayoutFrame } from './remote-layout-snapshot-recorder'
-import { openProfileStateDatabaseReadOnly } from '../persistence/profile-state/profile-state-database'
+import { openProfileStateDatabaseReadOnly } from '../persistence/profile-state/database/profile-state-database'
 import { ProfileStateSqliteAuthority } from '../persistence/profile-state/profile-state-sqlite-authority'
 import { Store } from '../persistence/loading-store/store'
 
@@ -153,5 +153,5 @@ it('keeps a title-only change without arming a save, and writes it with the next
   // Another domain's save writes only the domains marked dirty, which must include this one.
   store.updateSettings({ opencodeSessionCookie: 'cookie' })
   store.flushOrThrow()
-  expect(open().getRemoteLayoutSnapshot('env')?.workspaces[workspace.worktree]).toEqual(retitled)
+  expect(open().getRemoteLayoutSnapshots().env?.workspaces[workspace.worktree]).toEqual(retitled)
 })

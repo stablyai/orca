@@ -205,7 +205,7 @@ describe('grants scoped to the route the page was opened for', () => {
     const bridge = harness({ routeGrants: navigationOnly, ready: true })
     expect(bridge.last()).toMatchObject({
       type: 'init',
-      grants: { native: ['fault', 'rpcEnvelope', 'navigate', 'storage'] }
+      grants: { native: ['fault', 'rpcEnvelope', 'hostCatalogs', 'navigate', 'storage'] }
     })
     for (const [method, params] of [
       ['native.clipboard.read', { mime: 'text' }],

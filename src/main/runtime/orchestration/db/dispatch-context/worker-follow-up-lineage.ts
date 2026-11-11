@@ -1,8 +1,10 @@
+import { sleepingAgentLaunchConfigSchema } from '../../../../../shared/workspace-session/workspace-session-sleeping-agents'
 import { resolveWorkerLineageFacts, FOLLOW_UP_MESSAGE_TYPES } from './worker-follow-up-plan'
 
 import {
   normalizeAgentProviderSession,
-  type AgentProviderSessionMetadata
+  type AgentProviderSessionMetadata,
+  type SleepingAgentLaunchConfig
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   getConnectionExecutionHostId,
@@ -23,6 +25,8 @@ export type WorkerResumeSession = {
   agent: TuiAgent
   providerSession: AgentProviderSessionMetadata
   captureHostId: ExecutionHostId
+  /** The recipe the worker launched with; its pane's own record is gone once it closes (#37693). */
+  launchConfig?: SleepingAgentLaunchConfig
 }
 
 export function getFollowUpDispatch(
@@ -84,10 +88,18 @@ export function readWorkerResumeSession(
     const providerSession = normalizeAgentProviderSession(
       'providerSession' in parsed ? parsed.providerSession : undefined
     )
+    const launchConfig = sleepingAgentLaunchConfigSchema.parse(
+      'launchConfig' in parsed ? parsed.launchConfig : undefined
+    )
     return isTuiAgent(agent) &&
       providerSession &&
       (connectionId === null || typeof connectionId === 'string')
-      ? { agent, providerSession, captureHostId: getConnectionExecutionHostId(connectionId) }
+      ? {
+          agent,
+          providerSession,
+          captureHostId: getConnectionExecutionHostId(connectionId),
+          ...(launchConfig ? { launchConfig } : {})
+        }
       : null
   } catch {
     return null
@@ -107,10 +119,12 @@ export function recordWorkerResumeSession(
   const connectionId = isLocalHookConnectionId(session.connectionId)
     ? null
     : (session.connectionId ?? null)
+  const { launchConfig } = session
   const value = JSON.stringify({
     agent: session.agent,
     providerSession: session.providerSession,
-    connectionId
+    connectionId,
+    ...(launchConfig ? { launchConfig } : {})
   })
   // A repeat of the stored conversation writes nothing.
   db.db

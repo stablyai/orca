@@ -1,3 +1,4 @@
+import { GENERAL_SETTING_ANCHORS } from '../general/general-setting-anchors'
 import type React from 'react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { useTranslate } from '@/i18n/use-translate'
@@ -21,7 +22,8 @@ export function EditorFontFamilySetting({
   const t = useTranslate()
   return (
     <SearchableSetting
-      title={t('auto.components.settings.EditorFontFamilySetting.title', 'Editor Font Family')}
+      id={GENERAL_SETTING_ANCHORS.fontFamily}
+      title={t('auto.components.settings.EditorFontFamilySetting.458ec82128', 'Editor font family')}
       description={t(
         'auto.components.settings.EditorFontFamilySetting.description',
         'Font used by file editors and diff views, and by Markdown code when set. Leave empty to follow the terminal font.'
@@ -29,7 +31,10 @@ export function EditorFontFamilySetting({
       keywords={['editor', 'font', 'typography', 'family', 'code', 'cjk']}
     >
       <SettingsRow
-        label={t('auto.components.settings.EditorFontFamilySetting.title', 'Editor Font Family')}
+        label={t(
+          'auto.components.settings.EditorFontFamilySetting.458ec82128',
+          'Editor font family'
+        )}
         description={t(
           'auto.components.settings.EditorFontFamilySetting.description',
           'Font used by file editors and diff views, and by Markdown code when set. Leave empty to follow the terminal font.'

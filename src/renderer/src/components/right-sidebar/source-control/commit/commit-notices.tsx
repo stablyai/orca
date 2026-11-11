@@ -6,7 +6,7 @@ import {
 import { SourceControlRecoveryNotice } from './recovery-notice'
 import type { CommitNoticesProps } from './commit-area-types'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 export function CommitNotices({
   worktreeId,

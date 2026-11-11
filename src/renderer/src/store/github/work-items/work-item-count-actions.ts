@@ -1,4 +1,4 @@
-import { githubTaskBinding } from '@/lib/github-task-observation'
+import { githubTaskBinding } from '@/lib/work-items/github/github-task-observation'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'

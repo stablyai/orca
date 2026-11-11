@@ -1,5 +1,14 @@
 import type { AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-types'
-import { readTranscriptSlice, wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
+import {
+  openTranscriptReadStream,
+  readTranscriptSlice,
+  wslGatedReadFile
+} from '../native-chat/wsl-transcript-fs-access'
+import {
+  isZstdTranscriptPath,
+  readZstdTranscriptSlice,
+  zstdTranscriptStream
+} from '../native-chat/transcript-zstd-decompression'
 import {
   CLAUDE_CWD_BUCKET_LAYOUT,
   CODEBUDDY_CWD_BUCKET_LAYOUT,
@@ -182,7 +191,12 @@ export async function readTranscriptHeadCwd(
     : [first]) {
     let head: Buffer
     try {
-      head = await readTranscriptSlice(file.path, 0, length, 'scan', signal)
+      head = isZstdTranscriptPath(file.path)
+        ? await readZstdTranscriptSlice(
+            zstdTranscriptStream(openTranscriptReadStream(file.path, {}, 'scan', signal)),
+            length
+          )
+        : await readTranscriptSlice(file.path, 0, length, 'scan', signal)
     } catch (error) {
       if (signal?.aborted) {
         throw error

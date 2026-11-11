@@ -17,6 +17,10 @@ import {
   nativeChatSessionOptionActionLabel,
   nativeChatSessionOptionLabel
 } from '../../../../../src/shared/native-chat/input/native-chat-session-option-labels'
+import {
+  loneFastTier,
+  speedButtonTiers
+} from '../../../../../src/shared/native-chat/input/native-chat-session-speed-tiers'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
 import { MobileSwitch } from '../../../components/MobileSwitch'
 
@@ -131,6 +135,20 @@ type DescriptorRowsProps = {
   moreChoices?: { shown: boolean; onToggle: () => void }
 }
 
+/** A Fast-only speed, which toggles on one row like Claude's Fast mode. */
+function fastSpeedSwitch(descriptor: SessionOptionDescriptor) {
+  const speed = speedButtonTiers(descriptor)
+  const fast = speed ? loneFastTier(speed.tiers) : undefined
+  return speed && fast ? { standard: speed.standard, fast } : null
+}
+
+export function showsSessionOptionAsSwitch(descriptor: SessionOptionDescriptor): boolean {
+  return (
+    !descriptor.action &&
+    (descriptor.kind.type === 'boolean' || fastSpeedSwitch(descriptor) !== null)
+  )
+}
+
 /** One descriptor's rows as an array, so a ListGroup can draw the separators between them. */
 export function descriptorRowElements(
   {
@@ -156,8 +174,10 @@ export function descriptorRowElements(
     ]
   }
   // An unknown baseline still renders a switch; the source marker prevents implying the value was confirmed.
-  if (descriptor.kind.type === 'boolean') {
-    const label = nativeChatSessionOptionLabel(descriptor, say)
+  const fastSpeed = fastSpeedSwitch(descriptor)
+  if (descriptor.kind.type === 'boolean' || fastSpeed) {
+    const { kind } = descriptor
+    const label = fastSpeed ? say('fastMode') : nativeChatSessionOptionLabel(descriptor, say)
     const marker = sessionOptionValueMarker(descriptor)
     return [
       <ListRow
@@ -173,8 +193,16 @@ export function descriptorRowElements(
         accessory={
           <MobileSwitch
             accessibilityLabel={label}
-            value={descriptor.kind.currentValue}
-            onValueChange={(next) => onSetOption(next)}
+            value={
+              kind.type === 'boolean'
+                ? kind.currentValue
+                : kind.currentValue === fastSpeed?.fast.value
+            }
+            onValueChange={(next) =>
+              onSetOption(
+                fastSpeed ? (next ? fastSpeed.fast.value : fastSpeed.standard.value) : next
+              )
+            }
             disabled={locked}
           />
         }

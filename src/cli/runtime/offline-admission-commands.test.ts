@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setAppEnvironment } from '../../shared/app-environment'
-import { readAgentHookSettingsFromProfileState } from '../../main/persistence/profile-state/profile-state-offline-settings'
+import { readAgentHookSettingsFromProfileState } from '../../main/persistence/profile-state/offline-access/profile-state-offline-settings'
 import type * as ProcessHost from '@orca/process-host'
 import { main } from '../index'
 

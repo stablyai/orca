@@ -16,6 +16,7 @@ import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listen
 import type { AgentHookSource } from '../shared/agent-hook-listener/transport/agent-hook-relay'
 import { retainClaudeSettledRequests } from '../shared/agent-hook-listener/claude-settled-permission-requests'
 import { reduceHostTurnEnd } from '../shared/agent-hook-listener/state/agent-hook-turn-end-timing'
+import { previousCodexTurnContext } from '../shared/agent-hook-listener/providers/codex-session-start'
 import { buildRelayHookEnvelope } from './agent-hook-envelope-build'
 import type { RelayHookForward } from './agent-hook-server-contract'
 import { MAX_CACHED_PANES, type CachedPaneEnvelopeMeta } from './agent-hook-cached-pane-status'
@@ -127,7 +128,12 @@ export function applyRelayHookEvent(
   } = revised
   const event: AgentHookEventPayload = {
     ...unflagged,
-    ...reduceHostTurnEnd(previous, revised, Date.now(), options.isReplay !== true)
+    ...reduceHostTurnEnd(
+      previousCodexTurnContext(previous, revised),
+      revised,
+      Date.now(),
+      options.isReplay !== true
+    )
   }
   // Drop retired-pane posts and cached status so clients cannot auto-resume a ghost pane onto an orphan’s live transcript (#12447).
   if (host.isPaneSurfaceRetired(event.paneKey)) {

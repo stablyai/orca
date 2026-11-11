@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type {
-  AccountProviderRateLimits,
-  AccountsSnapshot
-} from '../../components/account-usage-state'
+import type { AccountProviderRateLimits, AccountsSnapshot } from '../../accounts/accounts-snapshot'
 import { selectHomeUsageCards } from './home-usage-cards'
 
 function limits(

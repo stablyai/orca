@@ -10,10 +10,16 @@ import {
   CLAUDE_AGENT_VIEW_PATH,
   CLAUDE_TERMINAL_MAIL_PATH
 } from '../../../shared/claude-agent-view'
+import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
+import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
+import { respondAfterAgentToolPluginHooks } from '../tool-events/agent-tool-plugin-hooks'
+import { ClaudePermissionHookHolds } from './claude-permission-hook-hold'
 
 export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServerRuntimeEnv {
   readonly claudeAgentViews = new ClaudeAgentViewBridge()
   readonly claudeTerminalMail = new ClaudeTerminalMailBridge()
+  protected readonly claudePermissionHooks = new ClaudePermissionHookHolds()
   private statusHookInitialization: Promise<void> | null = null
 
   /** The reply to a request from Orca's Claude plugin, or null when `pathname` is not one of its. */
@@ -27,6 +33,21 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
   protected clearClaudePlugins(): void {
     this.claudeAgentViews.clear()
     this.claudeTerminalMail.clear()
+  }
+
+  /** Answers a hook post: a worker's PermissionRequest waits for its coordinator's or person's answer;
+   *  plugins see only calls status accepted, so a fenced or reused pane's old agent is skipped. */
+  protected async respondToHook(
+    req: IncomingMessage,
+    res: ServerResponse,
+    source: AgentHookSource,
+    body: unknown,
+    accepted: AgentHookEventPayload | null
+  ): Promise<void> {
+    if (accepted && source === 'claude' && this.claudePermissionHooks.hold(req, res, accepted)) {
+      return
+    }
+    await respondAfterAgentToolPluginHooks(res, source, body, req.headers, accepted)
   }
 
   setStatusHooksEnabled(enabled: boolean): void {

@@ -1,17 +1,17 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store/index'
+import { cn } from '@/lib/class-names'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
-import { getScreenSubmitModifierLabel } from '@/lib/screen-submit-shortcut'
-import { resolveProjectCloneUrlPrefill } from '@/lib/project-clone-url-prefill'
+import { getScreenSubmitModifierLabel } from '@/lib/keyboard/screen-submit-shortcut'
+import { resolveProjectCloneUrlPrefill } from '@/lib/workspace/creation/project-clone-url-prefill'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import {
   AddRemoteHostDialog,
   type AddRemoteHostMode
 } from '@/components/sidebar/host-admission/ssh/AddRemoteHostDialog'
-import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
 import type * as SetProjectLocationDialogModule from '@/components/new-workspace/SetProjectLocationDialog'
 import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { withUiConnectTimeout } from '@/ssh/ssh-connect-ui-timeout'

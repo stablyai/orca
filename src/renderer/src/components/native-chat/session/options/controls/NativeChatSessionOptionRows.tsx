@@ -1,6 +1,6 @@
 import { useId, useLayoutEffect, useRef } from 'react'
 import { Zap } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Toggle } from '@/components/ui/toggle'
@@ -22,7 +22,8 @@ import {
 } from '../../../../../../../shared/native-chat/input/native-chat-session-option-labels'
 import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
 import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
-import { NativeChatSessionSpeedButton, speedButtonTiers } from './NativeChatSessionSpeedButton'
+import { NativeChatSessionSpeedButton } from './NativeChatSessionSpeedButton'
+import { speedButtonTiers } from '../../../../../../../shared/native-chat/input/native-chat-session-speed-tiers'
 
 type NativeChatSessionOptionRowsProps = {
   /** The current model's options, in display order. */

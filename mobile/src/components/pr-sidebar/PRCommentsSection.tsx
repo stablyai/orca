@@ -239,6 +239,7 @@ export function PRCommentsSection({
                   )}
                   submitLabel={t('pullRequest.commentsSection.comment', 'Comment')}
                   submitting={actions.isRootBusy}
+                  draftKey={actions.draftKey(null)}
                   onSubmit={actions.addRootComment}
                 />
               </View>
@@ -267,6 +268,7 @@ export function usePRCommentCardActions(
             isResolveBusy: actions.isResolveBusy,
             isEditBusy: actions.isEditBusy,
             isDeleteBusy: actions.isDeleteBusy,
+            draftKey: actions.draftKey,
             prRepo: prRepo ?? null
           }
         : undefined,

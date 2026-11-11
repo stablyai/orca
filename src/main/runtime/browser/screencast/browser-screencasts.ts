@@ -2,6 +2,7 @@ import type { BrowserScreencastResult } from '../../../../shared/browser/runtime
 import { BrowserError } from '../../../browser/browser-error'
 import { randomUUID } from 'node:crypto'
 import { startBrowserScreencast } from '../../../browser/cdp/screencast/browser-screencast-stream'
+import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'
 import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
 import { mintBrowserScreencastSubscriptionId } from './browser-screencast-subscription-id'
 import {
@@ -102,6 +103,7 @@ export class RuntimeBrowserScreencasts {
         format: params.format,
         ...budget,
         ...viewport,
+        holdPaint: () => browserManager.holdPaintForCapture(guest.id),
         onFrame: (bytes) => {
           const ghosts: string[] = []
           for (const [subscriptionId, subscriber] of pendingRecord.subscribers) {

@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import type { PortForwardEntry } from '../../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { ImeInput } from '@/lib/ime-text-field'
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 
 // Remap privileged ports to avoid EACCES when binding locally without root.
 function safeLocalPort(remotePort: number): number {

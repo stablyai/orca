@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   githubProjectKey,
   PickerModal,
+  toGitHubProjectIdentity,
   type GitHubProjectRef
 } from './mobile-tasks-dependencies'
 import { ListGroup, SectionHeader, ListRow } from '../components/list/ListGroup'
@@ -253,11 +254,7 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
                             ...githubProjectSettings,
                             pinned: [
                               ...githubProjectSettings.pinned,
-                              {
-                                owner: project.owner,
-                                ownerType: project.ownerType,
-                                number: project.number
-                              }
+                              toGitHubProjectIdentity(project)
                             ].slice(0, 20)
                           })
                         )
@@ -284,7 +281,7 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
           ) : (
             <ListGroup>
               {browseGitHubProjects.map((project) =>
-                projectRow(project.id, project, project.title, undefined)
+                projectRow(`browse:${githubProjectKey(project)}`, project, project.title, undefined)
               )}
             </ListGroup>
           )}
@@ -295,20 +292,21 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
 }
 
 export function renderMobileTasksGitHubProjectViewPicker(model: ConnectionPresentationModel) {
+  const pending = model.pendingGitHubProjectViewSelection
   return (
     <PickerModal
       visible={model.taskUiReady && model.showGitHubProjectViewPicker}
       title={
-        model.pendingGitHubProjectViewSelection
+        pending
           ? translate('tasks.githubProjectPickers.chooseView', 'Choose Project View')
           : translate('tasks.githubProjectPickers.view', 'Project View')
       }
       options={model.githubProjectViewOptions}
-      selected={
-        model.pendingGitHubProjectViewSelection ? '' : (model.activeGitHubProjectViewId ?? '')
-      }
+      selected={pending ? '' : (model.activeGitHubProjectViewId ?? '')}
       onSelect={(viewId) => {
-        const view = model.githubProjectViews.find((candidate) => candidate.id === viewId)
+        const view = (pending?.views ?? model.githubProjectViews).find(
+          (candidate) => candidate.id === viewId
+        )
         if (view && view.layout !== 'TABLE_LAYOUT') {
           model.setGithubProjectError(
             translate(
@@ -318,8 +316,8 @@ export function renderMobileTasksGitHubProjectViewPicker(model: ConnectionPresen
           )
           return
         }
-        if (model.pendingGitHubProjectViewSelection) {
-          model.commitGitHubProjectView(model.pendingGitHubProjectViewSelection, viewId)
+        if (pending) {
+          model.commitGitHubProjectView(pending.project, viewId, pending.views)
           model.setPendingGitHubProjectViewSelection(null)
           return
         }
@@ -330,7 +328,7 @@ export function renderMobileTasksGitHubProjectViewPicker(model: ConnectionPresen
       }}
       onClose={() => {
         model.setShowGitHubProjectViewPicker(false)
-        if (model.pendingGitHubProjectViewSelection) {
+        if (pending) {
           model.setPendingGitHubProjectViewSelection(null)
         }
       }}

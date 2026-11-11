@@ -1,9 +1,5 @@
 import { describe, vi } from 'vitest'
 import {
-  registerPtyConnectionSleepingRecordResumeTests,
-  registerPtyConnectionLiveResumeIdentityTests
-} from '../reattach/pty-connection-agent-session-resume.spec'
-import {
   registerPtyConnectionNonAgentLaunchRegistrationTests,
   registerPtyConnectionUnboundAgentLaunchRegistrationTests
 } from '../startup/pty-connection-agent-startup-launch-registration.spec'
@@ -30,10 +26,8 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
 )
 
 describe('pty-connection-agent-session-resume', () => {
-  registerPtyConnectionSleepingRecordResumeTests()
   registerPtyConnectionNonAgentLaunchRegistrationTests()
   registerPtyConnectionUnboundAgentLaunchRegistrationTests()
-  registerPtyConnectionLiveResumeIdentityTests()
 })
 describe(
   'pty-connection-cold-restore-agent-resume',

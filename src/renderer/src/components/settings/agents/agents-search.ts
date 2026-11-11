@@ -115,7 +115,7 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
     keywords: buildAgentSettingsKeywords()
   },
   {
-    title: translate('auto.components.settings.agents.search.agentRuntime', 'Agent Runtime'),
+    title: translate('auto.components.settings.agents.search.1523c4190f', 'Agent runtime'),
     id: AGENT_RUNTIME_SEARCH_ENTRY_ID,
     description: translate(
       'auto.components.settings.agents.search.agentRuntimeDescription',
@@ -212,10 +212,7 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
     keywords: getAgentAwakeSearchKeywords()
   },
   {
-    title: translate(
-      'auto.components.settings.agents.search.agentPermissions',
-      'Agent Permissions'
-    ),
+    title: translate('auto.components.settings.agents.search.788559d398', 'Agent permissions'),
     description: translate(
       'settings.agents.permissionsSearchDescription',
       'Choose Approve for me, Full access, or each agent’s own permission settings.'

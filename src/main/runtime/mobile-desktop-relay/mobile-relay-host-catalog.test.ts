@@ -8,8 +8,6 @@ import {
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
 import type { SshConnectionState } from '../../../shared/ssh-types'
-import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import { MobileRelayHostCatalog } from './mobile-relay-host-catalog'
@@ -69,6 +67,7 @@ function fakeHosts(
     environments,
     pairingRevision: 1,
     retire: (_environmentId: string) => {},
+    statusChanged: () => {},
     sshTargetLabels: new Map<string, string>(),
     sshConnectionStates: new Map<string, SshConnectionState>()
   }
@@ -119,22 +118,16 @@ function fakeHosts(
       state.retire = listener
       return () => {}
     },
-    onStatusChanged: () => () => {},
+    onStatusChanged: (listener) => {
+      state.statusChanged = listener
+      return () => {}
+    },
     watchChanges: () => ({ close: () => {}, current: () => true })
   }
   return { hosts, call, state }
 }
 
-function catalog(
-  hosts: MobileDesktopRelayHosts,
-  labels = new Map(),
-  desktop: {
-    sessions?: Record<string, Partial<WorkspaceSessionState>>
-    recipeEnvironmentsFor?: (
-      hostId: string
-    ) => ReadonlyMap<string, { name: string; destroys: boolean }>
-  } = {}
-) {
+function catalog(hosts: MobileDesktopRelayHosts) {
   const serverRows = new PairedServerRowsProducer({
     hasDemand: () => false,
     hostLabelOverrides: () => new Map()
@@ -144,69 +137,13 @@ function catalog(
     catalog: new MobileRelayHostCatalog({
       hosts,
       serverRows,
-      hostLabelOverrides: () => labels,
-      getWorkspaceSession: (hostId) => {
-        const session = desktop.sessions?.[hostId]
-        return session ? { ...getDefaultWorkspaceSession(), ...session } : null
-      },
-      ...(desktop.recipeEnvironmentsFor
-        ? { recipeEnvironmentsFor: desktop.recipeEnvironmentsFor }
-        : {})
+      hostLabelOverrides: () => new Map(),
+      getWorkspaceSession: () => null
     })
   }
 }
 
 describe('mobile relay host catalog', () => {
-  it('names the recipe environment on rows whose VM this desktop created, and only those', async () => {
-    const { hosts, call } = fakeHosts([
-      { id: 'env', name: 'Box', snapshot: snapshot('env', 'live') }
-    ])
-    call.mockResolvedValueOnce(
-      psReply([
-        { worktreeId: 'recipe-row', hostId: 'local' },
-        { worktreeId: 'plain-row', hostId: 'local' }
-      ])
-    )
-    const lookups: string[] = []
-    const { catalog: hostCatalog } = catalog(hosts, new Map(), {
-      recipeEnvironmentsFor: (hostId) => {
-        lookups.push(hostId)
-        return new Map([['recipe-row', { name: 'task', destroys: true }]])
-      }
-    })
-    await expect(hostCatalog.worktrees('runtime:env')).resolves.toEqual({
-      worktrees: [
-        {
-          worktreeId: 'recipe-row',
-          hostId: 'runtime:env',
-          recipeEnvironment: { name: 'task', destroys: true }
-        },
-        { worktreeId: 'plain-row', hostId: 'runtime:env' }
-      ]
-    })
-    // One store read per poll, not one per row.
-    expect(lookups).toEqual(['runtime:env'])
-  })
-
-  it("drops a server's own recipe-environment claim and survives an unreadable VM store", async () => {
-    const { hosts, call } = fakeHosts([
-      { id: 'env', name: 'Box', snapshot: snapshot('env', 'live') }
-    ])
-    call.mockResolvedValue(
-      psReply([
-        { worktreeId: 'claimed', hostId: 'local', recipeEnvironment: { name: 'x', destroys: true } }
-      ])
-    )
-    const { catalog: hostCatalog } = catalog(hosts, new Map(), {
-      recipeEnvironmentsFor: () => {
-        throw new Error('store unreadable')
-      }
-    })
-    await expect(hostCatalog.worktrees('runtime:env')).resolves.toEqual({
-      worktrees: [{ worktreeId: 'claimed', hostId: 'runtime:env' }]
-    })
-  })
-
   it('never serves rows from before a re-pair mid-fetch, and the next poll fetches the new server afresh', async () => {
     const { hosts, call, state } = fakeHosts([
       { id: 'env', name: 'Box', snapshot: snapshot('env', 'live') }

@@ -13,7 +13,7 @@ import {
   isWorktreeHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import { getAllWorktreeMetaForHost } from '../loading-store/worktree-identity-metadata'
+import { getAllWorktreeMetaForHost } from '../loading-store/worktree-metadata/worktree-identity-metadata'
 import { collectProjectGroups } from '../migrating-orcad-catalog/orcad-source-catalog'
 import {
   canonicalizeWslMoveValue,

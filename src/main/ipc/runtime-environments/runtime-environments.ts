@@ -29,7 +29,10 @@ import { setManagedOrcadPairingRepairedListener } from '../../managed-server/lif
 import { forgetManagedOrcadAutomaticFailures } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { registerRuntimeEnvironmentRecoveryHandler } from './runtime-environment-recovery-handler'
 import { registerRuntimeEnvironmentRepairHandler } from './runtime-environment-repair-handler'
-import { advanceRuntimeEnvironmentTransportGeneration } from './runtime-environment-transport-generation'
+import {
+  advanceRuntimeEnvironmentTransportGeneration,
+  onRuntimeEnvironmentTransportGenerationRetired
+} from './runtime-environment-transport-generation'
 import { resetSharedControlSupport } from './runtime-environment-shared-control-support'
 import { RUNTIME_ENVIRONMENT_HANDLER_CHANNELS } from './runtime-environment-handler-channels'
 import { registerOrcadRuntimeLifecycleHandlers } from './orcad-runtime-lifecycle-handlers'
@@ -59,11 +62,17 @@ function closeSubscriptionsForEnvironment(environmentId: string): void {
       pending.close()
     }
   }
+  closeEstablishedSubscriptionsForEnvironment(environmentId)
+}
+
+function closeEstablishedSubscriptionsForEnvironment(environmentId: string): number {
+  let closed = 0
   // Removed runtimes must release terminal/browser sockets before renderer teardown.
   for (const [subscriptionId, subscription] of remoteRuntimeSubscriptions) {
     if (subscription.environmentId !== environmentId) {
       continue
     }
+    closed += 1
     remoteRuntimeSubscriptions.delete(subscriptionId)
     // Isolate close and notification failures so neither strands this environment's sibling subscriptions.
     try {
@@ -78,7 +87,20 @@ function closeSubscriptionsForEnvironment(environmentId: string): void {
       console.warn('[runtime-environments] subscription close notice failed:', error)
     }
   }
+  return closed
 }
+// A retired generation's frames are discarded (runtime-environment-subscription-handlers.ts), so its
+// streams must close and tell their renderers, which resubscribe from where they left off. Streams
+// still being set up fail their own generation check instead.
+onRuntimeEnvironmentTransportGenerationRetired((environmentId) => {
+  const closed = closeEstablishedSubscriptionsForEnvironment(environmentId)
+  if (closed > 0) {
+    console.warn(`[runtime-environments] transport retired; reopening ${closed} stream(s)`, {
+      environmentId
+    })
+  }
+})
+
 /** Returns once the environment's client-hosted browser pages have been released. */
 export function invalidateRuntimeEnvironmentTransport(environmentId: string): Promise<void> {
   // Same-ID re-pairing must retire every transport authenticated as the former peer.

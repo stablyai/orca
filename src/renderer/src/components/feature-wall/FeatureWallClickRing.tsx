@@ -1,5 +1,5 @@
 import type { JSX } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 export function FeatureWallClickRing(props: { className?: string }): JSX.Element {
   return (

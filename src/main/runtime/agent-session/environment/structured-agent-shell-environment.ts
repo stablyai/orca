@@ -11,6 +11,7 @@ import {
   resolvePathEnvKey
 } from '../../../pty/environment/windows-path-segment-merge'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { overlayEnvironmentVariables } from '../../../../shared/environment-overlay'
 import {
   nativeChatShellEnvironmentPolicy,
   type NativeChatShellEnvironmentPolicy
@@ -27,24 +28,6 @@ function definedEnv(env: NodeJS.ProcessEnv): Record<string, string> {
     }
   }
   return defined
-}
-
-/** Overlays shell variables on Orca's env; win32 names are case-insensitive, so drop the base spelling. */
-function overlayShellVariables(
-  base: Record<string, string>,
-  shellVariables: Record<string, string>,
-  platform: NodeJS.Platform
-): Record<string, string> {
-  const merged = { ...base }
-  if (platform === 'win32') {
-    const overlaid = new Set(Object.keys(shellVariables).map((key) => key.toUpperCase()))
-    for (const key of Object.keys(merged)) {
-      if (overlaid.has(key.toUpperCase())) {
-        delete merged[key]
-      }
-    }
-  }
-  return { ...merged, ...shellVariables }
 }
 
 function pickShellVariables(
@@ -78,7 +61,7 @@ export function structuredAgentBaseEnvironment(input: {
     return definedEnv(input.shellEnv)
   }
   const platform = input.platform ?? process.platform
-  return overlayShellVariables(
+  return overlayEnvironmentVariables(
     definedEnv(input.processEnv ?? process.env),
     pickShellVariables(input.shellEnv, input.policy.names, platform),
     platform
@@ -246,7 +229,11 @@ export function createStructuredAgentEnvironmentResolvers(
           const base = structuredAgentBaseEnvironment({ shellEnv, policy, processEnv })
           return new Map(
             agents.map((agent) => {
-              const effective = { ...base, ...overlays.get(agent) }
+              const effective = overlayEnvironmentVariables(
+                base,
+                overlays.get(agent),
+                process.platform
+              )
               return [agent, structuredAgentEnvironmentIdentity(effective)]
             })
           )
@@ -258,10 +245,12 @@ export function createStructuredAgentEnvironmentResolvers(
       }
     },
     resolveBaseEnvironment: resolveBase,
-    resolveAgentEnvironment: async (agent) => ({
-      ...(await resolveBase()),
-      ...sources.resolveAgentLaunchEnv?.(agent)
-    })
+    resolveAgentEnvironment: async (agent) =>
+      overlayEnvironmentVariables(
+        await resolveBase(),
+        sources.resolveAgentLaunchEnv?.(agent),
+        process.platform
+      )
   }
 }
 

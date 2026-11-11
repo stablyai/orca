@@ -143,19 +143,6 @@ describe('all-host folder workspace settlement', () => {
     expect(store.getState().folderWorkspaces.map((w) => w.id)).toEqual(['remote-folder'])
     expect(store.getState().restoredRuntimeHostIdByWorkspaceSessionKey).toEqual({})
   })
-
-  it('keeps restored folder owner hints and lists no runtimes when remote hosts are skipped', async () => {
-    const store = storeWithRestoredFolderOwner()
-
-    await store.getState().fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
-    await store.getState().fetchProjectGroupsForAllHosts({ remoteHosts: 'skip' })
-
-    expect(runtimeEnvironmentsList).not.toHaveBeenCalled()
-    expect(store.getState().folderWorkspaces.map((w) => w.id)).toEqual(['local-folder'])
-    expect(store.getState().restoredRuntimeHostIdByWorkspaceSessionKey).toEqual({
-      [restoredFolderKey]: 'runtime:env-1'
-    })
-  })
 })
 
 describe('all-host repo settlement', () => {

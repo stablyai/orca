@@ -19,7 +19,6 @@ import { clearAllListenerCaches } from '../../../shared/agent-hook-listener/list
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import { AgentHookServerStatusHookLifecycle } from './server-status-hook-lifecycle'
 import { OPENCODE_STARTUP_PROMPT_CLAIM_PATH } from '../../../shared/agent-launch/startup/opencode-startup-prompt'
-import { respondAfterAgentToolPluginHooks } from '../tool-events/agent-tool-plugin-hooks'
 
 import type { HookServerStartOptions } from './server-types'
 
@@ -188,8 +187,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
             this.scheduleTranscriptPoll(source, aliasedBody, enriched)
           }
         }
-        // Plugins see only calls status accepted, so a fenced or reused pane's old agent is skipped.
-        await respondAfterAgentToolPluginHooks(res, source, aliasedBody, req.headers, toolCallOwner)
+        await this.respondToHook(req, res, source, aliasedBody, toolCallOwner)
       } catch (error) {
         if (pathname === OPENCODE_STARTUP_PROMPT_CLAIM_PATH) {
           if (isHookRequestTruncatedError(error) && !destroyedBySlowlorisCap) {
@@ -251,6 +249,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
   stop(options?: { keepStatus?: boolean }): void {
     this.startup.stop()
     this.clearClaudePlugins()
+    this.claudePermissionHooks.drain()
     // Terminal status may still have a pending write while hook ingress is disabled.
     if (this.statusHooksEnabled || this.statusPersistTimer) {
       this.flushStatusPersistSync()

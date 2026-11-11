@@ -1,5 +1,6 @@
 import { Pressable, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
+import { MobileNativeChatOptionThumbnail } from './MobileNativeChatOptionThumbnail'
 import {
   colors,
   concentricRadius,
@@ -14,6 +15,8 @@ import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 export function MobileNativeChatAskOptionRow({
   label,
   description,
+  preview,
+  onPreview,
   selected,
   multi,
   disabled,
@@ -21,19 +24,24 @@ export function MobileNativeChatAskOptionRow({
 }: {
   label: string
   description?: string
+  /** Read-only inspection is separate from choosing the option. */
+  preview?: string
+  onPreview?: () => void
   selected: boolean
   multi?: boolean
   disabled: boolean
   onPress: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
-  return (
+  const hasPreview = Boolean(preview && onPreview)
+  const row = (
     <Pressable
       accessibilityRole={multi ? 'checkbox' : 'radio'}
       accessibilityState={{ checked: selected, disabled }}
       style={({ pressed }) => [
         styles.option,
         selected && styles.optionSelected,
+        hasPreview && styles.optionWithPreview,
         pressed && pressedStyle
       ]}
       disabled={disabled}
@@ -58,6 +66,16 @@ export function MobileNativeChatAskOptionRow({
         ) : null}
       </View>
     </Pressable>
+  )
+  return hasPreview ? (
+    <View style={[styles.optionCard, selected && styles.optionSelected]}>
+      {row}
+      <View style={styles.previewInset}>
+        <MobileNativeChatOptionThumbnail label={label} preview={preview!} onPress={onPreview!} />
+      </View>
+    </View>
+  ) : (
+    row
   )
 }
 
@@ -106,5 +124,18 @@ const styles = themedStyleSheet(() => ({
   optionDescription: {
     color: colors.textSecondary,
     fontSize: typography.metaSize
+  },
+  optionCard: {
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderRadius: concentricRadius(radii.surface, spacing.xs),
+    backgroundColor: colors.bgRaised,
+    marginBottom: spacing.xs
+  },
+  optionWithPreview: { borderWidth: 0, marginBottom: 0 },
+  previewInset: {
+    marginLeft: 18 + spacing.sm * 2,
+    marginRight: spacing.sm,
+    marginBottom: spacing.sm
   }
 }))

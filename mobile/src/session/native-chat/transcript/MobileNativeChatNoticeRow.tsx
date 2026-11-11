@@ -21,14 +21,14 @@ import {
   readWholeAgentSessionFailureFact
 } from '../../../../../src/shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureSentence } from '../../../../../src/shared/agent-session/failures/agent-session-failure-words'
-import { agentSessionRemoteSignInCommand } from '../../../../../src/shared/agent-session/lifecycle/agent-session-sign-in'
+import { agentSessionSignInCommand } from '../../../../../src/shared/agent-session/lifecycle/agent-session-setup-commands'
 import { nativeChatOrcaStopRowText } from '../../../../../src/shared/native-chat/native-chat-orca-stop-words'
 import {
   MobileNativeChatForkedFromContext,
   MobileNativeChatNoticeContext,
   type MobileNativeChatNoticeView
-} from '../../mobile-native-chat-notice-context'
-import { MobileNativeChatMarkdown } from '../MobileNativeChatMarkdown'
+} from './mobile-native-chat-notice-context'
+import { MobileNativeChatMarkdown } from './MobileNativeChatMarkdown'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
@@ -36,7 +36,7 @@ import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { nativeChatHostStatusCopy, nativeChatNoticeCopy } from './native-chat-notice-copy'
 import { nativeChatOrcaStopSay } from './native-chat-orca-stop-copy'
 import { nativeChatUsageLimitText } from './native-chat-usage-limit-copy'
-import { sayMobileAgentSessionFailure } from '../../agent-session-failure-copy'
+import { sayMobileAgentSessionFailure } from '../agent-session/agent-session-failure-copy'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION } from '../../../../../src/shared/native-chat/native-chat-stopped-before-start'
@@ -73,7 +73,15 @@ function noticeLineText(
   // Only reword text fully described by its fact; other host text stays as written.
   const context = { agentName: names.agentName }
   const surface =
-    failure?.kind === 'savedConversationMissing' || failure?.kind === 'pluginInputRequired'
+    failure &&
+    [
+      'savedConversationMissing',
+      'pluginInputRequired',
+      'modelUnavailable',
+      'providerUnavailable',
+      'providerSafetyStopped',
+      'providerResponseFailed'
+    ].includes(failure.kind)
       ? (['row', 'rejection'] as const).find(
           (candidate) => notice.text === agentSessionFailureSentence(failure, candidate, context)
         )
@@ -119,7 +127,7 @@ export function MobileNativeChatNoticeRow({
   const failureDetail = agentSessionFailureDetailText(failure)
   const signInCommand =
     failure?.kind === 'notSignedIn'
-      ? agentSessionRemoteSignInCommand(names.agentName, failure.account)
+      ? agentSessionSignInCommand(names.agentName, { account: failure.account, remote: true })
       : null
   const runInTerminal = names.onRunInTerminal
   const detail = failureDetail?.trim() !== lineText.trim() ? failureDetail : undefined

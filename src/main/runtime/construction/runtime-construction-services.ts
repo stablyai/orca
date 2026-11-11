@@ -277,6 +277,7 @@ export abstract class RuntimeConstructionServices {
   protected abstract readonly getAgentStatusSnapshotForPaneFn:
     | ((paneKey: string) => AgentStatusIpcPayload[])
     | null
+  protected abstract readonly publicPaneStatusFn?: (paneKey: string) => AgentStatusIpcPayload[]
   abstract readonly getAgentStatusSnapshotFn: (() => AgentStatusIpcPayload[]) | null
   protected abstract getTrackedDisplayTitleForPty(ptyId: string): string | null
   protected abstract getLeavesForPty(ptyId: string): readonly RuntimeLeafRecord[]

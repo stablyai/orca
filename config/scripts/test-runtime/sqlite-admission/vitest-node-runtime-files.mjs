@@ -12,7 +12,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/packages/process-host/src/run-process.test.ts',
   'tests/e2e/cursor-quota-transport.unit.test.ts',
   'tests/e2e/helpers/electron-process-shutdown.unit.test.ts',
-  'src/main/ai-vault-search/session-search-index-writer.test.ts',
+  'src/main/ai-vault-search/storage/session-search-index-writer.test.ts',
   'src/main/ai-vault/session-scanner-unlimited-dedup.test.ts',
   // The parse cache persists through node:sqlite.
   'src/main/ai-vault/parse-cache/session-parse-cache-antigravity-upgrade.test.ts',
@@ -27,8 +27,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/browser/extensions/native-messaging/browser-extension-native-host-process-backpressure.test.ts',
   'src/main/daemon/providers/lifecycle/testing/daemon-init-provider-installation.test.ts',
   'src/renderer/src/components/terminal-pane/pty-transport/input/pty-input-write-queue.test.ts',
-  'src/renderer/src/lib/react-commit-cascade-observer.test.ts',
-  'src/renderer/src/lib/react-commit-cascade-telemetry.test.ts',
   // Asserts payloads are collected; Bun's GC scans the stack conservatively and may keep one alive.
   'src/shared/ws-inbound-message-queue.test.ts',
   'src/renderer/src/lib/agent-session/history/title-sync/ai-vault-tab-title-sync-inputs.test.ts',
@@ -36,12 +34,13 @@ const NODE_RUNTIME_INCLUDE = [
   // Asserts an observer survives a forced collection; conservative retention would hide a lost one.
   'config/scripts/test-runtime/dom/happy-dom-mutation-observer-retention.test.ts',
   // These reach Node SQLite through a shared helper or a dynamic import, which the scan skips.
+  'src/main/agent-hooks/server/testing/providers/codex/server-codex-session-start.test.ts',
   'src/main/claude/claude-transcript-catch-up.test.ts',
   'src/main/claude/claude-transcript-duration.test.ts',
   'tests/e2e/native-chat-startup-option-pickers.unit.test.ts',
   'src/main/ai-vault/transcripts/session-document-consumer-replacement.test.ts',
-  'src/main/ai-vault-search/session-search-dependent-transcripts.test.ts',
-  'src/main/ai-vault-search/session-search-list-reparse.test.ts',
+  'src/main/ai-vault-search/indexing/session-search-dependent-transcripts.test.ts',
+  'src/main/ai-vault-search/indexing/session-search-list-reparse.test.ts',
   'src/main/runtime/rpc/server/orchestration-cli-subprocess.test.ts',
   'src/main/runtime/orchestration/mailbox/terminal-pointer/orchestration-mailbox-delivery.test.ts',
   'src/main/runtime/orchestration/mailbox/routing/orchestration-mailbox-routing.test.ts',
@@ -105,8 +104,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/workspaces/removal/local-worktree-removal-recovery-live.test.ts',
   'src/main/rate-limits/providers/codex/codex-rpc-worker-backpressure.test.ts',
   'src/main/computer/macos-native-provider-client.test.ts',
-  'src/main/ai-vault-search/session-search-schema.test.ts',
-  'src/main/ai-vault-search/session-search-fts5-contract.test.ts',
+  'src/main/ai-vault-search/storage/session-search-schema.test.ts',
   'src/main/foreign-sqlite-readers/**/*.test.ts',
   'src/main/browser/*cookie*.test.ts',
   'src/main/browser/cookies/*cookie*.test.ts',
@@ -118,7 +116,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/browser/cookies/sources/browser-cookie-import-undecryptable.test.ts',
   'src/main/browser/cookies/sources/browser-cookie-source-partition.test.ts',
   // Playwright's CDP transport needs Node's WebSocket implementation.
-  'src/main/browser/guest-lifecycle/popups/compatibility/browser-popup-adapter-compatibility.electron.test.ts',
   'src/main/browser/guest-lifecycle/popups/presentation/popup-origin-chrome.electron.test.ts',
   'src/main/browser/guest-lifecycle/navigation/browser-link-materialization.electron.test.ts',
   'src/main/browser/guest-lifecycle/popups/compatibility/browser-popup-compatibility.electron.test.ts',
@@ -137,7 +134,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/gitlab/gitlab-known-host-retirement.test.ts',
   'src/main/window/main-window-updater-deferred-setup.test.ts',
   'src/renderer/src/components/terminal-pane/host-state/terminal-pane-host-state-memo.test.ts',
-  'src/renderer/src/components/automations/use-automation-runs-dashboard-payload.test.tsx',
+  'src/renderer/src/components/automations/runs/use-automation-runs-dashboard-payload.test.tsx',
   'src/main/native-chat/agent-session-journal/**/*.test.ts',
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-terminal-writer-acquire.test.ts',
   'src/main/runtime/agent-session/records/agent-session-conversation-name-store.test.ts',
@@ -169,7 +166,14 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/claude/claude-agent-sdk-contract-pins.test.ts',
   'config/scripts/orcad-distribution/server-bundle/profile-state-worker-smoke.test.mjs',
   'config/scripts/desktop-distribution/runtime-verification/process-host-dev-rebuild.test.ts',
-  'config/scripts/test-runtime/node-worker/vitest-node-runtime-pool.test.ts'
+  'config/scripts/test-runtime/node-worker/vitest-node-runtime-pool.test.ts',
+  // Reopen WAL-backed row caches read-only, which Bun on macOS cannot.
+  'src/main/agent-hooks/server/testing/identity/server-hook-session-binding.test.ts',
+  'tests/e2e/helpers/persisted-profile-state.unit.test.ts',
+  'src/main/runtime/push/notifications/mobile-notification-dismissal-store.test.ts',
+  'src/main/runtime/push/notifications/mobile-notification-dismissal-read-failure.test.ts',
+  'src/main/ipc/notifications-subject-retirement.test.ts',
+  'src/main/ipc/notifications-external-acknowledgement.test.ts'
 ]
 
 /** `filters` limits the SQLite import scan to the tests a filtered CLI run can select. */

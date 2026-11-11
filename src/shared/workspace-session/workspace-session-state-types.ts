@@ -4,6 +4,7 @@ import type { WorkspaceKey } from '../workspace-scope'
 import type { Tab, TabGroup, TabGroupLayoutNode, WorkspaceVisibleTabType } from '../tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../workspace-layout/terminal-tab-types'
 import type { BrowserHistoryEntry, BrowserPage, BrowserWorkspace } from '../browser-workspace-types'
+import type { BrowserPageAnnotation } from '../browser/element-grab/browser-grab-types'
 import type { WorkspaceDocHistoryEntry } from './workspace-doc-history'
 import type { ClientHostedBrowserCloseIntent } from './client-hosted-browser-close-intent'
 import type { PairedTerminalTabCloseIntent } from '../workspace-layout/paired-terminal-tab-close-intent'
@@ -32,6 +33,9 @@ export type PersistedOpenFile = {
   liveTail?: boolean
 }
 
+/** A saved page carries its unsent notes; the store keeps them in browserAnnotationsByPageId. */
+export type PersistedBrowserPage = BrowserPage & { annotations?: BrowserPageAnnotation[] }
+
 export type WorkspaceSessionState = {
   activeRepoId: string | null
   /** Scope-aware active owner for folder workspaces. Legacy worktree UI still reads activeWorktreeId. */
@@ -56,7 +60,7 @@ export type WorkspaceSessionState = {
   /** Persisted browser workspaces, keyed by worktree ID. */
   browserTabsByWorktree?: Record<string, BrowserWorkspace[]>
   /** Persisted browser pages, keyed by workspace ID. */
-  browserPagesByWorkspace?: Record<string, BrowserPage[]>
+  browserPagesByWorkspace?: Record<string, PersistedBrowserPage[]>
   /** Per-worktree active browser workspace ID at shutdown. */
   activeBrowserTabIdByWorktree?: Record<string, string | null>
   /** Runtime-authoritative logical client-hosted pages; desktop browserPagesByWorkspace holds the client half. */

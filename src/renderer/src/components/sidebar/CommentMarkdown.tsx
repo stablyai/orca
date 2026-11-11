@@ -17,7 +17,7 @@ import remarkCjkFriendly from 'remark-cjk-friendly/parseOnly'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from 'rehype-sanitize'
 import remend from 'remend'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   selectCommentMarkdownComponents,
   isTrustedCompactImageSrc,
@@ -37,8 +37,8 @@ import {
   markdownBlockContent
 } from './comment-markdown-block-pipeline'
 import { GITHUB_CALLOUT_SANITIZE_ATTRIBUTE } from '../../../../shared/github/github-callouts'
-import { remarkGitHubCallouts } from '@/lib/remark-github-callouts'
-import { remarkAutolinkLiteralProseBoundary } from '@/lib/remark-autolink-literal-prose-boundary'
+import { remarkGitHubCallouts } from '@/lib/markdown/remark-github-callouts'
+import { remarkAutolinkLiteralProseBoundary } from '@/lib/markdown/remark-autolink-literal-prose-boundary'
 import {
   linkGitHubReferences,
   type GitHubRepoReference

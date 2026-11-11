@@ -1,4 +1,3 @@
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import {
   DEFAULT_TERMINAL_FONT_WEIGHT_BOLD,
   TERMINAL_FONT_WEIGHT_MAX,
@@ -17,11 +16,12 @@ import {
   SettingsSegmentedControl
 } from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import { clampNumber } from '@/lib/terminal-theme'
+import { clampNumber } from '@/lib/terminal/appearance/terminal-theme'
 import { useTranslate } from '@/i18n/use-translate'
 import { defaultTerminalFontWeight } from '../../../../../../shared/terminal/appearance/terminal-platform-defaults'
-import { isWindowsDesktopClient } from '@/lib/windows-path-access'
+import { isWindowsDesktopClient } from '@/lib/files/os-open/windows-path-access'
 import { getTerminalAdvancedTypographySearchEntries } from './terminal-typography-search'
+import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 
 type TerminalAdvancedTypographyControlsProps = {
   settings: GlobalSettings
@@ -39,12 +39,12 @@ export function TerminalAdvancedTypographyControls({
   return (
     <div className="divide-y divide-border/40">
       <SearchableSetting
-        title={t('auto.components.settings.TerminalAppearanceSection.4aae5db258', 'Font Weight')}
+        title={t('auto.components.settings.TerminalAppearanceSection.bb4ac88514', 'Font weight')}
         description={searchEntries[0]?.description}
         keywords={searchEntries[0]?.keywords ?? ['terminal', 'typography', 'weight']}
       >
         <NumberField
-          label={t('auto.components.settings.TerminalAppearanceSection.4aae5db258', 'Font Weight')}
+          label={t('auto.components.settings.TerminalAppearanceSection.bb4ac88514', 'Font weight')}
           description=""
           value={normalizeTerminalFontWeight(settings.terminalFontWeight)}
           defaultValue={defaultTerminalFontWeight(isWindowsDesktopClient() ? 'win32' : '')}
@@ -60,8 +60,8 @@ export function TerminalAdvancedTypographyControls({
 
       <SearchableSetting
         title={t(
-          'auto.components.settings.TerminalAdvancedTypographyControls.f5fa1a08f1',
-          'Bold Font Weight'
+          'auto.components.settings.TerminalAdvancedTypographyControls.f40f6ef17c',
+          'Bold font weight'
         )}
         description={t(
           'auto.components.settings.TerminalAdvancedTypographyControls.0e0d1ee15a',
@@ -71,8 +71,8 @@ export function TerminalAdvancedTypographyControls({
       >
         <NumberField
           label={t(
-            'auto.components.settings.TerminalAdvancedTypographyControls.f5fa1a08f1',
-            'Bold Font Weight'
+            'auto.components.settings.TerminalAdvancedTypographyControls.f40f6ef17c',
+            'Bold font weight'
           )}
           description=""
           value={normalizeTerminalFontWeightBold(settings.terminalFontWeightBold)}
@@ -88,14 +88,14 @@ export function TerminalAdvancedTypographyControls({
       </SearchableSetting>
 
       <SearchableSetting
-        title={t('auto.components.settings.TerminalAppearanceSection.c084eb7d4c', 'Line Height')}
+        title={t('auto.components.settings.TerminalAppearanceSection.d9c0df9673', 'Line height')}
         description={searchEntries[1]?.description}
         keywords={
           searchEntries[1]?.keywords ?? ['terminal', 'typography', 'line height', 'spacing']
         }
       >
         <NumberField
-          label={t('auto.components.settings.TerminalAppearanceSection.c084eb7d4c', 'Line Height')}
+          label={t('auto.components.settings.TerminalAppearanceSection.d9c0df9673', 'Line height')}
           description=""
           value={settings.terminalLineHeight}
           defaultValue={1}
@@ -108,7 +108,7 @@ export function TerminalAdvancedTypographyControls({
       </SearchableSetting>
 
       <SearchableSetting
-        title={t('auto.components.settings.TerminalAppearanceSection.be8da35e7f', 'Font Ligatures')}
+        title={t('auto.components.settings.TerminalAppearanceSection.e4cccb139e', 'Font ligatures')}
         description={searchEntries[2]?.description}
         keywords={
           searchEntries[2]?.keywords ?? [
@@ -127,8 +127,8 @@ export function TerminalAdvancedTypographyControls({
       >
         <SettingsRow
           label={t(
-            'auto.components.settings.TerminalAppearanceSection.be8da35e7f',
-            'Font Ligatures'
+            'auto.components.settings.TerminalAppearanceSection.e4cccb139e',
+            'Font ligatures'
           )}
           // Explain whether Auto enables ligatures for the current font.
           description={
@@ -157,8 +157,8 @@ export function TerminalAdvancedTypographyControls({
           control={
             <SettingsSegmentedControl
               ariaLabel={t(
-                'auto.components.settings.TerminalAppearanceSection.be8da35e7f',
-                'Font Ligatures'
+                'auto.components.settings.TerminalAppearanceSection.e4cccb139e',
+                'Font ligatures'
               )}
               value={settings.terminalLigatures ?? 'auto'}
               onChange={(option) => updateSettings({ terminalLigatures: option })}

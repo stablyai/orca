@@ -82,6 +82,30 @@ describe('Store', () => {
     expect(isLocalWorktreeScanGenerationCurrent('r1', generation)).toBe(false)
   })
 
+  it('saves a pasted workspace directory with leading spaces as the absolute path it names', async () => {
+    const store = await createStore()
+    store.updateSettings({ workspaceDir: '/Users/me/dev' })
+    const historyBefore = store.getSettings().workspaceDirHistory
+
+    // Padding before an absolute path would otherwise resolve inside every repo.
+    expect(store.updateSettings({ workspaceDir: '  /Users/me/dev' }).workspaceDir).toBe(
+      '/Users/me/dev'
+    )
+    expect(store.getSettings().workspaceDirHistory).toEqual(historyBefore)
+    // Trailing characters and relative paths can be real folder names.
+    expect(store.updateSettings({ workspaceDir: '/tmp/workspaces ' }).workspaceDir).toBe(
+      '/tmp/workspaces '
+    )
+    expect(store.updateSettings({ workspaceDir: ' ~notes' }).workspaceDir).toBe(' ~notes')
+    if (process.platform === 'win32') {
+      expect(store.updateSettings({ workspaceDir: ' C:\\work' }).workspaceDir).toBe('C:\\work')
+    } else {
+      // ~\ and a leading \ are relative off Windows, so the value stays exact.
+      expect(store.updateSettings({ workspaceDir: ' ~\\work' }).workspaceDir).toBe(' ~\\work')
+      expect(store.updateSettings({ workspaceDir: ' \\work' }).workspaceDir).toBe(' \\work')
+    }
+  })
+
   it('updateSettings deep-merges and clamps notification custom sound volume', async () => {
     const store = await createStore()
     store.updateSettings({

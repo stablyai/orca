@@ -1,4 +1,5 @@
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { UnsentSendHold } from '../../agent-session-journal/queued-messages/journal-unsent-send-hold'
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { StructuredAgentSessionStartFlights } from '../startup/structured-agent-session-start-flight'
@@ -20,6 +21,10 @@ import type {
 } from '../host/structured-agent-session-host-types'
 
 export type StructuredAgentSessionDeliveryLoopDeps = {
+  captureTitleSourceUnavailable?: (
+    sessionId: string,
+    journal: AgentSessionJournal
+  ) => (() => void) | undefined
   startFlights?: Pick<StructuredAgentSessionStartFlights, 'get'>
   deliveryOrder: StructuredAgentSessionDeliveryOrder
   sessions: ReadonlyMap<string, StructuredAgentSessionHostSession>

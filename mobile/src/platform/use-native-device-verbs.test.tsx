@@ -17,6 +17,11 @@ const device = vi.hoisted(() => ({
   wakeTags: new Array<string>()
 }))
 
+// The shell's announce verb speaks through React Native's AccessibilityInfo.
+vi.mock('react-native', () => ({
+  AccessibilityInfo: { announceForAccessibilityWithOptions: () => {} },
+  Platform: { OS: 'ios' }
+}))
 vi.mock('expo-clipboard', () => ({
   setStringAsync: () => Promise.resolve(true),
   getStringAsync: device.clipboard.getStringAsync,

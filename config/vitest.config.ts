@@ -126,10 +126,12 @@ const bunProject = {
 }
 // Files whose state the per-file reset can undo share one worker's module cache instead of
 // re-importing thousands of modules each. ORCA_VITEST_ISOLATE_EVERY_FILE=1 turns it off.
+// Windows workers that keep native addons (process tree, ConPTY) across files die of heap
+// corruption (0xC0000374); production code loads them lazily, so the file scan can't see them.
 const runtimeProject = process.versions.bun ? bunProject : nodeProject
 const nodeRuntimeFiles = new Set(nodeRuntimeInclude.map((file) => file.replaceAll('\\', '/')))
 const sharedWorkerFiles =
-  process.env.ORCA_VITEST_ISOLATE_EVERY_FILE === '1'
+  process.env.ORCA_VITEST_ISOLATE_EVERY_FILE === '1' || process.platform === 'win32'
     ? []
     : filesSafeToShareWorker(
         process.cwd(),
@@ -151,6 +153,9 @@ const sharedProjects =
             name: `${runtimeProject.test.name}-shared`,
             include: sharedWorkerFiles,
             isolate: false,
+            runner: resolve(
+              'config/scripts/test-runtime/execution-policy/vitest-shared-worker-setup-runner.mjs'
+            ),
             setupFiles: [
               ...runtimeProject.test.setupFiles,
               resolve('config/scripts/test-runtime/environment/vitest-shared-worker-file-reset.mjs')

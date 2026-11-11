@@ -1,7 +1,7 @@
 import type { MobileRelayEndpoint } from '../../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import type { RelayHostCloseReason } from '../../../../src/shared/relay-host-close-reason'
 import type { HostGoodPath } from './host-path-memory'
-import type { MobileRelayCredentialBundle } from '../hosts/mobile-relay-credential-bundle'
+import type { MobileRelayCredentialBundle } from '../../host-credentials/mobile-relay-credential-bundle'
 import type { MobileRelayRpcSession } from '../relay/mobile-relay-rpc-session-contract'
 import type { resolveMobileRelayEndpoint } from '../relay/mobile-relay-resume-director'
 import type { RpcClient } from '../rpc/rpc-client-contract'

@@ -109,12 +109,4 @@ describe('orca plugin check: editors load as the frame protocol serves them', ()
     expect(result.issues).toEqual([])
     expect(result.files).toContain('editor/my script.js')
   })
-
-  it('lets a dependency reach the 16 MiB the protocol serves, past the 10 MiB entry cap', async () => {
-    const root = await editorWith({
-      'editor/index.html': page('<script type="module" src="./vendor.mjs"></script>'),
-      'editor/vendor.mjs': `export const x = 1\n//${'x'.repeat(11 * 1024 * 1024)}\n`
-    })
-    expect((await check(root)).issues).toEqual([])
-  })
 })

@@ -8,7 +8,7 @@ import { repairDuplicatePtyPanesOnStart } from '../../runtime/terminal/identity/
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
-import { DelayedAuthority } from '../loading-store/profile-state-delayed-authority-fixture'
+import { DelayedAuthority } from '../loading-store/profile-writing/profile-state-delayed-authority-fixture'
 import { Store } from '../loading-store/store'
 import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqlite-authority'
 import { planDuplicatePtyPaneRepair } from './duplicate-pty-pane-repair'

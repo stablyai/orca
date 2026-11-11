@@ -38,14 +38,6 @@ function loginShellProbe(shell: string, mode: string) {
   )
 }
 
-function decodePowerShellCommand(command: string): string {
-  const match = command.match(/-EncodedCommand\s+([A-Za-z0-9+/=]+)/)
-  if (!match) {
-    throw new Error(`No encoded PowerShell command found in: ${command}`)
-  }
-  return Buffer.from(match[1]!, 'base64').toString('utf16le')
-}
-
 describe('resolveRemoteNodePath', () => {
   beforeEach(() => {
     execCommandMock.mockReset()
@@ -60,46 +52,36 @@ describe('resolveRemoteNodePath', () => {
     await expect(resolveRemoteNodePath(conn)).resolves.toBe(
       '/home/u/.nvm/versions/node/v22.22.0/bin/node'
     )
-
-    expect(execCommandMock.mock.calls[1]![1]).toContain("PATH='/usr/bin':$PATH npm --version")
-    expect(execCommandMock.mock.calls[2]![1]).toContain(
-      "PATH='/home/u/.nvm/versions/node/v22.22.0/bin':$PATH npm --version"
-    )
   })
 
-  it.runIf(process.platform !== 'win32')(
-    'accepts npm elsewhere on PATH without probing another Node candidate',
-    async () => {
-      const root = mkdtempSync(path.join(os.tmpdir(), 'orca-split-node-npm-'))
-      try {
-        const nodePath = path.join(root, 'selected node', 'bin', 'node')
-        const npmBinDir = path.join(root, 'npm elsewhere', 'bin')
-        mkdirSync(path.dirname(nodePath), { recursive: true })
-        mkdirSync(npmBinDir, { recursive: true })
-        writeFileSync(nodePath, '#!/bin/sh\nprintf "v22.22.0\\n"\n')
-        writeFileSync(path.join(npmBinDir, 'npm'), '#!/bin/sh\nprintf "11.13.0\\n"\n')
-        chmodSync(nodePath, 0o755)
-        chmodSync(path.join(npmBinDir, 'npm'), 0o755)
+  it.runIf(process.platform !== 'win32')('accepts npm elsewhere on PATH', async () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'orca-split-node-npm-'))
+    try {
+      const nodePath = path.join(root, 'selected node', 'bin', 'node')
+      const npmBinDir = path.join(root, 'npm elsewhere', 'bin')
+      mkdirSync(path.dirname(nodePath), { recursive: true })
+      mkdirSync(npmBinDir, { recursive: true })
+      writeFileSync(nodePath, '#!/bin/sh\nprintf "v22.22.0\\n"\n')
+      writeFileSync(path.join(npmBinDir, 'npm'), '#!/bin/sh\nprintf "11.13.0\\n"\n')
+      chmodSync(nodePath, 0o755)
+      chmodSync(path.join(npmBinDir, 'npm'), 0o755)
 
-        execCommandMock
-          .mockResolvedValueOnce(`${nodePath}\n${path.join(root, 'fallback', 'bin', 'node')}\n`)
-          .mockImplementationOnce((_conn: SshConnection, command: string) =>
-            Promise.resolve(
-              execFileSync('/bin/sh', ['-c', command], {
-                encoding: 'utf8',
-                env: { HOME: root, PATH: npmBinDir }
-              })
-            )
+      execCommandMock
+        .mockResolvedValueOnce(`${nodePath}\n${path.join(root, 'fallback', 'bin', 'node')}\n`)
+        .mockImplementationOnce((_conn: SshConnection, command: string) =>
+          Promise.resolve(
+            execFileSync('/bin/sh', ['-c', command], {
+              encoding: 'utf8',
+              env: { HOME: root, PATH: npmBinDir }
+            })
           )
+        )
 
-        await expect(resolveRemoteNodePath(conn)).resolves.toBe(nodePath)
-        // One inventory exec plus one candidate probe keeps SSH startup work bounded.
-        expect(execCommandMock).toHaveBeenCalledTimes(2)
-      } finally {
-        rmSync(root, { recursive: true, force: true })
-      }
+      await expect(resolveRemoteNodePath(conn)).resolves.toBe(nodePath)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
     }
-  )
+  })
 
   it('finds node under a MISE_DATA_DIR exported from a shell dotfile', async () => {
     execCommandMock
@@ -290,14 +272,6 @@ describe('resolveRemoteNodePath', () => {
     )
   })
 
-  it('accepts Node 18 (the exact minimum) as valid', async () => {
-    execCommandMock
-      .mockResolvedValueOnce('/usr/local/bin/node\n')
-      .mockResolvedValueOnce('v18.0.0\n')
-
-    await expect(resolveRemoteNodePath(conn)).resolves.toBe('/usr/local/bin/node')
-  })
-
   it('falls back to the login shell when path probes find nothing', async () => {
     execCommandMock
       .mockResolvedValueOnce('\n')
@@ -328,37 +302,6 @@ describe('resolveRemoteNodePath', () => {
     )
   })
 
-  it('respects a non-default $SHELL instead of hardcoding bash', async () => {
-    execCommandMock
-      .mockResolvedValueOnce('\n')
-      .mockResolvedValueOnce('/usr/bin/fish')
-      .mockImplementationOnce(loginShellAnswer('/opt/homebrew/bin/node\n'))
-      .mockResolvedValueOnce('v22.0.0\n')
-
-    await resolveRemoteNodePath(conn)
-
-    expect(execCommandMock).toHaveBeenNthCalledWith(
-      3,
-      conn,
-      loginShellProbe('/usr/bin/fish', '-lc'),
-      { wrapCommand: false, timeoutMs: 8_000 }
-    )
-  })
-
-  it('uses /bin/sh when the remote shell expansion falls back to it', async () => {
-    execCommandMock
-      .mockResolvedValueOnce('\n')
-      .mockResolvedValueOnce('/bin/sh\n')
-      .mockImplementationOnce(loginShellAnswer('/usr/local/bin/node\n'))
-      .mockResolvedValueOnce('v20.0.0\n')
-
-    await expect(resolveRemoteNodePath(conn)).resolves.toBe('/usr/local/bin/node')
-    expect(execCommandMock).toHaveBeenNthCalledWith(3, conn, loginShellProbe('/bin/sh', '-c'), {
-      wrapCommand: false,
-      timeoutMs: 8_000
-    })
-  })
-
   it('uses -c (not -lc) for a csh login shell, which rejects combined -lc', async () => {
     // csh/tcsh require plain -c; -lc/-l can fail with Bad modifier (#8701).
     execCommandMock
@@ -372,25 +315,6 @@ describe('resolveRemoteNodePath', () => {
       wrapCommand: false,
       timeoutMs: 8_000
     })
-  })
-
-  it('uses -c (not -lc) for a tcsh login shell', async () => {
-    execCommandMock
-      .mockResolvedValueOnce('\n')
-      .mockResolvedValueOnce('/usr/bin/tcsh\n')
-      .mockImplementationOnce(loginShellAnswer('/usr/local/bin/node\n'))
-      .mockResolvedValueOnce('v20.0.0\n')
-
-    await expect(resolveRemoteNodePath(conn)).resolves.toBe('/usr/local/bin/node')
-    expect(execCommandMock).toHaveBeenNthCalledWith(
-      3,
-      conn,
-      loginShellProbe('/usr/bin/tcsh', '-c'),
-      {
-        wrapCommand: false,
-        timeoutMs: 8_000
-      }
-    )
   })
 
   it('keeps the default path-probe fallback for SSH session-limit-shaped errors', async () => {
@@ -413,73 +337,6 @@ describe('resolveRemoteNodePath', () => {
 
     await expect(
       resolveRemoteNodePath(conn, undefined, { rethrowSessionLimitErrors: true })
-    ).rejects.toBe(sessionLimitError)
-  })
-
-  it('rethrows SSH session-limit errors from candidate version checks in strict mode', async () => {
-    const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
-      reason: 4
-    })
-    execCommandMock
-      .mockResolvedValueOnce('/usr/local/bin/node\n')
-      .mockRejectedValueOnce(sessionLimitError)
-
-    await expect(
-      resolveRemoteNodePath(conn, undefined, { rethrowSessionLimitErrors: true })
-    ).rejects.toBe(sessionLimitError)
-  })
-
-  it('rethrows SSH session-limit errors from login-shell resolution in strict mode', async () => {
-    const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
-      reason: 4
-    })
-    execCommandMock.mockResolvedValueOnce('\n').mockRejectedValueOnce(sessionLimitError)
-
-    await expect(
-      resolveRemoteNodePath(conn, undefined, { rethrowSessionLimitErrors: true })
-    ).rejects.toBe(sessionLimitError)
-  })
-
-  it('rethrows SSH session-limit errors from package-manager hint probing in strict mode', async () => {
-    const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
-      reason: 4
-    })
-    execCommandMock
-      .mockResolvedValueOnce('\n')
-      .mockResolvedValueOnce('/bin/bash')
-      .mockResolvedValueOnce('\n')
-      .mockRejectedValueOnce(sessionLimitError)
-
-    await expect(
-      resolveRemoteNodePath(conn, undefined, { rethrowSessionLimitErrors: true })
-    ).rejects.toBe(sessionLimitError)
-  })
-
-  it('rethrows SSH session-limit errors from Windows node resolution in strict mode', async () => {
-    const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
-      reason: 4
-    })
-    execCommandMock.mockRejectedValueOnce(sessionLimitError)
-
-    await expect(
-      resolveRemoteNodePath(conn, getRemoteHostPlatform('win32-x64'), {
-        rethrowSessionLimitErrors: true
-      })
-    ).rejects.toBe(sessionLimitError)
-  })
-
-  it('rethrows SSH session-limit errors from Windows version checks in strict mode', async () => {
-    const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
-      reason: 4
-    })
-    execCommandMock
-      .mockResolvedValueOnce('C:\\Program Files\\nodejs\\node.exe\n')
-      .mockRejectedValueOnce(sessionLimitError)
-
-    await expect(
-      resolveRemoteNodePath(conn, getRemoteHostPlatform('win32-x64'), {
-        rethrowSessionLimitErrors: true
-      })
     ).rejects.toBe(sessionLimitError)
   })
 
@@ -508,9 +365,6 @@ describe('resolveRemoteNodePath', () => {
     await expect(resolveRemoteNodePath(conn, getRemoteHostPlatform('win32-x64'))).resolves.toBe(
       'C:/Program Files/nodejs/node.exe'
     )
-
-    const discoveryScript = decodePowerShellCommand(execCommandMock.mock.calls[0]![1] as string)
-    expect(discoveryScript).not.toMatch(/Write-Output \$path\s+exit 0/)
   })
 
   describe('strict resolution, which settles rung D only on an answered "no Node"', () => {

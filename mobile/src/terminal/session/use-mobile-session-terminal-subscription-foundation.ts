@@ -55,6 +55,19 @@ export function useMobileSessionTerminalSubscriptionFoundation(
   // react-doctor-disable-next-line react-doctor/no-ref-current-in-render
   unsubscribeTerminalRef.current = unsubscribeTerminal
 
+  // An unmounted pane took its xterm with it; the next mount is a new document that needs a snapshot.
+  // Chat's lease-only stream never drew into the document, so it stays.
+  const releaseTerminalDocument = useCallback(
+    (handle: string) => {
+      if (terminalUnsubsRef.current.has(handle) && !leaseOnlyHandlesRef.current.has(handle)) {
+        unsubscribeTerminalRef.current(handle)
+      }
+      webReadyHandlesRef.current.delete(handle)
+      terminalResume.forget(handle)
+    },
+    [terminalResume]
+  )
+
   const clearTerminalCache = useCallback(() => {
     terminalUnsubsRef.current.forEach((unsub) => unsub())
     clearNativeChatInputLease()
@@ -79,6 +92,7 @@ export function useMobileSessionTerminalSubscriptionFoundation(
     getTerminalRef,
     unsubscribeTerminal,
     unsubscribeTerminalRef,
+    releaseTerminalDocument,
     clearTerminalCache
   }
 }

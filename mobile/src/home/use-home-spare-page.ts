@@ -4,10 +4,11 @@ import { AppState } from 'react-native'
 import { setForegroundTimer } from '../mobile-web-shell/foreground-timer'
 import {
   enterHomeSparePage,
+  homeSpareRefillWaitMs,
   leaveHomeSparePage,
   prepareHomeSparePage
 } from '../mobile-web-shell/home-spare-page'
-import { processGenerationStore } from '../mobile-web-shell/process-generation-store'
+import { processGenerationStore } from '../mobile-web-shell/generations/process-generation-store'
 
 // Past Home's first paint and its first reads, so the boot never competes with them.
 const HOME_SPARE_IDLE_MS = 1000
@@ -29,7 +30,7 @@ export function useHomeSparePage(hostIds: readonly string[]): void {
         cancelTimer()
         cancelTimer = setForegroundTimer(
           () => void prepareHomeSparePage(processGenerationStore(), hosts.split(HOST_ID_SEPARATOR)),
-          HOME_SPARE_IDLE_MS
+          Math.max(HOME_SPARE_IDLE_MS, Math.ceil(homeSpareRefillWaitMs()))
         )
       }
       arm()

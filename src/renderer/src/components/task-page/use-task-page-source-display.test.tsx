@@ -10,7 +10,7 @@ import { createGlobalSettingsFixture } from '../../../../shared/global-settings-
 import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
 
-import { getTaskPageRepoSourceContext } from '../../lib/task-repo-source-context'
+import { getTaskPageRepoSourceContext } from '../../lib/work-items/task-repo-source-context'
 
 import {
   Q1,

@@ -3,7 +3,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree, DetectedWorktree } from '../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { Store } from '../../../persistence/loading-store/store'
-import { mergeWorktreeMetaForWrite } from '../../../persistence/loading-store/worktree-meta-write-normalization'
+import { mergeWorktreeMetaForWrite } from '../../../persistence/loading-store/worktree-metadata/worktree-meta-write-normalization'
 import { isWslMoveRepoBlocked } from '../../../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {

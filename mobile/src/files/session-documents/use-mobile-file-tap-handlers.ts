@@ -6,10 +6,10 @@ import { useWorkspaceRouteHandoff } from '../../navigation/workspace-route-hando
 import { triggerSelection } from '../../platform/haptics'
 import { openMobileFileTap, type FileTapSessionTab } from './mobile-file-tap-open'
 import { openMobileNativeChatFileTap } from '../../session/native-chat/visual/mobile-native-chat-open-file'
-import type { RpcOperationSender } from '../../transport/rpc/rpc-operation-sender'
+import type { UnvalidatedRpcRequestPort } from '../../transport/rpc/unvalidated-rpc-request-port'
 
 type MobileFileTapHandlerOptions<T extends FileTapSessionTab> = {
-  client: RpcOperationSender | null
+  client: UnvalidatedRpcRequestPort | null
   hostId: string
   worktreeId: string
   worktreeName?: string

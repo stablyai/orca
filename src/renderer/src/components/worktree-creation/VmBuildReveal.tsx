@@ -1,5 +1,5 @@
 import type React from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 /** Grows and fades content in and out without a height jump; still under reduced motion. */
 export function VmBuildReveal({
