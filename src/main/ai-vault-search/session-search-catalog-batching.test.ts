@@ -19,6 +19,7 @@ import { SessionSearchWorkerStore } from './worker/session-search-worker-store'
 import { SessionSearchWorkQueue } from './session-search-work-queue'
 import { configureSessionSearchWorkerFixture } from './worker/session-search-worker.test-fixture'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
+import { SESSION_SEARCH_INVENTORY_MEMBERS } from './session-search-inventory-relation'
 
 it.each([40, 400])(
   'batches discovery and replacement metadata for %s retained files',
@@ -43,7 +44,10 @@ it.each([40, 400])(
     const local = vi.spyOn(catalog, 'execute').mockImplementation((command) => {
       const result = execute(command)
       localRows +=
-        (command.kind === 'get' || command.kind === 'put') && catalog.inventory.owner(command.scope)
+        (command.kind === 'get' || command.kind === 'put') &&
+        SESSION_SEARCH_INVENTORY_MEMBERS.some(
+          (member) => command.scope === `physical:batch-control:${member}`
+        )
           ? 0
           : command.kind === 'put'
             ? command.rows.length
@@ -54,28 +58,35 @@ it.each([40, 400])(
                 : 0
       return result
     })
-    const getValue = catalog.inventory.loadValue.bind(catalog.inventory)
-    const typedReads = vi.spyOn(catalog.inventory, 'loadValue').mockImplementation((...args) => {
-      localRows++
-      return getValue(...args)
-    })
-    const putValue = catalog.inventory.putValue.bind(catalog.inventory)
-    const typedWrites = vi.spyOn(catalog.inventory, 'putValue').mockImplementation((...args) => {
-      localRows++
-      return putValue(...args)
-    })
-    const deleteStaged = catalog.inventory.deleteStaged.bind(catalog.inventory)
-    const minimumFloor = catalog.inventory.minimumFloor.bind(catalog.inventory)
-    const floorReads = vi.spyOn(catalog.inventory, 'minimumFloor').mockImplementation((scope) => {
-      localRows += 3
-      return minimumFloor(scope)
-    })
-    const stagedDeletes = vi
-      .spyOn(catalog.inventory, 'deleteStaged')
-      .mockImplementation((...args) => {
-        localRows += args[3].length
-        return deleteStaged(...args)
+    const prepare = db.prepare.bind(db)
+    const physicalTraffic = vi.spyOn(db, 'prepare').mockImplementation((sql) => {
+      const statement = prepare(sql)
+      if (!/search_inventory_(sources|entries|activity|epochs|staging)/.test(sql)) {
+        return statement
+      }
+      return new Proxy(statement, {
+        get(target, property) {
+          const method = Reflect.get(target, property)
+          if (typeof method !== 'function') {
+            return method
+          }
+          return (...args: Parameters<typeof statement.run>) => {
+            if (['get', 'all', 'iterate', 'run'].includes(String(property))) {
+              const payload = args.find(
+                (value) => typeof value === 'string' && value.startsWith('[')
+              )
+              const rows =
+                sql.includes('json_each(?)') && typeof payload === 'string'
+                  ? JSON.parse(payload).length
+                  : 1
+              // Reclaim probes the activity row and three witnesses before its physical update.
+              localRows += rows * (sql.includes('WITH live AS MATERIALIZED') ? 5 : 1)
+            }
+            return Reflect.apply(method, target, args)
+          }
+        }
       })
+    })
     const request = async (command: SessionSearchCatalogCommand) => {
       envelopes++
       const result = catalog.response(command)
@@ -181,10 +192,7 @@ it.each([40, 400])(
     } finally {
       transactionTraffic.mockRestore()
       local.mockRestore()
-      typedReads.mockRestore()
-      typedWrites.mockRestore()
-      stagedDeletes.mockRestore()
-      floorReads.mockRestore()
+      physicalTraffic.mockRestore()
       db.close()
       await harness.cleanup()
     }

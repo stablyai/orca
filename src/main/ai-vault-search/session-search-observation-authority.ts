@@ -236,6 +236,9 @@ export function cleanupSessionSearchAuthority(catalog: SessionSearchCatalog, sco
     orderRank: true,
     beforeRank: floor === Infinity ? catalog.nextRevision() : floor
   })
+  if (catalog.inventory.reclaimAuthority(scope, page.rows ?? [])) {
+    return {}
+  }
   for (const row of page.rows ?? []) {
     const live = ['dirty', 'observing', 'refusals', 'file-refusals', 'delivery'].some(
       (suffix) => !!authorityRow(catalog, `${scope}:${suffix}`, row.key)

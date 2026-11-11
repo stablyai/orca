@@ -14,12 +14,10 @@ import { dirname } from 'node:path'
 import type {
   SessionSearchInventoryCommand,
   SessionSearchInventoryResult,
-  SessionSearchObservationDebt,
-  SessionSearchObservedFacts
+  SessionSearchObservationDebt
 } from './session-search-observation-types'
 export type {
   SessionSearchObservationDebt,
-  SessionSearchObservedFacts,
   SessionSearchObservationInput,
   SessionSearchPreparedObservation,
   SessionSearchObservationOutcome,
@@ -35,26 +33,15 @@ export function transitionSessionSearchInventory(
   if (command.kind === 'observe-prepare') {
     return prepareSessionSearchObservations(catalog, command)
   }
-  const files = `${command.scope}:files`
   const failures = `${command.scope}:file-refusals`
   const authority = new SessionSearchAuthorityPage(catalog, command.scope)
   const get = (scope: string, key: string) => authority.get(scope, key)
-  const put = (scope: string, key: string, value: unknown, group = '', ready = 0) => {
-    const row = { key, data: value, parent: dirname(key), group, rank: 0, ready }
-    catalog.putValue(scope, row)
-    authority.changed(scope, key, row)
-  }
-  const remove = (scope: string, key: string) => {
-    catalog.execute({ kind: 'delete', scope, key })
-    authority.changed(scope, key)
-  }
-  const observing = `${command.scope}:observing`
-  const delivery = `${command.scope}:delivery`
+  const remove = (scope: string, key: string) => catalog.execute({ kind: 'delete', scope, key })
   if (command.kind === 'observe-ack') {
     for (const receipt of command.receipts) {
-      const row = get(delivery, receipt.path)
-      if (row && decode<{ revision: number }>(row)?.revision === receipt.revision) {
-        remove(delivery, receipt.path)
+      const row = authority.delivery(receipt.path)
+      if (row?.revision === receipt.revision) {
+        authority.putDelivery(receipt.path)
         authority.settle(receipt.path)
       }
     }
@@ -63,7 +50,7 @@ export function transitionSessionSearchInventory(
     return {}
   }
   const token = (path: string) => [
-    decode<SessionSearchObservedFacts>(get(files, path))?.revision ?? 0,
+    authority.file(path)?.revision ?? 0,
     decode<{ revision: number }>(get(`${command.scope}:dirty`, path))?.revision ?? 0,
     authority.authority(path)?.self ?? 0
   ]
@@ -96,20 +83,21 @@ export function transitionSessionSearchInventory(
       }
       removedFiles.push(path)
       authority.record(path, cutoff, 0)
-      const known = !!get(files, path)
+      const known = !!authority.file(path)
       filesDelta -= Number(known)
       if (known && command.notify !== false) {
-        put(delivery, path, {
+        authority.putDelivery(path, {
           removed: true,
           force: false,
           revision: catalog.nextRevision(),
           authority: cutoff
         })
       }
-      remove(files, path)
-      remove(observing, path)
+      authority.putFile(path)
+      authority.putObserving(path)
       debtChange(path, decode<SessionSearchObservationDebt>(get(failures, path)), undefined)
       remove(`${command.scope}:dirty`, path)
+      authority.forget(`${command.scope}:dirty`, path)
       authority.settle(path)
     }
     authority.flush()
@@ -117,30 +105,30 @@ export function transitionSessionSearchInventory(
   }
   for (const outcome of command.outcomes) {
     try {
-      remove(`${command.scope}:observation-epochs`, String(outcome.authority))
-      const current = get(files, outcome.path)
+      authority.epoch(outcome.authority)
+      const accepted = authority.file(outcome.path)
       const expected = JSON.parse(outcome.token)
-      const ownsObservation = decode<string>(get(observing, outcome.path)) === outcome.token
+      const ownsObservation = authority.observing(outcome.path) === outcome.token
       if (
         !ownsObservation ||
         JSON.stringify(token(outcome.path)) !== JSON.stringify(expected) ||
         authority.newer(outcome.path, outcome.authority)
       ) {
         if (ownsObservation) {
-          remove(observing, outcome.path)
+          authority.putObserving(outcome.path)
           const debt = decode<SessionSearchObservationDebt>(get(failures, outcome.path))
           if (debt && debt.failures < SESSION_INPUT_FAILURES_BEFORE_HELD_OUT) {
             recordSessionSearchRetry(catalog, failures, outcome.path, debt)
+            authority.forget(failures, outcome.path)
           }
         }
         continue
       }
-      remove(observing, outcome.path)
+      authority.putObserving(outcome.path)
       if (outcome.dirtyRevision !== undefined) {
         acknowledgeSessionSearchDirty(catalog, command.scope, outcome.path, outcome.dirtyRevision)
         authority.forget(`${command.scope}:dirty`, outcome.path)
       }
-      const accepted = decode<SessionSearchObservedFacts>(current)
       const previous = decode<SessionSearchObservationDebt>(get(failures, outcome.path))
       if (previous?.attempted === command.generation) {
         continue
@@ -182,16 +170,11 @@ export function transitionSessionSearchInventory(
         !!accepted &&
         facts.sidecar !== 'unknown' &&
         !sidecarUnchanged(accepted.file.sidecar ?? 'none', facts.sidecar ?? 'none')
-      put(
-        files,
-        outcome.path,
-        {
-          revision: outcome.authority,
-          file: facts,
-          dependency: outcome.metadataOnly ? undefined : outcome.observed.dependency
-        },
-        outcome.metadataOnly ? '' : outcome.observed.dependency
-      )
+      authority.putFile(outcome.path, {
+        revision: outcome.authority,
+        file: facts,
+        dependency: outcome.metadataOnly ? undefined : outcome.observed.dependency
+      })
       authority.ensureDirectories(outcome.path)
       filesDelta += Number(!accepted)
       const old = accepted?.file
@@ -203,8 +186,8 @@ export function transitionSessionSearchInventory(
         old.ino === facts.ino
       const metadata = outcome.metadataOwed || previous?.metadata
       if (force || !same || dependencyChanged || metadata) {
-        const owed = decode<{ force?: boolean; metadata?: boolean }>(get(delivery, outcome.path))
-        put(delivery, outcome.path, {
+        const owed = authority.delivery(outcome.path)
+        authority.putDelivery(outcome.path, {
           file: facts,
           metadata: metadata || owed?.metadata,
           force: !!owed?.force || dependencyChanged || (force && same),
@@ -224,13 +207,11 @@ export function transitionSessionSearchInventory(
               ready: 0
             }
             catalog.execute({ kind: 'put', scope: owner.scope, rows: [row] })
-            authority.changed(owner.scope, outcome.path, row)
+            authority.forget(owner.scope, outcome.path)
           }
         }
       }
-      const pendingDelivery = decode<{ revision: number; force: boolean; metadata?: boolean }>(
-        get(delivery, outcome.path)
-      )
+      const pendingDelivery = authority.delivery(outcome.path)
       observations.push({
         path: outcome.path,
         file: { ...facts, modifiedAt: new Date(facts.mtimeMs).toISOString() },

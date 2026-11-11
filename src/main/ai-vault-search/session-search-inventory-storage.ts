@@ -1,6 +1,15 @@
 import type { SessionSearchValueRow } from './session-search-value-row'
+import { SessionSearchInventoryObservation } from './session-search-inventory-observation'
+import type {
+  SessionSearchPhysicalTable,
+  SessionSearchPhysicalFields
+} from './session-search-inventory-page'
 import { SessionSearchInventoryPage } from './session-search-inventory-page'
 import { SessionSearchInventoryMutations } from './session-search-inventory-mutations'
+import {
+  sessionSearchEpochIdentity,
+  type SessionSearchInventoryFloor
+} from './session-search-inventory-floor'
 import type SyncDatabase from '../sqlite/sync-database'
 import type { SessionSearchCatalogRow } from './session-search-catalog-types'
 import { initializeSessionSearchInventory } from './session-search-inventory-schema'
@@ -66,16 +75,57 @@ export class SessionSearchInventoryStorage extends SessionSearchInventoryMutatio
       return undefined
     }
     const sourceScope = scope.slice(0, at)
-    if (!this.page?.sources.has(sourceScope)) {
-      const row = this.db
-        .prepare('SELECT id FROM temp.search_inventory_sources WHERE scope=?')
-        .get(sourceScope)
-      const source = row ? Number(row.id) : undefined
-      this.page?.sources.set(sourceScope, source)
-      return source === undefined ? undefined : { source, member }
+    const row = this.page
+      ? this.page.source(sourceScope)
+      : this.db
+          .prepare('SELECT id,root FROM temp.search_inventory_sources WHERE scope=?')
+          .get(sourceScope)
+    return row ? { source: Number(row.id), member } : undefined
+  }
+
+  fallbackValue(scope: string, path: string, read: () => SessionSearchValueRow | undefined) {
+    return this.page ? this.page.fallbackValue(scope, path, read) : read()
+  }
+  forgetFallback(scope: string, path: string): void {
+    this.page?.forgetFallback(scope, path)
+  }
+  peekFallback(scope: string, path: string): SessionSearchValueRow | undefined {
+    return this.page?.peekFallback(scope, path)
+  }
+  peekPhysical(table: SessionSearchPhysicalTable, source: number, path: string) {
+    return this.page?.peek(table, source, path)
+  }
+  observation(scope: string): SessionSearchInventoryObservation | undefined {
+    const row = this.page
+      ? this.page.source(scope)
+      : this.db
+          .prepare('SELECT id,root FROM temp.search_inventory_sources WHERE scope=?')
+          .get(scope)
+    return row
+      ? new SessionSearchInventoryObservation(this, Number(row.id), String(row.root))
+      : undefined
+  }
+  readPhysical(table: SessionSearchPhysicalTable, source: number, path: string) {
+    return (this.page ?? new SessionSearchInventoryPage(this.db)).read(table, source, path)
+  }
+  writePhysical(
+    table: SessionSearchPhysicalTable,
+    source: number,
+    path: string,
+    fields: SessionSearchPhysicalFields
+  ): void {
+    const page = this.page ?? new SessionSearchInventoryPage(this.db)
+    page.write(table, source, path, fields)
+    if (!this.page) {
+      page.flush()
     }
-    const source = this.page.sources.get(sourceScope)
-    return source === undefined ? undefined : { source, member }
+  }
+  observationEpoch(source: number, revision: number, path?: string): void {
+    const page = this.page ?? new SessionSearchInventoryPage(this.db)
+    page.observationEpoch(source, revision, path)
+    if (!this.page) {
+      page.flush()
+    }
   }
   select(owner: SessionSearchInventoryOwner): string {
     const relation = sessionSearchInventoryRelation(owner.member)
@@ -93,14 +143,9 @@ export class SessionSearchInventoryStorage extends SessionSearchInventoryMutatio
     return { ...fields, value: JSON.stringify(data) }
   }
   getValue(owner: SessionSearchInventoryOwner, key: string): SessionSearchValueRow | undefined {
-    const identity = `${owner.source}:${owner.member}:${key}`
-    if (this.page?.rows.has(identity)) {
-      return this.page.rows.get(identity)
-    }
-    const row = this.loadValue(owner, key)
-    this.page?.rows.set(identity, row)
-    return row
+    return this.loadValue(owner, key)
   }
+
   loadValue(owner: SessionSearchInventoryOwner, key: string): SessionSearchValueRow | undefined {
     const relation = sessionSearchInventoryRelation(owner.member)
     if (
@@ -110,6 +155,7 @@ export class SessionSearchInventoryStorage extends SessionSearchInventoryMutatio
     ) {
       return this.page.readValue(owner.source, owner.member, key, relation.table)
     }
+    this.flush()
     const keyColumn = owner.member === 'observation-epochs' ? 'revision' : relation.key
     const raw = this.db.prepare(`${this.select(owner)} AND ${keyColumn}=?`).get(owner.source, key)
     return raw ? decodeSessionSearchInventoryValue(owner.member, raw) : undefined
@@ -119,15 +165,66 @@ export class SessionSearchInventoryStorage extends SessionSearchInventoryMutatio
     if (!owner) {
       return undefined
     }
-    return Math.min(
-      ...['epochs', 'observation-epochs', 'removal-epochs'].map((kind) => {
+    const read = () => {
+      this.page?.flushEpochs()
+      let floor: SessionSearchInventoryFloor = { cutoff: Infinity }
+      for (const kind of ['epochs', 'observation-epochs', 'removal-epochs'] as const) {
         const row = this.db
-          .prepare(`SELECT cutoff FROM temp.search_inventory_epochs
-        WHERE source=? AND kind=? ORDER BY cutoff LIMIT 1`)
+          .prepare(`SELECT cutoff,revision,path FROM temp.search_inventory_epochs
+          WHERE source=? AND kind=? ORDER BY cutoff LIMIT 1`)
           .get(owner.source, kind)
-        return Number(row?.cutoff ?? Infinity)
-      })
-    )
+        if (row && Number(row.cutoff) < floor.cutoff) {
+          floor = {
+            cutoff: Number(row.cutoff),
+            epoch: sessionSearchEpochIdentity(
+              kind,
+              String(kind === 'observation-epochs' ? row.revision : row.path)
+            )
+          }
+        }
+      }
+      return floor
+    }
+    return this.page ? this.page.floor(owner.source, read) : read().cutoff
+  }
+  reclaimAuthority(scope: string, rows: SessionSearchCatalogRow[]): boolean {
+    this.invalidate()
+    const owner = this.owner(`${scope}:authority`)
+    if (!owner) {
+      return false
+    }
+    if (!rows.length) {
+      return true
+    }
+    const keys = JSON.stringify(rows.map((row) => row.key))
+    this.db
+      .prepare(`WITH live AS MATERIALIZED (
+      SELECT a.path,(a.observation_authority IS NOT NULL OR a.delivery_revision IS NOT NULL
+        OR EXISTS(SELECT 1 FROM temp.search_catalog WHERE scope=? AND key=a.path)
+        OR EXISTS(SELECT 1 FROM temp.search_catalog WHERE scope=? AND key=a.path)
+        OR EXISTS(SELECT 1 FROM temp.search_catalog WHERE scope=? AND key=a.path)) AS claimed
+      FROM json_each(?) requested CROSS JOIN temp.search_inventory_activity a
+      WHERE a.source=? AND a.path=requested.value
+    ) UPDATE temp.search_inventory_activity SET
+      authority_self=CASE WHEN live.claimed THEN authority_self ELSE NULL END,
+      authority_tree=CASE WHEN live.claimed THEN authority_tree ELSE NULL END,
+      reclaimable=CASE WHEN live.claimed THEN 0 ELSE NULL END
+      FROM live WHERE source=? AND search_inventory_activity.path=live.path AND authority_self IS NOT NULL`)
+      .run(
+        `${scope}:dirty`,
+        `${scope}:refusals`,
+        `${scope}:file-refusals`,
+        keys,
+        owner.source,
+        owner.source
+      )
+    this.db
+      .prepare(`DELETE FROM temp.search_inventory_activity WHERE source=?
+      AND path IN (SELECT value FROM json_each(?))
+      AND authority_self IS NULL AND observation_authority IS NULL AND delivery_revision IS NULL`)
+      .run(owner.source, keys)
+    this.page?.clear()
+    return true
   }
   deleteStaged(scope: string, parent: string, epoch: string, keys: string[]): boolean {
     const owner = this.owner(scope)
@@ -141,9 +238,6 @@ export class SessionSearchInventoryStorage extends SessionSearchInventoryMutatio
       .prepare(`DELETE FROM temp.search_inventory_staging
       WHERE source=? AND parent=? AND epoch=? AND path IN (SELECT value FROM json_each(?))`)
       .run(owner.source, parent, epoch, JSON.stringify(keys))
-    for (const key of keys) {
-      this.page?.rows.delete(`${owner.source}:${owner.member}:${key}`)
-    }
     return true
   }
   decode(
@@ -151,7 +245,6 @@ export class SessionSearchInventoryStorage extends SessionSearchInventoryMutatio
     row: Record<string, unknown>
   ): SessionSearchCatalogRow {
     const value = decodeSessionSearchInventoryValue(owner.member, row)
-    this.page?.rows.set(`${owner.source}:${owner.member}:${value.key}`, value)
     const { data, ...fields } = value
     return { ...fields, value: JSON.stringify(data) }
   }

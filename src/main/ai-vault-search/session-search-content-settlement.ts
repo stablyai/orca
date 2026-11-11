@@ -27,10 +27,9 @@ export function settleSessionSearchContent(
   const catalog = store.catalogStorage
   return catalog.transaction('search_content_settlement', () => {
     const path = candidate.file.path
-    candidates.acknowledge(path, candidate.agent, reason, metadataOnly, false)
+    const admission = candidates.acknowledge(path, candidate.agent, reason, metadataOnly, false)
     store.settleAcceptedFile(path)
     const row = readSessionSearchSnapshotRows(store, path)[0]
-    const admission = candidates.admission(candidate)
     if (receipt) {
       const retry =
         sessionSearchReadDecision({
@@ -107,7 +106,10 @@ export function applySessionSearchWorkAcknowledgement(
   command: Extract<SessionSearchWorkCommand, { kind: 'acknowledge' }>,
   known?: {
     row: SessionSearchFileRow | undefined
-    admission: ReturnType<SessionSearchStore['catalogCandidates']['admission']>
+    admission: Pick<
+      ReturnType<SessionSearchStore['catalogCandidates']['admission']>,
+      'allowed' | 'required' | 'contentRequired'
+    >
   }
 ): boolean {
   return queue.acknowledgeCurrent(command.work, () => {

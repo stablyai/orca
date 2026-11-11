@@ -203,10 +203,14 @@ export class SessionSearchCatalogCandidates {
     revision: string,
     metadataOnly: boolean,
     publish = true
-  ): void {
+  ): { allowed: boolean; required: boolean; contentRequired: boolean } {
     const admission = sessionSearchPathAdmission(this.db, path, agent)
     if (revision === '' || admission.revision !== revision) {
-      return
+      return {
+        allowed: admission.allowed,
+        required: admission.required,
+        contentRequired: admission.contentRequired
+      }
     }
     this.db
       .prepare(
@@ -215,6 +219,11 @@ export class SessionSearchCatalogCandidates {
       .run(path, agent)
     if (publish) {
       this.rowChanged(path)
+    }
+    return {
+      allowed: admission.allowed,
+      required: metadataOnly && admission.contentRequired,
+      contentRequired: metadataOnly && admission.contentRequired
     }
   }
 

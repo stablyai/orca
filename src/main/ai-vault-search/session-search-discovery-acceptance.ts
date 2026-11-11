@@ -3,7 +3,7 @@ import type {
   SessionSearchCandidateCommand,
   SessionSearchCandidateResult
 } from './session-search-catalog-candidate-types'
-import { admitSessionSearchCandidatePage } from './session-search-candidate-admission-page'
+import { acceptSessionSearchCandidatePage } from './session-search-candidate-admission-page'
 import { authorityValue } from './session-search-authority-page'
 
 /** A receipt is acknowledged only in the transaction that accepts its successor. */
@@ -54,12 +54,17 @@ export function acceptSessionSearchDiscoveryPage(
         keys: changed.filter((row) => row.selected).map((row) => row.candidate.file.path)
       })
     )
-    const admitted = admitSessionSearchCandidatePage(store, queue, {
-      kind: 'admit',
-      rows: changed.map(({ key, revision }) => ({ key, revision })),
-      recent: command.admission!.recent,
-      recovering: command.admission!.recovering
-    })
+    const admitted = acceptSessionSearchCandidatePage(
+      store,
+      queue,
+      {
+        kind: 'admit',
+        rows: changed.map(({ key, revision }) => ({ key, revision })),
+        recent: command.admission!.recent,
+        recovering: command.admission!.recovering
+      },
+      changed
+    )
     record(admitted)
     const scopes = new Set(accepted.flatMap((row) => (row.input ? [row.input.scope] : [])))
     for (const scope of scopes) {

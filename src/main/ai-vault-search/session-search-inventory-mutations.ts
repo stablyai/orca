@@ -7,6 +7,7 @@ import type { SessionSearchInventoryOwner } from './session-search-inventory-sto
 import { SESSION_SEARCH_FILE_COLUMNS, sessionSearchFileValues } from './session-search-file-facts'
 import { sessionSearchInventoryRelation } from './session-search-inventory-relation'
 import type { SessionSearchInventoryPage } from './session-search-inventory-page'
+import { sessionSearchEpochIdentity } from './session-search-inventory-floor'
 
 export abstract class SessionSearchInventoryMutations {
   protected page: SessionSearchInventoryPage | undefined
@@ -35,8 +36,10 @@ export abstract class SessionSearchInventoryMutations {
       metadata?: boolean
       authority?: number
     }
-    this.page?.rows.set(`${owner.source}:${owner.member}:${row.key}`, row)
     const relation = sessionSearchInventoryRelation(owner.member)
+    if (relation.table === 'search_inventory_epochs') {
+      this.page?.changeFloor(owner.source)
+    }
     let fields: Record<string, SyncDatabase.BindValue> = {}
     let path = row.key
     switch (owner.member) {
@@ -108,10 +111,25 @@ export abstract class SessionSearchInventoryMutations {
         break
       }
     }
-    if (relation.table === 'search_inventory_activity' && this.page) {
-      this.page.writeActivity(owner.source, path, fields)
+    if (owner.member === 'observation-epochs' && this.page) {
+      this.page.observationEpoch(owner.source, Number(row.key), path, row.rank)
       return
     }
+    if (
+      (relation.table === 'search_inventory_activity' ||
+        relation.table === 'search_inventory_entries') &&
+      this.page
+    ) {
+      this.page.write(
+        relation.table,
+        owner.source,
+        path,
+        fields,
+        relation.table === 'search_inventory_entries' ? row.parent : dirname(path)
+      )
+      return
+    }
+    this.page?.flush()
     const parent = relation.table === 'search_inventory_activity' ? dirname(path) : row.parent
     const columns = [
       'source',
@@ -143,21 +161,23 @@ export abstract class SessionSearchInventoryMutations {
         .map((column) => `${column}=excluded.${column}`)
         .join(',')}`)
       .run(...values)
-    this.page?.patch(relation.table, owner.source, path, { parent, ...fields })
   }
   delete(owner: SessionSearchInventoryOwner, key: string): boolean {
     const previous = this.getValue(owner, key)
     if (!previous) {
       return false
     }
-    this.page?.rows.set(`${owner.source}:${owner.member}:${key}`, undefined)
     const relation = sessionSearchInventoryRelation(owner.member)
+    if (relation.table === 'search_inventory_epochs') {
+      this.page?.changeFloor(owner.source, sessionSearchEpochIdentity(owner.member, previous.key))
+    }
     if (
       owner.member === 'directory-input' ||
       owner.member === 'epochs' ||
       owner.member === 'removal-epochs' ||
       owner.member === 'observation-epochs'
     ) {
+      this.page?.flush()
       this.db
         .prepare(
           `DELETE FROM temp.${relation.table} WHERE source=? AND ${relation.present} AND ${owner.member === 'observation-epochs' ? 'revision' : 'path'}=?`
@@ -192,11 +212,16 @@ export abstract class SessionSearchInventoryMutations {
                     ...SESSION_SEARCH_FILE_COLUMNS.map((column) => `delivery_${column}`)
                   ]
       const path = key
-      if (relation.table === 'search_inventory_activity' && this.page) {
-        this.page.writeActivity(
+      if (
+        (relation.table === 'search_inventory_activity' ||
+          relation.table === 'search_inventory_entries') &&
+        this.page
+      ) {
+        this.page.write(
+          relation.table,
           owner.source,
           path,
-          Object.fromEntries(fields.map((name) => [name, null]))
+          Object.fromEntries(fields.map((name) => [name, name === 'directory' ? 0 : null]))
         )
         return true
       }
@@ -212,12 +237,6 @@ export abstract class SessionSearchInventoryMutations {
       this.db
         .prepare(`DELETE FROM temp.${relation.table} WHERE source=? AND path=? AND ${empty}`)
         .run(owner.source, path)
-      this.page?.patch(
-        relation.table,
-        owner.source,
-        path,
-        Object.fromEntries(fields.map((column) => [column, column === 'directory' ? 0 : null]))
-      )
     }
     return true
   }

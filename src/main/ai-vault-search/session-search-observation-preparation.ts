@@ -1,47 +1,31 @@
 import { acknowledgeSessionSearchDirty } from './session-search-dirty-transition'
-import { dirname } from 'node:path'
 import { SessionSearchAuthorityPage } from './session-search-authority-page'
 import { boundedSessionSearchPage } from './session-search-catalog-pages'
-import { authorityValue, putAuthorityValue } from './session-search-observation-authority'
+import { authorityValue } from './session-search-observation-authority'
 import { recordSessionSearchRetry } from './session-search-retry-transition'
 import type { SessionSearchCatalog } from './session-search-catalog'
 import type {
   SessionSearchInventoryCommand,
   SessionSearchInventoryResult,
-  SessionSearchObservationDebt,
-  SessionSearchObservedFacts
+  SessionSearchObservationDebt
 } from './session-search-observation-types'
 
 export function prepareSessionSearchObservations(
   catalog: SessionSearchCatalog,
   command: Extract<SessionSearchInventoryCommand, { kind: 'observe-prepare' }>
 ): SessionSearchInventoryResult {
-  const files = `${command.scope}:files`
   const failures = `${command.scope}:file-refusals`
-  const observing = `${command.scope}:observing`
   const authority = new SessionSearchAuthorityPage(catalog, command.scope)
   const get = (scope: string, key: string) => authority.get(scope, key)
-  const put = (scope: string, key: string, value: unknown) => {
-    const row = {
-      key,
-      data: value,
-      parent: dirname(key),
-      group: '',
-      rank: 0,
-      ready: 0
-    }
-    catalog.putValue(scope, row)
-    authority.changed(scope, key, row)
-  }
   const scopes = [
-    files,
+    `${command.scope}:files`,
     failures,
     `${failures}:eligible`,
     `${command.scope}:dirty`,
     `${command.scope}:dirty-expansion`,
     `${command.scope}:authority`,
     `${command.scope}:authority-root`,
-    observing,
+    `${command.scope}:observing`,
     `${command.scope}:observation-epochs`
   ]
   const overheadBytes =
@@ -52,7 +36,7 @@ export function prepareSessionSearchObservations(
   const prepared = boundedSessionSearchPage(
     command.inputs,
     (input) => {
-      const accepted = get(files, input.path)
+      const accepted = authority.file(input.path)
       if (input.requireMembership && !accepted) {
         throw new Error('Session search read has no physical inventory owner')
       }
@@ -62,15 +46,14 @@ export function prepareSessionSearchObservations(
       const stale =
         input.dirtyRevision !== undefined &&
         authorityValue<{ revision: number }>(dirty)?.revision !== input.dirtyRevision
-      const previousToken = authorityValue<string>(get(observing, input.path))
+      const previousToken = authority.observing(input.path)
       const previous: [number, number, number] | undefined = previousToken
         ? JSON.parse(previousToken)
         : undefined
       const reuse =
         input.dirtyRevision !== undefined &&
         previous &&
-        previous[0] ===
-          (authorityValue<SessionSearchObservedFacts>(get(files, input.path))?.revision ?? 0) &&
+        previous[0] === (authority.file(input.path)?.revision ?? 0) &&
         previous[1] === (authorityValue<{ revision: number }>(dirty)?.revision ?? 0) &&
         authority.authority(input.path)?.self === previous[2]
       const revision = reuse ? previous[2] : catalog.nextRevision()
@@ -87,10 +70,10 @@ export function prepareSessionSearchObservations(
         metadataOwed: input.metadataOwed || debt?.metadata,
         refusalRevision: mergesDebt ? catalog.nextRevision() : refusal?.tie,
         attempt,
-        accepted: authorityValue<SessionSearchObservedFacts>(accepted),
+        accepted,
         token: attempt
           ? JSON.stringify([
-              authorityValue<SessionSearchObservedFacts>(accepted)?.revision ?? 0,
+              accepted?.revision ?? 0,
               authorityValue<{ revision: number }>(get(`${command.scope}:dirty`, input.path))
                 ?.revision ?? 0,
               revision
@@ -128,14 +111,8 @@ export function prepareSessionSearchObservations(
         }
         if (input.attempt) {
           authority.record(input.path, input.authority, 0)
-          put(observing, input.path, input.token)
-          putAuthorityValue(
-            catalog,
-            `${command.scope}:observation-epochs`,
-            String(input.authority),
-            input.path,
-            input.authority
-          )
+          authority.putObserving(input.path, input.token)
+          authority.epoch(input.authority, input.path)
         }
       }
     }

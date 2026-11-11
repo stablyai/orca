@@ -31,6 +31,19 @@ export abstract class SessionSearchCatalogStorage {
       this.execute({ kind: 'put', scope, rows: [{ ...fields, value: JSON.stringify(data) }] })
     }
   }
+  inventoryObservation(scope: string) {
+    for (const suffix of [
+      'files',
+      'directories',
+      'authority',
+      'observing',
+      'delivery',
+      'observation-epochs'
+    ]) {
+      this.touched.add(`${scope}:${suffix}`)
+    }
+    return this.inventory.observation(scope)
+  }
   minimumFloor(scope: string): number {
     return (
       this.inventory.minimumFloor(scope) ??
