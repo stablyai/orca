@@ -40,6 +40,12 @@ function layoutContainsLeaf(
     : layoutContainsLeaf(root.first, leafId) || layoutContainsLeaf(root.second, leafId)
 }
 
+/** A recycled counter is not a durable session id, so a spawn must not treat it as one to restore. */
+function isBareCounterPtyId(ptyId: string): boolean {
+  const requested = ptyId.trim()
+  return requested.length > 0 && /^\d+$/.test(requested)
+}
+
 export function bindLivePtyToExactSurface(
   store: LiveSurfaceAdoptionStore,
   worktreeId: string,
@@ -70,6 +76,11 @@ export function bindLivePtyToExactSurface(
     store.updateTabPtyId(terminal.tabId, terminal.ptyId)
     store.replaceTerminalLayoutPanePtyId(terminal.tabId, pane.leafId, terminal.ptyId)
     return true
+  }
+  // Why: creating this tab asks main to spawn. A bare counter is dropped there and a
+  // fresh shell starts, so the orphan stays unowned and the next visit repeats (#40920).
+  if (isBareCounterPtyId(terminal.ptyId)) {
+    return false
   }
   const created = store.createTab(worktreeId, undefined, undefined, {
     id: terminal.tabId,
@@ -241,17 +252,23 @@ export async function adoptLiveWorkspacePtySurfaces(
       }
       continue
     }
-    surfaced = true
     if (
       owner.recorded &&
       bindToRecordedSurface(getState, worktreeId, owner.recorded, materializedTabIds)
     ) {
+      surfaced = true
       continue
     }
     // A recorded tab createTab had to mint under another id already holds this PTY.
     if (resolveTerminalTabPtyOwnership(getState(), worktreeId, ptyId).kind !== 'none') {
+      surfaced = true
       continue
     }
+    if (isBareCounterPtyId(ptyId)) {
+      declinedPtyIds.push(ptyId)
+      continue
+    }
+    surfaced = true
     getState().createTab(worktreeId, undefined, undefined, {
       initialPtyId: ptyId,
       activate: false,
