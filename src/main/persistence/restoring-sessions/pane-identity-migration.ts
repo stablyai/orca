@@ -1,4 +1,4 @@
-import type { ProfileStateStartupPaneAlias } from '../loading-store/profile-state-authority'
+import type { ProfileStateStartupPaneAlias } from '../loading-store/profile-writing/profile-state-authority'
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
 import type {
   TerminalLayoutSnapshot,

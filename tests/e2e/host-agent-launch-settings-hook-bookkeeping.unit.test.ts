@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   deferred,
   fixture
-} from '../../src/main/persistence/loading-store/profile-state-delayed-authority-fixture'
+} from '../../src/main/persistence/loading-store/profile-writing/profile-state-delayed-authority-fixture'
 import { RuntimeClientSettingsController } from '../../src/main/runtime/client/settings/runtime-client-settings'
 import { HostAgentLaunchSettings } from '../../src/renderer/src/components/settings/agents/launch/HostAgentLaunchSettings'
 import { TooltipProvider } from '../../src/renderer/src/components/ui/tooltip'

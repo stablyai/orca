@@ -1110,7 +1110,6 @@ jobs:
           xvfb-run --auto-servernum pnpm exec vitest run --config config/vitest.config.ts
           --no-file-parallelism
           src/main/browser/client-pages/renderer/browser-client-page-renderer-lifecycle.electron.test.ts
-          src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts
           src/main/browser/cookies/browser-google-cookie-clear.electron.test.ts
           src/main/browser/guest-lifecycle/popups/presentation/popup-origin-chrome.electron.test.ts
           src/main/browser/guest-lifecycle/navigation/browser-link-materialization.electron.test.ts

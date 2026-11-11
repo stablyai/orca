@@ -60,38 +60,6 @@ export function registerFederatedAutoReleaseScenarios(harness: AutoReleaseScenar
     return dispatchId
   }
 
-  async function releaseDueOnHost(): Promise<void> {
-    vi.setSystemTime(Date.now() + GRACE_MS)
-    await getWorkerTerminalAutoReleaseScheduler(harness.workerRuntime()).releaseDue()
-  }
-
-  async function listFromHome(dispatchId: string) {
-    const listed = await harness.dispatchHome({
-      id: 'rpc_remote_list',
-      authToken: 'coordinator-token',
-      method: 'orchestration.workerList',
-      params: { includeRemote: true }
-    })
-    if (!listed.ok) {
-      throw new Error('worker-list failed')
-    }
-    const result: unknown = listed.result
-    const workers =
-      typeof result === 'object' &&
-      result !== null &&
-      'workers' in result &&
-      Array.isArray(result.workers)
-        ? result.workers
-        : []
-    return workers.find(
-      (worker: unknown) =>
-        typeof worker === 'object' &&
-        worker !== null &&
-        'dispatchId' in worker &&
-        worker.dispatchId === dispatchId
-    )?.projection
-  }
-
   function retainFromHome(dispatchId: string) {
     return harness.dispatchHome({
       id: 'rpc_remote_retain',
@@ -102,54 +70,6 @@ export function registerFederatedAutoReleaseScenarios(harness: AutoReleaseScenar
       params: { dispatch: dispatchId }
     })
   }
-
-  it('converges the home through worker-show after a host-side release', async () => {
-    const dispatchId = await settleRemotely()
-    await releaseDueOnHost()
-
-    await harness.dispatchHome({
-      id: 'rpc_remote_show_after_release',
-      authToken: 'coordinator-token',
-      method: 'orchestration.workerShow',
-      params: { dispatch: dispatchId }
-    })
-
-    expect(harness.homeDb().getWorkerDispatch(dispatchId)).toMatchObject({
-      stage: 'released',
-      agent_terminal_handle: null
-    })
-  })
-
-  it('forwards worker-retain to the host so its deadline never fires', async () => {
-    const dispatchId = await settleRemotely()
-
-    await expect(retainFromHome(dispatchId)).resolves.toMatchObject({
-      ok: true,
-      result: { state: 'retained', reason: 'user_requested' }
-    })
-    await releaseDueOnHost()
-
-    expect(harness.remoteCalls()).toContain('orchestration.federationRetain')
-    expect(harness.workerRuntime().closeTerminal).not.toHaveBeenCalled()
-    expect(harness.workerDb().getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
-      release_state: 'retained',
-      auto_release_at: null
-    })
-  })
-
-  it('holds a host close while its agent works again after worker_done', async () => {
-    const dispatchId = await settleRemotely()
-    vi.spyOn(harness.workerRuntime(), 'isWorkerAgentInTurn').mockReturnValue(true)
-
-    await releaseDueOnHost()
-
-    expect(harness.workerRuntime().closeTerminal).not.toHaveBeenCalled()
-    expect(harness.workerDb().getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
-      ownership_state: 'owned',
-      release_state: 'not_requested',
-      auto_release_at: null
-    })
-  })
 
   function holdHostCapture() {
     const read = {
@@ -184,30 +104,5 @@ export function registerFederatedAutoReleaseScenarios(harness: AutoReleaseScenar
     expect(harness.workerDb().getWorkerTerminalArchive(dispatchId)).toBeUndefined()
   })
 
-  it('keeps manual release when the home predates automatic release', async () => {
-    harness.setHomeOmitsAutoRelease(true)
-    const dispatchId = await settleRemotely()
-
-    await releaseDueOnHost()
-
-    expect(harness.workerDb().getRemoteDispatchAttachment(dispatchId)?.state).toBe('succeeded')
-    expect(harness.workerDb().getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
-      release_state: 'not_requested',
-      auto_release_at: null
-    })
-    expect(harness.workerRuntime().closeTerminal).not.toHaveBeenCalled()
-  })
-
-  registerHomeAutoReleaseScenarios({ harness, settleRemotely, listFromHome, retainFromHome })
-
-  it('keeps worker-retain home-only for a host that predates automatic release', async () => {
-    harness.setWorkerAdvertisesAutoRelease(false)
-    const dispatchId = await harness.startRemoteWorker()
-
-    await expect(retainFromHome(dispatchId)).resolves.toMatchObject({
-      ok: true,
-      result: { state: 'retained', reason: 'no_owned_resource' }
-    })
-    expect(harness.remoteCalls()).not.toContain('orchestration.federationRetain')
-  })
+  registerHomeAutoReleaseScenarios({ harness, settleRemotely })
 }

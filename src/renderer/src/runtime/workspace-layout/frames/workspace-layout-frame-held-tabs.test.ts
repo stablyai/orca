@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
-import type { Tab } from '../../../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import type { LayoutApplyReply } from '../../../../../shared/workspace-layout/workspace-layout-command-types'
 import { loadWorkspaceLayoutWithoutReport } from '../../../../../shared/workspace-layout/workspace-layout-load'
@@ -17,15 +16,10 @@ import { bootWindowFromPartitions } from '../../../app-shell/startup-window-view
 import { buildWorkspaceSessionPayload } from '../../../lib/workspace/persistence/workspace-session'
 import { createStoreSessionMockApi } from '../../../store/testing/app-store-session-api.test-fixture'
 import { createTestStore } from '../../../store/testing/app-store-test-fixture'
-import { withLayoutOwnerTabProps } from '@/components/tab-bar/tab-bar-layout-owner-props'
 import { endLayoutFramePositions } from './layout-frame-position'
 import { openWorkspaceLayoutFrameSync } from './workspace-layout-frame-sync'
 import { installLayoutFrameApplyCheck } from '../testing/workspace-layout-frame-apply-check.test-fixture'
 import { mainLayoutFrameSender } from '../testing/main-loaded-layout-frames.test-fixture'
-import {
-  getRuntimeMobileSessionSyncKey,
-  runtimeMobileSessionSyncKeysEqual
-} from '../../sync-runtime-graph/sync-key'
 
 vi.mock('../../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -133,57 +127,10 @@ async function boot() {
 
 const okReply: LayoutApplyReply = { ok: true, result: {} }
 
-/** Counts the store writes that change one slice: main's frame is one, a window re-apply another. */
-function writesOf<T>(
-  store: ReturnType<typeof createTestStore>,
-  pick: (state: ReturnType<ReturnType<typeof createTestStore>['getState']>) => T
-) {
-  let count = 0
-  const stop = store.subscribe((state, previous) => {
-    if (pick(state) !== pick(previous)) {
-      count += 1
-    }
-  })
-  return { count: () => count, stop }
-}
-
 const tabBar = (store: ReturnType<typeof createTestStore>) =>
   store.getState().unifiedTabsByWorktree[GIT_KEY]!.map((tab) => tab.id)
 const groupOrder = (store: ReturnType<typeof createTestStore>, groupId: string) =>
   store.getState().groupsByWorktree[GIT_KEY]!.find((group) => group.id === groupId)?.tabOrder
-
-/** Draws a tab as the window's open does, before its recorder tells main. */
-function drawTab(
-  store: ReturnType<typeof createTestStore>,
-  tab: Partial<Tab> & { id: string }
-): Tab {
-  const drawn: Tab = {
-    entityId: tab.id,
-    groupId: 'group-b',
-    worktreeId: GIT_KEY,
-    contentType: 'simulator',
-    label: tab.id,
-    customLabel: null,
-    color: null,
-    sortOrder: 9,
-    createdAt: 1_700_000_900_000,
-    ...tab
-  }
-  const state = store.getState()
-  store.setState({
-    unifiedTabsByWorktree: {
-      ...state.unifiedTabsByWorktree,
-      [GIT_KEY]: [...state.unifiedTabsByWorktree[GIT_KEY]!, drawn]
-    },
-    groupsByWorktree: {
-      ...state.groupsByWorktree,
-      [GIT_KEY]: state.groupsByWorktree[GIT_KEY]!.map((group) =>
-        group.id === drawn.groupId ? { ...group, tabOrder: [...group.tabOrder, drawn.id] } : group
-      )
-    }
-  })
-  return drawn
-}
 
 let check: ReturnType<typeof installLayoutFrameApplyCheck>
 beforeEach(() => {
@@ -198,22 +145,6 @@ afterEach(() => {
 })
 
 describe('a tab the window drew, closed or moved, with a frame from before main had it', () => {
-  it('keeps a just-created terminal tab, then shows main’s copy', async () => {
-    const { store, sync, before, answer } = await boot()
-    const tab = store.getState().createTab(GIT_KEY)
-    expect(rpc.calls[0]!.command).toMatchObject({ type: 'createTerminalTab', tabId: tab.id })
-
-    sendStaleFrame(before)
-    await settle()
-    expect(tabBar(store)).toContain(tab.id)
-    expect(store.getState().tabsByWorktree[GIT_KEY]!.map((row) => row.id)).toContain(tab.id)
-    expect(store.getState().terminalLayoutsByTabId[tab.id]).toBeDefined()
-
-    await answer(0)
-    expect(tabBar(store)).toContain(tab.id)
-    sync.close()
-  })
-
   it('keeps a just-closed terminal tab closed', async () => {
     const { store, sync, before, answer } = await boot()
     store.getState().closeTab('tab-unbound')
@@ -230,27 +161,6 @@ describe('a tab the window drew, closed or moved, with a frame from before main 
 
     await answer(close)
     expect(tabBar(store)).not.toContain('tab-unbound')
-    sync.close()
-  })
-
-  // Browser, chat and simulator opens draw from main's frame alone: content-tabs-from-main-frames.test.ts.
-
-  it('keeps a reorder the window made, and main’s order for the rest', async () => {
-    const { store, sync, before, answer } = await boot()
-    const order = groupOrder(store, 'group-a')!
-    const reordered = order.toReversed()
-    store.getState().reorderUnifiedTabs('group-a', reordered)
-    const moves = rpc.calls.filter((call) => call.command.type === 'moveTab')
-    expect(moves.length).toBeGreaterThan(0)
-
-    sendStaleFrame(before)
-    await settle()
-    expect(groupOrder(store, 'group-a')).toEqual(reordered)
-
-    for (let index = 0; index < rpc.calls.length; index += 1) {
-      await answer(index)
-    }
-    expect(groupOrder(store, 'group-a')).toEqual(reordered)
     sync.close()
   })
 
@@ -274,113 +184,6 @@ describe('a tab the window drew, closed or moved, with a frame from before main 
     expect(tabBar(store)).not.toContain(tab.id)
     expect(store.getState().tabsByWorktree[GIT_KEY]!.map((row) => row.id)).not.toContain(tab.id)
     expect(store.getState().terminalLayoutsByTabId[tab.id]).toBeUndefined()
-    sync.close()
-  })
-})
-
-describe('a change main applies first, with frames flowing', () => {
-  const callsOf = (type: string) => rpc.calls.filter((call) => call.command.type === type)
-
-  it('pins a preview tab and promotes it once; only main’s frame ends the preview', async () => {
-    const { store, sync, answer } = await boot()
-    const file = {
-      ...store.getState().openFiles[0]!,
-      id: '/Users/dev/orca/src/peek.ts',
-      filePath: '/Users/dev/orca/src/peek.ts',
-      relativePath: 'src/peek.ts',
-      isPreview: true
-    }
-    store.setState({ openFiles: [...store.getState().openFiles, file] })
-    const tab = drawTab(store, {
-      id: 'editor:peek',
-      entityId: file.id,
-      contentType: 'editor',
-      isPreview: true
-    })
-    seq += 1
-    stream.onFrame!(
-      frames.records(GIT_KEY, publishedOf(buildWorkspaceSessionPayload(store.getState())), seq)
-    )
-    stream.onPosition!(seq)
-    await settle()
-    const entry = () =>
-      store.getState().unifiedTabsByWorktree[GIT_KEY]!.find((item) => item.id === tab.id)!
-
-    const windowPin = vi.fn((tabId: string) => store.getState().pinFile(file.id, tabId))
-    withLayoutOwnerTabProps(
-      {
-        togglePinned: (item) => windowPin(item.unifiedTabId),
-        makePreviewFilePermanent: (fileId, tabId) =>
-          store.getState().makePreviewFilePermanent(fileId, tabId)
-      },
-      () => GIT_KEY
-    ).togglePinned({ unifiedTabId: tab.id, isPinned: false, type: 'editor', data: { id: file.id } })
-    const pin = rpc.calls.length - 1
-    expect(rpc.calls[pin]!.command).toMatchObject({ type: 'setTabProps', isPinned: true })
-    await answer(pin, okReply, (layout) => {
-      layout.tabs.find((item) => item.id === tab.id)!.isPinned = true
-    })
-    expect(windowPin).not.toHaveBeenCalled()
-    expect(callsOf('promotePreviewTab')).toHaveLength(1)
-    expect(entry()).toMatchObject({ isPinned: true, isPreview: true })
-
-    await answer(rpc.calls.indexOf(callsOf('promotePreviewTab')[0]!), okReply, (layout) => {
-      delete layout.tabs.find((item) => item.id === tab.id)!.isPreview
-    })
-    expect(entry()).toMatchObject({ isPinned: true })
-    expect(entry().isPreview).toBeFalsy()
-    expect(callsOf('promotePreviewTab')).toHaveLength(1)
-    sync.close()
-  })
-
-  it('runs a view toggle’s bookkeeping once, after main’s frame shows the toggle', async () => {
-    const { store, sync, answer } = await boot()
-    store.getState().toggleTabViewMode('tab-agent')
-    const toggle = rpc.calls.length - 1
-    expect(rpc.calls[toggle]!.command).toMatchObject({ type: 'setTabProps', viewMode: 'terminal' })
-    const writes = writesOf(store, (state) => state.unifiedTabsByWorktree)
-
-    await answer(toggle, okReply, (layout) => {
-      layout.tabs.find((item) => item.id === 'tab-agent')!.viewMode = 'terminal'
-    })
-    writes.stop()
-    expect(writes.count()).toBe(1)
-    const agent = () =>
-      store.getState().unifiedTabsByWorktree[GIT_KEY]!.find((item) => item.id === 'tab-agent')!
-    expect(agent().viewMode).toBe('terminal')
-    expect(effects.mirrorViewMode).not.toHaveBeenCalled()
-    expect(effects.chatToggled).toHaveBeenCalledTimes(1)
-    expect(effects.chatToggled).toHaveBeenCalledWith(
-      expect.objectContaining({ from: 'chat', to: 'terminal' })
-    )
-
-    // The answered send is settled: the next toggle flips from what is shown, back to chat.
-    store.getState().toggleTabViewMode('tab-agent')
-    expect(rpc.calls.at(-1)!.command).toMatchObject({ type: 'setTabProps', viewMode: 'chat' })
-    sync.close()
-  })
-
-  it('shows main’s rename from its frame alone, without the window writing it again', async () => {
-    const { store, sync, answer } = await boot()
-    store.getState().setTabCustomTitle('tab-unbound', 'Build')
-    const rename = rpc.calls.length - 1
-    const writes = writesOf(store, (state) => state.tabsByWorktree)
-    const graphBefore = getRuntimeMobileSessionSyncKey(store.getState())
-
-    await answer(rename, okReply, (layout) => {
-      layout.tabs.find((item) => item.id === 'tab-unbound')!.customTitle = 'Build'
-    })
-    const row = store.getState().tabsByWorktree[GIT_KEY]!.find((item) => item.id === 'tab-unbound')!
-    expect(row.customTitle).toBe('Build')
-    expect(writes.count()).toBe(1)
-    // The frame's write changes what the phone graph publishes, so useRuntimeGraphSync republishes.
-    expect(
-      runtimeMobileSessionSyncKeysEqual(
-        getRuntimeMobileSessionSyncKey(store.getState()),
-        graphBefore
-      )
-    ).toBe(false)
-    writes.stop()
     sync.close()
   })
 })

@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, rmSync } from 'node:fs'
-import { rename, rm } from 'node:fs/promises'
+import { rm } from 'node:fs/promises'
 import { join, relative, resolve } from 'node:path'
 import type { SpeechModelState, SpeechModelStatus } from '../../shared/speech-types'
 import { SPEECH_MODEL_CATALOG, getCatalogModel, isLocalSpeechModel } from './model-catalog'
@@ -15,13 +15,12 @@ import { SpeechModelDownloadTransport } from './speech-model-download-transport'
 import { hasSpeechModelFiles } from './speech-model-files'
 import type { OpenSpeechDownloadRequest } from './speech-model-download-response'
 import { getAppEnvironment } from '../../shared/app-environment'
-import {
-  removeModelDownloadFiles,
-  removeModelDownloadStaging
-} from './speech-model-download-cleanup'
+import { removeModelDownloadStaging } from './speech-model-download-cleanup'
+import { previousSpeechModelDir, swapInSpeechModelDir } from './speech-model-dir-swap'
 
 type DownloadHandle = {
   abort: () => void
+  settled: Promise<void>
 }
 
 type ProgressCallback = (modelId: string, progress: number) => void
@@ -175,17 +174,17 @@ export class ModelManager extends SpeechModelDownloadTransport {
     mkdirSync(stagingDir, { recursive: true })
     let aborted = false
     const abortController = new AbortController()
+    const settled = Promise.withResolvers<void>()
 
     const handle: DownloadHandle = {
       abort: () => {
         aborted = true
         // Abort immediately: stalled HTTPS may never deliver another chunk.
         abortController.abort()
-      }
+      },
+      settled: settled.promise
     }
     this.activeDownloads.set(modelId, handle)
-    // Until the swap starts, modelDir holds only the old files, which are how the update is found again.
-    let replacingModelDir = false
 
     try {
       await this.downloadModelFiles(
@@ -200,9 +199,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
         return
       }
 
-      replacingModelDir = true
-      await rm(modelDir, { recursive: true, force: true })
-      await rename(stagingDir, modelDir)
+      await swapInSpeechModelDir(stagingDir, modelDir)
       this.updateState(modelId, 'ready')
       if (getCatalogModel(modelId)?.files?.some((file) => file.endsWith('.gguf'))) {
         downloadSileroVadInBackground(this)
@@ -211,17 +208,13 @@ export class ModelManager extends SpeechModelDownloadTransport {
       if (!aborted) {
         console.error('[speech] Model download failed:', modelId, err)
         this.updateState(modelId, 'error', undefined, String(err))
-      }
-      if (replacingModelDir) {
-        removeModelDownloadFiles(modelDir, stagingDir, legacyArchivePath)
-      }
-      if (!aborted) {
         // Settings awaits real failures; cancellation stays quiet.
         throw err
       }
     } finally {
       this.activeDownloads.delete(modelId)
       removeModelDownloadStaging(stagingDir, legacyArchivePath)
+      settled.resolve()
     }
   }
 
@@ -242,20 +235,21 @@ export class ModelManager extends SpeechModelDownloadTransport {
     if (!manifest || !isLocalSpeechModel(manifest)) {
       throw new Error(`Model does not support deletion: ${modelId}`)
     }
+    const download = this.activeDownloads.get(modelId)
     this.cancelDownload(modelId)
-    const modelDir = this.getModelDir(modelId)
-    if (existsSync(modelDir)) {
-      await rm(modelDir, { recursive: true, force: true })
-    }
-    await rm(`${modelDir}.partial`, { recursive: true, force: true })
-    await rm(join(this.modelsDir, `${modelId}.tar.bz2`), { force: true })
+    // A swap already under way ignores cancel; deleting mid-swap could race its restore.
+    await download?.settled
     // Remove the migration source too or next launch resurrects the model.
+    const modelDirs = [this.getModelDir(modelId)]
     if (this.migrationSourceDir) {
-      const sourceModelDir = this.getSafeModelDir(modelId, this.migrationSourceDir)
-      if (existsSync(sourceModelDir)) {
-        await rm(sourceModelDir, { recursive: true, force: true })
+      modelDirs.push(this.getSafeModelDir(modelId, this.migrationSourceDir))
+    }
+    for (const modelDir of modelDirs) {
+      for (const path of [modelDir, `${modelDir}.partial`, previousSpeechModelDir(modelDir)]) {
+        await rm(path, { recursive: true, force: true })
       }
     }
+    await rm(join(this.modelsDir, `${modelId}.tar.bz2`), { force: true })
     this.modelStates.delete(modelId)
   }
 
