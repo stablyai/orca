@@ -137,13 +137,13 @@ describe('relay edge fence after a host leaves', () => {
     ])
   })
 
-  it('retries conflict and unavailable inline, then records the last outcome', async () => {
+  it('retries unavailable inline, then records the last outcome', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     const h = await harness()
-    h.edge.answers = ['conflict', 'down', 'conflict']
+    h.edge.answers = ['down', 'down', 'down']
     expect(await h.assignments.fenceAway({ userId: USER, relayHostId: HOST }, 'us-c1', 9)).toBe(false)
     expect(h.edge.calls).toHaveLength(3)
-    expect(logged(error, 'orca_relay_edge_fence_failed')[0]).toMatchObject({ outcome: 'conflict' })
+    expect(logged(error, 'orca_relay_edge_fence_failed')[0]).toMatchObject({ outcome: 'relay_edge_admin_unavailable:network' })
     expect(await h.pending()).toHaveLength(1)
   })
 
@@ -171,6 +171,43 @@ describe('relay edge fence after a host leaves', () => {
     h.edge.answers = ['stale']
     expect(await h.assignments.fenceAway({ userId: USER, relayHostId: HOST }, 'us-c1', 9)).toBe(false)
     expect(logged(error, 'orca_relay_edge_fence_record_failed')).toHaveLength(1)
+  })
+})
+
+describe('relay edge fence over a same-epoch conflict', () => {
+  it('fences once more one epoch above a conflict at its epoch, and never bumps over a stale answer', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const h = await harness()
+    h.edge.answers = ['conflict', 'applied']
+    expect(await h.assignments.fenceAway({ userId: USER, relayHostId: HOST }, 'us-c1', 9)).toBe(true)
+    expect(h.edge.calls.map((call) => call.body.assignmentEpoch)).toEqual([9, 10])
+    expect(h.edge.calls.every((call) => call.body.cellId === 'us-c1')).toBe(true)
+    expect(logged(warn, 'orca_relay_edge_fence_above_conflict')).toEqual([
+      { event: 'orca_relay_edge_fence_above_conflict', outcome: 'applied', assignmentEpoch: 10 }
+    ])
+    expect(await h.pending()).toEqual([])
+    // Stale: the edge holds a newer epoch (the host may be back there); no bump, recorded for retry.
+    h.edge.calls = []
+    h.edge.answers = ['stale']
+    expect(await h.assignments.fenceAway({ userId: USER, relayHostId: HOST }, 'us-c1', 11)).toBe(false)
+    expect(h.edge.calls.map((call) => call.body.assignmentEpoch)).toEqual([11])
+  })
+
+  it('a pending fence retried into a same-epoch conflict lands one epoch above the row', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const h = await harness()
+    await h.placeRow('us-c1', 7)
+    h.edge.answers = ['down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down']
+    expect(await h.assignments.fenceAway({ userId: USER, relayHostId: HOST }, 'us-c1', 7)).toBe(false)
+    expect(await h.pending()).toHaveLength(1)
+    h.edge.calls = []
+    h.edge.answers = ['conflict', 'applied']
+    h.clock.now += 60_000
+    await h.retry()
+    expect(h.edge.calls.map((call) => call.body.assignmentEpoch)).toEqual([7, 8])
+    expect(await h.pending()).toEqual([])
   })
 })
 
@@ -217,7 +254,7 @@ describe('relay edge pending fence retries', () => {
     await h.assignments.fenceAway({ userId: USER, relayHostId: HOST }, 'us-c1', 9)
     h.clock.now += EDGE_FENCE_RETRY_BASE_MS
     for (let attempt = 1; attempt < EDGE_FENCE_MAX_ATTEMPTS; attempt += 1) {
-      h.edge.answers = [attempt % 2 === 0 ? 'down' : 'conflict']
+      h.edge.answers = ['down']
       expect(await h.retry()).toBe(true)
       expect(await h.pending()).toMatchObject([{ attempts: attempt, nextAttemptAt: h.clock.now + edgeFenceRetryDelayMs(attempt) }])
       // Not due yet: nothing is sent.
