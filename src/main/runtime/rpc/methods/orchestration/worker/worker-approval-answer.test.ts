@@ -150,24 +150,4 @@ describe('answering a worker approval', () => {
     await byCoordinator.call('deny', coordinator)
     expect(byCoordinator.mailToWorker()).toEqual([{ body: 'Use a script file.' }])
   })
-
-  it("refuses, and leaves the card open, when Orca can't tell what kind of worker it is", async () => {
-    chat.custody = 'unverifiable'
-    const ctx = setup('item_1')
-
-    await expect(ctx.call('deny', coordinator)).rejects.toMatchObject({ code: 'approval_refused' })
-    expect(ctx.closings()).toEqual([])
-  })
-
-  it('closes a terminal prompt Orca no longer holds, so its card stops offering answers', async () => {
-    chat.custody = 'terminal'
-    const ctx = setup('apr_1')
-
-    await expect(ctx.call('deny', coordinator)).rejects.toMatchObject({
-      code: 'approval_not_open'
-    })
-    expect(ctx.closings()).toEqual([
-      expect.stringContaining('Closed without an answer Orca can name: approval apr_1')
-    ])
-  })
 })

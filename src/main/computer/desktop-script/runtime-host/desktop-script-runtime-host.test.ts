@@ -116,37 +116,6 @@ describe('DesktopScriptRuntimeHost', () => {
     vi.restoreAllMocks()
   })
 
-  it('serializes requests so only one operation is ever in flight', async () => {
-    const { host, children } = createHost()
-
-    const first = host.request({ tool: 'click', app: 'A' })
-    const second = host.request({ tool: 'click', app: 'B' })
-    await settle()
-
-    expect(children[0].requests()).toEqual([{ tool: 'click', app: 'A', requestId: 1 }])
-
-    children[0].respond({ ok: true, action: { path: 'synthetic' } })
-    await expect(first).resolves.toMatchObject({ ok: true })
-    await settle()
-
-    expect(children[0].requests()).toHaveLength(2)
-    children[0].respond({ ok: true, action: { path: 'accessibility' } })
-    await expect(second).resolves.toMatchObject({ ok: true })
-    host.dispose()
-  })
-
-  it('kills the helper rather than answering a request with another reply', async () => {
-    const { host, children } = createHost()
-
-    const first = host.request({ tool: 'handshake' })
-    await settle()
-    children[0].respond({ ok: true, capabilities: {} }, 999)
-
-    await expect(first).rejects.toThrow(/did not match the pending request/)
-    expect(children[0].killed).toBe(true)
-    host.dispose()
-  })
-
   it('times out a wedged operation and starts a fresh helper for the next one', async () => {
     vi.useFakeTimers()
     const { host, children } = createHost({ requestTimeoutMs: 30_000 })

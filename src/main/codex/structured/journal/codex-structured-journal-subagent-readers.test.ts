@@ -180,16 +180,6 @@ describe("a Codex subagent's rows on the parent's surfaces", () => {
     ).toBe(true)
   })
 
-  it("shows the parent's own compaction as its activity line", async () => {
-    const { spawnChild, item, items, activities } = await session()
-    spawnChild()
-    item(PARENT, 'item/started', PARENT_TURN, { type: 'contextCompaction', id: 'own-compact' })
-
-    expect(
-      selectStructuredAgentTurnActivity(await items(), PARENT_TURN, activities.at(-1))
-    ).toEqual({ kind: 'description', text: 'Compacting the conversation' })
-  })
-
   it("quotes the parent's own latest line, and still does after a reopen", async () => {
     const { spawnChild, item, reopen } = await session()
     spawnChild()

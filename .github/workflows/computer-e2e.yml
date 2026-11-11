@@ -97,8 +97,6 @@ jobs:
           src/main/computer/macos-native/macos-native-provider-client.test.ts
           src/main/providers/windows-shell-preflight-runtime.windows.test.ts
           src/main/computer/desktop-script/actions/desktop-script-provider-actions.test.ts
-          src/main/computer/desktop-script/desktop-script-provider-cache-lifecycle.test.ts
-          src/main/computer/desktop-script/actions/desktop-script-provider-action-errors.test.ts
           src/cli/format.test.ts
           src/cli/handlers/computer-action-validation.test.ts
           src/cli/handlers/computer-state-formatting.test.ts

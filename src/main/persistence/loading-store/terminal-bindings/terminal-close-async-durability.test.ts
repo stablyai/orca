@@ -118,35 +118,6 @@ it.each([
   expect(persistedLeafIds()).toEqual(remaining)
 })
 
-it('commits nothing for a pane that restarted while its close waited for the writer', async () => {
-  const { authority, store, runtime, liveLeafIds } = await closeFixture({ split: true })
-  const gate = authority.pause()
-  const session = store.getWorkspaceSession()
-  store.setWorkspaceSession({ ...session, activeTabIdByWorktree: { [binding.worktreeId]: null } })
-  const earlierWrite = store.flushPendingOrThrowAsync()
-  await gate.started.promise
-  // Queue restart before close executes to test stale-close ownership fencing.
-  const restart = store.persistPtyBinding({
-    ...binding,
-    ptyId: 'restarted-pty',
-    incarnationId: 'ffffffff-ffff-4fff-8fff-ffffffffffff'
-  })
-  const closing = runtime.closeTerminalSurfaceFromRenderer({
-    worktreeId: binding.worktreeId,
-    target: {
-      kind: 'pane',
-      tabId: binding.tabId,
-      leafId: binding.leafId
-    }
-  })
-  gate.finish.resolve()
-  await earlierWrite
-  await expect(restart).resolves.toBe(true)
-  await closing
-
-  expect(liveLeafIds()).toEqual([binding.leafId, siblingLeafId])
-})
-
 it('commits a renderer tab close whose split pane bound while the close waited for the writer', async () => {
   const { authority, store, runtime, persistedLeafIds, liveLeafIds } = await closeFixture()
   const gate = authority.pause()

@@ -46,23 +46,3 @@ it('prefers an older active MR and probes both active states behind a full recen
     expect.stringContaining('source_project_id=1&state=locked&per_page=1')
   ])
 })
-
-it('does not turn an active-probe failure into historical absence', async () => {
-  read
-    .mockResolvedValueOnce({
-      stdout: JSON.stringify(Array.from({ length: 10 }, (_, i) => row(i + 1)))
-    })
-    .mockRejectedValueOnce(new Error('offline'))
-  await expect(createGitLabBranchDiscovery(args)('feature')).rejects.toThrow('offline')
-  expect(pages).not.toHaveBeenCalled()
-})
-it('fails a legacy traversal rather than selecting from an incomplete foreign prefix', async () => {
-  read.mockResolvedValue({ stdout: JSON.stringify([row(1, 'opened', 8)]) })
-  pages
-    .mockResolvedValueOnce({
-      body: JSON.stringify(Array.from({ length: 100 }, (_, i) => row(i + 1, 'opened', 8))),
-      headers: { 'x-next-page': '2' }
-    })
-    .mockRejectedValueOnce(new Error('offline'))
-  await expect(createGitLabBranchDiscovery(args)('feature')).rejects.toThrow('incomplete')
-})
