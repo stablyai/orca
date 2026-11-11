@@ -1,7 +1,7 @@
 // Orca Cloud routines: /v1/routines wire shapes and the editor's request bodies.
 import { z } from 'zod'
 import { ORCA_CLOUD_IMAGE_AGENTS } from '../hosted-sandbox/orca-cloud-image-agents'
-import { HttpsUrl, Id, Millis, PersonName, ShortText } from './cloud-api-primitives'
+import { HttpsUrl, Id, Millis, PersonName } from './cloud-api-primitives'
 
 // ── Routines ────────────────────────────────────────────────────────────────
 
@@ -115,11 +115,33 @@ export const RoutineCreatedSchema = z.object({
 export type RoutineCreated = z.infer<typeof RoutineCreatedSchema>
 export const RoutineWebhookSchema = z.object({ url: HttpsUrl })
 
+const TriggerTarget = z.object({ repo: z.string().max(200), number: z.number().int() })
+const TriggerDetailObject = z.object({
+  event: z.string().max(100).optional(),
+  target: TriggerTarget.optional().catch(undefined)
+})
+
+/** "acme/web#482 pull_request.labeled" for GitHub runs; null when there is nothing worth showing. */
+export function triggerLabel(detail: unknown): string | null {
+  if (typeof detail === 'string') {
+    return detail.slice(0, 500) || null
+  }
+  const parsed = TriggerDetailObject.safeParse(detail)
+  if (!parsed.success) {
+    return null
+  }
+  const { event, target } = parsed.data
+  const where = target ? `${target.repo}#${target.number}` : null
+  return [where, event].filter(Boolean).join(' ') || null
+}
+
 export const RoutineRunSchema = z.object({
   id: Id,
   routineId: Id,
   trigger: z.enum(ROUTINE_RUN_TRIGGERS),
-  triggerDetail: ShortText.nullable(),
+  // The control plane sends what fired the run as an object ({requestedBy} for manual runs,
+  // {event, target} for GitHub, {scheduledFor} for schedules); the UI shows one short label.
+  triggerDetail: z.unknown().transform(triggerLabel),
   status: z.enum(ROUTINE_RUN_STATUSES),
   workspaceId: Id.nullable(),
   result: z
