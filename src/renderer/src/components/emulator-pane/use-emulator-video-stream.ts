@@ -114,16 +114,20 @@ export function useEmulatorVideoStream(
       error: (err) => fatal(err.message)
     })
 
-    let firstFrameTimeout: ReturnType<typeof setTimeout> | null = setTimeout(() => {
-      fatal('Video stream did not deliver a frame.')
-    }, 10_000)
-
+    let firstFrameTimeout: ReturnType<typeof setTimeout> | null = null
     const clearFirstFrameTimeout = (): void => {
       if (firstFrameTimeout) {
         clearTimeout(firstFrameTimeout)
         firstFrameTimeout = null
       }
     }
+    const armFirstFrameTimeout = (): void => {
+      clearFirstFrameTimeout()
+      firstFrameTimeout = setTimeout(() => {
+        fatal('Video stream did not deliver a frame.')
+      }, 10_000)
+    }
+    armFirstFrameTimeout()
 
     const stopStream = (): void => {
       if (streamId) {
@@ -161,6 +165,8 @@ export function useEmulatorVideoStream(
       decoder.reset()
       configured = false
       waitingForKeyFrame = true
+      // main's stall watch starts at the first byte, so a silent new connection needs this timeout.
+      armFirstFrameTimeout()
       startStream()
     }
 

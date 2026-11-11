@@ -240,14 +240,9 @@ it.each([...goneEvents, 'explicit stop'] as const)(
 )
 
 function startIosVideo(sender: Owner): void {
-  // A renderer-supplied URL must be ignored; main opens only the registered helper.
   mocks.handlers.get('emulator:videoStreamStart')?.(
     { sender },
-    {
-      deviceId: IOS_UDID,
-      streamId: 'ios-stream',
-      avccStreamUrl: 'http://169.254.169.254/stream.avcc'
-    }
+    { deviceId: IOS_UDID, streamId: 'ios-stream' }
   )
   vi.runOnlyPendingTimers()
 }
