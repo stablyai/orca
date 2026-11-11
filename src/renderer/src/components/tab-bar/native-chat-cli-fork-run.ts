@@ -1,18 +1,16 @@
 import { useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store/index'
-import type { AppState } from '@/store/types'
 import { readIpcErrorMessage } from '@/runtime/errors/ipc-error'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import {
-  prepareNativeChatCliFork,
-  type NativeChatCliForkSubject
-} from '@/lib/agent-session/resume/cli-fork/native-chat-cli-fork-preparation'
+import { parseExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { prepareNativeChatCliFork } from '@/lib/agent-session/resume/cli-fork/native-chat-cli-fork-preparation'
+import type { NativeChatCliForkSubject } from '@/lib/agent-session/resume/cli-fork/native-chat-cli-fork-preparation'
 import {
   assertAiVaultCopiedSessionLaunchAllowed,
   buildAiVaultCopiedSessionStartupForWorktree,
   buildAiVaultForkStartupForWorktree
 } from '@/lib/agent-session/resume/history/ai-vault-session-fork-startup'
-import { launchAiVaultSessionAndReveal } from '@/lib/launch-ai-vault-session-and-reveal'
+import { launchAiVaultSessionAndReveal } from '@/lib/agent-session/resume/history/launch-ai-vault-session-and-reveal'
 import { notifyAiVaultSessionPreparationFailure } from '../right-sidebar/ai-vault/session-actions/ai-vault-session-launch-feedback'
 import { describeAiVaultCliForkFailure } from '../right-sidebar/ai-vault/session-actions/ai-vault-session-cli-fork'
 import {
@@ -23,17 +21,16 @@ import {
   onRuntimeEnvironmentsRetired,
   onRuntimeEnvironmentRevisionsChanged
 } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
-import type { AiVaultAgent } from '../../../../shared/ai-vault/contracts/ai-vault-types'
-import {
-  resolveNativeChatCliForkIdentity,
-  type NativeChatCliForkIdentity
-} from './tab-session-history-switch'
+import { resolveNativeChatCliForkIdentity } from './tab-session-history-switch'
+import type { NativeChatCliForkIdentity } from './tab-session-history-switch'
 import { translate } from '@/i18n/i18n'
-import { openDesktopStructuredSession } from '@/lib/activate-ai-vault-structured-session'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
+import { openDesktopStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import { moveStructuredAgentLaunchDraft } from '@/lib/agent-session/launch/structured-agent-session-launch-draft'
 import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
+import type { AppState } from '@/store/types'
+import type { AiVaultAgent } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 const pending = new Map<string, AbortController>()
 const listeners = new Set<() => void>()

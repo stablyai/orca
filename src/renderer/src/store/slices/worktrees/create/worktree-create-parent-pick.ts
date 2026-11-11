@@ -1,14 +1,12 @@
-import type { AppState } from '../../../types'
-
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
 import {
-  type WorkspaceKey,
   folderWorkspaceKey,
   parseWorkspaceKey,
   worktreeWorkspaceKey
 } from '../../../../../../shared/workspace-scope'
+import type { WorkspaceKey } from '../../../../../../shared/workspace-scope'
 import {
   getIndexedAllWorktrees,
   getIndexedWorktreesById
@@ -17,14 +15,9 @@ import {
   getWorktreeHostIdentity,
   isWorktreeHostIdentity
 } from '../../../../../../shared/worktree/host-qualified-identity'
-import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import type { CreatedWorktreeResult } from './worktree-create-payload'
-import { resolveReviewRepository } from '@/lib/review-owner'
-import {
-  getRepoExecutionHostId,
-  type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+import { resolveReviewRepository } from '@/lib/source-control/review/review-owner'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { findFolderWorkspaceRecord } from '../../../folder-workspaces/folder-workspace-record-index'
 import {
   selectFolderWorkspaces,
@@ -32,6 +25,10 @@ import {
 } from '../../../workspaces/catalog/workspace-record-fields'
 import { getFolderWorkspaceWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/cross-store-lineage-resolution'
+import type { AppState } from '../../../types'
+import type { Worktree } from '../../../../../../shared/worktree/types'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { CreatedWorktreeResult } from './worktree-create-payload'
 
 export type CreateAttemptOutcome = {
   result: CreatedWorktreeResult

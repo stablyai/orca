@@ -1,19 +1,19 @@
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
 import {
   structuredLaunchConversationOwner,
   structuredLaunchFailure
 } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
-import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
+import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import { agentSessionWriteFailureText } from '../native-chat/messages/notices/agent-session-write-notice-text'
 import { agentLabel } from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { cliConversationExitGuidance } from '@/lib/cli-conversation-exit-guidance'
-import type { AgentSessionConversationOwner } from '../../../../shared/agent-session/failures/agent-session-refusal-details'
-import type { CliChatResumeSource } from './cli-chat-resume-source'
+import { cliConversationExitGuidance } from '@/lib/agent-session/resume/history/cli-conversation-exit-guidance'
 import { retryStructuredAgentSessionLaunch } from '@/lib/agent-session/launch/structured-agent-session-launch'
 import { reopenNativeChatCliForkOrigin } from './native-chat-cli-fork-run'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { AgentSessionConversationOwner } from '../../../../shared/agent-session/failures/agent-session-refusal-details'
+import type { CliChatResumeSource } from './cli-chat-resume-source'
 
 /** Main's answer to a chat that already holds the conversation: the header opens it, the menu says so. */
 export async function reportCliChatResumeOwner(
