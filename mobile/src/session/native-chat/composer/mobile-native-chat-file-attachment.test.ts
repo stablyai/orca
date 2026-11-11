@@ -1,23 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { PickedMobileFile } from '../../../platform/media-picker-contract'
-import {
-  nativeChatTextWithFileReferences,
-  uploadPickedNativeChatFiles,
-  type PendingNativeChatFile
-} from './mobile-native-chat-file-attachment'
-
-function picked(name: string): PickedMobileFile {
-  return { name, mime: 'text/plain', byteLength: 1, base64: 'YQ==' }
-}
-
-async function* pickedFiles(files: PickedMobileFile[], thenThrow?: Error) {
-  for (const file of files) {
-    yield file
-  }
-  if (thenThrow) {
-    throw thenThrow
-  }
-}
+import { nativeChatTextWithFileReferences } from './mobile-native-chat-file-attachment'
 
 describe('nativeChatTextWithFileReferences', () => {
   it('references each stored file on a line after the text', () => {
@@ -34,50 +16,5 @@ describe('nativeChatTextWithFileReferences', () => {
       '@/store/1/spec.pdf'
     )
     expect(nativeChatTextWithFileReferences('hi', [])).toBe('hi')
-  })
-})
-
-describe('uploadPickedNativeChatFiles', () => {
-  function run(files: AsyncIterable<PickedMobileFile>, failName?: string) {
-    const chips = new Map<string, PendingNativeChatFile>()
-    const errors: string[] = []
-    const pickedChips: PendingNativeChatFile[] = []
-    let id = 0
-    const done = uploadPickedNativeChatFiles({
-      picked: files,
-      upload: async (file) => {
-        if (file.name === failName) {
-          throw new Error('host refused')
-        }
-        return { path: `/store/${file.name}`, name: file.name, byteLength: 1 }
-      },
-      nextId: () => `file-${(id += 1)}`,
-      onPicked: (file) => {
-        pickedChips.push(file)
-        chips.set(file.id, file)
-      },
-      onStored: (fileId, stored) => {
-        const chip = chips.get(fileId)
-        if (chip) {
-          chips.set(fileId, { ...chip, path: stored.path })
-        }
-      },
-      onFailed: (fileId) => chips.delete(fileId),
-      onError: (message) => errors.push(message)
-    })
-    return { chips, errors, pickedChips, done }
-  }
-
-  it('keeps every stored file as a chip with its host path', async () => {
-    const { chips, errors, pickedChips, done } = run(
-      pickedFiles([picked('a.txt'), picked('b.txt')])
-    )
-    await done
-    expect(pickedChips).toEqual([
-      { id: 'file-1', name: 'a.txt', mime: 'text/plain', byteLength: 1, path: null },
-      { id: 'file-2', name: 'b.txt', mime: 'text/plain', byteLength: 1, path: null }
-    ])
-    expect([...chips.values()].map((chip) => chip.path)).toEqual(['/store/a.txt', '/store/b.txt'])
-    expect(errors).toEqual([])
   })
 })

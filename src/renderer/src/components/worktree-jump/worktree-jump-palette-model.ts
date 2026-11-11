@@ -11,7 +11,7 @@ import type {
   CmdJProjectSearchResult,
   CmdJRankedProjectSearchResult
 } from '@/components/cmd-j/palette-project-results'
-import type { RecentWorkspaceTabRow } from '@/lib/recent-workspace-tab-rows'
+import type { RecentWorkspaceTabRow } from '@/lib/workspace/search/palette/recent-workspace-tab-rows'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { CREATE_WORKSPACE_QUICK_ACTION_ID } from '@/components/cmd-j/quick-actions'
 import type { CREATE_WORKTREE_ITEM_ID } from '@/lib/workspace/search/worktrees/worktree-palette-create-action'

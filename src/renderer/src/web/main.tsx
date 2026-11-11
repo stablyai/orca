@@ -1,7 +1,7 @@
 import '../assets/main.css'
 
 import { Suspense, useMemo, useState } from 'react'
-import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import ReactDOM from 'react-dom/client'
 import { useTranslation } from 'react-i18next'
 import WebConnect from './WebConnect'
@@ -21,7 +21,7 @@ import { initWebDeviceKeySupport } from './web-device-key-support'
 import { WebPairingSecurityNotice } from './WebPairingSecurityNotice'
 import { I18nProvider } from '../i18n/I18nProvider'
 import { useTranslate } from '@/i18n/use-translate'
-import { installOsFileDropCancellationGuard } from '../lib/os-file-drop-cancellation-guard'
+import { installOsFileDropCancellationGuard } from '../lib/files/drop/os-file-drop-cancellation-guard'
 import { installBodyOverlayAttributes } from '../lib/body-overlay-attributes'
 import { installAppKeyboardRouter } from '../lib/keyboard/app-keyboard-router'
 
@@ -120,6 +120,6 @@ void initWebDeviceKeySupport()
   })
 
 // Prime WebGL here because web hosts terminals too; dynamic import keeps the App/pane-manager graph out of startup.
-void import('../lib/pane-manager/pane-webgl-renderer').then((module) =>
-  module.primeTerminalWebglAddon()
-)
+void import('../lib/pane-manager/terminal-rendering/pane-webgl-renderer')
+  .then(() => import('../lib/pane-manager/terminal-rendering/terminal-webgl-addon-loader'))
+  .then(({ primeTerminalWebglAddon }) => primeTerminalWebglAddon())

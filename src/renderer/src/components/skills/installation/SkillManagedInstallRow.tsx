@@ -8,7 +8,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { SkillBundleInstallResult } from '../../../../../shared/skill-bundle-install-contract'
 import type { SkillInstallResult } from '../../../../../shared/skill-install-contract'

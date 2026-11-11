@@ -24,7 +24,7 @@ vi.mock('@/runtime/source-control/git/runtime-git-status-client', async (importO
   getRuntimeGitMutationInFlight: mocks.mutationInFlight
 }))
 
-vi.mock('@/lib/focus-terminal-tab-surface', () => ({
+vi.mock('@/components/terminal-pane/input/focus/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: mocks.focusTerminalTabSurface
 }))
 

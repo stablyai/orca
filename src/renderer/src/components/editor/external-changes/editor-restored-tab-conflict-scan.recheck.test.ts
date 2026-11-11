@@ -14,7 +14,7 @@ vi.mock('@/runtime/files/metadata/runtime-path-existence-batch', () => ({
 vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionIdForFile: () => undefined
 }))
-vi.mock('@/lib/file-owner-runtime-target', () => {
+vi.mock('@/lib/files/access/file-owner-runtime-target', () => {
   const owner = { kind: 'environment', environmentId: 'env-1' }
   return {
     getRuntimeTargetForFileOwner: () => owner,

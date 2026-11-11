@@ -16,7 +16,7 @@ import { destroyWorkspaceWebviews } from './browser-webview-cleanup'
 import { omitRecordKeys } from '../../worktrees/teardown/record-key-omission'
 import { landOnEmptiedWorktree } from '../../tabs/tabs-empty-workspace'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
-import { forgetDesktopCreatedServerTab } from '@/lib/desktop-created-server-tabs'
+import { forgetDesktopCreatedServerTab } from '@/store/workspace-layout/frames/desktop-created-server-tabs'
 import {
   closeBrowserTabThroughLayoutOwner,
   withDrawnBrowserPages,

@@ -148,31 +148,6 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     renderer = null
   })
 
-  it('toggles a Fast-only Codex speed on the same Fast mode switch as Claude', async () => {
-    const speed: SessionOptionDescriptor = {
-      id: 'serviceTier',
-      label: 'Speed',
-      kind: {
-        type: 'select',
-        currentValue: 'default',
-        choices: [
-          { value: 'default', label: 'Standard' },
-          { value: 'priority', label: 'Fast' }
-        ]
-      },
-      valueSource: 'reported',
-      transport: 'catalog',
-      settable: true
-    }
-    mount([MODEL_DESCRIPTOR, speed], false, 'model')
-    const toggle = findAllByHostType(renderer!.root, 'Switch').find(
-      (node) => node.props.accessibilityLabel === 'Fast mode'
-    )
-    expect(toggle?.props.value).toBe(false)
-    await act(async () => toggle!.props.onValueChange(true))
-    expect(setOption).toHaveBeenCalledWith('serviceTier', 'priority')
-  })
-
   it('consumes a refused page without replay, then permits a fresh open and permission pick', async () => {
     const placeholder: SessionOptionDescriptor = {
       ...MODEL_DESCRIPTOR,

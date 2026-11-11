@@ -3,12 +3,15 @@ import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type { RowLessSource as RuntimeLinearSettings } from '@/runtime/hosts/selection/default-creation-host'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
+import '@/store/slices/linear/linear-issue-read'
 import {
   registerLinearIssueConsumer,
-  projectLinearIssue,
-  type LinearIssueLease,
-  type LinearIssueView
-} from '@/store/slices/linear/linear-issue-publication'
+  projectLinearIssue
+} from '@/store/slices/linear/linear-issue-write-publication'
+import type {
+  LinearIssueLease,
+  LinearIssueView
+} from '@/store/slices/linear/linear-issue-read-lifecycle'
 import { useLinearCommittedState } from './linear-issue-committed-state'
 
 export function useLinearIssuePublication(

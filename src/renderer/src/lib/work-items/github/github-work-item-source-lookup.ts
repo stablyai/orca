@@ -194,7 +194,11 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
     number: args.number,
     type: args.type
   }
-  if (row && !matchesGitHubWorkItemTarget(row, requestedTarget)) {
+  // A preview asked for as an issue answers with the pull request when the number is one, as bare
+  // `#N` links are; the repository and number still have to be the ones asked for.
+  const answeredTarget =
+    row && args.preview ? { ...requestedTarget, type: row.type } : requestedTarget
+  if (row && !matchesGitHubWorkItemTarget(row, answeredTarget)) {
     throw new GitHubWorkItemTargetError(requestedTarget)
   }
   if (row && contract?.complete && contract.current() && !('preview' in args && args.preview)) {

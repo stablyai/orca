@@ -75,6 +75,15 @@ export async function routeDesktopBrowserBridgeRpc(options: {
       'The Orca desktop sharing its browser cannot check --expect-url. Update Orca on that desktop or drop the flag.'
     )
   }
+  if (
+    forwardedMethod === 'browser.tabAnnotations' &&
+    !options.registry.newestAttachmentReadsTabAnnotations()
+  ) {
+    throw new BrowserError(
+      DESKTOP_BROWSER_BRIDGE_NOT_FORWARDED_CODE,
+      'The Orca desktop sharing its browser cannot read tab notes. Update Orca on that desktop.'
+    )
+  }
   const result = await options.registry.forward(
     { method: forwardedMethod, params, ...(workspaceId ? { workspaceId } : {}) },
     { timeoutMs: forwardTimeoutMs(forwardedMethod, params), signal: options.signal }

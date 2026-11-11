@@ -3363,6 +3363,27 @@
     }
   },
   "tasks": {
+    "hostedMerge": {
+      "confirmGitHubMerge": "PR #{{number}} zusammenführen?",
+      "confirmGitHubSquash": "PR #{{number}} mit Squash zusammenführen?",
+      "confirmGitHubRebase": "PR #{{number}} mit Rebase zusammenführen?",
+      "confirmGitLabMerge": "Merge Request #{{number}} zusammenführen?",
+      "confirmGitLabSquash": "Merge Request #{{number}} mit Squash zusammenführen?",
+      "confirmGitLabRebase": "Merge Request #{{number}} mit Rebase zusammenführen?",
+      "merged": "Zusammengeführt",
+      "closed": "Geschlossen",
+      "conflicts": "Konflikte",
+      "behind": "Nicht aktuell",
+      "blocked": "Blockiert",
+      "checksPending": "Prüfungen ausstehend",
+      "ableToMerge": "Zusammenführen möglich",
+      "unknown": "Unbekannt"
+    },
+    "pagination": {
+      "pageUnreachable": "Seite {{page}} liegt außerhalb des Bereichs der GitHub-Suche.",
+      "loadPageFailed": "Seite {{page}} konnte nicht von GitHub geladen werden.",
+      "noMoreResults": "Keine weiteren Ergebnisse auf Seite {{page}}."
+    },
     "composerSource": {
       "baseFailed": "Der Basis-Branch konnte nicht ermittelt werden.",
       "forkPushWarning": "Bei diesem PR ist „Allow edits from maintainers“ deaktiviert; GitHub könnte einen Push zum Fork ablehnen."

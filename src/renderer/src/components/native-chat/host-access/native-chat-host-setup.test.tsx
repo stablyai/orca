@@ -33,7 +33,7 @@ const { state, remoteCreate, persistOrder, startHost, notifyFailure, managedSign
     }
   }
 )
-vi.mock('@/store', () => ({
+vi.mock('@/store/index', () => ({
   useAppStore: Object.assign(<T,>(selector: (s: typeof state) => T) => selector(state), {
     getState: () => state
   })
@@ -53,7 +53,9 @@ vi.mock('@/runtime/hosts/wsl/wsl-host-user-start', () => ({
 vi.mock('@/lib/provider-accounts/claude-account-sign-in', () => ({
   signInToClaudeAccount: managedSignIn
 }))
-vi.mock('@/lib/renderer-app-platform', () => ({ getRendererAppPlatform: () => 'linux' }))
+vi.mock('@/app-shell/platform/renderer-app-platform', () => ({
+  getRendererAppPlatform: () => 'linux'
+}))
 
 beforeEach(() => {
   state.settings.activeClaudeManagedAccountId = null

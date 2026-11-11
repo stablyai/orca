@@ -10,10 +10,10 @@ import {
   RESET_AFTER_BYTE_GAP,
   buildKittyKeyboardRestore
 } from '../../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
-import { discardTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-queue-registry'
-import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import { discardTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-queue-registry'
+import { writeTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
 import { recordTerminalOutput } from '@/lib/pane-manager/pane-scroll'
-import { presentPaneViewport } from '@/lib/pane-manager/pane-viewport-present'
+import { presentPaneViewport } from '@/lib/pane-manager/terminal-rendering/pane-viewport-present'
 import {
   buildMainModelSnapshotReplayWrites,
   hasPositiveTerminalDimensions,

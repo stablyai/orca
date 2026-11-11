@@ -1,7 +1,7 @@
 import { exposeDispatchContext } from './dispatch-context-exposure'
 import { contextOnlyAbandonWarning } from '../../../../orchestration/workers/lifecycle/context-only-dispatch-release'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { defineMethod } from '../../../core'
+import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import {
   exposeObservation,
   exposeWorker,
@@ -27,8 +27,9 @@ import {
 } from '../../../../../../shared/rpc-contract/orchestration-worker-control-params'
 
 export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.workerShow',
+    access: { kind: 'reads', targets: { dispatch: 'dispatch' } },
     permission: 'workspace',
     params: WorkerDispatchParams,
     handler: async (params, { runtime }) => {
@@ -82,8 +83,9 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
       }
     }
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.workerRead',
+    access: { kind: 'reads', targets: { dispatch: 'dispatch' } },
     permission: 'workspace',
     params: WorkerReadParams,
     handler: async (params, { runtime }) => {
@@ -201,8 +203,9 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
       return { ...output, projection: projectFleetWorker(runtime, db, params.dispatch) }
     }
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.workerAbandon',
+    access: { kind: 'writes', targets: { dispatch: 'dispatch' } },
     permission: 'workspace',
     params: WorkerDispatchParams,
     handler: (params, { runtime, orchestrationCaller, orchestrationCompatibilityEvidence }) => {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Image as ImageIcon } from 'lucide-react'
-import { cn } from '../../../../lib/utils'
+import { cn } from '../../../../lib/class-names'
 import { useTranslate } from '../../../../i18n/use-translate'
 import { basename } from '../../../../lib/path'
 import type { NativeChatBlock } from '../../../../../../shared/native-chat/native-chat-types'
@@ -13,7 +13,7 @@ import type { RuntimeFileOperationArgs } from '../../../../runtime/files/runtime
 import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native-chat-image-copy'
 import { isNativeChatPastedImagePath } from '../../../../../../shared/native-chat/native-chat-image-label'
 import { nativeChatImageLabel } from './native-chat-image-label'
-import { chatImageAccess } from '../../../../lib/local-file-access'
+import { chatImageAccess } from '../../../../lib/files/access/local-file-access'
 import { observeTranscriptVisibility } from './native-chat-image-visibility'
 
 function renderableImageSource(source: string | undefined): boolean {

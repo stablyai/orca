@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { readIpcErrorMessage } from '@/lib/ipc-error'
+import { readIpcErrorMessage } from '@/runtime/errors/ipc-error'
 
 export function showFileLinkNotFoundToast(filePath: string): void {
   toast.error(

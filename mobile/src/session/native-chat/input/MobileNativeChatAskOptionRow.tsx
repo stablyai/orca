@@ -1,5 +1,6 @@
-import { Pressable, ScrollView, Text, View, type LayoutChangeEvent } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
+import { MobileNativeChatOptionThumbnail } from './MobileNativeChatOptionThumbnail'
 import {
   colors,
   concentricRadius,
@@ -15,7 +16,7 @@ export function MobileNativeChatAskOptionRow({
   label,
   description,
   preview,
-  onPreviewLayout,
+  onPreview,
   selected,
   multi,
   disabled,
@@ -23,16 +24,16 @@ export function MobileNativeChatAskOptionRow({
 }: {
   label: string
   description?: string
-  /** Shown under the row while it is selected, as the agent wrote it. */
+  /** Read-only inspection is separate from choosing the option. */
   preview?: string
-  /** The preview's edges in the card's scroll content; the row renders as its direct children. */
-  onPreviewLayout?: (top: number, bottom: number) => void
+  onPreview?: () => void
   selected: boolean
   multi?: boolean
   disabled: boolean
   onPress: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
+  const hasPreview = Boolean(preview && onPreview)
   const row = (
     <Pressable
       accessibilityRole={multi ? 'checkbox' : 'radio'}
@@ -40,6 +41,7 @@ export function MobileNativeChatAskOptionRow({
       style={({ pressed }) => [
         styles.option,
         selected && styles.optionSelected,
+        hasPreview && styles.optionWithPreview,
         pressed && pressedStyle
       ]}
       disabled={disabled}
@@ -65,29 +67,15 @@ export function MobileNativeChatAskOptionRow({
       </View>
     </Pressable>
   )
-  // One root shape whether or not the preview shows, so selecting never remounts the row.
-  return (
-    <>
+  return hasPreview ? (
+    <View style={[styles.optionCard, selected && styles.optionSelected]}>
       {row}
-      {preview && selected ? (
-        <View
-          style={styles.preview}
-          onLayout={(event: LayoutChangeEvent) => {
-            const { y, height } = event.nativeEvent.layout
-            onPreviewLayout?.(y, y + height)
-          }}
-        >
-          <ScrollView nestedScrollEnabled showsVerticalScrollIndicator>
-            {/* Mockups are drawn in columns, so they scroll sideways instead of wrapping at phone width. */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <Text selectable style={styles.previewText}>
-                {preview}
-              </Text>
-            </ScrollView>
-          </ScrollView>
-        </View>
-      ) : null}
-    </>
+      <View style={styles.previewInset}>
+        <MobileNativeChatOptionThumbnail label={label} preview={preview!} onPress={onPreview!} />
+      </View>
+    </View>
+  ) : (
+    row
   )
 }
 
@@ -137,18 +125,17 @@ const styles = themedStyleSheet(() => ({
     color: colors.textSecondary,
     fontSize: typography.metaSize
   },
-  preview: {
-    backgroundColor: colors.bgPanel,
+  optionCard: {
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     borderRadius: concentricRadius(radii.surface, spacing.xs),
-    padding: spacing.sm,
-    marginBottom: spacing.xs,
-    maxHeight: 220
+    backgroundColor: colors.bgRaised,
+    marginBottom: spacing.xs
   },
-  previewText: {
-    color: colors.textPrimary,
-    fontFamily: typography.monoFamily,
-    fontSize: typography.metaSize
+  optionWithPreview: { borderWidth: 0, marginBottom: 0 },
+  previewInset: {
+    marginLeft: 18 + spacing.sm * 2,
+    marginRight: spacing.sm,
+    marginBottom: spacing.sm
   }
 }))

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { DiscoveredSkill } from '../../../../../shared/skills'
-import { skillAgentOptions, skillMatchesAgent } from './skill-agent-filter'
+import { skillMatchesAgent } from './skill-agent-filter'
 
 function skill(overrides: Partial<DiscoveredSkill> = {}): DiscoveredSkill {
   return {
@@ -50,53 +50,5 @@ describe('skillMatchesAgent', () => {
     expect(skillMatchesAgent(skill({ rootPath: '/empty' }), '', agentByRootPath)).toBe(false)
     expect(skillMatchesAgent(skill({ rootPaths: ['/empty'] }), '', agentByRootPath)).toBe(false)
     expect(skillMatchesAgent(skill({ rootPath: '/a' }), '', agentByRootPath)).toBe(false)
-  })
-})
-
-describe('skillAgentOptions', () => {
-  it('still counts every owning root once per skill', () => {
-    const options = skillAgentOptions({
-      scannedAt: 1,
-      sources: [
-        {
-          id: 'a',
-          label: 'A',
-          path: '/a',
-          sourceKind: 'home',
-          providers: [],
-          owner: 'claude',
-          exists: true
-        },
-        {
-          id: 'b',
-          label: 'B',
-          path: '/b',
-          sourceKind: 'repo',
-          providers: [],
-          owner: 'codex',
-          exists: true
-        },
-        {
-          id: 'shared',
-          label: 'S',
-          path: '/s',
-          sourceKind: 'repo',
-          providers: [],
-          owner: null,
-          exists: true
-        }
-      ],
-      skills: [
-        skill({ id: 'one', rootPaths: ['/a', '/a', '/b'] }),
-        skill({ id: 'two', rootPaths: ['/a'] }),
-        skill({ id: 'three', rootPath: '/s', rootPaths: undefined }),
-        skill({ id: 'four', rootPath: '/missing', rootPaths: undefined })
-      ]
-    })
-    expect(options.map((option) => [option.id, option.count])).toEqual([
-      ['claude', 2],
-      ['codex', 1],
-      ['shared', 1]
-    ])
   })
 })

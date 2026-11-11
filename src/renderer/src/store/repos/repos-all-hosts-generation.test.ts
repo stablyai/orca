@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
@@ -6,6 +6,7 @@ import {
 } from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
 import { createTestStore } from '../testing/app-store-test-fixture'
+import { replaceRuntimeEnvironmentRevisions } from '../../runtime/rpc/environment-revisions/runtime-environment-revision'
 
 const localRepo: Repo = {
   id: 'local-repo',
@@ -39,6 +40,7 @@ const runtimeEnvironmentCall = vi.fn()
 const reposList = vi.fn()
 
 beforeEach(() => {
+  replaceRuntimeEnvironmentRevisions([])
   clearRuntimeCompatibilityCacheForTests()
   runtimeEnvironmentCall.mockReset()
   reposList.mockReset()
@@ -58,6 +60,10 @@ beforeEach(() => {
     },
     dispatchEvent: vi.fn()
   })
+})
+
+afterEach(() => {
+  replaceRuntimeEnvironmentRevisions([])
 })
 
 describe('fetchReposForAllHosts generation', () => {

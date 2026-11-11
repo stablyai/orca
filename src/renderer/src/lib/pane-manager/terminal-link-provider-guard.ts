@@ -1,5 +1,6 @@
 import type { ILinkProvider, Terminal } from '@xterm/xterm'
-import { recordRendererCrashBreadcrumb } from '@/lib/crash-diagnostics'
+import '@/diagnostics/crash-reporting/crash-diagnostics'
+import { recordRendererCrashBreadcrumb } from '../../diagnostics/crash-reporting/crash-breadcrumb-recorder'
 
 /** Convert synchronous provideLinks errors to no-link results. Pathological wrapped lines can make web-links LinkComputer throw RangeError into window.onerror and kill the renderer; degrading one hover preserves retry on mouse movement. */
 export function guardLinkProvider(provider: ILinkProvider, label: string): ILinkProvider {

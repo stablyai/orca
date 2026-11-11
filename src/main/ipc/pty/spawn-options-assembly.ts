@@ -93,7 +93,6 @@ export type PtySpawnLaunchOptionsInput = {
     connectionId?: string | null
     shellOverride?: string
     telemetry?: { agent_kind?: unknown }
-    skipAgentWorkspaceTrust?: unknown
   }
   env: Record<string, string> | undefined
   /** Mutated: OpenCode prep may add the keys its launch must drop. */
@@ -210,7 +209,6 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
     launchAgent: args.launchAgent,
     worktreeId: args.worktreeId,
     trustWorktreeId: args.trustWorktreeId,
-    skipForThisLaunch: args.skipAgentWorkspaceTrust === true,
     cwd: input.cwd,
     store: input.store,
     isFreshLaunch: !input.preAdoptedStablePane && launchCommand !== undefined,

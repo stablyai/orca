@@ -9,6 +9,7 @@ import {
 export const ephemeralVmApi = {
   listRecipes: (args) => ipcRenderer.invoke('ephemeralVm:listRecipes', args),
   listRecipeCatalog: () => ipcRenderer.invoke('ephemeralVm:listRecipeCatalog'),
+  listCredentialEnvNames: () => ipcRenderer.invoke('ephemeralVm:listCredentialEnvNames'),
   doctor: (args) => ipcRenderer.invoke('ephemeralVm:doctor', args),
   provision: (args) => ipcRenderer.invoke('ephemeralVm:provision', args),
   cancelProvision: (args) => ipcRenderer.invoke('ephemeralVm:cancelProvision', args),
