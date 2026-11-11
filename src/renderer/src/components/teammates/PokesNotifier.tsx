@@ -3,6 +3,7 @@
 // "Poke back", then mark it seen. Nothing runs when Pokes are off.
 import { useEffect } from 'react'
 import { toast } from 'sonner'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import type { Poke } from '../../../../shared/cloud-workspaces/team-presence-wire'
@@ -63,25 +64,24 @@ export function PokesNotifier(): null {
       void window.api.cloudWorkspaces.markPokesSeen(fresh.map((p) => p.id)).catch(() => undefined)
     }
     const tick = (): void => {
-      if (document.visibilityState !== 'visible') {
-        return
-      }
       void readPokes(accountKey).then(show)
     }
-    // First read learns the opt-in; it only keeps polling while Pokes are on.
-    tick()
+    // First read learns the opt-in; it only keeps polling while Pokes are on, and only while
+    // Orca is visible (catching up as soon as it comes back).
     if (!live) {
+      tick()
       return () => {
         stopped = true
       }
     }
-    const interval = setInterval(tick, POKE_POLL_MS)
-    const onVisible = (): void => tick()
-    document.addEventListener('visibilitychange', onVisible)
+    const stop = installWindowVisibilityInterval({
+      run: tick,
+      intervalMs: POKE_POLL_MS,
+      slowWhileUnfocused: true
+    })
     return () => {
       stopped = true
-      clearInterval(interval)
-      document.removeEventListener('visibilitychange', onVisible)
+      stop()
     }
   }, [accountKey, live, orgId, t])
 

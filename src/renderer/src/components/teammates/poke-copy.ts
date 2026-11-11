@@ -6,7 +6,7 @@ export function pokeRefusalCopy(
   name: string,
   t: Translate
 ): string {
-  switch (result.reason) {
+  switch (result.reason ?? '') {
     case 'pokes_off':
       return t(
         'auto.components.teammates.pokesOffYou',

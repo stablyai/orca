@@ -13,6 +13,10 @@ export type PokesState = {
   error: 'read' | 'save' | null
 }
 
+// Machine state codes (never shown); the setting maps each to its own copy.
+const READ_FAILED = 'read' as const
+const SAVE_FAILED = 'save' as const
+
 let state: PokesState = { accountKey: null, enabled: null, saving: false, error: null }
 const listeners = new Set<() => void>()
 
@@ -47,7 +51,7 @@ export async function readPokes(accountKey: string): Promise<Poke[]> {
   }
   if (!result?.ok) {
     // Keep the last known value; a blip shouldn't flip the switch.
-    set({ error: 'read' })
+    set({ error: READ_FAILED })
     return []
   }
   set({ enabled: result.value.enabled, error: null })
@@ -65,7 +69,7 @@ export async function setPokesEnabled(accountKey: string, enabled: boolean): Pro
     set({ enabled: result.value, saving: false })
     return true
   }
-  set({ enabled: previous, saving: false, error: 'save' })
+  set({ enabled: previous, saving: false, error: SAVE_FAILED })
   return false
 }
 

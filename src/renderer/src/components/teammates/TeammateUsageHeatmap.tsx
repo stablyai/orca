@@ -78,13 +78,13 @@ export function TeammateUsageHeatmap({
   const summary = self
     ? t(
         'auto.components.teammates.heatmapSummarySelf',
-        'You used Orca Cloud on {{count}} of the last {{days}} days',
-        { count: usage.activeDays, days: usage.levels.length }
+        'You used Orca Cloud on {{active}} of the last {{days}} days',
+        { active: usage.activeDays, days: usage.levels.length }
       )
     : t(
         'auto.components.teammates.heatmapSummary',
-        '{{name}} used Orca Cloud on {{count}} of the last {{days}} days',
-        { name, count: usage.activeDays, days: usage.levels.length }
+        '{{name}} used Orca Cloud on {{active}} of the last {{days}} days',
+        { name, active: usage.activeDays, days: usage.levels.length }
       )
   const caption = hovered
     ? cellCaption(hovered, usage, t, locale)

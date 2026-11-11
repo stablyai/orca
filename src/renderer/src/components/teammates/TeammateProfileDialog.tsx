@@ -16,6 +16,9 @@ import { localUtcOffsetMinutes } from './teammate-heatmap'
 import { closeTeammateProfile, useOpenTeammateProfile } from './teammate-profile-store'
 import { TeammateProfileView, type TeammatePokeState } from './TeammateProfileView'
 
+// Machine error code for a failed IPC call (never shown); copy comes from the branches below.
+const UNAVAILABLE = { ok: false as const, error: 'unavailable' as const }
+
 function shortId(userId: string): string {
   const tail = userId.split(':').at(-1) ?? userId
   return tail.length > 12 ? `${tail.slice(0, 8)}…` : tail
@@ -35,7 +38,7 @@ function ProfileBody({ userId }: { userId: string }): React.JSX.Element {
     setError(null)
     void window.api.cloudWorkspaces
       .teammateProfile(userId, localUtcOffsetMinutes())
-      .catch(() => ({ ok: false as const, error: 'unavailable' }))
+      .catch(() => UNAVAILABLE)
       .then((result) => {
         if (cancelled) {
           return
@@ -70,7 +73,7 @@ function ProfileBody({ userId }: { userId: string }): React.JSX.Element {
     setPoke({ kind: 'sending' })
     void window.api.cloudWorkspaces
       .poke(userId)
-      .catch(() => ({ ok: false as const, error: 'unavailable' }))
+      .catch(() => UNAVAILABLE)
       .then((result) => {
         if (result.ok) {
           setPoke({ kind: 'sent', at: result.value.at })

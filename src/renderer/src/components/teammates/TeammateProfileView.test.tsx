@@ -60,7 +60,7 @@ it('sends you to Settings when your Pokes are off, and disables Poke when theirs
   cleanup()
   view({ profile: profile({ pokes: { enabled: true, teammateEnabled: false } }) })
   expect(screen.getByText('Grace Hopper hasn’t turned on Pokes yet.')).toBeTruthy()
-  expect((screen.getByRole('button', { name: /Poke/ }) as HTMLButtonElement).disabled).toBe(true)
+  expect(screen.getByRole('button', { name: /Poke/ }).hasAttribute('disabled')).toBe(true)
 })
 
 it('shows no Poke on your own profile', () => {
