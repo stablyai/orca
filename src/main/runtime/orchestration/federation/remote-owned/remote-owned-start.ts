@@ -17,6 +17,7 @@ import {
   releaseRemotePlacement,
   reserveRemotePlacement
 } from '../../db/remote-owned/remote-placements'
+import { refuseTaskOfClosedPairing } from '../../db/remote-owned/remote-placement-hold'
 import { openRemoteRunLink } from '../../db/remote-owned/remote-run-links'
 import { callRemoteOwnedServer } from './remote-owned-calls'
 import { remoteForwardKey } from './remote-forward-caller'
@@ -91,6 +92,8 @@ export async function startRemoteOwnedWorker(
   const forward = remoteForwardKey(runtime, ctx, params.from, callerRequestId ?? randomUUID())!
   const taskId = existingTask?.id ?? adoptedTaskId(forward.key)
   const budgets = resolveFederatedWorkerStartBudgets(params.timeoutMs)
+  // Before any link is written: a Task an earlier pairing with this server placed is not reused there.
+  refuseTaskOfClosedPairing(db, taskId, server)
   const link = openRemoteRunLink(db, run.id, server, (handle, type) =>
     runtime.notifyMessageArrived(handle, type)
   )
@@ -98,7 +101,6 @@ export async function startRemoteOwnedWorker(
     link,
     taskId,
     requestKey: forward.key,
-    serverName: server.name,
     retryOf: params.retryOf,
     create: existingTask
       ? undefined

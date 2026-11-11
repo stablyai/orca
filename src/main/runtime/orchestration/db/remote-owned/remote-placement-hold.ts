@@ -1,7 +1,6 @@
 import { OrchestrationError } from '../../orchestration-error'
 import type { TaskStatus } from '../orchestration-records'
 import type { OrchestrationDb } from '../orchestration-db'
-import type { RemoteRunLinkRow } from './remote-run-links'
 
 export type RemotePlacementRow = {
   task_id: string
@@ -46,8 +45,7 @@ export function retireRemotePlacement(db: OrchestrationDb, taskId: string): void
 export function refuseTaskOfClosedPairing(
   db: OrchestrationDb,
   taskId: string,
-  link: RemoteRunLinkRow,
-  serverName: string
+  server: { peerFingerprint: string; name: string }
 ): void {
   const earlier = db.db
     .prepare(
@@ -55,11 +53,11 @@ export function refuseTaskOfClosedPairing(
        JOIN remote_run_links earlier ON earlier.conversation_id = placement.conversation_id
        WHERE placement.task_id = ? AND earlier.state = 'closed' AND earlier.peer_fingerprint = ?`
     )
-    .get(taskId, link.peer_fingerprint)
+    .get(taskId, server.peerFingerprint)
   if (earlier) {
     throw new OrchestrationError(
       'task_not_startable',
-      `Task ${taskId} was placed through a pairing with ${serverName} that was re-made or removed; create a new task to run it there. No effects were applied.`,
+      `Task ${taskId} was placed through a pairing with ${server.name} that was re-made or removed; create a new task to run it there. No effects were applied.`,
       { taskId, effectsApplied: false }
     )
   }

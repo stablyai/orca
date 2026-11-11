@@ -23,11 +23,7 @@ import {
   type RemoteDispatchRow
 } from './remote-dispatch-records'
 import { getOpenRemoteRunLink, type RemoteRunLinkRow } from './remote-run-links'
-import {
-  getLiveRemotePlacement,
-  refuseTaskOfClosedPairing,
-  type RemotePlacementRow
-} from './remote-placement-hold'
+import { getLiveRemotePlacement, type RemotePlacementRow } from './remote-placement-hold'
 import { writtenRow } from './written-row'
 
 export type { RemotePlacementRow }
@@ -55,8 +51,6 @@ export function reserveRemotePlacement(
     link: RemoteRunLinkRow
     taskId: string
     requestKey: string
-    /** The server as this Orca names it, for the refusal of a Task an earlier pairing placed there. */
-    serverName?: string
     create?: TaskCreation
     retryOf?: string
   }
@@ -94,7 +88,6 @@ export function reserveRemotePlacement(
         runId: link.run_id
       })
     }
-    refuseTaskOfClosedPairing(db, task.id, link, params.serverName ?? link.environment_id)
     claimTaskForStart(db, task, { retryOf: params.retryOf, onServer: link.environment_id })
     db.db
       .prepare(

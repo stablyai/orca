@@ -17,7 +17,11 @@ import { OrchestrationDb } from '../../db/orchestration-db'
 import { getRemoteDispatch } from '../../db/remote-owned/remote-dispatch-records'
 import { importRemoteOwnedItem } from '../../db/remote-owned/remote-owned-import'
 import { getRemotePlacement } from '../../db/remote-owned/remote-placements'
-import { closeRemoteRunLink, remoteServerPin } from '../../db/remote-owned/remote-run-links'
+import {
+  closeRemoteRunLink,
+  OWE_REMOTE_RUN_CANCELS_SQL,
+  remoteServerPin
+} from '../../db/remote-owned/remote-run-links'
 import type {
   OrchestrationEnvironmentTransport,
   OrchestrationWorkerServer
@@ -683,16 +687,20 @@ describe('commands about a worker a paired server owns', () => {
   })
 
   it('says plainly that a re-pair ended the listing of its Run on the server', async () => {
-    const { runId } = await startOnB()
+    const { runId, taskId } = await startOnB()
     server = { ...server, homePeerFingerprint: 'cred_a_new', pairingRevision: 2 }
     await call('orchestration.workerRead', { dispatch: 'ctx_b1' })
-
+    await call('orchestration.workerStart', { from: 'term_coord', on: 'devB', task: taskId }) // refused, writes no link
     const listed = await call('orchestration.workerList', { on: 'devB', run: runId })
     expect(listed.ok ? undefined : listed.error.code).toBe('server_pairing_changed')
     expect(listed.ok ? undefined : listed.error.message).toBe(
       "devB was re-paired; workers started before that are no longer listed here. worker-show still shows them from this computer's record."
     )
-    expect(sent.map((s) => s.method)).not.toContain('orchestration.workerList')
+    // A reset since then is not a re-pair: the Run lists nothing there.
+    await startOnB('7a1c2f1e-3a7b-4d55-9c1e-0a1b2c3d4e5f')
+    db.db.exec(OWE_REMOTE_RUN_CANCELS_SQL)
+    const afterReset = await call('orchestration.workerList', { on: 'devB', run: runId })
+    expect(afterReset.ok ? record(afterReset.result).workers : afterReset.error).toEqual([])
   })
 
   it("readies the Task here when the server's restart lost its worker, even after a stop it never proved", async () => {

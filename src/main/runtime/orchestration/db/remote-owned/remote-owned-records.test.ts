@@ -10,6 +10,7 @@ import {
   oweRemoteDispatchStop
 } from './remote-dispatch-records'
 import { importRemoteOwnedItem, type PulledRemoteOwnedItem } from './remote-owned-import'
+import { refuseTaskOfClosedPairing } from './remote-placement-hold'
 import {
   getRemotePlacement,
   recordRemoteStart,
@@ -684,20 +685,13 @@ describe('remote-owned records on the coordinating Orca', () => {
 
     it('refuses to place a Task again on a server whose pairing was re-made since it was placed', () => {
       placeTask('task_t', 'k')
-      const next = openRemoteRunLink(db, run.id, {
+      openRemoteRunLink(db, run.id, {
         ...SERVER,
         homePeerFingerprint: 'cred_a_new',
         pairingRevision: 2
       })
       db.updateTaskStatus('task_t', 'ready')
-      expect(() =>
-        reserveRemotePlacement(db, {
-          link: next,
-          taskId: 'task_t',
-          requestKey: 'k',
-          serverName: 'devB'
-        })
-      ).toThrow(
+      expect(() => refuseTaskOfClosedPairing(db, 'task_t', { ...SERVER, name: 'devB' })).toThrow(
         'Task task_t was placed through a pairing with devB that was re-made or removed; create a new task to run it there.'
       )
       expect(db.getTask('task_t')?.status).toBe('ready')

@@ -27,6 +27,7 @@ import { remoteForwardKey, type RemoteForwardKey } from './remote-forward-caller
 import { inServerTerms, serverNeverAnswered } from './remote-owned-answers'
 import { remoteWorkerShow, remoteServerName } from './remote-owned-reads'
 import { OrchestrationError } from '../../orchestration-error'
+import { latestRunLink, repairedListError } from './re-paired-run-list'
 import { explainRemoteServerFailure } from './remote-server-unreachable'
 import { serverOwnsPlacedWorkers, startRemoteOwnedWorker } from './remote-owned-start'
 import { settleUnansweredAbandon, stopRemoteWorker } from './remote-owned-stop'
@@ -150,11 +151,12 @@ async function routeServerCall(
   if (request.method === 'orchestration.workerList') {
     const runId = stringField(values, 'run')
     // A Run lists what it placed there, as its coordinator; no Run lists the server as a whole.
-    const link = runId ? runLinkFor(db, runId, server.environmentId, 'open') : undefined
+    const latest = runId ? latestRunLink(db, runId, server.environmentId) : undefined
+    if (latest?.state === 'closed') {
+      throw repairedListError(server.name)
+    }
+    const link = latest?.state === 'open' ? latest : undefined
     if (runId && !link) {
-      if (runLinkFor(db, runId, server.environmentId, 'closed')) {
-        throw repairedListError(server.name)
-      }
       return {
         handled: true,
         result: emptyWorkerListPage(numberField(values, 'limit') ?? ORCHESTRATION_FLEET_PAGE_MAX)
@@ -176,7 +178,11 @@ async function routeServerCall(
             )
       }
     } catch (error) {
-      if (error instanceof OrchestrationError && error.code === 'server_pairing_changed') {
+      const closed = link && getRemoteRunLink(db, link.conversation_id)?.state === 'closed'
+      if (
+        closed ||
+        (error instanceof OrchestrationError && error.code === 'server_pairing_changed')
+      ) {
         throw repairedListError(server.name)
       }
       throw error
@@ -288,26 +294,6 @@ function seedNamedDispatches(db: OrchestrationDb, link: RemoteRunLinkRow, answer
       adoptRemoteAttempt(db, open, { taskId, dispatchId })
     }
   })
-}
-
-function runLinkFor(
-  db: OrchestrationDb,
-  runId: string,
-  environmentId: string,
-  state: 'open' | 'closed'
-): RemoteRunLinkRow | undefined {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns exactly its row shape.
-  return db.db
-    .prepare('SELECT * FROM remote_run_links WHERE run_id = ? AND environment_id = ? AND state = ?')
-    .get(runId, environmentId, state) as RemoteRunLinkRow | undefined
-}
-
-function repairedListError(serverName: string): OrchestrationError {
-  return new OrchestrationError(
-    'server_pairing_changed',
-    `${serverName} was re-paired; workers started before that are no longer listed here. worker-show still shows them from this computer's record.`,
-    { server: serverName }
-  )
 }
 
 /** A retry of a start this Orca already took on today's path stays there, whatever the server runs now. */
