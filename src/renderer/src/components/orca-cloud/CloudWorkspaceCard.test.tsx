@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { HostedWorkspaceStatus } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 import { CloudWorkspaceStatusPanel } from './CloudWorkspaceStatusPanel'
 import { setCloudCardDetailsOpen } from './use-cloud-workspace-card-state'
+import { cloudCardSideOffset } from './CloudWorkspaceMark'
 
 afterEach(() => {
   cleanup()
@@ -110,5 +111,23 @@ describe('calm cloud workspace card', () => {
     })
     expect(handled).toBe(true)
     expect(container.textContent).toContain('Sleep')
+  })
+})
+
+describe('card placement', () => {
+  it('opens beside the sidebar, not over the row it describes', () => {
+    const sidebar = document.createElement('div')
+    sidebar.setAttribute('data-left-sidebar', '')
+    const mark = document.createElement('button')
+    sidebar.append(mark)
+    document.body.append(sidebar)
+    const rect = (right: number): DOMRect => new DOMRect(0, 0, right, 10)
+    sidebar.getBoundingClientRect = () => rect(260)
+    mark.getBoundingClientRect = () => rect(40)
+    expect(cloudCardSideOffset(mark)).toBe(228)
+    sidebar.remove()
+    // Outside the sidebar (fixtures, other hosts): just right of the mark.
+    expect(cloudCardSideOffset(document.createElement('button'))).toBe(10)
+    expect(cloudCardSideOffset(null)).toBe(10)
   })
 })
