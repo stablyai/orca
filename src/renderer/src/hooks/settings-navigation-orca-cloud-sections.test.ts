@@ -36,6 +36,7 @@ describe('Orca Cloud settings group', () => {
       'cloud-skills',
       'cloud-environments',
       'cloud-mcp',
+      'cloud-local-commands',
       'cloud-api-keys'
     ])
     // Routines are parked until they join Automations (cloud-routines-ui.ts): no section, no search.
