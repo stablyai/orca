@@ -7237,7 +7237,6 @@
       "tests/e2e/structured-chat-tab-lifetime.unit.test.ts": 5616,
       "tests/e2e/sustained-agent-typing-load-scripts.unit.test.ts": 2169,
       "tests/e2e/task-page-linear-refresh-authority.unit.test.ts": 5548,
-      "tests/e2e/terminal-binding-crash-hydration.unit.test.ts": 1769,
       "tests/e2e/terminal-foreground-confirmation.unit.test.ts": 644,
       "tests/e2e/terminal-perf-presentation.unit.test.ts": 60,
       "tests/e2e/worktree-status-warning.unit.test.ts": 2331,
