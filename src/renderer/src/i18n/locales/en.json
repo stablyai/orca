@@ -14406,6 +14406,7 @@
           "description_other": "Starts waking a sleeping sandbox when you point at its workspace or come back to Orca, so it's ready sooner. If you don't open it, it goes back to sleep after {{count}} minutes idle. Early wakes count toward your sandbox hours."
         },
         "cloudApi": {
+          "formerMember": "Former member",
           "keys": {
             "createdMine": "Created {{time}}",
             "createdByPerson": "Created by <person></person> {{time}}",
