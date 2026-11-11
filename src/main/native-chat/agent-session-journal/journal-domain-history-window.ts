@@ -220,7 +220,7 @@ export function fittingJournalDomainEventCount(
   rows: readonly JournalReadRow[],
   budgetBytes: number,
   forms: Map<string, HistoryItemForm>
-): number {
+): { limit: number; states: ReadonlyMap<string, unknown>; orderedIds: string[] } {
   const touched = rows.map((row) =>
     row.kind === 'outcome'
       ? [...row.itemIds, ...row.submissionIds.map(agentJournalSubmissionKey)]
@@ -228,7 +228,7 @@ export function fittingJournalDomainEventCount(
   )
   const sizes = new Map(
     db
-      .prepare(`SELECT item.item_id, ${JOURNAL_DOMAIN_HISTORY_ITEM_BYTES} AS bytes,
+      .prepare(`SELECT item.item_id, item.sequence, item.sequence_index, item.ordinal, ${JOURNAL_DOMAIN_HISTORY_ITEM_BYTES} AS bytes,
         CASE WHEN item.wire_version=${AGENT_SESSION_ITEM_WIRE_VERSION} THEN 0
         ELSE ${JOURNAL_DOMAIN_HISTORY_SUBMISSION_BYTES} END AS submission_bytes FROM json_each(?) wanted
         CROSS JOIN journal_items item
@@ -276,5 +276,16 @@ export function fittingJournalDomainEventCount(
     total += bytes
     count += 1
   }
-  return Math.max(count, 1)
+  return {
+    limit: Math.max(count, 1),
+    states,
+    orderedIds: [...sizes]
+      .sort(
+        ([, a], [, b]) =>
+          Number(a.sequence) - Number(b.sequence) ||
+          Number(a.sequence_index) - Number(b.sequence_index) ||
+          Number(a.ordinal) - Number(b.ordinal)
+      )
+      .map(([id]) => id)
+  }
 }

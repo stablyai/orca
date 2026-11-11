@@ -15,7 +15,8 @@ export type JournalDomainHistorySnapshotReader = (
   ids: Set<string>,
   forms: Map<string, HistoryItemForm>,
   states?: ReadonlyMap<string, unknown>,
-  ordinals?: Map<string, number>
+  ordinals?: Map<string, number>,
+  orderedIds?: readonly string[]
 ) => AgentJournalSnapshot
 
 const eventIds = (row: JournalOutcomeReadRow) => [

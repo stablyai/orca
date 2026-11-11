@@ -145,7 +145,7 @@ function readHistory(
       resolveHistoryLimit(request.limit),
       reader,
       latestTurnItem(db, head),
-      (ids, forms, states, ordinals) =>
+      (ids, forms, states, ordinals, orderedIds) =>
         readJournalDomainHistorySnapshot(
           db,
           head,
@@ -154,7 +154,8 @@ function readHistory(
           reader.presentSubmission,
           forms,
           states,
-          ordinals
+          ordinals,
+          orderedIds
         ),
       reset,
       request.reader?.queuedImages,

@@ -54,9 +54,8 @@ export function readJournalDomainForwardHistory(
     since?.ok && queuedImages && !useStoredClientForms
       ? admitJournalDomainImageEvents(db, head, since.rows.slice(0, limit), reader, readSnapshot)
       : undefined
-  const admitted =
-    image?.limit ??
-    (since?.ok
+  const fitted =
+    !image && since?.ok
       ? fittingJournalDomainEventCount(
           db,
           head,
@@ -64,7 +63,8 @@ export function readJournalDomainForwardHistory(
           reader.budgetBytes,
           forms
         )
-      : limit)
+      : undefined
+  const admitted = image?.limit ?? fitted?.limit ?? limit
   const count =
     since?.ok && queuedImages && useStoredClientForms
       ? halvedJournalDomainEventLimit(Math.min(limit, since.rows.length), admitted)
@@ -90,7 +90,7 @@ export function readJournalDomainForwardHistory(
     count,
     image ? { ...reader, form: (item) => image.forms.get(item) ?? reader.form(item) } : reader,
     (ids) => {
-      materialized ??= readSnapshot(ids, forms)
+      materialized ??= readSnapshot(ids, forms, fitted?.states, undefined, fitted?.orderedIds)
       return {
         ...materialized,
         items: materialized.items.filter((item) => ids.has(item.itemId)),
@@ -251,7 +251,8 @@ export function readJournalDomainHistorySnapshot(
   present?: (send: AgentJournalSubmission) => AgentJournalSubmission,
   forms?: Map<string, HistoryItemForm>,
   states?: ReadonlyMap<string, unknown>,
-  ordinals?: Map<string, number>
+  ordinals?: Map<string, number>,
+  orderedIds?: readonly string[]
 ): AgentJournalSnapshot {
   const wanted = [...ids]
   return {
@@ -261,12 +262,13 @@ export function readJournalDomainHistorySnapshot(
       ...readJournalDomainClientItems(
         db,
         head,
-        db
-          .prepare(`SELECT item.item_id FROM json_each(?) wanted
+        orderedIds?.filter((id) => ids.has(id)) ??
+          db
+            .prepare(`SELECT item.item_id FROM json_each(?) wanted
         CROSS JOIN journal_items item WHERE item.session_id=? AND item.epoch=? AND item.item_id=wanted.value AND item.hidden=0
         ORDER BY item.sequence,item.sequence_index,item.ordinal`)
-          .all(JSON.stringify(wanted), head.sessionId, head.epoch)
-          .map((row) => String(row.item_id)),
+            .all(JSON.stringify(wanted), head.sessionId, head.epoch)
+            .map((row) => String(row.item_id)),
         forms,
         states
       ),

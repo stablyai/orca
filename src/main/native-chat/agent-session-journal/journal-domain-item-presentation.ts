@@ -36,12 +36,14 @@ export function readJournalDomainClientForms(
     return forms
   }
   const wantedJson = JSON.stringify(wanted)
-  states ??= readJournalDomainStopStates(db, target, wanted, wantedJson)
   for (const row of db
     .prepare(`SELECT ${journalDomainClientFormColumns()} FROM json_each(?) wanted
     CROSS JOIN journal_items item
     WHERE item.session_id=? AND item.epoch=? AND item.item_id=wanted.value AND item.hidden=0`)
     .iterate(wantedJson, target.sessionId, target.epoch)) {
+    if (row.wire_version !== AGENT_SESSION_ITEM_WIRE_VERSION && states === undefined) {
+      states = readJournalDomainStopStates(db, target, wanted, wantedJson)
+    }
     forms.set(String(row.item_id), readJournalDomainClientForm(row, states))
   }
   return forms
@@ -49,7 +51,7 @@ export function readJournalDomainClientForms(
 
 export function readJournalDomainClientForm(
   row: SqliteRow,
-  states: ReadonlyMap<string, unknown>
+  states?: ReadonlyMap<string, unknown>
 ): HistoryItemForm {
   const item: AgentJournalRenderItem = JSON.parse(String(row.client_json))
   return row.wire_version === AGENT_SESSION_ITEM_WIRE_VERSION
@@ -59,7 +61,7 @@ export function readJournalDomainClientForm(
           item,
           row.wire_version,
           null,
-          journalDomainDisplayTurnState(item, states)
+          states && journalDomainDisplayTurnState(item, states)
         )
       )
 }

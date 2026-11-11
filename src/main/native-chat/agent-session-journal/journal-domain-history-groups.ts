@@ -41,7 +41,11 @@ export function formJournalDomainHistoryGroups(
   const states = readJournalDomainStopStates(
     db,
     head,
-    ids.filter((id) => !forms.has(id))
+    groups.flatMap((group) =>
+      group
+        .filter((header) => header.bytes === null && !forms.has(header.itemId))
+        .map((header) => header.itemId)
+    )
   )
   const bodies = reader.presentSubmission
     ? undefined
