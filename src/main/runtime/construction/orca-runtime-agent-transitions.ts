@@ -11,7 +11,12 @@ import { OrcaRuntimeWithWindowlessTerminalActivity } from '../sidebar-inputs/orc
 import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
 import type { AgentStatusStoreView } from '../sidebar-inputs/workspace-activity-facts-producer'
 import { subscribeHookStatusTitles } from '../terminal/layout/hook-status-title-subscription'
-import { TerminalWorkerTurnStops } from '../orchestration/workers/turn-stops/terminal-worker-turn-stops'
+import {
+  resolveTerminalWorkerDispatch,
+  TerminalWorkerTurnStops
+} from '../orchestration/workers/turn-stops/terminal-worker-turn-stops'
+import { TerminalWorkerApprovalHolds } from '../orchestration/workers/approvals/terminal-worker-approval-holds'
+import { readClaudeToolResult } from '../orchestration/workers/approvals/claude-tool-result-close'
 import type { WorkerTerminalResourceRow } from '../orchestration/terminal-authority/release/worker-terminal-ownership'
 import { resolveStructuredWorkerIdentity } from '../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import {
@@ -58,14 +63,44 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     setTimer: unrefTimer,
     now: Date.now
   })
+  private readonly terminalWorkerResolution = {
+    getDb: () => this.workerTurnStopReportDeps.getDb(),
+    getHandle: (paneKey: string) => this.getTerminalHandleForPaneKey(paneKey),
+    getProcessIncarnation: (handle: string) => this.getTerminalProcessIncarnation(handle)
+  }
+  /** Claude terminal workers' waiting PermissionRequest hooks, answerable by their coordinator. */
+  readonly terminalWorkerApprovals = new TerminalWorkerApprovalHolds({
+    ...this.workerTurnStopReportDeps,
+    resolveWorker: (paneKey) => {
+      const resolved = resolveTerminalWorkerDispatch(this.terminalWorkerResolution, paneKey)
+      // A remote attachment's coordinator answers at its Run home, which cannot reach this hook yet.
+      return resolved?.target.kind === 'local'
+        ? { db: resolved.db, handle: resolved.handle, dispatch: resolved.target.dispatch }
+        : null
+    },
+    canAnswerPane: (paneKey) => {
+      const pty = this.getPtyRecordForPaneKey(paneKey)
+      // Windows hooks print `{}` before they post; WSL and SSH relays answer for Claude.
+      return process.platform !== 'win32' && pty !== null && pty.connectionId === null && !pty.isWsl
+    },
+    processIncarnation: (handle) => this.getTerminalProcessIncarnation(handle),
+    readToolResult: (call) => readClaudeToolResult(call.transcriptPath, call.toolUseId),
+    readScreen: (paneKey) => {
+      const ptyId = this.getPtyRecordForPaneKey(paneKey)?.ptyId
+      return ptyId ? (this.readCaughtUpRuledScreen(ptyId)?.lines ?? null) : null
+    },
+    now: Date.now,
+    setTimer: unrefTimer
+  })
   // The execution host observes its own panes, so local, SSH and paired-server workers are all seen.
   private readonly terminalWorkerTurnStops = new TerminalWorkerTurnStops({
     ...this.workerTurnStopReportDeps,
+    ...this.terminalWorkerResolution,
     readHookRow: (paneKey) => this.agentTransitions.latestRow(paneKey),
     setTimer: unrefTimer,
-    getHandle: (paneKey) => this.getTerminalHandleForPaneKey(paneKey),
-    getProcessIncarnation: (handle) => this.getTerminalProcessIncarnation(handle),
-    readScreen: (handle) => this.readTerminal(handle, { screen: true, limit: 15 })
+    readScreen: (handle) => this.readTerminal(handle, { screen: true, limit: 15 }),
+    takeOpenApproval: (paneKey, dispatchId) =>
+      this.terminalWorkerApprovals.takeOpenApproval(paneKey, dispatchId)
   })
 
   private readonly externalConversations = installExternalConversations(this.store, this)
