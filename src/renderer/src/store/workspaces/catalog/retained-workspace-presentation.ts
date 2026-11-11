@@ -1,6 +1,7 @@
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { worktreeOwnerIdentity } from '@/lib/workspace/ownership/workspace-catalog-owner-index'
 import { readRecordChanges } from '../../keyed-record-change-reads'
+import { selectDetectedWorktreesByRepo, selectWorktreesByRepo } from './workspace-record-fields'
 
 type PresentationRow = Pick<Worktree, 'id' | 'repoId' | 'hostId' | 'runtimeOwnerEnvironmentId'> &
   Partial<Pick<Worktree, 'isBare' | 'isArchived'>>
@@ -92,15 +93,15 @@ export function createWorkspacePresentationSelector<W extends PresentationRow>(o
   return (state: WorkspacePresentationState<W>): Record<string, readonly W[]> => {
     // Narrow ownership snapshots carry no retained content and must not churn the full-state cache.
     if (!state.tabsByWorktree && !state.unifiedTabsByWorktree && !state.browserTabsByWorktree) {
-      return state.worktreesByRepo ?? EMPTY_WORKTREES
+      return selectWorktreesByRepo(state) ?? EMPTY_WORKTREES
     }
     const memberships = [
       terminalMembership(state.tabsByWorktree ?? EMPTY_BUCKETS),
       unifiedMembership(state.unifiedTabsByWorktree ?? EMPTY_BUCKETS),
       browserMembership(state.browserTabsByWorktree ?? EMPTY_BUCKETS)
     ]
-    const visible = state.worktreesByRepo ?? EMPTY_WORKTREES
-    const detected = state.detectedWorktreesByRepo ?? EMPTY_DETECTED
+    const visible = selectWorktreesByRepo(state) ?? EMPTY_WORKTREES
+    const detected = selectDetectedWorktreesByRepo(state) ?? EMPTY_DETECTED
     if (
       visible === previousVisible &&
       detected === previousDetected &&
