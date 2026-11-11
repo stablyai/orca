@@ -18,8 +18,6 @@ import { isExpectedAgentProcess } from '../../../../../../shared/agent-status/pr
 
 // Bracketed paste keeps prompt insertion atomic; callers separately choose whether to submit with Enter.
 
-const POST_PASTE_SUBMIT_DELAY_MS = AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS
-
 // Budget PTY creation and composer readiness separately: slow spawn must neither consume composer grace nor delay failed-launch reporting (STA-3367).
 const PTY_SPAWN_TIMEOUT_MS = 8000
 
@@ -181,7 +179,9 @@ async function sendBracketedPasteToAgent(args: {
       }
 
       // Defer Enter to the next turn so Claude processes bracketed-paste termination before submission.
-      await new Promise<void>((resolve) => window.setTimeout(resolve, POST_PASTE_SUBMIT_DELAY_MS))
+      await new Promise<void>((resolve) =>
+        window.setTimeout(resolve, AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS)
+      )
       const submitted = await sendRuntimePtyInputVerified(ptyId, '\r', inputKind)
 
       if (submitRetryDelayMs !== undefined) {
