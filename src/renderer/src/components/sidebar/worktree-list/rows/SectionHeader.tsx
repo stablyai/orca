@@ -24,6 +24,7 @@ import { translateWorkspaceStatusHeaderLabel } from '../../workspace-board-statu
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
 import { getSidebarHeaderVisual } from './header-visuals'
 import { resolveProjectGroupHeaderColor } from './project-header-color'
+import { ProjectColorAccentHeaderTint } from './ProjectColorAccent'
 import { ProjectHeaderActions } from './ProjectHeaderActions'
 import {
   getProjectGroupHeaderPaddingLeft,
@@ -146,6 +147,7 @@ export function renderWorktreeSectionHeaderRow(
     headerKey: row.key,
     badgeColor: row.repo?.badgeColor
   })
+  const projectAccentColor = ctx.projectColorAccents && isRepoHeader ? repoHeaderColor : undefined
   const folderBackedProjectGroup =
     isProjectGroupHeader &&
     !row.repo &&
@@ -182,7 +184,8 @@ export function renderWorktreeSectionHeaderRow(
       className={cn(
         'left-0 right-0',
         // Why: drop the inter-group spacer once the header pins so it sits flush at top (see getActiveStickyHeaderIndexForScroll).
-        args.hasHeaderTopSpacing && !isActiveStickyHeader && 'pt-1',
+        // Why: accented project groups get a wider gap so the space between groups exceeds the space within one.
+        args.hasHeaderTopSpacing && !isActiveStickyHeader && (projectAccentColor ? 'pt-3' : 'pt-1'),
         isActiveStickyHeader
           ? cn(
               'sticky z-20 bg-worktree-sidebar',
@@ -244,7 +247,9 @@ export function renderWorktreeSectionHeaderRow(
             isPinnedHeader &&
               ctx.pinDragOver &&
               'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/40',
-            row.repo && 'overflow-hidden'
+            row.repo && 'overflow-hidden',
+            // Why: a stacking context keeps the accent tint above the row background but beneath the label.
+            projectAccentColor && 'isolate'
           )}
           style={{
             // Why: non-project headers like "All" are flat-list labels; don't reserve project hierarchy indent.
@@ -298,6 +303,10 @@ export function renderWorktreeSectionHeaderRow(
             }
           }}
         >
+          <ProjectColorAccentHeaderTint
+            color={projectAccentColor}
+            groupDepth={row.projectGroupDepth ?? 0}
+          />
           {/* Stretch the title’s grab area to row height; action attributes exclude buttons while padding still arms drag. */}
           <div
             data-repo-header-drag-handle={isDraggableRepoHeader ? '' : undefined}
