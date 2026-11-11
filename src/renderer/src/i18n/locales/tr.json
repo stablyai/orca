@@ -12471,7 +12471,7 @@
               "tokenHint": "Repository, proje ve çalışma alanı erişim belirteçleri ilgili Bitbucket ayarlar sayfasından oluşturulur ve pull request'ler için okuma izni gerektirir.",
               "basicHint": "Hesabınız için bir Atlassian API belirteci oluşturun, ardından bunu sahibi olan e-posta adresiyle eşleştirin.",
               "scopesTitle": "Şu Bitbucket API belirteci kapsamlarını seçin:",
-              "scopeUser": "Hesabınızı doğrulama",
+              "scopeUser": "Hesap adınızı gösterme",
               "scopeRepository": "Derleme durumlarını okuma",
               "scopeReadPullRequest": "Pull request'leri okuma",
               "scopeWritePullRequest": "Pull request oluşturma",

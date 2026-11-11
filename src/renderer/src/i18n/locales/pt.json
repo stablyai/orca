@@ -6547,7 +6547,7 @@
               "tokenHint": "Tokens de acesso de repositório, projeto e espaço de trabalho são criados na página de configurações correspondente do Bitbucket e precisam de acesso de leitura a pull requests.",
               "basicHint": "Crie um token de API da Atlassian para sua conta e depois combine-o com o endereço de e-mail que o possui.",
               "scopesTitle": "Selecione estes escopos do token de API do Bitbucket:",
-              "scopeUser": "Verificar sua conta",
+              "scopeUser": "Mostrar o nome da sua conta",
               "scopeRepository": "Ler status de build",
               "scopeReadPullRequest": "Ler pull requests",
               "scopeWritePullRequest": "Criar pull requests",

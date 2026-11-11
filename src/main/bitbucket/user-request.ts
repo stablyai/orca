@@ -11,7 +11,7 @@ export type RawBitbucketUser = {
 
 /** Network, server and decode failures do not prove the credentials are invalid. */
 export type BitbucketUserResult =
-  | { ok: true; user: RawBitbucketUser }
+  | { ok: true; user: RawBitbucketUser | null }
   | { ok: false; reason: 'rejected' | 'unreachable' }
 
 export function accountNameFromUser(user: RawBitbucketUser | null): string | null {
@@ -37,8 +37,12 @@ export async function fetchBitbucketUserResult(
   }
   if (!response.ok) {
     await cancelUnreadResponseBody(response)
-    const rejected = response.status === 401 || response.status === 403
-    return { ok: false, reason: rejected ? 'rejected' : 'unreachable' }
+    // Bitbucket answers 401 to bad credentials; 403 means it accepted them without account access
+    // (every access token, and API tokens without read:user:bitbucket).
+    if (response.status === 403) {
+      return { ok: true, user: null }
+    }
+    return { ok: false, reason: response.status === 401 ? 'rejected' : 'unreachable' }
   }
   try {
     return { ok: true, user: (await response.json()) as RawBitbucketUser }

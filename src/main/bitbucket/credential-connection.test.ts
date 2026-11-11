@@ -94,6 +94,19 @@ describe('Bitbucket credential connection', () => {
     expect(conn.getBitbucketConnectionStatus().source).toBe('none')
   })
 
+  it('saves an access token Bitbucket accepts without account access (STA-14576)', async () => {
+    const conn = await loadModule()
+    // Bitbucket answers /user with 403 for every repository, project or workspace access token.
+    globalThis.fetch = vi.fn(
+      async () => new Response(null, { status: 403 })
+    ) as unknown as typeof fetch
+
+    const result = await conn.connectBitbucket({ authMode: 'token', accessToken: 'repo-token' })
+
+    expect(result).toEqual({ ok: true, account: null })
+    expect(conn.getBitbucketConnectionStatus().source).toBe('stored')
+  })
+
   it('rejects an incomplete basic-auth credential before making a request', async () => {
     const conn = await loadModule()
     const fetchSpy = vi.fn()

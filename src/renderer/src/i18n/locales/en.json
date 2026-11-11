@@ -13164,7 +13164,7 @@
               "tokenHint": "Repository, project, and workspace access tokens are created from the matching Bitbucket settings page and need read access to pull requests.",
               "basicHint": "Create an Atlassian API token for your account, then pair it with the email address that owns it.",
               "scopesTitle": "Select these Bitbucket API token scopes:",
-              "scopeUser": "Verify your account",
+              "scopeUser": "Show your account name",
               "scopeRepository": "Read build statuses",
               "scopeReadPullRequest": "Read pull requests",
               "scopeWritePullRequest": "Create pull requests",
