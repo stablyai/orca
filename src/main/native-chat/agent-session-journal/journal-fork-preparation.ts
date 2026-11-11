@@ -137,6 +137,7 @@ export class JournalForkPreparation {
           break
         }
         case 'headers': {
+          const headers: unknown[][] = []
           let exhausted = true
           for (const row of this.db
             .prepare(`SELECT item_id,sequence,sequence_index,ordinal,turn_item_id,turn_id,provider_turn_id,
@@ -145,19 +146,17 @@ export class JournalForkPreparation {
             WHERE session_id=? AND epoch=? AND hidden=0 AND sequence>?
               AND (sequence,sequence_index,ordinal)>(?,?,?) ORDER BY sequence,sequence_index,ordinal LIMIT ?`)
             .iterate(...prefix, this.floor, ...this.position, MAX_ROWS - units)) {
-            this.db
-              .prepare(`INSERT INTO temp.fork_headers(item_id,provider_key,turn_item_id,turn_id,provider_turn_id,sequence,sequence_index,ordinal)
-            VALUES(?,?,?,?,?,?,?,?)`)
-              .run(
-                row.item_id,
-                row.provider_key,
-                row.turn_item_id,
-                row.turn_id,
-                row.provider_turn_id,
-                row.sequence,
-                row.sequence_index,
-                row.ordinal
-              )
+            headers.push([
+              ++this.after,
+              row.item_id,
+              row.provider_key,
+              row.turn_item_id,
+              row.turn_id,
+              row.provider_turn_id,
+              row.sequence,
+              row.sequence_index,
+              row.ordinal
+            ])
             this.position = [Number(row.sequence), Number(row.sequence_index), Number(row.ordinal)]
             const { provider_key: _providerKey, ...header } = row
             account(header)
@@ -166,6 +165,14 @@ export class JournalForkPreparation {
               break
             }
           }
+          if (headers.length) {
+            this.db
+              .prepare(`INSERT INTO temp.fork_headers(rank,item_id,provider_key,turn_item_id,turn_id,provider_turn_id,sequence,sequence_index,ordinal)
+              SELECT json_extract(value,'$[0]'),json_extract(value,'$[1]'),json_extract(value,'$[2]'),
+                json_extract(value,'$[3]'),json_extract(value,'$[4]'),json_extract(value,'$[5]'),
+                json_extract(value,'$[6]'),json_extract(value,'$[7]'),json_extract(value,'$[8]') FROM json_each(?)`)
+              .run(JSON.stringify(headers))
+          }
           if (exhausted) {
             this.phase = 'members'
             this.after = 0
@@ -173,6 +180,7 @@ export class JournalForkPreparation {
           break
         }
         case 'members': {
+          const members: [number, string | null][] = []
           let exhausted = true
           for (const row of this.db
             .prepare(`SELECT header.rank,header.item_id,header.provider_key,header.turn_item_id,header.turn_id,header.provider_turn_id,
@@ -181,9 +189,7 @@ export class JournalForkPreparation {
             WHERE header.rank>? ORDER BY header.rank LIMIT ?`)
             .iterate(this.after, MAX_ROWS - units)) {
             const member = journalForkHeaderMember(row, this.input.sourceThreadId)
-            this.db
-              .prepare('UPDATE temp.fork_headers SET member=? WHERE rank=?')
-              .run(member, row.rank)
+            members.push([Number(row.rank), member])
             this.after = Number(row.rank)
             const { root_provider_turn_id: _providerTurn, root_turn_id: _turn, ...header } = row
             account(header)
@@ -191,6 +197,12 @@ export class JournalForkPreparation {
               exhausted = false
               break
             }
+          }
+          if (members.length) {
+            this.db
+              .prepare(`UPDATE temp.fork_headers AS header SET member=json_extract(wanted.value,'$[1]')
+              FROM json_each(?) wanted WHERE header.rank=json_extract(wanted.value,'$[0]')`)
+              .run(JSON.stringify(members))
           }
           if (exhausted) {
             if (this.nextItemId !== null) {

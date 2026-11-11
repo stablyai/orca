@@ -4,7 +4,10 @@ import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalLinkageFields } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { mapBodyLinks } from '../agent-session-wire/acquisition/structured-agent-session-fork-snapshot'
+import {
+  forkDependencies,
+  mapBodyLinks
+} from '../agent-session-wire/acquisition/structured-agent-session-fork-snapshot'
 import { continuedOutsideRecordId } from '../agent-session-wire/acquisition/structured-agent-session-history-catch-up'
 import {
   providerTimelineKeyPart,
@@ -16,17 +19,25 @@ import type {
   JournalForkPreparationResult
 } from './journal-fork-preparation'
 
+type ForkOutputSource = {
+  rank: number
+  mapped: string
+  bodyBytes: number
+  item: AgentJournalRenderItem
+}
+type ForkOutput = {
+  rank: number
+  mapped: string
+  item: JournalReplacementItem
+  bytes: number
+}
+
 export class JournalForkPresentation {
   private phase: 'closure' | 'notices' | 'output' | 'done' = 'closure'
   private after = 0
   private count = 0
   private lastItemId: string | null = null
-  private pendingOutput?: {
-    rank: number
-    mapped: string
-    item: JournalReplacementItem
-    bytes: number
-  }
+  private pendingOutput?: ForkOutput
   private closureParent: { rowid: number; id: string; after: string | null } | undefined
   constructor(
     private readonly db: Database.Database,
@@ -157,26 +168,34 @@ export class JournalForkPresentation {
         case 'output': {
           const page: JournalReplacementItem[] = []
           const ordinal = this.count
-          while (budget()) {
-            if (!this.pendingOutput) {
-              const row = this.retainedRow(this.after, true)
-              if (!row) {
-                this.phase = 'done'
-                break
-              }
-              const item: AgentJournalRenderItem = JSON.parse(String(row.payload))
+          const append = (output: ForkOutput) => {
+            page.push(output.item)
+            this.after = output.rank
+            this.count++
+            this.lastItemId = output.mapped
+            units++
+            bytes += output.bytes
+          }
+          if (this.pendingOutput) {
+            append(this.pendingOutput)
+            this.pendingOutput = undefined
+          }
+          if (budget()) {
+            const { sources, mappings } = this.outputWindow(64 - units, start)
+            if (!sources.length) {
+              this.phase = 'done'
+            }
+            for (const source of sources) {
+              const { item } = source
               let rewritten = false
               const rewrite = (id: string) => {
-                const mapped = String(
-                  this.db.prepare('SELECT mapped FROM temp.fork_bodies WHERE item_id=?').get(id)
-                    ?.mapped ?? id
-                )
+                const mapped = mappings.get(id) ?? id
                 rewritten ||= mapped !== id
                 return mapped
               }
               const body = mapBodyLinks(item.body, rewrite)
               const bodyUnchanged = !rewritten
-              const identity = parseAgentJournalItemKey(String(row.mapped))!
+              const identity = parseAgentJournalItemKey(source.mapped)!
               const output: JournalReplacementItem = {
                 identity,
                 body,
@@ -192,28 +211,25 @@ export class JournalForkPresentation {
                     }
                   : {})
               }
-              this.pendingOutput = {
-                rank: Number(row.rank),
-                mapped: String(row.mapped),
+              const formed = {
+                rank: source.rank,
+                mapped: source.mapped,
                 item: output,
                 bytes: bodyUnchanged
-                  ? Number(row.body_bytes) +
+                  ? source.bodyBytes +
                     Buffer.byteLength(JSON.stringify({ ...output, body: null })) -
                     4
                   : Buffer.byteLength(JSON.stringify(output))
               }
+              if (page.length && bytes + formed.bytes > MAX_BYTES) {
+                this.pendingOutput = formed
+                break
+              }
+              append(formed)
+              if (!budget()) {
+                break
+              }
             }
-            const output = this.pendingOutput
-            if (page.length && bytes + output.bytes > MAX_BYTES) {
-              break
-            }
-            page.push(output.item)
-            this.after = output.rank
-            this.count++
-            this.lastItemId = output.mapped
-            units++
-            bytes += output.bytes
-            this.pendingOutput = undefined
           }
           if (page.length) {
             return { kind: 'page', ordinal, items: page, bytes }
@@ -229,12 +245,46 @@ export class JournalForkPresentation {
   private omit(id: string): void {
     this.db.prepare('INSERT OR IGNORE INTO temp.fork_omitted(id) VALUES(?)').run(id)
   }
-  private retainedRow(after: number, notices = false): SqliteRow | undefined {
-    return this.db
+  private outputWindow(limit: number, start: number) {
+    const sources: ForkOutputSource[] = []
+    const links = new Set<string>()
+    let bytes = 0
+    for (const row of this.db
       .prepare(`SELECT body.rank,body.item_id,body.payload,body.mapped,body.body_bytes FROM temp.fork_bodies body
       WHERE rank>? AND NOT EXISTS(SELECT 1 FROM temp.fork_omitted WHERE id=body.item_id)
-      ${notices ? 'AND (notice IS NULL OR EXISTS(SELECT 1 FROM temp.fork_work WHERE anchor=body.notice AND last_rank>body.rank))' : ''}
-      ORDER BY rank LIMIT 1`)
-      .get(after)
+        AND (notice IS NULL OR EXISTS(SELECT 1 FROM temp.fork_work WHERE anchor=body.notice AND last_rank>body.rank))
+      ORDER BY rank LIMIT ?`)
+      .iterate(this.after, limit)) {
+      const size = journalForkRowBytes(row)
+      if (sources.length && bytes + size > 1024 * 1024) {
+        break
+      }
+      const item: AgentJournalRenderItem = JSON.parse(String(row.payload))
+      sources.push({
+        rank: Number(row.rank),
+        mapped: String(row.mapped),
+        bodyBytes: Number(row.body_bytes),
+        item
+      })
+      for (const [parent, child] of forkDependencies(item)) {
+        if (child === item.itemId) {
+          links.add(parent)
+        }
+      }
+      bytes += size
+      if (bytes >= 1024 * 1024 || performance.now() - start >= 8) {
+        break
+      }
+    }
+    const mappings = new Map<string, string>()
+    if (links.size) {
+      for (const row of this.db
+        .prepare(`SELECT body.item_id,body.mapped FROM json_each(?) wanted
+        CROSS JOIN temp.fork_bodies body WHERE body.item_id=wanted.value`)
+        .all(JSON.stringify([...links]))) {
+        mappings.set(String(row.item_id), String(row.mapped))
+      }
+    }
+    return { sources, mappings }
   }
 }

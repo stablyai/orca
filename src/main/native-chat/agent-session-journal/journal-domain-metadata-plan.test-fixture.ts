@@ -4,17 +4,23 @@ import type Database from '../../sqlite/sync-database'
 export function captureJournalMetadataPlans(db: Database.Database, prefix: string): () => string[] {
   const statements = vi.spyOn(db, 'prepare')
   return () => {
-    const headers = [
-      ...new Set(
-        statements.mock.calls
-          .map(([sql]) => sql)
-          .filter((sql) => sql.startsWith(prefix) && sql.includes('FROM journal_items '))
-      )
-    ]
+    const queries = [...new Set(statements.mock.calls.map(([sql]) => sql))]
+    const headers = queries.filter(
+      (sql) => sql.startsWith(prefix) && sql.includes('FROM journal_items ')
+    )
     statements.mockRestore()
     expect(headers.length).toBeGreaterThan(0)
     for (const sql of headers) {
       assertJournalMetadataPlan(db, sql)
+    }
+    for (const sql of queries.filter((query) => query.startsWith('UPDATE temp.fork_headers'))) {
+      const plan = db
+        .prepare(`EXPLAIN QUERY PLAN ${sql}`)
+        .all()
+        .map((row) => String(row.detail))
+        .join('\n')
+      expect(plan).toContain('SEARCH header USING INTEGER PRIMARY KEY')
+      expect(plan).not.toContain('TEMP B-TREE')
     }
     return headers
   }
@@ -69,13 +75,15 @@ export function captureJournalForkPresentationPlans(db: Database.Database): () =
       expect(
         code.filter((row) => ['OpenRead', 'OpenWrite'].includes(String(row.opcode)) && row.p3 === 0)
       ).toEqual([])
-      expect(
-        db
-          .prepare(`EXPLAIN QUERY PLAN ${sql}`)
-          .all()
-          .map((row) => String(row.detail))
-          .join('\n')
-      ).not.toContain('TEMP B-TREE')
+      const plan = db
+        .prepare(`EXPLAIN QUERY PLAN ${sql}`)
+        .all()
+        .map((row) => String(row.detail))
+        .join('\n')
+      expect(plan).not.toContain('TEMP B-TREE')
+      if (sql.includes('CROSS JOIN temp.fork_bodies body')) {
+        expect(plan).toContain('SEARCH body USING INDEX sqlite_autoindex_fork_bodies_1')
+      }
       if (sql.includes('body.lifecycle')) {
         const cursors = new Set(
           code
