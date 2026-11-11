@@ -1,7 +1,8 @@
 import { agentChoiceCliApply } from '../../agent-launch/choices/agent-choice-cli-apply'
 import type { AgentSessionOptionCatalog } from './agent-session-option-catalog-types'
+import { PI_THINKING_LEVELS } from './structured-agent-session-effective-effort'
 
-// Why: terminal launches need Pi's `--model`; Pi chats keep applying picks over RPC.
+// Why: terminal launches need Pi's CLI flags; Pi chats keep applying picks over RPC.
 export const PI_LAUNCH_OPTION_CATALOG: AgentSessionOptionCatalog = {
   // Pi models depend on configured providers; ids are opaque `provider/id` selectors.
   models: [],
@@ -17,5 +18,30 @@ export const PI_LAUNCH_OPTION_CATALOG: AgentSessionOptionCatalog = {
       }
     ],
     '--model'
-  )
+  ),
+  unknownModelOptions: [
+    {
+      id: 'effort',
+      label: 'Reasoning effort',
+      category: 'thought_level',
+      kind: {
+        type: 'select',
+        choices: PI_THINKING_LEVELS.map((level) => ({ value: level, label: level })),
+        // Pi's own config decides the level when none is sent.
+        defaultValue: ''
+      },
+      apply: agentChoiceCliApply(
+        'pi',
+        [
+          {
+            kind: 'value',
+            names: ['--thinking'],
+            lift: 'separate-and-long-equals',
+            recognizes: (value) => PI_THINKING_LEVELS.includes(value)
+          }
+        ],
+        '--thinking'
+      )
+    }
+  ]
 }

@@ -181,7 +181,7 @@ export async function detachBrowserExtensionsFromProfileSession(
   getBrowserExtensionDnrStore().forgetProfile(profile.id)
 }
 
-/** The experimental setting turned off: every profile drops its extensions until it turns on. */
+/** The extensions setting turned off: every profile drops its extensions until it turns on. */
 export async function detachBrowserExtensionsFromAllProfileSessions(): Promise<void> {
   const states = [...stateByProfileId.values()]
   stateByProfileId.clear()

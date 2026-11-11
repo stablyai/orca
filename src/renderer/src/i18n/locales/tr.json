@@ -8043,10 +8043,6 @@
             "modeAriaLabel": "Ajan Panosu açılış modu",
             "modeInWindow": "Pencere içi",
             "modePopout": "Ayrı pencere"
-          },
-          "browserExtensions": {
-            "copy": "Yerel tarayıcı profilleri için Ayarlar › Tarayıcı › Uzantılar bölümünü ekler.",
-            "toggleLabel": "Tarayıcı uzantılarını aç/kapat"
           }
         },
         "FloatingWorkspacePane": {
@@ -10212,13 +10208,6 @@
               "inWindow": "pencere içinde",
               "worktrees": "worktree'ler",
               "eaf17a7214": "Ajan Panosu"
-            },
-            "browserExtensions": {
-              "title": "Tarayıcı eklentileri",
-              "description": "Orca tarayıcı sekmelerinde parola yöneticileri gibi Chrome eklentilerini çalıştırın.",
-              "extension": "eklenti",
-              "chrome": "chrome",
-              "password": "parola yöneticisi"
             }
           }
         },

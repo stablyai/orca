@@ -106,7 +106,8 @@ it('keeps a Pi model in Arguments literal so chats never receive a CLI pattern',
     '--model sonnet:high',
     '--model anthropic/sonnet',
     '--model anthropic/claude-opus-5-5',
-    '--provider openai --model gpt-6'
+    '--provider openai --model gpt-6',
+    '--thinking ultra'
   ]) {
     const result = lift(userArgs)
     expect(result.recognized).toEqual([])

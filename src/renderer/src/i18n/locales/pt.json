@@ -5509,13 +5509,6 @@
               "inWindow": "na própria janela",
               "worktrees": "worktrees",
               "eaf17a7214": "Painel de Agentes"
-            },
-            "browserExtensions": {
-              "title": "Extensões de navegador",
-              "description": "Execute extensões do Chrome, como gerenciadores de senhas, nas abas do navegador do Orca.",
-              "extension": "extensão",
-              "chrome": "chrome",
-              "password": "gerenciador de senhas"
             }
           }
         },
@@ -6005,10 +5998,6 @@
             "modeAriaLabel": "Modo de abertura do Painel de Agentes",
             "modeInWindow": "Na própria janela",
             "modePopout": "Janela separada"
-          },
-          "browserExtensions": {
-            "copy": "Adiciona Configurações › Navegador › Extensões para perfis de navegador locais.",
-            "toggleLabel": "Ativar ou desativar extensões de navegador"
           }
         },
         "RuntimePairingUrlGenerator": {
