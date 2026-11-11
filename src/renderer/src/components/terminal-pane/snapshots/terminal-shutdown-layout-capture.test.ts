@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../../shared/terminal/replay/terminal-scrollback-limits'
+import { TERMINAL_SCROLLBACK_SAVED_PANE_BYTE_LIMIT } from '../../../../../shared/terminal/replay/terminal-scrollback-limits'
 import type { TerminalLayoutSnapshot } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { getUtf8ByteLength } from '../../../../../shared/utf8-byte-limits'
 
@@ -81,7 +81,7 @@ describe('captureTerminalShutdownLayout', () => {
       const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
       for (const delta of [-1, 0, 1]) {
         const payloadBytes =
-          TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT + delta - CURSOR_HOME.length
+          TERMINAL_SCROLLBACK_SAVED_PANE_BYTE_LIMIT + delta - CURSOR_HOME.length
         const unitBytes = Buffer.byteLength(unit)
         const contents =
           unit.repeat(Math.floor(payloadBytes / unitBytes)) + 'x'.repeat(payloadBytes % unitBytes)
@@ -201,7 +201,7 @@ describe('captureTerminalShutdownLayout', () => {
       id: 1,
       leafId: LEAF_ID,
       stablePaneId: LEAF_ID,
-      terminal: mockTerminal(512),
+      terminal: mockTerminal(2048),
       serializeAddon: {
         serialize: vi.fn((options?: { scrollback?: number }) =>
           multibyteRow.repeat(options?.scrollback ?? 0)
@@ -221,11 +221,11 @@ describe('captureTerminalShutdownLayout', () => {
     const buffer = layout.buffersByLeafId?.[LEAF_ID] ?? ''
     expect(buffer.length).toBeGreaterThan(0)
     expect(getUtf8ByteLength(buffer)).toBeLessThanOrEqual(
-      TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
+      TERMINAL_SCROLLBACK_SAVED_PANE_BYTE_LIMIT
     )
     // UTF-8 rows plus cursor suffix must fit together, reducing available history by one row here.
     const fittingRows = Math.floor(
-      (TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT - CURSOR_HOME.length) / 2048
+      (TERMINAL_SCROLLBACK_SAVED_PANE_BYTE_LIMIT - CURSOR_HOME.length) / 2048
     )
     expect(buffer).toHaveLength(fittingRows * 1024 + CURSOR_HOME.length)
   })
@@ -256,7 +256,7 @@ describe('captureTerminalShutdownLayout', () => {
     // Full pass plus at most MAX_SCROLLBACK_FIT_PROBES fit probes; a bisection took 10+.
     expect(serialize.mock.calls.length).toBeLessThanOrEqual(5)
     expect(getUtf8ByteLength(layout.buffersByLeafId?.[LEAF_ID] ?? '')).toBeLessThanOrEqual(
-      TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
+      TERMINAL_SCROLLBACK_SAVED_PANE_BYTE_LIMIT
     )
   })
 
@@ -264,7 +264,7 @@ describe('captureTerminalShutdownLayout', () => {
     const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
     // Dense recent rows over sparse history defeat pure secant convergence; test nonuniform byte density.
     const DENSE_ROWS = 1_000
-    const DENSE_ROW = 'x'.repeat(600)
+    const DENSE_ROW = 'x'.repeat(2400)
     const serialize = vi.fn((options?: { scrollback?: number }) => {
       const rows = options?.scrollback ?? 0
       const dense = Math.min(rows, DENSE_ROWS)
@@ -288,8 +288,8 @@ describe('captureTerminalShutdownLayout', () => {
     })
 
     const bytes = getUtf8ByteLength(layout.buffersByLeafId?.[LEAF_ID] ?? '')
-    expect(bytes).toBeLessThanOrEqual(TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT)
-    expect(bytes).toBeGreaterThan(TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT * 0.9)
+    expect(bytes).toBeLessThanOrEqual(TERMINAL_SCROLLBACK_SAVED_PANE_BYTE_LIMIT)
+    expect(bytes).toBeGreaterThan(TERMINAL_SCROLLBACK_SAVED_PANE_BYTE_LIMIT * 0.9)
     expect(serialize.mock.calls.length).toBeLessThanOrEqual(5)
   })
 
