@@ -688,6 +688,7 @@ describe('commands about a worker a paired server owns', () => {
     await call('orchestration.workerRead', { dispatch: 'ctx_b1' })
 
     const listed = await call('orchestration.workerList', { on: 'devB', run: runId })
+    expect(listed.ok ? undefined : listed.error.code).toBe('server_pairing_changed')
     expect(listed.ok ? undefined : listed.error.message).toBe(
       "devB was re-paired; workers started before that are no longer listed here. worker-show still shows them from this computer's record."
     )
