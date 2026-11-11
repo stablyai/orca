@@ -1,4 +1,4 @@
-import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../../opencode/opencode-model-startup-plan'
+import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../../opencode/model-launch/opencode-model-startup-plan'
 import {
   formatAmbiguousCwdParentMessage,
   type WorktreeLineageInput,
