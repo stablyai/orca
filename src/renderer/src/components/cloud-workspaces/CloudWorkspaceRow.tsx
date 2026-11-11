@@ -248,11 +248,6 @@ export function CloudWorkspaceRow({
             >
               {title}
             </span>
-            {w.number ? (
-              <span className="shrink-0 font-mono text-2xs tabular-nums text-muted-foreground">
-                {formatWorkspaceNumber(w.number)}
-              </span>
-            ) : null}
             {w.visibility === 'private' && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -278,6 +273,17 @@ export function CloudWorkspaceRow({
                 </TooltipContent>
               </Tooltip>
             )}
+            {/* Its W-number shows on hover or focus only; the space is held so nothing shifts. */}
+            {w.number ? (
+              <span
+                className={cn(
+                  'shrink-0 font-mono text-2xs tabular-nums text-muted-foreground opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 motion-safe:transition-opacity',
+                  revealOpen && 'opacity-100'
+                )}
+              >
+                {formatWorkspaceNumber(w.number)}
+              </span>
+            ) : null}
           </span>
           <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
             <MemberAvatar userId={w.ownerUserId} directory={directory} selfId={selfId} size="sm" />

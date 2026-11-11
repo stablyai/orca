@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
+import {
+  formatWorkspaceNumber,
+  type CloudWorkspace
+} from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import {
   MAX_PINNED,
   arrangeCloudWorkspaces,
@@ -24,8 +27,21 @@ import {
 import type { GroupDrag } from './CloudWorkspaceGroup'
 import type { RowArrangement } from './CloudWorkspaceRowMenu'
 
+/** How a screen reader hears a workspace in move confirmations: its number, else its title. */
+function spoken(w: CloudWorkspace | undefined): string {
+  return w?.number ? formatWorkspaceNumber(w.number) : (w?.title ?? '')
+}
+
+function groupName(group: CloudWorkspaceGroup<CloudWorkspace>): string {
+  return group.kind === 'pinned'
+    ? translate('auto.components.cloudWorkspaces.pinned', 'Pinned')
+    : (group.section ?? translate('auto.components.cloudWorkspaces.noSection', 'No section'))
+}
+
 export function useCloudWorkspaceArrangement(visible: readonly CloudWorkspace[]) {
   const prefs = useCloudWorkspacePrefs()
+  // Drags and menu moves are confirmed politely for screen readers ("Moved W-12 to position 2 in Pinned").
+  const [announcement, setAnnouncement] = useState('')
   // Opening Home is a good moment to pick up another device's edits without waiting for the poll.
   useEffect(() => {
     void refreshCloudWorkspacePrefs()
@@ -40,10 +56,22 @@ export function useCloudWorkspaceArrangement(visible: readonly CloudWorkspace[])
     [groups]
   )
   const reorder = useCallback(
-    (group: CloudWorkspaceGroup<CloudWorkspace>, ids: string[] | null) => {
-      if (ids) {
-        void editCloudWorkspacePrefs((doc) => reorderGroup(doc, group, ids))
+    (group: CloudWorkspaceGroup<CloudWorkspace>, ids: string[] | null, movedId: string) => {
+      if (!ids) {
+        return
       }
+      void editCloudWorkspacePrefs((doc) => reorderGroup(doc, group, ids))
+      setAnnouncement(
+        translate(
+          'auto.components.cloudWorkspaces.movedTo',
+          'Moved {{name}} to position {{position}} in {{group}}',
+          {
+            name: spoken(group.rows.find((w) => w.id === movedId)),
+            position: ids.indexOf(movedId) + 1,
+            group: groupName(group)
+          }
+        )
+      )
     },
     []
   )
@@ -63,7 +91,8 @@ export function useCloudWorkspaceArrangement(visible: readonly CloudWorkspace[])
               group.rows.map((w) => w.id),
               dragging.id,
               overId
-            )
+            ),
+            dragging.id
           )
         }
         setDragging(null)
@@ -84,6 +113,15 @@ export function useCloudWorkspaceArrangement(visible: readonly CloudWorkspace[])
       return
     }
     void editCloudWorkspacePrefs((doc) => setPinned(doc, w.id, pinned))
+    setAnnouncement(
+      pinned
+        ? translate('auto.components.cloudWorkspaces.pinnedName', 'Pinned {{name}}', {
+            name: spoken(w)
+          })
+        : translate('auto.components.cloudWorkspaces.unpinnedName', 'Unpinned {{name}}', {
+            name: spoken(w)
+          })
+    )
   }, [])
 
   const move = useCallback(
@@ -96,7 +134,8 @@ export function useCloudWorkspaceArrangement(visible: readonly CloudWorkspace[])
             group.rows.map((row) => row.id),
             w.id,
             delta
-          )
+          ),
+          w.id
         )
       }
     },
@@ -128,6 +167,7 @@ export function useCloudWorkspaceArrangement(visible: readonly CloudWorkspace[])
   )
 
   return {
+    announcement,
     groups,
     drag,
     pin,

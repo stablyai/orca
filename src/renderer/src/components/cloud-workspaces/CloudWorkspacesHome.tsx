@@ -370,6 +370,9 @@ export function CloudWorkspacesHome({
 
       {/* Polite, so opening from a link is announced without stealing focus. */}
       <div aria-live="polite" className="sr-only">
+        {arrangement.announcement}
+      </div>
+      <div aria-live="polite" className="sr-only">
         {highlighted
           ? t('auto.components.cloudWorkspaces.openedFromLink', 'Opened from link: {{title}}', {
               title: cloudWorkspaceTitle(highlighted, t)

@@ -65,6 +65,7 @@ export function workspace(overrides: Partial<CloudWorkspace>): CloudWorkspace {
     region: 'iad1',
     createdAt: FIXTURE_NOW - 86_400_000,
     title: null,
+    number: 40 + next,
     repo: { url: 'https://github.com/acme/payments.git', branch: 'main' },
     visibility: 'team',
     section: null,

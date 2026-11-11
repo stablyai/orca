@@ -1,4 +1,4 @@
-import { Archive, Moon } from 'lucide-react-native'
+import { Archive, Moon, Pin, PinOff } from 'lucide-react-native'
 import { useState } from 'react'
 import { View } from 'react-native'
 import { ConfirmModal } from '../components/ConfirmModal'
@@ -8,6 +8,41 @@ import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { CloudWorkspace } from './cloud-control-plane-client'
 import { cloudWorkspaceScreenStyles as styles } from './cloud-workspace-screen-styles'
+import { useCloudWorkspacePrefs } from './cloud-workspace-prefs'
+import { useCloudEnrollment } from './use-cloud-workspaces'
+import { setPinned } from '../../../src/shared/cloud-workspaces/cloud-workspace-arrangement'
+
+/** Pin to the top of the Cloud list on every device of yours (your own pins, not the team's). */
+function CloudWorkspacePinRow(props: { workspace: CloudWorkspace }) {
+  const t = useMobileTranslation()
+  const enrollment = useCloudEnrollment()
+  const prefs = useCloudWorkspacePrefs(enrollment?.deviceSessionId ?? null)
+  const [busy, setBusy] = useState(false)
+  if (!enrollment || props.workspace.status === 'archived') {
+    return null
+  }
+  const pinned = prefs.document.pinned.includes(props.workspace.id)
+  const Icon = pinned ? PinOff : Pin
+  return (
+    <View style={styles.section}>
+      <View style={styles.card}>
+        <ListRow
+          key="pin"
+          leading={<Icon size={18} color={colors.textSecondary} />}
+          title={pinned ? t('cloud.home.unpin', 'Unpin') : t('cloud.home.pin', 'Pin to top')}
+          subtitle={t('cloud.actions.pinCaption', 'On all your devices. Only you see your pins.')}
+          busy={busy}
+          onPress={() => {
+            setBusy(true)
+            void prefs
+              .edit((doc) => setPinned(doc, props.workspace.id, !pinned))
+              .finally(() => setBusy(false))
+          }}
+        />
+      </View>
+    </View>
+  )
+}
 
 /** Sleep (no sandbox hours, files kept) and Archive, each behind a confirm because both stop agents. */
 export function CloudWorkspaceActions(props: {
@@ -29,6 +64,7 @@ export function CloudWorkspaceActions(props: {
   const running = props.workspace.status === 'running'
   return (
     <>
+      <CloudWorkspacePinRow workspace={props.workspace} />
       {running ? (
         <View style={styles.section}>
           <View style={styles.card}>

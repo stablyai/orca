@@ -3,12 +3,11 @@
 import { useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { keybindingMatchesAction } from '../../../../shared/keybindings/matching'
 import { parseCloudWorkspaceLink } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
+import { reportCloudWorkspaceLinkFailure } from './cloud-workspace-link-failure'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
-import { describeError } from './cloud-workspace-errors'
 import { copyCloudWorkspaceLink, openCloudWorkspace } from './open-cloud-workspace'
 import { currentCloudChatId, focusCloudChat } from './cloud-chat-focus'
 import { cloudWorkspacesAvailable } from './use-cloud-workspaces'
@@ -54,19 +53,10 @@ export async function handleCloudWorkspaceLink(link: string): Promise<void> {
   }
   const resolved = await window.api.cloudWorkspaces.resolveLink(parsed.target, parsed.chatId)
   if (!resolved.ok) {
-    if (resolved.reason === 'other_org' && offerTeamSwitch(resolved.orgId, link)) {
-      setHighlight(null)
-      return
-    }
-    toast.error(
-      resolved.error === 'not_found'
-        ? translate(
-            'auto.components.cloudWorkspaces.linkNotFound',
-            'This link points to a private workspace, another team, or a workspace that was deleted.'
-          )
-        : describeError(resolved.error, resolved.reason)
-    )
     setHighlight(null)
+    reportCloudWorkspaceLinkFailure(parsed.target, resolved, () => {
+      void handleCloudWorkspaceLink(link)
+    })
     return
   }
   const workspace = resolved.value.workspace
@@ -79,38 +69,6 @@ export async function handleCloudWorkspaceLink(link: string): Promise<void> {
     await focusCloudChat(outcome.worktreeId, resolved.value.chatId)
   }
   setHighlight(workspace.id, HIGHLIGHT_MS)
-}
-
-/**
- * A W-number link from a team you belong to but don't have active: say which team, and offer to
- * switch and open it. False when you are not in that team (the generic not-found copy applies).
- */
-function offerTeamSwitch(orgId: string | undefined, link: string): boolean {
-  const state = useAppStore.getState()
-  const org = orgId
-    ? state.orcaProfileAuthStatus?.organizations?.find((o) => o.orgId === orgId)
-    : undefined
-  if (!org) {
-    return false
-  }
-  toast.info(
-    translate('auto.components.cloudWorkspaces.linkOtherTeam', 'This workspace is in {{team}}', {
-      team: org.name
-    }),
-    {
-      description: translate(
-        'auto.components.cloudWorkspaces.linkOtherTeamHint',
-        'Switch teams to open it.'
-      ),
-      action: {
-        label: translate('auto.components.cloudWorkspaces.linkSwitchTeam', 'Switch and open'),
-        onClick: () => {
-          void state.selectOrcaProfileOrg(org.orgId).then(() => handleCloudWorkspaceLink(link))
-        }
-      }
-    }
-  )
-  return true
 }
 
 type Front = {

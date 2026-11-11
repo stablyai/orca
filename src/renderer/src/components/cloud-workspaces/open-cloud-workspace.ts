@@ -250,7 +250,11 @@ async function shareLinkFor(id: string, chatId?: string | null): Promise<string>
   return cloudWorkspaceShareLink({ id, ...(link ? { link } : {}) }, chatId)
 }
 
-export async function copyCloudWorkspaceLink(id: string, chatId?: string | null): Promise<void> {
+export async function copyCloudWorkspaceLink(
+  id: string,
+  chatId?: string | null,
+  options: { quiet?: boolean } = {}
+): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(await shareLinkFor(id, chatId))
   } catch (error) {
@@ -258,11 +262,15 @@ export async function copyCloudWorkspaceLink(id: string, chatId?: string | null)
     toast.error(
       translate('auto.components.cloudWorkspaces.copyFailed', "Couldn't copy the link. Try again.")
     )
-    return
+    return false
+  }
+  if (options.quiet) {
+    return true
   }
   toast.success(
     chatId
       ? translate('auto.components.cloudWorkspaces.chatLinkCopied', 'Chat link copied')
       : translate('auto.components.cloudWorkspaces.workspaceLinkCopied', 'Workspace link copied')
   )
+  return true
 }
