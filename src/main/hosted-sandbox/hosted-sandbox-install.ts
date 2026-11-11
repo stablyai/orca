@@ -38,6 +38,9 @@ import { setHostedSessionSync } from './hosted-session-sync'
 import { orcaCloudAccountId } from '../../shared/hosted-sandbox/orca-cloud-account'
 import { setOrcaCloudActiveAccountResolver } from './orca-cloud-active-account'
 import { createCloudAccountBackfill } from './cloud-account-backfill'
+import { createCloudSandboxGonePrune } from './cloud-sandbox-gone-prune'
+import { retireGoneCloudSandbox } from './cloud-sandbox-gone-retire'
+import type { RemovedServerStore } from '../ipc/runtime-environments/runtime-environment-removal-cleanup'
 import { createUsageAlertRefreshScheduler } from '../billing/usage-alert-refresh'
 import { sendToTrustedUIRenderer } from '../ipc/ui'
 import { ORCA_BILLING_REFRESH_CHANNEL } from '../../shared/orca-billing'
@@ -71,7 +74,9 @@ export function getHostedSandboxControlPlaneClient(): HostedSandboxControlPlaneC
 }
 
 /** `repos` is main's repo store: org-environment repo imports only read checkouts listed there. */
-export function installHostedSandbox(repos?: OrcaCloudEnvironmentRepoSource): void {
+export function installHostedSandbox(
+  repos?: OrcaCloudEnvironmentRepoSource & RemovedServerStore
+): void {
   // Idempotent; answers isConfigured() = false itself when this build has no control plane.
   registerOrcaCloudEnvironmentHandlers(repos ? { repos } : {})
   if (installed) {
@@ -99,10 +104,18 @@ export function installHostedSandbox(repos?: OrcaCloudEnvironmentRepoSource): vo
   const activeAccountId = (): string | null =>
     orcaCloudAccountId(ensureActiveOrcaProfile(userDataPath).profile.cloud)
   setOrcaCloudActiveAccountResolver(activeAccountId)
+  const gonePrune = createCloudSandboxGonePrune({
+    userDataPath,
+    activeAccountId,
+    get: (sandboxId) => client.get(sandboxId),
+    retire: (runtime) => retireGoneCloudSandbox(userDataPath, repos, runtime)
+  })
   const accountBackfill = createCloudAccountBackfill({
     userDataPath,
     activeAccountId,
-    list: () => client.list()
+    list: () => client.list(),
+    onListed: (account, listed) => gonePrune.observeList(account, listed),
+    relistMs: 10 * 60_000
   })
   const mcpSync = installCloudMcpSync(userDataPath, {
     baseUrl: config.controlPlaneUrl,

@@ -22,7 +22,10 @@ function sandboxIdOf(runtime: EphemeralVmRuntimeRecord): string | null {
 }
 
 export type CloudAccountBackfill = {
-  /** Lists the active team's sandboxes when a live record is unfiled or the team changed. */
+  /**
+   * Lists the active team's sandboxes when a live record is unfiled, the team changed, or the last
+   * list is older than `relistMs` (the first run, at startup, always lists).
+   */
   run(): Promise<void>
 }
 
@@ -30,10 +33,17 @@ export function createCloudAccountBackfill(deps: {
   userDataPath: string
   activeAccountId: () => string | null
   list: () => Promise<readonly Pick<HostedSandboxView, 'id'>[]>
+  /** Each successful list, for the team it answered for (the gone-sandbox prune reads it). */
+  onListed?: (account: string, listed: ReadonlySet<string>) => Promise<void>
+  /** Re-list this often even when nothing changed, so a sandbox destroyed elsewhere is noticed. */
+  relistMs?: number
+  now?: () => number
   log?: (line: string) => void
 }): CloudAccountBackfill {
-  // One list per (team, unfiled set): the 30 s beat must not list on every tick.
+  const now = deps.now ?? Date.now
+  // One list per (team, unfiled set) or per relistMs: the 30 s beat must not list on every tick.
   let lastKey: string | null = null
+  let listedAt = Number.NEGATIVE_INFINITY
   return {
     async run() {
       const account = deps.activeAccountId()
@@ -43,7 +53,8 @@ export function createCloudAccountBackfill(deps: {
       const before = readCloud(deps.userDataPath)
       // A team switch re-lists once even with nothing unfiled: it corrects a misfiled create.
       const key = keyOf(account, before)
-      if (before.length === 0 || key === lastKey) {
+      const stale = deps.relistMs !== undefined && now() - listedAt >= deps.relistMs
+      if (before.length === 0 || (key === lastKey && !stale)) {
         return
       }
       let listed: ReadonlySet<string>
@@ -68,6 +79,8 @@ export function createCloudAccountBackfill(deps: {
       }
       // Keyed on what is still unfiled, so this team does not list again until that changes.
       lastKey = keyOf(account, readCloud(deps.userDataPath))
+      listedAt = now()
+      await deps.onListed?.(account, listed)
     }
   }
 }
