@@ -34,9 +34,9 @@ hold_for_member_setup() {
     return 0
   fi
   if [ -f "$state/git-setup.failed" ]; then
-    echo "git: Orca couldn't set up your GitHub identity in this workspace, so it stopped this $sub instead of making it under the wrong name. Restart the sandbox (workspace menu > Restart sandbox), then try again." >&2
+    printf '%s\n' "orca: Orca couldn't set up your GitHub identity in this sandbox, so it stopped \`git $sub\` rather than use the wrong identity. Restart this workspace (right-click it in the sidebar > Restart), then try again." >&2
   else
-    echo "git: this workspace is still setting up your GitHub identity, so Orca stopped this $sub instead of making it under the wrong name. Try again in a moment; if this keeps happening, restart the sandbox (workspace menu > Restart sandbox)." >&2
+    printf '%s\n' "orca: Orca is still setting up your GitHub identity in this sandbox, so it stopped \`git $sub\` rather than use the wrong identity. Try again in a few seconds. If this keeps happening, restart this workspace (right-click it in the sidebar > Restart)." >&2
   fi
   exit 1
 }

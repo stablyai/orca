@@ -74,8 +74,9 @@ describe('the git shim while member setup is pending', () => {
     writeFileSync(join(state, 'git-setup.failed'), `${now()}\n`)
     const run = git(['commit', '-m', 'x'])
     expect(run.status).toBe(1)
-    expect(run.stderr).toContain("Orca couldn't set up your GitHub identity")
-    expect(run.stderr).toContain('Restart sandbox')
+    expect(run.stderr).toBe(
+      "orca: Orca couldn't set up your GitHub identity in this sandbox, so it stopped `git commit` rather than use the wrong identity. Restart this workspace (right-click it in the sidebar > Restart), then try again.\n"
+    )
     expect(reachedRealGit(run.stderr)).toBe(false)
   })
 
@@ -83,7 +84,9 @@ describe('the git shim while member setup is pending', () => {
     writeFileSync(join(state, 'git-setup.pending'), `${now()}\n`)
     const run = git(['push'], 5)
     expect(run.status).toBe(1)
-    expect(run.stderr).toContain('still setting up your GitHub identity')
+    expect(run.stderr).toBe(
+      'orca: Orca is still setting up your GitHub identity in this sandbox, so it stopped `git push` rather than use the wrong identity. Try again in a few seconds. If this keeps happening, restart this workspace (right-click it in the sidebar > Restart).\n'
+    )
     expect(run.ms).toBeLessThan(5_000)
   })
 
