@@ -7,6 +7,7 @@ import {
   pluginHookWanted,
   runPluginHook
 } from '../../plugins/hooks/plugin-hook-dispatch'
+import { claudeProfileMemoryPermissionAllow } from '../../claude/claude-profile-memory-permission'
 import { readAgentToolCall, type AgentToolCallOwner } from './agent-tool-call-reader'
 
 /** Sent by hook scripts that print Orca's answer as Claude Code's PreToolUse decision. */
@@ -95,6 +96,13 @@ export async function respondAfterAgentToolPluginHooks(
   headers: IncomingHttpHeaders,
   owner: AgentToolCallOwner | null
 ): Promise<void> {
+  // Profile memory writes are allowed without a plugin. Other calls still answer at once.
+  const memoryAllow = claudeProfileMemoryPermissionAllow(source, body, headers)
+  if (memoryAllow) {
+    res.writeHead(200, { 'content-type': 'application/json' })
+    res.end(memoryAllow)
+    return
+  }
   // The usual case: no plugin listens, so answer at once without reading the call.
   if (!owner || (!pluginHookWanted('agent.tool.before') && !pluginHookWanted('agent.tool.after'))) {
     res.writeHead(204)

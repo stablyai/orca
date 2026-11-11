@@ -112,5 +112,33 @@ describe.skipIf(process.platform === 'win32')(
       expect(seen).toHaveLength(1)
       expect(seen[0]?.headers['x-orca-hook-decision']).toBeUndefined()
     })
+
+    it('prints a memory PermissionRequest allow and ignores any other permission reply', async () => {
+      const allow =
+        '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}}}'
+      const memory = JSON.stringify({
+        hook_event_name: 'PermissionRequest',
+        tool_name: 'Write',
+        tool_input: {
+          file_path: '/Users/ada/.claude/projects/-repo/memory/note.md'
+        }
+      })
+      const other = JSON.stringify({
+        hook_event_name: 'PermissionRequest',
+        tool_name: 'Write',
+        tool_input: { file_path: '/Users/ada/repo/src/app.ts' }
+      })
+      const { port, seen } = await hookServer((request) =>
+        request.headers['x-orca-hook-decision'] === 'claude-permission-memory-v1' ? allow : DENY
+      )
+      expect(await runHook(memory, { ORCA_AGENT_HOOK_PORT: String(port) })).toBe(`${allow}\n`)
+      expect(await runHook(other, { ORCA_AGENT_HOOK_PORT: String(port) })).toBe('{}\n')
+      expect(seen.map(({ headers }) => headers['x-orca-hook-decision'])).toEqual([
+        'claude-permission-memory-v1',
+        undefined
+      ])
+      const forged = await hookServer(() => DENY)
+      expect(await runHook(memory, { ORCA_AGENT_HOOK_PORT: String(forged.port) })).toBe('{}\n')
+    })
   }
 )
