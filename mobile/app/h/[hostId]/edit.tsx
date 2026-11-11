@@ -90,7 +90,18 @@ export default function EditHostScreen() {
           setHost(null)
           return
         }
-        await loadAuthForHost(found.id, found.endpoint, () => revision === routeRevision.current)
+        try {
+          await loadAuthForHost(found.id, found.endpoint, () => revision === routeRevision.current)
+        } catch {
+          if (revision === routeRevision.current) {
+            setSaveError(
+              translate(
+                'edgeAuth.loadFailed',
+                'Could not load edge authentication. Unlock protected storage and reopen this form.'
+              )
+            )
+          }
+        }
         if (revision !== routeRevision.current) {
           return
         }
@@ -365,7 +376,10 @@ export default function EditHostScreen() {
                 rows={edgeAuth.authRows}
                 storedCount={edgeAuth.storedAuthCount}
                 error={authNormalized.ok ? authEndpointCheck.error : authNormalized.error}
-                onRowsChange={edgeAuth.setAuthRows}
+                onRowsChange={(rows) => {
+                  edgeAuth.setAuthRows(rows)
+                  setSaveError(null)
+                }}
                 scrollViewRef={authScrollTarget}
               />
             ) : null}

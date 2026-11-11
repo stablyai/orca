@@ -83,7 +83,18 @@ export class RpcClientSocketFactory {
       endpoint: this.options.endpoint,
       omitNativeErrorDetails: Boolean(edgeAuthHeaders),
       createSocket: edgeAuthHeaders
-        ? (url) => createEndpointAuthSocket(url, edgeAuthHeaders)
+        ? (url) => {
+            try {
+              return createEndpointAuthSocket(url, edgeAuthHeaders)
+            } catch (error) {
+              this.options.emitLog(
+                'error',
+                'Edge authentication unavailable',
+                'Check the address and update the app to use edge authentication'
+              )
+              throw error
+            }
+          }
         : undefined,
       deviceToken: this.options.deviceToken,
       serverPublicKeyB64: this.options.serverPublicKeyB64,

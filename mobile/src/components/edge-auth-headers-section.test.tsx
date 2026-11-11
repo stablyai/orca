@@ -9,6 +9,7 @@ const keyboardListeners = vi.hoisted(() => {
 const scroller = vi.hoisted(() => ({
   scrollResponderScrollNativeHandleToKeyboard: vi.fn()
 }))
+const readHeaders = vi.hoisted(() => vi.fn(async () => null))
 
 vi.mock('react-native', () => ({
   findNodeHandle: () => 123,
@@ -42,12 +43,16 @@ vi.mock('../platform/keyboard-occlusion', () => ({
 }))
 
 vi.mock('../transport/endpoint-auth-headers-store', () => ({
-  readEndpointAuthHeaders: async () => null,
+  readEndpointAuthHeaders: readHeaders,
   writeEndpointAuthHeaders: async () => {},
   deleteEndpointAuthHeaders: async () => {}
 }))
 
-import { EdgeAuthHeadersSection, newEdgeAuthRow } from './edge-auth-headers-section'
+import {
+  EdgeAuthHeadersSection,
+  newEdgeAuthRow,
+  useEdgeAuthHeaders
+} from './edge-auth-headers-section'
 import type { ReactTestRenderer } from 'react-test-renderer'
 import { applyMobileColorScheme, paletteForScheme } from '../theme/mobile-theme'
 
@@ -162,4 +167,37 @@ describe('edge auth headers section keyboard', () => {
     )
     act(() => requireRenderer(renderer).unmount())
   })
+})
+
+it("clears another host's rows before an unreadable credential load", async () => {
+  let state: ReturnType<typeof useEdgeAuthHeaders> | undefined
+  function Harness() {
+    state = useEdgeAuthHeaders()
+    return null
+  }
+  const current = () => {
+    if (!state) {
+      throw new Error('Hook not rendered')
+    }
+    return state
+  }
+  let renderer: ReactTestRenderer | null = null
+  try {
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+    act(() =>
+      current().setAuthRows([{ ...newEdgeAuthRow(), name: 'X-Token', value: 'old-secret' }])
+    )
+    expect(current().authChanged).toBe(true)
+    readHeaders.mockRejectedValueOnce(new Error('Keychain locked'))
+    await act(async () => {
+      await expect(current().loadAuthForHost('other-host', 'wss://other.example')).rejects.toThrow()
+    })
+    expect(current().authNormalized).toEqual({ ok: true, headers: {} })
+    expect(current().authChanged).toBe(false)
+    expect(current().storedAuthCount).toBe(0)
+  } finally {
+    act(() => renderer?.unmount())
+  }
 })

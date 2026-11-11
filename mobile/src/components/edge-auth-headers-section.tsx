@@ -46,6 +46,9 @@ export function useEdgeAuthHeaders() {
 
   const loadAuthForHost = useCallback(
     async (hostId: string, endpoint: string, isCurrent?: () => boolean) => {
+      setAuthRows([newEdgeAuthRow()])
+      setInitialAuthJson(JSON.stringify({ ok: true, headers: {} }))
+      setStoredAuthCount(0)
       const stored = await readEndpointAuthHeaders(hostId, endpoint)
       if (isCurrent && !isCurrent()) {
         return

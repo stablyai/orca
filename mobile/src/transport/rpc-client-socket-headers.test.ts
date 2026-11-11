@@ -116,6 +116,33 @@ describe('direct socket edge-auth headers', () => {
     client.close()
   })
 
+  it('logs safe guidance when authenticated socket construction fails', () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.stubGlobal(
+      'WebSocket',
+      class {
+        constructor() {
+          throw new Error('native failure with synthetic-secret')
+        }
+      }
+    )
+    const logs: ConnectionLogEntry[] = []
+    expect(() =>
+      connect('wss://tunnel.example/runtime', 'device-token', 'server-key', {
+        edgeAuthHeaders: { 'X-Proxy-Token': 'synthetic-secret' },
+        onLog: (entry) => logs.push(entry)
+      })
+    ).toThrow()
+    expect(logs).toContainEqual(
+      expect.objectContaining({
+        level: 'error',
+        message: 'Edge authentication unavailable',
+        detail: 'Check the address and update the app to use edge authentication'
+      })
+    )
+    expect(JSON.stringify(logs)).not.toContain('synthetic-secret')
+  })
+
   it('logs header names but never values', () => {
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const logs: ConnectionLogEntry[] = []
