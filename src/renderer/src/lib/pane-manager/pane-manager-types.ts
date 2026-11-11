@@ -12,7 +12,7 @@ import type { TerminalLeafId } from '../../../../shared/workspace-layout/stable-
 import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-pane-placement'
 import type { TerminalWebglAutoDecision } from './terminal-rendering/terminal-webgl-auto-policy'
 
-export type { TerminalScrollIntentTarget } from './terminal-scroll-intent'
+export type { TerminalScrollIntentTarget } from './terminal-scroll/terminal-scroll-intent'
 
 export type PaneActivationOptions = { focus?: boolean }
 

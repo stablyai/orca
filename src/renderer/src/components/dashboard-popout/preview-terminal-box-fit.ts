@@ -1,5 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
-import { PaneReparentFrameTracker } from '@/lib/pane-manager/pane-reparent-frame-tracker'
+import { PaneReparentFrameTracker } from '@/lib/pane-manager/pane-layout/pane-reparent-frame-tracker'
 
 type PreviewBoxFitTerminal = Pick<Terminal, 'rows' | 'buffer'>
 
