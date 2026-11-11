@@ -259,8 +259,8 @@ export function CloudWorkspacesHome({
         selfId={selfId}
         metaStale={stale}
         meta={
-          state.status === 'ready'
-            ? // Why: no hours here. A sum over the listed workspaces isn't the team's month, and it
+          state.status === 'ready' && visible.length > 0
+            ? // Why: no hours here. Empty: the empty card says so; no "0 workspaces" (JA-30). A sum over the listed workspaces isn't the team's month, and it
               // disagreed with Plan & billing and the account menu (JA-07).
               t('auto.components.cloudWorkspaces.listMetaCount', '{{count}} workspaces', {
                 count: visible.length,
