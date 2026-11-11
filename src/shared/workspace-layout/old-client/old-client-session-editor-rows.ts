@@ -5,7 +5,7 @@ import type {
   RuntimeMobileSessionMarkdownTab
 } from '../../runtime-mobile-session-tab-contracts'
 import type { LayoutEditorView } from '../layout-editor-view'
-import { editorRowHost } from '../../session-tab-file-host'
+import { editorRowHost } from '../../workspace-session/session-tab-file-host'
 import type { DesktopLayoutView } from '../workspace-layout-beside'
 import { editorFileKey, editorTabFile } from '../workspace-layout-editor-tab-file'
 import type { LayoutContentTab, LayoutEditorFile, WorkspaceLayout } from '../workspace-layout-model'

@@ -300,11 +300,17 @@ describe('CLI launch through host surface creation and replay admission', () => 
   })
 
   it.each([undefined, 'current'])(
-    'uses the innermost native folder for %s before Git fallback',
+    'uses the innermost enclosing folder workspace for %s',
     async (selector) => {
       const client = hostClient(runtimeStub())
       vi.spyOn(console, 'log').mockImplementation(() => {})
       const call = vi.mocked(client.call)
+      call.mockResolvedValueOnce({
+        id: 'list',
+        ok: true,
+        result: { worktrees: [], totalCount: 0, truncated: false },
+        _meta: { runtimeId: 'runtime-1' }
+      })
       call.mockResolvedValueOnce({
         id: 'folders',
         ok: true,
@@ -327,10 +333,9 @@ describe('CLI launch through host surface creation and replay admission', () => 
         cwd: '/tmp/repo/nested/deeper',
         json: true
       })
-      expect(call).not.toHaveBeenCalledWith('worktree.list', expect.anything())
       expect(call).toHaveBeenCalledWith(
         'agent.launchReplay',
-        expect.objectContaining({ target: { kind: 'existing', worktree: 'id:folder:nested' } })
+        expect.objectContaining({ target: { kind: 'existing', worktree: 'folder:nested' } })
       )
     }
   )

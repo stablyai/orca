@@ -13,12 +13,14 @@ import { disposeRemoteTerminalStreamState } from '../remote-terminal-stream-disp
 import { isTerminalDriverState } from './remote-terminal-multiplex-event'
 import type { TerminalMultiplexEvent } from './remote-terminal-multiplex-event'
 import { unwrapRuntimeRpcResult } from '../../../rpc/calls/runtime-rpc-result'
+import { translate } from '@/i18n/i18n'
 
 type SubscribedCapabilities = {
   ackOutputSourceRanges: boolean
   outputPause: boolean
   outputPauseDropNotice: boolean
   inputAck: boolean
+  outputCadence: boolean
 }
 
 // Why parse: the frame comes off the wire, so a malformed or legacy capabilities value must read as "unsupported".
@@ -28,7 +30,8 @@ function parseSubscribedCapabilities(value: unknown): SubscribedCapabilities {
       ackOutputSourceRanges: false,
       outputPause: false,
       outputPauseDropNotice: false,
-      inputAck: false
+      inputAck: false,
+      outputCadence: false
     }
   }
   const record: {
@@ -36,12 +39,14 @@ function parseSubscribedCapabilities(value: unknown): SubscribedCapabilities {
     outputPause?: unknown
     outputPauseDropNotice?: unknown
     inputAck?: unknown
+    outputCadence?: unknown
   } = value
   return {
     ackOutputSourceRanges: record.ackOutputSourceRanges === 1,
     outputPause: record.outputPause === 1,
     outputPauseDropNotice: record.outputPause === 1 && record.outputPauseDropNotice === 1,
-    inputAck: record.inputAck === 1
+    inputAck: record.inputAck === 1,
+    outputCadence: record.outputCadence === 1
   }
 }
 
@@ -96,6 +101,8 @@ export abstract class RemoteRuntimeTerminalResponseController extends RemoteRunt
           ? event.inputLedgerId
           : null
       stream.supportsInputAck = stream.inputLedgerId !== null
+      stream.supportsOutputCadence = capabilities.outputCadence
+      this.syncOutputCadence(stream)
       if (stream.supportsOutputPause) {
         stream.callbacks.onOutputPauseCapability?.()
       }
@@ -107,7 +114,10 @@ export abstract class RemoteRuntimeTerminalResponseController extends RemoteRunt
         )
       }
     } else if (event.type === 'end') {
-      disposeRemoteTerminalStreamState(stream, 'Remote terminal stream ended.')
+      disposeRemoteTerminalStreamState(
+        stream,
+        translate('auto.runtime.remoteTerminal.streamEnded', 'Remote terminal stream ended.')
+      )
       this.streams.delete(event.streamId)
       if (stream.capacityRejected) {
         if (stream.callbacks.onTransportClose) {

@@ -1,7 +1,7 @@
 import { getRuntimeEnvironmentRevision } from '../rpc/environment-revisions/runtime-environment-revision'
-import { clearWebSessionCloseIntentsForOwner } from '../web-session-close-intent'
-import { clearWebSessionFocusIntentsForOwner } from '../web-session-focus-intent'
-import { clearWebSessionReorderIntentsForOwner } from '../web-session-reorder-intent'
+import { clearWebSessionCloseIntentsForOwner } from './closing/web-session-close-intent'
+import { clearWebSessionFocusIntentsForOwner } from './navigation/web-session-focus-intent'
+import { clearWebSessionReorderIntentsForOwner } from './navigation/web-session-reorder-intent'
 import {
   installWindowVisibilitySubscriptionParking,
   type WindowVisibilitySubscriptionParking,

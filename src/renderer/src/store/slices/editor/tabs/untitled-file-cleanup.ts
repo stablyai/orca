@@ -1,15 +1,15 @@
 import type { AppState } from '../../../types'
 import type { OpenFile } from '../types/open-file'
 import { mayShareEditorBackingFile } from '../file-ids/editor-file-ids'
-import { findWorktreeById } from '../../worktree-helpers'
-import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
-import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
+import { findFirstIndexedWorktree } from '../../../../lib/workspace/ownership/worktree-runtime-owner-index'
+import { getEditorFileOperationContext } from '@/lib/editor/file-operations/editor-file-operation-owner'
+import { getDiskBaselineSignature } from '../../../../../../shared/file-write/disk-baseline-signature'
 import {
   deleteRuntimePath,
   deleteRuntimeRelativePath
 } from '@/runtime/files/mutations/runtime-file-mutation-client'
 import { statRuntimePath } from '@/runtime/files/metadata/runtime-file-metadata-client'
-import { selectWorktreesByRepo } from '../../../workspace-record-selectors'
+import { selectWorktreesByRepo } from '../../../workspaces/catalog/workspace-record-fields'
 
 export function deleteUntouchedUntitledFile(getState: () => AppState, file: OpenFile): void {
   const hasRetainedView = () =>
@@ -18,7 +18,7 @@ export function deleteUntouchedUntitledFile(getState: () => AppState, file: Open
     return
   }
   const state = getState()
-  const worktree = findWorktreeById(selectWorktreesByRepo(state), file.worktreeId)
+  const worktree = findFirstIndexedWorktree(selectWorktreesByRepo(state), file.worktreeId)
   const owningRuntimeEnvironmentId = file.runtimeEnvironmentId?.trim()
   let context: ReturnType<typeof getEditorFileOperationContext>
   try {

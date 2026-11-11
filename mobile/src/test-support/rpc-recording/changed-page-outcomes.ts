@@ -1,5 +1,5 @@
 import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../../src/shared/github/work-item-target'
-import { GITHUB_CONNECTION_CHANGED } from '../../transport/github-target-invocation'
+import { GITHUB_CONNECTION_CHANGED } from '../../source-control/review/github-target-invocation'
 import { isKeyedObject, scriptsAbsentResultReply } from '../bridged-parity/divergence-evidence'
 import { rows } from './changed-bridge-outcomes'
 import { ITEM_REFUSALS } from './changed-page-item-refusals'

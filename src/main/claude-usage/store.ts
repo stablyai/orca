@@ -1,4 +1,4 @@
-import { claudeTokenSessions } from '../usage/agent-token-usage'
+import { claudeTokenSessions } from '../usage/reporting/token-usage/agent-token-usage'
 import { app } from 'electron'
 import { join } from 'node:path'
 import type {
@@ -11,14 +11,14 @@ import type {
   ClaudeUsageSnapshot,
   ClaudeUsageSummary
 } from '../../shared/claude-usage-types'
-import type { AutomationRunUsage } from '../../shared/automations-types'
-import type { Store } from '../persistence/loading-store/store'
+import type { AutomationRunUsage } from '../../shared/automations/history/automation-run'
+import type { UsageWorktreeSource } from '../usage/worktree-attribution/usage-worktree-metadata'
 import type { ClaudeUsagePersistedState } from './types'
 import {
   scanClaudeUsageFilesViaWorker,
   splitUsageCacheFileViaWorker
-} from '../usage/usage-scan-worker-spawn'
-import { UsageProviderStoreLifecycle } from '../usage/usage-provider-store-lifecycle'
+} from '../usage/scan-worker/usage-scan-worker-spawn'
+import { UsageProviderStoreLifecycle } from '../usage/provider-lifecycle/usage-provider-store-lifecycle'
 import { buildBreakdown, buildDaily, buildSummary } from './claude-usage-report-aggregation'
 import { buildRecentSessions } from './claude-usage-session-rows'
 import type { AutomationUsageLookupInput } from './claude-usage-automation-attribution'
@@ -79,7 +79,7 @@ export class ClaudeUsageStore extends UsageProviderStoreLifecycle<
   ClaudeUsagePersistedState,
   'hasAnyClaudeData'
 > {
-  constructor(store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>) {
+  constructor(store: UsageWorktreeSource) {
     super(store, {
       tokenUsage: {
         provider: 'claude',

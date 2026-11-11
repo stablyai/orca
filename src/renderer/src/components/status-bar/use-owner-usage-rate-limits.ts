@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
@@ -7,7 +7,7 @@ import {
   watchProviderAccounts,
   type ProviderAccountsSnapshot
 } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
-import { useActiveAccountOwner } from '@/runtime/use-worktree-runtime-target'
+import { useActiveAccountOwner } from '@/runtime/provider-accounts/ownership/use-active-account-owner'
 import type { RateLimitState } from '../../../../shared/rate-limit-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useAppStore } from '../../store'
@@ -54,6 +54,7 @@ export type OwnerUsageRateLimits = {
 
 /** Read provider usage from the focused workspace’s account owner, including that host’s own remote snapshot. */
 export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLimits {
+  const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   // Why: route by the focused workspace's owner, never by the Active Server setting.
   const { target } = useActiveAccountOwner(LOCAL_TARGET)
@@ -165,11 +166,11 @@ export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLi
             environmentId: ownerId,
             label:
               ownerName?.trim() ||
-              translate('auto.components.status.bar.StatusBar.remoteServerLabel', 'Remote server')
+              t('auto.components.status.bar.StatusBar.remoteServerLabel', 'Remote server')
           }
         : null,
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
-    [ownerId, ownerName, languageRevision]
+    [ownerId, ownerName, languageRevision, t]
   )
 
   const ownerState = useMemo<OwnerUsageState>(() => {
@@ -193,8 +194,8 @@ export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLi
   }, [remoteOwner, owned])
 
   const rateLimits = useMemo(
-    () => resolveOwnerUsageRateLimits(local, ownerState),
-    [local, ownerState]
+    () => resolveOwnerUsageRateLimits(local, ownerState, t),
+    [local, ownerState, t]
   )
   return {
     rateLimits,

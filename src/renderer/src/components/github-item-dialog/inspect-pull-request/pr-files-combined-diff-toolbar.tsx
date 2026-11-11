@@ -2,7 +2,7 @@ import React from 'react'
 import { PanelLeftOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { isPRFileViewed } from '@/components/github/pr-file-content-size'
 import type { GitHubPRFile } from '../../../../../shared/github/pull-request-types'
 
@@ -23,6 +23,7 @@ export function PRFilesCombinedDiffToolbar({
   onToggleAllCollapsed: () => void
   onToggleSideBySide: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-background/50 px-3 py-1.5">
       <div className="flex min-w-0 items-center gap-2">
@@ -33,22 +34,19 @@ export function PRFilesCombinedDiffToolbar({
                 type="button"
                 variant="ghost"
                 size="icon-xs"
-                aria-label={translate(
-                  'auto.components.GitHubItemDialog.1257d1435d',
-                  'Show file tree'
-                )}
+                aria-label={t('auto.components.GitHubItemDialog.1257d1435d', 'Show file tree')}
                 onClick={onShowFileTree}
               >
                 <PanelLeftOpen className="size-3.5" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {translate('auto.components.GitHubItemDialog.1257d1435d', 'Show file tree')}
+              {t('auto.components.GitHubItemDialog.1257d1435d', 'Show file tree')}
             </TooltipContent>
           </Tooltip>
         )}
         <span className="truncate text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.GitHubItemDialog.filesViewed',
             '{{viewed}} / {{count}} files viewed',
             {
@@ -66,8 +64,8 @@ export function PRFilesCombinedDiffToolbar({
           onClick={onToggleAllCollapsed}
         >
           {allSectionsCollapsed
-            ? translate('auto.components.GitHubItemDialog.3c19ec3069', 'Expand All')
-            : translate('auto.components.GitHubItemDialog.d00a0a7f8f', 'Collapse All')}
+            ? t('auto.components.GitHubItemDialog.3c19ec3069', 'Expand All')
+            : t('auto.components.GitHubItemDialog.d00a0a7f8f', 'Collapse All')}
         </button>
         <button
           type="button"
@@ -75,8 +73,8 @@ export function PRFilesCombinedDiffToolbar({
           onClick={onToggleSideBySide}
         >
           {sideBySide
-            ? translate('auto.components.GitHubItemDialog.6e43a16435', 'Inline')
-            : translate('auto.components.GitHubItemDialog.31770bef03', 'Side by Side')}
+            ? t('auto.components.GitHubItemDialog.6e43a16435', 'Inline')
+            : t('auto.components.GitHubItemDialog.31770bef03', 'Side by Side')}
         </button>
       </div>
     </div>

@@ -1,5 +1,5 @@
 import { defineMethod } from '../../../core'
-import { normalizeGitLabIssueListArgs } from '../../../../../gitlab/gitlab-preload-args'
+import { normalizeGitLabIssueListArgs } from '../../../../../gitlab/requests/gitlab-preload-args'
 import { toGitLabJobLogExcerptResult } from '../../../../../../shared/source-control/checks/gitlab/gitlab-job-log-excerpt'
 import {
   AddIssueComment,
@@ -208,7 +208,8 @@ export const GITLAB_METHODS = [
         params.iid,
         params.type,
         params.projectRef,
-        params.includeReviewDetails
+        params.includeReviewDetails,
+        params.markViewerComments
       )
   }),
   defineMethod({

@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { VirtualizedList } from '../virtualized-list'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
-import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import { CheckButton, SortIndicator } from './workspace-space-selection-controls'
 import { WorkspaceSpaceWorktreeRow } from './workspace-space-worktree-row'
 import { getWorkspaceSpaceWorktreeIdentity } from './workspace-space-delete-selection'
@@ -17,6 +17,7 @@ export function WorkspaceSpaceManagerTable({
 }: {
   model: WorkspaceSpaceManagerModel
 }): React.JSX.Element {
+  const t = useTranslate()
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
   const {
     analysis,
@@ -59,11 +60,11 @@ export function WorkspaceSpaceManagerTable({
                   disabled={visibleDeletableIds.length === 0}
                   label={
                     allVisibleSelected
-                      ? translate(
+                      ? t(
                           'auto.components.status.bar.WorkspaceSpaceManagerPanel.697d60c456',
                           'Clear visible selection'
                         )
-                      : translate(
+                      : t(
                           'auto.components.status.bar.WorkspaceSpaceManagerPanel.1d0f8300d1',
                           'Select visible deletable workspaces'
                         )
@@ -76,10 +77,7 @@ export function WorkspaceSpaceManagerTable({
                 onClick={() => toggleSort('name')}
                 className="flex items-center gap-1 text-left"
               >
-                {translate(
-                  'auto.components.status.bar.WorkspaceSpaceManagerPanel.e4aebea158',
-                  'Workspace'
-                )}
+                {t('auto.components.status.bar.WorkspaceSpaceManagerPanel.e4aebea158', 'Workspace')}
                 <SortIndicator sortKey="name" activeKey={sortKey} direction={sortDirection} />
               </button>
               <button
@@ -87,7 +85,7 @@ export function WorkspaceSpaceManagerTable({
                 onClick={() => toggleSort('repo')}
                 className="flex items-center gap-1 text-left"
               >
-                {translate(
+                {t(
                   'auto.components.status.bar.WorkspaceSpaceManagerPanel.81f14d9924',
                   'Repository'
                 )}
@@ -98,7 +96,7 @@ export function WorkspaceSpaceManagerTable({
                 onClick={() => toggleSort('activity')}
                 className="flex items-center justify-end gap-1 text-right"
               >
-                {translate('workspaceSpace.table.lastActive', 'Last active')}
+                {t('workspaceSpace.table.lastActive', 'Last active')}
                 <SortIndicator sortKey="activity" activeKey={sortKey} direction={sortDirection} />
               </button>
               <button
@@ -106,22 +104,14 @@ export function WorkspaceSpaceManagerTable({
                 onClick={() => toggleSort('size')}
                 className="flex items-center justify-end gap-1 text-right"
               >
-                {translate(
-                  'auto.components.status.bar.WorkspaceSpaceManagerPanel.33aef3e9cc',
-                  'Size'
-                )}
+                {t('auto.components.status.bar.WorkspaceSpaceManagerPanel.33aef3e9cc', 'Size')}
                 <SortIndicator sortKey="size" activeKey={sortKey} direction={sortDirection} />
               </button>
               <div className="text-right">
-                {translate(
-                  'auto.components.status.bar.WorkspaceSpaceManagerPanel.be37293b10',
-                  'State'
-                )}
+                {t('auto.components.status.bar.WorkspaceSpaceManagerPanel.be37293b10', 'State')}
               </div>
               <div>
-                <span className="sr-only">
-                  {translate('workspaceSpace.table.actions', 'Actions')}
-                </span>
+                <span className="sr-only">{t('workspaceSpace.table.actions', 'Actions')}</span>
               </div>
             </div>
 
@@ -129,14 +119,14 @@ export function WorkspaceSpaceManagerTable({
               {isInitialScan ? (
                 <div className="flex items-center justify-center gap-2 px-4 py-10 text-center text-sm text-muted-foreground">
                   <Loader2 className="size-4 animate-spin" />
-                  {translate(
+                  {t(
                     'auto.components.status.bar.WorkspaceSpaceManagerPanel.a02d84d2d2',
                     'Scanning workspaces. You can leave this page.'
                   )}
                 </div>
               ) : rows.length === 0 ? (
                 <div className="px-4 py-10 text-center text-sm text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.status.bar.WorkspaceSpaceManagerPanel.e031e93219',
                     'No matching workspaces.'
                   )}
@@ -193,16 +183,16 @@ export function WorkspaceSpaceManagerTable({
       ) : !analysis && !scanError ? null : (
         <div className="rounded-lg border border-border/70 bg-background/30 px-4 py-10 text-center text-sm text-muted-foreground">
           {scanError
-            ? translate(
+            ? t(
                 'auto.components.status.bar.WorkspaceSpaceManagerPanel.8194a4fb29',
                 'Scan failed before any workspace sizes were collected.'
               )
             : analysis
-              ? translate(
+              ? t(
                   'auto.components.status.bar.WorkspaceSpaceManagerPanel.61e25239da',
                   'No workspace rows were available from the scan.'
                 )
-              : translate(
+              : t(
                   'auto.components.status.bar.WorkspaceSpaceManagerPanel.e91dd2a9ae',
                   'Run a scan to inspect workspace sizes.'
                 )}

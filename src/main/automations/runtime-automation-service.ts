@@ -6,7 +6,7 @@ import { tuiAgentDisplayName } from '../../shared/agent-launch/catalog/tui-agent
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import type { Store } from '../persistence/loading-store/store'
-import type { AutomationRun } from '../../shared/automations-types'
+import type { AutomationRun } from '../../shared/automations/history/automation-run'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { AutomationService } from './service'
 import { createRunTerminalRetention, type RunTerminalRetention } from './run-terminal-retention'
@@ -22,6 +22,7 @@ import {
 } from './runtime-terminal-run-observer'
 import { closeEarlierHookReviewRunTerminals } from './hook-review-blocked-run-terminals'
 import { automationRunSetupSkip } from './automation-run-setup-skip'
+import { automationSystemSettled } from './automation-wake-settle'
 
 const MAX_REMEMBERED_LAUNCHES = 256
 
@@ -204,6 +205,7 @@ export function createRuntimeAutomationService(input: {
     },
     runTerminalRetention: (owner) => createRuntimeRunTerminalRetention(owner, store, runtime)
   })
+  service.wakeGate.settled = () => automationSystemSettled()
   runtime.setAutomationService(service)
   return service
 }

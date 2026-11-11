@@ -4,9 +4,9 @@ import type {
 } from '../query/terminal-identity-read-context'
 import type { CrewRuntimeReaders } from '../../orchestration/crew/crew-runtime-watch'
 import { TerminalIdentitySource } from '../identity/terminal-identity-source'
-import type { WaitBlockedCheckState } from '../../wait-blocked-check-state'
+import type { WaitBlockedCheckState } from '../wait/wait-blocked-check-state'
 import { OrcaRuntimeWithStopRequestedPtyIds } from '../../construction/runtime-service-state'
-import { RuntimeSubscriptionRegistry } from '../../runtime-subscription-registry'
+import { RuntimeSubscriptionRegistry } from '../../client/runtime-subscription-registry'
 import { RuntimeMobileNotificationController } from '../../push/notifications/runtime-mobile-notification-controller'
 import type {
   ProviderBufferAcquisition,
@@ -184,8 +184,8 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
     }
   >()
 
-  // Desktop mode prevents mobile fit until a deliberate gesture; absent mode defaults to auto, and restart clears modes.
-  protected mobileDisplayModes = new Map<string, 'desktop'>()
+  // Desktop mode prevents mobile fit until a deliberate gesture; absent mode uses the host default, and restart clears modes.
+  protected mobileDisplayModes = new Map<string, 'auto' | 'desktop'>()
 
   // Keep independent client records per PTY; subscribedAt selects restore baseline, lastActedAt selects the active viewport (docs/mobile-presence-lock.md).
   protected mobileSubscribers = new Map<

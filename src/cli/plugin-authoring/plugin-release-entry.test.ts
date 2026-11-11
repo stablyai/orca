@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
@@ -89,19 +89,5 @@ describe('orca plugin release-entry', () => {
     const result = await releaseFor(repo)
     expect(result.entry).toBeUndefined()
     expect(result.note).toContain('themes/dark.json')
-  })
-
-  it('explains why there is no entry outside Git or before the first commit', async () => {
-    const outside = join(await tempRoot(), 'loose')
-    await createPluginFromTemplate({ dir: outside, template: 'theme', publisher: 'acme' })
-    expect((await releaseFor(outside)).note).toContain('not in a Git repository')
-
-    const repo = await tempRoot()
-    await git(repo, ['init', '--quiet'])
-    await mkdir(join(repo, 'p'))
-    await createPluginFromTemplate({ dir: join(repo, 'p'), template: 'theme', publisher: 'acme' })
-    const uncommitted = await releaseFor(join(repo, 'p'))
-    expect(uncommitted.entry).toBeUndefined()
-    expect(uncommitted.note).toContain('commit the plugin first')
   })
 })

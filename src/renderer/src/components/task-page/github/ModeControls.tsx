@@ -1,9 +1,9 @@
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import TaskProjectSourceCombobox from '@/components/task-project-source-combobox'
 import { normalizeTaskRepoSelection } from '@/components/task-page/task-page-default-repo-selection'
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { ExternalLink } from 'lucide-react'
@@ -13,6 +13,7 @@ export function TaskPageGitHubModeControls({
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const {
     setTaskResumeState,
     updateSettings,
@@ -84,10 +85,7 @@ export function TaskPageGitHubModeControls({
               defaultRepoSelection: [...normalized]
             }).catch(() => {
               toast.error(
-                translate(
-                  'auto.components.TaskPage.dfd72673e7',
-                  'Failed to save project selection.'
-                )
+                t('auto.components.TaskPage.dfd72673e7', 'Failed to save project selection.')
               )
             })
           }}
@@ -98,10 +96,7 @@ export function TaskPageGitHubModeControls({
               defaultRepoSelection: null
             }).catch(() => {
               toast.error(
-                translate(
-                  'auto.components.TaskPage.dfd72673e7',
-                  'Failed to save project selection.'
-                )
+                t('auto.components.TaskPage.dfd72673e7', 'Failed to save project selection.')
               )
             })
           }}
@@ -122,10 +117,10 @@ export function TaskPageGitHubModeControls({
             }}
             aria-label={
               selectedGitHubRepoExternalLink
-                ? translate('auto.components.TaskPage.8d1e17a3ef', 'Open {{value0}} in GitHub', {
+                ? t('auto.components.TaskPage.8d1e17a3ef', 'Open {{value0}} in GitHub', {
                     value0: selectedGitHubRepoExternalLink.label
                   })
-                : translate(
+                : t(
                     'auto.components.TaskPage.d1132848f8',
                     'Select one GitHub project to open in GitHub'
                   )
@@ -137,13 +132,10 @@ export function TaskPageGitHubModeControls({
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
           {selectedGitHubRepoExternalLink
-            ? translate('auto.components.TaskPage.8d1e17a3ef', 'Open {{value0}} in GitHub', {
+            ? t('auto.components.TaskPage.8d1e17a3ef', 'Open {{value0}} in GitHub', {
                 value0: selectedGitHubRepoExternalLink.label
               })
-            : translate(
-                'auto.components.TaskPage.bc46d8204e',
-                'Select one project to open in GitHub'
-              )}
+            : t('auto.components.TaskPage.bc46d8204e', 'Select one project to open in GitHub')}
         </TooltipContent>
       </Tooltip>
     </div>

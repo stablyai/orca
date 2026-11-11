@@ -33,7 +33,6 @@ export function registerPtyConnectionRestartReplacementDisposeTests(): void {
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -58,8 +57,9 @@ export function registerPtyConnectionRestartReplacementDisposeTests(): void {
 
     it('stops the replaced PTY itself when the pane is disposed before a spawn carried the stop', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks6 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks6 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       transportFactoryQueue.push(createMockTransport('pty-restarted'))
       const deps = createDeps({
         tabId: 'tab-restart-closed',

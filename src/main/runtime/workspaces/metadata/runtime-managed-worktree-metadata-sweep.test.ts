@@ -8,10 +8,10 @@ import type { Repo } from '../../../../shared/repo-types'
 import { testState, createStore, makeRepo } from '../../../persistence/persistence-test-harness'
 import type { Store } from '../../../persistence/loading-store/store'
 import { RuntimeManagedWorktreeQueries } from '../catalog/runtime-managed-worktree-queries'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 
-vi.mock('./ssh/ssh-config-parser', () => ({
+vi.mock('../../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
   sshConfigHostsToTargets: vi.fn()
 }))
@@ -21,8 +21,10 @@ vi.mock('electron', () => ({
   safeStorage: { isEncryptionAvailable: () => false }
 }))
 
-vi.mock('./telemetry/client', () => ({ track: vi.fn() }))
-vi.mock('./telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn().mockReturnValue({}) }))
+vi.mock('../../../telemetry/client', () => ({ track: vi.fn() }))
+vi.mock('../../../telemetry/cohort-classifier', () => ({
+  getCohortAtEmit: vi.fn().mockReturnValue({})
+}))
 
 const gitWorktree = (path: string): GitWorktreeInfo => ({
   path,

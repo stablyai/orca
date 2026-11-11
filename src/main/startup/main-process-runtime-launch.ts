@@ -13,9 +13,9 @@ import { createRuntimeEnvironmentMobileRelayHosts } from '../ipc/runtime-environ
 import { getLocalPtyProvider } from '../ipc/pty/provider/registry'
 import { registerHeadlessPtyRuntime } from '../ipc/pty/register-headless-runtime'
 import { LocalPtyProvider } from '../providers/local-pty/local-pty-provider'
-import { publishHeadlessRuntimeGraph } from '../runtime/headless-runtime-graph'
+import { publishHeadlessRuntimeGraph } from '../runtime/session-graph/headless-runtime-graph'
 import { OffscreenBrowserBackend } from '../browser/backends/offscreen-browser-backend'
-import { browserManager } from '../browser/browser-manager'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import { getDesktopRelayStatus } from './main-process-relay-status'
 import { startDesktopRelayService } from './main-process-relay-startup'
 import { getServeOptions, getBundledWebClientRoot, printServeReady } from './main-process-serve'
@@ -38,7 +38,7 @@ import {
   showRuntimeRpcStartupFailureDialog
 } from '../runtime/rpc/server/runtime-rpc-startup-failure'
 import { registerCliForHeadlessServe } from './serve-cli-registration'
-import { startAppImageCopyPreExtraction } from '../cli/appimage-copy-pre-extraction'
+import { startAppImageCopyPreExtraction } from '../cli/appimage/appimage-copy-pre-extraction'
 import { scheduleAllPendingHistoryTreeRemovals } from '../pty/history/terminal-history-deletion'
 import { triggerStartupNotificationRegistration } from '../ipc/startup-notification-registration'
 import { startDesktopPushService } from './main-process-push-startup'
@@ -53,7 +53,7 @@ import { preserveStateBeforeUpdateRestart } from '../updater/update-restart-pres
 import { resolveUpdateInstallMode } from '../updater/updater-service'
 import { scheduleAgentLaunchRecordWarmup } from './agent-launch-record-warmup'
 import { emitServeBrowserIdentityActionLine } from '../server/serve-stdout-boundary'
-import { getBrowserIdentityModeStatus } from '../browser/identity/browser-identity-mode-store'
+import { getBrowserIdentityModeStatus } from '../browser/identity/mode/browser-identity-mode-store'
 
 type RuntimeService = NonNullable<typeof state.runtime>
 
@@ -186,6 +186,7 @@ async function launchServeMode(
   )
   await runtime.refreshRestoredOrchestrationAuthority()
   await runtime.reconcileLegacyWorkerTerminals()
+  runtime.startupWorkerAuthority.finish()
   // Main places unshown live terminals before any client attaches.
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     await placeUnshownLiveTerminalsBestEffort(runtime)

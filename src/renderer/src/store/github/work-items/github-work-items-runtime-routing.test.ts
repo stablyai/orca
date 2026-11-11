@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { githubTaskBinding } from '@/lib/github-task-observation'
+import { githubTaskBinding } from '@/lib/work-items/github/github-task-observation'
 import { findRepoForGitHubOwner } from '../repositories/repository-routing'
 import { workItemsCacheKey } from '../cache/cache-identity'
 import {
@@ -8,7 +8,7 @@ import {
   runtimeEnvironmentCall
 } from '../github-slice-test-harness'
 
-import { runtimeOwnedRepoState } from '../../slices/store-test-helpers'
+import { runtimeOwnedRepoState } from '../../repos/repo.test-fixture'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 
 describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {

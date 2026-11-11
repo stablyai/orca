@@ -8,7 +8,7 @@ import {
 import type {
   JournalStopFailedOn,
   JournalStopSettle
-} from '../queued-messages/queued-message-pause'
+} from '../queued-messages/queued-message-pause-marks'
 
 export class JournalStopMarks {
   // Settle edges write no row; invalidate readers cached per commit.

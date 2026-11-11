@@ -1,5 +1,5 @@
 import { defineMethod } from '../../core'
-import { getRemoteServerUpdaterSnapshot } from '../../../remote-server-updater'
+import { getRemoteServerUpdaterSnapshot } from '../../../hosts/management/remote-server-updater'
 import { getPublishedHostDescriptor } from '../../../hosts/platform-probe/host-descriptor'
 import { StatusGetParams } from '../../../../../shared/rpc-contract/status-params'
 import { readHostMachineWithin } from '../../../hosts/platform-probe/runtime-host-machine'

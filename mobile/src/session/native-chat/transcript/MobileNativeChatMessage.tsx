@@ -1,7 +1,7 @@
 import { memo, useCallback, useContext, useLayoutEffect, useMemo, useRef } from 'react'
 import { Text, View } from 'react-native'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
-import { MobileNativeChatLongPressContent as Content } from '../MobileNativeChatLongPressContent'
+import { MobileNativeChatLongPressContent as Content } from './MobileNativeChatLongPressContent'
 import { splitNativeChatBlocks } from '../../../../../src/shared/native-chat/tools/native-chat-tool-fold'
 import { nativeChatToolRunViewedImages } from '../../../../../src/shared/native-chat/tools/native-chat-tool-viewed-images'
 import { selectActiveToolCall } from '../../../../../src/shared/native-chat/tools/native-chat-tool-activity'
@@ -15,17 +15,19 @@ import {
   MobileNativeChatGroupedThought,
   MobileNativeChatReasoningRow
 } from './MobileNativeChatReasoningRow'
-import { mobileNativeChatRowId } from '../../mobile-native-chat-reading-place'
+import { mobileNativeChatRowId } from './mobile-native-chat-reading-place'
 import { nativeChatWorkRunEntries } from '../../../../../src/shared/native-chat/native-chat-work-run'
 import { nativeChatReasoningDisclosureKey } from '../../../../../src/shared/native-chat/transcript/native-chat-reasoning-row'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
 import { MobileNativeChatNoticeRow } from './MobileNativeChatNoticeRow'
+import { MobileNativeChatPullRequestEventLine } from './MobileNativeChatPullRequestEventLine'
+import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../../../src/shared/native-chat/native-chat-pull-request-event'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
 import { MobileNativeChatUserMessageFold } from './MobileNativeChatUserMessageFold'
 import { TextAttachmentActions } from './MobileNativeChatTextAttachmentActions'
 import { MobileNativeChatMessageMeta } from './MobileNativeChatMessageMeta'
 import { MobileNativeChatAwaitingInputRow } from './MobileNativeChatAwaitingInputRow'
-import { MobileNativeChatResolutionReceipt } from '../MobileNativeChatResolutionReceipt'
+import { MobileNativeChatResolutionReceipt } from './MobileNativeChatResolutionReceipt'
 import {
   nativeChatAskRunBlocks,
   nativeChatAskRunSubject
@@ -39,7 +41,7 @@ import type { NativeChatTurnStatus } from '../../../../../src/shared/native-chat
 import { styles } from './mobile-native-chat-message-styles'
 import { MobileNativeChatAgentMessageCard } from './MobileNativeChatAgentMessageCard'
 import { MobileNativeChatVisualContext } from '../visual/mobile-native-chat-visual-context'
-import { useMobileNativeChatFullMessage } from '../MobileNativeChatFullContent'
+import { useMobileNativeChatFullMessage } from './MobileNativeChatFullContent'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { MobileNativeChatPacedProse } from './MobileNativeChatPacedProse'
@@ -160,6 +162,12 @@ function MobileNativeChatMessageImpl({
         backgroundTasks.length > 0 ? withoutBackgroundTaskRows(prose) : prose
       )
   const isSystem = message.role === 'system'
+  const pullRequestEvent = isSystem
+    ? drawnProse.find(
+        (block): block is Chat.NativeChatTextBlock =>
+          Chat.isTextBlock(block) && block.presentation === PULL_REQUEST_EVENT_PRESENTATION
+      )
+    : undefined
   const showToolRun = tools.length > 0
   const askPending = structuredActivityUi
     ? selectActiveToolCall(unansweredAsks, { activeTurnIsWorking }) !== null
@@ -301,7 +309,14 @@ function MobileNativeChatMessageImpl({
           ) : (
             <>
               {/* A roster is not tool activity, so it stays out of the settled-tools collapse. */}
-              {isSystem ? (
+              {pullRequestEvent ? (
+                <MobileNativeChatPullRequestEventLine
+                  block={pullRequestEvent}
+                  messageId={message.id}
+                  fontScale={fontScale}
+                  onLongPress={onLongPress}
+                />
+              ) : isSystem ? (
                 <MobileNativeChatNoticeRow
                   blocks={drawnProse}
                   fontScale={fontScale}

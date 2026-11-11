@@ -1,6 +1,7 @@
+import { syncPaneOutputCadences } from '../pty-transport/renderer-active-pty'
 import type { ManagedPane, PaneSpawnHints } from '@/lib/pane-manager/pane-manager-types'
 import { useAppStore } from '@/store/index'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { createOsc52OscHandler } from '../../../../../shared/osc52-clipboard'
 import {
@@ -28,7 +29,7 @@ import { clearQueuedInitialCwdAfterFirstPane } from './queued-initial-cwd'
 import type { TerminalPaneManagerOptionsContext } from './terminal-pane-mount-context'
 import { installTerminalPaneInputHandling } from '../input/terminal-pane-pane-input'
 import { installTerminalPaneLinkHandling } from '../links/terminal-pane-pane-links'
-import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
+import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 
 export function createTerminalPaneCreatedHandler(
   context: TerminalPaneManagerOptionsContext
@@ -225,6 +226,8 @@ export function createTerminalPaneCreatedHandler(
     refs.queuedInitialCwdRef.current = nextInitialCwdState.queuedInitialCwd
     ptyDeps.cwd = nextInitialCwdState.ptyCwd
     deps.panePtyBindingsRef.current.set(pane.id, panePtyBinding)
+    // Why: a split activates the new pane without onActivePaneChange, so siblings must drop to background here.
+    syncPaneOutputCadences(deps.panePtyBindingsRef.current)
     context.syncPaneCount()
     scheduleRuntimeGraphSync()
     context.queueResizeAll(true)

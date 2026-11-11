@@ -7,9 +7,9 @@ import type {
   PluginMarketplaceHostInstallPreview,
   PluginMarketplaceHostListing
 } from '../../../../../preload/api-types'
-import { usePluginSyntaxFailureStore } from '@/store/plugin-syntax-failures'
-import { usePluginSyntaxStore } from '@/store/plugin-syntax-packs'
-import { usePluginThemeStore } from '@/store/plugin-themes'
+import { usePluginSyntaxFailureStore } from '@/store/plugins/syntax/plugin-syntax-failures'
+import { usePluginSyntaxStore } from '@/store/plugins/syntax/plugin-syntax-packs'
+import { usePluginThemeStore } from '@/store/plugins/appearance/plugin-themes'
 import { pluginManifestSchema } from '../../../../../shared/plugins/manifest/plugin-manifest'
 import {
   pluginListEntryFromInstalled,

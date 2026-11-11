@@ -103,16 +103,3 @@ export function buildRuntimeMobileAgentStatusProjection(
   }
   return projection
 }
-
-export function buildRuntimeMobileAgentStatusProjectionForTests(
-  agentStatusByPaneKey: AppState['agentStatusByPaneKey']
-): string {
-  return buildRuntimeMobileAgentStatusProjection(agentStatusByPaneKey)
-}
-
-export const AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS_FOR_TESTS =
-  AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS
-
-export function resetRuntimeMobileAgentStatusProjectionCacheForTests(): void {
-  cachedAgentStatusProjection = null
-}

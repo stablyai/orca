@@ -1,10 +1,10 @@
-import type { DirEntry } from '../../../../../shared/filesystem-entry-types'
+import type { DirEntry } from '../../../../../shared/file-listing/directory-entry'
 import {
   dirEntryPageAfter,
   FILE_READ_DIR_MAX_PAGE_ENTRIES,
   type DirEntryCursor,
   type DirEntryPage
-} from '../../../../../shared/file-dir-page'
+} from '../../../../../shared/file-listing/file-dir-page'
 
 /** Long enough to page through a folder as it scrolls; the cursor keeps an older listing correct. */
 export const DIR_LISTING_PAGE_CACHE_TTL_MS = 30_000

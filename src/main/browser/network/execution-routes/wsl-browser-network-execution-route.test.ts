@@ -9,11 +9,11 @@ import {
   BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
   type BrowserNetworkTunnelSocket
 } from '../tunnels/browser-network-tunnel-stream-state'
-import type { BrowserNetworkExecutionRoute } from './browser-network-execution-route'
+import type { BrowserNetworkExecutionRoute } from './browser-network-execution-route-contract'
 import {
   BrowserNetworkTunnelStreamFrameDecoder,
   BrowserNetworkTunnelStreamFrameWriter
-} from '../../../../shared/browser-network-tunnel-stream-framing'
+} from '../../../../shared/browser/network/tunnels/browser-network-tunnel-stream-framing'
 import { resolveWslBrowserNetworkExecutionRoute } from './wsl-browser-network-execution-route'
 
 class FakeDestination extends EventEmitter implements BrowserNetworkTunnelSocket {

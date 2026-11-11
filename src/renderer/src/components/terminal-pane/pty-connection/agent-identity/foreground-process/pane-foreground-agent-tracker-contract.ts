@@ -1,5 +1,5 @@
 import type { RecognizedAgentProcess } from '../../../../../../../shared/agent-status/process/agent-process-recognition'
-import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
+import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-foreground-agent'
 import type { TerminalProcessInspection as RuntimeTerminalProcessInspection } from '../../../../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 
 export type ForegroundReadReason = 'command' | 'visible-pty' | 'command-finished'

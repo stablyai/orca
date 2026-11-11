@@ -5,9 +5,9 @@ import type {
   PtyFencedTerminationOutcome
 } from '../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import type { ResourceViewAdmission } from '../../shared/resource-view-admission'
-import type { SpawnIntent } from '../../shared/host-spawn-admission'
+import type { SpawnIntent } from '../../shared/terminal/pty/admission/spawn-admission-contract'
 import { ipcRenderer } from 'electron'
-import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../shared/execution-host/project-execution-runtime'
 import type { StartupCommandDelivery } from '../../shared/agent-launch/startup/codex-startup-delivery'
 import type { TerminalInputKind } from '../../shared/terminal/input/terminal-input-kind'
 import type {
@@ -66,8 +66,6 @@ export const ptySessionControlApi = {
     placement?: TerminalPanePlacement
     spawnIntent?: SpawnIntent
     wslPassiveRestore?: true
-    // The user's "let agents ask" answer for this launch; older mains ignore it.
-    skipAgentWorkspaceTrust?: true
     agentLaunch?: AgentPaneLaunchRequest
     telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
   }): Promise<{
@@ -101,6 +99,7 @@ export const ptySessionControlApi = {
   write: (id: string, data: string, inputKind: TerminalInputKind): void => {
     ipcRenderer.send('pty:write', { id, data, inputKind })
   },
+  noteUserInput: (): void => ipcRenderer.send('pty:noteUserInput'),
   writeAccepted: (
     id: string,
     data: string,
@@ -194,6 +193,8 @@ export const ptySessionControlApi = {
     ids: string[]
   ): Promise<{ id: string; authoritative: boolean | null }[]> =>
     ipcRenderer.invoke('pty:getAuthoritativeBufferSnapshotCapabilities', { ids }),
+  getGoneSessionIds: (ids: string[]): Promise<string[]> =>
+    ipcRenderer.invoke('pty:getGoneSessionIds', { ids }),
   hasPty: (id: string): Promise<boolean | null> => ipcRenderer.invoke('pty:hasPty', { id }),
   moveLeafToNewTab: (request: TerminalLeafMoveRequest): Promise<TerminalLeafMoveResult> =>
     ipcRenderer.invoke('pty:moveLeafToNewTab', request),

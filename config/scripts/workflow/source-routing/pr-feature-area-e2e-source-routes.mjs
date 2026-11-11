@@ -92,9 +92,9 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
     ['issue-12656-terminal-link-tooltip', 'terminal-pane-padding-edges'],
     [
       'src/renderer/src/assets/terminal.css',
-      'src/renderer/src/lib/pane-manager/pane-divider.ts',
+      'src/renderer/src/lib/pane-manager/pane-layout/pane-divider.ts',
       'src/renderer/src/lib/pane-manager/pane-dom-creation.ts',
-      'src/renderer/src/lib/pane-manager/terminal-linkifier-hover-reset-on-mouseleave.ts'
+      'src/renderer/src/lib/pane-manager/terminal-input/terminal-linkifier-hover-reset-on-mouseleave.ts'
     ]
   ),
   featureRoute(
@@ -149,8 +149,8 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
     ['runtime-host-status-recovery'],
     [
       'src/main/ipc/runtime-environments/runtime-environment-status-',
-      'src/renderer/src/store/runtime-status-subscriptions.ts',
-      'src/renderer/src/store/slices/runtime-status-',
+      'src/renderer/src/store/slices/runtime-status/views/runtime-status-subscriptions.ts',
+      'src/renderer/src/store/slices/runtime-status/',
       'src/shared/remote-runtime/host-store/runtime-environment-pairing-replace-guards.ts',
       'src/shared/remote-runtime/host-store/runtime-environment-store.ts',
       `${COMPONENTS}sidebar/workspace-card/identity/worktree-card-header-items.tsx`

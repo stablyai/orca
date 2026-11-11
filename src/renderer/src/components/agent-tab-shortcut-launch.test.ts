@@ -19,9 +19,9 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('../store', () => ({ useAppStore: { getState: () => mocks.state } }))
 vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
-  launchAgentInNewTab: mocks.launchAgentInNewTab
+  launchAgentInNewTabWithOutcome: mocks.launchAgentInNewTab
 }))
-vi.mock('@/components/native-chat/use-native-chat-composer-reveal-focus', () => ({
+vi.mock('@/components/native-chat/composer/focus/native-chat-composer-focus-intent', () => ({
   captureNativeChatComposerFocusIntent: () => ({
     request: vi.fn(),
     cancel: mocks.cancelFocusIntent

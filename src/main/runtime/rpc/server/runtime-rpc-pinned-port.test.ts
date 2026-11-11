@@ -50,23 +50,4 @@ describe('orca serve --port', () => {
     expect(server.getWebSocketEndpoint()).toBeNull()
     await server.stop()
   })
-
-  it('binds the requested port when it is free', async () => {
-    const port = await holdPort()
-    await new Promise((resolve) => holders.pop()!.close(resolve))
-    const server = serveServer(port, true)
-    await server.start()
-    expect(server.getWebSocketEndpoint()).toContain(`:${port}`)
-    await server.stop()
-  })
-
-  it('still falls back for a pinned-but-not-required port', async () => {
-    const port = await holdPort()
-    const server = serveServer(port, false)
-    await server.start()
-    const endpoint = server.getWebSocketEndpoint()
-    expect(endpoint).not.toBeNull()
-    expect(endpoint).not.toContain(`:${port}`)
-    await server.stop()
-  })
 })

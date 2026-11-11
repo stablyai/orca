@@ -1,8 +1,6 @@
 import type { BrowserClientHostedPageInventory } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
-import type {
-  BrowserClientPageNetworkRoute,
-  BrowserClientPageRenderer
-} from './browser-client-page-cleanup'
+import type { BrowserClientPageNetworkRoute } from '../../network/client-routes/browser-client-page-network-route'
+import type { BrowserClientPageRenderer } from '../renderer/browser-client-page-renderer-contract'
 import type {
   BrowserRouteGuestLifecycleClaim,
   BrowserRoutePageGuestIdentity

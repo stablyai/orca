@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
-import { usePluginPreviewRequestStore } from '@/store/plugin-preview-request'
+import { usePluginPreviewRequestStore } from '@/store/plugins/navigation/plugin-preview-request'
 import { NO_PLUGIN_LIST_FILTER, type PluginListFilter } from '../list/plugin-list-filter'
 
 type PluginBrowseTargets = {

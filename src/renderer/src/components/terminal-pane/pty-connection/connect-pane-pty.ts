@@ -7,7 +7,7 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import { useAppStore } from '@/store'
 import { createPaneWindowsPtyModel } from './geometry/pane-windows-pty-model'
-import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/terminal-keyboard-protocol'
+import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/terminal-protocol/terminal-keyboard-protocol'
 import { resolvePaneKeyboardProtocolAgent } from '../input/keyboard/terminal-keyboard-protocol-pane-agent'
 import { TerminalKittyKeyboardModeTracker } from '../../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import type { PtyConnectionDeps } from './pty-connection-deps'
@@ -15,11 +15,11 @@ import { registerTerminalPaneRecoveryInstance } from '../render-health/recovery/
 import { captureTabRecoveryGeneration } from '@/store/terminals/terminal-tab-recovery-ledger'
 import { TerminalIdleCursorReset } from '../emulation/terminal-idle-cursor-reset'
 import { TerminalStreamPosition } from '../pty-transport/delivery/terminal-stream-position'
-import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
-import { createTerminalStructuralReplayCoordinator } from '@/lib/pane-manager/terminal-structural-replay-coordinator'
+import { writeTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
+import { createTerminalStructuralReplayCoordinator } from '@/lib/pane-manager/terminal-replay/terminal-structural-replay-coordinator'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
+import { resolveExplicitTerminalTitleAgentType } from '../../../../../shared/agent-status/title/terminal-title-agent-type'
 
 import { shouldWritePtyOutputForeground } from './output/foreground-output-visibility'
 import { exposeE2eTerminalPtyOutputDebug } from './instrumentation/e2e-terminal-pty-harness'
@@ -152,7 +152,7 @@ export function connectPanePty(
     title: string | undefined,
     agentType: AgentType | undefined
   ): void => {
-    const titleAgentType = resolveCommittedTitleAgentType(title ?? '')
+    const titleAgentType = resolveExplicitTerminalTitleAgentType(title ?? '')
     session.suppressNativeWindowsIdleCodexFocusReports =
       agentType && agentType !== 'unknown' ? agentType === 'codex' : titleAgentType === 'codex'
   }

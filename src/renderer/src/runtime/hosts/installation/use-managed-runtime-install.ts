@@ -2,7 +2,7 @@ import {
   useAppStateViewActive,
   useAppViewExternalStore,
   useAppStateValue
-} from '@/store/app-state-view'
+} from '@/store/retained-views/app-state-view'
 import { useCallback, useEffect, useMemo } from 'react'
 import { isAgentSessionHandleProvider } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import {
@@ -20,7 +20,7 @@ import {
   loadHostStructuredAgents,
   readHostStructuredAgentsForRuntime,
   subscribeHostStructuredAgents
-} from '../../host-structured-agents'
+} from '../../native-chat/agent-catalogs/host-structured-agents'
 import {
   ensureLocalRuntimeCapabilities,
   readLocalRuntimeCapabilities,
@@ -35,7 +35,7 @@ import {
   type ManagedRuntimeInstallSnapshot,
   type ManagedRuntimeInstallSubject
 } from './managed-runtime-install-status'
-import { useHostStructuredAgent } from '../../use-host-structured-agent'
+import { useHostStructuredAgent } from '../../native-chat/agent-catalogs/use-host-structured-agent'
 
 export type ManagedRuntimeInstallObservation =
   /** Orca provides no runtime for this agent on this host, or the host cannot install one. */

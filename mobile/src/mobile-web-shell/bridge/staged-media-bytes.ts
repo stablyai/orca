@@ -1,6 +1,6 @@
 import { BRIDGE_MEDIA_READ_MAX_BYTES, type BridgeMediaItem } from './bridge-media-verbs'
 import type { NativeVerbs } from './use-native-verbs'
-import { MobileImageBase64Accumulator } from '../../session/mobile-image-base64-accumulator'
+import { MobileImageBase64Accumulator } from '../../files/attachments/mobile-image-base64-accumulator'
 
 // Share chunked media reads across picker and clipboard; 18 MiB raw images exceed the 8 MiB reply ceiling and must stay behind handles until read.
 

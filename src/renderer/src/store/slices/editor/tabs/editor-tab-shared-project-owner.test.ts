@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createEditorTabsStore } from '../editor-slice-test-harness'
-import { makeWorktree, TEST_REPO } from '../../worktrees-slice-test-fixtures'
+import { makeWorktree } from '../../worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../../../repos/repo.test-fixture'
 import { getDefaultSettings } from '../../../../../../shared/constants'
 
 // #25467: a project set up on this machine and on a paired server shares one repo id.

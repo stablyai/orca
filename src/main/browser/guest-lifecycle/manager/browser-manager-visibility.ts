@@ -9,8 +9,8 @@ import {
   BrowserAgentActivity,
   type AgentCommandLease,
   type AgentPointerInput
-} from '../browser-agent-activity'
-import { BrowserPageEvents, type BrowserPageEvent } from '../browser-page-events'
+} from '../page-activity/browser-agent-activity'
+import { BrowserPageEvents, type BrowserPageEvent } from '../page-activity/browser-page-events'
 import { BrowserPageInputCredit } from '../../routing/input-ownership/browser-page-input-credit'
 import { browserPopupPageId } from '../popups/browser-popup-page-id'
 import type { RpcCallerIdentity } from '../../../runtime/rpc/rpc-caller-identity'

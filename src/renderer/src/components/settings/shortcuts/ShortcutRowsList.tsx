@@ -1,9 +1,10 @@
 import React from 'react'
 import type { KeybindingActionId, KeybindingInput } from '../../../../../shared/keybindings/types'
-import { cn } from '../../../lib/utils'
+import { cn } from '../../../lib/class-names'
 import { ShortcutCommandBlock } from './ShortcutCommandBlock'
 import type { ShortcutRowsByGroup } from './ShortcutFilterRail'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { translateShortcutGroupTitle } from './shortcut-action-copy'
 
 const EMPTY_BINDINGS: readonly string[] = []
 
@@ -42,6 +43,7 @@ export function ShortcutRowsList({
   onDisableAction: (actionId: KeybindingActionId) => void
   onEnableAction: (actionId: KeybindingActionId) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   if (groups.length === 0) {
     return (
       <div
@@ -50,7 +52,7 @@ export function ShortcutRowsList({
           className
         )}
       >
-        {translate(
+        {t(
           'auto.components.settings.ShortcutRowsList.4ce3cd24d9',
           'No shortcuts match those filters.'
         )}
@@ -63,7 +65,7 @@ export function ShortcutRowsList({
       {groups.map((group) => (
         <div key={group.title} className="space-y-3">
           <h3 className="border-b border-border/50 pb-2 text-sm font-medium text-muted-foreground">
-            {group.title}
+            {translateShortcutGroupTitle(group.title)}
           </h3>
           <div className="flex flex-col gap-3">
             {group.rows.map((row) => (

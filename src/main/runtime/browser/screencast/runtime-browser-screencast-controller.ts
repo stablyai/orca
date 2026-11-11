@@ -1,5 +1,5 @@
-import type { BrowserScreencastResult } from '../../../../shared/runtime-browser-contracts'
-import type { RuntimeBrowserDriverState } from '../../../../shared/runtime-session-contracts'
+import type { BrowserScreencastResult } from '../../../../shared/browser/runtime/runtime-browser-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
 import { BrowserError } from '../../../browser/browser-error'
 import {
   resolveBrowserDriverAfterMobileRelease,
@@ -17,8 +17,8 @@ type RuntimeBrowserScreencastControllerDeps = {
     connectionId?: string
   ) => void
   cleanupSubscription: (subscriptionId: string) => void
-  getDriver: (browserPageId: string) => RuntimeBrowserDriverState
-  setDriver: (browserPageId: string, next: RuntimeBrowserDriverState) => void
+  getDriver: (browserPageId: string) => RuntimeTerminalDriverState
+  setDriver: (browserPageId: string, next: RuntimeTerminalDriverState) => void
   notifyRemoteViewersChanged: (browserPageId: string, hasRemoteViewers: boolean) => void
 }
 

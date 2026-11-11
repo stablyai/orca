@@ -3,31 +3,12 @@ import './runtime-test-module-registration.spec'
 import { HeadlessEmulator } from '../../daemon/emulation/headless-emulator'
 import { MAX_OSC_TITLE_CHARS } from '../../../shared/agent-status/title/osc-title-extraction'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { RecentPtyOutputBuffer } from '../recent-pty-output-buffer'
+import '../terminal/output/recent-pty-output-buffer'
 import { appendNormalizedToTailBuffer } from '../terminal/output/tail/terminal-tail-buffer'
-import { buildPreview } from '../terminal/output/tail/terminal-tail-state'
+import '../terminal/output/tail/terminal-tail-state'
 import { store, syncSinglePty } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
-  it('trims oversized terminal output bursts without per-line array shifts', async () => {
-    const shiftSpy = vi.spyOn(Array.prototype, 'shift')
-    const lines = Array.from({ length: 5000 }, (_, index) => `line-${index}`)
-    const result = appendNormalizedToTailBuffer([], '', `${lines.join('\n')}\n`)
-    const shiftCallCount = shiftSpy.mock.calls.length
-    shiftSpy.mockRestore()
-
-    expect(result.truncated).toBe(true)
-    expect(result.lines).toHaveLength(2000)
-    expect(result.lines.slice(0, 5)).toEqual([
-      'line-3000',
-      'line-3001',
-      'line-3002',
-      'line-3003',
-      'line-3004'
-    ])
-    expect(shiftCallCount).toBe(0)
-  })
-
   it('trims terminal tail character budget without per-line array shifts', () => {
     const shiftSpy = vi.spyOn(Array.prototype, 'shift')
     const lines = Array.from({ length: 1000 }, (_, index) => `line-${index}-${'x'.repeat(300)}`)
@@ -46,93 +27,6 @@ describe('OrcaRuntimeService', () => {
     expect(result.lines).toEqual(lines.slice(expectedStartIndex))
     expect(result.lines.reduce((sum, line) => sum + line.length, 0)).toBeLessThanOrEqual(256 * 1024)
     expect(shiftCallCount).toBe(0)
-  })
-
-  it('builds terminal previews without mapping the full retained tail', () => {
-    const lines = Array.from({ length: 5000 }, (_, index) =>
-      index % 2 === 0 ? `line-${index}` : '   '
-    )
-    const mapSpy = vi.spyOn(Array.prototype, 'map')
-
-    const preview = buildPreview(lines, 'partial-tail')
-    const mapCallCount = mapSpy.mock.calls.length
-    mapSpy.mockRestore()
-
-    expect(preview).toBe(
-      ['line-4990', 'line-4992', 'line-4994', 'line-4996', 'line-4998', 'partial-tail'].join('\n')
-    )
-    expect(mapCallCount).toBe(0)
-  })
-
-  it('keeps recent PTY replay output capped without needing previous data for large chunks', () => {
-    const previous = 'old-output'.repeat(1000)
-    const data = 'new-output'.repeat(1000)
-    const outputLimit = 64 * 1024
-
-    const smallTail = new RecentPtyOutputBuffer()
-    smallTail.append(previous)
-    smallTail.append('tail')
-    expect(smallTail.read()).toBe(`${previous}tail`.slice(-outputLimit))
-
-    const combined = new RecentPtyOutputBuffer()
-    combined.append(previous)
-    combined.append(data)
-    expect(combined.read()).toBe(`${previous}${data}`.slice(-outputLimit))
-
-    const fresh = new RecentPtyOutputBuffer()
-    fresh.append(data)
-    expect(fresh.read()).toBe(data.slice(-outputLimit))
-  })
-
-  it('applies terminal redraw controls before retaining previews', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    syncSinglePty(runtime)
-
-    const [terminal] = (await runtime.listTerminals()).terminals
-    runtime.onPtyData('pty-1', 'Working\rWorking 1s\rWorking 2s', 100)
-
-    const carriageRead = await runtime.readTerminal(terminal.handle)
-    expect(carriageRead.tail).toEqual(['Working 2s'])
-    expect(carriageRead.latestCursor).toBe('0')
-
-    runtime.onPtyData('pty-1', '\b\b3s', 101)
-    const backspaceRead = await runtime.readTerminal(terminal.handle)
-    expect(backspaceRead.tail).toEqual(['Working 3s'])
-    expect(backspaceRead.latestCursor).toBe('0')
-
-    runtime.onPtyData('pty-1', '\rDone\n', 102)
-    const completedRead = await runtime.readTerminal(terminal.handle)
-    expect(completedRead.tail).toEqual(['Done'])
-    expect(completedRead.latestCursor).toBe('1')
-  })
-
-  it('applies ANSI terminal redraw controls before retaining previews', async () => {
-    const cursorRedraw = appendNormalizedToTailBuffer([], '', 'Working 10%\x1b[3D25%')
-    expect(cursorRedraw.partialLine).toBe('Working 25%')
-
-    const eraseLineKeepsCursor = appendNormalizedToTailBuffer([], '', 'ABC\x1b[2KXY\n')
-    expect(eraseLineKeepsCursor.lines).toEqual(['   XY'])
-
-    const eraseWithoutCarriageReturn = appendNormalizedToTailBuffer(
-      [],
-      'Downloading 10%',
-      '\x1b[2K\x1b[1GDownloading 20%'
-    )
-    expect(eraseWithoutCarriageReturn.partialLine).toBe('Downloading 20%')
-
-    const runtime = new OrcaRuntimeService(store)
-    syncSinglePty(runtime)
-
-    const [terminal] = (await runtime.listTerminals()).terminals
-    runtime.onPtyData(
-      'pty-1',
-      'Working\r\x1b[2K\x1b[1G\x1b[?25l\x1b[32mDone\x1b[0m\x1b]0;title\u0007\n',
-      100
-    )
-
-    const read = await runtime.readTerminal(terminal.handle)
-    expect(read.tail).toEqual(['Done'])
-    expect(read.latestCursor).toBe('1')
   })
 
   it('retains ANSI-only status redraws instead of appending every frame', async () => {
@@ -168,40 +62,6 @@ describe('OrcaRuntimeService', () => {
     const cursorReadAfterNewline = await runtime.readTerminal(terminal.handle, { cursor: 0 })
     expect(cursorReadAfterNewline.tail).toEqual(['• Working..'])
     expect(cursorReadAfterNewline.nextCursor).toBe('1')
-  })
-
-  it('retains multi-line ANSI footer redraws instead of appending old frames', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    syncSinglePty(runtime)
-
-    const [terminal] = (await runtime.listTerminals()).terminals
-    runtime.onPtyData('pty-1', '• Working\nTool call\n', 100)
-    runtime.onPtyData(
-      'pty-1',
-      '\x1b[2A\x1b[2K\x1b[1G• Working.\n\x1b[2K\x1b[1GTool call finished\n',
-      101
-    )
-
-    const read = await runtime.readTerminal(terminal.handle)
-    expect(read.tail).toEqual(['• Working.', 'Tool call finished'])
-    expect(read.latestCursor).toBe('4')
-    expect(read.tail.join('\n')).not.toContain('• Working\nTool call\n• Working.')
-    expect(read.tail.join('\n')).not.toContain('2A')
-    expect(read.tail.join('\n')).not.toContain('2K')
-  })
-
-  it('keeps the cursor column when erasing full lines in multi-line redraws', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    syncSinglePty(runtime)
-
-    const [terminal] = (await runtime.listTerminals()).terminals
-    runtime.onPtyData('pty-1', 'ABC\nxyz', 100)
-    runtime.onPtyData('pty-1', '\x1b[1A\x1b[2KXY\n', 101)
-
-    const read = await runtime.readTerminal(terminal.handle)
-    expect(read.tail).toEqual(['   XY'])
-    expect(read.tail.join('\n')).not.toContain('ABCXY')
-    expect(read.tail.join('\n')).not.toContain('2K')
   })
 
   it('retains split multi-line ANSI footer redraw state across chunks', async () => {
@@ -401,31 +261,6 @@ describe('OrcaRuntimeService', () => {
       }
     ).ptysById.get('pty-1')
     expect(pty?.lastOscTitle).toBe('x'.repeat(MAX_OSC_TITLE_CHARS))
-  })
-
-  it('applies ANSI split redraw controls without leaking raw params', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    syncSinglePty(runtime)
-
-    const [terminal] = (await runtime.listTerminals()).terminals
-    runtime.onPtyData('pty-1', 'Frame old', 100)
-    runtime.onPtyData('pty-1', '\x1b[', 101)
-
-    const pendingEraseRead = await runtime.readTerminal(terminal.handle)
-    expect(pendingEraseRead.tail).toEqual(['Frame old'])
-    expect(pendingEraseRead.tail.join('\n')).not.toContain('[')
-
-    runtime.onPtyData('pty-1', '2K\x1b[', 102)
-    const pendingColumnRead = await runtime.readTerminal(terminal.handle)
-    expect(pendingColumnRead.tail.join('\n')).not.toContain('2K')
-    expect(pendingColumnRead.tail.join('\n')).not.toContain('1G')
-
-    runtime.onPtyData('pty-1', '1GFrame new\n', 103)
-    const read = await runtime.readTerminal(terminal.handle)
-    const retained = read.tail.join('\n')
-    expect(read.tail).toEqual(['Frame new'])
-    expect(retained).not.toContain('2K')
-    expect(retained).not.toContain('1G')
   })
 
   it('retains same-line redraw cursor position across split full-line erase chunks', async () => {

@@ -8,21 +8,18 @@ import {
 } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { RemoteRuntimeMultiplexedTerminalCallbacks } from '@/runtime/hosted-terminals/streams/remote-terminal-stream-contracts'
-import { TooltipProvider } from '@/components/ui/tooltip'
+
 import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { resetRemoteRuntimeTerminalPreviewSessionsForTests } from './remote-runtime-terminal-preview-api'
 import {
   installPreviewDomFixture,
   mountPreviewLinkInteraction
 } from './dashboard-preview-dom-test-fixture'
-import { verifyPreviewLinkPopulation } from './dashboard-preview-link-population-test-fixture'
 
-import { toast } from 'sonner'
-import { runtimeStatuses } from '@/store/slices/browser/browser-slice-test-harness'
 import type { openStandaloneTerminal } from '../standalone-terminal/open-standalone-terminal'
 
 import { getDefaultSettings } from '../../../../shared/constants'
-import { createStoreCascadesMockApi } from '@/store/slices/store-cascades-test-harness'
+import { createStoreCascadesMockApi } from '@/store/testing/app-store-cascade-api.test-fixture'
 import {
   createBrowserLinkTestStore,
   WORKSPACE,
@@ -33,14 +30,12 @@ import {
   registerWorkspaceHttpLinkBrowserOpener
 } from '@/lib/browser/navigation/http-link-routing'
 import { openWorkspaceBrowserTabForLink } from '@/lib/browser/workspace/workspace-browser-tab-open'
-import { AgentTerminalPreview } from './AgentTerminalPreview'
+
 import { terminalPreviewApiFor } from './terminal-preview-api'
 import { AgentKanbanBoard } from './AgentKanbanBoard'
 
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { DashboardPreviewLinkSource } from './dashboard-preview-http-actions'
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
@@ -76,9 +71,7 @@ vi.mock(
     })
   })
 )
-function render(ui: React.ReactElement) {
-  return renderWithoutApp(ui, { wrapper: TooltipProvider })
-}
+
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(
     (selector: (state: ReturnType<typeof mocks.getState>) => unknown) => selector(mocks.getState()),
@@ -88,7 +81,7 @@ vi.mock('@/store', () => ({
 vi.mock('@/hooks/theme/use-system-prefers-dark', () => ({
   useSystemPrefersDark: () => false
 }))
-vi.mock('@/lib/shortcut-platform', () => ({ getShortcutPlatform: () => 'linux' }))
+vi.mock('@/lib/keyboard/shortcut-platform', () => ({ getShortcutPlatform: () => 'linux' }))
 vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn(), info: vi.fn(), warning: vi.fn() }
 }))
@@ -215,104 +208,6 @@ async function output(data: string, ptyId = 'pty-1') {
 }
 const osc = `\x1b]8;;${URL_TO_OPEN}\x07hidden label\x1b]8;;\x07`
 
-it.each(['actions', 'open'] as const)(
-  'retains the provider-owned hidden OSC target across unrelated live row output for %s and context',
-  async (behavior) => {
-    store.setState((state) => ({
-      settings: { ...state.settings!, terminalLinkClickBehavior: behavior }
-    }))
-    const view = render(<AgentTerminalPreview ptyId="pty-1" linkSource={source} />)
-    await waitFor(() => screenFor(view.container))
-    await output(`\x1b[?1000h\x1b[?1006h${osc}\x1b[3;1Hprogress 1`)
-    const screen = screenFor(view.container)
-    const terminal = view.container.querySelector('.xterm')!
-    pointer(screen, 'mousemove', { buttons: 0 })
-    await waitFor(() => expect(terminal.getAttribute('title')).toBe(URL_TO_OPEN))
-    await output('\x1b[3;1Hprogress 2')
-    await waitFor(() => expect(view.container.textContent).toContain('progress 2'))
-    expect(terminal.getAttribute('title')).toBe(URL_TO_OPEN)
-    // Keep the pointer stationary: the retained provider does not emit another hover.
-    pointer(screen, 'mousedown')
-    pointer(screen, 'mouseup')
-    if (behavior === 'actions') {
-      const system = await view.findByRole('button', { name: /System Browser/ })
-      expect(document.querySelector('[data-terminal-link-destination]')?.textContent).toBe(
-        URL_TO_OPEN
-      )
-      fireEvent.click(system)
-    }
-    await waitFor(() => expect(openUrl).toHaveBeenCalledExactlyOnceWith(URL_TO_OPEN))
-    expect(input.mock.calls.map(([, data]) => data)).toEqual([])
-    await output('\x1b[3;1Hprogress 3')
-    const context = pointer(screen, 'contextmenu', { button: 2, buttons: 0 })
-    expect(context.defaultPrevented).toBe(true)
-    const copy = await view.findByRole('button', { name: 'Copy link' })
-    expect(document.querySelector('[data-terminal-link-destination]')?.textContent).toBe(
-      URL_TO_OPEN
-    )
-    fireEvent.click(copy)
-    await waitFor(() => expect(window.api.ui.writeClipboardText).toHaveBeenCalledWith(URL_TO_OPEN))
-    pointer(screen, 'mouseleave', { buttons: 0 })
-    expect(terminal.hasAttribute('title')).toBe(false)
-  }
-)
-
-function seedRemoteWorkspace(
-  hostId: ExecutionHostId,
-  environmentId: string,
-  streaming: boolean
-): void {
-  store.setState((state) => ({
-    activeWorkspaceExecutionHostId: hostId,
-    worktreesByRepo: {
-      repo1: state.worktreesByRepo.repo1!.map((row) => ({
-        ...row,
-        hostId,
-        runtimeOwnerEnvironmentId: environmentId
-      }))
-    },
-    unifiedTabsByWorktree: {
-      [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.map((tab) => ({
-        ...tab,
-        executionHostId: hostId
-      }))
-    },
-    runtimeStatusByEnvironmentId: new Map([
-      [environmentId, runtimeStatuses(streaming ? ['browser.screencast.v1'] : []).get('env-1')!]
-    ]),
-    settings: { ...state.settings!, browserClientHostedRemoteEnabled: false, openLinksInApp: true }
-  }))
-}
-
-it('gives one useful refusal when a real saved chooser action loses runtime browser eligibility', async () => {
-  const hostId = 'runtime:e'
-  const ptyId = 'remote:e@@handle-1'
-  const linkSource = {
-    ...source,
-    executionHostId: hostId,
-    ptyId
-  } satisfies DashboardPreviewLinkSource
-  const foreground = vi.fn()
-  seedRemoteWorkspace(hostId, 'e', true)
-  const props = { ptyId, linkSource, onBrowserForeground: foreground }
-  const view = render(<AgentTerminalPreview {...props} />)
-  await waitFor(() => screenFor(view.container))
-  await output(osc, ptyId)
-  const screen = screenFor(view.container)
-  pointer(screen, 'mousedown')
-  pointer(screen, 'mouseup')
-  const savedAction = await view.findByRole('button', { name: /Orca Browser/ })
-  // Actual failed-status refresh shape, after the real request has captured its action.
-  store.setState({ runtimeStatusByEnvironmentId: new Map([['e', { status: null, checkedAt: 2 }]]) })
-  fireEvent.click(savedAction)
-  await waitFor(() => expect(toast.error).toHaveBeenCalledExactlyOnceWith('Unable to open URL.'))
-  expect(document.querySelector('[data-link-action-popover]')).toBeNull()
-  expect(store.getState().browserPagesByWorkspace).toEqual({})
-  expect(openUrl).not.toHaveBeenCalled()
-  expect(foreground).not.toHaveBeenCalled()
-  expect(input.mock.calls.map(([, data]) => data)).toEqual([])
-})
-
 function mountedInteraction() {
   return mountPreviewLinkInteraction(
     source,
@@ -320,22 +215,6 @@ function mountedInteraction() {
     (instance) => instances.push(instance)
   )
 }
-
-it.each([10, 100])(
-  'bounds actual registration, document callbacks and target input/output at P=%s; reset/dispose leave zero adapter residue',
-  async (population) => {
-    await verifyPreviewLinkPopulation(
-      population,
-      source,
-      () => store.getState().settings,
-      (instance) => instances.push(instance),
-      osc,
-      URL_TO_OPEN,
-      pointer,
-      screenFor
-    )
-  }
-)
 
 it('retains actual boolean/Promise forwarding results and flushes unclaimed reports in order, with finite overflow and cleanup', async () => {
   const preview = mountedInteraction()

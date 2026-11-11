@@ -2,7 +2,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { isResumableTuiAgent } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { OrchestrationPartyLocation } from '../../../../../../shared/orchestration-caller-status'
+import type { OrchestrationPartyLocation } from '../../../../../../shared/orchestration/orchestration-caller-status'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { readWorkerResumeSession } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'

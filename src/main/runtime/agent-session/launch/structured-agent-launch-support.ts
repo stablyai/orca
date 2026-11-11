@@ -1,6 +1,7 @@
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { overlayEnvironmentVariables } from '../../../../shared/environment-overlay'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import {
   resolveTuiAgentLaunchEnv,
@@ -32,6 +33,7 @@ import type { AgentSessionAccountHome } from '../../../../shared/agent-session/l
 import { nativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat/native-chat-shell-environment'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
 import { structuredChatUnavailableOnPlatform } from '../../../../shared/agent-session/structured-chat-platform-support'
+import { stripInheritedAgentSessionEnv } from '../../../../shared/agent-launch/startup/parent-agent-session-env'
 
 export type LaunchEnvironmentSettings = Pick<
   GlobalSettings,
@@ -101,10 +103,15 @@ export async function resolveHostStructuredAgentLaunchEnvironment(
   agent: string,
   settings: LaunchEnvironmentSettings
 ): Promise<Record<string, string>> {
-  return {
-    ...(await resolveHostAgentBaseEnvironment(settings)),
-    ...(isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings) : {})
+  const inherited = { ...(await resolveHostAgentBaseEnvironment(settings)) }
+  if (agent === 'claude') {
+    stripInheritedAgentSessionEnv(inherited)
   }
+  return overlayEnvironmentVariables(
+    inherited,
+    isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings) : undefined,
+    process.platform
+  )
 }
 
 /** What a chat start of `agent` on this host launches from, for a child that serves no chat. */

@@ -5,19 +5,20 @@ import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import type { OpenCodeUsageStore } from '../opencode-usage/store'
 import type { MuseUsageStore } from '../muse-usage/store'
+import type { UsageWorktreeHistory } from '../usage/worktree-attribution/usage-worktree-history'
 import type { CodexAccountService } from '../codex-accounts/service'
 import type { CodexRuntimeHomeService } from '../codex-accounts/runtime-home-service'
 import type { ClaudeAccountService } from '../claude-accounts/service'
 import type { ClaudeRuntimeAuthService } from '../claude-accounts/runtime-auth-service'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import type { RateLimitService } from '../rate-limits/service'
+import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
 import type { OrcaRuntimeRpcServer } from '../runtime/rpc/server/runtime-rpc'
 import type { DesktopRelayService } from '../runtime/mobile-cloud-relay/desktop-relay-service'
 import type { DesktopRelayServiceInstaller } from '../runtime/mobile-cloud-relay/desktop-relay-service-installer'
 import type { DesktopPushService } from '../runtime/push/desktop-push-service'
 import type { StarNagService } from '../star-nag/service'
 import type { AgentAwakeService } from '../power/agent-awake-service'
-import type { CrashReportStore } from '../crash-reporting/crash-report-store'
+import type { CrashReportStore } from '../crash-reporting/reports/crash-report-store'
 import type { AutomationService } from '../automations/service'
 import type { PluginService } from '../plugins/plugin-service'
 import type { PluginKillListService } from '../plugins/catalog/plugin-kill-list-service'
@@ -45,11 +46,11 @@ import {
   DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD,
   DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS,
   GpuCrashFallbackTracker
-} from '../crash-reporting/gpu-crash-fallback-decision'
-import type { GpuCrashDiagnosticsRecorder } from '../crash-reporting/gpu-crash-diagnostics'
+} from '../crash-reporting/recovery/gpu-crash-fallback-decision'
+import type { GpuCrashDiagnosticsRecorder } from '../crash-reporting/capture/gpu-crash-diagnostics'
 import { createWebContentsTimedFlag } from './web-contents-timed-flag'
-import type { ProfileStateStorageClassification } from '../persistence/profile-state/profile-state-storage-classification'
-import type { ProfileStateRuntimeAdmission } from '../persistence/profile-state/profile-state-access'
+import type { ProfileStateStorageClassification } from '../persistence/profile-state/database/profile-state-storage-classification'
+import type { ProfileStateRuntimeAdmission } from '../persistence/profile-state/access/profile-state-access'
 
 export type ProfileStateStartupMetadata = {
   backend: 'sqlite'
@@ -84,6 +85,8 @@ export const mainProcessState = {
   openCodeUsage: null as OpenCodeUsageStore | null,
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot to the store type assigned by main-process-observers.
   museUsage: null as MuseUsageStore | null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot to the history assigned by main-process-observers.
+  usageWorktreeHistory: null as UsageWorktreeHistory | null,
   codexAccounts: null as CodexAccountService | null,
   codexRuntimeHome: null as CodexRuntimeHomeService | null,
   codexSessionMigration: null as ReturnType<typeof createCodexSessionMigrationScheduler> | null,

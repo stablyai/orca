@@ -6,8 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   useCustomEditorViewStore,
   type ActivePluginCustomEditor
-} from '@/store/plugin-custom-editors'
-import { usePluginFrameIsolationStore } from '@/store/plugin-frame-isolation'
+} from '@/store/plugins/file-editors/plugin-custom-editors'
+import { usePluginFrameIsolationStore } from '@/store/plugins/frames/plugin-frame-isolation'
 
 vi.mock('@/i18n/i18n', () => ({
   getIntlLocale: () => 'en-US',

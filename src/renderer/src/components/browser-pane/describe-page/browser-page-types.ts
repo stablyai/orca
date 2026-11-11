@@ -5,8 +5,8 @@ import type {
   BrowserGrabPayload,
   BrowserPageAnnotation,
   GrabIntent
-} from '../../../../../shared/browser-grab-types'
-import type { BrowserContextMenuRequestedEvent } from '../../../../../shared/browser-guest-events'
+} from '../../../../../shared/browser/element-grab/browser-grab-types'
+import type { BrowserContextMenuRequestedEvent } from '../../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
 import type { GrabModeHook } from '../annotate/useGrabMode'
 import type { BrowserOverlayViewport } from './browser-annotation-geometry'
@@ -30,8 +30,6 @@ export type BrowserChromeShortcutScope =
   | 'inactive'
   | 'owned-target'
   | 'owned-target-focused'
-
-export type { GrabIntent } from '../../../../../shared/browser-grab-types'
 
 export type BrowserPageContextMenuState = Pick<
   BrowserContextMenuRequestedEvent,
@@ -76,6 +74,8 @@ export type BrowserPageGrabAnnotations = {
   setGrabToast: Dispatch<SetStateAction<BrowserPageGrabToastState | null>>
   grabToastTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | undefined>
   dismissGrabToast: () => void
+  /** Copies a grab screenshot; `onSettled` runs only while that copy still owns the toast. */
+  copyGrabScreenshot: (dataUrl: string, onSettled: (copied: boolean) => void) => void
   handleGrabCopy: () => void
   handleGrabCopyScreenshot: () => void
   grabMenuActionTakenRef: MutableRefObject<boolean>
@@ -129,6 +129,22 @@ export type BrowserPageAnnotationTrayProps = {
     intent: BrowserAnnotationIntent,
     imagePaths: string[]
   ) => void
+}
+
+export type BrowserPagePaneProps = {
+  browserTab: BrowserPageState
+  workspaceId: string
+  worktreeId: string
+  sessionProfileId: string | null
+  sessionPartition: string | null
+  isActive: boolean
+  chromeShortcutScope: BrowserChromeShortcutScope
+  isAutomationVisible: boolean
+  isMobileDriven: boolean
+  isRemotelyViewed: boolean
+  inputLocked: boolean
+  onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
+  onSetUrl: BrowserPageUrlSetter
 }
 
 export type ClientHostedBrowserPagePaneProps = {

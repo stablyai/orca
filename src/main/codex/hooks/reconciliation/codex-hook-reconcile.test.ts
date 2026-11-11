@@ -13,8 +13,8 @@ import {
 import type * as NodeOs from 'node:os'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import '../../../agent-hooks/installer-utils'
-import { wrapPosixHookCommand } from '../../../agent-hooks/posix-hook-command'
+
+import { wrapPosixHookCommand } from '../../../agent-hooks/installation/commands/posix-hook-command'
 import type * as CodexCommand from '../../../codex-cli/command'
 import type * as TrustDerivation from '../../trust/hooks/codex-hook-trust-derivation'
 import type * as RealHomeInstall from './codex-real-home-hook-install'

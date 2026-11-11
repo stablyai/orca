@@ -1,11 +1,13 @@
 import type * as WorkspaceAndProjectStateModule from '../../tasks/use-mobile-tasks-workspace-and-project-state'
 import type * as GithubTaskIdentityModule from '../../tasks/github-task-identity'
 import type * as TaskItemStateModule from '../../tasks/use-mobile-tasks-item-state'
+import type * as TaskDraftRowsModule from '../../tasks/task-draft-rows'
+import type * as DurableDraftFieldsModule from '../../drafts/durable-draft-fields'
 import { useLayoutEffect, useRef } from 'react'
 import type { operationModuleLoader } from './operation-module-loader'
 import type { ActionableTaskItem } from '../../tasks/mobile-tasks-project-workspace-types'
 import type { DetailPayload } from '../../tasks/mobile-tasks-provider-detail-types'
-import type { RpcClient } from '../../transport/rpc-client'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { MountContext } from './recording-scenario'
 import { projectObservable } from './observable-model'
 import { captureValue, type RecordedValue } from './recording-values'
@@ -22,13 +24,35 @@ function useTaskStateAndSelection(
   const { useMobileTasksSelection, githubTaskKey } = modules.load<typeof GithubTaskIdentityModule>(
     'mobile/src/tasks/github-task-identity.ts'
   )
-  const state = useMobileTasksItemState()
+  const { useTaskCommentDraft } = modules.load<typeof TaskDraftRowsModule>(
+    'mobile/src/tasks/task-draft-rows.ts'
+  )
+  const itemState = useMobileTasksItemState()
   const selection = useMobileTasksSelection(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mount adapter stores its actual recording client in this field.
     model.client as RpcClient,
-    state.readDetailPayload,
-    state.reconcilePrFileConnection
+    itemState.readDetailPayload,
+    itemState.reconcilePrFileConnection
   )
+  // The comment box is kept per item, so its fixture text goes in once the item is selected.
+  const [itemCommentDraft, setItemCommentDraft] = useTaskCommentDraft(selection.actionItem)
+  const state = { ...itemState, itemCommentDraft, setItemCommentDraft }
+  const { resetDurableDraftFieldsForTests } = modules.load<typeof DurableDraftFieldsModule>(
+    'mobile/src/drafts/durable-draft-fields.ts'
+  )
+  // The recording's document ends at unmount, and its unsaved draft timers end with it as a page's would.
+  useLayoutEffect(() => resetDurableDraftFieldsForTests, [])
+  const commentSeeded = useRef(false)
+  useLayoutEffect(() => {
+    if (
+      !commentSeeded.current &&
+      selection.actionItem &&
+      typeof fixture.itemCommentDraft === 'string'
+    ) {
+      commentSeeded.current = true
+      setItemCommentDraft(fixture.itemCommentDraft)
+    }
+  })
   useLayoutEffect(() => {
     const isStateKey = (key: string): key is keyof typeof state => key in state
     for (const [field, value] of Object.entries(fixture)) {

@@ -206,7 +206,6 @@
     },
     "composerPlaceholder": {
       "prompt": "Frage stellen, @ für Dateiverweise, / für Befehle",
-      "reconnecting": "Verbindung wird wiederhergestellt…",
       "waitingForTerminal": "Warten auf Terminal…"
     },
     "diffCard": {
@@ -301,12 +300,18 @@
       "plan": "Plan",
       "stoppedManually": "Manuell gestoppt",
       "permissionDenied": "{{agent}} hat die Berechtigung verweigert. Details anzeigen.",
+      "safetyReviewApproved": "{{agent}} hat diese Aktion genehmigt. Details anzeigen.",
       "safetyReview": "{{agent}} hat eine Warnung zur Sicherheitsprüfung gemeldet. Details anzeigen.",
       "truncatedResponse": "Anbieterantwort gekürzt (ursprüngliche Größe: {{bytes}} Bytes).",
       "modelFallback": "Claude hat das Modell gewechselt: {{from}} → {{to}}.",
       "signIn": "Anmelden",
       "signInHint": "Öffnet ein Terminal auf dem Computer, auf dem dieser Chat läuft",
       "forkedFrom": "Abgezweigt von"
+    },
+    "ciResultLine": {
+      "failingLead": "CI fehlgeschlagen bei",
+      "greenLead": "CI grün bei",
+      "at": "auf"
     },
     "orcaStop": {
       "canContinue": "Die Unterhaltung kann fortgesetzt werden.",
@@ -353,6 +358,13 @@
       "resume": "Fortsetzen",
       "resumeSending": "Senden der Nachrichten in der Warteschlange fortsetzen",
       "title": "Nachrichten in der Warteschlange"
+    },
+    "offlineQueue": {
+      "failed": "Nicht gesendet – zum erneuten Versuch auf Senden tippen",
+      "waitingFor": "Wird gesendet, wenn {{host}} wieder erreichbar ist",
+      "waiting": "Wird gesendet, wenn der Desktop wieder erreichbar ist",
+      "behind": "Wartet – eine Nachricht davor braucht Aufmerksamkeit",
+      "closed": "Nicht gesendet, bevor Orca geschlossen wurde"
     },
     "receipt": {
       "cancelled": "Abgebrochen",
@@ -591,6 +603,7 @@
       "fullCopySaveUpdate": "„Vollständig kopieren“ und Speichern werden für diesen Anhang mit einem Smartphone-Update verfügbar sein."
     },
     "hostOutage": {
+      "offlineAsOf": "{{host}} ist offline · Stand {{time}}",
       "reconnecting": "{{hostName}} verbindet sich erneut…",
       "stopped": "{{hostName}} ist gestoppt. Starte es auf deinem Computer.",
       "server": "Der Server",
@@ -1291,6 +1304,62 @@
       "sessionLimit": "Auf diesem Computer diktieren zu viele Geräte. Erneut versuchen, sobald eines fertig ist.",
       "sessionLost": "Die Verbindung zum Computer wurde beim Diktat unterbrochen. Erneut versuchen.",
       "updateFailed": "Diktateinstellungen konnten nicht aktualisiert werden"
+    },
+    "controls": {
+      "start": "Diktieren",
+      "starting": "Diktat wird gestartet",
+      "stop": "Stoppen und einfügen",
+      "finishing": "Diktat wird abgeschlossen",
+      "cancel": "Diktat abbrechen",
+      "meterOnPhone": "Aufnahme, {{duration}}, auf diesem Telefon",
+      "meterOn": "Aufnahme, {{duration}}, auf {{computer}}",
+      "meterOnComputer": "Aufnahme, {{duration}}, auf dem Computer",
+      "meter": "Aufnahme, {{duration}}",
+      "durationMinutesSeconds": "{{minutes}} {{seconds}}",
+      "durationSeconds_one": "{{count}} Sekunde",
+      "durationSeconds_other": "{{count}} Sekunden",
+      "durationMinutes_one": "{{count}} Minute",
+      "durationMinutes_other": "{{count}} Minuten",
+      "discard": "Aufnahme verwerfen",
+      "retry": "Diktat wiederholen",
+      "retryShort": "Wiederholen"
+    },
+    "status": {
+      "finishingOn": "Wird auf {{computer}} abgeschlossen",
+      "finishingOnComputer": "Wird auf dem Computer abgeschlossen",
+      "movedTo": "Zu {{computer}} gewechselt",
+      "movedToComputer": "Zum Computer gewechselt"
+    },
+    "failure": {
+      "connectionLost": "Verbindung unterbrochen",
+      "connectionSlow": "Verbindung zu langsam",
+      "phoneStopped": "Auf diesem Telefon gestoppt",
+      "stopped": "Diktat gestoppt",
+      "recordingKept": "Aufnahme behalten"
+    },
+    "announce": {
+      "typedInto": "Eingetippt in {{target}}",
+      "insertedIn": "Eingefügt in {{target}}",
+      "listeningOnPhone": "Hört zu. Transkription auf diesem Telefon.",
+      "listeningOn": "Hört zu. Transkription auf {{computer}}.",
+      "listeningOnComputer": "Hört zu. Transkription auf dem Computer.",
+      "finishing": "Wird abgeschlossen.",
+      "inserted": "Eingefügt.",
+      "cancelled": "Diktat abgebrochen.",
+      "movedTo": "Dieses Telefon hat die Transkription beendet. Weiter auf {{computer}}.",
+      "movedToComputer": "Dieses Telefon hat die Transkription beendet. Weiter auf dem Computer.",
+      "stoppedKept": "Diktat gestoppt. {{reason}}. Deine Aufnahme bleibt erhalten.",
+      "stoppedKeptGeneric": "Diktat gestoppt. Deine Aufnahme bleibt erhalten.",
+      "stillListening": "Hört weiter zu."
+    },
+    "pill": {
+      "open": "Öffnen",
+      "listening": "Hört zu",
+      "starting": "Startet",
+      "finishing": "Wird abgeschlossen",
+      "stopped": "Diktat gestoppt",
+      "label": "Diktat in {{target}}, {{duration}}",
+      "hint": "Doppeltippen, um zurückzukehren"
     }
   },
   "files": {
@@ -1307,10 +1376,16 @@
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} auf Mobilgeräten nicht verfügbar",
       "loadFolderFailed": "Ordner konnte nicht geladen werden",
+      "loadedOfTotal": "{{loaded}} von {{total}}",
       "loading": "Wird geladen…",
       "openFolder": "Ordner {{name}} öffnen",
       "previewFile": "Vorschau der Datei {{name}} anzeigen",
       "retryLoading": "{{path}} erneut laden",
+      "searchAll": "Alle durchsuchen",
+      "searchAllIn": "Ganz {{folder}} durchsuchen",
+      "searched": "{{loaded}} von {{total}} in {{folder}} durchsucht.",
+      "searching": "{{folder}} wird durchsucht… {{loaded}} von {{total}}",
+      "showMore": "{{rows}} weitere anzeigen",
       "unavailable": "Auf Mobilgeräten nicht verfügbar"
     },
     "fileExplorerRowActions": {
@@ -1384,15 +1459,16 @@
       "openFailed": "Diese PDF-Datei konnte nicht geöffnet werden",
       "opening": "PDF wird geöffnet…",
       "updateRequired": "Orca Mobile aktualisieren, um PDFs zu öffnen"
+    },
+    "unsavedEditsOffer": {
+      "changedSince": "Auf dem Desktop geändert seit deinen Änderungen von {{time}}",
+      "copyMyEdits": "Meine Änderungen kopieren",
+      "discard": "Verwerfen",
+      "restore": "Wiederherstellen",
+      "unsavedFrom": "Nicht gespeicherte Änderungen von {{time}}"
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "{{count}} aktiv",
-      "heading": "Agenten",
-      "showAll": "Alle {{count}} anzeigen",
-      "showFewer": "Weniger anzeigen"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Update-Hinweis für Orca {{version}} ausblenden",
       "title": "Orca {{version}} ist verfügbar",
@@ -1516,6 +1592,8 @@
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "„{{name}}“ ({{branch}}) löschen?",
+      "deleteDestroysEnvironment": "Dadurch wird auch die Umgebung „{{environment}}“ gelöscht, die Orca dafür erstellt hat, samt nicht committeter Änderungen und laufender Terminals.",
+      "deleteKeepsEnvironment": "Die Umgebung „{{environment}}“, die Orca dafür erstellt hat, läuft weiter: Ihr Rezept hat keinen Löschschritt.",
       "deleteWorktree": "Worktree löschen",
       "pin": "Anheften",
       "primaryWorktreeDeleteHint": "Primärer Worktree — kann nicht gelöscht werden. Stattdessen das Projekt entfernen.",
@@ -2086,6 +2164,10 @@
       "providerExitedRejection": "{{agent}} wurde gestoppt, bevor diese Nachricht gesendet wurde.",
       "providerExitedRow": "{{agent}} wurde während dieser Antwort gestoppt. Die Unterhaltung kann fortgesetzt werden.",
       "providerRateLimited": "{{agent}} hat das Ratenlimit erreicht und versucht es erneut.",
+      "providerUnavailable": "{{agent}} konnte nicht antworten, weil der Dienst ausgelastet ist. Wähle ein anderes Modell oder warte kurz und sende erneut.",
+      "providerSafetyStopped": "{{agent}} hat diese Antwort nach einer Sicherheitsprüfung gestoppt. Überprüfe deine Anfrage und sende sie erneut.",
+      "providerResponseFailed": "{{agent}} konnte diese Antwort nicht abschließen. Öffnen Sie die Details für weitere Informationen.",
+      "selectedModel": "das ausgewählte Modell",
       "providerRejected": "{{agent}} hat diese Nachricht nicht angenommen.",
       "providerRejectedQuoted": "{{agent}} hat diese Nachricht nicht angenommen: {{detail}}.",
       "providerRetryLastError": "Letzter Fehler: {{detail}}.",
@@ -2175,8 +2257,7 @@
       "copyPathLabel": "Pfad der Markdown-Datei kopieren",
       "copySource": "Markdown-Quelltext kopieren",
       "discard": "Verwerfen",
-      "dismissKeyboard": "Tastatur ausblenden",
-      "dismissKeyboardHint": "Blendet die Bildschirmtastatur aus und lässt den Markdown-Editor geöffnet.",
+      "previewTruncated": "Vorschau gekürzt.",
       "readOnly": "Schreibgeschützt"
     },
     "nativeChatAttachActions": {
@@ -2385,11 +2466,7 @@
     "terminalInputActions": {
       "attachFileHint": "Lange drücken, um stattdessen eine Datei anzuhängen",
       "attachPhoto": "Foto anhängen",
-      "sendingImage": "Bild wird gesendet",
-      "startDictation": "Diktat starten",
-      "startingDictation": "Diktat wird gestartet",
-      "stopDictation": "Diktat beenden",
-      "transcribingDictation": "Diktat wird transkribiert"
+      "sendingImage": "Bild wird gesendet"
     },
     "terminalLiveInputStatus": {
       "listening": "Hört zu",
@@ -2398,8 +2475,6 @@
       "processing": "Wird verarbeitet",
       "releaseMicHint": "Zum Stoppen Mikrofon loslassen",
       "startingMic": "Mikrofon wird gestartet",
-      "stopHint": "Zum Stoppen Mikrofon antippen",
-      "transcribing": "Transkription auf dem Desktop",
       "uploadingImage": "Bild wird auf den Host hochgeladen",
       "uploadingImageTitle": "Bild wird hochgeladen"
     },
@@ -2493,7 +2568,8 @@
       "insertFailed": "Diktat konnte nicht eingefügt werden",
       "insertFailedCopied": "Diktat konnte nicht eingefügt werden und wurde daher in die Zwischenablage kopiert",
       "inserted": "Diktat eingefügt",
-      "stoppedAfterSilence": "Nach einer Minute Stille beendet"
+      "stoppedAtCloudLimit": "Diktat am 10-Minuten-Limit der Cloud gestoppt.",
+      "stoppedAfterSilenceSeconds": "Nach {{seconds}} Sekunden Stille gestoppt"
     },
     "useNativeChatStop": {
       "stopNotSent": "Stoppbefehl nicht gesendet",
@@ -2814,6 +2890,8 @@
       "dictationHeading": "DIKTAT",
       "dictationMode": "Diktatmodus",
       "dictationModeDescription": "Umschalten: einmal zum Starten und erneut zum Stoppen drücken. Gedrückt halten: währenddessen diktieren.",
+      "dictationModeWithAutoDescription": "Automatisch: Tippen zum Starten und Stoppen; am Computer nimmt das Gedrückthalten des Kürzels auf, bis Sie loslassen. Gedrückt halten: währenddessen diktieren. Umschalten: einmal zum Starten und erneut zum Stoppen drücken.",
+      "autoMode": "Automatisch",
       "downloadFailed": "Download fehlgeschlagen",
       "enableDictation": "Diktat aktivieren",
       "holdMode": "Gedrückt halten",
@@ -3286,6 +3364,27 @@
     }
   },
   "tasks": {
+    "hostedMerge": {
+      "confirmGitHubMerge": "PR #{{number}} zusammenführen?",
+      "confirmGitHubSquash": "PR #{{number}} mit Squash zusammenführen?",
+      "confirmGitHubRebase": "PR #{{number}} mit Rebase zusammenführen?",
+      "confirmGitLabMerge": "Merge Request #{{number}} zusammenführen?",
+      "confirmGitLabSquash": "Merge Request #{{number}} mit Squash zusammenführen?",
+      "confirmGitLabRebase": "Merge Request #{{number}} mit Rebase zusammenführen?",
+      "merged": "Zusammengeführt",
+      "closed": "Geschlossen",
+      "conflicts": "Konflikte",
+      "behind": "Nicht aktuell",
+      "blocked": "Blockiert",
+      "checksPending": "Prüfungen ausstehend",
+      "ableToMerge": "Zusammenführen möglich",
+      "unknown": "Unbekannt"
+    },
+    "pagination": {
+      "pageUnreachable": "Seite {{page}} liegt außerhalb des Bereichs der GitHub-Suche.",
+      "loadPageFailed": "Seite {{page}} konnte nicht von GitHub geladen werden.",
+      "noMoreResults": "Keine weiteren Ergebnisse auf Seite {{page}}."
+    },
     "composerSource": {
       "baseFailed": "Der Basis-Branch konnte nicht ermittelt werden.",
       "forkPushWarning": "Bei diesem PR ist „Allow edits from maintainers“ deaktiviert; GitHub könnte einen Push zum Fork ablehnen."

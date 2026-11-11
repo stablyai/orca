@@ -5,7 +5,7 @@ import {
   type AgentSessionCreateOperation
 } from '../../../../runtime/hosted-terminals/creation/agent-launch/agent-session-create-operation'
 import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
-import { toRuntimeTerminalWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
+import { toRuntimeTerminalWorktreeSelector } from '../../../../runtime/rpc/targets/runtime-worktree-selector'
 
 type PtyConnectOptions = Parameters<PtyTransport['connect']>[0]
 const modelLaunchOperations = new WeakMap<IpcPtyTransportOptions, AgentSessionCreateOperation>()
@@ -19,9 +19,7 @@ export type IpcPtySpawnResponse = PtyConnectResult & {
 export async function spawnIpcPty(
   transportOptions: IpcPtyTransportOptions,
   connectOptions: PtyConnectOptions,
-  admittedSessionId?: string,
-  /** The user's "let agents ask" answer for this launch. */
-  skipAgentWorkspaceTrust = false
+  admittedSessionId?: string
 ): Promise<IpcPtySpawnResponse> {
   if (
     !admittedSessionId &&
@@ -146,7 +144,6 @@ export async function spawnIpcPty(
     ...(placement && !admittedSessionId ? { placement } : {}),
     ...(spawnIntent ? { spawnIntent } : {}),
     ...(connectOptions.wslPassiveRestore ? { wslPassiveRestore: true as const } : {}),
-    ...(skipAgentWorkspaceTrust ? { skipAgentWorkspaceTrust: true as const } : {}),
     ...(replacesPtyId ? { replacesPtyId } : {}),
     ...(shellOverride ? { shellOverride } : {}),
     ...(projectRuntime ? { projectRuntime } : {}),

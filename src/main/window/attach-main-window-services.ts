@@ -20,11 +20,11 @@ import type {
 } from '../ipc/pty/host-env/types'
 import { registerDaemonManagementHandlers } from '../ipc/pty/pty-management'
 import { registerSshHandlers } from '../ipc/ssh/ssh'
-import { browserManager } from '../browser/browser-manager'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import {
   hasSystemMediaAccess,
   requestSystemMediaAccess
-} from '../browser/site-settings/browser-media-access'
+} from '../browser/site-settings/permissions/browser-media-access'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RuntimeWorktreeLifecycleEvent } from '../runtime/workspaces/lifecycle/worktree-lifecycle-event'
 import type {
@@ -32,7 +32,7 @@ import type {
   UpdateInstallMode
 } from '../updater/lifecycle/updater-state'
 import { scheduleHistoryGc } from '../pty/history/terminal-history-gc'
-import { openCodeHookService, openCode2HookService } from '../opencode/hook-service'
+import { openCodeHookService, openCode2HookService } from '../opencode/status-hooks/hook-service'
 import { listLiveDaemonPtyIds } from '../daemon/providers/lifecycle/daemon-provider-state'
 import { hydrateLocalPtyRegistryAtBoot } from '../memory/hydrate-local-pty-registry'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'

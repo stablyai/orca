@@ -14,7 +14,7 @@ import {
   pickPrimaryHostForClaims
 } from '../../../../shared/workspace-session/workspace-session-contested-primary-host'
 import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 
 export type CachedWorktreeHost = Pick<Worktree, 'id' | 'hostId' | 'runtimeOwnerEnvironmentId'>
 

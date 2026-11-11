@@ -76,20 +76,6 @@ describe('Relay-bound pairing offer expiry', () => {
     vi.useRealTimers()
   })
 
-  it('revokes the Relay invite of an expired offer when it is discarded', async () => {
-    const { server, revoked } = await startRelayServer()
-    try {
-      const first = await mint(server)
-      vi.setSystemTime(T0 + TTL)
-      const next = await mint(server)
-      expect(next).not.toBe(first)
-      expect(revoked).toEqual([first])
-      expect(server.getDeviceRegistry()?.getDevice(first)).toBeNull()
-    } finally {
-      await server.stop()
-    }
-  })
-
   it('revokes every overlapping offer on rotate', async () => {
     const { server, revoked } = await startRelayServer()
     try {

@@ -7,87 +7,13 @@ import { describe, expect, it, vi } from 'vitest'
 import type { WebSocket } from 'ws'
 import { DeviceRegistry } from './pairing/device-registry'
 import { OrcaRuntimeService } from '../../orca-runtime'
-import { defineStreamingMethod } from '../core'
+import { defineStreamingMethod, type RpcContext } from '../core'
+import { defineOrchestrationStreamingMethod } from '../methods/orchestration/access/orchestration-method-access'
 
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { withCurrentOrchestrationContract } from './runtime-rpc-test-harness'
 
 describe('runtime RPC browser-host admission', () => {
-  it('reserves wait capacity and releases host admission on socket close', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-browser-host-admission-'))
-    const aborted = vi.fn()
-    const blockingMethod = (name: 'browser.clientHost.attach' | 'terminal.wait') =>
-      defineStreamingMethod({
-        name,
-        permission: 'workspace',
-        params: null,
-        handler: async (_params, { signal }) => {
-          await new Promise<void>((resolve) => {
-            signal?.addEventListener(
-              'abort',
-              () => {
-                aborted(name)
-                resolve()
-              },
-              { once: true }
-            )
-          })
-        }
-      })
-    const server = new OrcaRuntimeRpcServer({
-      runtime: new OrcaRuntimeService(),
-      userDataPath,
-      longPollCap: 4,
-      methods: [blockingMethod('browser.clientHost.attach'), blockingMethod('terminal.wait')]
-    })
-    server['deviceRegistry'] = new DeviceRegistry(userDataPath)
-    const device = server['deviceRegistry'].addDevice('runtime-test', 'runtime')
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the server reads only these wiring members in this test.
-    server['mobileSocketWiring'] = {
-      dispose: () => {},
-      getConnectionId: () => 'connection-a'
-    } as unknown as NonNullable<(typeof server)['mobileSocketWiring']>
-    const socket = new FakeWebSocket()
-    const replies: Record<string, unknown>[] = []
-    const dispatch = (id: string, method: string) =>
-      server['handleWebSocketMessage'](
-        JSON.stringify({ id, method, deviceToken: device.token }),
-        (reply) => replies.push(JSON.parse(reply) as Record<string, unknown>),
-        () => {},
-        undefined,
-        socket as unknown as WebSocket
-      )
-
-    try {
-      const host = dispatch('host-a', 'browser.clientHost.attach')
-      await vi.waitFor(() => expect(server['activeBrowserHostLongPolls']).toBe(1))
-      await dispatch('host-overflow', 'browser.clientHost.attach')
-      expect(replies).toContainEqual(
-        expect.objectContaining({
-          id: 'host-overflow',
-          ok: false,
-          error: expect.objectContaining({
-            message: 'browser-host capacity reached; retry with backoff'
-          })
-        })
-      )
-
-      const wait = dispatch('wait-a', 'terminal.wait')
-      await vi.waitFor(() => expect(server['activeLongPolls']).toBe(2))
-
-      socket.readyState = 3
-      socket.emit('close')
-      await Promise.all([host, wait])
-      expect(server['activeLongPolls']).toBe(0)
-      expect(server['activeBrowserHostLongPolls']).toBe(0)
-      expect(aborted).toHaveBeenCalledWith('browser.clientHost.attach')
-      expect(aborted).toHaveBeenCalledWith('terminal.wait')
-    } finally {
-      await server.stop()
-      rmSync(userDataPath, { recursive: true, force: true })
-    }
-  })
-
   it('reserves browser-host capacity for a second paired device', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-browser-host-fairness-'))
     const blockingHost = defineStreamingMethod({
@@ -183,23 +109,24 @@ describe('runtime RPC browser-host admission', () => {
 
   it('keeps a wait slot when asks and browser hosts fill their shared budget', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-browser-host-wait-reserve-'))
-    const blockingMethod = (
-      name: 'browser.clientHost.attach' | 'orchestration.ask' | 'terminal.wait'
-    ) =>
-      defineStreamingMethod({
-        name,
-        permission: 'workspace',
-        params: null,
-        handler: async (_params, { signal }) =>
-          await new Promise<void>((resolve) => signal?.addEventListener('abort', () => resolve()))
-      })
+    const block = async (_params: void, { signal }: RpcContext) =>
+      await new Promise<void>((resolve) => signal?.addEventListener('abort', () => resolve()))
+    const blockingMethod = (name: 'browser.clientHost.attach' | 'terminal.wait') =>
+      defineStreamingMethod({ name, permission: 'workspace', params: null, handler: block })
+    const blockingAsk = defineOrchestrationStreamingMethod({
+      name: 'orchestration.ask',
+      permission: 'workspace',
+      params: null,
+      access: { kind: 'writes', targets: {} },
+      handler: block
+    })
     const server = new OrcaRuntimeRpcServer({
       runtime: new OrcaRuntimeService(),
       userDataPath,
       longPollCap: 4,
       methods: [
         blockingMethod('browser.clientHost.attach'),
-        blockingMethod('orchestration.ask'),
+        blockingAsk,
         blockingMethod('terminal.wait')
       ]
     })

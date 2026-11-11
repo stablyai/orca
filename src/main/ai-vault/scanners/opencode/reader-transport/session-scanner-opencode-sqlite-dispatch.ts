@@ -1,3 +1,5 @@
+import { readOpenCode2ForkCoverage } from '../../../../native-chat/transcript-opencode2-fork-coverage'
+import { readOpenCodeDatabase } from '../sqlite/session-scanner-opencode-sqlite-open'
 import {
   readOpenCodeTranscriptPage,
   readOpenCodeTranscriptSignal
@@ -22,6 +24,13 @@ export async function handleOpenCodeSqliteRequest(
   request: OpenCodeSqliteWorkerRequest
 ): Promise<OpenCodeSqliteWorkerResponse> {
   try {
+    if (request.kind === 'fork-coverage') {
+      const value = readOpenCodeDatabase({
+        dbPath: request.dbPath,
+        read: (db) => readOpenCode2ForkCoverage(db, request.sessionId, request.sourceSessionId)
+      })
+      return { id: request.id, ok: true, value }
+    }
     if (request.kind === 'native-page' || request.kind === 'native-signal') {
       const value =
         request.kind === 'native-signal'

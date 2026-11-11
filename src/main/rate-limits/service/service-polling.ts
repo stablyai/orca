@@ -8,9 +8,9 @@ import {
   normalizePollingInterval,
   type ActiveProviderState,
   type ActiveRateLimitProvider,
-  type ActiveWindowRefreshPlan,
-  type ProviderRateLimits
+  type ActiveWindowRefreshPlan
 } from './service-types'
+import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
 
 export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue {
   setPollingInterval(ms: number): void {

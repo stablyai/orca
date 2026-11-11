@@ -2,13 +2,13 @@ import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-
 import { join } from 'node:path'
 import {
   buildManagedCommandHook,
-  getSharedManagedScriptPath,
   MANAGED_HOOK_TIMEOUT_SECONDS,
-  writeHooksJson,
   type HookCommandConfig,
   type HookDefinition
-} from '../../../agent-hooks/installer-utils'
-import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from '../../../agent-hooks/hook-stdin-contract'
+} from '../../../agent-hooks/installation/configuration/hook-config-schema'
+import { getSharedManagedScriptPath } from '../../../agent-hooks/installation/scripts/managed-hook-script-path'
+import { writeHooksJson } from '../../../agent-hooks/installation/configuration/hooks-json-write'
+import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from '../../../agent-hooks/installation/scripts/hook-stdin-contract'
 import {
   getOrcaManagedCodexHomePath,
   getSystemCodexHomePath

@@ -30,8 +30,12 @@ const ConnectionKindSchema = z.enum(['invite', 'resume'])
 
 // Strict deployed cells reject new hello keys; mirror contract capabilities in upgrade headers.
 export const RELAY_HOST_CAPABILITY_HEADERS = {
-  'x-orca-host-capabilities': 'pending-conn-details,idle-regional-rehome-v1'
+  'x-orca-host-capabilities': 'pending-conn-details,idle-regional-rehome-v1,client-keepalive-v1'
 } as const
+
+// Mirror relay-contract RELAY_CLIENT_KEEPALIVE_*: sent only after a relay's keepalive-offer. The
+// relay answers it without waking, so the bytes must match exactly.
+export const RELAY_CLIENT_KEEPALIVE_FRAME = '{"type":"keepalive"}'
 
 // Mirror RELAY_PROTOCOL_LIMITS.hostAttachDeadlineMs, the phone's data-socket attach window.
 export const RELAY_HOST_ATTACH_DEADLINE_MS = 10_000
@@ -83,6 +87,18 @@ export const RelayDrainMessageSchema = z
 
 export const RelayPingMessageSchema = z
   .object({ type: z.literal('ping'), t: EpochMsSchema })
+  .strict()
+
+export const RelayKeepaliveOfferMessageSchema = z
+  .object({
+    type: z.literal('keepalive-offer'),
+    v: z.literal(1),
+    intervalMs: z.number().int().min(1_000).max(60_000)
+  })
+  .strict()
+
+export const RelayKeepaliveAckMessageSchema = z
+  .object({ type: z.literal('keepalive-ack') })
   .strict()
 
 export const RelayInviteCreatedMessageSchema = z

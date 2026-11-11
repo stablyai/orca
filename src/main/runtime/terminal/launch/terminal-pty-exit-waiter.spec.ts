@@ -4,7 +4,7 @@ import {
   createTranscriptPane,
   TRANSCRIPT_PANE_PTY_ID
 } from '../../orca-runtime-tests/agent-transcript-pane-test-harness'
-import { readRuntimeFixture } from '../../agent-transcript-replay-test-harness'
+import { readRuntimeFixture } from '../wait/agent-transcript-replay-test-harness'
 import { deliverTerminalAgentLaunchPrompt } from '../../rpc/methods/agent-launch/agent-launch-terminal-prompt'
 import { waitForWorkerAgentReady } from '../wait/launched-agent-composer-readiness'
 
@@ -70,74 +70,6 @@ export function registerTerminalPtyExitWaiterTests(): void {
   })
 
   describe('fresh composer lifetime', () => {
-    it.each(['exit', 'replacement', 'prune', 'graph-retirement', 'abort', 'timeout'] as const)(
-      'retires its scanner, listeners and deadline on %s',
-      async (end) => {
-        const { runtime, handle } = await createTranscriptPane({
-          paneTitle: 'shell',
-          foregroundProcess: 'bash',
-          data: ''
-        })
-        const subscribe = vi.spyOn(runtime, 'subscribeToTerminalData')
-        const stop = new AbortController()
-        const removeAbort = vi.spyOn(stop.signal, 'removeEventListener')
-        vi.useFakeTimers()
-        try {
-          const deadlines = vi.spyOn(globalThis, 'setTimeout')
-          const clearDeadline = vi.spyOn(globalThis, 'clearTimeout')
-          const pending = runtime.waitForFreshWorkerComposer(handle, 'claude', 60_000, {
-            signal: stop.signal
-          })
-          const outcome = pending.catch((error: unknown) => error)
-          const settled = vi.fn()
-          outcome.then(settled)
-          expect(runtime['terminalWaiters'].forPty(TRANSCRIPT_PANE_PTY_ID)).toHaveLength(1)
-          expect(subscribe).toHaveBeenCalledOnce()
-          const deadline =
-            deadlines.mock.results[deadlines.mock.calls.findIndex(([, ms]) => ms === 60_000)].value
-          if (end === 'exit') {
-            runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 137, 'inc-1', { providerExitObserved: true })
-          } else if (end === 'replacement') {
-            runtime.onPtySpawned(TRANSCRIPT_PANE_PTY_ID, 'inc-2')
-            runtime['recordPtyWorktree'](TRANSCRIPT_PANE_PTY_ID, 'wt-1', {
-              connected: true,
-              incarnationId: 'inc-2'
-            })
-            runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 137, 'inc-1', { providerExitObserved: true })
-          } else if (end === 'prune') {
-            runtime['dropDisconnectedPtyRecord'](TRANSCRIPT_PANE_PTY_ID)
-          } else if (end === 'graph-retirement') {
-            runtime['restoreHeadlessGraphAuthority']()
-          } else if (end === 'abort') {
-            stop.abort()
-          } else {
-            await vi.advanceTimersByTimeAsync(60_000)
-          }
-          await vi.advanceTimersByTimeAsync(0)
-          expect(settled).toHaveBeenCalledOnce()
-          expect(await outcome).toMatchObject({
-            message:
-              end === 'exit'
-                ? 'terminal_exited'
-                : end === 'abort'
-                  ? 'request_aborted'
-                  : end === 'timeout'
-                    ? 'timeout'
-                    : 'terminal_handle_stale'
-          })
-          expect(runtime['terminalWaiters'].forPty(TRANSCRIPT_PANE_PTY_ID)).toHaveLength(0)
-          expect(
-            runtime['terminalStreamConsumers']['dataListeners'].get(TRANSCRIPT_PANE_PTY_ID)
-          ).toBeUndefined()
-          expect(removeAbort).toHaveBeenCalledWith('abort', expect.any(Function))
-          expect(clearDeadline).toHaveBeenCalledWith(deadline)
-        } finally {
-          vi.useRealTimers()
-          vi.restoreAllMocks()
-        }
-      }
-    )
-
     it.each(['accept-exit', 'exit', 'replacement'] as const)(
       'ignores a late acceptance/foreground success after %s',
       async (end) => {

@@ -2,8 +2,8 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PaneManagerOptions } from '@/lib/pane-manager/pane-manager-types'
 import type { TerminalPaneLayoutNode } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { useAppStore } from '@/store/index'
-import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
-import { layoutFrameTerminalTab } from '@/runtime/layout-frame-terminal-panes'
+import { sendLayoutCommandToOwner } from '@/runtime/workspace-layout/commands/layout-owner-command'
+import { layoutFrameTerminalTab } from '@/runtime/workspace-layout/frames/layout-frame-terminal-panes'
 import { samePanesIgnoringRatios } from '../../../../../../shared/workspace-layout/terminal-pane-tree'
 import {
   allSplitRatios,

@@ -1,15 +1,15 @@
 // Compare window startup from disk with the Loader round trip. Enumerate each divergence as a known defect or accepted difference with its reason.
 
 import { describe, expect, it, vi } from 'vitest'
-import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { LEGACY_WORKSPACE_LAYOUT_PROFILES } from '../../../shared/workspace-layout/workspace-layout-legacy-profile.test-fixture'
 import { loadWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-load'
 import { WORKSPACE_LAYOUT_PROFILES } from '../../../shared/workspace-layout/workspace-layout-profile.test-fixture'
 import { saveWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-save'
-import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
-import { createTestStore } from '../store/slices/store-test-helpers'
+import { createStoreSessionMockApi } from '../store/testing/app-store-session-api.test-fixture'
+import { createTestStore } from '../store/testing/app-store-test-fixture'
 import { GIT, sweptAtStartup } from './startup-window-parity-differences.test-fixture'
 import {
   bootWindowFromPartitions,
@@ -24,7 +24,7 @@ vi.mock('../../../shared/layout-owner-switch', () => ({
   }
 }))
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })

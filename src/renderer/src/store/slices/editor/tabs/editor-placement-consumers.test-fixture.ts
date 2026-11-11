@@ -1,6 +1,8 @@
 import { useAppStore } from '@/store/index'
-import { makeOpenFile, makeTabGroup, makeUnifiedTab } from '../../store-session-test-harness'
-import { makeWorktree, TEST_REPO } from '../../worktrees-slice-test-fixtures'
+import { makeOpenFile } from '../types/open-file.test-fixture'
+import { makeTabGroup, makeUnifiedTab } from '../../tabs/tab-group.test-fixture'
+import { makeWorktree } from '../../worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../../../repos/repo.test-fixture'
 import {
   makeFolderWorkspace,
   makeProjectGroup
@@ -8,10 +10,10 @@ import {
 import type { OpenFile } from '../types/open-file'
 import { createGlobalSettingsFixture } from '../../../../../../shared/global-settings-test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
-import { drawTabsFromMain } from '../../tabs-drawn-from-main.test-fixture'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
-import { beginPendingTab } from '@/runtime/layout-owner-pending-tabs'
-import { newGroupSplitOf } from '@/runtime/layout-owner-new-group-split'
+import { drawTabsFromMain } from '../../tabs/tabs-drawn-from-main.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
+import { beginPendingTab } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
+import { newGroupSplitOf } from '@/runtime/workspace-layout/commands/layout-owner-new-group-split'
 import { editorTabContent } from './editor-tab-open-through-layout-owner'
 import { isEditorTabContentType } from './editor-tab-content-type'
 

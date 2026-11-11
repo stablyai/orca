@@ -1,5 +1,5 @@
-import { saveMobileClipboardImageAsTempFile } from '../../mobile-clipboard-image'
-import type { MobileClipboardImageRpcSender } from '../../mobile-clipboard-image-operations'
+import { saveMobileClipboardImageAsTempFile } from '../../../files/attachments/mobile-clipboard-image'
+import type { MobileClipboardImageRpcSender } from '../../../files/attachments/mobile-clipboard-image-operations'
 // Keep picker dependencies type-only so this upload module stays free of Expo/React Native at runtime.
 import type { MobileImageSource, PickedMobileImage } from '../../../platform/media-picker-contract'
 

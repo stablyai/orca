@@ -33,8 +33,9 @@ export class JournalContextController {
     floor: AgentJournalCursor,
     fence: number,
     items: readonly JournalReplacementItem[],
-    receipt: (cursor: AgentJournalCursor) => JournalOperationReceipt
+    receipt: (cursor: AgentJournalCursor) => JournalOperationReceipt,
+    boundary?: Parameters<typeof rewindJournalContext>[0]['boundary']
   ) {
-    return rewindJournalContext({ ...this.deps, floor, fence, items, receipt })
+    return rewindJournalContext({ ...this.deps, floor, fence, items, receipt, boundary })
   }
 }

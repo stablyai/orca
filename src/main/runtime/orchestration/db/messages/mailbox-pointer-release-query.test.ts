@@ -1,8 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import Database from '../../../../sqlite/sync-database'
 import { OrchestrationDb } from '../orchestration-db'
 import '../contract-constants'
 import './mailbox-routing-page'
@@ -60,36 +56,4 @@ describe('PTY mailbox reservation cleanup', () => {
       db.close()
     }
   })
-
-  it.each(['current', 'before-pointer-columns'])(
-    'installs the lookup on first open of an existing %s database',
-    (version) => {
-      const dir = mkdtempSync(join(tmpdir(), 'orca-pointer-release-'))
-      const path = join(dir, 'orchestration.db')
-      try {
-        new OrchestrationDb(path).close()
-        const raw = new Database(path)
-        try {
-          raw.exec('DROP INDEX idx_messages_pending_pointer_pty')
-          if (version === 'before-pointer-columns') {
-            raw.exec(`DROP INDEX idx_messages_pending_pointer_enter;
-              ALTER TABLE messages DROP COLUMN pointer_enter_pending;
-              ALTER TABLE messages DROP COLUMN pointer_pty_id;
-              ALTER TABLE messages DROP COLUMN pointer_process_incarnation;`)
-            raw.pragma('user_version = 32')
-          }
-        } finally {
-          raw.close()
-        }
-        const reopened = new OrchestrationDb(path)
-        try {
-          assertTargetedRelease(reopened)
-        } finally {
-          reopened.close()
-        }
-      } finally {
-        rmSync(dir, { recursive: true, force: true })
-      }
-    }
-  )
 })

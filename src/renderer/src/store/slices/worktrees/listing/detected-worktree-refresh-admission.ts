@@ -1,5 +1,5 @@
-import { getEnvironmentSshStateGeneration } from '../../runtime-environment-ssh'
-import { getRuntimeEnvironmentConnectionGeneration } from '../../runtime-status'
+import { getEnvironmentSshStateGeneration } from '../../ssh/runtime-environment-ssh'
+import { getRuntimeEnvironmentConnectionGeneration } from '../../runtime-status/runtime-status-connection-generation'
 import type { AppState } from '../../../types'
 import type { HostQualifiedDetectedWorktreeResult } from '../../../../../../shared/detected-worktree-provider-contract'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'

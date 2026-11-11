@@ -1,13 +1,14 @@
-import type { PendingSessionSelection } from '../../../session/pending-session-selection'
+import type * as UseMobileSessionTerminalCreateActionsModule from '../../../terminal/session/use-mobile-session-terminal-create-actions'
+import type { PendingSessionSelection } from '../../../session/tabs/pending-session-selection'
 import { hookMount } from '../hook-mount'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
 import type {
   MobileSessionTab,
-  MobileSessionTabType,
-  Terminal
-} from '../../../session/mobile-session-route-types'
+  MobileSessionTabType
+} from '../../../session/tabs/mobile-session-tabs'
+import type { Terminal } from '../../../terminal/session/mobile-terminal-model'
 import type { TuiAgent } from '../../../../../src/shared/agent-launch/catalog/tui-agent'
 import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../src/shared/protocol-version'
 
@@ -40,12 +41,10 @@ export function sessionTerminalCreateMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'session.create-terminal': ({ client, effect }) => {
-      const useCreateActions = modules.load<
-        typeof import('../../../session/use-mobile-session-terminal-create-actions')
-      >(
-        'mobile/src/session/use-mobile-session-terminal-create-actions.ts'
+      const useCreateActions = modules.load<typeof UseMobileSessionTerminalCreateActionsModule>(
+        'mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts'
       ).useMobileSessionTerminalCreateActions
-      modules.load('mobile/src/session/mobile-session-terminal-create-request.ts')
+      modules.load('mobile/src/terminal/session/mobile-session-terminal-create-request.ts')
 
       let terminals: Terminal[] = []
       let sessionTabs: MobileSessionTab[] = []

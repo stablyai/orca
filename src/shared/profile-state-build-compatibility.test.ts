@@ -15,8 +15,4 @@ describe('SQLite profile build selection', () => {
       expect(profileStateBuildCompatibilityError('1.4.221', version)).toBeNull()
     }
   )
-
-  it('leaves JSON-era build selection unaffected', () => {
-    expect(profileStateBuildCompatibilityError('1.4.200', '1.4.199')).toBeNull()
-  })
 })

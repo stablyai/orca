@@ -10,10 +10,10 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useEffect, useRef, useState } from 'react'
 import { useAutomationTargetDrafts } from './use-automation-target-drafts'
 import { Text, View } from 'react-native'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { MobileAutomation } from './automation-reply-schema'
 import { mobileTuiAgentLabel } from '../tasks/mobile-tui-agents'
-import type { MobileNewTabAgentOption } from '../session/mobile-new-tab-agent-options'
+import type { MobileNewTabAgentOption } from '../session/agent-launch/mobile-new-tab-agent-options'
 import { AutomationAdvancedFields } from './AutomationAdvancedFields'
 import { AutomationButton, AutomationChoice, AutomationField } from './AutomationControls'
 import { AutomationScheduleFields } from './AutomationScheduleFields'
@@ -29,6 +29,7 @@ import {
   validateAutomationDraft,
   type AutomationDraft
 } from './automation-draft'
+import { useAutomationEditorDraft } from './use-automation-editor-draft'
 import { automationErrorMessage } from './automation-error'
 import { automationStyles as styles } from './automation-styles'
 
@@ -36,6 +37,8 @@ export function AutomationEditor(props: {
   client: RpcClient
   current?: MobileAutomation
   initialDraft?: AutomationDraft
+  /** Where unsaved edits are kept; they come back when this editor opens again, even after a kill. */
+  draftKey: string
   onDraftChange: (draft: AutomationDraft) => void
   busy: boolean
   connected: boolean
@@ -46,9 +49,9 @@ export function AutomationEditor(props: {
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
-  const [draft, setDraft] = useState(() => props.initialDraft ?? newAutomationDraft(props.current))
-  const original = useRef(newAutomationDraft(props.current))
-  const leave = useAutomationLeaveGuard(draft, original, props.leaveGuard)
+  const form = useAutomationEditorDraft(props.draftKey, props.current, props.initialDraft)
+  const { draft, setDraft, original } = form
+  const leave = useAutomationLeaveGuard(draft, original, props.leaveGuard, form.discard)
   const selectTargetDraft = useAutomationTargetDrafts()
   const initialized = useRef(false)
   const [targets, setTargets] = useState<AutomationTargets | null>(null)
@@ -96,7 +99,7 @@ export function AutomationEditor(props: {
             initial.workspaceMode = 'existing'
           }
           original.current = { ...initial }
-          setDraft(props.initialDraft ?? initial)
+          setDraft(props.initialDraft ?? form.withSavedEdits(initial))
         }
       })
       .catch((failure: unknown) => {

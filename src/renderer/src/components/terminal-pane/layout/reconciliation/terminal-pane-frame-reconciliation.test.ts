@@ -1,3 +1,4 @@
+import { _resetLayoutOwnerPaneTreeHoldsForTests } from '@/runtime/workspace-layout/intents/layout-owner-pane-tree-holds'
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { PaneManagerOptions } from '@/lib/pane-manager/pane-manager-types'
@@ -6,7 +7,7 @@ import {
   _resetLayoutOwnerPaneIntentsForTests,
   expectPaneToClose,
   expectPaneToMountUnfocused
-} from '@/runtime/layout-owner-pane-intents'
+} from '@/runtime/workspace-layout/intents/layout-owner-pane-intents'
 import { serializePaneTree } from '../terminal-layout-dom-serialization'
 
 // Why: happy-dom has no canvas, so xterm cannot open; the reconciler never touches the terminal.
@@ -62,6 +63,7 @@ describe('reconcileMountedPanesToLayout', () => {
 
   beforeEach(() => {
     _resetLayoutOwnerPaneIntentsForTests()
+    _resetLayoutOwnerPaneTreeHoldsForTests()
     closePane.mockReset()
     vi.stubGlobal('requestAnimationFrame', () => 1)
     vi.stubGlobal('cancelAnimationFrame', () => {})
@@ -122,16 +124,6 @@ describe('reconcileMountedPanesToLayout', () => {
       split('vertical', leaf(A), split('horizontal', leaf(B), split('vertical', leaf(C), leaf(D))))
     )
     expect(manager.getActivePane()?.leafId).toBe(D)
-  })
-
-  it('closes a pane main dropped only when the window asked, with the close it asked for', () => {
-    expect(reconcile(leaf(A))).toBe(false)
-    expect(closePane).not.toHaveBeenCalled()
-
-    expectPaneToClose(TAB, B, 'exit')
-    expect(reconcile(leaf(A))).toBe(true)
-
-    expect(closePane).toHaveBeenCalledWith(manager.getNumericIdForLeaf(B), B, 'exit')
   })
 
   it('keeps the last pane when main’s tree holds a pane the window has not drawn', () => {

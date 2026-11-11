@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
-import { track } from '@/lib/telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
 import {
   buildNestedRepoScanTelemetry,
@@ -8,7 +8,7 @@ import {
 } from '../../../../../../shared/nested-repo-telemetry'
 import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry-events'
 import type { Repo } from '../../../../../../shared/repo-types'
-import type { WorktreeFetchOptions } from '@/store/slices/worktree-helpers'
+import type { WorktreeFetchOptions } from '@/store/slices/worktrees/listing/worktree-fetch-options'
 import type { RepoSlice } from '@/store/repos/repo-state'
 import type { AppState } from '@/store/types'
 import type { ShowNestedRepoReviewArgs } from '../nested-import/useAddRepoNestedReviewState'

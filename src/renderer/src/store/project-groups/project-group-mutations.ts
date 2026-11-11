@@ -1,27 +1,27 @@
+import { initializeNewRootProjectGroupOrder } from './project-group-update-persistence'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
-import { selectProjectGroupRemovalTargets } from '../slices/project-group-removal-targets'
+import { selectProjectGroupRemovalTargets } from './project-group-removal-targets'
 import {
-  getProjectGroupHostId,
   isProjectGroupJoinableFromCatalog,
   projectGroupMatchesOwnerHost,
   resolveProjectGroupOwnerHostId,
   runtimeTargetForProjectGroupOwner
-} from '../slices/project-group-owner-routing'
+} from './project-group-owner-routing'
 import {
   findRepoForHost,
   isSameRepoRow,
   repoMatchesHostIdentity
-} from '../slices/repo-host-identity'
+} from '../repos/repo-host-identity'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import { ipcOrRuntimeTargetForHostId } from '../../runtime/rpc/targets/runtime-client-target'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { ProjectRemovalFailure, RepoSlice } from '../repos/repo-state'
 import { mergeProjectCompatibilityForHostRepoChange } from '../repos/repo-catalog-identity'
 import { applyProjectGroupDeleteCascade } from './project-group-removal-state'
-import { adoptFromEndpoint } from '../adopt-from-endpoint'
+import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 
@@ -70,20 +70,23 @@ export function createProjectGroupMutationActions(
                   { timeoutMs: 15_000 }
                 )
               ).group
-        const ownedGroup = adoptFromEndpoint(target, { kind: 'projectGroup', row: group })
-        const ownerHostId = getProjectGroupHostId(ownedGroup)
+        const orderedGroup = await initializeNewRootProjectGroupOrder(target, group, get())
+        const ownedGroup = adoptFromEndpoint(target, { kind: 'projectGroup', row: orderedGroup })
+        const ownerHostId = getRepoExecutionHostId(ownedGroup)
         set((s) => {
-          // An overlapping catalog refresh may have already inserted a newer copy.
-          if (
-            s.projectGroups.some(
-              (existing) =>
-                existing.id === ownedGroup.id && getProjectGroupHostId(existing) === ownerHostId
-            )
-          ) {
+          const existing = s.projectGroups.find((entry) =>
+            projectGroupMatchesOwnerHost(entry, ownedGroup.id, ownerHostId)
+          )
+          if (existing && orderedGroup === group) {
             return s
           }
+          // Keep newer catalog fields, but include the order confirmed after that refresh.
+          const { rootProjectOrder, tabOrder } = ownedGroup
+          const nextGroup = existing ? { ...existing, rootProjectOrder, tabOrder } : ownedGroup
           return {
-            projectGroups: [...s.projectGroups, ownedGroup],
+            projectGroups: existing
+              ? s.projectGroups.map((entry) => (entry === existing ? nextGroup : entry))
+              : [...s.projectGroups, nextGroup],
             folderWorkspacePathStatuses: {}
           }
         })
@@ -94,45 +97,11 @@ export function createProjectGroupMutationActions(
       }
     },
 
-    updateProjectGroup: async (groupId, updates, options) => {
-      try {
-        // Why: the sidebar lists groups from every host, so the mutation follows the group's owner, not the focused host.
-        const ownerHostId = resolveProjectGroupOwnerHostId(get(), groupId, options?.hostId)
-        const target = runtimeTargetForProjectGroupOwner(get(), groupId, options?.hostId)
-        if (!target) {
-          return false
-        }
-        const updated =
-          target.kind === 'local'
-            ? await window.api.projectGroups.update({ groupId, updates })
-            : (
-                await callRuntimeRpc<{ group: ProjectGroup | null }>(
-                  target,
-                  'projectGroup.update',
-                  { groupId, updates },
-                  { timeoutMs: 15_000 }
-                )
-              ).group
-        if (!updated) {
-          return false
-        }
-        const ownedGroup = adoptFromEndpoint(target, { kind: 'projectGroup', row: updated })
-        set((s) => ({
-          projectGroups: s.projectGroups.map((group) =>
-            projectGroupMatchesOwnerHost(group, groupId, ownerHostId) ? ownedGroup : group
-          ),
-          folderWorkspacePathStatuses: {}
-        }))
-        return true
-      } catch (err) {
-        console.error('Failed to update project group:', err)
-        return false
-      }
-    },
+    updateProjectGroup: (groupId, updates, options) =>
+      get().updateProjectGroups([{ groupId, updates, hostId: options?.hostId }]),
 
     deleteProjectGroup: async (groupId, options) => {
       try {
-        // Why: deletion targets the group's owner host (see updateProjectGroup); focus may be elsewhere.
         const ownerHostId = resolveProjectGroupOwnerHostId(get(), groupId, options?.hostId)
         const target = runtimeTargetForProjectGroupOwner(get(), groupId, options?.hostId)
         if (!target) {

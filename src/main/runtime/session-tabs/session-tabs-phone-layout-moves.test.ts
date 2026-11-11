@@ -1,6 +1,6 @@
 // Windowless phone split moves and subsequent creates must retain main-owned groups/order.
 import { describe, expect, it, vi } from 'vitest'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
 import * as selection from './mobile-session-tab-selection'
 

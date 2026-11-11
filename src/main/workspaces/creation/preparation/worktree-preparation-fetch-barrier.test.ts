@@ -81,7 +81,8 @@ describe('prepared checkout shared fetch barrier', () => {
         repo.path,
         entry.preparedPath,
         expect.objectContaining({ signal: undefined }),
-        entry.lockReason
+        entry.lockReason,
+        null
       )
       expect(listPreparations()).toEqual([])
     } finally {

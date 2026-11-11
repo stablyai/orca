@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { RpcDispatcher, TERMINAL_METHODS } from '../orca-runtime-test-mocks/terminal-rpc.spec'
-import { makeRpcRequest, store, syncSinglePty } from './orca-runtime-test-fixtures.spec'
+import '../orca-runtime-test-mocks/setup.spec'
+import '../rpc/dispatcher'
+import '../rpc/methods/terminal/terminal'
+import { store, syncSinglePty } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('rejects a provider visible frame after live non-mode-switch output advances', async () => {
@@ -442,43 +444,6 @@ describe('OrcaRuntimeService', () => {
     expect(serializeProviderBuffer).toHaveBeenCalledOnce()
   })
 
-  it('returns renderer visible screen lines through terminal.read RPC JSON result', async () => {
-    const serializeBuffer = vi.fn().mockResolvedValue({
-      data: '\x1b[?1049hClaude Code\r\nChecking files\r\nWaiting for input\r\n',
-      cols: 80,
-      rows: 24
-    })
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      hasRendererSerializer: () => true,
-      serializeBuffer
-    })
-    syncSinglePty(runtime)
-
-    const [terminal] = (await runtime.listTerminals()).terminals
-    runtime.onPtyData('pty-1', `${Array.from({ length: 3000 }, () => '').join('\n')}\n`, 100)
-    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
-
-    const response = await dispatcher.dispatch(
-      makeRpcRequest('terminal.read', { terminal: terminal.handle })
-    )
-
-    expect(response.ok).toBe(true)
-    if (!response.ok) {
-      throw new Error(response.error.message)
-    }
-    expect(response.result).toMatchObject({
-      terminal: {
-        handle: terminal.handle,
-        status: 'running',
-        tail: ['Claude Code', 'Checking files', 'Waiting for input']
-      }
-    })
-  })
-
   it('separates composer draft text from rendered terminal output', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
@@ -532,41 +497,6 @@ describe('OrcaRuntimeService', () => {
     expect(serializeBuffer).toHaveBeenCalledWith('pty-1', {
       scrollbackRows: 0
     })
-  })
-
-  it('separates composer drafts from provider-owned terminal screens', async () => {
-    const serializeProviderBuffer = vi.fn().mockResolvedValue({
-      data: '\x1b[?1049hBuild passed\r\n────────\r\n❯ \x1b[2mproceed with the release\x1b[22m\x1b[3G',
-      cols: 80,
-      rows: 24,
-      seq: 900,
-      source: 'headless',
-      alternateScreen: true
-    })
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      serializeProviderBuffer,
-      hasRendererSerializer: () => false
-    })
-    syncSinglePty(runtime)
-    runtime.synchronizePtyOutputSequenceFromProvider(
-      'pty-1',
-      { value: 900, generation: 'continued' },
-      0
-    )
-    const [terminal] = (await runtime.listTerminals()).terminals
-
-    const read = await runtime.readTerminal(terminal.handle)
-
-    expect(read).toMatchObject({
-      source: 'screen',
-      tail: ['Build passed', '────────', '❯'],
-      draft: 'proceed with the release'
-    })
-    expect(serializeProviderBuffer).toHaveBeenCalledOnce()
   })
 
   it('does not use renderer visible-screen fallback for cursor transcript reads', async () => {

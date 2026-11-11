@@ -3,28 +3,29 @@ import { DashboardAgentChildDisclosure } from '@/components/dashboard/DashboardA
 import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
 import { AgentChildRowContent } from '@/components/AgentChildRowContent'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
-import { AgentTypeIcon } from '@/lib/agent-type-icon'
+import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
-import { cn } from '@/lib/utils'
-import { viewClaudeAgentFromRow } from '@/lib/claude-agent-row-view'
+import { cn } from '@/lib/class-names'
+import { viewClaudeAgentFromRow } from '@/lib/agent-session/navigation/claude-agent-row-view'
 import { useClaudeAgentRowView } from '@/components/dashboard/use-claude-agent-row-view'
 import './worktree-card-agent-summary'
-import { agentRowDisplayDotState as getAgentDotState } from '../../../../lib/agent-row-dot-state'
+import { agentRowDisplayDotState as getAgentDotState } from '../../../../lib/agent-status/presentation/agent-row-dot-state'
 import { getAgentRowPrimaryText } from '../../../../../../shared/agent-status/presentation/agent-row-primary-text'
-import { formatAgentToolPreview } from '@/lib/agent-row-tool-preview'
+import { formatAgentToolPreview } from '@/lib/agent-status/presentation/agent-row-tool-preview'
 import { agentNoUpdateLabel } from '../../../../../../shared/agent-status/presentation/agent-row-decay-state'
 import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
-import { formatShortTimeAgo } from '@/lib/short-time-ago'
-import { agentVerdictStatusLine } from '@/lib/agent-verdict-status-line'
-import { agentRowStoppingLabel } from '@/lib/agent-row-stopping-label'
+import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
+import { agentVerdictStatusLine } from '@/lib/agent-status/presentation/agent-verdict-status-line'
+import { agentRowStoppingLabel } from '@/lib/agent-status/presentation/agent-row-stopping-label'
 import { getCompactAgentLineOrder } from './worktree-card-compact-agent-line-order'
 import {
   programStatusAttentionLine,
   type ProgramStatusPresentation
 } from '../../../../../../shared/program-status/presentation'
 import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 function getCompactAgentPrimary(
   agent: DashboardAgentRowData,
@@ -38,7 +39,8 @@ export function getCompactAgentSecondary(
   agent: DashboardAgentRowData,
   now: number,
   lastAssistantMessageOverride?: string,
-  presentation: ProgramStatusPresentation = resolveRowProgramStatus(agent).presentation
+  presentation: ProgramStatusPresentation = resolveRowProgramStatus(agent).presentation,
+  t?: Translate
 ): string {
   // Program-reported blocks need user attention before other row details.
   if (presentation.attention) {
@@ -52,7 +54,7 @@ export function getCompactAgentSecondary(
   if (agent.state === 'unverifiable') {
     return agentNoUpdateLabel(agent.entry, now)
   }
-  const stoppingLabel = agentRowStoppingLabel(agent.entry, agent.state)
+  const stoppingLabel = agentRowStoppingLabel(agent.entry, agent.state, t)
   if (stoppingLabel) {
     return stoppingLabel
   }
@@ -127,6 +129,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   cacheTimerActive = true,
   isUnvisited = false
 }: CompactAgentRowProps) {
+  const t = useTranslate()
   const view = useClaudeAgentRowView(agent)
   const highlighted = view ? view.current && view.focused : isFocusedPane
   const hasChildDisclosure =
@@ -155,12 +158,13 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const held = heldMessageRef.current
   const stableMessage =
     turnHoldable && !currentMessage && held?.turn === turn ? held.message : undefined
-  const secondary = getCompactAgentSecondary(agent, now, stableMessage, presentation)
+  const secondary = getCompactAgentSecondary(agent, now, stableMessage, presentation, t)
   const { leadingText, trailingText } = getCompactAgentLineOrder(
     agent,
     dotState,
     primary,
-    secondary
+    secondary,
+    t
   )
   const rowTitle = `${leadingText}${trailingText ? ` - ${trailingText}` : ''}`
   const model = agent.entry.model?.trim() ?? ''

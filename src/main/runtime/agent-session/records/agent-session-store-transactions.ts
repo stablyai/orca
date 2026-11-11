@@ -30,7 +30,7 @@ import {
   draftAgentSessionStoreState,
   type AgentSessionStoreRowWrites
 } from './agent-session-store-draft'
-import { changesAgentSenderIdentity } from '../../agent-session-sender-identity-revision'
+import { changesAgentSenderIdentity } from './agent-session-sender-identity-revision'
 
 // Commit validated draft rows atomically before publication; failures discard the draft.
 // The promise queue preserves FIFO and defers BEGIN beyond the caller's open journal transaction.

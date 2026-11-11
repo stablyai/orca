@@ -1,5 +1,8 @@
 import type { AppState } from '@/store/types'
-import { captureWorkspaceSelection, isWorkspaceSelected } from '../../active-workspace-host'
+import {
+  captureWorkspaceSelection,
+  isWorkspaceSelected
+} from '../../workspace/ownership/active-workspace-host'
 
 type SelectionState = Partial<
   Pick<AppState, 'activeView' | 'activeWorktreeId' | 'activeWorkspaceExecutionHostId'>
@@ -20,9 +23,12 @@ export function captureBrowserLinkReveal(
   const activeView = initial.activeView
   let ownsSelection = true
   const observe = (state: SelectionState): boolean => {
-    ownsSelection &&= isWorkspaceSelected(state, selection) && state.activeView === activeView
+    ownsSelection &&=
+      isWorkspaceSelected(state, selection) &&
+      state.activeView === activeView &&
+      canReveal?.() !== false
     return ownsSelection
   }
   const dispose = subscribe?.(observe) ?? (() => {})
-  return { canReveal: () => observe(getState()) && canReveal?.() !== false, dispose }
+  return { canReveal: () => observe(getState()), dispose }
 }

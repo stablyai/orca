@@ -2,8 +2,8 @@ import { useCallback } from 'react'
 import { Loader2, Server, ServerOff } from 'lucide-react'
 import { toastSshConnectFailure } from '@/ssh/ssh-connect-failure-toast'
 import { Button } from '@/components/ui/button'
-import { SshHostNodeMirrorAction } from '@/components/settings/ssh/server-actions/SshHostNodeMirrorAction'
-import { SshHostMoveAnywayButton } from '@/components/settings/ssh/server-actions/SshHostMoveAnywayAction'
+import { SshHostNodeMirrorAction } from '@/components/ssh-host-recovery/SshHostNodeMirrorAction'
+import { SshHostMoveAnywayButton } from '@/components/ssh-host-recovery/SshHostMoveAnywayAction'
 import { OpenPlainSshTerminalButton } from '@/components/plain-ssh-terminal/OpenPlainSshTerminalButton'
 import { useAppStore } from '@/store/index'
 import type { SshConnectionStatus } from '../../../../../../../shared/ssh-types'
@@ -12,6 +12,7 @@ import {
   toSshExecutionHostId
 } from '../../../../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { runWorktreeDelete } from '../../../../sidebar/workspace-actions/deletion/delete-worktree-flow'
 import {
   connectRuntimeEnvironmentSshTarget,
@@ -39,17 +40,21 @@ type TerminalSshReconnectOverlayProps = {
   sshOwnerEnvironmentId?: string | null
 }
 
-function messageForStatus(status: SshConnectionStatus, targetLabel: string): string {
+function messageForStatus(
+  status: SshConnectionStatus,
+  targetLabel: string,
+  t: Translate = translate
+): string {
   switch (status) {
     case 'auth-failed':
-      return translate(
+      return t(
         'auto.components.terminal.pane.TerminalSshReconnectOverlay.authFailed',
         'Authentication failed for {{value0}}. Connect again to continue this terminal session.',
         { value0: targetLabel }
       )
     case 'error':
     case 'reconnection-failed':
-      return translate(
+      return t(
         'auto.components.terminal.pane.TerminalSshReconnectOverlay.reconnectFailed',
         'The SSH connection to {{value0}} failed. Connect again to continue this terminal session.',
         { value0: targetLabel }
@@ -57,18 +62,18 @@ function messageForStatus(status: SshConnectionStatus, targetLabel: string): str
     case 'connecting':
     case 'deploying-relay':
     case 'reconnecting':
-      return translate(
+      return t(
         'auto.components.terminal.pane.TerminalSshReconnectOverlay.connecting',
         'Connecting to {{value0}}. This terminal will resume after the host is available.',
         { value0: targetLabel }
       )
     case 'connected':
-      return translate(
+      return t(
         'auto.components.terminal.pane.TerminalSshReconnectOverlay.connected',
         'SSH is connected.'
       )
     case 'disconnected':
-      return translate(
+      return t(
         'auto.components.terminal.pane.TerminalSshReconnectOverlay.disconnected',
         'This terminal is waiting for {{value0}}. Connect to continue this SSH session.',
         { value0: targetLabel }
@@ -85,6 +90,7 @@ export function TerminalSshReconnectOverlay({
   worktreeId,
   sshOwnerEnvironmentId = null
 }: TerminalSshReconnectOverlayProps): React.JSX.Element {
+  const t = useTranslate()
   const setSshConnectionState = useAppStore((store) => store.setSshConnectionState)
   const managedServer = useAppStore(
     (store) => store.sshConnectionStates.get(targetId)?.managedServer
@@ -164,11 +170,11 @@ export function TerminalSshReconnectOverlay({
           <div className="flex min-w-0 items-center gap-2">
             <div className="shrink-0 text-sm font-semibold">
               {targetRemoved
-                ? translate(
+                ? t(
                     'auto.components.terminal.pane.TerminalSshReconnectOverlay.removedTitle',
                     'SSH host removed'
                   )
-                : translate(
+                : t(
                     'auto.components.terminal.pane.TerminalSshReconnectOverlay.title',
                     'SSH connection required'
                   )}
@@ -180,11 +186,11 @@ export function TerminalSshReconnectOverlay({
           </div>
           <div className="mt-0.5 text-xs leading-5 text-muted-foreground">
             {targetRemoved
-              ? translate(
+              ? t(
                   'auto.components.terminal.pane.TerminalSshReconnectOverlay.removedBody',
                   'The SSH host for this workspace was removed, so it can no longer connect. Remove the workspace to clear it — remote files are left untouched.'
                 )
-              : messageForStatus(status, targetLabel)}
+              : messageForStatus(status, targetLabel, t)}
           </div>
           {/* Keep the full host-key remedy visible; removed targets already have their own explanation. */}
           {!targetRemoved && error ? (
@@ -229,7 +235,7 @@ export function TerminalSshReconnectOverlay({
             }
             disabled={!worktreeId}
           >
-            {translate(
+            {t(
               'auto.components.terminal.pane.TerminalSshReconnectOverlay.removeWorkspaceButton',
               'Remove workspace'
             )}
@@ -244,10 +250,10 @@ export function TerminalSshReconnectOverlay({
             {!showConnect || isConnecting ? (
               <>
                 <Loader2 className="size-3.5 animate-spin" />
-                {sshConnectingLabel()}
+                {sshConnectingLabel(t)}
               </>
             ) : (
-              sshConnectVerb(status)
+              sshConnectVerb(status, t)
             )}
           </Button>
         )}

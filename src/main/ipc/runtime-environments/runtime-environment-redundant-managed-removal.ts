@@ -5,7 +5,7 @@ import {
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { findManagedSshTwin } from '../../../shared/remote-runtime/host-catalog/runtime-environment-host-key-match'
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
-import { getManagedServerActions } from '../../runtime/managed-server-actions-registry'
+import { getManagedServerActions } from '../../runtime/hosts/management/managed-server-actions-registry'
 
 /**
  * Removes one of two saved entries for a managed server reached through two SSH aliases.

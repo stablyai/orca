@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import type { RuntimeNotifier } from '../runtime/runtime-notifier-contract'
+import type { RuntimeNotifier } from '../runtime/client/events/runtime-notifier-contract'
 
 vi.mock('electron', () => ({ ipcMain: { on: vi.fn(), removeListener: vi.fn() } }))
 vi.mock('../ipc/worktrees/listing/worktree-change-invalidators', () => ({

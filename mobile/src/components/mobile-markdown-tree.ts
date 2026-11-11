@@ -9,7 +9,7 @@ import { inlineTagNode, inlineTagPairs } from './mobile-markdown-inline-html'
 import { readTaskMarker } from './mobile-markdown-task-items'
 import { plainText } from './mobile-markdown-plain-text'
 import { appendHtmlBlock, noteInlineHtml, popContainer } from './mobile-markdown-details'
-import { mobileMarkdownMath } from './mobile-markdown-math'
+import { mobileMarkdownMath, type MathEnv } from './mobile-markdown-math'
 import {
   displayFormulas,
   inlineMathNode,
@@ -30,9 +30,6 @@ const markdown = new MarkdownIt({ html: true, linkify: true })
 // Every href parses as a link, file: included; routeMarkdownHref decides what a tap opens.
 markdown.validateLink = () => true
 endLinkifyUrlsAtProsePunctuation(markdown.linkify)
-
-/** markdown-it's env for every parse of one document; mobile-markdown-math reads `chatMath`. */
-export type MathEnv = { chatMath: boolean }
 
 const PATH_FLANK = /[\w\\/]/
 const LINE_BREAK_TAG = /^<br\s*\/?>$/i

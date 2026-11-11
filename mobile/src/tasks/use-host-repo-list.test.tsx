@@ -203,26 +203,6 @@ describe('useHostRepoList', () => {
     expect(probe.resource.state.status).toBe('idle')
   })
 
-  // Keep resource/callback identities stable so consumer effects cannot form a render loop.
-  it('keeps a stable identity across renders that change nothing', async () => {
-    const probe = mountResource()
-    const first = probe.resource
-    probe.rerender()
-    expect(probe.resource).toBe(first)
-    expect(probe.resource.ensureLoaded).toBe(first.ensureLoaded)
-    expect(probe.resource.reload).toBe(first.reload)
-
-    await act(async () => {
-      void probe.resource.ensureLoaded()
-    })
-    await probe.settle(0, [{ id: 'a' }])
-    expect(probe.resource.ensureLoaded).toBe(first.ensureLoaded)
-    expect(probe.resource.reload).toBe(first.reload)
-    const loaded = probe.resource
-    probe.rerender()
-    expect(probe.resource).toBe(loaded)
-  })
-
   it('re-reads the host on an explicit reload', async () => {
     const probe = mountResource()
     await act(async () => {

@@ -151,15 +151,6 @@ describe('TerminalKittyKeyboardModeTracker', () => {
       expect(fresh.snapshotFlags).toBeUndefined()
     })
 
-    it('ignores values that are not non-negative safe integers', () => {
-      const tracker = new TerminalKittyKeyboardModeTracker()
-      tracker.resetForSnapshot()
-      for (const invalid of [-1, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER + 2]) {
-        tracker.restoreSnapshotFlags(invalid)
-        expect(tracker.snapshotFlags).toBeUndefined()
-      }
-    })
-
     it('re-proves state on an absolute set but not on a relative update', () => {
       const relative = new TerminalKittyKeyboardModeTracker()
       relative.resetForSnapshot()

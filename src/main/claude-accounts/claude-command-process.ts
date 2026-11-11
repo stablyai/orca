@@ -15,6 +15,7 @@ import {
 import { resolveWslExecutablePath } from '../wsl/execution/wsl-executable-path'
 import { buildWindowsCommandInvocation } from './windows-command-invocation'
 import { terminateClaudeProcess } from './claude-login-process-termination'
+import { stripInheritedAgentSessionEnv } from '../../shared/agent-launch/startup/parent-agent-session-env'
 
 const MAX_COMMAND_OUTPUT_CHARS = 4_000
 const CLAUDE_AUTH_DENIED_PATTERN =
@@ -248,12 +249,14 @@ function resolveClaudeInvocation(
   hostClaudeCommand: () => string,
   browser: string | undefined
 ): ClaudeSpawnConfig {
+  const inheritedEnv = { ...process.env }
+  stripInheritedAgentSessionEnv(inheritedEnv)
   const spawnConfig = interactiveLogin
     ? {
         command: interactiveLogin.command,
         args: interactiveLogin.args,
         env: withCliRuntimeOnPath(hostClaudeCommand(), {
-          ...process.env,
+          ...inheritedEnv,
           ...claudeConfigDirEnv(configDir.windowsPath, browser)
         }),
         windowsVerbatimArguments: false
@@ -267,14 +270,14 @@ function resolveClaudeInvocation(
             '-c',
             buildWslLoginShellCommand(wslClaudeCommand(configDir.linuxPath, args, browser))
           ]),
-          env: process.env,
+          env: inheritedEnv,
           windowsVerbatimArguments: false
         }
       : process.platform === 'win32'
         ? {
             ...buildWindowsCommandInvocation(hostClaudeCommand(), args),
             env: withCliRuntimeOnPath(hostClaudeCommand(), {
-              ...process.env,
+              ...inheritedEnv,
               ...claudeConfigDirEnv(configDir.windowsPath, browser)
             })
           }
@@ -282,7 +285,7 @@ function resolveClaudeInvocation(
             command: hostClaudeCommand(),
             args,
             env: withCliRuntimeOnPath(hostClaudeCommand(), {
-              ...process.env,
+              ...inheritedEnv,
               ...claudeConfigDirEnv(configDir.windowsPath, browser)
             }),
             windowsVerbatimArguments: false

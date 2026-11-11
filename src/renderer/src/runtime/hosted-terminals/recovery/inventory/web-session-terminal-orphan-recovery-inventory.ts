@@ -4,7 +4,7 @@ import type {
   RuntimeTerminalOrphanAdoptionClaim
 } from '../../../../../../shared/runtime-terminal-contracts'
 import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
-import { toRuntimeWorktreeSelector } from '../../../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../../rpc/targets/runtime-worktree-selector'
 import { isTerminalListResult } from './web-session-terminal-orphan-recovery-inventory-validation'
 import {
   clearSurfaceInventoryAbsence,

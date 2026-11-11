@@ -36,6 +36,7 @@ import { STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS } from './subscription
 import { STRUCTURED_AGENT_SESSION_THREAD_GOAL_METHODS } from './conversation/structured-agent-session-thread-goal'
 import { STRUCTURED_AGENT_SESSION_CONVERSATION_OUTLINE_METHODS } from './history/structured-agent-session-conversation-outline'
 import { STRUCTURED_AGENT_SESSION_ITEM_METHODS } from './history/structured-agent-session-item'
+import { STRUCTURED_AGENT_SESSION_SEND_RECORDED_METHODS } from './history/structured-agent-session-send-recorded'
 import { STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS } from './catalog/structured-agent-session-options-read'
 import {
   AttachParams,
@@ -44,6 +45,7 @@ import {
   CreateParams,
   CreateSupportParams,
   HistoryParams,
+  WorkStateParams,
   RewindParams,
   SendParams,
   SleepWorkspaceParams,
@@ -190,6 +192,16 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       )
     }
   }),
+  // Waiters poll this instead of history: no history page or running-turn scan, and no transcript in the reply.
+  defineMethod({
+    name: 'agentSession.workState',
+    permission: 'workspace',
+    params: WorkStateParams,
+    handler: async (params, ctx) =>
+      (await requireInstalledHost(ctx, params.sessionId)).backgroundTasks.workState(
+        params.sessionId
+      )
+  }),
   STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD,
   defineMethod({
     name: 'agentSession.unsubscribe',
@@ -218,6 +230,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   ...STRUCTURED_AGENT_SESSION_THREAD_GOAL_METHODS,
   ...STRUCTURED_AGENT_SESSION_CONVERSATION_OUTLINE_METHODS,
   ...STRUCTURED_AGENT_SESSION_ITEM_METHODS,
+  ...STRUCTURED_AGENT_SESSION_SEND_RECORDED_METHODS,
   ...STRUCTURED_AGENT_SESSION_CURRENT_REQUESTS_METHODS,
   ...STRUCTURED_AGENT_SESSION_ACCOUNT_USAGE_METHODS,
   ...STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS

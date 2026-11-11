@@ -2,7 +2,10 @@ import type { WorktreeOccurrencePlan } from '../../../../../../shared/worktree-o
 import type React from 'react'
 import type { AppState } from '@/store/types'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
-import type { PendingSidebarRowReveal, PendingSidebarWorktreeReveal } from '@/store/slices/ui'
+import type {
+  PendingSidebarRowReveal,
+  PendingSidebarWorktreeReveal
+} from '@/store/slices/ui/ui-slice-contract-core'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
@@ -17,7 +20,7 @@ import type {
   Worktree
 } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host-registry'
+import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host/execution-host-registry-entry'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import type { ImportedWorktreeCardActionState } from '../listing/imported-worktrees-card-actions'
 import type { NewExternalWorktreesInboxActionState } from '../listing/new-external-worktrees-inbox-actions'

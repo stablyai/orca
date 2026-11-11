@@ -1,10 +1,5 @@
-import type { AgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 import type { AgentStartupPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-startup'
 import { useAppStore } from '@/store/index'
-import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
-import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
-import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { agentTabLaunchStore } from '@/lib/agent-session/launch/new-tab/launch-agent-execution-context'
 import {
   awaitStructuredRouteHostAnswer,
@@ -20,7 +15,7 @@ import type { StructuredLaunchTerminal } from '@/lib/agent-session/launch/struct
 /** The user action this launch serves: minted where that action is handled, or carried by the
  *  route the caller already planned for it. */
 export type LaunchAgentInNewTabRequest =
-  | { requestId: AgentLaunchRequestId; agentSessionLaunchPlan?: undefined }
+  | { requestId: string; agentSessionLaunchPlan?: undefined }
   | {
       /** Keeps a preflighted route authoritative across workspace creation. */
       agentSessionLaunchPlan: AgentSessionLaunchPlan
@@ -45,7 +40,11 @@ export type LaunchAgentInNewTabResult = {
 
 export type AgentTabLaunchOutcome =
   | LaunchAgentInNewTabResult
-  | { refused: StructuredPromptDeliveryResult }
+  | {
+      refused: StructuredPromptDeliveryResult
+      /** What to do instead, when the caller's visible surface presents the refusal itself. */
+      recovery?: string
+    }
 
 export function shouldQueueTerminalFocusAfterMenuClose(
   result: NonNullable<LaunchAgentInNewTabResult>
@@ -60,16 +59,6 @@ const DELIVERED: StructuredPromptDeliveryResult = { delivered: true, failureNoti
 const NOT_DELIVERED: StructuredPromptDeliveryResult = { delivered: false, failureNotified: false }
 
 type AwaitingHostAnswer = { awaited: Promise<void>; replan: () => AgentSessionLaunchPlan }
-
-export function notifyAgentTabLaunchFailure(agent: TuiAgent): void {
-  toast.error(
-    translate(
-      'auto.components.Terminal.e57db40c11',
-      'Could not build launch command for {{value0}}.',
-      { value0: structuredAgentLabel(agent) }
-    )
-  )
-}
 
 /** Both terminal adapters retain the same actual-create receipt behind their early acceptance. */
 export async function terminalLaunchOpened(terminal: StructuredLaunchTerminal): Promise<boolean> {

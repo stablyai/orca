@@ -1,7 +1,7 @@
 // Close removes the pane before exit; resolve it by PTY and incarnation in closed-pane records, then retire that entry (L80 Q2).
 import { closedTerminalPaneOf } from '../../../../shared/workspace-layout/closed-terminal-panes'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'

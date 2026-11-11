@@ -8,7 +8,8 @@ export type CanonicalHookTrustFixture = {
 }
 
 export async function createCanonicalHookTrustFixture(): Promise<CanonicalHookTrustFixture> {
-  const { MANAGED_HOOK_TIMEOUT_SECONDS } = await import('../agent-hooks/installer-utils')
+  const { MANAGED_HOOK_TIMEOUT_SECONDS } =
+    await import('../agent-hooks/installation/configuration/hook-config-schema')
   const [, { getCodexManagedHookInstallMaterial }] = await Promise.all([
     import('../codex/hooks/installation/hook-service'),
     import('../codex/hooks/definitions/codex-hook-definition')

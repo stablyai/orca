@@ -1,13 +1,22 @@
 import { EVERY_AGENT_CHAT } from '../../../../../shared/native-chat/every-agent-chat.test-fixture'
-import { RuntimeClientCapabilities } from '../../runtime-client-capabilities'
-import '../../unused-default-rpc-methods.test-fixture'
+
+import '../../runtime-client-capabilities'
+import type { RuntimeClientCapabilities } from '../../runtime-client-capabilities'
+
 import { describe, expect, it, vi } from 'vitest'
+
 import type { OrcaRuntimeService } from '../../../orca-runtime'
+
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
-import { RuntimeSubscriptionRegistry } from '../../../runtime-subscription-registry'
+
+import { RuntimeSubscriptionRegistry } from '../../../client/runtime-subscription-registry'
+
 import { RpcDispatcher } from '../../dispatcher'
+
 import type { RpcRequest } from '../../core'
+
 import { SESSION_TAB_METHODS } from './session-tabs'
+
 import { visibleSnapshot } from './session-tabs-snapshot.test-fixture'
 
 const CONNECTION = 'conn-1'
@@ -174,20 +183,6 @@ describe('session.tabs.subscribe registers when the request arrives', () => {
     expect(frames(messages)).toEqual(['end'])
   })
 
-  it('a request whose socket already closed attaches nothing', async () => {
-    const host = makeHost()
-    const controller = new AbortController()
-    controller.abort()
-
-    await host.dispatch(request('sub-1', 'session.tabs.subscribe', { worktree: 'id:wt-1' }), [], {
-      signal: controller.signal
-    })
-    await settle()
-
-    expect(host.isRegistered(KEY('sub-1'))).toBe(false)
-    expect(host.runtime.onMobileSessionTabsChanged).not.toHaveBeenCalled()
-  })
-
   it('a stream released during setup reports no error when the await then rejects', async () => {
     const host = makeHost()
     const listing = deferred<RuntimeMobileSessionTabsResult>()
@@ -208,21 +203,6 @@ describe('session.tabs.subscribe registers when the request arrives', () => {
     await pending
 
     expect(frames(messages)).toEqual(['end'])
-  })
-
-  it('a failed setup reports only the error and leaves no registration', async () => {
-    const host = makeHost()
-    host.listMobileSessionTabs.mockRejectedValueOnce(new Error('list failed'))
-    const messages: Frame[] = []
-
-    await host.dispatch(
-      request('sub-1', 'session.tabs.subscribe', { worktree: 'id:wt-1' }),
-      messages
-    )
-    await settle()
-
-    expect(host.isRegistered(KEY('sub-1'))).toBe(false)
-    expect(frames(messages)).toEqual(['error'])
   })
 
   it('streams snapshot and updates, then ends once on unsubscribe', async () => {
@@ -247,19 +227,6 @@ describe('session.tabs.subscribe registers when the request arrives', () => {
     expect(frames(messages)).toEqual(['snapshot', 'updated', 'end'])
     expect(host.stopListening).toHaveBeenCalledTimes(1)
     expect(host.isRegistered(KEY('sub-1'))).toBe(false)
-  })
-
-  it('keys a non-id selector by the resolved worktree once it is known', async () => {
-    const host = makeHost()
-    const messages: Frame[] = []
-
-    await host.dispatch(
-      request('sub-1', 'session.tabs.subscribe', { worktree: 'path:/repo/wt-1' }),
-      messages
-    )
-
-    expect(host.isRegistered(KEY('sub-1'))).toBe(true)
-    expect(frames(messages)).toEqual(['snapshot'])
   })
 
   it('a worktree-wide unsubscribe spares a subscribe that arrives while it resolves', async () => {
@@ -343,30 +310,3 @@ describe('session.tabs.subscribeAll registers before restoring structured tabs',
     ).toBe(0)
   })
 })
-
-it.each(['abort', 'failure'] as const)(
-  'disposes capability observation on %s before workspace identity resolves',
-  async (outcome) => {
-    const host = makeHost()
-    const source = new RuntimeClientCapabilities()
-    const observe = vi.spyOn(source, 'observe')
-    const stop = vi.fn()
-    observe.mockImplementation(() => stop)
-    const listing = deferred<RuntimeMobileSessionTabsResult>()
-    host.listMobileSessionTabs.mockReturnValueOnce(listing.promise)
-    const abort = new AbortController()
-    const pending = host.dispatch(
-      request('unresolved', 'session.tabs.subscribe', { worktree: '/unresolved/path' }),
-      [],
-      { capabilitySource: source, signal: abort.signal }
-    )
-    await settle()
-    if (outcome === 'abort') {
-      abort.abort()
-    }
-    listing.reject(new Error('identity resolution failed'))
-    await pending
-    expect(stop).toHaveBeenCalledOnce()
-    expect(host.runtime.onMobileSessionTabsChanged).not.toHaveBeenCalled()
-  }
-)

@@ -13,7 +13,7 @@ import type {
   SourceControlActionLaunchPreferences
 } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 
-import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
+import { resetHostStructuredAgentsForTests } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { TooltipProvider } from '../../ui/tooltip'
 
 import { SourceControlActionRecipeRow } from './SourceControlActionRecipeRow'

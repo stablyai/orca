@@ -27,14 +27,14 @@ import {
   mobileNativeChatRowBoxProps,
   type MobileNativeChatReadingUnit,
   type MobileNativeChatScrollNode
-} from '../../mobile-native-chat-reading-place'
+} from './mobile-native-chat-reading-place'
 import type { MobileNativeChatListHandle } from './use-mobile-native-chat-tail-follow'
 import type { MobileNativeChatScrollRoots } from './mobile-native-chat-scroll-roots'
-import { scrollWritesStopMomentum } from '../../mobile-native-chat-scroll-motion'
+import { scrollWritesStopMomentum } from './mobile-native-chat-scroll-motion'
 import {
   createMobileNativeChatGrowthHold,
   MobileNativeChatGrowthHoldContext
-} from '../../mobile-native-chat-growth-hold'
+} from './mobile-native-chat-growth-hold'
 
 const FIRST_ROWS = 24
 const DRAW_BATCH = 12
@@ -237,12 +237,15 @@ export function MobileNativeChatPageList({
       }
     }
   })
-  // A hidden chat keeps its hold but loses the timer; settle it again when the chat shows.
+  // A hidden chat keeps its hold but loses the timer and touch listeners; settle it again when the chat shows.
   useEffect(() => {
     if (heldRef.current) {
       settle.current()
     }
-    return () => clearTimeout(settleTimer.current)
+    return () => {
+      clearTimeout(settleTimer.current)
+      touching.current = false
+    }
   }, [])
 
   const drawAndFetch = useCallback(

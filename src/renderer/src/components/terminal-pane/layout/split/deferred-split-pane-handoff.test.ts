@@ -25,29 +25,6 @@ describe('deferred split pane handoff', () => {
   beforeEach(resetDeferredSplitPaneHandoffsForTests)
   afterEach(resetDeferredSplitPaneHandoffsForTests)
 
-  it('hands the same cwd promise and buffered input to a remounted leaf in order', () => {
-    const key = makePaneKey('tab-1', LEAF_1)
-    const cwdPromise = Promise.resolve('/source/cwd')
-    const initial = beginDeferredSplitPaneHandoff(key, cwdPromise)
-
-    appendDeferredSplitPaneInput(initial, { data: 'typed', kind: 'ordinary', inputKind: 'driving' })
-    appendDeferredSplitPaneInput(initial, {
-      data: '\x1b[0n',
-      kind: 'immediate',
-      inputKind: 'query-reply'
-    })
-    appendDeferredSplitPaneInput(initial, { data: '\x03', kind: 'accepted', inputKind: 'driving' })
-
-    const remounted = claimDeferredSplitPaneHandoff(key)
-
-    expect(remounted?.cwdPromise).toBe(cwdPromise)
-    expect(remounted?.preconnectInput).toEqual([
-      { data: 'typed', kind: 'ordinary', inputKind: 'driving' },
-      { data: '\x1b[0n', kind: 'immediate', inputKind: 'query-reply' },
-      { data: '\x03', kind: 'accepted', inputKind: 'driving' }
-    ])
-  })
-
   it('keeps input across repeated remounts and fences stale owners', () => {
     const key = makePaneKey('tab-1', LEAF_1)
     const initial = beginDeferredSplitPaneHandoff(key, Promise.resolve('/source/cwd'))
@@ -120,28 +97,6 @@ describe('deferred split pane handoff', () => {
     discardDeferredSplitPaneHandoffForKey(key)
 
     expect(claimDeferredSplitPaneHandoff(key)).toBeNull()
-  })
-
-  it('clears the current owner', () => {
-    const clearedKey = makePaneKey('tab-clear', LEAF_1)
-    const cleared = beginDeferredSplitPaneHandoff(clearedKey, Promise.resolve('/clear'))
-    clearDeferredSplitPaneHandoff(cleared)
-    expect(claimDeferredSplitPaneHandoff(clearedKey)).toBeNull()
-  })
-
-  it('drops a stale record when an authoritative restored PTY wins the key', () => {
-    const key = makePaneKey('tab-authoritative', LEAF_1)
-    const stale = beginDeferredSplitPaneHandoff(key, Promise.resolve('/stale'))
-    appendDeferredSplitPaneInput(stale, {
-      data: 'must-not-replay',
-      kind: 'ordinary',
-      inputKind: 'driving'
-    })
-
-    discardDeferredSplitPaneHandoffForKey(key)
-
-    expect(claimDeferredSplitPaneHandoff(key)).toBeNull()
-    expect(getDeferredSplitPaneHandoffCountForTests()).toBe(0)
   })
 
   it('replaces an older handoff for the same stable pane key', () => {

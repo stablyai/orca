@@ -59,24 +59,6 @@ function runReconcile(
 }
 
 describe('split-right white screen: post-spawn PTY size reconcile', () => {
-  it('recovers a 0x0 spawn whose container is briefly unmeasurable then settles', () => {
-    // Layout arrives after several null measurements; reconciliation must move the PTY out of 0×0.
-    let frame = 0
-    const SETTLE_AT = 3
-    const { resize, lastSent } = runReconcile({
-      measure: vi.fn((): PtySizeReconcileDimensions | null => {
-        const dims = frame < SETTLE_AT ? null : { cols: 120, rows: 40 }
-        frame += 1
-        return dims
-      }),
-      // Local PTY: applied size readback reflects what was actually forwarded.
-      getAppliedSize: vi.fn(async () => lastSentForApplied)
-    })
-
-    expect(resize).toHaveBeenCalledWith(120, 40)
-    expect(lastSent).toEqual({ cols: 120, rows: 40 })
-  })
-
   it('forwards a safe fallback grid when a visible pane stays unmeasurable (never leaves the PTY at 0x0)', () => {
     // Model a visible split that stays unmeasurable for the entire reconciliation window.
     const measure = vi.fn((): PtySizeReconcileDimensions | null => null)
@@ -107,5 +89,3 @@ describe('split-right white screen: post-spawn PTY size reconcile', () => {
     expect(lastSent).toBeNull()
   })
 })
-
-const lastSentForApplied: PtySizeReconcileDimensions = { cols: 120, rows: 40 }

@@ -21,8 +21,9 @@ import type { GitWorktreeInfo, Worktree } from '../../../../shared/worktree/type
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
+import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
 
 import { areWorktreePathsEqual } from '../../../git/worktrees/catalog/worktree-path-comparison'
 import { mergeWorktree } from '../../../ipc/worktree-metadata-merge'
@@ -241,8 +242,9 @@ export async function resolveScopedWorktreeIdRow(
   if (!parsed?.repoId || !parsed.worktreePath) {
     return null
   }
-  const owners = store
-    .getRepos()
+  const repoOwners = createRepoRowExecutionHostLookup(store.getRepos())
+  const owners = repoOwners
+    .rowsFor(parsed.repoId)
     .filter(
       (repo) =>
         repo.id === parsed.repoId &&
@@ -257,7 +259,8 @@ export async function resolveScopedWorktreeIdRow(
     deps,
     repo,
     store.getAllWorktreeMeta() ?? {},
-    resolveLocalProjectRuntimesForRepos(store, [repo])
+    resolveLocalProjectRuntimesForRepos(store, [repo]),
+    repoOwners.rowsFor(repo.id).length
   )
   // Accept one normalized equivalent id; multiple path matches remain ambiguous (#16243).
   const comparisonKey = worktreeIdentityKey(worktreeId)
@@ -278,12 +281,11 @@ export async function resolveScopedWorktreeIdRow(
   )
   relatedRepoIds.delete(repo.id)
   const hostId = getRepoExecutionHostId(repo)
-  const relatedRepos = store
-    .getRepos()
-    .filter(
-      (candidate) =>
-        relatedRepoIds.has(candidate.id) && getRepoExecutionHostId(candidate) === hostId
-    )
+  const registered = store.getRepos()
+  const relatedOwners = createRepoRowExecutionHostLookup(registered)
+  const relatedRepos = registered.filter(
+    (candidate) => relatedRepoIds.has(candidate.id) && getRepoExecutionHostId(candidate) === hostId
+  )
   if (new Set(relatedRepos.map((candidate) => candidate.id)).size !== relatedRepos.length) {
     return null
   }
@@ -291,7 +293,13 @@ export async function resolveScopedWorktreeIdRow(
   const projectRuntimeByRepoId = resolveLocalProjectRuntimesForRepos(store, relatedRepos)
   const otherRows = await Promise.all(
     relatedRepos.map((relatedRepo) =>
-      resolveRepoWorktreeRows(deps, relatedRepo, metaById, projectRuntimeByRepoId)
+      resolveRepoWorktreeRows(
+        deps,
+        relatedRepo,
+        metaById,
+        projectRuntimeByRepoId,
+        relatedOwners.rowsFor(relatedRepo.id).length
+      )
     )
   )
   const projected = projectResolvedWorktreeLineage([...ownerRows, ...otherRows.flat()], lineageById)

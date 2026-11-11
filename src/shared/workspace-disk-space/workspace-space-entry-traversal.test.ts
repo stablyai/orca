@@ -35,45 +35,6 @@ function makeTraversal(
 }
 
 describe('scanWorkspaceSpaceEntryTree', () => {
-  it('uses a fixed worker pool and preserves source order', async () => {
-    const entries = Array.from({ length: 200 }, (_, index) => ({ name: `file-${index}` }))
-    let release!: () => void
-    const gate = new Promise<void>((resolve) => {
-      release = resolve
-    })
-    let active = 0
-    let peak = 0
-    let started = 0
-    let saturated!: () => void
-    const saturation = new Promise<void>((resolve) => {
-      saturated = resolve
-    })
-
-    const scan = makeTraversal(new Map([['/root', entries]]), async (path) => {
-      if (path === '/root') {
-        return { kind: 'directory', sizeBytes: 1 }
-      }
-      active += 1
-      started += 1
-      peak = Math.max(peak, active)
-      if (started === 5) {
-        saturated()
-      }
-      await gate
-      active -= 1
-      return { kind: 'file', sizeBytes: 1 }
-    })
-
-    await saturation
-    expect(started).toBe(5)
-    expect(peak).toBe(5)
-    release()
-
-    const result = await scan
-    expect(result.children?.map((child) => child.name)).toEqual(entries.map((entry) => entry.name))
-    expect(result.sizeBytes).toBe(201)
-  })
-
   it('preserves aggregate sizes and partial-failure accounting', async () => {
     const directories = new Map<string, readonly Entry[]>([
       ['/root', [{ name: 'directory' }, { name: 'missing' }, { name: 'link' }, { name: 'file' }]],

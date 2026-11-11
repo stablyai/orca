@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { isPluginPanelTabKey } from '../../../../../shared/plugins/manifest/plugin-manifest'
-import type { PluginPanelsFetchStatus } from '@/store/plugin-panels'
+import type { PluginPanelsFetchStatus } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import type { ActiveRightSidebarTab } from '../../../../../shared/ui-chrome-types'
 
 /** Persists removal only after the authoritative installed list is ready. */

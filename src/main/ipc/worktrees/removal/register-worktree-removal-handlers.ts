@@ -17,12 +17,13 @@ import {
   getWorktreeRemovalOptionsKey
 } from './worktree-removal-coordinator'
 import { resolveRepoForExecutionHost } from '../repo-host-ownership'
+import { withNestedPreservedBranches } from '../../../workspaces/removal/nested-worktree-removal-plan'
 import {
   finishAcceptedWorktreeRemoval,
   waitForPendingWorktreeRemoval
 } from '../../../workspaces/removal/worktree-background-removal'
 import { runSerializedWorktreeRemovalAcceptance } from '../../../workspaces/removal/worktree-removal-acceptance-queue'
-import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import {
   deleteLostContact,
   observeTerminals,
@@ -101,13 +102,7 @@ export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): vo
           : runSerializedWorktreeRemovalAcceptance(repo.path, accept))
         result = await finishAcceptedWorktreeRemoval(accepted, args.worktreeId, removalHostId)
       } catch (error) {
-        if (nestedPreservedBranches.length > 0) {
-          throw new Error(
-            `${error instanceof Error ? error.message : String(error)} Branches kept after nested deletions: ${nestedPreservedBranches.map((item) => item.branchName).join(', ')}.`,
-            { cause: error }
-          )
-        }
-        throw error
+        throw withNestedPreservedBranches(error, nestedPreservedBranches)
       }
       if (!accepted.removing) {
         options?.onWorktreeLifecycle?.({

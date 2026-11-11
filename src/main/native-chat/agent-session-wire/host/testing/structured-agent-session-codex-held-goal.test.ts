@@ -72,7 +72,7 @@ it.each([
     expect(await goal).toMatchObject({ ok: true })
     expect(changeGoal).toHaveBeenCalledWith(expect.objectContaining({ change }))
     expect(rig.dispatch).toHaveBeenCalledOnce()
-    expect(await rig.submission(held.id)).toMatchObject({ dispatchState: 'pending' })
-    expect((await rig.submission(held.id))?.handedOverAt).toBeUndefined()
+    expect(await rig.drafts()).toEqual([{ messageId: held.id, state: 'waiting' }])
+    expect(await rig.handoff(held.id)).toBeUndefined()
   }
 )

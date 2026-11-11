@@ -1,3 +1,4 @@
+import { recoverJournalQueue } from './queued-messages/journal-unsent-send-hold'
 import { journalInputSourceBody } from './input-order/journal-input-source'
 import { journalInputOrder } from './input-order/journal-input-order'
 import { JournalWriteProjection } from './writing/journal-write-projection'
@@ -14,7 +15,6 @@ import type {
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage'
 import { latestStructuredAgentContextFacts } from '../../../shared/agent-session/structured-agent-session-context-usage'
-import { runningStructuredAgentSessionTurnItemBySequence } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { journalWroteBeforeOpen } from './replay/journal-cursor'
 import type { JournalHostDatabase } from './database/journal-host-database'
@@ -75,6 +75,7 @@ export class AgentSessionJournal {
   private readonly submissionWriter: JournalCollaborators['submissionWriter']
   private readonly stepWriter: JournalCollaborators['stepWriter']
   private readonly restore: () => Promise<void>
+  private openingQueueConversion = true
   private readonly projection: JournalWriteProjection
   /** Queued cards never count as owed work. */
   readonly queuedMessages: JournalCollaborators['queuedMessages']
@@ -90,6 +91,7 @@ export class AgentSessionJournal {
     this.projection = new JournalWriteProjection({
       ...options,
       state: () => this.state,
+      convertingLegacyQueue: () => this.openingQueueConversion,
       adopt: (state) => {
         this.state = state
         this.reopenUnmarked = retireCoveredJournalFloor(state, this.reopenUnmarked)
@@ -161,6 +163,8 @@ export class AgentSessionJournal {
     await this.restore()
     this.openedThrough = { epoch: this.state.epoch, sequence: this.state.lastSequence }
     journalInputOrder(this.state).markOpeningRecovery()
+    await recoverJournalQueue(this, this.database.db)
+    this.openingQueueConversion = false
   }
 
   /** Refuse future writes and drain admitted ones; the host retains database ownership. */
@@ -225,9 +229,8 @@ export class AgentSessionJournal {
   hasRecordedItem = (itemId: string): boolean =>
     this.state.items.has(itemId) || this.state.tombstones.has(itemId)
 
-  /** Read the journal's running turn without allocating a snapshot; host projection decides current work. */
-  runningTurn = (): { item: journal.AgentJournalRenderItem; turnId: string } | null =>
-    runningStructuredAgentSessionTurnItemBySequence(this.state.items.values())
+  /** Read from the per-row turn index so hot readers never rescan history; host projection decides current work. */
+  runningTurn = () => journalInputOrder(this.state).newestTurn.running()
 
   newestTurn = (): journal.AgentJournalTurnLifecycle | null =>
     readAgentJournalTurn(journalInputOrder(this.state).newestTurn.read()?.body)

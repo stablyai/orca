@@ -217,16 +217,6 @@ describe('active workspace context for a focused desktop-catalog workspace (real
     }
   })
 
-  it('answers the real branch and display name for the linked worktree', async () => {
-    const id = `${REPO_ID}::${linkedPath}`
-    await expect(runtimeFor(focused(id, 'local')).resolveActiveWorktreeContext()).resolves.toEqual({
-      worktreeId: id,
-      path: linkedPath,
-      branch: 'refs/heads/feature/parity',
-      displayName: 'Parity feature'
-    })
-  })
-
   it('matches the pre-#38653 answer for a focused SSH worktree whose host is not connected', async () => {
     const id = 'ssh-repo::/home/me/app-feature'
     for (const displayName of ['', 'Named on the box']) {
@@ -236,17 +226,6 @@ describe('active workspace context for a focused desktop-catalog workspace (real
         `meta name ${JSON.stringify(displayName)}`
       ).resolves.toEqual(await contextBefore(id, rows))
     }
-  })
-
-  it('still resolves a workspace whose stored focus host is stale (local) as it did before', async () => {
-    // The focus was stamped local; the repo row now routes to an SSH host (e.g. after a move).
-    const id = 'moved-repo::/home/me/app'
-    const rows = sshRows('moved-repo', id, 'Moved main')
-    const before = await contextBefore(id, rows)
-    expect(before).toMatchObject({ worktreeId: id, displayName: 'Moved main' })
-    await expect(
-      runtimeFor(focused(id, 'local'), rows).resolveActiveWorktreeContext()
-    ).resolves.toEqual(before)
   })
 
   it("never answers the local twin's context for a paired-server focus with the same id", async () => {

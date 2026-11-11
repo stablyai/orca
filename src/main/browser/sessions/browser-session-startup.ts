@@ -1,9 +1,11 @@
-import { browserSessionRegistry } from './browser-session-registry'
-import type { BrowserSessionRegistryProfileOptions } from './browser-session-registry'
+import { browserSessionRegistry } from './profiles/browser-session-registry'
+import type { BrowserSessionRegistryProfileOptions } from './profiles/browser-session-registry'
 import { collectOrphanedBrowserRoutePartitionStorage } from '../routing/partitions/browser-route-partition-storage-runtime'
-import { configureRouteSessionsForOrcaProfile } from '../routing/sessions/browser-route-session-runtime'
-import { configureBrowserSitePermissionStore } from '../site-settings/browser-site-permission-store'
-import { configureBrowserSiteDisplayStore } from '../site-settings/browser-site-display-store'
+// Initialize route registries and ownership probes before profile startup.
+import '../routing/sessions/browser-route-session-runtime'
+import { configureBrowserRoutePartitionBindingsForOrcaProfile } from '../routing/partitions/browser-route-partition-binding-runtime'
+import { configureBrowserSitePermissionStore } from '../site-settings/permissions/browser-site-permission-store'
+import { configureBrowserSiteDisplayStore } from '../site-settings/display/browser-site-display-store'
 import { configureBrowserExtensionProfileDataDirectory } from '../extensions/profile-storage/browser-extension-profile-data-directory'
 import { configurePairedRuntimeBrowserClientHostsForOrcaProfile } from '../client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import { configureBrowserPasswordVaults } from '../../browser-passwords/browser-password-vaults'
@@ -25,7 +27,7 @@ export function initializeBrowserSessionsForApp(
     configureBrowserSiteDisplayStore(activeProfile.profileDirectory)
     configureBrowserExtensionProfileDataDirectory(activeProfile.profileDirectory)
     configureBrowserPasswordVaults(activeProfile.profileDirectory)
-    configureRouteSessionsForOrcaProfile({
+    configureBrowserRoutePartitionBindingsForOrcaProfile({
       orcaProfileId: activeProfile.orcaProfileId,
       profileDirectory: activeProfile.profileDirectory
     })

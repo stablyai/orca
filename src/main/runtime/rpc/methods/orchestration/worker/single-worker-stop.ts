@@ -1,4 +1,4 @@
-import type { WorkerStopReceipt } from '../../../../../../shared/orchestration-worker-stop-receipt'
+import type { WorkerStopReceipt } from '../../../../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
 import { RemoteCapabilities, RemoteStopReceipt, remoteHelpers } from './worker-stop-remote-receipt'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { RpcContext } from '../../../core'
@@ -6,16 +6,17 @@ import { describeUnconfirmedAgentStop } from '../../../../../../shared/terminal/
 import {
   ORCHESTRATION_WORKER_STOP_HELPERS_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY
-} from '../../../../../../shared/orchestration-runtime-capabilities'
+} from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { inspectWorkerTerminal, resolvePinnedFederatedServer } from './worker-observation'
+import { inspectWorkerTerminal } from './worker-observation'
+import { resolvePinnedFederatedServer } from './pinned-federated-server'
 import { refuseFederatedStopWhileKeptOpen } from './worker-keep-open'
 import { archiveWorkerOutputBeforeStop } from './worker-stop-archive'
 import {
   resolveStructuredWorkerForDispatch,
   stopStructuredWorker
 } from '../structured-workers/orchestration-structured-worker-lifecycle'
-import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
+import { isStructuredWorkerHandle } from '../../../../../../shared/orchestration/workers/structured-worker-handle'
 
 export type StopMutation = RpcContext['orchestrationMutation']
 

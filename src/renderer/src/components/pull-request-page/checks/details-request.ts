@@ -12,12 +12,15 @@ import {
   type CheckDetailsLoadState,
   type GitHubChecksTabState
 } from '@/components/github-checks-tab-state'
-import { getGitHubRuntimeRepoId, type GitHubRuntimeHost } from '@/lib/github-source-runtime-context'
+import {
+  getGitHubRuntimeRepoId,
+  type GitHubRuntimeHost
+} from '@/lib/work-items/github/github-source-runtime-context'
 import { translate } from '@/i18n/i18n'
 import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 
 export function requestPullRequestCheckDetails(args: {
   canUseChecksRepoContext: boolean

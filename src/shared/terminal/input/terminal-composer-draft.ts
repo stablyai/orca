@@ -148,6 +148,21 @@ function isHiddenComposerCaret(
   )
 }
 
+// Why: Claude paints its caret over a suggestion's first glyph undimmed and dims the rest (#40195).
+function isCaretOverDimSuggestion(context: TerminalCursorContext): boolean {
+  const painted = context.afterCursor
+  const raw = context.rawAfterCursor
+  return (
+    context.cursorInverse === true &&
+    [...painted].length === 1 &&
+    raw.length > painted.length &&
+    raw.startsWith(painted) &&
+    // Why: on a typed word's last glyph the caret sits before a dim hint and the glyph is real.
+    (!context.beforeCursor.replace(COMPOSER_PROMPT_PREFIX, '').trim() ||
+      !/\s/.test(raw[painted.length] ?? ''))
+  )
+}
+
 function detectTerminalComposer(
   context: TerminalCursorContext | null | undefined,
   typedOnly = false
@@ -157,7 +172,8 @@ function detectTerminalComposer(
   }
   const cursorIndex = context.rows.length - 1
   const codexFooterIndex = findCodexFooterIndex(context)
-  let afterCursor = typedOnly ? context.afterCursor : context.afterCursor || context.rawAfterCursor
+  const typedAfter = isCaretOverDimSuggestion(context) ? '' : context.afterCursor
+  let afterCursor = typedOnly ? typedAfter : typedAfter || context.rawAfterCursor
   let continuationRows = composerContinuationRows(context, afterCursor, codexFooterIndex, typedOnly)
   // Why: the continuation walk stops at the row that would close the frame; typed-only walks also
   // stop at dim suggestion rows, which still sit inside the frame.

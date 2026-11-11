@@ -4,9 +4,10 @@ import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } fro
 import type { RuntimeWorktreeListResult } from '../../../shared/runtime-worktree-contracts'
 import type { DetectedWorktreeListResult, Worktree } from '../../../shared/worktree/types'
 import type { Repo } from '../../../shared/repo-types'
+import type { RepoRowExecutionHostLookup } from '../../../shared/execution-host/worktree-execution-host-resolution'
 import { stopMissingWorktreeTerminals } from './removal/missing-worktree-terminal-reconciliation'
 import type { WorktreeVisibilitySourceMatcher } from '../../../shared/worktree/visibility-sources'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { getWorkspaceAttachments } from '../../../shared/workspace-attachments/workspace-attachments'
 import type { TerminalWorkspaceLaunchScope } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
@@ -92,13 +93,15 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends RuntimeWorkspa
     worktree: Worktree,
     worktreeVisibilitySourceMatcher?: WorktreeVisibilitySourceMatcher,
     sourceDefaultsSupported = true,
-    providedSettings?: ReturnType<RuntimeStore['getSettings']>
+    providedSettings?: ReturnType<RuntimeStore['getSettings']>,
+    repoLookup?: RepoRowExecutionHostLookup<Repo>
   ): boolean {
     return this.managedWorktreeQueries.isVisible(
       worktree,
       worktreeVisibilitySourceMatcher,
       sourceDefaultsSupported,
-      providedSettings
+      providedSettings,
+      repoLookup
     )
   }
 
@@ -114,8 +117,15 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends RuntimeWorkspa
     )
   }
 
-  async showManagedWorktree(worktreeSelector: string, requiredHostId?: ExecutionHostId) {
-    const worktree = await this.resolveWorkspaceSelector(worktreeSelector, { requiredHostId })
+  async showManagedWorktree(
+    worktreeSelector: string,
+    requiredHostId?: ExecutionHostId,
+    options: { matchFolders?: boolean } = {}
+  ) {
+    const worktree = await this.resolveWorkspaceSelector(worktreeSelector, {
+      requiredHostId,
+      matchFolders: options.matchFolders
+    })
     const childKey = worktreeWorkspaceKey(worktree.id)
     const crossStoreLineage = this.store?.getCrossStoreWorkspaceLineage?.(childKey)
     const workspaceLineage = this.store?.getWorkspaceLineage?.(childKey)

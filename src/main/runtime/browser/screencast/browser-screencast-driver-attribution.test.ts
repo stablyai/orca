@@ -1,4 +1,3 @@
-import '../../rpc/unused-default-rpc-methods.test-fixture'
 /** Shared screencast subscriptions must not give desktop/web/CLI viewers a phone's input lock. */
 import { describe, expect, it, vi } from 'vitest'
 import {

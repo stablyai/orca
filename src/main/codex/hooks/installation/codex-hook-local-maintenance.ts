@@ -3,8 +3,8 @@ import type { AgentHookInstallStatus } from '../../../../shared/agent-hook-liste
 import {
   createManagedCommandMatcher,
   removeManagedCommands
-} from '../../../agent-hooks/installer-utils'
-import { readHooksJson } from '../../../agent-hooks/hooks-json-read'
+} from '../../../agent-hooks/installation/commands/managed-hook-command-matching'
+import { readHooksJson } from '../../../agent-hooks/installation/configuration/hooks-json-read'
 import { syncSystemConfigIntoManagedCodexHome } from '../../configuration/settings/codex-config-mirror'
 import { upsertHookTrustEntries } from '../../trust/toml/config-toml-trust'
 import {

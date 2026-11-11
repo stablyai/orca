@@ -25,6 +25,7 @@ import { createStructuredAgentSessionDispatchFollowUps } from '../structured-age
 import type { CatalogOwner } from '../model-catalog/structured-agent-model-catalog-wiring'
 import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime-contract'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import { observePRWatchCommittedRows } from '../pr-watch-runtime'
 
 export async function installOnJournal(
   deps: StructuredAgentSessionRuntimeDeps,
@@ -82,6 +83,7 @@ export async function installOnJournal(
     resolveWorkspacePath: deps.resolveWorkspacePath,
     logger: deps.logger,
     ...(deps.onRequestFailure ? { onRequestFailure: deps.onRequestFailure } : {}),
+    observeCommittedRows: observePRWatchCommittedRows,
     ...(deps.onSessionStatusChanged ? { onSessionStatusChanged: deps.onSessionStatusChanged } : {}),
     ...(deps.statusSink ? { statusSink: deps.statusSink } : {}),
     ...(deps.conversationNaming

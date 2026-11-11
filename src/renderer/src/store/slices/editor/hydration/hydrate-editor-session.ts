@@ -6,7 +6,7 @@ import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { buildValidWorktreeIdsForSessionHydration } from '../../../../../../shared/worktree/degraded-repo-worktree-validity'
 import { migrateHydratedEditorTabsAndGroups } from '../file-ids/hydrated-editor-file-ids'
 import { buildHydratedEditorSessionState } from './hydrated-editor-session-state'
-import { selectFolderWorkspaces } from '../../../workspace-record-selectors'
+import { selectFolderWorkspaces } from '../../../workspaces/catalog/workspace-record-fields'
 
 export function createHydrateEditorSession(
   set: EditorSet,

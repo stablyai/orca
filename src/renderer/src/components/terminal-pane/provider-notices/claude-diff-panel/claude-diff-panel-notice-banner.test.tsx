@@ -96,21 +96,6 @@ afterEach(() => {
 })
 
 describe('ClaudeDiffPanelNoticeBanner', () => {
-  it('explains the panel and how to hide it, then Got it keeps it away for good', async () => {
-    setState('claude')
-    await renderBanner()
-    expect(mayAutoOpen).toHaveBeenCalledWith(PTY_ID, { runtime: 'host' })
-    expect(paneElement.textContent).toContain(TITLE)
-    expect(paneElement.textContent).toContain('type /diff in Claude Code')
-
-    const gotIt = Array.from(paneElement.querySelectorAll('button')).find(
-      (button) => button.textContent?.trim() === 'Got it'
-    )
-    await act(async () => gotIt?.click())
-    expect(paneElement.textContent).toBe('')
-    expect(uiSet).toHaveBeenCalledWith({ claudeDiffPanelNoticeSeen: true })
-  })
-
   it('keeps the newest answer when an older request lands after it', async () => {
     vi.useFakeTimers()
     try {

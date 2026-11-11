@@ -1,5 +1,5 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { panesLeftAfterPendingCloses } from '@/runtime/layout-owner-pane-intents'
+import { panesLeftAfterPendingCloses } from '@/runtime/workspace-layout/intents/layout-owner-pane-intents'
 
 /** After main’s last-pane refusal, close the tab if pending closes leave one pane; otherwise close locally to handle lagging main state; leave unmounted tabs alone. */
 export function closeAfterLastPaneRefusal(

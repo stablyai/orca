@@ -231,6 +231,29 @@ describe.skipIf(process.platform === 'win32')('Codex shell launch preflight', ()
     )
   }
 
+  for (const shell of ['/bin/bash', '/bin/zsh']) {
+    it.skipIf(!existsSync(shell))(
+      `keeps the user’s own codex function in ${shell} when the cwd has a codex entry`,
+      () => {
+        const root = mkdtempSync(join(tmpdir(), 'orca-codex-user-fn-'))
+        roots.push(root)
+        mkdirSync(join(root, 'codex'))
+
+        const output = execFileSync(
+          shell,
+          [
+            shell.endsWith('/zsh') ? '-f' : '--noprofile',
+            '-c',
+            `codex() { printf 'user function'; }\n${getPosixCodexShellLaunchPreflight()}\ncodex`
+          ],
+          { encoding: 'utf-8', cwd: root, env: { ...process.env, PATH: '/usr/bin:/bin' } }
+        )
+
+        expect(output).toBe('user function')
+      }
+    )
+  }
+
   // Fail explicitly when CI requires fish; skipped regression cases cannot establish coverage.
 
   // #16893: absent Codex made unquoted (type -t codex) vanish and test complain; exercise real -l -C startup.

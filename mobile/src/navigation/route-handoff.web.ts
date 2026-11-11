@@ -6,7 +6,7 @@ import {
 } from '../mobile-web-shell/bridge/bridge-caps'
 import { matchesRoutePattern } from '../mobile-web-shell/page-route-policy'
 import type { BridgeRpcClient } from '../mobile-web-shell/bridge/bridge-rpc-client'
-import { usePageBridgeClient } from '../transport/client-context.web'
+import { usePageBridgeClient } from '../transport/connection/client-context.web'
 import { stringifyRouteHref, type RouterHref } from './route-href'
 import { useBackClaim } from './use-back-claim.web'
 import type { RouteHandoff } from './route-handoff'

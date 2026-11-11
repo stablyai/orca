@@ -1,6 +1,7 @@
 import { ChevronDown, Link } from 'lucide-react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { ClaudeRateLimitAccountsState } from '../../../../../../shared/managed-account-types'
 import { canCopyClaudeSignInLink } from '../../../../../../shared/claude-sign-in-link'
 import { Button } from '../../../ui/button'
@@ -53,6 +54,7 @@ export function ClaudeSignInLinkMenu({
   disabled: boolean
   onCopyLink: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
@@ -60,7 +62,7 @@ export function ClaudeSignInLinkMenu({
           variant={variant}
           size="icon-xs"
           disabled={disabled}
-          aria-label={translate('accounts.claude.moreSignInOptions', 'More sign-in options')}
+          aria-label={t('accounts.claude.moreSignInOptions', 'More sign-in options')}
         >
           <ChevronDown />
         </Button>
@@ -68,7 +70,7 @@ export function ClaudeSignInLinkMenu({
       <DropdownMenuContent align="end">
         <DropdownMenuItem onSelect={onCopyLink}>
           <Link />
-          {translate('accounts.claude.copySignInLink', 'Copy sign-in link instead')}
+          {t('accounts.claude.copySignInLink', 'Copy sign-in link instead')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

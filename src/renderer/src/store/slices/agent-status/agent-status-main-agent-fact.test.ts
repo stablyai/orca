@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import '../../../hooks/ipc-events/normalize-agent-status-event'
-import { createTestStore } from '../store-test-helpers'
+import { createTestStore } from '../../testing/app-store-test-fixture'
 
 const PANE = 'tab-1:11111111-1111-4111-8111-111111111111'
 

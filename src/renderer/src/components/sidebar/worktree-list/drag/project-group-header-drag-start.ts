@@ -1,3 +1,7 @@
+import {
+  getRootProjectHeaderDragKeys,
+  measureRootProjectHeaderDragRects
+} from './root-project-header-drop'
 import type { PointerEvent } from 'react'
 
 import {
@@ -20,6 +24,7 @@ export function createProjectGroupHeaderDragSession(args: {
     ProjectGroupHeaderDragBucketKey,
     readonly string[]
   >
+  rootProjectHeaderKeys?: readonly string[]
   getScrollContainer: () => HTMLElement | null
 }): ProjectGroupHeaderDragSession | null {
   if (args.event.button !== 0) {
@@ -36,8 +41,16 @@ export function createProjectGroupHeaderDragSession(args: {
     return null
   }
   const bucketKey = getProjectGroupHeaderDragBucketKey(group, args.projectGroupById)
+  const rootProjectHeaderHostId = args.rootProjectHeaderKeys?.some((key) => key.startsWith('host:'))
+    ? args.event.currentTarget.dataset.rootProjectHeaderHost
+    : undefined
+  const rootProjectHeaderKeys = getRootProjectHeaderDragKeys(
+    args.rootProjectHeaderKeys,
+    `group:${args.groupId}`,
+    rootProjectHeaderHostId
+  )
   const sidebarProjectGroupHeaderIds =
-    args.sidebarProjectGroupHeaderIdsByBucket.get(bucketKey) ?? []
+    rootProjectHeaderKeys ?? args.sidebarProjectGroupHeaderIdsByBucket.get(bucketKey) ?? []
   // Why: a lone group in a parent bucket cannot move without reparenting.
   if (sidebarProjectGroupHeaderIds.length <= 1) {
     return null
@@ -53,7 +66,18 @@ export function createProjectGroupHeaderDragSession(args: {
     bucketKey,
     sidebarProjectGroupHeaderIds,
     pointerId: args.event.pointerId,
-    headerRects: measureProjectGroupHeaderDragRects(container, bucketKey),
+    rootProjectHeaderKeys,
+    rootProjectHeaderHostId,
+    headerRects: rootProjectHeaderKeys
+      ? measureRootProjectHeaderDragRects(
+          container,
+          rootProjectHeaderKeys,
+          rootProjectHeaderHostId
+        ).map((rect) => ({
+          ...rect,
+          groupId: rect.key
+        }))
+      : measureProjectGroupHeaderDragRects(container, bucketKey),
     handleEl,
     startX: args.event.clientX,
     startY: args.event.clientY,

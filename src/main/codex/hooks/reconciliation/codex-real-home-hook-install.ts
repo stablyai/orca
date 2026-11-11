@@ -1,11 +1,9 @@
-import {
-  createManagedCommandMatcher,
-  type HookDefinition,
-  writeHooksJson,
-  writeManagedScript
-} from '../../../agent-hooks/installer-utils'
-import { readHooksJsonWithRaw } from '../../../agent-hooks/hooks-json-read'
-import { resolveHooksJsonWritePath } from '../../../agent-hooks/hook-config-write-path'
+import { createManagedCommandMatcher } from '../../../agent-hooks/installation/commands/managed-hook-command-matching'
+import type { HookDefinition } from '../../../agent-hooks/installation/configuration/hook-config-schema'
+import { writeHooksJson } from '../../../agent-hooks/installation/configuration/hooks-json-write'
+import { writeManagedScript } from '../../../agent-hooks/installation/scripts/managed-hook-script-write'
+import { readHooksJsonWithRaw } from '../../../agent-hooks/installation/configuration/hooks-json-read'
+import { resolveHooksJsonWritePath } from '../../../agent-hooks/installation/configuration/hook-config-write-path'
 import {
   assertHooksJsonGeneration,
   backupRealHomeHooksJsonOnce,

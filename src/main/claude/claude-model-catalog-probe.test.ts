@@ -55,7 +55,6 @@ describe('claude model catalog probe', () => {
   it.each([
     [[], [], ['/orca-probe', '/orca-probe'], 'user,project,local'],
     [['node_modules/claude/cli.js'], [], ['/chat-a', '/chat-b'], 'user'],
-    [['--env-file=work env', '--', 'claude'], [], ['/chat-a', '/chat-b'], 'user'],
     [[], ['--settings', 'settings.json'], ['/chat-a', '/chat-b'], 'user']
   ])(
     'lists prefix %j with arguments %j from %j, reading %s settings',

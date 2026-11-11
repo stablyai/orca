@@ -1,4 +1,8 @@
-import { useAppStateValue, useAppStateView, useAppStateViewActive } from '@/store/app-state-view'
+import {
+  useAppStateValue,
+  useAppStateView,
+  useAppStateViewActive
+} from '@/store/retained-views/app-state-view'
 import { toast } from 'sonner'
 import { shallow } from 'zustand/shallow'
 import { useShallow } from 'zustand/react/shallow'
@@ -11,33 +15,33 @@ import {
   selectLivePtyIdsForWorktree
 } from '@/components/sidebar/workspace-card/activity/worktree-card-status-inputs'
 import { useAppStore } from '@/store/index'
-import { selectKnownWorktreeById } from '@/store/selectors'
+import { selectKnownWorktreeById } from '@/store/workspaces/selection/known-worktree-selection'
 import {
   useWorktreeStructuredChatTabNames,
   getStructuredChatTabNames
-} from '@/runtime/structured-chat-name-observation'
+} from '@/runtime/native-chat/naming/structured-chat-name-observation'
 import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
 import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
-import { AgentTypeIcon } from '@/lib/agent-type-icon'
+import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import '@/lib/active-agent-note-send'
+import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
+import '@/lib/agent-session/messaging/terminal/active-agent-note-send'
 import {
   activeAgentNotesSendFailureMessage,
   type ActiveAgentNotesSendResult
-} from '@/lib/active-agent-note-send-result'
-import { sendMessageToAgent } from '@/lib/agent-message-send'
+} from '@/lib/agent-session/messaging/terminal/active-agent-note-send-result'
+import { sendMessageToAgent } from '@/lib/agent-session/messaging/agent-message-send'
 import {
   deriveNotesSendAgentTargets,
   type NotesSendAgentTarget
-} from '@/lib/notes-send-agent-targets'
-import { agentKindForAgentType } from '@/lib/agent-status'
+} from '@/lib/agent-session/messaging/notes-send-agent-targets'
+import { agentKindForAgentType } from '@/lib/agent-status/aggregation/worktree-agent-status'
 import { formatAgentTypeLabel } from '../../../../../shared/agent-status/presentation/agent-type-label'
-import { track } from '@/lib/telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
 import { useNow } from '@/hooks/use-now'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
@@ -45,16 +49,13 @@ import { useWorktreeAgentRows } from '@/components/sidebar/workspace-card/activi
 import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
 import { getAgentRowPrimaryText } from '../../../../../shared/agent-status/presentation/agent-row-primary-text'
 import type { LaunchSource } from '../../../../../shared/telemetry-property-schemas'
-import { agentRowDisplayDotState } from '@/lib/agent-row-dot-state'
+import { agentRowDisplayDotState } from '@/lib/agent-status/presentation/agent-row-dot-state'
 import { translate } from '@/i18n/i18n'
-import { agentSendDisabledReasonLabel } from '@/lib/agent-send-disabled-reason-label'
-import { addQuoteToAgent } from '@/components/native-chat/native-chat-workspace-selection'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { agentSendDisabledReasonLabel } from '@/lib/agent-session/messaging/agent-send-disabled-reason-label'
+import { addQuoteToAgent } from '@/components/native-chat/selection-quotes/native-chat-workspace-selection'
 import React, { useCallback, useMemo } from 'react'
-
-type OrderedSendTarget = {
-  target: NotesSendAgentTarget
-  agent: DashboardAgentRowData | null
-}
+import { orderSendTargetsByWorktreeAgentRows } from './review-notes-send-target-order'
 
 export function ReviewNotesSendMenuContent({
   worktreeId,
@@ -77,6 +78,7 @@ export function ReviewNotesSendMenuContent({
   /** Given each send's own result the moment its prompt is handed to an agent. */
   onPromptHandedOff?: (delivered: Promise<unknown>) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const hasPrompt = prompt.trim().length > 0
 
   const viewActive = useAppStateViewActive()
@@ -233,11 +235,8 @@ export function ReviewNotesSendMenuContent({
     <>
       <DropdownMenuLabel>
         {mode === 'add-to-chat'
-          ? translate('components.native-chat.addSelectionToChat', 'Add to chat')
-          : translate(
-              'auto.components.editor.ReviewNotesSendMenuContent.03378aea75',
-              'Send notes to'
-            )}
+          ? t('components.native-chat.addSelectionToChat', 'Add to chat')
+          : t('auto.components.editor.ReviewNotesSendMenuContent.03378aea75', 'Send notes to')}
       </DropdownMenuLabel>
       {orderedSendTargets.map(({ target, agent }) => {
         const itemProps = {
@@ -254,7 +253,7 @@ export function ReviewNotesSendMenuContent({
       })}
       <DropdownMenuSeparator />
       <DropdownMenuLabel>
-        {translate('auto.components.editor.ReviewNotesSendMenuContent.a49800405b', 'New agent')}
+        {t('auto.components.editor.ReviewNotesSendMenuContent.a49800405b', 'New agent')}
       </DropdownMenuLabel>
       <QuickLaunchAgentMenuItems
         worktreeId={worktreeId}
@@ -327,14 +326,15 @@ function AgentTargetMenuItem({
   disabled,
   onSend
 }: AgentTargetMenuItemProps & { name: string }): React.JSX.Element {
+  const t = useTranslate()
   const tabTitle = target.tabTitle.trim()
   const typeLabel = formatAgentTypeLabel(target.agentType ?? agent?.agentType)
   // Use the sidebar’s display state so failed/stopped agents agree across surfaces.
   const state = agent ? agentRowDisplayDotState(agent) : 'idle'
-  const timeAgo = agent ? formatAgentRelativeTime(agent, now) : null
+  const timeAgo = agent ? formatAgentRelativeTime(agent, now, t) : null
   const disabledReason =
     target.status === 'disabled' && target.disabledReason
-      ? agentSendDisabledReasonLabel(target.disabledReason)
+      ? agentSendDisabledReasonLabel(target.disabledReason, t)
       : undefined
   const secondaryParts = [
     ...(name ? [typeLabel] : []),
@@ -369,59 +369,37 @@ function AgentTargetMenuItem({
   )
 }
 
-function orderSendTargetsByWorktreeAgentRows(
-  sendTargets: NotesSendAgentTarget[],
-  agentRows: DashboardAgentRowData[]
-): OrderedSendTarget[] {
-  const targetsByPaneKey = new Map(sendTargets.map((target) => [target.paneKey, target]))
-  const usedPaneKeys = new Set<string>()
-  const ordered: OrderedSendTarget[] = []
-
-  for (const agent of agentRows) {
-    const target = targetsByPaneKey.get(agent.paneKey)
-    if (!target) {
-      continue
-    }
-    ordered.push({ target: { ...target, agentType: agent.agentType }, agent })
-    usedPaneKeys.add(target.paneKey)
-  }
-
-  for (const target of sendTargets) {
-    if (!usedPaneKeys.has(target.paneKey)) {
-      ordered.push({ target, agent: null })
-    }
-  }
-
-  return ordered
-}
-
-function formatAgentRelativeTime(agent: DashboardAgentRowData, now: number): string | null {
+function formatAgentRelativeTime(
+  agent: DashboardAgentRowData,
+  now: number,
+  t?: Translate
+): string | null {
   const doneAt = lastEnteredDoneAt(agent)
   if (doneAt !== null) {
-    return `${formatTimeAgo(doneAt, now)}`
+    return `${formatTimeAgo(doneAt, now, t)}`
   }
   const startedAt = agent.startedAt > 0 ? agent.startedAt : agent.entry.stateStartedAt
-  return startedAt > 0 ? `${formatTimeAgo(startedAt, now)}` : null
+  return startedAt > 0 ? `${formatTimeAgo(startedAt, now, t)}` : null
 }
 
-function formatTimeAgo(ts: number, now: number): string {
+function formatTimeAgo(ts: number, now: number, t: Translate = translate): string {
   const delta = now - ts
   if (delta < 60_000) {
-    return translate('auto.components.editor.ReviewNotesSendMenu.justNow', 'just now')
+    return t('auto.components.editor.ReviewNotesSendMenu.justNow', 'just now')
   }
   const minutes = Math.floor(delta / 60_000)
   if (minutes < 60) {
-    return translate('auto.components.editor.ReviewNotesSendMenu.minutesAgo', '{{minutes}}m ago', {
+    return t('auto.components.editor.ReviewNotesSendMenu.minutesAgo', '{{minutes}}m ago', {
       minutes
     })
   }
   const hours = Math.floor(minutes / 60)
   if (hours < 24) {
-    return translate('auto.components.editor.ReviewNotesSendMenu.hoursAgo', '{{hours}}h ago', {
+    return t('auto.components.editor.ReviewNotesSendMenu.hoursAgo', '{{hours}}h ago', {
       hours
     })
   }
-  return translate('auto.components.editor.ReviewNotesSendMenu.daysAgo', '{{days}}d ago', {
+  return t('auto.components.editor.ReviewNotesSendMenu.daysAgo', '{{days}}d ago', {
     days: Math.floor(hours / 24)
   })
 }

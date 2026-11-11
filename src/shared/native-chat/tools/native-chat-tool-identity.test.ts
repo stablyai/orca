@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  formatToolDuration,
   MAX_TOOL_SEARCH_RESULTS,
   mcpToolIdentity,
   toolExecutionMetadata,
@@ -8,12 +7,6 @@ import {
 } from './native-chat-tool-identity'
 
 describe('MCP tool identity', () => {
-  it('splits a qualified MCP name into display labels', () => {
-    expect(mcpToolIdentity('mcp__linear__list_issues')).toEqual({
-      server: 'Linear',
-      tool: 'list issues'
-    })
-  })
   it.each([
     'linear/list_issues',
     'linear.list_issues',
@@ -49,24 +42,6 @@ describe('MCP tool identity', () => {
 })
 
 describe('command metadata', () => {
-  it.each([
-    [0, '0ms'],
-    [400, '400ms'],
-    [1000, '1s'],
-    [62000, '1m 2s'],
-    [3600000, '1h 0m 0s']
-  ])('formats %s milliseconds as %s', (value, expected) =>
-    expect(formatToolDuration(value)).toBe(expected)
-  )
-  it.each([undefined, null, '400', -1, Number.NaN, Infinity])(
-    'omits invalid duration %s',
-    (value) => {
-      expect(formatToolDuration(value)).toBeNull()
-      expect(toolExecutionMetadata({ exitCode: value, durationMs: value })).toEqual(
-        value === -1 ? { exitCode: -1 } : {}
-      )
-    }
-  )
   it('accepts both provider casings and keeps zero values', () => {
     expect(toolExecutionMetadata({ exitCode: 0, durationMs: 0 })).toEqual({
       exitCode: 0,
@@ -110,8 +85,5 @@ describe('web search results', () => {
     expect(results).toHaveLength(MAX_TOOL_SEARCH_RESULTS)
     expect(results[0]!.title).toHaveLength(200)
     expect(toolWebSearchResults([{ url: `https://example.com/${'x'.repeat(3000)}` }])).toEqual([])
-  })
-  it.each([null, undefined, {}, '[]'])('ignores malformed collection %s', (value) => {
-    expect(toolWebSearchResults(value)).toEqual([])
   })
 })

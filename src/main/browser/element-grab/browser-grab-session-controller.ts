@@ -1,4 +1,7 @@
-import type { BrowserGrabCancelReason, BrowserGrabResult } from '../../../shared/browser-grab-types'
+import type {
+  BrowserGrabCancelReason,
+  BrowserGrabResult
+} from '../../../shared/browser/element-grab/browser-grab-types'
 import { buildGuestOverlayScript } from './grab-guest-script'
 import { clampGrabPayload } from './browser-grab-payload'
 import { readDocPreviewGuestDocumentUrl } from '../document-preview/doc-preview-guest-policy'

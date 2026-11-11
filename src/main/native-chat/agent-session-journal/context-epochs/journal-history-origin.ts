@@ -7,12 +7,25 @@ const handle = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('claude'), sessionId: text, leafUuid: text.nullable() }),
   z.object({ kind: z.literal('opaque'), agent: text, value: text })
 ])
-const origin = z.object({
+const legacyOrigin = z.object({
   version: z.literal(1),
   kind: z.literal('legacy_import'),
   providerHandle: handle,
   importedAt: z.number().finite()
 })
+
+const nativeCopyOrigin = z.object({
+  version: z.literal(1),
+  kind: z.literal('native_copy'),
+  providerHandle: handle,
+  unit: z.enum(['codex-turn', 'claude-entry', 'acp-user-message']),
+  agent: text,
+  ids: z.array(text)
+})
+const origin = z.discriminatedUnion('kind', [legacyOrigin, nativeCopyOrigin])
+export type NativeCopyCoverage = Pick<z.infer<typeof nativeCopyOrigin>, 'unit' | 'ids'>
+export type NativeCopyOrigin = z.infer<typeof nativeCopyOrigin>
+const parsedOrigins = new WeakMap<JournalHistoryOrigin, ReturnType<typeof origin.safeParse>>()
 
 /** Preserve raw annotations even when this build cannot interpret them. */
 export type JournalHistoryOrigin = {
@@ -54,8 +67,49 @@ export function usableJournalHistoryOrigin(value: JournalHistoryOrigin | null) {
   if (!value) {
     return null
   }
-  const parsed = origin.safeParse(value.raw)
+  let parsed = parsedOrigins.get(value)
+  if (!parsed) {
+    parsed = origin.safeParse(value.raw)
+    parsedOrigins.set(value, parsed)
+  }
   return parsed.success && sameJournalConversation(value.providerHandle, parsed.data.providerHandle)
     ? parsed.data
+    : null
+}
+
+const coveredIds = new WeakMap<NativeCopyOrigin, ReadonlySet<string>>()
+export function nativeCopyIds(origin: NativeCopyOrigin): ReadonlySet<string> {
+  let ids = coveredIds.get(origin)
+  if (!ids) {
+    ids = new Set(origin.ids)
+    coveredIds.set(origin, ids)
+  }
+  return ids
+}
+
+/** A copy receipt applies only to the exact native conversation it was captured from. */
+export function nativeCopyCoverage(
+  value: JournalHistoryOrigin | null,
+  agent: string,
+  unit: NativeCopyOrigin['unit'],
+  providerHandle: JournalEpochRow['providerHandle']
+): ReadonlySet<string> | undefined {
+  const copy = usableJournalHistoryOrigin(value)
+  return copy?.kind === 'native_copy' &&
+    copy.agent === agent &&
+    copy.unit === unit &&
+    sameJournalConversation(copy.providerHandle, providerHandle)
+    ? nativeCopyIds(copy)
+    : undefined
+}
+
+export function journalImportTime(
+  value: JournalHistoryOrigin | null,
+  providerHandle: JournalEpochRow['providerHandle']
+): number | null {
+  const imported = usableJournalHistoryOrigin(value)
+  return imported?.kind === 'legacy_import' &&
+    sameJournalConversation(imported.providerHandle, providerHandle)
+    ? imported.importedAt
     : null
 }

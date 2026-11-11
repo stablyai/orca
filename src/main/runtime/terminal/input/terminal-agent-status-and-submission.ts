@@ -1,6 +1,6 @@
 import { selectFreshExplicitAgentStatus } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import { OrcaRuntimeWithPluginHookedTerminalInput } from './terminal-plugin-hooked-input'
-import type { RuntimeTerminalAgentStatus } from '../../../../shared/runtime-types'
+import type { RuntimeTerminalAgentStatus } from '../../../../shared/runtime-terminal-contracts'
 import type { RuntimeTerminalAgentStatusSnapshot } from '../query/runtime-terminal-agent-status-query'
 import { getDisplayPromptLifecycle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
@@ -239,11 +239,7 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
   protected getFreshExplicitAgentStatusForHandle(
     handle: string,
     ptyId: string
-  ): {
-    status: NonNullable<RuntimeTerminalAgentStatus['status']>
-    updatedAt: number
-    stateStartedAt: number
-  } | null {
+  ): ReturnType<typeof selectFreshExplicitAgentStatus> {
     return selectFreshExplicitAgentStatus({
       handle,
       paneKey: this.getPaneKeyForTerminalHandle(handle),
@@ -297,7 +293,9 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
       generation: this.getPtyLifecycleGeneration(ptyId),
       permissionSequence: this.agentPromptPermissionSequenceByPtyId.get(ptyId) ?? 0,
       workingSequence: nativeLifecycle?.workingSequence ?? 0,
-      explicitWorkingStartedAt: explicit?.status === 'working' ? explicit.stateStartedAt : null,
+      // A prompt starts the main agent's turn; child work can hold the row working across it.
+      explicitWorkingStartedAt:
+        explicit?.status === 'working' ? explicit.mainAgentWorkingStartedAt : null,
       outputSequence,
       status
     }

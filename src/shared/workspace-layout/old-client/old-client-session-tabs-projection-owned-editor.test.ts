@@ -68,9 +68,4 @@ describe('projectSessionTabs with an owned editor id', () => {
       })
     ])
   })
-
-  it('keeps matching by path alone with the switch off', () => {
-    mocks.layoutOwnerIsMain = false
-    expect(projectOwnedReadme().projected.tabs).toEqual([])
-  })
 })

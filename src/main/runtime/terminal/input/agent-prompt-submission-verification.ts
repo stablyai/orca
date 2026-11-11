@@ -1,4 +1,4 @@
-import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../../../shared/orchestration-timing-budgets'
+import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../../../shared/orchestration/orchestration-timing-budgets'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 
 export const AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS = AGENT_PROMPT_EFFECT_TIMEOUT_MS

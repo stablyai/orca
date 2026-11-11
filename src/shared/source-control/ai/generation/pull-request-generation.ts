@@ -1,5 +1,5 @@
 import { truncateDiffForPrompt } from './commit-message-prompt'
-import { assertJsonTextStructureWithinLimits } from '../../../json-text-structure-limit'
+import { assertJsonTextStructureWithinLimits } from '../../../json-stream/json-text-structure-limit'
 import type { HostedReviewProvider } from '../../hosted-review/hosted-review-contracts'
 
 export const GENERATED_PULL_REQUEST_JSON_STRUCTURE_LIMITS = {

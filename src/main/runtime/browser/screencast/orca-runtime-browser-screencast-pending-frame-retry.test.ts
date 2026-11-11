@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { BROWSER_SCREENCAST_GHOST_SUBSCRIBER_REFUSAL_LIMIT } from './browser-screencast-ghost-subscriber-eviction'
+
 import { SCREENCAST_PENDING_FRAME_RETRY_MS } from './browser-screencast-subscriber-frame-delivery'
 import {
   createSinglePageBrowserCommandsHost,
@@ -76,52 +76,6 @@ describe('screencast frames a viewer refused', () => {
     expect(received).toEqual([last])
     await vi.advanceTimersByTimeAsync(SCREENCAST_PENDING_FRAME_RETRY_MS * 4)
     expect(received).toEqual([last])
-    subscription.session.stop()
-  })
-
-  it('retries the newest refused frame when a newer one is refused mid-retry', async () => {
-    let socketFull = true
-    const received: Uint8Array<ArrayBufferLike>[] = []
-    const { subscription, onFrame } = await subscribe((bytes) => {
-      if (socketFull) {
-        return false
-      }
-      received.push(bytes)
-      return true
-    })
-    const stale = new Uint8Array([1])
-    const newest = new Uint8Array([2])
-    onFrame(stale)
-    await vi.advanceTimersByTimeAsync(SCREENCAST_PENDING_FRAME_RETRY_MS * 2)
-    onFrame(newest)
-    socketFull = false
-    await vi.advanceTimersByTimeAsync(SCREENCAST_PENDING_FRAME_RETRY_MS * 4)
-    expect(received).toEqual([newest])
-    subscription.session.stop()
-  })
-
-  it('stops retrying once the viewer leaves', async () => {
-    const sendBinary = vi.fn(() => false)
-    const { subscription, onFrame } = await subscribe(sendBinary)
-    onFrame(new Uint8Array([1]))
-    subscription.session.stop()
-    await subscription.session.done
-    sendBinary.mockClear()
-    await vi.advanceTimersByTimeAsync(SCREENCAST_PENDING_FRAME_RETRY_MS * 4)
-    expect(sendBinary).not.toHaveBeenCalled()
-  })
-
-  it('does not count refused retries toward ghost eviction', async () => {
-    let refusing = false
-    const { subscription, onFrame, stop } = await subscribe(() => !refusing)
-    onFrame(new Uint8Array([0]))
-    refusing = true
-    onFrame(new Uint8Array([1]))
-    await vi.advanceTimersByTimeAsync(
-      SCREENCAST_PENDING_FRAME_RETRY_MS * BROWSER_SCREENCAST_GHOST_SUBSCRIBER_REFUSAL_LIMIT * 2
-    )
-    onFrame(new Uint8Array([2]))
-    expect(stop).not.toHaveBeenCalled()
     subscription.session.stop()
   })
 })

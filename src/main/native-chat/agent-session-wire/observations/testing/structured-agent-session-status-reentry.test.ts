@@ -7,7 +7,7 @@ import type { AgentSessionExecutionLocation } from '../../../../../shared/agent-
 import type { AgentSessionHandleProvider } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { AgentHookServer } from '../../../../agent-hooks/server'
+import { AgentHookServer } from '../../../../agent-hooks/server/agent-hook-server'
 import { indexedStatusFeedSession } from './structured-agent-session-status-feed-test-session'
 import { StructuredAgentSessionStatusFeed } from '../structured-agent-session-status-feed'
 

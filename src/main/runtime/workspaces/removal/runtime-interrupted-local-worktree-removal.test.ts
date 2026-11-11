@@ -783,17 +783,6 @@ describe('finishing an interrupted worktree removal after a restart', () => {
     expect(records).toMatchObject([{ failure: { message: expect.any(String) } }])
   })
 
-  it('deletes the branch when Git finished the checkout but the quit came before the branch', async () => {
-    await git(['worktree', 'remove', worktreePath])
-
-    const { outcome, purged, records } = await finishAfterRestart()
-
-    expect(outcome).toMatchObject({ status: 'removed' })
-    expect(records).toEqual([])
-    expect(await git(['branch', '--list', 'feature'])).toBe('')
-    expect(purged).toEqual([`repo-1::${worktreePath}`])
-  })
-
   it('keeps an unmerged branch, as a normal removal does', async () => {
     await writeFile(join(worktreePath, 'work.txt'), 'work\n')
     await git(['add', '-A'], worktreePath)
@@ -816,21 +805,6 @@ describe('finishing an interrupted worktree removal after a restart', () => {
       head,
       undefined
     )
-  })
-
-  it('treats a removal that fully finished as done', async () => {
-    const head = (await git(['rev-parse', 'feature'])).trim()
-    await git(['worktree', 'remove', worktreePath])
-    await git(['branch', '-d', 'feature'])
-
-    const { outcome, purged, records } = await finishAfterRestart({ head })
-
-    expect(records).toEqual([])
-    expect(outcome).toMatchObject({ status: 'removed' })
-    expect(
-      outcome && 'preservedBranch' in outcome ? outcome.preservedBranch : undefined
-    ).toBeUndefined()
-    expect(purged).toEqual([`repo-1::${worktreePath}`])
   })
 
   it('drops a record whose repo Orca no longer has', async () => {

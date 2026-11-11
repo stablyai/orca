@@ -1,4 +1,4 @@
-import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
+import type { FsChangedPayload } from '../../../shared/file-watch/filesystem-change-event'
 import { subscribeRuntimeFileChanges } from '@/runtime/files/watching/runtime-file-watch-client'
 import { subscribeRuntimeHostContactRegained } from '@/runtime/hosts/connections/runtime-host-contact-regained'
 import { onRuntimeEnvironmentsRetired } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'

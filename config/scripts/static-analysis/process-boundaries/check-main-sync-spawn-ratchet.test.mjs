@@ -71,18 +71,18 @@ describe('main sync-spawn ratchet', () => {
       ['getWslHome', 'listWslDistros']
     ],
     [
-      "import * as acl from '..\\\\shared\\\\secure-path-windows-acl'\nacl.restrictWindowsPathSync(p, true)",
+      "import * as acl from '..\\\\shared\\\\secure-storage\\\\secure-path-windows-acl'\nacl.restrictWindowsPathSync(p, true)",
       1,
       ['restrictWindowsPathSync']
     ],
     [
       "const { execSync } = require('child_process')\nconst run = execSync\nrun('a')",
-      2,
+      1,
       ['execSync']
     ],
     [
       "function f() { const run = cp.execSync; run('a') }\nconst cp = require('child_process')",
-      2,
+      1,
       ['execSync']
     ],
     [
@@ -91,10 +91,18 @@ describe('main sync-spawn ratchet', () => {
       ['execFileSync']
     ],
     [
-      "import { runProcessSync } from '@orca/process-host'\nconst run = runProcessSync<string>",
+      "import { runProcessSync } from '@orca/process-host'\nconst run = runProcessSync<string>\nrun(a)",
       1,
       ['runProcessSync']
-    ]
+    ],
+    // Binding an alias is setup; each call through it is a use, so an alias refactor keeps the count.
+    [
+      "import { execSync } from 'child_process'\nconst run = execSync\nrun('a')\nrun('b')",
+      2,
+      ['execSync']
+    ],
+    ["import { execSync } from 'child_process'\nexport const run = execSync", 1, ['execSync']],
+    ["import { execSync } from 'child_process'\nconst out = execSync('a')", 1, ['execSync']]
   ])('counts %s', (source, count, symbols) => {
     expect(uses(source)).toEqual({ count, symbols })
   })
@@ -148,7 +156,7 @@ describe('main sync-spawn ratchet', () => {
 
   it('fails a lowered or stale count until it is pruned, and prune never raises', () => {
     const write =
-      "import { restrictWindowsPathSync } from '../shared/secure-path-windows-acl'\nrestrictWindowsPathSync(a, b)\n"
+      "import { restrictWindowsPathSync } from '../shared/secure-storage/secure-path-windows-acl'\nrestrictWindowsPathSync(a, b)\n"
     const root = tree({
       'src/main/store.ts': write,
       'src/main/clean.ts': 'export const done = true\n',

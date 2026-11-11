@@ -35,7 +35,16 @@ export function orchestrationMutationRecoveryError(
   // Without a dispatch id, query by request id to inspect the outcome before retrying a mutation.
   const queryCommand = dispatchId
     ? [executable, 'orchestration', 'worker-show', '--dispatch', dispatchId, '--json']
-    : [executable, 'orchestration', 'request-show', '--request', requestId, '--json']
+    : [
+        executable,
+        'orchestration',
+        'request-show',
+        '--request',
+        requestId,
+        // A command forwarded to a paired server keeps its receipt there.
+        ...(typeof data?.server === 'string' ? ['--on', data.server] : []),
+        '--json'
+      ]
   const recovery = {
     orchestrationRequestId: requestId,
     ...(dispatchId ? { dispatchId } : {}),

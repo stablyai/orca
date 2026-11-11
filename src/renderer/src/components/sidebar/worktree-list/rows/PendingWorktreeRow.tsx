@@ -1,25 +1,27 @@
 import React from 'react'
 import { AlertTriangle, Loader2, X } from 'lucide-react'
-import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store/index'
+import { cn } from '@/lib/class-names'
 import {
   getCreationProgressLabel,
   type PendingWorktreeCreation
 } from '@/lib/workspace/creation/pending-worktree-creation'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
-function statusLabel(entry: PendingWorktreeCreation): string {
+function statusLabel(entry: PendingWorktreeCreation, t: Translate = translate): string {
   if (entry.status === 'error') {
     return (
       entry.error ??
-      translate('auto.components.sidebar.PendingWorktreeRow.creationFailed', 'Creation failed')
+      t('auto.components.sidebar.PendingWorktreeRow.creationFailed', 'Creation failed')
     )
   }
-  return getCreationProgressLabel(entry)
+  return getCreationProgressLabel(entry, t)
 }
 
 /** Host-owned creation with no request in this window, such as a phone or CLI creation. */
 function HostCreationRow({ repoName }: { repoName: string | null }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex w-full items-center gap-2 rounded-md border border-transparent px-2 py-1.5">
       <span className="flex size-4 shrink-0 items-center justify-center">
@@ -27,10 +29,7 @@ function HostCreationRow({ repoName }: { repoName: string | null }): React.JSX.E
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[13px] font-medium text-sidebar-foreground">
-          {translate(
-            'auto.components.sidebar.PendingWorktreeRow.creatingWorkspace',
-            'Creating workspace…'
-          )}
+          {t('auto.components.sidebar.PendingWorktreeRow.creatingWorkspace', 'Creating workspace…')}
         </span>
         <span className="block truncate text-[11px] text-muted-foreground">{repoName}</span>
       </span>
@@ -45,6 +44,7 @@ export function PendingWorktreeRow({
   creationId: string
   repoName: string | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const entry = useAppStore((s) => s.pendingWorktreeCreations[creationId])
   const active = useAppStore((s) => s.activePendingCreationId === creationId)
   if (!entry) {
@@ -89,14 +89,14 @@ export function PendingWorktreeRow({
               isError ? 'text-destructive/90' : 'text-muted-foreground'
             )}
           >
-            {statusLabel(entry)}
+            {statusLabel(entry, t)}
           </span>
         </span>
       </button>
       <button
         type="button"
-        title={translate('auto.components.sidebar.PendingWorktreeRow.188f6922a0', 'Cancel')}
-        aria-label={translate(
+        title={t('auto.components.sidebar.PendingWorktreeRow.188f6922a0', 'Cancel')}
+        aria-label={t(
           'auto.components.sidebar.PendingWorktreeRow.af21e953d1',
           'Cancel worktree creation'
         )}

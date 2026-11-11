@@ -1,20 +1,20 @@
+import type { Automation } from '../../shared/automations/automation-definition'
 import type {
-  Automation,
   AutomationDispatchResult,
   AutomationPrecheckResult,
   AutomationRun
-} from '../../shared/automations-types'
+} from '../../shared/automations/history/automation-run'
 import {
   didAutomationPrecheckPass,
   formatAutomationPrecheckFailure
-} from '../../shared/automation-precheck'
+} from '../../shared/automations/launch/automation-precheck'
 import type { AutomationLauncher, AutomationLaunch } from './automation-launch'
 import { AutomationRunLaunchError } from './automation-launch'
 import type { AutomationRunTargetResult } from './run-target-resolution'
 import {
   automationRunFailure,
   type AutomationRunFailure
-} from '../../shared/automation-run-failure-copy'
+} from '../../shared/automations/history/automation-run-failure-copy'
 import { parseWslDistroHold } from '../../shared/wsl-distro-stopped-hold'
 
 export type AutomationLaunchContext = {

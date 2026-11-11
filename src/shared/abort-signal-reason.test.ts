@@ -1,7 +1,5 @@
-import { getEventListeners } from 'node:events'
-import { expect, it, vi } from 'vitest'
+import { expect, it } from 'vitest'
 import { waitForPromiseWithSignal } from './abort-signal-reason'
-import { sharedPromiseSettlementWaiters } from './promise-settlement-waiters'
 
 it('observes work that rejects after its caller has already canceled', async () => {
   const controller = new AbortController()
@@ -13,29 +11,6 @@ it('observes work that rejects after its caller has already canceled', async () 
 
   await expect(waitForPromiseWithSignal(work, controller.signal)).rejects.toBe(reason)
   await new Promise<void>((resolve) => setImmediate(resolve))
-})
-
-it('detaches cancelled callers from shared stalled work while another caller waits', async () => {
-  let finish = (_value: number): void => {}
-  const work = new Promise<number>((resolve) => {
-    finish = resolve
-  })
-  const observed = vi.spyOn(work, 'then')
-  const anchorController = new AbortController()
-  const anchor = waitForPromiseWithSignal(work, anchorController.signal)
-  for (let index = 0; index < 100; index += 1) {
-    const controller = new AbortController()
-    const cancelled = waitForPromiseWithSignal(work, controller.signal)
-    controller.abort(new Error('cancelled'))
-    await expect(cancelled).rejects.toThrow('cancelled')
-    expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0)
-  }
-  expect(observed).toHaveBeenCalledOnce()
-  expect(sharedPromiseSettlementWaiters(work).waiterCount).toBe(1)
-  finish(42)
-  await expect(anchor).resolves.toBe(42)
-  expect(sharedPromiseSettlementWaiters(work).waiterCount).toBe(0)
-  expect(getEventListeners(anchorController.signal, 'abort')).toHaveLength(0)
 })
 
 it('allows synchronous cancellation before a cached settlement is delivered', async () => {

@@ -1,14 +1,14 @@
 import React, { useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { useAppStore } from '@/store'
-import { selectCrossStoreFolderChildrenById } from '@/store/cross-store-lineage-parents'
+import { useAppStore } from '@/store/index'
+import { selectCrossStoreFolderChildrenById } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { useShallow } from 'zustand/react/shallow'
 import {
   useAllWorktrees,
-  useProjectHostSetupProjection,
-  useRepoMap,
   useWorktreeMap
-} from '@/store/selectors'
+} from '@/store/slices/worktrees/listing/use-worktree-catalog'
+import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
+import { useRepoMap } from '@/store/repos/use-repository-catalog'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { openHeaderCreateComposer } from '../rows/header-create-workspace-target'
@@ -37,7 +37,7 @@ import { useSidebarWorktreeFilters } from './use-filters'
 import { useSidebarWorktreeSelection } from '../navigation/use-selection'
 import { useWindowSidebarListModel } from './use-window-list-model'
 import { useMainSidebarListModel } from './use-main-list-model'
-import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import { useWorktreeStatusMutations } from '../drag/use-status-mutations'
 import { shouldFiltersHideAllRows } from './sidebar-empty-state-gate'
@@ -54,7 +54,7 @@ import {
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 type WorktreeListProps = {
   scrollOffsetRef: React.MutableRefObject<number>

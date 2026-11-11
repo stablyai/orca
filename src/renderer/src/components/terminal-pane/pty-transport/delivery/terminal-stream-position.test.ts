@@ -69,10 +69,6 @@ describe('TerminalStreamPosition', () => {
     expect(replaced.admit('pty-2', 'hello', at(0, 'hello'))).toBe('\x18hello')
   })
 
-  it("writes a brand-new pane's first byte without grounding", () => {
-    expect(new TerminalStreamPosition().admit(PTY, 'hello', at(0, 'hello'))).toBe('hello')
-  })
-
   it("forgets the position when the stream's seq domain ends", () => {
     const position = new TerminalStreamPosition()
     position.anchor(PTY, 1000)

@@ -18,8 +18,11 @@ import {
   getRepoIdFromWorktreeId,
   splitWorktreeIdForFilesystem
 } from '../../../../shared/worktree/id'
-import { findWorktreeById } from '../slices/worktree-helpers'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '../workspace-record-selectors'
+import { findFirstIndexedWorktree } from '../../lib/workspace/ownership/worktree-runtime-owner-index'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '../workspaces/catalog/workspace-record-fields'
 
 type MovedCatalog = Pick<AppState, 'wslMovedProjects' | 'worktreesByRepo' | 'folderWorkspaces'>
 
@@ -92,7 +95,7 @@ export function findWslMovedProjectForWorkspace(
   }
   const scope = parseWorkspaceKey(workspaceKey)
   const worktreeId = scope?.type === 'worktree' ? scope.worktreeId : workspaceKey
-  return findWorktreeById(selectWorktreesByRepo(state), worktreeId) ? null : project
+  return findFirstIndexedWorktree(selectWorktreesByRepo(state), worktreeId) ? null : project
 }
 
 /**

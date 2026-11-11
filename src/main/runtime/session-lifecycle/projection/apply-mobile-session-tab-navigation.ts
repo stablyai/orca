@@ -5,16 +5,16 @@ import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as MobileS
 import { OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh } from './perform-mobile-session-pty-records-refresh'
 import type {
   RuntimeMobileSessionTabsResult,
-  RuntimeMobileSessionTabsSnapshot,
-  RuntimeMobileSessionTerminalTab
-} from '../../../../shared/runtime-types'
+  RuntimeMobileSessionTabsSnapshot
+} from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import { navigationTargetsClients } from '../../../../shared/runtime-navigation'
 import {
   activateClientSessionTabSelection,
   deriveClientSessionTabSelection,
   projectClientSessionTabSelection
-} from '../../client-session-tab-selection-projection'
+} from '../../client/navigation/client-session-tab-selection-projection'
 import {
   buildHeadlessMobileSessionTabGroups,
   cloneTerminalLayoutSnapshot

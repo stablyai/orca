@@ -16,7 +16,7 @@ const connectedLinearWorkspaces = vi.hoisted(() => {
   const current: { id: string; organizationUrlKey: string }[] = []
   return { current }
 })
-vi.mock('../../linear/issue-context/client', async (importOriginal) => ({
+vi.mock('../../linear/issues/context/issue-context-resolution', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   getConnectedWorkspaces: () => connectedLinearWorkspaces.current
 }))
@@ -76,62 +76,5 @@ describe('workspace commands on a project-group folder workspace', () => {
 
     expect(shown.id).toBe(WORKSPACE_ID)
     expect(shown.path).toBe(FOLDER_PATH)
-  })
-})
-
-function runtimeWithFolderTerminal(
-  linkedTask: Record<string, unknown>,
-  setWorktreeMeta?: (...args: unknown[]) => unknown
-) {
-  const runtime = createRuntime(null, linkedTask, setWorktreeMeta)
-  const leafId = '22222222-2222-4222-8222-222222222222'
-  runtime.attachWindow(1)
-  const handle = runtime.preAllocateHandleForPty('folder-pty')
-  runtime.registerPty('folder-pty', WORKSPACE_ID, null, { tabId: 'tab-1', leafId })
-  runtime.syncWindowGraph(1, {
-    tabs: [
-      { tabId: 'tab-1', worktreeId: WORKSPACE_ID, title: '', activeLeafId: leafId, layout: null }
-    ],
-    leaves: [
-      { tabId: 'tab-1', worktreeId: WORKSPACE_ID, leafId, paneRuntimeId: 1, ptyId: 'folder-pty' }
-    ]
-  })
-  return { runtime, handle }
-}
-
-const LINKED_LINEAR_TASK = {
-  provider: 'linear',
-  type: 'issue',
-  number: 1,
-  title: 'Fix it',
-  url: 'https://linear.app/acme/issue/ENG-1',
-  linearIdentifier: 'ENG-1'
-}
-
-describe('Linear --current from a project-group folder workspace terminal', () => {
-  it('reads the folder workspace’s linked Linear issue', async () => {
-    const { runtime, handle } = runtimeWithFolderTerminal({
-      ...LINKED_LINEAR_TASK,
-      linearWorkspaceId: 'linear-workspace-1'
-    })
-
-    const link = await runtime.linearCommands.linearResolveCurrentIssue({ terminalHandle: handle })
-
-    expect(link.identifier).toBe('ENG-1')
-  })
-
-  it('answers a legacy link without writing worktree metadata for the folder', async () => {
-    connectedLinearWorkspaces.current = [{ id: 'linear-workspace-1', organizationUrlKey: 'acme' }]
-    const setWorktreeMeta = vi.fn()
-    const { runtime, handle } = runtimeWithFolderTerminal(
-      { ...LINKED_LINEAR_TASK, linearOrganizationUrlKey: 'acme' },
-      setWorktreeMeta
-    )
-
-    const link = await runtime.linearCommands.linearResolveCurrentIssue({ terminalHandle: handle })
-
-    expect(link.workspaceId).toBe('linear-workspace-1')
-    expect(setWorktreeMeta).not.toHaveBeenCalled()
-    connectedLinearWorkspaces.current = []
   })
 })

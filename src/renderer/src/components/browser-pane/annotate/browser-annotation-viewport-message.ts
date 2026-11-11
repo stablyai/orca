@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
-import { BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX } from '../../../../../shared/browser-annotation-viewport-bridge'
-import { parseBrowserAnnotationViewportReport } from '../../../../../shared/browser-annotation-viewport-report'
+import { BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX } from '../../../../../shared/browser/annotations/browser-annotation-viewport-bridge'
+import { parseBrowserAnnotationViewportReport } from '../../../../../shared/browser/annotations/browser-annotation-viewport-report'
 import {
   applyBrowserAnnotationViewportReport,
   type BrowserOverlayViewport

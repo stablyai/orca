@@ -7,7 +7,7 @@ import {
   EDITOR_NOT_UTF8_SAVE_MESSAGE,
   EDITOR_STALE_SAVE_MESSAGE
 } from '../queue/editor-save-disk-precondition'
-import { FILE_BYTES_SAVE_UPDATE_REQUIRED_MESSAGE } from '../../../../../../shared/file-bytes-write'
+import { FILE_BYTES_SAVE_UPDATE_REQUIRED_MESSAGE } from '../../../../../../shared/file-write/file-bytes-write'
 import { EditorSaveDeniedByPluginError } from '../transforms/editor-save-plugin-hook'
 
 /** Asks before an explicit save rewrites a non-UTF-8 file as UTF-8, which can't be undone. */

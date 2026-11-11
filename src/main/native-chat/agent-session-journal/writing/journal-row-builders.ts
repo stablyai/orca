@@ -1,4 +1,3 @@
-import { journalInputOrder } from '../input-order/journal-input-order'
 import type { JournalInputContext } from '../input-order/journal-input-lineage'
 import { journalItemEchoFields, type JournalItemEcho } from '../projection/journal-item-echo'
 import type {
@@ -104,11 +103,6 @@ export function journalSubmissionRowBuilder(
     const queuedMessageId = consume?.messageId ?? input.queuedMessageId
     return buildJournalSubmissionRow({
       state: state(),
-      inputOrderContext: {
-        source: { epoch: state().epoch, sequence: seq },
-        basis: 'observed',
-        cut: journalInputOrder(state()).lineage.at(seq)
-      },
       providerHandle: agentSessionJournalProviderHandle(identity),
       ...input,
       ...(queuedMessageId !== undefined ? { queuedMessageId } : {}),

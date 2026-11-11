@@ -23,6 +23,8 @@ export type JournalQueueChange =
       queuedAt: AgentJournalCursor | null
       holdReason?: string
       options?: AgentSessionExecutionOptions
+      deliveryMode?: 'queue' | 'steer'
+      unattended?: boolean
       attempt?: string
       /** The doubtful submission resolved by the person's action on this card. */
       recovers?: string

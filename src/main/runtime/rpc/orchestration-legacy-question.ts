@@ -1,4 +1,4 @@
-import { clampOrchestrationAskTimeoutMs } from '../../../shared/orchestration-ask-timeout'
+import { clampOrchestrationAskTimeoutMs } from '../../../shared/orchestration/mailbox/orchestration-ask-timeout'
 import type { RpcRequest } from './core'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { OrchestrationError } from '../orchestration/orchestration-error'

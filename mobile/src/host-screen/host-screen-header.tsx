@@ -17,15 +17,16 @@ import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
 import { StatusDot } from '../components/StatusDot'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useRefreshHint } from '../query/refresh-hint'
 import { colors, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { useCalmConnectionState } from '../transport/calm-connection-state'
+import { useCalmConnectionState } from '../transport/connection/calm-connection-state'
 import {
   isConnectionOutage,
   verdictDisplayLabel,
   type ConnectionVerdict
-} from '../transport/connection-health'
+} from '../transport/connection/connection-health'
 import type { HostScreenController } from './use-host-screen-controller'
 
 function isErrorVerdict(v: ConnectionVerdict): boolean {
@@ -96,6 +97,7 @@ export function HostScreenHeader({
   } = controller
   const moreRef = useRef<View>(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  const showRefreshLine = useRefreshHint(controller.catalog.revalidating)
   const disconnected = connState !== 'connected'
   const hostPath = `/h/${encodeURIComponent(hostId)}`
 
@@ -163,6 +165,7 @@ export function HostScreenHeader({
         }
         title={hostDisplay.title}
         subtitle={<HostConnectionStatus controller={controller} />}
+        refreshing={showRefreshLine}
         titleOpacity={collapsingTitle?.barTitleOpacity}
         dividerOpacity={collapsingTitle?.barDividerOpacity}
         trailing={

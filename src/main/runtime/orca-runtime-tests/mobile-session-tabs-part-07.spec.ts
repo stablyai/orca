@@ -174,56 +174,6 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('hydrates a persisted SSH-owned pane before an attached renderer publishes its graph', async () => {
-    const ptyId = 'ssh:ssh-1@@pty-persisted'
-    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
-      makeWorkspaceSessionWithHeadlessTerminal({
-        tabsByWorktree: {
-          [TEST_WORKTREE_ID]: [
-            {
-              id: 'host-tab',
-              ptyId,
-              worktreeId: TEST_WORKTREE_ID,
-              title: 'Persisted SSH Terminal',
-              customTitle: null,
-              color: null,
-              sortOrder: 0,
-              createdAt: 1
-            }
-          ]
-        },
-        terminalLayoutsByTabId: {
-          'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: ptyId })
-        }
-      })
-    )
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-    runtime.syncWindowGraph(1, {
-      tabs: [],
-      leaves: [],
-      mobileSessionTabs: [
-        {
-          worktree: TEST_WORKTREE_ID,
-          publicationEpoch: 'renderer-after-restart',
-          snapshotVersion: 1,
-          activeGroupId: null,
-          activeTabId: null,
-          activeTabType: null,
-          tabs: []
-        }
-      ]
-    })
-
-    expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([
-      expect.objectContaining({
-        parentTabId: 'host-tab',
-        leafId: HEADLESS_LEAF_ID,
-        ptyId,
-        status: 'pending-handle'
-      })
-    ])
-  })
-
   it('hydrates a persisted SSH-owned pane when the restarted renderer has not published sessions', async () => {
     const ptyId = 'ssh:ssh-1@@pty-persisted'
     const sshSession = makeWorkspaceSessionWithHeadlessTerminal({

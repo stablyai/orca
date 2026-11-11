@@ -10,9 +10,9 @@ import {
   resolveTerminalCursorInactiveStyle,
   resolveTerminalScrollOnUserInput
 } from '@/lib/pane-manager/pane-terminal-options'
-import { buildLocalConptyTerminalOptions } from '@/lib/pane-manager/windows-pty-compatibility'
-import { buildFontFamily } from '@/lib/monospace-font-family'
-import { pluginFontFamilyWhenLoaded } from '@/store/plugin-fonts'
+import { buildLocalConptyTerminalOptions } from '@/lib/pane-manager/terminal-protocol/windows-pty-compatibility'
+import { buildFontFamily } from '../../../../shared/monospace-font-family'
+import { pluginFontFamilyWhenLoaded } from '@/store/plugins/appearance/plugin-fonts'
 import { resolveTerminalMinimumContrastRatio } from '../../../../shared/terminal-themes/terminal-contrast-correction'
 
 /** Options a live settings change can write onto an open preview terminal. */

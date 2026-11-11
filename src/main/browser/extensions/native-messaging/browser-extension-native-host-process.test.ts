@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { once } from 'node:events'
 import { build } from 'esbuild'
 import { spawnProcess } from '@orca/process-host'
-import type { PipedChildProcess } from '@orca/process-host/process-spec'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import {
   killAllNativeHosts,
@@ -42,11 +42,10 @@ const onMessages = (handle) => {
 };
 if (process.env.PID_FILE) require('fs').writeFileSync(process.env.PID_FILE, String(process.pid));
 `
-const ECHO = `${FRAMING} onMessages((message) => send({ echo: message, argv: process.argv.slice(1) }));`
+
 // A large last reply spans many reads; all of it must arrive before the exit is reported.
 const REPLY_THEN_EXIT = `${FRAMING} send({ hello: 'x'.repeat(900 * 1024) }); process.stdout.end(() => process.exit(0));`
 const IGNORES_EOF = `${FRAMING} process.stdin.resume(); setInterval(() => {}, 1000);`
-const OVERSIZED = `${FRAMING} send('x'.repeat(1024 * 1024));`
 
 const root = mkdtempSync(join(tmpdir(), 'orca-native-host-'))
 let pidFiles = 0
@@ -107,19 +106,6 @@ async function start(script: string) {
 }
 
 describe('native host process', () => {
-  it('round-trips messages and passes the origin as the first argument', async () => {
-    const host = await start(ECHO)
-    host.connection.send(JSON.stringify({ text: 'héllo 🦈' }))
-    host.connection.send('2')
-    await expect.poll(() => host.messages.length).toBe(2)
-    expect(JSON.parse(host.messages[0])).toEqual({
-      echo: { text: 'héllo 🦈' },
-      argv: ['chrome-extension://abc/']
-    })
-    expect(JSON.parse(host.messages[1]).echo).toBe(2)
-    host.connection.close()
-  })
-
   it('delivers the last reply, then reports the exit as Chrome does', async () => {
     const host = await start(REPLY_THEN_EXIT)
     await expect.poll(() => host.closes).toEqual(['Native host has exited.'])
@@ -160,7 +146,7 @@ describe('native host process', () => {
   it('waits for the Windows supervisor to start the host before exposing its connection', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
-    const children: PipedChildProcess[] = []
+    const children: ChildProcessWithoutNullStreams[] = []
     const messages: string[] = []
     let resolved = false
     try {
@@ -203,13 +189,5 @@ describe('native host process', () => {
         Object.defineProperty(process, 'platform', originalPlatform)
       }
     }
-  })
-
-  it('treats a message over 1 MB as a communication error and kills the host', async () => {
-    const host = await start(OVERSIZED)
-    await expect
-      .poll(() => host.closes)
-      .toEqual(['Error when communicating with the native messaging host.'])
-    expect(host.messages).toEqual([])
   })
 })

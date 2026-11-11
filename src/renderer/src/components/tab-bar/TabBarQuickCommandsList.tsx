@@ -2,7 +2,7 @@ import { Fragment, useCallback, useState, type RefObject } from 'react'
 import { CommandList, CommandSeparator } from '@/components/ui/command'
 import { VirtualizedList } from '@/components/virtualized-list'
 import type { HostedTerminalQuickCommand } from '@/hooks/use-terminal-quick-command-hosts'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function TabBarQuickCommandsList({
   commands,
@@ -19,6 +19,7 @@ export function TabBarQuickCommandsList({
   commandListRef: RefObject<HTMLDivElement | null>
   renderCommand: (entry: HostedTerminalQuickCommand) => React.JSX.Element
 }): React.JSX.Element {
+  const t = useTranslate()
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
   const attachList = useCallback(
     (element: HTMLDivElement | null): void => {
@@ -34,14 +35,11 @@ export function TabBarQuickCommandsList({
         {commands.length === 0 ? (
           <div className="py-4 text-center text-2xs">
             {query.trim()
-              ? translate(
+              ? t(
                   'auto.components.tab.bar.TabBarQuickCommandsButton.b4e7f9a2c1',
                   'No commands match'
                 )
-              : translate(
-                  'auto.components.tab.bar.TabBarQuickCommandsButton.20bbd75896',
-                  'No commands'
-                )}
+              : t('auto.components.tab.bar.TabBarQuickCommandsButton.20bbd75896', 'No commands')}
           </div>
         ) : null}
         <VirtualizedList

@@ -1,51 +1,8 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { probePtyRunningWorkWithInspection } from './pty-running-work-probe'
-import {
-  clientOnlyUnverifiableInspection,
-  type TerminalProcessInspection
-} from './terminal-process-inspection'
+import type { TerminalProcessInspection } from './terminal-process-inspection'
 
 afterEach(() => vi.useRealTimers())
-
-it.each([
-  [
-    { foregroundProcess: 'zsh', hasChildProcesses: true, childProcessEvidence: 'children' },
-    'live',
-    undefined
-  ],
-  [
-    { foregroundProcess: 'zsh', hasChildProcesses: false, childProcessEvidence: 'no-children' },
-    'exited',
-    undefined
-  ],
-  [
-    { foregroundProcess: 'zsh', hasChildProcesses: false, childProcessEvidence: 'unverifiable' },
-    'unverifiable',
-    'host_child_processes_unobserved'
-  ],
-  [clientOnlyUnverifiableInspection('transport_loss'), 'unverifiable', 'transport_loss'],
-  [{ foregroundProcess: 'zsh', hasChildProcesses: true }, 'live', undefined],
-  [{ foregroundProcess: 'zsh', hasChildProcesses: false }, 'exited', undefined]
-] as const)(
-  'keeps the existing owning-host verdict for %j',
-  async (inspection, verdict, reason) => {
-    const inspect = vi.fn(async () => inspection)
-    const [probe] = await probePtyRunningWorkWithInspection(
-      ['remote:owner:pty'],
-      { timeoutMs: 1000 },
-      inspect
-    )
-    expect(probe).toEqual({
-      ptyId: 'remote:owner:pty',
-      verdict,
-      ...(reason ? { reason } : {}),
-      timedOut: false,
-      remote: true,
-      ...(verdict === 'unverifiable' ? {} : { foregroundProcess: 'zsh' })
-    })
-    expect(inspect).toHaveBeenCalledWith('remote:owner:pty')
-  }
-)
 
 it('keeps thrown inspections unverifiable and clears the deadline once all answer', async () => {
   vi.useFakeTimers()

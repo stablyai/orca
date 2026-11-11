@@ -1,4 +1,4 @@
-import { STRUCTURED_WORKER_HANDLE_PREFIX } from './structured-worker-handle'
+import { STRUCTURED_WORKER_HANDLE_PREFIX } from './orchestration/workers/structured-worker-handle'
 
 // Dependency-light leaf so CLI startup avoids the session-address codec's zod graph.
 const TERMINAL_HANDLE_PREFIXES = ['term_', STRUCTURED_WORKER_HANDLE_PREFIX] as const

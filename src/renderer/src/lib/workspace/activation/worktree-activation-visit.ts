@@ -1,10 +1,10 @@
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-inputs-switch'
 import type { AppState } from '@/store/types'
-import type { ActiveWorktreeStateTransition } from '@/store/slices/worktree-helpers'
+import type { ActiveWorktreeStateTransition } from '@/store/slices/worktrees/session/worktree-selection-contract'
 import { stampWorktreeVisit } from '@/store/slices/worktrees/session/worktree-visit-recency'
-import { appendHistoryEntry } from '@/store/slices/worktree-nav-history'
-import { noteUserWorkspaceOpen } from '../../workspace-switch-user-act'
+import { appendHistoryEntry } from '@/store/slices/ui/workspace-navigation-history'
+import { noteUserWorkspaceOpen } from './workspace-switch-user-act'
 
 type PreviousActive = { worktreeId: string | null; hostId: ExecutionHostId | null }
 type VisitState = Pick<

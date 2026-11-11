@@ -1,9 +1,7 @@
 import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
-import {
-  activateAndRevealWorktree,
-  type ActivateAndRevealResult
-} from '@/lib/workspace/activation/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import type { ActivateAndRevealResult } from '@/lib/workspace/activation/worktree-activation-outcome'
 import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import type { AgentLaunchRoute } from '@/lib/agent-session/launch/routing/agent-launch-routing'
 import {
@@ -18,15 +16,15 @@ import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/ba
 import {
   nativeChatComposerSelection,
   waitForNativeChatComposerHandoff
-} from '@/components/native-chat/native-chat-composer-mount'
-import '@/components/native-chat/use-native-chat-composer-reveal-focus'
-import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/native-chat-composer-focus-intent'
+} from '@/components/native-chat/composer/focus/native-chat-composer-mount'
+import '@/components/native-chat/composer/focus/use-native-chat-composer-reveal-focus'
+import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import { openBackgroundDeclinedTerminal } from '@/lib/workspace/creation/worktree-creation-background-mount'
 import {
   captureNativeChatStagedInput,
   hasNativeChatStagedFiles
-} from '@/components/native-chat/native-chat-draft-attachment-staging'
-import { nativeChatComposerHasUserContent } from '@/components/native-chat/native-chat-pending-attachment-cache'
+} from '@/components/native-chat/drafts/native-chat-draft-attachment-staging'
+import { nativeChatComposerHasUserContent } from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
 
 const HANDOFF_READY_TIMEOUT_MS = 5000
 
@@ -66,7 +64,8 @@ export async function launchStructuredWorktreeSession(
   }
   // Freeze the first send; unsent typing stays with the composer until its replacement is ready.
   useAppStore.getState().updatePendingWorktreeCreation(args.creationId, {
-    chatInputHandedOff: true
+    chatInputHandedOff: true,
+    chatHandedOffAt: Date.now()
   })
   const pending = useAppStore.getState().pendingWorktreeCreations[args.creationId]
   const request = withPendingChatInput(pending, {
@@ -203,7 +202,12 @@ export async function launchStructuredWorktreeSession(
         ? {}
         : {
             onHostDeclined: (host) =>
-              openBackgroundDeclinedTerminal(args, host, pending?.heldChatMessage)
+              openBackgroundDeclinedTerminal(
+                { ...args, request },
+                host,
+                pending?.heldChatMessage,
+                abandoned.signal
+              )
           }),
       beforeOpen: () => !abandoned.signal.aborted && !isCancelled(),
       onTabOpenSettled: (tabId, reason) => {
@@ -252,6 +256,7 @@ export async function launchStructuredWorktreeSession(
         }
         const fallback = launchAgentInNewTabWithOutcome({
           agent,
+          ...request.launchInputs,
           worktreeId: args.worktreeId,
           prompt: plan.prompt,
           promptDelivery: plan.promptDelivery,

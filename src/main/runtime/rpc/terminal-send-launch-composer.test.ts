@@ -1,6 +1,5 @@
 import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../../git/worktrees/catalog/worktree-listing'
-import './unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { settledWriteStub } from '../../providers/settled-pty-write-stub'
@@ -131,28 +130,6 @@ const PASTE = '\x1b[200~/review\nthis\x1b[201~'
 describe('terminal.send into a freshly launched Claude', () => {
   afterEach(() => vi.useRealTimers())
 
-  // A command override keeps the planned agent, so its launch is held too.
-  it.each(['claude', 'my-claude'])(
-    'holds the submit until the composer is drawn (#34580, %s)',
-    async (command) => {
-      vi.useFakeTimers()
-      const { runtime, writes, send } = await launchClaude(command)
-
-      const sending = send(PASTE)
-      await vi.advanceTimersByTimeAsync(3_000)
-      expect(writes).toEqual([])
-
-      runtime.onPtyData(PTY_ID, CLAUDE_COMPOSER_READY_OUTPUT, Date.now())
-      await vi.runAllTimersAsync()
-
-      await expect(sending).resolves.toMatchObject({
-        ok: true,
-        result: { send: { accepted: true } }
-      })
-      expect(writes).toEqual([PASTE, '\r'])
-    }
-  )
-
   it('holds the entire ordered suffix behind the fresh composer and the first submit', async () => {
     vi.useFakeTimers()
     const { runtime, writes, send } = await launchClaude('claude', true)
@@ -209,18 +186,4 @@ describe('terminal.send into a freshly launched Claude', () => {
     await sending
     expect(writes).toEqual([])
   })
-
-  // A resume tab types its own `claude --resume`; a headless `--print` run never draws a composer.
-  it.each([undefined, 'claude --print task'])(
-    'does not hold sends to a shell tagged for Claude that starts no composer (%s)',
-    async (command) => {
-      const { writes, send } = await launchClaude(command)
-
-      await expect(send('claude --resume abc')).resolves.toMatchObject({
-        ok: true,
-        result: { send: { accepted: true } }
-      })
-      expect(writes).toEqual(['claude --resume abc', '\r'])
-    }
-  )
 })

@@ -1,4 +1,4 @@
-import type { AutomationRun } from '../../shared/automations-types'
+import type { AutomationRun } from '../../shared/automations/history/automation-run'
 import type { Store } from '../persistence/loading-store/store'
 import type { AutomationService } from './service'
 

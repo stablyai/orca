@@ -5,7 +5,8 @@ import {
 } from '../../../../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   TERMINAL_MULTIPLEX_ACK_BATCH_BYTES,
-  TERMINAL_MULTIPLEX_ACK_FLUSH_MS
+  TERMINAL_MULTIPLEX_ACK_FLUSH_MS,
+  type TerminalOutputCadence
 } from '../../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { RemoteRuntimeTerminalSnapshotController } from '../../snapshots/remote-runtime-terminal-snapshot-controller'
 import { clearAckFlushTimer } from '../remote-terminal-stream-disposal'
@@ -76,6 +77,34 @@ export abstract class RemoteRuntimeTerminalFlowController extends RemoteRuntimeT
       stream.outputPaused = paused
     }
     return sent
+  }
+
+  protected setOutputCadence(
+    stream: RemoteRuntimeMultiplexedTerminalState,
+    cadence: TerminalOutputCadence
+  ): void {
+    stream.outputCadence = cadence
+    this.syncOutputCadence(stream)
+  }
+
+  protected syncOutputCadence(stream: RemoteRuntimeMultiplexedTerminalState): void {
+    if (
+      !stream.supportsOutputCadence ||
+      stream.outputCadence === stream.hostOutputCadence ||
+      !this.isRegisteredStream(stream)
+    ) {
+      return
+    }
+    const cadence = stream.outputCadence
+    if (
+      this.sendFrame(
+        stream.streamId,
+        TerminalStreamOpcode.SetOutputCadence,
+        encodeTerminalStreamJson({ cadence })
+      )
+    ) {
+      stream.hostOutputCadence = cadence
+    }
   }
 
   protected queueOutputAcknowledgement(

@@ -10,18 +10,16 @@ import type {
   AgentHookInstallState,
   AgentHookInstallStatus
 } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
-import {
-  buildManagedCommandHook,
-  readHooksJson,
-  writeHooksJson,
-  writeManagedScript
-} from '../agent-hooks/installer-utils'
+import { buildManagedCommandHook } from '../agent-hooks/installation/configuration/hook-config-schema'
+import { readHooksJson } from '../agent-hooks/installation/configuration/hooks-json-read'
+import { writeHooksJson } from '../agent-hooks/installation/configuration/hooks-json-write'
+import { writeManagedScript } from '../agent-hooks/installation/scripts/managed-hook-script-write'
 import {
   readHooksJsonRemote,
-  writeHooksJsonRemote,
-  writeManagedScriptRemote
-} from '../agent-hooks/installer-utils-remote'
-import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
+  writeHooksJsonRemote
+} from '../agent-hooks/installation/configuration/hooks-json-remote'
+import { writeManagedScriptRemote } from '../agent-hooks/installation/scripts/managed-script-write-remote'
+import { refreshManagedScriptIfPresent } from '../agent-hooks/installation/scripts/managed-hook-script-refresh'
 import { getManagedScript } from './hook-script'
 import {
   removeClaudeAgentViewRemote,
@@ -45,7 +43,6 @@ import {
   CLAUDE_HOOK_SETTINGS,
   getManagedScriptFileName,
   getConfigPath,
-  getManagedEventHook,
   getManagedScriptPath,
   getPosixManagedScriptFileName,
   getRemoteConfigPath,
@@ -59,6 +56,7 @@ import {
   type ClaudeCompatibleHookSettings
 } from './hook-settings'
 import { claudeAcceptsExecFormHooks } from './claude-hook-event-versions'
+import { getManagedEventHook } from './claude-managed-event-hook'
 import {
   getClaudeManagedHookPlan,
   OPENCLAUDE_MANAGED_HOOK_PLAN,
@@ -211,7 +209,8 @@ export class ClaudeHookService {
       (eventName) =>
         getManagedEventHook(eventName, scriptPath, this.options.settings, exePath, { execForm }),
       getManagedScriptFileName(this.options.settings),
-      plan
+      plan,
+      process.platform !== 'win32'
     )
     const payload = this.managedScript()
     if (this.usesWindowsEntry) {
@@ -256,7 +255,8 @@ export class ClaudeHookService {
         (eventName) =>
           buildManagedCommandHook(getRemoteManagedEventCommand(eventName, remoteScriptPath)),
         remoteScriptFileName,
-        this.managedHookPlan(options)
+        this.managedHookPlan(options),
+        true
       )
 
       // Publish scripts before settings can reference them.

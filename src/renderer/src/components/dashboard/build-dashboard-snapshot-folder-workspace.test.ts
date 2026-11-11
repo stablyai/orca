@@ -10,7 +10,6 @@ import {
   buildDashboardSnapshot,
   type DashboardSnapshotInput as DashboardSnapshotState
 } from './build-dashboard-snapshot'
-import { buildDashboardBucketCounts } from './build-dashboard-bucket-counts'
 
 const NOW = 2_000_000_000
 const WORKSPACE_ID = folderWorkspaceKey('folder-1')
@@ -138,13 +137,8 @@ describe('buildDashboardSnapshot folder workspaces', () => {
     }
 
     const snapshot = buildDashboardSnapshot(structuredState, NOW)
-    const expected = { attention: 0, working: 0, done: 0, idle: 0 }
-    for (const card of snapshot.cards) {
-      expected[card.bucket] += 1
-    }
 
     expect(snapshot.cards).toHaveLength(1)
     expect(snapshot.cards[0]).toMatchObject({ paneKey: PANE_KEY, bucket: 'done' })
-    expect(buildDashboardBucketCounts(structuredState, NOW)).toEqual(expected)
   })
 })

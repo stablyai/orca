@@ -8,9 +8,9 @@ import {
 } from '../tabs/workspace-editor-files'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
-import { getRecentlyClosedTabPosition } from '../../recently-closed-tab-position'
-import { pushRecentlyClosedTabKind } from '../../recently-closed-tabs'
-import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
+import { getRecentlyClosedTabPosition } from '../../tabs/recently-closed-tab-position'
+import { pushRecentlyClosedTabKind } from '../../tabs/recently-closed-tabs'
+import { notifyHostOfMirroredEditorClose } from '@/runtime/web-session-tabs-sync/closing/close-mirrored-editor-tab'
 import { type ClosedEditorTabSnapshot, MAX_RECENT_CLOSED_EDITOR_TABS } from '../types/open-file'
 import { removeMarkdownVisibilityKeys } from '../tabs/workspace-editor-item'
 import {

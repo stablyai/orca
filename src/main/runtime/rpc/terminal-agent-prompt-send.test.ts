@@ -1,5 +1,4 @@
 import type * as WorktreeListingModule from '../../git/worktrees/catalog/worktree-listing'
-import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { RpcRequest } from './core'

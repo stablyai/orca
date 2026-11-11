@@ -1,3 +1,4 @@
+import { journalInputCaller } from '../../agent-session-journal/input-order/journal-input-provenance'
 import { prepareStructuredAgentSessionAttach } from './structured-agent-session-attach-preparation'
 import {
   publishAttachedChild,
@@ -189,6 +190,20 @@ async function runAttachUnderAbort(
         ...(await lock.wait(pinnedAgentSessionLaunchEnv(context.deps.resolveLaunchEnv, params)))
       },
       callerKey,
+      ...(options.startedFor
+        ? {
+            telemetryCaller: () => {
+              const submission = context.sessions
+                .get(sessionId)
+                ?.journal.submission(options.startedFor!)
+              return submission
+                ? journalInputCaller(context.deps.journalDatabase.db, sessionId, submission)
+                : undefined
+            }
+          }
+        : options.telemetryCallerKey
+          ? { telemetryCaller: () => options.telemetryCallerKey }
+          : {}),
       params,
       now: () => context.now(),
       recordPhase,

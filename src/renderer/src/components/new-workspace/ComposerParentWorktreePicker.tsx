@@ -5,15 +5,15 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { Button } from '@/components/ui/button'
 import { Command, CommandInput, CommandList } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store/index'
 import {
   getIndexedAllWorktrees,
   getIndexedWorktreeById,
   getIndexedWorktreeMap
-} from '@/store/worktree-repo-index'
-import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
+} from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { compareWorktreeDisplayName } from '@/lib/workspace/display/worktree-display-name-order'
 import '@/components/sidebar/workspace-card/activity/worktree-card-empty-inputs'
 import { branchDisplayName } from '@/components/sidebar/workspace-card/identity/worktree-branch-display'
 import { getCyclicProjectedWorktreeLineageIds } from '../../../../shared/sidebar-list/worktree-lineage-projection'
@@ -43,8 +43,8 @@ import {
   getWorktreeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import { useRepoMap } from '@/store/selectors'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { useRepoMap } from '@/store/repos/use-repository-catalog'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { isCrossStoreCreateParent } from '@/components/sidebar/workspace-actions/parenting/worktree-parent-candidates'
 import { ParentMachineBadge } from '@/components/sidebar/workspace-actions/parenting/ParentMachineBadge'
 import {
@@ -87,6 +87,7 @@ function ComposerParentWorktreePickerImpl({
   disabled = false,
   activeFolderWorkspaceId = null
 }: ComposerParentWorktreePickerProps): React.JSX.Element {
+  const t = useTranslate()
   // Subscribe so translate() refreshes on language changes.
   useTranslation()
   const [open, setOpen] = useState(false)
@@ -122,7 +123,7 @@ function ComposerParentWorktreePickerImpl({
   return (
     <div className="space-y-1.5">
       <span id={labelId} className="block text-xs font-medium text-muted-foreground">
-        {translate('auto.components.ComposerParentWorktreePicker.label', 'Parent worktree')}
+        {t('auto.components.ComposerParentWorktreePicker.label', 'Parent worktree')}
       </span>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
@@ -137,7 +138,7 @@ function ComposerParentWorktreePickerImpl({
           >
             <span className="truncate">
               {parentName ??
-                translate('auto.components.ComposerParentWorktreePicker.noParent', 'No parent')}
+                t('auto.components.ComposerParentWorktreePicker.noParent', 'No parent')}
             </span>
             <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />
           </Button>
@@ -168,7 +169,7 @@ function ComposerParentWorktreePickerImpl({
         </PopoverContent>
       </Popover>
       <p className="text-[11px] text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.ComposerParentWorktreePicker.description',
           'Nests this workspace under another in the sidebar. Does not change the base branch.'
         )}
@@ -217,6 +218,7 @@ function ParentWorktreeCandidateList({
   activeFolderWorkspaceId,
   onSelect
 }: ParentWorktreeCandidateListProps): React.JSX.Element {
+  const t = useTranslate()
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const repoMap = useRepoMap()
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
@@ -357,7 +359,7 @@ function ParentWorktreeCandidateList({
         onValueChange={handleSearchChange}
         onKeyDown={handleKeyDown}
         wrapperClassName="shrink-0"
-        placeholder={translate(
+        placeholder={t(
           'auto.components.ComposerParentWorktreePicker.searchPlaceholder',
           'Search workspaces...'
         )}
@@ -413,10 +415,7 @@ function ParentWorktreeCandidateList({
                   </div>
                 ) : (
                   <span className="truncate">
-                    {translate(
-                      'auto.components.ComposerParentWorktreePicker.noParent',
-                      'No parent'
-                    )}
+                    {t('auto.components.ComposerParentWorktreePicker.noParent', 'No parent')}
                   </span>
                 )}
               </div>
@@ -425,7 +424,7 @@ function ParentWorktreeCandidateList({
         </div>
         {filtered.length === 0 && search.trim().length > 0 ? (
           <div className="py-6 text-center text-sm text-muted-foreground">
-            {translate('auto.components.ComposerParentWorktreePicker.noMatches', 'No matches.')}
+            {t('auto.components.ComposerParentWorktreePicker.noMatches', 'No matches.')}
           </div>
         ) : null}
       </CommandList>

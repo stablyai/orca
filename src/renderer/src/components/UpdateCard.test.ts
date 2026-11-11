@@ -1,7 +1,7 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { UpdateStatus } from '../../../shared/update-status-types'
-import { createUISlice } from '../store/slices/ui'
+import { createUISlice } from '../store/slices/ui/create-ui-slice'
 import type { AppState } from '../store/types'
 import { isUpdateCardVisible } from './maintenance/update-card/update-card-visibility'
 

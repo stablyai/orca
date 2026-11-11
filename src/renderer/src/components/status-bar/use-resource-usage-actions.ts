@@ -1,3 +1,4 @@
+import { selectWorktreesByRepo } from '../../store/workspaces/catalog/workspace-record-fields'
 import {
   useCallback,
   useState,
@@ -9,11 +10,11 @@ import {
   activateAndRevealWorkspace,
   activateAndRevealWorktree
 } from '@/lib/workspace/activation/worktree-activation'
-import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 import type { AppState } from '../../store/types'
-import { getAllWorktreesFromState } from '../../store/selectors'
+import { getIndexedAllWorktrees } from '../../store/slices/worktrees/listing/worktree-catalog-index'
 import { runWorktreeDelete } from '../sidebar/workspace-actions/deletion/delete-worktree-flow'
 import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -115,7 +116,7 @@ export function useResourceUsageActions({
     }
     const target = resolveResourceManagerWorktreeTarget(
       worktreeId,
-      getAllWorktreesFromState(useAppStore.getState())
+      getIndexedAllWorktrees(selectWorktreesByRepo(useAppStore.getState()))
     )
     if (!target) {
       return
@@ -139,7 +140,7 @@ export function useResourceUsageActions({
     (worktreeId: string): void => {
       const target = resolveResourceManagerWorktreeTarget(
         worktreeId,
-        getAllWorktreesFromState(useAppStore.getState())
+        getIndexedAllWorktrees(selectWorktreesByRepo(useAppStore.getState()))
       )
       if (!target) {
         return

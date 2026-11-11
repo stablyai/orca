@@ -8,6 +8,7 @@ import {
   type RichMarkdownHtmlSuperscriptLinkContext
 } from '../citations/rich-markdown-html-superscript-link-context'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 export function createEditableMarkdownLinkBubble(
   href: string,
@@ -76,28 +77,28 @@ export function getSelectedHtmlSuperscriptLinkStatus(
 }
 
 export function formatSelectedHtmlSuperscriptLinkStatus(
-  status: NonNullable<ReturnType<typeof getSelectedHtmlSuperscriptLinkStatus>>
+  status: NonNullable<ReturnType<typeof getSelectedHtmlSuperscriptLinkStatus>>,
+  t: Translate = translate
 ): string {
   const label =
-    status.label ||
-    translate('auto.components.editor.RichMarkdownEditor.citationFallbackLabel', 'Citation')
+    status.label || t('auto.components.editor.RichMarkdownEditor.citationFallbackLabel', 'Citation')
   if (status.openEnabled) {
-    return translate(
+    return t(
       'auto.components.editor.RichMarkdownEditor.citationLinkAvailable',
       '{{value0}}, link to {{value1}}. Press Enter to open or Tab for link actions.',
       { value0: label, value1: status.href }
     )
   }
   const actionHint = status.href
-    ? translate(
+    ? t(
         'auto.components.editor.RichMarkdownEditor.tabForCitationActions',
         'Tab for available actions.'
       )
-    : translate(
+    : t(
         'auto.components.editor.RichMarkdownEditor.noCitationActions',
         'No link actions are available.'
       )
-  return translate(
+  return t(
     'auto.components.editor.RichMarkdownEditor.citationLinkUnavailable',
     '{{value0}}, citation link unavailable. {{value1}}',
     { value0: label, value1: actionHint }

@@ -1,11 +1,12 @@
-import type { HostStatusReply } from '../transport/host-status-reply-schema'
-import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
+import type { HostStatusReply } from '../transport/hosts/host-status-reply-schema'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../transport/connection/connection-state'
 import {
   readBridgeConnectionSnapshot,
   type BridgeConnectionSnapshot
 } from './bridge/bridge-connection-snapshot'
 import { bridgePendingRequestCap } from './bridge/bridge-caps'
+import { isPhoneOnlyNativeVerb } from './bridge/bridge-native-verbs'
 import type { BridgeClientMessage } from './bridge/bridge-envelope'
 import { BridgeCapExceededError, BridgeHostDisposedError } from './bridge-host-errors'
 
@@ -16,27 +17,13 @@ export function isDesktopBound(message: BridgeClientMessage): message is Desktop
   return message.type === 'request' || message.type === 'subscribe'
 }
 
-// Native verbs that never touch the desktop; any other (native.pdf.view downloads its file) waits like a request.
-const PHONE_ONLY_NATIVE_VERBS: ReadonlySet<string> = new Set([
-  'native.clipboard.write',
-  'native.clipboard.read',
-  'native.media.pick',
-  'native.media.read',
-  'native.media.release',
-  'native.media.name',
-  'native.audio.start',
-  'native.audio.read',
-  'native.audio.stop',
-  'native.storage.read',
-  'native.image.act',
-  'native.speech.act'
-])
-
 export type BridgeVerdictHold = {
   // A connection whose verdict has not opened is still handshaking to the page.
   snapshot: (client: RpcClient, state?: ConnectionState) => BridgeConnectionSnapshot
   // False when the frame waits for the verdict (or is refused over the cap), or cancels one that waits.
   admit: (message: BridgeClientMessage) => boolean
+  // True when a reconnect's re-send of an open page stream waits for the verdict.
+  holdReplay: (id: string, resend: () => void) => boolean
   // On the verdict opening: re-send init if what the page last heard changed, then send what waited.
   publish: (resendInit: () => void, dispatch: (message: DesktopBound) => void) => void
   // The document ended; parked frames never left the phone, so a disposal fails them definitely.
@@ -54,6 +41,10 @@ export function createBridgeVerdictHold(
   const open = (): boolean => readHostStatus === undefined || readHostStatus() !== null
   let openAtInit: boolean | null = null
   let parked: DesktopBound[] = []
+  // Keyed by page stream id: a later connection's re-send replaces the one it superseded.
+  const replays = new Map<string, () => void>()
+  // While anything waits, later frames wait behind it so the verdict's flush keeps page order.
+  const passes = (): boolean => open() && parked.length === 0 && replays.size === 0
   const take = (): DesktopBound[] => {
     const taken = parked
     parked = []
@@ -70,12 +61,11 @@ export function createBridgeVerdictHold(
         parked = parked.filter((held) => held.id !== message.id)
         return false
       }
-      // While anything waits, later frames wait behind it so the verdict's flush keeps page order.
       if (
         !isDesktopBound(message) ||
-        (open() && parked.length === 0) ||
+        passes() ||
         message.method === 'status.get' ||
-        PHONE_ONLY_NATIVE_VERBS.has(message.method)
+        isPhoneOnlyNativeVerb(message.method)
       ) {
         return true
       }
@@ -86,15 +76,27 @@ export function createBridgeVerdictHold(
       }
       return false
     },
+    holdReplay: (id, resend) => {
+      if (passes()) {
+        return false
+      }
+      replays.set(id, resend)
+      return true
+    },
     publish: (resendInit, dispatch) => {
       if (openAtInit !== open()) {
         resendInit()
       }
+      // Streams the page already held resume before anything it sent while it waited.
       if (open()) {
+        const resends = [...replays.values()]
+        replays.clear()
+        resends.forEach((resend) => resend())
         take().forEach(dispatch)
       }
     },
     settle: (notify) => {
+      replays.clear()
       for (const message of take()) {
         if (notify) {
           sendError(message.id, new BridgeHostDisposedError())

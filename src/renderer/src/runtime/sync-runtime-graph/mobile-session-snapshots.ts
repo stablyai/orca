@@ -1,9 +1,4 @@
-import { getSystemPrefersDark } from '@/lib/terminal-theme'
-import type { AppState } from '@/store/types'
-import type {
-  RuntimeMobileSessionSnapshotTab,
-  RuntimeMobileSessionTabsSnapshot
-} from '../../../../shared/runtime-types'
+import { getSystemPrefersDark } from '@/lib/terminal/appearance/terminal-theme'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   collectAmbiguousTerminalTabIds,
@@ -32,10 +27,13 @@ import {
 import { buildMobileTerminalSurfaceTabs } from './mobile-session-terminal-tabs'
 import { buildMobileMarkdownTab, buildMobileFileTab } from './mobile-session-editor-tabs'
 import { buildMobileBrowserTab } from './mobile-session-browser-tabs'
-import type { MobileSessionPublicationInputs } from './types'
 import { canReuseMobileSessionSnapshot } from './mobile-session-capture'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import type { AppState } from '@/store/types'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionSnapshotTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
+import type { MobileSessionPublicationInputs } from './types'
 
 export function buildMobileSessionTabSnapshots(
   state: AppState,

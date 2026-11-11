@@ -9,17 +9,17 @@ import type {
 import {
   reconcileWebSessionCloseIntents,
   isWebSessionCloseIntentPending
-} from '../web-session-close-intent'
+} from './closing/web-session-close-intent'
 import {
   peekWebSessionFocusIntent,
   resolveWebSessionVisibleTabId,
   clearWebSessionFocusIntent
-} from '../web-session-focus-intent'
+} from './navigation/web-session-focus-intent'
 import {
   resolveWebAgentSessionHandoff,
   isWebAgentSessionHandoffPostCreateSnapshotConfirmed,
   clearWebAgentSessionHandoff
-} from '../web-agent-session-handoff'
+} from '../hosted-terminals/creation/agent-launch/web-agent-session-handoff'
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import {
@@ -33,7 +33,7 @@ import {
   collectHostRetiredTerminals,
   isTerminalRowRetiredByHost
 } from './host-retired-terminal-rows'
-import { hostSnapshotAffirmsWorktreeContents } from '../host-session-snapshot-authority'
+import { hostSnapshotAffirmsWorktreeContents } from './hydration/host-session-snapshot-authority'
 import { logHostTerminalTabsShrunk } from './host-terminal-tab-drop-log'
 
 export function prepareWebSessionTabsSnapshotBase(

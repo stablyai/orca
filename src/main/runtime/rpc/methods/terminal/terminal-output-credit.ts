@@ -23,6 +23,9 @@ export type TerminalOutputCredit = {
   dropOutputCoveredBySnapshot: (snapshotSeq: number) => void
   /** A snapshot of unknown seq was sent; a recovery replaces held output it may already show. */
   recoverHeldOutput: () => void
+  /** Before the final flush. A PTY exit sends held output and later deliveries at once, since no ack or
+   * recovery can follow; any other close drops them so the flush can't start a recovery. */
+  close: (release: { ptyExited: boolean }) => void
   dispose: () => void
 }
 
@@ -38,6 +41,7 @@ export function createTerminalOutputCredit(options: {
   let heldBytes = 0
   let overflowed = false
   let recovering = false
+  let draining = false
   let disposed = false
   // Snapshots omit control sequences; replay dropped queries so a waiting TUI still gets its reply.
   let droppedQueries = ''
@@ -82,7 +86,7 @@ export function createTerminalOutputCredit(options: {
   }
 
   const fits = (units: number): boolean =>
-    inFlightUnits === 0 || inFlightUnits + units <= OUTPUT_CREDIT_WINDOW_UNITS
+    draining || inFlightUnits === 0 || inFlightUnits + units <= OUTPUT_CREDIT_WINDOW_UNITS
 
   const trimToBudget = (): void => {
     let dropCount = 0
@@ -142,11 +146,17 @@ export function createTerminalOutputCredit(options: {
     }
   }
 
+  const dispose = (): void => {
+    disposed = true
+    held = []
+  }
+
   function pump(): void {
-    if (disposed || recovering) {
+    if (disposed || (recovering && !draining)) {
       return
     }
-    if (!overflowed) {
+    // A drain sends output past a gap too: no snapshot can follow an exit, and the tail holds the last lines.
+    if (!overflowed || draining) {
       let sent = 0
       while (sent < held.length && fits(held[sent]!.data.length)) {
         const chunk = held[sent]!
@@ -160,7 +170,7 @@ export function createTerminalOutputCredit(options: {
     // Trim after sending so output held across a recovery reaches the client before any new gap.
     trimToBudget()
     // Recover only once the link has drained, so a sustained flood cannot outrun the client with snapshots.
-    if (overflowed && inFlightUnits <= TERMINAL_MULTIPLEX_ACK_BATCH_BYTES) {
+    if (overflowed && !draining && inFlightUnits <= TERMINAL_MULTIPLEX_ACK_BATCH_BYTES) {
       void recover()
     }
   }
@@ -199,9 +209,14 @@ export function createTerminalOutputCredit(options: {
       overflowed = true
       pump()
     },
-    dispose() {
-      disposed = true
-      held = []
-    }
+    close({ ptyExited }) {
+      if (ptyExited) {
+        draining = true
+        pump()
+      } else {
+        dispose()
+      }
+    },
+    dispose
   }
 }

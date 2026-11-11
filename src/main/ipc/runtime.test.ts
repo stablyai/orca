@@ -21,6 +21,7 @@ vi.mock('electron', () => ({
   }
 }))
 import { registerRuntimeHandlers } from './runtime'
+import { EphemeralVmFailureError } from '../../shared/ephemeral-vm-failure-copy'
 
 describe('registerRuntimeHandlers', () => {
   beforeEach(() => {
@@ -29,6 +30,21 @@ describe('registerRuntimeHandlers', () => {
     removeAllListenersMock.mockReset()
     removeHandlerMock.mockReset()
     fromWebContentsMock.mockReset()
+  })
+
+  it("passes the orchestration contract fence for the window's own mutations", async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fence answers before any other runtime member is read.
+    registerRuntimeHandlers({ getRuntimeId: () => 'runtime-1' } as never)
+    const registration = handleMock.mock.calls.find(([channel]) => channel === 'runtime:call')
+    const frame = {}
+    const response = await registration![1](
+      { senderFrame: frame, sender: { mainFrame: frame, id: 1, once: vi.fn(), on: vi.fn() } },
+      {
+        method: 'orchestration.approvalAnswer',
+        params: { dispatch: 'ctx_1', prompt: 'apr_1', decision: 'deny', reason: 'no' }
+      }
+    )
+    expect(response.error?.code).not.toBe('orchestration_migration_required')
   })
 
   // #36923: the window's wake shares the runtime's one VM wake path with its sleep's suspend.
@@ -41,8 +57,34 @@ describe('registerRuntimeHandlers', () => {
     const registration = handleMock.mock.calls.find(
       ([channel]) => channel === 'ephemeralVm:resumeWorkspace'
     )
-    await expect(registration![1]({}, { workspaceId: 'repo::/vm' })).resolves.toBe(record)
+    await expect(registration![1]({}, { workspaceId: 'repo::/vm' })).resolves.toEqual({
+      ok: true,
+      runtime: record
+    })
     expect(runtime.wakeWorkspaceVm).toHaveBeenCalledWith('repo::/vm')
+  })
+
+  it('returns coded VM wake and suspend failures as values so the code reaches the window', async () => {
+    const failure = {
+      error: 'Resume exited with code 3.',
+      errorCode: 'resumeExited',
+      errorParams: { exitCode: 3 }
+    }
+    const runtime = {
+      wakeWorkspaceVm: vi.fn().mockRejectedValue(new EphemeralVmFailureError(failure)),
+      suspendWorkspaceVm: vi.fn().mockRejectedValue(new Error('Suspend failed.'))
+    }
+    registerRuntimeHandlers(runtime as never)
+    const handler = (channel: string) =>
+      handleMock.mock.calls.find(([registered]) => registered === channel)![1]
+
+    await expect(
+      handler('ephemeralVm:resumeWorkspace')({}, { workspaceId: 'repo::/vm' })
+    ).resolves.toEqual({ ok: false, ...failure })
+    await expect(
+      handler('ephemeralVm:suspendWorkspace')({}, { workspaceId: 'repo::/vm' })
+    ).resolves.toEqual({ ok: false, error: 'Suspend failed.' })
+    expect(runtime.suspendWorkspaceVm).toHaveBeenCalledWith('repo::/vm')
   })
 
   // #37067: a phone's re-read on the add's reposChanged came before this publish.

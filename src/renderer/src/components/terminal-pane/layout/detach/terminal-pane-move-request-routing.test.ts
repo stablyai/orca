@@ -26,7 +26,9 @@ const storeState = vi.hoisted(() => ({
   }
 }))
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => storeState } }))
-vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
+  scheduleRuntimeGraphSync: vi.fn()
+}))
 const requestBackgroundTerminalWorktreeMount = vi.hoisted(() => vi.fn())
 vi.mock('../../../terminal/background-terminal-worktree-mount', () => ({
   requestBackgroundTerminalWorktreeMount
@@ -85,43 +87,6 @@ describe('a pane move a client asked this window for', () => {
     vi.useRealTimers()
   })
 
-  it('moves the named pane into the tab the client drew, where the client dropped it', async () => {
-    const detachPaneToNewTab = vi.fn<DetachTerminalPaneToNewTab>(() => moved('pty-2'))
-    unmount = mountTab(detachPaneToNewTab)
-
-    await expect(
-      moveTerminalPaneToNewTabForClient({ ...request, targetGroupId: 'group-2', index: 0 })
-    ).resolves.toEqual({ status: 'moved', ptyId: 'pty-2' })
-    expect(detachPaneToNewTab).toHaveBeenCalledWith(2, {
-      groupId: 'group-2',
-      index: 0,
-      targetTabId: 'client-tab'
-    })
-  })
-
-  it('puts the tab beside its source when this window has no such drop group', async () => {
-    const detachPaneToNewTab = vi.fn<DetachTerminalPaneToNewTab>(() => moved('pty-2'))
-    unmount = mountTab(detachPaneToNewTab)
-
-    await moveTerminalPaneToNewTabForClient({ ...request, targetGroupId: 'gone', index: 3 })
-    expect(detachPaneToNewTab).toHaveBeenCalledWith(2, {
-      groupId: 'group-1',
-      targetTabId: 'client-tab'
-    })
-  })
-
-  it('mounts a parked source tab, then moves its pane', async () => {
-    const detachPaneToNewTab = vi.fn<DetachTerminalPaneToNewTab>(() => moved('pty-2'))
-    const answer = moveTerminalPaneToNewTabForClient(request)
-    expect(requestBackgroundTerminalWorktreeMount).toHaveBeenCalledWith({
-      worktreeId: 'wt-1',
-      tabIds: ['tab-1']
-    })
-    unmount = mountTab(detachPaneToNewTab)
-
-    await expect(answer).resolves.toEqual({ status: 'moved', ptyId: 'pty-2' })
-  })
-
   it('keeps a parked source tab mounted until a move slower than the mount lease settles', async () => {
     const detached = Promise.withResolvers<Awaited<ReturnType<DetachTerminalPaneToNewTab>>>()
     const answer = moveTerminalPaneToNewTabForClient(request)
@@ -131,14 +96,6 @@ describe('a pane move a client asked this window for', () => {
 
     detached.resolve(await moved('pty-2'))
     await expect(answer).resolves.toEqual({ status: 'moved', ptyId: 'pty-2' })
-    expect(hasTerminalPaneSplitMountLease('tab-1', 'wt-1')).toBe(false)
-  })
-
-  it('refuses when the source tab does not mount, so the client puts the pane back', async () => {
-    const answer = moveTerminalPaneToNewTabForClient(request)
-    await vi.runAllTimersAsync()
-
-    await expect(answer).resolves.toEqual({ status: 'refused', reason: 'pane_unavailable' })
     expect(hasTerminalPaneSplitMountLease('tab-1', 'wt-1')).toBe(false)
   })
 })

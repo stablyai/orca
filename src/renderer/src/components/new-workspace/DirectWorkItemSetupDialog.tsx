@@ -8,7 +8,7 @@ import {
   DialogFooter
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { DirectWorkItemSetupRequest } from '@/lib/workspace/creation/work-item/direct-work-item-setup'
 import { WorkspaceSetupSection } from './WorkspaceSetupSection'
 import { selectWorkspaceSetupCopy } from './workspace-setup-section-model'
@@ -19,6 +19,7 @@ export function DirectWorkItemSetupDialog({
 }: {
   request: DirectWorkItemSetupRequest
 }): React.JSX.Element {
+  const t = useTranslate()
   const [inspection, setInspection] = useState(request.inspection)
   const [checking, setChecking] = useState(false)
   const retry = async (): Promise<void> => {
@@ -49,14 +50,14 @@ export function DirectWorkItemSetupDialog({
       <DialogContent surface="security" scrollable className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {translate('components.newWorkspace.directSetup.run', 'Run setup')} · {request.repoName}
+            {t('components.newWorkspace.directSetup.run', 'Run setup')} · {request.repoName}
           </DialogTitle>
         </DialogHeader>
         <WorkspaceSetupSection
           setupConfig={inspection.kind === 'needs-modal' ? inspection.setupConfig : null}
           copy={selectWorkspaceSetupCopy(
             inspection.kind === 'needs-modal' ? inspection.setupConfig : null,
-            getDirectWorkspaceSetupLabels()
+            getDirectWorkspaceSetupLabels(t)
           )}
           requiresExplicitSetupChoice
           resolvedSetupDecision={null}
@@ -66,11 +67,11 @@ export function DirectWorkItemSetupDialog({
           unavailable={
             inspection.kind === 'unavailable'
               ? {
-                  message: translate(
+                  message: t(
                     'components.newWorkspace.setupCheckFailed',
                     'Could not check setup configuration. Try again.'
                   ),
-                  retryLabel: translate('components.newWorkspace.directSetup.retry', 'Retry'),
+                  retryLabel: t('components.newWorkspace.directSetup.retry', 'Retry'),
                   checking,
                   retry: () => void retry()
                 }
@@ -79,7 +80,7 @@ export function DirectWorkItemSetupDialog({
         />
         <DialogFooter>
           <Button variant="ghost" onClick={request.cancel}>
-            {translate('components.newWorkspace.directSetup.cancel', 'Cancel')}
+            {t('components.newWorkspace.directSetup.cancel', 'Cancel')}
           </Button>
         </DialogFooter>
       </DialogContent>

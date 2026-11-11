@@ -11,13 +11,13 @@ import {
   tryStealInstallLockCommand,
   type InstallLockOwnerFile
 } from './remote-install-lock-commands'
-import { RELAY_REMOTE_DIR } from '../../ssh/remote-exec/remote-frame-protocol'
-import { removeRemoteTreeCommand } from '../../ssh/ssh-remote-commands'
+import { RELAY_REMOTE_DIR } from './remote-install-root'
+import { removeRemoteTreeCommand } from '../../ssh/remote-exec/ssh-remote-commands'
 import {
   isWindowsRemoteHost,
   joinRemotePath,
   type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
+} from '../../ssh/remote-host/ssh-remote-platform'
 
 export const RUNTIME_STORE_LOCK_NAME = '.store-lock'
 // Owner tokens prevent late releases from deleting successor locks.

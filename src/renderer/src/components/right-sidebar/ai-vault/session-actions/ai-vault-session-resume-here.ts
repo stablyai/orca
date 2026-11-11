@@ -3,29 +3,28 @@ import { useAppStore } from '@/store/index'
 import {
   activateAiVaultStructuredSession,
   openDesktopStructuredSession
-} from '@/lib/activate-ai-vault-structured-session'
-import { insertUnifiedTabAfterAnchor } from '@/lib/unified-tab-anchor-insertion'
-import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+} from '@/lib/agent-session/open/activate-ai-vault-structured-session'
+import { insertUnifiedTabAfterAnchor } from '@/lib/workspace/tabs/unified-tab-anchor-insertion'
+
+import { createNonSecureContextUuid } from '../../../../../../shared/non-secure-context-uuid'
 import {
   captureNativeChatComposerFocusIntent,
   requestNativeChatComposerFocus
-} from '@/components/native-chat/use-native-chat-composer-reveal-focus'
-import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
+} from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import { translate } from '@/i18n/i18n'
 import { agentLabel } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-filters'
-import {
-  aiVaultHistoryAgents,
-  type AiVaultAgent,
-  type AiVaultSession
+import { aiVaultHistoryAgents } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
+import type {
+  AiVaultAgent,
+  AiVaultSession
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-import {
-  adoptsCliConversations,
-  type CliConversationRowAgent
-} from '../../../../../../shared/structured-agent-cli-conversation-adoption'
-import type { Tab } from '../../../../../../shared/tab-types'
+import { adoptsCliConversations } from '../../../../../../shared/structured-agent-cli-conversation-adoption'
+import type { CliConversationRowAgent } from '../../../../../../shared/structured-agent-cli-conversation-adoption'
 import { structuredLaunchConversationOwner } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
-import type { AiVaultSessionRowChatActions } from './ai-vault-session-chat-action'
 import { resumeAiVaultSessionInNewChat } from './ai-vault-session-resume-in-chat-launch'
+import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
+import type { Tab } from '../../../../../../shared/tab-types'
+import type { AiVaultSessionRowChatActions } from './ai-vault-session-chat-action'
 
 /** The chat `/resume` was typed in; a picked row's conversation takes its place. */
 export type AiVaultResumeHere = {
@@ -139,7 +138,7 @@ function resumeInPlaceOf(
     session,
     rowAgent,
     here.workspaceId,
-    newAgentLaunchRequestId(),
+    createNonSecureContextUuid(),
     {
       afterTabId: here.tabId,
       // Why: the focus request is the one call every launch path makes once the new tab exists.

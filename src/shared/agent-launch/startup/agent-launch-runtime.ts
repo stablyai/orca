@@ -1,4 +1,4 @@
-import type { ProjectExecutionRuntimeResolution } from '../../project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../execution-host/project-execution-runtime'
 import { isWindowsAbsolutePathLike } from '../../cross-platform-path'
 import type { LocalWindowsTerminalRuntimeOptions } from '../../local-windows-terminal-runtime'
 import { resolveStartupShell, type AgentStartupShell } from './tui-agent-startup-shell'

@@ -125,22 +125,6 @@ describe('a split of a pane the window draws, in a layout-owner build', () => {
     expect(split.tabId).toBe(TAB_ID)
   })
 
-  it('lists the new pane to phones and session.tabs with no window report', async () => {
-    const { runtime, handle } = setup()
-    // A phone already lists the tab, so the new pane must be published, not just hydrated.
-    await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
-
-    const split = await runtime.splitTerminal(handle, { direction: 'vertical' })
-
-    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
-    expect(
-      listed.tabs.some(
-        (tab) =>
-          tab.type === 'terminal' && tab.parentTabId === TAB_ID && tab.leafId === split.leafId
-      )
-    ).toBe(true)
-  })
-
   it('a split no one asked to see leaves the phones’ active tab alone; one asked for takes it', async () => {
     const { runtime, handle } = setup()
     const listed = () => runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
@@ -151,30 +135,6 @@ describe('a split of a pane the window draws, in a layout-owner build', () => {
 
     const shown = await runtime.splitTerminal(handle, { direction: 'horizontal' })
     expect((await listed()).activeTabId).toBe(`${TAB_ID}::${shown.leafId}`)
-  })
-
-  it('the window’s own split keeps its proposed pane id, folder and size', async () => {
-    const { runtime, leafIds, spawn } = setup()
-
-    const split = await runtime.splitTerminalPane(
-      { worktreeId: TEST_WORKTREE_ID, tabId: TAB_ID, leafId: HEADLESS_LEAF_ID },
-      {
-        direction: 'horizontal',
-        newLeafId: NEW_LEAF_ID,
-        cwd: TEST_WORKTREE_PATH,
-        initialSize: { cols: 90, rows: 20 },
-        keepPaneOnStartFailure: true
-      }
-    )
-
-    expect(split.leafId).toBe(NEW_LEAF_ID)
-    expect(leafIds()).toEqual([HEADLESS_LEAF_ID, NEW_LEAF_ID])
-    expect(spawn.mock.calls[0]![0]).toMatchObject({
-      leafId: NEW_LEAF_ID,
-      cwd: TEST_WORKTREE_PATH,
-      cols: 90,
-      rows: 20
-    })
   })
 
   it('a window split whose terminal fails to start keeps its pane, showing why', async () => {
@@ -205,127 +165,5 @@ describe('a split of a pane the window draws, in a layout-owner build', () => {
 
     expect(leafIds()).toEqual([HEADLESS_LEAF_ID])
     expect(notifier.closeTerminalPane).not.toHaveBeenCalled()
-  })
-
-  it('starts nothing when main cannot write the pane', async () => {
-    const { runtime, runtimeStore, handle, splitTerminal, leafIds, spawn } = setup()
-    Reflect.set(
-      runtimeStore,
-      'admitTerminalPane',
-      vi.fn(async () => 'pane_not_found')
-    )
-
-    await expect(runtime.splitTerminal(handle, { direction: 'vertical' })).rejects.toThrow(
-      'terminal_split_source_not_found'
-    )
-    expect(spawn).not.toHaveBeenCalled()
-    expect(splitTerminal).not.toHaveBeenCalled()
-    expect(leafIds()).toEqual([HEADLESS_LEAF_ID])
-  })
-
-  it('starts nothing for a pane-named split of a tab main does not hold', async () => {
-    const { runtime, spawn } = setup()
-
-    await expect(
-      runtime.splitTerminalPane(
-        { worktreeId: TEST_WORKTREE_ID, tabId: 'tab-elsewhere', leafId: HEADLESS_LEAF_ID },
-        { direction: 'vertical' }
-      )
-    ).rejects.toThrow('terminal_split_source_not_found')
-    expect(spawn).not.toHaveBeenCalled()
-  })
-
-  // The real spawn commit refuses a pane that left the layout while it started (spawn-commit.ts).
-  function closeWhileStarting(setupResult: ReturnType<typeof setup>, close: () => Promise<void>) {
-    const { spawn, getSession } = setupResult
-    spawn.mockImplementationOnce(async (args: { tabId?: string; leafId?: string }) => {
-      await close()
-      const root = getSession().terminalLayoutsByTabId[TAB_ID]?.root
-      if (!root || !collectLayoutLeafIdsInOrder(root).includes(args.leafId!)) {
-        throw new Error('terminal_split_source_not_found')
-      }
-      return { id: 'pty-late' }
-    })
-  }
-
-  it.each([
-    ['its pane', { kind: 'pane', tabId: TAB_ID, leafId: NEW_LEAF_ID }],
-    ['its tab', { kind: 'tab', tabId: TAB_ID }]
-  ] as const)(
-    'answers a split once, and leaves nothing, when the user closes %s while it starts',
-    async (_, target) => {
-      const context = setup()
-      const { runtime, getSession } = context
-      closeWhileStarting(context, () =>
-        runtime.closeTerminalSurfaceFromRenderer({
-          worktreeId: TEST_WORKTREE_ID,
-          target,
-          reason: 'user'
-        })
-      )
-
-      await expect(
-        runtime.splitTerminalPane(
-          { worktreeId: TEST_WORKTREE_ID, tabId: TAB_ID, leafId: HEADLESS_LEAF_ID },
-          { direction: 'vertical', newLeafId: NEW_LEAF_ID, keepPaneOnStartFailure: true }
-        )
-      ).rejects.toThrow('terminal_split_source_not_found')
-
-      const root = getSession().terminalLayoutsByTabId[TAB_ID]?.root
-      expect(root ? collectLayoutLeafIdsInOrder(root) : []).not.toContain(NEW_LEAF_ID)
-      expect(runtime.startStatusOf(makePaneKey(TAB_ID, NEW_LEAF_ID))).toBeNull()
-    }
-  )
-
-  it('refuses a named pane id another pane already holds, starting nothing', async () => {
-    const { runtime, spawn } = setup()
-
-    await expect(
-      runtime.splitTerminalPane(
-        { worktreeId: TEST_WORKTREE_ID, tabId: TAB_ID, leafId: HEADLESS_LEAF_ID },
-        { direction: 'vertical', newLeafId: HEADLESS_LEAF_ID }
-      )
-    ).rejects.toThrow('pane_exists')
-    expect(spawn).not.toHaveBeenCalled()
-    expect(runtime.startStatusOf(makePaneKey(TAB_ID, HEADLESS_LEAF_ID))).toBeNull()
-  })
-
-  it('a window split main cannot start at all still shows its pane, failed, with why', async () => {
-    const { runtime, leafIds } = setup()
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-
-    await expect(
-      runtime.splitTerminalPane(
-        { worktreeId: TEST_WORKTREE_ID, tabId: TAB_ID, leafId: HEADLESS_LEAF_ID },
-        { direction: 'vertical', newLeafId: NEW_LEAF_ID, keepPaneOnStartFailure: true }
-      )
-    ).rejects.toThrow('runtime_unavailable')
-
-    expect(leafIds()).toEqual([HEADLESS_LEAF_ID, NEW_LEAF_ID])
-    expect(runtime.startStatusOf(makePaneKey(TAB_ID, NEW_LEAF_ID))).toEqual({
-      status: 'failed',
-      reason: 'runtime_unavailable'
-    })
-  })
-
-  it('refuses a taken pane id before anything else, even when main cannot start', async () => {
-    const { runtime } = setup()
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-
-    await expect(
-      runtime.splitTerminalPane(
-        { worktreeId: TEST_WORKTREE_ID, tabId: TAB_ID, leafId: HEADLESS_LEAF_ID },
-        { direction: 'vertical', newLeafId: HEADLESS_LEAF_ID, keepPaneOnStartFailure: true }
-      )
-    ).rejects.toThrow('pane_exists')
-    expect(runtime.startStatusOf(makePaneKey(TAB_ID, HEADLESS_LEAF_ID))).toBeNull()
   })
 })

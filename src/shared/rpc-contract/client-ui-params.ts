@@ -1,6 +1,6 @@
 import { GitHistoryRefName } from './git-params'
 import { z } from 'zod'
-import { isFeatureTipId } from '../feature-tips'
+import { isFeatureTipSeenId } from '../feature-tips'
 import {
   WORKTREE_CARD_PROPERTIES,
   normalizeWorktreeCardProperties
@@ -21,7 +21,7 @@ export const NullableString = z.string().nullable()
 export const StringArray = z.array(z.string())
 
 export const FeatureTipIds = z.array(
-  z.custom(isFeatureTipId, { message: 'Unknown feature tip id' })
+  z.custom(isFeatureTipSeenId, { message: 'Unknown feature tip id' })
 )
 
 export const UnknownRecord = z.record(z.string(), z.unknown())
@@ -133,6 +133,7 @@ export const UiUpdateFields = z
     rightSidebarTab: RightSidebarTabParam.optional(),
     rightSidebarExplorerView: z.enum(['files', 'search']).optional(),
     rightSidebarWidth: z.number().finite().optional(),
+    activityBarPosition: z.enum(['top', 'side']).optional(),
     markdownTocPanelWidth: z.number().finite().optional(),
     combinedDiffFileTreeWidth: z.number().finite().optional(),
     groupBy: z.enum(['none', 'workspace-status', 'repo', 'pr-status']).optional(),
@@ -202,6 +203,26 @@ export const UiUpdateFields = z
     statusBarVisible: z.boolean().optional(),
     usagePercentageDisplay: z.enum(['used', 'remaining']).optional(),
     statusBarUsageMode: z.enum(['verbose', 'compact']).optional(),
+    statusBarUsageFormat: z
+      .object({
+        template: z.string(),
+        byProvider: z
+          .object({
+            claude: z.string().optional(),
+            codex: z.string().optional(),
+            gemini: z.string().optional(),
+            'opencode-go': z.string().optional(),
+            kimi: z.string().optional(),
+            minimax: z.string().optional(),
+            grok: z.string().optional(),
+            antigravity: z.string().optional(),
+            cursor: z.string().optional(),
+            zcode: z.string().optional(),
+            muse: z.string().optional()
+          })
+          .optional()
+      })
+      .optional(),
     dismissedUpdateVersion: NullableString.optional(),
     dismissedUnexpectedSignoutVersion: NullableString.optional(),
     lastUpdateCheckAt: z.number().finite().nullable().optional(),
@@ -259,6 +280,7 @@ export const UiUpdateFields = z
     pluginsAlphaNoticeDismissed: z.boolean().optional(),
     codexTerminalServerIsolationNoticeSeen: z.boolean().optional(),
     codexSharedSettingsNoticeSeen: z.boolean().optional(),
+    speechModelUpdateNoticeSeen: z.boolean().optional(),
     claudeDiffPanelNoticeSeen: z.boolean().optional(),
     claudeAccountSignInNoticeSeen: z.boolean().optional(),
     petVisible: z.boolean().optional(),

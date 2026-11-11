@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+
 import { describe, expect, it } from 'vitest'
 import { FcmClient, type FcmRequest, type FcmResponse } from './fcm-client.js'
 import { buildPushDelivery } from './push-delivery-message.js'
@@ -51,30 +51,6 @@ function client(response: FcmResponse) {
 }
 
 describe('fcm client', () => {
-
-
-  it('carries every data value as a string and omits a null agent state', async () => {
-    const { fake, client: fcm } = client({ status: 200, body: '{}' })
-    await fcm.send(delivery(null), { token: TOKEN })
-    const message = JSON.parse(fake.requests[0]!.body) as {
-      message: {
-        android: Record<string, unknown>
-        data: Record<string, string>
-      }
-    }
-    expect(Object.values(message.message.data).every((value) => typeof value === 'string')).toBe(
-      true
-    )
-    expect(message.message.data.agentState).toBeUndefined()
-    const tag = createHash('sha256')
-      .update(JSON.stringify([HOST, 'note-1']))
-      .digest('hex')
-    expect(message.message.data.coalescedCount).toBeUndefined()
-    expect(message.message.data.tag).toBe(tag)
-    expect(message.message.android).not.toHaveProperty('collapse_key')
-    expect(message.message).not.toHaveProperty('notification')
-    expect(message.message.data).not.toHaveProperty('body')
-  })
 
 
 

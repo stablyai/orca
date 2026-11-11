@@ -7,7 +7,7 @@ import { store } from 'expo-router/build/global-state/router-store'
 import type { BridgeRpcClient } from '../mobile-web-shell/bridge/bridge-rpc-client'
 import type { BridgeInitRoute } from '../mobile-web-shell/bridge/bridge-init-route'
 import { BRIDGE_OPEN_ROUTE_PARAM } from '../mobile-web-shell/bridge/bridge-route-update'
-import { usePageBridgeClient } from '../transport/client-context.web'
+import { usePageBridgeClient } from '../transport/connection/client-context.web'
 import { createRefusalReporter, handOffRoute, servedHere } from './route-handoff.web'
 
 type StackRouterFactory = typeof StackRouter
@@ -95,6 +95,10 @@ function decodedPathnameOf(href: string): string {
   }
 }
 
+function searchParamsOf(href: string): Record<string, string> {
+  return Object.fromEntries(new URL(href, 'orca-page://document').searchParams)
+}
+
 // The shell names a target to open inside this document (Jump back in, notification taps) instead of pushing a second one.
 // Returns the stack router that opens the first init's target; later inits push theirs in-page.
 export function useShellOpenTarget(): StackRouterFactory {
@@ -117,10 +121,30 @@ export function useShellOpenTarget(): StackRouterFactory {
     let applied = spliced.current
     // A route update can land before the root navigator is ready; Expo Router refuses to route until then.
     let waiting: string | null = null
+    const place = (target: string): void => {
+      if (!navigation.isReady()) {
+        waiting = target
+        return
+      }
+      // Already on top: a second copy would only stack the same screen under itself, so hand it the target's params (a notification's pane) instead.
+      if (decodedPathnameOf(target) === store.getRouteInfo().pathname) {
+        const params = searchParamsOf(target)
+        if (Object.keys(params).length > 0) {
+          router.setParams(params)
+        }
+        return
+      }
+      router.push(target)
+    }
     const stopWaiting = navigation.addListener('ready', () => {
+      // A preloaded boot mounts the spliced stack with the container, so linking keeps the host list's URL until the state next changes.
+      if (spliced.current !== null) {
+        router.setParams({})
+      }
       if (waiting !== null) {
-        router.push(waiting)
+        const target = waiting
         waiting = null
+        place(target)
       }
     })
     const open = (target: string): void => {
@@ -132,15 +156,7 @@ export function useShellOpenTarget(): StackRouterFactory {
       if (handOffRoute(client, target, report) !== 'local') {
         return
       }
-      // Already on top: a second copy would only stack the same screen under itself.
-      if (decodedPathnameOf(target) === store.getRouteInfo().pathname) {
-        return
-      }
-      if (navigation.isReady()) {
-        router.push(target)
-      } else {
-        waiting = target
-      }
+      place(target)
     }
     // Clear on every arrival so a lost acknowledgement is repaired, but open each value once so a replayed init cannot push it again.
     const receive = (route: BridgeInitRoute | null): void => {

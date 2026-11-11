@@ -29,7 +29,23 @@ export function getMobileWorkspaceLineageGroupKey(worktree: WorktreeLineageIdent
   return `workspace-lineage:${encodeURIComponent(getWorktreeRowIdentity(worktree))}`
 }
 
-function hasValidLineageParent(worktree: Worktree, parent: Worktree): boolean {
+/** The row fields lineage reads; a caller may resolve over a projection of its rows. */
+export type MobileLineageRow = Pick<
+  Worktree,
+  | 'worktreeId'
+  | 'hostId'
+  | 'repoId'
+  | 'workspaceKind'
+  | 'isArchived'
+  | 'parentWorktreeId'
+  | 'worktreeInstanceId'
+  | 'lineageWorktreeInstanceId'
+  | 'parentWorktreeInstanceId'
+  | 'crossStoreParent'
+  | 'workspaceLineage'
+>
+
+function hasValidLineageParent(worktree: MobileLineageRow, parent: MobileLineageRow): boolean {
   if (
     worktree.lineageWorktreeInstanceId === undefined &&
     worktree.parentWorktreeInstanceId === undefined
@@ -50,15 +66,17 @@ export type MobileLineageStores = {
   servers: readonly Pick<MobileRelayHost, 'hostId' | 'installationId'>[]
 }
 
-type ResolutionRow = {
-  worktree: Worktree
+type ResolutionRow<Row extends MobileLineageRow = MobileLineageRow> = {
+  worktree: Row
   id: string
   hostId: ExecutionHostId
   instanceId: string | undefined
   isArchived: boolean
 }
 
-function getResolutionRows(worktrees: readonly Worktree[]): Map<string, ResolutionRow> {
+function getResolutionRows<Row extends MobileLineageRow>(
+  worktrees: readonly Row[]
+): Map<string, ResolutionRow<Row>> {
   return new Map(
     worktrees.map((worktree) => [
       getWorktreeRowIdentity(worktree),
@@ -75,7 +93,7 @@ function getResolutionRows(worktrees: readonly Worktree[]): Map<string, Resoluti
 }
 
 // Unchecked wire data: a newer host may send a shape this build cannot read.
-function readFolderEdge(worktree: Worktree): WorkspaceLineageEdge | undefined {
+function readFolderEdge(worktree: MobileLineageRow): WorkspaceLineageEdge | undefined {
   const edge = worktree.workspaceLineage
   return edge && typeof edge.parentWorkspaceKey === 'string' ? edge : undefined
 }
@@ -109,11 +127,11 @@ function getCrossStoreView(
  * machine; lineage loops nest nothing.
  * Edges resolve over every row, then `filterRepoIds` keeps those with both ends shown: a hidden
  * twin must still make a parent ambiguous. */
-export function getMobileWorkspaceLineageChildren(
-  listed: readonly Worktree[],
+export function getMobileWorkspaceLineageChildren<Row extends MobileLineageRow>(
+  listed: readonly Row[],
   stores?: MobileLineageStores,
   filterRepoIds: readonly string[] = []
-): Map<string, Worktree[]> {
+): Map<string, Row[]> {
   const rows = getResolutionRows(listed)
   // The shared policy: worktree parent, then folder workspace, then another store. The phone trusts
   // an older host's edge without instance ids and keeps its loops, as it always has.
@@ -132,9 +150,9 @@ export function getMobileWorkspaceLineageChildren(
     keepSameStoreCycles: true
   })
   const parentByChild = new Map([...resolved].map(([child, parent]) => [child, parent.worktree]))
-  const shown = (row: Worktree): boolean =>
+  const shown = (row: Row): boolean =>
     filterRepoIds.length === 0 || filterRepoIds.includes(row.repoId)
-  const childrenByParentId = new Map<string, Worktree[]>()
+  const childrenByParentId = new Map<string, Row[]>()
   for (const worktree of listed) {
     const parent = parentByChild.get(getWorktreeRowIdentity(worktree))
     // A folder workspace spans projects, so the project filter never hides it as a parent.

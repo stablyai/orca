@@ -12,7 +12,12 @@ import { durableWriteTempPath } from '../filesystem/durable-file-write'
 import type { ClaudeForkCheckpoint } from './claude-conversation-fork-boundary'
 import type { ClaudeConversationForkWork } from './claude-conversation-fork-worker-entry'
 
-type ConversationCopy = { sessionId: string; resumeCursor: string; filePath: string }
+type ConversationCopy = {
+  sessionId: string
+  resumeCursor: string
+  filePath: string
+  coverage: { unit: 'claude-entry'; ids: string[] }
+}
 
 /** The native materializer is CPU/memory heavy even when reached through rewind. */
 export async function materializeClaudeConversationTranscript(input: {
@@ -28,17 +33,6 @@ export async function materializeClaudeConversationTranscript(input: {
   input.signal?.throwIfAborted()
   const destinationDirectory = input.destinationDirectory ?? dirname(input.sourcePath)
   const temporaryPath = durableWriteTempPath(join(destinationDirectory, 'conversation.jsonl'))
-  const compiled = resolveWorkerThreadEntryPath(
-    currentWorkerEntryLayout(__dirname),
-    'claude-conversation-fork-worker-entry.js'
-  )
-  const installed = [
-    compiled,
-    join(dirname(compiled), '..', 'claude-conversation-fork-worker-entry.js')
-  ].find(existsSync)
-  const entry = installed
-    ? installed
-    : new URL('./claude-conversation-fork-worker-entry.ts', import.meta.url)
   const signal = input.signal
   const failure = input.rewind
     ? 'Claude could not rewind this chat. Try again.'
@@ -52,7 +46,7 @@ export async function materializeClaudeConversationTranscript(input: {
     destinationDirectory,
     temporaryPath
   }
-  const worker = spawnWorkerThread(entry, { workerData })
+  const worker = spawnClaudeConversationWorker(workerData)
   let abort: () => void = () => undefined
   try {
     return await new Promise<ConversationCopy | null>((resolve, reject) => {
@@ -110,7 +104,7 @@ export async function materializeClaudeRewindTranscript(
   destinationDirectory?: string
 ): Promise<AgentSessionRewindFork> {
   if (!fork.throughEntryId) {
-    return { ...fork, materialized: true }
+    return { ...fork, materialized: true, coverage: [] }
   }
   const copy = await materializeClaudeConversationTranscript({
     sourcePath,
@@ -120,11 +114,33 @@ export async function materializeClaudeRewindTranscript(
     destinationDirectory
   })
   return copy
-    ? { ...fork, sessionId: copy.sessionId, resumeCursor: copy.resumeCursor, materialized: true }
+    ? {
+        ...fork,
+        sessionId: copy.sessionId,
+        resumeCursor: copy.resumeCursor,
+        coverage: copy.coverage.ids,
+        materialized: true
+      }
     : {
         sessionId: fork.sessionId,
         sourceSessionId: fork.sourceSessionId,
         replacesSessionId: fork.replacesSessionId,
-        materialized: true
+        materialized: true,
+        coverage: []
       }
+}
+
+export function spawnClaudeConversationWorker(workerData: unknown) {
+  const compiled = resolveWorkerThreadEntryPath(
+    currentWorkerEntryLayout(__dirname),
+    'claude-conversation-fork-worker-entry.js'
+  )
+  const installed = [
+    compiled,
+    join(dirname(compiled), '..', 'claude-conversation-fork-worker-entry.js')
+  ].find(existsSync)
+  const entry = installed
+    ? installed
+    : new URL('./claude-conversation-fork-worker-entry.ts', import.meta.url)
+  return spawnWorkerThread(entry, { workerData })
 }

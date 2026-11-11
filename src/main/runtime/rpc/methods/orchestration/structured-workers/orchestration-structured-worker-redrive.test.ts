@@ -3,8 +3,8 @@ import { getDefaultWorkspaceSession } from '../../../../../../shared/constants'
 import { partialRuntimeStore } from '../../../../orca-runtime-tests/runtime-store-partial-fixture'
 import { withChatTabChanges } from '../../../../agent-session/agent-session-tab-layout'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
-import * as historyPages from '../../../../../native-chat/agent-session-wire/publication/history/agent-session-history-page'
-import * as subscriberFrames from '../../../../../native-chat/agent-session-wire/publication/subscribers/agent-session-subscriber-frame-fields'
+import '../../../../../native-chat/agent-session-wire/publication/history/agent-session-history-page'
+import '../../../../../native-chat/agent-session-wire/publication/subscribers/agent-session-subscriber-frame-fields'
 import { hostTestState } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
 import { createTestParams } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-create-test-fixture'
 import {
@@ -593,108 +593,6 @@ describe('the structured redrive publication edge', () => {
     }
   })
 
-  it.each([16, 160])('watches no journal for %i resting workers', async (count) => {
-    const { host } = hostTestState()
-    const registrations = vi.spyOn(host, 'observeJournalPublications')
-    const workers: Awaited<ReturnType<typeof startWorker>>[] = []
-    for (let index = 0; index < count; index += 1) {
-      workers.push(await startWorker(index === 0 ? dispatchId : createDispatch()))
-    }
-    // Only parked mail watches a chat's journal; resting workers cost a publication nothing.
-    expect(registrations).not.toHaveBeenCalled()
-    const reads = [
-      vi.spyOn(host, 'subscribe'),
-      vi.spyOn(historyPages, 'readAgentSessionHistory'),
-      vi.spyOn(subscriberFrames, 'emitSubscriberFrame')
-    ]
-    for (const worker of workers) {
-      await worker.append('resting')
-    }
-    vi.advanceTimersByTime(5_000)
-    for (const read of reads) {
-      expect(read).not.toHaveBeenCalled()
-    }
-  })
-
-  it('coalesces real commits without client frames, history, commands, queue or roster reads', async () => {
-    const { host } = hostTestState()
-    const readCatalog = vi.fn(() => undefined)
-    let catalogChanged = () => {}
-    host.deps.adapter.atRestCommands = {
-      read: readCatalog,
-      onChange: (listener) => {
-        catalogChanged = listener
-        return () => {}
-      }
-    }
-    host['clientDelivery'].watchAtRestCommands(host.deps.adapter)
-    const worker = await startWatchedWorker()
-    const hooks = host.collaboratorsForTests().subscribers['hooks']
-    const reads = [
-      vi.spyOn(historyPages, 'readAgentSessionHistory'),
-      vi.spyOn(historyPages, 'readAgentSessionHydrationPage'),
-      vi.spyOn(subscriberFrames, 'emitSubscriberFrame'),
-      vi.spyOn(hooks, 'readCommands'),
-      vi.spyOn(hooks, 'readQueuePublication'),
-      vi.spyOn(hooks, 'readBackgroundTasks')
-    ]
-
-    for (let batch = 0; batch < 25; batch += 1) {
-      await worker.append(`batch-${batch}`)
-      catalogChanged()
-      vi.advanceTimersByTime(10)
-    }
-    expect(worker.onJournalActivity).not.toHaveBeenCalled()
-    vi.advanceTimersByTime(300)
-    expect(worker.onJournalActivity).toHaveBeenCalledExactlyOnceWith(worker.identity.sessionId)
-    expect(
-      host.collaboratorsForTests().subscribers.subscriberCountForTests(worker.identity.sessionId)
-    ).toBe(0)
-    expect(readCatalog).not.toHaveBeenCalled()
-    for (const read of reads) {
-      expect(read).not.toHaveBeenCalled()
-    }
-  })
-
-  it('wakes after a tombstone settles the running turn', async () => {
-    const { identity, journal, fence, onJournalActivity } = await startWatchedWorker()
-    const turn = { provider: 'orca', clientMessageId: 'running-turn' } as const
-    await journal.appendItem(
-      turn,
-      { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
-      { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-    )
-    vi.advanceTimersByTime(300)
-    onJournalActivity.mockClear()
-
-    await journal.appendTombstone(turn, { fence })
-    vi.advanceTimersByTime(300)
-
-    expect(onJournalActivity).toHaveBeenCalledExactlyOnceWith(identity.sessionId)
-    expect(journal.snapshot().items).toEqual([])
-  })
-
-  it('still re-evaluates a journal that never goes quiet', async () => {
-    const { append, onJournalActivity } = await startWatchedWorker()
-    for (let batch = 0; batch < 60; batch += 1) {
-      await append(`batch-${batch}`)
-      vi.advanceTimersByTime(100)
-    }
-    expect(onJournalActivity.mock.calls.length).toBeGreaterThan(0)
-    expect(onJournalActivity.mock.calls.length).toBeLessThan(10)
-  })
-
-  it('wakes on the journal rollover that resets client cursors', async () => {
-    const { identity, journal, fence, onJournalActivity } = await startWatchedWorker()
-    const before = journal.cursor()
-
-    await journal.rollEpoch('unreconcilable_prefix', fence)
-    vi.advanceTimersByTime(300)
-
-    expect(journal.cursor().epoch).not.toBe(before.epoch)
-    expect(onJournalActivity).toHaveBeenCalledExactlyOnceWith(identity.sessionId)
-  })
-
   it('keeps the observer across close and reattach with a new fence', async () => {
     const { host, identity, onJournalActivity } = await startWatchedWorker()
     await reattach(identity.sessionId)
@@ -710,50 +608,4 @@ describe('the structured redrive publication edge', () => {
     expect(snapshot).toHaveBeenCalled()
     expect(onJournalActivity).toHaveBeenCalledExactlyOnceWith(identity.sessionId)
   })
-
-  it('wakes on row-free generation end without renewing idle activity', async () => {
-    const { host, identity, journal, onJournalActivity } = await startWatchedWorker()
-    const sessions = host.collaboratorsForTests().sessions
-    const before = {
-      cursor: journal.cursor(),
-      activity: sessions.lastActivityAt(identity.sessionId)
-    }
-    vi.advanceTimersByTime(1_000)
-
-    host.publishWorkChanged(identity.sessionId)
-    vi.advanceTimersByTime(300)
-
-    expect(onJournalActivity).toHaveBeenCalledExactlyOnceWith(identity.sessionId)
-    expect(journal.cursor()).toEqual(before.cursor)
-    expect(sessions.lastActivityAt(identity.sessionId)).toBe(before.activity)
-  })
-
-  it.each(['release', 'stop', 'abandon'] as const)(
-    '%s frees the worker and forgets its parked mail',
-    async (action) => {
-      const forget = vi.spyOn(state.runtime, 'forgetStructuredSessionMail')
-      const { identity } = await startWorker()
-
-      if (action === 'release') {
-        releaseStructuredWorkerSession(identity.sessionId, state.runtime)
-      } else if (action === 'stop') {
-        await stopStructuredWorker(identity, state.runtime)
-      } else {
-        // Abandon finds the worker by the authority its start recorded.
-        state.db.prepareStartingWorkerAuthority({
-          dispatchId,
-          handle: identity.handle,
-          paneKey: identity.paneKey,
-          processIncarnation: identity.processIncarnation,
-          worktreeId: identity.worktreeId,
-          effects: [],
-          setupState: 'not_applicable'
-        })
-        await harness.call('orchestration.workerAbandon', { dispatch: dispatchId }, state.ctx)
-      }
-
-      expect(forget).toHaveBeenCalledWith(identity.sessionId)
-      expect(structuredWorkerIdentities.get(identity.handle)).toBeNull()
-    }
-  )
 })

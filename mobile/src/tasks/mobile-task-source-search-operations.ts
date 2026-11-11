@@ -1,8 +1,9 @@
 import type { GitHubWorkItem } from '../../../src/shared/github/work-item-types'
-import type { RpcClient, SendRequestOptions } from '../transport/rpc-client'
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
-import { githubPrRepoSlugSchema } from '../session/github-pr-read-reply-schema'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { SendRequestOptions } from '../transport/rpc/unvalidated-rpc-request-port'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
+import { githubPrRepoSlugSchema } from '../source-control/review/github-pr-read-reply-schema'
 import {
   taskGitHubWorkItemListSchema,
   taskGitLabWorkItemListSchema,

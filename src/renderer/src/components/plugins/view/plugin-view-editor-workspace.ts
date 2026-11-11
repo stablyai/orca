@@ -5,7 +5,10 @@ import { getFolderWorkspaceWorktreeHostId } from '../../../../../shared/folder-w
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { useAppStore } from '@/store'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 type WorkspaceRow = { id: string; path: string; hostId?: string; isArchived?: boolean }
 

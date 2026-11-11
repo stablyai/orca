@@ -13,7 +13,7 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session/journ
 import { codexProviderHandle } from '../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { createTrackedJournalOpener } from '../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { structuredRewindCut } from '../../src/main/native-chat/agent-session-wire/rewind/structured-rewind-cut'
-import { useNativeChatRewind } from '../../src/renderer/src/components/native-chat/use-native-chat-rewind'
+import { useNativeChatRewind } from '../../src/renderer/src/components/native-chat/messages/actions/use-native-chat-rewind'
 
 const IDENTITY = {
   sessionId: 'session-1',

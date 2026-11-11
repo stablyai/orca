@@ -23,7 +23,7 @@ vi.mock('@/store/index', () => ({
     })
 }))
 
-vi.mock('@/store/selectors', () => ({
+vi.mock('@/store/workspaces/selection/use-selected-worktree', () => ({
   useActiveWorktree: () => activeWorktreeState.current
 }))
 

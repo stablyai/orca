@@ -21,12 +21,12 @@ on:
       - 'src/main/runtime/rpc/server/runtime-rpc.ts'
       - 'src/main/runtime/rpc/server/pairing/device-registry.ts'
       - 'src/main/runtime/orca-runtime.ts'
-      - 'src/main/runtime/agent-session-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-*.ts'
+      - 'src/main/runtime/agent-session/ownership/agent-session-*.ts'
       - 'src/main/runtime/agent-session/records/agent-session-*.ts'
       - 'src/main/runtime/agent-session/agent-session-account-*.ts'
       - 'src/main/runtime/agent-session/agent-session-acquisition-*.ts'
       - 'src/main/runtime/agent-session/agent-session-conversation-*.ts'
-      - 'src/main/runtime/agent-session/agent-session-death-*.ts'
       - 'src/main/runtime/agent-session/agent-session-launch-*.ts'
       - 'src/main/runtime/agent-session/agent-session-operation-*.ts'
       - 'src/main/runtime/agent-session/agent-session-rewind-*.ts'
@@ -63,7 +63,7 @@ on:
       - 'src/main/wsl/execution/wsl-exe-process.ts'
       - 'src/main/wsl/execution/wsl-interop-spawn-directory.ts'
       - 'src/main/wsl/filesystem/wsl-unc-access-gate.ts'
-      - 'src/main/runtime/structured-attention-original-delivery.test-fixture.ts'
+      - 'src/main/runtime/push/notifications/structured-attention-original-delivery.test-fixture.ts'
       # Rerun the only Fastfile-loading checks for release-workflow/Fastfile edits.
       - '.github/workflows/mobile.yml'
       - 'config/mobile-ci.vitest.config.mjs'
@@ -109,12 +109,12 @@ on:
       - 'src/main/runtime/rpc/server/runtime-rpc.ts'
       - 'src/main/runtime/rpc/server/pairing/device-registry.ts'
       - 'src/main/runtime/orca-runtime.ts'
-      - 'src/main/runtime/agent-session-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-*.ts'
+      - 'src/main/runtime/agent-session/ownership/agent-session-*.ts'
       - 'src/main/runtime/agent-session/records/agent-session-*.ts'
       - 'src/main/runtime/agent-session/agent-session-account-*.ts'
       - 'src/main/runtime/agent-session/agent-session-acquisition-*.ts'
       - 'src/main/runtime/agent-session/agent-session-conversation-*.ts'
-      - 'src/main/runtime/agent-session/agent-session-death-*.ts'
       - 'src/main/runtime/agent-session/agent-session-launch-*.ts'
       - 'src/main/runtime/agent-session/agent-session-operation-*.ts'
       - 'src/main/runtime/agent-session/agent-session-rewind-*.ts'
@@ -151,7 +151,7 @@ on:
       - 'src/main/wsl/execution/wsl-exe-process.ts'
       - 'src/main/wsl/execution/wsl-interop-spawn-directory.ts'
       - 'src/main/wsl/filesystem/wsl-unc-access-gate.ts'
-      - 'src/main/runtime/structured-attention-original-delivery.test-fixture.ts'
+      - 'src/main/runtime/push/notifications/structured-attention-original-delivery.test-fixture.ts'
       - '.github/workflows/mobile.yml'
       - 'config/mobile-ci.vitest.config.mjs'
       - 'config/scripts/mobile-web/check-entry/run-mobile-ci-tests.mjs'
@@ -296,8 +296,19 @@ jobs:
             echo 'should_run=true' >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Setup Bun for tests
+      - name: Find installed Bun
+        id: installed-bun
         if: steps.test-scope.outputs.should_run != 'false'
+        shell: bash
+        working-directory: .
+        run: |
+          bun="$GITHUB_WORKSPACE/node_modules/.bin/bun"
+          if [ -x "$bun" ] && [ "$("$bun" --version)" = "$(cat config/.bun-version)" ]; then
+            echo "$GITHUB_WORKSPACE/node_modules/.bin" >> "$GITHUB_PATH"
+            echo 'found=true' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Setup Bun for tests
+        if: steps.test-scope.outputs.should_run != 'false' && steps.installed-bun.outputs.found != 'true'
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
@@ -429,7 +440,18 @@ jobs:
         run: node scripts/check-tests-typecheck-ratchet.mjs
 
       # Run all golden consumers, including mutant/page-bridge suites; failures name the recording and rpc:record command.
+      - name: Find installed Bun
+        id: installed-bun
+        shell: bash
+        working-directory: .
+        run: |
+          bun="$GITHUB_WORKSPACE/node_modules/.bin/bun"
+          if [ -x "$bun" ] && [ "$("$bun" --version)" = "$(cat config/.bun-version)" ]; then
+            echo "$GITHUB_WORKSPACE/node_modules/.bin" >> "$GITHUB_PATH"
+            echo 'found=true' >> "$GITHUB_OUTPUT"
+          fi
       - name: Setup Bun for tests
+        if: steps.installed-bun.outputs.found != 'true'
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version

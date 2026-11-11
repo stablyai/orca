@@ -1,3 +1,4 @@
+import type { FreshWorkspaceAgentLaunch } from '@/lib/workspace/creation/worktree-startup-payload'
 import type { ClosedTerminalTabTombstonesByTabId } from '../../../../shared/workspace-layout/closed-terminal-tab-tombstones'
 import type {
   TerminalLayoutSnapshot,
@@ -63,7 +64,8 @@ export type TerminalState = {
   pendingStartupByTabId: Record<
     string,
     {
-      command: string
+      /** Absent when the startup carries only spawn env, e.g. a paired viewer's plain terminal (#39852). */
+      command?: string
       delivery?: 'terminal-paste'
       startupCommandDelivery?: StartupCommandDelivery
       env?: Record<string, string>
@@ -77,6 +79,7 @@ export type TerminalState = {
       trustWorktreeId?: string
       /** The agent launch the pane's own spawn starts, instead of `command`. */
       agentLaunch?: AgentPaneLaunchRequest
+      freshAgentLaunch?: FreshWorkspaceAgentLaunch
       agentArgsOverride?: string | null
       draftPrompt?: string
       sessionOptions?: Record<string, SessionOptionValue>

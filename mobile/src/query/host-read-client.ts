@@ -1,6 +1,12 @@
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 
 const readViews = new WeakMap<RpcClient, RpcClient>()
+const viewBases = new WeakMap<object, RpcClient>()
+
+/** The client a read view was made from, or the client itself; per-connection state keys on this. */
+export function readViewBase<T extends object>(client: T): T | RpcClient {
+  return viewBases.get(client) ?? client
+}
 
 // Query reads reject at once while the host is down instead of queueing for the reconnect; the connected edge refetches them.
 // Memoized per client: loaders key delta baselines and in-flight joins on the client object.
@@ -36,5 +42,6 @@ export function hostReadClient(client: RpcClient): RpcClient {
     close: () => {}
   }
   readViews.set(client, view)
+  viewBases.set(view, client)
   return view
 }

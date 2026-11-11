@@ -7,7 +7,7 @@ import {
 } from '../menu/register-app-menu'
 import { zoomDashboardPopoutIfFocused } from '../window/dashboard-popout-window'
 import { zoomWorkspaceSpaceWindowIfFocused } from '../window/workspace-space-window'
-import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
+import { recordCrashBreadcrumb } from '../crash-reporting/breadcrumbs/crash-breadcrumb-store'
 import { mainProcessState as state } from './main-process-state'
 import {
   getAppMenuQuitHandlers,
@@ -19,7 +19,7 @@ import {
 } from './main-window-actions'
 import { ensureAutoUpdaterConfigured } from '../window/attach-main-window-services'
 import { logStartupMilestone } from './startup-diagnostics'
-import { browserManager } from '../browser/browser-manager'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 
 export async function initializeMainProcessI18nAndMenu(): Promise<void> {
   const store = state.store

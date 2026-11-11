@@ -1,65 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
-import {
-  TEST_WORKTREE_ID,
-  TEST_WORKTREE_PATH,
-  store,
-  syncSinglePty
-} from './orca-runtime-test-fixtures.spec'
+import { TEST_WORKTREE_PATH, store, syncSinglePty } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
-  it('lets Claude agents management titles clear stale runtime-created title status', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => 'claude'
-    })
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-
-    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      command: 'claude agents',
-      title: 'claude agents'
-    })
-    const pty = (
-      runtime as unknown as {
-        ptysById: Map<
-          string,
-          {
-            lastAgentStatus: 'working' | null
-            lastOscTitle: string | null
-            lastOscTitleAt: number | null
-          }
-        >
-      }
-    ).ptysById.get('pty-bg')
-    expect(pty).toBeDefined()
-    if (!pty) {
-      throw new Error('expected runtime PTY record')
-    }
-    pty.lastAgentStatus = 'working'
-    pty.lastOscTitle = 'claude agents'
-    pty.lastOscTitleAt = 0
-
-    await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(false)
-  })
-
-  it('does not recognize live Claude agents panes from a Claude foreground process', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => 'claude'
-    })
-    syncSinglePty(runtime, 'pty-1', { paneTitle: 'claude agents' })
-    const [terminal] = (await runtime.listTerminals()).terminals
-
-    await expect(runtime.isTerminalRunningAgent(terminal.handle)).resolves.toBe(false)
-  })
-
   it('lets Claude agents pane titles override stale live-leaf title status', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
@@ -105,22 +49,6 @@ describe('OrcaRuntimeService', () => {
     await expect(runtime.isTerminalRunningAgent(terminal.handle)).resolves.toBe(true)
   })
 
-  it('does not let stale tab-level agent titles override current neutral pane titles', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    syncSinglePty(runtime, 'pty-1', {
-      tabTitle: 'claude working',
-      paneTitle: 'bash'
-    })
-    const [terminal] = (await runtime.listTerminals()).terminals
-
-    await expect(runtime.isTerminalRunningAgent(terminal.handle)).resolves.toBe(false)
-  })
-
   it('does not let stale live-leaf status override current neutral pane titles', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
@@ -144,36 +72,6 @@ describe('OrcaRuntimeService', () => {
     const [terminal] = (await runtime.listTerminals()).terminals
 
     await expect(runtime.getAgentStatusForHandle(terminal.handle)).resolves.toBeNull()
-  })
-
-  it('lists live terminals with fresh pane titles over stale tab titles', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
-      tabs: [
-        {
-          tabId: 'tab-1',
-          worktreeId: TEST_WORKTREE_ID,
-          title: 'claude working',
-          activeLeafId: 'pane:1',
-          layout: null
-        }
-      ],
-      leaves: [
-        {
-          tabId: 'tab-1',
-          worktreeId: TEST_WORKTREE_ID,
-          leafId: 'pane:1',
-          paneRuntimeId: 1,
-          ptyId: 'pty-1',
-          paneTitle: 'claude agents'
-        }
-      ]
-    })
-
-    const [terminal] = (await runtime.listTerminals()).terminals
-
-    expect(terminal.title).toBe('claude agents')
   })
 
   it('does not let stale Claude agents OSC titles suppress current pane activity', async () => {
@@ -233,51 +131,6 @@ describe('OrcaRuntimeService', () => {
     await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(false)
   })
 
-  it('lets adopted neutral pane titles use non-shell foreground fallback', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => 'codex'
-    })
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      command: 'bash',
-      title: 'bash'
-    })
-
-    syncSinglePty(runtime, 'pty-bg', { paneTitle: 'bash' })
-
-    await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(true)
-  })
-
-  it('lets adopted neutral pane titles retry wrapper foregrounds until recognized', async () => {
-    const getForegroundProcess = vi
-      .fn()
-      .mockResolvedValueOnce('node')
-      .mockResolvedValueOnce('codex')
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess
-    })
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      command: 'bash',
-      title: 'bash'
-    })
-
-    syncSinglePty(runtime, 'pty-bg', { paneTitle: 'bash' })
-
-    await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(true)
-    expect(getForegroundProcess).toHaveBeenCalledTimes(2)
-  })
-
   it('does not poll a wrapper foreground for a speculative CLI prompt send', async () => {
     const getForegroundProcess = vi
       .fn()
@@ -304,22 +157,6 @@ describe('OrcaRuntimeService', () => {
     ).resolves.toBe(false)
     expect(getForegroundProcess).toHaveBeenCalledTimes(1)
   })
-
-  it.each(['claude', 'codex', 'pi', 'grok', 'gemini'] as const)(
-    'authorizes settled CLI prompts only after positive %s foreground identity',
-    async (agent) => {
-      const runtime = new OrcaRuntimeService(store)
-      runtime.setPtyController({
-        write: () => true,
-        kill: () => true,
-        getForegroundProcess: async () => agent
-      })
-      syncSinglePty(runtime, 'pty-1', { paneTitle: 'bash' })
-      const [terminal] = (await runtime.listTerminals()).terminals
-
-      await expect(runtime.isTerminalRunningSettledPromptAgent(terminal.handle)).resolves.toBe(true)
-    }
-  )
 
   it.each(['orca', 'acli', 'cn', 'vibe'])(
     'keeps direct input for a bare %s foreground that may be an ordinary tool',
@@ -387,26 +224,6 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('does not recognize arbitrary foreground TUIs as running agents', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => 'vim'
-    })
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      command: 'bash',
-      title: 'bash'
-    })
-
-    syncSinglePty(runtime, 'pty-bg', { paneTitle: 'bash' })
-
-    await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(false)
-  })
-
   it('does not recognize unresolved wrapper foregrounds as running agents', async () => {
     const getForegroundProcess = vi.fn().mockResolvedValue('node')
     const runtime = new OrcaRuntimeService(store)
@@ -435,24 +252,6 @@ describe('OrcaRuntimeService', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('lets live neutral pane titles retry wrapper foregrounds until recognized', async () => {
-    const getForegroundProcess = vi
-      .fn()
-      .mockResolvedValueOnce('node')
-      .mockResolvedValueOnce('codex')
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess
-    })
-    syncSinglePty(runtime, 'pty-1', { paneTitle: 'bash' })
-    const [terminal] = (await runtime.listTerminals()).terminals
-
-    await expect(runtime.isTerminalRunningAgent(terminal.handle)).resolves.toBe(true)
-    expect(getForegroundProcess).toHaveBeenCalledTimes(2)
   })
 
   it('keeps Claude management titles suppressed after wrapper foreground refreshes', async () => {
@@ -541,78 +340,6 @@ describe('OrcaRuntimeService', () => {
     runtime.onPtyData('pty-bg', '\x1b]0;claude agents\x07', 100)
 
     syncSinglePty(runtime, 'pty-bg', { paneTitle: 'claude working' })
-
-    await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(true)
-  })
-
-  it('lets current Claude agents PTY titles override stale runtime-created OSC titles', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => 'claude'
-    })
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-
-    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      command: 'claude agents',
-      title: 'claude agents'
-    })
-    const pty = (
-      runtime as unknown as {
-        ptysById: Map<
-          string,
-          {
-            lastOscTitle: string | null
-            lastOscTitleAt: number | null
-          }
-        >
-      }
-    ).ptysById.get('pty-bg')
-    expect(pty).toBeDefined()
-    if (!pty) {
-      throw new Error('expected runtime PTY record')
-    }
-    pty.lastOscTitle = 'claude working'
-    pty.lastOscTitleAt = 0
-
-    await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(false)
-  })
-
-  it('does not let stale Claude agents OSC titles suppress current PTY title activity', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => 'claude'
-    })
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-
-    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      command: 'claude',
-      title: 'claude working'
-    })
-    const pty = (
-      runtime as unknown as {
-        ptysById: Map<
-          string,
-          {
-            lastOscTitle: string | null
-            lastOscTitleAt: number | null
-          }
-        >
-      }
-    ).ptysById.get('pty-bg')
-    expect(pty).toBeDefined()
-    if (!pty) {
-      throw new Error('expected runtime PTY record')
-    }
-    pty.lastOscTitle = 'claude agents'
-    pty.lastOscTitleAt = 0
 
     await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(true)
   })

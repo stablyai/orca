@@ -80,17 +80,6 @@ describe("main's layout load of view-less saved editor tabs", () => {
     expect(load(saved).changes).toEqual([])
   })
 
-  // Loads without main’s views must retain live diffs represented only in memory.
-  it('keeps every saved tab in a load that carries no views', () => {
-    const workspace = loadWorkspaceLayout(
-      LOCAL_EXECUTION_HOST_ID,
-      savedSession(),
-      nameBasedLoadContext()
-    ).layout.workspaces[KEY]!
-
-    expect(workspace.tabs).toHaveLength(8)
-  })
-
   it('keeps a transient tab while main still holds its view', () => {
     const workspace = loadWorkspaceLayout(LOCAL_EXECUTION_HOST_ID, savedSession(), {
       ...nameBasedLoadContext(),

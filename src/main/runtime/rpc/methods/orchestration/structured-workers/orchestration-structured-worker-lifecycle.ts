@@ -2,13 +2,14 @@
 
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
-import type { OrchestrationWorkerReadTranscriptResult } from '../../../../../../shared/orchestration-worker-output'
+import type { OrchestrationWorkerReadTranscriptResult } from '../../../../../../shared/orchestration/workers/orchestration-worker-output'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import {
   buildStructuredJournalArchive,
   captureRetiredLineageArchive,
+  readStructuredLineageArchiveJournal,
   type WorkerStructuredJournalArchive
 } from '../../../../orchestration/workers/archives/structured-worker-journal-archive'
 import {
@@ -228,7 +229,7 @@ export async function captureStructuredWorkerArchive(
 ): Promise<WorkerStructuredJournalArchive> {
   const running = requireRunningStructuredWorker(identity)
   // Open resting journals too and preserve the whole /clear lineage.
-  const page = await readStructuredLineageJournalPage(running.lineage)
+  const page = await readStructuredLineageArchiveJournal(running.lineage)
   if (page) {
     return buildStructuredJournalArchive({
       agent,

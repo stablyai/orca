@@ -8,8 +8,8 @@ import type {
 } from './remote-browser-stream-tokens'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
-import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser-screencast-protocol'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
+import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser/screencast/browser-screencast-protocol'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
 import { browserPageExists } from '../describe-page/browser-page-load-error'
 import {

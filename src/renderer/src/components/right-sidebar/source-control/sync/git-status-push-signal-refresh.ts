@@ -1,7 +1,7 @@
-import { useAppStore } from '@/store'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { useAppStore } from '@/store/index'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useEffect } from 'react'
-import { isWindowVisible } from '@/lib/window-visibility-interval'
+import { isWindowVisible } from '@/lib/window-activity/window-visibility-interval'
 import {
   ORCA_TERMINAL_COMMAND_FINISHED_EVENT,
   type TerminalCommandFinishedEventDetail

@@ -1,6 +1,6 @@
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
-import { ownsGlobalSelection } from '../../../global-selection-owner'
+import { ownsGlobalSelection } from '../../../workspaces/selection/global-selection-owner'
 import { EMPTY_EDITOR_BUFFER_VIEW_INDEX } from '../buffers/editor-buffer-views'
 
 export function createOpenFileState(

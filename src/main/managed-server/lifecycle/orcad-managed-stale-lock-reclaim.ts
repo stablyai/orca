@@ -16,15 +16,12 @@ import {
 } from '../../../shared/orcad-artifacts'
 import { withOrcadActivationLock } from '../activation/orcad-activation-lock'
 import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
-import {
-  followLaunchedServerPort,
-  withManagedOrcadLifecycle
-} from '../../ssh/orcad-runtime-maintenance'
+import { followLaunchedServerPort, withManagedOrcadLifecycle } from './orcad-managed-lifecycle'
 import { managedOrcadSlot, resolveLinkedOrcadContext } from './orcad-managed-runtime-context'
 import { selectOrcadSlotRuntimeCommand } from '../install/orcad-remote-runtime'
 import { execOrcadRemote } from '../install/orcad-remote-runtime-control'
-import { orcadSlotDir, type OrcadSlotOptions } from '../../ssh/orcad-recovery-slot'
-import { joinRemotePath } from '../../ssh/ssh-remote-platform'
+import { orcadSlotDir, type OrcadSlotOptions } from '../activation/orcad-recovery-slot'
+import { joinRemotePath } from '../../ssh/remote-host/ssh-remote-platform'
 import { isSshCommandExitError } from '../../ssh/remote-exec/remote-exec-command'
 import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
 import { ORCAD_LOCK_FILE_NAME } from '../../orcad/orcad-instance-lock'

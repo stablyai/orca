@@ -222,7 +222,7 @@ export async function runWithReadyStructuredAgentSessionOperation<T>(
       )
       const place = context.deliveryOrder.reserve(envelope.sessionId)
       return {
-        start: child.child ? null : context.claimAgent(envelope.sessionId),
+        start: child.child ? null : context.claimAgent(envelope.sessionId, callerKey),
         child: child.child,
         readiness: child.readiness,
         place

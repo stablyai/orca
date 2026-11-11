@@ -9,26 +9,14 @@ import {
   ORCA_AGENT_SESSION_ID_ENV,
   ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV
 } from '../../../../shared/agent-session/lifecycle/agent-session-caller-env'
-import {
-  ORCA_SCRUB_SAFE_LAUNCH_ENV,
-  ORCA_SCRUB_SAFE_PANE_ENV
-} from '../../../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
 import { ORCA_STRUCTURED_SESSION_ENV } from '../../../../shared/structured-session-marker'
 import { withCliRuntimeOnPath } from '../../../../shared/node-cli-command-resolution'
-import { prependOrcaCliDirToChildPath } from '../../../cli/orca-cli-child-path'
-import { AGENT_HOOK_RUNTIME_ENV_KEYS } from '../../../ipc/pty/host-env/spawn-env-keys'
+import { prependOrcaCliDirToChildPath } from '../../../cli/launchers/orca-cli-child-path'
+import { AGENT_PANE_HOOK_ENV_KEYS } from '../../../ipc/pty/host-env/spawn-env-keys'
 import { resolveStructuredWorkerIdentityForSession } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 
 /** Remove inherited pane identity so hook status cannot compete with the structured-session producer. */
-export const STRUCTURED_CHILD_ENV_TO_DELETE: readonly string[] = [
-  'ORCA_PANE_KEY',
-  'ORCA_TAB_ID',
-  'ORCA_WORKTREE_ID',
-  'ORCA_AGENT_LAUNCH_TOKEN',
-  ORCA_SCRUB_SAFE_PANE_ENV,
-  ORCA_SCRUB_SAFE_LAUNCH_ENV,
-  ...AGENT_HOOK_RUNTIME_ENV_KEYS
-]
+export const STRUCTURED_CHILD_ENV_TO_DELETE: readonly string[] = AGENT_PANE_HOOK_ENV_KEYS
 
 export type SealedStructuredSessionChild = {
   env: Record<string, string>

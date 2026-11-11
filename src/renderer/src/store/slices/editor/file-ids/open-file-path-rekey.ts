@@ -1,7 +1,7 @@
 import type { AppState } from '../../../types'
 import type { TabGroup } from '../../../../../../shared/tab-types'
-import { pruneTabGroupLayoutForGroups } from '../../tabs-hydration'
-import { sanitizeRecentTabIds } from '../../tab-group-state'
+import { pruneTabGroupLayoutForGroups } from '../../tabs/tabs-hydration'
+import { sanitizeRecentTabIds } from '../../tabs/tab-selection-history'
 
 export function rekeyFileIdRecord<T>(
   record: Record<string, T>,

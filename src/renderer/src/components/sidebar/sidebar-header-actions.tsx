@@ -4,7 +4,7 @@ import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { formatOptionalPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { openWorkspaceCreationComposerWithTourHandoff } from '../contextual-tours/workspace-creation-tour-handoff'
 import SidebarWorkspaceOptionsMenu from './worktree-list/controls/SidebarWorkspaceOptionsMenu'
 
@@ -13,8 +13,9 @@ function AddProjectButton({
 }: {
   preserveWorkspaceBoardOpen: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const openModal = useAppStore((s) => s.openModal)
-  const label = translate('auto.components.sidebar.SidebarHeader.addProject', 'Add project')
+  const label = t('auto.components.sidebar.SidebarHeader.addProject', 'Add project')
 
   return (
     <Tooltip>
@@ -43,10 +44,11 @@ function NewWorkspaceButton({
 }: {
   preserveWorkspaceBoardOpen: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const keybindings = useAppStore((s) => s.keybindings)
   // Show the primary create shortcut so aliases do not crowd the tooltip.
   const shortcutLabel = formatOptionalPrimaryShortcutLabel('workspace.create', keybindings)
-  const label = translate('auto.components.sidebar.SidebarHeader.92154beb7e', 'New workspace')
+  const label = t('auto.components.sidebar.SidebarHeader.92154beb7e', 'New workspace')
 
   const handleCreateWorkspace = useCallback(() => {
     openWorkspaceCreationComposerWithTourHandoff()

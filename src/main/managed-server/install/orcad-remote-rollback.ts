@@ -1,14 +1,14 @@
 // Rollback restores a pre-activation snapshot: older builds may not understand newer state.
 // Stop, rescue, restore, then launch; the rescue and fenced journal allow recovery of interrupted steps.
 import { logOrcadActivationOutcome } from '../activation/orcad-activation-outcome-log'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTransport } from './orcad-host-transport'
 import type { OrcadActivationRecord } from '../activation/orcad-activation-record'
 import type { OrcadTerminalCensus } from '../../../shared/orcad-terminal-census'
 import type { OrcadActivationVerdict } from '../activation/orcad-activation-gate'
-import type { OrcadDaemonProtocolFacts } from '../../ssh/orcad-daemon-protocol-crossing'
+import type { OrcadDaemonProtocolFacts } from '../activation/orcad-daemon-protocol-crossing'
 import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
 import { sameOrcadActivationRecord } from '../activation/orcad-activation-transaction'
-import type { RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import type { RemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 import {
   resolveOrcadActivationReadinessTimeout,
   withOrcadActivationLock

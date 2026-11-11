@@ -9,7 +9,7 @@ import type {
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-session-contracts'
 import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-terminal-contracts'
-import type { SpawnIntent } from '../../../../shared/host-spawn-admission'
+import type { SpawnIntent } from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import {
   type RuntimeNavigationTarget,

@@ -3,11 +3,9 @@ import { getFolderSourceRepos } from '../shared/folder-workspaces/folder-workspa
 import type { ProjectGroup } from '../shared/project-group-types'
 import type { Repo } from '../shared/repo-types'
 import { folderWorkspaceKey, parseWorkspaceKey, type WorkspaceKey } from '../shared/workspace-scope'
-import { selectEnclosingNativeFolderWorkspace } from './agent-workspace-selector'
 import { getOptionalStringFlag } from './flags'
 import { RuntimeClientError, type RuntimeClient } from './runtime-client'
 import { getOptionalWorktreeSelector } from './selectors'
-import { selectorPurpose } from './caller-host-worktree-selection'
 
 export type FolderWorkspaceRepoChoice = {
   repo: string
@@ -23,9 +21,8 @@ export function getCallerFolderWorkspaceKey(): WorkspaceKey | undefined {
 }
 
 /**
- * A parent flag's value, where active/current also reaches native folder workspaces, which aren't
- * catalog rows: the caller terminal's folder first (as create's no-flag inference picks it), then the
- * enclosing checkout, then the enclosing folder.
+ * A parent flag's value. active/current follow the enclosing-workspace rule; outside every workspace a
+ * folder terminal still names its own folder, which isn't a cwd the catalog can contain.
  */
 export async function getOptionalParentSelector(
   flags: Map<string, string | boolean>,
@@ -33,40 +30,25 @@ export async function getOptionalParentSelector(
   client: RuntimeClient
 ): Promise<string | undefined> {
   const value = getOptionalStringFlag(flags, 'parent-worktree')
-  if (client.isRemote || (value !== 'active' && value !== 'current')) {
-    return await getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client)
-  }
-  const callerFolder = getCallerFolderWorkspaceKey()
-  if (callerFolder) {
-    return callerFolder
-  }
   try {
     return await getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client)
   } catch (error) {
-    // A worktree terminal's own workspace is a worktree; only other callers can mean a folder.
+    // A worktree terminal's own workspace is a worktree; only folder terminals fall back to a folder.
     const callerWorktree = process.env.ORCA_WORKTREE_ID?.trim()
+    const callerFolder =
+      callerWorktree && !callerWorktree.startsWith('folder:')
+        ? undefined
+        : getCallerFolderWorkspaceKey()
     if (
+      client.isRemote ||
+      (value !== 'active' && value !== 'current') ||
+      !callerFolder ||
       !(error instanceof RuntimeClientError) ||
-      error.code !== 'selector_not_found' ||
-      (callerWorktree && !callerWorktree.startsWith('folder:'))
+      error.code !== 'selector_not_found'
     ) {
       throw error
     }
-    // Several enclosing folders keep their choices; any other lookup failure keeps the original miss.
-    const enclosingFolder = await selectEnclosingNativeFolderWorkspace(
-      cwd,
-      client,
-      selectorPurpose('parent-worktree')
-    ).catch((lookupError: unknown) => {
-      if (lookupError instanceof RuntimeClientError && lookupError.code === 'selector_ambiguous') {
-        throw lookupError
-      }
-      return undefined
-    })
-    if (!enclosingFolder) {
-      throw error
-    }
-    return enclosingFolder
+    return callerFolder
   }
 }
 
@@ -145,7 +127,7 @@ export async function getFolderWorkspaceMissingRepoError(
     [
       'This folder workspace is not a Git repository. Add --repo to your command to choose which repository gets the worktree:',
       ...lines,
-      'The new worktree attaches to this folder workspace and is listed in its Attached worktrees panel.'
+      'The new worktree attaches to this folder workspace and is shown in its Source Control and Attached worktrees panels.'
     ].join('\n'),
     data
   )

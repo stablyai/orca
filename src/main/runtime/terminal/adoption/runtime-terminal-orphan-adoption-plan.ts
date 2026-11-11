@@ -6,7 +6,7 @@ import { hasClosedTerminalTabRecord } from '../../../../shared/workspace-layout/
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { terminalOrphanExecutionOwnersEqual } from './terminal-orphan-owner'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
-import type { PtyControllerInventory } from '../../runtime-pty-controller-contract'
+import type { PtyControllerInventory } from '../lifecycle/runtime-pty-controller-contract'
 import { buildRuntimeTerminalOrphanSession } from './runtime-terminal-orphan-session-adoption'
 import { validateRuntimeTerminalOrphanTopology } from './runtime-terminal-orphan-topology-validation'
 import type {

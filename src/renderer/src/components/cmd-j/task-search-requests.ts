@@ -8,7 +8,7 @@ import { jiraStatusForTarget } from '@/runtime/jira/runtime-jira-project-client'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { gitLabApiFor } from '@/runtime/repository-gitlab/gitlab-owner-api'
 import { resolveJiraSourceHostId } from '../../../../shared/jira/jira-source-host'
-import { getJiraAccountLabel } from '@/lib/jira-account-label'
+import { getJiraAccountLabel } from '@/lib/work-items/jira/jira-account-label'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
@@ -18,14 +18,17 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 import {
   normalizeTaskSourceContext,
   type TaskSourceContext
-} from '../../../../shared/task-source-context'
-import { normalizeVisibleTaskProviders, type TaskProvider } from '../../../../shared/task-providers'
+} from '../../../../shared/work-items/task-source-context'
+import {
+  normalizeVisibleTaskProviders,
+  type TaskProvider
+} from '../../../../shared/work-items/task-providers'
 import type { Repo } from '../../../../shared/repo-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { PaletteFilterState } from './palette-filter'
 import { getTaskEligibleRepos } from '../task-page/task-page-default-repo-selection'
 import { getRepoBackedProviderAvailability } from '../task-source-provider-availability'
-import { getTaskPageRepoSourceContext } from '../../lib/task-repo-source-context'
+import { getTaskPageRepoSourceContext } from '../../lib/work-items/task-repo-source-context'
 import { searchJiraIssuesByKeyOrText } from '../jira-key-or-text-search'
 import { bindTaskPageJiraItemSourceContext } from '../task-page/jira/task-page-jira-item-source-context'
 import { makeCmdJTaskSearchResult, type CmdJTaskSearchResult } from './task-search-results'
@@ -34,6 +37,7 @@ const RESULT_LIMIT = 12
 export type CmdJTaskSearchRequest = {
   id: string
   provider: TaskProvider
+  hostId: ExecutionHostId
   hostLabel: string
   run: () => Promise<CmdJTaskSearchResult[]>
 }
@@ -79,6 +83,7 @@ export function createCmdJTaskSearchRequests(args: {
       requests.push({
         id: `${provider}:${source.hostId}:${repo.id}`,
         provider,
+        hostId: source.hostId,
         hostLabel,
         run: async () => {
           if (signal.aborted) {
@@ -195,6 +200,7 @@ export function createCmdJTaskSearchRequests(args: {
       requests.push({
         id: requestId,
         provider,
+        hostId,
         hostLabel,
         run: async () => {
           if (signal.aborted) {

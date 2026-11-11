@@ -6,9 +6,9 @@ import {
   ORCAD_CLI_ENTRY_FILENAME,
   ORCAD_WINDOWS_CLI_LAUNCHER_FILENAME
 } from '../../shared/orcad-artifacts'
-import { nodeFileContentsEqual } from '../../shared/node-file-content-equality'
-import { buildUnixCliLauncher } from '../cli/cli-dev-launcher'
-import { writeFileAtomically } from '../codex-accounts/fs-utils'
+import { nodeFileContentsEqual } from '../../shared/file-content/node-file-content-equality'
+import { buildUnixCliLauncher } from '../cli/launchers/cli-dev-launcher'
+import { writeFileAtomically } from '../filesystem/atomic-file-publication'
 import { resolveOrcadInstallRoot, resolveUserDataPath } from './orcad-app-paths'
 
 // The native Windows launcher selects server mode when this sibling config exists.

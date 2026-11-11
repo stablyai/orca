@@ -1,5 +1,6 @@
 import { existsSync, rmSync, writeFileSync } from 'node:fs'
-import { writeManagedScript, type HooksConfig } from '../agent-hooks/installer-utils'
+import { writeManagedScript } from '../agent-hooks/installation/scripts/managed-hook-script-write'
+import type { HooksConfig } from '../agent-hooks/installation/configuration/hook-config-schema'
 import { getManagedStatusLineCommand, getManagedStatusLineScript } from './statusline-script'
 import {
   applyManagedStatusLine,

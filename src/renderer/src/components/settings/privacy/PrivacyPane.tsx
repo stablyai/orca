@@ -5,10 +5,14 @@ import type { GlobalSettings } from '../../../../../shared/global-settings-types
 import type { TelemetryConsentState } from '../../../../../shared/telemetry-consent-types'
 import { Label } from '../../ui/label'
 import { Switch } from '../../ui/switch'
-import { PRIVACY_URL, getConsentState, setOptIn as telemetrySetOptIn } from '../../../lib/telemetry'
+import {
+  PRIVACY_URL,
+  getConsentState,
+  setOptIn as telemetrySetOptIn
+} from '../../../diagnostics/telemetry/telemetry'
 import { useAppStore } from '../../../store/index'
 import { PrivacyDiagnosticsSection } from './PrivacyDiagnosticsSection'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export type EnvBlockedReason = 'do_not_track' | 'orca_disabled' | 'ci'
@@ -50,6 +54,7 @@ export function computeBlockedReason(consent: TelemetryConsentState | null): Blo
 }
 
 export function PrivacyPane({ settings }: PrivacyPaneProps): React.JSX.Element {
+  const t = useTranslate()
   const [consent, setConsent] = useState<TelemetryConsentState | null>(null)
   const [inFlight, setInFlight] = useState(false)
   const mountedRef = useMountedRef()
@@ -87,19 +92,16 @@ export function PrivacyPane({ settings }: PrivacyPaneProps): React.JSX.Element {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-4 py-2">
+      <div data-settings-row="" className="flex items-center justify-between gap-4 py-2">
         <div className="space-y-0.5">
           <div className="flex items-center gap-2">
             <ShieldCheck className="size-4" />
             <Label>
-              {translate(
-                'auto.components.settings.PrivacyPane.fe904ac984',
-                'Share anonymous usage data'
-              )}
+              {t('auto.components.settings.PrivacyPane.fe904ac984', 'Share anonymous usage data')}
             </Label>
           </div>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.PrivacyPane.8bfdd23a88',
               'Help us figure out what to build next. Orca sends anonymous counts of which features you use and where things break.'
             )}{' '}
@@ -108,14 +110,13 @@ export function PrivacyPane({ settings }: PrivacyPaneProps): React.JSX.Element {
               className="underline underline-offset-2 hover:text-foreground"
               onClick={(event) => openAppHttpLink(PRIVACY_URL, { event })}
             >
-              {translate('auto.components.settings.PrivacyPane.77410e0566', 'Privacy policy')}
+              {t('auto.components.settings.PrivacyPane.77410e0566', 'Privacy policy')}
             </button>
-            .
           </p>
         </div>
         <Switch
           checked={toggleChecked}
-          aria-label={translate(
+          aria-label={t(
             'auto.components.settings.PrivacyPane.fe904ac984',
             'Share anonymous usage data'
           )}
@@ -132,25 +133,23 @@ export function PrivacyPane({ settings }: PrivacyPaneProps): React.JSX.Element {
 }
 
 function BlockedHelper({ blocked, id }: { blocked: BlockedReason; id: string }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div id={id} className="pb-2 text-xs text-muted-foreground">
       {blocked.reason === 'ci' ? (
         <p>
-          {translate(
+          {t(
             'auto.components.settings.PrivacyPane.e3970bbbf5',
             'Telemetry is disabled because a CI environment variable is set. Unset it and restart.'
           )}
         </p>
       ) : (
         <p>
-          {translate(
-            'auto.components.settings.PrivacyPane.79a0f3c16c',
-            'Telemetry is disabled by the'
-          )}{' '}
+          {t('auto.components.settings.PrivacyPane.79a0f3c16c', 'Telemetry is disabled by the')}{' '}
           <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
             {envVarNameForReason(blocked.reason)}
           </code>{' '}
-          {translate(
+          {t(
             'auto.components.settings.PrivacyPane.36e0e2e63b',
             'environment variable. Unset it and restart to re-enable.'
           )}

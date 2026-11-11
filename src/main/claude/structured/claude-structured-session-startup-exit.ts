@@ -38,7 +38,9 @@ export async function claudeExitForReport(
   connection: Pick<ClaudeStreamJsonConnection, 'exited'>,
   error: unknown
 ): Promise<unknown> {
-  return error instanceof Error && claudeStartupAnswer(error) === 'reported' && connection.exited
+  return error instanceof Error &&
+    (claudeStartupAnswer(error) === 'reported' || isClaudeQueryClosed(error)) &&
+    connection.exited
     ? withTimeout<unknown>(connection.exited, 2_000, undefined)
     : undefined
 }

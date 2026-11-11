@@ -30,7 +30,7 @@ export {
   parseAndFilterSearchRefDetails,
   normalizeRefSearchQuery
 } from './repo-base-ref-search'
-export { getBranchConflictKind } from './repo-branch-conflict'
+export { getBranchConflictKind, getBranchConflictKindStrict } from './repo-branch-conflict'
 export type { BranchConflictKind } from './repo-branch-conflict'
 
 export function getRepoName(path: string): string {

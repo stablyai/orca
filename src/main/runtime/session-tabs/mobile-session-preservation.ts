@@ -6,10 +6,8 @@ import {
 } from './mobile-session-tab-selection'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as StoredMobileSnapshotHasStalePreservedTabMethods } from './mobile-session-publication-preservation'
 import { OrcaRuntimeWithSyncMobileSessionTabs } from './mobile-session-reconciliation'
-import type {
-  RuntimeMobileSessionTabsSnapshot,
-  RuntimeMobileSessionTerminalTab
-} from '../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTerminalTab } from '../../../shared/runtime-mobile-session-tab-contracts'
 import {
   appendChatTabOrder,
   getMobileSessionSnapshotTabIdentityKeys,
@@ -23,7 +21,7 @@ import { getHeadlessMobileSessionGroupId } from '../terminal/surface/mobile-sess
 import {
   appendBrowserTabOrder,
   collectBrowserGroupAssignment
-} from '../mobile-session-browser-group-projection'
+} from '../session-lifecycle/projection/mobile-session-browser-group-projection'
 
 export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs extends OrcaRuntimeWithSyncMobileSessionTabs {
   protected abstract collectPreservedHeadlessMobileSessionTabs(

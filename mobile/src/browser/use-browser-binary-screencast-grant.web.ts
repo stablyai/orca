@@ -1,4 +1,4 @@
-import { usePageBridgeClient } from '../transport/client-context.web'
+import { usePageBridgeClient } from '../transport/connection/client-context.web'
 
 // Use camelCase lane token: manifest GRANT_NAME_PATTERN accepts bare names/native verbs, refusing dotted non-verbs.
 const BROWSER_BINARY_SCREENCAST_GRANT = 'screencastBinary'

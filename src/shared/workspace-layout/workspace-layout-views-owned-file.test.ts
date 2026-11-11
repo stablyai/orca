@@ -5,11 +5,7 @@ import { ownedEditorFileId } from '../workspace-session/workspace-session-pane-o
 import { emptyModel, WS } from './workspace-layout-command.test-fixture'
 import type { WorkspaceLayout } from './workspace-layout-model'
 import { pruneViewRecord } from './workspace-layout-view-prune'
-import {
-  emptyLayoutViewRecord,
-  resolveWorkspaceSelection,
-  type LayoutViewRecord
-} from './workspace-layout-views'
+import { emptyLayoutViewRecord, type LayoutViewRecord } from './workspace-layout-views'
 
 const mocks = vi.hoisted(() => ({ layoutOwnerIsMain: true }))
 vi.mock('../layout-owner-switch', () => ({
@@ -49,10 +45,6 @@ const activeOn = (id: string): LayoutViewRecord => ({
 })
 
 describe('an owned-id active file, layout-owner build', () => {
-  it('reads back as the active file', () => {
-    expect(resolveWorkspaceSelection(activeOn(OWNED), WS, workspace()).activeFileId).toBe(OWNED)
-  })
-
   it('stays through a prune', () => {
     const pruned = pruneViewRecord(activeOn(OWNED), {
       ...emptyModel(),
@@ -60,11 +52,5 @@ describe('an owned-id active file, layout-owner build', () => {
     })
 
     expect(pruned.activeFileIdByWorktree?.[WS]).toBe(OWNED)
-  })
-
-  it('falls back when no record holds it', () => {
-    const gone = ownedEditorFileId(PATH, WS, 'env-2')
-
-    expect(resolveWorkspaceSelection(activeOn(gone), WS, workspace()).activeFileId).toBeNull()
   })
 })

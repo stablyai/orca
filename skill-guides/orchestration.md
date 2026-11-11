@@ -36,7 +36,8 @@ ORCA orchestration worker-start --spec "<task>" --worktree current --agent codex
 - If a receipt has `next`, follow it. When Orca has nothing for you, end your
   turn.
 - `--worktree current` uses your workspace. Use a new one only when the user
-  asks or sharing would conflict:
+  asks or sharing would conflict: `--worktree new-child --name <short-name>`
+  nests it under yours. For one with no parent, use
   `--worktree new-top-level --repo id:<repoId> --name <short-name>`
   (`ORCA repo list --json` gives the id). If nothing needs to come back to you
   (the user will work in those chats), don't start workers; per workspace run
@@ -70,6 +71,10 @@ Never:
   follows from the task or the user's instructions; otherwise ask the user first.
 - An `escalation` with `stopReason` means the worker stopped without
   `worker_done`: steer it with `send`, stop and retry it, or tell the user.
+  `exited` or `lost` means it is gone: retry it or tell the user.
+- An `escalation` with an `approval` is a worker's permission prompt that only a
+  person can allow: carry on with other work until its closing message arrives,
+  and deny it with a reason only if it is holding up the task.
 - A `worker_done` settles its Task; never mark a reported failure completed.
 - When every worker has settled, report to the user per Task: outcome,
   evidence, open blockers.

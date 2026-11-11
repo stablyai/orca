@@ -11,7 +11,7 @@ import type { RunSourceControlAgentActionStartArgs } from '../ai/runSourceContro
 import type { Repo } from '../../../../../../shared/repo-types'
 import { normalizeRepoSourceControlAiOverrides } from '../../../../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
 import { saveSourceControlAiActionRecipeForTarget } from '../ai/recipe-persistence'
-import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import { getDefaultSettings } from '../../../../../../shared/constants'
 import { useAppStore } from '@/store/index'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'

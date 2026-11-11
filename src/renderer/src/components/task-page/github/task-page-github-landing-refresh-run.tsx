@@ -1,13 +1,14 @@
 import type { TaskPageGitHubLandingRefreshModel } from './task-page-github-landing-refresh-model'
-import { stripRepoQualifiers } from '../../../../../shared/task-query'
+import { stripRepoQualifiers } from '../../../../../shared/work-items/task-query'
 import { useAppStore } from '@/store/index'
 import {
   taskPageGitHubResumeCache,
   TASK_PAGE_GITHUB_RESUME_FRESH_MS
 } from '@/components/task-page/github/task-page-github-resume-cache'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import { getTaskPageRepoSourceContext } from '../../../lib/task-repo-source-context'
-import { sortWorkItemsByNumber, taskPageToGitHubApiPage } from '../../../../../shared/work-items'
+import { getTaskPageRepoSourceContext } from '../../../lib/work-items/task-repo-source-context'
+import { sortWorkItemsByNumber } from '../../../../../shared/work-items/work-item-order'
+import { taskPageToGitHubApiPage } from '../../../../../shared/work-items/work-item-pagination'
 import {
   materializeTaskPageItemList,
   overlayPendingOnTaskPagePages,
@@ -15,7 +16,7 @@ import {
 } from '@/components/task-page/github/task-page-github-work-item-mutation-pages'
 import { clearTaskPageGitHubAuthorityThroughGeneration } from '@/components/task-page/github/task-page-github-work-item-authority-refresh'
 import { getOrCreateQuietRevalidateState } from '@/components/task-page/github/task-page-github-work-item-quiet-state'
-import { resolveEmptyPageOutcome } from '../../../../../shared/work-item-empty-page'
+import { resolveEmptyPageOutcome } from '../../../../../shared/work-items/work-item-empty-page'
 import {
   deriveTaskPageGitHubWorkItemsFetchOptions,
   shouldReplaceTaskPageItemsAfterRefresh,

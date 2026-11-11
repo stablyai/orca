@@ -1,16 +1,19 @@
-import type { RuntimeFileReadChunkResult } from '../../../../../shared/runtime-file-contracts'
+import type { RuntimeFileReadChunkResult } from '../../../../../shared/file-content/runtime-file-read'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import { validateFileRangeRequest } from '../../../../../shared/file-range-read'
+import { validateFileRangeRequest } from '../../../../../shared/file-content/file-range-read'
 import type { RuntimeFileReadArgs } from '../runtime-file-client-types'
-import { assertExternalSshReadOwnership, canReadRelativeRuntimeFile } from '../runtime-file-routing'
+import {
+  assertExternalSshReadOwnership,
+  workspaceOrScratchFileAddress
+} from '../runtime-file-routing'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import { decodeBase64Bytes } from '@/lib/base64-bytes'
 import {
   remoteFileRequest,
   type RemoteFileLocator
-} from '../../../../../shared/remote-file-locator'
+} from '../../../../../shared/file-access/remote-file-locator'
 
 /** A file on a paired runtime, addressed the way its host's `files.*` methods expect. */
 export type RuntimeRemoteFileAddress = {
@@ -45,10 +48,16 @@ export function rangeReadTarget(args: RuntimeFileReadArgs): RuntimeRemoteFileAdd
       ...pairing
     }
   }
-  if (!canReadRelativeRuntimeFile(args.relativePath)) {
+  const address = workspaceOrScratchFileAddress(args.worktreeId, args.relativePath, args.filePath)
+  if (!address) {
     throw new Error('Remote file is outside the owning runtime worktree')
   }
-  return { target, worktree, relativePath: args.relativePath, ...pairing }
+  return {
+    target,
+    worktree: address.worktreeSelector,
+    relativePath: address.relativePath,
+    ...pairing
+  }
 }
 
 export type RuntimeFileSnapshot = {

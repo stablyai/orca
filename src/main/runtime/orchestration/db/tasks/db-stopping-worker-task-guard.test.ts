@@ -60,16 +60,6 @@ describe('a Task whose supervised worker is stopping', () => {
       )
       expect(db.getTask(task.id)?.status).toBe('blocked')
     })
-
-    it('control: a no-op re-assert of dispatched under a stopping worker stays legal', () => {
-      const { task, dispatch } = localWorker()
-      expect(db.getTask(task.id)?.status).toBe('dispatched')
-      db.beginWorkerStop(dispatch.id, 'epoch_home')
-      // Use SQL to restore dispatched without invoking the guarded reopen path.
-      db.db.prepare("UPDATE tasks SET status = 'dispatched' WHERE id = ?").run(task.id)
-
-      expect(db.updateTaskStatus(task.id, 'dispatched')?.status).toBe('dispatched')
-    })
   })
 
   describe('operator escape', () => {

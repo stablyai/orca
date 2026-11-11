@@ -6,22 +6,31 @@ import {
   buildValidWorktreeIdsForSessionHydration,
   collectPersistedWorktreeIdsForSessionHydration
 } from '../../../../../shared/worktree/degraded-repo-worktree-validity'
-import { buildHydratedTabState } from '../tabs-hydration'
+import { buildHydratedTabState } from './tabs-hydration'
 import { projectWorktreeTabModelReconciliation } from './tabs-reconciliation'
-import { createWorktreeTabModelReconciliationBatch } from './tabs-reconciliation-batch'
+import {
+  createWorktreeTabModelReconciliationBatch,
+  finishReconciliationDrafts
+} from './tabs-reconciliation-batch'
 import type { AppState } from '../../types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
-import { selectFolderWorkspaces } from '../../workspace-record-selectors'
+import { selectFolderWorkspaces } from '../../workspaces/catalog/workspace-record-fields'
+import { markFullResync } from '../../keyed-record-transitions'
+import { markPatchFullResync } from '../../seam-record-fields'
 
-function replaceWorkspaceRecordKeys<T>(
-  current: Record<string, T>,
-  hydrated: Record<string, T>,
+// Cold path: scoped hydration rebuilds the selected workspaces' entries from the session snapshot.
+function replaceWorkspaceRecordKeys<V>(
+  current: Record<string, V>,
+  hydrated: Record<string, V>,
   workspaceKeys: ReadonlySet<string>
-): Record<string, T> {
-  return {
-    ...Object.fromEntries(Object.entries(current).filter(([key]) => !workspaceKeys.has(key))),
-    ...Object.fromEntries(Object.entries(hydrated).filter(([key]) => workspaceKeys.has(key)))
-  }
+): Record<string, V> {
+  return markFullResync(
+    {
+      ...Object.fromEntries(Object.entries(current).filter(([key]) => !workspaceKeys.has(key))),
+      ...Object.fromEntries(Object.entries(hydrated).filter(([key]) => workspaceKeys.has(key)))
+    },
+    'hydration'
+  )
 }
 
 /** Fold in workspace order so shared unread/orphan maps see prior patches; defer only the store write and subscriber notifications. */
@@ -41,7 +50,8 @@ function projectWorktreeTabModelReconciliations(
     Object.assign(merged, patch)
     Object.assign(working, patch)
   }
-  return merged
+  // The fold's drafts finish once, after every workspace has written its entries.
+  return Object.assign(merged, finishReconciliationDrafts(batch.drafts, batch.writtenDraftFields))
 }
 
 export function createTabsSessionActions(
@@ -94,7 +104,8 @@ export function createTabsSessionActions(
         new Set(options?.wslMovedChatWorkspaceKeys)
       )
       if (!options?.replaceWorkspaceKeys) {
-        set(hydrated)
+        // Cold path: a full session hydration rebuilds every workspace's tab state.
+        set(markPatchFullResync(hydrated, 'hydration'))
         return
       }
       const replaceWorkspaceKeys = new Set(options.replaceWorkspaceKeys)

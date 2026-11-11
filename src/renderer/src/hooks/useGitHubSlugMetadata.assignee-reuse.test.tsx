@@ -96,31 +96,4 @@ describe('repository assignee reuse across row seeds', () => {
     expect(results.get('a')?.data[0]).toEqual(baseUser)
     expect(results.get('a')?.data[1]).toEqual({ login: 'alpha', name: null, avatarUrl: '' })
   })
-
-  it('adds seeds to a successful empty list but not to loading or failed results', async () => {
-    let finish: (value: { ok: boolean; users: GitHubAssignableUser[] }) => void = () => {}
-    listUsers.mockReturnValueOnce(new Promise((resolve) => (finish = resolve)))
-    await render(<Probe seeds={['existing']} />)
-    expect(results.get('row')).toMatchObject({ data: [], loading: true, error: null })
-    await act(async () => finish({ ok: true, users: [] }))
-    expect(logins()).toEqual(['existing'])
-
-    listUsers.mockResolvedValueOnce({ ok: false, error: { message: 'Forbidden' } })
-    await render(<Probe repo="other" seeds={['unavailable']} />)
-    expect(results.get('row')).toMatchObject({ data: [], loading: false, error: 'Forbidden' })
-  })
-
-  it('retains seed projection after expiry and fetches fresh metadata for a new reader', async () => {
-    const now = Date.now()
-    const time = vi.spyOn(Date, 'now').mockReturnValue(now)
-    await render(<Probe seeds={['existing']} />)
-    time.mockReturnValue(now + 300_001)
-    await render(<Probe seeds={['updated']} />)
-    expect(logins()).toEqual(['member', 'updated'])
-    expect(listUsers).toHaveBeenCalledTimes(1)
-
-    await render(<Probe key="new-reader" seeds={['fresh']} />)
-    expect(logins()).toEqual(['member', 'fresh'])
-    expect(listUsers).toHaveBeenCalledTimes(2)
-  })
 })

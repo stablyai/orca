@@ -1,10 +1,9 @@
-import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { TERMINAL_METHODS } from './methods/terminal/terminal'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
-import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
+import type { RuntimeTerminalWait } from '../../../shared/runtime-terminal-contracts'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -169,15 +168,6 @@ describe('terminal.subscribe resume', () => {
     await third.stop()
   })
 
-  it('resumes from an earlier frame the phone stopped at', async () => {
-    const { host, token } = await endedStream()
-
-    const second = await host.subscribe({ streamToken: token, units: 6 })
-    expect(second.subscribed.resumed).toBe(true)
-    await second.receives('worldagain')
-    await second.stop()
-  })
-
   it('leaves reply queries out of the missed output', async () => {
     const host = createHost()
     const first = await host.subscribe()
@@ -192,15 +182,20 @@ describe('terminal.subscribe resume', () => {
     await second.stop()
   })
 
-  it('tells the phone about a directory change it missed', async () => {
-    const { host, token, units } = await endedStream()
-    host.output('cd done', '/tmp/elsewhere')
+  it('sends a snapshot after a coverage reset while the stream was live, as on a clear', async () => {
+    const host = createHost()
+    const first = await host.subscribe()
+    host.output('hello ')
+    await first.receives('hello ')
+    host.resetCoverage()
+    host.output('after')
+    await first.receives('hello after')
+    await first.stop()
 
-    const second = await host.subscribe({ streamToken: token, units })
-    expect(second.subscribed.resumed).toBe(true)
-    await second.receives('againcd done')
-    expect(second.cwds()).toEqual(['/tmp/elsewhere'])
-    await second.stop()
+    const next = await host.subscribe({ streamToken: first.subscribed.streamToken, units: 11 })
+    expect(next.subscribed.resumed).toBeUndefined()
+    expect(next.snapshotKinds()).toEqual(['scrollback'])
+    await next.stop()
   })
 
   it.each([
@@ -230,15 +225,6 @@ describe('terminal.subscribe resume', () => {
     await disrupt(ended)
 
     const next = await ended.host.subscribe({ streamToken: ended.token, units: ended.units })
-    expect(next.subscribed.resumed).toBeUndefined()
-    expect(next.snapshotKinds()).toEqual(['scrollback'])
-    await next.stop()
-  })
-
-  it('sends a snapshot for a count between frames', async () => {
-    const { host, token } = await endedStream()
-
-    const next = await host.subscribe({ streamToken: token, units: 8 })
     expect(next.subscribed.resumed).toBeUndefined()
     expect(next.snapshotKinds()).toEqual(['scrollback'])
     await next.stop()

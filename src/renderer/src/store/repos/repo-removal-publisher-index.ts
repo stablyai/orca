@@ -1,7 +1,10 @@
 import type { AppState } from '../types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import { selectDetectedWorktreesByRepo, selectWorktreesByRepo } from '../workspace-record-selectors'
+import {
+  selectDetectedWorktreesByRepo,
+  selectWorktreesByRepo
+} from '../workspaces/catalog/workspace-record-fields'
 
 export type PurgePublisher = {
   id: string

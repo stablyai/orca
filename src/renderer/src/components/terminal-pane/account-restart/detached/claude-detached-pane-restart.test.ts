@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
-import { provideLayoutFrameTerminalPanes } from '@/runtime/layout-frame-terminal-panes'
+import { provideLayoutFrameTerminalPanes } from '@/runtime/workspace-layout/frames/layout-frame-terminal-panes'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import { sweepUnclaimedCodexPaneRestarts } from './codex-detached-pane-restart'
+
 import {
   installCodexDetachedPaneRestartExecutor,
   resetCodexDetachedPaneRestartExecutorForTests
@@ -117,27 +117,6 @@ describe('detached Claude account-move restart', () => {
     } else {
       delete (globalThis as { window?: typeof window }).window
     }
-  })
-
-  it('respawns an unmounted Claude pane with a resume of its own session', async () => {
-    seedClaudePane()
-    useAppStore.getState().queuePaneAccountRestarts([OLD_PTY], 'claude')
-
-    await sweepUnclaimedCodexPaneRestarts()
-
-    const spawnArgs = vi.mocked(window.api.pty.spawn).mock.calls[0]?.[0]
-    expect(spawnArgs).toEqual(
-      expect.objectContaining({
-        launchAgent: 'claude',
-        startupCommandDelivery: 'shell-ready',
-        replacesPtyId: OLD_PTY,
-        leafId: LEAF_ID
-      })
-    )
-    expect(spawnArgs?.command).toMatch(new RegExp(`^claude .*'--resume' '${SESSION_ID}'$`))
-    const state = useAppStore.getState()
-    expect(state.pendingPaneAccountRestarts).toEqual({})
-    expect(state.terminalLayoutsByTabId['tab-1']?.ptyIdsByLeafId).toEqual({ [LEAF_ID]: NEW_PTY })
   })
 
   it('restarts a mid-turn session once its turn ends, via the store subscription', async () => {

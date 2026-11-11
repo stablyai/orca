@@ -3,7 +3,7 @@ import {
   assertClipboardImageByteLengthWithinLimit,
   assertClipboardImageDimensionsWithinLimit
 } from '../../shared/clipboard-image'
-import { readRasterImageDimensions } from '../../shared/raster-image-dimensions'
+import { readRasterImageDimensions } from '../../shared/file-preview/raster-image-dimensions'
 
 export function readClipboardNativeImage(): NativeImage {
   const image = clipboard.readImage()

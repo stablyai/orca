@@ -1,4 +1,3 @@
-import './unused-default-rpc-methods.test-fixture'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { afterEach, describe, expect, it, vi } from 'vitest'

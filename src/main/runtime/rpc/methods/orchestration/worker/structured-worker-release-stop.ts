@@ -4,7 +4,8 @@ import type { WorkerTerminalResourceRow } from '../../../../orchestration/termin
 import { stopStructuredWorker } from '../structured-workers/orchestration-structured-worker-lifecycle'
 import type { StructuredWorkerIdentity } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { archiveSummary } from './worker-terminal-resource-presentation'
-import { releaseUnknownRecovery, type WorkerReleaseReceipt } from './worker-release-completion'
+import type { WorkerReleaseReceipt } from './worker-release-completion'
+import { releaseUnknownRecovery } from './worker-release-unknown-recovery'
 
 /** Use host settlement to prove structured close; unproven closes remain release_unknown. Retry with a fresh request id because replay returns the old receipt. */
 export async function stopStructuredWorkerForRelease(args: {

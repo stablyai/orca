@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { applyTerminalAppearance } from './terminal-appearance'
-import { useThemeBackgroundStore } from '@/store/theme-background'
-import { usePluginFontReady } from '@/store/plugin-fonts'
+import { useThemeBackgroundStore } from '@/store/appearance/theme-background'
+import { usePluginFontReady } from '@/store/plugins/appearance/plugin-fonts'
 import type { UseTerminalPaneLifecycleDeps } from '../mounting/terminal-pane-lifecycle-types'
 import type { TerminalPaneLifecycleRefs } from '../mounting/use-terminal-pane-lifecycle-refs'
 

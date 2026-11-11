@@ -1,4 +1,4 @@
-import { useAppStateValue } from '@/store/app-state-view'
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import {
   formatKeybinding,
   formatKeybindingList,
@@ -7,7 +7,8 @@ import {
   type KeybindingActionId,
   type KeybindingOverrides
 } from '../../../shared/keybindings'
-import { getShortcutPlatform } from '../lib/shortcut-platform'
+import { getShortcutPlatform } from '../lib/keyboard/shortcut-platform'
+import { localizeUnassignedDisplay } from '@/i18n/unassigned-label'
 
 export { getShortcutPlatform }
 
@@ -54,8 +55,13 @@ export function formatShortcutLabel(
   overrides?: KeybindingOverrides
 ): string {
   const platform = getShortcutPlatform()
-  return memoizeShortcut('label', actionId, platform, overrides, () =>
-    formatKeybindingList(getEffectiveKeybindingsForAction(actionId, platform, overrides), platform)
+  return localizeUnassignedDisplay(
+    memoizeShortcut('label', actionId, platform, overrides, () =>
+      formatKeybindingList(
+        getEffectiveKeybindingsForAction(actionId, platform, overrides),
+        platform
+      )
+    )
   )
 }
 
@@ -64,10 +70,12 @@ export function formatPrimaryShortcutLabel(
   overrides?: KeybindingOverrides
 ): string {
   const platform = getShortcutPlatform()
-  return memoizeShortcut('primary', actionId, platform, overrides, () => {
-    const [binding] = getEffectiveKeybindingsForAction(actionId, platform, overrides)
-    return binding ? formatKeybindingList([binding], platform) : 'Unassigned'
-  })
+  return localizeUnassignedDisplay(
+    memoizeShortcut('primary', actionId, platform, overrides, () => {
+      const [binding] = getEffectiveKeybindingsForAction(actionId, platform, overrides)
+      return binding ? formatKeybindingList([binding], platform) : 'Unassigned'
+    })
+  )
 }
 
 export function useShortcutLabel(actionId: KeybindingActionId): string {

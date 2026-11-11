@@ -1,5 +1,5 @@
 import { escapeRegex } from '../../../shared/string-utils'
-import { findStartupDialogBlockedSignals } from '../startup-dialog-blocked-signals'
+import { findStartupDialogBlockedSignals } from '../terminal/wait/startup-dialog-blocked-signals'
 import { startOfLastNonBlankLines } from '../terminal/wait/terminal-wait-tail-window'
 import { compiledFromActiveAgentStateRules } from './active-agent-state-rules'
 import {
@@ -12,7 +12,7 @@ import {
 // Any pane can contain another agent's dialog; the latest live blocker wins.
 
 const BUILT_IN_SENTINEL_RE =
-  /update available|choose working directory to|codex just got an upgrade|available\s*\u00B7|esc\s*skip|enter\s*confirm\s*\u00B7|enter\/esc\s*(?:continue|confirm)|hooks need review|do you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust|permission required|requires permission|allow once|allow always/
+  /update available|choose working directory to|codex just got an upgrade|available\s*\u00B7|esc\s*skip|enter\s*confirm\s*\u00B7|enter\/esc\s*(?:continue|confirm)|hooks need review|do you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust|new\s*mcp\s*servers?\s*found|custom\s*api\s*key|bypass\s*permissions\s*mode|external\s*claude\.md|permission required|requires permission|allow once|allow always/
 
 /** Cheap negative test; identity remains stable until rules change for caller caches. */
 export const terminalWaitBlockedSentinelRe = compiledFromActiveAgentStateRules(

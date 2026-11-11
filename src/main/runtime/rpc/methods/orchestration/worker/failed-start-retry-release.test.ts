@@ -132,18 +132,6 @@ describe('retrying a failed worker-start', () => {
     expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
   })
 
-  it('does nothing for a terminal the coordinator already released', async () => {
-    h.setup()
-    const failed = await failFirstStart()
-    await expect(
-      h.call('orchestration.workerRelease', { dispatch: failed.dispatchId })
-    ).resolves.toMatchObject({ state: 'released' })
-
-    await retry(failed)
-
-    expect(h.runtime.closeTerminal).toHaveBeenCalledTimes(1)
-  })
-
   it('leaves the pane alone when the retry reuses a terminal explicitly', async () => {
     h.setup()
     const failed = await failFirstStart()

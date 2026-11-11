@@ -15,7 +15,11 @@ const PIXEL_PNG = Buffer.from(
   'base64'
 )
 
-export async function writeMobileWebBundleFixtureTree({ outDir, body = 'fixture' }) {
+export async function writeMobileWebBundleFixtureTree({
+  outDir,
+  body = 'fixture',
+  brotli = false
+}) {
   const [desktopVersion, protocolWindow] = await Promise.all([
     readDesktopVersion(),
     readProtocolWindow()
@@ -49,6 +53,7 @@ export async function writeMobileWebBundleFixtureTree({ outDir, body = 'fixture'
       image
     ],
     desktopVersion,
-    protocolWindow
+    protocolWindow,
+    brotli
   })
 }

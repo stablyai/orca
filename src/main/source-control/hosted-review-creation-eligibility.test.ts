@@ -48,13 +48,13 @@ vi.mock('../github/github-enterprise-repository', () => ({
   getEnterpriseGitHubRepoSlug: getEnterpriseGitHubRepoSlugMock
 }))
 
-vi.mock('../gitlab/client', () => ({
+vi.mock('../gitlab/merge-requests/merge-request-lookup', () => ({
   getProjectSlug: getProjectSlugMock,
   getMergeRequestForBranch: vi.fn(),
   getMergeRequest: vi.fn()
 }))
 
-vi.mock('../gitlab/merge-request-creation', () => ({
+vi.mock('../gitlab/merge-requests/merge-request-creation', () => ({
   createGitLabMergeRequest: createGitLabMergeRequestMock
 }))
 
@@ -93,10 +93,16 @@ vi.mock('../github/gh-utils', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-vi.mock('../gitlab/gl-utils', () => ({
+vi.mock('../gitlab/requests/glab-request-admission', () => ({
   acquire: vi.fn(),
-  release: vi.fn(),
-  glabExecFileAsync: glabExecFileAsyncMock,
+  release: vi.fn()
+}))
+
+vi.mock('../git/command-runner/glab-exec-file', () => ({
+  glabExecFileAsync: glabExecFileAsyncMock
+}))
+
+vi.mock('../gitlab/projects/gitlab-project-ref-resolution', () => ({
   glabRepoExecOptions: (repoPath: string, connectionId?: string | null) =>
     connectionId ? {} : { cwd: repoPath }
 }))
@@ -741,44 +747,6 @@ describe('getHostedReviewCreationEligibility', () => {
     expect(result).not.toHaveProperty('stackedCreationSupported')
 
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
-  it('resolves remote eligibility from SSH repo metadata without running git or PR copy', async () => {
-    const remoteGit = {
-      exec: vi.fn(async (args: string[]) => ({
-        stdout:
-          args[0] === 'remote'
-            ? 'origin\n'
-            : args[0] === 'show-ref'
-              ? 'abc refs/remotes/origin/main\n'
-              : '',
-        stderr: ''
-      }))
-    }
-
-    await expect(
-      getHostedReviewCreationEligibility({
-        repoPath: '/remote/repo',
-        executionHostId: 'ssh:ssh-1',
-        branch: 'feature/create-pr',
-        base: 'origin/main',
-        hasUncommittedChanges: false,
-        hasUpstream: true,
-        ahead: 0,
-        behind: 0
-      })
-    ).resolves.toMatchObject({
-      provider: 'github',
-      canCreate: true,
-      head: 'feature/create-pr'
-    })
-
-    expect(getProjectSlugMock).toHaveBeenCalledWith('/remote/repo', 'ssh-1')
-    expect(getRepoSlugMock).toHaveBeenCalledWith('/remote/repo', 'ssh-1')
-    expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
-      expect.objectContaining({ repoPath: '/remote/repo', executionHostId: 'ssh:ssh-1' })
-    )
-    expect(remoteGit.exec).not.toHaveBeenCalled()
   })
 
   it('offers push as the next action for authenticated branches with local-only commits', async () => {

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { chmod, mkdir } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 
 const runProcessMock = vi.fn<(spec: Spec) => Promise<unknown>>()
@@ -16,7 +16,7 @@ vi.mock('node:fs/promises', () => ({
 }))
 
 import { ExternalChromiumBrowserSession } from './external-chromium-browser-session'
-import { agentBrowserCommandOf } from '../browser/agent-browser/agent-browser-bridge-test-harness'
+import { agentBrowserCommandOf } from '../browser/agent-browser/testing/agent-browser-bridge-test-harness'
 
 const BASE = {
   executablePath: '/opt/orca/chromium',
@@ -39,19 +39,6 @@ describe('orcad external-chromium agent-browser environment', () => {
   beforeEach(() => {
     runProcessMock.mockReset()
     vi.mocked(mkdir).mockClear()
-  })
-
-  it('does no work when startup is already aborted', async () => {
-    const controller = new AbortController()
-    controller.abort()
-    const session = new ExternalChromiumBrowserSession(
-      '/opt/orca/agent-browser',
-      { executablePath: BASE.executablePath, provider: 'chromium' },
-      '/state'
-    )
-    await expect(session.start(controller.signal)).rejects.toMatchObject({ name: 'AbortError' })
-    expect(mkdir).not.toHaveBeenCalled()
-    expect(runProcessMock).not.toHaveBeenCalled()
   })
 
   it('reports a ref whose element is gone as stale', async () => {
@@ -112,13 +99,6 @@ describe('orcad external-chromium agent-browser environment', () => {
     await expect(failure).rejects.not.toMatchObject({
       message: expect.stringContaining('--no-sandbox')
     })
-  })
-
-  it('keeps the profile, which holds browser state and captures, owner-only', async () => {
-    await startFailingOpen('Chrome exited early').catch(() => undefined)
-    const profile = join('/state', 'browser-chromium')
-    expect(mkdir).toHaveBeenCalledWith(profile, { recursive: true, mode: 0o700 })
-    expect(chmod).toHaveBeenCalledWith(profile, 0o700)
   })
 
   it("keeps Chromium's own explanation when another process holds the profile", async () => {

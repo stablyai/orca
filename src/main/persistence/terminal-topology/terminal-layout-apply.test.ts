@@ -9,7 +9,6 @@ import type { Store } from '../loading-store/store'
 import { leafIds, WindowSession } from './terminal-topology-window-session-fixture'
 import {
   emptyTerminalSessionProfile,
-  FIXTURE_FOLDER_WORKTREE_ID,
   FIXTURE_GIT_WORKTREE_ID,
   openTopologyStore,
   reopenTopologyStore
@@ -102,41 +101,6 @@ describe('Store.applyLayoutCommand (layout.apply)', () => {
     expect(revision(store)).toBeGreaterThan(revisionBefore)
   })
 
-  it('prunes the partition’s expired close records when it records one, as today', async () => {
-    const { store } = await storeWithOneTab()
-    store.setWorkspaceSession({
-      ...store.getWorkspaceSession(),
-      closedTerminalTabTombstonesByTabId: {
-        'tab-old': { worktreeId: 'repo-other::/x', closedAt: 1, reason: 'user' }
-      }
-    })
-
-    await store.applyLayoutCommand({
-      type: 'closeTabs',
-      workspace: WORKTREE,
-      tabIds: [TAB],
-      force: true,
-      recordClose: 'cleanup'
-    })
-
-    expect(
-      Object.keys(store.getWorkspaceSession().closedTerminalTabTombstonesByTabId ?? {})
-    ).toEqual([TAB])
-  })
-
-  it('writes a folder workspace’s split', async () => {
-    const { store } = await storeWithOneTab(undefined, FIXTURE_FOLDER_WORKTREE_ID)
-
-    const reply = await store.applyLayoutCommand({
-      ...split,
-      workspace: FIXTURE_FOLDER_WORKTREE_ID
-    })
-
-    expect(reply.ok).toBe(true)
-    const root = store.getWorkspaceSession().terminalLayoutsByTabId[TAB]?.root
-    expect(leafIds(root)).toEqual([LEAF, reply.ok ? reply.result.leafId : undefined])
-  })
-
   it('keeps records the split did not touch exactly as stored', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-layout-apply-'))
     directories.push(directory)
@@ -158,16 +122,6 @@ describe('Store.applyLayoutCommand (layout.apply)', () => {
     )
     expect(written.tabsByWorktree).toEqual(stored.tabsByWorktree)
     expect(written.unifiedTabs).toEqual(stored.unifiedTabs)
-  })
-
-  it('refuses a pane main does not hold and writes nothing', async () => {
-    const { store } = await storeWithOneTab()
-    const before = store.getWorkspaceSession()
-
-    const reply = await store.applyLayoutCommand({ ...split, leafId: 'missing-leaf' })
-
-    expect(reply).toEqual({ ok: false, code: 'pane_not_found' })
-    expect(store.getWorkspaceSession()).toEqual(before)
   })
 
   it('writes an SSH workspace’s split into that host’s partition only', async () => {

@@ -34,6 +34,18 @@ describe.skipIf(originalPlatform === 'win32')('WSL Git object-store variables', 
     Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
   })
 
+  it('applies the editor override in the guest after the login profile', async () => {
+    const resolved = resolveCommand('git', ['cherry-pick', '--continue'], undefined, 'Ubuntu', {
+      env: { GIT_EDITOR: 'true' },
+      wslShellCommand: 'sh -c \'"$GIT_EDITOR"\''
+    })
+    const result = await runProcess({
+      program: 'sh',
+      args: ['-c', `export GIT_EDITOR=false; ${resolved.args.at(-1)}`]
+    })
+    expect(result.code).toBe(0)
+  })
+
   it('reach WSL Git after the login profile, appending to its alternates', async () => {
     await expect(alternatesSeenByWslGit(undefined)).resolves.toBe('/home/me/repo/.git/objects')
     await expect(alternatesSeenByWslGit('/shared/objects')).resolves.toBe(

@@ -1,23 +1,28 @@
 import {
   selectSidebarLineageParentIdentities,
   selectCrossStoreFolderChildrenById
-} from '@/store/cross-store-lineage-parents'
+} from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import WorktreeCard from '@/components/sidebar/workspace-card/surface/WorktreeCard'
 import { stopNestedWorktreeCardBubble } from '@/components/sidebar/worktree-list/rows/header-event-guards'
 import {
   getLineageChildrenInlineStyle,
   LINEAGE_CHILDREN_INLINE_OFFSET
 } from '@/components/sidebar/worktree-list/rows/indentation'
-import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store/index'
+import { useTranslate } from '@/i18n/use-translate'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
-import { resolveReviewRepository } from '@/lib/review-owner'
-import type { Worktree } from '../../../../shared/worktree/types'
+import { resolveReviewRepository } from '@/lib/source-control/review/review-owner'
 import { getAttachedWorktreesForFolderWorkspace } from './folder-workspace-attached-worktrees'
 import { useState } from 'react'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
+import { FolderWorkspaceEmptyState } from './folder-workspace-empty-state'
+import type { Worktree } from '../../../../shared/worktree/types'
 
 export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
+  const t = useTranslate()
   const executionHostId = useAppStore((s) => s.activeWorkspaceExecutionHostId)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorkspaceKey = useAppStore((s) => s.activeWorkspaceKey)
@@ -118,7 +123,7 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
   if (!folderWorkspace) {
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center p-6 text-center text-sm text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.unavailable',
           'Workspaces are only shown for folder workspaces.'
         )}
@@ -131,7 +136,7 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
       <div className="border-b border-border px-4 py-3">
         <div className="truncate text-sm font-medium text-foreground">{folderWorkspace.name}</div>
         <div className="mt-1 text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.attachedCount',
             '{{count}} attached worktrees',
             { count: childWorktrees.length, defaultValue_one: '{{count}} attached worktree' }
@@ -140,20 +145,17 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
       </div>
 
       {childWorktrees.length === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-          <div className="text-sm font-medium text-foreground">
-            {translate(
-              'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.emptyTitle',
-              'No attached worktrees yet'
-            )}
-          </div>
-          <div className="mt-2 max-w-[16rem] text-xs leading-5 text-muted-foreground">
-            {translate(
-              'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.emptyCopy',
-              'Worktrees created from this workspace will show up here.'
-            )}
-          </div>
-        </div>
+        <FolderWorkspaceEmptyState
+          folderWorkspace={folderWorkspace}
+          title={t(
+            'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.emptyTitle',
+            'No attached worktrees yet'
+          )}
+          copy={t(
+            'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.emptyCopy',
+            'Worktrees created from this workspace will show up here.'
+          )}
+        />
       ) : (
         <div className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto py-2 pl-1 pr-2">
           <div className="space-y-1">

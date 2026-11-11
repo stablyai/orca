@@ -5,9 +5,9 @@ import type { EditorSlice } from '../types/editor-slice'
 import {
   createRecentlyClosedTabPositionIndex,
   restoreRecentlyClosedTabPosition
-} from '../../recently-closed-tab-position'
-import { pushRecentlyClosedTabKind } from '../../recently-closed-tabs'
-import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
+} from '../../tabs/recently-closed-tab-position'
+import { pushRecentlyClosedTabKind } from '../../tabs/recently-closed-tabs'
+import { notifyHostOfMirroredEditorClose } from '@/runtime/web-session-tabs-sync/closing/close-mirrored-editor-tab'
 import {
   type ClosedEditorTabSnapshot,
   MAX_RECENT_CLOSED_EDITOR_TABS,
@@ -21,7 +21,10 @@ import {
 import { unifiedTabsKeepWorktreeSelected } from '../tabs/unified-tabs-keep-worktree-selected'
 import { isEditorTabContentType } from '../tabs/editor-tab-content-type'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
-import { afterPendingTabs, hasPendingEntityTab } from '@/runtime/layout-owner-pending-tabs'
+import {
+  afterPendingTabs,
+  hasPendingEntityTab
+} from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import type { AppState } from '../../../types'
 
 export function createRecentlyClosedEditorTabs(

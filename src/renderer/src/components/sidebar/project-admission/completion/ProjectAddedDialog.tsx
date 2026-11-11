@@ -3,7 +3,7 @@ import { useAppStore } from '@/store/index'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { isFolderRepo } from '../../../../../../shared/repo-kind'
 import { finishProjectAddWithDefaultCheckout } from './project-added-default-checkout'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type ProjectAddedModalData = {
   repoId?: string

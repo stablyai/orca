@@ -137,6 +137,7 @@ export function taskMountAdapters(
       Object.assign(model, {
         client: context.client,
         clientRef: { current: context.client },
+        hostId: 'host-1',
         taskUiReady: true,
         githubProjectFieldVisibilityScope: null,
         taskResumeRef: { current: {} },

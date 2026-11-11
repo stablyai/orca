@@ -9,7 +9,7 @@ import {
   encodeBrowserNetworkTunnelFrame,
   encodeBrowserNetworkTunnelWindowUpdate,
   type BrowserNetworkTunnelFrame
-} from '../../../../shared/browser-network-tunnel-protocol'
+} from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import { BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES } from './browser-network-tunnel-stream-state'
 import { BrowserNetworkTunnelClient } from './browser-network-tunnel-client'
 

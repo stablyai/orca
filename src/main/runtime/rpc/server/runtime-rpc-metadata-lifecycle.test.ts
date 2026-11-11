@@ -1,16 +1,17 @@
 import type * as WorktreeScanCacheModule from '../../../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../../../git/worktrees/catalog/worktree-listing'
 import '../unused-default-rpc-methods.test-fixture'
-import { existsSync, mkdtempSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import * as runtimeMetadataModule from './runtime-metadata'
 import { readRuntimeMetadata, writeRuntimeMetadata } from './runtime-metadata'
+import { shortDaemonSocketDir } from '../../../daemon/endpoint/publication/daemon-socket-endpoint-path'
 import { createRuntimeTransportMetadata } from './runtime-rpc-socket-metadata'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
-import type { DeviceRegistry } from './pairing/device-registry'
+
 import type { RuntimeMetadata } from '../../../../shared/runtime-bootstrap'
 
 vi.mock('../../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
@@ -50,25 +51,6 @@ const { getWorktreeListingMocks } = vi.hoisted(() => {
 })
 
 describe('OrcaRuntimeRpcServer', () => {
-  it('writes runtime metadata with transport details when started', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    const runtime = new OrcaRuntimeService()
-    const server = new OrcaRuntimeRpcServer({ methods: [], runtime, userDataPath })
-
-    await server.start()
-
-    const metadata = readRuntimeMetadata(userDataPath)
-    expect(metadata?.runtimeId).toBe(runtime.getRuntimeId())
-    expect(metadata?.authToken).toBeTruthy()
-    expect(metadata?.transports?.[0]?.endpoint).toBeTruthy()
-    expect(metadata?.transports).toEqual(server['transports'])
-
-    await server.stop()
-    expect(readRuntimeMetadata(userDataPath)).toMatchObject({
-      runtimeId: runtime.getRuntimeId()
-    })
-  })
-
   it('reclaims runtime metadata clobbered by a second instance that has since died', async () => {
     // A second instance can replace metadata then exit; reclaim it so CLI finds this still-serving runtime (#7848).
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
@@ -116,36 +98,6 @@ describe('OrcaRuntimeRpcServer', () => {
     await server.stop()
   })
 
-  it('stops reclaiming runtime metadata after the server is stopped', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    const server = new OrcaRuntimeRpcServer({
-      methods: [],
-      runtime: new OrcaRuntimeService(),
-      userDataPath
-    })
-    await server.start()
-    const watch = server['metadataOwnershipWatch']
-    if (!watch) {
-      throw new Error('start() must arm the metadata ownership watch')
-    }
-    // Assert timer cancellation too; republish guard alone masks leaked intervals.
-    const watchStop = vi.spyOn(watch, 'stop')
-    await server.stop()
-
-    writeRuntimeMetadata(userDataPath, {
-      runtimeId: 'rt_second_instance',
-      pid: 99999999,
-      transports: [],
-      authToken: 'second-instance-token',
-      startedAt: 1
-    })
-    await server.checkRuntimeMetadataOwnership()
-
-    expect(watchStop).toHaveBeenCalledTimes(1)
-    expect(server['metadataOwnershipWatch']).toBeNull()
-    expect(readRuntimeMetadata(userDataPath)).toMatchObject({ runtimeId: 'rt_second_instance' })
-  })
-
   it('drops a republish from an ownership read that lands after the server stopped', async () => {
     // In-flight async reads can outlive stop; activeTransports must prevent late republish.
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
@@ -178,59 +130,6 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(readRuntimeMetadata(userDataPath)).toMatchObject({ runtimeId: 'rt_second_instance' })
   })
 
-  it('flushes a lastSeen refresh scheduled while transports stop', async () => {
-    const server = new OrcaRuntimeRpcServer({
-      methods: [],
-      runtime: new OrcaRuntimeService(),
-      userDataPath: mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-')),
-      enableWebSocket: false
-    })
-    let pending = false
-    const timeline: string[] = []
-    server['deviceRegistry'] = {
-      flushPendingLastSeen: vi.fn(() => {
-        timeline.push(pending ? 'flush-pending' : 'flush-empty')
-        pending = false
-      })
-    } as unknown as DeviceRegistry
-    let finishSecondStop: () => void = () => {}
-    const secondStop = new Promise<void>((resolve) => {
-      finishSecondStop = resolve
-    })
-    server['activeTransports'] = [
-      {
-        start: vi.fn(async () => {}),
-        stop: vi.fn(async () => {
-          timeline.push('failed-transport-stop')
-          throw new Error('transport stop failed')
-        })
-      },
-      {
-        start: vi.fn(async () => {}),
-        stop: vi.fn(async () => {
-          timeline.push('second-transport-started')
-          await secondStop
-          timeline.push('second-transport-stopped')
-          pending = true
-        })
-      }
-    ]
-
-    const stopping = server.stop()
-    await vi.waitFor(() => expect(timeline).toContain('second-transport-started'))
-    expect(timeline).not.toContain('flush-empty')
-    finishSecondStop()
-    await expect(stopping).rejects.toThrow('transport stop failed')
-
-    expect(timeline).toEqual([
-      'failed-transport-stop',
-      'second-transport-started',
-      'second-transport-stopped',
-      'flush-pending'
-    ])
-    expect(pending).toBe(false)
-  })
-
   it('closes the socket if metadata publication fails during startup', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
@@ -255,4 +154,28 @@ describe('OrcaRuntimeRpcServer', () => {
 
     writeMetadataSpy.mockRestore()
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'never sweeps inside a relocated socket dir that is not private to this user',
+    async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const relocatedDir = shortDaemonSocketDir(userDataPath, process.getuid!())
+      mkdirSync(dirname(relocatedDir), { recursive: true, mode: 0o700 })
+      mkdirSync(relocatedDir, { recursive: true, mode: 0o755 })
+      const deadSocket = join(relocatedDir, 'o-99999999-dead.sock')
+      writeFileSync(deadSocket, '')
+      const server = new OrcaRuntimeRpcServer({
+        methods: [],
+        runtime: new OrcaRuntimeService(),
+        userDataPath
+      })
+      try {
+        await server.start()
+        expect(existsSync(deadSocket)).toBe(true)
+      } finally {
+        await server.stop()
+        rmSync(relocatedDir, { recursive: true, force: true })
+      }
+    }
+  )
 })

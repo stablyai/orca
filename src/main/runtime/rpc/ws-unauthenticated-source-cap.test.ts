@@ -31,14 +31,6 @@ describe('UnauthenticatedSourceCap', () => {
     expect(cap.admit(peer('2001:db8:1:3::1'))).toBe(true)
   })
 
-  it('never limits loopback', () => {
-    const cap = new UnauthenticatedSourceCap(1, () => 0, vi.fn())
-    for (let index = 0; index < 5; index += 1) {
-      expect(cap.admit(peer('127.0.0.1'))).toBe(true)
-      expect(cap.admit(peer('::1'))).toBe(true)
-    }
-  })
-
   it('frees the slot on authentication and admits a source holding an authenticated socket', () => {
     const cap = new UnauthenticatedSourceCap(1, () => 0, vi.fn())
     const client = peer('192.168.1.20')

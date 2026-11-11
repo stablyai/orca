@@ -43,9 +43,6 @@ const COMPAT_SLOT_GLIBC_FLOOR = glibcFloorProfile(
   [1, 3, 7]
 )
 
-// Lazy speech-worker sherpa prebuilt requires GCC11 GLIBCXX_3.4.29; exempt C++ floor only, retain glibc gate because it is not launch-critical.
-const LIBSTDCXX_FLOOR_EXEMPT = /(?:^|[/\\])sherpa-onnx/
-
 // VER_FLG_WEAK needs may resolve null and use fallback; they must not raise required floor.
 const VER_FLG_WEAK = 0x2
 
@@ -118,15 +115,9 @@ function isLibstdcxxNode(name) {
   return name.startsWith('GLIBCXX_') || name.startsWith('CXXABI_')
 }
 
-// Gate load-time requirements; exempt sherpa C++ needs only, never its glibc needs.
-function findFloorViolations(needs, filePath = '', glibcFloor = DESKTOP_GLIBC_FLOOR) {
-  const exemptLibstdcxx = LIBSTDCXX_FLOOR_EXEMPT.test(filePath)
-  return needs.filter(
-    (need) =>
-      !need.weak &&
-      isVersionNodeAboveFloor(need.name, glibcFloor) &&
-      !(exemptLibstdcxx && isLibstdcxxNode(need.name))
-  )
+// Gate load-time requirements; weak needs can resolve to null and fall back.
+function findFloorViolations(needs, glibcFloor = DESKTOP_GLIBC_FLOOR) {
+  return needs.filter((need) => !need.weak && isVersionNodeAboveFloor(need.name, glibcFloor))
 }
 
 // Ubuntu20.04 keeps openpty/forkpty in libutil until glibc2.34 merge: require DT_NEEDED even when newer libc compat aliases satisfy link-time floor.
@@ -402,7 +393,7 @@ function verifyLinuxGlibcFloor(rootDir, options = {}) {
     const { versionNeeds, neededLibraries, isStatic } = readDynamicInfo(filePath, objdumpPath)
     const isMuslTarget = isMuslTemplatePayload(filePath, neededLibraries, versionNeeds)
     // Remote musl payloads use their host's C++ runtime, not Ubuntu's libstdc++ or libutil.
-    const floorViolations = findFloorViolations(versionNeeds, filePath, glibcFloor).filter(
+    const floorViolations = findFloorViolations(versionNeeds, glibcFloor).filter(
       (need) => !isMuslTarget || !isLibstdcxxNode(need.name)
     )
     // Inspect dynamic symbols only if relocated provider is absent from DT_NEEDED; healthy case avoids extra objdump.

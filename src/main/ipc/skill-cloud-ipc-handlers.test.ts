@@ -34,15 +34,15 @@ vi.mock('./ui', () => ({ getTrustedUIRendererWebContents: trustedRendererMock })
 vi.mock('./skill-install-management-ipc-handlers', () => ({
   registerSkillInstallManagementIpcHandlers: registerInstallManagementMock
 }))
-vi.mock('../skills/skill-cloud-install-target', () => ({
+vi.mock('../skills/cloud/skill-cloud-install-target', () => ({
   classifySkillCloudInstallTarget: classifyInstallTargetMock
 }))
-vi.mock('../skills/skill-runtime-capability', () => ({
+vi.mock('../skills/runtime-transfer/skill-runtime-capability', () => ({
   supportsSkillRuntimeBundleInstall: vi.fn(),
   supportsSkillRuntimeCancellation: vi.fn(),
   supportsSkillRuntimeInstall: vi.fn()
 }))
-vi.mock('../skills/skill-cloud-grant-installation', () => ({
+vi.mock('../skills/cloud/skill-cloud-grant-installation', () => ({
   installSkillBundleCloudGrant: vi.fn(),
   installSkillCloudGrant: installSkillCloudGrantMock
 }))
@@ -55,7 +55,7 @@ vi.mock('./runtime-environments/runtime-environment-transport-routing', () => ({
 }))
 
 import { registerSkillCloudIpcHandlers } from './skill-cloud-ipc-handlers'
-import { SkillSharePreparationService } from '../skills/skill-share-preparation-service'
+import { SkillSharePreparationService } from '../skills/sharing/skill-share-preparation'
 
 describe('skill cloud IPC', () => {
   beforeEach(() => {

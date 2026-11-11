@@ -1,10 +1,11 @@
-import { CLAUDE_PRE_TOOL_USE_DECISION } from '../agent-hooks/agent-tool-plugin-hooks'
+import { CLAUDE_PRE_TOOL_USE_DECISION } from '../agent-hooks/tool-events/agent-tool-plugin-hooks'
+import { CLAUDE_PERMISSION_REQUEST_DECISION } from '../agent-hooks/server/claude-permission-hook-hold'
 
 /**
- * Lets Claude Code's PreToolUse hook print Orca's answer (plugins' `agent.tool.before`) instead of
- * a fixed `{}`. Every other event still prints `{}` before it posts, as permission hooks need. The
- * answer is printed only when it is a PreToolUse decision; a timeout, an error or no answer prints
- * `{}`, so the tool call proceeds as if Orca were not there.
+ * Lets Claude Code's PreToolUse hook print Orca's answer (plugins' `agent.tool.before`), and its
+ * PermissionRequest hook print a coordinator's or person's answer, instead of a fixed `{}`. Every
+ * other event still prints `{}` before it posts. The answer is printed only when it is a decision
+ * for that same event; a timeout, an error or no answer prints `{}`, so Claude asks as usual.
  */
 export function buildPosixClaudeDecisionPreludeLines(): string[] {
   return [
@@ -24,6 +25,9 @@ export function buildPosixClaudeDecisionModeLines(): string[] {
   return [
     'case "$payload" in',
     `  *'"hook_event_name":"PreToolUse"'*|*'"hook_event_name": "PreToolUse"'*) orca_hook_decides=${CLAUDE_PRE_TOOL_USE_DECISION}; max_time=8 ;;`,
+    // Why 126 s: Orca answers within its 122 s hold; the managed entry's 130 s timeout outlasts both.
+    // An async entry's output is ignored, so it answers `{}` first like any other event.
+    `  *'"hook_event_name":"PermissionRequest"'*|*'"hook_event_name": "PermissionRequest"'*) if [ -n "\${ORCA_HOOK_ASYNC:-}" ]; then printf '{}\\n'; orca_hook_printed=1; else orca_hook_decides=${CLAUDE_PERMISSION_REQUEST_DECISION}; max_time=126; fi ;;`,
     "  *) printf '{}\\n'; orca_hook_printed=1 ;;",
     'esac'
   ]
@@ -39,6 +43,10 @@ export function wrapPosixClaudeDecisionPost(postLines: readonly string[]): strin
           ? `${line} 2>/dev/null) || { orca_hook_reply=; spool_hook_event; }`
           : line
     ),
-    'case "$orca_hook_reply" in \'{"hookSpecificOutput":{"hookEventName":"PreToolUse"\'*\'}}\') orca_hook_answer=$orca_hook_reply ;; esac'
+    // Only a decision for the event that asked is printed; anything else stays `{}`.
+    'case "$orca_hook_decides:$orca_hook_reply" in',
+    `  ${CLAUDE_PRE_TOOL_USE_DECISION}:'{"hookSpecificOutput":{"hookEventName":"PreToolUse"'*'}}') orca_hook_answer=$orca_hook_reply ;;`,
+    `  ${CLAUDE_PERMISSION_REQUEST_DECISION}:'{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"'*'}}}') orca_hook_answer=$orca_hook_reply ;;`,
+    'esac'
   ]
 }

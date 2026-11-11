@@ -11,9 +11,13 @@ import {
   getSettingsProjectRemovalScope
 } from '../navigation/settings-project-list'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { SettingsRenderContext } from './settings-render-context'
 
-export function renderProjectSettingsSections(context: SettingsRenderContext): React.ReactNode {
+export function renderProjectSettingsSections(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.ReactNode {
   const { model, navigation, terminal, view, interactions } = context
   return model.settingsProjectList.map((settingsProject) => {
     const repoSectionId = `repo-${settingsProject.representativeRepoId}`
@@ -40,11 +44,10 @@ export function renderProjectSettingsSections(context: SettingsRenderContext): R
       <SettingsSection
         key={repoSectionId}
         id={repoSectionId}
-        title={translate(
-          'auto.components.settings.Settings.3bf149e873',
-          'Project Settings > {{value0}}',
-          { value0: settingsProject.checkoutLabel ?? project.displayName }
-        )}
+        grouped
+        title={t('auto.components.settings.Settings.3bf149e873', 'Project Settings > {{value0}}', {
+          value0: settingsProject.checkoutLabel ?? project.displayName
+        })}
         description={repo.path}
         searchEntries={navigation.getSectionSearchEntries(repoSectionId)}
       >

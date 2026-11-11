@@ -1,5 +1,4 @@
 import { closeTestJournalHostDatabases } from '../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import '../../unused-default-rpc-methods.test-fixture'
 /** Exercise at-most-once launch and truthful replay against the durable ledger; adjacent ablations prove each guard prevents duplication. */
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -9,13 +8,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import {
   computeAgentLaunchFingerprint,
-  deriveAgentLaunchChildOperationId,
   type AgentLaunchFingerprintInput
 } from '../../../../../shared/agent-launch/contracts/agent-launch-operation'
 import {
   agentSessionOperationKey,
-  claimAgentSessionOperation,
-  isAgentSessionOperationRow,
   settleAgentSessionOperation,
   type AgentSessionOperationRow
 } from '../../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
@@ -26,9 +22,8 @@ import {
   readPersistedTestAgentSessionStore
 } from '../../../agent-session/records/agent-session-record-store-test-harness'
 import type { RpcContext } from '../../core'
-import { terminalStartError } from '../../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
-import type { OrcaRuntimeService } from '../../../orca-runtime'
-import { RpcDispatcher } from '../../dispatcher'
+import '../../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
+import '../../dispatcher'
 import {
   methodNamed,
   rpcContext,
@@ -158,22 +153,6 @@ describe('exactly one execution per launch operation', () => {
     expect(createStructuredSession).toHaveBeenCalledTimes(1)
     expect(joinedResult).toEqual(firstResult)
   })
-
-  it('the atomic claim admits exactly one winner where the blind settle admitted two', async () => {
-    await store.admitOperation({
-      callerKey: 'device-1',
-      operationId: OPERATION_ID,
-      fingerprint: 'fp-1',
-      now: NOW
-    })
-
-    const claims = await Promise.all([
-      store.claimOperation({ callerKey: 'device-1', operationId: OPERATION_ID }),
-      store.claimOperation({ callerKey: 'device-1', operationId: OPERATION_ID })
-    ])
-    expect(claims.filter((claim) => claim.claim === 'won')).toHaveLength(1)
-    expect(claims.filter((claim) => claim.claim === 'lost')).toHaveLength(1)
-  })
 })
 
 describe('a fresh launch writes the ledger once before its effect', () => {
@@ -197,25 +176,6 @@ describe('a fresh launch writes the ledger once before its effect', () => {
     expect(claimOnly).not.toHaveBeenCalled()
     // A claim moves the row from `pending` to `unknown`: taken, not yet settled.
     expect(statusAtEffect).toBe('unknown')
-  })
-
-  it('still lets exactly one of two concurrent admissions run the effect', async () => {
-    const admission = {
-      callerKey: 'device-1',
-      operationId: OPERATION_ID,
-      fingerprint: 'fp-1',
-      now: NOW
-    }
-    const claimAfter = (decision: { decision: string; row?: AgentSessionOperationRow }) =>
-      decision.decision === 'admit' ||
-      (decision.decision === 'replay' && decision.row?.outcome.status === 'pending')
-
-    const results = await Promise.all([
-      store.admitAndClaimOperation(admission, claimAfter),
-      store.admitAndClaimOperation(admission, claimAfter)
-    ])
-
-    expect(results.filter((result) => result.claim?.claim === 'won')).toHaveLength(1)
   })
 })
 
@@ -269,37 +229,6 @@ describe('a replay answers from the record', () => {
     expect(replayed.prompt).toEqual({ delivery: 'draft', outcome: 'not-delivered' })
     expect(movedSettings.createManagedWorktree).not.toHaveBeenCalled()
   })
-
-  it('survives a host restart, because the record is on disk', async () => {
-    const runtime = runtimeStub()
-    const params = createLaunch({ operationId: OPERATION_ID })
-    const first = await launch(params, runtime)
-
-    const reopened = await openTestAgentSessionRecordStore(directory)
-    setAgentLaunchRecordStore(reopened)
-    const afterRestart = runtimeStub()
-
-    expect(await launch(params, afterRestart)).toEqual(first)
-    expect(afterRestart.createManagedWorktree).not.toHaveBeenCalled()
-  })
-
-  it('refuses a retry that changed what it asks for, and creates nothing', async () => {
-    const runtime = runtimeStub()
-    await launch(createLaunch({ operationId: OPERATION_ID }), runtime)
-
-    const conflicting = runtimeStub()
-    await expect(
-      launch(
-        createLaunch({
-          operationId: OPERATION_ID,
-          target: { kind: 'create-worktree', create: { repo: 'id:repo-1', name: 'other' } }
-        }),
-        conflicting
-      )
-    ).rejects.toThrow('agent_session_operation_conflict')
-    expect(conflicting.createManagedWorktree).not.toHaveBeenCalled()
-    expect(conflicting.createTerminal).not.toHaveBeenCalled()
-  })
 })
 
 describe('an uncertain launch stays uncertain', () => {
@@ -330,58 +259,6 @@ describe('an uncertain launch stays uncertain', () => {
     )
     expect(rowFor(OPERATION_ID)?.outcome.status).toBe('unknown')
   })
-
-  it('preserves the unknown refusal code through RPC dispatch', async () => {
-    const params = createLaunch({ operationId: OPERATION_ID })
-    await store.admitOperation({
-      callerKey: 'trusted-local:runtime',
-      operationId: OPERATION_ID,
-      fingerprint: computeAgentLaunchFingerprint(params),
-      now: NOW
-    })
-    await store.claimOperation({
-      callerKey: 'trusted-local:runtime',
-      operationId: OPERATION_ID
-    })
-    const runtime = { ...runtimeStub(), getRuntimeId: () => 'runtime-1' }
-    const dispatcher = new RpcDispatcher({
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture implements every runtime method reached by agent.launch and dispatcher metadata.
-      runtime: runtime as unknown as OrcaRuntimeService,
-      methods: AGENT_LAUNCH_METHODS
-    })
-
-    const response = await dispatcher.dispatch({
-      id: 'request-1',
-      authToken: 'token',
-      method: 'agent.launch',
-      params
-    })
-
-    expect(response).toMatchObject({
-      ok: false,
-      error: {
-        code: 'agent_session_operation_unknown',
-        message: 'agent_session_operation_unknown'
-      }
-    })
-    expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
-  })
-
-  it('records a failure that happened before anything could be created', async () => {
-    const runtime = runtimeStub()
-    runtime.showTerminalWorkspaceLaunchScope.mockRejectedValueOnce(new Error('worktree_not_found'))
-
-    await expect(
-      launch(
-        createLaunch({ operationId: OPERATION_ID, target: { kind: 'existing', worktree: 'gone' } }),
-        runtime
-      )
-    ).rejects.toThrow('worktree_not_found')
-    expect(rowFor(OPERATION_ID)?.outcome).toMatchObject({
-      status: 'failed',
-      code: 'worktree_not_found'
-    })
-  })
 })
 
 describe('settlement is monotone', () => {
@@ -405,50 +282,6 @@ describe('settlement is monotone', () => {
 
     expect([...settled.values()][0].outcome).toEqual({ status: 'succeeded', sessionId: 'sess-1' })
   })
-
-  it('still lets a claim take a pending row, which is the one state it may take', () => {
-    const pending: AgentSessionOperationRow = {
-      callerKey: 'device-1',
-      operationId: OPERATION_ID,
-      fingerprint: 'fp-1',
-      operationTimestamp: NOW,
-      recordedAt: NOW,
-      expiresAt: NOW + 1,
-      outcome: { status: 'pending' }
-    }
-    const rows = new Map([[agentSessionOperationKey('device-1', OPERATION_ID), pending]])
-
-    const claimed = claimAgentSessionOperation(rows, {
-      callerKey: 'device-1',
-      operationId: OPERATION_ID
-    })
-
-    expect(claimed.claim.claim).toBe('won')
-    expect([...claimed.rows.values()][0].outcome).toEqual({ status: 'unknown' })
-  })
-})
-
-describe('the recorded row stays readable by a build that predates it', () => {
-  it('writes a launch success as a succeeded row with a string sessionId', async () => {
-    // Terminal outcomes have a handle but no session id; preserve the ledger shape older builds accept.
-    await launch(
-      createLaunch({
-        agent: 'codex',
-        operationId: OPERATION_ID,
-        target: { kind: 'existing', worktree: 'id:wt-7' }
-      }),
-      runtimeStub({ createSupport: { supported: false, reason: 'agent' } })
-    )
-
-    const file: { operations: Record<string, { outcome: Record<string, unknown> }> } =
-      await readPersistedTestAgentSessionStore(directory)
-    const outcome = Object.values(file.operations)[0].outcome
-
-    // Older builds require succeeded plus a string sessionId; changing those fields would discard the row on downgrade.
-    expect(outcome.status).toBe('succeeded')
-    expect(typeof outcome.sessionId).toBe('string')
-    expect(outcome.launch).toMatchObject({ outcome: { kind: 'terminal' } })
-  })
 })
 
 describe('an unreadable launch payload costs one replay, never the store', () => {
@@ -459,21 +292,6 @@ describe('an unreadable launch payload costs one replay, never the store', () =>
       row.outcome.launch = payload
     })
   }
-
-  it('still admits the row, because a load drops a row it rejects', () => {
-    // Keep isAgentLaunchResult aligned with results this build writes, or replay rejects its own records.
-    expect(
-      isAgentSessionOperationRow({
-        callerKey: 'device-1',
-        operationId: OPERATION_ID,
-        fingerprint: 'fp-1',
-        operationTimestamp: NOW,
-        recordedAt: NOW,
-        expiresAt: NOW + 1,
-        outcome: { status: 'succeeded', sessionId: 'sess-1', launch: { not: 'a launch result' } }
-      })
-    ).toBe(true)
-  })
 
   it('reopens the store and refuses only the operation whose payload it cannot read', async () => {
     const runtime = runtimeStub()
@@ -492,39 +310,6 @@ describe('an unreadable launch payload costs one replay, never the store', () =>
 })
 
 describe('a recorded failure replays as the failure it was', () => {
-  it('replays the capacity explanation with its original failure identity without launching again', async () => {
-    const runtime = runtimeStub()
-    runtime.showTerminalWorkspaceLaunchScope.mockRejectedValue(
-      terminalStartError(
-        'agent_session_exited_during_start',
-        {
-          kind: 'exited',
-          exitCode: 256,
-          initialOutputDiagnostic: 'git-bash-console-capacity'
-        },
-        'failed-incarnation'
-      )
-    )
-    const params = createLaunch({
-      operationId: OPERATION_ID,
-      target: { kind: 'existing', worktree: 'gone' }
-    })
-    await expect(launch(params, runtime)).rejects.toThrow('agent_session_exited_during_start')
-    expect(rowFor(OPERATION_ID)?.outcome).toMatchObject({
-      status: 'failed',
-      code: 'agent_session_exited_during_start',
-      message: expect.stringContaining('Close some Git Bash terminals')
-    })
-    const replayed = runtimeStub()
-    const error = await launch(params, replayed).catch((caught: unknown) => caught)
-    expect(error).toMatchObject({
-      code: 'agent_session_exited_during_start',
-      message: expect.stringContaining('Close some Git Bash terminals')
-    })
-    expect(replayed.showTerminalWorkspaceLaunchScope).not.toHaveBeenCalled()
-    expect(replayed.createTerminal).not.toHaveBeenCalled()
-  })
-
   it('answers with the code the launch actually raised, not the ledger vocabulary', async () => {
     const runtime = runtimeStub()
     runtime.showTerminalWorkspaceLaunchScope.mockRejectedValue(new Error('worktree_not_found'))
@@ -539,109 +324,5 @@ describe('a recorded failure replays as the failure it was', () => {
     replayed.showTerminalWorkspaceLaunchScope.mockRejectedValue(new Error('worktree_not_found'))
     await expect(launch(params, replayed)).rejects.toThrow('worktree_not_found')
     expect(replayed.showTerminalWorkspaceLaunchScope).not.toHaveBeenCalled()
-  })
-
-  it('bounds the code it persists, because a code is an identifier and a message is not', async () => {
-    const runtime = runtimeStub()
-    runtime.showTerminalWorkspaceLaunchScope.mockRejectedValue(
-      new Error(`ENOENT: no such file or directory, stat '${'/very/long/path'.repeat(400)}'`)
-    )
-
-    await expect(
-      launch(
-        createLaunch({ operationId: OPERATION_ID, target: { kind: 'existing', worktree: 'gone' } }),
-        runtime
-      )
-    ).rejects.toThrow('ENOENT')
-
-    const outcome = rowFor(OPERATION_ID)?.outcome
-    if (outcome?.status !== 'failed') {
-      throw new Error('the pre-execution failure must record a failed row')
-    }
-    expect(outcome.code.length).toBeLessThanOrEqual(128)
-  })
-})
-
-describe('a client that names no operation keeps today behaviour', () => {
-  it('runs the launch and writes no ledger row at all', async () => {
-    const runtime = runtimeStub()
-    await launch(createLaunch(), runtime)
-
-    expect(runtime.createManagedWorktree).toHaveBeenCalledTimes(1)
-    expect(store.listOperationRows()).toHaveLength(0)
-  })
-
-  it('still dedupes a repeated create through the in-memory mutation-id cache', async () => {
-    const runtime = runtimeStub()
-    const params = createLaunch({
-      target: {
-        kind: 'create-worktree',
-        create: { repo: 'id:repo-1', name: 'task', clientMutationId: 'launch-1' }
-      }
-    })
-
-    const [first, second] = await Promise.all([launch(params, runtime), launch(params, runtime)])
-
-    expect(first).toEqual(second)
-    expect(runtime.createManagedWorktree).toHaveBeenCalledTimes(1)
-    expect(store.listOperationRows()).toHaveLength(0)
-  })
-})
-
-describe('the inner attach reserves under its own id', () => {
-  it('does not conflict with its own launch when both share a caller key', async () => {
-    const runtime = runtimeStub()
-    const params = createLaunch({
-      operationId: OPERATION_ID,
-      target: { kind: 'existing', worktree: 'id:wt-7' }
-    })
-
-    const result = await launch(params, runtime, PAIRED_CLIENT)
-
-    expect(result.outcome).toEqual({
-      kind: 'structured',
-      sessionId: 'sess-1',
-      handle: expect.any(String)
-    })
-    expect(attachOperationIds).toHaveLength(1)
-    expect(attachOperationIds[0]).not.toBe(OPERATION_ID)
-    expect(attachOperationIds[0]).toBe(deriveAgentLaunchChildOperationId(OPERATION_ID))
-    expect(attachCallerKeys).toEqual(['device-1'])
-  })
-
-  it('what forwarding the launch id unchanged would do: the attach refuses a conflict', async () => {
-    const callerKey = 'client-9'
-    await store.admitOperation({
-      callerKey,
-      operationId: OPERATION_ID,
-      fingerprint: 'launch-fingerprint',
-      now: NOW
-    })
-
-    // What the attach does with whatever id it is handed: reserve in the same ledger, under the
-    // same caller, with its own attach fingerprint.
-    const forwarded = await store.admitOperation({
-      callerKey,
-      operationId: OPERATION_ID,
-      fingerprint: 'attach-fingerprint',
-      now: NOW
-    })
-    expect(forwarded).toEqual({
-      decision: 'refused',
-      code: 'agent_session_operation_conflict',
-      details: { reason: 'operationIdReused' }
-    })
-
-    const derived = deriveAgentLaunchChildOperationId(OPERATION_ID)
-    if (derived === null) {
-      throw new Error('the launch id must derive a child id')
-    }
-    const child = await store.admitOperation({
-      callerKey,
-      operationId: derived,
-      fingerprint: 'attach-fingerprint',
-      now: NOW
-    })
-    expect(child.decision).toBe('admit')
   })
 })

@@ -6,7 +6,7 @@ import { canSaveSourceControlActionSurface } from '../../source-control/SourceCo
 import { SOURCE_CONTROL_ACTION_IDS } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { invalidateAgentPickerDrafts } from '../../../agent/agent-launch-picker-drafts'
 import { useSourceControlActionAgentInventory } from '../../source-control/use-source-control-action-agent'
-import { readNativeDetectedAgents } from '@/store/slices/local-detected-agent-store-state'
+import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
 import type { RepositorySourceControlAiActionRowsProps } from './repository-source-control-ai-action-rows-props'
 
 export function useRepositoryActionPickerInputs(props: RepositorySourceControlAiActionRowsProps) {

@@ -1,4 +1,3 @@
-import './unused-default-rpc-methods.test-fixture'
 // Use the real runtime exit predicate: stale-handle wiring doubles it and cannot prove a relay drop preserves the lease.
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime'

@@ -1,4 +1,4 @@
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import '../../../../../shared/keybindings'
 import {
   logicalKeyTokenFromInput,

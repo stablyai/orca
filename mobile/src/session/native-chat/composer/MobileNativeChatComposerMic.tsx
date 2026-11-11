@@ -1,15 +1,18 @@
-import { ActivityIndicator, Pressable, View } from 'react-native'
-import { Mic, Square } from 'lucide-react-native'
-import { useContext } from 'react'
-import { colors } from '../../../theme/mobile-theme'
-import { MobileDictationGrapes, MobileDictationTimer } from '../../MobileDictationMeter'
-import { MobileDictationMeterContext } from '../../mobile-dictation-meter-context'
-import { keepHeldPressThroughLongPress } from '../../held-press-long-press'
+import { Pressable, type View } from 'react-native'
+import { useContext, type RefObject } from 'react'
+import { MobileDictationLiveContext } from '../../../dictation/mobile-dictation-live-context'
+import { dictationControlsCopy } from '../../../dictation/mobile-dictation-controls-copy'
+import {
+  MobileDictationMicIcon,
+  MobileDictationRetryButton
+} from '../../../dictation/MobileDictationLiveControls'
+import { useMobileDictationCancelDrop } from '../../../dictation/use-mobile-dictation-cancel-drop'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
+import { keepHeldPressThroughLongPress } from '../../../platform/held-press-long-press'
 import {
   COMPOSER_CONTROL_HIT_SLOP,
   composerInputStyles as inputStyles
 } from '../../../components/composer-input/composer-input-styles'
-import { mobileNativeChatComposerStyles as styles } from './mobile-native-chat-composer-styles'
 import { MobileNativeChatControlSwap } from '../input/mobile-native-chat-control-swap'
 
 export type MobileNativeChatMicProps = {
@@ -33,61 +36,50 @@ export function MobileNativeChatComposerMic({
   dictationMode = 'toggle',
   onMicPressIn,
   onMicPressOut,
+  cancelRef,
   disabled
-}: MobileNativeChatMicProps & { disabled: boolean }): React.JSX.Element {
-  const meter = useContext(MobileDictationMeterContext)
-  const recordingMeter = micActive && !micStarting ? meter : null
-  // Keep the mic at the same fragment slot: remounting it mid-hold would lose the release.
+}: MobileNativeChatMicProps & {
+  disabled: boolean
+  // The composer's ✕ that a held mic may be released over.
+  cancelRef?: RefObject<View | null>
+}): React.JSX.Element {
+  useMobileTranslation()
+  const live = useContext(MobileDictationLiveContext)
+  const release = useMobileDictationCancelDrop(cancelRef, live?.cancel, onMicPressOut)
+  if (live?.failureReason != null) {
+    return <MobileDictationRetryButton onRetry={live.retry} labelled />
+  }
   return (
-    <>
-      {recordingMeter ? (
-        <View style={styles.dictationMeter}>
-          <MobileDictationGrapes meter={recordingMeter} dotSize={5} />
-          <MobileDictationTimer meter={recordingMeter} />
-        </View>
-      ) : null}
-      <Pressable
-        accessibilityRole="button"
-        aria-busy={micStarting || micProcessing}
-        accessibilityLabel={
-          micStarting
-            ? 'Starting dictation'
-            : micActive
-              ? 'Stop dictation'
-              : micProcessing
-                ? 'Transcribing dictation'
-                : 'Dictate'
-        }
-        style={({ pressed }) => [inputStyles.ghostButton, pressed && inputStyles.pressed]}
-        // Hold mode is walkie-talkie (press-in/out); toggle mode taps.
-        onPress={dictationMode === 'hold' ? undefined : onMicPress}
-        onPressIn={dictationMode === 'hold' ? onMicPressIn : undefined}
-        onPressOut={dictationMode === 'hold' ? onMicPressOut : undefined}
-        onLongPress={dictationMode === 'hold' ? keepHeldPressThroughLongPress : undefined}
-        disabled={disabled && !micActive}
-        hitSlop={COMPOSER_CONTROL_HIT_SLOP}
-      >
-        {/* The icon swaps on press; as the page's touch target, its removal would send
+    <Pressable
+      accessibilityRole="button"
+      aria-busy={micStarting || micProcessing}
+      accessibilityLabel={dictationControlsCopy.mic({
+        starting: micStarting,
+        active: micActive,
+        processing: micProcessing
+      })}
+      style={({ pressed }) => [inputStyles.ghostButton, pressed && inputStyles.pressed]}
+      // Hold mode is walkie-talkie (press-in/out); toggle mode taps.
+      onPress={dictationMode === 'hold' ? undefined : onMicPress}
+      onPressIn={dictationMode === 'hold' ? onMicPressIn : undefined}
+      onPressOut={dictationMode === 'hold' ? release : undefined}
+      onLongPress={dictationMode === 'hold' ? keepHeldPressThroughLongPress : undefined}
+      disabled={disabled && !micActive}
+      hitSlop={COMPOSER_CONTROL_HIT_SLOP}
+    >
+      {/* The icon swaps on press; as the page's touch target, its removal would send
             touchend to a detached node and lose the release. */}
-        <MobileNativeChatControlSwap
-          swapKey={micProcessing ? 'processing' : micActive ? 'active' : 'idle'}
-          icon
-        >
-          {micProcessing ? (
-            <ActivityIndicator pointerEvents="none" size="small" color={colors.textSecondary} />
-          ) : micActive ? (
-            <Square
-              pointerEvents="none"
-              size={16}
-              color={colors.statusRed}
-              strokeWidth={2.4}
-              fill={colors.statusRed}
-            />
-          ) : (
-            <Mic pointerEvents="none" size={19} color={colors.textSecondary} strokeWidth={2} />
-          )}
-        </MobileNativeChatControlSwap>
-      </Pressable>
-    </>
+      <MobileNativeChatControlSwap
+        swapKey={micProcessing ? 'processing' : micActive ? 'active' : 'idle'}
+        icon
+      >
+        <MobileDictationMicIcon
+          active={micActive}
+          processing={micProcessing}
+          micSize={19}
+          micStroke={2}
+        />
+      </MobileNativeChatControlSwap>
+    </Pressable>
   )
 }

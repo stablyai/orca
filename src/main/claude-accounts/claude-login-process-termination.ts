@@ -1,13 +1,13 @@
 import { spawnProcess } from '@orca/process-host'
-import type { ChildProcessHandle } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
 import type { WindowsHostInteractiveLoginSpawn } from '../../shared/windows-interactive-login-spawn'
-import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
+import { recordSelfInitiatedTreeKill } from '../crash-reporting/process-exits/self-initiated-tree-kill-log'
 import { admitSelfInitiatedTreeKill } from '../pty/process-retirement/own-chromium-tree-kill-guard'
 
 const WINDOWS_TASKKILL_TIMEOUT_MS = 5_000
 
 export function terminateClaudeProcess(
-  child: ChildProcessHandle,
+  child: ChildProcess,
   interactiveLogin: WindowsHostInteractiveLoginSpawn | null,
   afterKill: () => void
 ): void {

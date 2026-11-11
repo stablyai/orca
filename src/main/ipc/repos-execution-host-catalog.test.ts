@@ -48,7 +48,7 @@ vi.mock('../workspaces/creation/worktree-root-preparation', () =>
 
 import { registerRepoHandlers } from './repos'
 import { clearGitCapabilityStateForTests } from '../git/command-runner/git-capability-state'
-import { resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'
+import { resetSshProviderAuthorities } from '../ssh/connection/authority/ssh-provider-authority'
 import { getGitRepoRoot, isGitRepo } from '../git/repo'
 import { createRepoHandlerHarness, resetProjectGroupMocks } from './repos-remote-test-harness'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -60,7 +60,7 @@ import {
   WslMoveProjectFencedError,
   loadWslMoveFence,
   resetWslMoveFenceForTests
-} from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 const { handleMock, mockStore } = reposMocks
 

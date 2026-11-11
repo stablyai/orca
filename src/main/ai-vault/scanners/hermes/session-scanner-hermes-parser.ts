@@ -113,7 +113,8 @@ export async function parseHermesSessionDocument(
       })
     },
     consume: consumeHermesSessionMessage,
-    signal
+    signal,
+    drain: () => messages?.drain?.() ?? Promise.resolve()
   })
   if (!parsed) {
     return null

@@ -1,10 +1,10 @@
 import { lstat } from 'node:fs/promises'
 import * as path from 'node:path'
-import { isBinaryBuffer } from '../../binary-buffer'
+import { isBinaryBuffer } from '../../file-preview/binary-buffer'
 import { decodeGitCQuotedPath } from '../paths/git-cquoted-path'
 import { DEFAULT_GIT_STATUS_LIMIT } from './git-status-limit'
 import { iterateNulDelimitedFields } from '../../nul-delimited-fields'
-import { readNodeFileWithinLimit } from '../../node-bounded-file-reader'
+import { readNodeFileWithinLimit } from '../../file-content/node-bounded-file-reader'
 
 export type GitLineStats = { added?: number; removed?: number }
 

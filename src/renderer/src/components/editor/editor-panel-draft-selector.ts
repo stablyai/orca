@@ -1,4 +1,4 @@
-import type { AppState } from '@/store'
+import type { AppState } from '@/store/types'
 import { joinPath } from '@/lib/path'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import {

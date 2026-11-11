@@ -36,11 +36,7 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'global', 'worktree', 'switch', 'jump'],
-    defaultBindings: {
-      darwin: ['Mod+K'],
-      linux: ['Mod+Shift+J'],
-      win32: ['Mod+Shift+J']
-    }
+    defaultBindings: platformBindings(['Mod+K'])
   },
   {
     id: 'worktree.navigateUp',

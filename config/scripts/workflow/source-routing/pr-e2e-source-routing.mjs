@@ -35,7 +35,7 @@ const MANAGED_SSH_HARNESS =
 
 // An enabled SSH automation moves with its host and is re-enabled on the server (#29083).
 const ENABLED_AUTOMATION_MOVE =
-  /^src\/(?:main\/(?:persistence\/(?:migrating-orcad-catalog\/orcad-(?:source-automation-state|source-dormant-state|source-dependency-census|destination-automation-state)|scheduling-automations\/automation-schedule-operations)|automations\/(?:run-target-resolution|automation-dispatch-request|orcad-fenced-automation)|ssh\/orcad-migration-(?:moved-automations|source-retention))|shared\/orcad-migration\/orcad-migration-(?:dormant-automation-validation|source-cutover))\.ts$/
+  /^src\/(?:main\/(?:persistence\/(?:migrating-orcad-catalog\/(?:source\/(?:automations\/orcad-source-automation-state|dormancy\/orcad-source-dormant-state|sessions\/orcad-source-dependency-census)|destination\/orcad-destination-automation-state)|scheduling-automations\/automation-schedule-operations)|automations\/(?:run-target-resolution|automation-dispatch-request|orcad-fenced-automation)|persistence\/migrating-orcad-catalog\/retained-source\/orcad-migration-(?:moved-automations|source-retention))|shared\/orcad-migration\/orcad-migration-(?:dormant-automation-validation|source-cutover))\.ts$/
 
 export const PR_E2E_SOURCE_ROUTES = [
   ...PR_BROWSER_E2E_SOURCE_ROUTES,
@@ -154,16 +154,6 @@ export const PR_E2E_SOURCE_ROUTES = [
       )
   },
   {
-    id: 'ssh.orcad-auto-convert',
-    specs: ['tests/e2e/ssh-orcad-auto-convert.spec.ts'],
-    matches: (file) =>
-      MANAGED_SSH_HARNESS.test(file) ||
-      (isProductSource(file) &&
-        /^src\/main\/(?:ipc\/(?:ssh\/)?ssh-host-server-|(?:ssh|managed-server\/[a-z-]+)\/(?:ssh-host-server-|orcad-runtime-conversion|orcad-migration-|orcad-retained-source|orcad-runtime-deployment))/.test(
-          file
-        ))
-  },
-  {
     id: 'ssh.orcad-connect-failure',
     specs: [
       'tests/e2e/ssh-orcad-ssh-failure-reason.spec.ts',
@@ -174,7 +164,7 @@ export const PR_E2E_SOURCE_ROUTES = [
       MANAGED_SSH_HARNESS.test(file) ||
       ENABLED_AUTOMATION_MOVE.test(file) ||
       (isProductSource(file) &&
-        /^src\/(?:main\/(?:ipc\/ssh\/(?:ssh-connect-flow|ssh-host-server-)|ssh\/(?:ssh-session-start-failure|ssh-host-server-|connection\/ssh-connection-manager|orcad-migration-refusal-reason|targets\/ssh-target-orcad-preflight)|managed-server\/lifecycle\/orcad-runtime-conversion|persistence\/migrating-orcad-catalog\/orcad-source-(?:automation-state|leave-behind-view))|renderer\/src\/(?:ssh\/(?:ssh-host-server-status-copy|ssh-connect-failure-toast)|components\/settings\/(?:SshTargetServerStatus|SshHostMoveAnywayAction|SshTargetCard)))/.test(
+        /^src\/(?:main\/(?:ipc\/ssh\/(?:ssh-connect-flow|ssh-host-server-)|ssh\/(?:ssh-session-start-failure|ssh-host-server-|connection\/ssh-connection-manager|orcad-migration-refusal-reason|targets\/ssh-target-orcad-preflight)|managed-server\/lifecycle\/orcad-runtime-conversion|persistence\/migrating-orcad-catalog\/source\/(?:automations\/orcad-source-automation-state|catalog\/orcad-source-leave-behind-view))|renderer\/src\/(?:ssh\/(?:ssh-host-server-status-copy|ssh-connect-failure-toast)|components\/settings\/(?:SshTargetServerStatus|SshHostMoveAnywayAction|SshTargetCard)))/.test(
           file
         ))
   },
@@ -259,7 +249,7 @@ export const PR_E2E_SOURCE_ROUTES = [
       MANAGED_SSH_HARNESS.test(file) ||
       /^tests\/e2e\/helpers\/browser-split-(?:guest-probes|page-server)\.ts$/.test(file) ||
       (isProductSource(file) &&
-        /^src\/renderer\/src\/(?:lib\/(?:file-preview|workspace-file-drag|worktree-runtime-owner|connection-context)\.ts|components\/(?:right-sidebar\/file-explorer\/panel\/FileExplorer(?:Row|VirtualRows)\.tsx|browser-pane\/(?:navigate\/use-browser-page-navigation-downloads\.ts|host-guest\/attach-browser-page-webview\.ts)))$/.test(
+        /^src\/renderer\/src\/(?:lib\/(?:browser\/documents\/file-preview|workspace-file-drag|worktree-runtime-owner)\.ts|lib\/workspace\/ownership\/connection-context\.ts|components\/(?:right-sidebar\/file-explorer\/panel\/FileExplorer(?:Row|VirtualRows)\.tsx|browser-pane\/(?:navigate\/use-browser-page-navigation-downloads\.ts|host-guest\/attach-browser-page-webview\.ts)))$/.test(
           file
         ))
   },
@@ -280,7 +270,7 @@ export const PR_E2E_SOURCE_ROUTES = [
       MANAGED_SSH_HARNESS.test(file) ||
       file === 'tests/e2e/helpers/terminal-workspace-root-link.ts' ||
       (isProductSource(file) &&
-        /^src\/renderer\/src\/(?:components\/terminal-pane\/terminal-(?:worktree-path-link|file-link-actions|file-link-hit-testing|file-open-routing|link-handlers)\.ts|lib\/(?:workspace-file-host-routing|worktree-owner-route|worktree-operation-route|worktree-operation-catalog-route)\.ts)$/.test(
+        /^src\/renderer\/src\/(?:components\/terminal-pane\/terminal-(?:worktree-path-link|file-link-actions|file-link-hit-testing|file-open-routing|link-handlers)\.ts|(?:runtime\/files\/workspace-file-host-routing|lib\/workspace\/ownership\/(?:worktree-owner-route|worktree-operation-route|worktree-operation-catalog-route))\.ts)$/.test(
           file
         ))
   },
@@ -352,7 +342,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     matches: (file) =>
       MANAGED_SSH_HARNESS.test(file) ||
       (isProductSource(file) &&
-        /^src\/main\/(?:persistence\/migrating-orcad-catalog\/orcad-source-(?:draft-rename|workspace-session|session-copy-resolution|export)|ssh\/orcad-migration-source-retention|ipc\/ssh\/ssh)\.ts$/.test(
+        /^src\/main\/(?:persistence\/migrating-orcad-catalog\/source\/(?:worktrees\/orcad-source-draft-rename|sessions\/orcad-source-(?:workspace-session|session-copy-resolution)|catalog\/orcad-source-export)|persistence\/migrating-orcad-catalog\/retained-source\/orcad-migration-source-retention|ipc\/ssh\/ssh)\.ts$/.test(
           file
         ))
   },
@@ -428,15 +418,6 @@ export const PR_E2E_SOURCE_ROUTES = [
     matches: (file) =>
       isProductSource(file) &&
       /^(?:src\/renderer\/src\/components\/tab-bar\/TabBarQuickCommandsMenu\.tsx|src\/renderer\/src\/hooks\/use-terminal-quick-command-hosts\.ts|src\/renderer\/src\/components\/terminal-pane\/(?:pty-transport\/ipc\/pty-transport|pty-transport\/ipc\/terminal-pty-pre-spawn-e2e-barrier)\.ts|src\/renderer\/src\/components\/terminal-pane\/pty-connection\/(?:connect-pane-pty|spawn\/fresh-spawn-start|lifecycle\/active-pane-pty-binding|notifications\/terminal-bell-completion-arbitration|input\/terminal-input-activity|host-ownership\/pane-transport-bootstrap|emulation\/(?:pane-capability-replies|pane-mode-2031-state)|geometry\/pane-viewport-claim|lifecycle\/pty-input-recovery)\.ts|src\/renderer\/src\/components\/terminal-pane\/(?:TerminalPane|use-terminal-pane-lifecycle)\.tsx?|src\/renderer\/src\/store\/slices\/terminals\.ts)$/.test(
-        file
-      )
-  },
-  {
-    id: 'quick-open.paired-host-path-search',
-    specs: ['tests/e2e/paired-quick-open-large-tree.spec.ts'],
-    matches: (file) =>
-      isProductSource(file) &&
-      /^(?:src\/main\/ipc\/filesystem-(?:list-files|search-file-paths)\.ts|src\/main\/ripgrep\/bundled-ripgrep-path\.ts|src\/main\/providers\/(?:filesystem-provider-contract|ssh-filesystem-provider(?:-capabilities)?)\.ts|src\/main\/runtime\/(?:orca-runtime-files|rpc\/methods\/files)\.ts|src\/renderer\/src\/(?:components\/(?:QuickOpen|quick-open-file-list|quick-open-search)\.tsx?|runtime\/(?:files\/search\/runtime-file-search-client|runtime-legacy-quick-open-inventory)\.ts)|src\/shared\/(?:quick-open-(?:install-rg|path-search|transport-budget)|ripgrep-process-availability|bundled-ripgrep)\.ts)$/.test(
         file
       )
   },

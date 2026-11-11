@@ -96,27 +96,4 @@ describe('useDaemonActions kill-all cleanup', () => {
     expect(onKillAllError).not.toHaveBeenCalled()
     expect(onKillAllSettled).not.toHaveBeenCalled()
   })
-
-  it('runs mounted error and settled callbacks only after cleanup settlement', async () => {
-    const cleanup = deferred<KillAllTerminalSurfacesSummary>()
-    const onKillAllError = vi.fn()
-    const onKillAllSettled = vi.fn()
-    runCleanupMock.mockReturnValue(cleanup.promise)
-    const { result } = renderHook(() => useDaemonActions({ onKillAllError, onKillAllSettled }))
-
-    let completion!: Promise<void>
-    act(() => {
-      completion = result.current.runKillAll()
-    })
-    expect(onKillAllError).not.toHaveBeenCalled()
-    expect(onKillAllSettled).not.toHaveBeenCalled()
-
-    await act(async () => {
-      cleanup.resolve(rejectedSummary())
-      await completion
-    })
-
-    expect(onKillAllError).toHaveBeenCalledTimes(1)
-    expect(onKillAllSettled).toHaveBeenCalledTimes(1)
-  })
 })

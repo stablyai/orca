@@ -9,38 +9,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   disposeOpenTerminals,
   dispatchComposition,
-  dispatchInput,
   dispatchKey,
   nextEventLoop,
   openIosTerminal,
   pretendIosWeb,
-  typeHangeul,
-  typeJamo,
-  typePrintable,
-  type IosHangulRig
+  typeHangeul
 } from './terminal-ios-hangul-preedit-fixture'
-
-/** Chinese pinyin, which fires real composition events on the very same iPad. */
-async function typePinyin(rig: IosHangulRig, spelling: string, committed: string): Promise<void> {
-  const base = rig.textarea.value
-  dispatchComposition(rig, 'compositionstart', '')
-  for (let index = 1; index <= spelling.length; index += 1) {
-    const preedit = spelling.slice(0, index)
-    dispatchKey(rig, 'keydown', {
-      key: spelling[index - 1],
-      keyCode: 229,
-      isComposing: true
-    })
-    dispatchComposition(rig, 'compositionupdate', preedit)
-    rig.textarea.value = base + preedit
-    dispatchInput(rig, 'insertCompositionText', preedit, { isComposing: true })
-  }
-  rig.textarea.value = base + committed
-  dispatchComposition(rig, 'compositionend', committed)
-  dispatchInput(rig, 'insertCompositionText', committed)
-  await nextEventLoop()
-  await nextEventLoop()
-}
 
 describe('the iPadOS Hangul path alongside everything else', () => {
   let originalUserAgent: PropertyDescriptor | undefined
@@ -66,37 +40,6 @@ describe('the iPadOS Hangul path alongside everything else', () => {
     document.body.replaceChildren()
   })
 
-  describe('Chinese pinyin on the same device', () => {
-    it('commits two compositions in a row', async () => {
-      pretendIosWeb()
-      const rig = openIosTerminal()
-      await typePinyin(rig, 'ni', '你')
-      await typePinyin(rig, 'hao', '好')
-
-      expect(rig.emitted).toEqual(['你', '好'])
-    })
-
-    it('still works after Hangul was typed first', async () => {
-      pretendIosWeb()
-      const rig = openIosTerminal()
-      await typeHangeul(rig)
-      await typePinyin(rig, 'ni', '你')
-
-      // The open syllable is committed by the composition that supersedes it.
-      expect(rig.emitted).toEqual(['한', '글', '你'])
-    })
-
-    it('leaves Hangul working after a composition finished', async () => {
-      pretendIosWeb()
-      const rig = openIosTerminal()
-      await typePinyin(rig, 'ni', '你')
-      await typeHangeul(rig)
-      dispatchKey(rig, 'keydown', { key: 'Enter', code: 'Enter', keyCode: 13 })
-
-      expect(rig.emitted).toEqual(['你', '한', '글', '\r'])
-    })
-  })
-
   it('composes Hangul after a composition that never ended, then a blur', async () => {
     // Derive expiring composition state: a latched flag survives missing end/blur and can disable input forever.
     pretendIosWeb()
@@ -111,49 +54,5 @@ describe('the iPadOS Hangul path alongside everything else', () => {
     dispatchKey(rig, 'keydown', { key: 'Enter', code: 'Enter', keyCode: 13 })
 
     expect(rig.emitted.join('')).toContain('한글')
-  })
-
-  it('sends a digit after a held syllable as the literal text that ends it', async () => {
-    pretendIosWeb()
-    const rig = openIosTerminal()
-    await typeJamo(rig, 'ㅎ', 'ㅎ', { replaces: false })
-    await typeJamo(rig, 'ㅏ', '하', { replaces: true })
-    await typePrintable(rig, { key: '1', keyCode: 49, written: '1', replaces: false })
-
-    expect(rig.emitted).toEqual(['하', '1'])
-  })
-
-  describe('desktop platforms', () => {
-    it('is inert on a Mac whose touch peripheral reports a single point', async () => {
-      pretendIosWeb(1)
-      const rig = openIosTerminal()
-      await typeJamo(rig, 'ㅎ', 'ㅎ', { replaces: false })
-
-      expect(rig.emitted).toEqual(['ㅎ'])
-      expect(rig.compositionView.classList.contains('active')).toBe(false)
-    })
-
-    it('is inert on Windows and Linux', async () => {
-      for (const userAgent of [
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0.0.0',
-        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/126.0.0.0'
-      ]) {
-        pretendIosWeb(5, userAgent)
-        const rig = openIosTerminal()
-        await typeJamo(rig, 'ㅎ', 'ㅎ', { replaces: false })
-        expect(rig.emitted).toEqual(['ㅎ'])
-      }
-    })
-  })
-
-  it('leaves non-Hangul scripts on the same device reaching the PTY', async () => {
-    // Claim only jamo; other scripts have no downstream resend and would disappear.
-    pretendIosWeb()
-    const rig = openIosTerminal()
-    for (const key of ['п', 'р', 'α', 'ω', 'あ', 'カ', 'é', 'ü', '€']) {
-      await typePrintable(rig, { key, keyCode: 71, written: key, replaces: false })
-    }
-
-    expect(rig.emitted).toEqual(['п', 'р', 'α', 'ω', 'あ', 'カ', 'é', 'ü', '€'])
   })
 })

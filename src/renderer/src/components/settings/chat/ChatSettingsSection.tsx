@@ -1,4 +1,4 @@
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { AppearanceChatSection } from '../appearance/chat/AppearanceChatSection'
 import { ChatBehaviorSetting } from './ChatBehaviorSetting'
 import { ChatNamingSetting } from './ChatNamingSetting'
@@ -45,19 +45,20 @@ export function ChatSettingsSection({
   showDesktopOnlySettings: boolean
   isMounted: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const query = useAppStore((state) => state.settingsSearchQuery)
-  const title = translate('settings.appearance.chat.title', 'Chat UI')
-  const appearanceTitle = translate('auto.components.settings.Settings.2b4474780a', 'Appearance')
-  const launchEntries = getChatLaunchEntriesByKey()
+  const title = t('settings.appearance.chat.title', 'Chat UI')
+  const appearanceTitle = t('auto.components.settings.Settings.2b4474780a', 'Appearance')
+  const launchEntries = getChatLaunchEntriesByKey(t)
   const showAllBehavior = matchesSettingsSearch(query, [
     { title },
-    { title: getChatBehaviorTitle() }
+    { title: getChatBehaviorTitle(t) }
   ])
   return (
     <SettingsSection
       id="chat"
       title={title}
-      description={translate('settings.chat.description', 'Choose how chats look and behave.')}
+      description={t('settings.chat.description', 'Choose how chats look and behave.')}
       searchEntries={searchEntries}
       forceVisible={hasUnsavedChatPromptChanges}
       bodyClassName="rounded-none border-0 bg-transparent p-0 shadow-none"
@@ -84,7 +85,7 @@ export function ChatSettingsSection({
               </SearchableSetting>
             </>
           ) : null}
-          {matchesSettingsSearch(query, [{ title }, ...getChatAppearanceSearchEntries()]) ? (
+          {matchesSettingsSearch(query, [{ title }, ...getChatAppearanceSearchEntries(t)]) ? (
             <section id="chat-appearance" className="space-y-3">
               <SettingsSubsectionHeader title={appearanceTitle} />
               <Card>
@@ -108,7 +109,7 @@ export function ChatSettingsSection({
             updateSettings={updateSettings}
             forceVisible={matchesSettingsSearch(query, [
               { title },
-              { title: getChatTurnActivityTitle() }
+              { title: getChatTurnActivityTitle(t) }
             ])}
           />
           {showDesktopOnlySettings ? (

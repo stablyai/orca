@@ -9,7 +9,7 @@ import type {
   SshManagedServerUpdateNote,
   SshTarget
 } from '../../../shared/ssh-types'
-import { managedServerUpdateDeps } from '../../ssh/managed-server-update-deps'
+import { managedServerUpdateDeps } from '../../ssh/host-server/managed-server-update-deps'
 import {
   ensureOrcadManagedTunnel,
   rebuildOrcadManagedTunnel
@@ -28,7 +28,10 @@ import {
   redeployStoppedManagedOrcad,
   updateManagedOrcadOnRestore
 } from '../../managed-server/lifecycle/orcad-managed-update-on-restore'
-import { getSshHostServerStatus, setSshHostServerStatus } from '../../ssh/ssh-host-server-status'
+import {
+  getSshHostServerStatus,
+  setSshHostServerStatus
+} from '../../ssh/host-server/ssh-host-server-status'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import { connectionManager, getCurrentMainWindow } from '../ssh/ssh-ipc-context'
 import {

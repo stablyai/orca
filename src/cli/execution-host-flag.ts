@@ -21,6 +21,7 @@ import {
 } from './host-selector-alternatives'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime/types'
+import { isLocalEnvironmentSelector } from './local-environment-selector'
 
 export type HostFlagRoutingSelection = {
   // Enumerating SSH targets needs the running host; defer lookup until error recovery.
@@ -137,9 +138,10 @@ export async function resolveHostFlagEnvironmentId(
   }
   if (selection.environmentSelector) {
     const { value } = selection.environmentSelector
-    const selected =
-      findEnvironmentByName(environments, value) ?? resolveEnvironment(userDataPath, value)
-    if (selected.id !== environment.id) {
+    const selected = isLocalEnvironmentSelector(value)
+      ? null
+      : (findEnvironmentByName(environments, value) ?? resolveEnvironment(userDataPath, value))
+    if (selected?.id !== environment.id) {
       throw new RuntimeClientError(
         'invalid_argument',
         `${flagSpelling} and ${selection.environmentSelector.label} ${selection.environmentSelector.value} name different Orca servers.`

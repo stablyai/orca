@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import { BROWSER_CLIENT_PAGE_RENDERER_REPLY_CHANNEL } from '../../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'
-import type { BrowserClientPageRenderer } from '../lifecycle/browser-client-page-cleanup'
+import type { BrowserClientPageRenderer } from './browser-client-page-renderer-contract'
 import { BrowserClientPageRendererBridgeRegistry } from './browser-client-page-renderer-bridge'
 import type { BrowserClientPageRendererEndpoint } from './browser-client-page-renderer-reply-admission'
 

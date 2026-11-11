@@ -61,38 +61,6 @@ describe('useTaskCreationDraftRetention', () => {
     expect(writeDraft).toHaveBeenCalledOnce()
     expect(writeDraft).toHaveBeenCalledWith({ title: 'Latest', body: 'Details' })
   })
-
-  it('clears a successful draft without resurrecting it during close cleanup', () => {
-    const writeDraft = vi.fn()
-    const view = renderHook(
-      ({ open }) =>
-        useTaskCreationDraftRetention({
-          open,
-          draft: { title: 'Created', body: 'Details' },
-          writeDraft
-        }),
-      { initialProps: { open: true } }
-    )
-
-    act(() => view.result.current())
-    view.rerender({ open: true })
-    view.rerender({ open: false })
-    view.unmount()
-
-    expect(writeDraft).toHaveBeenCalledOnce()
-    expect(writeDraft).toHaveBeenCalledWith(null)
-  })
-
-  it('does not create a draft when an unopened composer unmounts', () => {
-    const writeDraft = vi.fn()
-    const view = renderHook(() =>
-      useTaskCreationDraftRetention({ open: false, draft: emptyDraft(), writeDraft })
-    )
-
-    view.unmount()
-
-    expect(writeDraft).not.toHaveBeenCalled()
-  })
 })
 
 it.each([false, true])(

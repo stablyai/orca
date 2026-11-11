@@ -1,5 +1,5 @@
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
-import { resolveStructuredAgentSessionForkIntent } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-fork'
+import { resolveStructuredAgentSessionForkIntent } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-fork-intent'
 import {
   captureStructuredAgentCliSource,
   structuredAgentCliSourceFromEvidence

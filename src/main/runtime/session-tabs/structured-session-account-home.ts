@@ -69,4 +69,19 @@ export abstract class OrcaRuntimeWithStructuredSessionAccountHome extends OrcaRu
     const launchEnv = this.structuredAgentLaunchEnv(provider, this.requireStore().getSettings())
     return (await read?.({ launchEnv, location })) ?? null
   }
+
+  /** The same account, prepared for a start in `launchDirectory` as a create prepares it. */
+  async prepareStructuredAgentLaunchAccountHome(
+    record: AgentSessionRecord,
+    launchDirectory: string
+  ): Promise<AgentSessionAccountHome | null> {
+    const { provider, location } = record
+    if (!structuredAgentRuntimeMetadata(provider)?.launchFollowsSelection?.()) {
+      return null
+    }
+    const prepare = this.structuredAgentAccountHomeResolver(provider, '', 'launch', launchDirectory)
+    await this.accounts.prepareHostAgentLaunch(provider)
+    const launchEnv = this.structuredAgentLaunchEnv(provider, this.requireStore().getSettings())
+    return (await prepare?.({ launchEnv, location })) ?? null
+  }
 }

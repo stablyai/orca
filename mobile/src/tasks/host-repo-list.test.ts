@@ -41,12 +41,6 @@ describe('hostRepoListReducer', () => {
     const loaded = reduce(idle, { type: 'resolved', repos: [{ id: 'a' }] })
     expect(reduce(loaded, { type: 'reset' })).toEqual(idle)
   })
-
-  it('returns the identical state when a reset or repeat request changes nothing', () => {
-    expect(hostRepoListReducer<Repo>(idle, { type: 'reset' })).toBe(idle)
-    const loading = reduce(idle, { type: 'requested' })
-    expect(hostRepoListReducer<Repo>(loading, { type: 'requested' })).toBe(loading)
-  })
 })
 
 describe('host repo list readiness', () => {

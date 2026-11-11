@@ -6,21 +6,25 @@ import { Button } from '../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
-function getRemoveProjectDescription(scope: SettingsProjectRemovalScope): string {
+function getRemoveProjectDescription(
+  scope: SettingsProjectRemovalScope,
+  t: Translate = translate
+): string {
   if (scope === 'checkout') {
-    return translate(
+    return t(
       'auto.components.settings.RepositoryPane.removeProjectCheckout',
       'Remove this checkout from Orca. Other checkouts of this project stay.'
     )
   }
   if (scope === 'split-project') {
-    return translate(
+    return t(
       'auto.components.settings.RepositoryPane.removeProjectKeepCheckouts',
       'Remove this project from Orca. Checkouts that have their own settings stay.'
     )
   }
-  return translate(
+  return t(
     'auto.components.settings.RepositoryPane.removeProjectAllHosts',
     'Remove this project from Orca on all configured hosts.'
   )
@@ -37,6 +41,7 @@ export function RepositoryRemoveProjectButton({
   forceVisible: boolean
   removeProject: (repoId: string) => void
 }) {
+  const t = useTranslate()
   const [confirmingRemove, setConfirmingRemove] = useState<string | null>(null)
   const removeProjectLabel =
     confirmingRemove === repo.id ? 'Confirm Remove Project' : 'Remove Project'
@@ -53,10 +58,10 @@ export function RepositoryRemoveProjectButton({
 
   return (
     <SearchableSetting
-      title={translate('auto.components.settings.RepositoryPane.0909e5d650', 'Remove Project')}
-      description={getRemoveProjectDescription(removalScope)}
+      title={t('auto.components.settings.RepositoryPane.04eebebbea', 'Remove project')}
+      description={getRemoveProjectDescription(removalScope, t)}
       keywords={[repo.displayName, 'delete', 'project', 'repository']}
-      className="absolute top-0 right-0 z-10 w-auto max-w-none"
+      className="w-auto"
       forceVisible={forceVisible}
     >
       <Tooltip>

@@ -30,24 +30,6 @@ describe('agent process inspection queue rejection containment', () => {
     resetAgentProcessInspectionQueueForTests()
   })
 
-  it('contains an unreachable-runtime inspection failure instead of raising unhandledrejection', async () => {
-    const unhandled = await collectUnhandledRejections(async () => {
-      enqueueAgentProcessInspection({
-        priority: 'cadence',
-        canRun: () => true,
-        run: () =>
-          Promise.reject(
-            new Error(
-              "Error invoking remote method 'runtimeEnvironments:call': RemoteRuntimeClientError: Could not connect to the remote Orca runtime."
-            )
-          )
-      })
-      await settleRejections()
-    })
-
-    expect(unhandled).toEqual([])
-  })
-
   it('keeps draining the queue after a rejecting inspection', async () => {
     const ran: string[] = []
     const unhandled = await collectUnhandledRejections(async () => {

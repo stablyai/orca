@@ -3,10 +3,10 @@ import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { create } from 'zustand'
-import { AppStateViewContext } from '@/store/app-state-view'
+import { AppStateViewContext } from '@/store/retained-views/app-state-view'
 import { BaseRefPicker } from './BaseRefPicker'
 
-vi.mock('@/runtime/runtime-repo-client', () => ({
+vi.mock('@/runtime/source-control/references/runtime-repo-client', () => ({
   watchRuntimeRepoBaseRefDefault: () => () => {},
   searchRuntimeRepoBaseRefs: async () => []
 }))

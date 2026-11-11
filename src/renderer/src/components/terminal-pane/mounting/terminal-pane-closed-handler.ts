@@ -1,11 +1,15 @@
+import { captureTerminalPaneNoticeRetirement } from './terminal-pane-notice-retirement'
 import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
+import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import {
   resolveTabTitleAfterPaneClose,
   shouldClearLaunchAgentForClosedPane
 } from '../layout/close/terminal-pane-close-identity'
-import { reportActiveRendererPtyForPane } from '../pty-transport/renderer-active-pty'
+import {
+  reportActiveRendererPtyForPane,
+  syncPaneOutputCadences
+} from '../pty-transport/renderer-active-pty'
 import {
   retireMountedTerminalPaneSurface,
   suppressIntentionalPaneCloseExit
@@ -115,6 +119,16 @@ export function createTerminalPaneClosedHandler(
       if (isDetachedToTab) {
         transport.detach?.({ preserveExitObserver: false })
       } else {
+        const retireNotice = leafId
+          ? captureTerminalPaneNoticeRetirement({
+              tabId,
+              worktreeId,
+              leafId,
+              ptyId: closedPtyId,
+              transport,
+              getTransports: () => paneTransportsRef.current
+            })
+          : undefined
         const ptyId = suppressIntentionalPaneCloseExit(
           transport,
           useAppStore.getState().suppressPtyExit
@@ -130,6 +144,7 @@ export function createTerminalPaneClosedHandler(
           clearTabPtyId(tabId, ptyId)
         }
         transport.destroy?.()
+        retireNotice?.()
       }
       paneTransportsRef.current.delete(paneId)
     }
@@ -157,6 +172,7 @@ export function createTerminalPaneClosedHandler(
     const activePane = managerRef.current?.getActivePane()
     if (activePane) {
       reportActiveRendererPtyForPane(paneTransportsRef.current, activePane.id)
+      syncPaneOutputCadences(panePtyBindingsRef.current)
       const paneTitles = useAppStore.getState().runtimePaneTitlesByTabId[tabId] ?? {}
       updateTabTitle(tabId, resolveTabTitleAfterPaneClose(paneTitles, activePane.id))
     }

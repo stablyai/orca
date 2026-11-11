@@ -4,7 +4,7 @@ import { z } from 'zod'
 import type {
   GoogleCookieClearLocalTarget,
   GoogleCookieClearTarget
-} from '../../../shared/browser-google-cookie-clear'
+} from '../../../shared/browser/cookies/browser-google-cookie-clear'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -52,13 +52,19 @@ vi.mock('../client-hosts/lifecycle/paired-runtime-browser-client-host-runtime', 
   getPairedRuntimeBrowserClientRouteIdentity: mocks.route
 }))
 vi.mock('./browser-cookie-import', () => ({
-  importCookiesFromBrowser: mocks.import,
-  importCookiesFromFile: mocks.import,
-  pickCookieFile: mocks.pick,
+  importCookiesFromBrowser: mocks.import
+}))
+vi.mock('./imports/import-cookie-file', () => ({
+  importCookiesFromFile: mocks.import
+}))
+vi.mock('./imports/cookie-file-picker', () => ({
+  pickCookieFile: mocks.pick
+}))
+vi.mock('./sources/browser-cookie-detection', () => ({
   detectInstalledBrowsers: mocks.detect,
   selectBrowserProfile: vi.fn()
 }))
-vi.mock('../browser-manager', () => ({ browserManager: {} }))
+vi.mock('../guest-lifecycle/manager/browser-manager', () => ({ browserManager: {} }))
 vi.mock('./client-route/client-route-cookie-import-source-store', () => ({
   recordClientRouteCookieImportSource: vi.fn()
 }))
@@ -66,7 +72,7 @@ vi.mock('@/store/index', () => ({ useAppStore: { getState: () => importStore.get
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
-import { browserSessionRegistry } from '../sessions/browser-session-registry'
+import { browserSessionRegistry } from '../sessions/profiles/browser-session-registry'
 vi.mock('../client-hosts/lifecycle/paired-runtime-browser-client-host-registry', () => ({
   PairedRuntimeBrowserClientHostRegistry: class {
     start = async () => ({})
@@ -104,7 +110,7 @@ const { captureGoogleCookieClearTarget, confirmAndClearGoogleCookies } = await v
 import { registerBrowserHandlers } from '../../ipc/browser/browser'
 import { setTrustedBrowserRendererWebContentsId } from '../../ipc/browser/browser-renderer-trust'
 import { importCookiesIntoClientRoutePartition } from './client-route/browser-client-route-cookie-import'
-import { acquireCookieMutationLock } from './browser-cookie-import-clear'
+import { acquireCookieMutationLock } from './mutation/cookie-mutation-lock'
 import * as bindingFile from '../routing/partitions/browser-route-partition-binding-file'
 
 const profile: BrowserSessionProfile = {
