@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, rmSync } from 'node:fs'
-import { rename, rm } from 'node:fs/promises'
+import { rm } from 'node:fs/promises'
 import { join, relative, resolve } from 'node:path'
 import type { SpeechModelState, SpeechModelStatus } from '../../shared/speech-types'
 import { SPEECH_MODEL_CATALOG, getCatalogModel, isLocalSpeechModel } from './model-catalog'
@@ -15,10 +15,8 @@ import { SpeechModelDownloadTransport } from './speech-model-download-transport'
 import { hasSpeechModelFiles } from './speech-model-files'
 import type { OpenSpeechDownloadRequest } from './speech-model-download-response'
 import { getAppEnvironment } from '../../shared/app-environment'
-import {
-  removeModelDownloadFiles,
-  removeModelDownloadStaging
-} from './speech-model-download-cleanup'
+import { removeModelDownloadStaging } from './speech-model-download-cleanup'
+import { previousSpeechModelDir, swapInSpeechModelDir } from './speech-model-dir-swap'
 
 type DownloadHandle = {
   abort: () => void
@@ -184,8 +182,6 @@ export class ModelManager extends SpeechModelDownloadTransport {
       }
     }
     this.activeDownloads.set(modelId, handle)
-    // Until the swap starts, modelDir holds only the old files, which are how the update is found again.
-    let replacingModelDir = false
 
     try {
       await this.downloadModelFiles(
@@ -200,9 +196,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
         return
       }
 
-      replacingModelDir = true
-      await rm(modelDir, { recursive: true, force: true })
-      await rename(stagingDir, modelDir)
+      await swapInSpeechModelDir(stagingDir, modelDir)
       this.updateState(modelId, 'ready')
       if (getCatalogModel(modelId)?.files?.some((file) => file.endsWith('.gguf'))) {
         downloadSileroVadInBackground(this)
@@ -211,9 +205,6 @@ export class ModelManager extends SpeechModelDownloadTransport {
       if (!aborted) {
         console.error('[speech] Model download failed:', modelId, err)
         this.updateState(modelId, 'error', undefined, String(err))
-      }
-      if (replacingModelDir) {
-        removeModelDownloadFiles(modelDir, stagingDir, legacyArchivePath)
       }
       if (!aborted) {
         // Settings awaits real failures; cancellation stays quiet.
@@ -248,6 +239,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
       await rm(modelDir, { recursive: true, force: true })
     }
     await rm(`${modelDir}.partial`, { recursive: true, force: true })
+    await rm(previousSpeechModelDir(modelDir), { recursive: true, force: true })
     await rm(join(this.modelsDir, `${modelId}.tar.bz2`), { force: true })
     // Remove the migration source too or next launch resurrects the model.
     if (this.migrationSourceDir) {

@@ -123,6 +123,15 @@ describe('ModelManager', () => {
         modelId
       )
       expect(state.needsUpdate).toBe(true)
+
+      const failedSwap = new ModelManager(dir, openElectronSpeechDownloadRequest)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above.
+      ;(failedSwap as unknown as typeof internals).downloadModelFiles = async (_m, stagingDir) => {
+        rmSync(stagingDir, { recursive: true, force: true })
+      }
+      await expect(failedSwap.downloadModel(modelId)).rejects.toThrow('ENOENT')
+      expect(existsSync(`${modelDir}.previous`)).toBe(false)
+      expect((await failedSwap.getModelState(modelId)).needsUpdate).toBe(true)
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
