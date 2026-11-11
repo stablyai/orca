@@ -211,7 +211,7 @@ export function RemoteBrowserPageViewport({
             <ReopenBrowserPageOnServerButton
               environmentId={remotePageHandle.environmentId}
               worktreeId={worktreeId}
-              lastCommittedUrl={browserTab.url}
+              reopenUrl={browserTab.url}
               className="h-6 shrink-0 px-2 text-xs"
             />
           ) : null}
