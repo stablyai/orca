@@ -27,7 +27,7 @@ Orca wakes you with the answer. To hand work off with nothing back, use `orca-cl
 place and use it for every command.
 
 ```text
-ORCA orchestration worker-start --spec "<task>" --worktree current --agent codex
+ORCA orchestration worker-start --spec "<task>" --worktree current
 ```
 
 - Start every independent worker, then **end your turn**. "Report back" and
@@ -43,7 +43,10 @@ ORCA orchestration worker-start --spec "<task>" --worktree current --agent codex
   (the user will work in those chats), don't start workers; per workspace run
   `ORCA worktree create --name <name> --no-parent --agent <agent> --prompt "<brief>" --json`
   and end your turn.
-- Add `--model` only if the user named one.
+- Add `--agent`, `--model`, or `--effort` only if the user or the task named
+  one; omitted fields inherit the user's configured worker defaults. If
+  `worker-start` fails with `agent_unconfigured`, ask the user which agent to
+  use and have them set the default; never pick one yourself.
 - If `worker-start` fails, do not rerun it; read `failedStage` and load
   `references/recovery-and-cleanup.md`.
 - To talk to a worker, use

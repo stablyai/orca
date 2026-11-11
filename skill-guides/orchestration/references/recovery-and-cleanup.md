@@ -7,7 +7,7 @@ Retry a failed or stopped attempt on the same Task; `--spec` would create a new
 one. Placement is not inherited:
 
 ```text
-ORCA orchestration worker-start --task <task_id> --retry-of <dispatch_id> --worktree <placement> --agent <agent>
+ORCA orchestration worker-start --task <task_id> --retry-of <dispatch_id> --worktree <placement>
 ```
 
 `worker-stop` exits 1 with `stop_unknown` when it cannot prove the agent
@@ -64,7 +64,7 @@ Reopen and start the same Task in its owning Run:
 
 ```text
 ORCA orchestration task-update --id <task_id> --status ready --run <owning_run_id>
-ORCA orchestration worker-start --task <task_id> --run <owning_run_id> --worktree <placement> --agent <agent>
+ORCA orchestration worker-start --task <task_id> --run <owning_run_id> --worktree <placement>
 ```
 
 This fresh series starts at zero. The broken Dispatch and its failure count stay
