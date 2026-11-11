@@ -135,7 +135,7 @@ export function AgentChoiceFields({
           onChange={(model) => onSelect({ model: model === AGENT_DEFAULT_VALUE ? null : model })}
         />
       ) : null}
-      {catalog && usesSeedModels ? (
+      {catalog?.models.length && usesSeedModels ? (
         <p data-agent-model-list-fallback className="text-xs text-muted-foreground">
           {t(
             'settings.agents.modelListFallback',
