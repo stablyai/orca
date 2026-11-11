@@ -24,6 +24,38 @@ if [[ -z "${PREMERGE_IN_WORKTREE:-}" ]]; then
 fi
 dir=$PREMERGE_IN_WORKTREE
 branch=${PREMERGE_BRANCH:-unknown}
+# At most PREMERGE_MAX_CONCURRENT (default 2) premerges run their heavy part (install, typecheck, lint, tests) at once
+# on this machine; the rest queue here and log while they wait (one shared Mac, load 60 starved the e2e harness).
+# Slots are flock'd files under PREMERGE_LOCK_DIR (default /tmp/vdrv, else $TMPDIR), held by a python parent until the
+# run ends, so a killed run frees its slot. This sits after the merge and before anything heavy, in the merged copy
+# every branch re-runs (#447), so all branches pick it up. Set PREMERGE_SLOT=none to bypass (for tests only).
+if [[ -z "${PREMERGE_SLOT:-}" ]]; then
+  lock_dir=${PREMERGE_LOCK_DIR:-$([[ -d /tmp/vdrv ]] && echo /tmp/vdrv || echo "${TMPDIR:-/tmp}")}
+  exec /usr/bin/python3 -I -c '
+import fcntl, os, subprocess, sys, time
+lock_dir, slots, script, branch = sys.argv[1], max(1, int(sys.argv[2])), sys.argv[3], sys.argv[4]
+start, last, held = time.time(), -1.0, None
+while held is None:
+    for i in range(1, slots + 1):
+        f = open(os.path.join(lock_dir, f"premerge-slot-{i}.lock"), "a")
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            held = (i, f)
+            break
+        except BlockingIOError:
+            f.close()
+    if held is None:
+        waited = time.time() - start
+        if last < 0 or waited - last >= 30:
+            print(f"premerge: queued for one of {slots} slots ({branch}), waited {int(waited)}s", flush=True)
+            last = waited
+        time.sleep(5)
+waited = int(time.time() - start)
+print(f"premerge: got slot {held[0]}/{slots} after {waited}s", flush=True)
+env = dict(os.environ, PREMERGE_SLOT=str(held[0]))
+sys.exit(subprocess.call(["bash", script], env=env))
+' "$lock_dir" "${PREMERGE_MAX_CONCURRENT:-2}" "$dir/config/scripts/cloud-integration/premerge-check.sh" "$branch"
+fi
 trap 'git -C "$dir" worktree remove --force "$dir" >/dev/null 2>&1 || true' EXIT
 cd "$dir"
 pnpm install --frozen-lockfile >/dev/null
