@@ -273,13 +273,19 @@ describe('CompactAgentRow on an Orca Cloud workspace: Agent accounts decide', ()
   })
 
   it('covered but the sandbox is signed out: needs sign-in until a turn ends after the account became active', () => {
-    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'active' }))
-    signedOut()
-    const container = renderRow(makeAgent(CLOUD_WORKTREE, false))
-    expect(container.textContent).toContain('Needs sign-in - Claude')
-    const finished = makeAgent(CLOUD_WORKTREE, false)
-    rerenderRow({ ...finished, entry: { ...finished.entry, turnEndedAt: Date.now() + 60_000 } })
-    expect(container.textContent).toContain('Done - Claude')
+    // A fixed clock: the account is first seen covered at 5000; the row's own turn ended at 1000.
+    vi.useFakeTimers({ now: 5_000, toFake: ['Date'] })
+    try {
+      setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'active' }))
+      signedOut()
+      const container = renderRow(makeAgent(CLOUD_WORKTREE, false))
+      expect(container.textContent).toContain('Needs sign-in - Claude')
+      const finished = makeAgent(CLOUD_WORKTREE, false)
+      rerenderRow({ ...finished, entry: { ...finished.entry, turnEndedAt: 6_000 } })
+      expect(container.textContent).toContain('Done - Claude')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('leaves working rows alone', () => {
