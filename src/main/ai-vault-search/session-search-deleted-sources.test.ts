@@ -203,3 +203,52 @@ it('continues a finite parked-retirement wake across passes without waking its n
     await state.close()
   }
 })
+
+it('retains a refused retirement remainder at EOF after an earlier unit finished', async () => {
+  const paths = seedSearchableRows(300)
+  const owned = paths.at(-1)!
+  store.removeFile = SessionSearchStore.prototype.removeFile.bind(store)
+  const state = new SessionSearchPassState()
+  await state.prepare(store)
+  const candidate = syntheticCandidate({ path: owned })
+  await store.candidates({
+    kind: 'batch',
+    rows: [
+      {
+        candidate,
+        root: harness.claudeProjectDir,
+        group: owned,
+        alias: owned,
+        sqlite: false,
+        preference: 0,
+        sourceOrder: 0
+      }
+    ]
+  })
+  for (const row of (await store.candidates({ kind: 'changes' })).rows) {
+    await store.candidates({ kind: 'consumed', key: row.key, revision: row.revision })
+  }
+  await state.candidates.reconcilePublications(store, () => false)
+  const request = store.candidates.bind(store)
+  let unit = 0
+  const admission = vi.spyOn(store, 'candidates').mockImplementation((command) => {
+    if (command.kind === 'unowned-page' && ++unit === 2) {
+      return Promise.reject(new Error('fixture declined later membership unit'))
+    }
+    return request(command)
+  })
+  try {
+    const args = retirementArgs(state)
+    await expect(
+      retireSessionSearchPassSources(args, [harness.roots.claudeProjectsDir!], new Set())
+    ).rejects.toThrow('fixture declined later membership unit')
+    expect(retainedRows()).toBe(44)
+    await retireSessionSearchPassSources(args, [harness.roots.claudeProjectsDir!], new Set())
+    expect(retainedRows()).toBe(1)
+    expect(store.fileRow(owned)).toBeDefined()
+    expect(state.pending).toBe(false)
+  } finally {
+    admission.mockRestore()
+    await state.close()
+  }
+})

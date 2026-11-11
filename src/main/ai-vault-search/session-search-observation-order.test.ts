@@ -165,6 +165,7 @@ it('discovers searchable conversations when a directory page exceeds the transpo
     historyDays: null,
     clock: new FakeSessionSearchClock()
   })
+  const requests = vi.spyOn(SessionSearchWorkerClient.prototype, 'request')
   try {
     for (let index = 0; index < 256; index++) {
       await writeClaudeTranscript(
@@ -184,7 +185,14 @@ it('discovers searchable conversations when a directory page exceeds the transpo
       )
     ).toEqual({ n: 512 })
     expect(subject.status().phase).toBe('current')
+    for (const [command] of requests.mock.calls) {
+      if (command.op === 'candidates' && command.command.kind === 'unowned-page') {
+        expect(command.command.rows.length).toBeLessThanOrEqual(256)
+        expect(JSON.stringify(command).length * 2 + 1024).toBeLessThanOrEqual(256 * 1024)
+      }
+    }
   } finally {
+    requests.mockRestore()
     await subject.close()
     await harness.cleanup()
   }

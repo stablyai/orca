@@ -54,7 +54,11 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
     return (await this.request!({ kind: 'path', path, agent })).rows.length > 0
   }
   async unowned(rows: { path: string; agent?: string | null }[]): Promise<string[]> {
-    return (await this.request!({ kind: 'unowned-page', rows })).unowned ?? []
+    const unowned: string[] = []
+    for (const page of sessionSearchRecordPages(rows)) {
+      unowned.push(...((await this.request!({ kind: 'unowned-page', rows: page })).unowned ?? []))
+    }
+    return unowned
   }
   async admitChanges(
     receipts: { key: string; revision: number }[],

@@ -1,7 +1,22 @@
+import type { SessionSearchFileRow } from './session-search-store'
 import type { SessionSearchPassArgs } from './session-search-pass'
 import type { SessionSearchDegradedRoot } from './session-search-degraded-roots'
 import { sessionSearchEmptiedRoots, isUnderScanRoot } from './session-search-scan-roots'
 import { retireDeletedSessionSearchSources } from './session-search-deleted-sources'
+
+async function* replayRetirement(
+  rows: SessionSearchFileRow[],
+  tail: AsyncIterator<SessionSearchFileRow> | null
+): AsyncGenerator<SessionSearchFileRow> {
+  yield* rows
+  while (tail) {
+    const next = await tail.next()
+    if (next.done) {
+      return
+    }
+    yield next.value
+  }
+}
 
 export async function wakeSessionSearchPassRetirements(args: SessionSearchPassArgs): Promise<void> {
   if (args.full || args.purge) {
@@ -40,49 +55,66 @@ export async function retireSessionSearchPassSources(
     const queued = remaining > 0 ? await state.retire.receipts(Math.min(256, remaining)) : []
     paths.push(...queued.map(({ key }) => key))
     consumedRetirements += queued.length
-    const inspected = []
-    while (state.retirement && paths.length + inspected.length < 256) {
-      const row = await state.retirement.next()
-      if (row.done) {
-        state.retirement = null
-        break
+    const inspected: SessionSearchFileRow[] = []
+    let inspectedBytes = 1024
+    try {
+      while (state.retirement && paths.length + inspected.length < 256) {
+        const row = await state.retirement.next()
+        if (row.done) {
+          state.retirement = null
+          break
+        }
+        const size = JSON.stringify(row.value).length * 2 + 64
+        if (inspected.length && inspectedBytes + size > 256 * 1024) {
+          state.retirement = replayRetirement([row.value], state.retirement)
+          break
+        }
+        inspected.push(row.value)
+        inspectedBytes += size
       }
-      inspected.push({ path: row.value.path, agent: row.value.agent })
-    }
-    if (inspected.length) {
-      const queuedPaths = new Set(paths)
-      paths.push(
-        ...(await state.candidates.unowned(inspected)).filter((path) => !queuedPaths.has(path))
+      if (inspected.length) {
+        const queuedPaths = new Set(paths)
+        paths.push(
+          ...(await state.candidates.unowned(inspected)).filter((path) => !queuedPaths.has(path))
+        )
+      }
+      if (!paths.length) {
+        if (!state.retirement || args.discoveryOverdue?.()) {
+          break
+        }
+        continue
+      }
+      const retirement = await retireDeletedSessionSearchSources({
+        store,
+        paths,
+        roots,
+        emptiedRoots,
+        enumeratedContainers: state.discovery.enumeratedContainers,
+        listings: args.listings,
+        directoryLimit: 512,
+        signal
+      })
+      await state.retire.acknowledge(queued)
+      await state.retire.setPage(retirement.unchecked.map((path) => [path, path] as const))
+      const emptied = (path: string) =>
+        [...emptiedRoots].some((root) => isUnderScanRoot(path, root))
+      await state.retire.setPage(
+        retirement.unverifiable.filter(emptied).map((path) => [path, path] as const)
       )
-    }
-    if (!paths.length) {
-      if (!state.retirement || args.discoveryOverdue?.()) {
-        break
+      await state.parkedRetire.setPage(
+        retirement.unverifiable
+          .filter((path) => !emptied(path))
+          .map((path) => [path, path] as const)
+      )
+      degraded.push(...retirement.degradedRoots)
+      // Retry refused paths next cycle, but keep advancing the older retirement frontier now.
+      batches++
+    } catch (error) {
+      if (inspected.length) {
+        state.retirement = replayRetirement(inspected, state.retirement)
       }
-      continue
+      throw error
     }
-    const retirement = await retireDeletedSessionSearchSources({
-      store,
-      paths,
-      roots,
-      emptiedRoots,
-      enumeratedContainers: state.discovery.enumeratedContainers,
-      listings: args.listings,
-      directoryLimit: 512,
-      signal
-    })
-    await state.retire.acknowledge(queued)
-    await state.retire.setPage(retirement.unchecked.map((path) => [path, path] as const))
-    const emptied = (path: string) => [...emptiedRoots].some((root) => isUnderScanRoot(path, root))
-    await state.retire.setPage(
-      retirement.unverifiable.filter(emptied).map((path) => [path, path] as const)
-    )
-    await state.parkedRetire.setPage(
-      retirement.unverifiable.filter((path) => !emptied(path)).map((path) => [path, path] as const)
-    )
-    degraded.push(...retirement.degradedRoots)
-    // Retry refused paths next cycle, but keep advancing the older retirement frontier now.
-    batches++
   } while (
     (state.retirement || consumedRetirements < availableRetirements) &&
     (batches === 0 || !args.discoveryOverdue?.())
