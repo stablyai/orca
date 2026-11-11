@@ -82,6 +82,19 @@ it.each<{ config: AntigravityChatAuthConfig | undefined; method: string }>([
   }
 )
 
+it('passes Antigravity safety metadata to a managed session', async () => {
+  const safetyMeta = { antigravity: { disabledTools: ['run_workflow'] } }
+  const rig = await openAcpAdapterRig({
+    spec: { ...ANTIGRAVITY, sessionMeta: safetyMeta },
+    script: (agent) =>
+      agent.on('session/new', (frame) =>
+        agent.reply(frame, { sessionId: PROVIDER_SESSION, modes: {}, configOptions: [] })
+      )
+  })
+  await rig.acquire()
+  expect(rig.sent('session/new')[0]?.params).toMatchObject({ _meta: safetyMeta })
+})
+
 it("leaves a Full access host chat's plan approval to the person", async () => {
   let answered = false
   const rig = await openAcpAdapterRig({

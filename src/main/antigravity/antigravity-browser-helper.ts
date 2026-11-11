@@ -17,13 +17,20 @@ const PREFLIGHT_URL = 'https://example.invalid/orca-antigravity-browser-prefligh
 const executable = process.execPath.replaceAll('\\', '\\\\').replaceAll(':', '\\072')
 const shell = `exec /usr/bin/env ELECTRON_RUN_AS_NODE=1 "$(printf %b ${quotePosixShellDoubleQuotedApostrophe(executable)})" -e ${quotePosixShellDoubleQuotedApostrophe(HELPER_SOURCE)} -- "$1"`
 const BROWSER_ARGV = ['/bin/sh', '-c', shell, '--', '%s']
-export const ANTIGRAVITY_BROWSER_COMMAND = BROWSER_ARGV.map(
-  quotePosixShellDoubleQuotedApostrophe
+const WINDOWS_BROWSER_ARGV = [process.execPath, '-e', HELPER_SOURCE, '--', '%s']
+const POSIX_BROWSER_COMMAND = BROWSER_ARGV.map(quotePosixShellDoubleQuotedApostrophe).join(' ')
+const WINDOWS_BROWSER_COMMAND = WINDOWS_BROWSER_ARGV.map(
+  (arg) => `'${arg.replaceAll("'", `"'"'`)}'`
 ).join(' ')
 const usable = !/[\r\n\0]|%s/.test(process.execPath)
 
+export const ANTIGRAVITY_BROWSER_COMMAND =
+  process.platform === 'win32' ? WINDOWS_BROWSER_COMMAND : POSIX_BROWSER_COMMAND
+
 export const antigravityBrowserArgv = (link: string): string[] =>
-  BROWSER_ARGV.map((arg) => (arg === '%s' ? link : arg))
+  (process.platform === 'win32' ? WINDOWS_BROWSER_ARGV : BROWSER_ARGV).map((arg) =>
+    arg === '%s' ? link : arg
+  )
 
 /** Check before each server start: a broken helper could let Python launch a real browser. */
 export async function antigravityBrowserHelperWorks(): Promise<boolean> {

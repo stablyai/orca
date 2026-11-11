@@ -71,6 +71,8 @@ export type AcpLaunchSpec = {
   privateTempDirectory?: true
   /** Prefer session/resume even when loading is supported. */
   resumePreference?: 'resume'
+  /** Extra ACP session metadata required by this provider's protocol implementation. */
+  sessionMeta?: Readonly<Record<string, unknown>>
   launchGate?: AcpLaunchGate
   /** Writes sessions it cannot delete into the user's own history, so it runs no naming tasks. */
   keepsEverySession?: true

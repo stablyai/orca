@@ -6,11 +6,11 @@ import { probeAntigravityAcpServer } from './antigravity-acp-runtime-probe'
 
 // 1.4.2 through 1.4.5 are reported to write skills/system/run-workflow/SKILL.md into the chat's
 // workspace when a session starts; check a newer release in an empty folder before moving this pin.
-const VERSION = '1.4.1'
+const VERSION = process.platform === 'win32' ? '1.4.5' : '1.4.1'
 const RELEASES = 'https://dl.google.com/agy-extensions/releases'
-const COMMAND = 'agy_acp_server.par'
+const COMMAND = process.platform === 'win32' ? 'agy_acp_server.exe' : 'agy_acp_server.par'
 // The server finds its harness beside itself.
-const HARNESS = 'localharness_external'
+const HARNESS = process.platform === 'win32' ? 'localharness_external.exe' : 'localharness_external'
 
 type Pinned = {
   path: string
@@ -57,6 +57,24 @@ const PINNED: Record<string, Pinned> = {
     serverBytes: 933416796,
     harness: '18bcd9a2ab80b66d90f61add7a52a37f53d3113bb0429a0b92709ed09f32a6e1',
     harnessBytes: 124895000
+  },
+  'win32-x64': {
+    path: 'windows/agy-acp-server-1.4.5-windows-x86_64.zip',
+    archive: 'd24f4c73c9f96d4f44384e281c855a56c72d8eaa9c5b0fad7ccb1635c6b63f50',
+    archiveBytes: 100423655,
+    server: 'ccca30a4aef1b915b0d8baa17b149de6cda305841fa27717e52c529bb462c51d',
+    serverBytes: 55839864,
+    harness: '98f808f7796c0a06d104715dbef65025e57243106fff5935d9bedd5843f03cda',
+    harnessBytes: 147843736
+  },
+  'win32-arm64': {
+    path: 'windows/agy-acp-server-1.4.5-windows-arm64.zip',
+    archive: 'ab0a9aac8349e08ef289be6d16da8f89e3abe60eba5158032ef78c4a1220261c',
+    archiveBytes: 102703121,
+    server: 'c1363f25215a131b0c114d28da9a952b39eef7596408e33cfb3487c87f32ffb2',
+    serverBytes: 62293488,
+    harness: 'b56aa033e85c3df681e15deb1aaceda8a98e137c55c05a625071b11546d7b840',
+    harnessBytes: 139322008
   }
 }
 
