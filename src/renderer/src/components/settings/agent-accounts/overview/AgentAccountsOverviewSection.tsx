@@ -3,10 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
-import {
-  reloadOrcaCloudAgentAccounts,
-  useOrcaCloudAgentAccounts
-} from '@/lib/orca-cloud/orca-cloud-agent-accounts-store'
+import { useOrcaCloudAgentAccounts } from '@/lib/orca-cloud/orca-cloud-agent-accounts-store'
 import { openAgentHostPanel } from '../../../agent-host-panel/agent-host-panel-store'
 import { ORCA_CLOUD_ACCOUNTS_SECTION_ID } from '../OrcaCloudAccounts'
 import {
@@ -114,12 +111,6 @@ export function AgentAccountsOverviewSection(): React.JSX.Element {
       summary={summary}
       onOpenRow={(row) => open(row)}
       onAction={onAction}
-      onSignIn={() =>
-        void useAppStore
-          .getState()
-          .connectCurrentOrcaProfile()
-          .then(() => reloadOrcaCloudAgentAccounts())
-      }
     />
   )
 }
