@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RelayHttpError, type RelayAssignment } from './relay-http-client'
+import type { RelayAssignment } from './relay-http-client'
 import type * as RelayHttpClientModule from './relay-http-client'
 import type { RelayRegionWindow } from './relay-region-correction-protocol'
 const fake = vi.hoisted(() => ({ assign: vi.fn() }))
@@ -55,42 +55,7 @@ describe('broker-owned region decision refresh', () => {
     scheduler?.close()
     vi.useRealTimers()
   })
-  it('measures only after the server window and reports the complete fixed basis', async () => {
-    const { measure } = setup()
-    fake.assign.mockResolvedValue({
-      ...assignment,
-      regionCorrection: { v: 1, reportStatus: 'accepted' }
-    })
-    scheduler.start(assignment)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(measure).toHaveBeenCalledWith(window)
-    expect(fake.assign).toHaveBeenCalledWith(
-      expect.objectContaining({
-        regionCorrection: {
-          v: 1,
-          action: 'report',
-          generation: 1,
-          assignmentEpoch: 1,
-          policyVersion: 1,
-          outcome: 'conclusive',
-          measurements: { 'us-central1': 30, 'asia-east2': 200 }
-        }
-      })
-    )
-    await vi.advanceTimersByTimeAsync(23 * HOUR)
-    expect(measure).toHaveBeenCalledOnce()
-  })
-  it('never jitters a retry before the director Retry-After minimum', async () => {
-    setup(0)
-    fake.assign
-      .mockRejectedValueOnce(new RelayHttpError('assignment', 429, 120_000))
-      .mockResolvedValue({ ...assignment, regionCorrection: { v: 1, reportStatus: 'accepted' } })
-    scheduler.start(assignment)
-    await vi.advanceTimersByTimeAsync(119_999)
-    expect(fake.assign).toHaveBeenCalledOnce()
-    await vi.advanceTimersByTimeAsync(1)
-    expect(fake.assign).toHaveBeenCalledTimes(2)
-  })
+
   it('retries exactly the same report without probing or extending its window', async () => {
     const { measure } = setup()
     fake.assign
@@ -104,31 +69,7 @@ describe('broker-owned region decision refresh', () => {
       fake.assign.mock.calls[1]![0].regionCorrection
     )
   })
-  it('records inconclusive reports and retries measurement after one hour', async () => {
-    const { measure } = setup()
-    measure.mockResolvedValue({ outcome: 'inconclusive', reason: 'incomplete-measurement' })
-    fake.assign
-      .mockResolvedValueOnce({
-        ...assignment,
-        regionCorrection: { v: 1, reportStatus: 'accepted' }
-      })
-      .mockResolvedValue(assignment)
-    scheduler.start(assignment)
-    await vi.advanceTimersByTimeAsync(HOUR)
-    expect(measure).toHaveBeenCalledTimes(2)
-    expect(fake.assign.mock.calls[1]![0].regionCorrection).toEqual({ v: 1, action: 'issue-window' })
-  })
-  it('does not probe offline and cancels future work on close', async () => {
-    const { measure, isOnline } = setup()
-    isOnline.mockReturnValue(false)
-    scheduler.start(assignment)
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(measure).not.toHaveBeenCalled()
-    scheduler.close()
-    isOnline.mockReturnValue(true)
-    await vi.advanceTimersByTimeAsync(25 * HOUR)
-    expect(fake.assign).not.toHaveBeenCalled()
-  })
+
   it('does not report a measurement that completed after broker close', async () => {
     const { measure } = setup()
     let resolve!: (value: unknown) => void

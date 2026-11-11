@@ -7,7 +7,7 @@ import type { OrcadMigrationSourceCutover } from '../../../shared/orcad-migratio
 import {
   exportOrcadMigrationManifest,
   type OrcadMigrationExportedBlob
-} from '../../persistence/migrating-orcad-catalog/orcad-migration-manifest-export'
+} from '../../persistence/migrating-orcad-catalog/source/catalog/orcad-migration-manifest-export'
 import { resolveOrcadMigrationFence } from './orcad-migration-source-fence'
 import { confirmOrcadMigrationTerminalsUnderFence } from './orcad-migration-terminal-gate'
 import { collectUntransferredDependentBlockers } from '../targets/ssh-target-orcad-dependents'

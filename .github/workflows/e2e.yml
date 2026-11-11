@@ -123,6 +123,10 @@ jobs:
             exit 0
           fi
           read -r -a packages <<< "$ORCA_E2E_APT_PACKAGES"
+          if [ -f .github/scripts/install-ubuntu-apt-packages.sh ]; then
+            bash .github/scripts/install-ubuntu-apt-packages.sh "${packages[@]}"
+            exit 0
+          fi
           if [ -f .github/scripts/prepare-ubuntu-apt.sh ]; then
             bash .github/scripts/prepare-ubuntu-apt.sh
           else
@@ -529,7 +533,12 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
       - name: Install headless tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential ripgrep xvfb openbox x11-utils
+        run: &install_headless_tools |
+          if [ -f .github/scripts/install-ubuntu-apt-packages.sh ]; then
+            bash .github/scripts/install-ubuntu-apt-packages.sh build-essential ripgrep xvfb openbox x11-utils
+          else
+            sudo apt-get update && sudo apt-get install -y build-essential ripgrep xvfb openbox x11-utils
+          fi
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: electron
@@ -636,7 +645,7 @@ jobs:
       - name: Fetch the 1.4.224 relay sources
         run: git fetch --no-tags --depth=1 origin +refs/tags/v1.4.224:refs/tags/v1.4.224
       - name: Install headless tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential ripgrep xvfb openbox x11-utils
+        run: *install_headless_tools
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: electron

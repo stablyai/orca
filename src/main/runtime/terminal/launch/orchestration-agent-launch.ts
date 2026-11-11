@@ -15,7 +15,7 @@ import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-co
 import { resolveConfiguredWorkerAgent } from '../../orchestration/workers/launch/configured-worker-agent-selector'
 import { newWorktreeLaunchScope, resolveAgentLaunchRuntime } from './agent-launch-scope-runtime'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
-import { resolveOpenCodeModelLaunchRoute } from '../../../opencode/opencode-model-startup-plan'
+import { resolveOpenCodeModelLaunchRoute } from '../../../opencode/model-launch/opencode-model-startup-plan'
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { OrcaRuntimeWithAdoptTerminalOrphansFromInventory } from '../adoption/adopt-terminal-orphans-from-inventory'
 

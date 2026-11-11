@@ -86,10 +86,10 @@ import { initOpenCodeUsagePath } from '../opencode-usage/store'
 import { initMuseUsagePath } from '../muse-usage/store'
 import { registerDocPreviewSchemePrivileges } from '../browser/document-preview/doc-preview-protocol'
 import { PRIVILEGED_CUSTOM_SCHEMES } from './privileged-custom-schemes'
-import { startCrashpadCapture } from '../crash-reporting/crashpad-capture'
-import { CrashReportStore } from '../crash-reporting/crash-report-store'
-import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
-import { getMainProcessLifecycleIdentity } from '../crash-reporting/main-process-lifecycle-identity'
+import { startCrashpadCapture } from '../crash-reporting/capture/crashpad-capture'
+import { CrashReportStore } from '../crash-reporting/reports/crash-report-store'
+import { recordCrashBreadcrumb } from '../crash-reporting/breadcrumbs/crash-breadcrumb-store'
+import { getMainProcessLifecycleIdentity } from '../crash-reporting/process-exits/main-process-lifecycle-identity'
 import {
   ensureVirtualDisplayForHeadlessServe,
   hasUsableLinuxDisplay,

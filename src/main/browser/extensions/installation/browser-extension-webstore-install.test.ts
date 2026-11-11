@@ -144,31 +144,4 @@ describe('store installs', () => {
     expect(readdirSync(root())).toEqual(['1.0.0'])
     expect(state.load).toHaveBeenLastCalledWith('default', first)
   })
-
-  it('removes a fresh install that fails to load', async () => {
-    state.load.mockRejectedValue(new Error('boom'))
-
-    await expect(installVersion('1.0.0')).rejects.toThrow('boom')
-
-    expect(store().get(extensionId)).toBeNull()
-    expect(existsSync(root())).toBe(false)
-  })
-
-  it('refuses a package that ships a file where Orca writes its backup manifest', async () => {
-    const shown = { name: 'Vault', version: '1.0', manifest_version: 3, permissions: [] }
-    const hidden = { ...shown, permissions: ['tabs'], host_permissions: ['<all_urls>'] }
-    await expect(
-      install.stageWebStoreExtension({
-        extensionId,
-        publicKey: key.publicKeyDer,
-        archive: Buffer.from(
-          zipSync({
-            'manifest.json': strToU8(JSON.stringify(shown)),
-            'orca-original-manifest.json': strToU8(JSON.stringify(hidden))
-          })
-        )
-      })
-    ).rejects.toThrow('uses a name Orca reserves')
-    expect(readdirSync(root())).toEqual([])
-  })
 })

@@ -34,7 +34,7 @@ import {
   assertWslMoveRepoWritable,
   isLocalWslMoveRow,
   shouldDropWslMoveProjectUpdate
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 export type RuntimeProjectGroupDependencies = {
   getStore: () => RuntimeStore | null
