@@ -7,17 +7,20 @@ import type {
   OrcadMigrationCatalogPayload,
   OrcadMigrationManifest
 } from '../../../../shared/orcad-migration/orcad-migration-manifest'
-import { isRetainedOrcadMigrationSourceCutover } from '../../../../shared/orcad-migration/orcad-migration-source-cutover'
-import type { OrcadMigrationSourceCutover } from '../../../../shared/orcad-migration/orcad-migration-source-cutover'
+import {
+  isRetainedOrcadMigrationSourceCutover,
+  type OrcadMigrationSourceCutover
+} from '../../../../shared/orcad-migration/orcad-migration-source-cutover'
+
 import type { SshTarget } from '../../../../shared/ssh-types'
 import type { Store } from '../../../persistence/loading-store/store'
-import { collectOrcadMigrationSourceCatalog } from '../../../persistence/migrating-orcad-catalog/orcad-source-catalog'
-import { listOrcadMigrationCutoverChainForTarget } from '../../../persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
+import { collectOrcadMigrationSourceCatalog } from '../../../persistence/migrating-orcad-catalog/source/catalog/orcad-source-catalog'
+import { listOrcadMigrationCutoverChainForTarget } from '../../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
 import {
   createOrcadMigrationManifest,
   orcadMigrationCatalogIds,
   type OrcadMigrationCatalogIds
-} from '../../../persistence/migrating-orcad-catalog/orcad-migration-manifest-export'
+} from '../../../persistence/migrating-orcad-catalog/source/catalog/orcad-migration-manifest-export'
 import type { OrcadMigrationSnapshotSource } from '../transfers/orcad-migration-snapshot-coordinator'
 import { collectUntransferredDependentBlockers } from '../../../ssh/targets/ssh-target-orcad-dependents'
 import type { OrcadMigrationPreflightStore } from '../../../ssh/targets/ssh-target-orcad-preflight'

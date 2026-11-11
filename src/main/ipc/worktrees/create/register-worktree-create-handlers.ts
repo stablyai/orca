@@ -12,8 +12,8 @@ import {
   addWorktreeCreatePhaseAttributes,
   withWorktreeSpan
 } from '../../../observability/instrumentation'
-import { workspaceSourceSchema } from '../../../../shared/telemetry-events'
-import type { WorkspaceSource } from '../../../../shared/telemetry-events'
+import { workspaceSourceSchema, type WorkspaceSource } from '../../../../shared/telemetry-events'
+
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { createLocalWorktree, notifyWorktreesChanged } from '../../worktree-remote'
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
@@ -29,7 +29,7 @@ import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { workspaceLifecycleKey } from '../../../runtime/workspaces/lifecycle/workspace-lifecycle-commands'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { beginWorkspaceCreateTelemetry } from '../../../workspaces/creation/workspace-create-telemetry'
-import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { applyWorkspaceCreatePluginHook } from '../../../plugins/hooks/workspace-create-plugin-hook'
 import { withProjectWorktreeCreate } from '../../../workspaces/creation/worktree-create-in-flight'
 

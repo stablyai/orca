@@ -14,7 +14,7 @@ import {
   syncDirectoryDurablySync,
   writeFileDurableSync
 } from '../../filesystem/durable-file-write'
-import { rewriteWslMoveOrchestrationHistoryFile } from '../../persistence/moving-wsl-projects/wsl-move-orchestration-history-rewrite'
+import { rewriteWslMoveOrchestrationHistoryFile } from '../../persistence/moving-wsl-projects/desktop-state/wsl-move-orchestration-history-rewrite'
 import { hashWorktreeId } from '../../pty/history/terminal-history-id'
 
 export type WslDriveUncConversionStorePaths = {

@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest'
 import {
   createWorkerMaintenanceFixture,
   maintenanceBarrier
-} from './loading-store/profile-state-maintenance-fixture'
+} from './loading-store/profile-writing/profile-state-maintenance-fixture'
 import type { ProfileStateWorkerAuthority } from './profile-state/profile-state-worker-authority'
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({

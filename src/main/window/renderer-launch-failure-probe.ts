@@ -1,5 +1,5 @@
 import { runProcess } from '@orca/process-host'
-import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
+import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { errnoCodeOrUnknown } from '../../shared/errno-code'
 
 /** 'ok' when a throwaway child could start, the spawn errno (EAGAIN = per-user process limit), or 'skipped' on Windows. */

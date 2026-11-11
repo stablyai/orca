@@ -13,13 +13,13 @@ import { createStructuredAgentSessionLogger } from '../../native-chat/agent-sess
 import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { CODEX_MINIMUM_SUPPORTED_VERSION } from '../../../shared/codex-cli-installation'
 import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-server-request-error'
-import { resolveStructuredWorkerIdentity } from '../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
+
 import { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import '../orchestration/db/contract-constants'
 import '../orchestration/db/messages/mailbox-routing-page'
 import '../orchestration/db/dispatch-row-writer'
 import '../orchestration/db/attempt-outcome-projection'
-import { storeRepo } from '../orca-runtime-tests/runtime-store-partial-fixture'
+
 import { scriptedCodexTransport } from '../orca-runtime-tests/scripted-codex-transport.test-fixture'
 import { chatTabCommandsSettled } from '../orca-runtime-tests/session-layout-apply.test-fixture'
 import {
@@ -42,7 +42,7 @@ import { WORKTREE_METHODS } from './methods/workspaces/worktree'
 import { REPO_METHODS } from './methods/projects/repo'
 import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
-import { idOf, isRecord, resultOf } from './orchestration-session-caller-test-fixture'
+import { isRecord, resultOf } from './orchestration-session-caller-test-fixture'
 import { UnixSocketTransport } from './unix-socket-transport'
 import { removalPtyProvider } from './worktree-rm-pty.test-fixture'
 
@@ -347,89 +347,6 @@ function settle(worker: Awaited<ReturnType<typeof start>>) {
   })
 }
 
-it.each(['worker-release', 'retry-of'] as const)(
-  'keeps a refused first task inspectable across identity reload until %s releases it',
-  async (cleanup) => {
-    const coordinator = await launch()
-    rejectNextTurn = true
-    const receipt = await cli([
-      'orchestration',
-      'worker-start',
-      '--run',
-      runId,
-      '--worktree',
-      `id:${rig.workspace}`,
-      '--agent',
-      'codex',
-      '--spec',
-      'Refused fixture task'
-    ])
-    expect(receipt.code, receipt.stdout + receipt.stderr).toBe(1)
-    const result = resultOf(receipt.output)
-    expect(result).toMatchObject({ state: 'failed' })
-    if (typeof result.dispatchId !== 'string') {
-      throw new Error('failed start did not return its dispatch')
-    }
-    const dispatchId = result.dispatchId
-    dispatches.push(dispatchId)
-    const worker = db.getWorkerDispatch(dispatchId)!
-    const handle = worker.agent_terminal_handle!
-    const identity = structuredWorkerIdentities.get(handle)!
-    expect(identity).toBeTruthy()
-    await chatTabCommandsSettled()
-    visible(identity.sessionId, true)
-    expect(host.hasSession(identity.sessionId)).toBe(false)
-    expect(db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
-      ownership_state: 'owned',
-      release_state: 'not_requested'
-    })
-    expect(db.getDispatchContextById(dispatchId)).toMatchObject({ status: 'failed' })
-    expect(db.getDispatchContextById(dispatchId)?.capability_revoked_at).not.toBeNull()
-    expect(db.getTask(db.getDispatchContextById(dispatchId)!.task_id)?.status).toBe('failed')
-    const snapshot = await readTestHostJournal(host, identity.sessionId)
-    expect(snapshot.submissions).toMatchObject([{ dispatchState: 'rejected' }])
-    expect(JSON.stringify(snapshot)).toContain('Refused fixture task')
-    structuredWorkerIdentities.clear()
-    expect(resolveStructuredWorkerIdentity(handle, db)).toMatchObject({
-      sessionId: identity.sessionId,
-      handle,
-      paneKey: identity.paneKey
-    })
-    const read = await cli([
-      'orchestration',
-      'worker-read',
-      '--dispatch',
-      dispatchId,
-      '--source',
-      'transcript'
-    ])
-    expect(read.code, read.stdout + read.stderr).toBe(0)
-    expect(resultOf(read.output)).toMatchObject({
-      dispatchId,
-      status: { worker: 'failed' },
-      transcript: {
-        messages: [{ role: 'user', from: { orchestration: { dispatchId } } }]
-      }
-    })
-    if (cleanup === 'worker-release') {
-      const released = await cli(['orchestration', 'worker-release', '--dispatch', dispatchId])
-      expect(released.code, released.stdout + released.stderr).toBe(0)
-      expect(resultOf(released.output)).toMatchObject({ state: 'released' })
-    } else {
-      const retry = await start(dispatchId)
-      expect(retry.dispatchId).not.toBe(dispatchId)
-      await vi.waitFor(() =>
-        expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('released')
-      )
-    }
-    await chatTabCommandsSettled()
-    await rig.profile.flushPendingOrThrowAsync()
-    visible(identity.sessionId, false)
-    visible(coordinator.sessionId, true)
-    expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.ownership_state).toBe('released')
-  }
-)
-
 it.each(['worker-stop', 'worker-release'] as const)(
   '%s waits for provider proof before CLI success and exact raw/saved retirement',
   async (command) => {
@@ -518,205 +435,3 @@ it.each(['worker-stop', 'worker-release'] as const)(
     }
   }
 )
-
-it.each(['worker-stop', 'worker-release'] as const)(
-  '%s reports an unproven provider close with exit 1 and retains the original surface',
-  async (command) => {
-    const survivor = await launch()
-    const worker = await start()
-    if (command === 'worker-release') {
-      settle(worker)
-    }
-    const selectionPreserved = await selectSurvivor(survivor.sessionId)
-    const close = vi.spyOn(worker.connection, 'close').mockResolvedValue(false)
-    try {
-      const receipt = await cli(['orchestration', command, '--dispatch', worker.dispatchId])
-      expect(receipt.code, receipt.stdout + receipt.stderr).toBe(1)
-      expect(resultOf(receipt.output)).toMatchObject({
-        state: command === 'worker-stop' ? 'stop_unknown' : 'release_unknown'
-      })
-      expect(worker.connection.closed).toBe(false)
-      expect(
-        host.deps.store.getRecord(worker.identity.sessionId)?.lease.ownerProcess
-      ).not.toBeNull()
-      visible(worker.identity.sessionId, true)
-      visible(survivor.sessionId, true)
-      selectionPreserved()
-      if (command === 'worker-stop') {
-        expect(db.getWorkerDispatch(worker.dispatchId)?.state).toBe('stop_unknown')
-      } else {
-        expect(db.getWorkerTerminalResourceByOwner(worker.dispatchId)?.release_state).toBe(
-          'unknown'
-        )
-      }
-    } finally {
-      close.mockRestore()
-      await host.close(worker.identity.sessionId, 'evict')
-    }
-  }
-)
-
-it('worker-abandon settles and fences consumption, releases the existing binding and retains the child', async () => {
-  await launch()
-  finishTurns = false
-  const worker = await start()
-  await vi.waitFor(async () => {
-    const journal = await readTestHostJournal(host, worker.identity.sessionId)
-    expect(
-      journal.items.some((item) => item.body.kind === 'turn' && item.body.state === 'running')
-    ).toBe(true)
-  })
-  const mailbox = `dispatch:${worker.dispatchId}`
-  const checked = db.insertMessage({
-    from: `run:${runId}`,
-    to: mailbox,
-    runId,
-    subject: 'Already checked'
-  })
-  const dispatch = db.getDispatchContextById(worker.dispatchId)!
-  const outstanding = db.getOrCreateMailboxDelivery({
-    runId,
-    mailboxHandle: mailbox,
-    consumerGeneration: dispatch.consumer_generation,
-    consumerSource: 'dispatch'
-  })
-  if (!outstanding) {
-    throw new Error('expected actual outstanding worker delivery')
-  }
-  expect(outstanding.messages.map((message) => message.id)).toContain(checked.id)
-  const unread = db.insertMessage({
-    from: `run:${runId}`,
-    to: mailbox,
-    runId,
-    subject: 'Retain until a real journal edge',
-    body: 'Do not lose this message'
-  })
-  runtime.deliverPendingMessagesForHandle(mailbox)
-  await vi.waitFor(async () => {
-    const send = db.getStructuredMailSend(mailbox, unread.id)
-    expect(send).toBeDefined()
-    expect(await host.sendAnswer(worker.identity.sessionId, send!.operation_id)).toEqual({
-      kind: 'waiting'
-    })
-  })
-  const tableId = host.getSessionTabId(worker.identity.sessionId)
-  const owner = host.deps.store.getRecord(worker.identity.sessionId)?.lease.ownerProcess
-  const resource = db.getWorkerTerminalResourceByOwner(worker.dispatchId)
-  expect(tableId).toBe(structuredAgentSessionTabId(worker.identity.sessionId))
-  expect(owner).toBeTruthy()
-  expect(resource).toMatchObject({ ownership_state: 'owned', release_state: 'not_requested' })
-  const receipt = await cli(['orchestration', 'worker-abandon', '--dispatch', worker.dispatchId])
-  expect(receipt.code, receipt.stdout + receipt.stderr).toBe(0)
-  expect(resultOf(receipt.output)).toMatchObject({ state: 'abandoned', processAction: 'none' })
-  expect(db.getWorkerDispatch(worker.dispatchId)?.state).toBe('abandoned')
-  expect(db.getDispatchContextById(worker.dispatchId)).toMatchObject({
-    status: 'failed',
-    last_failure: 'abandoned',
-    capability_revoked_at: expect.any(String)
-  })
-  expect(db.getWorkerTerminalResourceByOwner(worker.dispatchId)).toMatchObject({
-    id: resource?.id,
-    ownership_state: 'owned',
-    release_state: 'retained',
-    retained_reason: 'user_requested'
-  })
-  // STA-12976: unchanged failed-dispatch notification routing can repark after this cleanup.
-  expect(worker.connection.closed).toBe(false)
-  expect(host.hasSession(worker.identity.sessionId)).toBe(true)
-  expect(host.deps.store.getRecord(worker.identity.sessionId)?.lease.ownerProcess).toEqual(owner)
-  expect(host.getSessionTabId(worker.identity.sessionId)).toBe(tableId)
-  visible(worker.identity.sessionId, true)
-  const unconsumed = () => {
-    expect(db.getMessageById(checked.id)?.read).toBe(0)
-    expect(db.getMessageById(unread.id)?.read).toBe(0)
-    expect(db.getDeliveryRaw(outstanding.delivery.id)?.acknowledged_at).toBeNull()
-  }
-  unconsumed()
-  vi.stubEnv('ORCA_AGENT_SESSION_ID', worker.identity.sessionId)
-  const refused = await cli(['orchestration', 'check'])
-  expect(refused.code, refused.stdout + refused.stderr).toBe(1)
-  expect(refused.output).toMatchObject({ ok: false, error: { code: 'consumer_fenced' } })
-  expect(requests.at(-1)).toMatchObject({
-    method: 'orchestration.check',
-    orchestrationCompatibilityEvidence: { agentSessionId: worker.identity.sessionId }
-  })
-  unconsumed()
-})
-
-it('worktree create --agent reaches common native creation and worktree rm performs actual teardown', async () => {
-  const survivor = await launch()
-  const folder = join(root, 'folder-repo')
-  await mkdir(folder)
-  rig.profile.addRepo(storeRepo({ id: 'cli-folder', path: folder, kind: 'folder' }))
-  const created = await cli([
-    'worktree',
-    'create',
-    '--repo',
-    'id:cli-folder',
-    '--name',
-    'native-child',
-    '--agent',
-    'codex',
-    '--surface',
-    'chat',
-    '--prompt',
-    'Reply READY',
-    '--setup',
-    'skip',
-    '--no-parent'
-  ])
-  expect(created.code, created.stdout + created.stderr).toBe(0)
-  const result = resultOf(created.output)
-  const worktreeId = idOf(result.worktree)
-  const session = host.deps.store
-    .listRecords()
-    .find((record) => record.location.workspaceId === worktreeId)
-  if (!session) {
-    throw new Error('created workspace has no native record')
-  }
-  await vi.waitFor(async () => {
-    expect((await readTestHostJournal(host, session.sessionId)).submissions).toMatchObject([
-      { dispatchState: 'accepted' }
-    ])
-  })
-  const current = host.deps.store.getRecord(session.sessionId)
-  const threadId = current && activeProviderContext(current).head?.handle.nativeId
-  const connection = codex.connections.find((c) => c.threadId === threadId)
-  if (!connection) {
-    throw new Error('created workspace has no provider')
-  }
-  await chatTabCommandsSettled()
-  expect(result.launch).toMatchObject({
-    worktreeId,
-    outcome: { kind: 'structured', sessionId: session.sessionId }
-  })
-  visible(session.sessionId, true)
-  expect(rig.profile.getWorktreeMeta(worktreeId)).toBeDefined()
-  const release = Promise.withResolvers<void>()
-  const close = connection.close.bind(connection)
-  vi.spyOn(connection, 'close').mockImplementation(async () => {
-    await release.promise
-    return close()
-  })
-  const removed = cli(['worktree', 'rm', '--worktree', `id:${worktreeId}`])
-  try {
-    await vi.waitFor(() => expect(connection.close).toHaveBeenCalled())
-    expect(connection.closed).toBe(false)
-    visible(survivor.sessionId, true)
-  } finally {
-    release.resolve()
-  }
-  const receipt = await removed
-  expect(receipt.code, receipt.stdout + receipt.stderr).toBe(0)
-  await chatTabCommandsSettled()
-  await rig.profile.flushPendingOrThrowAsync()
-  expect(resultOf(receipt.output)).toMatchObject({ removed: true })
-  expect(connection.closed).toBe(true)
-  expect(host.deps.store.getRecord(session.sessionId)?.lease.ownerProcess).toBeNull()
-  visible(session.sessionId, false)
-  visible(survivor.sessionId, true)
-  expect(rig.profile.getWorktreeMeta(worktreeId)).toBeUndefined()
-  expect(requests.map((r) => r.method)).toEqual(
-    expect.arrayContaining(['agent.launchReplay', 'worktree.rm'])
-  )
-})

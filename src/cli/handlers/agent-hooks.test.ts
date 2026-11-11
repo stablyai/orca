@@ -13,18 +13,18 @@ import {
   getOrcaProfileDataFile,
   getOrcaProfileStateDatabaseFile
 } from '../../main/orca-profiles/profile-storage-paths'
-import { openProfileStateDatabase } from '../../main/persistence/profile-state/profile-state-database'
-import * as profileStateDatabase from '../../main/persistence/profile-state/profile-state-database'
+import { openProfileStateDatabase } from '../../main/persistence/profile-state/database/profile-state-database'
+import * as profileStateDatabase from '../../main/sqlite/sync-database'
 import {
   exportProfileStateJson,
-  hashProfileStateJson,
   importProfileStateJson
-} from '../../main/persistence/profile-state/profile-state-documents'
+} from '../../main/persistence/profile-state/documents/profile-state-documents'
+import { hashProfileStatePayload as hashProfileStateJson } from '../../main/persistence/profile-state/documents/profile-state-document-validation'
 import {
   acquireProfileStateMaintenance,
   acquireProfileStateRuntimeAdmission,
   type ProfileStateRuntimeAdmission
-} from '../../main/persistence/profile-state/profile-state-access'
+} from '../../main/persistence/profile-state/access/profile-state-access'
 
 vi.mock('node:fs', async (original) => ({ ...(await original<typeof fs>()) }))
 
@@ -143,7 +143,7 @@ describe('agent hooks CLI handler', () => {
       if (source === 'profile-json') {
         writeActiveProfileIndex(userDataPath, profileId)
       }
-      vi.spyOn(profileStateDatabase, 'isProfileStateSqliteAvailable').mockReturnValue(false)
+      vi.spyOn(profileStateDatabase, 'isSqliteAvailable').mockReturnValue(false)
 
       await runAgentHooksOff(userDataPath)
 
@@ -175,7 +175,7 @@ describe('agent hooks CLI handler', () => {
         writeActiveProfileIndex(userDataPath, profileId)
       }
       getDefaultUserDataPathMock.mockReturnValue(userDataPath)
-      vi.spyOn(profileStateDatabase, 'isProfileStateSqliteAvailable').mockReturnValue(false)
+      vi.spyOn(profileStateDatabase, 'isSqliteAvailable').mockReturnValue(false)
       const original = readFileSync(join(directory, 'orca-data.json'), 'utf8')
 
       await main(['agent', 'hooks', 'status', '--json'], userDataPath)

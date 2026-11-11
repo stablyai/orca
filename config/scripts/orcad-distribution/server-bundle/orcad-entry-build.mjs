@@ -18,9 +18,9 @@ const ORCAD_COMPAT_BUILD_TARGET = 'node18'
 export const ORCAD_CHILD_ENTRY_POINTS = {
   watcher: 'src/main/ipc/filesystem/watcher-process/parcel-watcher-process-entry.ts',
   daemon: 'src/main/daemon/daemon-entry.ts',
-  writer: 'src/main/persistence/profile-state/profile-state-writer-worker-entry.ts',
-  backup: 'src/main/persistence/profile-state/profile-state-backup-worker-entry.ts',
-  sessionSearch: 'src/main/ai-vault-search/session-search-worker-entry.ts',
+  writer: 'src/main/persistence/profile-state/writer/profile-state-writer-worker-entry.ts',
+  backup: 'src/main/persistence/profile-state/backup/profile-state-backup-worker-entry.ts',
+  sessionSearch: 'src/main/ai-vault-search/worker/session-search-worker-entry.ts',
   foreignSqliteReader: 'src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry.ts',
   journalSql: 'src/main/native-chat/agent-session-journal/journal-sql-worker-entry.ts',
   journalSqlReader: 'src/main/native-chat/agent-session-journal/journal-sql-reader-entry.ts',

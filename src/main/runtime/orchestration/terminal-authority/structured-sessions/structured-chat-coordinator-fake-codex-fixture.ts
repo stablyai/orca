@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
@@ -142,7 +143,7 @@ export function operationId(): string {
   return `${Date.now()}-${operations.toString(16).padStart(32, '0')}`
 }
 
-export function attachParams(sessionId: string) {
+export function attachParams(sessionId: string, fixtureRoot: string) {
   const params = {
     location: {
       executionHostId: 'local' as const,
@@ -152,7 +153,7 @@ export function attachParams(sessionId: string) {
     },
     provider: 'codex' as const,
     agent: 'codex' as const,
-    accountHome: { variable: 'CODEX_HOME' as const, path: '/home/dev/.codex' },
+    accountHome: { variable: 'CODEX_HOME' as const, path: join(fixtureRoot, 'codex-home') },
     runtimeKind: 'native' as const
   }
   const envelope = {

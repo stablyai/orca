@@ -4,7 +4,6 @@ import { continuationContextReader as contextReader } from '../recovery/structur
 import { structuredAgentStartJournal } from '../acquisition/structured-agent-start-journal'
 import { StructuredConversationCommandController as CommandController } from '../operations/structured-conversation-command-controller'
 
-import type { AgentSessionSubscribeInput } from '../publication/subscribers/agent-session-subscribe-input'
 import { createStartupRecovery } from '../recovery/structured-agent-session-restart-reconcile'
 import { StructuredAgentSessionTaskQueue } from './structured-agent-session-task-queue'
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
@@ -304,6 +303,7 @@ export class StructuredAgentSessionHost {
   historyItem = (id: string, itemId: string) => this.backgroundTasks.historyItem(id, itemId)
   conversationOutline = (sessionId: string) => this.backgroundTasks.conversationOutline(sessionId)
   namingPrompt = this.reads.namingPrompt
+  approvalPrompt = this.reads.approvalPrompt
   automationRun = this.reads.automationRun
   queuedSendAnswer = this.reads.queuedSendAnswer
   sendAnswer = this.reads.sendAnswer
@@ -325,7 +325,7 @@ export class StructuredAgentSessionHost {
 
   observeJournalPublications = this.clientDelivery.observeJournalPublications
 
-  subscribe = (input: AgentSessionSubscribeInput) => this.backgroundTasks.subscribe(input)
+  subscribe: BackgroundTasks['subscribe'] = (input) => this.backgroundTasks.subscribe(input)
 
   settleLateDispatch = this.mutations.settleLateDispatch
   publishWorkChanged: (sessionId: string) => void = this.clientDelivery.publishGenerationEnded

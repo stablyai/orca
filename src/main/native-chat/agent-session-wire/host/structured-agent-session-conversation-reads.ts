@@ -69,6 +69,8 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
     },
     namingPrompt: async (sessionId: string, hostStartedAt?: number) =>
       (await journalOf(sessionId)).reads.namingPrompt(hostStartedAt),
+    approvalPrompt: async (sessionId: string, itemId: string) =>
+      (await journalOf(sessionId)).reads.item(itemId),
     automationRun: async (sessionId: string, messageId: string, inputIds: readonly string[]) =>
       (await journalOf(sessionId)).reads.automationRun(messageId, inputIds),
 

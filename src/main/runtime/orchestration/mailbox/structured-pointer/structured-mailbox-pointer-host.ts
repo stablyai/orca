@@ -1,3 +1,5 @@
+import { structuredAgentSessionSendBlock } from '../../../../native-chat/agent-session-wire/operations/structured-agent-session-send-preparation'
+import type { ChatMailAdmitFacts } from '../delivery-hold/mailbox-delivery-hold'
 /** Adapt host reads/sends for the pure structured-pointer policy; do not decide delivery here. */
 
 import '../../../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-admission'
@@ -46,6 +48,31 @@ export async function readStructuredSessionGateFacts(
       console.warn('[orchestration] structured journal unreadable', sessionId, error)
     }
     return null
+  }
+}
+
+/** The pointer and queue admission read the same current-work owner without sending. */
+export async function readStructuredMailAdmitFacts(
+  sessionId: string
+): Promise<ChatMailAdmitFacts | null> {
+  const host = getStructuredAgentSessionHost()
+  if (!host) {
+    return { attached: false }
+  }
+  let work
+  try {
+    work = await host.currentWorkAtRest(sessionId)
+  } catch (error) {
+    return (error as Error)?.message === AGENT_SESSION_NOT_ATTACHED.code
+      ? { attached: false }
+      : null
+  }
+  const block = structuredAgentSessionSendBlock(host.deps.store.getRecord(sessionId))
+  return {
+    attached: true,
+    fenced: (host.deps.store.getConversation(sessionId)?.currentFence ?? null) !== null,
+    refusal: block ? block.refusal.message : null,
+    behindPrompt: work?.hasActionablePrompt() === true
   }
 }
 
