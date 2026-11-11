@@ -172,3 +172,11 @@ export function gatherOrcaCloudSettingsGroup(
   const at = firstCloud === -1 ? rest.length : firstCloud
   return [...rest.slice(0, at), ...leads, ...rest.slice(at)]
 }
+
+/** True when the active Settings section belongs to the Orca Cloud group (team-level, host-free). */
+export function isOrcaCloudSettingsSection(
+  sections: readonly { id: string; group?: string }[],
+  activeSectionId: string | null | undefined
+): boolean {
+  return sections.some((section) => section.id === activeSectionId && section.group === 'orca-cloud')
+}
