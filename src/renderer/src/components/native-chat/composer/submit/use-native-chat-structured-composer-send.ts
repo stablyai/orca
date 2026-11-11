@@ -15,6 +15,11 @@ import {
 } from '../editor/native-chat-prompt-document'
 import type { StructuredAgentSessionAttachmentPreparation } from '../../session/structured/delivery/structured-agent-session-send-slot'
 import { useCallback } from 'react'
+import {
+  claimNativeChatShellContext,
+  consumeNativeChatShellRuns,
+  releaseNativeChatShellRuns
+} from '../../shell/native-chat-shell-runs'
 import { completeNativeChatStructuredUserAction } from './native-chat-structured-user-action'
 import {
   isStructuredAgentSessionHostCommand,
@@ -201,6 +206,10 @@ export function useNativeChatStructuredComposerSend({
       }
       const prepareAttachments: StructuredAgentSessionAttachmentPreparation | undefined =
         stagedInput ? (input) => stagedInput.prepare(input, structuredTransport) : undefined
+      const shellContext = hostCommand ? null : claimNativeChatShellContext(draftScopeKey)
+      if (shellContext) {
+        text = text.trim() ? `${text}\n\n${shellContext.text}` : shellContext.text
+      }
       return dispatchNativeChatStructuredComposerText(
         structuredTransport,
         text,
@@ -220,9 +229,13 @@ export function useNativeChatStructuredComposerSend({
           }
           if (!accepted) {
             finishNativeChatComposerSubmission(draftScopeKey, submission, recoversDraft())
+            releaseNativeChatShellRuns(shellContext?.ids ?? [])
             return false
           }
           transferred = true
+          if (shellContext) {
+            consumeNativeChatShellRuns(shellContext.ids)
+          }
           completeNativeChatStructuredUserAction(
             agent,
             structuredTransport,
@@ -233,6 +246,7 @@ export function useNativeChatStructuredComposerSend({
         })
         .catch((error) => {
           finishNativeChatComposerSubmission(draftScopeKey, submission, recoversDraft())
+          releaseNativeChatShellRuns(shellContext?.ids ?? [])
           if (hostCommand && !isCurrent()) {
             return false
           }

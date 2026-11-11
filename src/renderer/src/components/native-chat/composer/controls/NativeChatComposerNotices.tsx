@@ -1,4 +1,4 @@
-import { AlertCircle, Paperclip, ServerOff, Smartphone, X } from 'lucide-react'
+import { AlertCircle, Paperclip, ServerOff, Smartphone, SquareTerminal, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -9,30 +9,41 @@ import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 /** Keep the live region mounted so screen readers announce the first notice; show errors first. */
 export function NativeChatComposerNotices({
   notices,
-  className
+  className,
+  shellMode
 }: {
   notices: readonly NativeChatComposerNotice[]
   className?: string
+  shellMode?: boolean
 }): React.JSX.Element {
+  const hint = shellMode ? <NativeChatShellModeHint /> : null
   if (notices.length === 0) {
-    return <ul aria-live="polite" />
+    return (
+      <>
+        <ul aria-live="polite" />
+        {hint}
+      </>
+    )
   }
   const ordered = [...notices].sort(
     (a, b) => Number(b.kind === 'error') - Number(a.kind === 'error')
   )
   return (
-    <ul
-      aria-live="polite"
-      className={cn(
-        'divide-y divide-border overflow-hidden rounded-md border border-border bg-card text-xs text-card-foreground',
-        ordered[0]?.kind === 'error' && 'border-destructive/30',
-        className
-      )}
-    >
-      {ordered.map((notice) => (
-        <NoticeRow key={notice.key} notice={notice} />
-      ))}
-    </ul>
+    <>
+      <ul
+        aria-live="polite"
+        className={cn(
+          'divide-y divide-border overflow-hidden rounded-md border border-border bg-card text-xs text-card-foreground',
+          ordered[0]?.kind === 'error' && 'border-destructive/30',
+          className
+        )}
+      >
+        {ordered.map((notice) => (
+          <NoticeRow key={notice.key} notice={notice} />
+        ))}
+      </ul>
+      {hint}
+    </>
   )
 }
 
@@ -114,5 +125,21 @@ function NoticeRow({ notice }: { notice: NativeChatComposerNotice }): React.JSX.
         </div>
       ) : null}
     </li>
+  )
+}
+
+function NativeChatShellModeHint(): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <p className="mb-1.5 flex items-center gap-1.5 px-1 text-xs text-chat-foreground-faint">
+      <SquareTerminal className="size-3.5 text-[var(--chat-link)]" />
+      <span className="font-medium text-chat-foreground">
+        {t('components.native-chat.composer.shellCommandLabel', 'Shell command')}
+      </span>
+      {t(
+        'components.native-chat.composer.shellModeHint',
+        'Runs in this workspace. Add a result to the chat to share it with the agent.'
+      )}
+    </p>
   )
 }

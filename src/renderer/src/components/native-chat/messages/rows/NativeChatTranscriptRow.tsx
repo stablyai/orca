@@ -1,4 +1,5 @@
 import { memo, useContext } from 'react'
+import { NativeChatShellRunCards } from '../../shell/NativeChatShellRunList'
 import { cn } from '@/lib/class-names'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { MessageRow, type NativeChatDeliveryNotice } from './NativeChatMessageRow'
@@ -175,6 +176,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       {openedPullRequests ? (
         <NativeChatOpenedPullRequestCard pullRequests={openedPullRequests} />
       ) : null}
+      <NativeChatShellRunCards anchorIds={(workRun ?? [message]).map(({ id }) => id)} />
     </div>
   )
 })

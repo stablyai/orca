@@ -2,6 +2,8 @@ import type { AgentType } from '../../../../../../shared/agent-status/contracts/
 import { serializeNativeChatAgentReferences } from '../pickers/native-chat-agent-reference-send'
 import { mayHoldAgentReferences } from '../../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
 import { useCallback, useMemo, useState, type RefObject } from 'react'
+import { isNativeChatShellDraft } from '../../../../../../shared/native-chat/input/native-chat-shell-command'
+import { useNativeChatShellCommand } from './use-native-chat-shell-command'
 import { translate } from '@/i18n/i18n'
 import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/native-chat-picker-items'
 import type { NativeChatComposerSendIntent } from './native-chat-composer-send-intent'
@@ -195,10 +197,27 @@ export function useNativeChatComposerSubmit(args: {
     ]
   )
 
+  const runShellDraft = useNativeChatShellCommand(
+    structuredTransport,
+    draftScopeKey,
+    setDraft,
+    setCaret
+  )
+
   const send = useCallback(
     (intent?: NativeChatComposerSendIntent) => {
       // Before goal mode too: a navigation command must never become an objective.
       if (consumeOrcaCommand?.(draft)) {
+        return
+      }
+      if (
+        structuredTransport?.runShellCommand &&
+        !active &&
+        !disabled &&
+        imageAttachments.length === 0 &&
+        isNativeChatShellDraft(draft)
+      ) {
+        runShellDraft(draft)
         return
       }
       if (
@@ -221,7 +240,12 @@ export function useNativeChatComposerSubmit(args: {
         }
       } else if (!structuredTransport) {
         sendPty()
-      } else if (!disabled && draft.trim() === '' && imageAttachments.length === 0) {
+      } else if (
+        !disabled &&
+        draft.trim() === '' &&
+        imageAttachments.length === 0 &&
+        !structuredTransport.hasAddedShellResults
+      ) {
         submitEmpty?.()
       } else if (!disabled) {
         if (intent) {
@@ -239,6 +263,7 @@ export function useNativeChatComposerSubmit(args: {
       draft,
       draftScopeKey,
       imageAttachments,
+      runShellDraft,
       sendPty,
       sendStructured,
       setCaret,

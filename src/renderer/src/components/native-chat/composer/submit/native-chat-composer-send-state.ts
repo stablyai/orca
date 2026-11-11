@@ -1,4 +1,5 @@
 import type { NativeChatFollowUpBehavior } from '../../../../../../shared/native-chat/input/native-chat-follow-up-behavior'
+import { isNativeChatShellDraft } from '../../../../../../shared/native-chat/input/native-chat-shell-command'
 import type { NativeChatComposerImageAttachment } from '../../attachments/chips/native-chat-image-attachment'
 import type { NativeChatStructuredComposerTransport } from './native-chat-structured-composer-transport'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
@@ -21,6 +22,7 @@ export type NativeChatComposerSendState = {
   alternateSend: NativeChatFollowUpBehavior | undefined
   /** Cmd/Ctrl+Enter on an empty composer sends the head queued card now: into the running turn, or with none running (a paused queue after Stop), as its own. */
   chordSteersHead: boolean
+  shellMode: boolean
 }
 
 /** What the composer's Send/Stop button offers now, and whether it can be pressed. */
@@ -35,7 +37,13 @@ export function nativeChatComposerSendState(
     structuredTransport:
       | Pick<
           NativeChatStructuredComposerTransport,
-          'sendOut' | 'sendBlockedReason' | 'threadGoal' | 'sendFollowUp' | 'optionSnapshot'
+          | 'sendOut'
+          | 'sendBlockedReason'
+          | 'threadGoal'
+          | 'sendFollowUp'
+          | 'optionSnapshot'
+          | 'runShellCommand'
+          | 'hasAddedShellResults'
         >
       | undefined
     editSession: { canSave: boolean } | undefined
@@ -70,12 +78,13 @@ export function nativeChatComposerSendState(
       !structuredAgentSessionCommandChangesConversation(input.draft))
   const draftHeld = localHold || (hostHold && !runsWhileHostHolds)
   const hasDraft = input.draft.trim() !== '' || input.imageAttachments.length > 0
+  const sendsShellResults = !hasDraft && transport?.hasAddedShellResults === true
   // Like Enter, a typed draft sends while the agent works; only an empty one offers Stop.
   const sendButtonDisabled = input.editSession
     ? sendHeld || !input.editSession.canSave
     : input.isWorking && !hasDraft
       ? !input.canStop
-      : draftHeld || !hasDraft
+      : draftHeld || !(hasDraft || sendsShellResults)
   // The send's own resolver, so the hint withdraws wherever Cmd/Ctrl+Enter would send no differently.
   const followUp = transport?.sendFollowUp
   const alternateSend: NativeChatFollowUpBehavior | undefined =
@@ -96,6 +105,14 @@ export function nativeChatComposerSendState(
     alternateSend,
     // Never where the chord queues, or a second press would steer the card the first one just queued.
     chordSteersHead:
-      input.messageDelivery && !input.editSession && (alternateSend === 'steer' || !input.isWorking)
+      input.messageDelivery &&
+      !input.editSession &&
+      (alternateSend === 'steer' || !input.isWorking),
+    shellMode:
+      transport?.runShellCommand !== undefined &&
+      input.goalMode !== true &&
+      !input.disabled &&
+      input.imageAttachments.length === 0 &&
+      isNativeChatShellDraft(input.draft)
   }
 }

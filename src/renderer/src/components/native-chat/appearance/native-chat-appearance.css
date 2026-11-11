@@ -119,6 +119,27 @@
   );
 }
 
+.native-chat-composer-frame {
+  transition:
+    border-color 200ms ease-out,
+    background-color 200ms ease-out;
+}
+
+.native-chat-appearance {
+  --chat-shell-accent: color-mix(in srgb, var(--chat-link) 55%, var(--background));
+}
+
+.native-chat-composer-shell {
+  border-color: var(--chat-shell-accent);
+  background-color: color-mix(in srgb, var(--chat-link) 4%, var(--chat-composer-surface));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .native-chat-composer-frame {
+    transition: none;
+  }
+}
+
 @media (width >= 40rem) {
   .native-chat-composer-gutter {
     --composer-gutter: calc(var(--spacing) * 4);
