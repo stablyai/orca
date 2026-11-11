@@ -5,31 +5,30 @@ import type { OrcaCloudWallNotice } from '@/lib/orca-cloud/run-on-preflight'
 
 /**
  * JA-21b (flagged): under Run on when Orca Cloud is the selected target and a billing wall applies.
- * One line: why it can't start, and the one fix (or who can fix it). Create waits until it's fixed.
+ * The reason, then the one fix (or who can fix it) on its own line, flush with the reason: one
+ * layout in the narrow column, never a dangling separator (design-squad). Create waits until fixed.
  */
 export function OrcaCloudWallLine({ wall }: { wall: OrcaCloudWallNotice }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <p
-      role="status"
-      className="flex min-w-0 flex-wrap items-baseline gap-x-1 text-[11px] text-muted-foreground"
-      data-orca-cloud-wall
-    >
-      {/* Wraps rather than truncating: the glossary reason is never cut (design-squad). */}
-      <span>{wall.reason}</span>
-      <span aria-hidden>·</span>
+    <div role="status" className="flex flex-col items-start text-[11px]" data-orca-cloud-wall>
+      {/* Wraps rather than truncating: the glossary reason is never cut. */}
+      <p className="text-muted-foreground">{wall.reason}</p>
       {wall.action ? (
-        <Button type="button" variant="link" size="xs" onClick={wall.action.run}>
-          <span className="text-[11px]">{wall.action.label}</span>
-        </Button>
+        // statusAction pads its label by px-1; the wrapper's -mx-1 puts the text flush-left.
+        <div className="-mx-1">
+          <Button type="button" variant="link" size="statusAction" onClick={wall.action.run}>
+            {wall.action.label}
+          </Button>
+        </div>
       ) : (
-        <span className="shrink-0">
+        <p className="text-muted-foreground">
           {t(
             'auto.components.new.workspace.RunTargetCombobox.orcaCloudAskOwnerOrAdmin',
             'Ask an owner or admin'
           )}
-        </span>
+        </p>
       )}
-    </p>
+    </div>
   )
 }
