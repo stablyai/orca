@@ -1,3 +1,7 @@
+import {
+  applyWorkspaceSessionTerminalTitles,
+  type WorkspaceSessionTitlePatch
+} from '../../../shared/workspace-session/workspace-session-terminal-titles'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type {
   WorkspaceSessionPatch,
@@ -99,8 +103,31 @@ export class SessionSnapshotOperations {
     this.publishSession(next, resolved)
   }
 
-  private publishSession(session: WorkspaceSessionState, hostId: ExecutionHostId): void {
-    session = orderTerminalRowsByTabGroups(session)
+  patchWorkspaceSessionTerminalTitles(
+    updates: WorkspaceSessionTitlePatch,
+    hostId?: string | null
+  ): void {
+    this.assertSnapshotAdmission()
+    const resolved = resolveHostId(hostId)
+    const { runtime, sessions } = this[sessionSnapshotOperationsContext]
+    const stored = sessions.getWorkspaceSession(resolved)
+    let next = applyWorkspaceSessionTerminalTitles(stored, updates)
+    if (resolved === LOCAL_EXECUTION_HOST_ID) {
+      next = keepWslMoveFrozenSessionsForStore(next, runtime.state.workspaceSession)
+    }
+    if (next !== stored) {
+      this.publishSession(next, resolved, false)
+    }
+  }
+
+  private publishSession(
+    session: WorkspaceSessionState,
+    hostId: ExecutionHostId,
+    orderRows = true
+  ): void {
+    if (orderRows) {
+      session = orderTerminalRowsByTabGroups(session)
+    }
     const { runtime, scheduling } = this[sessionSnapshotOperationsContext]
     if (hostId === LOCAL_EXECUTION_HOST_ID) {
       runtime.state.workspaceSession = session

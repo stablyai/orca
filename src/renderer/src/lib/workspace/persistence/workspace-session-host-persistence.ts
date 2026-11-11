@@ -1,3 +1,4 @@
+import type { WorkspaceSessionTitlePatch } from '../../../../../shared/workspace-session/workspace-session-terminal-titles'
 import type { Repo } from '../../../../../shared/repo-types'
 import type {
   WorkspaceSessionPatch,
@@ -251,6 +252,34 @@ export function patchWorkspaceSessionByHost(
   // Why: a host failure must not surface as an unhandled rejection on the upload chain's promise.
   localWrite.catch(() => {})
   return { localWrite, written }
+}
+
+/** Metadata writes target only their current primary partition; parked co-claimants stay untouched. */
+export async function patchWorkspaceSessionTerminalTitlesByHost(
+  patchTitles: (args: WorkspaceSessionTitlePatch, hostId?: ExecutionHostId) => Promise<void>,
+  updates: WorkspaceSessionTitlePatch,
+  state: HostPersistenceState
+): Promise<void> {
+  const hostIdByWorktreeId = buildHostIdByWorktreeId(state)
+  const byHost = new Map<ExecutionHostId, WorkspaceSessionTitlePatch>()
+  for (const field of ['terminalTitles', 'unifiedLabels'] as const) {
+    for (const update of updates[field]) {
+      const hostId = hostIdByWorktreeId(update.worktreeId)
+      let patch = byHost.get(hostId)
+      if (!patch) {
+        patch = { terminalTitles: [], unifiedLabels: [] }
+        byHost.set(hostId, patch)
+      }
+      patch[field].push(update)
+    }
+  }
+  const results = await Promise.allSettled(
+    [...byHost].map(([hostId, patch]) => patchTitles(patch, hostId))
+  )
+  const failure = results.find((result) => result.status === 'rejected')
+  if (failure) {
+    throw failure.reason
+  }
 }
 
 /** Write full snapshots to each owner and force main to disk; request/reply lifecycle receipts represent durability, unlike debounced UI updates. */

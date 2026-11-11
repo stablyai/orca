@@ -1,3 +1,4 @@
+import type { WorkspaceSessionTitlePatch } from '../../shared/workspace-session/workspace-session-terminal-titles'
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -68,6 +69,15 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
       )
     }
   })
+
+  ipcMain.handle(
+    'session:patch-terminal-titles',
+    (_event, args: WorkspaceSessionTitlePatch, hostId?: string | null) => {
+      if (!isFenced(hostId) && !ORCA_LAYOUT_OWNER_IS_MAIN) {
+        store.patchWorkspaceSessionTerminalTitles(args, hostId)
+      }
+    }
+  )
 
   // Window saves cannot shrink main-owned membership; closes must commit explicitly.
   ipcMain.handle(

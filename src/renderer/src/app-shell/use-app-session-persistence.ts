@@ -13,7 +13,8 @@ import {
 } from '../lib/workspace/persistence/workspace-session'
 import {
   buildWorkspaceSessionHostSnapshots,
-  patchWorkspaceSessionByHost
+  patchWorkspaceSessionByHost,
+  patchWorkspaceSessionTerminalTitlesByHost
 } from '../lib/workspace/persistence/workspace-session-host-persistence'
 import {
   createShutdownCheckpointBeforeUnloadHandler,
@@ -48,7 +49,16 @@ export function useAppSessionPersistence(): void {
     return createSessionWriteSubscriber({
       store: useAppStore,
       onPersistError: (error) => console.warn('[session] Session patch failed:', error),
-      persist: ({ patch }) => {
+      supportsTerminalTitlePatches:
+        !ORCA_LAYOUT_OWNER_IS_MAIN && Boolean(window.api.session.patchTerminalTitles),
+      persist: ({ patch, terminalTitles }) => {
+        if (terminalTitles && window.api.session.patchTerminalTitles) {
+          return patchWorkspaceSessionTerminalTitlesByHost(
+            window.api.session.patchTerminalTitles,
+            terminalTitles,
+            useAppStore.getState()
+          )
+        }
         // Route each host’s workspace slice to its own partition.
         return patchWorkspaceSessionByHost(window.api.session, patch, useAppStore.getState())
           .written
