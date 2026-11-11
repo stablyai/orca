@@ -10,7 +10,6 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { OrcaProfileSignOutConfirmDialog } from '../../../orca-profiles/OrcaProfileSignOutConfirmDialog'
 import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../../OrcaSignInProgress'
-import { OrcaCloudSettingsLinks } from '../../orca-cloud/OrcaCloudSettingsLinks'
 import { useOrcaCloudApiAvailable } from '@/hooks/useOrcaCloudApiAvailability'
 
 function accountStatusCopy(
@@ -68,7 +67,6 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
   const t = useTranslate()
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
   const signOut = useAppStore((state) => state.signOutCurrentOrcaProfile)
-  const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const cloudAvailable = useOrcaCloudApiAvailable()
   const [signOutOpen, setSignOutOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
@@ -133,51 +131,54 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
           {connected ? null : <OrcaSignInWaitNotice className="basis-full" />}
         </div>
 
-        {connected && cloudAvailable ? (
-          <OrcaCloudSettingsLinks onOpen={(pane) => openSettingsTarget({ pane, repoId: null })} />
-        ) : null}
-
-        <div className="space-y-4 border-t border-border/60 pt-5">
-          <SettingsGroupHeader
-            className="px-0"
-            title={t(
-              'auto.components.settings.orcaAccount.benefitsTitle',
-              'Included with your account'
-            )}
-          />
-          <div className="space-y-5">
-            <div className="grid gap-5 md:grid-cols-2 md:gap-0 md:divide-x md:divide-border/60">
+        {/* JA-16: with Orca Cloud the page is identity + Sign out only; plan, team and agents have
+            their own entries in the Orca Cloud group right beside it. */}
+        {cloudAvailable ? null : (
+          <div className="space-y-4 border-t border-border/60 pt-5">
+            <SettingsGroupHeader
+              className="px-0"
+              title={t(
+                'auto.components.settings.orcaAccount.benefitsTitle',
+                'Included with your account'
+              )}
+            />
+            <div className="space-y-5">
+              <div className="grid gap-5 md:grid-cols-2 md:gap-0 md:divide-x md:divide-border/60">
+                <AccountBenefit
+                  icon={Files}
+                  className="md:pr-6"
+                  title={t(
+                    'auto.components.settings.orcaAccount.artifactsTitle',
+                    'Artifact sharing'
+                  )}
+                  description={t(
+                    'auto.components.settings.orcaAccount.artifactsDescription',
+                    'Publish HTML and Markdown files, then manage every shared link from Orca.'
+                  )}
+                />
+                <AccountBenefit
+                  icon={Smartphone}
+                  className="md:pl-6"
+                  title={t('auto.components.settings.orcaAccount.relayTitle', 'Orca Relay')}
+                  description={t(
+                    'auto.components.settings.orcaAccount.relayDescription',
+                    'Connect Orca Mobile to this desktop across cellular or any Wi-Fi.'
+                  )}
+                />
+              </div>
+              {/* Put the third benefit below at full width so it cannot squeeze the existing pair. */}
               <AccountBenefit
-                icon={Files}
-                className="md:pr-6"
-                title={t('auto.components.settings.orcaAccount.artifactsTitle', 'Artifact sharing')}
+                icon={BookOpen}
+                className="border-t border-border/60 pt-5"
+                title={t('auto.components.settings.orcaAccount.skillsTitle', 'Skill sharing')}
                 description={t(
-                  'auto.components.settings.orcaAccount.artifactsDescription',
-                  'Publish HTML and Markdown files, then manage every shared link from Orca.'
-                )}
-              />
-              <AccountBenefit
-                icon={Smartphone}
-                className="md:pl-6"
-                title={t('auto.components.settings.orcaAccount.relayTitle', 'Orca Relay')}
-                description={t(
-                  'auto.components.settings.orcaAccount.relayDescription',
-                  'Connect Orca Mobile to this desktop across cellular or any Wi-Fi.'
+                  'auto.components.settings.orcaAccount.skillsDescription',
+                  'Share one skill or a whole set behind an unlisted link, and install them on any machine you use.'
                 )}
               />
             </div>
-            {/* Put the third benefit below at full width so it cannot squeeze the existing pair. */}
-            <AccountBenefit
-              icon={BookOpen}
-              className="border-t border-border/60 pt-5"
-              title={t('auto.components.settings.orcaAccount.skillsTitle', 'Skill sharing')}
-              description={t(
-                'auto.components.settings.orcaAccount.skillsDescription',
-                'Share one skill or a whole set behind an unlisted link, and install them on any machine you use.'
-              )}
-            />
           </div>
-        </div>
+        )}
       </div>
 
       <OrcaProfileSignOutConfirmDialog

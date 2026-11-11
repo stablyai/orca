@@ -1397,7 +1397,7 @@
       "orcaCloud": "Orca Cloud"
     },
     "orcaAccount": {
-      "descriptionWithCloud": "Sign-in, plan, team and Orca Cloud settings."
+      "descriptionIdentity": "The Orca account you’re signed in with."
     },
     "agentAccounts": {
       "searchTitle": "Agent accounts",
@@ -14603,7 +14603,8 @@
         },
         "cloudRoutines": {
           "pausedSr": "(paused)",
-          "createdByPerson": "by <person></person>",
+          "createdByName": "by {{name}}",
+          "formerMember": "Former member",
           "lastRun": "Last run:",
           "neverRun": "Never run",
           "nextRun": "Next run {{time}}",

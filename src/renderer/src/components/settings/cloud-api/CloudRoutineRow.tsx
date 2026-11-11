@@ -21,14 +21,13 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Switch } from '@/components/ui/switch'
-import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import type {
   CloudApiProject,
   Routine,
   RoutineRun
 } from '../../../../../shared/cloud-api/cloud-api-types'
-import { PersonSentence } from './PersonName'
 import { RoutineRunHistory, type LoadRoutineRuns } from './RoutineRunHistory'
 import {
   describeRoutineTrigger,
@@ -62,7 +61,8 @@ export function RoutineRow({
   onLatestRun,
   onOpenWorkspace,
   fixedNow,
-  viewerUserId
+  viewerUserId,
+  memberNames
 }: {
   routine: Routine
   projects: readonly CloudApiProject[]
@@ -79,6 +79,7 @@ export function RoutineRow({
   onOpenWorkspace?: (workspaceId: string) => void
   fixedNow?: number
   viewerUserId: string | null
+  memberNames?: ReadonlyMap<string, string>
 }): React.JSX.Element {
   const t = useTranslate()
   const locale = useIntlLocale()
@@ -164,14 +165,9 @@ export function RoutineRow({
             {viewerUserId && routine.createdBy !== viewerUserId ? (
               <span className="text-muted-foreground">
                 {' · '}
-                <PersonSentence
-                  sentence={t(
-                    'auto.components.settings.cloudRoutines.createdByPerson',
-                    'by <person></person>'
-                  )}
-                  name={routine.createdByName}
-                  id={routine.createdBy}
-                />
+                {t('auto.components.settings.cloudRoutines.createdByName', 'by {{name}}', {
+                  name: creatorName(routine, memberNames, t)
+                })}
               </span>
             ) : null}
           </p>
@@ -319,5 +315,18 @@ export function RoutineRow({
         </div>
       ) : null}
     </li>
+  )
+}
+
+/** Display name only, never a raw id: the server's name, then the team roster, then "Former member". */
+export function creatorName(
+  routine: Pick<Routine, 'createdBy' | 'createdByName'>,
+  memberNames: ReadonlyMap<string, string> | undefined,
+  t: Translate
+): string {
+  return (
+    routine.createdByName?.trim() ||
+    memberNames?.get(routine.createdBy)?.trim() ||
+    t('auto.components.settings.cloudRoutines.formerMember', 'Former member')
   )
 }
