@@ -150,6 +150,8 @@ function cloudRoutinesSection(t: Translate, group: string): SettingsNavSection[]
   ]
 }
 
+const ORCA_CLOUD_LEAD_IDS: readonly string[] = ['orca-account']
+
 /**
  * JA-16: in Orca Cloud builds the Orca account leads the one Orca Cloud group instead of sitting in
  * Set up. Agent accounts stays in AI capabilities: it covers this computer and hosts as much as
@@ -162,7 +164,7 @@ export function gatherOrcaCloudSettingsGroup(
   if (isWebClient || !isOrcaCloudApiAvailable) {
     return [...sections]
   }
-  const leadIds = ['orca-account']
+  const leadIds = ORCA_CLOUD_LEAD_IDS
   const leads = leadIds
     .map((id) => sections.find((section) => section.id === id))
     .filter((section): section is SettingsNavSection => section !== undefined)
@@ -173,10 +175,7 @@ export function gatherOrcaCloudSettingsGroup(
   return [...rest.slice(0, at), ...leads, ...rest.slice(at)]
 }
 
-/** True when the active Settings section belongs to the Orca Cloud group (team-level, host-free). */
-export function isOrcaCloudSettingsSection(
-  sections: readonly { id: string; group?: string }[],
-  activeSectionId: string | null | undefined
-): boolean {
-  return sections.some((section) => section.id === activeSectionId && section.group === 'orca-cloud')
+/** True for an Orca Cloud group page (team-level, so host-free): the cloud pages and the Orca account. */
+export function isOrcaCloudSettingsSectionId(id: string | null | undefined): boolean {
+  return typeof id === 'string' && (id.startsWith('cloud-') || ORCA_CLOUD_LEAD_IDS.includes(id))
 }

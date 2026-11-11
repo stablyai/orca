@@ -63,7 +63,6 @@ import {
 } from './settings-advanced-section-renderers'
 import { renderProjectSettingsSections } from './settings-project-section-renderer'
 import { renderCloudApiSettingsSections } from './settings-cloud-api-section-renderers'
-import { isOrcaCloudSettingsSection } from '@/hooks/settings-navigation-orca-cloud-sections'
 import { renderOrcaCloudSettingsSections } from './settings-orca-cloud-section-renderers'
 import { orcaCloudAgentAccountsParts } from './settings-orca-cloud-agent-accounts-sections'
 import {
@@ -127,8 +126,6 @@ export function renderSettingsPage(
           onClose={interactions.closeSettingsPageWithPromptGuard}
           hostPicker={
             !model.isWebClient &&
-            // Orca Cloud pages are team-level: a host doesn't apply, so no Host switcher there.
-            !isOrcaCloudSettingsSection(navigation.navSections, model.activeSectionId) &&
             shouldShowSettingsHostScopePicker(
               model.settingsHostScope,
               model.runtimeEnvironments
