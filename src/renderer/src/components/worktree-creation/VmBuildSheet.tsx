@@ -40,7 +40,11 @@ import {
   orcaCloudRepoName,
   PUSH_TO_GITHUB_URL
 } from './vm-build-repo-actions'
-import { useVmBuildStepTimings, type VmBuildStepTimings } from './vm-build-timing'
+import {
+  recordCloudStartSample,
+  useVmBuildStepTimings,
+  type VmBuildStepTimings
+} from './vm-build-timing'
 import { cloneStageLabel, headerTitle, stepLabel, type SheetState } from './vm-build-sheet-copy'
 import { humanizeOrcaCloudLogLine, latestOrcaCloudPhaseLabel } from './orca-cloud-build-log'
 
@@ -150,6 +154,15 @@ export function VmBuildSheet({
       : step
   )
   const steps = useMinimumRunningSteps(derived, failure === null, now)
+  // JA-11: this computer's own "Start sandbox" durations drive the next sheet's hint.
+  const provisionMs = cloud
+    ? derived.find((step) => step.id === 'provision' && step.state === 'done')?.elapsedMs
+    : null
+  React.useEffect(() => {
+    if (provisionMs) {
+      recordCloudStartSample(creationId, provisionMs)
+    }
+  }, [creationId, provisionMs])
   const state: SheetState = failure
     ? failure.kind === 'checks'
       ? 'attention'
