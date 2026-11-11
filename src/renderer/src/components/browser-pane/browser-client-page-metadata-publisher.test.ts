@@ -11,7 +11,7 @@ const PLACEMENT = {
 
 describe('browser client page metadata publisher', () => {
   it('publishes an untitled long URL within the title wire limit without changing the source', () => {
-    const url = 'https://example.com/' + 'a'.repeat(4080)
+    const url = `https://example.com/${'a'.repeat(4080)}`
     const source = { ...snapshot(url), url }
     const publish = vi.fn().mockResolvedValue({ status: 'published', accepted: true })
     const publisher = createBrowserClientPageMetadataPublisher({
@@ -25,7 +25,7 @@ describe('browser client page metadata publisher', () => {
 
     expect(BrowserClientPageMetadataParams.parse(publish.mock.calls[0][0])).toMatchObject({
       url,
-      title: 'https://example.com/' + 'a'.repeat(4076),
+      title: `https://example.com/${'a'.repeat(4076)}`,
       loading: false,
       canGoBack: true,
       canGoForward: false
