@@ -18500,6 +18500,7 @@
           "22b22034bc": "Terminal autônomo indisponível em Atividade.",
           "afdc2139a8": "Terminal do agente fechado. Abra um novo terminal neste espaço de trabalho para continuar.",
           "clearCompleted": "Limpar concluídos",
+          "doneUnread": "Concluído · não lido",
           "none": "Nenhum",
           "search": "Buscar",
           "showUnreadOnly": "Mostrar apenas não lidas",

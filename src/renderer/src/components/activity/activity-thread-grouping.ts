@@ -29,8 +29,14 @@ export function getActivityThreadGroup(
     return { key: 'all', label: '' }
   }
   if (groupBy === 'status') {
-    // The key is the glyph every row in the group draws, so it heads the group too.
     const status = activityThreadStatusId(thread)
+    if (status === 'done' && thread.unread) {
+      return {
+        key: 'done:unread',
+        label: t('auto.components.activity.ActivityPrototypePage.doneUnread', 'Done · unread'),
+        state: status
+      }
+    }
     return { key: status, label: threadAgentStateLabel(thread, t), state: status }
   }
   if (groupBy === 'project') {
@@ -70,7 +76,11 @@ export function buildActivityThreadGroups(
   if (groupBy !== 'status') {
     return groups
   }
-  return groups.sort((a, b) => activityStatusRank(a.threads[0]) - activityStatusRank(b.threads[0]))
+  return groups.sort(
+    (a, b) =>
+      activityStatusRank(a.threads[0]) - activityStatusRank(b.threads[0]) ||
+      Number(b.threads[0].unread) - Number(a.threads[0].unread)
+  )
 }
 
 function buildThreadSearchText(thread: AgentPaneThread): string {

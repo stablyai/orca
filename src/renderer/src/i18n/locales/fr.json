@@ -18156,6 +18156,7 @@
           "afdc2139a8": "Terminal de l'agent fermé. Ouvrez un nouveau terminal dans cet espace de travail pour continuer.",
           "markThreadRead": "Marquer le sujet comme lu",
           "clearCompleted": "Effacer terminé",
+          "doneUnread": "Terminé · non lu",
           "none": "Aucun",
           "search": "Recherche",
           "activityOptions": "Options d'activité",

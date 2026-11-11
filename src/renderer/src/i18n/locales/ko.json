@@ -17452,6 +17452,7 @@
           "22b22034bc": "활동에서는 독립형 terminal을 사용할 수 없습니다.",
           "afdc2139a8": "Agent terminal이 닫혔습니다. 계속하려면 이 워크스페이스에서 새 terminal을 여세요.",
           "clearCompleted": "완료된 항목 지우기",
+          "doneUnread": "완료 · 읽지 않음",
           "none": "없음",
           "search": "검색",
           "showUnreadOnly": "읽지 않은 항목만 표시",

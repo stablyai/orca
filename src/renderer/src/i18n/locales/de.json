@@ -18166,6 +18166,7 @@
           "22b22034bc": "Ein eigenständiges Terminal ist in der Aktivitätsansicht nicht verfügbar.",
           "afdc2139a8": "Das Agententerminal wurde geschlossen. Zum Fortfahren ein neues Terminal in diesem Arbeitsbereich öffnen.",
           "clearCompleted": "Abgeschlossene entfernen",
+          "doneUnread": "Erledigt · ungelesen",
           "none": "Keine",
           "search": "Suchen",
           "showUnreadOnly": "Nur ungelesene anzeigen",

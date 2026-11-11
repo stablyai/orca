@@ -1,4 +1,7 @@
+import { useState } from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
+import { ActivityStatusGroupHeader } from './activity-thread-controls'
+import { buildActivityThreadGroups } from './activity-thread-grouping'
 import { ActivityThreadRow } from './activity-thread-row'
 import type { AgentPaneThread } from './activity-thread-types'
 
@@ -77,4 +80,45 @@ export const full = defineFixture({
 export const narrowCompact = defineFixture({
   width: 240,
   render: () => <ActivityCards compactMode />
+})
+
+function CompletionGroups() {
+  const [threads, setThreads] = useState(() => [
+    thread(2, false),
+    { ...thread(8, true), currentAgentState: null, paneTitle: 'Review the completed changes' },
+    { ...thread(12, false), currentAgentState: null, paneTitle: 'Update the activity layout' }
+  ])
+  const markRead = (entry: AgentPaneThread, unread = false) =>
+    setThreads((current) =>
+      current.map((item) => (item.paneKey === entry.paneKey ? { ...item, unread } : item))
+    )
+
+  return (
+    <div className="bg-background p-1.5 text-foreground">
+      {buildActivityThreadGroups(threads, 'status').map((group) => (
+        <section key={group.key}>
+          <ActivityStatusGroupHeader group={group} />
+          {group.threads.map((entry) => (
+            <ActivityThreadRow
+              key={entry.paneKey}
+              thread={entry}
+              selected={false}
+              compactMode
+              canJump={false}
+              previewSuppressed
+              onSelect={(item) => markRead(item)}
+              onJump={() => {}}
+              onMarkRead={(item) => markRead(item)}
+              onMarkUnread={(item) => markRead(item, true)}
+            />
+          ))}
+        </section>
+      ))}
+    </div>
+  )
+}
+
+export const completionGroups = defineFixture({
+  width: 280,
+  render: () => <CompletionGroups />
 })

@@ -17743,6 +17743,7 @@
           "22b22034bc": "独立终端在活动中不可用",
           "afdc2139a8": "代理终端关闭，在此工作区中打开一个新终端以继续",
           "clearCompleted": "清除已完成",
+          "doneUnread": "已完成 · 未读",
           "none": "无",
           "search": "搜索",
           "showUnreadOnly": "仅显示未读",

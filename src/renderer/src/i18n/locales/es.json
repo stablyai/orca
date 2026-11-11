@@ -17882,6 +17882,7 @@
           "22b22034bc": "Terminal independiente no disponible en Actividad.",
           "afdc2139a8": "Terminal de Agent cerrada. Abre una nueva terminal en este workspace para continuar.",
           "clearCompleted": "Borrar completados",
+          "doneUnread": "Completado · sin leer",
           "none": "Ninguno",
           "search": "Buscar",
           "showUnreadOnly": "Mostrar solo no leídos",

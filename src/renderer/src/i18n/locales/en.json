@@ -19040,6 +19040,7 @@
           "22b22034bc": "Standalone terminal unavailable in Activity.",
           "afdc2139a8": "Agent terminal closed. Open a new terminal in this workspace to continue.",
           "clearCompleted": "Clear completed",
+          "doneUnread": "Done · unread",
           "none": "None",
           "search": "Search",
           "showUnreadOnly": "Show unread only",
