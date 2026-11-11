@@ -207,7 +207,7 @@ describe('ClientHostedBrowserPagePane', () => {
     expect(
       screen.getByRole<HTMLButtonElement>('button', { name: 'Reopen on server' }).disabled
     ).toBe(false)
-    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
+    expect(screen.queryByText('Retry', { selector: 'button' })).toBeNull()
 
     const { webview, setUrl } = createWebview()
     setUrl(browserTab.url)
@@ -216,7 +216,7 @@ describe('ClientHostedBrowserPagePane', () => {
     view.rerender(pane(PLACEMENT))
 
     expect(screen.queryByRole('button', { name: 'Reopen on server' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
+    expect(screen.getByText('Retry', { selector: 'button' })).toBeTruthy()
   })
 
   it('shows exact-generation unavailability without creating a fallback guest', () => {
