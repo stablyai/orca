@@ -38,6 +38,27 @@ export function CloudAsleepTerminalNotice({
   historyEndPx?: number | null
 }): React.JSX.Element {
   const t = useTranslate()
+  const divider =
+    asleepSince === null ? null : (
+      <div
+        data-cloud-asleep-divider=""
+        // Right under the last line of history, so it reads as the history's end, not a footer.
+        style={historyEndPx !== null ? { top: historyEndPx } : undefined}
+        className={
+          historyEndPx !== null
+            ? 'absolute inset-x-3 flex items-center gap-2 text-[11px] text-muted-foreground'
+            : 'flex items-center gap-2 text-[11px] text-muted-foreground'
+        }
+      >
+        <span className="h-px flex-1 bg-border" />
+        <span>
+          {t('orcaCloudWorkspace.terminal.asleepSince', 'Asleep since {{time}}', {
+            time: formatAsleepSince(asleepSince)
+          })}
+        </span>
+        <span className="h-px flex-1 bg-border" />
+      </div>
+    )
   return (
     <div
       data-cloud-asleep-terminal-notice=""
@@ -49,27 +70,10 @@ export function CloudAsleepTerminalNotice({
         aria-hidden="true"
         className="absolute inset-0 bg-background/55"
       />
+      {/* Placed under the last line of history: positioned against the whole pane. */}
+      {historyEndPx !== null ? divider : null}
       <div className="relative flex flex-col gap-2 px-3 pb-3">
-        {asleepSince !== null ? (
-          <div
-            data-cloud-asleep-divider=""
-            // Right under the last line of history, so it reads as the history's end, not a footer.
-            style={historyEndPx !== null ? { top: historyEndPx } : undefined}
-            className={
-              historyEndPx !== null
-                ? 'absolute inset-x-3 flex items-center gap-2 text-[11px] text-muted-foreground'
-                : 'flex items-center gap-2 text-[11px] text-muted-foreground'
-            }
-          >
-            <span className="h-px flex-1 bg-border" />
-            <span>
-              {t('orcaCloudWorkspace.terminal.asleepSince', 'Asleep since {{time}}', {
-                time: formatAsleepSince(asleepSince)
-              })}
-            </span>
-            <span className="h-px flex-1 bg-border" />
-          </div>
-        ) : null}
+        {historyEndPx === null ? divider : null}
         {waking ? null : (
           <div
             role="status"
