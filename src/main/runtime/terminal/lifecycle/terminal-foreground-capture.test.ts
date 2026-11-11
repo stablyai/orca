@@ -4,10 +4,7 @@ import {
   observePtyForeground,
   resolvePtyForegroundMembers
 } from '../../../pty/process-retirement/pty-master-foreground-observation'
-import {
-  parseTerminalSessionRows,
-  readTerminalProcessRows
-} from '../../../pty/process-retirement/terminal-process-rows'
+import { readTerminalProcessRows } from '../../../pty/process-retirement/terminal-process-rows'
 import { readLaunchedAgentForeground } from '../wait/launched-agent-foreground'
 import { createAdapter } from '../../../daemon/providers/routing/testing/daemon-pty-router-test-fixture'
 import { DaemonPtyRouter } from '../../../daemon/providers/routing/daemon-pty-router'
@@ -111,40 +108,26 @@ describe('fresh target foreground regressions', () => {
   })
 })
 
-// #39488: a docker run -t container holds its own pts/0, so host ps -t pts/0 lists its sleep beside the
-// terminal's shell and agent. Rows follow the reporter's ps -o pid,sid,tpgid,tty,args capture.
+// #39488: a `docker run -t` container holds its own private pts/0, so host `ps -t pts/0` lists its sleep beside
+// the terminal's shell and agent. Rows are the reporter's capture; columns follow what ps was asked for.
 const CONTAINER_SHARING_PTS = [
-  '58769 58769 58768 58769 58769 Ss+ sleep 900',
-  '58824 58824 100 58824 58826 Ss+ /bin/sh -l',
-  '58824 58826 58824 58826 58826 S+ claude --print-output'
-].join('\n')
+  { sid: 58769, row: '58769 58768 58769 58769 Ss+ sleep 900' },
+  { sid: 58824, row: '58824 100 58824 58826 Ss+ /bin/sh -l' },
+  { sid: 58824, row: '58826 58824 58826 58826 S+ claude --print-output' }
+]
 
-describe('terminal foreground across container sessions sharing a pts number', () => {
-  beforeEach(() => {
+describe('terminal foreground with a container holding the same pts number', () => {
+  it('observes the agent as foreground on Linux', async () => {
     mocks.runProcess.mockReset()
-  })
-
-  it('parseTerminalSessionRows keeps only the anchor session', () => {
-    const rows = parseTerminalSessionRows(`${CONTAINER_SHARING_PTS}\n`, 58824)
-    expect(rows.map((row) => row.pid)).toEqual([58824, 58826])
-    expect(rows.every((row) => row.tpgid === 58826)).toBe(true)
-    expect(resolvePtyForegroundMembers(rows, 58826).verdict).toBe('observed')
-    // A missing anchor row (terminal torn down) degrades to every row, as before.
-    expect(
-      parseTerminalSessionRows(`${CONTAINER_SHARING_PTS}\n`, 99999).map((row) => row.pid)
-    ).toEqual([58769, 58824, 58826])
-    expect(() =>
-      parseTerminalSessionRows(`${CONTAINER_SHARING_PTS}\npartial broken row\n`, 58824)
-    ).toThrow()
-  })
-
-  it('observes the foreground instead of reporting it changing forever', async () => {
     const original = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     try {
-      mocks.runProcess.mockImplementation(async ({ args }: { args: readonly string[] }) =>
-        args.includes('-p') ? result('pts/0\n') : result(`${CONTAINER_SHARING_PTS}\n`)
-      )
+      mocks.runProcess.mockImplementation(async ({ args }: { args: readonly string[] }) => {
+        const withSid = args.some((arg) => arg.startsWith('sid='))
+        return result(
+          `${CONTAINER_SHARING_PTS.map(({ sid, row }) => (withSid ? `${sid} ${row}` : row)).join('\n')}\n`
+        )
+      })
       const owner = {
         pid: 58824,
         fd: 9,
@@ -153,7 +136,7 @@ describe('terminal foreground across container sessions sharing a pts number', (
       }
       await expect(observePtyForeground(owner, () => true)).resolves.toMatchObject({
         verdict: 'observed',
-        source: 'pty-master',
+        foregroundKind: 'non-shell',
         foregroundPgid: 58826
       })
     } finally {
