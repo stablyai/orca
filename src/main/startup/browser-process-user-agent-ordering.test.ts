@@ -161,7 +161,7 @@ vi.mock('../persistence/loading-store/user-data-path', () => ({
   initDataPath: () => mocks.events.push('init-data-path'),
   getCanonicalUserDataPath: () => '/canonical-user-data'
 }))
-vi.mock('../persistence/profile-state/profile-state-access', () => ({
+vi.mock('../persistence/profile-state/access/profile-state-access', () => ({
   acquireProfileStateRuntimeAdmission: (root: string) => {
     mocks.events.push(`admission:${root}`)
     return mocks.admission()
@@ -177,7 +177,7 @@ vi.mock('../orca-profiles/profile-storage-paths', () => ({
 vi.mock('../orca-profiles/project-transfer/profile-project-move-intent', () => ({
   recoverPendingProfileProjectMoves: mocks.recoverMoves
 }))
-vi.mock('../persistence/profile-state/profile-state-active-location', () => ({
+vi.mock('../persistence/profile-state/offline-access/profile-state-active-location', () => ({
   getActiveProfileStateLocation: () => ({ profileId: 'active-profile' })
 }))
 vi.mock('../stats/collector')

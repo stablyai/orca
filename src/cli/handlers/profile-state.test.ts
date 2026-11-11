@@ -8,18 +8,18 @@ import * as http1Marker from '../../main/startup/http1-compatibility-marker'
 import { readPersistedHttp1CompatibilityMode } from '../../main/startup/http1-compatibility-profile-state'
 import {
   openProfileStateDatabase,
-  openProfileStateDatabaseReadOnly,
-  profileStateDatabaseFile
-} from '../../main/persistence/profile-state/profile-state-database'
+  openProfileStateDatabaseReadOnly
+} from '../../main/persistence/profile-state/database/profile-state-database'
+import { profileStateDatabaseFile } from '../../shared/profile-state-storage-paths'
 import {
   exportProfileStateJson,
   importProfileStateJson
-} from '../../main/persistence/profile-state/profile-state-documents'
+} from '../../main/persistence/profile-state/documents/profile-state-documents'
 import {
   createProfileStateDatabaseBackupId,
   profileStateDatabaseBackupPath
-} from '../../main/persistence/profile-state/profile-state-backup-path'
-import { writeProfileStateDatabaseSnapshotAsync } from '../../main/persistence/profile-state/profile-state-database-snapshot'
+} from '../../main/persistence/profile-state/backup/profile-state-backup-path'
+import { writeProfileStateDatabaseSnapshotAsync } from '../../main/persistence/profile-state/database/profile-state-database-snapshot'
 import { profileStateJsonExportPath } from '../../main/persistence/profile-state/legacy-json/profile-state-export-path'
 import { PROFILE_STATE_RECOVERY_RESULT_PREFIX } from '../../shared/profile-state-recovery-command'
 import { main } from '../index'

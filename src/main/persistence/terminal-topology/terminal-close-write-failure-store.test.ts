@@ -2,7 +2,7 @@ import { expect, it, vi } from 'vitest'
 import {
   admitRuntimeSpawnPane,
   fixture
-} from '../loading-store/profile-state-delayed-authority-fixture'
+} from '../loading-store/profile-writing/profile-state-delayed-authority-fixture'
 
 vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
