@@ -146,11 +146,14 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
 }
 
 export function createEmulatorApi(): NonNullable<Partial<PreloadApi>['emulator']> {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial stub; withFallback in web-preload-api answers every emulator member it omits.
   return {
     onPaneFocus: () => noopUnsubscribe,
     onAutoAttach: () => noopUnsubscribe,
     startFrameStream: () => Promise.reject(new Error('Mobile emulator is unavailable on web.')),
     stopFrameStream: () => Promise.resolve(),
+    startVideoStream: () => Promise.reject(new Error('Mobile emulator is unavailable on web.')),
+    stopVideoStream: () => Promise.resolve(),
     onFrameStreamFrame: () => noopUnsubscribe,
     onFrameStreamError: () => noopUnsubscribe
   } as unknown as NonNullable<Partial<PreloadApi>['emulator']>

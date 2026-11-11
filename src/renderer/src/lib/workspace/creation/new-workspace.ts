@@ -149,7 +149,6 @@ async function deliverAgentStartupToTerminal(
     const delivered = await sendFollowupPromptWhenAgentReady({
       ptyId,
       agent: startup.agent,
-      expectedProcess: startup.expectedProcess,
       prompt: startup.followupPrompt
     })
     // Report dropped follow-ups so users know to open the workspace and paste manually.
