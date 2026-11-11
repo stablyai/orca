@@ -1,10 +1,13 @@
 import { useEffect } from 'react'
 
-/** Something on top of the page owns Escape (a menu, popover or dialog): leave it to that. */
+/**
+ * Something open on top of the page owns Escape (a menu, a popover or popper list, a dialog): leave
+ * it to that. Always-mounted lists (the sidebar's worktree listbox) don't count.
+ */
 function escapeBelongsToOverlay(): boolean {
   return (
     document.querySelector(
-      '[role="dialog"], [role="menu"], [role="listbox"], [data-radix-popper-content-wrapper]'
+      '[role="dialog"][data-state="open"], [role="alertdialog"], [role="menu"], [data-radix-popper-content-wrapper]'
     ) !== null
   )
 }

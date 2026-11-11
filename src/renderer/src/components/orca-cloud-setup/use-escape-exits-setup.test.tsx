@@ -37,6 +37,16 @@ describe('Escape on the Orca Cloud setup page (RR-b)', () => {
     expect(onExit).toHaveBeenCalledOnce()
   })
 
+  it('an always-mounted list (the sidebar listbox) does not swallow Escape', () => {
+    const onExit = vi.fn()
+    const sidebar = document.createElement('div')
+    sidebar.setAttribute('role', 'listbox')
+    document.body.appendChild(sidebar)
+    renderHook(() => useEscapeExitsSetup(true, onExit))
+    pressEscape()
+    expect(onExit).toHaveBeenCalledOnce()
+  })
+
   it('leaves Escape to a menu, popover or dialog on top, and does nothing while hidden', () => {
     const onExit = vi.fn()
     const { rerender } = renderHook(({ visible }) => useEscapeExitsSetup(visible, onExit), {
