@@ -27886,7 +27886,9 @@
     "copyAndOpen": "Copy code and open",
     "unavailable": "Signs in for each cloud workspace",
     "unavailableDetail": "Signing in once with your {{product}} account isn’t available in Orca Cloud yet. Each new cloud workspace asks you to sign in.",
-    "allUnavailable": "Claude and Codex sign in for each cloud workspace for now."
+    "allUnavailable": "Claude and Codex sign in for each cloud workspace for now.",
+    "pasteTokenInstead": "Paste a token instead",
+    "rowMenu": "{{agent}} account options"
   },
   "vmBuildAgents": {
     "menu": {
@@ -27909,7 +27911,6 @@
     "pasteToken": "Paste token",
     "tryAgain": "Try again",
     "dismiss": "Dismiss",
-    "signInAgain": "Sign in again",
     "signInHere": "Sign in for this workspace",
     "checking": "Checking agent sign-in",
     "readyDetail": "Every cloud workspace uses it. Nothing to do here.",
@@ -27933,7 +27934,6 @@
     "offerDetail": "Sign in to {{agents}} once. Every cloud workspace uses it.",
     "stillOpens": "The workspace still opens.",
     "expired": "Your {{agent}} sign-in for Orca Cloud expired",
-    "expiredDetail": "Sign in again once. Every cloud workspace picks it up.",
     "agentSignIn": "{{agent}} sign-in",
     "paused": "Orca account sign-in is paused",
     "pausedDetail": "This sign-in stays with this workspace.",
@@ -27941,7 +27941,8 @@
     "errorDetail": "The workspace still opens. Agents can sign in later.",
     "groupAccount": "{{agents}} from your Orca account",
     "groupKey": "{{agents}} with {{key}}",
-    "notOffered": "Signs in for each cloud workspace for now"
+    "notOffered": "Signs in for each cloud workspace for now",
+    "expiredDetailRenew": "Renew once. Every cloud workspace picks it up."
   },
   "agentAccountsOverview": {
     "action": {
@@ -27980,7 +27981,8 @@
       "cloudNotSetUp": "Not set up",
       "cloudPaused": "Each workspace signs in (temporarily)",
       "apiKeyOverrides": "API key overrides sign-in"
-    }
+    },
+    "nothingNeedsAttention": "Nothing needs attention."
   },
   "agentSignInStrip": {
     "sandbox": "the sandbox",
