@@ -1,6 +1,25 @@
-import React from 'react'
-import { useIsCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import React, { useEffect } from 'react'
+import { useAppStore } from '@/store'
+import { HostGlyph } from '@/components/host-row-icon'
+import {
+  refreshCloudWorkspaceIds,
+  useIsCloudWorkspace
+} from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { isOrcaCloudRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
 import { CloudWorkspaceMark } from './CloudWorkspaceMark'
+
+/** The workspace's VM server is an Orca Cloud sandbox: known before the cloud id list catches up. */
+function useRunsOnOrcaCloudSandbox(workspaceId: string): boolean {
+  return useAppStore((state) => {
+    const environmentId =
+      state.ephemeralVmRuntimesByWorkspaceId?.[workspaceId]?.runtimeEnvironmentId
+    if (!environmentId) {
+      return false
+    }
+    const environment = state.runtimeEnvironments.find((entry) => entry.id === environmentId)
+    return environment ? isOrcaCloudRuntimeEnvironment(environment) : false
+  })
+}
 
 /** The card's host mark slot: Orca Cloud workspaces get the live cloud mark, others the fallback. */
 export function CloudWorkspaceMarkSlot({
@@ -13,6 +32,18 @@ export function CloudWorkspaceMarkSlot({
   onPointerDown?: React.PointerEventHandler<HTMLButtonElement>
 }): React.JSX.Element | null {
   const isCloud = useIsCloudWorkspace(workspaceId)
+  const onCloudSandbox = useRunsOnOrcaCloudSandbox(workspaceId)
+  const awaitingId = onCloudSandbox && !isCloud
+  // A new workspace joins the cloud id list on the next poll; ask now so its live mark arrives.
+  useEffect(() => {
+    if (awaitingId) {
+      void refreshCloudWorkspaceIds()
+    }
+  }, [awaitingId])
+  if (awaitingId) {
+    // One glyph from the pending row on (NP-5): the cloud, never the server icon in between.
+    return <HostGlyph kind="orca-cloud" size={12} />
+  }
   if (!isCloud) {
     return <>{fallback}</>
   }
