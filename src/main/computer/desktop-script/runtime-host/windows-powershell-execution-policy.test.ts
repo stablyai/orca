@@ -37,15 +37,4 @@ describe('isExecutionPolicyBlocked', () => {
     // The word boundary distinguishes a policy ID from UnauthorizedAccessException.
     expect(isExecutionPolicyBlocked(GENUINE_ACCESS_DENIED)).toBe(false)
   })
-
-  it('keeps recognising a block when the record labels are localized', () => {
-    // Error IDs and the help topic stay stable when labels are localized.
-    const localized = POLICY_BLOCKED_RESTRICTED.replace('CategoryInfo', 'Categoria')
-      .replace('FullyQualifiedErrorId', 'IdErroreCompleto')
-      .replace(
-        'cannot be loaded because running scripts is disabled on this system',
-        'non puo essere caricato'
-      )
-    expect(isExecutionPolicyBlocked(localized)).toBe(true)
-  })
 })

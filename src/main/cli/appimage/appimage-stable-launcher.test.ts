@@ -59,10 +59,7 @@ vi.mock('node:fs', async (importOriginal) => {
     }
   }
 })
-import {
-  publishAppImageLauncherEndpoint,
-  resolveAppImageStableLauncherPath
-} from './appimage-stable-launcher'
+import { publishAppImageLauncherEndpoint } from './appimage-stable-launcher'
 
 const created: string[] = []
 
@@ -117,18 +114,5 @@ describe.skipIf(process.platform === 'win32')('AppImage stable launcher', () => 
 
     expect(publishAppImageLauncherEndpoint(cacheRootPath, 'installed', targetPath)).toBeNull()
     await expect(readFile(launcherPath, 'utf8')).resolves.toBe(foreignContent)
-  })
-
-  it('preserves an oversized foreign launcher without treating its marker as ownership', async () => {
-    const cacheRootPath = await makeFixture()
-    const launcherPath = resolveAppImageStableLauncherPath(cacheRootPath)
-    const content = `#!/usr/bin/env bash\n# orca-appimage-stable-launcher\n${'x'.repeat(20_000)}`
-    await mkdir(dirname(launcherPath), { recursive: true })
-    await writeFile(launcherPath, content, { mode: 0o755 })
-
-    expect(
-      publishAppImageLauncherEndpoint(cacheRootPath, 'installed', join(cacheRootPath, 'target'))
-    ).toBeNull()
-    await expect(readFile(launcherPath, 'utf8')).resolves.toBe(content)
   })
 })

@@ -6,6 +6,9 @@ import type {
   AgentSessionHistoryRequest,
   AgentSessionHistoryResult
 } from '../../../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionWorkState } from '../../../../../shared/agent-session/agent-session-work-state'
+import { AgentSessionRefusalError } from '../../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { AGENT_SESSION_NOT_ATTACHED } from '../../operations/structured-agent-session-mutation-refusals'
 import type { AgentSessionBackgroundTaskState } from '../../../../../shared/agent-session/agent-session-background-task-wire'
 import type { AgentChildWorkView } from '../../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { structuredChildWorkLegacyTasks } from '../../../../../shared/agent-session/structured-agent-session-child-work-legacy'
@@ -82,6 +85,31 @@ export class StructuredAgentSessionBackgroundTaskChannel {
           : {}),
         backgroundTasks
       }
+    }
+  }
+
+  /** What a waiter decides from, from the sources history pages state, without building a page. */
+  async workState(sessionId: string): Promise<AgentSessionWorkState> {
+    await this.conversation(sessionId)
+    const work = hostStructuredAgentSessionCurrentWork(
+      { store: this.deps.store, sessions: this.sessions },
+      sessionId
+    )
+    if (!work) {
+      throw new AgentSessionRefusalError(AGENT_SESSION_NOT_ATTACHED)
+    }
+    const queue = this.subscribers.readQueuePublication(sessionId)
+    const fence = this.deps.store.getConversation(sessionId)?.currentFence
+    return {
+      working: work.working(),
+      actionablePrompt: work.hasActionablePrompt(),
+      ...(queue !== undefined
+        ? {
+            queuedMessageIds: (queue.queuedMessages ?? []).map((card) => card.messageId),
+            nextQueuedMessageId: queue.nextQueuedMessageId
+          }
+        : {}),
+      ...(fence !== undefined ? { fence } : {})
     }
   }
 

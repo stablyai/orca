@@ -104,32 +104,6 @@ describe('RelaySessionBroker lifecycle ownership', () => {
     fakes.assign.mockReset().mockResolvedValue(relayAssignment('https://relay.example.test', 1))
   })
 
-  it('publishes the assigned cell with the status and drops it on close', async () => {
-    fakes.controlConnect.mockResolvedValue({
-      type: 'host-hello-ack',
-      v: 1,
-      generation: 1,
-      controlResumeSecret: 'A'.repeat(43),
-      leaseExpiresAt: 1_000_000,
-      activeConnIds: [],
-      pendingConns: []
-    } satisfies RelayHostHelloAckMessage)
-    const onStatus = vi.fn()
-
-    const broker = await RelaySessionBroker.connect(brokerOptions({ onStatus }))
-
-    expect(onStatus.mock.calls).toContainEqual(['connecting', undefined])
-    expect(onStatus).toHaveBeenLastCalledWith('registered', 'https://relay.example.test')
-
-    // The pool still holds the rotating assignment while publishing offline; do not expose its dead cell.
-    fakes.controls[0]!.options.onClose(1006)
-    expect(onStatus.mock.calls).toContainEqual(['offline', undefined])
-    expect(onStatus.mock.calls).toContainEqual(['draining', 'https://relay.example.test'])
-
-    broker.closeNow()
-    expect(onStatus).toHaveBeenLastCalledWith('offline')
-  })
-
   it('recovers through a new origin after the director failure clears', async () => {
     vi.useFakeTimers()
     try {

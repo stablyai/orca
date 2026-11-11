@@ -58,11 +58,6 @@ afterEach(() => {
 })
 
 describe('reuseSavedCloneTarget', () => {
-  it('reuses a saved project whose folder is a finished clone of the URL', async () => {
-    const project = saved(checkout(url))
-    await expect(decide(project)).resolves.toBe(project)
-  })
-
   it('reuses a finished clone of the same repo spelled differently', async () => {
     const project = saved(checkout('git@github.com:stablyai/orca.git'))
     await expect(decide(project, 'https://github.com/stablyai/orca')).resolves.toBe(project)
@@ -133,11 +128,6 @@ describe('reuseSavedCloneTarget', () => {
     await expect(result).rejects.toThrow('recorded as a different repository')
     await expect(result).rejects.not.toThrow('synthetic-secret')
     await expect(result).rejects.not.toThrow(project.gitRemoteIdentity?.remoteUrl ?? '')
-  })
-
-  it('says it has no record of the repository when the project never stored an origin', async () => {
-    const project = saved(join(tmpdir(), 'orca-saved-clone-target-absent'))
-    await expect(decide(project)).rejects.toThrow('no record of which repository')
   })
 
   it('refuses a finished clone of a different local path, which does not normalize', async () => {

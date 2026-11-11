@@ -5,7 +5,7 @@ import { isGroupAddress } from '../../../../orchestration/addressing/groups/grou
 import { dispatchReportMailbox } from '../../../../orchestration/workers/reports/dispatch-report-mailbox'
 import { AskParams } from '../../../../../../shared/rpc-contract/orchestration-params'
 import { rejectFederatedExplicitTarget } from '../routing'
-import { askRemoteRunHome } from '../../../../orchestration/legacy-remote/legacy-remote'
+import { askRemoteRunHome } from '../../../../orchestration/legacy-remote/ask-remote'
 import {
   mailboxAddressOf,
   runCoordinatorKey

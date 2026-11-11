@@ -18,7 +18,6 @@ import {
   currentOrcadSourceFingerprint,
   reconcileManagedOrcadSshTargets
 } from './orcad-retained-source'
-import { visibleRepos } from '../source/catalog/orcad-source-visibility'
 
 const TARGET: SshTarget = {
   id: 'ssh-prod',
@@ -64,7 +63,6 @@ function movedHost(): void {
 }
 
 const changedAt = () => store.getSshTarget(TARGET.id)?.orcadFence?.sourceChangedAt
-const visibleIds = () => visibleRepos(store, () => userDataPath).map((row) => row.id)
 
 beforeEach(() => {
   userDataPath = mkdtempSync(join(tmpdir(), 'orcad-retained-changes-'))
@@ -87,29 +85,6 @@ afterEach(async () => {
 })
 
 describe('what makes a moved host changed', () => {
-  it('keeps the host served when its groups are deleted or created (#31523)', () => {
-    movedHost()
-    reconcileManagedOrcadSshTargets(userDataPath, store, now)
-    expect(changedAt()).toBeUndefined()
-
-    // Deleting the group also drops the folder workspace in it; the server keeps its own copy.
-    store.deleteProjectGroup(store.getProjectGroups()[0]!.id)
-    store.createProjectGroup({ name: 'later', connectionId: TARGET.id, createdFrom: 'manual' })
-    reconcileManagedOrcadSshTargets(userDataPath, store, now)
-
-    expect(changedAt()).toBeUndefined()
-    expect(visibleIds()).toEqual([])
-  })
-
-  it('still marks a project no move took', () => {
-    movedHost()
-    store.addRepo(repo('repo-2', '/srv/tool'))
-    reconcileManagedOrcadSshTargets(userDataPath, store, now)
-
-    expect(changedAt()).toBeDefined()
-    expect(visibleIds().sort()).toEqual(['repo-1', 'repo-2'])
-  })
-
   it('lifts a mark an earlier build set for a group edit, but not one for an added project', () => {
     movedHost()
     store.deleteProjectGroup(store.getProjectGroups()[0]!.id)

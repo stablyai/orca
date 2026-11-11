@@ -63,6 +63,9 @@ await bundle(
   OPENCODE_SQLITE_READER_FILENAME,
   { external: ['electron'] }
 )
-await bundle('src/main/opencode/opencode-wsl-text-task-entry.ts', OPENCODE_WSL_TEXT_TASK_FILENAME)
+await bundle(
+  'src/main/opencode/text-tasks/wsl/opencode-wsl-text-task-entry.ts',
+  OPENCODE_WSL_TEXT_TASK_FILENAME
+)
 
 console.log('WSL guest build complete.')

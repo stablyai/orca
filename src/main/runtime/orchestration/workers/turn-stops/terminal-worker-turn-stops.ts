@@ -16,7 +16,7 @@ import {
   type WorkerTurnStopReason,
   type WorkerTurnStopReportDeps
 } from './worker-turn-stop-report'
-import type { WorkerApprovalPayload } from '../approvals/worker-approval'
+import type { WorkerApprovalPayload } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 
 export type TerminalWorkerTurnStopsDeps = WorkerTurnStopReportDeps & {
   readHookRow: (paneKey: string) => AgentStatusIpcPayload | null
