@@ -26,7 +26,11 @@ import { useSwitchTeamSteps } from '../cloud-setup/use-cloud-setup-tracker'
 import { cloudSetupRequired } from '../../orca-cloud-setup/cloud-setup-page-model'
 import { useRunOnDefault } from './use-run-on-default'
 import { useCloudOnlyCreate, useCloudOnlyRepo } from './use-cloud-only-repo'
-import { orcaCloudNeedsGitHubRepo, type CloudStartView } from './cloud-start-view'
+import {
+  isGitHubBackedProject,
+  orcaCloudNeedsGitHubRepo,
+  type CloudStartView
+} from './cloud-start-view'
 import { showCloudAgentNotStartedToast } from '@/lib/orca-cloud/cloud-agent-not-started-toast'
 import { orcaCloudWallNotice, useRunOnPreflightEnabled } from '@/lib/orca-cloud/run-on-preflight'
 import { isOrcaCloudAccountAgent } from '../../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
@@ -95,6 +99,7 @@ export function useCloudStartComposer({
   const fetched = useOrcaCloudRunTargetAccess(segment === 'enabled' && !accessOverride)
   const access = accessOverride ?? fetched
   const preflight = useRunOnPreflightEnabled()
+  const githubProjectCount = useAppStore((s) => s.repos.filter(isGitHubBackedProject).length)
   const wall = useMemo(
     () => (cloudSelected && preflight ? orcaCloudWallNotice(access) : null),
     [access, cloudSelected, preflight]
@@ -227,10 +232,11 @@ export function useCloudStartComposer({
               cloudSelected,
               folderProject: cloudOnly.folderProject,
               pickedRepo: cloudOnly.picked !== null,
-              repoCount: cloudOnly.repos?.length ?? 0
+              repoCount: cloudOnly.repos?.length ?? 0,
+              githubProjectCount
             })
           },
-    [cloudOnly, cloudSelected, markTouched, onSelectOrcaCloud, segment, wall]
+    [cloudOnly, cloudSelected, githubProjectCount, markTouched, onSelectOrcaCloud, segment, wall]
   )
   if (!view || !cloudSelected) {
     return { view, onPrimary: null, recordCreated }
