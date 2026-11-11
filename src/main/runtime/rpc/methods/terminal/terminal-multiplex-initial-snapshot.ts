@@ -6,6 +6,9 @@ import {
 import { getOutputAfterSnapshotSeq } from './terminal-stream-replay'
 import { isMovedPaneHistorySessionId } from '../../../../../shared/orcad-migration/orcad-migration-terminal-history'
 import {
+  DESKTOP_SNAPSHOT_BYTE_BUDGET,
+  DESKTOP_SUBSCRIBE_SCROLLBACK_ROWS,
+  MOBILE_SNAPSHOT_BYTE_BUDGET,
   MOBILE_SUBSCRIBE_SCROLLBACK_ROWS,
   MOVED_PANE_SUBSCRIBE_SCROLLBACK_ROWS
 } from '../../../terminal/output/mobile-scrollback-limits'
@@ -39,11 +42,22 @@ export async function publishMultiplexInitialSnapshot(
   const forcedInitialSnapshotTruncated =
     process.env.ORCA_E2E_FORCE_REMOTE_TERMINAL_INITIAL_SNAPSHOT_TRUNCATED === '1'
   // A WSL-moved pane replays its whole carried history once; the first view must hold all of it.
+  // A desktop keeps a local terminal's depth (N-02: a cloud pane reattaching after an app restart
+  // lost everything above the phone-sized 1000 rows); phones keep the phone-sized cut.
   const firstRows = isMovedPaneHistorySessionId(ptyId)
     ? MOVED_PANE_SUBSCRIBE_SCROLLBACK_ROWS
-    : MOBILE_SUBSCRIBE_SCROLLBACK_ROWS
+    : isMobile
+      ? MOBILE_SUBSCRIBE_SCROLLBACK_ROWS
+      : DESKTOP_SUBSCRIBE_SCROLLBACK_ROWS
+  const rawBudgetBytes = isMobile ? MOBILE_SNAPSHOT_BYTE_BUDGET : DESKTOP_SNAPSHOT_BYTE_BUDGET
   let read = await runtime.readTerminal(request.terminal)
-  let serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, undefined, firstRows)
+  let serialized = await serializeBudgetedMobileSnapshot(
+    runtime,
+    ptyId,
+    undefined,
+    firstRows,
+    rawBudgetBytes
+  )
   if (!isMultiplexStreamAttached(state, stream)) {
     return null
   }
@@ -51,7 +65,13 @@ export async function publishMultiplexInitialSnapshot(
   if (stream.pendingOutputOverflowed) {
     discardPendingMultiplexOutput(stream)
     read = await runtime.readTerminal(request.terminal)
-    serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, undefined, firstRows)
+    serialized = await serializeBudgetedMobileSnapshot(
+      runtime,
+      ptyId,
+      undefined,
+      firstRows,
+      rawBudgetBytes
+    )
     if (!isMultiplexStreamAttached(state, stream)) {
       return null
     }
