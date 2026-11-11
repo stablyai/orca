@@ -157,6 +157,8 @@ type WokenTerminal = {
     }
   }
   scrollToLine: (line: number) => void
+  /** Drops the scrollback (xterm's own API; an ED3 sent through the replay writer may not). */
+  clear?: () => void
 }
 
 /** A restore started on the woken terminal's snapshot, finished once that snapshot painted. */
@@ -246,6 +248,11 @@ export async function finishWakeScrollbackRestore(
   write: (data: string) => Promise<void>
 ): Promise<boolean> {
   const data = composeWakeRestore(restore.block, terminal)
+  if (data !== null) {
+    // The woken screen is read; drop everything above it (a remount's preview, the old image) so
+    // the rewrite below is the pane's only copy of its history.
+    terminal.clear?.()
+  }
   // Always release the render hold, restored or not.
   await write(`${data ?? ''}${RELEASE_RENDER}`)
   if (data === null) {
