@@ -414,6 +414,7 @@
       "defaultSurfaceSetAllChat": "Poner todos en Chat",
       "defaultSurfaceSetAllTerminal": "Poner todos en Terminal",
       "sameAsChoice": "Igual que {{agent}} · {{choice}}",
+      "modelListFallback": "Lista integrada. Orca no pudo obtener una lista de modelos de este host.",
       "chatUnavailableOnWindows": "{{value0}} Chat aún no está disponible en Windows, así que {{value0}} se abre en una terminal en este host. Los chats en un host macOS o Linux siguen funcionando.",
       "undetectedCommandHint": "Si la CLI de {{agent}} está instalada fuera de PATH, introduce la ruta completa a su ejecutable en este host."
     },
@@ -10904,7 +10905,7 @@
         },
         "agent-workspace-trust-copy": {
           "title": "Confiar en la carpeta cuando Orca inicia un agente",
-          "description": "Los agentes que inicia Orca pueden omitir su pregunta \"Do you trust this folder?\", así que los hooks y ajustes de agente del proyecto se ejecutan de inmediato. Orca pregunta una vez por repositorio la primera vez que inicias un agente allí, y puedes cambiar la respuesta en los ajustes de ese repositorio. Desactívalo para que los agentes pregunten siempre. Un agente que pregunta mientras se ejecuta sin que estés mirando, como un worker de orquestación, una automatización o un agente iniciado desde tu teléfono, espera hasta que respondas en su terminal. Las carpetas que ya son de confianza lo siguen siendo."
+          "description": "Los agentes que inicia Orca pueden omitir su pregunta \"Do you trust this folder?\", así que los hooks y ajustes de agente del proyecto se ejecutan de inmediato. Puedes desactivarlo para un repositorio en los ajustes de ese repositorio. Desactívalo para que los agentes pregunten siempre. Un agente que pregunta mientras se ejecuta sin que estés mirando, como un worker de orquestación, una automatización o un agente iniciado desde tu teléfono, espera hasta que respondas en su terminal. Las carpetas que ya son de confianza lo siguen siendo."
         },
         "agent-generated-tab-title-copy": {
           "19ad21615a": "Generar títulos de pestañas automáticamente",
@@ -18780,14 +18781,10 @@
         }
       },
       "agent-workspace-trust-decision": {
-        "prompt-title": "¿Confiar en {{repo}} para los agentes?",
-        "prompt-description": "Los agentes como Claude Code y Codex preguntan \"Do you trust this folder?\" antes de cargar los ajustes y hooks de agente propios del proyecto, que pueden ejecutar comandos. Orca puede responder que sí por ti en todos los worktrees de este repositorio.",
-        "prompt-remembered": "Orca recuerda tu respuesta para este repositorio. Puedes cambiarla en los ajustes del repositorio.",
         "trust-repository": "Confiar en el repositorio",
         "let-agents-ask": "Dejar que los agentes pregunten",
         "setting-title": "Confianza de carpetas para agentes",
         "setting-description": "Indica si los agentes que Orca inicia en los worktrees de este repositorio omiten su pregunta \"Do you trust this folder?\" y cargan de inmediato los ajustes y hooks de agente del proyecto.",
-        "setting-undecided": "Aún no se ha decidido. Orca preguntará la próxima vez que inicies un agente aquí.",
         "setting-global-off": "La confianza de carpetas está desactivada en los ajustes de Agentes, así que los agentes siempre preguntan.",
         "keyword-trust": "confianza",
         "keyword-hooks": "hooks"
