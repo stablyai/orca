@@ -66,10 +66,18 @@ export function cloudSessionEnv(
 }
 
 /** `env` with the current cloud session env laid over it and dropped names removed. */
-export function withCloudSessionEnv<T extends Record<string, string | undefined>>(
-  env: T,
+export function withCloudSessionEnv(
+  env: Record<string, string>,
+  options?: CloudSessionEnvOptions
+): Record<string, string>
+export function withCloudSessionEnv(
+  env: NodeJS.ProcessEnv,
+  options?: CloudSessionEnvOptions
+): NodeJS.ProcessEnv
+export function withCloudSessionEnv(
+  env: Record<string, string | undefined>,
   options: CloudSessionEnvOptions = {}
-): T {
+): Record<string, string | undefined> {
   const current = cloudSessionEnv(env, options)
   if (!current) {
     return env
@@ -78,5 +86,5 @@ export function withCloudSessionEnv<T extends Record<string, string | undefined>
   for (const name of current.unset) {
     delete next[name]
   }
-  return Object.assign(next, current.set) as T
+  return Object.assign(next, current.set)
 }

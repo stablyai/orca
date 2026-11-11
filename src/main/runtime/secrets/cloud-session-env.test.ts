@@ -12,7 +12,7 @@ const file =
 
 describe('cloud session env overlay (RA-1)', () => {
   it('lays the live file over an env captured before a credential was added', () => {
-    const started = { PATH: '/usr/bin', ORCA_SESSION_ENV_NAMES: '' }
+    const started: Record<string, string> = { PATH: '/usr/bin', ORCA_SESSION_ENV_NAMES: '' }
     const env = withCloudSessionEnv(started, {
       processEnv: CLOUD,
       uid: 1000,
