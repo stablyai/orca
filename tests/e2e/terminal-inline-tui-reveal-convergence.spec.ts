@@ -54,7 +54,8 @@ function latestFrame(text: string): number {
 
 function heartbeatFrame(heartbeatPath: string): number {
   try {
-    return Number(readFileSync(heartbeatPath, 'utf8').trim())
+    const value = readFileSync(heartbeatPath, 'utf8').trim()
+    return /^\d+$/.test(value) ? Number(value) : -1
   } catch {
     return -1
   }
@@ -345,8 +346,11 @@ async function assertRevealConvergence(
 ): Promise<void> {
   const { tabId, heartbeatPath } = setup
 
-  const heartbeatAtReveal = heartbeatFrame(heartbeatPath)
-  expect(heartbeatAtReveal, 'fixture stopped streaming while hidden').toBeGreaterThan(5)
+  await expect
+    .poll(() => heartbeatFrame(heartbeatPath), {
+      message: 'fixture stopped streaming while hidden'
+    })
+    .toBeGreaterThan(5)
 
   let lastProbe: RevealProbe | null = null
   await expect
@@ -365,7 +369,7 @@ async function assertRevealConvergence(
         }
         const visibleFrame = latestFrame(screen)
         const liveFrame = heartbeatFrame(heartbeatPath)
-        if (visibleFrame < 0 || liveFrame - visibleFrame > MAX_VISIBLE_FRAME_LAG) {
+        if (visibleFrame < 0 || liveFrame < 0 || liveFrame - visibleFrame > MAX_VISIBLE_FRAME_LAG) {
           return `stale-frame visible=${visibleFrame} live=${liveFrame}`
         }
         return 'converged'
@@ -483,7 +487,13 @@ async function withCpuThrottle<T>(page: Page, rate: number, run: () => Promise<T
 }
 
 async function streamWhileParked(setup: StreamingTabSetup, minFrames: number): Promise<void> {
-  const heartbeatBefore = heartbeatFrame(setup.heartbeatPath)
+  let heartbeatBefore = -1
+  await expect
+    .poll(() => {
+      heartbeatBefore = heartbeatFrame(setup.heartbeatPath)
+      return heartbeatBefore
+    })
+    .toBeGreaterThanOrEqual(0)
   await expect
     .poll(() => heartbeatFrame(setup.heartbeatPath), {
       timeout: 60_000,

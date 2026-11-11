@@ -23,18 +23,18 @@ test.describe('Settings sidebar search on the Shortcuts pane', () => {
     await expect(orcaPage.getByRole('heading', { name: 'Shortcuts', exact: true })).toBeVisible()
 
     // Regression: a pane-title-only query used to blank the whole list (0/112).
-    await expect(orcaPage.getByText('Go to File', { exact: true })).toBeVisible()
+    await expect(orcaPage.getByText('Go to file', { exact: true })).toBeVisible()
     await expect(orcaPage.getByText('No shortcuts match those filters.')).not.toBeVisible()
 
     // Keep pane search working with a global query; the old empty base list broke their intersection.
     const localSearch = orcaPage.getByPlaceholder('Search command or keys')
     await localSearch.fill('go to')
-    await expect(orcaPage.getByText('Go to File', { exact: true })).toBeVisible()
-    await expect(orcaPage.getByText('Force Reload', { exact: true })).not.toBeVisible()
+    await expect(orcaPage.getByText('Go to file', { exact: true })).toBeVisible()
+    await expect(orcaPage.getByText('Force reload', { exact: true })).not.toBeVisible()
 
     await localSearch.clear()
     await searchInput.fill('worktree')
     await expect(orcaPage.getByText('Create worktree', { exact: true })).toBeVisible()
-    await expect(orcaPage.getByText('Go to File', { exact: true })).not.toBeVisible()
+    await expect(orcaPage.getByText('Go to file', { exact: true })).not.toBeVisible()
   })
 })
