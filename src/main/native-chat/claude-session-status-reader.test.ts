@@ -1,4 +1,4 @@
-import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -70,6 +70,16 @@ describe('createClaudeSessionStatusReader', () => {
     expect(await reader.read(file)).toMatchObject({ compactions: 3 })
     await writeFile(file, `${COMPACT}\n`)
     expect(await reader.read(file)).toMatchObject({ compactions: 1 })
+  })
+
+  it('reads a file replaced at the same path from the start', async () => {
+    const reader = createClaudeSessionStatusReader()
+    await writeFile(file, `${COMPACT}\n${COMPACT}\n${COMPACT}\n`)
+    expect(await reader.read(file)).toMatchObject({ compactions: 3 })
+    const replacement = join(dir, 'replacement.jsonl')
+    await writeFile(replacement, `${reply(500)}\n${reply(500)}\n`)
+    await rename(replacement, file)
+    expect(await reader.read(file)).toMatchObject({ compactions: 0, usedTokens: 500 })
   })
 
   it('forgets a file that disappeared', async () => {
