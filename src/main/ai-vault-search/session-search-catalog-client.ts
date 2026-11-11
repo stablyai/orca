@@ -156,6 +156,7 @@ export class SessionSearchCatalogClient<T> {
       group?: string
       ready?: number
       orderRank?: boolean
+      orderRevision?: boolean
       limit?: number
       prefix?: string
       throughRevision?: number

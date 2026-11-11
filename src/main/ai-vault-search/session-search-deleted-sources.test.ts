@@ -159,6 +159,37 @@ it('advances a long retirement sweep while one queued removal is refused', async
   }
 })
 
+it('progresses a queued tail and the full sweep while an earlier page stays refused', async () => {
+  const paths = seedSearchableRows(600)
+  const held = new Set(paths.slice(0, 256))
+  const remove = SessionSearchStore.prototype.removeFile.bind(store)
+  store.removeFile = (path) => (held.has(path) ? false : remove(path))
+  const state = new SessionSearchPassState()
+  await state.prepare(store)
+  await state.retire.setPage(paths.slice(0, 257).map((path) => [path, path] as const))
+  try {
+    const args = { ...retirementArgs(state), discoveryOverdue: () => true }
+    // Three sweep pages alternate with queued turns, with one final EOF turn available.
+    for (let cycle = 0; cycle < 8; cycle++) {
+      await retireSessionSearchPassSources(args, [harness.claudeProjectDir], new Set())
+    }
+    expect(store.fileRow(paths[256])).toBeUndefined()
+    expect(store.fileRow(paths[599])).toBeUndefined()
+    expect(retainedRows()).toBe(256)
+    expect(state.pending).toBe(true)
+    held.clear()
+    await retireSessionSearchPassSources(
+      retirementArgs(state),
+      [harness.claudeProjectDir],
+      new Set()
+    )
+    expect(retainedRows()).toBe(0)
+    expect(state.pending).toBe(false)
+  } finally {
+    await state.close()
+  }
+})
+
 it('continues a finite parked-retirement wake across passes without waking its new failures', async () => {
   const paths = seedSearchableRows(300)
   store.removeFile = SessionSearchStore.prototype.removeFile.bind(store)

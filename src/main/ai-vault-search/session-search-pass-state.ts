@@ -18,6 +18,7 @@ export class SessionSearchPassState {
     lookahead?: Pick<SessionSearchFileRow, 'path' | 'agent'>
     exhausted: boolean
   } | null = null
+  retirementTurn: 'queued' | 'sweep' = 'queued'
   private catalog: SessionSearchCatalogRequest | undefined
   private readonly request: SessionSearchCatalogRequest = (command) => this.catalog!(command)
   retire = this.retirementFrontier('retirement')
@@ -45,6 +46,7 @@ export class SessionSearchPassState {
       this.candidates.reset()
       this.queue = new SessionSearchWorkQueue()
       this.retirement = null
+      this.retirementTurn = 'queued'
       this.retire = this.retirementFrontier('retirement')
       this.parkedRetire = this.retirementFrontier('parked-retirement')
       this.needsRetirement = true

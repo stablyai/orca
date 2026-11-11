@@ -2,9 +2,13 @@ const PAGE_ROWS = 256
 const PAGE_BYTES = 256 * 1024
 
 /** Stop before decoding another page; one oversized valid record remains an accounted transient. */
-export function boundedSessionSearchPage<T, R>(rows: Iterable<R>, decode: (row: R) => T): T[] {
+export function boundedSessionSearchPage<T, R>(
+  rows: Iterable<R>,
+  decode: (row: R) => T,
+  options: { accept?: (value: T) => void; overheadBytes?: number } = {}
+): T[] {
   const page: T[] = []
-  let bytes = 1024
+  let bytes = options.overheadBytes ?? 1024
   for (const row of rows) {
     const value = decode(row)
     const size = JSON.stringify(value).length * 2 + 64
@@ -12,6 +16,7 @@ export function boundedSessionSearchPage<T, R>(rows: Iterable<R>, decode: (row: 
       break
     }
     page.push(value)
+    options.accept?.(value)
     bytes += size
   }
   return page

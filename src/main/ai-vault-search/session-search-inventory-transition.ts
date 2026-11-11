@@ -1,11 +1,8 @@
 import { SessionSearchAuthorityPage } from './session-search-authority-page'
 import { SESSION_INPUT_FAILURES_BEFORE_HELD_OUT } from '../ai-vault/session-observation-retries'
 import { recordSessionSearchRetry } from './session-search-retry-transition'
-import {
-  cleanupSessionSearchAuthority,
-  putAuthorityValue
-} from './session-search-observation-authority'
-import { boundedSessionSearchPage } from './session-search-catalog-pages'
+import { cleanupSessionSearchAuthority } from './session-search-observation-authority'
+import { prepareSessionSearchObservations } from './session-search-observation-preparation'
 import type { SessionSearchCatalog, SessionSearchCatalogRow } from './session-search-catalog'
 import { sidecarUnchanged } from '../ai-vault/parse-cache/session-sidecar-stat'
 import { dirname } from 'node:path'
@@ -36,6 +33,9 @@ export function transitionSessionSearchInventory(
   catalog: SessionSearchCatalog,
   command: SessionSearchInventoryCommand
 ): SessionSearchInventoryResult {
+  if (command.kind === 'observe-prepare') {
+    return prepareSessionSearchObservations(catalog, command)
+  }
   const files = `${command.scope}:files`
   const failures = `${command.scope}:file-refusals`
   const authority = new SessionSearchAuthorityPage(catalog, command.scope)
@@ -68,53 +68,6 @@ export function transitionSessionSearchInventory(
     get(`${command.scope}:dirty`, path)?.value ?? '',
     authority.authority(path)?.self ?? 0
   ]
-  if (command.kind === 'observe-prepare') {
-    const prepared = boundedSessionSearchPage(command.inputs, (input) => {
-      const refusal = get(failures, input.path)
-      const debt = decode<SessionSearchObservationDebt>(refusal)
-      const authority = catalog.nextRevision()
-      return {
-        ...input,
-        authority,
-        force: input.force || !!debt?.force,
-        metadataOwed: input.metadataOwed || debt?.metadata,
-        refusalRevision: refusal?.tie,
-        attempt: !debt || (debt.failures < 3 && debt.attempted !== command.generation),
-        accepted: decode<SessionSearchObservedFacts>(get(files, input.path)),
-        token: ''
-      }
-    })
-    for (const input of prepared) {
-      const debt = decode<SessionSearchObservationDebt>(get(failures, input.path))
-      if (
-        !input.attempt &&
-        debt &&
-        (((input.force || input.readOwed) && !debt.force) || (input.metadataOwed && !debt.metadata))
-      ) {
-        recordSessionSearchRetry(catalog, failures, input.path, {
-          ...debt,
-          force: debt.force || input.force || !!input.readOwed,
-          metadata: debt.metadata || input.metadataOwed
-        })
-        authority.forget(failures, input.path)
-        input.refusalRevision = get(failures, input.path)?.tie
-      }
-      if (input.attempt) {
-        authority.record(input.path, input.authority, 0)
-        input.token = JSON.stringify(token(input.path))
-        put(observing, input.path, input.token)
-        putAuthorityValue(
-          catalog,
-          `${command.scope}:observation-epochs`,
-          String(input.authority),
-          input.path,
-          input.authority
-        )
-      }
-    }
-    authority.flush()
-    return { prepared }
-  }
   let filesDelta = 0,
     failuresDelta = 0,
     runnableDelta = 0

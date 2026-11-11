@@ -87,7 +87,7 @@ export class SessionSearchCatalogFrontier<T> {
   async receipts(limit = 256, cutoff?: number) {
     const page = await this.catalog.page({
       group: '',
-      orderRank: true,
+      orderRevision: true,
       limit,
       throughRevision: cutoff
     })

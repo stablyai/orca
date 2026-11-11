@@ -35,11 +35,13 @@ export async function retireSessionSearchPassSources(
     }
     state.needsRetirement = false
   }
-  let batches = 0
   const cutoff = await state.retire.snapshot()
   while (true) {
     const unit = state.retirement
-    const queued = unit?.rows.length ? [] : await state.retire.receipts(256, cutoff)
+    const queued =
+      unit?.rows.length || (unit && state.retirementTurn === 'sweep')
+        ? []
+        : await state.retire.receipts(256, cutoff)
     const paths = queued.map(({ key }) => key)
     if (unit && !unit.rows.length && !queued.length) {
       let bytes = 1024
@@ -94,15 +96,15 @@ export async function retireSessionSearchPassSources(
         paths.map((key) => ({ key, revision: receipts.get(key), outcome: outcomes.get(key) }))
       )
       degraded.push(...retirement.degradedRoots)
-      batches++
     }
+    state.retirementTurn = queued.length ? 'sweep' : 'queued'
     if (unit && !queued.length) {
       unit.rows.length = 0
       if (unit.exhausted && !unit.lookahead) {
         state.retirement = null
       }
     }
-    if ((!state.retirement && !queued.length) || (batches > 0 && args.discoveryOverdue?.())) {
+    if ((!state.retirement && !queued.length) || args.discoveryOverdue?.()) {
       break
     }
   }

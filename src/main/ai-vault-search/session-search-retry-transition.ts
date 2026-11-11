@@ -40,7 +40,8 @@ export function recordSessionSearchRetry(
   catalog: SessionSearchCatalog,
   scope: string,
   path: string,
-  debt?: SessionSearchRetryDebt
+  debt?: SessionSearchRetryDebt,
+  revision?: number
 ): void {
   const eligible = `${scope}:eligible`
   if (!debt) {
@@ -48,7 +49,7 @@ export function recordSessionSearchRetry(
     catalog.execute({ kind: 'delete', scope: eligible, key: path })
     return
   }
-  const revision = catalog.nextRevision()
+  const nextRevision = revision ?? catalog.nextRevision()
   catalog.execute({
     kind: 'put',
     scope,
@@ -59,7 +60,7 @@ export function recordSessionSearchRetry(
         parent: '',
         group: debt.issue ? 'issue' : '',
         rank: 0,
-        tie: revision,
+        tie: nextRevision,
         ready: Number(debt.failures < SESSION_INPUT_FAILURES_BEFORE_HELD_OUT)
       }
     ]
