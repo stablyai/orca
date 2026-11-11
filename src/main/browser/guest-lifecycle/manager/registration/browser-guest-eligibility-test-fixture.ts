@@ -111,6 +111,7 @@ export class EligibilityGuest extends DestroyedGuestTestContents {
 
   stopLoading(): void {
     this.loading = false
+    this.emit('did-finish-load')
     this.emit('did-stop-loading')
   }
 
