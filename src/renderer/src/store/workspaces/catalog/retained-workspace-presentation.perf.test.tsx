@@ -92,8 +92,10 @@ it.each([100, 1000])(
       true
     )
     const inspected: string[] = []
+    const inspectedContent: string[] = []
     const selectPresentation = createWorkspacePresentationSelector<Worktree>({
-      onInspectBucket: (id) => inspected.push(id)
+      onInspectBucket: (id) => inspected.push(id),
+      onInspectContent: (id) => inspectedContent.push(id)
     })
     let targetRenders = 0
     let otherRenders = 0
@@ -113,6 +115,7 @@ it.each([100, 1000])(
     const before = selectPresentation(useAppStore.getState())
     targetRenders = otherRenders = emptyRenders = 0
     inspected.length = 0
+    inspectedContent.length = 0
     act(() => {
       useAppStore.setState((state) => ({
         tabsByWorktree: replaceRecordEntries(state.tabsByWorktree, [
@@ -125,17 +128,20 @@ it.each([100, 1000])(
     })
     // A title changes one bucket, never membership: work is independent of fleet size.
     expect(inspected).toEqual([target.id])
+    expect(inspectedContent).toEqual([target.id])
     expect(selectPresentation(useAppStore.getState())).toBe(before)
     expect([targetRenders, otherRenders, emptyRenders]).toEqual([0, 0, 0])
     expect(targetPane.result.current).toBe(before[target.repoId])
     expect(otherPane.result.current).toBe(before[otherHost.repoId])
     inspected.length = 0
+    inspectedContent.length = 0
     act(() => {
       useAppStore.setState({
         agentStatusByPaneKey: { changed: makeAgentEntry('target-tab', 'working', 1) }
       })
     })
     expect(inspected).toEqual([])
+    expect(inspectedContent).toEqual([])
     expect([targetRenders, otherRenders, emptyRenders]).toEqual([0, 0, 0])
     act(() => {
       useAppStore.setState((state) => ({
@@ -145,6 +151,7 @@ it.each([100, 1000])(
       }))
     })
     expect(inspected).toEqual([empty.id])
+    expect(inspectedContent).toEqual([empty.id])
     expect([targetRenders, otherRenders, emptyRenders]).toEqual([0, 0, 1])
     expect(newPane.result.current?.map((row) => row.id)).toEqual(['repo::/2/.bare'])
   }

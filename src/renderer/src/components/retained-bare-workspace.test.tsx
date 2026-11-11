@@ -421,3 +421,84 @@ it('keeps host twins ambiguous and drops truly removed identities despite retain
       .map((row) => row.id)
   ).toEqual([checkout.id])
 })
+
+it('does not lend a listed owner’s content to a hidden host twin', () => {
+  const listed = { ...checkout, hostId: 'ssh:a' as const }
+  const hidden = { ...listed, hostId: 'runtime:other' as const, runtimeOwnerEnvironmentId: 'other' }
+  useAppStore.setState(
+    {
+      ...initialState,
+      repos: [{ ...TEST_REPO, executionHostId: 'ssh:a', connectionId: 'a' }],
+      activeWorktreeId: listed.id,
+      activeWorkspaceExecutionHostId: null,
+      worktreesByRepo: { repo1: [listed] },
+      detectedWorktreesByRepo: {
+        repo1: {
+          repoId: 'repo1',
+          authoritative: true,
+          source: 'git',
+          worktrees: [{ ...hidden, ownership: 'external', selectedCheckout: false, visible: false }]
+        }
+      },
+      unifiedTabsByWorktree: {
+        [listed.id]: [
+          {
+            id: 'saved-twin',
+            entityId: 'saved-twin',
+            worktreeId: listed.id,
+            groupId: 'twin-group',
+            contentType: 'agent-session',
+            label: 'Saved twin',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
+    },
+    true
+  )
+  const state = useAppStore.getState()
+  expect(selectWorkspacePresentationWorktrees(state)).toBe(state.worktreesByRepo)
+  expect(getResolvedExecutionHostIdForWorktree(state, listed.id)).toBe('ssh:a')
+  expect(searchTabs('Saved twin').map((entry) => entry.executionHostId)).toEqual(['ssh:a'])
+  const created = state.createUnifiedTab(listed.id, 'terminal', {
+    id: 'new-twin-tab',
+    entityId: 'new-twin'
+  })
+  expect(created.executionHostId).toBe('ssh:a')
+  useAppStore.setState((current) => ({
+    unifiedTabsByWorktree: replaceRecordEntries<AppState['unifiedTabsByWorktree'][string]>(
+      current.unifiedTabsByWorktree,
+      [
+        [
+          listed.id,
+          current.unifiedTabsByWorktree[listed.id].map((tab) =>
+            tab.id === 'saved-twin' ? { ...tab, executionHostId: 'runtime:other' } : tab
+          )
+        ]
+      ]
+    )
+  }))
+  expect(
+    selectWorkspacePresentationWorktrees(useAppStore.getState()).repo1.map((row) => row.hostId)
+  ).toEqual(['ssh:a', 'runtime:other'])
+  expect(searchTabs('Saved twin').map((entry) => entry.executionHostId)).toEqual(['runtime:other'])
+  useAppStore.setState((current) => ({
+    unifiedTabsByWorktree: replaceRecordEntries<AppState['unifiedTabsByWorktree'][string]>(
+      current.unifiedTabsByWorktree,
+      [
+        [
+          listed.id,
+          current.unifiedTabsByWorktree[listed.id].map((tab) => ({
+            ...tab,
+            executionHostId: 'ssh:a'
+          }))
+        ]
+      ]
+    )
+  }))
+  const restored = useAppStore.getState()
+  expect(selectWorkspacePresentationWorktrees(restored)).toBe(restored.worktreesByRepo)
+})
