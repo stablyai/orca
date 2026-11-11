@@ -13,8 +13,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
-import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import type {
   LocalCommandDecision,
   LocalCommandPrompt
@@ -191,7 +190,8 @@ export function LocalCommandApprovalDialogView({
       <p className="text-xs text-muted-foreground">
         {prompt.agent
           ? `${t('localCommands.prompt.agent', 'From {{agent}}', {
-              agent: getAgentLabel(prompt.agent as TerminalAgent)
+              agent:
+                getAgentCatalog().find((entry) => entry.id === prompt.agent)?.label ?? prompt.agent
             })} · `
           : null}
         {timeoutLabel(prompt.timeoutSec, t)}

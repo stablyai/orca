@@ -5,8 +5,7 @@ import { z } from 'zod'
 import {
   LOCAL_COMMANDS_ATTACH_METHOD,
   LOCAL_COMMANDS_SETTLE_METHOD,
-  type LocalCommandSettleParams,
-  type LocalCommandSettleResult
+  type LocalCommandSettleParams
 } from '../../shared/local-commands/local-command-contract'
 import {
   LOCAL_COMMANDS_PROMPTS_CHANNEL,
@@ -44,18 +43,20 @@ import {
   stopAllLocalCommands
 } from './local-command-executor'
 import { isLocalCommandSandboxId, LocalCommandSettingsStore } from './local-command-settings-store'
+import { onEphemeralVmRuntimesChanged } from '../../shared/ephemeral-vm-runtime-store-events'
+import { eventField } from './local-command-request-checks'
 import {
   createLocalCommandSettingsController,
   type LocalCommandSettingsController
 } from './local-command-settings-controller'
 
-const RECONCILE_MS = 30_000
 const SETTLE_TIMEOUT_MS = 15_000
 const ENDED_STATUSES = new Set(['failed', 'cleanup_pending', 'cleanup_failed', 'cleaned'])
 
 let bridge: LocalCommandBridge | null = null
 let controller: LocalCommandSettingsController | null = null
-let reconcileTimer: ReturnType<typeof setInterval> | null = null
+let stopWatchingRuntimes: (() => void) | null = null
+let auditLog: LocalCommandAuditLog | null = null
 
 function listLocalCloudWorkspaces(userDataPath: string): LocalCloudWorkspaceRef[] {
   const refs: LocalCloudWorkspaceRef[] = []
@@ -114,12 +115,14 @@ export function installLocalCommands(userDataPath: string): void {
     return
   }
   const settings = new LocalCommandSettingsStore(userDataPath)
+  const audit = new LocalCommandAuditLog(userDataPath)
+  auditLog = audit
   const supported = localCommandsSupported()
   const listWorkspaces = (): LocalCloudWorkspaceRef[] => listLocalCloudWorkspaces(userDataPath)
   const publishState = (): void => sendToTrustedUIRenderer(LOCAL_COMMANDS_STATE_CHANNEL, null)
   bridge = createLocalCommandBridge({
     settings,
-    audit: new LocalCommandAuditLog(userDataPath),
+    audit,
     supported,
     listWorkspaces,
     readPolicy: async (sandboxId) => {
@@ -159,11 +162,14 @@ export function installLocalCommands(userDataPath: string): void {
       if (!response.ok) {
         throw new Error(response.error.message)
       }
-      return response.result as LocalCommandSettleResult
+      const result = response.result
+      const accepted = eventField(result, 'accepted')
+      // A claim counts only when orcad says so in so many words.
+      return { accepted: accepted === true }
     },
     resolveCwd: (requested) => resolveLocalCommandCwd(requested),
     execute: async ({ command, cwd, timeoutSec }) => {
-      const shellEnv = await hostShellEnvironment().catch(() => ({}) as NodeJS.ProcessEnv)
+      const shellEnv = await hostShellEnvironment().catch((): NodeJS.ProcessEnv => ({}))
       return executeLocalCommand({
         command,
         cwd,
@@ -182,13 +188,12 @@ export function installLocalCommands(userDataPath: string): void {
     listWorkspaces,
     publishState
   })
-  bridge.reconcile()
-  reconcileTimer = setInterval(() => bridge?.reconcile(), RECONCILE_MS)
-  reconcileTimer.unref?.()
+  // Nothing attaches until this computer's own switches are read.
+  void settings.load().then(() => bridge?.reconcile())
+  // A created, woken, rolled-over or deleted workspace changes the records: attach where they point.
+  stopWatchingRuntimes = onEphemeralVmRuntimesChanged(() => bridge?.reconcile())
   app.once('before-quit', () => {
-    if (reconcileTimer) {
-      clearInterval(reconcileTimer)
-    }
+    stopWatchingRuntimes?.()
     bridge?.dispose()
     stopAllLocalCommands()
   })
@@ -215,7 +220,7 @@ const CHANNELS = [
 
 const UNAVAILABLE = { available: false, workspaces: [], rules: [] }
 
-export function registerLocalCommandHandlers(userDataPath: string): void {
+export function registerLocalCommandHandlers(): void {
   for (const channel of CHANNELS) {
     ipcMain.removeHandler(channel)
   }
@@ -247,7 +252,7 @@ export function registerLocalCommandHandlers(userDataPath: string): void {
   )
   handle('localCommands:listAudit', (args) => {
     const limit = typeof args === 'number' && Number.isInteger(args) ? args : 50
-    return new LocalCommandAuditLog(userDataPath).recent(limit)
+    return auditLog?.recent(limit) ?? []
   })
   handle('localCommands:decide', async (args) => {
     const parsed = Decide.safeParse(args)

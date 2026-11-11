@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { access } from 'node:fs/promises'
 import {
   LOCAL_COMMAND_APPROVAL_WINDOW_MS,
   LOCAL_COMMAND_MAX_TIMEOUT_SEC,
@@ -27,7 +27,12 @@ export async function registerLocalCommandMcpServer(
   deps: Partial<HostMcpSyncDeps> = {}
 ): Promise<void> {
   const server = {
-    command: existsSync(VM_ORCA_CLI) ? VM_ORCA_CLI : 'orca',
+    command: (await access(VM_ORCA_CLI).then(
+      () => true,
+      () => false
+    ))
+      ? VM_ORCA_CLI
+      : 'orca',
     args: ['local-command', 'mcp']
   }
   await syncHostMcpServers(

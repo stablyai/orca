@@ -92,7 +92,7 @@ export function installHostedSandbox(
   )
   registerCloudMcpSyncHandlers()
   const userDataPath = app.getPath('userData')
-  registerLocalCommandHandlers(userDataPath)
+  registerLocalCommandHandlers()
   const config = getHostedSandboxConfig(
     userDataPath,
     withCloudBuildDefaults(process.env),

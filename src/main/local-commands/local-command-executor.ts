@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+import { spawnProcess } from '@orca/process-host'
 import { realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
@@ -92,6 +92,8 @@ class CappedOutput {
   }
 }
 
+type ChildProcess = ReturnType<typeof spawnProcess>
+
 const running = new Set<ChildProcess>()
 
 function killGroup(child: ChildProcess, signal: NodeJS.Signals): void {
@@ -141,12 +143,13 @@ export function executeLocalCommand(
     let timedOut = false
     let child: ChildProcess
     try {
-      child = spawn('/bin/sh', ['-c', input.command], {
+      child = spawnProcess({
+        program: '/bin/sh',
+        args: ['-c', input.command],
         cwd: input.cwd,
         env: input.env,
         stdio: ['ignore', 'pipe', 'pipe'],
-        detached: true,
-        windowsHide: true
+        detached: true
       })
     } catch (error) {
       reject(error)

@@ -1,4 +1,3 @@
-import { assessLocalCommandRisk } from '../../shared/local-commands/local-command-risk'
 import {
   LOCAL_COMMAND_APPROVAL_WINDOW_MS,
   type LocalCommandDeclineReason,
@@ -18,7 +17,9 @@ import type { LocalCommandBridgeDeps, PendingPrompt } from './local-command-brid
 import {
   LocalCommandRequestedEventSchema,
   LocalCommandSettledEventSchema,
+  buildLocalCommandPrompt,
   displayText,
+  eventField,
   requestIdOf,
   type LocalCommandRequestedEventInput
 } from './local-command-request-checks'
@@ -48,7 +49,6 @@ export function createLocalCommandBridge(deps: LocalCommandBridgeDeps) {
   // Environment + request ids this computer already acted on; a replay is never answered twice.
   const handled = new Set<string>()
   const limits = createLocalCommandRequestLimits()
-  // Requests per workspace that passed the limits and are still being checked.
   const checking = new Map<string, number>()
   // The prompt in front and since when: a queued one gets its own read delay when it moves up.
   let front: { id: string; since: number } | null = null
@@ -59,7 +59,7 @@ export function createLocalCommandBridge(deps: LocalCommandBridgeDeps) {
     setTimer,
     onConnectedChanged: deps.publishState,
     onEvent: (sandboxId, environmentId, event) => {
-      const type = (event as { type?: unknown }).type
+      const type = eventField(event, 'type')
       if (type === 'requested') {
         void onRequested(environmentId, sandboxId, event)
       } else if (type === 'settled') {
@@ -69,7 +69,7 @@ export function createLocalCommandBridge(deps: LocalCommandBridgeDeps) {
   })
 
   function audit(entry: Omit<LocalCommandAuditEntry, 'at' | 'workspaceLabel'>): void {
-    deps.audit.append({ at: now(), workspaceLabel: labelOf(entry.sandboxId), ...entry })
+    void deps.audit.append({ at: now(), workspaceLabel: labelOf(entry.sandboxId), ...entry })
   }
 
   function publishPrompts(): void {
@@ -92,11 +92,13 @@ export function createLocalCommandBridge(deps: LocalCommandBridgeDeps) {
   async function settle(
     environmentId: string,
     params: LocalCommandSettleParams
-  ): Promise<LocalCommandSettleResult | null> {
+  ): Promise<Pick<LocalCommandSettleResult, 'accepted'> | null> {
     try {
       return await deps.settle(environmentId, params)
     } catch (error) {
-      log(`settle ${params.outcome} failed: ${error instanceof Error ? error.message : error}`)
+      log(
+        `settle ${params.outcome} failed: ${error instanceof Error ? error.message : String(error)}`
+      )
       return null
     }
   }
@@ -175,22 +177,12 @@ export function createLocalCommandBridge(deps: LocalCommandBridgeDeps) {
     if (windowMs <= 0) {
       return
     }
-    const risk = assessLocalCommandRisk(event.command, cwd)
-    const prompt: LocalCommandPrompt = {
-      id: requestId,
-      sandboxId,
+    const prompt = buildLocalCommandPrompt(event, base, {
+      cwd,
       workspaceLabel: labelOf(sandboxId),
       shared: policy.cached(sandboxId)?.shared ?? false,
-      command: event.command,
-      cwd,
-      timeoutSec: event.timeoutSec,
-      reason: displayText(event.reason, 200),
-      agent: base.agent,
-      hasNonAscii: risk.nonAscii,
-      pipesToShell: risk.pipesToShell,
-      alwaysAllowBlocked: risk.alwaysAllowBlocked,
       expiresAt: now() + windowMs
-    }
+    })
     const timer = setTimer(() => {
       if (pending.delete(requestId)) {
         audit({ ...base, cwd, outcome: 'timed-out' })
@@ -302,8 +294,12 @@ export function createLocalCommandBridge(deps: LocalCommandBridgeDeps) {
         deps.settings.addRule(base.sandboxId, base.command, base.cwd, now())
         deps.publishState()
       }
-      const outcome = decision === 'always-allow' ? 'always-allowed' : 'allowed-once'
-      void runApproved(entry.environmentId, base, entry.prompt.timeoutSec, outcome)
+      void runApproved(
+        entry.environmentId,
+        base,
+        entry.prompt.timeoutSec,
+        decision === 'always-allow' ? 'always-allowed' : 'allowed-once'
+      )
       return { ok: true }
     },
 

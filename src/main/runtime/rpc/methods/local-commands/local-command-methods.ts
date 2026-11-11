@@ -30,7 +30,7 @@ export type LocalCommandMethodDeps = {
   enabled: () => boolean
   callerTerminal: (ctx: RpcContext) => string | null
   /** Devices paired through a grant (teammates, other computers) never take requests. */
-  isGrantedDevice: (originDeviceId: string) => boolean
+  isGrantedDevice: (originDeviceId: string) => Promise<boolean>
 }
 
 const defaultDeps: LocalCommandMethodDeps = {
@@ -42,17 +42,17 @@ const defaultDeps: LocalCommandMethodDeps = {
 
 /** A paired desktop, proven by its socket: never the agent's CLI, a phone, or a device paired through
  *  a grant (best effort, see grant-device-ledger.ts). The desktop re-checks ownership itself. */
-function requireOwnerDesktop(
+async function requireOwnerDesktop(
   ctx: RpcContext,
   deps: LocalCommandMethodDeps
-): { deviceId: string; connectionId: string } {
+): Promise<{ deviceId: string; connectionId: string }> {
   if (
     ctx.clientKind !== 'runtime' ||
     ctx.caller?.kind !== 'paired-device' ||
     !ctx.pairedDeviceId ||
     !ctx.pairedDeviceOriginId ||
     !ctx.connectionId ||
-    deps.isGrantedDevice(ctx.pairedDeviceOriginId)
+    (await deps.isGrantedDevice(ctx.pairedDeviceOriginId))
   ) {
     throw new LocalCommandError(LOCAL_COMMAND_ERRORS.forbidden)
   }
@@ -109,7 +109,7 @@ export function createLocalCommandMethods(deps: LocalCommandMethodDeps = default
       permission: 'workspace',
       params: LocalCommandSettleParamsSchema,
       handler: async (params, ctx): Promise<LocalCommandSettleResult> => {
-        const { deviceId } = requireOwnerDesktop(ctx, deps)
+        const { deviceId } = await requireOwnerDesktop(ctx, deps)
         return broker().settle(deviceId, params)
       }
     }),
@@ -118,7 +118,7 @@ export function createLocalCommandMethods(deps: LocalCommandMethodDeps = default
       permission: 'workspace',
       params: LocalCommandAttachParamsSchema,
       handler: async (_params, ctx, emit) => {
-        const { deviceId, connectionId } = requireOwnerDesktop(ctx, deps)
+        const { deviceId, connectionId } = await requireOwnerDesktop(ctx, deps)
         const relay = broker()
         await new Promise<void>((resolve) => {
           const subscriptionId = `local-commands-${connectionId}-${++attachSeq}`
@@ -143,7 +143,7 @@ export function createLocalCommandMethods(deps: LocalCommandMethodDeps = default
         })
       }
     })
-  ]
+  ] as const
 }
 
 export const LOCAL_COMMAND_METHODS = createLocalCommandMethods()

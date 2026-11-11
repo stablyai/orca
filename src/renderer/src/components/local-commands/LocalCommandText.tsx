@@ -1,5 +1,7 @@
 import type React from 'react'
+import { useTranslate } from '@/i18n/use-translate'
 
+const TAB_GLYPH = '\\t'
 const VISIBLE_TOKEN = 'rounded-sm bg-muted px-0.5 text-muted-foreground'
 const SUSPECT_TOKEN = 'rounded-sm bg-destructive/20 text-destructive'
 
@@ -13,6 +15,7 @@ function codePoint(char: string): string {
  * never get here; requests holding them are refused.
  */
 export function LocalCommandText({ text }: { text: string }): React.JSX.Element {
+  const t = useTranslate()
   const parts: React.ReactNode[] = []
   let key = 0
   let plain = ''
@@ -30,8 +33,8 @@ export function LocalCommandText({ text }: { text: string }): React.JSX.Element 
       if (char === '\t') {
         flush()
         parts.push(
-          <span key={key++} className={VISIBLE_TOKEN} title="Tab">
-            \t
+          <span key={key++} className={VISIBLE_TOKEN} title={t('localCommands.text.tab', 'Tab')}>
+            {TAB_GLYPH}
           </span>
         )
       } else if (/[\x20-\x7e]/.test(char)) {
@@ -48,8 +51,12 @@ export function LocalCommandText({ text }: { text: string }): React.JSX.Element 
     if (trailing > 0) {
       flush()
       parts.push(
-        <span key={key++} className={VISIBLE_TOKEN} title="Trailing whitespace">
-          {line.slice(body.length).replace(/ /g, '·').replace(/\t/g, '\\t')}
+        <span
+          key={key++}
+          className={VISIBLE_TOKEN}
+          title={t('localCommands.text.trailingSpace', 'Trailing whitespace')}
+        >
+          {line.slice(body.length).replace(/ /g, '·').replace(/\t/g, TAB_GLYPH)}
         </span>
       )
     }

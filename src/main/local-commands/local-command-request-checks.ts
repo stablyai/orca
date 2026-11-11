@@ -6,6 +6,8 @@ import {
   sanitizeLocalCommandReason
 } from '../../shared/local-commands/local-command-contract'
 import type { LocalCommandWorkspaceSetting } from './local-command-settings-store'
+import type { LocalCommandPrompt } from '../../shared/local-commands/local-command-desktop-types'
+import { assessLocalCommandRisk } from '../../shared/local-commands/local-command-risk'
 
 export const LOCAL_COMMAND_REQUEST_ID = /^lc_[A-Za-z0-9_-]{16,64}$/
 
@@ -28,9 +30,15 @@ export const LocalCommandSettledEventSchema = z.object({
   status: z.string().max(32)
 })
 
+/** One field of an untyped wire event, without trusting its shape. */
+export function eventField(event: unknown, name: string): unknown {
+  return event !== null && typeof event === 'object' && name in event
+    ? Object.getOwnPropertyDescriptor(event, name)?.value
+    : undefined
+}
+
 export function requestIdOf(raw: unknown): string | null {
-  const value =
-    raw && typeof raw === 'object' ? (raw as { requestId?: unknown }).requestId : undefined
+  const value = eventField(raw, 'requestId')
   return typeof value === 'string' && LOCAL_COMMAND_REQUEST_ID.test(value) ? value : null
 }
 
@@ -64,4 +72,28 @@ export function localCommandRefusal(
     return 'The workspace is shared with teammates.'
   }
   return null
+}
+
+/** The prompt the person sees, from a validated event and what this computer resolved itself. */
+export function buildLocalCommandPrompt(
+  event: LocalCommandRequestedEventInput,
+  base: { requestId: string; sandboxId: string; agent: string | null },
+  local: { cwd: string; workspaceLabel: string; shared: boolean; expiresAt: number }
+): LocalCommandPrompt {
+  const risk = assessLocalCommandRisk(event.command, local.cwd)
+  return {
+    id: base.requestId,
+    sandboxId: base.sandboxId,
+    workspaceLabel: local.workspaceLabel,
+    shared: local.shared,
+    command: event.command,
+    cwd: local.cwd,
+    timeoutSec: event.timeoutSec,
+    reason: displayText(event.reason, 200),
+    agent: base.agent,
+    hasNonAscii: risk.nonAscii,
+    pipesToShell: risk.pipesToShell,
+    alwaysAllowBlocked: risk.alwaysAllowBlocked,
+    expiresAt: local.expiresAt
+  }
 }

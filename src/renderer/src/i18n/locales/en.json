@@ -28246,6 +28246,10 @@
     "notification": {
       "title": "Run a command on this computer?",
       "body": "An agent in {{workspace}} is waiting for your approval."
+    },
+    "text": {
+      "tab": "Tab",
+      "trailingSpace": "Trailing whitespace"
     }
   }
 }

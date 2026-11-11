@@ -31,7 +31,7 @@ export type LocalCommandBridgeDeps = {
   settle: (
     environmentId: string,
     params: LocalCommandSettleParams
-  ) => Promise<LocalCommandSettleResult>
+  ) => Promise<Pick<LocalCommandSettleResult, 'accepted'>>
   resolveCwd: (requested: string | null) => Promise<string | null>
   execute: (input: {
     command: string

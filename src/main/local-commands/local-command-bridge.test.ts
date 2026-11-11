@@ -20,7 +20,7 @@ afterEach(() => {
   }
 })
 
-function setup(
+async function setup(
   options: {
     policy?: LocalCommandWorkspacePolicy | null
     enabled?: boolean
@@ -32,6 +32,7 @@ function setup(
   dirs.push(dir)
   let clock = 10_000
   const settings = new LocalCommandSettingsStore(dir)
+  await settings.load()
   if (options.enabled !== false) {
     settings.setEnabled(SANDBOX, true, false, clock)
   }
@@ -59,7 +60,7 @@ function setup(
     },
     settle: async (_env, params) => {
       settled.push(params)
-      return { accepted: true, status: 'running' }
+      return { accepted: true }
     },
     resolveCwd: async (cwd) => (cwd === '/missing' ? null : '/Users/me'),
     execute: async ({ command, cwd }) => {
@@ -120,7 +121,10 @@ function setup(
       expiresInMs: 300_000,
       ...overrides
     })
-    await new Promise((resolve) => setTimeout(resolve, 5))
+    // The bridge's checks resolve on already-settled promises; let them run to the end.
+    for (let turn = 0; turn < 50; turn += 1) {
+      await Promise.resolve()
+    }
   }
   return {
     bridge,
@@ -141,17 +145,17 @@ function setup(
 
 describe('local command bridge', () => {
   it('refuses without asking when the workspace is shared and the owner did not allow that', async () => {
-    const t = setup({ policy: { isOwner: true, shared: true, title: 'api-fix' } })
+    const t = await setup({ policy: { isOwner: true, shared: true, title: 'api-fix' } })
     await t.request()
     expect(t.prompts()).toEqual([])
     expect(t.executed).toEqual([])
     expect(t.settled).toEqual([{ requestId: REQUEST, outcome: 'declined', reason: 'not_allowed' }])
-    expect(t.audit.recent(1)[0]).toMatchObject({ outcome: 'refused' })
+    expect((await t.audit.recent(1))[0]).toMatchObject({ outcome: 'refused' })
   })
 
   it("refuses when this person doesn't own the workspace, or ownership can't be read", async () => {
     for (const policy of [{ isOwner: false, shared: false, title: null }, null]) {
-      const t = setup({ policy })
+      const t = await setup({ policy })
       await t.request()
       expect(t.executed).toEqual([])
       expect(t.settled[0]).toMatchObject({ outcome: 'declined', reason: 'not_allowed' })
@@ -159,7 +163,7 @@ describe('local command bridge', () => {
   })
 
   it('refuses a command with hidden characters', async () => {
-    const t = setup()
+    const t = await setup()
     await t.request({ command: 'echo safe\u202E; rm -rf ~' })
     expect(t.prompts()).toEqual([])
     expect(t.executed).toEqual([])
@@ -167,7 +171,7 @@ describe('local command bridge', () => {
   })
 
   it('asks, then runs exactly the command it showed after Allow once', async () => {
-    const t = setup()
+    const t = await setup()
     await t.request()
     expect(t.prompts()).toEqual([
       expect.objectContaining({ id: REQUEST, command: 'xcrun simctl list', cwd: '/Users/me' })
@@ -177,20 +181,20 @@ describe('local command bridge', () => {
     expect(await t.bridge.decide(REQUEST, 'allow-once')).toEqual({ ok: true })
     await vi.waitFor(() => expect(t.settled.map((s) => s.outcome)).toEqual(['started', 'finished']))
     expect(t.executed).toEqual([{ command: 'xcrun simctl list', cwd: '/Users/me' }])
-    expect(t.audit.recent(1)[0]).toMatchObject({ outcome: 'allowed-once', exitCode: 0 })
+    expect((await t.audit.recent(1))[0]).toMatchObject({ outcome: 'allowed-once', exitCode: 0 })
   })
 
   it('runs an always-allowed command next time without asking', async () => {
-    const t = setup()
+    const t = await setup()
     t.settings.addRule(SANDBOX, 'xcrun simctl list', '/Users/me', 1)
     await t.request()
     await vi.waitFor(() => expect(t.executed).toHaveLength(1))
     expect(t.prompts()).toEqual([])
-    expect(t.audit.recent(1)[0]).toMatchObject({ outcome: 'auto-allowed' })
+    expect((await t.audit.recent(1))[0]).toMatchObject({ outcome: 'auto-allowed' })
   })
 
   it('reports an unanswered prompt as not answered, not as denied', async () => {
-    const t = setup()
+    const t = await setup()
     await t.request()
     t.timers.at(-1)!()
     expect(t.settled).toEqual([
@@ -200,7 +204,7 @@ describe('local command bridge', () => {
   })
 
   it('does not run when the workspace was turned off while the prompt was open', async () => {
-    const t = setup()
+    const t = await setup()
     await t.request()
     t.settings.setEnabled(SANDBOX, false, false, 2)
     t.advance(1_000)
@@ -212,7 +216,7 @@ describe('local command bridge', () => {
   })
 
   it('stops asking after three waiting prompts from one workspace', async () => {
-    const t = setup()
+    const t = await setup()
     for (let index = 0; index < 5; index += 1) {
       await t.send(`lc_flood${String(index).padStart(14, '0')}`)
     }
@@ -222,7 +226,7 @@ describe('local command bridge', () => {
   })
 
   it('runs an always-allowed command one at a time and asks about the next one', async () => {
-    const t = setup({ holdRuns: true })
+    const t = await setup({ holdRuns: true })
     t.settings.addRule(SANDBOX, 'xcrun simctl list', '/Users/me', 1)
     await t.send('lc_rule00000000000000001')
     await t.send('lc_rule00000000000000002')

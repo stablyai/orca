@@ -17,7 +17,7 @@ export type ApprovedLocalCommandDeps = {
   settle: (
     environmentId: string,
     params: LocalCommandSettleParams
-  ) => Promise<LocalCommandSettleResult | null>
+  ) => Promise<Pick<LocalCommandSettleResult, 'accepted'> | null>
   execute: (input: {
     command: string
     cwd: string

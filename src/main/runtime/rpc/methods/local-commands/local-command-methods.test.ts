@@ -9,18 +9,16 @@ function methods(grantedDevices: string[]) {
     broker: () => broker,
     enabled: () => true,
     callerTerminal: () => null,
-    isGrantedDevice: (origin) => grantedDevices.includes(origin)
+    isGrantedDevice: async (origin) => grantedDevices.includes(origin)
   })
-  const byName = (name: string) => {
-    const method = list.find((entry) => entry.name === name)!
-    return { handler: method.handler as (params: unknown, ctx: RpcContext) => unknown }
-  }
-  return { broker, byName }
+  const [, , settle] = list
+  return { broker, settle }
 }
 
 function desktop(deviceId: string, originId = deviceId): RpcContext {
   return {
-    runtime: { registerSubscriptionCleanup: () => {} } as unknown as RpcContext['runtime'],
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: settle never touches the runtime.
+    runtime: {} as RpcContext['runtime'],
     clientKind: 'runtime',
     caller: { kind: 'paired-device', deviceId },
     pairedDeviceId: deviceId,
@@ -31,10 +29,9 @@ function desktop(deviceId: string, originId = deviceId): RpcContext {
 
 describe('local command RPC methods', () => {
   it('refuses a device paired through a grant, even after it forked a key', async () => {
-    const { broker, byName } = methods(['grant-device'])
+    const { broker, settle } = methods(['grant-device'])
     broker.attach('owner', 'owner-device', () => {})
     const { requestId } = broker.request({ command: 'ls', cwd: null, reason: null, agent: null })
-    const settle = byName('localCommands.settle')
     await expect(
       Promise.resolve(
         settle.handler({ requestId, outcome: 'started' }, desktop('fork-1', 'grant-device'))
@@ -44,10 +41,9 @@ describe('local command RPC methods', () => {
   })
 
   it('refuses a phone and the agent CLI as a desktop', async () => {
-    const { broker, byName } = methods([])
+    const { broker, settle } = methods([])
     broker.attach('owner', 'owner-device', () => {})
     const { requestId } = broker.request({ command: 'ls', cwd: null, reason: null, agent: null })
-    const settle = byName('localCommands.settle')
     const phone = { ...desktop('phone'), clientKind: 'mobile' as const }
     const cli = { ...desktop('cli'), caller: { kind: 'local-cli' as const } }
     for (const ctx of [phone, cli]) {

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { writeFileAtomically } from '../filesystem/atomic-file-publication'
@@ -131,19 +131,28 @@ export class LocalCommandSettingsStore {
     return true
   }
 
-  private read(): LocalCommandSettingsFile {
-    if (!this.cached) {
-      try {
-        const parsed = FileSchema.safeParse(JSON.parse(readFileSync(this.path, 'utf8')))
-        this.cached = parsed.success ? parsed.data : structuredClone(EMPTY)
-      } catch {
-        this.cached = structuredClone(EMPTY)
-      }
+  /** Reads the file once; until then (or if it's unreadable) everything reads as off. */
+  async load(): Promise<void> {
+    if (this.cached) {
+      return
     }
-    return structuredClone(this.cached)
+    try {
+      const parsed = FileSchema.safeParse(JSON.parse(await readFile(this.path, 'utf8')))
+      this.cached = parsed.success ? parsed.data : structuredClone(EMPTY)
+    } catch {
+      this.cached = structuredClone(EMPTY)
+    }
+  }
+
+  private read(): LocalCommandSettingsFile {
+    return structuredClone(this.cached ?? EMPTY)
   }
 
   private write(next: LocalCommandSettingsFile): void {
+    if (!this.cached) {
+      // Never overwrite a file this run hasn't read.
+      throw new Error('local command settings are not loaded')
+    }
     writeFileAtomically(this.path, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 })
     this.cached = next
   }

@@ -76,7 +76,27 @@ export type LocalCommandMcpDeps = {
 }
 
 function field(value: unknown, name: string): unknown {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>)[name] : undefined
+  return value !== null && typeof value === 'object' && name in value
+    ? Object.getOwnPropertyDescriptor(value, name)?.value
+    : undefined
+}
+
+type JsonRpcId = string | number | null | undefined
+type JsonRpcReply =
+  | { id: JsonRpcId; result: unknown }
+  | { id: JsonRpcId; error: { code: number; message: string } }
+
+function asMessage(value: unknown): JsonRpcMessage | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+  const id = field(value, 'id')
+  const method = field(value, 'method')
+  return {
+    id: typeof id === 'string' || typeof id === 'number' ? id : null,
+    method: typeof method === 'string' ? method : undefined,
+    params: field(value, 'params')
+  }
 }
 
 /** Tool arguments, checked here so a bad call gets a tool error the agent can read. */
@@ -113,7 +133,7 @@ export function parseLocalCommandToolArguments(args: unknown): LocalCommandInput
 
 /** A minimal MCP stdio server (newline-delimited JSON-RPC) with one tool. Resolves on stdin end. */
 export function serveLocalCommandMcp(deps: LocalCommandMcpDeps): Promise<void> {
-  const write = (message: object): void => {
+  const write = (message: JsonRpcReply): void => {
     deps.output.write(`${JSON.stringify({ jsonrpc: '2.0', ...message })}\n`)
   }
   const reply = (id: JsonRpcMessage['id'], result: unknown): void => write({ id, result })
@@ -146,7 +166,7 @@ export function serveLocalCommandMcp(deps: LocalCommandMcpDeps): Promise<void> {
   const handle = (message: JsonRpcMessage): void => {
     const { id, method } = message
     const isRequest = id !== undefined && id !== null
-    switch (method) {
+    switch (method ?? '') {
       case 'initialize': {
         const requested = field(message.params, 'protocolVersion')
         reply(id, {
@@ -182,14 +202,15 @@ export function serveLocalCommandMcp(deps: LocalCommandMcpDeps): Promise<void> {
       if (!line.trim()) {
         return
       }
-      let message: JsonRpcMessage
+      let parsed: unknown
       try {
-        message = JSON.parse(line) as JsonRpcMessage
+        parsed = JSON.parse(line)
       } catch {
         write({ id: null, error: { code: -32700, message: 'Parse error' } })
         return
       }
-      if (message && typeof message === 'object' && !Array.isArray(message)) {
+      const message = asMessage(parsed)
+      if (message) {
         handle(message)
       }
     })

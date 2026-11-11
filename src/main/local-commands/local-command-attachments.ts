@@ -1,3 +1,5 @@
+import { eventField } from './local-command-request-checks'
+
 const RETRY_MIN_MS = 5_000
 const RETRY_MAX_MS = 60_000
 
@@ -67,7 +69,7 @@ export function createLocalCommandAttachments(deps: LocalCommandAttachmentsDeps)
       if (attachment.closed) {
         return
       }
-      const type = event && typeof event === 'object' ? (event as { type?: unknown }).type : null
+      const type = eventField(event, 'type')
       if (type === 'ready') {
         attachment.retryMs = RETRY_MIN_MS
         setConnected(attachment, true)

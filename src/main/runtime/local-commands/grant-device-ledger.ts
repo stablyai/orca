@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -12,13 +12,13 @@ export function grantDeviceLedgerPath(home = homedir()): string {
 }
 
 /** True when the device came from a grant. An unreadable ledger (other than missing) counts as yes. */
-export function isGrantedDevice(
+export async function isGrantedDevice(
   originDeviceId: string,
-  read: () => string = () => readFileSync(grantDeviceLedgerPath(), 'utf8')
-): boolean {
+  read: () => Promise<string> = () => readFile(grantDeviceLedgerPath(), 'utf8')
+): Promise<boolean> {
   let text: string
   try {
-    text = read()
+    text = await read()
   } catch (error) {
     return (error as NodeJS.ErrnoException)?.code !== 'ENOENT'
   }
