@@ -1770,7 +1770,6 @@
             "7d4bc516ee": "Failed to switch profile",
             "f518e89aa5": "Project already exists in that profile",
             "f03ae7f27b": "Failed to transfer project",
-            "signInTimedOut": "Sign-in timed out",
             "signInDidNotFinish": "Sign-in didn’t finish. Try again."
           }
         },

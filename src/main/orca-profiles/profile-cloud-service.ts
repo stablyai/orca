@@ -108,6 +108,7 @@ export async function connectCurrentOrcaProfile(
     status: 'cancelled',
     auth: getCurrentOrcaProfileAuthStatus(userDataPath)
   })
+  const stale = (): boolean => attempt < linkedCloudConnectAttempt || attemptAbort.signal.aborted
   let end: 'timed-out' | undefined
   startOrcaCloudSignInProgress(attempt, () => attemptAbort.abort())
   let finishBrowser: ((location: string | null) => void) | undefined
@@ -120,7 +121,7 @@ export async function connectCurrentOrcaProfile(
     finishBrowser = code.finishBrowser
     // The callback listener has closed, so its browser link is dead.
     setOrcaCloudSignInLink(attempt, null)
-    if (attempt < linkedCloudConnectAttempt || attemptAbort.signal.aborted) {
+    if (stale()) {
       return cancelled()
     }
     const exchange = await exchangeOrcaCloudAuthCode(configState.config, {
@@ -131,7 +132,7 @@ export async function connectCurrentOrcaProfile(
       state: code.state,
       localProfileId: active.profile.id
     })
-    if (attempt < linkedCloudConnectAttempt || attemptAbort.signal.aborted) {
+    if (stale()) {
       return cancelled()
     }
     signInCloudSession(active.profile.id, userDataPath, exchange)
@@ -149,26 +150,18 @@ export async function connectCurrentOrcaProfile(
       profiles: list.profiles
     }
   } catch (error) {
-    if (attemptAbort.signal.aborted) {
-      return cancelled()
-    }
     const message = error instanceof Error ? error.message : String(error)
-    if (message === 'orca_cloud_auth_timeout' && attempt === nextCloudConnectAttempt) {
+    if (!stale() && message === 'orca_cloud_auth_timeout' && attempt === nextCloudConnectAttempt) {
       end = 'timed-out'
-      return {
-        status: 'timed-out',
-        auth: getCurrentOrcaProfileAuthStatus(userDataPath)
-      }
+      return { status: 'timed-out', auth: getCurrentOrcaProfileAuthStatus(userDataPath) }
     }
-    if (
-      message === 'orca_cloud_auth_timeout' ||
-      message === 'orca_cloud_auth_denied' ||
-      message === 'orca_cloud_auth_cancelled'
-    ) {
-      return {
-        status: 'cancelled',
-        auth: getCurrentOrcaProfileAuthStatus(userDataPath)
-      }
+    const stopped = [
+      'orca_cloud_auth_timeout',
+      'orca_cloud_auth_denied',
+      'orca_cloud_auth_cancelled'
+    ]
+    if (attemptAbort.signal.aborted || stopped.includes(message)) {
+      return cancelled()
     }
     return {
       status: 'failed',

@@ -50,6 +50,9 @@ const cloud: OrcaProfileCloudSummary = {
   linkedAt: 10
 }
 
+// A fixed far-future expiry: no wall clock in tests.
+const EXPIRES_AT = 4_102_444_800_000
+
 const code = {
   code: 'the-code',
   codeVerifier: 'verifier',
@@ -88,7 +91,7 @@ describe('Orca Cloud sign-in cancel, supersede and timeout', () => {
     exchangeOrcaCloudAuthCodeMock.mockResolvedValue({
       accessToken: 'access-token',
       refreshToken: 'refresh-token',
-      expiresAt: Date.now() + 3_600_000,
+      expiresAt: EXPIRES_AT,
       cloud,
       organizations: [],
       capabilities: { flags: {}, refreshedAt: 1 }
@@ -121,7 +124,7 @@ describe('Orca Cloud sign-in cancel, supersede and timeout', () => {
       return {
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
-        expiresAt: Date.now() + 3_600_000,
+        expiresAt: EXPIRES_AT,
         cloud,
         organizations: [],
         capabilities: { flags: {}, refreshedAt: 1 }
