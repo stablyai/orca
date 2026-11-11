@@ -25,7 +25,7 @@ function harness(initial: { activePendingCreationId: string | null; activeModal:
     startScreenShown: () => painted,
     closePage,
     setTimer: (callback, ms) => setTimeout(callback, ms),
-    clearTimer: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>)
+    clearTimer: (handle) => clearTimeout(handle)
   })
   return { set, paint: () => (painted = true), closePage, cancel, listeners }
 }

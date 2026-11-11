@@ -43,7 +43,7 @@ function reopenComposer(request: CloudSetupPageRequest, autoStart: boolean): voi
       startScreenShown: () => document.querySelector('[data-vm-build-sheet]') !== null,
       closePage: closeCloudSetupPage,
       setTimer: (callback, ms) => window.setTimeout(callback, ms),
-      clearTimer: (handle) => window.clearTimeout(handle as number)
+      clearTimer: (handle) => window.clearTimeout(handle)
     })
   }
 }

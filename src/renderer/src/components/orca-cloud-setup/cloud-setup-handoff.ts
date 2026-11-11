@@ -5,14 +5,14 @@
 
 type HandoffState = { activePendingCreationId: string | null; activeModal: string }
 
-export type HandoffDeps = {
+export type HandoffDeps<Timer> = {
   getState: () => HandoffState
   subscribe: (listener: (state: HandoffState) => void) => () => void
   /** True once the start screen is in the DOM (its lazy chunk may land a few frames later). */
   startScreenShown: () => boolean
   closePage: () => void
-  setTimer: (callback: () => void, ms: number) => unknown
-  clearTimer: (handle: unknown) => void
+  setTimer: (callback: () => void, ms: number) => Timer
+  clearTimer: (handle: Timer) => void
 }
 
 /** The hidden composer reveals itself after 8 s; past that the dialog sits over the page anyway. */
@@ -23,10 +23,10 @@ const PAINT_POLL_MS = 16
 const COMPOSER_MODAL = 'new-workspace-composer'
 
 /** Call right after opening the auto-starting composer. Returns a cancel. */
-export function closeSetupPageWhenCreateTakesOver(deps: HandoffDeps): () => void {
+export function closeSetupPageWhenCreateTakesOver<Timer>(deps: HandoffDeps<Timer>): () => void {
   const before = deps.getState().activePendingCreationId
   let done = false
-  const timers = new Set<unknown>()
+  const timers = new Set<Timer>()
   const later = (callback: () => void, ms: number): void => {
     const handle = deps.setTimer(() => {
       timers.delete(handle)
