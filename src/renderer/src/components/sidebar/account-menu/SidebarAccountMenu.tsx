@@ -17,6 +17,7 @@ import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { refreshBillingSummary, useBillingState } from '../../billing/billing-summary-store'
+import { BILLING_CAPABILITY } from '../../billing/register-plan-billing-menu-item'
 import { accountMenuUsageLines } from '../../billing/plan-billing-usage-copy'
 import { AccountMenuTrialRow } from '../../billing/AccountMenuTrialRow'
 import { SidebarTeamSubmenu } from './SidebarTeamSubmenu'
@@ -100,7 +101,12 @@ export function SidebarAccountMenu(): React.JSX.Element {
       void loadSidebarFeedbackDialog().catch(() => {})
       // JA-07: the team row's hours must match Plan & billing, so re-read if the cached answer is
       // over a minute old (hours tick down while sandboxes run).
-      void refreshBillingSummary().catch(() => {})
+      if (
+        authStatus?.state === 'connected' &&
+        authStatus.capabilities?.flags[BILLING_CAPABILITY] === true
+      ) {
+        void refreshBillingSummary().catch(() => {})
+      }
     }
   }
 
