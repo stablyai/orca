@@ -1,4 +1,5 @@
 import {
+  existsSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -8,7 +9,6 @@ import {
   writeFileSync
 } from 'node:fs'
 import { execFileSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
