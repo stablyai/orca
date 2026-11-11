@@ -1,4 +1,5 @@
 import type { WebContents } from 'electron'
+import { invalidateBrowserGuestDiscardProtection } from '../../guest-lifecycle/manager/registration/browser-guest-discard-protection'
 
 type DebuggerLeaseState = {
   attachedByLease: boolean
@@ -26,6 +27,7 @@ export function acquireElectronDebugger(webContents: WebContents): ElectronDebug
   if (!dbg.isAttached()) {
     dbg.attach('1.3')
     state.attachedByLease = true
+    invalidateBrowserGuestDiscardProtection(webContents)
   }
 
   const owner = Symbol('electron-debugger-lease')

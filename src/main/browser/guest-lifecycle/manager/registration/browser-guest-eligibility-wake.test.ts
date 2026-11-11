@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 
 const native = vi.hoisted(() => new Map<number, Electron.WebContents>())
+const channels = vi.hoisted(() => new Map<string, (...args: unknown[]) => unknown>())
 vi.mock('electron', () => ({
   app: { getPath: () => '/downloads' },
   BrowserWindow: { fromWebContents: () => null },
@@ -8,7 +9,16 @@ vi.mock('electron', () => ({
   shell: { openExternal: vi.fn() },
   Menu: { buildFromTemplate: vi.fn() },
   screen: { getCursorScreenPoint: () => ({ x: 0, y: 0 }) },
-  webContents: { fromId: (id: number) => native.get(id) ?? null }
+  webContents: { fromId: (id: number) => native.get(id) ?? null },
+  ipcMain: {
+    removeHandler: vi.fn(),
+    handle: (channel: string, listener: (...args: unknown[]) => unknown) =>
+      channels.set(channel, listener),
+    removeAllListeners: (channel: string) => channels.delete(channel),
+    on: (channel: string, listener: (...args: unknown[]) => void) =>
+      channels.set(channel, listener),
+    emit: (channel: string, ...args: unknown[]) => channels.get(channel)?.(...args)
+  }
 }))
 vi.mock('../../popups/presentation/popup-origin-bar-window', () => ({
   openPopupWithOriginBar: vi.fn()
@@ -39,6 +49,10 @@ it.each([true, false])(
     await Promise.resolve()
     expect(attempts).toEqual([pageId])
     expect(freed).toEqual([])
+    for (let turn = 0; turn < 5; turn++) {
+      await Promise.resolve()
+    }
+    expect(attempts).toEqual([pageId])
     if (loadFirst) {
       guest.stopLoading()
     } else {

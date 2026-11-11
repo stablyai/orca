@@ -52,12 +52,42 @@ export function clearBrowserPageMemoryInvalidation(pageId: string, guestId: numb
   }
 }
 
+export function readBrowserMemoryPageDiscardProtection(
+  pageId: string,
+  guest: Electron.WebContents,
+  rendererId: number | undefined
+): ReturnType<typeof readBrowserGuestDiscardProtection> {
+  const protection = readBrowserGuestDiscardProtection(guest)
+  if (protection.protection !== 'discardable') {
+    return protection
+  }
+  const page = pages.get(pageId)
+  if (!page || page.guest !== guest || page.rendererId !== rendererId) {
+    return { ...protection, protection: 'unknown', reason: 'observer' }
+  }
+  if (page.claim.held) {
+    return { ...protection, protection: 'protected', reason: 'held' }
+  }
+  try {
+    if (guest.debugger.isAttached()) {
+      return { ...protection, protection: 'protected', reason: 'debugger' }
+    }
+    if (guest.isDevToolsOpened()) {
+      return { ...protection, protection: 'protected', reason: 'devtools' }
+    }
+  } catch {
+    return { ...protection, protection: 'unknown', reason: 'observer' }
+  }
+  return protection
+}
+
 export function claimBrowserMemoryPage(pageId: string): () => void {
   let claim = claims.get(pageId)
   if (!claim) {
     claim = { held: false, operations: 0 }
     claims.set(pageId, claim)
   }
+  const wasHeld = claim.held
   claim.operations++
   if (pages.has(pageId) && isAgentRpcCaller(getActiveRpcCaller())) {
     claim.held = true
@@ -65,6 +95,9 @@ export function claimBrowserMemoryPage(pageId: string): () => void {
   const page = pages.get(pageId)
   if (page) {
     renewHeldThrottle(page)
+    if (!wasHeld && claim.held) {
+      page.invalidation?.notify()
+    }
   }
   let released = false
   return () => {
@@ -96,6 +129,7 @@ export function retainBrowserMemoryPageForAgent(
     return
   }
   const claim: Claim = claims.get(pageId) ?? { held: false, operations: 0 }
+  const wasHeld = claim.held
   if (creator && !pages.has(pageId)) {
     claim.pendingRendererId = creator.id
   }
@@ -104,6 +138,9 @@ export function retainBrowserMemoryPageForAgent(
   const page = pages.get(pageId)
   if (page) {
     renewHeldThrottle(page)
+    if (!wasHeld) {
+      page.invalidation?.notify()
+    }
   }
 }
 

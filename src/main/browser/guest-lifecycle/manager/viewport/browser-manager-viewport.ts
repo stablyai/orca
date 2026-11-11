@@ -141,6 +141,7 @@ export abstract class BrowserManagerViewport extends BrowserManagerDevTools {
           }
         }
         guest.debugger.attach('1.3')
+        this.invalidateGuestMemoryProtection(guest)
       }
     } catch (err) {
       console.warn('[browser-manager] setViewportOverride: failed to attach debugger', {

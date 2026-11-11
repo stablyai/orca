@@ -6,7 +6,6 @@ import {
   acknowledgeBrowserPageRemoval
 } from '../../browser/guest-lifecycle/browser-page-memory'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
-import { readBrowserGuestDiscardProtection } from '../../browser/guest-lifecycle/manager/registration/browser-guest-discard-protection'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 
 export function registerBrowserGuestDiscardHandlers(): void {
@@ -42,16 +41,20 @@ export function registerBrowserGuestDiscardHandlers(): void {
         return
       }
       const guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
-      if (
-        !guest ||
-        guest.id !== args.webContentsId ||
-        browserManager.isGuestMemoryProtected(args.browserPageId)
-      ) {
+      if (!guest || guest.id !== args.webContentsId) {
         return
       }
-      if (reserveBrowserPageDiscard(args.browserPageId, guest)) {
+      if (
+        !browserManager.isGuestMemoryProtected(args.browserPageId) &&
+        reserveBrowserPageDiscard(args.browserPageId, guest)
+      ) {
         browserManager.unregisterGuest(args.browserPageId, 'guest-destroyed')
         event.returnValue = true
+      } else if (
+        browserManager.readGuestDiscardProtection(args.browserPageId, guest).protection !==
+        'discardable'
+      ) {
+        browserManager.invalidateGuestMemoryProtection(guest)
       }
     }
   )
@@ -82,7 +85,7 @@ export function registerBrowserGuestDiscardHandlers(): void {
       }
       const guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
       return guest && guest.id === args.webContentsId
-        ? readBrowserGuestDiscardProtection(guest)
+        ? browserManager.readGuestDiscardProtection(args.browserPageId, guest)
         : null
     }
   )

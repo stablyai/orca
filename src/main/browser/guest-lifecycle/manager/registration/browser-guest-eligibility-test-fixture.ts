@@ -1,13 +1,14 @@
 import { EventEmitter } from 'node:events'
 import { vi } from 'vitest'
+import { ipcMain } from 'electron'
 import { DestroyedGuestTestContents } from './browser-manager-destroyed-guest-test-fixture'
-import { BrowserManager } from '../browser-manager'
+import { browserManager } from '../browser-manager'
 import {
   prepareBrowserPageAttach,
   admitBrowserPageAttach,
   associateBrowserPageAttach,
   startBrowserPageAttach,
-  reserveBrowserPageDiscard,
+  closeBrowserMemoryPage,
   waitForBrowserPageReady
 } from '../../browser-page-memory'
 import { reportBrowserSessionWebRequest } from '../../../sessions/requests/browser-session-web-request-observer'
@@ -19,7 +20,23 @@ import {
   updateBrowserGuestProtection
 } from '../../../../../renderer/src/components/browser-pane/host-guest/browser-guest-activity'
 import { installBrowserGuestPageRetention } from '../../../../../renderer/src/components/browser-pane/host-guest/browser-guest-page-retention'
+import { registerBrowserGuestDiscardHandlers } from '../../../../ipc/browser/browser-guest-discard-ipc'
 import type { BrowserGuestDiscardProtectionChange } from '../../../../../shared/browser/guest-lifecycle/browser-guest-discard-protection'
+
+vi.mock('../../../../../renderer/src/store', () => ({
+  useAppStore: { getState: () => ({ settings: {}, browserAudiblePageIds: {} }) }
+}))
+vi.mock('../../../../../renderer/src/components/browser-pane/host-guest/webview-registry', () => ({
+  isBrowserPageRendererRecoveryPending: () => false
+}))
+vi.mock('../../../../ipc/browser/browser-renderer-trust', () => ({
+  isTrustedBrowserRenderer: () => true
+}))
+
+// The renderer project owns these types; the main fixture executes the production veto.
+const { browserPageVetoesGuestEviction } = await vi.importActual<{
+  browserPageVetoesGuestEviction: (pageId: string) => boolean
+}>('../../../../../renderer/src/components/browser-pane/host-guest/browser-guest-eviction-veto')
 
 export class EligibilityGuest extends DestroyedGuestTestContents {
   readonly hostWebContents = { id: 99 }
@@ -32,6 +49,10 @@ export class EligibilityGuest extends DestroyedGuestTestContents {
     attach: vi.fn(() => {
       this.debugged = true
     }),
+    detach: () => {
+      this.debugged = false
+      this.debugger.emit('detach')
+    },
     sendCommand: vi.fn(async () => undefined)
   })
   private finish = (): void => {}
@@ -99,11 +120,17 @@ export class EligibilityGuest extends DestroyedGuestTestContents {
   }
 }
 
-export function createEligibilityFleet(native: Map<number, Electron.WebContents>, size = 33) {
-  const manager = new BrowserManager()
+export function createEligibilityFleet(
+  native: Map<number, Electron.WebContents>,
+  size = 33,
+  allMainOwned = false
+) {
+  const manager = browserManager
+  registerBrowserGuestDiscardHandlers()
   const attempts: string[] = []
   const freed: string[] = []
   const guests: EligibilityGuest[] = []
+  const pageIds = new Set<string>()
   const pageId = 'oldest'
   const send = (channel: string, payload: BrowserGuestDiscardProtectionChange): void => {
     if (channel === 'browser:guest-discard-protection-changed') {
@@ -112,41 +139,57 @@ export function createEligibilityFleet(native: Map<number, Electron.WebContents>
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: main publication needs only this renderer's identity, liveness and send method.
   native.set(99, { id: 99, isDestroyed: () => false, send } as unknown as Electron.WebContents)
-  const attach = (id: number): EligibilityGuest => {
+  const attach = (id: number, attachedPageId = pageId): EligibilityGuest => {
     const guest = new EligibilityGuest(id)
     guests.push(guest)
+    pageIds.add(attachedPageId)
     native.set(id, guest.asWebContents())
-    const marker = prepareBrowserPageAttach(pageId, 99, 'persist:eligibility', guest.getURL())
+    const marker = prepareBrowserPageAttach(
+      attachedPageId,
+      99,
+      'persist:eligibility',
+      guest.getURL()
+    )
     admitBrowserPageAttach(marker, 99, 'persist:eligibility')
     associateBrowserPageAttach(guest.asWebContents())
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the production pool reads only the fixture's native guest ID.
-    registerBrowserGuestActivity(pageId, { getWebContentsId: () => id } as Electron.WebviewTag)
+    registerBrowserGuestActivity(attachedPageId, {
+      getWebContentsId: () => id
+    } as Electron.WebviewTag)
     manager.attachGuestPolicies(guest.asWebContents())
-    manager.registerGuest({ browserPageId: pageId, webContentsId: id, rendererWebContentsId: 99 })
+    manager.registerGuest({
+      browserPageId: attachedPageId,
+      webContentsId: id,
+      rendererWebContentsId: 99
+    })
     startBrowserPageAttach(guest.asWebContents())
     return guest
   }
   const guest = attach(1)
   for (let i = 1; i < size; i++) {
+    if (allMainOwned) {
+      attach(1000 + i, `held-${i}`)
+      continue
+    }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: protected sibling rows expose only identity and never enter native reservation.
     registerBrowserGuestActivity(`held-${i}`, {
       getWebContentsId: () => 1000 + i
     } as Electron.WebviewTag)
   }
   const stop = installBrowserGuestPageRetention({
-    isBlocked: (id) => browserGuestActivity.get(id)?.protection !== 'discardable',
+    isBlocked: (id) =>
+      browserGuestActivity.get(id)?.protection === undefined || browserPageVetoesGuestEviction(id),
     discard: (id, _webview, guestId) => {
       attempts.push(id)
-      const current = native.get(guestId)
-      if (
-        !current ||
-        manager.isGuestMemoryProtected(id) ||
-        !reserveBrowserPageDiscard(id, current)
-      ) {
+      const event = { sender: native.get(99), returnValue: false }
+      ipcMain.emit('browser:reserveGuestDiscard', event, {
+        browserPageId: id,
+        webContentsId: guestId
+      })
+      if (!event.returnValue) {
         return false
       }
       freed.push(id)
-      manager.unregisterGuest(id, 'guest-destroyed')
       unregisterBrowserGuestActivity(id)
       return true
     }
@@ -157,12 +200,17 @@ export function createEligibilityFleet(native: Map<number, Electron.WebContents>
     pageId,
     attempts,
     freed,
+    guests,
+    pageIds,
     attach,
     close: () => {
       stop()
       manager.unregisterAll()
       for (const item of guests) {
         item.destroy()
+      }
+      for (const id of pageIds) {
+        closeBrowserMemoryPage(id)
       }
       browserGuestActivity.clear()
       native.clear()

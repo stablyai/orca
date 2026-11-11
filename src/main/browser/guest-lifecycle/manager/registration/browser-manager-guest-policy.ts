@@ -16,6 +16,7 @@ import {
   installBrowserGuestDiscardProtection,
   readBrowserGuestDiscardProtection
 } from './browser-guest-discard-protection'
+import { readBrowserMemoryPageDiscardProtection } from '../../browser-page-memory'
 
 export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestCleanup {
   attachGuestPolicies(
@@ -38,12 +39,9 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     const disposeDetachTracking = this.trackDebuggerDetachForCdpOverrides(guest)
     const disposePopupPolicy = this.installGuestPopupPolicy(guest)
     const disposeNavigationPolicy = this.installGuestNavigationPolicy(guest)
-    const disposeDiscardProtection = installBrowserGuestDiscardProtection(guest, () => {
-      const pageId = this.tabIdByWebContentsId.get(guest.id)
-      if (pageId) {
-        this.notifyGuestDiscardProtection(pageId, guest)
-      }
-    })
+    const disposeDiscardProtection = installBrowserGuestDiscardProtection(guest, () =>
+      this.invalidateGuestMemoryProtection(guest)
+    )
     const invalidate = (): void => this.invalidateGuestMemoryProtection(guest)
     const inPageNavigation = (_event: Electron.Event, _url: string, mainFrame: boolean): void => {
       if (mainFrame) {
@@ -54,6 +52,7 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     guest.on('did-navigate', invalidate)
     guest.on('did-navigate-in-page', inPageNavigation)
     guest.on('devtools-closed', invalidate)
+    guest.on('devtools-opened', invalidate)
     const forwardAudioState = (
       event: Electron.Event<Electron.WebContentsAudioStateChangedEventParams>
     ): void => {
@@ -87,6 +86,7 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
       guest.off('did-navigate', invalidate)
       guest.off('did-navigate-in-page', inPageNavigation)
       guest.off('devtools-closed', invalidate)
+      guest.off('devtools-opened', invalidate)
       disposeDevToolsCloseShortcut()
       disposeEscapeForwarding()
       if (!guest.isDestroyed()) {
@@ -113,12 +113,23 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
         'browser:guest-discard-protection-changed',
         {
           browserPageId,
-          ...readBrowserGuestDiscardProtection(guest)
+          ...this.readGuestDiscardProtection(browserPageId, guest)
         }
       )
     } catch {
       // A disposed renderer must not fail a lifecycle terminal.
     }
+  }
+
+  readGuestDiscardProtection(
+    browserPageId: string,
+    guest: Electron.WebContents
+  ): ReturnType<typeof readBrowserMemoryPageDiscardProtection> {
+    return readBrowserMemoryPageDiscardProtection(
+      browserPageId,
+      guest,
+      this.rendererWebContentsIdByTabId.get(browserPageId)
+    )
   }
 
   invalidateGuestMemoryProtection(guest: Electron.WebContents): void {

@@ -12,6 +12,7 @@ import {
 type ProtectionOwner = BrowserGuestHistoryProtection & {
   generation: string | null
   unavailable: boolean
+  changed: () => void
 }
 const initialGuests = new WeakSet<Electron.WebContents>()
 export function markInitialBrowserGuest(guest: Electron.WebContents): void {
@@ -19,6 +20,14 @@ export function markInitialBrowserGuest(guest: Electron.WebContents): void {
 }
 
 const owners = new WeakMap<Electron.WebContents, ProtectionOwner>()
+
+export function invalidateBrowserGuestDiscardProtection(guest: Electron.WebContents): void {
+  try {
+    owners.get(guest)?.changed()
+  } catch {
+    // A disposed recipient must not fail a debugger acquisition.
+  }
+}
 
 export function readBrowserGuestDiscardProtection(
   guest: Electron.WebContents
@@ -59,6 +68,7 @@ export function installBrowserGuestDiscardProtection(
   initial = initialGuests.has(guest)
 ): () => void {
   const owner: ProtectionOwner = {
+    changed,
     generation: null,
     dirty: null,
     unavailable: false,
