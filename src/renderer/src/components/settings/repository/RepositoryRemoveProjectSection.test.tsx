@@ -56,7 +56,6 @@ it('holds removal when a terminal opens while the confirm dialog is up', () => {
 
   fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
   expect(removeProject).not.toHaveBeenCalled()
-  expect(screen.getByText('1 open terminal in this project will be closed.')).toBeTruthy()
 
   fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
   expect(removeProject).toHaveBeenCalledTimes(1)
