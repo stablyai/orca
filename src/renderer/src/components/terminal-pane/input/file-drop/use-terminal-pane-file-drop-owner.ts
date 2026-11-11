@@ -2,7 +2,7 @@ import { useRef, useState, type RefObject } from 'react'
 import { toast } from 'sonner'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { isElementDisplayNone } from '@/lib/pane-manager/pane-display-visibility'
+import { isElementDisplayNone } from '@/lib/pane-manager/terminal-fit/pane-display-visibility'
 import {
   createOsFileDropSequence,
   useOsFileDropOwner,

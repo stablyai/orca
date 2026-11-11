@@ -1,3 +1,4 @@
+import type { WorkspaceMetadataSet } from '../../../../shared/worktree/workspace-metadata-set'
 import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
@@ -49,6 +50,7 @@ export type RuntimeNotifier = {
     // Why: false for metadata-only changes (sort order) that leave Git scan results valid.
     options?: { invalidateGitScans?: boolean }
   ): void
+  workspaceMetadataSet?(set: WorkspaceMetadataSet): void
   worktreeBaseStatus?(event: WorktreeBaseStatusEvent): void
   worktreeRemoteBranchConflict?(event: WorktreeRemoteBranchConflictEvent): void
   reposChanged(): void

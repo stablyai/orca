@@ -10,12 +10,12 @@ export type NativeChatApprovalEnvelope = {
 }
 
 const ESCAPE = String.fromCharCode(27)
+const MENU_KEYS_RE = new RegExp(`^(?:${ESCAPE}\\[[AB])*\r$`)
 
-/** Read the approval envelope published in agentStatus.interactivePrompt on PermissionRequest. */
-export function parseNativeChatApprovalEnvelope(
+function readEnvelopeField(
   interactivePrompt: string | undefined | null,
-  agent?: string
-): NativeChatApprovalEnvelope | null {
+  key: string
+): object | null {
   if (!interactivePrompt) {
     return null
   }
@@ -25,11 +25,20 @@ export function parseNativeChatApprovalEnvelope(
   } catch {
     return null
   }
-  if (typeof parsed !== 'object' || parsed === null || !('approval' in parsed)) {
+  if (typeof parsed !== 'object' || parsed === null) {
     return null
   }
-  const approval = parsed.approval
-  if (typeof approval !== 'object' || approval === null || !('tool' in approval)) {
+  const field: unknown = Object.entries(parsed).find(([name]) => name === key)?.[1]
+  return typeof field === 'object' && field !== null ? field : null
+}
+
+/** Read the approval envelope published in agentStatus.interactivePrompt on PermissionRequest. */
+export function parseNativeChatApprovalEnvelope(
+  interactivePrompt: string | undefined | null,
+  agent?: string
+): NativeChatApprovalEnvelope | null {
+  const approval = readEnvelopeField(interactivePrompt, 'approval')
+  if (!approval || !('tool' in approval)) {
     return null
   }
   const tool = approval.tool
@@ -42,5 +51,76 @@ export function parseNativeChatApprovalEnvelope(
     ...(typeof summary === 'string' && summary.length > 0 ? { summary } : {}),
     allowSend: nativeChatApprovalAcceptKey(agent),
     denySend: ESCAPE
+  }
+}
+
+/** A folder-trust dialog read off the screen; a null `trustSend` (unaimable trust choice) leaves only Exit. */
+export function buildNativeChatFolderTrustPrompt(trustSend: string | null): string {
+  return JSON.stringify({ folderTrust: trustSend ? { trustSend } : {} })
+}
+
+export function parseNativeChatFolderTrustEnvelope(
+  interactivePrompt: string | undefined | null
+): { trustSend: string | null; exitSend: string } | null {
+  const trust = readEnvelopeField(interactivePrompt, 'folderTrust')
+  if (!trust) {
+    return null
+  }
+  if (!('trustSend' in trust)) {
+    return { trustSend: null, exitSend: ESCAPE }
+  }
+  const trustSend = trust.trustSend
+  // Only arrow keys then Return; anything else is not a trust-choice keystroke.
+  if (typeof trustSend !== 'string' || !MENU_KEYS_RE.test(trustSend)) {
+    return null
+  }
+  return { trustSend, exitSend: ESCAPE }
+}
+
+export type NativeChatStartupMenuChoice = { label: string; send: string }
+
+const STARTUP_MENU_LABEL_MAX = 300
+// Room for a full screen of warning text, which the user reads before answering.
+const STARTUP_MENU_DESCRIPTION_MAX = 4000
+const STARTUP_MENU_CHOICES_MAX = 9
+
+function isStartupMenuText(value: unknown, max: number): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= max
+}
+
+/** A startup menu read off the screen; no choices means only the terminal can answer it. */
+export function buildNativeChatStartupMenuPrompt(menu: {
+  description?: string
+  choices: NativeChatStartupMenuChoice[]
+}): string {
+  const description = menu.description?.slice(0, STARTUP_MENU_DESCRIPTION_MAX)
+  return JSON.stringify({ startupMenu: { ...menu, ...(description ? { description } : {}) } })
+}
+
+export function parseNativeChatStartupMenuEnvelope(
+  interactivePrompt: string | undefined | null
+): { description?: string; choices: NativeChatStartupMenuChoice[] } | null {
+  const menu = readEnvelopeField(interactivePrompt, 'startupMenu')
+  if (!menu || !('choices' in menu) || !Array.isArray(menu.choices)) {
+    return null
+  }
+  const choices: NativeChatStartupMenuChoice[] = []
+  for (const choice of menu.choices.slice(0, STARTUP_MENU_CHOICES_MAX)) {
+    const label: unknown = choice?.label
+    const send: unknown = choice?.send
+    // Only arrow keys then Return; anything else is not a menu-choice keystroke.
+    if (
+      !isStartupMenuText(label, STARTUP_MENU_LABEL_MAX) ||
+      typeof send !== 'string' ||
+      !MENU_KEYS_RE.test(send)
+    ) {
+      return null
+    }
+    choices.push({ label, send })
+  }
+  const description = 'description' in menu ? menu.description : undefined
+  return {
+    ...(isStartupMenuText(description, STARTUP_MENU_DESCRIPTION_MAX) ? { description } : {}),
+    choices
   }
 }

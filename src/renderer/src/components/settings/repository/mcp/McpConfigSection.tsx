@@ -2,8 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, FileCode2, LoaderCircle, Plus, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import type { Repo } from '../../../../../../shared/repo-types'
-import type { Worktree } from '../../../../../../shared/worktree/types'
 import { composeWorktreeId, getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import {
   getRepoExecutionHostId,
@@ -29,22 +27,22 @@ import { Button } from '../../../ui/button'
 import { isWindowsUserAgent } from '../../../../app-shell/platform/user-agent-platform'
 import { McpConfigFileRow } from './McpConfigFileRow'
 import { McpMissingConfigList } from './McpMissingConfigList'
-import {
-  type LoadedMcpConfigInspection,
-  loadMcpConfigInspections
-} from '../../../../runtime/mcp/configuration/mcp-config-inspection'
+import { loadMcpConfigInspections } from '../../../../runtime/mcp/configuration/mcp-config-inspection'
+import type { LoadedMcpConfigInspection } from '../../../../runtime/mcp/configuration/mcp-config-inspection'
 import { formatMcpConfigSummary } from './mcp-config-summary'
 import { useTranslate } from '@/i18n/use-translate'
-import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
+import { captureDirectSshMutationExpectation } from '@/runtime/hosts/ssh/ssh-mutation-expectation'
 import { writeRuntimeFile } from '@/runtime/files/mutations/runtime-file-mutation-client'
 import {
   assertFileWriteApplied,
   missingOrIdenticalPrecondition
 } from '../../../../../../shared/file-write/file-write-disk-precondition'
-import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
+import type { Repo } from '../../../../../../shared/repo-types'
+import type { Worktree } from '../../../../../../shared/worktree/types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 
 type McpConfigSectionProps = {
   repo: Repo

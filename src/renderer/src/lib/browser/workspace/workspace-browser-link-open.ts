@@ -2,27 +2,29 @@ import { focusOpenedBrowserLink } from '../navigation/browser-link-focus'
 import { createBrowserLinkHostMatcher } from '../navigation/browser-link-owner'
 import { resolveBrowserLinkSession } from '../navigation/browser-link-session'
 import { useAppStore } from '@/store/index'
-import type { AppState } from '@/store/types'
-import type { TabSplitTarget } from '@/store/slices/tabs/tabs-slice-contract'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host'
-import type { OpenWorkspaceBrowserTabRequest } from './workspace-browser-tab-open'
+import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { openLocalBrowserLink, browserLinkCommitIsValid } from '../navigation/browser-link-open'
 import {
   selectBrowserLinkDestination,
   browserOpenResultForPage,
-  currentBrowserLinkMatch,
-  type BrowserLinkDestination,
-  type BrowserOpenOutcome
+  currentBrowserLinkMatch
+} from '../navigation/browser-link-destination'
+import type {
+  BrowserLinkDestination,
+  BrowserOpenOutcome
 } from '../navigation/browser-link-destination'
 import { activateBrowserWorkspaceTab } from './browser-workspace-tab-activation'
 import {
   getFloatingWorkspaceOperationRoute,
   resolveWorktreeOperationRoute
 } from '../../workspace/ownership/worktree-operation-route'
-import { getWorkspaceClientCreationActionPolicy } from '../../client-creation-action-policy'
+import { getWorkspaceClientCreationActionPolicy } from '../../workspace/creation/surface-policy/client-creation-action-policy'
 import { selectWorkspaceSurface } from '../../workspace/activation/workspace-surface-reveal'
 import { showWorkspaceTabs } from '../navigation/http-link-browser-placement'
+import type { AppState } from '@/store/types'
+import type { TabSplitTarget } from '@/store/slices/tabs/tabs-slice-contract'
+import type { OpenWorkspaceBrowserTabRequest } from './workspace-browser-tab-open'
 
 function ownsBrowserRoute(
   state: AppState,

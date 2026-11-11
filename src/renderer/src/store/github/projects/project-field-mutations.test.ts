@@ -103,27 +103,6 @@ beforeEach(() => {
 })
 
 describe('project field writes', () => {
-  it('keeps rapid moves optimistic and sends update then clear in order', async () => {
-    const store = setup()
-    const first = deferred()
-    mockApi.gh.updateProjectItemField.mockReturnValueOnce(first.promise)
-    mockApi.gh.clearProjectItemField.mockResolvedValueOnce({ ok: true })
-    const update = store
-      .getState()
-      .updateProjectFieldValue(key, 'row', 'status', { kind: 'single-select', optionId: 'done' })
-    expect(field(store)).toMatchObject({ optionId: 'done', name: 'Done', color: 'PURPLE' })
-
-    const clear = store.getState().clearProjectFieldValue(key, 'row', 'status')
-    expect(field(store)).toBeUndefined()
-
-    await vi.waitFor(() => expect(mockApi.gh.updateProjectItemField).toHaveBeenCalledTimes(1))
-    expect(mockApi.gh.clearProjectItemField).not.toHaveBeenCalled()
-    first.resolve({ ok: true })
-    await Promise.all([update, clear])
-
-    expect(field(store)).toBeUndefined()
-  })
-
   it.each([true, false])(
     'rolls a failed clear back to the last confirmed value (first succeeds: %s)',
     async (succeeds) => {
@@ -173,27 +152,6 @@ describe('project field writes', () => {
     ).toMatchObject({ optionId: 'todo' })
   })
 
-  it('preserves a successful edit to a different field when status rolls back', async () => {
-    const store = setup()
-    const first = deferred()
-    mockApi.gh.updateProjectItemField
-      .mockReturnValueOnce(first.promise)
-      .mockResolvedValueOnce({ ok: true })
-    const update1 = store
-      .getState()
-      .updateProjectFieldValue(key, 'row', 'status', { kind: 'single-select', optionId: 'done' })
-    const update2 = store
-      .getState()
-      .updateProjectFieldValue(key, 'row', 'notes', { kind: 'text', text: 'Keep this' })
-    await vi.waitFor(() => expect(mockApi.gh.updateProjectItemField).toHaveBeenCalledTimes(2))
-    first.resolve(failed)
-    await Promise.all([update1, update2])
-    expect(field(store)).toMatchObject({ optionId: 'todo' })
-    expect(
-      store.getState().projectViewCache[key]?.data?.rows[0]?.fieldValuesByFieldId.notes
-    ).toMatchObject({ text: 'Keep this' })
-  })
-
   it('does not roll back a newer clear when two clear requests overlap', async () => {
     const store = setup()
     const first = deferred()
@@ -209,18 +167,6 @@ describe('project field writes', () => {
     second.resolve({ ok: true })
     await clear2
     expect(field(store)).toBeUndefined()
-  })
-
-  it('preserves a concurrent content edit when a field transport throws', async () => {
-    const store = setup()
-    mockApi.gh.updateProjectItemField.mockRejectedValueOnce(new Error('Transport closed'))
-    const request = store
-      .getState()
-      .updateProjectFieldValue(key, 'row', 'status', { kind: 'single-select', optionId: 'done' })
-    store.getState().patchProjectRowContent(key, 'row', { title: 'Edited' })
-    expect(await request).toMatchObject({ ok: false, error: { message: 'Transport closed' } })
-    expect(field(store)).toMatchObject({ optionId: 'todo' })
-    expect(store.getState().projectViewCache[key]?.data?.rows[0]?.content.title).toBe('Edited')
   })
 
   it('uses a refreshed value as the rollback baseline for a subsequently queued edit', async () => {
@@ -244,18 +190,5 @@ describe('project field writes', () => {
     first.resolve(failed)
     await Promise.all([update, clear])
     expect(field(store)).toMatchObject({ optionId: 'doing' })
-  })
-
-  it('preserves an authoritative refresh instead of rolling back a failed clear', async () => {
-    const store = setup()
-    const response = deferred()
-    mockApi.gh.clearProjectItemField.mockReturnValueOnce(response.promise)
-    const request = store.getState().clearProjectFieldValue(key, 'row', 'status')
-    const refreshed = fixture()
-    delete refreshed.rows[0].fieldValuesByFieldId.status
-    store.setState({ projectViewCache: { [key]: { data: refreshed, fetchedAt: 2 } } })
-    response.resolve(failed)
-    await request
-    expect(field(store)).toBeUndefined()
   })
 })

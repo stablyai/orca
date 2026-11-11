@@ -1,10 +1,6 @@
 import { observeAcpForkSupport } from '../capabilities/acp-fork-support'
-import {
-  assertStructuredAgentResolutionCurrent,
-  type StructuredAgentResolutionOperation
-} from '../../native-chat/structured-agent-command-resolution'
+import { assertStructuredAgentResolutionCurrent } from '../../native-chat/structured-agent-command-resolution'
 import { homedir } from 'node:os'
-import { setTimeout as delay } from 'node:timers/promises'
 import { join } from 'node:path'
 import type { AgentCliVersionReader } from '../../agent-launch/preflight/agent-cli-version-probe'
 import type { AgentModelCatalogProbe } from '../../native-chat/agent-model-catalog/agent-model-catalog-store'
@@ -20,40 +16,22 @@ import { acpRunFolder } from '../launch/acp-private-temp'
 import {
   acpListingDependsOnRelease,
   acpListingNeedsChatFolder,
-  acpModelListingForRelease,
-  type AcpSessionModelDiscovery
+  acpModelListingForRelease
 } from './acp-model-discovery-policy'
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
-import type { AcpSessionStarted, AcpSessionStartOptions } from '../protocol/acp-session-setup'
 import { checkAcpLaunchVersion } from '../launch/acp-launch-version'
 import {
   resolveAcpLaunchInvocation,
   type AcpLaunchInvocationDeps
 } from '../launch/acp-structured-launch-resolution'
-import { AcpStructuredOptions } from '../options/acp-structured-options'
-import type {
-  InitializeResponse,
-  SetSessionConfigOptionResponse
-} from '../generated/acp-protocol.generated'
-import { withTimeout } from '../../../shared/promise-timeout-fallback'
-import { AcpAgentError } from '../transport/acp-errors'
+import {
+  readSessionModels,
+  type AcpModelCatalogConnection,
+  type AcpModelCatalogSessionConnection
+} from './acp-listing-session-models'
+import { AcpAgentError, AcpAgentExitedError } from '../transport/acp-errors'
 import { AgentModelCatalogUnavailableError } from '../../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
-
-/** Session-free capability boundary: no session methods are exposed. */
-export type AcpModelCatalogConnection = {
-  initialize(): Promise<InitializeResponse>
-  requestSessionFreeExtension(method: string, params: unknown): Promise<unknown>
-  close(): Promise<unknown>
-}
-
-export type AcpModelCatalogSessionConnection = Omit<
-  AcpModelCatalogConnection,
-  'requestSessionFreeExtension'
-> & {
-  start(options: AcpSessionStartOptions): Promise<AcpSessionStarted>
-  setConfigOption(configId: string, value: string): Promise<SetSessionConfigOptionResponse>
-  deleteSession(sessionId: string): Promise<unknown>
-}
+import { usesModelSpecificAcpEfforts } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 
 export type AcpModelCatalogProbeDeps = AcpLaunchInvocationDeps & {
   probeVersion?: AgentCliVersionReader
@@ -113,6 +91,11 @@ export function createAcpModelCatalogProbe(
       envToDelete
     }
     const run = { label: spec.agent, signal: options?.signal }
+    // OMP records every model switch as account usage; starting on the picked model records none.
+    const launchedModel =
+      spec.launchesWithModel && usesModelSpecificAcpEfforts(spec.agent)
+        ? options?.selectedModels?.[0]
+        : undefined
     let models: AgentSessionModelOption[]
     let attemptedModels: string[] | undefined
     if (listing.kind === 'command') {
@@ -133,32 +116,49 @@ export function createAcpModelCatalogProbe(
       }
       // Remove disposable session storage after the process closes.
       const folderArgs = listing.sessionFolderArgs
-      const folder = folderArgs
-        ? await acpRunFolder(join(deps.dataDirectory, 'acp-listing-sessions', spec.agent))
-        : null
-      try {
-        assertStructuredAgentResolutionCurrent(operation)
-        const args =
-          folderArgs && folder ? [...launch.args, ...folderArgs(folder.path)] : launch.args
-        const result = await runAgentModelCatalogSession(
-          () => (deps.connectSession ?? createAcpAgentConnection)({ ...launch, args }),
-          (connection, ready) =>
-            readSessionModels(
-              spec,
-              listing,
-              connection,
-              workspace,
-              operation,
-              options?.selectedModels,
-              spec.dialect.effortChangesModel ? ready : undefined
-            ),
-          run
-        )
-        models = result.models
-        attemptedModels = result.attemptedModels
-      } finally {
-        await folder?.remove()
+      const listInSession = async (model: string | undefined) => {
+        const folder = folderArgs
+          ? await acpRunFolder(join(deps.dataDirectory, 'acp-listing-sessions', spec.agent))
+          : null
+        try {
+          assertStructuredAgentResolutionCurrent(operation)
+          const args = [
+            ...prefixArgs,
+            ...spec.args({ fullAccess: false, pluginDir: null, model }),
+            ...(folderArgs && folder ? folderArgs(folder.path) : [])
+          ]
+          return await runAgentModelCatalogSession(
+            () => (deps.connectSession ?? createAcpAgentConnection)({ ...launch, args }),
+            (connection, ready) =>
+              readSessionModels(
+                spec,
+                listing,
+                connection,
+                workspace,
+                operation,
+                options?.selectedModels,
+                model,
+                spec.dialect.effortChangesModel ? ready : undefined
+              ),
+            run
+          )
+        } finally {
+          await folder?.remove()
+        }
       }
+      let result: Awaited<ReturnType<typeof listInSession>>
+      try {
+        result = await listInSession(launchedModel)
+      } catch (error) {
+        // OMP exits before ACP on a model it cannot start (a stale `:level` id); list without it.
+        if (launchedModel === undefined || !(error instanceof AcpAgentExitedError)) {
+          throw error
+        }
+        assertStructuredAgentResolutionCurrent(operation)
+        result = { ...(await listInSession(undefined)), attemptedModels: [launchedModel] }
+      }
+      models = result.models
+      attemptedModels = result.attemptedModels
     } else {
       models = await runAgentModelCatalogSession(
         () => (deps.connect ?? createAcpAgentConnection)(launch),
@@ -190,107 +190,3 @@ export function createAcpModelCatalogProbe(
 
 const folderlessListing = (spec: AcpLaunchSpec) =>
   new AgentModelCatalogListingStoppedError(`${spec.agent} lists in a chat's folder`)
-
-// OpenCode can answer -32603 while its providers are still opening; a later attempt lists them.
-async function startListingSession(
-  connection: AcpModelCatalogSessionConnection,
-  workspace: string,
-  operation?: StructuredAgentResolutionOperation
-): Promise<AcpSessionStarted> {
-  for (const backoffMs of [250, 500]) {
-    try {
-      return await connection.start({ cwd: workspace, mcpServers: [] })
-    } catch (error) {
-      if (!(error instanceof AcpAgentError && error.code === -32603)) {
-        throw error
-      }
-    }
-    await delay(backoffMs, undefined, { signal: operation?.signal })
-    assertStructuredAgentResolutionCurrent(operation)
-  }
-  return connection.start({ cwd: workspace, mcpServers: [] })
-}
-
-async function readSessionModels(
-  spec: AcpLaunchSpec,
-  listing: AcpSessionModelDiscovery,
-  connection: AcpModelCatalogSessionConnection,
-  workspace: string,
-  operation?: StructuredAgentResolutionOperation,
-  selectedModels?: readonly string[],
-  ready?: (cleanup: () => Promise<unknown>) => void
-): Promise<{ models: AgentSessionModelOption[]; attemptedModels: string[] }> {
-  const initialized = await connection.initialize()
-  assertStructuredAgentResolutionCurrent(operation)
-  observeAcpForkSupport(spec.agent, initialized)
-  const deletes = Boolean(initialized.agentCapabilities?.sessionCapabilities?.delete)
-  if (!deletes && !listing.sessionFolderArgs) {
-    throw new Error(`${spec.agent} cannot delete a session, so it lists its models only in chats`)
-  }
-  const started = await startListingSession(connection, workspace, operation)
-  let stopped = false
-  const cleanup = async (): Promise<void> => {
-    stopped = true
-    if (deletes) {
-      await connection.deleteSession(started.sessionId).catch((error: unknown) => {
-        console.warn(`[acp-model-catalog] ${spec.agent} kept its listing session:`, error)
-      })
-    }
-  }
-  // Startup and menu discovery have separate budgets; cleanup also runs on cancellation.
-  ready?.(cleanup)
-  const options = new AcpStructuredOptions(spec.dialect)
-  options.adoptSession(started.response, 'new')
-  let models = options.read().models
-  const attemptedModels: string[] = []
-  try {
-    if (spec.dialect.effortChangesModel) {
-      const byId = new Map(models.map((model) => [model.id, model]))
-      const targets = selectedModels ? selectedModels.flatMap((id) => byId.get(id) ?? []) : models
-      const sweep = async () => {
-        for (const model of targets) {
-          if (stopped) {
-            return
-          }
-          assertStructuredAgentResolutionCurrent(operation)
-          if (model.effortsKnown !== false) {
-            continue
-          }
-          attemptedModels.push(model.id)
-          try {
-            for (let attempt = 0; attempt < 2 && !stopped; attempt++) {
-              const write = options.write('model', model.id)
-              if (write?.method !== 'config') {
-                break
-              }
-              const reply = await connection.setConfigOption(write.configId, write.value)
-              if (stopped) {
-                return
-              }
-              assertStructuredAgentResolutionCurrent(operation)
-              options.adoptConfigOptions(reply.configOptions)
-              const observed = options.read()
-              if (observed.current.model !== model.id) {
-                continue
-              }
-              const known = observed.models.find((row) => row.id === model.id)
-              if (known) {
-                models = models.map((row) => (row.id === model.id ? known : row))
-              }
-              break
-            }
-          } catch {
-            assertStructuredAgentResolutionCurrent(operation)
-          }
-        }
-      }
-      await withTimeout(sweep(), 5_000, undefined)
-    }
-    assertStructuredAgentResolutionCurrent(operation)
-    return { models, attemptedModels }
-  } finally {
-    if (!ready) {
-      await cleanup()
-    }
-  }
-}

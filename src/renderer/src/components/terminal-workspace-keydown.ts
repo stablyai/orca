@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
-
-import { type KeybindingActionId, keybindingMatchesAction } from '../../../shared/keybindings'
+import { keybindingMatchesAction } from '../../../shared/keybindings'
+import type { KeybindingActionId } from '../../../shared/keybindings'
 import { matchesRecentTabSwitcherChord } from '../../../shared/window-shortcut-policy'
 import { useAppStore } from '../store/index'
 import {
@@ -18,7 +18,7 @@ import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/ter
 import {
   ensureClientCreationActionAllowed,
   showClientCreationActionError
-} from '@/lib/client-creation-action-error'
+} from '@/lib/workspace/creation/surface-policy/client-creation-action-error'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { translate } from '@/i18n/i18n'
 import { getKeybindingContext } from './terminal-workspace-model'

@@ -1,5 +1,8 @@
-import * as monaco from 'monaco-editor'
 import type { editor as monacoEditor } from 'monaco-editor'
+// Why: a value import of 'monaco-editor' here would evaluate Monaco ahead of its NLS pack
+// (see monaco-nls-import-order.test.ts); these two modules carry no localized labels.
+import { Range } from 'monaco-editor/esm/vs/editor/common/core/range.js'
+import { MouseTargetType } from 'monaco-editor/esm/vs/editor/common/standalone/standaloneEnums.js'
 import { capturePointer, releasePointerCapture } from './diff-comment-range-pointer-capture'
 import { getDragAutoScrollStepPx, REFERENCE_FRAME_MS } from './diff-comment-drag-auto-scroll'
 import {
@@ -45,7 +48,7 @@ export type DiffCommentRangeDragHandle = {
 
 // Claim line numbers only: decoration presses toggle folds. The external add button resolves separately.
 const GUTTER_PRESS_TARGET_TYPES: ReadonlySet<monacoEditor.MouseTargetType> = new Set([
-  monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS
+  MouseTargetType.GUTTER_LINE_NUMBERS
 ])
 
 // Far enough into the text column to clear the gutter, close enough to stay on every line.
@@ -96,7 +99,7 @@ export function installDiffCommentRangeDrag({
     }
     decorations.set([
       {
-        range: new monaco.Range(range.startLine, 1, range.endLine, 1),
+        range: new Range(range.startLine, 1, range.endLine, 1),
         options: {
           isWholeLine: true,
           className: 'orca-diff-comment-range-highlight',

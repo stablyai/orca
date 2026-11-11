@@ -1,5 +1,6 @@
-import { useCallback, useLayoutEffect, useRef, type DragEventHandler } from 'react'
-import { useAppStore } from '@/store'
+import { useCallback, useLayoutEffect, useRef } from 'react'
+import type { DragEventHandler } from 'react'
+import { useAppStore } from '@/store/index'
 import {
   getWorkspaceFileDragRejectionMessage,
   hasWorkspaceFileDragType,
@@ -12,13 +13,13 @@ import {
   resolveNativeChatAttachmentHost
 } from '../uploads/native-chat-attachment-owner'
 import { nativeChatWorktreeNotReadyNotice } from './native-chat-attachment-notices'
-import { chatWorkspaceByTabId as findTerminalTabWorktreeId } from '../../../../lib/structured-chat-tab-index'
+import { chatWorkspaceByTabId as findTerminalTabWorktreeId } from '../../../../lib/agent-session/tab-identity/structured-chat-tab-index'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   nativeChatAttachmentOwnerUnchanged,
-  nativeChatWorkspaceAttachmentMismatchNotice,
-  type NativeChatResolvedPathOptions
+  nativeChatWorkspaceAttachmentMismatchNotice
 } from '../uploads/native-chat-resolved-path-ownership'
+import type { NativeChatResolvedPathOptions } from '../uploads/native-chat-resolved-path-ownership'
 
 export type NativeChatResolvedPathSink = (
   paths: string[],

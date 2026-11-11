@@ -2,6 +2,13 @@ import type { GitHubPRMergeMethod, GitHubPRMergeMethodSettings } from './pull-re
 
 export const GITHUB_PR_MERGE_METHODS = ['squash', 'merge', 'rebase'] as const
 
+// Shared by the mobile hosted-review surfaces, whose catalogs carry these keys.
+export const GITHUB_PR_MERGE_METHOD_I18N_KEYS = {
+  squash: 'pullRequest.prActionsState.methodSquash',
+  merge: 'pullRequest.prActionsState.methodMerge',
+  rebase: 'pullRequest.prActionsState.methodRebase'
+} as const
+
 export type GitHubPRMergeMethodPresentation = {
   defaultMethod: GitHubPRMergeMethod
   methods: GitHubPRMergeMethod[]
