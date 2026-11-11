@@ -64,7 +64,9 @@ test('narrowing the pane after mount re-lays the strip out; the title stays read
     [320, 'compact', 'Claude sign-in expired']
   ] as const) {
     await page.locator('[data-strip-pane]').evaluate((pane, w) => {
-      ;(pane as HTMLElement).style.width = `${w}px`
+      if (pane instanceof HTMLElement) {
+        pane.style.width = `${w}px`
+      }
     }, width)
     await expect(strip).toHaveAttribute('data-strip-width', layout)
     const titleBox = await strip.getByText(title, { exact: true }).boundingBox()
