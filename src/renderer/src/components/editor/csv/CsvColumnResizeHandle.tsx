@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { CSV_MIN_COLUMN_WIDTH, CSV_MAX_COLUMN_WIDTH } from './csv-column-width-limits'
 export { CSV_MIN_COLUMN_WIDTH, CSV_MAX_COLUMN_WIDTH } from './csv-column-width-limits'
 
@@ -14,6 +14,7 @@ export function CsvColumnResizeHandle({
   onResize: (index: number, width: number) => void
   onReset: (index: number) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const drag = useRef<{ x: number; width: number } | null>(null)
   const frame = useRef<number | null>(null)
   const pendingWidth = useRef(width)
@@ -43,7 +44,7 @@ export function CsvColumnResizeHandle({
       role="separator"
       tabIndex={0}
       aria-orientation="vertical"
-      aria-label={translate('csv.resizeColumn', 'Resize column {{column}}', { column: index + 1 })}
+      aria-label={t('csv.resizeColumn', 'Resize column {{column}}', { column: index + 1 })}
       aria-valuemin={CSV_MIN_COLUMN_WIDTH}
       aria-valuemax={CSV_MAX_COLUMN_WIDTH}
       aria-valuenow={width}

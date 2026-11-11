@@ -5,26 +5,16 @@ import { githubHostExecOptions, type GitHubApiRepository } from '../../github-ap
 import { noteRepositoryRateLimitSpend } from '../../rate-limit'
 import type { GhExecOptions } from '../github-exec-scope'
 import type { PullRequestLookupData } from './pull-request-lookup-data'
+import {
+  collectPRCheckRollup,
+  createPRCheckRollupPageReader,
+  prCheckRollupCommitsSchema,
+  prCheckRollupFields
+} from '../check/pr-check-rollup'
 
-const CHECKS_FIELDS = `commits(last: 1) {
-  nodes {
-    commit {
-      oid
-      statusCheckRollup {
-        contexts(first: 100, after: $checksCursor) {
-          nodes {
-            __typename
-            ... on CheckRun { status conclusion }
-            ... on StatusContext { state }
-          }
-          pageInfo { hasNextPage endCursor }
-        }
-      }
-    }
-  }
-}`
+const CHECKS_FIELDS = prCheckRollupFields()
 
-const SIDEBAR_QUERY = `query($owner: String!, $repo: String!, $number: Int!, $checksCursor: String) {
+const SIDEBAR_QUERY = `query($owner: String!, $repo: String!, $number: Int!, $checksCursor: String, $suitesCursor: String) {
   repository(owner: $owner, name: $repo) {
     pullRequest(number: $number) {
       number title state url updatedAt isDraft mergeable reviewDecision mergeStateStatus
@@ -39,31 +29,6 @@ const SIDEBAR_QUERY = `query($owner: String!, $repo: String!, $number: Int!, $ch
   }
 }`
 
-const CHECKS_QUERY = `query($owner: String!, $repo: String!, $number: Int!, $checksCursor: String) {
-  repository(owner: $owner, name: $repo) {
-    pullRequest(number: $number) { number ${CHECKS_FIELDS} }
-  }
-}`
-
-const commitsSchema = z.object({
-  nodes: z
-    .array(
-      z.object({
-        commit: z.object({
-          oid: z.string(),
-          statusCheckRollup: z
-            .object({
-              contexts: z.object({
-                nodes: z.array(z.record(z.string(), z.unknown()).nullable()),
-                pageInfo: z.object({ hasNextPage: z.boolean(), endCursor: z.string().nullable() })
-              })
-            })
-            .nullable()
-        })
-      })
-    )
-    .max(1)
-})
 const errorsSchema = z
   .array(
     z.object({
@@ -91,7 +56,7 @@ const pullRequestSchema = z.object({
   isCrossRepository: z.boolean().optional(),
   headRepositoryOwner: z.object({ login: z.string() }).nullable(),
   headRepository: z.object({ name: z.string() }).nullable(),
-  commits: commitsSchema,
+  commits: z.unknown(),
   stack: z.unknown().optional(),
   stackEntry: z.unknown().optional()
 })
@@ -107,14 +72,6 @@ const envelopeSchema = z.object({
 })
 const missingEnvelopeSchema = z.object({
   data: z.object({ repository: z.object({ pullRequest: z.null() }) }),
-  errors: errorsSchema
-})
-const checksEnvelopeSchema = z.object({
-  data: z.object({
-    repository: z.object({
-      pullRequest: z.object({ number: z.number(), commits: commitsSchema })
-    })
-  }),
   errors: errorsSchema
 })
 
@@ -160,7 +117,8 @@ async function readQuery(
 export async function readPullRequestSidebarQuery(
   repository: GitHubApiRepository,
   number: number,
-  options: GhExecOptions
+  options: GhExecOptions,
+  checkPageLimit?: number
 ): Promise<PullRequestLookupData | null | undefined> {
   if (repository.host?.toLowerCase() !== 'github.com') {
     return undefined
@@ -188,13 +146,16 @@ export async function readPullRequestSidebarQuery(
     return undefined
   }
   const envelope = parsed.data
-  const stackErrors = envelope.errors ?? []
+  const errors = envelope.errors ?? []
+  const stackErrors = errors.filter(
+    ({ path }) => path?.[2] === 'stack' || path?.[2] === 'stackEntry'
+  )
   if (
-    stackErrors.some(
+    errors.some(
       ({ path }) =>
         path?.[0] !== 'repository' ||
         path[1] !== 'pullRequest' ||
-        (path[2] !== 'stack' && path[2] !== 'stackEntry')
+        (path[2] !== 'stack' && path[2] !== 'stackEntry' && path[2] !== 'commits')
     )
   ) {
     if (response.failure) {
@@ -206,37 +167,22 @@ export async function readPullRequestSidebarQuery(
   if (pr.number !== number) {
     return undefined
   }
-  let contexts = pr.commits.nodes[0]?.commit.statusCheckRollup?.contexts
-  const statusCheckRollup = contexts?.nodes.flatMap((node) => (node ? [node] : [])) ?? []
-  const cursors = new Set<string>()
-  while (contexts?.pageInfo.hasNextPage) {
-    const cursor = contexts.pageInfo.endCursor
-    if (!cursor || cursors.has(cursor)) {
-      return undefined
+  let statusCheckRollup: unknown[] | undefined
+  try {
+    if (!pr.headRefOid || errors.some(({ path }) => path?.[2] === 'commits')) {
+      throw new Error('Missing PR head')
     }
-    cursors.add(cursor)
-    const page = await readQuery(repository, number, options, CHECKS_QUERY, cursor)
-    if (page.failure) {
-      throw page.failure.error
-    }
-    const parsedPage = checksEnvelopeSchema.safeParse(page.payload)
-    if (!parsedPage.success) {
-      return undefined
-    }
-    const next = parsedPage.data
-    if (
-      next.errors?.length ||
-      next.data.repository.pullRequest.number !== number ||
-      next.data.repository.pullRequest.commits.nodes[0]?.commit.oid !==
-        pr.commits.nodes[0]?.commit.oid
-    ) {
-      return undefined
-    }
-    contexts = next.data.repository.pullRequest.commits.nodes[0]?.commit.statusCheckRollup?.contexts
-    if (!contexts) {
-      return undefined
-    }
-    statusCheckRollup.push(...contexts.nodes.flatMap((node) => (node ? [node] : [])))
+    statusCheckRollup = await collectPRCheckRollup(
+      {
+        number: pr.number,
+        headRefOid: pr.headRefOid,
+        commits: prCheckRollupCommitsSchema.parse(pr.commits)
+      },
+      createPRCheckRollupPageReader(repository, number, options),
+      checkPageLimit
+    )
+  } catch {
+    // Metadata remains usable when complete checks need REST recovery.
   }
   const stack = stackSchema.safeParse(pr.stack)
   const entry = stackEntrySchema.safeParse(pr.stackEntry)
@@ -248,7 +194,8 @@ export async function readPullRequestSidebarQuery(
     ...metadata,
     baseRefOid: pr.baseRefOid ?? undefined,
     headRefOid: pr.headRefOid ?? undefined,
-    statusCheckRollup,
+    statusCheckRollup: statusCheckRollup ?? [],
+    checksUnavailable: statusCheckRollup === undefined,
     stackMetadataChecked,
     stack:
       stackMetadataChecked && validStack

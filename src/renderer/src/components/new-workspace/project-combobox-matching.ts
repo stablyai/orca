@@ -1,6 +1,7 @@
-import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
-import { isNewWorkspaceProjectOptionQueryTooLarge } from '@/lib/new-workspace-project-options'
+import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
+import { isNewWorkspaceProjectOptionQueryTooLarge } from '@/lib/workspace/creation/new-workspace-project-options'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 export type ScoredProjectOption = {
   option: NewWorkspaceProjectOption
@@ -94,7 +95,8 @@ const RECENT_LIMIT = 4
 export function sectionProjectOptions(
   matches: readonly ScoredProjectOption[],
   query: string,
-  recentIds: readonly string[]
+  recentIds: readonly string[],
+  t: Translate = translate
 ): ProjectOptionSection[] {
   if (query.trim() !== '' || matches.length < SECTION_THRESHOLD) {
     return [{ key: 'results', heading: null, items: [...matches] }]
@@ -108,20 +110,17 @@ export function sectionProjectOptions(
   const sections: ProjectOptionSection[] = [
     {
       key: 'recent',
-      heading: translate('auto.components.new.workspace.projectCombobox.recentHeading', 'Recent'),
+      heading: t('auto.components.new.workspace.projectCombobox.recentHeading', 'Recent'),
       items: recent
     },
     {
       key: 'projects',
-      heading: translate(
-        'auto.components.new.workspace.projectCombobox.projectsHeading',
-        'Projects'
-      ),
+      heading: t('auto.components.new.workspace.projectCombobox.projectsHeading', 'Projects'),
       items: matches.filter((m) => m.option.kind === 'project' && !recentSet.has(m.option.id))
     },
     {
       key: 'folders',
-      heading: translate('auto.components.new.workspace.projectCombobox.foldersHeading', 'Folders'),
+      heading: t('auto.components.new.workspace.projectCombobox.foldersHeading', 'Folders'),
       // Exclude recent rows from folders too; duplicate options would desynchronize arming/rendering.
       items: matches.filter((m) => m.option.kind === 'project-group' && !recentSet.has(m.option.id))
     }

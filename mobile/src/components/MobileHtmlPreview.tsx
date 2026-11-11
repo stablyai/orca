@@ -11,6 +11,10 @@ export type MobileHtmlPreviewProps = {
   html: string
   // Rendered when the user flips to "Source" (the existing syntax view).
   renderSource: () => React.ReactNode
+  /** Source for a line-targeted open, so the target line is what shows first. */
+  initialMode?: MobilePreviewMode
+  /** Shown above the frame, e.g. a save failure the Source view would otherwise only show. */
+  notice?: React.ReactNode
 }
 
 // Deny scripts/same-origin: artifact gets opaque origin without storage/cookies or shell bridge; native also rejects non-main-frame messages.
@@ -24,17 +28,22 @@ export const MOBILE_HTML_PREVIEW_SEALED_SANDBOX = ''
 // Use srcdoc: inherits shipped CSP without matching frame-src; blob is blocked by frame-src none and WebKit frame-ancestors none.
 // Inherited img/font/connect/script policies still constrain artifact; https images can report view through fixed author URL, but scripts cannot add dynamic data.
 // Shell Referrer-Policy:no-referrer is required: WebKit ignores iframe referrerPolicy for srcdoc images, unlike Chromium.
-export function MobileHtmlPreview({ html, renderSource }: MobileHtmlPreviewProps) {
+export function MobileHtmlPreview({
+  html,
+  renderSource,
+  initialMode = 'preview',
+  notice
+}: MobileHtmlPreviewProps) {
   const t = useMobileTranslation()
   useMobileColorScheme()
-  const [mode, setMode] = useState<MobilePreviewMode>('preview')
+  const [mode, setMode] = useState<MobilePreviewMode>(initialMode)
   // Read immutable session grants once after init, before page mounts.
   const linksOpen = useHtmlPreviewLinkGrant()
-  // Only the path that rewrites pays for a parse, and only when the artifact changes.
-  const rendered = useMemo(
-    () => (linksOpen ? html : htmlPreviewWithInertLinks(html)),
-    [html, linksOpen]
-  )
+  // Keep the rewrite across mode switches, but defer parsing until Preview is shown.
+  const getPreviewHtml = useMemo(() => {
+    let rendered: string | undefined
+    return () => (rendered ??= linksOpen ? html : htmlPreviewWithInertLinks(html))
+  }, [html, linksOpen])
 
   return (
     <View style={styles.container}>
@@ -45,7 +54,14 @@ export function MobileHtmlPreview({ html, renderSource }: MobileHtmlPreviewProps
         sourceLabel={t('components.htmlPreview.viewHtmlSource', 'View HTML source')}
       />
       {/* Show author’s original source; inert-link rewrite is only this shell’s rendering policy. */}
-      {mode === 'preview' ? <PreviewFrame html={rendered} linksOpen={linksOpen} /> : renderSource()}
+      {mode === 'preview' ? (
+        <>
+          {notice}
+          <PreviewFrame html={getPreviewHtml()} linksOpen={linksOpen} />
+        </>
+      ) : (
+        renderSource()
+      )}
     </View>
   )
 }

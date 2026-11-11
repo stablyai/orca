@@ -1,4 +1,4 @@
-import { TerminalKittyKeyboardModeTracker } from '../../../../src/shared/terminal-kitty-keyboard-mode-tracker'
+import { TerminalKittyKeyboardModeTracker } from '../../../../src/shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import type { TerminalLaidOutCellBox } from '../terminal-cell-box'
 import { DEFAULT_TERMINAL_THEME } from '../terminal-webview-html/theme'
 import {

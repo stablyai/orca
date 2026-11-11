@@ -16,7 +16,7 @@ import type { DictationCapture } from '../platform/dictation-capture-contract'
 
 const WINDOW_MS = 50
 const WINDOW_SAMPLES = (DICTATION_SAMPLE_RATE * WINDOW_MS) / 1000
-// The page shell drains every 500 ms; more backlog than two drains only adds lag.
+// More backlog than a second of page drains only adds lag.
 const MAX_BACKLOG_MS = 1_000
 
 export type MobileDictationMeterState = DictationMeterState & {
@@ -61,7 +61,7 @@ export function createMobileDictationMeter(): MobileDictationMeter {
     }
   }
 
-  // Play windows back at the pace they were captured, so a 500 ms page batch moves the dots smoothly instead of in one jump.
+  // Play windows back at the pace they were captured, so a page batch moves the dots smoothly instead of in one jump.
   function tick(): void {
     const now = performance.now()
     creditMs += now - lastTickAt

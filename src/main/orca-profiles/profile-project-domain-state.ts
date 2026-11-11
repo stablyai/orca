@@ -1,3 +1,4 @@
+import { ProfileStateLegacyDocumentRefresh } from '../persistence/profile-state/profile-state-legacy-document-refresh'
 import {
   openProfileStateDatabase,
   openProfileStateDatabaseReadOnly
@@ -78,6 +79,8 @@ export function writeProfileProjectDomainChanges(
     if (!result.changed || result.revision !== changes.expectedRevision + 1) {
       throw new Error('Profile domain transfer did not commit its expected revision')
     }
+    // This profile may not be running; keep the copy older builds read current too.
+    new ProfileStateLegacyDocumentRefresh().refresh(opened.db)
   } finally {
     opened.db.close()
   }

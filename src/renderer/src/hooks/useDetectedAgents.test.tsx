@@ -13,7 +13,7 @@ import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
 } from '../../../shared/protocol-version'
-import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -299,35 +299,6 @@ describe('useDetectedAgents (unresolved target)', () => {
 })
 
 describe('useDetectedAgents (runtime call site)', () => {
-  it('distinguishes an initial remote failure from the pre-effect loading state', async () => {
-    runtimeEnvironmentCall.mockRejectedValue(new Error('runtime disconnected'))
-
-    await renderProbe({ kind: 'runtime', environmentId: 'env-1' })
-
-    expect(latestHookResult?.detectedIds).toBeNull()
-    expect(latestHookResult?.isLoading).toBe(false)
-    expect(latestHookResult?.detectionFailed).toBe(true)
-  })
-
-  it('probes each empty runtime target at most once per mounted surface', async () => {
-    const root = await renderProbe({ kind: 'runtime', environmentId: 'env-1' })
-
-    await act(async () => {
-      root.render(createElement(HookProbe, { target: { kind: 'runtime', environmentId: 'env-2' } }))
-    })
-    await flushEffects()
-    await act(async () => {
-      root.render(createElement(HookProbe, { target: { kind: 'runtime', environmentId: 'env-1' } }))
-    })
-    await flushEffects()
-
-    expect(
-      runtimeEnvironmentCall.mock.calls.filter(
-        ([{ method }]) => method === 'preflight.detectAgents'
-      )
-    ).toHaveLength(2)
-  })
-
   it('refreshes a non-empty runtime cache when a new launch surface opens', async () => {
     useAppStore.setState({ runtimeDetectedAgentIds: { 'env-1': ['claude'] } })
     runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {

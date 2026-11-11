@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { resetSystemPrefersDarkSubscriptionForTests } from '@/components/terminal-pane/use-system-prefers-dark'
+import { resetSystemPrefersDarkSubscriptionForTests } from '@/hooks/theme/use-system-prefers-dark'
 
 const settingsState: { theme: 'system' | 'dark' | 'light' | undefined } = vi.hoisted(() => ({
   theme: 'system'
@@ -14,7 +14,7 @@ vi.mock('@/store', () => ({
     })
 }))
 
-import { usePluginViewCaptureStore } from '@/store/plugin-view-capture'
+import { usePluginViewCaptureStore } from '@/store/plugins/capture/plugin-view-capture'
 import { useDocumentDarkTheme, useSettingsDarkTheme } from './use-document-dark-theme'
 
 function installMatchMedia(initialMatches: boolean): {

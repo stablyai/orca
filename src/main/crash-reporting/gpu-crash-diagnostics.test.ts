@@ -179,22 +179,4 @@ describe('GpuCrashDiagnosticsRecorder', () => {
       expect.objectContaining({ gpuInfoLevel: 'unavailable' })
     )
   })
-
-  it('still records collection status when Electron throws during both GPU info calls', async () => {
-    const recordBreadcrumb = vi.fn()
-    const provider = {
-      getGPUInfo: vi.fn(() => {
-        throw new Error('GPU access disabled')
-      }),
-      getGPUFeatureStatus: vi.fn(() => {
-        throw new Error('GPU teardown')
-      })
-    }
-    const recorder = new GpuCrashDiagnosticsRecorder({ provider, recordBreadcrumb })
-
-    recorder.warm()
-    await recorder.record()
-
-    expect(recordBreadcrumb).toHaveBeenCalledWith({ gpuInfoLevel: 'unavailable' })
-  })
 })

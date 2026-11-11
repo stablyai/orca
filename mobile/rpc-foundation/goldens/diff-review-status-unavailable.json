@@ -4,19 +4,57 @@
   "family": "session.diff-review",
   "namedDeltas": [],
   "values": {
-    "14804a5e414f": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "kind": "unavailable",
-        "message": "Update Orca desktop to review changes on mobile."
+    "1f10fad6906c": {
+      "name": "worktree.show#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
       }
     },
-    "168d1f64ca9b": {
-      "name": "git.status#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
+    "3374ccf2bc9a": {
+      "name": "repo.list#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
     },
     "45d1ea7c0b42": {
       "name": "git.status#1",
@@ -53,13 +91,29 @@
         }
       }
     },
-    "55c07df45014": {
+    "5dbd52d6a1c7": {
+      "name": "worktree.show#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
+    },
+    "648638103acb": {
+      "name": "repo.list#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    },
+    "8db27b0778a5": {
+      "name": "git.status#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "e39817462870": {
       "branchCompare": "unloaded",
       "diff": "unloaded",
-      "snapshot": {
-        "kind": "unavailable",
-        "message": "Update Orca desktop to review changes on mobile."
-      }
+      "snapshot": "unloaded"
     }
   },
   "recording": {
@@ -68,12 +122,12 @@
       {
         "id": "unavailable",
         "observation": {
-          "sender": ["45d1ea7c0b42"],
-          "payloads": ["168d1f64ca9b"],
+          "sender": ["45d1ea7c0b42", "1f10fad6906c", "3374ccf2bc9a"],
+          "payloads": ["8db27b0778a5", "5dbd52d6a1c7", "648638103acb"],
           "settlements": {
-            "unavailable": "14804a5e414f"
+            "unavailable": "9270aeb7d9c6"
           },
-          "state": "55c07df45014",
+          "state": "e39817462870",
           "effects": []
         }
       }

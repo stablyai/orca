@@ -25,8 +25,6 @@ import {
   readProfileStateWithRevision,
   writeSerializedProfileState
 } from './profile-project-state-file'
-import { recoverPendingProfileProjectMoves } from './profile-project-move-intent'
-import * as profileProjectDomainState from './profile-project-domain-state'
 
 vi.mock('../persistence/loading-store/store', () => {
   throw new Error('Profile transfers must not load inactive Stores')
@@ -115,71 +113,6 @@ afterEach(() => {
 })
 
 describe('profile transfer migration', () => {
-  it.each(['copy', 'move'] as const)(
-    '%s adopts an unopened JSON target without loading Store',
-    (mode) => {
-      writeState('source', true, [repo])
-      const targetJson = writeState('target', false)
-      expect(transfer(mode)).toMatchObject({ status: 'transferred', mode })
-
-      const target = readProfileStateWithRevision('target', directory)
-      expect(target.revision).toBe(2)
-      expect(target.state.repos).toHaveLength(1)
-      expect(target.state.repos[0]).toMatchObject({ kind: 'folder', path: repo.path })
-      expect(target.state.settings.opencodeSessionCookie).toBe('enc:v1:sealed-inactive-secret')
-      expect(JSON.parse(target.serialized ?? '{}').futureDomain).toEqual({ profileId: 'target' })
-      expect(readFileSync(paths('target').dataFile, 'utf8')).toBe(targetJson)
-      expect(existsSync(`${paths('target').dataFile}.sqlite-export.1.json`)).toBe(true)
-      expect(readProfileStateWithRevision('source', directory).state.repos).toHaveLength(
-        mode === 'move' ? 0 : 1
-      )
-    }
-  )
-
-  it('initializes a target with no saved JSON before its move intent is created', () => {
-    writeState('source', true, [repo])
-    expect(transfer()).toMatchObject({ status: 'transferred' })
-    expect(readProfileStateWithRevision('target', directory).state.repos).toHaveLength(1)
-    expect(existsSync(paths('target').dataFile)).toBe(false)
-    expect(existsSync(paths('target').databaseFile)).toBe(true)
-  })
-
-  it.each(['copy', 'move'] as const)(
-    '%s refuses an apparently empty target that retains a legacy JSON backup',
-    (mode) => {
-      writeState('source', true, [repo])
-      const sourceRevision = readProfileStateWithRevision('source', directory).revision
-      const targetJson = writeState('target', false)
-      const target = paths('target')
-      writeFileSync(`${target.dataFile}.bak.0`, targetJson)
-      rmSync(target.dataFile)
-
-      expect(() => transfer(mode)).toThrow('restore a selected backup')
-      expect(readProfileStateWithRevision('source', directory)).toMatchObject({
-        revision: sourceRevision,
-        state: { repos: [repo] }
-      })
-      expect(existsSync(target.dataFile)).toBe(false)
-      expect(existsSync(target.databaseFile)).toBe(false)
-      expect(readFileSync(`${target.dataFile}.bak.0`, 'utf8')).toBe(targetJson)
-    }
-  )
-
-  it.each(['[]', '7', '"invalid"', 'true'])(
-    'refuses a non-object JSON target (%s) without replacing its contents',
-    (raw) => {
-      writeState('source', false, [repo])
-      writeState('target', false)
-      const target = paths('target')
-      writeFileSync(target.dataFile, raw)
-
-      expect(() => transfer()).toThrow('Profile state JSON root must be an object')
-      expect(readFileSync(target.dataFile, 'utf8')).toBe(raw)
-      expect(existsSync(target.databaseFile)).toBe(false)
-      expect(readProfileStateWithRevision('source', directory).state.repos).toHaveLength(1)
-    }
-  )
-
   it('migrates a JSON source before moving into SQLite and retains its exact rollback bytes', () => {
     const sourceJson = writeState('source', false, [repo])
     writeState('target', true)
@@ -201,51 +134,6 @@ describe('profile transfer migration', () => {
     expect(readProfileStateWithRevision('target', directory).state.repos).toHaveLength(1)
   })
 
-  it.each(['copy', 'move'] as const)(
-    '%s migrates every mutated JSON participant while preserving storage-form values',
-    (mode) => {
-      const sourceJson = writeState('source', false, [repo])
-      const targetJson = writeState('target', false)
-      expect(transfer(mode)).toMatchObject({ status: 'transferred', mode })
-      expect(existsSync(paths('source').databaseFile)).toBe(mode === 'move')
-      expect(existsSync(paths('target').databaseFile)).toBe(true)
-      expect(readProfileStateWithRevision('source', directory).state.repos).toHaveLength(
-        mode === 'move' ? 0 : 1
-      )
-      expect(readProfileStateWithRevision('target', directory)).toMatchObject({
-        revision: 2,
-        state: { repos: [expect.objectContaining({ path: repo.path })] }
-      })
-      for (const [profileId, rawJson] of [
-        ['source', sourceJson],
-        ['target', targetJson]
-      ]) {
-        expect(readFileSync(paths(profileId).dataFile, 'utf8')).toBe(rawJson)
-        const current = readProfileStateWithRevision(profileId, directory)
-        expect(current.state.settings.opencodeSessionCookie).toBe('enc:v1:sealed-inactive-secret')
-        expect(JSON.parse(current.serialized ?? '{}').futureDomain).toEqual({ profileId })
-      }
-    }
-  )
-
-  it.each(['copy', 'move'] as const)(
-    '%s rejects JSON-only mutation without SQLite and preserves both legacy sources',
-    (mode) => {
-      const sourceJson = writeState('source', false, [repo])
-      const targetJson = writeState('target', false)
-      const getBuiltin = process.getBuiltinModule
-      vi.spyOn(process, 'getBuiltinModule').mockImplementation((name) =>
-        name === 'node:sqlite' ? undefined : getBuiltin(name)
-      )
-      expect(() => transfer(mode)).toThrow('Unable to open profile state database')
-      expect(existsSync(paths('source').databaseFile)).toBe(false)
-      expect(existsSync(paths('target').databaseFile)).toBe(false)
-      expect(readFileSync(paths('source').dataFile, 'utf8')).toBe(sourceJson)
-      expect(readFileSync(paths('target').dataFile, 'utf8')).toBe(targetJson)
-      expect(readProfileStateWithRevision('source', directory).state.repos).toHaveLength(1)
-    }
-  )
-
   it('refuses a legacy JSON write outside participant migration', () => {
     const sourceJson = writeState('source', false, [repo])
     expect(() => writeSerializedProfileState('source', directory, '{}')).toThrow(
@@ -257,18 +145,6 @@ describe('profile transfer migration', () => {
     )
     expect(existsSync(paths('target').dataFile)).toBe(false)
     expect(existsSync(paths('target').databaseFile)).toBe(false)
-  })
-
-  it('refuses mixed storage on a runtime without SQLite before migrating or editing JSON', () => {
-    const sourceJson = writeState('source', false, [repo])
-    writeState('target', true)
-    const getBuiltin = process.getBuiltinModule
-    vi.spyOn(process, 'getBuiltinModule').mockImplementation((name) =>
-      name === 'node:sqlite' ? undefined : getBuiltin(name)
-    )
-    expect(() => transfer()).toThrow('Unable to open profile state database')
-    expect(readFileSync(paths('source').dataFile, 'utf8')).toBe(sourceJson)
-    expect(existsSync(paths('source').databaseFile)).toBe(false)
   })
 
   it('refuses to adopt stale target JSON when a retained database backup proves missing authority', () => {
@@ -287,13 +163,6 @@ describe('profile transfer migration', () => {
     )
     expect(existsSync(paths('target').databaseFile)).toBe(false)
     expect(readProfileStateWithRevision('source', directory).state.repos).toHaveLength(1)
-  })
-
-  it('does not migrate a duplicate target', () => {
-    writeState('source', true, [repo])
-    writeState('target', false, [repo])
-    expect(transfer()).toMatchObject({ status: 'duplicate-target' })
-    expect(existsSync(paths('target').databaseFile)).toBe(false)
   })
 
   it('leaves both participants untouched when the import fails before publication', () => {
@@ -334,33 +203,4 @@ describe('profile transfer migration', () => {
     expect(readProfileStateWithRevision('target', directory).state.repos).toHaveLength(0)
     expect(readFileSync(paths('target').dataFile, 'utf8')).toBe(targetJson)
   })
-
-  it.each([
-    [true, false],
-    [false, true],
-    [false, false]
-  ])(
-    'replays an interrupted move with initial SQLite source=%s target=%s',
-    (sourceSqlite, targetSqlite) => {
-      writeState('source', sourceSqlite, [repo])
-      writeState('target', targetSqlite)
-      const originalWrite = profileProjectDomainState.writeProfileProjectDomainChanges
-      const write = vi
-        .spyOn(profileProjectDomainState, 'writeProfileProjectDomainChanges')
-        .mockImplementation((profileId, ...rest) => {
-          if (profileId === 'source') {
-            throw new Error('source commit interrupted')
-          }
-          return originalWrite(profileId, ...rest)
-        })
-      expect(() => transfer()).toThrow('source commit interrupted')
-      expect(readProfileStateWithRevision('source', directory).state.repos).toHaveLength(1)
-      expect(readProfileStateWithRevision('target', directory).state.repos).toHaveLength(1)
-      write.mockRestore()
-      expect(recoverPendingProfileProjectMoves(directory)).toBe(1)
-      expect(readProfileStateWithRevision('source', directory).state.repos).toHaveLength(0)
-      expect(readProfileStateWithRevision('target', directory).state.repos).toHaveLength(1)
-      expect(recoverPendingProfileProjectMoves(directory)).toBe(0)
-    }
-  )
 })

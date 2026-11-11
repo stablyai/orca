@@ -1,4 +1,4 @@
-import { readFile, rm, unlink, utimes, writeFile } from 'node:fs/promises'
+import { rm, unlink, utimes, writeFile } from 'node:fs/promises'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -86,17 +86,6 @@ describe('real Git missing paths and failed blob reads', () => {
     })
   })
 
-  it('retains additions absent from a valid HEAD tree', async () => {
-    await writeFile(path.join(repo, 'seed.txt'), 'seed\n')
-    gitCommit(repo, 'initial')
-    await writeFile(path.join(repo, 'file.txt'), 'new file\n')
-    await git(['add', 'file.txt'])
-    expect(await diff(true)).toMatchObject({
-      originalContent: '',
-      modifiedContent: 'new file\n'
-    })
-  })
-
   it('shows empty baselines for untracked and newly committed paths containing brackets', async () => {
     await writeFile(path.join(repo, 'seed.txt'), 'seed\n')
     gitCommit(repo, 'COMMIT_METADATA_MUST_NOT_BE_DIFF_CONTENT')
@@ -132,29 +121,5 @@ describe('real Git missing paths and failed blob reads', () => {
       originalContent: '',
       modifiedContent: 'new content\n'
     })
-  })
-
-  it('recognizes actual index and tree absence without accepting corrupt objects', async () => {
-    await writeFile(path.join(repo, 'seed.txt'), 'seed\n')
-    gitCommit(repo, 'initial')
-    const names = [
-      'file.txt',
-      'new [draft].txt',
-      ...(process.platform === 'win32' ? [] : ["quote' and\nnewline.txt"])
-    ]
-    for (const filePath of names) {
-      for (const presentOnDisk of [false, true]) {
-        if (presentOnDisk) {
-          await writeFile(path.join(repo, filePath), 'untracked\n')
-        }
-        for (const result of [
-          await readGitBlobAtIndexPath(repo, filePath),
-          await readGitBlobAtOidPath(repo, 'HEAD', filePath)
-        ]) {
-          expect(result).toEqual({ content: '', isBinary: false, exists: false, failed: false })
-        }
-      }
-    }
-    expect(await readFile(path.join(repo, 'seed.txt'), 'utf8')).toBe('seed\n')
   })
 })

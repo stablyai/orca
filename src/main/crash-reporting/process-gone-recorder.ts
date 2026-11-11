@@ -19,6 +19,7 @@ import {
   trackRendererSiblingAttribution
 } from './process-gone-sibling-attribution'
 import {
+  childProcessNames,
   shouldRecordProcessGoneCrash,
   type ExpectedTeardownScope,
   type ProcessGoneSource
@@ -163,13 +164,12 @@ export function recordProcessGoneCrash(
     return
   }
   const goneAt = Date.now()
-  const serviceName =
-    typeof event.details.serviceName === 'string' ? event.details.serviceName : undefined
+  const names = childProcessNames(event.details)
   if (event.source === 'child') {
     correlateChildProcessDeath({
       at: goneAt,
       processType: event.processType,
-      ...(serviceName ? { serviceName } : {}),
+      ...(names.serviceName ? { serviceName: names.serviceName } : {}),
       reason: event.reason,
       exitCode: event.exitCode
     })
@@ -181,7 +181,7 @@ export function recordProcessGoneCrash(
       platform: process.platform,
       source: event.source,
       processType: event.processType,
-      serviceName,
+      ...names,
       reason: event.reason,
       exitCode: event.exitCode,
       expectedTeardown: event.expectedTeardown

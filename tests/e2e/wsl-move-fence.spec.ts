@@ -2,7 +2,8 @@
  * The WSL move fence on a real desktop: a journal written beside the profile, as a move would,
  * must make the moving projects (a folder and a repo) refuse new terminals while they stay listed,
  * and once the host owns them, take them out of the project and worktree lists. Other projects
- * keep working throughout.
+ * keep working throughout. A move interrupted before it could ask the host to commit is undone
+ * at the next launch instead.
  */
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
@@ -13,7 +14,10 @@ import { expect, test } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 import { createRestartSession } from './helpers/orca-restart'
 import { wslMoveCutoverFixture } from '../../src/main/persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
-import { writeWslMoveCutover } from '../../src/main/persistence/moving-wsl-projects/wsl-move-cutover-journal'
+import {
+  listWslMoveCutovers,
+  writeWslMoveCutover
+} from '../../src/main/persistence/moving-wsl-projects/wsl-move-cutover-journal'
 import {
   WSL_MOVE_CUTOVER_PHASES,
   type WslMoveCutoverPhase
@@ -154,11 +158,11 @@ test('a WSL move journal fences the moving project, then hides it once the host 
         {},
         { repoIds: [repoId], folderWorkspaceIds: [movingId] }
       )
-    const expectMovingRefused = async (page: Page) => {
+    const expectMovingRefused = async (page: Page, spawnRefusal: string) => {
       expect(await spawnIn(page, `folder:${movingId}`, folders[0].folderPath)).toContain(
-        'moving to its WSL host'
+        spawnRefusal
       )
-      expect(await spawnIn(page, repoWorktreeId, repoPath)).toContain('moving to its WSL host')
+      expect(await spawnIn(page, repoWorktreeId, repoPath)).toContain(spawnRefusal)
       expect(await spawnIn(page, `folder:${stayingId}`, folders[1].folderPath)).toBe('spawned')
       // A user's edit is refused; background bookkeeping is dropped quietly, never an error.
       expect(
@@ -185,10 +189,23 @@ test('a WSL move journal fences the moving project, then hides it once the host 
       journaled = target
     }
 
+    // No commit can exist before blobs-transferred, so startup recovery lifts the record.
     advanceTo('source-fenced')
     launched = await session.launch()
     await waitForSessionReady(launched.page)
-    await expectMovingRefused(launched.page)
+    expect(listWslMoveCutovers(session.userDataDir)).toEqual([])
+    expect(await spawnIn(launched.page, `folder:${movingId}`, folders[0].folderPath)).toBe(
+      'spawned'
+    )
+    await session.close(launched.app)
+    launched = undefined
+
+    // A commit may exist from here; with no host to ask, recovery keeps the fence.
+    journaled = -1
+    advanceTo('blobs-transferred')
+    launched = await session.launch()
+    await waitForSessionReady(launched.page)
+    await expectMovingRefused(launched.page, 'moving to its WSL host')
     const whileMoving = await listed(launched.page)
     expect(whileMoving.folders).toEqual(expect.arrayContaining([movingId, stayingId]))
     expect(whileMoving.repos).toContain(repoId)
@@ -199,7 +216,7 @@ test('a WSL move journal fences the moving project, then hides it once the host 
     advanceTo('destination-committed')
     launched = await session.launch()
     await waitForSessionReady(launched.page)
-    await expectMovingRefused(launched.page)
+    await expectMovingRefused(launched.page, 'now runs on its Ubuntu WSL host')
     const owned = await listed(launched.page)
     expect(owned.folders).toContain(stayingId)
     expect(owned.folders).not.toContain(movingId)

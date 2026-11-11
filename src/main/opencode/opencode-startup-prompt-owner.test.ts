@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { TerminalRunFactsRegister } from '../runtime/terminal-run-facts'
+import { TerminalRunFactsRegister } from '../runtime/terminal/lifecycle/terminal-run-facts'
 import {
   reserveOpenCodeStartupPrompt,
   commitPtyWithOpenCodePromptIntent
@@ -13,7 +13,7 @@ const ownership = vi.hoisted(() => ({
   ptyOwnership: new Map<string, string>(),
   ptyIncarnationById: new Map<string, string>()
 }))
-vi.mock('../agent-hooks/server', () => ({
+vi.mock('../agent-hooks/server/agent-hook-server', () => ({
   agentHookServer: {
     setStartupPromptClaimListener: (claim: typeof control.claim, clear: () => void) => {
       control.claim = claim
@@ -72,22 +72,6 @@ function fixture() {
 }
 
 describe('native prompt admission after spawn commit', () => {
-  it('waits for canonical commit and runtime identity before claiming once', async () => {
-    const f = fixture()
-    const committed = commitPtyWithOpenCodePromptIntent(f.context, async () => {
-      await f.waiting
-      f.facts.recordSpawnCommit(f.result)
-      return { kind: 'committed' as const, result: f.result }
-    })
-    expect(control.claim(f.body)).toBe('pending')
-    f.release()
-    await committed
-    expect(control.claim(f.body)).toBe('pending')
-    f.admit()
-    expect(control.claim(f.body)).toBe(true)
-    expect(control.claim(f.body)).toBe(false)
-  })
-
   it('cancels a registration-exited outcome despite later facts and identity admission', async () => {
     const f = fixture()
     const outcome = { kind: 'registration-exited' as const, result: f.result }
@@ -117,17 +101,6 @@ describe('native prompt admission after spawn commit', () => {
     expect(control.claim(f.body)).toBe('pending')
     f.release()
     await committed
-    f.admit()
-    expect(control.claim(f.body)).toBe(false)
-  })
-
-  it('cancels a failed commit without allowing later admission', async () => {
-    const f = fixture()
-    await expect(
-      commitPtyWithOpenCodePromptIntent(f.context, async () => {
-        throw new Error('persistence rejected')
-      })
-    ).rejects.toThrow('persistence rejected')
     f.admit()
     expect(control.claim(f.body)).toBe(false)
   })

@@ -8,7 +8,7 @@ import {
   decryptBytes,
   encrypt,
   generateKeyPair
-} from '../../../shared/e2ee-crypto'
+} from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import { createMobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 

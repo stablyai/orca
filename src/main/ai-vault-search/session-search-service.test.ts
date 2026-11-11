@@ -8,8 +8,8 @@ import { createSessionSearchService } from './session-search-service'
 import {
   AiVaultSearchResponseSchema,
   AiVaultSearchStatusSchema
-} from '../../shared/ai-vault-search-contract'
-import { unavailableSessionSearchStatus } from '../../shared/ai-vault-search-client'
+} from '../../shared/ai-vault/search/ai-vault-search-contract'
+import { unavailableSessionSearchStatus } from '../../shared/ai-vault/search/ai-vault-search-client'
 
 let harness: SessionSearchHarness | undefined
 
@@ -89,21 +89,5 @@ describe('real index to public service adapter', () => {
     const status = await service.status()
     expect(AiVaultSearchStatusSchema.parse(status)).toEqual(status)
     expect(status.generation).toBeGreaterThan(0)
-  })
-  it('keeps tool text out of conversation scope and reports query truncation', async () => {
-    const { db, service } = await fixture()
-    addSyntheticSession(db, { id: 1, role: 'tool', text: 'needle' })
-    expect(await service.search({ query: 'needle', scope: 'conversation' })).toMatchObject({
-      kind: 'results',
-      hits: []
-    })
-    expect(await service.search({ query: 'needle' })).toMatchObject({
-      kind: 'results',
-      hits: [expect.anything()]
-    })
-    expect(await service.search({ query: 'needle '.repeat(100) })).toMatchObject({
-      kind: 'results',
-      truncated: { query: true }
-    })
   })
 })

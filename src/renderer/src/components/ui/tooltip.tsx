@@ -2,10 +2,12 @@ import * as React from 'react'
 import * as TooltipPrimitive from 'radix-ui/tooltip'
 
 import { cva, type VariantProps } from 'class-variance-authority'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
+import { PortalContainerContext, usePortalContainer } from './portal-container-context'
 
 function TooltipProvider({
-  delayDuration = 0,
+  delayDuration = 600,
+  skipDelayDuration = 0,
   disableHoverableContent = true,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
@@ -14,6 +16,7 @@ function TooltipProvider({
     <TooltipPrimitive.Provider
       data-slot="tooltip-provider"
       delayDuration={delayDuration}
+      skipDelayDuration={skipDelayDuration}
       disableHoverableContent={disableHoverableContent}
       {...props}
     />
@@ -48,26 +51,34 @@ function TooltipContent({
   className,
   sideOffset = 0,
   showArrow = true,
+  portalContainer,
   variant,
   children,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content> &
-  VariantProps<typeof tooltipContentVariants> & { showArrow?: boolean; onPlaced?: () => void }) {
+  VariantProps<typeof tooltipContentVariants> & {
+    showArrow?: boolean
+    onPlaced?: () => void
+    portalContainer?: HTMLElement | null
+  }) {
+  const container = usePortalContainer(portalContainer)
   return (
-    <TooltipPrimitive.Portal>
-      <TooltipPrimitive.Content
-        data-slot="tooltip-content"
-        sideOffset={sideOffset}
-        // Tooltip portals must layer above the menus/popovers that trigger them.
-        className={cn(tooltipContentVariants({ variant }), className)}
-        {...props}
-      >
-        {children}
-        {showArrow ? (
-          <TooltipPrimitive.Arrow className="size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px] bg-foreground fill-foreground" />
-        ) : null}
-      </TooltipPrimitive.Content>
-    </TooltipPrimitive.Portal>
+    <PortalContainerContext value={container}>
+      <TooltipPrimitive.Portal container={container ?? undefined}>
+        <TooltipPrimitive.Content
+          data-slot="tooltip-content"
+          sideOffset={sideOffset}
+          // Tooltip portals must layer above the menus/popovers that trigger them.
+          className={cn(tooltipContentVariants({ variant }), className)}
+          {...props}
+        >
+          {children}
+          {showArrow ? (
+            <TooltipPrimitive.Arrow className="size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px] bg-foreground fill-foreground" />
+          ) : null}
+        </TooltipPrimitive.Content>
+      </TooltipPrimitive.Portal>
+    </PortalContainerContext>
   )
 }
 

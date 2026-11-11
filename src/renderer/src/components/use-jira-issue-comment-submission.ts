@@ -3,10 +3,10 @@ import { toast } from 'sonner'
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import type { JiraComment, JiraIssue } from '../../../shared/jira/jira-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import { createBrowserUuid } from '@/lib/browser-uuid'
-import { getCommentBodySubmitState } from '@/lib/comment-body-submit-state'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
+import { getCommentBodySubmitState } from '@/lib/source-control/review/comments/comment-body-submit-state'
 import { translate } from '@/i18n/i18n'
-import { jiraAddIssueCommentForTarget } from '@/runtime/runtime-jira-client'
+import { jiraAddIssueCommentForTarget } from '@/runtime/jira/runtime-jira-detail-client'
 
 type JiraIssueCommentSubmissionArgs = {
   commentDraft: string

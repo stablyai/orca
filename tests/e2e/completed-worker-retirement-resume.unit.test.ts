@@ -3,23 +3,27 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import type { SleepingAgentSessionRecord } from '../../src/shared/agent-session/lifecycle/agent-session-resume'
-import { makePaneKey } from '../../src/shared/stable-pane-id'
-import { parseWorkspaceSession } from '../../src/shared/workspace-session-schema'
-import type { TerminalTab } from '../../src/shared/terminal-tab-types'
-import type { ResolvedWorktree } from '../../src/main/runtime/runtime-worktree-path-identity'
-import { OrchestrationDb } from '../../src/main/runtime/orchestration/db'
+import { makePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'
+import { parseWorkspaceSession } from '../../src/shared/workspace-session/workspace-session-schema'
+import type { TerminalTab } from '../../src/shared/workspace-layout/terminal-tab-types'
+import type { Worktree } from '../../src/shared/worktree/types'
+import { OrchestrationDb } from '../../src/main/runtime/orchestration/db/orchestration-db'
+import '../../src/main/runtime/orchestration/db/contract-constants'
+import '../../src/main/runtime/orchestration/db/messages/mailbox-routing-page'
+import '../../src/main/runtime/orchestration/db/dispatch-row-writer'
+import '../../src/main/runtime/orchestration/db/attempt-outcome-projection'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import type { RpcContext } from '../../src/main/runtime/rpc/core'
-import { ORCHESTRATION_METHODS } from '../../src/main/runtime/rpc/methods/orchestration'
+import { ORCHESTRATION_METHODS } from '../../src/main/runtime/rpc/methods/orchestration/orchestration'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
 import {
   resolveLegacyWorkerTerminalRecoveryAction,
   rollbackLegacyWorkerTerminalSurfaceInStore
 } from '@/hooks/legacy-worker-terminal-recovery-event'
 import { useAppStore } from '@/store'
-import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
+import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import { resumeSleepingAgentSessionsForWorktree } from '@/lib/agent-session/resume/resume-sleeping-agent-session'
 
 const PROVIDER_SESSION_ID = '019feb51-2269-71c2-89c6-faa8dc65c8dc'
 const ORIGINAL_TAB_ID = '1c897bc8-973b-47b4-9449-ac5fc6b726c3'
@@ -40,7 +44,7 @@ const HELPER_PANE_KEY = makePaneKey(HELPER_TAB_ID, HELPER_LEAF_ID)
 const TERMINAL_HANDLE = 'terminal-background-worker'
 const initialAppStoreState = useAppStore.getState()
 
-function makeWorktree(id: string, workspacePath: string): ResolvedWorktree {
+function makeWorktree(id: string, workspacePath: string): Worktree {
   return {
     id,
     repoId: REPO_ID,
@@ -61,17 +65,7 @@ function makeWorktree(id: string, workspacePath: string): ResolvedWorktree {
     isPinned: false,
     sortOrder: 0,
     lastActivityAt: 0,
-    hostId: 'local',
-    parentWorktreeId: null,
-    childWorktreeIds: [],
-    lineage: null,
-    git: {
-      path: workspacePath,
-      head: 'abc123',
-      branch: 'refs/heads/review',
-      isBare: false,
-      isMainWorktree: false
-    }
+    hostId: 'local'
   }
 }
 
@@ -283,11 +277,8 @@ async function releaseCompletedWorker(terminalState: 'running' | 'exited'): Prom
       : null
   )
   vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
-  vi.spyOn(runtime, 'validateOrchestrationAgentLauncherForRepo').mockResolvedValue()
   vi.spyOn(runtime, 'validateOrchestrationAgentLauncherForWorktree').mockResolvedValue()
-  vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue(
-    makeWorktree(WORKTREE_ID, WORKTREE_PATH)
-  )
+  vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue({ id: WORKTREE_ID } as never)
   vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
     handle: TERMINAL_HANDLE,
     worktreeId: WORKTREE_ID,
@@ -322,6 +313,7 @@ async function releaseCompletedWorker(terminalState: 'running' | 'exited'): Prom
   })
   const closeTerminal = vi.spyOn(runtime, 'closeTerminal').mockImplementation(async () => {
     closeTerminalTab(ORIGINAL_TAB_ID, {
+      reason: 'requested',
       force: true,
       skipRunningProcessConfirm: true,
       localPtyTeardownOwnedExternally: true
@@ -421,6 +413,7 @@ describe('completed background-worker retirement resume matrix', () => {
     seedWorkspace()
     recordCompletedWorker()
     closeTerminalTab(ORIGINAL_TAB_ID, {
+      reason: 'requested',
       force: true,
       skipRunningProcessConfirm: true,
       localPtyTeardownOwnedExternally: true
@@ -509,6 +502,7 @@ describe('completed background-worker retirement resume matrix', () => {
       makeLayout(ORIGINAL_LEAF_ID, ORIGINAL_PTY_ID)
     )
     closeTerminalTab(HELPER_TAB_ID, {
+      reason: 'requested',
       force: true,
       skipRunningProcessConfirm: true,
       localPtyTeardownOwnedExternally: true

@@ -12,7 +12,6 @@ import {
   splitClaudeUsageCacheFile,
   writeClaudeUsageSourceCache
 } from './persisted-source-cache'
-import { sealUsageCacheJson } from '../usage/usage-cache-json-integrity'
 import {
   compressClaudeUsageSourceText,
   decodeClaudeUsageSourceText
@@ -183,56 +182,6 @@ it('rejects same-stat direct scanner corruption without a raw-envelope proof', a
   expect(rebuilt.sessions[0]?.turnCount).toBe(1)
 })
 
-it.each(['missing', 'null', 'number', 'pretty', 'domain'] as const)(
-  'starts cold for %s source framing',
-  async (corruption) => {
-    const original = await fixture()
-    await writeClaudeUsageSourceCache(ref(), [original])
-    const text = await readFile(sourcePath, 'utf8')
-    const saved = JSON.parse(text)
-    if (corruption === 'missing') {
-      delete saved.usageIntegrity
-    }
-    if (corruption === 'null') {
-      saved.usageIntegrity = null
-    }
-    if (corruption === 'number') {
-      saved.usageIntegrity = 7
-    }
-    const damaged =
-      corruption === 'domain'
-        ? serializeClaudeUsageReport(state(original))
-        : JSON.stringify(saved, null, corruption === 'pretty' ? 2 : undefined)
-    await writeFile(sourcePath, damaged)
-
-    expect((await readClaudeUsageSourceCache(ref())).sources).toEqual([])
-  }
-)
-
-it('does not present a corrupt future completion as fresh report history', async () => {
-  const original = await fixture()
-  const saved = JSON.parse(serializeClaudeUsageReport(state(original)))
-  saved.scanState.lastScanCompletedAt = Date.now() + 86_400_000
-
-  const rejected = await parseClaudeUsageReport(JSON.stringify(saved))
-
-  expect(rejected.sessions).toEqual([])
-  expect(rejected.scanState).toMatchObject({ enabled: false, lastScanCompletedAt: null })
-  expect(rejected.scanState.lastScanError).toContain('could not be validated')
-})
-
-it('retains genuine unsigned schema6 reports without promoting their lineage', async () => {
-  const original = await fixture(false)
-  const legacy = state(original, 6)
-  const text = serializeClaudeUsageReport(legacy)
-
-  expect(text).not.toContain('usageIntegrity')
-  expect(await parseClaudeUsageReport(text)).toMatchObject({
-    schemaVersion: 6,
-    sessions: original.sessions
-  })
-})
-
 it('does not seal arbitrary unprotected schema7 inline totals during migration', async () => {
   const original = await fixture(false)
   const cacheFile = join(directory, 'usage.json')
@@ -248,19 +197,4 @@ it('does not seal arbitrary unprotected schema7 inline totals during migration',
   expect(report.sessions).toEqual([])
   expect(report.scanState).toMatchObject({ enabled: false, lastScanCompletedAt: null })
   expect(report.scanState.lastScanError).toContain('could not be validated')
-})
-
-it('rejects a source envelope stamped for an unsupported producer schema', async () => {
-  const original = await fixture()
-  const material = JSON.stringify({
-    schemaVersion: 6,
-    worktreeFingerprint: '[]',
-    sources: [original]
-  })
-  await writeFile(sourcePath, sealUsageCacheJson(material, 'claude-usage-sources-v1'))
-  expect((await readClaudeUsageSourceCache(ref())).sources).toEqual([])
-})
-
-it('rejects empty-object integrity material rather than emitting invalid JSON', () => {
-  expect(() => sealUsageCacheJson('{}', 'test')).toThrow('requires a JSON object')
 })

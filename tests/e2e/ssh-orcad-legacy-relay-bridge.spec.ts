@@ -13,16 +13,16 @@ import {
   mutateStoppedProfileState,
   readPersistedProfileState
 } from './helpers/persisted-profile-state'
-import { workspaceSessionStateSchema } from '../../src/shared/workspace-session-schema'
+import { workspaceSessionStateSchema } from '../../src/shared/workspace-session/workspace-session-schema'
 import {
   getProfileTerminalScrollbackSnapshotRoot,
   getTerminalScrollbackSnapshotPath,
   makeTerminalScrollbackSnapshotRef
-} from '../../src/main/terminal-scrollback-snapshots'
-import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../src/shared/terminal-scrollback-limits'
+} from '../../src/main/pty/scrollback/terminal-scrollback-snapshots'
+import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../src/shared/terminal/replay/terminal-scrollback-limits'
 import { getOrcaProfileDataFile } from '../../src/shared/profile-state-storage-paths'
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
-import { getOrcadSshDeployment } from '../../src/shared/runtime-environments'
+import { getOrcadSshDeployment } from '../../src/shared/remote-runtime/host-catalog/runtime-environments'
 import { toSshExecutionHostId } from '../../src/shared/execution-host'
 import { toAppSshPtyId } from '../../src/shared/ssh-pty-id'
 import {
@@ -45,7 +45,7 @@ import {
 } from './helpers/paired-host-terminal'
 import { expectTerminalAccessibilityText } from './helpers/terminal-accessibility-tree'
 import { focusActiveTerminalInput } from './helpers/terminal'
-import { findOrcadMigrationSourceCutoverForTarget } from '../../src/main/ssh/orcad-migration-cutover-journal'
+import { findOrcadMigrationSourceCutoverForTarget } from '../../src/main/persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
 
 const TEMPLATE_SOURCE = process.env.ORCA_E2E_ORCAD_CONVERT_TEMPLATE
 const BRIDGE_TIMEOUT_MS = 4 * 60_000

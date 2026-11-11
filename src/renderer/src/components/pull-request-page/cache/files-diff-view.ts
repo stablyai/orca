@@ -1,4 +1,4 @@
-import type { DiffSection } from '@/components/editor/diff-section-types'
+import type { DiffSection } from '@/components/editor/diff/sections/diff-section-types'
 
 export type CachedPRFilesDiffViewState = {
   entrySignature: string

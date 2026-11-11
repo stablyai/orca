@@ -1,4 +1,4 @@
-import { isSameCodexRestartNoticeAccount } from '../slices/codex-restart-notice-account-identity'
+import { isSameCodexRestartNoticeAccount } from './codex-restart-notice-account-identity'
 import type { AccountRestartAgent } from './terminal-contracts'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 

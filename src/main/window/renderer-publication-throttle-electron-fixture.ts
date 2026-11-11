@@ -1,5 +1,5 @@
 import { app, BrowserWindow } from 'electron'
-import { startBrowserScreencast } from '../browser/browser-screencast-stream'
+import { startBrowserScreencast } from '../browser/cdp/screencast/browser-screencast-stream'
 import { RendererPublicationThrottle } from './renderer-publication-throttle'
 
 async function run(): Promise<void> {
@@ -47,6 +47,7 @@ async function run(): Promise<void> {
       maxHeight: 480,
       everyNthFrame: 1,
       minFrameIntervalMs: 0,
+      holdPaint: () => () => {},
       onFrame: () => {
         frames += 1
         firstFrame()

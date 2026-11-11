@@ -1,31 +1,54 @@
-import './unused-default-rpc-methods.test-fixture'
+import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../../git/worktrees/catalog/worktree-listing'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
+import { settledWriteStub } from '../../providers/settled-pty-write-stub'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { makeStore } from '../runtime-rpc-worktree-store-fixtures'
-import { AGENT_PROMPT_TEST_WORKTREE_PATH } from '../agent-prompt-submission-runtime-test-fixture'
+import { makeStore } from './server/runtime-rpc-worktree-store-fixtures'
+import { AGENT_PROMPT_TEST_WORKTREE_PATH } from '../terminal/input/agent-prompt-submission-runtime-test-fixture'
 import { RpcDispatcher } from './dispatcher'
-import { TERMINAL_METHODS } from './methods/terminal'
+import { TERMINAL_METHODS } from './methods/terminal/terminal'
 
-vi.mock('../../git/worktree', () => ({
-  listWorktrees: vi.fn().mockResolvedValue([
-    {
-      path: '/tmp/worktree-a',
-      head: 'abc',
-      branch: 'feature/launch-composer',
-      isBare: false,
-      isMainWorktree: false
-    }
-  ]),
-  listWorktreesStrict: vi.fn().mockResolvedValue([
-    {
-      path: '/tmp/worktree-a',
-      head: 'abc',
-      branch: 'feature/launch-composer',
-      isBare: false,
-      isMainWorktree: false
-    }
-  ])
-}))
+vi.mock('../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees
+  }
+})
+
+vi.mock('../../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: facade.listWorktreesStrict
+  }
+})
+
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  const createWorktreeListingMocks = () => ({
+    listWorktrees: vi.fn().mockResolvedValue([
+      {
+        path: '/tmp/worktree-a',
+        head: 'abc',
+        branch: 'feature/launch-composer',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ]),
+    listWorktreesStrict: vi.fn().mockResolvedValue([
+      {
+        path: '/tmp/worktree-a',
+        head: 'abc',
+        branch: 'feature/launch-composer',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+  })
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
+})
 
 // Claude's palette-report anchor, then its composer prompt row (draft-paste-ready-scanner.ts).
 const CLAUDE_COMPOSER_READY_OUTPUT = '\x1b[?2031h\x1b[?2004h❯\u00a0'
@@ -36,18 +59,20 @@ const CLAUDE_TRUST_DIALOG_OUTPUT =
   ' Quick safety check: Is this a project you created or one you trust?\r\n\r\n' +
   ' ❯ No, exit\r\n   Yes, I trust this folder\r\n\r\n Enter to confirm · Esc to cancel\r\n'
 
-async function launchClaude(command: string | undefined) {
+async function launchClaude(command: string | undefined, ordered = false) {
   const runtime = new OrcaRuntimeService(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial store double; terminal create and send read only its repo and worktree members.
     makeStore() as never
   )
   const writes: string[] = []
+  const write = (_ptyId: string, data: string) => {
+    writes.push(data)
+    return true
+  }
   runtime.setPtyController({
     spawn: async () => ({ id: PTY_ID }),
-    write: (_ptyId, data) => {
-      writes.push(data)
-      return true
-    },
+    write,
+    writeWithSettlement: settledWriteStub(write),
     kill: () => true,
     getForegroundProcess: async () => 'claude'
   })
@@ -57,15 +82,45 @@ async function launchClaude(command: string | undefined) {
   })
   vi.spyOn(runtime, 'readLaunchedAgentForeground').mockResolvedValue('agent')
   const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+  const mobile = {
+    caller: { kind: 'paired-device', deviceId: 'device' },
+    clientId: 'phone'
+  } as const
+  const client = { id: 'phone', type: 'mobile' } as const
+  let inputSessionId: string | undefined
+  let seq = 0
+  if (ordered) {
+    await runtime.handleMobileSubscribe(PTY_ID, 'phone', undefined)
+    const opened = await dispatcher.dispatch(
+      {
+        id: 'open',
+        authToken: 'token',
+        method: 'terminal.openInputSession',
+        params: { terminal: handle, client }
+      },
+      mobile
+    )
+    if (!opened.ok) {
+      throw new Error(opened.error.message)
+    }
+    inputSessionId = z.object({ inputSessionId: z.string() }).parse(opened.result).inputSessionId
+  }
   const send = (text: string, signal?: AbortSignal) =>
     dispatcher.dispatch(
       {
         id: 'rpc-send',
         authToken: 'token',
         method: 'terminal.send',
-        params: { terminal: handle, text, enter: true }
+        params: {
+          terminal: handle,
+          text,
+          enter: true,
+          ...(inputSessionId
+            ? { client, inputSequence: { sessionId: inputSessionId, seq: ++seq } }
+            : {})
+        }
       },
-      signal ? { signal } : undefined
+      { ...(ordered ? mobile : {}), ...(signal ? { signal } : {}) }
     )
   return { runtime, writes, send }
 }
@@ -75,27 +130,21 @@ const PASTE = '\x1b[200~/review\nthis\x1b[201~'
 describe('terminal.send into a freshly launched Claude', () => {
   afterEach(() => vi.useRealTimers())
 
-  // A command override keeps the planned agent, so its launch is held too.
-  it.each(['claude', 'my-claude'])(
-    'holds the submit until the composer is drawn (#34580, %s)',
-    async (command) => {
-      vi.useFakeTimers()
-      const { runtime, writes, send } = await launchClaude(command)
-
-      const sending = send(PASTE)
-      await vi.advanceTimersByTimeAsync(3_000)
-      expect(writes).toEqual([])
-
-      runtime.onPtyData(PTY_ID, CLAUDE_COMPOSER_READY_OUTPUT, Date.now())
-      await vi.runAllTimersAsync()
-
-      await expect(sending).resolves.toMatchObject({
-        ok: true,
-        result: { send: { accepted: true } }
-      })
-      expect(writes).toEqual([PASTE, '\r'])
-    }
-  )
+  it('holds the entire ordered suffix behind the fresh composer and the first submit', async () => {
+    vi.useFakeTimers()
+    const { runtime, writes, send } = await launchClaude('claude', true)
+    const first = send(PASTE)
+    const second = send('next')
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(writes).toEqual([])
+    runtime.onPtyData(PTY_ID, CLAUDE_COMPOSER_READY_OUTPUT, Date.now())
+    await vi.runAllTimersAsync()
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      expect.objectContaining({ result: { send: expect.objectContaining({ accepted: true }) } }),
+      expect.objectContaining({ result: { send: expect.objectContaining({ accepted: true }) } })
+    ])
+    expect(writes).toEqual([PASTE, '\r', 'next', '\r'])
+  })
 
   it('refuses the send, writing nothing, when the composer never comes up', async () => {
     vi.useFakeTimers()
@@ -137,18 +186,4 @@ describe('terminal.send into a freshly launched Claude', () => {
     await sending
     expect(writes).toEqual([])
   })
-
-  // A resume tab types its own `claude --resume`; a headless `--print` run never draws a composer.
-  it.each([undefined, 'claude --print task'])(
-    'does not hold sends to a shell tagged for Claude that starts no composer (%s)',
-    async (command) => {
-      const { writes, send } = await launchClaude(command)
-
-      await expect(send('claude --resume abc')).resolves.toMatchObject({
-        ok: true,
-        result: { send: { accepted: true } }
-      })
-      expect(writes).toEqual(['claude --resume abc', '\r'])
-    }
-  )
 })

@@ -257,11 +257,6 @@
       "loading": false,
       "refreshing": false
     },
-    "6d7869e6f6ea": {
-      "name": "loading",
-      "ordinal": 6,
-      "value": false
-    },
     "729c72067310": {
       "name": "gitlab.todos#1",
       "ordinal": 3,
@@ -377,20 +372,10 @@
         }
       }
     },
-    "88d78bf42794": {
-      "name": "refreshing",
-      "ordinal": 7,
-      "value": false
-    },
     "8f4406e0198e": {
       "name": "error",
       "ordinal": 6,
       "value": "transport failure"
-    },
-    "9ddfd0ed517d": {
-      "name": "taskListSettled",
-      "ordinal": 8,
-      "value": true
     },
     "b1272a516ca7": {
       "name": "gitlab.todos#1",
@@ -576,9 +561,10 @@
             "39f99cf479f0",
             "609f32a21704",
             "2ee5e836afb7",
-            "6d7869e6f6ea",
-            "88d78bf42794",
-            "9ddfd0ed517d"
+            "f1dcb0c02c92",
+            "5ac1816a09df",
+            "411aee2eccd9",
+            "ba411b67de4b"
           ]
         }
       },
@@ -596,9 +582,10 @@
             "39f99cf479f0",
             "609f32a21704",
             "1f4eeb3dcff1",
-            "6d7869e6f6ea",
-            "88d78bf42794",
-            "9ddfd0ed517d"
+            "f1dcb0c02c92",
+            "5ac1816a09df",
+            "411aee2eccd9",
+            "ba411b67de4b"
           ]
         }
       },
@@ -616,9 +603,10 @@
             "39f99cf479f0",
             "609f32a21704",
             "1f4eeb3dcff1",
-            "6d7869e6f6ea",
-            "88d78bf42794",
-            "9ddfd0ed517d"
+            "f1dcb0c02c92",
+            "5ac1816a09df",
+            "411aee2eccd9",
+            "ba411b67de4b"
           ]
         }
       },

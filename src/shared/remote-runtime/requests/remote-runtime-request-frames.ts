@@ -4,11 +4,11 @@ import {
   isKeepaliveFrame
 } from '../../runtime-rpc-envelope'
 import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
-import { assertJsonTextStructureWithinLimits } from '../../json-text-structure-limit'
+import { assertJsonTextStructureWithinLimits } from '../../json-stream/json-text-structure-limit'
 import type {
   PairedE2EEAuthReply,
   PairedE2EEReadyVerdict
-} from '../../paired-e2ee-client-handshake'
+} from '../e2ee/paired-e2ee-client-handshake'
 
 export const REMOTE_RUNTIME_JSON_STRUCTURE_LIMITS = {
   structuralTokens: 256 * 1024,

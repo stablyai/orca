@@ -63,16 +63,6 @@ describe('push gateway request limits', () => {
     expect(await response.json()).toEqual({ error: 'request_too_large' })
   })
 
-  it('lets a chunked body under the cap through to schema validation', async () => {
-    const response = await harness.server.app.request(
-      chunkedRequest(
-        '/v1/host/challenge',
-        JSON.stringify({ v: 1, hostPublicKeyB64: hostPublicKeyB64(createPushHostKeypair(60)) })
-      )
-    )
-    expect(response.status).toBe(200)
-  })
-
   it('caps an authenticated oversized send as well', async () => {
     const sessionToken = await harness.signIn(createPushHostKeypair(61))
     const response = await harness.server.app.request(

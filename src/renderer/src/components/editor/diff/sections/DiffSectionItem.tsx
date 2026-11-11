@@ -1,0 +1,345 @@
+import { NO_RESOURCE_EVIDENCE } from '@/lib/workspace/ownership/workspace-copy-owner'
+import { useDiffCommentView } from '../../../diff-comments/use-diff-comment-owner'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { DiffOnMount } from '@monaco-editor/react'
+import type { editor as monacoEditor } from 'monaco-editor'
+import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
+import { useAppStore } from '@/store/index'
+import { useEditorTypography } from '@/hooks/use-editor-typography'
+import { useDiffCommentDecorator } from '../../../diff-comments/useDiffCommentDecorator'
+import { applyDiffEditorLineNumberOptions } from '../monaco-view/diff-editor-line-number-options'
+import { DiffSectionHeader } from './DiffSectionHeader'
+import { isDiffComment } from '@/lib/source-control/review/comments/diff-comment-compat'
+import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from '../../editor-shortcuts'
+import { DiffSectionBody } from './DiffSectionBody'
+import { useDiffSectionLayoutMetrics } from './useDiffSectionLayoutMetrics'
+import { getLiveDiffSectionRenderLimit } from './diff-section-live-render-limit'
+import { useDiffSectionFallbackCleanup } from './useDiffSectionFallbackCleanup'
+import { submitDiffSectionComment } from './diff-section-comment-submit'
+import type { DiffSectionItemProps } from './diff-section-item-props'
+import { useDiffSectionModelLifecycle } from './use-diff-section-model-lifecycle'
+import { hasLayoutBox } from '@/hooks/virtualized-hidden-row-measurement'
+import { DiffSectionSaveConflictBar } from './DiffSectionSaveConflictBar'
+
+export function DiffSectionItem({
+  section,
+  index,
+  isBranchMode,
+  sideBySide,
+  isDark,
+  sectionHeight,
+  worktreeId,
+  noteSource = NO_RESOURCE_EVIDENCE,
+  loadSection,
+  loadDeferredSection,
+  retrySection,
+  toggleSection,
+  openSection,
+  openSectionTitle,
+  onOpenPreview,
+  renderHeaderTrailingContent,
+  imageUploadAddress,
+  onAddLineComment,
+  addLineCommentLabel,
+  addLineCommentPlaceholder,
+  inlineComments,
+  getCommentableLineNumbers,
+  setSectionHeights,
+  setSections,
+  modifiedEditorsRef,
+  handleSectionSaveRef
+}: DiffSectionItemProps): React.JSX.Element {
+  const diffTypography = useEditorTypography('diff')
+  const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap)
+  const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace)
+  // One read: the stable notes array and the copy it belongs to; filter below so unrelated writes don't invalidate.
+  const { owner: commentOwner, comments: allDiffComments } = useDiffCommentView(
+    worktreeId,
+    noteSource
+  )
+  const addDiffComment = useAppStore((s) => s.addDiffComment)
+  const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
+  const updateDiffComment = useAppStore((s) => s.updateDiffComment)
+  const scrollToDiffCommentId = useAppStore((s) => s.scrollToDiffCommentId)
+  const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
+  const diffComments = useMemo(
+    () => (allDiffComments ?? []).filter((c) => c.filePath === section.path && isDiffComment(c)),
+    [allDiffComments, section.path]
+  )
+  const language = detectLanguage(section.path)
+  const isEditable = section.area === 'unstaged'
+  const modelPathBase = useMemo(
+    () =>
+      `diff-section:${encodeURIComponent(worktreeId ?? 'review')}:${encodeURIComponent(section.key)}:${section.contentGeneration ?? 0}`,
+    [section.contentGeneration, section.key, worktreeId]
+  )
+
+  const [modifiedEditor, setModifiedEditor] = useState<monacoEditor.ICodeEditor | null>(null)
+  const diffEditorRef = useRef<monacoEditor.IStandaloneDiffEditor | null>(null)
+  const lineNumberOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
+  const hasLineCommentAction = Boolean(worktreeId || onAddLineComment)
+
+  const { disposeDiffModels, setSectionRootNode } = useDiffSectionModelLifecycle({
+    modelPathBase,
+    collapsed: section.collapsed
+  })
+
+  const { lineStats, sectionBodyHeight, useIntrinsicImageHeight, isLargeDiffLimited } =
+    useDiffSectionLayoutMetrics({
+      section,
+      sectionHeight
+    })
+
+  // Forward only this section’s scroll target to avoid waking unrelated decorators.
+  const pendingScrollForThisSection = useMemo(() => {
+    if (!scrollToDiffCommentId) {
+      return null
+    }
+    return diffComments.some((c) => c.id === scrollToDiffCommentId) ? scrollToDiffCommentId : null
+  }, [scrollToDiffCommentId, diffComments])
+
+  const handleCreateComment = useCallback(
+    async ({
+      lineNumber,
+      startLine,
+      body
+    }: {
+      lineNumber: number
+      startLine?: number
+      body: string
+    }): Promise<boolean> => {
+      return submitDiffSectionComment({
+        owner: commentOwner,
+        addDiffComment,
+        body,
+        onAddLineComment,
+        target: { lineNumber, startLine },
+        section,
+        worktreeId
+      })
+    },
+    [commentOwner, addDiffComment, onAddLineComment, section, worktreeId]
+  )
+
+  useDiffCommentDecorator({
+    imageUploadAddress,
+    captureCreateComment: !onAddLineComment,
+    commentOwner,
+    editor: hasLineCommentAction ? modifiedEditor : null,
+    monacoModelIdentity: `${modelPathBase}:modified`,
+    filePath: section.path,
+    worktreeId: worktreeId ?? '',
+    comments: inlineComments ?? (worktreeId ? diffComments : []),
+    commentableLineNumbers: getCommentableLineNumbers?.(section),
+    addButtonLabel: addLineCommentLabel,
+    addNoteShortcutEnabled: hasLineCommentAction,
+    onCreateComment: handleCreateComment,
+    draftPlaceholder: addLineCommentPlaceholder,
+    draftSubmitLabel: addLineCommentLabel,
+    canOpenDraft: !isLargeDiffLimited && (commentOwner !== null || Boolean(onAddLineComment)),
+    onDeleteComment: (id) => {
+      if (worktreeId) {
+        void (commentOwner && deleteDiffComment(commentOwner, id))
+      }
+    },
+    onUpdateComment: worktreeId
+      ? (id, body) =>
+          commentOwner ? updateDiffComment(commentOwner, id, body) : Promise.resolve(false)
+      : undefined,
+    pendingScrollCommentId: pendingScrollForThisSection,
+    onPendingScrollConsumed: () => setScrollToDiffCommentId(null)
+  })
+
+  useEffect(() => {
+    const diffEditor = diffEditorRef.current
+    if (!diffEditor) {
+      return
+    }
+    lineNumberOptionsSubRef.current?.dispose()
+    lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(diffEditor, sideBySide)
+    return () => {
+      lineNumberOptionsSubRef.current?.dispose()
+      lineNumberOptionsSubRef.current = null
+    }
+  }, [sideBySide])
+
+  useDiffSectionFallbackCleanup({
+    disposeDiffModels,
+    index,
+    isLargeDiffLimited,
+    setSectionHeights
+  })
+
+  const handleMount: DiffOnMount = (editor, _monaco) => {
+    diffEditorRef.current = editor
+    lineNumberOptionsSubRef.current?.dispose()
+    lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(editor, sideBySide)
+    const modified = editor.getModifiedEditor()
+
+    // Wait for Monaco’s hidden-region layout; earlier full-file measurements make virtualized rows jump on remount.
+    let diffLayoutReady = false
+    let pendingHeightFrame: number | null = null
+    const updateHeight = (): void => {
+      // Zero-width side-by-side editors fall back to inline and report an incorrect taller height.
+      if (!hasLayoutBox(editor.getContainerDomNode())) {
+        return
+      }
+      const contentHeight = editor.getModifiedEditor().getContentHeight()
+      setSectionHeights((prev) => {
+        if (prev[index] === contentHeight) {
+          return prev
+        }
+        return { ...prev, [index]: contentHeight }
+      })
+    }
+    const requestHeightUpdate = (): void => {
+      if (pendingHeightFrame !== null) {
+        return
+      }
+      pendingHeightFrame = window.requestAnimationFrame(() => {
+        pendingHeightFrame = null
+        updateHeight()
+      })
+    }
+    const markDiffLayoutReady = (): void => {
+      diffLayoutReady = true
+      requestHeightUpdate()
+    }
+    const contentSizeSub = modified.onDidContentSizeChange(() => {
+      if (diffLayoutReady) {
+        requestHeightUpdate()
+      }
+    })
+    const diffUpdateSub = editor.onDidUpdateDiff(markDiffLayoutReady)
+    if (editor.getLineChanges() !== null) {
+      markDiffLayoutReady()
+    }
+
+    setModifiedEditor(modified)
+    // Monaco disposes inner editors on unmount; clear state so decorators and drafts cannot retain a disposed instance.
+    modified.onDidDispose(() => {
+      contentSizeSub.dispose()
+      diffUpdateSub.dispose()
+      if (pendingHeightFrame !== null) {
+        window.cancelAnimationFrame(pendingHeightFrame)
+        pendingHeightFrame = null
+      }
+      lineNumberOptionsSubRef.current?.dispose()
+      lineNumberOptionsSubRef.current = null
+      diffEditorRef.current = null
+      if (modifiedEditorsRef.current.get(index) === modified) {
+        modifiedEditorsRef.current.delete(index)
+      }
+      setModifiedEditor(null)
+    })
+
+    if (!isEditable) {
+      return
+    }
+
+    modifiedEditorsRef.current.set(index, modified)
+    const original = editor.getOriginalEditor()
+    const cleanupSaveShortcut = installEditorSaveShortcut(modified.getContainerDomNode(), () =>
+      handleSectionSaveRef.current(index)
+    )
+    const cleanupOriginalFindShortcut = installMonacoEditorFindShortcut(original)
+    const cleanupModifiedFindShortcut = installMonacoEditorFindShortcut(modified)
+    const modelContentSub = modified.onDidChangeModelContent(() => {
+      const current = modified.getValue()
+      setSections((prev) => {
+        let changed = false
+        const next = prev.map((s, i) => {
+          if (i !== index) {
+            return s
+          }
+
+          const savedModifiedContent =
+            s.diffResult?.kind === 'text' ? s.diffResult.modifiedContent : s.modifiedContent
+          const dirty = current !== savedModifiedContent
+          if (s.modifiedContent === current && s.dirty === dirty) {
+            return s
+          }
+
+          changed = true
+          // Virtualized rows unmount offscreen; retain drafts in section state beyond Monaco’s lifetime.
+          return {
+            ...s,
+            modifiedContent: current,
+            dirty,
+            largeDiffRenderLimit: getLiveDiffSectionRenderLimit({
+              section: s,
+              modifiedEditor: modified,
+              modifiedContent: current
+            })
+          }
+        })
+        return changed ? next : prev
+      })
+    })
+    modified.onDidDispose(() => {
+      // Dispose shortcut bridges and model subscriptions with their owning diff instance.
+      cleanupSaveShortcut()
+      cleanupOriginalFindShortcut()
+      cleanupModifiedFindShortcut()
+      modelContentSub.dispose()
+    })
+  }
+
+  useEffect(() => {
+    loadSection(index)
+  }, [index, loadSection])
+
+  return (
+    <div ref={setSectionRootNode} className="border-b border-border">
+      <DiffSectionHeader
+        path={section.path}
+        dirty={section.dirty}
+        collapsed={section.collapsed}
+        added={lineStats?.added ?? section.added ?? 0}
+        removed={lineStats?.removed ?? section.removed ?? 0}
+        onToggle={() => toggleSection(index)}
+        onOpenSection={(event) => {
+          event.stopPropagation()
+          openSection(index)
+        }}
+        openSectionTitle={openSectionTitle}
+        onOpenPreview={
+          onOpenPreview
+            ? () => {
+                onOpenPreview(section, index)
+              }
+            : undefined
+        }
+        trailingContent={renderHeaderTrailingContent?.(section, index)}
+      />
+
+      {section.saveConflict && (
+        <DiffSectionSaveConflictBar
+          onReload={() => retrySection(index)}
+          onOverwrite={() => void handleSectionSaveRef.current(index, 'overwrite')}
+        />
+      )}
+      {!section.collapsed && (
+        <DiffSectionBody
+          section={section}
+          index={index}
+          sectionBodyHeight={sectionBodyHeight}
+          useIntrinsicImageHeight={useIntrinsicImageHeight}
+          isBranchMode={isBranchMode}
+          sideBySide={sideBySide}
+          isDark={isDark}
+          language={language}
+          modelPathBase={modelPathBase}
+          isEditable={isEditable}
+          typography={diffTypography}
+          diffWordWrap={diffWordWrap}
+          diffShowWhitespace={diffShowWhitespace}
+          onRetrySection={retrySection}
+          onLoadDeferredSection={loadDeferredSection ?? loadSection}
+          onSaveLimitedDiff={() => void handleSectionSaveRef.current(index)}
+          onMount={handleMount}
+        />
+      )}
+    </div>
+  )
+}

@@ -1,0 +1,151 @@
+{
+  "single": {
+    "message": "Questions",
+    "mode": "form",
+    "requestedSchema": {
+      "properties": {
+        "q0": {
+          "description": "Which storage?",
+          "oneOf": [
+            {
+              "const": "SQLite",
+              "description": "SQLite",
+              "title": "SQLite"
+            },
+            {
+              "const": "Postgres",
+              "description": "Postgres",
+              "title": "Postgres"
+            }
+          ],
+          "title": "Storage",
+          "type": "string"
+        },
+        "q0_custom": {
+          "description": "Type your own answer",
+          "title": "Storage (other)",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "sessionId": "<session-1>",
+    "toolCallId": "<tool-1>"
+  },
+  "batch": {
+    "message": "Questions",
+    "mode": "form",
+    "requestedSchema": {
+      "properties": {
+        "q0": {
+          "description": "Which storage?",
+          "oneOf": [
+            {
+              "const": "SQLite",
+              "description": "SQLite",
+              "title": "SQLite"
+            },
+            {
+              "const": "Postgres",
+              "description": "Postgres",
+              "title": "Postgres"
+            }
+          ],
+          "title": "Storage",
+          "type": "string"
+        },
+        "q0_custom": {
+          "description": "Type your own answer",
+          "title": "Storage (other)",
+          "type": "string"
+        },
+        "q1": {
+          "description": "Which features?",
+          "items": {
+            "anyOf": [
+              {
+                "const": "Search",
+                "description": "Search",
+                "title": "Search"
+              },
+              {
+                "const": "Export",
+                "description": "Export",
+                "title": "Export"
+              },
+              {
+                "const": "Sync",
+                "description": "Sync",
+                "title": "Sync"
+              }
+            ]
+          },
+          "title": "Features",
+          "type": "array"
+        },
+        "q1_custom": {
+          "description": "Add your own answer",
+          "title": "Features (other)",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "sessionId": "<session-1>",
+    "toolCallId": "<tool-1>"
+  },
+  "empty": {
+    "message": "Questions",
+    "mode": "form",
+    "requestedSchema": {
+      "properties": {
+        "q0": {
+          "description": "What is the project name?",
+          "oneOf": [],
+          "title": "Name",
+          "type": "string"
+        },
+        "q0_custom": {
+          "description": "Type your own answer",
+          "title": "Name (other)",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "sessionId": "<session-1>",
+    "toolCallId": "<tool-1>"
+  },
+  "websearch": {
+    "message": "Web Search",
+    "mode": "form",
+    "requestedSchema": {
+      "properties": {
+        "choice": {
+          "description": "Allow OpenCode to search the web for up-to-date information?",
+          "oneOf": [
+            {
+              "const": "allow",
+              "title": "Allow search via Exa, Firecrawl, Parallel, Tavily, TinyFish"
+            },
+            {
+              "const": "choose",
+              "title": "Choose another provider"
+            },
+            {
+              "const": "disable",
+              "title": "Disable web search"
+            }
+          ],
+          "type": "string"
+        }
+      },
+      "required": ["choice"],
+      "type": "object"
+    },
+    "sessionId": "<session-1>"
+  }
+}

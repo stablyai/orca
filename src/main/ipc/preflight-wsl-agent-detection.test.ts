@@ -1,111 +1,14 @@
 import { execFileSync, type ExecFileSyncOptions } from 'node:child_process'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const runWslProcessMock = vi.hoisted(() => vi.fn())
-vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
+vi.mock('../wsl/execution/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
 
 import { detectWslCommandsOnPath } from './preflight-wsl-agent-detection'
 import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
-
-describe('detectWslCommandsOnPath', () => {
-  beforeEach(() => {
-    runWslProcessMock.mockReset()
-    runWslProcessMock.mockResolvedValue({
-      environmentResolved: true,
-      code: 0,
-      stdout: '',
-      stderr: '',
-      timedOut: false
-    })
-  })
-
-  afterEach(() => {
-    vi.restoreAllMocks()
-    vi.useRealTimers()
-  })
-
-  it('ignores commands whose resolved path is not absolute', async () => {
-    runWslProcessMock.mockResolvedValue({
-      environmentResolved: true,
-      code: 0,
-      stdout: '__ORCA_AGENT_PATH__claude\tclaude\n' + '__ORCA_AGENT_PATH__codex\tC:\\spoof\n',
-      stderr: '',
-      timedOut: false
-    })
-
-    const found = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude', 'codex'])
-
-    expect(found).toEqual(new Set())
-  })
-
-  it('waits for a cold guest before starting the strict launcher inventory', async () => {
-    vi.useFakeTimers()
-    let booted = false
-    runWslProcessMock.mockImplementation(async ({ loginPath, timeoutMs }) => {
-      if (!booted) {
-        const { promise, resolve } = Promise.withResolvers<void>()
-        setTimeout(resolve, Math.min(12_000, timeoutMs))
-        await promise
-        if (timeoutMs < 12_000) {
-          return { environmentResolved: false, code: null, timedOut: true, stdout: '', stderr: '' }
-        }
-        booted = true
-      }
-      return {
-        environmentResolved: true,
-        code: 0,
-        timedOut: false,
-        stdout: loginPath === 'preferred' ? '__ORCA_AGENT_PATH__claude\t/usr/bin/claude\n' : '',
-        stderr: ''
-      }
-    })
-
-    const detection = expect(
-      detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'], { failOnProbeError: true })
-    ).resolves.toEqual(new Set(['claude']))
-    await vi.advanceTimersByTimeAsync(12_000)
-    await detection
-  })
-
-  it('rejects failed guest startup rather than accepting a later inventory', async () => {
-    runWslProcessMock.mockResolvedValueOnce({
-      environmentResolved: true,
-      code: 1,
-      timedOut: false,
-      stdout: '',
-      stderr: 'guest startup failed'
-    })
-    runWslProcessMock.mockResolvedValue({
-      environmentResolved: true,
-      code: 0,
-      timedOut: false,
-      stdout: '__ORCA_AGENT_PATH__claude\t/usr/bin/claude\n',
-      stderr: ''
-    })
-
-    await expect(
-      detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'], { failOnProbeError: true })
-    ).rejects.toMatchObject({ code: 'remote_runtime_unavailable' })
-  })
-  it.each([
-    { environmentResolved: false, code: 0, timedOut: false },
-    { environmentResolved: true, code: 1, timedOut: false },
-    { environmentResolved: true, code: null, timedOut: true }
-  ])('preserves an unverifiable strict probe despite partial output: %j', async (result) => {
-    runWslProcessMock.mockResolvedValue({
-      ...result,
-      stdout: '__ORCA_AGENT_PATH__claude\t/usr/bin/claude\n',
-      stderr: ''
-    })
-
-    await expect(
-      detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'], { failOnProbeError: true })
-    ).rejects.toMatchObject({ code: 'remote_runtime_unavailable' })
-  })
-})
 
 describe('the detection script itself, run by a real POSIX shell', () => {
   // Execute real shell globbing and executable checks; Windows has no /bin/sh.
@@ -126,7 +29,7 @@ describe('the detection script itself, run by a real POSIX shell', () => {
     chmodSync(file, 0o755)
   }
 
-  const runScript = async (): Promise<string> => {
+  const runScript = async (commands = ['orca-fake-cli', 'nosuchtool']): Promise<string> => {
     runWslProcessMock.mockResolvedValue({
       environmentResolved: false,
       code: 0,
@@ -134,7 +37,7 @@ describe('the detection script itself, run by a real POSIX shell', () => {
       stderr: '',
       timedOut: false
     })
-    await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['orca-fake-cli', 'nosuchtool'])
+    await detectWslCommandsOnPath({ distro: 'Ubuntu' }, commands)
     const script = String(runWslProcessMock.mock.calls.at(-1)?.[0].script)
     const options: ExecFileSyncOptions = {
       encoding: 'utf8',
@@ -149,11 +52,6 @@ describe('the detection script itself, run by a real POSIX shell', () => {
     const out = await runScript()
     expect(out).toContain('__ORCA_AGENT_PATH__orca-fake-cli')
     expect(out).toContain('.nvm/versions/node/v20.1.0/bin/orca-fake-cli')
-  })
-
-  itPosix('still reports nothing for a command that is genuinely absent', async () => {
-    plant('.local/bin', 'orca-fake-cli')
-    expect(await runScript()).not.toContain('nosuchtool')
   })
 
   itPosix('finds a CLI when $HOME contains a space', async () => {
@@ -174,6 +72,13 @@ describe('the detection script itself, run by a real POSIX shell', () => {
     // Directories pass -x but would fail to launch with EISDIR.
     mkdirSync(join(home, '.local/bin/orca-fake-cli'), { recursive: true })
     expect(await runScript()).not.toContain('__ORCA_AGENT_PATH__orca-fake-cli')
+  })
+
+  itPosix('resolves a tilde executable without changing its inventory identity', async () => {
+    plant('custom bin', 'orca-fake-cli')
+    expect(await runScript(['~/custom bin/orca-fake-cli'])).toBe(
+      `__ORCA_AGENT_PATH__~/custom bin/orca-fake-cli\t${home}/custom bin/orca-fake-cli\n`
+    )
   })
 })
 
@@ -216,43 +121,6 @@ describe('the PATH walk, run by a real POSIX shell', () => {
 describe('the mount table read, counted against a real shell', () => {
   const itPosix = process.platform === 'win32' ? it.skip : it
 
-  const runWithCountingAwk = async (commands: string[]): Promise<number> => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-awk-'))
-    try {
-      const counter = join(root, 'count')
-      const bin = join(root, 'bin')
-      mkdirSync(bin, { recursive: true })
-      // A stub that records each fork, then answers as awk would on a host
-      // with no Windows mounts.
-      writeFileSync(join(bin, 'awk'), `#!/bin/sh\necho x >> ${counter}\nexit 0\n`)
-      chmodSync(join(bin, 'awk'), 0o755)
-      writeFileSync(counter, '')
-
-      runWslProcessMock.mockResolvedValue({
-        environmentResolved: true,
-        code: 0,
-        stdout: '',
-        stderr: '',
-        timedOut: false
-      })
-      await detectWslCommandsOnPath({ distro: 'Ubuntu' }, commands)
-      const script = String(runWslProcessMock.mock.calls.at(-1)?.[0].script)
-      const options: ExecFileSyncOptions = {
-        encoding: 'utf8',
-        env: { PATH: `${bin}:/usr/bin:/bin`, HOME: root }
-      }
-      execFileSync('/bin/sh', ['-c', script], options)
-      return readFileSync(counter, 'utf8').trim().split('\n').filter(Boolean).length
-    } finally {
-      rmSync(root, { recursive: true, force: true })
-    }
-  }
-
-  itPosix('reads /proc/mounts once, not once per probed command', async () => {
-    // Cache mount discovery across the per-agent loop to avoid repeated awk forks.
-    expect(await runWithCountingAwk(['claude', 'codex', 'gemini', 'opencode'])).toBe(1)
-  })
-
   itPosix('applies the memoised mount list to every command, not just the first', async () => {
     // Fork counts alone miss a clobbered mount cache; all later agents must still skip Windows mounts.
     const root = mkdtempSync(join(tmpdir(), 'orca-memo-'))
@@ -291,5 +159,68 @@ describe('the mount table read, counted against a real shell', () => {
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
+  })
+})
+
+describe('strict WSL execution-host admission', () => {
+  const success = {
+    environmentResolved: true,
+    code: 0,
+    stdout: '__ORCA_AGENT_PATH__claude\t/usr/bin/claude\n',
+    stderr: '',
+    timedOut: false
+  }
+
+  beforeEach(() => {
+    runWslProcessMock.mockReset()
+  })
+
+  it.each([{ environmentResolved: false }, { timedOut: true }, { code: 1 }])(
+    'rejects failed inventory probes but keeps background inventory empty: %j',
+    async (failure) => {
+      runWslProcessMock.mockImplementation(async ({ script }) =>
+        script === ':' ? success : { ...success, ...failure }
+      )
+      await expect(
+        detectWslCommandsOnPath({}, ['claude'], { failOnProbeError: true })
+      ).rejects.toMatchObject({ code: 'remote_runtime_unavailable' })
+      await expect(detectWslCommandsOnPath({}, ['claude'])).resolves.toEqual(new Set())
+    }
+  )
+
+  it.each([{ environmentResolved: false }, { timedOut: true }, { code: 1 }])(
+    'rejects an unavailable guest before inventory can report a launcher: %j',
+    async (failure) => {
+      runWslProcessMock.mockImplementation(async ({ script }) =>
+        script === ':' ? { ...success, ...failure } : success
+      )
+      await expect(
+        detectWslCommandsOnPath({}, ['claude'], { failOnProbeError: true })
+      ).rejects.toMatchObject({ code: 'remote_runtime_unavailable' })
+    }
+  )
+
+  it('classifies process exceptions without breaking background discovery', async () => {
+    runWslProcessMock.mockRejectedValue(new Error('WSL unavailable'))
+    await expect(
+      detectWslCommandsOnPath({}, ['claude'], { failOnProbeError: true })
+    ).rejects.toMatchObject({ code: 'remote_runtime_unavailable' })
+    await expect(detectWslCommandsOnPath({}, ['claude'])).resolves.toEqual(new Set())
+  })
+
+  it('allows a cold guest to boot separately from its bounded login-PATH inventory', async () => {
+    let ready = false
+    runWslProcessMock.mockImplementation(async ({ script, shell, loginPath, timeoutMs }) => {
+      if (script === ':') {
+        ready = shell === 'sh' && loginPath === 'none' && timeoutMs === 60_000
+        return ready ? success : { ...success, timedOut: true }
+      }
+      return ready && shell === 'sh' && loginPath === 'preferred' && timeoutMs === 10_000
+        ? success
+        : { ...success, timedOut: true }
+    })
+    await expect(
+      detectWslCommandsOnPath({}, ['claude'], { failOnProbeError: true })
+    ).resolves.toEqual(new Set(['claude']))
   })
 })

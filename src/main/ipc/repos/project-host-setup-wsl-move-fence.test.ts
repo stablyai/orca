@@ -13,10 +13,10 @@ import {
   loadWslMoveFence,
   resetWslMoveFenceForTests
 } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import { RuntimeProjectHostSetupController } from '../../runtime/runtime-project-host-setup-controller'
-import { RuntimeRepositoryIssueCommand } from '../../runtime/runtime-repository-issue-command'
-import { RuntimeRepositorySettingsController } from '../../runtime/runtime-repository-settings-controller'
-import * as issueCommandFile from '../../issue-command-file'
+import { RuntimeProjectHostSetupController } from '../../runtime/repositories/runtime-project-host-setup-controller'
+import { RuntimeRepositoryIssueCommand } from '../../runtime/repositories/runtime-repository-issue-command'
+import { RuntimeRepositorySettingsController } from '../../runtime/repositories/runtime-repository-settings-controller'
+import * as issueCommandFile from '../../workspace-hooks/issue-command-file'
 import { registerProjectHostSetupHandlers } from './project-host-setup-handlers'
 
 const { handlers } = vi.hoisted(() => ({
@@ -83,7 +83,10 @@ describe('project host setups under a WSL move', () => {
     store.addRepo(repo('repo-1'))
     store.addRepo(repo('repo-2'))
     seedWslMoveCutover(testState.dir, cutover('move-1', 'source-fenced'))
-    registerProjectHostSetupHandlers(new BrowserWindow(), store)
+    registerProjectHostSetupHandlers(new BrowserWindow(), store, {
+      enqueueRepositoryMetadata: vi.fn(),
+      resolveRepositoryMetadata: vi.fn().mockResolvedValue(true)
+    })
     const moving = setupFor('repo-1')
 
     await expect(
@@ -107,7 +110,10 @@ describe('project host setups under a WSL move', () => {
   it("keeps a setup's own repo frozen once the WSL host owns it", async () => {
     store.addRepo(repo('repo-1'))
     seedWslMoveCutover(testState.dir, cutover('move-1', 'destination-committed'))
-    registerProjectHostSetupHandlers(new BrowserWindow(), store)
+    registerProjectHostSetupHandlers(new BrowserWindow(), store, {
+      enqueueRepositoryMetadata: vi.fn(),
+      resolveRepositoryMetadata: vi.fn().mockResolvedValue(true)
+    })
     const owned = setupFor('repo-1')
 
     await expect(
@@ -129,6 +135,8 @@ describe('project host setups under a WSL move', () => {
       invalidateResolvedWorktrees: vi.fn(),
       invalidateWorktreeScan: vi.fn(),
       notifyReposChanged: vi.fn(),
+      enqueueRepositoryMetadata: vi.fn(),
+      resolveRepositoryMetadata: vi.fn().mockResolvedValue(true),
       countLiveTerminalsForRepo: () => 0
     })
     const setupId = setupFor('repo-1').id

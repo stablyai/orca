@@ -1,10 +1,12 @@
+import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
+import { GitHubWorkItemTargetContext } from '../load-item-details/github-work-item-target-context'
 import React, { useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { useAllWorktrees } from '@/store/selectors'
-import { useAppStore } from '@/store'
-import { findGithubIssueWorkspaceAttachment } from '@/lib/github-work-item-workspace-attachment'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
+import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
+import { useAppStore } from '@/store/index'
+import { findGithubIssueWorkspaceAttachment } from '@/lib/work-items/github/github-work-item-workspace-attachment'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import { getWorktreeAttachmentLabel } from '@/lib/workspace/display/worktree-attachment-label'
 import { translate } from '@/i18n/i18n'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { GitHubItemDialogProps } from '../load-item-details/github-item-dialog-types'
@@ -13,10 +15,23 @@ import { GitHubItemDialogIssueHeader } from './github-item-dialog-issue-header'
 import { GitHubItemDialogPRHeader } from './github-item-dialog-pr-header'
 import { GitHubItemDialogPRTabs } from './github-item-dialog-pr-tabs'
 import { GHEditSection } from '../edit-item-fields/gh-edit-section'
-import { useGitHubItemDialogDetails } from '../load-item-details/use-github-item-dialog-details'
+import { useGitHubWorkItemDetails } from '../load-item-details/use-github-work-item-details'
 import { useGitHubItemDialogLinkCopy } from './use-github-item-dialog-link-copy'
 
-export default function GitHubItemDialog({
+export default function GitHubItemDialog(props: GitHubItemDialogProps): React.JSX.Element {
+  const { workItem, sourceContext } = props
+  const key = [
+    props.repoId ?? workItem?.repoId,
+    props.repoPath,
+    workItem?.url,
+    workItem?.type,
+    workItem?.number,
+    sourceContext ? getTaskSourceCacheScope(sourceContext) : ''
+  ].join('\0')
+  return <GitHubItemDialogItem key={key} {...props} />
+}
+
+function GitHubItemDialogItem({
   workItem,
   repoPath,
   repoId,
@@ -80,6 +95,7 @@ export default function GitHubItemDialog({
   )
 
   const {
+    targetContext,
     refreshTask,
     refreshing,
     acceptedRefresh,
@@ -101,7 +117,7 @@ export default function GitHubItemDialog({
     handlePRFileViewedChange,
     pendingViewedPaths,
     isIssuePage
-  } = useGitHubItemDialogDetails({
+  } = useGitHubWorkItemDetails({
     workItem,
     repoPath,
     effectiveRepoId,
@@ -198,7 +214,7 @@ export default function GitHubItemDialog({
         />
       )}
 
-      {!isIssuePage && (canUseDetailsRepoContext || projectOrigin) && (
+      {!error && !isIssuePage && (canUseDetailsRepoContext || projectOrigin) && (
         <GHEditSection
           item={workItem}
           repoPath={repoPath}
@@ -247,7 +263,7 @@ export default function GitHubItemDialog({
           />
         ) : (
           <GitHubItemDialogPRTabs
-            workItem={workItem}
+            workItem={displayWorkItem ?? workItem}
             displayWorkItem={displayWorkItem}
             repoPath={repoPath}
             effectiveRepoId={effectiveRepoId}
@@ -277,7 +293,9 @@ export default function GitHubItemDialog({
       data-testid="github-item-detail"
       className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-border/50 bg-background shadow-sm"
     >
-      {content}
+      <GitHubWorkItemTargetContext.Provider value={targetContext}>
+        {content}
+      </GitHubWorkItemTargetContext.Provider>
     </div>
   )
 }

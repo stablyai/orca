@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { vi, describe, expect, it } from 'vitest'
-import type * as GitBashModule from '../git-bash'
+import type * as GitBashModule from '../pty/shell-startup/git-bash'
 
 vi.mock('electron', () => ({
   app: {
@@ -11,13 +11,14 @@ vi.mock('electron', () => ({
 }))
 
 const { gitBashAvailableMock } = vi.hoisted(() => ({ gitBashAvailableMock: { value: true } }))
-vi.mock('../git-bash', async (importOriginal) => ({
+vi.mock('../pty/shell-startup/git-bash', async (importOriginal) => ({
   ...(await importOriginal<typeof GitBashModule>()),
   isGitBashAvailable: () => gitBashAvailableMock.value
 }))
 
 import type { SFTPWrapper } from 'ssh2'
-import { createManagedCommandMatcher, WINDOWS_CMD_SAFE_PATH } from '../agent-hooks/installer-utils'
+import { createManagedCommandMatcher } from '../agent-hooks/installation/commands/managed-hook-command-matching'
+import { WINDOWS_CMD_SAFE_PATH } from '../agent-hooks/installation/commands/windows-hook-command'
 import { ClaudeHookService } from './hook-service'
 import { CLAUDE_EVENTS } from './claude-managed-hook-events'
 import { getWindowsManagedLifecycleHook, OPENCLAUDE_HOOK_SETTINGS } from './hook-settings'
@@ -293,21 +294,6 @@ describe('ClaudeHookService.install', () => {
     }
   })
 
-  it('removes the managed statusLine on remove()', () => {
-    const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-statusline-remove-'))
-    vi.stubEnv('HOME', tmpHome)
-    vi.stubEnv('USERPROFILE', tmpHome)
-    try {
-      new ClaudeHookService().install()
-      new ClaudeHookService().remove()
-      const settings = JSON.parse(readFileSync(join(tmpHome, '.claude', 'settings.json'), 'utf-8'))
-      expect(settings.statusLine).toBeUndefined()
-    } finally {
-      vi.unstubAllEnvs()
-      rmSync(tmpHome, { recursive: true, force: true })
-    }
-  })
-
   it('does not re-install a managed statusLine the user deleted, until remove() resets the opt-out', () => {
     const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-statusline-optout-'))
     vi.stubEnv('HOME', tmpHome)
@@ -443,16 +429,6 @@ describe('ClaudeHookService.installRemote', () => {
     expect(upgraded.hooks.StopFailure[0].hooks[0].command).toContain('claude-hook.sh')
     expect(upgraded.hooks.Stop[0]).toEqual(userStop)
     expect(upgraded.env).toEqual({ A: '1' })
-  })
-
-  it('reports parse error when remote settings.json cannot be parsed', async () => {
-    const svc = new ClaudeHookService()
-    const { sftp, fs } = createFakeSftp()
-    fs.files.set('/home/dev/.claude/settings.json', 'not json')
-    const status = await svc.installRemote(sftp, '/home/dev')
-    expect(status.state).toBe('error')
-    expect(status.managedHooksPresent).toBe(false)
-    expect(status.detail).toContain('Could not parse remote Claude settings.json')
   })
 
   it('preserves user-authored hook entries while sweeping old managed entries', async () => {

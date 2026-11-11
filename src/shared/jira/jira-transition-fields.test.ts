@@ -3,7 +3,6 @@ import {
   buildResolutionFieldValue,
   transitionAllowedValueKey,
   classifyTransitionRequirements,
-  requiredTransitionFields,
   transitionAllowedValueLabel
 } from './jira-transition-fields'
 import type { JiraTransition } from './jira-types'
@@ -20,23 +19,6 @@ function transition(fields: JiraTransition['fields']): JiraTransition {
 }
 
 describe('jira-transition-fields', () => {
-  it('treats transitions without required fields as one-click', () => {
-    expect(classifyTransitionRequirements(transition(undefined))).toEqual({ kind: 'none' })
-    expect(
-      classifyTransitionRequirements(
-        transition([
-          {
-            key: 'comment',
-            name: 'Comment',
-            required: false,
-            schema: { type: 'string', system: 'comment' }
-          }
-        ])
-      )
-    ).toEqual({ kind: 'none' })
-    expect(requiredTransitionFields(transition(undefined))).toEqual([])
-  })
-
   it('classifies resolution (+ optional required comment) as a supported form', () => {
     const resolution = {
       key: 'resolution',

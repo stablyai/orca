@@ -2,8 +2,11 @@ import { profileStateDatabaseFiles } from './profile-state-storage-classificatio
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
-import { bestEffortFsyncDirectorySync, fsyncFileSync } from '../../../shared/secure-file'
-import { durableWriteTempPath, writeFileDurableSync } from '../../durable-file-write'
+import {
+  bestEffortFsyncDirectorySync,
+  fsyncFileSync
+} from '../../../shared/secure-storage/secure-file'
+import { durableWriteTempPath, writeFileDurableSync } from '../../filesystem/durable-file-write'
 import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
 import { copyProfileStateRecoveryFiles } from './profile-state-recovery-copy'
 

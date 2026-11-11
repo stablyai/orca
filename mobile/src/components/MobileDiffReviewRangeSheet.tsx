@@ -2,18 +2,18 @@ import { useEffect, useState } from 'react'
 import { KeyboardAvoidingView, Pressable, Text, View } from 'react-native'
 import { Sparkles } from 'lucide-react-native'
 import { getRuntimePathBasename } from '../../../src/shared/cross-platform-path'
-import { tuiAgentDisplayName } from '../../../src/shared/tui-agent-display-names'
+import { tuiAgentDisplayName } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { hostOs } from '../platform/host-os'
-import { canCommentOnGitHub } from '../session/mobile-diff-review-github'
-import type { useMobileDiffReviewController } from '../session/use-mobile-diff-review-controller'
+import { canCommentOnGitHub } from '../source-control/review/mobile-diff-review-github'
+import type { useMobileDiffReviewController } from '../source-control/review/use-mobile-diff-review-controller'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { TextField } from './composer-input/TextField'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
 import { SheetHeader } from './nav-bar/SheetHeader'
-import type { ReviewSheet } from '../session/mobile-diff-review-sheets'
-import type { MobileReviewTerminalTab } from '../session/review-terminal-reply-schema'
+import type { ReviewSheet } from '../source-control/review/mobile-diff-review-sheets'
+import type { MobileReviewTerminalTab } from '../source-control/review/review-terminal-reply-schema'
 
 type Props = {
   controller: ReturnType<typeof useMobileDiffReviewController>
@@ -79,7 +79,8 @@ export function MobileDiffReviewRangeSheet({
                 .commentOnGitHub({ item, startLine: range.startLine, line: range.line, body })
                 .then((posted) => {
                   if (posted.ok) {
-                    // Only this sheet; one opened since keeps its own draft.
+                    controller.clearSavedNote(body)
+                    // Only this sheet; text typed since stays.
                     controller.closeSheet('range', range)
                   } else {
                     setPostError(posted.error)

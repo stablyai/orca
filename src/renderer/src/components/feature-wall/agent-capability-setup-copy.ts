@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 export function capabilitiesSetupBusyLabel(): string {
   return translate(
@@ -7,20 +8,20 @@ export function capabilitiesSetupBusyLabel(): string {
   )
 }
 
-export function capabilityToggleLabel(selected: boolean, title: string): string {
+export function capabilityToggleLabel(
+  selected: boolean,
+  title: string,
+  t: Translate = translate
+): string {
   return selected
-    ? translate(
+    ? t(
         'auto.components.feature.wall.AgentCapabilitiesSetupAction.disableRow',
         'Disable {{title}}',
         {
           title
         }
       )
-    : translate(
-        'auto.components.feature.wall.AgentCapabilitiesSetupAction.enableRow',
-        'Enable {{title}}',
-        {
-          title
-        }
-      )
+    : t('auto.components.feature.wall.AgentCapabilitiesSetupAction.enableRow', 'Enable {{title}}', {
+        title
+      })
 }

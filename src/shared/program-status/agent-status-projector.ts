@@ -1,13 +1,19 @@
 // Projects OSC 7501 records onto agent-status payloads so they ride the OSC 9999 terminal-status ingress.
-import type { AgentStatusState, ParsedAgentStatusPayload } from '../agent-status-types'
-import type { AgentSubagentSnapshot, AgentSubagentState } from '../agent-status-subagent-snapshot'
-import { AGENT_SUBAGENT_ID_MAX_LENGTH } from '../agent-status-subagent-snapshot'
-import type { AgentTurnOutcome } from '../agent-turn-outcome'
-import { foldMainAgentWithRowChildWork } from '../agent-hook-row-child-work-fold'
+import type {
+  AgentStatusState,
+  ParsedAgentStatusPayload
+} from '../agent-status/contracts/agent-status-types'
+import type {
+  AgentSubagentSnapshot,
+  AgentSubagentState
+} from '../agent-status/contracts/agent-status-subagent-snapshot'
+import { AGENT_SUBAGENT_ID_MAX_LENGTH } from '../agent-status/contracts/agent-status-subagent-snapshot'
+import type { AgentTurnOutcome } from '../agent-status/lifecycle/agent-turn-outcome'
+import { foldMainAgentWithRowChildWork } from '../agent-hook-listener/state/agent-hook-row-child-work-fold'
 import {
   heldTurnCountsAsFinished,
   isAgentStatusHeldOpenByChildWork
-} from '../agent-lead-status-fold'
+} from '../agent-status/lifecycle/agent-lead-status-fold'
 import { createProgramStatusOscScanner } from './osc-scanner'
 import {
   programStatusDisplayText,
@@ -148,10 +154,17 @@ export function createProgramStatusProjector(now: () => number = Date.now): Prog
       case 'error':
         return { state: 'done', outcome: 'failure' }
       case 'idle':
-        // Idle may follow startup work (Codex), so it proves rest, not cancellation; interrupt keystrokes own that verdict.
+        if (newInvocation || lastRoot === null || lastRoot.sessionBoundary === true) {
+          return { state: 'done', sessionBoundary: true }
+        }
         // Keep unseen done results when the same invocation rests.
-        return !newInvocation && lastRoot?.state === 'done' && lastRoot.sessionBoundary !== true
-          ? lastRoot
+        if (lastRoot.state === 'done') {
+          return lastRoot
+        }
+        // OpenCode ends every turn with idle, never done, so its idle after work is a turn end with no verdict.
+        // Others' idle may follow startup work (Codex), so it proves rest; interrupt keystrokes own cancellation.
+        return root.app === 'opencode'
+          ? { state: 'done' }
           : { state: 'done', sessionBoundary: true }
     }
   }
@@ -160,7 +173,9 @@ export function createProgramStatusProjector(now: () => number = Date.now): Prog
     const at = now()
     const live = new Set<string>()
     const children: AgentSubagentSnapshot[] = []
-    for (const record of records.descendants()) {
+    // OpenCode keys its records by peer root sessions (its own and other panes'), never by child sessions.
+    const subagentRecords = records.root()?.app === 'opencode' ? [] : records.descendants()
+    for (const record of subagentRecords) {
       const state = subagentState(record)
       if (record.id === null || state === null) {
         continue

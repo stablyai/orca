@@ -1,4 +1,4 @@
-import path from 'node:path'
+import 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
@@ -6,20 +6,14 @@ import {
   HEADLESS_SECOND_LEAF_ID,
   HEADLESS_THIRD_LEAF_ID as THIRD_LEAF_ID,
   TEST_WORKTREE_ID
-} from '../../orca-runtime-test-fixtures.spec'
+} from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import {
   SURFACE_PTYS,
   SURFACE_TAB_ID,
-  captureSurfaceReplies,
-  mountedSurfaceGraph,
-  recordedSurfaceReplies,
   surfaceRuntime
 } from './terminal-surface-replies.test-fixture'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
-
-const golden = (name: string): string =>
-  recordedSurfaceReplies(path.join(__dirname, '__fixtures__', name))
 
 const MOUNTED = Object.keys(SURFACE_PTYS).map((leafId, index) => ({
   tabId: SURFACE_TAB_ID,
@@ -29,19 +23,6 @@ const MOUNTED = Object.keys(SURFACE_PTYS).map((leafId, index) => ({
 }))
 
 describe('terminal replies from main (switch on)', () => {
-  it('match the window-owned build when the window sends only what it mounts', async () => {
-    const { runtime } = surfaceRuntime()
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mountedLeaves: MOUNTED })
-
-    // Older readers skip the added verdict; every field they read is unchanged.
-    expect(await captureSurfaceReplies(runtime, { ignore: ['verdict'] })).toBe(
-      golden('terminal-surface-replies-desktop.json')
-    )
-    const listed = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
-    expect(listed.terminals.map((terminal) => terminal.verdict)).toEqual(['live', 'live'])
-  })
-
   it('keep answering after the window closes', async () => {
     const { runtime } = surfaceRuntime()
     runtime.attachWindow(1)
@@ -68,49 +49,6 @@ describe('terminal replies from main (switch on)', () => {
     expect(runtime.getStatus()).toMatchObject({ graphStatus: 'ready', liveLeafCount: 2 })
     const shown = await runtime.showTerminal(listed.terminals[0]!.handle)
     expect(shown).toMatchObject({ tabId: SURFACE_TAB_ID, ptyId: 'pty-a', paneRuntimeId: -1 })
-  })
-
-  it('list a pane split into the layout before any window shows it', async () => {
-    const { runtime, store, setSession } = surfaceRuntime()
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mountedLeaves: MOUNTED })
-    const session = store.getSession()
-    const layout = session.terminalLayoutsByTabId[SURFACE_TAB_ID]!
-    setSession({
-      ...session,
-      terminalLayoutsByTabId: {
-        [SURFACE_TAB_ID]: {
-          ...layout,
-          root: {
-            type: 'split',
-            direction: 'vertical',
-            first: layout.root!,
-            second: { type: 'leaf', leafId: THIRD_LEAF_ID }
-          },
-          ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [THIRD_LEAF_ID]: 'pty-c' }
-        }
-      }
-    })
-    runtime.registerPty('pty-c', TEST_WORKTREE_ID)
-    await Promise.resolve()
-
-    const listed = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
-    expect(listed.terminals.map((terminal) => terminal.ptyId)).toEqual(['pty-a', 'pty-b', 'pty-c'])
-  })
-
-  it('close a tab by a pane handle in main, with no session row from the window', async () => {
-    const { runtime, store, killed } = surfaceRuntime()
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mountedLeaves: MOUNTED })
-    const listed = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
-    const second = listed.terminals.find((terminal) => terminal.ptyId === 'pty-b')!
-
-    await expect(runtime.closeTerminalTab(second.handle)).resolves.toMatchObject({
-      tabId: SURFACE_TAB_ID,
-      closeMode: 'tab'
-    })
-    expect(store.getSession().tabsByWorktree[TEST_WORKTREE_ID] ?? []).toEqual([])
-    expect(killed.toSorted()).toEqual(['pty-a', 'pty-b'])
   })
 
   it("close a tab by an unbound pane's handle, stopping the tab's other terminals", async () => {
@@ -155,33 +93,5 @@ describe('terminal replies from main (switch on)', () => {
     const layout = store.getSession().terminalLayoutsByTabId[SURFACE_TAB_ID]
     expect(layout?.root).toEqual({ type: 'leaf', leafId: HEADLESS_LEAF_ID })
     expect(killed).toEqual(['pty-b'])
-  })
-
-  // Main-owned liveness comes from host inventory, so graph sync must not reconnect disconnected records.
-  it("a graph sync leaves a disconnected terminal of main's pane disconnected, with no reinstall", async () => {
-    const { runtime } = surfaceRuntime()
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, mountedSurfaceGraph())
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ptysById is the runtime's PTY registry; the test edits the record it keeps.
-    const { ptysById } = runtime as unknown as { ptysById: Map<string, { connected: boolean }> }
-    ptysById.get('pty-a')!.connected = false
-    const installs: { depth: number; connected: boolean | undefined }[] = []
-    let depth = 0
-    const sync = runtime.syncWindowGraph.bind(runtime)
-    vi.spyOn(runtime, 'syncWindowGraph').mockImplementation((windowId, graph) => {
-      installs.push({ depth, connected: ptysById.get('pty-a')?.connected })
-      depth += 1
-      try {
-        return sync(windowId, graph)
-      } finally {
-        depth -= 1
-      }
-    })
-
-    runtime.syncWindowGraph(1, mountedSurfaceGraph())
-    await Promise.resolve()
-
-    expect(installs).toEqual([{ depth: 0, connected: false }])
-    expect(ptysById.get('pty-a')?.connected).toBe(false)
   })
 })

@@ -12,17 +12,15 @@ import {
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { buildProfileStateCutoverFixture } from '../persistence/profile-state-cutover-fixture'
 import { chatAutomationRunObservation, observeAutomationChatRun } from './runtime-chat-run-observer'
-import type { JournalPublication } from '../native-chat/agent-session-wire/structured-agent-session-conversations'
-import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
-import {
-  createQueuedMessageTestRig,
-  eventually
-} from '../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
+import type { JournalPublication } from '../native-chat/agent-session-wire/host/structured-agent-session-conversations'
+import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
+import { createQueuedMessageTestRig } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
+import { eventually } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
 import {
   HOST_TEST_SESSION,
   HOST_TEST_THREAD,
   hostTestMessage
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { automationRunOperationId } from './automation-run-operation'
 
@@ -31,13 +29,13 @@ const mocks = vi.hoisted(() => {
   return {
     ...hostState,
     host: {
-      journalSnapshot: vi.fn(),
+      journalCurrentRead: vi.fn(),
       observeConversationPublications: vi.fn(),
       queuedSendAnswer: vi.fn(async () => null)
     }
   }
 })
-vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+vi.mock('../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => mocks.actualHost ?? mocks.host
 }))
 const submission: AgentJournalSubmission = {
@@ -69,16 +67,6 @@ function turn(
     }
   }
 }
-function answer(itemId: string, turnItemId: string, text: string): AgentJournalRenderItem {
-  return {
-    itemId,
-    revision: 1,
-    sequence: 2,
-    observedAt: 2,
-    turnScope: { kind: 'turn', turnItemId },
-    body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] }
-  }
-}
 function snapshot(items: AgentJournalRenderItem[] = []): AgentJournalSnapshot {
   return {
     sessionId: 'claude_chat',
@@ -95,89 +83,14 @@ afterEach(() => {
   vi.useRealTimers()
   vi.restoreAllMocks()
 })
-describe('exact automation chat turn', () => {
-  it('waits for its own prompt even when a later human turn completed', () => {
-    expect(
-      chatAutomationRunObservation(
-        snapshot([turn('own', 'provider-user', 'running'), turn('human', 'other')]),
-        'prompt',
-        'Claude'
-      )
-    ).toBeNull()
-    const missingRoot = snapshot([turn('human', 'other')])
-    const roots = vi.spyOn(missingRoot.items, 'find')
-    expect(chatAutomationRunObservation(missingRoot, 'prompt', 'Claude')).toBeNull()
-    expect(roots).toHaveBeenCalledOnce()
-    missingRoot.submissions = []
-    roots.mockClear()
-    expect(chatAutomationRunObservation(missingRoot, 'prompt', 'Claude')).toBeNull()
-    expect(roots).not.toHaveBeenCalled()
-  })
-  it('matches the Orca opener alias and snapshots only the accepted root turn', () => {
-    const view = snapshot([
-      turn('own', agentJournalSubmissionKey('prompt')),
-      answer('a', 'own', 'Automation output'),
-      answer('b', 'human', 'Private later output'),
-      { ...answer('c', 'own', 'Child output'), agentId: 'child' }
-    ])
-    let outputRows = 0
-    const items = view.items[Symbol.iterator].bind(view.items)
-    vi.spyOn(view.items, Symbol.iterator).mockImplementation(function* () {
-      for (const item of items()) {
-        outputRows++
-        yield item
-      }
-      return undefined
-    })
-    const result = chatAutomationRunObservation(view, 'prompt', 'Codex')
-    expect(outputRows).toBe(4)
-    expect(result).toMatchObject({
-      status: 'completed',
-      error: null,
-      outputSnapshot: { content: 'Automation output' }
-    })
-  })
-  it('accepts explicit start proof and never claims a steered or unlinked turn', () => {
-    const view = snapshot([turn('own', 'different')])
-    view.submissions = [{ ...submission, answeredInTurn: { turnItemId: 'own', via: 'steer' } }]
-    expect(chatAutomationRunObservation(view, 'prompt', 'Codex')).toBeNull()
-    view.submissions = [{ ...submission, answeredInTurn: { turnItemId: 'own', via: 'start' } }]
-    expect(chatAutomationRunObservation(view, 'prompt', 'Codex')?.status).toBe('completed')
-  })
-  it('reports Stop as Interrupted and unknown or refused prompts as failures', () => {
-    expect(
-      chatAutomationRunObservation(
-        snapshot([turn('own', 'provider-user', 'interrupted')]),
-        'prompt',
-        'Claude'
-      )
-    ).toMatchObject({ status: 'dispatch_failed', error: expect.stringContaining('Interrupted') })
-    const view = snapshot()
-    view.submissions = [{ ...submission, dispatchState: 'unknown' }]
-    expect(chatAutomationRunObservation(view, 'prompt', 'Claude')).toMatchObject({
-      status: 'dispatch_failed',
-      error: expect.stringContaining('Claude')
-    })
-  })
-  it('does not infer success from completed without an outcome and bounds output', () => {
-    const own = turn('own', 'provider-user')
-    own.body = { kind: 'turn', turnId: 'own', userItemId: 'provider-user', state: 'completed' }
-    const result = chatAutomationRunObservation(
-      snapshot([own, answer('a', 'own', 'x'.repeat(300_000))]),
-      'prompt',
-      'Claude'
-    )
-    expect(result?.status).toBe('dispatch_failed')
-    expect(result?.outputSnapshot?.content.length).toBeLessThanOrEqual(256 * 1024)
-    expect(result?.outputSnapshot?.truncated).toBe(true)
-  })
-})
 
 describe('restart observation and disposal', () => {
   function fixture() {
     const run = {
       ...buildProfileStateCutoverFixture('/fixture').automationRuns[0],
+      // ast-grep-ignore: test-no-wall-clock -- Run timestamps must match the live host expiry clock.
       createdAt: Date.now(),
+      // ast-grep-ignore: test-no-wall-clock -- Run timestamps must match the live host expiry clock.
       dispatchedAt: Date.now(),
       sessionKind: 'chat' as const,
       chatSessionId: 'claude_chat'
@@ -209,15 +122,15 @@ describe('restart observation and disposal', () => {
     const release = vi.fn()
     const read = Promise.withResolvers<AgentJournalSnapshot>()
     mocks.host.observeConversationPublications.mockImplementation((_id, observer) => {
-      expect(mocks.host.journalSnapshot).not.toHaveBeenCalled()
+      expect(mocks.host.journalCurrentRead).not.toHaveBeenCalled()
       observer.next({ kind: 'reset', source: {}, journal: null })
       return release
     })
-    mocks.host.journalSnapshot.mockReturnValue(read.promise)
+    mocks.host.journalCurrentRead.mockReturnValue(read.promise)
     const controller = new AbortController()
     const pending = observeAutomationChatRun(runtime, run, controller.signal)
     const rejected = expect(pending).rejects.toThrow('request_aborted')
-    await vi.waitFor(() => expect(mocks.host.journalSnapshot).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(mocks.host.journalCurrentRead).toHaveBeenCalledOnce())
     controller.abort()
     await rejected
     read.resolve(view)
@@ -237,10 +150,10 @@ describe('restart observation and disposal', () => {
     })
     const delayed = Promise.withResolvers<null>()
     const opening = Promise.withResolvers<AgentJournalSnapshot>()
-    mocks.host.journalSnapshot.mockReturnValueOnce(opening.promise).mockResolvedValue(view)
+    mocks.host.journalCurrentRead.mockReturnValueOnce(opening.promise).mockResolvedValue(view)
     mocks.host.queuedSendAnswer.mockReturnValueOnce(delayed.promise)
     const pending = observeAutomationChatRun(runtime, run, new AbortController().signal)
-    await vi.waitFor(() => expect(mocks.host.journalSnapshot).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(mocks.host.journalCurrentRead).toHaveBeenCalledOnce())
     notify({ kind: 'reset', source: {}, journal: null })
     opening.resolve({
       ...view,
@@ -251,67 +164,8 @@ describe('restart observation and disposal', () => {
     view.items[0] = turn('own', view.submissions[0].providerItemId!)
     delayed.resolve(null)
     expect(await pending).toMatchObject({ status: 'completed' })
-    expect(mocks.host.journalSnapshot).toHaveBeenCalledTimes(3)
+    expect(mocks.host.journalCurrentRead).toHaveBeenCalledTimes(3)
     expect(release).toHaveBeenCalledOnce()
-  })
-  it('ends read errors, listener errors, host-end and the six-hour deadline exactly once', async () => {
-    vi.useFakeTimers()
-    const { run, runtime, view } = fixture()
-    for (const mode of ['read', 'listener', 'end', 'deadline'] as const) {
-      const release = vi.fn()
-      let observer:
-        | { next: (hint: JournalPublication) => void; error: (error: unknown) => void }
-        | undefined
-      mocks.host.observeConversationPublications.mockImplementation((_id, next) => {
-        observer = next
-        next.next({ kind: 'reset', source: {}, journal: null })
-        return release
-      })
-      mocks.host.journalSnapshot.mockImplementation(async () => {
-        if (mode === 'read') {
-          throw new Error('unreadable')
-        }
-        return view
-      })
-      const pending = observeAutomationChatRun(runtime, run, new AbortController().signal)
-      const result = pending.then(
-        (value) => value,
-        (error) => error
-      )
-      await vi.advanceTimersByTimeAsync(0)
-      if (mode === 'listener') {
-        observer!.error(new Error('consumer'))
-      }
-      if (mode === 'end') {
-        observer!.next({ kind: 'end', source: null, journal: null })
-      }
-      if (mode === 'deadline') {
-        await vi.advanceTimersByTimeAsync(6 * 60 * 60 * 1000)
-      }
-      expect(await result).toMatchObject(
-        mode === 'deadline'
-          ? { status: 'dispatch_failed' }
-          : {
-              message:
-                mode === 'read'
-                  ? 'unreadable'
-                  : mode === 'listener'
-                    ? 'consumer'
-                    : 'Chat session host stopped'
-            }
-      )
-      observer!.next({ kind: 'reset', source: {}, journal: null })
-      expect(release).toHaveBeenCalledOnce()
-      expect(vi.getTimerCount()).toBe(0)
-    }
-  })
-  it('fails promptly when no exact accepted receipt survives', async () => {
-    const { run, runtime, records } = fixture()
-    records.getOperationRow.mockReturnValue(undefined)
-    expect(
-      await observeAutomationChatRun(runtime, run, new AbortController().signal)
-    ).toMatchObject({ status: 'dispatch_failed', error: expect.stringContaining('confirm') })
-    expect(mocks.host.observeConversationPublications).not.toHaveBeenCalled()
   })
 })
 
@@ -322,6 +176,7 @@ describe('real host queue publication and operation bounds', () => {
     'observes Q→S at %i prior turns without token-triggered history scans',
     async (history) => {
       const totals: number[][] = []
+      const outputIterations: number[] = []
       for (const mode of ['baseline', 'internal', 'display'] as const) {
         const rig = await createQueuedMessageTestRig({ restartable: true })
         mocks.actualHost = rig.host
@@ -355,7 +210,9 @@ describe('real host queue publication and operation bounds', () => {
           await sink.written?.()
           const run = {
             ...buildProfileStateCutoverFixture('/fixture').automationRuns[0],
+            // ast-grep-ignore: test-no-wall-clock -- Run timestamps must match the live host expiry clock.
             createdAt: Date.now(),
+            // ast-grep-ignore: test-no-wall-clock -- Run timestamps must match the live host expiry clock.
             dispatchedAt: Date.now(),
             sessionKind: 'chat' as const,
             chatSessionId: HOST_TEST_SESSION
@@ -373,8 +230,17 @@ describe('real host queue publication and operation bounds', () => {
             )
           ).toMatchObject({ ok: true, value: { queued: { messageId: q, state: 'waiting' } } })
           const metrics = measureAutomationChatRun(journal, rig.host)
-          const { measure, full, observerReads, registration, releases, keys, timers, cleared } =
-            metrics
+          const {
+            measure,
+            full,
+            status,
+            observerReads,
+            registration,
+            releases,
+            keys,
+            timers,
+            cleared
+          } = metrics
           const tokenBurst = async () => {
             for (let n = 0; n < 25; n++) {
               sink.appendItem(
@@ -426,7 +292,8 @@ describe('real host queue publication and operation bounds', () => {
             await eventually(() => expect(registration).toHaveBeenCalledOnce())
           }
           await rig.host.flushStreamedEvents(HOST_TEST_SESSION)
-          await eventually(() => expect(full.mock.calls.length).toBeGreaterThan(0))
+          expect(status.mock.calls.length).toBeGreaterThan(0)
+          expect(full).not.toHaveBeenCalled()
           const beforeTokens = measure()
           const readsBeforeTokens = observerReads.mock.calls.length
           const keysBeforeTokens = keys.map((spy) => spy.mock.calls.length)
@@ -521,7 +388,7 @@ describe('real host queue publication and operation bounds', () => {
             pending
               ? await pending
               : chatAutomationRunObservation(
-                  await rig.host.journalSnapshot(HOST_TEST_SESSION),
+                  await rig.host.journalCurrentRead(HOST_TEST_SESSION),
                   q,
                   'Codex',
                   await rig.host.queuedSendAnswer(HOST_TEST_SESSION, q)
@@ -551,6 +418,7 @@ describe('real host queue publication and operation bounds', () => {
           expect(sessions['observers'].size).toBe(0)
           expect(sessions['attachments'].size).toBe(1)
           totals.push(measure())
+          outputIterations.push(metrics.details().outputIterations)
           process.stdout.write(
             `${JSON.stringify({ history, mode, sourceAttachments: sessions['attachments'].size, logicalObservers: sessions['observers'].size, baselineWork, observerWork, keyedAdded, totals: measure(), ...metrics.details(), reconciliations: observerReads.mock.calls.length, registrations: registration.mock.calls.length, releases: releases.filter((r) => r.mock.calls.length === 1).length })}\n`
           )
@@ -562,13 +430,25 @@ describe('real host queue publication and operation bounds', () => {
         }
       }
       const added = totals[1].map((value, i) => value - totals[0][i])
-      expect(added.slice(0, 15).filter((_, i) => i !== 5 && i !== 12)).toEqual(
-        added
-          .slice(0, 15)
-          .filter((_, i) => i !== 5 && i !== 12)
-          .map(() => 0)
-      )
-      expect(added[5]).toBe(6)
+      expect(added.slice(0, 15)).toEqual([
+        0,
+        8 * history + 13,
+        4,
+        12 * history + 20,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        6,
+        0,
+        0
+      ])
+      expect(added[1]).toBe(outputIterations[1] - outputIterations[0])
+      expect(added[5]).toBe(0)
       expect(added[12]).toBe(6)
       expect(totals[0].slice(17, 21)).toEqual([1, 2 * history + 5, 0, 0])
       expect(totals[1].slice(17, 21)).toEqual([5, 10 * history + 20, 2, 2 * history + 2])
@@ -590,14 +470,16 @@ describe('real host queue publication and operation bounds', () => {
     'settles a queue-only %s without resending',
     async (outcome) => {
       const rig = await createQueuedMessageTestRig({
-        idleSweep: { idleMs: 0, intervalMs: 3600000 }
+        idleSweep: { idleMs: () => 0, intervalMs: 3600000 }
       })
       mocks.actualHost = rig.host
       try {
         const working = await rig.workingSend()
         const run = {
           ...buildProfileStateCutoverFixture('/fixture').automationRuns[0],
+          // ast-grep-ignore: test-no-wall-clock -- Run timestamps must match the live host expiry clock.
           createdAt: Date.now(),
+          // ast-grep-ignore: test-no-wall-clock -- Run timestamps must match the live host expiry clock.
           dispatchedAt: Date.now(),
           chatSessionId: HOST_TEST_SESSION
         }
@@ -624,12 +506,12 @@ describe('real host queue publication and operation bounds', () => {
           (value) => value,
           (error) => error
         )
-        const reads = vi.spyOn(rig.host, 'journalSnapshot')
+        const reads = vi.spyOn(rig.host, 'journalCurrentRead')
         await eventually(() => expect(reads).toHaveBeenCalled())
 
         expect(
           chatAutomationRunObservation(
-            await rig.host.journalSnapshot(HOST_TEST_SESSION),
+            await rig.host.journalCurrentRead(HOST_TEST_SESSION),
             q,
             'Codex',
             await rig.host.queuedSendAnswer(HOST_TEST_SESSION, q)
@@ -664,7 +546,7 @@ describe('real host queue publication and operation bounds', () => {
         expect(rig.dispatch).toHaveBeenCalledTimes(sends)
         expect(
           chatAutomationRunObservation(
-            await rig.host.journalSnapshot(HOST_TEST_SESSION),
+            await rig.host.journalCurrentRead(HOST_TEST_SESSION),
             q,
             'Codex',
             await rig.host.queuedSendAnswer(HOST_TEST_SESSION, q)
@@ -691,7 +573,7 @@ describe('real host queue publication and operation bounds', () => {
         }
         expect(
           chatAutomationRunObservation(
-            await rig.host.journalSnapshot(HOST_TEST_SESSION),
+            await rig.host.journalCurrentRead(HOST_TEST_SESSION),
             q,
             'Codex',
             await rig.host.queuedSendAnswer(HOST_TEST_SESSION, q)

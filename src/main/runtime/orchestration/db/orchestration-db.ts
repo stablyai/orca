@@ -15,6 +15,7 @@ import {
   rememberCurrentRunCoordinatorHandles
 } from './runs/run-coordinator-mail-routing'
 import { createTables } from './schema/create-tables'
+import { createPeerRunQueueTriggers } from './peer-runs/peer-run-queue-sql'
 import { migrate } from './schema/migrate'
 import { backfillStructuredWorkerOrcaSessionIds } from './schema/structured-worker-orca-session-backfill'
 import { reconcileSettledWorkerDispatches } from './worker-dispatch/worker-dispatch-settlement'
@@ -40,11 +41,30 @@ class OrchestrationDbCore {
     this.db.pragma('journal_mode = WAL')
     this.db.pragma('synchronous = NORMAL')
     this.db.pragma('busy_timeout = 5000')
+    // Savepoint journals otherwise need a temp file; a full or unwritable temp dir then aborts the whole transaction (#38123).
+    this.db.pragma('temp_store = MEMORY')
     createTables.call(this as unknown as OrchestrationDb)
     // Read before migrate, which drops the capture triggers it may need to rebuild around.
     const removedWorkCaptureWasIntact = isRemovedWorkCaptureIntact(this.db)
     migrate.call(this as unknown as OrchestrationDb)
+    for (const [table, columns] of [
+      ['messages', ['answer_sender_snapshot']],
+      ['federation_relay_items', ['answer_sender_report']]
+    ] as const) {
+      const existing = new Set(
+        this.db
+          .prepare(`PRAGMA table_info(${table})`)
+          .all()
+          .map((row) => row.name)
+      )
+      for (const column of columns) {
+        if (!existing.has(column)) {
+          this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} TEXT`)
+        }
+      }
+    }
     createRunCoordinatorAddressTriggers(this.db)
+    createPeerRunQueueTriggers(this.db)
     backfillFederatedStubHomeRuns(this.db)
     // After every open step that creates Runs, before any step that deletes work.
     installRemovedWorkCapture(this.db, removedWorkCaptureWasIntact)

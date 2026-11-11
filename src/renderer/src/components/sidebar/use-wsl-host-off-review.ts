@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
-import { isWslHostOffForForge } from '@/store/github/wsl-host-off-forge'
+import { isWslHostOffForForge } from '@/store/github/repositories/wsl-host-off-forge'
 
 /** E9: the repo's WSL host is off, so its review badges show the last known status. */
 export function useWslHostOffForRepo(

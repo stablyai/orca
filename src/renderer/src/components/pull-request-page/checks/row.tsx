@@ -1,12 +1,16 @@
 import React from 'react'
 import { ChevronDown, CircleDashed } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-panel/check-presentation'
+import { cn } from '@/lib/class-names'
+import {
+  CHECK_COLOR,
+  CHECK_ICON
+} from '@/components/right-sidebar/checks-panel/presentation/check-presentation'
 import { getCheckConclusion } from '@/components/pr-check-counts'
 import { getCheckDetailsKey, getCheckStatusLabel } from '@/components/github/pr-check-presentation'
 import type { CheckDetailsLoadState } from '@/components/github-checks-tab-state'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import { CheckDetailsPanel } from './details'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function CheckRow({
   check,
@@ -23,10 +27,11 @@ export function CheckRow({
   onToggle: (check: PRCheckDetail) => void
   onRetryDetails: (check: PRCheckDetail, key: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const conclusion = getCheckConclusion(check)
   const Icon = CHECK_ICON[conclusion] ?? CircleDashed
   const color = CHECK_COLOR[conclusion] ?? 'text-muted-foreground'
-  const statusLabel = getCheckStatusLabel(check)
+  const statusLabel = getCheckStatusLabel(check, t)
   const key = getCheckDetailsKey(check)
   return (
     <div key={key} className="min-w-0">

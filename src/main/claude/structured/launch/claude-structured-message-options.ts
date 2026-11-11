@@ -1,14 +1,17 @@
+import { claudeBuildPermissionMode } from '../../claude-plan-approval-mode'
 import { claudeStartedUnechoedSend } from '../../claude-command-lifecycle'
 import { claudeExecutionObservations } from '../claude-structured-execution-observations'
 import { dispatchClaudeTurn } from '../claude-structured-dispatch'
-import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
-import { AgentSessionOptionRejectedError } from '../../../native-chat/agent-session-wire/structured-agent-session-option-error'
+import { AgentSessionOptionRejectedError } from '../../../native-chat/agent-session-wire/options/structured-agent-session-option-error'
+import { StructuredAgentSessionInputNotAdmitted } from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
+import { AgentSessionPreDispatchError } from '../../../native-chat/agent-session-wire/operations/structured-agent-session-operation-settlement'
 import {
   createStructuredAgentSessionLogger,
   neverThrowingStructuredAgentSessionLogger,
   type StructuredAgentSessionLogger
-} from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
+} from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { claudeTakesFlagSettings, setClaudeStructuredOption } from './claude-structured-options'
 import type { ClaudeSession } from '../claude-structured-session-state'
 import {
@@ -27,6 +30,10 @@ export async function applyClaudeMessageOptions(
 ): Promise<void> {
   throwIfSignalAborted(signal)
   const model = options.model
+  // Only a turn carrying the newest pick reports on it; earlier captured sends run the replaced model.
+  if (model === session.modelPickAwaitingTurn) {
+    delete session.modelPickAwaitingTurn
+  }
   if (model && session.appliedInputOptions.get('model') !== model) {
     await waitForPromiseWithSignal(
       setClaudeStructuredOption(session, { key: 'model', value: model }, timeoutMs),
@@ -57,6 +64,18 @@ export async function applyClaudeMessageOptions(
     )
   }
   throwIfSignalAborted(signal)
+  if (options.interactionMode !== undefined) {
+    const mode = options.interactionMode === 'plan' ? 'plan' : claudeBuildPermissionMode(session)
+    await waitForPromiseWithSignal(
+      session.connection.setPermissionMode(mode, { timeoutMs }),
+      signal
+    )
+    session.appliedInputOptions.set('interactionMode', options.interactionMode)
+    if (options.interactionMode === 'default') {
+      session.appliedInputOptions.set('buildPermissionMode', mode)
+    }
+  }
+  throwIfSignalAborted(signal)
 }
 
 export async function dispatchClaudeMessage(
@@ -67,7 +86,6 @@ export async function dispatchClaudeMessage(
 ): ReturnType<StructuredAgentSessionAdapter['dispatch']> {
   let ranOptions: Record<string, string> = {}
   const outcome = await dispatchClaudeTurn(session, input, async () => {
-    await input.beforeDispatch?.()
     try {
       input.signal?.throwIfAborted()
       // Input joining a running turn, and Orca mail notices, run on the choices Claude already has;
@@ -84,6 +102,7 @@ export async function dispatchClaudeMessage(
         await applyClaudeMessageOptions(session, messageOptions, timeoutMs, input.signal)
       }
       input.signal?.throwIfAborted()
+      await input.beforeDispatch?.()
       input.onExecutionSnapshot?.()
       ranOptions = claudeExecutionObservations(session)
       if (messageOptions?.model && ranOptions.model !== messageOptions.model) {
@@ -100,6 +119,8 @@ export async function dispatchClaudeMessage(
         }
       )
       throw error instanceof AgentSessionOptionRejectedError ||
+        error instanceof AgentSessionPreDispatchError ||
+        error instanceof StructuredAgentSessionInputNotAdmitted ||
         isAbortSignalReason(input.signal, error)
         ? error
         : new AgentSessionOptionRejectedError(error)

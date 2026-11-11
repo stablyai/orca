@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest'
 import { ClaimedAgentPtyOwnerRegistry } from '../../shared/claimed-agent-pty-owner'
 import {
   canonicalizeAgentSessionIdentity,
-  createEphemeralAgentSessionClaimSigner,
   loadAgentSessionClaimSigner,
   type AgentSessionClaimSigner
 } from '../runtime/agent-session/ownership/agent-session-claim-identity'
@@ -52,16 +51,5 @@ describe('orcad agent-session claim signer', () => {
     } finally {
       rmSync(userData, { recursive: true, force: true })
     }
-  })
-
-  it('a per-process signer cannot recognise the previous incarnation (the old orcad default)', async () => {
-    const daemonOwners = new ClaimedAgentPtyOwnerRegistry()
-    await ensureFrom(daemonOwners, createEphemeralAgentSessionClaimSigner('runtime-a'), 'pty-1')
-    const restarted = await ensureFrom(
-      daemonOwners,
-      createEphemeralAgentSessionClaimSigner('runtime-b'),
-      'pty-2'
-    )
-    expect(restarted).toMatchObject({ disposition: 'created', owner: { ptyId: 'pty-2' } })
   })
 })

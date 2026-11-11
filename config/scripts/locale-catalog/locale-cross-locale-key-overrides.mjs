@@ -20,18 +20,6 @@ export const CROSS_LOCALE_KEY_OVERRIDES = {
     zh: 'Jira',
     ja: 'Jira'
   },
-  // Search-match fragment concatenated flush after the visible theme count; MT dropped the
-  // en leading space that separates it from the count.
-  'auto.components.settings.SettingsFormControls.c822571b2e': {
-    zh: ' 匹配“{{value0}}”',
-    ja: ' 「{{value0}}」に一致'
-  },
-  // Total-count fragment on the same row; without the separator "Showing 30 of 30"
-  // rendered as "表示中 3030の" / "显示中 3030 的".
-  'auto.components.settings.SettingsFormControls.cb330ef7f8': {
-    zh: '/{{value0}}',
-    ja: '/{{value0}}'
-  },
   // ko/zh put the quoted query before the verb phrase; MT tends to move it after.
   'auto.components.settings.Settings.noSettingsFoundForQuery': {
     ko: '"{{value0}}"에 대한 설정을 찾을 수 없습니다.',

@@ -1,15 +1,16 @@
 import { useTranslation } from 'react-i18next'
-import { useAppStore } from '@/store'
-import { useRepoMap, useAllWorktrees } from '@/store/selectors'
-import { localPreflightContextKey } from '@/lib/local-preflight-context-key'
-import { getLocalPreflightContext } from '@/lib/local-preflight-context'
+import { useAppStore } from '@/store/index'
+import { useRepoMap } from '@/store/repos/use-repository-catalog'
+import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
+import { localPreflightContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
+import { getLocalPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import {
   getProviderRuntimeContextKey,
   isEnvironmentRuntimeContextKey
-} from '@/lib/provider-runtime-context'
+} from '@/runtime/hosts/observations/provider-runtime-context'
 import { useRef } from 'react'
-import { getScreenSubmitShortcutLabel } from '@/lib/screen-submit-shortcut'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { getScreenSubmitShortcutLabel } from '@/lib/keyboard/screen-submit-shortcut'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function useTaskPageStoreBindings() {
   useTranslation()

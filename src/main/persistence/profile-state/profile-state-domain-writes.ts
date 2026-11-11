@@ -18,6 +18,12 @@ import {
 import { isRecord, validateProfileStateDocumentRow } from './profile-state-document-validation'
 import { assertProfileStateDocumentRevision } from './profile-state-revision'
 import {
+  deleteProfileStateDomainParts,
+  readSplitDomainWriteState,
+  writeProfileStateDomainParts
+} from './profile-state-document-parts-storage'
+import { isProfileStateSplitDomain } from './profile-state-document-parts'
+import {
   prepareProfileStateDomainMutation,
   validateProfileStateDomainTransaction,
   type PreparedProfileStateMutation
@@ -90,7 +96,18 @@ export function writeProfileStateDomains(
     const currentAutomationRuns = readCurrentAutomationRunsState(db, actualRevision)
 
     const updates: PreparedProfileStateMutation[] = []
-    for (const mutation of prepared) {
+    const splitStates = new Map<string, ReturnType<typeof readSplitDomainWriteState>>()
+    const admit = (mutation: PreparedProfileStateMutation): void => {
+      const splitState = readSplitDomainWriteState(db, mutation.domain)
+      splitStates.set(mutation.domain, splitState)
+      if (splitState.kind === 'parts') {
+        // Compare by hash; the legacy row is a stale downgrade copy and is not re-read.
+        assertProfileStateDocumentRevision(splitState.revision, actualRevision, mutation.domain)
+        if (mutation.payload === null || mutation.payloadHash !== splitState.contentHash) {
+          updates.push(mutation)
+        }
+        return
+      }
       const existing = db
         .prepare(
           `SELECT domain, payload, domain_version, revision, updated_at, content_hash
@@ -114,7 +131,7 @@ export function writeProfileStateDomains(
           mutation.payload?.startsWith('[') &&
           currentAutomationRuns.contentHash === mutation.payloadHash
         ) {
-          continue
+          return
         }
         const normalized = prepareProfileStateAutomationRunsReplacement(
           db,
@@ -125,7 +142,7 @@ export function writeProfileStateDomains(
           if (normalized.changed) {
             updates.push({ ...mutation, automationRuns: normalized })
           }
-          continue
+          return
         }
       }
       const unchanged =
@@ -134,6 +151,9 @@ export function writeProfileStateDomains(
       if (!unchanged) {
         updates.push(mutation)
       }
+    }
+    for (const mutation of prepared) {
+      admit(mutation)
     }
     if (transaction.automationRunsAfter !== undefined) {
       const delta = prepareProfileStateAutomationRunsDelta(
@@ -144,9 +164,15 @@ export function writeProfileStateDomains(
         actualRevision
       )
       if (delta === undefined) {
-        throw new Error('Normalized automationRuns delta is unsupported')
-      }
-      if (delta.changed) {
+        // Histories per-run rows can't hold (e.g. duplicate run ids) save as one replacement row.
+        admit(
+          prepareProfileStateDomainMutation({
+            domain: 'automationRuns',
+            payload: JSON.stringify(transaction.automationRunsAfter),
+            domainVersion: PROFILE_STATE_DOCUMENT_VERSION
+          })
+        )
+      } else if (delta.changed) {
         updates.push({
           domain: 'automationRuns',
           payload: null,
@@ -172,10 +198,28 @@ export function writeProfileStateDomains(
       }
       if (mutation.payload === null) {
         db.prepare('DELETE FROM profile_state_documents WHERE domain = ?').run(mutation.domain)
+        deleteProfileStateDomainParts(db, mutation.domain)
       } else {
         const updatedAt = (mutation.now ?? Date.now)()
         if (!Number.isSafeInteger(updatedAt) || updatedAt < 0) {
           throw new Error(`Profile state domain update timestamp is invalid: ${mutation.domain}`)
+        }
+        const splitState = splitStates.get(mutation.domain)
+        if (
+          splitState?.kind === 'parts' &&
+          writeProfileStateDomainParts(db, {
+            domain: mutation.domain,
+            payload: mutation.payload,
+            value: mutation.splitDomainValue,
+            payloadHash: mutation.payloadHash!,
+            domainVersion: mutation.domainVersion,
+            revision: nextRevision,
+            updatedAt,
+            legacyRevision: splitState.legacyRevision,
+            diffExisting: true
+          })
+        ) {
+          continue
         }
         db.prepare(
           `INSERT INTO profile_state_documents
@@ -195,6 +239,20 @@ export function writeProfileStateDomains(
           updatedAt,
           mutation.payloadHash
         )
+        if (isProfileStateSplitDomain(mutation.domain)) {
+          // The legacy row now matches; later writes touch only the parts that change.
+          writeProfileStateDomainParts(db, {
+            domain: mutation.domain,
+            payload: mutation.payload,
+            value: mutation.splitDomainValue,
+            payloadHash: mutation.payloadHash!,
+            domainVersion: mutation.domainVersion,
+            revision: nextRevision,
+            updatedAt,
+            legacyRevision: nextRevision,
+            diffExisting: false
+          })
+        }
       }
     }
     db.prepare(

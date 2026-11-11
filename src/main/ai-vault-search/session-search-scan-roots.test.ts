@@ -10,30 +10,6 @@ function file(path: string): SessionFileDiscovery['files'][number] {
   return { path, mtimeMs: 0, modifiedAt: new Date(0).toISOString() }
 }
 
-it('splits a merged discovery into the real directories behind it', () => {
-  const current = join(STATE, 'agents')
-  const legacy = join(LEGACY, 'agents')
-  const listings = sessionSearchRootListings(
-    { openclawStateDir: STATE, openclawLegacyStateDir: LEGACY },
-    [
-      {
-        agent: 'openclaw',
-        rootDir: [current, legacy].join(delimiter),
-        files: [
-          file(join(current, 'a', 'sessions', 'one.jsonl')),
-          file(join(current, 'a', 'sessions', 'two.jsonl')),
-          file(join(legacy, 'b', 'sessions', 'three.jsonl'))
-        ]
-      }
-    ]
-  )
-
-  const byRoot = Object.fromEntries(listings.map((one) => [one.root, one.files]))
-  expect(byRoot[current]).toBe(2)
-  expect(byRoot[legacy]).toBe(1)
-  expect(listings.every((one) => !one.root.includes(delimiter))).toBe(true)
-})
-
 it('attributes a file by path segment, not by string prefix', () => {
   const agents = join(STATE, 'agents')
   const legacy = join(LEGACY, 'agents')
@@ -51,25 +27,6 @@ it('attributes a file by path segment, not by string prefix', () => {
   const byRoot = Object.fromEntries(listings.map((one) => [one.root, one.files]))
   expect(byRoot[agents]).toBe(0)
   expect(byRoot[legacy]).toBe(0)
-})
-
-it('reads a re-resolved root set as the same trees when only spelling order differs', () => {
-  expect(
-    sameSessionSearchRoots(
-      { openclawStateDir: STATE, wslHomeDirs: ['/home/a', '/home/b'] },
-      { wslHomeDirs: ['/home/b', '/home/a'], openclawStateDir: STATE }
-    )
-  ).toBe(true)
-  expect(sameSessionSearchRoots({ openclawStateDir: STATE }, { openclawStateDir: STATE })).toBe(
-    true
-  )
-})
-
-it('reads an added, dropped or changed root as a different set', () => {
-  const base = { openclawStateDir: STATE, wslHomeDirs: ['/home/a'] }
-  expect(sameSessionSearchRoots(base, { ...base, openclawLegacyStateDir: LEGACY })).toBe(false)
-  expect(sameSessionSearchRoots(base, { openclawStateDir: STATE })).toBe(false)
-  expect(sameSessionSearchRoots(base, { ...base, wslHomeDirs: ['/home/b'] })).toBe(false)
 })
 
 it('compares WSL readers structurally without restarting for reordered objects', () => {

@@ -12,7 +12,7 @@ import { resolveOsOpenedDocuments } from './os-opened-documents'
 import {
   onStructuredAgentSessionsHeldChanged,
   structuredAgentSessionsHeld
-} from '../native-chat/agent-session-wire/structured-agent-session-registry'
+} from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { subscribeAgentSessionUploadRemoval } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 
 export function registerMainProcessIpcHandlers(): void {

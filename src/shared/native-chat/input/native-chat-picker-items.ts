@@ -246,6 +246,24 @@ function rankItems<T extends NativeChatPickerItem>(
     .map((entry) => entry.item)
 }
 
+// Commands render before skills, and Enter uses this index into that same order.
+// An exact name in the later section has to beat a fuzzy name in the earlier one.
+export function preferredNativeChatPickerIndex(
+  items: readonly NativeChatPickerItem[],
+  query: string
+): number {
+  let bestIndex = 0
+  let bestRank = Number.POSITIVE_INFINITY
+  for (let index = 0; index < items.length; index += 1) {
+    const rank = getMatchRank(items[index], query, true)
+    if (rank !== null && rank < bestRank) {
+      bestRank = rank
+      bestIndex = index
+    }
+  }
+  return bestIndex
+}
+
 function getMatchRank(
   item: Pick<NativeChatPickerItem, 'name' | 'description'>,
   query: string,

@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { runProcess } from '@orca/process-host'
+import { runProcess, runProcessSync } from '@orca/process-host'
 import {
   buildProfileStateCutoverFixture,
   canonicalProfileStateJson
@@ -20,6 +20,33 @@ const node = locatePinnedNodeForTests()
 const directory = mkdtempSync(join(tmpdir(), 'orca-profile-cross-runtime-'))
 const entry = join(directory, 'cross-runtime.cjs')
 const PROFILE_ID = 'cross-runtime'
+
+/**
+ * Bun on macOS links the system SQLite, which cannot open a cleanly closed WAL database
+ * read-only (SQLITE_CANTOPEN), whoever wrote it. Production never runs this code under Bun,
+ * so such a reader still proves it replays the unclean WAL but skips the read-only backup.
+ */
+function bunOpensClosedWalReadOnly(program: string): boolean {
+  const probe = join(directory, 'readonly-wal-probe.db')
+  const result = runProcessSync({
+    program,
+    args: [
+      '-e',
+      `const { DatabaseSync } = require('node:sqlite')
+       const path = process.argv.at(-1)
+       const db = new DatabaseSync(path)
+       db.exec('PRAGMA journal_mode = WAL')
+       db.exec('CREATE TABLE t(x)')
+       db.close()
+       new DatabaseSync(path, { readOnly: true }).prepare('PRAGMA user_version').get()`,
+      probe
+    ],
+    timeoutMs: 30_000
+  })
+  rmSync(probe, { force: true })
+  return result.code === 0
+}
+const bunReadOnlyWal = bun ? bunOpensClosedWalReadOnly(bun) : false
 
 beforeAll(async () => {
   await build({
@@ -44,6 +71,10 @@ beforeAll(async () => {
           const exported = exportProfileStateJson(opened.db)
           const revision = readProfileStateRevision(opened.db)
           opened.db.close()
+          if (process.env.CROSS_RUNTIME_SKIP_READONLY_BACKUP === '1') {
+            console.log(JSON.stringify({ runtime, revision, exported, backedUp: null }))
+            return
+          }
           await writeProfileStateBackup({ databasePath: dbPath, profileId, targetPath: backupPath })
           const backup = openProfileStateDatabaseReadOnly(backupPath, profileId)
           const backedUp = exportProfileStateJson(backup.db)
@@ -71,12 +102,13 @@ afterAll(() => {
 async function run(
   program: string,
   args: string[],
-  exit: 'clean' | 'killed' = 'clean'
+  exit: 'clean' | 'killed' = 'clean',
+  extraEnv: Record<string, string> = {}
 ): Promise<Record<string, unknown>> {
   const result = await runProcess({
     program,
     args: [entry, ...args],
-    env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' },
+    env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1', ...extraEnv },
     timeoutMs: 60_000
   })
   if (exit === 'killed' && process.platform !== 'win32') {
@@ -120,18 +152,20 @@ describe.skipIf(skip)('profile database across the pinned Bun and the pinned Nod
       expect(readFileSync(`${dbPath}-wal`).byteLength).toBeGreaterThan(0)
 
       const backupPath = join(caseDir, 'backup.db')
-      const read = await run(runtimes[reader], [
-        'read-and-backup',
-        dbPath,
-        PROFILE_ID,
-        '',
-        backupPath
-      ])
+      const skipBackup = reader === 'Bun' && !bunReadOnlyWal
+      const read = await run(
+        runtimes[reader],
+        ['read-and-backup', dbPath, PROFILE_ID, '', backupPath],
+        'clean',
+        skipBackup ? { CROSS_RUNTIME_SKIP_READONLY_BACKUP: '1' } : {}
+      )
       expect(read.runtime).toBe(reader.toLowerCase())
       expect(read.revision).toBe(written.revision)
       const expected = canonicalProfileStateJson(fixture)
       expect(canonicalProfileStateJson(JSON.parse(String(read.exported)))).toBe(expected)
-      expect(canonicalProfileStateJson(JSON.parse(String(read.backedUp)))).toBe(expected)
+      if (!skipBackup) {
+        expect(canonicalProfileStateJson(JSON.parse(String(read.backedUp)))).toBe(expected)
+      }
     },
     60_000
   )

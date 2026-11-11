@@ -1,6 +1,6 @@
 // Survive rejected tasks and known-benign exceptions; unknown exceptions require bounded shutdown.
 import process from 'node:process'
-import { isNativePtyException } from '../daemon/daemon-native-pty-exception'
+import { isNativePtyException } from '../daemon/pty-subprocess/daemon-native-pty-exception'
 import { ORCAD_EXIT_FAILED } from './orcad-exit-code'
 import type { OrcadShutdownTrigger } from './orcad-lifecycle'
 

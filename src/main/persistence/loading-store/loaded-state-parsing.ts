@@ -5,20 +5,20 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { ChatUiLaunchTipAudience } from '../../../shared/native-chat/chat-ui-launch-tip-audience'
 import type { SshPtyConsumerRecovery } from '../../../shared/ssh-types'
 import { getDefaultPersistedState } from '../../../shared/constants'
-import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
-import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session-browser-history'
+import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session/workspace-session-terminal-buffers'
+import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session/workspace-session-browser-history'
 import { clearMissingProjectGroupMemberships } from '../../../shared/project-groups'
-import { migrateWorkspaceSessionTerminalScrollbackSnapshots } from '../../terminal-scrollback-snapshots'
+import { migrateWorkspaceSessionTerminalScrollbackSnapshots } from '../../pty/scrollback/terminal-scrollback-snapshots'
 import { logStartupMilestone } from '../../startup/startup-diagnostics'
 import {
   PROTECTED_SECRET_SLOT,
   sshPtyOwnerLeaseSecretSlot
-} from '../../protected-secret-persistence'
+} from '../../credentials/protected-secret-persistence'
 import {
   isLegacyOpenCodeSessionCookie,
   isLegacySshPtyOwnerLease
 } from '../leasing-ssh-ptys/secret-validation'
-import { readGithubCacheSnapshot } from './user-data-path'
+import { readGitHubCacheDatabase } from './github-cache-database'
 import { retainLegacyOpenCodeGoApiKey } from './legacy-opencode-go-api-key-migration'
 import {
   gcStaleWorktreeMeta,
@@ -50,6 +50,8 @@ type LoadedStateParsingOperationsRuntime = Pick<
   StoreRuntimeState,
   | 'dataFile'
   | 'githubCacheDirty'
+  | 'githubCacheLegacyFileHash'
+  | 'githubCachePersistenceDisabled'
   | 'loadNeedsSave'
   | 'originalExperimentalNativeChat'
   | 'protectedSecrets'
@@ -105,6 +107,7 @@ export class LoadedStateParsingOperations {
         if (parsed === undefined) {
           throw new Error('Profile state startup snapshot is missing')
         }
+        parsed = this.cohorts.migrateCohortSeeds(parsed, true)
         // Freeze audience before defaults or migrations alter the saved Chat UI state.
         chatUiLaunchTipAudience = this.cohorts.captureChatUiLaunchTipAudience(parsed)
         this.runtime.originalExperimentalNativeChat =
@@ -195,7 +198,7 @@ export class LoadedStateParsingOperations {
     }
 
     if (result === null) {
-      result = getDefaultPersistedState(homedir())
+      result = this.cohorts.migrateCohortSeeds(getDefaultPersistedState(homedir()), false)
     }
 
     const workspaceSession = pruneWorkspaceSessionBrowserHistory(
@@ -276,9 +279,9 @@ export class LoadedStateParsingOperations {
       chatUiLaunchTipAudience ?? this.cohorts.captureChatUiLaunchTipAudience(undefined)
     const migrated = {
       ...this.cohorts.carryChatUiChoices(
-        this.cohorts.migrateTabSwitchKeybindings(
+        this.cohorts.keepResumeOnRestartOffForExistingProfiles(
           this.cohorts.migrateTelemetry(current, fileExistedOnLoad),
-          fileExistedOnLoad
+          parsed
         ),
         parsed,
         audience
@@ -286,23 +289,42 @@ export class LoadedStateParsingOperations {
       chatUiLaunchTipAudience: audience
     }
 
-    // Legacy inline caches seed the session, then move to the cache sidecar.
+    // Cache precedence, resolved once: an inline legacy cache, else an older build's sidecar,
+    // else the saved rows. Whatever wins is saved as rows, which retires any sidecar it supersedes.
     const legacyCache = migrated.githubCache
     const hasLegacyCache =
       Object.keys(legacyCache?.pr ?? {}).length > 0 ||
       Object.keys(legacyCache?.issue ?? {}).length > 0
+    const stored = readStoredGitHubCache(this.runtime.dataFile)
     if (hasLegacyCache) {
       this.runtime.loadNeedsSave = true
       // Persist the seed even when no cache poll refresh occurs this session.
       this.runtime.githubCacheDirty = true
-    } else {
-      migrated.githubCache = readGithubCacheSnapshot(this.runtime.dataFile) ?? migrated.githubCache
+    } else if (stored?.cache) {
+      migrated.githubCache = stored.cache
+      // A sidecar import, or rows that already hold it, saves so the sidecar retires.
+      this.runtime.githubCacheDirty ||= stored.sidecarHash !== null
     }
+    this.runtime.githubCacheLegacyFileHash = stored?.sidecarHash ?? null
+    // Unread rows or an unread sidecar may hold newer entries than this session will poll.
+    this.runtime.githubCachePersistenceDisabled = stored?.unavailable ?? false
 
     logStartupMilestone('persistence-load-done', () => ({
       repos: migrated.repos.length,
       workspaceSessionBytes: Buffer.byteLength(JSON.stringify(migrated.workspaceSession))
     }))
     return migrated
+  }
+}
+
+function readStoredGitHubCache(
+  dataFile: string
+): ReturnType<typeof readGitHubCacheDatabase> | null {
+  try {
+    return readGitHubCacheDatabase(dataFile)
+  } catch (error) {
+    // A disposable cache must never block startup; the first poll refills it.
+    console.warn('[persistence] Failed to read github cache:', error)
+    return null
   }
 }

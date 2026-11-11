@@ -24,6 +24,7 @@ export function configureFederationWorkerRuntime(
   }
   vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
   vi.spyOn(runtime, 'validateOrchestrationAgentLauncherForRepo').mockResolvedValue()
+  vi.spyOn(runtime, 'validateOrchestrationAgentLauncherForWorktree').mockResolvedValue()
   vi.spyOn(runtime, 'showRepo').mockResolvedValue({
     id: 'windows-repo',
     kind: 'git',

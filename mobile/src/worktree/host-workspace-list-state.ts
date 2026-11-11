@@ -2,8 +2,8 @@ import {
   isConnectionDialing,
   isConnectionOutage,
   type ConnectionVerdict
-} from '../transport/connection-health'
-import type { ConnectionState } from '../transport/types'
+} from '../transport/connection/connection-health'
+import type { ConnectionState } from '../transport/connection/connection-state'
 
 export type HostWorkspaceListStateInput = {
   connState: ConnectionState

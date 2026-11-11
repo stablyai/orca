@@ -1,21 +1,22 @@
 import { createLocalWorkerStartDispatch } from './local-worker-start-dispatch'
+import { refuseClaimedWorkerTerminal } from '../../../../orchestration/db/worker-dispatch/worker-terminal-claim'
 import { probeWorkerOpenCodeModelLaunchSupport } from './worker-opencode-model-preflight'
 import { validateWorkerAgent } from './worker-agent-validation'
 import { resolveWorkerConfiguredAgentParams } from './worker-configured-agent-preflight'
-import { waitForWorkerAgentReady } from '../../../../launched-agent-composer-readiness'
+import { waitForWorkerAgentReady } from '../../../../terminal/wait/launched-agent-composer-readiness'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal-wait-blocked-reason-legacy-alias'
-import type { OrchestrationDb } from '../../../../orchestration/db'
-import type { DispatchContextRow, RunRow, TaskRow } from '../../../../orchestration/types'
+import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal/runtime-policy/terminal-wait-blocked-reason-legacy-alias'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type {
-  OrchestrationCallerIdentity,
-  OrchestrationSessionCaller
-} from '../../../../orchestration/orchestration-caller-identity'
-import { resolveDispatchCallerWorktreeId } from '../../orchestration-caller-workspace'
-import {
-  resolveWorkerStartModeOnHost,
-  type WorkerStartModeReceipt
-} from '../../orchestration-worker-start-mode'
+  DispatchContextRow,
+  RunRow,
+  TaskRow
+} from '../../../../orchestration/db/orchestration-records'
+import type { OrchestrationEntryCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
+import { resolveDispatchCallerWorktreeId } from '../orchestration-caller-workspace'
+import { resolveWorkerStartModeOnHost } from '../structured-workers/orchestration-worker-start-mode'
+import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { EXISTING_WORKTREE_SETUP, placeWorkerAgent } from './worker-start-agent-placement'
 import { awaitStructuredWorkerSetupGate } from './worker-start-structured-setup-gate'
 import { assertOrchestrationWorktreeCreationSupported } from './folder-worktree-placement'
@@ -28,7 +29,7 @@ import {
 } from './worker-setup-gate'
 import { failWorkerStartWithReceipt } from './worker-start-receipt'
 import { assertExplicitWorkerUsable } from './explicit-worker-terminal-validation'
-import { resolveDispatchAssigneeParty } from '../../../../orchestration/orchestration-party'
+import { resolveDispatchAssigneeParty } from '../../../../orchestration/addressing/orchestration-party'
 import { chatAssigneeOf, chatWorkerMode } from '../chat-assignee-admission'
 import { recordCreatedWorkerTerminalCustody } from './created-worker-terminal-custody'
 import { releaseRetriedWorkerTerminal } from './retried-worker-terminal-release'
@@ -36,8 +37,8 @@ import { requireWorkerAuthority, type WorkerEffect } from './worker-topology'
 import { prepareLocalWorkerStart } from './worker-start-validation'
 import { deliverAndSettleWorkerStartReadiness } from './worker-start-readiness-settlement'
 import type { WorkerStartMutation } from './worker-start-mutation'
-import { prepareWorkerStartCard } from '../../../../orchestration/worker-start-card'
-import { rebindReusedStructuredWorker } from '../../orchestration-structured-worker-session'
+import { prepareWorkerStartCard } from '../../../../orchestration/workers/launch/worker-start-card'
+import { rebindReusedStructuredWorker } from '../structured-workers/orchestration-structured-worker-session'
 import { placedWorkerParty, type WorkerFollowUp } from './worker-follow-up-placement'
 
 export async function startLocalWorker(args: {
@@ -48,7 +49,7 @@ export async function startLocalWorker(args: {
   bindRun: () => RunRow
   taskDeps: string[] | undefined
   coordinator: OrchestrationCallerIdentity | null
-  callerSession?: OrchestrationSessionCaller
+  callerSession?: OrchestrationEntryCaller
   existingTask?: TaskRow
   orchestrationMutation?: WorkerStartMutation
   /** Settings-driven; the executing host still gets to refuse below. */
@@ -57,7 +58,7 @@ export async function startLocalWorker(args: {
   helperCreator?: DispatchContextRow
   followUp?: WorkerFollowUp
 }): Promise<unknown> {
-  const { runtime, db, coordinator, callerSession } = args
+  const { runtime, db, coordinator, callerSession, orchestrationMutation } = args
   const recordStart = prepareWorkerStartCard(runtime, callerSession)
   // `--terminal` names a party: a chat by its `/clear` root address, as its Dispatch does.
   const terminal = args.params.terminal && resolveDispatchAssigneeParty(args.params.terminal, db)
@@ -139,6 +140,8 @@ export async function startLocalWorker(args: {
   let mode = chatWorkerMode(await hostMode, chat)
   await validateWorkerAgent(runtime, agent, creationTarget, resolvedWorktree, mode.mode)
 
+  // Synchronous through the Dispatch insert, so nothing else claims the terminal in between.
+  refuseClaimedWorkerTerminal(db, params.terminal, runtime, args.followUp?.of)
   const run = args.bindRun()
   const started = createLocalWorkerStartDispatch(args, {
     params,
@@ -251,7 +254,7 @@ export async function startLocalWorker(args: {
       terminalOwnership: external ? 'external' : 'created'
     })
     if (workerChat) {
-      rebindReusedStructuredWorker(runtime, terminalHandle, db)
+      rebindReusedStructuredWorker(terminalHandle, db)
     }
 
     result = await deliverAndSettleWorkerStartReadiness({
@@ -265,7 +268,7 @@ export async function startLocalWorker(args: {
       terminalHandle,
       coordinatorHandle: params.from,
       devMode: params.devMode,
-      requestId: args.orchestrationMutation?.requestId ?? started.dispatch.id,
+      requestId: orchestrationMutation?.requestId ?? started.dispatch.id,
       agent: agent ?? null,
       launchedAgent: external || workerChat ? null : (agent ?? null),
       setupReceipt,

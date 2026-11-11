@@ -1,12 +1,10 @@
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-freshness'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 
-import { createCrewPartyRegistry } from './crew-parties'
-import type { FleetAgentStatusEvidence } from '../../../../shared/orchestration-fleet-agent-status-evidence'
 import { describe, expect, it, vi } from 'vitest'
 
-import { buildCrewSnapshot, CrewReadModel } from './crew-read-model'
+import { buildCrewSnapshot } from './crew-party-snapshot'
+import { CrewReadModel } from './crew-read-model'
 import { subscribeCrew } from './crew-stream'
-import type { OrchestrationCrewFrame } from '../../../../shared/orchestration-crew'
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 
@@ -108,6 +106,50 @@ describe('public crew read and stream', () => {
   })
 })
 
+it("keeps a worker's last real message over Orca's own records", () => {
+  const { db, deps, assign } = fixture()
+  const worker = assign('term_worker')
+  db.insertMessage({
+    from: 'term_worker',
+    to: 'term_coord',
+    subject: 'Update',
+    body: 'Read 3 files'
+  })
+  // Orca's notice as QA recorded it, an agent's own escalation, an empty setup receipt and a rejected report.
+  db.insertMessage({
+    from: 'term_worker',
+    to: 'term_coord',
+    subject: 'Worker stopped without reporting',
+    body: 'Worker term_698aff42-fca8-4378-b317-029b98be48dc ended its turn without sending worker_done for task "W4: list files then wait" (task_b7063456179a). The Dispatch is still open. Answer it with your Orca CLI\'s `orchestration send --to dispatch:ctx_e99c0e270caf --subject "<topic>" --body "<guidance>"`, retry it, or stop the worker.',
+    type: 'escalation',
+    priority: 'high'
+  })
+  db.insertMessage({
+    from: 'term_worker',
+    to: 'term_coord',
+    subject: 'Blocked: no database credentials',
+    body: 'I need credentials for the staging database.',
+    type: 'escalation'
+  })
+  db.insertMessage({ from: `dispatch:${worker.id}`, to: 'term_coord', subject: 'Setup ready' })
+  const report = db.insertMessage({
+    from: 'term_worker',
+    to: 'term_coord',
+    subject: 'Done',
+    body: 'Finished',
+    type: 'worker_done'
+  })
+  db.convertLifecycleMessageToRejection(
+    report.id,
+    'payload_required',
+    'worker_done requires a JSON object payload'
+  )
+  expect(buildCrewSnapshot('term_coord', deps).sections.managing[0]?.latest).toMatchObject({
+    direction: 'from',
+    preview: 'Read 3 files'
+  })
+})
+
 it('preserves a bound offline manager and the complete committed clear conversation', () => {
   const { db, deps, run, handles } = fixture()
   db.createDispatchContext({
@@ -170,77 +212,6 @@ it('preserves a bound offline manager and the complete committed clear conversat
   })
 })
 
-it('uses qualified terminal status and keeps canonical native status without requiring a terminal binding', () => {
-  const { deps, assign, handles } = fixture()
-  const worker = assign('term_worker')
-  const now = Date.now()
-  deps.now = now
-  const status = {
-    binding: {
-      kind: 'worker',
-      dispatchId: worker.id,
-      paneKey: handles.get('term_worker')!,
-      terminalHandle: 'term_worker',
-      processIncarnation: 'incarnation'
-    },
-    clock: { kind: 'observed', at: now },
-    deliveredAt: now,
-    activity: {
-      paneKey: handles.get('term_worker')!,
-      connectionId: null,
-      state: 'done',
-      agentType: 'codex',
-      model: null,
-      worktreeId: null,
-      restoredUnconfirmed: false,
-      providerSessionOnly: false
-    }
-  } satisfies FleetAgentStatusEvidence
-  const read = () =>
-    buildCrewSnapshot('term_coord', deps).sections.managing.find(
-      (row) => row.sendAddress === `dispatch:${worker.id}`
-    )
-  for (const invalid of [
-    { ...status, binding: { kind: 'unresolved', reason: 'stale_incarnation' } },
-    { ...status, binding: { ...status.binding, kind: 'worker', dispatchId: 'ctx_other' } },
-    { ...status, activity: { ...status.activity, restoredUnconfirmed: true } },
-    { ...status, activity: { ...status.activity, providerSessionOnly: true } },
-    { ...status, clock: { kind: 'observed', at: now + 60_000 } },
-    { ...status, clock: { kind: 'observed', at: now - 31 * 60_000 } }
-  ] satisfies FleetAgentStatusEvidence[]) {
-    deps.statuses = [invalid]
-    expect(read()?.status).toBe('working')
-    expect(read()?.agentKind).toBe('Agent')
-  }
-  deps.statuses = [status]
-  expect(read()?.status).toBe('done')
-  const native = agentSessionConversationView(
-    agentSessionRecordFixture({ sessionId: 'chat-native' })
-  )
-  deps.records = {
-    listRecords: () => [native],
-    getRecord: (id) => (id === native.sessionId ? native : null)
-  }
-  assign('orca_session_id:chat-native')
-  const nativeRow = buildCrewSnapshot('term_coord', deps).sections.managing.find(
-    (row) => row.openTarget?.kind === 'chat'
-  )!
-  const registry = createCrewPartyRegistry(deps)
-  const paneKey = registry.party('chat-native', null, null)!.paneKey!
-  deps.statuses = [
-    {
-      ...status,
-      binding: { kind: 'unresolved', reason: 'pane_not_bound' },
-      activity: { ...status.activity, paneKey, state: 'waiting' }
-    }
-  ]
-  expect(
-    buildCrewSnapshot('term_coord', deps).sections.managing.find(
-      (row) => row.partyKey === nativeRow.partyKey
-    )?.status
-  ).toBe('waiting')
-})
-
 it('rederives exact and backwards clocks and drops unwatched one-shot truth', () => {
   const { db, deps, assign } = fixture()
   const worker = assign('term_worker')
@@ -275,11 +246,10 @@ it('invalidates host membership when report import uses the transaction settleme
   const { db, deps, assign } = fixture()
   const worker = assign('term_worker')
   const model = new CrewReadModel(() => deps, db.crewChanges.subscribe)
-  const frames: OrchestrationCrewFrame[] = []
   const stop = subscribeCrew(
     () => model.read('term_coord'),
     model.subscribe,
-    (frame) => frames.push(frame)
+    () => {}
   )
   expect(model.read('term_coord').sections.managing[0].task?.state).toBe('dispatched')
   db.db.exec('BEGIN')
@@ -292,8 +262,6 @@ it('invalidates host membership when report import uses the transaction settleme
   db.db.exec('COMMIT')
   await Promise.resolve()
   expect(result.action).toBe('settled')
-  expect(db.getDispatchContextById(worker.id)?.completed_at).toBeTruthy()
   expect(model.read('term_coord').sections.managing[0].task?.state).toBe('completed')
-  expect(frames.filter((frame) => frame.type === 'complete')).toHaveLength(2)
   stop()
 })

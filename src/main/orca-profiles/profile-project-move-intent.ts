@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
-import { bestEffortFsyncDirectorySync, fsyncFileSync } from '../../shared/secure-file'
+import {
+  bestEffortFsyncDirectorySync,
+  fsyncFileSync
+} from '../../shared/secure-storage/secure-file'
 import { hashProfileStateJson } from '../persistence/profile-state/profile-state-documents'
 import {
   readProfileStateWithRevision,

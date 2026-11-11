@@ -2,12 +2,12 @@ import {
   decideWorkerTerminalRelease,
   WORKER_SETTLED_STATES,
   WORKER_TERMINAL_RELEASABLE_ROW_SQL
-} from '../../worker-terminal-ownership'
+} from '../../terminal-authority/release/worker-terminal-ownership'
 import type {
   WorkerTerminalArchiveStatus,
   WorkerTerminalResourceRow,
   WorkerTerminalRetainedReason
-} from '../../worker-terminal-ownership'
+} from '../../terminal-authority/release/worker-terminal-ownership'
 import { OrchestrationError } from '../../orchestration-error'
 import { parseWorkerTerminalPriorOwnerIds } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'

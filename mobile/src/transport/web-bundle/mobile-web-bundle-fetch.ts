@@ -1,20 +1,41 @@
 import { CryptoDigestAlgorithm, digest } from 'expo-crypto'
+import { PrioritySemaphore } from '../../../../src/shared/priority-semaphore'
 import { mobileWebBundleManifestRead } from './mobile-web-bundle-operations'
-import type {
-  MobileWebBundleAssetRead,
-  MobileWebBundleManifestRead
+import {
+  shellDownloadedAssets,
+  type MobileWebBundleAssetRead,
+  type MobileWebBundleManifestRead,
+  type MobileWebBundleManifestReply
 } from './mobile-web-bundle-reply-schemas'
-import type { RpcClient } from '../rpc-client'
+import type { RpcClient } from '../rpc/rpc-client-contract'
 import { MobileWebBundleFetchError } from './mobile-web-bundle-fetch-refusal'
-import { markRpcDeliveryUnknown } from '../rpc-delivery-ambiguity'
-import { runRpcOperation } from '../rpc-operation'
+import { markRpcDeliveryUnknown } from '../rpc/rpc-delivery-ambiguity'
+import { runRpcOperation } from '../rpc/rpc-operation'
 import {
   mobileWebBundleWindowReader,
-  type MobileWebBundleWindowHeader
+  type MobileWebBundleWindowReader
 } from './mobile-web-bundle-window-reader'
+import {
+  assertWindowDescribesAsset,
+  assertWindowFillsItsSlot,
+  windowSlotBytes,
+  type MobileWebBundleWindowStream
+} from './mobile-web-bundle-window-checks'
 
-// Limit concurrent windows across all assets to the host’s four slots; one reader per asset serializes large scripts.
+// The host admits four window reads per connection; one reader per asset would serialize large scripts.
 const MAX_CONCURRENT_WINDOW_READS = 4
+// Shells on one host share its client, so their fetches share its read slots; per-fetch limits got the second fetch refused.
+type ConnectionReads = { readonly slots: PrioritySemaphore; lastWindowAt: number }
+const connectionReads = new WeakMap<RpcClient, ConnectionReads>()
+
+function connectionReadsOf(client: RpcClient): ConnectionReads {
+  let reads = connectionReads.get(client)
+  if (reads === undefined) {
+    reads = { slots: new PrioritySemaphore(MAX_CONCURRENT_WINDOW_READS), lastWindowAt: 0 }
+    connectionReads.set(client, reads)
+  }
+  return reads
+}
 
 // Time fetch-wide inactivity; a queued read on a slow moving link can exceed a per-request stall budget (#29697).
 export const MOBILE_WEB_BUNDLE_WINDOW_STALL_MS = 30_000
@@ -22,6 +43,7 @@ export const MOBILE_WEB_BUNDLE_WINDOW_STALL_MS = 30_000
 const WINDOW_READ_BACKSTOP_MS =
   (MAX_CONCURRENT_WINDOW_READS + 1) * MOBILE_WEB_BUNDLE_WINDOW_STALL_MS
 
+// Bytes are what the reader moves (a brotli copy where it reads one, else the asset); reused assets add none.
 export type MobileWebBundleFetchProgress = {
   readonly completedAssets: number
   readonly totalAssets: number
@@ -32,7 +54,7 @@ export type MobileWebBundleFetchProgress = {
 export type MobileWebBundleFetchResult = {
   readonly manifest: MobileWebBundleManifestRead
   readonly assets: ReadonlyMap<string, Uint8Array>
-  // stageGeneration must copy every reused asset or fail rather than stage an incomplete tree.
+  // stageGeneration must copy every reused asset or fail rather than stage an incomplete tree (skipped catalogs aside).
   readonly reused: readonly string[]
   readonly totalBytes: number
   readonly elapsedMs: number
@@ -40,6 +62,7 @@ export type MobileWebBundleFetchResult = {
 
 type AssetReassembly = {
   readonly entry: MobileWebBundleAssetRead
+  readonly stream: MobileWebBundleWindowStream
   readonly whole: Uint8Array<ArrayBuffer>
   outstandingWindows: number
 }
@@ -59,18 +82,24 @@ export async function fetchMobileWebBundle(args: {
   signal?: AbortSignal
   onProgress?: (progress: MobileWebBundleFetchProgress) => void
   reusable?: MobileWebBundleReusableAssets
+  // The manifest the caller already read; windows name its build id, so a build the desktop since replaced fails the fetch.
+  opened?: MobileWebBundleManifestReply
 }): Promise<MobileWebBundleFetchResult> {
   const startedAt = Date.now()
   const stopped = new AbortController()
   throwIfCallerAborted(args.signal)
-  const opened = await runRpcOperation(args.client, mobileWebBundleManifestRead, null)
+  const opened =
+    args.opened ?? (await runRpcOperation(args.client, mobileWebBundleManifestRead, null))
   throwIfCallerAborted(args.signal)
   const manifest = opened.manifest
   const reader = mobileWebBundleWindowReader(args.client, opened)
+  const connection = connectionReadsOf(args.client)
+  // Before reuse: a skipped catalog an older generation lists may not be on disk there either.
+  const wanted = shellDownloadedAssets(manifest)
   const candidates = new Set(
-    args.reusable === undefined ? [] : manifest.assets.filter((entry) => args.reusable?.has(entry))
+    args.reusable === undefined ? [] : wanted.filter((entry) => args.reusable?.has(entry))
   )
-  const fetched = manifest.assets.filter((entry) => !candidates.has(entry))
+  const fetched = wanted.filter((entry) => !candidates.has(entry))
   const assets = new Map<string, Uint8Array>()
   const reused: string[] = []
   let receivedBytes = 0
@@ -88,13 +117,19 @@ export async function fetchMobileWebBundle(args: {
       stallTimer = null
     }
   }
-  const armStallClock = (): void => {
+  const armStallClock = (delayMs = MOBILE_WEB_BUNDLE_WINDOW_STALL_MS): void => {
     disarmStallClock()
     // A read that lands after the fetch settled must not leave a timer behind.
     if (stopped.signal.aborted) {
       return
     }
     stallTimer = setTimeout(() => {
+      // Windows still arriving for another fetch on this connection mean this one waits for slots, not on a dead link.
+      const idleMs = Date.now() - connection.lastWindowAt
+      if (idleMs >= 0 && idleMs < MOBILE_WEB_BUNDLE_WINDOW_STALL_MS) {
+        armStallClock(MOBILE_WEB_BUNDLE_WINDOW_STALL_MS - idleMs)
+        return
+      }
       stopped.abort()
       failStalled(
         markRpcDeliveryUnknown(
@@ -103,7 +138,7 @@ export async function fetchMobileWebBundle(args: {
           )
         )
       )
-    }, MOBILE_WEB_BUNDLE_WINDOW_STALL_MS)
+    }, delayMs)
   }
   const reportProgress = (): void => {
     args.onProgress?.({
@@ -119,6 +154,8 @@ export async function fetchMobileWebBundle(args: {
       { buildId: manifest.buildId, path: asset.entry.path, offset },
       { timeoutMs: WINDOW_READ_BACKSTOP_MS }
     )
+    // Any reply is connection activity, even one this fetch no longer wants; fetches waiting for its slot count on it.
+    connection.lastWindowAt = Date.now()
     throwIfCallerAborted(args.signal)
     armStallClock()
     // A sibling already failed the fetch; this reply is not worth checking, decoding or reporting.
@@ -126,9 +163,9 @@ export async function fetchMobileWebBundle(args: {
       return
     }
     assertWindowDescribesAsset(reply.header, asset.entry, manifest.buildId, offset)
-    const bytes = reply.bytes(windowSlotBytes(asset.entry, offset, reader.windowBytes))
+    const bytes = reply.bytes(windowSlotBytes(asset.stream, offset, reader.windowBytes))
     assertWindowFillsItsSlot(
-      asset.entry,
+      asset.stream,
       offset,
       bytes.byteLength,
       reply.header.eof,
@@ -137,7 +174,7 @@ export async function fetchMobileWebBundle(args: {
     asset.whole.set(bytes, offset)
     asset.outstandingWindows -= 1
     if (asset.outstandingWindows === 0) {
-      const verified = await verifyReassembledAsset(asset)
+      const verified = await verifyReassembledAsset(asset, reader)
       throwIfCallerAborted(args.signal)
       // A sibling failed while this hashed; the fetch already rejected with that failure.
       if (stopped.signal.aborted) {
@@ -152,19 +189,33 @@ export async function fetchMobileWebBundle(args: {
   }
 
   const readWindows = async (entries: readonly MobileWebBundleAssetRead[]): Promise<void> => {
-    const queue = planWindowReads(entries, reader.windowBytes)
+    const queue = planWindowReads(entries, reader)
     if (queue.length === 0) {
       return
     }
     const worker = async (): Promise<void> => {
       try {
         while (!stopped.signal.aborted) {
+          // Take work before a slot, so a fetch with nothing left never waits behind another's reads.
           const read = queue.shift()
           if (read === undefined) {
             return
           }
-          throwIfCallerAborted(args.signal)
-          await readWindow(read)
+          // Rejects only when this fetch stopped while waiting; the failure that stopped it is already reported.
+          const release = await connection.slots.acquire(0, stopped.signal).catch(() => null)
+          if (release === null) {
+            return
+          }
+          try {
+            // A sibling may fail between the grant and this resume.
+            if (stopped.signal.aborted) {
+              return
+            }
+            throwIfCallerAborted(args.signal)
+            await readWindow(read)
+          } finally {
+            release()
+          }
         }
       } catch (error) {
         // Stop sibling dispatch after failure so retained reads cannot consume the host slots needed by a retry.
@@ -199,7 +250,7 @@ export async function fetchMobileWebBundle(args: {
 
   const countDownload = (entries: readonly MobileWebBundleAssetRead[]): void => {
     downloadAssets += entries.length
-    downloadBytes += entries.reduce((sum, entry) => sum + entry.byteLength, 0)
+    downloadBytes += entries.reduce((sum, entry) => sum + reader.streamLength(entry), 0)
   }
 
   try {
@@ -228,105 +279,49 @@ export async function fetchMobileWebBundle(args: {
 // Plan all grid offsets largest-asset first so its tail cannot serialize the end; still validate eof replies.
 function planWindowReads(
   entries: readonly MobileWebBundleAssetRead[],
-  windowBytes: number
+  reader: MobileWebBundleWindowReader
 ): WindowRead[] {
-  const largestFirst = [...entries].sort((left, right) => right.byteLength - left.byteLength)
-  return largestFirst.flatMap((entry) => {
-    const count = Math.max(1, Math.ceil(entry.byteLength / windowBytes))
+  const { windowBytes } = reader
+  const streams = entries.map((entry) => ({
+    entry,
+    stream: { path: entry.path, byteLength: reader.streamLength(entry) }
+  }))
+  const largestFirst = streams.sort(
+    (left, right) => right.stream.byteLength - left.stream.byteLength
+  )
+  return largestFirst.flatMap(({ entry, stream }) => {
+    const count = Math.max(1, Math.ceil(stream.byteLength / windowBytes))
     const asset: AssetReassembly = {
       entry,
-      whole: new Uint8Array(entry.byteLength),
+      stream,
+      whole: new Uint8Array(stream.byteLength),
       outstandingWindows: count
     }
     return Array.from({ length: count }, (_, index) => ({ asset, offset: index * windowBytes }))
   })
 }
 
-function windowSlotBytes(
-  entry: MobileWebBundleAssetRead,
-  offset: number,
-  windowBytes: number
-): number {
-  return Math.min(windowBytes, entry.byteLength - offset)
-}
-
-/** Offsets are planned, so a reply is accepted only if it fills exactly its slot of the grid. */
-function assertWindowFillsItsSlot(
-  entry: MobileWebBundleAssetRead,
-  offset: number,
-  byteLength: number,
-  eof: boolean,
-  windowBytes: number
-): void {
-  const { path, byteLength: declared } = entry
-  const expected = windowSlotBytes(entry, offset, windowBytes)
-  if (byteLength === expected && eof === offset + windowBytes >= declared) {
-    return
-  }
-  const end = offset + byteLength
-  if (byteLength > windowBytes) {
+async function verifyReassembledAsset(
+  asset: AssetReassembly,
+  reader: MobileWebBundleWindowReader
+): Promise<Uint8Array> {
+  const whole = await reader.inflate(asset.entry, asset.whole)
+  const { path, byteLength } = asset.entry
+  if (whole.byteLength !== byteLength) {
     throw new MobileWebBundleFetchError(
-      'chunk-oversize',
-      `bundle window for ${path} at ${offset} is ${byteLength} bytes, over the ${windowBytes}-byte window`
+      whole.byteLength > byteLength ? 'asset-overlong' : 'asset-short',
+      `bundle asset ${path} inflated to ${whole.byteLength} of ${byteLength} declared bytes`
     )
   }
-  if (byteLength > expected || (byteLength > 0 && !eof && end >= declared)) {
-    throw new MobileWebBundleFetchError(
-      'asset-overlong',
-      `bundle asset ${path} is longer than the manifest declares`
-    )
-  }
-  if (!eof && byteLength === 0) {
-    throw new MobileWebBundleFetchError(
-      'asset-no-progress',
-      `bundle asset ${path} made no progress at ${offset}`
-    )
-  }
-  throw new MobileWebBundleFetchError(
-    'asset-short',
-    eof
-      ? `bundle asset ${path} ended at ${end} of ${declared} declared bytes`
-      : `bundle window for ${path} at ${offset} carried ${byteLength} of ${expected} bytes without ending the asset`
-  )
-}
-
-async function verifyReassembledAsset(asset: AssetReassembly): Promise<Uint8Array> {
   // Native: hashing in JS held the JS thread for seconds, and React's progress renders waited on it.
-  const hashed = toHex(new Uint8Array(await digest(CryptoDigestAlgorithm.SHA256, asset.whole)))
+  const hashed = toHex(new Uint8Array(await digest(CryptoDigestAlgorithm.SHA256, whole)))
   if (hashed !== asset.entry.sha256) {
     throw new MobileWebBundleFetchError(
       'asset-checksum-mismatch',
       `bundle asset ${asset.entry.path} hashed ${hashed}, not ${asset.entry.sha256}`
     )
   }
-  return asset.whole
-}
-
-// Validate build/path/offset/length/hash echoes so misrouted or post-update replies cannot corrupt reassembly.
-function assertWindowDescribesAsset(
-  reply: MobileWebBundleWindowHeader,
-  asset: MobileWebBundleAssetRead,
-  buildId: string,
-  offset: number
-): void {
-  if (reply.buildId !== buildId) {
-    throw new MobileWebBundleFetchError(
-      'build-changed-mid-fetch',
-      `bundle build changed mid-fetch: asked ${buildId}, served ${reply.buildId}`
-    )
-  }
-  if (reply.path !== asset.path || reply.offset !== offset) {
-    throw new MobileWebBundleFetchError(
-      'chunk-misrouted',
-      `bundle window answered ${reply.path} at ${reply.offset}, not ${asset.path} at ${offset}`
-    )
-  }
-  if (reply.sha256 !== asset.sha256 || reply.assetByteLength !== asset.byteLength) {
-    throw new MobileWebBundleFetchError(
-      'asset-entry-changed',
-      `bundle asset ${asset.path} no longer matches the manifest entry`
-    )
-  }
+  return whole
 }
 
 /** Only the caller's abort surfaces as `fetch-stopped`; an internal stop rejects with the failure

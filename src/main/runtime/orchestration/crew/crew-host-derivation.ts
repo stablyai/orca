@@ -1,16 +1,18 @@
 import { createCrewRecipientInputs } from './crew-recipient-inputs'
 import { captureCrewIdentityInputs } from './crew-identity-inputs'
-import type { FleetDurableWorker } from '../../../../shared/orchestration-fleet-projection'
-import { createFleetStatusIndex } from '../../../../shared/orchestration-fleet-status-index'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-freshness'
+import type { FleetDurableWorker } from '../../../../shared/orchestration/fleet/orchestration-fleet-projection'
+import { createFleetStatusIndex } from '../../../../shared/orchestration/fleet/orchestration-fleet-status-index'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import { creatorFirstParent } from './crew-rules'
 import { createCrewPartyRegistry, type Party } from './crew-parties'
 import { readCrewAssignments, type CrewAssignmentRow } from './crew-query'
 import { createCrewSourceInputs } from './crew-source-inputs'
-import type { CrewReadDependencies } from './crew-read-model'
+import type { CrewReadDependencies } from './crew-read-dependencies'
 
-export function createCrewHostDerivation(deps: CrewReadDependencies, now: number) {
+export function createCrewHostDerivation(deps: CrewReadDependencies, capacity?: () => number) {
   const { statuses, ...sources } = captureCrewIdentityInputs(deps)
+  // Reading statuses can refresh the same source; capture its cutoff afterwards.
+  const now = deps.now ?? Date.now()
   const registry = createCrewPartyRegistry({ ...sources, statuses })
   const { alias } = registry
   const identity = deps.openIdentityRead?.()
@@ -145,8 +147,8 @@ export function createCrewHostDerivation(deps: CrewReadDependencies, now: number
       }
     }
   }
-  const sourceInputs = createCrewSourceInputs(deps.db)
-  return refreshCrewStatuses(
+  const sourceInputs = createCrewSourceInputs(deps.db, capacity)
+  return indexCrewStatuses(
     {
       registry,
       sourceInputs,
@@ -174,7 +176,12 @@ export function refreshCrewStatuses<
     workersById: Map<string, FleetDurableWorker>
   }
 >(host: T, statuses: CrewReadDependencies['statuses']) {
-  statuses = structuredClone(statuses)
+  return indexCrewStatuses(host, structuredClone(statuses))
+}
+
+function indexCrewStatuses<
+  T extends { deps: CrewReadDependencies; workersById: Map<string, FleetDurableWorker> }
+>(host: T, statuses: CrewReadDependencies['statuses']) {
   const statusIndex = createFleetStatusIndex(statuses, [...host.workersById.values()])
   const statusesByPane = new Map<string, (typeof statuses)[number]>()
   for (const status of statuses) {

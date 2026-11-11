@@ -7,10 +7,10 @@ import {
   ContextMenuSubTrigger
 } from '@/components/ui/context-menu'
 import { PanelBottomClose, PanelRightClose, SquareTerminal } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { requestActiveTerminalPaneSplit } from './request-active-terminal-pane-split'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 export function TerminalTabSplitMenuSection({
   unifiedTabId,
@@ -33,6 +33,7 @@ export function TerminalTabSplitMenuSection({
   showTerminalSplit?: boolean
   trailingSeparator?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const splitActiveTerminalPane = (direction: 'vertical' | 'horizontal'): void => {
     if (!isActive) {
       onActivate(tabId)
@@ -47,7 +48,7 @@ export function TerminalTabSplitMenuSection({
         <ContextMenuSub>
           <ContextMenuSubTrigger className="[&>svg:last-child]:size-3.5">
             <SquareTerminal className="size-3.5 shrink-0" />
-            {translate(
+            {t(
               'auto.components.tab.bar.TerminalTabSplitMenuSection.splitTerminal',
               'Split terminal'
             )}
@@ -58,7 +59,7 @@ export function TerminalTabSplitMenuSection({
           >
             <ContextMenuItem onSelect={() => splitActiveTerminalPane('vertical')}>
               <PanelRightClose className="size-3.5 shrink-0" />
-              {translate(
+              {t(
                 'auto.components.tab.bar.SortableTabContextMenu.splitTerminalRight',
                 'Split terminal right'
               )}
@@ -66,7 +67,7 @@ export function TerminalTabSplitMenuSection({
             </ContextMenuItem>
             <ContextMenuItem onSelect={() => splitActiveTerminalPane('horizontal')}>
               <PanelBottomClose className="size-3.5 shrink-0" />
-              {translate(
+              {t(
                 'auto.components.tab.bar.SortableTabContextMenu.splitTerminalDown',
                 'Split terminal down'
               )}

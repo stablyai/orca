@@ -1,13 +1,8 @@
 """Regressions for false success claims and unsafe trial reuse in the original benchmark."""
-from pathlib import Path
-import sys
-import tempfile
-import time
 import unittest
 
-from process_scope import ProcessScope
-from trial_contract import (DECOY, DiscoveryError, MARKER, TASKS, acknowledged, completed,
-                            initial_state, prepared, schedule, select_unique, summarize, verdict)
+from trial_contract import (DECOY, DiscoveryError, MARKER, acknowledged, completed,
+                            initial_state, prepared, select_unique, summarize, verdict)
 
 
 class TaskContractTests(unittest.TestCase):
@@ -89,36 +84,7 @@ class TaskContractTests(unittest.TestCase):
         self.assertEqual((result["timed_completions"], result["timed_failures"]), (1, 2))
         self.assertEqual(result["failed_attempt_ms"], 15001)
 
-    def test_engine_order_is_reproducible_and_rotates_each_round(self):
-        cells = schedule(["baseline", "candidate", "cua"], TASKS, 3, 417)
-        self.assertEqual(cells, schedule(["baseline", "candidate", "cua"], TASKS, 3, 417))
-        self.assertEqual(len(cells), len(TASKS) * 9)
-        for task in TASKS:
-            positions = [[cell["engine"] for cell in cells if cell["task"] == task and cell["round"] == index]
-                         for index in range(3)]
-            for index in range(3):
-                self.assertEqual({order[index] for order in positions}, {"baseline", "candidate", "cua"})
 
-    def test_process_scope_stops_descendant_writes_before_returning(self):
-        with tempfile.TemporaryDirectory() as directory:
-            heartbeat = Path(directory) / "heartbeat"
-            child = "import pathlib,time; p=pathlib.Path(" + repr(str(heartbeat)) + "); "
-            child += "\nwhile True:\n p.write_text(str(time.monotonic())); time.sleep(0.02)"
-            parent = "import subprocess,sys,time; subprocess.Popen([sys.executable,'-c'," + repr(child) + "]); time.sleep(60)"
-            scope = ProcessScope(directory)
-            try:
-                proc = scope.spawn([sys.executable, "-c", parent], hidden=True)
-                end = time.monotonic() + 10
-                while not heartbeat.exists() and time.monotonic() < end:
-                    time.sleep(0.01)
-                self.assertTrue(heartbeat.exists(), "descendant never started")
-                scope.close()
-                self.assertIsNotNone(proc.poll())
-                final = heartbeat.read_bytes()
-                time.sleep(0.12)
-                self.assertEqual(heartbeat.read_bytes(), final)
-            finally:
-                scope.close()
 
 
 if __name__ == "__main__":

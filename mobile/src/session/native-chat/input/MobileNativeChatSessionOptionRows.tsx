@@ -16,7 +16,11 @@ import {
   nativeChatSessionChoiceLabel,
   nativeChatSessionOptionActionLabel,
   nativeChatSessionOptionLabel
-} from '../../../../../src/shared/native-chat-session-option-labels'
+} from '../../../../../src/shared/native-chat/input/native-chat-session-option-labels'
+import {
+  loneFastTier,
+  speedButtonTiers
+} from '../../../../../src/shared/native-chat/input/native-chat-session-speed-tiers'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
 import { MobileSwitch } from '../../../components/MobileSwitch'
 
@@ -30,6 +34,7 @@ export function ModelPill({
   secondary,
   warning,
   icon: Icon,
+  leading,
   accessibleName,
   disabled,
   onPress
@@ -38,12 +43,15 @@ export function ModelPill({
   secondary: string | null
   warning: boolean
   icon?: LucideIcon
+  /** Shown before the label, unlike `icon`, which replaces it. */
+  leading?: LucideIcon
   accessibleName: string
   disabled: boolean
   onPress: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
-  const PillIcon = Icon ?? (warning ? ShieldAlert : undefined)
+  // A held pick's clock never hides the full-access warning.
+  const PillIcon = Icon ?? (warning ? ShieldAlert : leading)
   return (
     <Pressable
       accessibilityLabel={accessibleName}
@@ -123,11 +131,34 @@ type DescriptorRowsProps = {
   onInvokeAction: () => void
   /** A leading mark per choice, as each permission mode has its icon. */
   choiceLeading?: (value: string) => ReactNode
+  /** Whether search-only choices are revealed; without it they stay off the list. */
+  moreChoices?: { shown: boolean; onToggle: () => void }
+}
+
+/** A Fast-only speed, which toggles on one row like Claude's Fast mode. */
+function fastSpeedSwitch(descriptor: SessionOptionDescriptor) {
+  const speed = speedButtonTiers(descriptor)
+  const fast = speed ? loneFastTier(speed.tiers) : undefined
+  return speed && fast ? { standard: speed.standard, fast } : null
+}
+
+export function showsSessionOptionAsSwitch(descriptor: SessionOptionDescriptor): boolean {
+  return (
+    !descriptor.action &&
+    (descriptor.kind.type === 'boolean' || fastSpeedSwitch(descriptor) !== null)
+  )
 }
 
 /** One descriptor's rows as an array, so a ListGroup can draw the separators between them. */
 export function descriptorRowElements(
-  { descriptor, disabled, onSetOption, onInvokeAction, choiceLeading }: DescriptorRowsProps,
+  {
+    descriptor,
+    disabled,
+    onSetOption,
+    onInvokeAction,
+    choiceLeading,
+    moreChoices
+  }: DescriptorRowsProps,
   t: Translate
 ): ReactElement[] {
   const locked = disabled || !descriptor.settable
@@ -143,8 +174,10 @@ export function descriptorRowElements(
     ]
   }
   // An unknown baseline still renders a switch; the source marker prevents implying the value was confirmed.
-  if (descriptor.kind.type === 'boolean') {
-    const label = nativeChatSessionOptionLabel(descriptor, say)
+  const fastSpeed = fastSpeedSwitch(descriptor)
+  if (descriptor.kind.type === 'boolean' || fastSpeed) {
+    const { kind } = descriptor
+    const label = fastSpeed ? say('fastMode') : nativeChatSessionOptionLabel(descriptor, say)
     const marker = sessionOptionValueMarker(descriptor)
     return [
       <ListRow
@@ -160,8 +193,16 @@ export function descriptorRowElements(
         accessory={
           <MobileSwitch
             accessibilityLabel={label}
-            value={descriptor.kind.currentValue}
-            onValueChange={(next) => onSetOption(next)}
+            value={
+              kind.type === 'boolean'
+                ? kind.currentValue
+                : kind.currentValue === fastSpeed?.fast.value
+            }
+            onValueChange={(next) =>
+              onSetOption(
+                fastSpeed ? (next ? fastSpeed.fast.value : fastSpeed.standard.value) : next
+              )
+            }
             disabled={locked}
           />
         }
@@ -169,7 +210,7 @@ export function descriptorRowElements(
     ]
   }
   const { currentValue, choices } = descriptor.kind
-  return choices.map((choice) => (
+  const choiceRow = (choice: (typeof choices)[number]) => (
     <ListRow
       key={choice.value}
       title={nativeChatSessionChoiceLabel(choice, say, descriptor.id)}
@@ -179,7 +220,26 @@ export function descriptorRowElements(
       disabled={locked}
       onPress={() => onSetOption(choice.value)}
     />
-  ))
+  )
+  // No search here: search-only aliases follow a More models toggle, as compact pickers show them.
+  const more = moreChoices ? choices.filter((choice) => choice.searchOnly) : []
+  return [
+    ...choices.filter((choice) => !choice.searchOnly).map(choiceRow),
+    ...(more.length > 0 && moreChoices
+      ? [
+          <ListRow
+            key="more-choices"
+            title={
+              moreChoices.shown
+                ? t('chat.sessionOptionRows.fewerModels', 'Fewer models')
+                : t('chat.sessionOptionRows.moreModels', 'More models')
+            }
+            onPress={moreChoices.onToggle}
+          />,
+          ...(moreChoices.shown ? more.map(choiceRow) : [])
+        ]
+      : [])
+  ]
 }
 
 export function DescriptorRows(props: DescriptorRowsProps): React.JSX.Element {

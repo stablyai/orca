@@ -1,13 +1,13 @@
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
 import { deleteStructuredAgentLaunchRecord } from './structured-agent-session-launch-persistence'
+import { hasStructuredAgentSessionLaunchCancellationTombstone } from './structured-agent-session-launch-registry'
 import {
   getPersistedStructuredAgentLaunchRecord,
   getStructuredLaunchStateBySessionId,
-  hasStructuredAgentSessionLaunchCancellationTombstone,
   notifyStructuredLaunchListeners
-} from './structured-agent-session-launch-registry'
-import { forgetUnlistedCreatedChat } from '../../structured-agent-session-unlisted-created-chats'
+} from './structured-agent-session-launch-state-store'
+import { forgetUnlistedCreatedChat } from './pane/structured-agent-session-unlisted-created-chats'
 
 function confirmStructuredLaunchFirstMessagePublication(
   worktreeId: string,
@@ -43,7 +43,7 @@ export function markStructuredAgentSessionLaunchPublished(
       return false
     }
     deleteStructuredAgentLaunchRecord(sessionId)
-    notifyStructuredLaunchListeners()
+    notifyStructuredLaunchListeners(sessionId)
     return true
   }
   if (
@@ -71,7 +71,7 @@ export function markStructuredAgentSessionLaunchPublished(
   state.callers.outcome = 'published'
   deleteStructuredAgentLaunchRecord(sessionId)
   state.callers.onSettled()
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchListeners(sessionId)
   return true
 }
 

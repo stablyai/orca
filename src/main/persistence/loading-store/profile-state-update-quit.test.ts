@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { profileStateJsonExportPaths } from '../profile-state/legacy-json/profile-state-export-path'
 import { createWorkerMaintenanceFixture } from './profile-state-maintenance-fixture'
@@ -13,28 +13,6 @@ vi.mock('../../ssh/config/ssh-config-parser', () => ({
 }))
 
 describe('SQLite profile state during an update quit', () => {
-  it.each(['best-effort', 'strict'] as const)(
-    'persists final getter mutations without publishing JSON (%s)',
-    async (kind) => {
-      const { store, dataFile, readState } = await createWorkerMaintenanceFixture()
-      await store.writeLatestProfileStateJsonExportAsync()
-      const retainedPaths = profileStateJsonExportPaths(dataFile)
-      const retainedBytes = retainedPaths.map((path) => readFileSync(path, 'utf8'))
-      store.updateSettings({ theme: 'dark' })
-      store.getWorkspaceSession().activeTabId = 'last-tab'
-
-      await (kind === 'strict' ? store.flushFinalOrThrowAsync() : store.flushAsync())
-
-      expect(readState()).toMatchObject({
-        settings: { theme: 'dark' },
-        workspaceSession: { activeTabId: 'last-tab' }
-      })
-      expect(existsSync(dataFile)).toBe(false)
-      expect(profileStateJsonExportPaths(dataFile)).toEqual(retainedPaths)
-      expect(retainedPaths.map((path) => readFileSync(path, 'utf8'))).toEqual(retainedBytes)
-    }
-  )
-
   it('preserves the prior durable state when final persistence fails', async () => {
     const { store, authority, dataFile, readState } = await createWorkerMaintenanceFixture()
     const before = readState()

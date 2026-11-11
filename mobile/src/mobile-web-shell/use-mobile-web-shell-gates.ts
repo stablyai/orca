@@ -1,11 +1,11 @@
 import { useEffect } from 'react'
-import type { HostStatusGates } from '../transport/host-status-gates'
-import type { HostStatusReply } from '../transport/host-status-reply-schema'
-import { provenHostStatus } from '../transport/proven-host-status'
-import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
+import type { HostStatusGates } from '../transport/connection/host-status-gates'
+import type { HostStatusReply } from '../transport/hosts/host-status-reply-schema'
+import { provenHostStatus } from '../transport/connection/proven-host-status'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../transport/connection/connection-state'
 import { readMobileWebShellReachability } from './mobile-web-shell-reachability'
-import { isEarlyConnectRetry } from '../transport/connection-health'
+import { isEarlyConnectRetry } from '../transport/connection/connection-health'
 import type { MobileWebShellGates } from './mobile-web-shell-session-contract'
 
 /** Feeds the host route's gates to the shell session, and returns the status they proved for the page's init. */

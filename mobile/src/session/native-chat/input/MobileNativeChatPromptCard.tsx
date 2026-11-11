@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import {
   Animated,
   Easing,
@@ -15,7 +15,10 @@ import { colors, pressedStyle, radii, spacing, typography } from '../../../theme
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import type { AskAnswerSelection } from '../../../../../src/shared/native-chat-ask-answer'
+import type {
+  AskAnswerSelection,
+  NativeChatAnswerSource
+} from '../../../../../src/shared/native-chat/input/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
 import { MobileNativeChatAsk } from './MobileNativeChatAsk'
 import { MobileNativeChatPermission } from './MobileNativeChatPermission'
@@ -24,10 +27,16 @@ import { MobileNativeChatQuestion } from './MobileNativeChatQuestion'
 import { MobileNativeChatStructuredAsk } from './MobileNativeChatStructuredAsk'
 import { mobileChatQuestionKey, type MobileChatQuestion } from './mobile-native-chat-question'
 import { MobileNativeChatPromptStrip } from './MobileNativeChatPromptStrip'
+import {
+  useMobileNativeChatLowerGeometry,
+  useMobileNativeChatLowerRegion
+} from '../mobile-native-chat-lower-region-context'
 
 // Keep dismissal in the controller across chat/terminal toggles; the shared resolver already chose the terminal card.
 export function MobileNativeChatPromptCard({
   ask,
+  askPending,
+  askSendSource,
   answering = false,
   askKey,
   onDismissAsk,
@@ -45,11 +54,17 @@ export function MobileNativeChatPromptCard({
   onAnswerQuestion
 }: {
   ask?: AskPrompt | null
+  askSendSource?: NativeChatAnswerSource
+  askPending?: boolean
   // The keyboard is up for this card's reply, so it may take the whole conversation area.
   answering?: boolean
   askKey?: string | null
   onDismissAsk?: () => void
-  onAnswerAsk?: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>
+  onAnswerAsk?: (
+    prompt: AskPrompt,
+    selections: AskAnswerSelection[],
+    onCreated?: (id: string) => void
+  ) => Promise<boolean>
   requiresTerminal?: boolean
   onAnswerInTerminal?: () => void
   onCancelAsk?: () => Promise<boolean>
@@ -87,8 +102,10 @@ export function MobileNativeChatPromptCard({
       <MobileNativeChatAsk
         key={askKey ?? 'ask'}
         prompt={ask}
-        onAnswer={async (selections) => {
-          const accepted = (await onAnswerAsk?.(ask, selections)) ?? false
+        answerPending={askPending}
+        answerSendSource={askSendSource}
+        onAnswer={async (selections, onCreated) => {
+          const accepted = (await onAnswerAsk?.(ask, selections, onCreated)) ?? false
           if (accepted && !ask.replyAsMessage) {
             onDismissAsk?.()
           }
@@ -131,16 +148,14 @@ export function MobileNativeChatPromptCard({
   // Hide without remounting so a collapsed prompt keeps partial selections.
   return (
     <>
-      <View
-        style={
-          collapsedPrompt
-            ? styles.collapsed
-            : [styles.shown, answering && styles.answering, arrival.arriving && styles.arriving]
-        }
+      <PromptCardSlot
+        collapsed={Boolean(collapsedPrompt)}
+        answering={answering}
+        arriving={arrival.arriving}
         onLayout={arrival.onLayout}
       >
         <Animated.View style={[styles.arrivalLayer, arrival.style]}>{card}</Animated.View>
-      </View>
+      </PromptCardSlot>
       {collapsedPrompt ? (
         <MobileNativeChatPromptStrip
           title={collapsedPrompt.title}
@@ -148,6 +163,44 @@ export function MobileNativeChatPromptCard({
         />
       ) : null}
     </>
+  )
+}
+
+function PromptCardSlot({
+  collapsed,
+  answering,
+  arriving,
+  onLayout,
+  children
+}: {
+  collapsed: boolean
+  answering: boolean
+  arriving: boolean
+  onLayout: (event: LayoutChangeEvent) => void
+  children: ReactNode
+}) {
+  const lower = useMobileNativeChatLowerRegion()
+  const { allocationHeight } = useMobileNativeChatLowerGeometry()
+  return (
+    <View
+      style={
+        collapsed
+          ? styles.collapsed
+          : [
+              styles.shown,
+              answering && styles.answering,
+              lower && { maxHeight: (allocationHeight ?? 0) * (answering ? 1 : 0.6) },
+              arriving && styles.arriving
+            ]
+      }
+      onLayout={(event) => {
+        if (!lower || allocationHeight !== null) {
+          onLayout(event)
+        }
+      }}
+    >
+      {children}
+    </View>
   )
 }
 

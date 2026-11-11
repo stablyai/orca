@@ -3,7 +3,7 @@ import type {
   RuntimeRequestSelection,
   RuntimeRpcFailure
 } from '../../shared/runtime-rpc-envelope'
-import { redactOrchestrationCompatibilitySecrets } from '../../shared/orchestration-compatibility-evidence'
+import { redactOrchestrationCompatibilitySecrets } from '../../shared/orchestration/orchestration-compatibility-evidence'
 
 export type {
   RuntimeRpcFailure,

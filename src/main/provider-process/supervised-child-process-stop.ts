@@ -1,4 +1,4 @@
-import type { ChildProcessHandle } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
 import {
   closeProviderProcess,
   rootOnlyProviderClosePolicy,
@@ -8,7 +8,7 @@ import type { ProviderCloseRequest } from './provider-process-supervisor'
 import { terminateProviderProcessTree } from './provider-process-teardown'
 
 type SupervisedChild = Pick<
-  ChildProcessHandle,
+  ChildProcess,
   'pid' | 'kill' | 'stdin' | 'exitCode' | 'signalCode' | 'once'
 >
 

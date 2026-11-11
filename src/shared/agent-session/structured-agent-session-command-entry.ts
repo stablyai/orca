@@ -25,11 +25,20 @@ export function isStructuredAgentSessionCommandTurn(
 export function structuredAgentSessionCommandTurnItemIds(
   items: readonly AgentJournalRenderItem[]
 ): ReadonlySet<string> {
-  const bodies = new Map(items.map((item) => [item.itemId, item.body]))
+  // Status re-derives on every journal write; index only the rare command entries, not every body in history.
+  const commands = new Map<string, AgentJournalItemBody>()
+  for (const item of items) {
+    if (isStructuredAgentSessionCommandEntry(item.body)) {
+      commands.set(item.itemId, item.body)
+    }
+  }
   const ids = new Set<string>()
+  if (commands.size === 0) {
+    return ids
+  }
   for (const item of items) {
     if (
-      isStructuredAgentSessionCommandTurn(readAgentJournalTurn(item.body), (id) => bodies.get(id))
+      isStructuredAgentSessionCommandTurn(readAgentJournalTurn(item.body), (id) => commands.get(id))
     ) {
       ids.add(item.itemId)
     }
@@ -37,9 +46,39 @@ export function structuredAgentSessionCommandTurnItemIds(
   return ids
 }
 
+export type AgentJournalBodyLookup = (itemId: string) => AgentJournalItemBody | null | undefined
+
+/** Command-turn membership read lazily through an indexed body lookup: only the turns a scan reaches are checked, not all history. */
+export function commandTurnsByBody(
+  bodyOf: AgentJournalBodyLookup
+): Pick<ReadonlySet<string>, 'has'> {
+  const known = new Map<string, boolean>()
+  return {
+    has: (itemId) => {
+      let command = known.get(itemId)
+      if (command === undefined) {
+        command = isStructuredAgentSessionCommandTurn(
+          readAgentJournalTurn(bodyOf(itemId) ?? undefined),
+          bodyOf
+        )
+        known.set(itemId, command)
+      }
+      return command
+    }
+  }
+}
+
+/** Lazy membership when the caller has an indexed body read; otherwise the scan of `items`. */
+export function commandTurnsOf(
+  items: readonly AgentJournalRenderItem[],
+  bodyOf: AgentJournalBodyLookup | undefined
+): Pick<ReadonlySet<string>, 'has'> {
+  return bodyOf ? commandTurnsByBody(bodyOf) : structuredAgentSessionCommandTurnItemIds(items)
+}
+
 export function isStructuredAgentSessionCommandRow(
   item: Pick<AgentJournalRenderItem, 'body' | 'turnScope'>,
-  commandTurnItemIds: ReadonlySet<string>
+  commandTurnItemIds: Pick<ReadonlySet<string>, 'has'>
 ): boolean {
   const scope = item.turnScope
   return (

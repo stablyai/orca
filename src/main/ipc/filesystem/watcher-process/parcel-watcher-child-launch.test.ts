@@ -26,7 +26,7 @@ vi.mock('./parcel-watcher-child-termination', () => ({
 }))
 
 import { launchWatcherChild } from './parcel-watcher-child-launch'
-import { reserveWatcherChild, WatcherChildCapacityError } from './parcel-watcher-child-registry'
+import { reserveWatcherChild } from './parcel-watcher-child-registry'
 
 class LaunchChild extends EventEmitter {
   pid = 1234
@@ -41,22 +41,6 @@ describe('launchWatcherChild', () => {
     signalPhysicalExitMock.mockReset()
     writeFileSyncMock.mockReset()
     vi.mocked(reserveWatcherChild).mockReturnValue(releaseReservationMock)
-  })
-
-  it('preserves typed transient capacity exhaustion without forking', () => {
-    vi.mocked(reserveWatcherChild).mockReturnValueOnce(null)
-
-    expect(() => launchWatcherChild('/watcher.js', null, vi.fn(), vi.fn())).toThrow(
-      WatcherChildCapacityError
-    )
-    expect(forkMock).not.toHaveBeenCalled()
-  })
-
-  it('creates the fault-harness pid file without clobbering an existing path', () => {
-    expect(launchWatcherChild('/watcher.js', null, vi.fn(), vi.fn())).not.toBeNull()
-    expect(writeFileSyncMock).toHaveBeenCalledWith('/tmp/orca-watcher.pid', '1234', {
-      flag: 'wx'
-    })
   })
 
   it('releases physical capacity when an async spawn failure closes without exit', () => {

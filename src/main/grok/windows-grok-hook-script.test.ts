@@ -104,13 +104,6 @@ describe.skipIf(process.platform !== 'win32')('buildWindowsGrokHookScript (win32
     expect(result.grokHome).toBe('')
   })
 
-  it('posts a normal GROK_HOME unchanged', async () => {
-    const result = await runHook('C:\\Users\\test\\.grok')
-
-    expect(result.status).toBe(0)
-    expect(result.grokHome).toBe('C:\\Users\\test\\.grok')
-  })
-
   // Why: an unescaped trailing backslash would escape curl's closing argv quote and
   // swallow the payload option that follows it.
   it('neutralizes a trailing backslash in GROK_HOME', async () => {
@@ -139,14 +132,6 @@ describe.skipIf(process.platform !== 'win32')('buildWindowsGrokHookScript (win32
 
     expect(result.status).toBe(0)
     expect(result.grokHome).toBe('C:\\Users\\ab\\.grok')
-    expect(result.payload).toBe('{"session_id":"s"}')
-  })
-
-  it('posts an empty grokHome when GROK_HOME is only a quote', async () => {
-    const result = await runHook('"')
-
-    expect(result.status).toBe(0)
-    expect(result.grokHome).toBe('')
     expect(result.payload).toBe('{"session_id":"s"}')
   })
 

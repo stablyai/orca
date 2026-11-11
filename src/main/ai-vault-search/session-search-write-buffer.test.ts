@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import SyncDatabase from '../sqlite/sync-database'
-import { SessionSearchWriteBuffer } from './session-search-write-buffer'
+import { SessionSearchWriteBuffer, SessionSearchStagingBudget } from './session-search-write-buffer'
 import { SessionSearchIndexWriter } from './session-search-index-writer'
 import {
   openSessionSearchIndexFile,
@@ -65,8 +65,7 @@ it.each([1, 1_000_000])(
       ).toEqual([
         { role: 'user', text_truncated: 1 },
         { role: 'user', text_truncated: 1 },
-        { role: 'assistant', text_truncated: 0 },
-        { role: 'tool', text_truncated: 1 }
+        { role: 'assistant', text_truncated: 0 }
       ])
     } finally {
       write.discard()
@@ -119,3 +118,31 @@ it.each(['discard', 'close', 'removed', 'rollback'] as const)(
     }
   }
 )
+
+it('shares resident staging across handles without changing publication readiness or row order', () => {
+  const budget = new SessionSearchStagingBudget()
+  const buffers = Array.from(
+    { length: 4 },
+    () => new SessionSearchWriteBuffer(32 * 1024 * 1024, budget)
+  )
+  const text = '界'.repeat(8000)
+  try {
+    for (const buffer of buffers) {
+      for (let row = 0; row < 200; row++) {
+        buffer.add({ role: 'user', text: `${row}:${text}`, timestamp: null })
+      }
+    }
+    expect(budget.bytes).toBeLessThanOrEqual(8 * 1024 * 1024)
+    for (const buffer of buffers) {
+      expect(buffer.ready).toBe(false)
+      expect([...buffer.rows()].map((row) => row.text)).toEqual(
+        Array.from({ length: 200 }, (_, row) => `${row}:${text}`)
+      )
+    }
+  } finally {
+    for (const buffer of buffers) {
+      buffer.release()
+    }
+  }
+  expect(budget.bytes).toBe(0)
+})

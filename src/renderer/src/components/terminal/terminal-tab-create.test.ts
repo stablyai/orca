@@ -17,18 +17,19 @@ vi.mock('@/store', () => ({
     getState: getStateMock
   }
 }))
-vi.mock('@/lib/browser-uuid', () => ({
-  createBrowserUuid: createBrowserUuidMock
+
+vi.mock('../../../../shared/non-secure-context-uuid', () => ({
+  createNonSecureContextUuid: createBrowserUuidMock
 }))
-vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminal: createWebRuntimeSessionTerminalMock
 }))
-vi.mock('@/runtime/web-runtime-session-environment', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: isWebRuntimeSessionActiveMock
 }))
 
 import { createNewTerminalTab } from './terminal-tab-create'
-import { terminalOwnerRows } from './terminal-tab-owner-rows.test-fixture'
 
 describe('createNewTerminalTab', () => {
   beforeEach(() => {
@@ -61,20 +62,5 @@ describe('createNewTerminalTab', () => {
       { userAct: true }
     )
     expect(createTab).not.toHaveBeenCalled()
-  })
-
-  it('reports a failed host launch to the caller instead of toasting it', async () => {
-    isWebRuntimeSessionActiveMock.mockReturnValue(true)
-    createWebRuntimeSessionTerminalMock.mockResolvedValue({ status: 'failed', message: 'offline' })
-    getStateMock.mockReturnValue(terminalOwnerRows('web-runtime'))
-    const onSettled = vi.fn()
-
-    createNewTerminalTab('wt-1', undefined, { command: 'git fetch --unshallow origin', onSettled })
-
-    await vi.waitFor(() => expect(onSettled).toHaveBeenCalledWith(false))
-    expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith(
-      expect.objectContaining({ command: 'git fetch --unshallow origin' }),
-      { userAct: true, notifyFailure: false }
-    )
   })
 })

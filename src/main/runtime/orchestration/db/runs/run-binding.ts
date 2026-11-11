@@ -1,4 +1,4 @@
-import type { RunRow } from '../../types'
+import type { RunRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { LEGACY_CONTRACT_VERSION } from '../contract-constants'
 import { isEquivalentPaneKey } from '../pane-key-match'
@@ -9,7 +9,7 @@ import {
   mailboxAddressOf,
   runBoundToCoordinator,
   runCoordinatorKey
-} from '../../orchestration-caller-identity'
+} from '../../addressing/orchestration-caller-identity'
 
 export function bindRun(
   this: OrchestrationDb,
@@ -42,6 +42,15 @@ export function bindRun(
       return undefined
     }
     const sameBinding = runBoundToCoordinator(run, coordinator)
+    const peerRun = this.getPeerRun(params.runId)
+    if (peerRun && !sameBinding) {
+      // A paired Orca's Run has that Orca as its only consumer; it never binds anything here.
+      throw new OrchestrationError(
+        'consumer_fenced',
+        `Run ${params.runId} is coordinated from ${peerRun.home_label}, which stays its only coordinator. No effects were applied.`,
+        { effectsApplied: false }
+      )
+    }
     const explicitTakeover = params.takeoverLegacy === true
     // Why: before the legacy gate, so a worker never sees its --takeover-legacy recovery command.
     const workerRefusal = sameBinding

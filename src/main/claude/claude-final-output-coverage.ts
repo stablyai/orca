@@ -1,7 +1,7 @@
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
-} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+} from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 
 /** A refused final snapshot makes this acquisition's leaf unsafe; the next open re-derives it. */
 export function createClaudeFinalOutputCoverage(target: StructuredAgentSessionEventSink) {

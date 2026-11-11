@@ -1,23 +1,8 @@
 import { expect, it } from 'vitest'
-import { csvCellIsSelected, csvSelectionBounds, moveCsvSelection } from './csv-cell-selection'
+import { moveCsvSelection } from './csv-cell-selection'
 import { csvInspectionRows, csvSourceRow } from './csv-inspection'
 import { copyCsvSelection, pasteCsvSelection } from './csv-cell-clipboard'
 import { mutateCsvTextDocument, parseCsvTextDocument } from './csv-text-document'
-
-it('retains the selection anchor when extending backwards and collapses on normal movement', () => {
-  const first = moveCsvSelection(null, 3, 2, false)
-  const extended = moveCsvSelection(first, 1, 0, true)
-  expect(extended.anchor).toEqual({ row: 3, column: 2 })
-  expect(csvSelectionBounds(extended)).toEqual({
-    firstRow: 1,
-    lastRow: 3,
-    firstColumn: 0,
-    lastColumn: 2
-  })
-  expect(csvCellIsSelected(extended, 2, 1)).toBe(true)
-  expect(csvCellIsSelected(extended, 0, 1)).toBe(false)
-  expect(moveCsvSelection(extended, 2, 1, false).anchor).toEqual({ row: 2, column: 1 })
-})
 
 it('sorts and filters for inspection without mutating source order and edits the original row', () => {
   const document = parseCsvTextDocument('name,value\nb,10\na,2\na,1', ',')

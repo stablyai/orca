@@ -1,4 +1,4 @@
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 /** Recovery/remount/budget/native-chat guards must all use terminal rows; unified-index gaps previously erased each remount’s budget and defeated its cap (b5cfc6ca). */
 export function locateTerminalTab(
