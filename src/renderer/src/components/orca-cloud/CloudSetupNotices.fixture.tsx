@@ -49,8 +49,8 @@ function cards(views: readonly CloudToastView[]) {
     width: 420,
     render: () => (
       <div className="flex flex-col items-end gap-3 bg-background p-4">
-        {views.map((view, index) => (
-          <CloudToastCard key={index} view={view} onDismiss={noop} />
+        {views.map((view) => (
+          <CloudToastCard key={view.lines[0]?.key} view={view} onDismiss={noop} />
         ))}
       </div>
     )

@@ -4,9 +4,12 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-type CustomCall = [render: () => React.ReactNode, options: { id: string; className?: string }]
 const { sonner } = vi.hoisted(() => ({
-  sonner: { custom: vi.fn(), dismiss: vi.fn() }
+  sonner: {
+    custom:
+      vi.fn<(render: () => React.ReactNode, options: { id: string; className?: string }) => void>(),
+    dismiss: vi.fn<(id: string) => void>()
+  }
 }))
 vi.mock('sonner', () => ({ toast: sonner }))
 
@@ -45,7 +48,7 @@ const infoView: CloudToastView = { priority: 'info', lines: [{ key: 'i', text: '
 function sonnerStack(): string[] {
   const dismissed = new Set(sonner.dismiss.mock.calls.map(([id]) => id))
   const order: string[] = []
-  for (const [, options] of sonner.custom.mock.calls as CustomCall[]) {
+  for (const [, options] of sonner.custom.mock.calls) {
     if (options.className === 'cloud-toast-gone') {
       continue
     }
@@ -58,7 +61,7 @@ function sonnerStack(): string[] {
 
 /** Renders what sonner would render for an internal id (its latest custom content). */
 function renderInternal(internalId: string) {
-  const call = (sonner.custom.mock.calls as CustomCall[]).findLast(
+  const call = sonner.custom.mock.calls.findLast(
     ([, options]) => options.id === internalId && options.className !== 'cloud-toast-gone'
   )
   return render(<>{call?.[0]()}</>)
@@ -127,7 +130,7 @@ describe('cloud toast stack (DS-q)', () => {
   it('guard 2: the re-add skips the enter animation and the old card leaves without one', () => {
     showCloudToast(AGENT, agentView(), {}, 0)
     showCloudToast(PUSH, pushView, {}, 1)
-    const calls = sonner.custom.mock.calls as CustomCall[]
+    const calls = sonner.custom.mock.calls
     const gone = calls.find(([, options]) => options.className === 'cloud-toast-gone')
     expect(gone?.[1].id).toBe(`${AGENT}#0`)
     expect(sonner.dismiss).toHaveBeenCalledWith(`${AGENT}#0`)
