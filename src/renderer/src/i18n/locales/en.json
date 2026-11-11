@@ -27779,7 +27779,7 @@
     "useChatGPT": "Use my ChatGPT account",
     "notSetUpKey": "Not set up · using {{key}}",
     "notSetUp": "Not set up",
-    "notSetUpDetail": "One sign-in on this computer. Then every cloud workspace can use it.",
+    "notSetUpDetail": "One sign-in. Then every cloud workspace can use it.",
     "tryAgain": "Try again",
     "expired": "Your {{agent}} sign-in expired",
     "expiredDetail": "Cloud workspaces use {{key}} until you renew. Nothing else changed.",

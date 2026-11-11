@@ -56,13 +56,18 @@ const NOT_SET_UP: OrcaCloudAccountRow = { kind: 'notSetUp', keyKind: null }
 describe('OrcaCloudAccountsView', () => {
   afterEach(cleanup)
 
-  it('keeps the policy reachable from a focusable info button and starts setup per agent', () => {
+  it('keeps the policy visible, the storage note in a tooltip, and starts setup per agent', () => {
     const handlers = view({ claude: NOT_SET_UP, codex: { kind: 'notSetUp', keyKind: 'team' } })
-    // JA-23: the mandatory A1 line moved into a tooltip; its text stays in the accessibility tree.
-    const info = screen.getByRole('button', {
-      name: /used only in your own workspaces\. Teammates never use them\./
-    })
-    expect(info.tagName).toBe('BUTTON')
+    // JA-23: the mandatory A1 sentence stays visible in the description, verbatim.
+    expect(
+      screen.getByText(
+        /Your Claude and ChatGPT accounts are used only in your own workspaces\. Teammates never use them\./
+      )
+    ).toBeTruthy()
+    // Where it's kept moves from every active row into one focusable info button.
+    expect(
+      screen.getByRole('button', { name: 'Kept in your Orca account, never in a sandbox.' })
+    ).toBeTruthy()
     expect(screen.getByText('Not set up · using the team key')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Use my ChatGPT account' }))
     expect(handlers.start).toHaveBeenCalledWith('codex')

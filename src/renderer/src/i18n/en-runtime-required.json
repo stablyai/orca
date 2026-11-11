@@ -2328,9 +2328,6 @@
   "menu": {
     "quitApp": "Quit {{appName}}"
   },
-  "orcaCloudAccounts": {
-    "notSetUpDetail": "One sign-in on this computer. Then every cloud workspace can use it."
-  },
   "orcaCloudMove": {
     "confirm": {
       "changesCount_one": "{{count}} uncommitted change, plus untracked files",
