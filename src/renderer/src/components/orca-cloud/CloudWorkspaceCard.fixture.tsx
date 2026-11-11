@@ -9,6 +9,8 @@ import {
   type HostedWorkspaceStatus
 } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 import type { CloudSyncView } from '../../../../shared/cloud-sync/cloud-sync-contract'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { CloudWorkspaceStatusPanel, type CloudCardLayer } from './CloudWorkspaceStatusPanel'
 import type { CloudCardAttention } from './cloud-workspace-card-model'
 
@@ -171,16 +173,50 @@ export const onComputerContextEmpty = card({
   emptyContext: true
 })
 
+const placementRepo: Repo = {
+  id: 'hello-world',
+  path: '/Users/me/src/Hello-World',
+  displayName: 'Hello-World',
+  badgeColor: '',
+  addedAt: 1
+}
+const PLACEMENT_ID = 'hello-world::/home/ubuntu/orca/workspaces/Hello-World/fix-login-redirect'
+const placementWorktree: Worktree = {
+  id: PLACEMENT_ID,
+  repoId: placementRepo.id,
+  instanceId: 'fix-login-redirect',
+  path: '/home/ubuntu/orca/workspaces/Hello-World/fix-login-redirect',
+  displayName: 'fix-login-redirect',
+  branch: 'fix-login-redirect',
+  head: 'abc123',
+  isBare: false,
+  isMainWorktree: false,
+  comment: '',
+  linkedIssue: null,
+  linkedPR: null,
+  linkedLinearIssue: null,
+  isArchived: false,
+  isUnread: false,
+  isPinned: false,
+  sortOrder: 0,
+  lastActivityAt: 1
+}
+
 /** Opened from the sidebar: the card sits beside the sidebar, so the row it describes stays visible. */
 export const besideSidebar = defineFixture({
   width: 720,
+  // The workspace record, so the card's first line (its name and accessible title) shows.
+  store: {
+    repos: [placementRepo],
+    worktreesByRepo: { [placementRepo.id]: [placementWorktree] }
+  },
   setup: () => {
     seedCloudWorkspaceSnapshot({
-      ids: new Set(['card-placement']),
+      ids: new Set([PLACEMENT_ID]),
       idsLoaded: true,
-      status: { 'card-placement': entry(running) }
+      status: { [PLACEMENT_ID]: entry(running) }
     })
-    seedCloudSyncView(syncView('card-placement', false))
+    seedCloudSyncView(syncView(PLACEMENT_ID, false))
   },
   render: () => (
     <div className="flex h-[420px] bg-background">
@@ -189,7 +225,7 @@ export const besideSidebar = defineFixture({
         className="w-64 shrink-0 border-e border-border bg-worktree-sidebar p-2"
       >
         <div className="flex items-center gap-2 rounded-md bg-muted/60 px-2 py-1.5 text-[13px]">
-          <CloudWorkspaceMark workspaceId="card-placement" />
+          <CloudWorkspaceMark workspaceId={PLACEMENT_ID} />
           <span className="truncate text-foreground">fix-login-redirect</span>
           <span className="ms-auto rounded border border-border px-1 text-[10px] text-muted-foreground">
             Orca Cloud
