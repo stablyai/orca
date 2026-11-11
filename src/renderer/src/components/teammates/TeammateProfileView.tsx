@@ -142,7 +142,7 @@ export function TeammateProfileView(props: TeammateProfileViewProps): React.JSX.
         <LargeAvatar userId={props.userId} name={props.name} />
         <div className="min-w-0 flex-1">
           <h2
-            className="flex min-w-0 items-center gap-2 text-base font-semibold"
+            className="flex min-w-0 items-center gap-2 text-base font-semibold outline-none"
             data-teammate-profile-heading
             tabIndex={-1}
           >
