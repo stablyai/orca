@@ -1,4 +1,4 @@
-import type { MessageType, WorkerDispatchState } from '../db/orchestration-records'
+import type { WorkerDispatchState } from '../db/orchestration-records'
 import type { OrchestrationDb } from '../db/orchestration-db'
 
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -7,14 +7,13 @@ import { crossMachineMessageType } from '../federation/cross-machine-message-typ
 import { waitForFederatedLifecycleSettlement } from './federation-lifecycle-settlement'
 import { bindCoordinatorMutationPayload } from '../workers/reports/dispatch-message-binding'
 import { ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
-import type { z } from 'zod'
 import { parseRemoteWorkerPayload } from '../../rpc/methods/orchestration/messaging/message-payload'
-import type { SendParams } from '../../rpc/methods/orchestration/messaging/send-params'
+import type { ResolvedSendParams } from '../../rpc/methods/orchestration/messaging/send-params'
 import { rejectFederatedExplicitTarget } from '../../rpc/methods/orchestration/routing'
 import { WORKER_DONE_RECORDED_NEXT } from '../../rpc/methods/orchestration/receipt-next'
 import { assertWorkerCanReport } from '../workers/reports/worker-report-admission'
 
-type SendParamsInput = z.infer<typeof SendParams>
+type SendParamsInput = ResolvedSendParams
 
 type RemoteAttachment = {
   dispatch_id: string
@@ -46,7 +45,7 @@ export async function sendRemoteMessage(args: {
     })
   })
 
-  const type = crossMachineMessageType((params.type ?? 'status') as MessageType)
+  const type = crossMachineMessageType(params.type)
   const payload = parseRemoteWorkerPayload(params.payload)
   if (
     typeof payload.dispatchId === 'string' &&

@@ -12,7 +12,7 @@ import {
 } from '../../../../orchestration/federation/peer-mail/peer-mail-delivery'
 import type { RpcContext } from '../../../core'
 import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
-import type { SendParams } from './send-params'
+import { resolveSendType, type ResolvedSendParams, type SendParams } from './send-params'
 
 const NOTHING_SENT = { effectsApplied: false } as const
 
@@ -49,7 +49,7 @@ export function peerMailLocalCaller(args: {
 
 /** `send --on <server>`: this Orca carries the mail and keeps the conversation the replies come back on. */
 export async function sendPeerMail(args: {
-  params: z.infer<typeof SendParams> & { on: string }
+  params: ResolvedSendParams & { on: string }
   runtime: OrcaRuntimeService
   orchestrationCaller: OrchestrationEntryCaller | undefined
   attestedCaller: OrchestrationCompatibilityCallerAuthority | undefined
@@ -65,11 +65,11 @@ export async function sendPeerMail(args: {
       NOTHING_SENT
     )
   }
-  const type = params.type ?? 'notice'
+  const type = params.type
   if (type !== 'notice' && type !== 'status' && type !== 'handoff') {
     throw new OrchestrationError(
       'invalid_argument',
-      `--on carries --type notice or handoff, not ${type}. Nothing was sent.`,
+      `--on carries --type notice, status or handoff, not ${type}. Nothing was sent.`,
       NOTHING_SENT
     )
   }
@@ -108,13 +108,13 @@ export async function sendPeerMail(args: {
   )
 }
 
-type SendInput = z.infer<typeof SendParams>
-
-/** `send --on` goes to the paired server; every other send, and every replay, runs `send`. */
+/** The entry of `orchestration.send`: resolves the default type once, then `send --on` goes to the paired
+ *  server and every other send, and every replay, runs `send`. */
 export function withPeerMailSend<R>(
-  send: (params: SendInput, ctx: RpcContext) => Promise<R>
-): (params: SendInput, ctx: RpcContext) => Promise<unknown> {
-  return async (params, ctx) => {
+  send: (params: ResolvedSendParams, ctx: RpcContext) => Promise<R>
+): (params: z.infer<typeof SendParams>, ctx: RpcContext) => Promise<unknown> {
+  return async (input, ctx) => {
+    const params = resolveSendType(input)
     const on = params.on
     if (on === undefined || ctx.replayedMutationReceipt !== undefined) {
       return await send(params, ctx)

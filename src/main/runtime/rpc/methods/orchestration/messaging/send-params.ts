@@ -5,7 +5,7 @@ import {
   requiredString
 } from '../../../../../../shared/rpc-contract/rpc-param-primitives'
 import { isGroupAddress } from '../../../../orchestration/addressing/groups/group-addressing'
-import { MESSAGE_TYPES } from '../../../../orchestration/db/orchestration-records'
+import { MESSAGE_TYPES, type MessageType } from '../../../../orchestration/db/orchestration-records'
 import {
   getLifecycleGroupRecipientError,
   isDispatchMutationMessageType
@@ -49,3 +49,11 @@ export const SendParams = z
       path: ['to']
     })
   })
+
+/** A send after its one default: with --to and no --type it is a notice; without --to, a status report up
+ *  the sender's own chain. Every sender below `orchestration.send` takes it already resolved. */
+export type ResolvedSendParams = z.infer<typeof SendParams> & { type: MessageType }
+
+export function resolveSendType(params: z.infer<typeof SendParams>): ResolvedSendParams {
+  return { ...params, type: params.type ?? (params.to ? 'notice' : 'status') }
+}

@@ -6,11 +6,10 @@ import { crossMachineMessageType } from '../federation/cross-machine-message-typ
 import { encodeFederatedControlMessage } from '../legacy-remote/federation-control-message'
 import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { recordReceiptBeforeNudge } from '../../rpc/methods/orchestration/messaging/mutation-replay-nudge'
-import type { SendParams } from '../../rpc/methods/orchestration/messaging/send-params'
+import type { ResolvedSendParams } from '../../rpc/methods/orchestration/messaging/send-params'
 import type { SendRecipientWarning } from '../../rpc/methods/orchestration/messaging/recipient-routing'
-import type { z } from 'zod'
 
-type SendParamsInput = z.infer<typeof SendParams>
+type SendParamsInput = ResolvedSendParams
 type SendReceipt = <T extends object>(receipt: T) => T & { warnings?: SendRecipientWarning[] }
 
 /** Delivers coordinator control mail to a federated worker when `to` names its exact Dispatch. */
@@ -74,7 +73,7 @@ export function sendFederatedControlMail(args: {
       from,
       subject: params.subject,
       body: params.body ?? '',
-      type: crossMachineMessageType(params.type ?? 'notice'),
+      type: crossMachineMessageType(params.type),
       priority: (params.priority ?? 'normal') as MessagePriority,
       threadId: params.threadId ?? null,
       payload: params.payload ?? null

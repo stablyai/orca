@@ -6,7 +6,8 @@ const TABLE_NAME = /^CREATE TABLE\s+(?:IF NOT EXISTS\s+)?(?:"messages"|messages)
 
 /** Lets messages store `notice`. SQLite cannot alter a CHECK, so the table is rebuilt once, as v9 did. */
 export function migrateV47(this: OrchestrationDb): void {
-  // Gated on the CHECK, not the version: another build may already have moved this database to v47.
+  // Gated on the CHECK, not the version: a new database already allows notice, and a later schema's
+  // migrate still rebuilds a database whose version moved past 47 without this step.
   if (this.messagesTypeCheckAllowsNotice()) {
     return
   }

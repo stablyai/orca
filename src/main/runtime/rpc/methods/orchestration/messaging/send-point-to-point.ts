@@ -1,7 +1,4 @@
-import type {
-  MessagePriority,
-  MessageType
-} from '../../../../orchestration/db/orchestration-records'
+import type { MessagePriority } from '../../../../orchestration/db/orchestration-records'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { reconcileLifecycleMessage } from '../../../../orchestration/workers/lifecycle/lifecycle-reconciliation'
@@ -9,7 +6,7 @@ import { bindCoordinatorMutationPayload } from '../../../../orchestration/worker
 import { isDispatchMutationMessageType } from '../../../../../../shared/rpc-contract/orchestration-params'
 import { parseMessageTaskId } from './message-payload'
 import { isDispatchAssignee } from '../../../../orchestration/db/dispatch-context/dispatch-lookup'
-import type { SendParams } from './send-params'
+import type { ResolvedSendParams } from './send-params'
 import { legacyWorkerDeliveryContract } from '../routing'
 import { exposeMessage } from './mailbox-message-receipt'
 import { WORKER_DONE_RECORDED_NEXT } from '../receipt-next'
@@ -19,9 +16,8 @@ import {
   workerReportRefusal,
   type WorkerReportRefusal
 } from '../../../../orchestration/workers/reports/worker-report-admission'
-import type { z } from 'zod'
 
-type SendParamsInput = z.infer<typeof SendParams>
+type SendParamsInput = ResolvedSendParams
 type SendReceipt = <T extends object>(receipt: T) => T & { warnings?: SendRecipientWarning[] }
 
 export function sendPointToPointMessage(args: {
@@ -57,7 +53,7 @@ export function sendPointToPointMessage(args: {
     withSendWarnings
   } = args
   revalidateLegacyCoordinator?.()
-  const messageType = (params.type ?? 'status') as MessageType
+  const messageType = params.type
   const processIncarnation = isDispatchMutationMessageType(messageType)
     ? resolveProcessIncarnation()
     : undefined

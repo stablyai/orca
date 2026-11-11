@@ -1,7 +1,4 @@
-import type {
-  MessagePriority,
-  MessageType
-} from '../../../../orchestration/db/orchestration-records'
+import type { MessagePriority } from '../../../../orchestration/db/orchestration-records'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
@@ -20,11 +17,10 @@ import { legacyWorkerDeliveryContract } from '../routing'
 import { exposeMessages } from './mailbox-message-receipt'
 import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
 
-import type { SendParams } from './send-params'
+import type { ResolvedSendParams } from './send-params'
 import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
-import type { z } from 'zod'
 
-type SendParamsInput = z.infer<typeof SendParams>
+type SendParamsInput = ResolvedSendParams
 type SendReceipt = <T extends object>(receipt: T) => T & { warnings?: SendRecipientWarning[] }
 
 type GroupAgentSnapshot = OrchestrationAddressableAgent & { tabId?: string; leafId?: string }
@@ -253,7 +249,7 @@ export async function sendGroupMessage(args: {
       to: resolution.to,
       subject: params.subject,
       body: params.body,
-      type: params.type as MessageType,
+      type: params.type,
       priority: params.priority as MessagePriority,
       threadId,
       payload: params.payload,

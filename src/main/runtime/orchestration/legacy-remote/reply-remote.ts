@@ -29,6 +29,8 @@ export async function replyToRemoteRunHome(args: {
   const sent = await sendRemoteMessage({
     params: {
       from,
+      // A reply is the worker's report back to its coordinator.
+      type: 'status',
       subject,
       body: params.body,
       threadId: original.thread_id ?? original.id,

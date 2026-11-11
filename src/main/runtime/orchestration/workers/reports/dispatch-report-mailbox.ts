@@ -10,11 +10,6 @@ export function federatedMessageNamesOnlyHome(
   )
 }
 
-/** Without --to, mail is a report up the sender's own chain; mail it addresses to an agent is a notice. */
-export function defaultSendType(to: string | undefined): MessageType {
-  return to ? 'notice' : 'status'
-}
-
 /** Reports about the worker's own task; gates and handoffs stay with the Run's coordinator. */
 export function isDispatchReportType(type: MessageType | undefined): boolean {
   return (
