@@ -24939,7 +24939,8 @@
       "new": "New branch",
       "newHint": "Create a new local branch",
       "newName": "New branch name",
-      "automaticName": "Automatic name"
+      "automaticName": "Automatic name",
+      "titleCloud": "Branch for this workspace"
     },
     "links": {
       "foreignReview": "This review belongs to another repository. Add reviews from this workspace’s repository.",

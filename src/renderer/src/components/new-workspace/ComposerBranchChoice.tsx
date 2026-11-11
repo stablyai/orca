@@ -14,6 +14,8 @@ type Props = {
   onBranchNameOverrideChange: (value: string | undefined) => void
   onOpenSelectedBranchWorkspace?: () => void
   disabled: boolean
+  /** Orca Cloud is the run target: the unit of work is a workspace (JA-25 glossary). */
+  cloud?: boolean
 }
 
 export function ComposerBranchChoice({
@@ -23,19 +25,21 @@ export function ComposerBranchChoice({
   branchNameOverride,
   onBranchNameOverrideChange,
   onOpenSelectedBranchWorkspace,
-  disabled
+  disabled,
+  cloud = false
 }: Props) {
   const t = useTranslate()
+  const title = cloud
+    ? t('workspace.branchChoice.titleCloud', 'Branch for this workspace')
+    : t('workspace.branchChoice.title', 'Branch for this worktree')
   const id = useId()
   const branchNameInputRef = useRef<HTMLInputElement>(null)
   const showOpenWorkspace = reuseSelectedBranch && Boolean(onOpenSelectedBranchWorkspace)
   return (
     <fieldset className="min-w-0 space-y-2" disabled={disabled}>
-      <legend className="text-xs font-medium text-muted-foreground">
-        {t('workspace.branchChoice.title', 'Branch for this worktree')}
-      </legend>
+      <legend className="text-xs font-medium text-muted-foreground">{title}</legend>
       <RadioGroup
-        aria-label={t('workspace.branchChoice.title', 'Branch for this worktree')}
+        aria-label={title}
         value={reuseSelectedBranch ? 'existing' : 'new'}
         onValueChange={(value) => onReuseSelectedBranchChange(value === 'existing')}
         disabled={disabled}

@@ -53,8 +53,8 @@ function RowAction({
 }
 
 /**
- * "Sandbox · 8 vCPU · 16 GB". The specs never split: below a 28rem container (the menu, or
- * the hint under the field) they drop out whole so "N sandbox hours left" keeps its room.
+ * "Sandbox · 8 vCPU · 16 GB" in the Run on menu row. The specs never split: below a 28rem
+ * container they drop out whole so "N sandbox hours left" keeps its room.
  */
 export function OrcaCloudSpecs({ t }: { t: Translate }): React.JSX.Element {
   return (
