@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
 
 const buildScript = fileURLToPath(new URL('./build-native-for-platform.mjs', import.meta.url))
-const BUILD_COUNT = 4
+const BUILD_COUNT = 5
 const directories = []
 const children = []
 const buildPids = new Set()

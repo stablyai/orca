@@ -46,6 +46,7 @@ import { withRolldownThreadLimit } from '../../tool-invocation/rolldown-thread-l
 import { withDevRolldownRuntimeEnv } from './dev-rolldown-runtime-env.mjs'
 import { copyPrivateTree } from '../../artifact-storage/reflink-copy/space-sharing-copy.mjs'
 import { buildDevSwiftCliHelpers } from '../../native-build/macos/swift-cli-helper-macos.mjs'
+import * as menuBar from '../../native-build/macos/build-menu-bar-macos.mjs'
 import {
   DEV_BUNDLE_ID,
   getDevBundlePlistPatches,
@@ -220,9 +221,10 @@ function prepareMacDevElectronApp() {
   const identityKey = process.env.ORCA_DEV_INSTANCE_KEY || repoRoot
   // v11 stabilizes Info.plist/cdhash; ignored stale marker fields permit schema narrowing without another bump.
   const bundleLayoutVersion = 'stable-cdhash-dock-name-from-bundle-dir-v11'
+  const menuBarIdentity = menuBar.menuBarBuildIdentity(repoRoot)
   const hash = createHash('sha1')
     .update(
-      `${sourceAppPath}\0${electronVersion ?? ''}\0${title}\0${identityKey}\0${bundleLayoutVersion}`
+      `${sourceAppPath}\0${electronVersion ?? ''}\0${title}\0${identityKey}\0${bundleLayoutVersion}\0${menuBarIdentity}`
     )
     .digest('hex')
     .slice(0, 12)
@@ -243,6 +245,7 @@ function prepareMacDevElectronApp() {
       sourceAppPath,
       electronVersion,
       bundleLayoutVersion,
+      menuBarIdentity,
       plistPatches: [...getDevBundlePlistPatches(), ...getDevHelperPlistPatches()]
     },
     null,
@@ -261,7 +264,8 @@ function prepareMacDevElectronApp() {
   const requiredResourcePaths = [
     chromiumResourcePath,
     path.join(appPath, 'Contents', 'MacOS', 'orca-keyboard-layout'),
-    path.join(appPath, 'Contents', 'MacOS', 'orca-process-footprint')
+    path.join(appPath, 'Contents', 'MacOS', 'orca-process-footprint'),
+    ...menuBar.menuBarAppFiles(path.join(appPath, 'Contents', 'Resources', 'Orca Menu Bar.app'))
   ]
 
   function copiedAppIsUsable() {
@@ -355,6 +359,7 @@ function prepareMacDevElectronApp() {
   }
 
   buildDevSwiftCliHelpers(path.join(appPath, 'Contents', 'MacOS'))
+  menuBar.buildDevMenuBarApp(appPath, bundleId)
 
   // Re-sign after copy/plist edits or macOS rejects notification registration (UNErrorDomain 1); signing failure stays nonfatal for dev.
   let signed = true

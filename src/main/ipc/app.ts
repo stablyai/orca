@@ -20,7 +20,11 @@ import { isWslAvailableAsync } from '../wsl/discovery/wsl-availability'
 import { listWslDistrosAsync } from '../wsl/discovery/distro-catalog'
 import { isGitBashAvailable } from '../pty/shell-startup/git-bash'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
-import { destroySystemTray, rebuildSystemTrayMenu } from '../tray/system-tray'
+import {
+  destroySystemTray,
+  inspectSystemTrayForQA,
+  rebuildSystemTrayMenu
+} from '../tray/system-tray'
 import {
   ensureDefaultFloatingWorkspacePath,
   trustFloatingWorkspaceDirectory,
@@ -124,6 +128,28 @@ function resolveDevFeatureWallAssetDir(): string {
 }
 
 export function registerAppHandlers(store: Store, options: RegisterAppHandlersOptions = {}): void {
+  if (process.env.ORCA_E2E_MENU_BAR === '1' && process.env.ORCA_E2E_USER_DATA_DIR) {
+    ipcMain.handle('e2e:menuBar', (event, command: unknown) => {
+      if (!isTrustedUIRenderer(event.sender) || !command || typeof command !== 'object') {
+        throw new Error('Menu bar QA request unavailable')
+      }
+      const request = command as { operation?: unknown; action?: unknown }
+      if (request.operation === 'inspect' || request.operation === 'tracking') {
+        return inspectSystemTrayForQA({ operation: request.operation })
+      }
+      if (
+        request.operation === 'invoke' &&
+        (request.action === 'open' ||
+          request.action === 'settings' ||
+          request.action === 'updates' ||
+          request.action === 'quit-completely' ||
+          request.action === 'quit')
+      ) {
+        return inspectSystemTrayForQA({ operation: 'invoke', action: request.action })
+      }
+      throw new Error('Invalid menu bar QA request')
+    })
+  }
   registerRendererShutdownCheckpointHandler(
     store,
     options.quitResumeRecordsFor,

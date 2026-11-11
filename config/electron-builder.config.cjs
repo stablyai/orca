@@ -519,6 +519,16 @@ module.exports = {
     chmodUnixCliLaunchers(resourcesDir, context.electronPlatformName)
     if (context.electronPlatformName === 'darwin') {
       await signMacComputerUseHelper(join(resourcesDir, 'Orca Computer Use.app'), context.packager)
+      const menuBarApp = join(resourcesDir, 'Orca Menu Bar.app')
+      if (!existsSync(join(menuBarApp, 'Contents', 'MacOS', 'orca-menu-bar'))) {
+        throw new Error('Missing Orca Menu Bar helper app')
+      }
+      await signMacStandaloneHelper(
+        join(menuBarApp, 'Contents', 'MacOS', 'orca-menu-bar'),
+        'orca-menu-bar',
+        context.packager
+      )
+      await signMacStandaloneHelper(menuBarApp, 'Orca Menu Bar app', context.packager)
       await signMacStandaloneHelper(
         join(resourcesDir, '..', 'MacOS', 'orca-notification-status'),
         'orca-notification-status',
@@ -620,6 +630,8 @@ module.exports = {
       ...orcadTemplateMacSignIgnore,
       // afterPack signs it before the orcad template hashes it.
       '/Contents/Resources/agent-browser-darwin-[^/]+$',
+      // afterPack signs this permission-free nested app before sealing the outer bundle.
+      '/Contents/Resources/Orca Menu Bar\\.app(?:/|$)',
       ...macTerminalHostSignIgnore
     ],
     extendInfo: macUsageDescriptions,
@@ -641,6 +653,10 @@ module.exports = {
       {
         from: 'native/computer-use-macos/.build/release/Orca Computer Use.app',
         to: 'Orca Computer Use.app'
+      },
+      {
+        from: 'native/menu-bar-macos/.build/release/Orca Menu Bar.app',
+        to: 'Orca Menu Bar.app'
       },
       featureWallResources
     ],
