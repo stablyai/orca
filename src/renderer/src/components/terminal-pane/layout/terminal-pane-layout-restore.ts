@@ -52,7 +52,8 @@ export function restoreTerminalPaneLayout(args: {
   // WAKE-SCROLLBACK: waking remounts a cloud pane with a fresh, empty xterm; paint its kept pre-sleep
   // output now (client-side, text + SGR) so it never shows blank before the woken snapshot's restore.
   for (const pane of manager.getPanes()) {
-    const preview = wakeScrollbackPreview(pane.leafId)
+    // A pane whose saved output was just replayed already shows it; a second copy would double it.
+    const preview = restoredBuffers?.[pane.leafId] ? null : wakeScrollbackPreview(pane.leafId)
     if (preview !== null) {
       pane.terminal.write(preview)
     }

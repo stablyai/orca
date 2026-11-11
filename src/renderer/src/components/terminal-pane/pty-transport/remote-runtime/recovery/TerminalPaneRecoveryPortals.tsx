@@ -151,7 +151,8 @@ export function TerminalPaneRecoveryPortals({
     if (!isCloud) {
       return
     }
-    if (goingToSleep || cloudAsleep || cloudWaking) {
+    // Never while waking: a remount may already hold restored copies; the capture is the sleep's.
+    if (goingToSleep || cloudAsleep) {
       for (const pane of managedPanes) {
         // The Rerun hint and the pre-sleep output, before the new terminal attaches.
         captureCloudPaneBeforeWake({
