@@ -56,48 +56,43 @@ export function vmBuildFailureCopy(
 ): { title: string; body: string | null } {
   switch (failure.kind) {
     case 'checks': {
+      if (cloud) {
+        // Orca Cloud stops only when the sandbox can't hold the workspace at all; warnings open it.
+        return {
+          title: t(
+            'auto.components.worktree.creation.VmBuildFailureCard.cloudUnusableTitle',
+            'This sandbox can’t open your workspace'
+          ),
+          body:
+            failure.sandbox === 'deleted'
+              ? t(
+                  'auto.components.worktree.creation.VmBuildFailureCard.cloudUnusableDeletedBody',
+                  'The sandbox was deleted. Start again to try a new one.'
+                )
+              : t(
+                  'auto.components.worktree.creation.VmBuildFailureCard.cloudUnusableBody',
+                  'Start again on a new sandbox, or delete this one.'
+                )
+        }
+      }
       // Warnings ride along in the list but don't count as failures in the title.
       const count = failure.problems.filter((check) => check.status === 'fail').length
       return {
         title:
           count === 0
-            ? cloud
-              ? t(
-                  'auto.components.worktree.creation.VmBuildFailureCard.checksAttentionTitleCloud',
-                  'The sandbox is up, but some environment checks need attention'
-                )
-              : t(
-                  'auto.components.worktree.creation.VmBuildFailureCard.checksAttentionTitleVm',
-                  'The VM is up, but some environment checks need attention'
-                )
-            : cloud
-              ? t(
-                  'auto.components.worktree.creation.VmBuildFailureCard.checksCountTitleCloud',
-                  'The sandbox is up, but {{count}} environment checks failed',
-                  {
-                    count,
-                    defaultValue_one: 'The sandbox is up, but {{count}} environment check failed'
-                  }
-                )
-              : t(
-                  'auto.components.worktree.creation.VmBuildFailureCard.checksCountTitleVm',
-                  'The VM is up, but {{count}} environment checks failed',
-                  {
-                    count,
-                    defaultValue_one: 'The VM is up, but {{count}} environment check failed'
-                  }
-                ),
-        body: cloud
-          ? t(
-              'auto.components.worktree.creation.VmBuildFailureCard.checksBodyCloud2',
-              'Open it anyway and fix them inside the workspace, or run the checks again after changing your project.',
-              {
-                count: failure.problems.length,
-                defaultValue_one:
-                  'Open it anyway and fix it inside the workspace, or run the checks again after changing your project.'
-              }
-            )
-          : null
+            ? t(
+                'auto.components.worktree.creation.VmBuildFailureCard.checksAttentionTitleVm',
+                'The VM is up, but some environment checks need attention'
+              )
+            : t(
+                'auto.components.worktree.creation.VmBuildFailureCard.checksCountTitleVm',
+                'The VM is up, but {{count}} environment checks failed',
+                {
+                  count,
+                  defaultValue_one: 'The VM is up, but {{count}} environment check failed'
+                }
+              ),
+        body: null
       }
     }
     case 'plan':

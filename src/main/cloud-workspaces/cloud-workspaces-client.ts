@@ -18,6 +18,12 @@ import {
   type CloudWorkspacePatch,
   type OrgPrompts
 } from '../../shared/cloud-workspaces/cloud-workspaces-wire'
+import {
+  PokeInboxSchema,
+  PokeSentSchema,
+  PokeSettingsSchema,
+  TeammateProfileResponseSchema
+} from '../../shared/cloud-workspaces/team-presence-wire'
 
 const NoteSentSchema = z.object({ ok: z.literal(true) })
 /** DELETE and POST suspend on /v1/sandboxes/:id answer with the sandbox's new state, not `{ok}`. */
@@ -133,13 +139,7 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
         }
       }
       const qs = params.toString()
-      return (
-        await call(
-          'GET',
-          `/v1/team/workspaces${qs ? `?${qs}` : ''}`,
-          CloudWorkspaceListResponseSchema
-        )
-      ).workspaces
+      return call('GET', `/v1/team/workspaces${qs ? `?${qs}` : ''}`, CloudWorkspaceListResponseSchema)
     },
     async get(id: string) {
       return (await call('GET', ws(id), CloudWorkspaceResponseSchema)).workspace
@@ -256,6 +256,35 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
     },
     putOrgPrompts(document: OrgPrompts['document'], revision: number): Promise<OrgPrompts> {
       return call('PUT', '/v1/team/prompts', OrgPromptsSchema, { document, revision })
+    },
+    async teammateProfile(userId: string, utcOffsetMin: number) {
+      const qs = new URLSearchParams({ utcOffsetMin: String(utcOffsetMin) })
+      return (
+        await call(
+          'GET',
+          `/v1/team/members/${encodeURIComponent(userId)}/profile?${qs}`,
+          TeammateProfileResponseSchema
+        )
+      ).profile
+    },
+    async poke(userId: string) {
+      return (
+        await call(
+          'POST',
+          `/v1/team/members/${encodeURIComponent(userId)}/poke`,
+          PokeSentSchema,
+          {}
+        )
+      ).poke
+    },
+    pokeInbox() {
+      return call('GET', '/v1/team/pokes', PokeInboxSchema)
+    },
+    async setPokesEnabled(enabled: boolean) {
+      return (await call('PUT', '/v1/team/pokes/settings', PokeSettingsSchema, { enabled })).enabled
+    },
+    async markPokesSeen(ids: string[]) {
+      await call('POST', '/v1/team/pokes/seen', NoteSentSchema, { ids })
     }
   }
 }

@@ -42,7 +42,7 @@ export default function WorktreeCreationPanel({
   const dismiss = (): void => useAppStore.getState().removePendingWorktreeCreation(creationId)
   // A failed or paused VM build still holds a VM that dismissing deletes, so confirm first.
   const holdsVm =
-    entry.environmentCheck?.status === 'failed' ||
+    (entry.environmentCheck?.status === 'failed' && entry.environmentCheck.sandbox !== 'deleted') ||
     (entry.status === 'error' && Boolean(entry.request.ephemeralVmRuntimeId))
   const leave = holdsVm ? () => setConfirmingDelete(true) : dismiss
   const isError = entry.status === 'error'

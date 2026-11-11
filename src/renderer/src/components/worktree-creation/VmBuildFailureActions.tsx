@@ -28,6 +28,8 @@ export type VmBuildFailureActions = {
   onRetry: () => void
   onEditRecipe: () => void
   onOpenAnyway: () => void
+  /** Orca Cloud, unusable sandbox: delete it and start the create on a new one. */
+  onStartAgain: () => void
   onDismiss: () => void
   onSeePlans: () => void
   onOpenBilling: () => void
@@ -173,18 +175,20 @@ function failureActions(
         icon: <SquareArrowOutUpRight />,
         onClick: actions.onOpenAnyway
       }
-      // Hosted sandboxes have no recipe for an agent or the user to edit. Checks rarely pass on a
-      // rerun without a change, so opening the sandbox to fix them in place leads. Two plain text
-      // buttons read as a choice between equals rather than a toolbar.
-      return cloud
-        ? {
-            primary: [
-              { ...openAnyway, icon: undefined },
-              { ...retryChecks, icon: undefined }
-            ],
-            more: []
-          }
-        : { primary: [fix, retryChecks], more: [openAnyway, editRecipe] }
+      if (!cloud) {
+        return { primary: [fix, retryChecks], more: [openAnyway, editRecipe] }
+      }
+      // Orca Cloud stops here only when the sandbox can't hold the workspace (no checkout, no git,
+      // orcad unreachable), so opening it anyway would land in a broken workspace. A fresh sandbox
+      // is the fix; checking again only helps while this one is still awake.
+      const startAgain: Action = {
+        key: 'start-again',
+        label: t('auto.components.worktree.creation.VmBuildFailureCard.startAgain', 'Start again'),
+        onClick: actions.onStartAgain
+      }
+      return failure.sandbox
+        ? { primary: [startAgain], more: [] }
+        : { primary: [startAgain, { ...retryChecks, icon: undefined }], more: [] }
     }
     case 'provision':
       return cloud

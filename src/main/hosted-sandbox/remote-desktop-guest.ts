@@ -9,12 +9,18 @@
 // - pastes this computer's clipboard into the sandbox only on a paste key in the desktop.
 import { clipboard } from 'electron'
 import { translateMain } from '../i18n/main-i18n'
+import { remoteDesktopPauseMessage as pauseMessage } from './remote-desktop-pause-copy'
 import { isAgentInjectingInput } from '../browser/cdp/input/agent-input-injection'
+import {
+  isCloudRemoteDesktopUrl,
+  type RemoteDesktopConnection,
+  type RemoteDesktopPageState,
+  type RemoteDesktopPauseReason
+} from '../../shared/hosted-sandbox/cloud-remote-desktop'
 import {
   onRemoteDesktopSessionRefreshed,
   remoteDesktopSessionForUrl,
   takeRemoteDesktopTicket,
-  type RemoteDesktopMintFailure,
   type RemoteDesktopSession
 } from './remote-desktop-sessions'
 import {
@@ -31,14 +37,11 @@ const MIN_MINT_INTERVAL_MS = 1_000
 const MAX_MINTS_PER_MINUTE = 10
 const MAX_PASTE_CHARS = 1 << 20
 const PAGE_READY_TIMEOUT_MS = 10_000
+/** How long, and how often, main watches a handed-over ticket become a connected session. */
+const CONNECT_WATCH_MS = 20_000
+const CONNECT_POLL_MS = 150
 
-export type RemoteDesktopGuestState = {
-  browserPageId: string
-  /** The page is a remote desktop with Orca's page glue. */
-  desktop: boolean
-  /** It has keyboard focus: Orca's shortcuts are off until the release chord. */
-  captured: boolean
-}
+export type RemoteDesktopGuestState = RemoteDesktopPageState
 
 export type RemoteDesktopGuestDeps = {
   browserPageId: string
@@ -64,37 +67,6 @@ const WAIT_FOR_REQUEST = `(async () => {
   return window.orcaDesktop ? window.orcaDesktop.nextTicketRequest() : 'missing'
 })()`
 
-function pauseMessage(reason: RemoteDesktopMintFailure | 'failed'): string {
-  switch (reason) {
-    case 'asleep':
-      return translateMain(
-        'components.cloudRemoteDesktop.pageAsleep',
-        'This sandbox is asleep. Wake it in Orca, then reconnect.'
-      )
-    case 'archived':
-      return translateMain(
-        'components.cloudRemoteDesktop.pageArchived',
-        'This workspace is archived. Unarchive it in Orca, then reconnect.'
-      )
-    case 'starting':
-      return translateMain(
-        'components.cloudRemoteDesktop.pageStarting',
-        'The sandbox is starting or waking. Reconnect in a moment.'
-      )
-    case 'signed_out':
-      return translateMain(
-        'components.cloudRemoteDesktop.pageSignedOut',
-        'You’re signed out of Orca Cloud. Sign in, then reconnect.'
-      )
-    case 'failed':
-    case 'unavailable':
-      return translateMain(
-        'components.cloudRemoteDesktop.pageDisconnected',
-        'The remote desktop disconnected. Your files are safe.'
-      )
-  }
-}
-
 export function setupRemoteDesktopGuest(deps: RemoteDesktopGuestDeps): () => void {
   const { guest, browserPageId, notify } = deps
   const platform = deps.platform ?? process.platform
@@ -106,6 +78,10 @@ export function setupRemoteDesktopGuest(deps: RemoteDesktopGuestDeps): () => voi
   let stopRefreshListener = (): void => {}
   let disposed = false
   let published = ''
+  let connection: RemoteDesktopConnection = 'none'
+  let pauseReason: RemoteDesktopPauseReason | undefined
+  /** The page's URL is shaped like a desktop (with or without a session on this computer). */
+  let shaped = false
   /** Settles every in-flight page call when the page goes away (a torn-down page may never answer). */
   let cancelInFlight = (): void => {}
   let cancelled = new Promise<undefined>((resolve) => {
@@ -120,18 +96,47 @@ export function setupRemoteDesktopGuest(deps: RemoteDesktopGuestDeps): () => voi
 
   const alive = (gen: number): boolean => !disposed && gen === generation && !guest.isDestroyed()
   const publish = (): void => {
-    const state = {
+    const state: RemoteDesktopGuestState = {
       browserPageId,
       desktop: session !== null,
-      captured: session !== null && !guest.isDestroyed() && guest.isFocused()
+      captured: session !== null && !guest.isDestroyed() && guest.isFocused(),
+      connection: session || shaped ? connection : 'none',
+      ...(connection === 'paused' && pauseReason ? { reason: pauseReason } : {})
     }
     // Only changes, and nothing at all for ordinary pages' focus churn.
-    const key = `${state.desktop}:${state.captured}`
-    if (key === published || (!state.desktop && published === '')) {
+    const key = `${state.desktop}:${state.captured}:${shaped}:${state.connection}:${state.reason ?? ''}`
+    if (key === published || (!state.desktop && !shaped && published === '')) {
       return
     }
     published = key
     notify({ kind: 'state', state })
+  }
+  const setConnection = (
+    gen: number,
+    next: RemoteDesktopConnection,
+    reason?: RemoteDesktopPauseReason
+  ): void => {
+    if (!alive(gen)) {
+      return
+    }
+    connection = next
+    pauseReason = next === 'paused' ? reason : undefined
+    publish()
+  }
+  /** The page says when its session is up; main only knows it handed over a ticket. */
+  const watchConnected = async (gen: number): Promise<void> => {
+    const until = Date.now() + CONNECT_WATCH_MS
+    while (alive(gen) && connection === 'connecting' && Date.now() < until) {
+      const pageState = await run(gen, 'window.orcaDesktop && window.orcaDesktop.state()')
+      if (pageState === 'connected') {
+        setConnection(gen, 'connected')
+        return
+      }
+      if (pageState !== 'connecting' && pageState !== 'idle') {
+        return
+      }
+      await sleep(CONNECT_POLL_MS)
+    }
   }
   const run = async (gen: number, code: string): Promise<unknown> => {
     if (!alive(gen)) {
@@ -154,6 +159,7 @@ export function setupRemoteDesktopGuest(deps: RemoteDesktopGuestDeps): () => voi
       if (!alive(gen) || (ask !== 'ticket' && ask !== 'retry')) {
         return
       }
+      setConnection(gen, 'connecting')
       // 'retry': the last ticket never got a session (refused, or the forward was down).
       failures = ask === 'retry' || refused ? failures + 1 : 0
       refused = false
@@ -167,6 +173,13 @@ export function setupRemoteDesktopGuest(deps: RemoteDesktopGuestDeps): () => voi
       await sleep(Math.max(RETRY_DELAYS_MS[failures] ?? 4_000, MIN_MINT_INTERVAL_MS - sinceLast))
       // The forward may have closed meanwhile; a page now on that port gets nothing.
       if (!alive(gen) || remoteDesktopSessionForUrl(guest.getURL()) !== current) {
+        // Its forward closed (the sandbox slept, or this computer dropped it): the renderer
+        // reopens the desktop once the sandbox is awake.
+        if (alive(gen)) {
+          session = null
+          guestsWithDesktop.delete(guest)
+          setConnection(gen, 'none')
+        }
         return
       }
       mintTimes = mintTimes.filter((at) => Date.now() - at < 60_000)
@@ -186,10 +199,14 @@ export function setupRemoteDesktopGuest(deps: RemoteDesktopGuestDeps): () => voi
       const started = await run(gen, `window.orcaDesktop.connect(${JSON.stringify(minted.ticket)})`)
       // Anything but a started attempt still counts against the budget, so this never spins.
       refused = started !== 'connecting'
+      if (!refused) {
+        void watchConnected(gen)
+      }
     }
   }
 
-  async function pause(gen: number, reason: RemoteDesktopMintFailure | 'failed'): Promise<void> {
+  async function pause(gen: number, reason: RemoteDesktopPauseReason): Promise<void> {
+    setConnection(gen, 'paused', reason)
     const label = translateMain('components.cloudRemoteDesktop.reconnect', 'Reconnect')
     await run(
       gen,
@@ -203,12 +220,20 @@ export function setupRemoteDesktopGuest(deps: RemoteDesktopGuestDeps): () => voi
     const gen = generation
     stopRefreshListener()
     stopRefreshListener = () => {}
-    session = remoteDesktopSessionForUrl(guest.getURL())
+    const url = guest.getURL()
+    session = remoteDesktopSessionForUrl(url)
+    shaped = isCloudRemoteDesktopUrl(url)
+    connection = session ? 'connecting' : 'none'
+    pauseReason = undefined
     if (session) {
       guestsWithDesktop.add(guest)
       // Reopening from the menu resumes a page that stopped retrying (asleep, then woken).
       stopRefreshListener = onRemoteDesktopSessionRefreshed(session.localPort, () => {
-        void run(gen, 'window.orcaDesktop && window.orcaDesktop.resume()')
+        void run(gen, 'window.orcaDesktop && window.orcaDesktop.resume()').then((resumed) => {
+          if (resumed === true) {
+            setConnection(gen, 'connecting')
+          }
+        })
       })
       void driveTickets(gen, session)
     } else {
@@ -225,6 +250,9 @@ export function setupRemoteDesktopGuest(deps: RemoteDesktopGuestDeps): () => voi
       generation += 1
       cancelPageCalls()
       session = null
+      shaped = false
+      connection = 'none'
+      pauseReason = undefined
       guestsWithDesktop.delete(guest)
       stopRefreshListener()
       publish()
@@ -296,8 +324,11 @@ export function setupRemoteDesktopGuest(deps: RemoteDesktopGuestDeps): () => voi
     } catch {
       // The guest may already be destroyed.
     }
-    if (session) {
+    if (session || shaped) {
       session = null
+      shaped = false
+      connection = 'none'
+      pauseReason = undefined
       publish()
     }
   }

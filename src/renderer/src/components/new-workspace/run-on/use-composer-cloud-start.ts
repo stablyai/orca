@@ -66,7 +66,7 @@ export function useComposerCloudStart({
     initialTargetFixed: Boolean(
       modalData.initialEphemeralVmRecipeId || modalData.initialWorkspaceTarget || modalData.recovery
     ),
-    autoStart: modalData.cloudAutoStart === true,
+    autoStartIntent: modalData.cloudAutoStart ? (modalData.cloudCreateIntent ?? null) : null,
     createReady: !createDisabled,
     composerSnapshot,
     onCreate: runCreate,

@@ -87,7 +87,9 @@ export async function checkSetup(
           'Setup script is configured and has run here. Use --run-setup to check its exit code.'
         )
       : check('setup', 'setup.run', 'warn', 'Setup script is configured but has not run here.', {
-          remediation: 'Re-run the doctor with --run-setup to run it and check the result.'
+          remediation: 'Re-run the doctor with --run-setup to run it and check the result.',
+          // Desktop clients show their own words (no CLI flags) for this code.
+          code: 'setupNotRun'
         })
   ]
 }

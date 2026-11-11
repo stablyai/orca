@@ -7,6 +7,7 @@ import type { Repo } from '../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
 import { cleanupFailedEphemeralVmWorkspace } from '@/lib/ephemeral-vm-failed-create-cleanup'
 import { gateVmCreateOnEnvironmentCheck } from '@/lib/ephemeral-vm-environment-check'
+import { orcaCloudGitHubRepoUrl } from '@/lib/orca-cloud/use-orca-cloud-repo-access'
 import { showVmBuildFailureToast } from '@/components/worktree-creation/vm-build-failure-toast'
 import { ephemeralVmErrorText } from '@/lib/ephemeral-vm-error-copy'
 import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/worktree-creation-surface'
@@ -18,6 +19,8 @@ import {
   appendProvisioningLog,
   appendProvisioningWarnings
 } from '@/lib/pending-creation-provisioning-log'
+import { cloudCreateIdempotencyKey } from '@/lib/orca-cloud/cloud-create-intent'
+import { ORCA_CLOUD_RECIPE_ID } from '../../../shared/hosted-sandbox/orca-cloud-recipe-id'
 
 export async function prepareRequestForCreate(
   creationId: string,
@@ -70,13 +73,16 @@ async function prepareEphemeralVmRecipeRequest(
           }
         : {}),
       provisionId: creationId,
+      ...cloudCreateIdempotency(recipe.recipeId, creationId),
       setupExistingFolder: async (args) => {
         // The VM's checkout folder is named "project"; register it under the real project's name.
         const displayName =
           useAppStore.getState().projects.find((project) => project.id === args.projectId)
             ?.displayName ?? sourceRepo?.displayName
+        // Why: the user picked an existing project; the VM's checkout joining it is not a new project.
         const setup = await store.setupProjectExistingFolder(
-          displayName ? { ...args, displayName } : args
+          displayName ? { ...args, displayName } : args,
+          { quiet: true }
         )
         if (setup) {
           // Why: until the create adopts it, the VM's primary checkout is not a workspace; the pending row stands for it.
@@ -147,16 +153,36 @@ async function prepareEphemeralVmRecipeRequest(
       path: preparedTarget.setup.repo.path
     }
   }
-  const proceed =
-    Boolean(useAppStore.getState().pendingWorktreeCreations[creationId]) &&
-    (!preparedTarget.environmentId ||
-      (await gateVmCreateOnEnvironmentCheck(
-        creationId,
-        preparedTarget.environmentId,
-        preparedTarget.setup.repo.path
-      )))
-  if (!proceed) {
+  const gate = !useAppStore.getState().pendingWorktreeCreations[creationId]
+    ? 'stop'
+    : !preparedTarget.environmentId
+      ? 'proceed'
+      : await gateVmCreateOnEnvironmentCheck(
+          creationId,
+          preparedTarget.environmentId,
+          preparedTarget.setup.repo.path,
+          recipe.provider === 'orca-cloud'
+            ? {
+                runtimeId: preparedTarget.runtimeId,
+                // `inherit` follows the project's setup policy, which runs it on create.
+                setupRunsOnCreate: request.setupDecision !== 'skip',
+                repoId: preparedTarget.setup.repo.id,
+                hostId: preparedTarget.setup.setup.hostId,
+                repoUrl: orcaCloudGitHubRepoUrl(
+                  useAppStore.getState().repos.find((repo) => repo.id === recipe.sourceRepoId)
+                )
+              }
+            : undefined
+        )
+  if (gate !== 'proceed') {
     await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest, creationId)
+    if (gate === 'restart' && useAppStore.getState().pendingWorktreeCreations[creationId]) {
+      // Lazy: the creation flow imports this module.
+      const { retryBackgroundWorktreeCreation } = await import(
+        '@/lib/workspace/creation/worktree-creation-flow'
+      )
+      retryBackgroundWorktreeCreation(creationId)
+    }
     return null
   }
   useAppStore.getState().updatePendingWorktreeCreation(creationId, {
@@ -244,4 +270,13 @@ export function getProvisionedRootSparseCheckoutError(): string {
     'auto.lib.ephemeralVmWorktreeCreation.sparseCheckoutUnsupported',
     'Provisioned-root recipes do not support sparse checkout.'
   )
+}
+
+/** Orca Cloud creates carry the Create press's Idempotency-Key; other recipes don't. */
+function cloudCreateIdempotency(recipeId: string, creationId: string): { idempotencyKey?: string } {
+  if (recipeId !== ORCA_CLOUD_RECIPE_ID) {
+    return {}
+  }
+  const key = cloudCreateIdempotencyKey(creationId)
+  return key ? { idempotencyKey: key } : {}
 }
