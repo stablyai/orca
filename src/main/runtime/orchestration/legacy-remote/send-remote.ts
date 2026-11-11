@@ -70,6 +70,9 @@ export async function sendRemoteMessage(args: {
   const supportsLifecycleSettlement =
     remoteAttachment.protocol_version >=
     ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION
+  // `ask` stores the remote question. `send --type question` is imported as the
+  // same question, and the reply is applied as its answer. Without this row the
+  // server returns question_not_found and that item blocks later mail.
   const relay = db.enqueueFederationRelay({
     dispatchId: remoteAttachment.dispatch_id,
     direction: 'to_home',
@@ -83,6 +86,7 @@ export async function sendRemoteMessage(args: {
       threadId: params.threadId ?? null,
       payload: bindCoordinatorMutationPayload(type, params.payload, remoteAttachment.dispatch_id)
     }),
+    ...(type === 'question' ? { remoteQuestion: true as const } : {}),
     ...(!supportsLifecycleSettlement && outcome ? { settleRemoteOutcome: outcome } : {})
   })
   const lifecycle =
