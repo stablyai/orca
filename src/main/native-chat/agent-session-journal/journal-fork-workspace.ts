@@ -1,3 +1,6 @@
+import type { SqliteRow } from '../../sqlite/sqlite-statement'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { sourceThreadTurnMembership } from '../agent-session-wire/rewind/structured-rewind-cut'
 import type Database from '../../sqlite/sync-database'
 
 export function createJournalForkWorkspace(db: Database.Database): void {
@@ -23,4 +26,33 @@ export function createJournalForkWorkspace(db: Database.Database): void {
       CREATE TEMP TABLE fork_omitted(id TEXT UNIQUE,processed INTEGER NOT NULL DEFAULT 0);
       CREATE INDEX temp.fork_omitted_pending ON fork_omitted(processed);
       CREATE TEMP TABLE fork_work(anchor TEXT PRIMARY KEY,last_rank INTEGER NOT NULL);`)
+}
+
+export function journalForkHeaderMember(row: SqliteRow, sourceThreadId?: string): string | null {
+  const identity = parseAgentJournalItemKey(String(row.provider_key))
+  let member: string | null = null
+  if (sourceThreadId) {
+    const root =
+      row.turn_item_id === null
+        ? row
+        : { provider_turn_id: row.root_provider_turn_id, turn_id: row.root_turn_id }
+    member =
+      sourceThreadTurnMembership(
+        identity,
+        sourceThreadId,
+        root.provider_turn_id != null
+          ? String(root.provider_turn_id)
+          : root.turn_id != null
+            ? String(root.turn_id)
+            : undefined
+      ) ?? null
+  } else {
+    member =
+      row.turn_item_id !== null
+        ? String(row.turn_item_id)
+        : row.turn_id === null
+          ? null
+          : String(row.item_id)
+  }
+  return member
 }

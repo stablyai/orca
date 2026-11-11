@@ -1,5 +1,5 @@
 import { readJournalDomainDisplayedRow } from './journal-domain-item-display'
-import { createJournalForkWorkspace } from './journal-fork-workspace'
+import { createJournalForkWorkspace, journalForkHeaderMember } from './journal-fork-workspace'
 import { JournalForkPresentation } from './journal-fork-presentation'
 import type Database from '../../sqlite/sync-database'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
@@ -14,7 +14,6 @@ import {
   omitForkPresentation,
   forkDependencies
 } from '../agent-session-wire/acquisition/structured-agent-session-fork-snapshot'
-import { sourceThreadTurnMembership } from '../agent-session-wire/rewind/structured-rewind-cut'
 import { validateJournalForkSource, type JournalForkSourceProof } from './journal-fork-source-proof'
 
 export type JournalForkPreparationInput = {
@@ -90,71 +89,93 @@ export class JournalForkPreparation {
     while (budget()) {
       switch (this.phase) {
         case 'submissions': {
-          const row = this.db
+          let exhausted = true
+          for (const row of this.db
             .prepare(`SELECT ordinal,payload_json FROM journal_submission_attempts
-            WHERE session_id=? AND epoch=? AND current=1 AND ordinal>? AND (?=0 OR accepted_sequence>?) ORDER BY ordinal LIMIT 1`)
-            .get(...prefix, this.after, this.floor, this.floor)
-          if (!row) {
+            WHERE session_id=? AND epoch=? AND current=1 AND ordinal>? AND (?=0 OR accepted_sequence>?) ORDER BY ordinal LIMIT ?`)
+            .iterate(...prefix, this.after, this.floor, this.floor, MAX_ROWS - units)) {
+            const submission: AgentJournalSubmission = JSON.parse(String(row.payload_json))
+            const keys = savedRewindKeys([submission])
+            const itemId = agentJournalItemKey({
+              provider: 'orca',
+              clientMessageId: submission.clientMessageId
+            })
+            this.db
+              .prepare('INSERT OR REPLACE INTO temp.fork_aliases VALUES(?,?)')
+              .run(itemId, keys.providerKey(itemId))
+            if (keys.omitted.has(itemId)) {
+              this.omit(itemId)
+            }
+            this.after = Number(row.ordinal)
+            account(row)
+            if (!budget()) {
+              exhausted = false
+              break
+            }
+          }
+          if (exhausted) {
             this.phase = 'headers'
             this.after = 0
-            continue
           }
-          const submission: AgentJournalSubmission = JSON.parse(String(row.payload_json))
-          const keys = savedRewindKeys([submission])
-          const itemId = agentJournalItemKey({
-            provider: 'orca',
-            clientMessageId: submission.clientMessageId
-          })
-          this.db
-            .prepare('INSERT OR REPLACE INTO temp.fork_aliases VALUES(?,?)')
-            .run(itemId, keys.providerKey(itemId))
-          if (keys.omitted.has(itemId)) {
-            this.omit(itemId)
-          }
-          this.after = Number(row.ordinal)
-          account(row)
           break
         }
         case 'headers': {
-          const row = this.db
-            .prepare(`SELECT item_id,sequence,sequence_index,ordinal,turn_item_id,turn_id,provider_turn_id
-            FROM journal_items INDEXED BY journal_items_visible_position
+          let exhausted = true
+          for (const row of this.db
+            .prepare(`SELECT item_id,sequence,sequence_index,ordinal,turn_item_id,turn_id,provider_turn_id,
+              COALESCE((SELECT provider_key FROM temp.fork_aliases alias WHERE alias.item_id=item.item_id),item_id) AS provider_key
+            FROM journal_items item INDEXED BY journal_items_visible_position
             WHERE session_id=? AND epoch=? AND hidden=0 AND sequence>?
-              AND (sequence,sequence_index,ordinal)>(?,?,?) ORDER BY sequence,sequence_index,ordinal LIMIT 1`)
-            .get(...prefix, this.floor, ...this.position)
-          if (!row) {
+              AND (sequence,sequence_index,ordinal)>(?,?,?) ORDER BY sequence,sequence_index,ordinal LIMIT ?`)
+            .iterate(...prefix, this.floor, ...this.position, MAX_ROWS - units)) {
+            this.db
+              .prepare(`INSERT INTO temp.fork_headers(item_id,provider_key,turn_item_id,turn_id,provider_turn_id,sequence,sequence_index,ordinal)
+            VALUES(?,?,?,?,?,?,?,?)`)
+              .run(
+                row.item_id,
+                row.provider_key,
+                row.turn_item_id,
+                row.turn_id,
+                row.provider_turn_id,
+                row.sequence,
+                row.sequence_index,
+                row.ordinal
+              )
+            this.position = [Number(row.sequence), Number(row.sequence_index), Number(row.ordinal)]
+            const { provider_key: _providerKey, ...header } = row
+            account(header)
+            if (!budget()) {
+              exhausted = false
+              break
+            }
+          }
+          if (exhausted) {
             this.phase = 'members'
             this.after = 0
-            continue
           }
-          const providerKey =
-            this.db
-              .prepare('SELECT provider_key FROM temp.fork_aliases WHERE item_id=?')
-              .get(row.item_id)?.provider_key ?? row.item_id
-          this.db
-            .prepare(`INSERT INTO temp.fork_headers(item_id,provider_key,turn_item_id,turn_id,provider_turn_id,sequence,sequence_index,ordinal)
-            VALUES(?,?,?,?,?,?,?,?)`)
-            .run(
-              row.item_id,
-              providerKey,
-              row.turn_item_id,
-              row.turn_id,
-              row.provider_turn_id,
-              row.sequence,
-              row.sequence_index,
-              row.ordinal
-            )
-          this.position = [Number(row.sequence), Number(row.sequence_index), Number(row.ordinal)]
-          account(row)
           break
         }
         case 'members': {
-          const row = this.db
-            .prepare(
-              'SELECT rank,item_id,provider_key,turn_item_id,turn_id,provider_turn_id FROM temp.fork_headers WHERE rank>? ORDER BY rank LIMIT 1'
-            )
-            .get(this.after)
-          if (!row) {
+          let exhausted = true
+          for (const row of this.db
+            .prepare(`SELECT header.rank,header.item_id,header.provider_key,header.turn_item_id,header.turn_id,header.provider_turn_id,
+              root.provider_turn_id AS root_provider_turn_id,root.turn_id AS root_turn_id
+            FROM temp.fork_headers header LEFT JOIN temp.fork_headers root ON root.item_id=header.turn_item_id
+            WHERE header.rank>? ORDER BY header.rank LIMIT ?`)
+            .iterate(this.after, MAX_ROWS - units)) {
+            const member = journalForkHeaderMember(row, this.input.sourceThreadId)
+            this.db
+              .prepare('UPDATE temp.fork_headers SET member=? WHERE rank=?')
+              .run(member, row.rank)
+            this.after = Number(row.rank)
+            const { root_provider_turn_id: _providerTurn, root_turn_id: _turn, ...header } = row
+            account(header)
+            if (!budget()) {
+              exhausted = false
+              break
+            }
+          }
+          if (exhausted) {
             if (this.nextItemId !== null) {
               const next = this.db
                 .prepare('SELECT rank,member FROM temp.fork_headers WHERE item_id=?')
@@ -174,60 +195,30 @@ export class JournalForkPreparation {
             }
             this.phase = 'kept'
             this.after = 0
-            continue
           }
-          const identity = parseAgentJournalItemKey(String(row.provider_key))
-          let member: string | null = null
-          if (this.input.sourceThreadId) {
-            const root =
-              row.turn_item_id === null
-                ? row
-                : this.db
-                    .prepare(
-                      'SELECT provider_turn_id,turn_id FROM temp.fork_headers WHERE item_id=?'
-                    )
-                    .get(row.turn_item_id)
-            member =
-              sourceThreadTurnMembership(
-                identity,
-                this.input.sourceThreadId,
-                root?.provider_turn_id != null
-                  ? String(root.provider_turn_id)
-                  : root?.turn_id != null
-                    ? String(root.turn_id)
-                    : undefined
-              ) ?? null
-          } else {
-            member =
-              row.turn_item_id !== null
-                ? String(row.turn_item_id)
-                : row.turn_id === null
-                  ? null
-                  : String(row.item_id)
-          }
-          this.db
-            .prepare('UPDATE temp.fork_headers SET member=? WHERE rank=?')
-            .run(member, row.rank)
-          this.after = Number(row.rank)
-          account(row)
           break
         }
         case 'kept': {
-          const row = this.db
+          let exhausted = true
+          for (const row of this.db
             .prepare(
-              'SELECT rank,member FROM temp.fork_headers WHERE rank>? AND rank<? ORDER BY rank LIMIT 1'
+              'SELECT rank,member FROM temp.fork_headers WHERE rank>? AND rank<? ORDER BY rank LIMIT ?'
             )
-            .get(this.after, this.end)
-          if (!row) {
+            .iterate(this.after, this.end, MAX_ROWS - units)) {
+            if (row.member !== null) {
+              this.db.prepare('INSERT OR IGNORE INTO temp.fork_kept VALUES(?)').run(row.member)
+            }
+            this.after = Number(row.rank)
+            account(row)
+            if (!budget()) {
+              exhausted = false
+              break
+            }
+          }
+          if (exhausted) {
             this.phase = 'capture'
             this.after = 0
-            continue
           }
-          if (row.member !== null) {
-            this.db.prepare('INSERT OR IGNORE INTO temp.fork_kept VALUES(?)').run(row.member)
-          }
-          this.after = Number(row.rank)
-          account(row)
           break
         }
         case 'capture': {

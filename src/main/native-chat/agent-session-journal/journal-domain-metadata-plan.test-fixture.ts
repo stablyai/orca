@@ -26,6 +26,9 @@ export function assertJournalMetadataPlan(db: Database.Database, sql: string): v
   const details = plan.map((row) => String(row.detail)).join('\n')
   expect(details).toMatch(/SEARCH (?:item|journal_items) USING INDEX journal_items_/)
   expect(details).not.toContain('TEMP B-TREE')
+  if (sql.includes('FROM temp.fork_aliases alias')) {
+    expect(details).toMatch(/SEARCH alias USING INDEX sqlite_autoindex_fork_aliases_1/)
+  }
   if (sql.includes('AND turn_marker=1 ORDER BY')) {
     expect(details).toContain('SEARCH item USING INDEX journal_items_turn_marker')
   }
