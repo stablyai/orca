@@ -14,6 +14,7 @@ import { overlayEnvironmentVariables } from '../../../../shared/environment-over
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { RuntimeWorkspaceCatalog } from '../../workspaces/catalog/workspace-catalog'
+import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import type { OrcaRuntimeWithRefreshPtyWorktreeRecordsFromController } from '../../terminal/lifecycle/pty-worktree-refresh'
 import type { RuntimeAccountController } from '../environment/runtime-account-controller'
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
@@ -23,6 +24,8 @@ import type { StructuredAgentSessionHostDeps } from '../../../native-chat/agent-
 import { OrcaRuntimeWithStartTuiIdleVisibleReadProbe } from '../../terminal/wait/terminal-wait-visible-probe'
 
 export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTuiIdleVisibleReadProbe {
+  protected abstract workspaceUsesBareGitStorage(target: HostWorktreeTarget): Promise<boolean>
+
   protected async assertWorkspaceAcceptsLaunch(workspaceId: string): Promise<void> {
     if (
       await this.workspaceUsesBareGitStorage({ id: workspaceId, hostId: LOCAL_EXECUTION_HOST_ID })

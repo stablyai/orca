@@ -135,7 +135,10 @@ it('launch classification never starts or waits for full scans at fleet scale', 
   const runtime = new OrcaRuntimeService(store)
   const repo = store.getRepos()[0]!
   const key = `${repo.id}\0local`
-  const scan = vi.spyOn(runtime, 'listRepoWorktreesForResolution' as never)
+  const scan = vi.spyOn(
+    runtime as unknown as { listRepoWorktreesForResolution: (...args: unknown[]) => unknown },
+    'listRepoWorktreesForResolution'
+  )
   const metadata = vi.spyOn(store, 'getAllWorktreeMeta')
   for (const population of [750, 7500]) {
     const graph = Array.from({ length: population }, (_, index) => ({
@@ -148,7 +151,8 @@ it('launch classification never starts or waits for full scans at fleet scale', 
     graph[0]!.path = TEST_WORKTREE_ID.slice(TEST_WORKTREE_ID.indexOf('::') + 2)
     const cached = {
       generation: 0,
-      runtimeKey: resolveWorktreeScanRuntime(store, repo).runtimeKey,
+      runtimeKey: resolveWorktreeScanRuntime({ ...store, getSettings: () => ({}) }, repo)
+        .runtimeKey,
       result: { ok: true as const, worktrees: graph },
       expiresAt: 1700000030000,
       scannedAt: 1700000000000,

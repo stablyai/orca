@@ -358,16 +358,32 @@ it('keeps bare storage out of local and paired rows, including parent synthesis'
   const bareId = 'r::/r/.bare'
   const local = buildWorkspaceRows({
     worktrees: [
-      worktree(bareId, { isBare: true, isMainWorktree: true }),
-      worktree('r::/r/main', { parentWorktreeId: bareId })
+      worktree(bareId, { isBare: true, isMainWorktree: true, instanceId: 'bare' }),
+      worktree('r::/r/main', { instanceId: 'main' })
     ],
     folderWorkspaces: [],
     repos,
-    lineageById: {}
+    lineageById: {
+      'r::/r/main': {
+        worktreeId: 'r::/r/main',
+        worktreeInstanceId: 'main',
+        parentWorktreeId: bareId,
+        parentWorktreeInstanceId: 'bare',
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 0
+      }
+    }
   })
   const paired = [
-    { worktreeId: bareId, isBare: true, isMainWorktree: true },
-    { worktreeId: 'r::/r/main', parentWorktreeId: bareId }
+    { worktreeId: bareId, isBare: true, isMainWorktree: true, worktreeInstanceId: 'bare' },
+    {
+      worktreeId: 'r::/r/main',
+      worktreeInstanceId: 'main',
+      lineageWorktreeInstanceId: 'main',
+      parentWorktreeId: bareId,
+      parentWorktreeInstanceId: 'bare'
+    }
   ].flatMap((row) => normalizePairedServerRow('runtime:a', { repoId: 'r', ...row }) ?? [])
   const built = buildSidebarFeedRows(
     domains({
