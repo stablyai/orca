@@ -90,6 +90,23 @@ export function getAgentResumeArgv(
   }
 }
 
+/** A Claude session that never took a turn wrote no transcript, so `--resume` only prints "No conversation
+ * found". Start it fresh under the same id instead: holds, claims and readers keyed on it still match. */
+export function getAgentFreshSessionArgv(
+  agent: ResumableTuiAgent,
+  providerSession: AgentProviderSessionMetadata
+): string[] | null {
+  if (agent !== 'claude' || providerSession.key !== 'session_id') {
+    return null
+  }
+  return [
+    'claude',
+    ...(providerSession.effort ? ['--effort', providerSession.effort] : []),
+    '--session-id',
+    providerSession.id
+  ]
+}
+
 /** CLI fork creates a new conversation ID so chat and terminal cannot write the same one. */
 const FORK_ARGV: Partial<
   Record<ResumableTuiAgent, (providerSession: AgentProviderSessionMetadata) => string[] | null>

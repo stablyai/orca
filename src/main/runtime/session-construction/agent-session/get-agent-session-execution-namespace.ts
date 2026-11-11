@@ -22,6 +22,7 @@ import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { resolveSavedRestoreLaunchRecipe } from './saved-restore-launch-recipe'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import { hasMissingAgentTranscript } from '../../terminal/launch/agent-transcript-presence'
 import {
   resolveTuiAgentLaunchRawArgs,
   resolveTuiAgentLaunchEnv
@@ -168,8 +169,15 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
     const isRemote = Boolean(workspace.connectionId)
     const restored =
       request.resumeOrigin === 'saved' ? this.savedRestoreRecipe(workspace.id, request) : undefined
+    // A turn-less Claude wrote no transcript: start it fresh under its id, not into "No conversation found".
+    const freshSession = await hasMissingAgentTranscript(
+      request.agent,
+      identity.providerSession,
+      workspace.connectionId
+    )
     const startup = buildAgentResumeStartupPlan(
       resolveWslHostAgentResumeInputs({
+        freshSession,
         agent: request.agent,
         providerSession: identity.providerSession,
         cmdOverrides: settings.agentCmdOverrides ?? {},
