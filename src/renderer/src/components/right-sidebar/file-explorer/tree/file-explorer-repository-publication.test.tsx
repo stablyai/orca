@@ -25,7 +25,10 @@ afterEach(() => {
 })
 
 function mountProjection(count: number, read: ExplorerRepositoryRead) {
-  const paths = Array.from({ length: count }, (_, index) => `repo/wave${index}`)
+  const paths = Array.from(
+    { length: count },
+    (_, index) => `repo/wave${String(index).padStart(5, '0')}`
+  )
   const node = (relativePath: string, isDirectory = false) => ({
     name: relativePath.split('/').at(-1)!,
     relativePath,
@@ -147,8 +150,8 @@ it.each([1, 10])(
     expect(copied).toBe(count)
     expect(fixture.publications.length - initialPublications).toBe(2)
     expect(fixture.projections.size).toBe(2)
-    expect(old.get('wave0')).toBe(true)
-    expect(fixture.result.current[0].ignored.get('wave0')).toBe(false)
+    expect(old.get('wave00000')).toBe(true)
+    expect(fixture.result.current[0].ignored.get('wave00000')).toBe(false)
     const unchanged = fixture.result.current[0].ignored
     act(() => fixture.observer.invalidate('repo/.gitignore'))
     await act(() => vi.advanceTimersByTimeAsync(4000))
@@ -207,14 +210,14 @@ it.each(['hide', 'input'] as const)(
     expect(fixture.publications).toHaveLength(before + 1)
     const prefix = fixture.result.current[0].ignored
     expect(prefix.size).toBe(2000)
-    expect(prefix.get('wave0')).toBe(true)
+    expect(prefix.get('wave00000')).toBe(true)
     await act(async () => {
       finishOld()
       await vi.advanceTimersByTimeAsync(5000)
     })
     expect(reads).toBeGreaterThan(2)
     expect(fixture.result.current[0].ignored).toBe(prefix)
-    expect(prefix.has('wave2000')).toBe(false)
+    expect(prefix.has('wave02000')).toBe(false)
     expect(empty.size).toBe(0)
     expect(fixture.publications).toHaveLength(before + 1)
   }
