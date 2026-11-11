@@ -424,14 +424,14 @@
 3 src/main/plugins/appearance/plugin-appearance-service.ts
 2 src/main/plugins/installation/plugin-install-staging.ts
 1 src/main/plugins/installation/plugin-install.ts
-1 src/main/plugins/panels/plugin-frame-guest-sessions.ts
+1 src/main/plugins/panels/guest-isolation/plugin-frame-guest-sessions.ts
 1 src/main/plugins/panels/plugin-source-transpile-client.ts
 2 src/main/plugins/plugin-dev-watcher.ts
 3 src/main/plugins/plugin-secrets-store.ts
 3 src/main/plugins/plugin-storage-store.ts
 1 src/main/plugins/testing/plugin-editor-static-check.ts
-1 src/main/plugins/workers/plugin-host-process.ts
-3 src/main/plugins/workers/plugin-worker-source-hooks.ts
+1 src/main/plugins/workers/parent-process/plugin-host-process.ts
+3 src/main/plugins/workers/child-runtime/plugin-worker-source-hooks.ts
 8 src/main/ports/darwin-port-scan-lock.ts
 1 src/main/ports/port-scan-command-client.ts
 1 src/main/ports/port-scan-command-execution.ts
