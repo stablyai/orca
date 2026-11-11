@@ -11,7 +11,10 @@ function methods(grantedDevices: string[]) {
     callerTerminal: () => null,
     isGrantedDevice: (origin) => grantedDevices.includes(origin)
   })
-  const byName = (name: string) => list.find((method) => method.name === name)!
+  const byName = (name: string) => {
+    const method = list.find((entry) => entry.name === name)!
+    return { handler: method.handler as (params: unknown, ctx: RpcContext) => unknown }
+  }
   return { broker, byName }
 }
 
@@ -34,10 +37,7 @@ describe('local command RPC methods', () => {
     const settle = byName('localCommands.settle')
     await expect(
       Promise.resolve(
-        settle.handler(
-          { requestId, outcome: 'started' } as never,
-          desktop('fork-1', 'grant-device')
-        )
+        settle.handler({ requestId, outcome: 'started' }, desktop('fork-1', 'grant-device'))
       )
     ).rejects.toThrow('local_command_forbidden')
     expect(broker.status(requestId).status).toBe('pending')
@@ -52,7 +52,7 @@ describe('local command RPC methods', () => {
     const cli = { ...desktop('cli'), caller: { kind: 'local-cli' as const } }
     for (const ctx of [phone, cli]) {
       await expect(
-        Promise.resolve(settle.handler({ requestId, outcome: 'started' } as never, ctx))
+        Promise.resolve(settle.handler({ requestId, outcome: 'started' }, ctx))
       ).rejects.toThrow('local_command_forbidden')
     }
   })

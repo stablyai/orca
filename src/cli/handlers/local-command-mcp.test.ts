@@ -1,10 +1,10 @@
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
-import { serveLocalCommandMcp } from './local-command-mcp'
+import { serveLocalCommandMcp, type LocalCommandMcpDeps } from './local-command-mcp'
 
 async function exchange(
   messages: object[],
-  run = vi.fn(async () => ({
+  run: LocalCommandMcpDeps['run'] = vi.fn(async () => ({
     requestId: 'lc_x',
     status: 'finished' as const,
     result: {
