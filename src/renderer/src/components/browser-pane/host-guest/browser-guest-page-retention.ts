@@ -21,7 +21,7 @@ export function installBrowserGuestPageRetention(args: {
   let disposed = false
   let scheduled = false
   let timer: ReturnType<typeof setTimeout> | null = null
-  const overBudget = (): boolean => hidden.size + retiredBrowserGuestResources.size > limit
+  const overBudget = (): boolean => hidden.size > limit
   const schedule = (): void => {
     if (disposed || scheduled) {
       return

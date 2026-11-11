@@ -42,7 +42,10 @@ import {
   isRetiredBrowserGuest
 } from '../../browser-page-memory'
 import { pages } from '../../browser-page-memory-state'
-import { retiredBrowserGuestResources } from '../../../../../renderer/src/components/browser-pane/host-guest/browser-guest-activity'
+import {
+  browserGuestActivity,
+  retiredBrowserGuestResources
+} from '../../../../../renderer/src/components/browser-pane/host-guest/browser-guest-activity'
 
 const registry = await vi.importActual<{
   registerPersistentWebview: (id: string, webview: Electron.WebviewTag) => void
@@ -54,7 +57,9 @@ let fleet: ReturnType<typeof createEligibilityFleet> | undefined
 afterEach(() => {
   vi.restoreAllMocks()
   fleet?.close()
-  registry.unregisterPersistentWebview('oldest')
+  for (const id of fleet?.pageIds ?? ['oldest']) {
+    registry.unregisterPersistentWebview(id)
+  }
   document.body.replaceChildren()
   retiredBrowserGuestResources.clear()
   fleet = undefined
@@ -175,5 +180,106 @@ it.each([false, true])(
     expect(manager.getAuthorizedGuest(pageId, renderer.id)).toBe(
       replacement?.asWebContents() ?? null
     )
+  }
+)
+
+it.each([
+  [33, 1, 32],
+  [36, 4, 32],
+  [37, 4, 33]
+])(
+  'retires only the surplus of %i hidden guests through native settlement',
+  async (count, pendingCount, retainedCount) => {
+    const pending = new Map<number, { release: () => void; completion: Promise<boolean> }>()
+    fleet = createEligibilityFleet(native, count, true, registry.discardPersistentWebview)
+    const current = fleet
+    const renderer = native.get(99)
+    if (!renderer) {
+      throw new Error('Renderer missing')
+    }
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        browser: {
+          reserveGuestDiscard: (args: unknown) => invokeGuestDiscard(renderer, args),
+          acknowledgeGuestRemoval: (args: { browserPageId: string; webContentsId: number }) => {
+            const guest = native.get(args.webContentsId)
+            if (!guest) {
+              throw new Error('Retired native guest missing')
+            }
+            let release = (): void => {}
+            const gate = new Promise<void>((resolve) => {
+              release = resolve
+            })
+            const completion = gate.then(() =>
+              acknowledgeBrowserPageRemoval(args.browserPageId, guest, renderer.id)
+            )
+            pending.set(guest.id, { release, completion })
+            return completion
+          }
+        }
+      }
+    })
+    const mount = (guest: EligibilityGuest, id: string): Promise<void> => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the DOM element supplies the exact native identity for the real registry path.
+      const webview = Object.assign(document.createElement('webview'), {
+        getWebContentsId: () => guest.id
+      }) as unknown as Electron.WebviewTag
+      document.body.append(webview)
+      registry.registerPersistentWebview(id, webview)
+      guest.clean()
+      guest.stopLoading()
+      return guest.finishRestore(id)
+    }
+    await Promise.all([...current.pageIds].map((id, index) => mount(current.guests[index], id)))
+    await Promise.resolve()
+    expect(current.freed).toHaveLength(pendingCount)
+    expect(current.freed[0]).toBe('oldest')
+    expect(document.querySelectorAll('webview')).toHaveLength(retainedCount)
+    expect(retiredBrowserGuestResources.size).toBe(pendingCount)
+    expect(current.guests.every((guest) => !guest.isDestroyed())).toBe(true)
+    if (count === 33) {
+      current.attempts.length = 0
+      for (const guest of current.guests) {
+        guest.stopLoading()
+      }
+      await Promise.resolve()
+      expect(current.attempts).toEqual([])
+      expect(pending.has(1)).toBe(true)
+      for (let id = 1; id <= 4; id++) {
+        const pageId = `new-${id}`
+        await mount(current.attach(2000 + id, pageId), pageId)
+      }
+      expect(current.freed).toEqual(['oldest', 'held-1', 'held-2', 'held-3'])
+      expect(retiredBrowserGuestResources.size).toBe(4)
+      expect(document.querySelectorAll('webview')).toHaveLength(33)
+      expect(current.manager.getAuthorizedGuest('new-4', renderer.id)).toBe(native.get(2004))
+      expect(current.guests.every((guest) => !guest.isDestroyed())).toBe(true)
+      return
+    }
+    if (count === 37) {
+      const first = pending.get(1)
+      if (!first) {
+        throw new Error('Oldest acknowledgement missing')
+      }
+      pending.delete(1)
+      first.release()
+      await first.completion
+      await Promise.resolve()
+      expect(current.guest.isDestroyed()).toBe(true)
+      expect(current.freed).toEqual(['oldest', 'held-1', 'held-2', 'held-3', 'held-4'])
+      expect(document.querySelectorAll('webview')).toHaveLength(32)
+      expect(retiredBrowserGuestResources.size).toBe(4)
+    }
+    await Promise.all(
+      [...pending.values()].map(async (ack) => {
+        ack.release()
+        await ack.completion
+      })
+    )
+    await Promise.resolve()
+    expect(retiredBrowserGuestResources.size).toBe(0)
+    expect(browserGuestActivity.size).toBe(32)
+    expect(current.guests.filter((guest) => !guest.isDestroyed())).toHaveLength(32)
   }
 )

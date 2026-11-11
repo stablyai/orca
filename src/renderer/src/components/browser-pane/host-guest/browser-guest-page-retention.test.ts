@@ -97,7 +97,7 @@ it.each([100, 1000])(
   }
 )
 
-it('counts unconfirmed native removals until destruction while letting a replacement remain live', async () => {
+it('keeps unconfirmed native removals counted without requesting more than the surplus', async () => {
   for (let id = 1; id <= 34; id++) {
     guest(id)
   }
@@ -108,11 +108,13 @@ it('counts unconfirmed native removals until destruction while letting a replace
   })
   stops.push(installBrowserGuestPageRetention({ isBlocked: () => false, discard }))
   await Promise.resolve()
-  expect(retiredBrowserGuestResources.size).toBe(4)
-  expect(browserGuestActivity.size).toBe(30)
+  expect([...retiredBrowserGuestResources]).toEqual([1, 2])
+  expect(browserGuestActivity.size).toBe(32)
+  expect(browserGuestActivity.has('page-3')).toBe(true)
   for (const id of retiredBrowserGuestResources) {
     setBrowserGuestResourceRetired(`page-${id}`, id, false)
   }
   await Promise.resolve()
-  expect(browserGuestActivity.size).toBe(30)
+  expect(retiredBrowserGuestResources.size).toBe(0)
+  expect(browserGuestActivity.size).toBe(32)
 })
