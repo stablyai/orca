@@ -49,7 +49,7 @@ export function useAppUpdateState(): AppUpdateState {
   return useSyncExternalStore(appUpdateChecker.subscribe, appUpdateChecker.getSnapshot)
 }
 
-/** Opens the channel's page for the update: the GitHub release (Android) or App Store (iOS). */
+/** Opens the channel's update: the APK download (Android) or App Store page (iOS). */
 export function openAppUpdate(url: string): void {
   void Linking.openURL(url).catch(() => {})
 }

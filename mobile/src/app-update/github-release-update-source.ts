@@ -14,8 +14,7 @@ type Fetch = typeof fetch
 const tagRefsSchema = z.array(z.looseObject({ ref: z.string() }))
 const installableReleaseSchema = z.looseObject({
   draft: z.literal(false),
-  html_url: z.string(),
-  assets: z.array(z.looseObject({ name: z.string() }))
+  assets: z.array(z.looseObject({ name: z.string(), browser_download_url: z.string() }))
 })
 
 /** Versions named by the tag refs GitHub returns for the mobile-android prefix. */
@@ -27,12 +26,15 @@ export function parseMobileAndroidTagVersions(refs: unknown): string[] {
     .map(({ ref }) => ref.slice(prefix.length))
 }
 
-/** The release page when the tag has a published release carrying an APK, else null. */
-export function installableReleaseUrl(release: unknown): string | null {
+/** The APK download when the tag has a published release carrying one, else null; the release page buries it under long notes. */
+export function installableApkUrl(release: unknown): string | null {
   const parsed = installableReleaseSchema.safeParse(release)
-  return parsed.success && parsed.data.assets.some((asset) => asset.name.endsWith('.apk'))
-    ? parsed.data.html_url
-    : null
+  if (!parsed.success) {
+    return null
+  }
+  return (
+    parsed.data.assets.find((asset) => asset.name.endsWith('.apk'))?.browser_download_url ?? null
+  )
 }
 
 export function createGithubReleaseUpdateSource(fetchImpl: Fetch): AppUpdateSource {
@@ -59,7 +61,7 @@ export function createGithubReleaseUpdateSource(fetchImpl: Fetch): AppUpdateSour
         if (!releaseReply.ok) {
           throw new Error(`release HTTP ${releaseReply.status}`)
         }
-        const url = installableReleaseUrl(await releaseReply.json())
+        const url = installableApkUrl(await releaseReply.json())
         if (url) {
           return { kind: 'available', version, url }
         }
