@@ -21,6 +21,11 @@ export class SessionSearchDependencyInventory {
   private readonly observe: SessionDiscoveryDependencyObserver | undefined
   private readonly retries = new SessionObservationRetries()
   private readonly delivered: SessionSearchCatalogClient<{ after?: string }>
+  private staging:
+    | { iterator?: AsyncGenerator<string>; keys: string[]; serial: number; done: boolean }
+    | undefined
+  private stagingSequence = 0
+  private inventoryAck: { path: string; revision: number }[] | undefined
   private deliveryAfter: string | undefined
   private discardAfter: string | undefined
   private readonly keys: SessionSearchCatalogClient<string>
@@ -40,6 +45,8 @@ export class SessionSearchDependencyInventory {
   }
   get pending(): boolean {
     return (
+      !!this.staging ||
+      !!this.inventoryAck ||
       this.retries.pending ||
       this.delivered.size > 0 ||
       this.observe?.pending === true ||
@@ -88,19 +95,46 @@ export class SessionSearchDependencyInventory {
     args: DiscoverSessionFilesArgs,
     overdue: () => boolean
   ): Promise<void> {
-    let keys: string[] = []
-    const flush = async () => {
-      await this.delivered.putPage(keys.map((key) => this.delivered.encode(key, {})))
-      keys = []
+    this.staging ??= {
+      iterator: this.changedKeys(watch, args, overdue),
+      keys: [],
+      serial: ++this.stagingSequence,
+      done: false
     }
-    for await (const key of this.changedKeys(watch, args, overdue)) {
-      keys.push(key)
-      if (keys.length === 256) {
-        await flush()
+    const pending = this.staging
+    while (!pending.done || pending.keys.length) {
+      if (
+        pending.keys.length &&
+        (pending.done || pending.keys.length === 256 || !pending.iterator)
+      ) {
+        await this.delivered.transition({
+          kind: 'dependency-deliver',
+          scope: this.scope,
+          keys: pending.keys,
+          receipt: { consumer: 'native-dependency', revision: pending.serial }
+        })
+        pending.keys = []
+        pending.serial = ++this.stagingSequence
+      }
+      if (pending.done) {
+        break
+      }
+      pending.iterator ??= this.changedKeys(watch, args, overdue)
+      try {
+        const next = await pending.iterator.next()
+        if (next.done) {
+          pending.done = true
+        } else {
+          pending.keys.push(next.value)
+        }
+      } catch (error) {
+        pending.iterator = undefined
+        throw error
       }
     }
-    await flush()
+    this.staging = undefined
   }
+
   async addFile(path: string): Promise<void> {
     await this.addFiles([path])
   }
@@ -130,6 +164,10 @@ export class SessionSearchDependencyInventory {
     args: DiscoverSessionFilesArgs,
     overdue: () => boolean
   ): AsyncGenerator<string> {
+    if (this.inventoryAck) {
+      await this.inventory!.acknowledge(this.inventoryAck)
+      this.inventoryAck = undefined
+    }
     if (this.dependency.eventsOnly) {
       const keys = new Set<string>()
       for (const event of watch?.events.values() ?? []) {
@@ -176,10 +214,14 @@ export class SessionSearchDependencyInventory {
     const keys = new Set<string>()
     const inventory = this.inventory!
     if ((!watch || watch.failed || watch.reconcile) && !inventory.walking) {
-      await inventory.reconcile()
+      await inventory.reconcile(watch?.receipt('reconcile'))
+      if (watch) {
+        watch.reconcile = false
+      }
     }
     for (const event of watch?.events.values() ?? []) {
-      await inventory.invalidate(event.path)
+      await inventory.invalidate(event.path, true, true, watch?.eventReceipt(event.path))
+      watch?.acknowledgeEvent(event.path)
     }
     await inventory.retryFailures()
     const delta = await inventory.drain(
@@ -202,7 +244,9 @@ export class SessionSearchDependencyInventory {
         keys.add(key)
       }
     }
+    this.inventoryAck = delta.receipts
     yield* keys
     await inventory.acknowledge(delta.receipts)
+    this.inventoryAck = undefined
   }
 }

@@ -1,18 +1,15 @@
+import type { SessionSearchInputReceipt } from '../ai-vault-search/session-search-catalog-types'
 import type { SessionSearchRemovalReceipt } from '../ai-vault-search/session-search-observation-authority'
-import { SessionInventoryDirectoryWalks } from './session-file-inventory-walk'
-import { dirname } from 'node:path'
-import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
+import { SessionInventoryDirtyInputs } from './session-file-inventory-dirty'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
-import {
-  isMissingTranscriptPathError,
-  type DiscoverSessionFilesArgs
-} from './session-scanner-discovery'
-import { isInsideSessionRoot } from './session-file-discovery'
+import type { DiscoverSessionFilesArgs } from './session-scanner-discovery'
 import type { SessionFileChange } from './session-file-inventory-files'
 export type { SessionFileChange } from './session-file-inventory-files'
 
 /** The writer retains queued directories, observations and membership across bounded passes. */
-export class SessionFileInventory extends SessionInventoryDirectoryWalks {
+export class SessionFileInventory extends SessionInventoryDirtyInputs {
+  private wakeSequence = 0
+  private waking: SessionSearchInputReceipt | undefined
   private reconcileAgain = false
   private reconciling = false
   private initialized = false
@@ -48,6 +45,7 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
   }
   get pending(): boolean {
     return (
+      this.dirtyProbing ||
       this.observations.applying ||
       this.authority.readySize > 0 ||
       this.garbage.size > 0 ||
@@ -73,36 +71,75 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
       await this.reconcile()
     }
   }
-  async wakeFailures(): Promise<void> {
+  async wakeFailures(receipt?: SessionSearchInputReceipt): Promise<void> {
+    const acceptedReceipt =
+      receipt ?? (this.waking ??= { consumer: 'explicit-recovery', revision: ++this.wakeSequence })
     await this.request({
       kind: 'retry-wake',
-      scope: `${this.scope}:primary-wakes`,
-      prefix: this.root
+      scope: this.scope,
+      prefix: this.root,
+      all: true,
+      receipt: acceptedReceipt
     })
-    await this.failures.wake()
-    await this.observations.failures.wake()
+    if (!receipt) {
+      this.waking = undefined
+    }
   }
   get refused(): boolean {
     return this.failures.size > 0 || this.observations.failures.size > 0
   }
-  get walking(): boolean {
-    return this.cancellations.size > 0 || this.walks.size > 0 || this.reconcileAgain
+  get seedDelivered(): boolean {
+    return !this.observations.delivery.size && !this.observations.applying
   }
-  async reconcile(): Promise<void> {
+  get primarySeedWaiting(): boolean {
+    return this.primaryWakes.size > 0 && !this.cancellations.size && !this.walks.size
+  }
+  get walking(): boolean {
+    return (
+      this.cancellations.size > 0 ||
+      this.walks.size > 0 ||
+      this.reconcileAgain ||
+      this.primarySeedWaiting
+    )
+  }
+  async reconcile(receipt?: SessionSearchInputReceipt): Promise<void> {
+    if (this.primarySeedWaiting) {
+      this.reconcileAgain = true
+      return
+    }
+    if (receipt) {
+      await this.request({
+        kind: 'directory-schedule',
+        scope: this.scope,
+        path: this.root,
+        depth: 0,
+        reconcile: true,
+        trailing: true,
+        receipt
+      })
+      this.reconciling = true
+      return
+    }
     if (this.reconciling) {
       this.reconcileAgain = true
       return
     }
-    this.reconciling = true
     await this.schedule(this.root, true)
+    this.reconciling = true
   }
-  async invalidate(path: string, force = true, wake = true): Promise<void> {
+  async invalidate(
+    path: string,
+    force = true,
+    wake = true,
+    receipt?: SessionSearchInputReceipt
+  ): Promise<void> {
     if (!wake) {
       await this.dirty.set(path, ((await this.dirty.get(path)) ?? false) || force)
       return
     }
     await this.request({
       kind: 'input-invalidate',
+      receipt,
       scope: this.scope,
       path,
       force,
@@ -197,7 +234,7 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
         await this.request({ kind: 'authority-cleanup', scope: this.scope })
       }
     }
-    if (!this.walks.size && !this.cancellations.size) {
+    if (!this.walks.size && !this.cancellations.size && !this.primaryWakes.size) {
       this.reconciling = false
       if (this.reconcileAgain) {
         this.reconcileAgain = false
@@ -238,57 +275,20 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
   acknowledge(receipts: { path: string; revision: number }[]): Promise<void> {
     return this.observations.acknowledge(receipts)
   }
-  private async drainDirty(args: DiscoverSessionFilesArgs, limit: number): Promise<void> {
-    const page = await this.request({ kind: 'dirty-page', scope: this.scope })
-    const inputs = page.dirtyInputs ?? []
-    await this.observations.observePage(
-      inputs.filter(({ path }) => this.accepts(path, args)),
-      args,
-      limit
-    )
-    for (const { path } of inputs) {
-      if (this.accepts(path, args) || !isInsideSessionRoot(this.root, path)) {
-        continue
-      }
-      const revision = (await this.request({ kind: 'authority-probe', scope: this.scope, path }))
-        .observationEpoch!
-      try {
-        const stat = await wslGatedStat(path, 'scan', args.signal)
-        if (
-          (await this.request({ kind: 'authority-probe-end', scope: this.scope, path, revision }))
-            .invalidProof
-        ) {
-          continue
-        }
-        await this.failures.delete(path)
-        if (stat.isDirectory()) {
-          await ((await this.walks.has(path)) ? this.trailing.put(path, true) : this.schedule(path))
-        } else if (await this.directories.get(path)) {
-          await this.schedule(dirname(path))
-        }
-      } catch (error) {
-        throwIfAiVaultScanCancelled(args.signal)
-        if (
-          (await this.request({ kind: 'authority-probe-end', scope: this.scope, path, revision }))
-            .invalidProof
-        ) {
-          continue
-        }
-        if (isMissingTranscriptPathError(error)) {
-          await this.schedule(path, false, true, revision)
-          await this.schedule(dirname(path))
-        } else {
-          await this.issue(path, error, args)
-        }
-      }
-    }
-  }
-  async retryFailures(): Promise<void> {
+  async retryFailures(primary = true): Promise<void> {
     await this.request({
       kind: 'retry-admit',
+      primary,
       scope: this.scope,
       root: this.root,
       generation: this.failures.epoch
     })
+    if (!this.primaryWakes.size && !this.walks.size && !this.cancellations.size) {
+      this.reconciling = false
+      if (this.reconcileAgain) {
+        this.reconcileAgain = false
+        await this.reconcile()
+      }
+    }
   }
 }

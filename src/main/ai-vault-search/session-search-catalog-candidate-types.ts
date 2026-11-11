@@ -40,7 +40,7 @@ export type SessionSearchCandidateCommand =
   | { kind: 'unowned-page'; rows: { path: string; agent?: string | null }[] }
   | { kind: 'path'; path: string; agent?: string | null }
   | { kind: 'group'; group: string; after?: string }
-  | { kind: 'changes'; after?: string }
+  | { kind: 'changes'; after?: string; root?: string; agent?: string }
   | { kind: 'rerank'; root: string; agent: string; order: [string, number][]; after?: string }
   | { kind: 'consumed'; key: string; revision: number }
   | SessionSearchPublicationCommand

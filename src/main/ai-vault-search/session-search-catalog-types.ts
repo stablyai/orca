@@ -27,7 +27,8 @@ export type SessionSearchCatalogRow = {
   ready: number
   tie?: number
 }
-export type SessionSearchCatalogCommand =
+export type SessionSearchInputReceipt = { consumer: string; revision: number }
+export type SessionSearchCatalogCommand = (
   | SessionSearchRetryCommand
   | SessionSearchAuthorityCommand
   | SessionSearchDirtyCommand
@@ -63,6 +64,7 @@ export type SessionSearchCatalogCommand =
       limit?: number
       prefix?: string
     }
+) & { receipt?: SessionSearchInputReceipt }
 export type SessionSearchCatalogResult = SessionSearchDirtyResult &
   SessionSearchInventoryResult &
   SessionSearchDirectoryResult & {

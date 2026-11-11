@@ -17,6 +17,7 @@ export type SessionSearchObservationInput = {
   force: boolean
   readOwed?: boolean
   metadataOwed?: boolean
+  dirtyRevision?: number
 }
 export type SessionSearchPreparedObservation = SessionSearchObservationInput & {
   accepted?: SessionSearchObservedFacts

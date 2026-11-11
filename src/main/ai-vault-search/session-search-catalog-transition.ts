@@ -42,7 +42,19 @@ export function transitionSessionSearchCatalog(
       return transitionSessionSearchContainer(catalog, command)
     case 'input-invalidate':
     case 'dirty-page':
-      return transitionSessionSearchDirty(catalog, command)
+    case 'dirty-ack': {
+      catalog.connection.exec('SAVEPOINT search_dirty_transition')
+      try {
+        const result = transitionSessionSearchDirty(catalog, command)
+        catalog.connection.exec('RELEASE search_dirty_transition')
+        return result
+      } catch (error) {
+        catalog.connection.exec(
+          'ROLLBACK TO search_dirty_transition; RELEASE search_dirty_transition'
+        )
+        throw error
+      }
+    }
     case 'dependency-remove':
     case 'dependency-deliver':
     case 'dependency-fanout':

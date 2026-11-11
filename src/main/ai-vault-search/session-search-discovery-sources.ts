@@ -24,6 +24,20 @@ type Root = {
 
 /** Search owns its notifications and raw membership; ordinary History discovery stays stateless. */
 export class SessionSearchDiscoverySources {
+  private readonly active = new Set<Promise<unknown>>()
+  protected track<T>(work: Promise<T>): Promise<T> {
+    this.active.add(work)
+    void work.then(
+      () => this.active.delete(work),
+      () => this.active.delete(work)
+    )
+    return work
+  }
+  async settled(): Promise<void> {
+    while (this.active.size) {
+      await Promise.allSettled(this.active)
+    }
+  }
   protected readonly roots = new Map<string, Root>()
   readonly containers = new SessionSearchContainerInventory()
   protected readonly owner = new AbortController()
@@ -38,6 +52,10 @@ export class SessionSearchDiscoverySources {
     | undefined
   onRemoved(accept: NonNullable<SessionSearchDiscoverySources['acceptRemoved']>): void {
     this.acceptRemoved = accept
+  }
+  protected admitSeed: ((root: string, agent: string) => Promise<boolean>) | undefined
+  onSeedAdmission(accept: NonNullable<SessionSearchDiscoverySources['admitSeed']>): void {
+    this.admitSeed = accept
   }
   protected accept:
     | ((
@@ -91,7 +109,7 @@ export class SessionSearchDiscoverySources {
   }
 
   get pending(): boolean {
-    if (this.containers.pending) {
+    if (this.containers.pending || this.watchers.pending) {
       return true
     }
     for (const root of this.roots.values()) {

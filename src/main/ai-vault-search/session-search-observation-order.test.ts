@@ -1,3 +1,4 @@
+import './session-search-watcher.test-fixture'
 import './session-search-worker.test-fixture'
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -120,7 +121,7 @@ it.each(['file', 'subtree'] as const)(
         await rm(child, { recursive: true })
       }
       paused = false
-      notifySessionSearchOverflow(harness.roots.claudeProjectsDir!)
+      expect(notifySessionSearchOverflow(harness.roots.claudeProjectsDir!)).toBe(1)
       await subject.reconcile()
       expect(paused).toBe(true)
       refusing = variant === 'subtree'

@@ -1,3 +1,4 @@
+import { SessionSearchAuthorityPage } from './session-search-authority-page'
 import { wakeSessionSearchPrimaryFailures } from './session-search-primary-retries'
 import { recordSessionSearchInput } from './session-search-observation-authority'
 import type { SessionSearchCatalog, SessionSearchCatalogRow } from './session-search-catalog'
@@ -5,8 +6,11 @@ import type { SessionSearchObservationDebt } from './session-search-inventory-tr
 
 export type SessionSearchDirtyCommand =
   | { kind: 'dirty-page'; scope: string }
+  | { kind: 'dirty-ack'; scope: string; path: string; revision: number }
   | { kind: 'input-invalidate'; scope: string; path: string; force: boolean; subtree?: boolean }
-export type SessionSearchDirtyResult = { dirtyInputs?: { path: string; force: boolean }[] }
+export type SessionSearchDirtyResult = {
+  dirtyInputs?: { path: string; force: boolean; dirtyRevision: number }[]
+}
 type Entry = { value: boolean; revision: number }
 function entry(row: SessionSearchCatalogRow | undefined): Entry | undefined {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the matching frontier owns its encoded value and revision.
@@ -80,10 +84,17 @@ export function transitionSessionSearchDirty(
     )
     return {}
   }
+  if (command.kind === 'dirty-ack') {
+    acknowledgeSessionSearchDirty(catalog, command.scope, command.path, command.revision)
+    const authority = new SessionSearchAuthorityPage(catalog, command.scope)
+    authority.settle(command.path)
+    authority.flush()
+    return {}
+  }
   const scope = `${command.scope}:dirty`,
     expansion = `${command.scope}:dirty-expansion`
   const page = catalog.execute({ kind: 'page', scope, group: '', orderRank: true })
-  const dirtyInputs: { path: string; force: boolean }[] = []
+  const dirtyInputs: { path: string; force: boolean; dirtyRevision: number }[] = []
   let remaining = 256
   for (const row of page.rows ?? []) {
     const fact = entry(row)!
@@ -94,9 +105,17 @@ export function transitionSessionSearchDirty(
       continue
     }
     const stored = catalog.execute({ kind: 'get', scope: expansion, key: row.key }).rows?.[0]
-    const cursor: { revision: number; after?: string } | undefined = stored
+    const cursor: { revision: number; after?: string; complete?: boolean } | undefined = stored
       ? JSON.parse(stored.value)
       : undefined
+    if (cursor?.revision === fact.revision && cursor.complete) {
+      dirtyInputs.push({ path: row.key, force: fact.value, dirtyRevision: fact.revision })
+      remaining--
+      if (!remaining) {
+        break
+      }
+      continue
+    }
     const owners = catalog.execute({
       kind: 'page',
       scope: `${command.scope}:files`,
@@ -127,13 +146,32 @@ export function transitionSessionSearchDirty(
       entry(catalog.execute({ kind: 'get', scope, key: row.key }).rows?.[0])?.revision ===
       fact.revision
     ) {
-      catalog.execute({ kind: 'delete', scope: expansion, key: row.key })
-      catalog.execute({ kind: 'delete', scope, key: row.key })
-      dirtyInputs.push({ path: row.key, force: fact.value })
+      catalog.execute({
+        kind: 'put',
+        scope: expansion,
+        rows: [{ ...row, value: JSON.stringify({ revision: fact.revision, complete: true }) }]
+      })
+      dirtyInputs.push({ path: row.key, force: fact.value, dirtyRevision: fact.revision })
+      remaining--
     }
     if (!remaining) {
       break
     }
   }
   return { dirtyInputs }
+}
+
+export function acknowledgeSessionSearchDirty(
+  catalog: SessionSearchCatalog,
+  owner: string,
+  path: string,
+  revision: number
+): void {
+  const scope = `${owner}:dirty`
+  const current = entry(catalog.execute({ kind: 'get', scope, key: path }).rows?.[0])
+  if (current?.revision !== revision) {
+    return
+  }
+  catalog.execute({ kind: 'delete', scope, key: path })
+  catalog.execute({ kind: 'delete', scope: `${owner}:dirty-expansion`, key: path })
 }

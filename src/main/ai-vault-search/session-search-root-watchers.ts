@@ -5,7 +5,9 @@ import type { WatcherProcessSubscription } from '../ipc/filesystem/watcher-proce
 import type { WatcherProcessEvent } from '../ipc/filesystem/watcher-process/parcel-watcher-process-protocol'
 import { throwIfAiVaultScanCancelled } from '../ai-vault/ai-vault-scan-cancellation'
 import { RUNTIME_FILE_WATCH_CRAWL_TIMEOUT_MS } from '../../shared/file-watch/runtime-file-watch-limits'
-export type SessionSearchRootWatch = {
+import { SessionSearchWatchDelivery } from './session-search-watch-delivery'
+export type { SessionSearchRootWatch } from './session-search-watch-delivery'
+type NativeWatch = {
   identity: string
   subscription?: WatcherProcessSubscription
   failed: boolean
@@ -17,17 +19,36 @@ export type SessionSearchRootWatch = {
 }
 
 export class SessionSearchRootWatchers {
-  private readonly watches = new Map<string, SessionSearchRootWatch>()
+  private readonly watches = new Map<string, NativeWatch>()
   private readonly owner = new AbortController()
   private readonly supervisor: WatcherProcessSupervisor
-  private probes = new Map<string, Promise<SessionSearchRootWatch | undefined>>()
+  private sequence = 0
+  private readonly consumers = new Map<string, Map<string, SessionSearchWatchDelivery>>()
+  private seen = new Set<string>()
+  get pending(): boolean {
+    return [...this.consumers.values()].some((consumers) =>
+      [...consumers.values()].some((consumer) => consumer.pending)
+    )
+  }
+  private probes = new Map<string, Promise<NativeWatch | undefined>>()
   constructor(entryPath?: string) {
     this.supervisor = new WatcherProcessSupervisor({ entryPath })
   }
   begin(): void {
     this.probes = new Map()
+    this.seen.clear()
   }
   async end(): Promise<void> {
+    for (const [key, consumers] of this.consumers) {
+      for (const consumer of consumers.keys()) {
+        if (!this.seen.has(`${key}:${consumer}`)) {
+          consumers.delete(consumer)
+        }
+      }
+      if (!consumers.size) {
+        this.consumers.delete(key)
+      }
+    }
     for (const [path, watch] of this.watches) {
       if (!this.probes.has(path)) {
         this.watches.delete(path)
@@ -38,29 +59,49 @@ export class SessionSearchRootWatchers {
   close(): Promise<void> {
     this.owner.abort()
     this.watches.clear()
+    this.consumers.clear()
     return this.supervisor.disposeAndWait()
   }
-  watch(
+  async watch(
     path: string,
     signal?: AbortSignal,
-    mode: 'recursive' | 'shallow' = 'recursive'
-  ): Promise<SessionSearchRootWatch | undefined> {
+    mode: 'recursive' | 'shallow' = 'recursive',
+    consumer = path
+  ) {
     const key = `${mode}:${path}`
+    this.seen.add(`${key}:${consumer}`)
+    let consumers = this.consumers.get(key)
+    if (!consumers) {
+      consumers = new Map()
+      this.consumers.set(key, consumers)
+    }
+    let delivery = consumers.get(consumer)
+    if (!delivery) {
+      delivery = new SessionSearchWatchDelivery(consumer, () => ++this.sequence)
+      consumers.set(consumer, delivery)
+    }
     let probe = this.probes.get(key)
     if (!probe) {
-      probe = this.probeWatch(path, key, mode, signal).then((watch) => {
-        if (!watch) {
-          return undefined
-        }
-        const delivery = { ...watch }
-        watch.events = new Map()
-        watch.reconcile = false
-        watch.recovery = false
-        return delivery
-      })
+      probe = this.probeWatch(path, key, mode, signal)
       this.probes.set(key, probe)
     }
-    return probe
+    const watch = await probe
+    if (!watch) {
+      if (!delivery.pending) {
+        return undefined
+      }
+      const pending = delivery.capture()
+      pending.failed = true
+      pending.reconcile = true
+      return pending
+    }
+    for (const target of consumers.values()) {
+      target.stage(watch)
+    }
+    watch.events = new Map()
+    watch.reconcile = false
+    watch.recovery = false
+    return delivery.capture()
   }
 
   private async probeWatch(
@@ -68,7 +109,7 @@ export class SessionSearchRootWatchers {
     key: string,
     mode: 'recursive' | 'shallow',
     signal?: AbortSignal
-  ): Promise<SessionSearchRootWatch | undefined> {
+  ): Promise<NativeWatch | undefined> {
     const previous = this.watches.get(key)
     let identity: string
     try {
@@ -81,6 +122,11 @@ export class SessionSearchRootWatchers {
       identity = `${stat.dev}:${stat.ino}:${stat.birthtimeMs}`
     } catch {
       throwIfAiVaultScanCancelled(signal)
+      if (previous) {
+        for (const target of this.consumers.get(key)?.values() ?? []) {
+          target.stage(previous)
+        }
+      }
       this.watches.delete(key)
       await previous?.subscription?.unsubscribe().catch(() => undefined)
       return undefined
@@ -92,8 +138,13 @@ export class SessionSearchRootWatchers {
     ) {
       return previous
     }
+    if (previous) {
+      for (const target of this.consumers.get(key)?.values() ?? []) {
+        target.stage(previous)
+      }
+    }
     await previous?.subscription?.unsubscribe().catch(() => undefined)
-    const watch: SessionSearchRootWatch = {
+    const watch: NativeWatch = {
       identity,
       failed: false,
       events: new Map(),

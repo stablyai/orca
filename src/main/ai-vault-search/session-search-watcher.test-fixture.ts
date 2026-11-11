@@ -64,10 +64,15 @@ export function notifySessionSearchFileChange(path: string): void {
   }
 }
 
-export function notifySessionSearchOverflow(path: string): void {
+export function notifySessionSearchOverflow(path: string): number {
+  let delivered = 0
   for (const watch of watchers.values()) {
     if (watch.path === path) {
-      watch.hooks.onOverflow?.()
+      if (watch.hooks.onOverflow) {
+        watch.hooks.onOverflow()
+        delivered++
+      }
     }
   }
+  return delivered
 }

@@ -11,7 +11,10 @@ export class SessionSearchDiscoveryInventory
   extends SessionSearchDiscoverySources
   implements SessionDiscoveryContext
 {
-  async files(args: DiscoverSessionFilesArgs): Promise<SessionFileDiscovery> {
+  files(args: DiscoverSessionFilesArgs): Promise<SessionFileDiscovery> {
+    return this.track(this.discoverFiles(args))
+  }
+  private async discoverFiles(args: DiscoverSessionFilesArgs): Promise<SessionFileDiscovery> {
     const key = `${args.agent}:${args.rootDir}`
     this.seen.add(key)
     let root = this.roots.get(key)
@@ -33,6 +36,18 @@ export class SessionSearchDiscoveryInventory
       await root.inventory.wakeFailures()
       root.wake = this.primaryWake
     }
+    const admitPrimary = async () => {
+      if (
+        root.inventory.primarySeedWaiting &&
+        root.inventory.seedDelivered &&
+        (!this.admitSeed || (await this.admitSeed(args.rootDir, args.agent)))
+      ) {
+        await root.inventory.retryFailures()
+        return true
+      }
+      return false
+    }
+    await admitPrimary()
     let watching = false
     if (this.maintenance) {
       root.fallback = await this.watchers.requiresPolling(args.rootDir)
@@ -42,7 +57,12 @@ export class SessionSearchDiscoveryInventory
         await root.inventory.reconcile()
       }
     } else {
-      const watch = await this.watchers.watch(args.rootDir, args.signal)
+      const watch = await this.watchers.watch(
+        args.rootDir,
+        args.signal,
+        'recursive',
+        root.inventory.scope
+      )
       if (!watch) {
         root.unwatched = true
         if (!root.inventory.walking) {
@@ -54,7 +74,8 @@ export class SessionSearchDiscoveryInventory
           (this.force || watch.reconcile || root.identity !== watch.identity) &&
           (root.identity !== undefined || !root.inventory.walking)
         ) {
-          await root.inventory.reconcile()
+          await root.inventory.reconcile(watch.receipt('reconcile'))
+          watch.reconcile = false
         }
         if (
           root.identity !== watch.identity &&
@@ -72,13 +93,16 @@ export class SessionSearchDiscoveryInventory
             root.unwatched ||
             (root.identity !== undefined && root.identity !== watch.identity))
         ) {
-          await root.inventory.wakeFailures()
+          await root.inventory.wakeFailures(watch.receipt('recovery'))
+          watch.recovery = false
         }
         root.unwatched = watch.failed
         root.identity = watch.identity
         for (const event of watch.events.values()) {
-          await root.inventory.invalidate(event.path)
+          await root.inventory.invalidate(event.path, true, true, watch.eventReceipt(event.path))
+          watch.acknowledgeEvent(event.path)
         }
+        watch.acknowledge()
       }
     }
     const auxiliaries = await Promise.all(
@@ -101,7 +125,12 @@ export class SessionSearchDiscoveryInventory
           observer,
           watch: observer.polling
             ? undefined
-            : await this.watchers.watch(dependency.path, args.signal, dependency.mode)
+            : await this.watchers.watch(
+                dependency.path,
+                args.signal,
+                dependency.mode,
+                `dependency:${key}:${dependency.path}`
+              )
         }
       })
     )
@@ -111,9 +140,10 @@ export class SessionSearchDiscoveryInventory
         args
       )
       await observer.stageChanges(auxiliary, args, this.overdue)
+      auxiliary?.acknowledge()
       await observer.settleDelivered(root.inventory.scope, this.overdue)
     }
-    await root.inventory.retryFailures()
+    await root.inventory.retryFailures(false)
     if (root.fallback || !watching) {
       await root.inventory.pollRecent(args, this.recentLimit)
     }
@@ -173,7 +203,8 @@ export class SessionSearchDiscoveryInventory
         }
       }
       await root.inventory.acknowledge(delta.receipts)
-      if ((!delta.changes.length && !delta.removed.length) || this.overdue()) {
+      const admittedPrimary = await admitPrimary()
+      if ((!delta.changes.length && !delta.removed.length && !admittedPrimary) || this.overdue()) {
         break
       }
     } while (root.inventory.pending)
@@ -185,10 +216,20 @@ export class SessionSearchDiscoveryInventory
     read: (issues: AiVaultScanIssue[]) => Promise<readonly string[]>,
     issues: AiVaultScanIssue[]
   ) {
-    return this.containers.containerPaths(root, read, issues)
+    return this.track(this.containers.containerPaths(root, read, issues))
   }
 
-  async container(
+  container(
+    key: string,
+    paths: readonly string[],
+    read: (paths: readonly string[], limit: number) => Promise<SessionFileDiscovery>,
+    limit: number,
+    issues: readonly AiVaultScanIssue[],
+    enumerationComplete = true
+  ): Promise<SessionFileDiscovery> {
+    return this.track(this.discoverContainer(key, paths, read, limit, issues, enumerationComplete))
+  }
+  private async discoverContainer(
     key: string,
     paths: readonly string[],
     read: (paths: readonly string[], limit: number) => Promise<SessionFileDiscovery>,

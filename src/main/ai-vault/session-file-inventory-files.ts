@@ -64,7 +64,13 @@ export class SessionInventoryFiles {
     )
   }
   async observePage(
-    inputs: { path: string; force: boolean; readOwed?: boolean; metadataOwed?: boolean }[],
+    inputs: {
+      path: string
+      force: boolean
+      readOwed?: boolean
+      metadataOwed?: boolean
+      dirtyRevision?: number
+    }[],
     args: DiscoverSessionFilesArgs,
     limit: number
   ): Promise<Map<string, FileWithMtime>> {

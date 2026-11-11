@@ -1,3 +1,4 @@
+import { acknowledgeSessionSearchDirty } from './session-search-dirty-transition'
 import { dirname } from 'node:path'
 import { SessionSearchAuthorityPage } from './session-search-authority-page'
 import { boundedSessionSearchPage } from './session-search-catalog-pages'
@@ -37,6 +38,7 @@ export function prepareSessionSearchObservations(
     failures,
     `${failures}:eligible`,
     `${command.scope}:dirty`,
+    `${command.scope}:dirty-expansion`,
     `${command.scope}:authority`,
     `${command.scope}:authority-root`,
     observing,
@@ -52,8 +54,23 @@ export function prepareSessionSearchObservations(
     (input) => {
       const refusal = get(failures, input.path)
       const debt = authorityValue<SessionSearchObservationDebt>(refusal)
-      const revision = catalog.nextRevision()
-      const attempt = !debt || (debt.failures < 3 && debt.attempted !== command.generation)
+      const dirty = get(`${command.scope}:dirty`, input.path)
+      const stale =
+        input.dirtyRevision !== undefined &&
+        authorityValue<{ revision: number }>(dirty)?.revision !== input.dirtyRevision
+      const previousToken = authorityValue<string>(get(observing, input.path))
+      const previous: [string, string, number] | undefined = previousToken
+        ? JSON.parse(previousToken)
+        : undefined
+      const reuse =
+        input.dirtyRevision !== undefined &&
+        previous &&
+        previous[0] === (get(files, input.path)?.value ?? '') &&
+        previous[1] === (dirty?.value ?? '') &&
+        authority.authority(input.path)?.self === previous[2]
+      const revision = reuse ? previous[2] : catalog.nextRevision()
+      const attempt =
+        !stale && (!debt || (debt.failures < 3 && debt.attempted !== command.generation))
       const mergesDebt =
         !attempt &&
         debt &&
@@ -98,6 +115,11 @@ export function prepareSessionSearchObservations(
             input.refusalRevision
           )
           authority.forget(failures, input.path)
+        }
+        if (!input.attempt && input.dirtyRevision !== undefined) {
+          acknowledgeSessionSearchDirty(catalog, command.scope, input.path, input.dirtyRevision)
+          authority.forget(`${command.scope}:dirty`, input.path)
+          authority.settle(input.path)
         }
         if (input.attempt) {
           authority.record(input.path, input.authority, 0)

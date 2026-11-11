@@ -43,6 +43,7 @@ export class SessionSearchCatalogCandidates {
     CREATE INDEX temp.search_candidate_rank ON search_candidates(group_key,sqlite_source,mtime DESC,source_order,key);
     CREATE INDEX temp.search_candidate_changes ON search_candidates(changed,mtime DESC,key);
     CREATE INDEX temp.search_candidate_source ON search_candidates(root,agent,group_key);
+    CREATE INDEX temp.search_candidate_seed ON search_candidates(root,agent,changed,mtime DESC,key);
     `)
   }
 
@@ -98,9 +99,11 @@ export class SessionSearchCatalogCandidates {
           ])
         )
       case 'changes': {
-        const rows = this.read('WHERE changed = 1 AND key > ? ORDER BY mtime DESC,key LIMIT 256', [
-          command.after ?? ''
-        ])
+        const scoped = command.root !== undefined && command.agent !== undefined
+        const rows = this.read(
+          `WHERE changed = 1 AND key > ?${scoped ? ' AND root=? AND agent=?' : ''} ORDER BY mtime DESC,key LIMIT 256`,
+          scoped ? [command.after ?? '', command.root!, command.agent!] : [command.after ?? '']
+        )
         return this.result(rows)
       }
       case 'rerank': {
@@ -156,7 +159,7 @@ export class SessionSearchCatalogCandidates {
               `UPDATE temp.search_candidates SET required = ${command.metadataOnly ? 'force_read' : '0'},force_read=${command.metadataOnly ? 'force_read' : '0'},metadata=0 WHERE path = ? AND agent = ? AND selected = 1`
             )
             .run(command.path, command.agent)
-          this.dirtyPath(command.path)
+          this.rowChanged(command.path)
         }
         return this.result([])
       }
@@ -196,7 +199,7 @@ export class SessionSearchCatalogCandidates {
     return this.read('WHERE key=?', [key])[0]
   }
   rowChanged(path: string): void {
-    this.dirtyPath(path)
+    this.publications.rowChanged(path)
   }
 
   private put(row: SessionSearchCatalogCandidate): void {
@@ -271,12 +274,8 @@ export class SessionSearchCatalogCandidates {
       .run(++this.revision, path)
     if (Number(this.db.prepare('SELECT changes() AS n').get()?.n ?? 0)) {
       this.pending += previouslyClean
-      this.dirtyPath(path)
+      this.rowChanged(path)
     }
-  }
-
-  private dirtyPath(path: string): void {
-    this.publications.rowChanged(path)
   }
 
   private read(where: string, values: (string | number)[]): SessionSearchCandidateRow[] {

@@ -116,11 +116,30 @@ export async function runSessionSearchPass(
       } while (state.candidates.pendingChanges)
     }
     let discoveryLane = Promise.resolve()
-    const serializeDiscovery = (consume: () => Promise<void>): Promise<void> => {
+    const serializeDiscovery = <T>(consume: () => Promise<T>): Promise<T> => {
       const accepted = discoveryLane.then(consume)
-      discoveryLane = accepted
+      discoveryLane = accepted.then(
+        () => undefined,
+        () => undefined
+      )
       return accepted
     }
+    state.discovery.onSeedAdmission((root, agent) =>
+      serializeDiscovery(async () => {
+        const rows = await state.candidates.changedForRoot(root, agent)
+        if (rows.length) {
+          await state.parkedRetire.deletePage(rows.map((row) => row.candidate.file.path))
+          state.queue.update(
+            await state.candidates.admitChanges(
+              rows.map(({ key, revision }) => ({ key, revision })),
+              !args.full,
+              state.recovering
+            )
+          )
+        }
+        return !(await state.candidates.changedForRoot(root, agent)).length
+      })
+    )
     state.discovery.onRemoved((paths, observations) =>
       serializeDiscovery(async () => {
         if (!paths.length) {
@@ -139,7 +158,7 @@ export async function runSessionSearchPass(
     )
     const swept = await withSessionDiscovery(state.discovery, () =>
       discoverSessionSearchCandidates(args.roots, { limitPerAgent: Infinity, signal, raw: true })
-    )
+    ).finally(() => state.discovery.settled())
     await state.discovery.end()
     const issues: AiVaultScanIssue[] = [...swept.issues]
     const update = await state.candidates.update(

@@ -33,8 +33,8 @@ export type SessionSearchRetryCommand =
     }
   | { kind: 'retry-remove'; scope: string; path: string }
   | { kind: 'retry-require'; scope: string; path: string }
-  | { kind: 'retry-wake'; scope: string; prefix?: string }
-  | { kind: 'retry-admit'; scope: string; root: string; generation: number }
+  | { kind: 'retry-wake'; scope: string; prefix?: string; all?: boolean }
+  | { kind: 'retry-admit'; scope: string; root: string; generation: number; primary?: boolean }
 
 export function recordSessionSearchRetry(
   catalog: SessionSearchCatalog,
@@ -153,7 +153,9 @@ export function transitionSessionSearchRetry(
   command: SessionSearchRetryCommand
 ) {
   if (command.kind === 'retry-admit') {
-    admitSessionSearchPrimaryFailures(catalog, command.scope)
+    if (command.primary !== false) {
+      admitSessionSearchPrimaryFailures(catalog, command.scope)
+    }
     admit(
       catalog,
       command.scope,
@@ -173,6 +175,16 @@ export function transitionSessionSearchRetry(
     return {}
   }
   if (command.kind === 'retry-wake') {
+    if (command.all && command.prefix) {
+      for (const suffix of ['primary-wakes', 'refusals', 'file-refusals']) {
+        catalog.execute({
+          kind: 'retry-wake',
+          scope: `${command.scope}:${suffix}`,
+          prefix: command.prefix
+        })
+      }
+      return {}
+    }
     if (command.scope.endsWith(':primary-wakes') && command.prefix) {
       wakeSessionSearchPrimaryFailures(
         catalog,

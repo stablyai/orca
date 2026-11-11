@@ -32,7 +32,45 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
 
   execute(command: SessionSearchCatalogCommand): SessionSearchCatalogResult {
     this.touched.add(command.scope)
-    return this.apply(command)
+    if (!command.receipt) {
+      return this.apply(command)
+    }
+    const scope = `${command.scope}:input-receipts`
+    const previous = this.execute({ kind: 'get', scope, key: command.receipt.consumer }).rows?.[0]
+    if (previous && previous.rank >= command.receipt.revision) {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only this receipt owner encodes the accepted response.
+      const accepted = JSON.parse(previous.value) as {
+        result: SessionSearchCatalogResult
+        scopes: string[]
+      }
+      for (const touchedScope of accepted.scopes) {
+        this.touched.add(touchedScope)
+      }
+      return accepted.result
+    }
+    this.db.exec('SAVEPOINT search_input_receipt')
+    try {
+      const result = this.apply({ ...command, receipt: undefined })
+      this.execute({
+        kind: 'put',
+        scope,
+        rows: [
+          {
+            key: command.receipt.consumer,
+            value: JSON.stringify({ result, scopes: [...this.touched] }),
+            parent: '',
+            group: '',
+            rank: command.receipt.revision,
+            ready: 0
+          }
+        ]
+      })
+      this.db.exec('RELEASE search_input_receipt')
+      return result
+    } catch (error) {
+      this.db.exec('ROLLBACK TO search_input_receipt; RELEASE search_input_receipt')
+      throw error
+    }
   }
   response(command: SessionSearchCatalogCommand): SessionSearchCatalogResult {
     const records =

@@ -64,6 +64,9 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
     }
     return unowned
   }
+  async changedForRoot(root: string, agent: string) {
+    return (await this.request!({ kind: 'changes', root, agent })).rows
+  }
   async admitChanges(
     receipts: { key: string; revision: number }[],
     recent: boolean,

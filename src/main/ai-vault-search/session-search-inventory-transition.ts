@@ -1,3 +1,4 @@
+import { acknowledgeSessionSearchDirty } from './session-search-dirty-transition'
 import { SessionSearchAuthorityPage } from './session-search-authority-page'
 import { SESSION_INPUT_FAILURES_BEFORE_HELD_OUT } from '../ai-vault/session-observation-retries'
 import { recordSessionSearchRetry } from './session-search-retry-transition'
@@ -137,6 +138,10 @@ export function transitionSessionSearchInventory(
         continue
       }
       remove(observing, outcome.path)
+      if (outcome.dirtyRevision !== undefined) {
+        acknowledgeSessionSearchDirty(catalog, command.scope, outcome.path, outcome.dirtyRevision)
+        authority.forget(`${command.scope}:dirty`, outcome.path)
+      }
       const accepted = decode<SessionSearchObservedFacts>(current)
       const previous = decode<SessionSearchObservationDebt>(get(failures, outcome.path))
       if (previous?.attempted === command.generation) {
