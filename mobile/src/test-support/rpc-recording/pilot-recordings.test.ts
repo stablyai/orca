@@ -48,11 +48,9 @@ describe('RPC main recordings', () => {
         expect(visibleState(recording)).toMatchObject({ hydrated: true })
       }
       const golden = goldenRecording(pilot.scenarios(), recording)
-      if (process.env.RPC_FOUNDATION_MODE === '--record') {
-        await writeGolden(goldens, golden, '--record')
-      } else {
-        await expectGoldenFile(goldens, id, golden)
-      }
+      await (process.env.RPC_FOUNDATION_MODE === '--record'
+        ? writeGolden(goldens, golden, '--record')
+        : expectGoldenFile(goldens, id, golden))
     })
   }
 })

@@ -29,11 +29,9 @@ async function certify(id: string, scenarios: RecordingScenario[]) {
     }
   }
   const golden = goldenRecording(scenarios, { scenario: id, checkpoints })
-  if (process.env.RPC_FOUNDATION_MODE === '--record') {
-    await writeGolden(directory, golden, '--record')
-  } else {
-    await expectGoldenFile(directory, id, golden)
-  }
+  await (process.env.RPC_FOUNDATION_MODE === '--record'
+    ? writeGolden(directory, golden, '--record')
+    : expectGoldenFile(directory, id, golden))
 }
 
 describe('family reply partitions and owned schedules', () => {
