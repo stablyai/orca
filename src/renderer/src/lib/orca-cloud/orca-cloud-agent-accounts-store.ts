@@ -186,6 +186,11 @@ export function subscribeOrcaCloudAgentAccounts(listener: () => void): () => voi
 }
 
 /** Reads again when the last read is stale or missing, for a launch about to decide. */
+/** When the current account view was read (ms); 0 before the first read. */
+export function orcaCloudAgentAccountsLoadedAt(): number {
+  return loadedAt
+}
+
 /** A ready read from within the last 30 s; older reads may miss a revoke (RA-1). */
 export function isOrcaCloudAgentAccountsFresh(): boolean {
   return state.load.kind === 'ready' && Date.now() - loadedAt <= FRESH_MS
