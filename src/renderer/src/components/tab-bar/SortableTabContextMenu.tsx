@@ -1,4 +1,4 @@
-import { Pencil, Pin, PinOff, SquareTerminal, Timer, X } from 'lucide-react'
+import { ExternalLink, Pencil, Pin, PinOff, SquareTerminal, Timer, X } from 'lucide-react'
 import {
   ContextMenuItem,
   ContextMenuSeparator,
@@ -16,6 +16,8 @@ import type { NativeChatTabSession } from './tab-session-history-switch'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
 import { useAllowAutoClose } from './use-allow-auto-close'
 import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
+import { jumpToWorktreeFromSidebar } from '@/lib/workspace/activation/worktree-jump-navigation'
+import { resolveWorktreeOperationRoute } from '@/lib/workspace/ownership/worktree-operation-route'
 
 const TAB_COLORS = [
   {
@@ -134,6 +136,13 @@ export function SortableTabContextMenu({
   nativeChat
 }: SortableTabContextMenuProps): React.JSX.Element {
   const t = useTranslate()
+  const workspaceHostId = useAppStore((state) => {
+    if (!open) {
+      return null
+    }
+    const hostId = resolveWorktreeOperationRoute(state, tab.worktreeId)?.executionHostId
+    return hostId && state.getKnownWorktreeById(tab.worktreeId, hostId) ? hostId : null
+  })
   const keybindings = useAppStore((state) => state.keybindings)
   const splitRightShortcut = formatShortcutLabel('terminal.splitRight', keybindings)
   const splitDownShortcut = formatShortcutLabel('terminal.splitDown', keybindings)
@@ -156,6 +165,22 @@ export function SortableTabContextMenu({
       animation="none"
       className="min-w-[13rem] max-w-[calc(100vw-1rem)] whitespace-nowrap"
     >
+      {workspaceHostId ? (
+        <>
+          <ContextMenuItem
+            onSelect={() =>
+              jumpToWorktreeFromSidebar(tab.worktreeId, { executionHostId: workspaceHostId })
+            }
+          >
+            <ExternalLink className="size-3.5 shrink-0" />
+            {t(
+              'auto.components.activity.ActivityThreadContextMenu.goToWorkspace',
+              'Go to Workspace'
+            )}
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+        </>
+      ) : null}
       <TerminalTabSplitMenuSection
         unifiedTabId={unifiedTabId}
         groupId={groupId}
