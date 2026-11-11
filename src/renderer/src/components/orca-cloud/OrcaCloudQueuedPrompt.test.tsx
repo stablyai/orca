@@ -66,7 +66,7 @@ describe('OrcaCloudQueuedPromptView editing hint (N-04)', () => {
   })
 
   it('waits for the agent from the first render while it isn’t set up', () => {
-    expect(hint(true)).toBe('Claude starts with it once Claude is set up.')
+    expect(hint(true)).toBe('Sends once Claude is set up.')
   })
 })
 
@@ -111,6 +111,6 @@ describe('OrcaCloudQueuedPrompt held copy from the first frame (N-04)', () => {
     const { container } = render(<OrcaCloudQueuedPrompt creationId="c1" />)
     expect(
       container.querySelector('[data-orca-cloud-queued-prompt="editing"]')?.textContent
-    ).toContain('Claude starts with it once Claude is set up.')
+    ).toContain('Sends once Claude is set up.')
   })
 })

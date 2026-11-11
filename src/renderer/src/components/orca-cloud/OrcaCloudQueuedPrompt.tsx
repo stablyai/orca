@@ -129,7 +129,7 @@ export function OrcaCloudQueuedPromptView({
             {held
               ? t(
                   'auto.components.orcaCloud.QueuedPrompt.heldHint',
-                  '{{agent}} starts with it once {{agent}} is set up.',
+                  'Sends once {{agent}} is set up.',
                   { agent: agentName }
                 )
               : t(

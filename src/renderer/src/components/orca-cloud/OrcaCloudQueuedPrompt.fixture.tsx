@@ -12,7 +12,7 @@ function promptFixture(prompt: string, editable: boolean, held = false) {
     render: () => (
       <div className="bg-background p-3">
         <OrcaCloudQueuedPromptView
-          agentName="Claude Code"
+          agentName="Claude"
           prompt={prompt}
           editable={editable}
           held={held}
@@ -42,12 +42,7 @@ function BuildOutrunsTyping(): React.JSX.Element {
   }, [])
   return (
     <div className="bg-background p-3">
-      <OrcaCloudQueuedPromptView
-        agentName="Claude Code"
-        prompt=""
-        editable={editable}
-        onQueue={noop}
-      />
+      <OrcaCloudQueuedPromptView agentName="Claude" prompt="" editable={editable} onQueue={noop} />
     </div>
   )
 }
