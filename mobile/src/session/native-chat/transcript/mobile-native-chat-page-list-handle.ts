@@ -1,7 +1,7 @@
 import {
   mobileNativeChatDrawnRow,
   type MobileNativeChatScrollNode
-} from '../../mobile-native-chat-reading-place'
+} from './mobile-native-chat-reading-place'
 import { watchMobileNativeChatRow } from './mobile-native-chat-row-watch'
 import type { MobileNativeChatListHandle } from './use-mobile-native-chat-tail-follow'
 

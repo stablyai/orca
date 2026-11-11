@@ -125,8 +125,11 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
   const [showGitHubProjectPicker, setShowGitHubProjectPicker] = useState(false)
   const [showGitHubProjectViewPicker, setShowGitHubProjectViewPicker] = useState(false)
   const [showGitHubProjectFieldsPicker, setShowGitHubProjectFieldsPicker] = useState(false)
-  const [pendingGitHubProjectViewSelection, setPendingGitHubProjectViewSelection] =
-    useState<GitHubProjectRef | null>(null)
+  // The project being picked keeps its own views, so cancelling leaves the active project's list intact.
+  const [pendingGitHubProjectViewSelection, setPendingGitHubProjectViewSelection] = useState<{
+    project: GitHubProjectRef
+    views: GitHubProjectViewSummary[]
+  } | null>(null)
   const [projectRowItem, setProjectRowItem] = useState<GitHubProjectRow | null>(null)
   const [projectRowDetail, setProjectRowDetail] = useState<DetailPayload | null>(null)
   const [projectRowDetailLoading, setProjectRowDetailLoading] = useState(false)

@@ -69,25 +69,25 @@ function resizeTo(width: number): void {
 describe('useBrowserChromeToolFold', () => {
   it('discards measurements when the available tools change', () => {
     let folded = -1
-    layout.rowWidth = 300
+    layout.rowWidth = 250
     const view = render(<Host onFolded={(count) => (folded = count)} />)
     expect(folded).toBeGreaterThan(0)
 
-    view.rerender(<Host onFolded={(count) => (folded = count)} stages={['grab', 'annotate']} />)
+    view.rerender(<Host onFolded={(count) => (folded = count)} stages={['annotate-label']} />)
     expect(folded).toBe(0)
 
     resizeTo(150)
-    expect(folded).toBe(2)
+    expect(folded).toBe(1)
   })
 
   it('does not restore an obsolete fold level when a tool set returns', () => {
     let folded = -1
-    layout.rowWidth = 300
+    layout.rowWidth = 250
     const view = render(<Host onFolded={(count) => (folded = count)} />)
     expect(folded).toBeGreaterThan(0)
 
     layout.rowWidth = 600
-    view.rerender(<Host onFolded={(count) => (folded = count)} stages={['grab']} />)
+    view.rerender(<Host onFolded={(count) => (folded = count)} stages={['extensions']} />)
     expect(folded).toBe(0)
 
     view.rerender(<Host onFolded={(count) => (folded = count)} />)

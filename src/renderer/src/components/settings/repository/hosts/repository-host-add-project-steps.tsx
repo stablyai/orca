@@ -3,7 +3,7 @@ import { CloneFolderNameField } from '../../../sidebar/project-admission/clone-f
 import type { CloneFolderOverride } from '../../../sidebar/project-admission/clone-folder/use-clone-folder-override'
 import { ArrowLeft, Download, FolderOpen, Plus } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Button } from '../../../ui/button'
 import { Input } from '../../../ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'

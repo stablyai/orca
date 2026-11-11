@@ -9,7 +9,7 @@ import {
   getLinkedWorkItemSuggestedName,
   getLinkedWorkItemWorkspaceName
 } from '../../../../shared/workspace-name'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import type { WorktreeJumpPaletteCreateWorktreeInput } from './worktree-jump-palette-create-worktree-input'
 import { lookupGitHubWorkItemForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
@@ -18,7 +18,7 @@ import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import { useAppStore } from '@/store/index'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { buildTaskSourceContextFromRepo } from '../../../../shared/work-items/task-source-context'
-import { buildLinearIssueComposerData } from '@/lib/linear-linked-work-item'
+import { buildLinearIssueComposerData } from '@/lib/work-items/linear/linear-linked-work-item'
 import { isWorktreePaletteCreateActivationAllowed } from '@/lib/workspace/search/worktrees/worktree-palette-create-action'
 
 export function createWorktreeJumpPaletteWorktreeHandler({

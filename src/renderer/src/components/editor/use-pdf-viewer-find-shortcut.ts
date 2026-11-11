@@ -1,9 +1,9 @@
 import { useEffect, type RefObject } from 'react'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { isEditableTarget } from '@/lib/editable-target'
-import { isEventTargetInsideFloatingWorkspacePanel } from '@/lib/floating-workspace-terminal-actions'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
+import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
+import { isEventTargetInsideFloatingWorkspacePanel } from '@/components/floating-terminal/floating-workspace-terminal-actions'
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../../../shared/keybindings'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 /** Claim Find inside this PDF or through its focused group, excluding other text fields and split/window surfaces. */
 export function pdfViewerOwnsFind(

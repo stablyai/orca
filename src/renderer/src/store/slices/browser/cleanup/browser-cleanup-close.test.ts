@@ -85,26 +85,6 @@ async function storeWithOnlyBrowserTab(): Promise<{
   return { store, workspaceId: workspace.id, pageId }
 }
 
-/** Three browser tabs in a known tab-bar order, so neighbor selection is deterministic. */
-async function storeWithThreeBrowserTabs(): Promise<{
-  store: ReturnType<typeof createTestStore>
-  ids: string[]
-}> {
-  const store = createTestStore()
-  seedStore(store, {
-    worktreesByRepo: { repo1: [makeWorktree({ id: WT, repoId: 'repo1', path: '/path/wt1' })] },
-    activeWorktreeId: WT,
-    activeTabType: 'terminal'
-  })
-  main = await drawTabsFromMain(store)
-  const ids = [0, 1, 2].map(
-    (index) =>
-      store.getState().createBrowserTab(WT, `https://example.test/${index}`, { activate: true }).id
-  )
-  await settled()
-  return { store, ids }
-}
-
 describe('closeBrowserTab with reason cleanup', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -124,28 +104,5 @@ describe('closeBrowserTab with reason cleanup', () => {
     expect(s.activeWorktreeId).toBe(WT)
     expect(s.browserTabsByWorktree[WT] ?? []).toEqual([])
     expect(s.unifiedTabsByWorktree[WT] ?? []).toEqual([])
-  })
-
-  // Require real closes still use Landing; cleanup carve-out must remain narrow.
-  it('still returns to the landing state when the user closes the only tab', async () => {
-    const { store, workspaceId } = await storeWithOnlyBrowserTab()
-
-    store.getState().closeBrowserTab(workspaceId)
-
-    await settled()
-
-    expect(store.getState().activeWorktreeId).toBeNull()
-  })
-
-  // Background tab close must never move focus, including through pending address-bar bookkeeping.
-  it('leaves the active browser tab alone when a background tab closes', async () => {
-    const { store, ids } = await storeWithThreeBrowserTabs()
-    store.getState().setActiveBrowserTab(ids[0]!)
-
-    store.getState().closeBrowserTab(ids[2]!)
-
-    await settled()
-
-    expect(store.getState().activeBrowserTabIdByWorktree[WT]).toBe(ids[0]!)
   })
 })

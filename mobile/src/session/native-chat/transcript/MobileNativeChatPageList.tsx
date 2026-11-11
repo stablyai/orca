@@ -27,14 +27,14 @@ import {
   mobileNativeChatRowBoxProps,
   type MobileNativeChatReadingUnit,
   type MobileNativeChatScrollNode
-} from '../../mobile-native-chat-reading-place'
+} from './mobile-native-chat-reading-place'
 import type { MobileNativeChatListHandle } from './use-mobile-native-chat-tail-follow'
 import type { MobileNativeChatScrollRoots } from './mobile-native-chat-scroll-roots'
-import { scrollWritesStopMomentum } from '../../mobile-native-chat-scroll-motion'
+import { scrollWritesStopMomentum } from './mobile-native-chat-scroll-motion'
 import {
   createMobileNativeChatGrowthHold,
   MobileNativeChatGrowthHoldContext
-} from '../../mobile-native-chat-growth-hold'
+} from './mobile-native-chat-growth-hold'
 import { mobileNativeChatPageListHandle } from './mobile-native-chat-page-list-handle'
 
 const FIRST_ROWS = 24

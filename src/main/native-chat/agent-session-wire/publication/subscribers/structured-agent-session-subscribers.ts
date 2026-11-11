@@ -307,8 +307,10 @@ export class AgentSessionSubscribers {
       if (options?.historyView !== undefined && this.isActive(subscriber)) {
         subscriber.historyView = options.historyView
       }
-    } catch {
+    } catch (error) {
+      // A dropped subscriber gets no more frames, so end its stream or the client never resubscribes.
       this.drop(subscriber)
+      subscriber.end?.(error)
     }
   }
 

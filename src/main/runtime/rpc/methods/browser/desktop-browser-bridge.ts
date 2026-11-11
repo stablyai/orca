@@ -2,6 +2,7 @@ import {
   DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY,
   DESKTOP_BROWSER_BRIDGE_EXPECT_URL_CAPABILITY,
   DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY,
+  DESKTOP_BROWSER_BRIDGE_TAB_ANNOTATIONS_CAPABILITY,
   DesktopBrowserBridgeAttachParams,
   DesktopBrowserBridgeResultParams
 } from '../../../../../shared/desktop-browser-bridge-protocol'
@@ -44,6 +45,9 @@ export const DESKTOP_BROWSER_BRIDGE_RPC_METHODS = [
         acceptsCancel,
         enforcesExpectUrl:
           context.clientCapabilities?.includes(DESKTOP_BROWSER_BRIDGE_EXPECT_URL_CAPABILITY) ??
+          false,
+        readsTabAnnotations:
+          context.clientCapabilities?.includes(DESKTOP_BROWSER_BRIDGE_TAB_ANNOTATIONS_CAPABILITY) ??
           false,
         emit
       })

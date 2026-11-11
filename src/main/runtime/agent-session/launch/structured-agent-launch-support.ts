@@ -33,6 +33,7 @@ import type { AgentSessionAccountHome } from '../../../../shared/agent-session/l
 import { nativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat/native-chat-shell-environment'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
 import { structuredChatUnavailableOnPlatform } from '../../../../shared/agent-session/structured-chat-platform-support'
+import { stripInheritedClaudeSessionEnv } from '../../../../shared/agent-launch/startup/claude-parent-session-env'
 
 export type LaunchEnvironmentSettings = Pick<
   GlobalSettings,
@@ -102,8 +103,12 @@ export async function resolveHostStructuredAgentLaunchEnvironment(
   agent: string,
   settings: LaunchEnvironmentSettings
 ): Promise<Record<string, string>> {
+  const inherited = { ...(await resolveHostAgentBaseEnvironment(settings)) }
+  if (agent === 'claude') {
+    stripInheritedClaudeSessionEnv(inherited)
+  }
   return overlayEnvironmentVariables(
-    await resolveHostAgentBaseEnvironment(settings),
+    inherited,
     isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings) : undefined,
     process.platform
   )

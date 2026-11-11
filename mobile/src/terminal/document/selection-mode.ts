@@ -3,7 +3,7 @@ import { notify } from './host-notify'
 import { repositionOverlay, stopEdgeScroll } from './selection-overlay'
 import { seedWordSelection } from './selection-range'
 import { resetSmoothScrollOffset } from './normal-buffer-smooth-scroll'
-import { stopSurfaceTouchGestures } from './surface-touch-gestures'
+import { stopSurfaceTouchGestures } from './surface-touch-gesture-stop'
 
 // Keep overlay transitions outside range math to avoid an overlay import cycle.
 

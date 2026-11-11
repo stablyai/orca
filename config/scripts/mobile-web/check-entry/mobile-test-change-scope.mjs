@@ -27,7 +27,6 @@ const DESKTOP_SUITE_PREFIXES = [
   'src/main/runtime/agent-session/agent-session-account-',
   'src/main/runtime/agent-session/agent-session-acquisition-',
   'src/main/runtime/agent-session/agent-session-conversation-',
-  'src/main/runtime/agent-session/agent-session-death-',
   'src/main/runtime/agent-session/agent-session-launch-',
   'src/main/runtime/agent-session/agent-session-operation-',
   'src/main/runtime/agent-session/agent-session-rewind-',

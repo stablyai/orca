@@ -45,7 +45,10 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   { file: 'src/accounts/MobileAccountsScreen.tsx', references: 2 },
 
   // callAgentSession accepts dynamic methods and generic results; typed operations require restructuring its callers.
-  { file: 'src/session/mobile-structured-agent-session-rpc.ts', references: 1 },
+  {
+    file: 'src/session/native-chat/agent-session/mobile-structured-agent-session-rpc.ts',
+    references: 1
+  },
   // The recorded create-terminal prompt uses a unique empty-refusal fallback absent from existing terminal.send operations.
   { file: 'src/session/use-mobile-session-terminal-create-actions.ts', references: 1 },
 

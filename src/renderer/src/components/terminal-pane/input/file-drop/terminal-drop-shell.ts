@@ -1,6 +1,6 @@
 import { isTerminalDropWindowsPathLike } from '../../../../../../shared/image-path-paste'
 import { isWslUncPath } from '../../../../../../shared/wsl-paths'
-import { isWindowsUserAgent } from '../../../../lib/user-agent-platform'
+import { isWindowsUserAgent } from '../../../../app-shell/platform/user-agent-platform'
 
 export type TerminalTargetShell = 'posix' | 'windows'
 

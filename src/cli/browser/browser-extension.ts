@@ -16,7 +16,7 @@ export const BROWSER_EXTENSION_HANDLERS: Record<string, CommandHandler> = {
     )
     printResult(result, json, ({ active, extensions }) =>
       !active
-        ? 'Browser extensions are disabled in Settings › Experimental.'
+        ? 'Browser extensions are turned off in Settings › Browser › Extensions.'
         : extensions.length === 0
           ? 'No browser extensions installed.'
           : extensions

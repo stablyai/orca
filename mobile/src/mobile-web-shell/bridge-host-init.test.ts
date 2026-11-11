@@ -48,6 +48,7 @@ describe('init and state', () => {
     expect(init.grants.native).toEqual([
       BRIDGE_FAULT_GRANT,
       BRIDGE_RPC_ENVELOPE_GRANT,
+      'hostCatalogs',
       'navigate',
       'storage',
       'haptics',

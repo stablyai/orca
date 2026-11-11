@@ -2,7 +2,7 @@ import {
   mobileNativeChatDrawnRow,
   mobileNativeChatRowBox,
   type MobileNativeChatScrollNode
-} from '../../mobile-native-chat-reading-place'
+} from './mobile-native-chat-reading-place'
 
 export function watchMobileNativeChatRow(
   scroller: MobileNativeChatScrollNode | null,

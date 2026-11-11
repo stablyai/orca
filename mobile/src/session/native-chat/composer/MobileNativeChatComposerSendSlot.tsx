@@ -6,7 +6,7 @@ import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-ch
 import type { SessionOptionDescriptor } from '../../../../../src/shared/native-chat/input/native-chat-session-options'
 import { MobileNativeChatStopButton } from '../input/MobileNativeChatStopButton'
 import { MobileNativeChatControlSwap } from '../input/mobile-native-chat-control-swap'
-import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
+import type { MobileNativeChatSendIntent } from './mobile-native-chat-send'
 import { mobileNativeChatComposerShowsStop } from './mobile-native-chat-composer-layout'
 import type { MobileNativeChatStructuredComposer } from './mobile-native-chat-structured-composer'
 import { readMobileNativeChatPickedSkills } from './mobile-native-chat-draft-store'

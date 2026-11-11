@@ -211,7 +211,8 @@ function resetRuntimeTestMocks(): void {
   vi.mocked(shouldRunSetupForCreate).mockReset()
   vi.mocked(shouldRunSetupForCreate).mockImplementation((_repo, decision) => decision === 'run')
   vi.mocked(getEffectiveHooks).mockReturnValue(null)
-  vi.mocked(getEffectiveHooksFromConfig).mockReturnValue(null)
+  // Setup derives effective hooks from the parsed orca.yaml; tests steer it through getEffectiveHooks.
+  vi.mocked(getEffectiveHooksFromConfig).mockImplementation((repo) => getEffectiveHooks(repo))
   vi.mocked(getDefaultTabsLaunch).mockReturnValue(undefined)
   vi.mocked(loadHooks).mockReturnValue(null)
   vi.mocked(resolveSetupRunnerShell).mockReturnValue(undefined)

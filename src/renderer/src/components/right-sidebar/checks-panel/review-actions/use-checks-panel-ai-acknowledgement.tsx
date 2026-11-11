@@ -22,7 +22,7 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import type { ChecksAgentComposerState } from '../panel-state-types'
 import type { ChecksPanelReview } from '../checks-panel-review'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 type ChecksPanelAiAcknowledgementInput = Pick<
   ChecksPanelControllerState,

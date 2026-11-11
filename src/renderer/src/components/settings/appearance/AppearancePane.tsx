@@ -36,8 +36,8 @@ import type { UseTerminalConfigImportReturn } from '../terminal/configuration/us
 import type { UseWarpThemeImportReturn } from '../terminal/themes/useWarpThemeImport'
 import { AppIconSelector } from './AppIconSelector'
 import { normalizeAppIconId } from '../../../../../shared/app-icon'
-import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { SHOW_UI_LANGUAGE_SETTING } from '@/i18n/supported-languages'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -118,8 +118,8 @@ export function AppearancePane({
   const interfaceTitle = t('auto.components.settings.AppearancePane.interfaceTitle', 'Interface')
   const terminalTitle = t('auto.components.settings.AppearancePane.terminalTitle', 'Terminal')
   const windowSidebarTitle = t(
-    'auto.components.settings.AppearancePane.windowSidebarTitle',
-    'Window & Sidebar'
+    'auto.components.settings.AppearancePane.e90c5d745a',
+    'Window & sidebar'
   )
   const windowSidebarSummary = t(
     'auto.components.settings.AppearancePane.windowSidebarSummary',
@@ -267,7 +267,7 @@ export function AppearancePane({
       {appIconMatches ? (
         <SettingsGroup>
           <SearchableSetting
-            title={t('auto.components.settings.AppearancePane.ca1590d42f', 'App Icon')}
+            title={t('auto.components.settings.AppearancePane.907888cd09', 'App icon')}
             description={t(
               'auto.components.settings.AppearancePane.0cd9b8228f',
               'Choose the app icon shown in the Dock and window switcher.'

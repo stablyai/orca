@@ -1,11 +1,11 @@
 import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
-import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { ArrowDown, ArrowUp, Braces, LoaderCircle, UndoDot } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { detectLanguage } from '../../../../shared/editor-language/editor-language-detect'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   createCommentCodeContextExpansionState,

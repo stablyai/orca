@@ -47,6 +47,8 @@ export type SpeechModelManifest = {
   sampleRate: number
   streaming: boolean
   recommended?: boolean
+  /** Languages one-click setup offers this model for, ahead of the recommended default. */
+  suggestedFor?: readonly string[]
   /** Retired: never offered for selection, and a saved selection moves to this model on load. */
   replacedBy?: string
   /** Codes the engine accepts (others crash or fail to load it); absent when it ignores the setting. */
@@ -128,6 +130,8 @@ export type VoiceSettings = {
   microphoneDeviceLabel: string | null
   /** Minutes an idle on-device model stays loaded; 0 unloads after each dictation, null never unloads. */
   unloadModelAfterMinutes: number | null
+  /** Seconds of silence that end a toggled dictation; null never does. Absent = 60. */
+  stopAfterSilenceSeconds?: number | null
   /** 'off' keeps on-device recognition on the CPU, for machines whose GPU driver hard-crashes. Absent = 'auto'. */
   speechGpu?: SpeechGpuMode
   /** Personal dictionary, used in every repo; each repo adds its own Repo.dictationTerms. */

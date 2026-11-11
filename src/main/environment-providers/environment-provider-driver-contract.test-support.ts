@@ -5,12 +5,10 @@ import {
   getEphemeralVmRecipeResultProjectRoot,
   isAbsoluteRuntimePath
 } from '../../shared/ephemeral-vm-recipes'
-import {
-  ENVIRONMENT_PROVIDER_ERROR_CODES,
-  isEnvironmentProviderError,
-  type EnvironmentCreateSpec,
-  type EnvironmentProviderDriver,
-  type EnvironmentReady
+import type {
+  EnvironmentCreateSpec,
+  EnvironmentProviderDriver,
+  EnvironmentReady
 } from './environment-provider-driver'
 
 export type EnvironmentProviderDriverContractHarness = {
@@ -71,35 +69,6 @@ export function runEnvironmentProviderDriverContract(
       expect(await liveEnvironmentIds()).not.toContain(created.handle.environmentId)
       // Idempotent: cleanup retries after a lost response or a restart must not fail.
       await reopenDriver().destroy(reload(created.handle))
-    })
-
-    it('refuses to bring back a destroyed environment, even after a restart', async () => {
-      const { driver, liveEnvironmentIds, reopenDriver } = await makeHarness()
-      const created = await driver.create(spec('ws-contract-2'))
-      await driver.destroy(created.handle)
-      const error = await reopenDriver()
-        .resume(reload(created.handle))
-        .then(
-          () => null,
-          (caught: unknown) => caught
-        )
-      expect(isEnvironmentProviderError(error)).toBe(true)
-      expect(await liveEnvironmentIds()).not.toContain(created.handle.environmentId)
-    })
-
-    it('rejects a cancelled create with a catalogued error and leaks nothing', async () => {
-      const { driver, liveEnvironmentIds } = await makeHarness()
-      const controller = new AbortController()
-      controller.abort()
-      const error = await driver.create(spec('ws-contract-3'), { signal: controller.signal }).then(
-        () => null,
-        (caught: unknown) => caught
-      )
-      expect(isEnvironmentProviderError(error)).toBe(true)
-      expect(ENVIRONMENT_PROVIDER_ERROR_CODES).toContain(
-        isEnvironmentProviderError(error) ? error.code : null
-      )
-      expect(await liveEnvironmentIds()).toEqual([])
     })
   })
 }

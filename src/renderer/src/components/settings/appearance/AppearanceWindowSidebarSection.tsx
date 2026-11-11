@@ -27,6 +27,8 @@ import {
 } from './appearance-usage-percentage-search'
 
 import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
+import { getStatusBarUsageFormatEntry } from './appearance-status-bar-usage-format-search'
+import { StatusBarUsageFormatSetting } from './StatusBarUsageFormatSetting'
 
 import { useTranslate } from '@/i18n/use-translate'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from '../search/settings-search'
@@ -63,6 +65,7 @@ function recordStatusBarToggleInteraction(
   }
 }
 
+/** Window & Sidebar appearance section: sidebar/chrome appearance, status bar controls, and layout advanced settings. */
 export function AppearanceWindowSidebarSection({
   settings,
   updateSettings,
@@ -79,12 +82,15 @@ export function AppearanceWindowSidebarSection({
   const setWorktreeCardMode = useAppStore((state) => state.setWorktreeCardMode)
   const visibleStatusBarToggles = useAvailableStatusBarToggles(getStatusBarToggles())
   const usagePercentageDisplayEntry = getUsagePercentageDisplayEntry()
+  const statusBarUsageFormatEntry = getStatusBarUsageFormatEntry()
+  const statusBarUsageFormat = useAppStore((state) => state.statusBarUsageFormat)
+  const setStatusBarUsageFormat = useAppStore((state) => state.setStatusBarUsageFormat)
   const leftSidebarAppearanceEntry = getLeftSidebarAppearanceEntry()
   const sidebarEntries = getSidebarEntries()
   const workspaceCardLayoutEntry = getWorkspaceCardLayoutEntry()
   const layoutEntries = getLayoutEntries()
   const followSymlinkEntry = getFollowSymlinkedDirectoriesEntry(t)
-  const statusBarTitle = t('auto.components.settings.AppearancePane.3e4175e5c6', 'Status Bar')
+  const statusBarTitle = t('auto.components.settings.AppearancePane.3a5d06686d', 'Status bar')
   const statusBarDescription = t(
     'auto.components.settings.AppearancePane.statusBarDescription',
     'Choose which indicators appear in the status bar.'
@@ -97,6 +103,7 @@ export function AppearanceWindowSidebarSection({
   })
   const statusBarControlMatches =
     matchesSettingsSearch(searchQuery, usagePercentageDisplayEntry) ||
+    matchesSettingsSearch(searchQuery, statusBarUsageFormatEntry) ||
     visibleStatusBarToggles.some((toggle) =>
       matchesSettingsSearch(searchQuery, {
         title: toggle.title,
@@ -167,6 +174,18 @@ export function AppearanceWindowSidebarSection({
                       ]}
                     />
                   }
+                />
+              </SearchableSetting>
+
+              <SearchableSetting
+                title={statusBarUsageFormatEntry.title}
+                description={statusBarUsageFormatEntry.description}
+                keywords={statusBarUsageFormatEntry.keywords}
+                className="space-y-2"
+              >
+                <StatusBarUsageFormatSetting
+                  format={statusBarUsageFormat}
+                  onChange={setStatusBarUsageFormat}
                 />
               </SearchableSetting>
 
@@ -244,16 +263,16 @@ export function AppearanceWindowSidebarSection({
 
                   <SearchableSetting
                     title={t(
-                      'auto.components.settings.AppearancePane.cf81907069',
-                      'Show Tasks Button'
+                      'auto.components.settings.AppearancePane.e0f9902e18',
+                      'Show tasks button'
                     )}
                     description={sidebarEntries[0]?.description}
                     keywords={sidebarEntries[0]?.keywords ?? ['tasks', 'sidebar', 'button']}
                   >
                     <SettingsSwitchRow
                       label={t(
-                        'auto.components.settings.AppearancePane.cf81907069',
-                        'Show Tasks Button'
+                        'auto.components.settings.AppearancePane.e0f9902e18',
+                        'Show tasks button'
                       )}
                       checked={settings.showTasksButton !== false}
                       onChange={() =>
@@ -264,8 +283,8 @@ export function AppearanceWindowSidebarSection({
 
                   <SearchableSetting
                     title={t(
-                      'auto.components.settings.AppearancePane.511f270ebb',
-                      'Show Automations Button'
+                      'auto.components.settings.AppearancePane.7be0027489',
+                      'Show automations button'
                     )}
                     description={sidebarEntries[1]?.description}
                     keywords={
@@ -274,8 +293,8 @@ export function AppearanceWindowSidebarSection({
                   >
                     <SettingsSwitchRow
                       label={t(
-                        'auto.components.settings.AppearancePane.511f270ebb',
-                        'Show Automations Button'
+                        'auto.components.settings.AppearancePane.7be0027489',
+                        'Show automations button'
                       )}
                       checked={settings.showAutomationsButton !== false}
                       onChange={() =>
@@ -288,16 +307,16 @@ export function AppearanceWindowSidebarSection({
 
                   <SearchableSetting
                     title={t(
-                      'auto.components.settings.AppearancePane.9da1020447',
-                      'Show Orca Mobile Button'
+                      'auto.components.settings.AppearancePane.d2b4ddbea0',
+                      'Show Orca Mobile button'
                     )}
                     description={sidebarEntries[2]?.description}
                     keywords={sidebarEntries[2]?.keywords ?? ['mobile', 'phone', 'sidebar']}
                   >
                     <SettingsSwitchRow
                       label={t(
-                        'auto.components.settings.AppearancePane.9da1020447',
-                        'Show Orca Mobile Button'
+                        'auto.components.settings.AppearancePane.d2b4ddbea0',
+                        'Show Orca Mobile button'
                       )}
                       // Explain the remaining Toolbox route so hiding the shortcut cannot imply feature removal.
                       description={t(
@@ -343,15 +362,15 @@ export function AppearanceWindowSidebarSection({
             {showFileExplorerAdvanced ? (
               <div className="space-y-3">
                 <SettingsSubsectionHeader
-                  title={t('auto.components.settings.AppearancePane.d496901cd0', 'File Explorer')}
+                  title={t('auto.components.settings.AppearancePane.8e374ce9a3', 'File explorer')}
                 />
                 <div className="ml-4 divide-y divide-border/40">
                   <SearchableSetting
                     title={
                       layoutEntries[0]?.title ??
                       t(
-                        'auto.components.settings.AppearancePane.0fafabcf35',
-                        'Show Git-Ignored Files'
+                        'auto.components.settings.AppearancePane.7e958ee950',
+                        'Show Git-ignored files'
                       )
                     }
                     description={layoutEntries[0]?.description}
@@ -359,8 +378,8 @@ export function AppearanceWindowSidebarSection({
                   >
                     <SettingsSwitchRow
                       label={t(
-                        'auto.components.settings.AppearancePane.0fafabcf35',
-                        'Show Git-Ignored Files'
+                        'auto.components.settings.AppearancePane.7e958ee950',
+                        'Show Git-ignored files'
                       )}
                       description={t(
                         'auto.components.settings.AppearancePane.gitIgnoredGlossary',

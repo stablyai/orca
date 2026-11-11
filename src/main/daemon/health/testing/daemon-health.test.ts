@@ -367,8 +367,8 @@ describe('killStaleDaemon ownership decisions', () => {
     }
   })
 
-  it('removes a malformed pid record', async () => {
-    writeFileSync(getDaemonPidPath(dir), '{truncated', { mode: 0o600 })
+  it.each(['{truncated', ''])('removes a malformed pid record %j', async (record) => {
+    writeFileSync(getDaemonPidPath(dir), record, { mode: 0o600 })
 
     await killStaleDaemon(dir, socketPath, tokenPath, undefined, {
       probeEndpoint: async () => 'missing'
@@ -376,6 +376,20 @@ describe('killStaleDaemon ownership decisions', () => {
 
     expect(existsSync(getDaemonPidPath(dir))).toBe(false)
   })
+
+  it.each(['connected', 'unknown'] as const)(
+    'keeps an empty pid record while its endpoint probe is %s',
+    async (outcome) => {
+      writeFileSync(getDaemonPidPath(dir), '', { mode: 0o600 })
+
+      await expect(
+        killStaleDaemon(dir, socketPath, tokenPath, undefined, {
+          probeEndpoint: async () => outcome
+        })
+      ).resolves.toEqual({ killed: false, liveOwnerSurvived: true })
+      expect(existsSync(getDaemonPidPath(dir))).toBe(true)
+    }
+  )
 
   it.skipIf(process.platform === 'win32')(
     "leaves a replacement's pid record after killing the recorded owner",

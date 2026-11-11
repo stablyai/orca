@@ -1339,7 +1339,18 @@
     },
     "announce": {
       "typedInto": "{{target}} içine yazıldı",
-      "insertedIn": "{{target}} içine eklendi"
+      "insertedIn": "{{target}} içine eklendi",
+      "listeningOnPhone": "Dinleniyor. Bu telefonda yazıya dökülüyor.",
+      "listeningOn": "Dinleniyor. {{computer}} üzerinde yazıya dökülüyor.",
+      "listeningOnComputer": "Dinleniyor. Bilgisayarda yazıya dökülüyor.",
+      "finishing": "Tamamlanıyor.",
+      "inserted": "Eklendi.",
+      "cancelled": "Dikte iptal edildi.",
+      "movedTo": "Bu telefon yazıya dökmeyi bıraktı. {{computer}} üzerinde devam ediliyor.",
+      "movedToComputer": "Bu telefon yazıya dökmeyi bıraktı. Bilgisayarda devam ediliyor.",
+      "stoppedKept": "Dikte durdu. {{reason}}. Kaydınız saklandı.",
+      "stoppedKeptGeneric": "Dikte durdu. Kaydınız saklandı.",
+      "stillListening": "Dinlemeye devam ediliyor."
     },
     "pill": {
       "open": "Aç",
@@ -1450,11 +1461,11 @@
       "updateRequired": "PDF'leri açmak için Orca Mobile'ı güncelleyin"
     },
     "unsavedEditsOffer": {
-      "changedSince": "{{time}} tarihli düzenlemelerinizden sonra masaüstünde değişti",
+      "changedSince": "Düzenlemelerinizden ({{time}}) sonra masaüstünde değişti",
       "copyMyEdits": "Düzenlemelerimi kopyala",
       "discard": "Vazgeç",
       "restore": "Geri yükle",
-      "unsavedFrom": "{{time}} tarihli kaydedilmemiş düzenlemeler"
+      "unsavedFrom": "Kaydedilmemiş düzenlemeler ({{time}})"
     }
   },
   "home": {
@@ -2558,8 +2569,8 @@
       "insertFailed": "Dikte metni eklenemedi",
       "insertFailedCopied": "Dikte metni eklenemediği için panoya kopyalandı",
       "inserted": "Dikte metni eklendi",
-      "stoppedAfterSilence": "Bir dakika sessizlikten sonra durduruldu",
-      "stoppedAtCloudLimit": "Dikte, 10 dakikalık bulut sınırında durduruldu."
+      "stoppedAtCloudLimit": "Dikte, 10 dakikalık bulut sınırında durduruldu.",
+      "stoppedAfterSilenceSeconds": "{{seconds}} saniyelik sessizlikten sonra durduruldu"
     },
     "useNativeChatStop": {
       "stopNotSent": "Durdurma isteği gönderilemedi",
@@ -3354,6 +3365,27 @@
     }
   },
   "tasks": {
+    "hostedMerge": {
+      "confirmGitHubMerge": "PR #{{number}} birleştirilsin mi?",
+      "confirmGitHubSquash": "PR #{{number}} commit’leri squash edilerek birleştirilsin mi?",
+      "confirmGitHubRebase": "PR #{{number}} yeniden temellendirilip birleştirilsin mi?",
+      "confirmGitLabMerge": "Birleştirme isteği #{{number}} birleştirilsin mi?",
+      "confirmGitLabSquash": "Birleştirme isteği #{{number}} commit’leri squash edilerek birleştirilsin mi?",
+      "confirmGitLabRebase": "Birleştirme isteği #{{number}} yeniden temellendirilip birleştirilsin mi?",
+      "merged": "Birleştirildi",
+      "closed": "Kapatıldı",
+      "conflicts": "Çakışmalar",
+      "behind": "Geride",
+      "blocked": "Engellendi",
+      "checksPending": "Kontroller bekleniyor",
+      "ableToMerge": "Birleştirilebilir",
+      "unknown": "Bilinmiyor"
+    },
+    "pagination": {
+      "pageUnreachable": "{{page}}. sayfa GitHub aramasının döndürebileceği aralığın dışında.",
+      "loadPageFailed": "{{page}}. sayfa GitHub’dan yüklenemedi.",
+      "noMoreResults": "{{page}}. sayfada başka sonuç yok."
+    },
     "composerSource": {
       "baseFailed": "Temel branch çözümlenemedi.",
       "forkPushWarning": "Bu PR'da “Allow edits from maintainers” kapalı; fork'a push işlemi GitHub tarafından reddedilebilir."

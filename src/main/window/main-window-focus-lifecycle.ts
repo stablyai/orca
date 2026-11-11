@@ -9,8 +9,8 @@ import {
   DEFAULT_RENDERER_RECOVERY_MAX_RECOVERIES,
   DEFAULT_RENDERER_RECOVERY_WINDOW_MS,
   RendererRecoveryCircuitBreaker
-} from '../crash-reporting/renderer-recovery-circuit-breaker'
-import { createLowCommitOomRecoveryGate } from '../crash-reporting/low-commit-oom-recovery-gate'
+} from '../crash-reporting/recovery/renderer-recovery-circuit-breaker'
+import { createLowCommitOomRecoveryGate } from '../crash-reporting/recovery/low-commit-oom-recovery-gate'
 import {
   buildEditableContextMenuTemplate,
   matchingRichMarkdownContextMenuTableTarget,

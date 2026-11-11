@@ -1,7 +1,5 @@
-import type {
-  LinearIssueData,
-  LinearIssueView
-} from '@/store/slices/linear/linear-issue-publication'
+import type { LinearIssueData } from '@/store/slices/linear/linear-issue-read'
+import type { LinearIssueView } from '@/store/slices/linear/linear-issue-read-lifecycle'
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { linearStatus } from '@/runtime/linear/runtime-linear-client'
 import { useAppStore } from '@/store'
