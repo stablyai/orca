@@ -93,7 +93,7 @@ The direct/LAN address picker also accepts a user-managed Cloudflare Tunnel or r
 
 In the desktop mobile-pairing flow, choose a custom network address and enter the public `https://orca.example.com` or `wss://orca.example.com` URL. Generate a mobile pairing code and scan or paste it on the phone. Keep the host and tunnel running. Prefer a stable named tunnel. A Quick Tunnel hostname changes on restart, so a saved phone may need its address updated under **Edit host**.
 
-An already paired phone can switch from LAN to a secure tunnel by entering `wss://orca.example.com` under **Edit host → Address**. A full WSS URL without a port uses `443`. An explicit port is preserved, and the existing pairing token stays the same.
+An already paired phone can switch from LAN to a secure tunnel by entering `wss://orca.example.com` under **Edit host → Address**. A full WSS URL without a port uses `443`. An explicit port is preserved, and the existing pairing token stays the same. The editor preserves the existing path and query. If the tunnel requires a new path or query, generate a mobile pairing code with the full tunnel URL and pair the phone again.
 
 An interactive Cloudflare Access login page cannot authenticate the native mobile WebSocket. The native connection must satisfy any additional proxy authentication. Keep the existing Access policy, Orca device authentication and E2EE enabled.
 
