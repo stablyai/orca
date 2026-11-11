@@ -4,7 +4,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-sw
 import {
   forgetDesktopCreatedServerTab,
   noteDesktopCreatedServerTab
-} from '@/lib/desktop-created-server-tabs'
+} from '@/store/workspace-layout/frames/desktop-created-server-tabs'
 
 /** Local rows minted for a browser tab whose host create RPC has not answered yet. */
 export type StagedWebRuntimeBrowserTab = {

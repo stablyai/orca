@@ -27,6 +27,7 @@ describe('startBrowserScreencast', () => {
       maxHeight: 1200,
       everyNthFrame: 1,
       minFrameIntervalMs: 0,
+      holdPaint: () => () => {},
       onFrame
     })
 
@@ -84,6 +85,7 @@ describe('startBrowserScreencast', () => {
       maxHeight: 1200,
       everyNthFrame: 1,
       minFrameIntervalMs: 100,
+      holdPaint: () => () => {},
       onFrame
     })
 
@@ -136,6 +138,7 @@ describe('startBrowserScreencast', () => {
       maxHeight: 1200,
       everyNthFrame: 2,
       minFrameIntervalMs: 0,
+      holdPaint: () => () => {},
       onFrame: vi.fn(),
       onEvent
     })

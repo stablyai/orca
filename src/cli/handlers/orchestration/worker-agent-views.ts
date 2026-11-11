@@ -108,6 +108,7 @@ export type WorkerListResult = {
     dispatchStatus: string
     agentTerminalHandle: string | null
     terminalState: string | null
+    coordinatedFrom?: string | null
     resource?: { worktreeId?: string | null; autoReleaseAt?: string | null } | null
     projection?: WorkerProjection
   }[]
@@ -133,6 +134,7 @@ type WorkerListRow = {
   terminalState?: string
   workspace?: string
   host?: string
+  coordinatedFrom?: string
   attention?: string[]
   autoReleaseAt?: string
   next?: string
@@ -168,6 +170,7 @@ export const WORKER_LIST_VIEW: OrchestrationAgentView<ScopedWorkerList, WorkerLi
         // Older runtimes send no projection; the terminal resource row still names both.
         workspace: projection?.workspace?.id ?? worker.resource?.worktreeId ?? undefined,
         host: projection?.host.id,
+        coordinatedFrom: worker.coordinatedFrom ?? undefined,
         attention: actionableAttention(projection),
         autoReleaseAt: projection?.autoReleaseAt ?? worker.resource?.autoReleaseAt ?? undefined,
         next: projection

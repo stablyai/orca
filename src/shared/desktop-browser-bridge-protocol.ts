@@ -6,6 +6,9 @@ export const DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY = 'browser.desktopBridge.
 export const DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY = 'browser.desktopBridge.cancel.v1'
 /** Older desktops re-parse params and would drop expectUrl, so commands carrying it need this. */
 export const DESKTOP_BROWSER_BRIDGE_EXPECT_URL_CAPABILITY = 'browser.desktopBridge.expect-url.v1'
+/** Older desktops drop the whole attachment on a method they don't allow, so tab annotations need this. */
+export const DESKTOP_BROWSER_BRIDGE_TAB_ANNOTATIONS_CAPABILITY =
+  'browser.desktopBridge.tab-annotations.v1'
 
 export const DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_CODE = 'desktop_browser_bridge_unavailable'
 export const DESKTOP_BROWSER_BRIDGE_NOT_FORWARDED_CODE = 'desktop_browser_bridge_not_forwarded'
@@ -27,6 +30,7 @@ export const DESKTOP_BROWSER_BRIDGE_METHODS: ReadonlySet<string> = new Set([
   'browser.tabList',
   'browser.tabCurrent',
   'browser.tabShow',
+  'browser.tabAnnotations',
   'browser.tabSwitch',
   'browser.tabCreate',
   'browser.tabClose',
@@ -144,3 +148,22 @@ export const DesktopBrowserBridgeResultParams = z.discriminatedUnion('ok', [
   })
 ])
 export type DesktopBrowserBridgeResultParams = z.infer<typeof DesktopBrowserBridgeResultParams>
+
+// Routed tabs can still display local files; those remain off-limits to hosts.
+// Allow chrome-error: so hosts can navigate away from failed loads.
+const HOST_REACHABLE_DOCUMENT_PROTOCOLS = new Set([
+  'http:',
+  'https:',
+  'about:',
+  'blob:',
+  'data:',
+  'chrome-error:'
+])
+
+export function isHostReachableDocument(url: string): boolean {
+  try {
+    return HOST_REACHABLE_DOCUMENT_PROTOCOLS.has(new URL(url).protocol)
+  } catch {
+    return url === ''
+  }
+}

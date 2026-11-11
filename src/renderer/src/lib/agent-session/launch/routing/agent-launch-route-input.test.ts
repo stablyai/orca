@@ -1,11 +1,13 @@
 import { EVERY_AGENT_CHAT } from '../../../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
-
+import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { buildAgentLaunchRouteInput } from './agent-launch-route-input'
+import type { AgentLaunchRouteArgs, AgentLaunchRouteStore } from './agent-launch-route-input'
+import { planAgentSessionLaunch } from './agent-session-launch-plan'
 import type * as ConnectionOwnerResolutionModule from '../../../workspace/ownership/connection-owner-resolution'
 
 const mocks = vi.hoisted(() => ({
@@ -25,7 +27,7 @@ vi.mock('@/lib/workspace/ownership/connection-owner-resolution', async (importOr
   ...(await importOriginal<typeof ConnectionOwnerResolutionModule>()),
   getConnectionIdFromState: mocks.getConnectionIdFromState
 }))
-vi.mock('@/lib/local-preflight-context', () => ({
+vi.mock('@/runtime/hosts/preflight/local-preflight-context', () => ({
   getLocalProjectExecutionRuntimeContext: mocks.getLocalProjectExecutionRuntimeContext,
   getLocalRepoProjectExecutionRuntimeContext: mocks.getLocalRepoProjectExecutionRuntimeContext
 }))
@@ -36,14 +38,6 @@ vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', () => ({
   readLocalRuntimeCapabilitiesOrUnknown: mocks.readLocalRuntimeCapabilitiesOrUnknown
 }))
 vi.mock('@/lib/agent-session/launch/continuation/structured-agent-launch-settlement', () => ({}))
-
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import {
-  buildAgentLaunchRouteInput,
-  type AgentLaunchRouteArgs,
-  type AgentLaunchRouteStore
-} from './agent-launch-route-input'
-import { planAgentSessionLaunch } from './agent-session-launch-plan'
 
 const routeFor = (appStore: AgentLaunchRouteStore, args: AgentLaunchRouteArgs) =>
   planAgentSessionLaunch(appStore, { ...args, requestId: 'route-check' }).route

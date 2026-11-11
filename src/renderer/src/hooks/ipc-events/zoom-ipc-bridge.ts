@@ -1,14 +1,14 @@
 import { writeNativeChatFontSize } from '@/components/native-chat/appearance/native-chat-font-size-write'
-import { applyUIZoom } from '@/lib/ui-zoom'
+import { applyUIZoom } from '@/app-shell/chrome/ui-zoom'
 import {
   computeEditorFontSize,
   nextEditorFontZoomLevel
 } from '../../../../shared/editor/editor-font-zoom'
 import { resolveEditorBaseFontSize } from '../../../../shared/editor/editor-typography'
 import { zoomLevelToPercent, stepUIZoomLevel } from '../../../../shared/ui-zoom-level'
-import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
+import { dispatchZoomLevelChanged } from '@/app-shell/chrome/zoom-events'
 
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import { focusedBrowserPageId, resolveZoomTarget } from '../resolve-zoom-target'
 import { dispatchBrowserPageZoom } from '@/components/browser-pane/host-guest/browser-page-zoom'
 import {

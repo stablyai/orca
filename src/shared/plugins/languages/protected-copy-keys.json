@@ -596,6 +596,8 @@
     "auto.components.terminal.pane.PinnedTabCloseDialog.6c190f295a",
     "auto.components.terminal.pane.PinnedTabCloseDialog.c337c9d75c",
     "auto.components.terminal.pane.PinnedTabCloseDialog.dont_ask_again",
+    "auto.components.terminal.pane.PinnedTabCloseDialog.unsent_notes_description",
+    "auto.components.terminal.pane.PinnedTabCloseDialog.unsent_notes_title",
     "auto.components.workspace.cleanup.WorkspaceCleanupDialog.191f0bc98e",
     "auto.components.workspace.cleanup.WorkspaceCleanupDialog.1d3503357d",
     "auto.components.workspace.cleanup.WorkspaceCleanupDialog.38ca0b1400",

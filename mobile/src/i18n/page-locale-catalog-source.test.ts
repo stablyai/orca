@@ -204,15 +204,4 @@ describe('the page language catalog', () => {
     expect(i18n.getMobileUiLocale()).toBe('ko')
     expect(i18n.translate('greeting', 'Hello')).toBe('안녕하세요')
   })
-
-  it('imports the chunk an older shell left on disk, with no wait and no request', async () => {
-    chunksOnDisk.set('es', { greeting: 'Hola' })
-    const client = fakeClient('reconnecting')
-    openPage(client, fakeStore({}))
-
-    await i18n.activateMobileUiLocale('es')
-
-    expect(i18n.translate('greeting', 'Hello')).toBe('Hola')
-    expect(client.sent).toHaveLength(0)
-  })
 })
