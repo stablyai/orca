@@ -4,9 +4,12 @@ import {
   appendToNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
 import type {
+  NativeChatComposerDraft,
   NativeChatComposerDraftOwner,
   NativeChatComposerDraftImage
 } from './native-chat-composer-draft-storage'
+import { notifyDraftAppend } from './native-chat-composer-draft-memory'
+import { appendPromptDocumentText } from '../composer/editor/native-chat-prompt-document-text'
 import type { JSONContent } from '@tiptap/react'
 
 export function readNativeChatDraftCache(scopeKey: string): string {
@@ -42,6 +45,28 @@ export function appendNativeChatDraftCache(
     return true
   }
   return appendToNativeChatComposerDraft(scopeKey, { text, images }, owner)
+}
+
+/** Append a user-initiated block verbatim: always lands, even over a duplicate or a lone /clear.
+ *  No journal, so crash replay of returned text cannot duplicate it. */
+export function appendNativeChatDraftCacheManual(scopeKey: string, text: string): void {
+  if (text === '') {
+    return
+  }
+  // Keep a structured draft's picked nodes (a selected skill, image chips) instead of dropping
+  // them: only the text grows, so the document can grow with it.
+  const before = readNativeChatComposerDraft(scopeKey)
+  const insert = <T extends NativeChatComposerDraft>(draft: T): T => {
+    const previous = draft.text
+    const appended = previous === '' ? text : `${previous}\n\n${text}`
+    return {
+      ...draft,
+      text: appended,
+      document: appendPromptDocumentText(draft.document, previous, appended)
+    }
+  }
+  updateNativeChatComposerDraft(scopeKey, insert(before), 'immediate', insert)
+  notifyDraftAppend(scopeKey, insert, before)
 }
 
 export function readNativeChatDraftSnapshot(scopeKey: string | undefined, text: string) {

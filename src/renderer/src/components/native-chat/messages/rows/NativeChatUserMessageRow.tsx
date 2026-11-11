@@ -128,7 +128,7 @@ export function NativeChatUserMessageRow({
                       content={text}
                       variant="document"
                       className="text-sm"
-                      renderCodeBlock={NativeChatCodeBlock}
+                      renderCodeBlock={(props) => <NativeChatCodeBlock {...props} editable={false} />}
                     />
                   )}
                 />
