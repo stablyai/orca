@@ -7,7 +7,12 @@
 import { useAppStore } from '@/store'
 import { destroyWorktreeBrowserGuests } from '@/store/slices/browser/cleanup/browser-webview-cleanup'
 import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
-import { isWorktreeGoingToSleep, isWorktreeSuspendCommitted } from '@/lib/worktree-sleep-view'
+import {
+  isWorktreeGoingToSleep,
+  isWorktreeSleepViewHeld,
+  isWorktreeSuspendCommitted,
+  subscribeWorktreeSleepView
+} from '@/lib/worktree-sleep-view'
 import type { BrowserWorkspace } from '../../../../../../shared/browser-workspace-types'
 
 type BrowserTabsByWorktree = Record<string, BrowserWorkspace[]>
@@ -112,7 +117,9 @@ export function isBrowserSandboxUp(
 ): boolean {
   const runtime = state.ephemeralVmRuntimesByWorkspaceId?.[worktreeId]
   return (
-    !sleep.sleepIntent &&
+    // A VM's own state says whether it is up; the sleep intent can outlive a wake pressed on the
+    // held view (#399), so it only decides for a workspace with no VM.
+    (runtime !== undefined || !sleep.sleepIntent) &&
     !sleep.goingToSleep &&
     !sleep.suspendCommitted &&
     !state.asleepBrowserWorktreeIds?.[worktreeId] &&
@@ -171,18 +178,69 @@ export function wakeWorktreeBrowserTabs(worktreeId: string): void {
 }
 
 /** Wakes a workspace's asleep tabs whenever it becomes the active one. */
+/**
+ * The active workspace is back after a sleep without being re-opened: a wake pressed on the
+ * held asleep view (#331/#399) keeps it selected, so no activation change says so. Its VM is
+ * running, nothing is waking or going to sleep, and the view is no longer held.
+ */
+export function isBackAfterHeldSleep(
+  state: {
+    activeWorktreeId: string | null
+    asleepBrowserWorktreeIds?: Record<string, number>
+    ephemeralVmRuntimesByWorkspaceId?: Record<string, { status: string } | undefined>
+    wakingEphemeralVmWorkspaceIds?: Record<string, boolean | undefined>
+  },
+  view: {
+    held: (id: string) => boolean
+    goingToSleep: (id: string) => boolean
+    suspendCommitted: (id: string) => boolean
+  }
+): string | null {
+  const id = state.activeWorktreeId
+  if (!id || !state.asleepBrowserWorktreeIds?.[id]) {
+    return null
+  }
+  const runtime = state.ephemeralVmRuntimesByWorkspaceId?.[id]
+  const up =
+    runtime?.status === 'running' &&
+    !state.wakingEphemeralVmWorkspaceIds?.[id] &&
+    !view.held(id) &&
+    !view.goingToSleep(id) &&
+    !view.suspendCommitted(id)
+  return up ? id : null
+}
+
+const SLEEP_VIEW = {
+  held: (id: string) => isWorktreeSleepViewHeld(id),
+  goingToSleep: isWorktreeGoingToSleep,
+  suspendCommitted: isWorktreeSuspendCommitted
+}
+
+/** Wakes a workspace's asleep tabs whenever it becomes the active one, or is woken in place. */
 export function installBrowserTabWakeOnOpen(): () => void {
   let previous = useAppStore.getState().activeWorktreeId
   if (previous) {
     wakeWorktreeBrowserTabs(previous)
   }
-  return useAppStore.subscribe((state) => {
-    if (state.activeWorktreeId === previous) {
+  const wakeIfBackInPlace = (): void => {
+    const id = isBackAfterHeldSleep(useAppStore.getState(), SLEEP_VIEW)
+    if (id) {
+      wakeWorktreeBrowserTabs(id)
+    }
+  }
+  const stopStore = useAppStore.subscribe((state) => {
+    if (state.activeWorktreeId !== previous) {
+      previous = state.activeWorktreeId
+      if (previous) {
+        wakeWorktreeBrowserTabs(previous)
+      }
       return
     }
-    previous = state.activeWorktreeId
-    if (previous) {
-      wakeWorktreeBrowserTabs(previous)
-    }
+    wakeIfBackInPlace()
   })
+  const stopView = subscribeWorktreeSleepView(wakeIfBackInPlace)
+  return () => {
+    stopStore()
+    stopView()
+  }
 }
