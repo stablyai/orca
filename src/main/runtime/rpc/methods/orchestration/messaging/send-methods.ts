@@ -67,14 +67,9 @@ export const ORCHESTRATION_SEND_METHODS = [
       ) => {
         const db = runtime.getOrchestrationDb()
         const from = params.from ?? 'unknown'
-        const attestedCaller =
-          orchestrationCompatibilityCallerAuthority?.terminalHandle === from
-            ? orchestrationCompatibilityCallerAuthority
-            : undefined
-        // Why: attested hook identity survives graph remount; caller params never supply lifecycle authority.
         const reporter = resolveWorkerReporterIdentity(runtime, db, {
           from,
-          attested: attestedCaller,
+          authority: orchestrationCompatibilityCallerAuthority,
           hasSessionCaller: Boolean(orchestrationCaller),
           evidence: orchestrationCompatibilityEvidence
         })
@@ -109,7 +104,7 @@ export const ORCHESTRATION_SEND_METHODS = [
           })
         }
 
-        refuseFinishedRemoteWorker(db, senderPaneKey, params.to)
+        refuseFinishedRemoteWorker(db, { address: from, paneKey: senderPaneKey }, params.to)
         const runGroup =
           params.to &&
           isGroupAddress(params.to) &&

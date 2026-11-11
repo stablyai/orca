@@ -10,6 +10,7 @@ import { withRunCheckNext } from '../receipt-next'
 import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
 import { hasRunBindingKey } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
+import { resolveWorkerReporterIdentity } from '../../../../orchestration/workers/reports/reminted-worker-reporter'
 import {
   callerHoldsDispatchPane,
   dispatchFenced,
@@ -44,11 +45,19 @@ export const ORCHESTRATION_CHECK_METHODS = [
       const handle = params.terminal ?? 'unknown'
       const typeFilter = parseMessageTypes(params.types)
 
+      // A restart can reissue a surviving worker PTY's handle; the woken worker still checks with its env
+      // handle. Recover it by the Dispatch's exact recorded incarnation, as its ask and reports were.
+      const reporter = resolveWorkerReporterIdentity(runtime, db, {
+        from: handle,
+        authority: undefined,
+        hasSessionCaller: Boolean(orchestrationCaller),
+        evidence: orchestrationCompatibilityEvidence
+      })
       const caller = orchestrationCallerIdentity(runtime, {
         handle,
         session: orchestrationCaller,
         // Why: a live runtime handle is authoritative; pane metadata is only the restart fallback.
-        paneKey: runtime.getTerminalPaneKey(handle) ?? params.terminalPaneKey
+        paneKey: reporter.paneKey ?? params.terminalPaneKey
       })
       const paneKey = caller.paneKey ?? undefined
       const boundRun = hasRunBindingKey(caller) ? db.getCurrentRunForCoordinator(caller) : undefined
@@ -94,7 +103,7 @@ export const ORCHESTRATION_CHECK_METHODS = [
         !db.isRemoteAttachmentProcessCurrent({
           dispatchId: remoteAttachment.dispatch_id,
           paneKey: paneKey ?? null,
-          processIncarnation: runtime.getTerminalProcessIncarnation(handle)
+          processIncarnation: reporter.processIncarnation()
         })
       ) {
         throw new OrchestrationError(
@@ -114,6 +123,7 @@ export const ORCHESTRATION_CHECK_METHODS = [
             signal,
             activeDispatch,
             remoteAttachment,
+            processIncarnation: reporter.processIncarnation,
             recordMutationReceipt,
             acknowledgeOnly: !params.wait
           })

@@ -28,6 +28,8 @@ export async function checkWorkerMailbox(args: {
   signal: AbortSignal | undefined
   activeDispatch: ActiveDispatch | undefined
   remoteAttachment: RemoteAttachment | undefined
+  /** The caller's process, re-read at each fence; a restart-reissued handle supplies its recovered one. */
+  processIncarnation?: () => string | null
   wakeTypes?: MessageType[]
   revalidateConsumer?: () => void
   deferDelivery?: () => boolean
@@ -100,7 +102,9 @@ export async function checkWorkerMailbox(args: {
         db.isRemoteAttachmentProcessCurrent({
           dispatchId: current.dispatch_id,
           paneKey,
-          processIncarnation: runtime.getTerminalProcessIncarnation(handle)
+          processIncarnation: args.processIncarnation
+            ? args.processIncarnation()
+            : runtime.getTerminalProcessIncarnation(handle)
         })
       ) {
         return

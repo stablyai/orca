@@ -56,7 +56,7 @@ export const ORCHESTRATION_ASK_METHODS = [
       // A runtime restart can reissue a surviving worker PTY's handle; recover it by exact incarnation.
       const reporter = resolveWorkerReporterIdentity(runtime, db, {
         from,
-        attested: undefined,
+        authority: undefined,
         hasSessionCaller: Boolean(orchestrationCaller),
         evidence: orchestrationCompatibilityEvidence
       })
@@ -101,7 +101,7 @@ export const ORCHESTRATION_ASK_METHODS = [
           'question'
         )
       if (!askingDispatch) {
-        refuseFinishedRemoteWorker(db, paneKey, undefined)
+        refuseFinishedRemoteWorker(db, { address: from, paneKey }, undefined)
         throw new OrchestrationError(
           'dispatch_inactive',
           'ask requires an active supervised Dispatch.'

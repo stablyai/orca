@@ -153,25 +153,33 @@ export function resolveWorkerReporterIdentity(
   db: OrchestrationDb,
   args: {
     from: string
-    attested:
-      | Pick<OrchestrationCompatibilityCallerAuthority, 'paneKey' | 'processIncarnation'>
+    /** The hook-attested caller, which speaks for `from` only when it names that same handle. */
+    authority:
+      | Pick<
+          OrchestrationCompatibilityCallerAuthority,
+          'terminalHandle' | 'paneKey' | 'processIncarnation'
+        >
       | undefined
     hasSessionCaller: boolean
     evidence: OrchestrationCompatibilityEvidence | undefined
   }
 ): { paneKey: string | null; processIncarnation: () => string | null } {
-  const { from, attested } = args
+  const { from } = args
+  // Why: attested hook identity survives graph remount; caller params never supply lifecycle authority.
+  const attested = args.authority?.terminalHandle === from ? args.authority : undefined
   const declaredPaneKey = attested?.paneKey ?? runtime.getTerminalPaneKey(from)
   const remint = () =>
     args.hasSessionCaller || attested || declaredPaneKey
       ? null
       : resolveRemintedWorkerReporter(runtime, db, { from, evidence: args.evidence })
   const reminted = remint()
-  // The re-read must still speak for the same Dispatch and pane that routing already used.
+  // The re-read must still speak for the same Dispatch, pane and process that routing already used, so a
+  // record rewritten to another incarnation after entry cannot carry the request over to it.
   const remintedAgain = (entry: RemintedWorkerReporter): string | null => {
     const again = remint()
     return again?.dispatchId === entry.dispatchId &&
-      isEquivalentPaneKey(again.paneKey, entry.paneKey)
+      isEquivalentPaneKey(again.paneKey, entry.paneKey) &&
+      again.processIncarnation === entry.processIncarnation
       ? again.processIncarnation
       : null
   }
