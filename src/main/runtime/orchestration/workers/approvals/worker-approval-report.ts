@@ -59,7 +59,7 @@ export function recentOpenApprovalReports(
     .parse(
       db.db
         .prepare(`SELECT id, payload, from_handle FROM messages WHERE type = 'escalation'
-          AND json_extract(payload, '$.approval.state') = 'open'
+          AND json_valid(payload) AND json_extract(payload, '$.approval.state') = 'open'
           ORDER BY sequence DESC LIMIT ${RECENT_ESCALATIONS}`)
         .all()
     )

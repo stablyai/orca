@@ -8,8 +8,22 @@ import {
 } from '../../../../orchestration/mailbox/delivery-hold/mailbox-delivery-hold'
 import type { SendRecipientWarning } from './recipient-routing'
 
-/** The receipt line for mail the delivery gate would hold right now; null when it would deliver. */
+/** The receipt line for mail the delivery gate would hold right now; null when it would deliver.
+ *  Never throws: the mail is already stored, so a failed read must not fail the send. */
 export async function sendDeliveryHoldWarning(
+  runtime: Pick<OrcaRuntimeService, 'readTerminalMailHold'>,
+  db: OrchestrationDb,
+  recipient: string
+): Promise<SendRecipientWarning | null> {
+  try {
+    return await readDeliveryHoldWarning(runtime, db, recipient)
+  } catch (error) {
+    console.warn('[orchestration] delivery hold read failed', recipient, error)
+    return null
+  }
+}
+
+async function readDeliveryHoldWarning(
   runtime: Pick<OrcaRuntimeService, 'readTerminalMailHold'>,
   db: OrchestrationDb,
   recipient: string

@@ -10,7 +10,10 @@ export function firstWithin<T>(
   return new Promise((resolve) => {
     let waited = 0
     const check = async (): Promise<void> => {
-      const value = await read()
+      // A read that throws has no value yet; a rejection must not leave the wait unsettled.
+      const value = await Promise.resolve()
+        .then(read)
+        .catch(() => null)
       if (value !== null || waited >= WAIT_MS) {
         resolve(value)
         return
