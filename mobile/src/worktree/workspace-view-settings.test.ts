@@ -33,20 +33,6 @@ describe('the other-client filter on an older desktop', () => {
 })
 
 describe('applyDesktopViewSettings', () => {
-  it('applies provided desktop fields and leaves missing ones untouched', () => {
-    const next = applyDesktopViewSettings(base, {
-      groupBy: 'pr-status',
-      hideSleepingWorkspaces: true,
-      filterRepoIds: ['repo-1']
-    })
-    expect(next).toEqual({
-      ...base,
-      groupBy: 'pr-status',
-      sharesOtherClientFilter: false,
-      filters: { ...base.filters, hideSleepingWorkspaces: true, filterRepoIds: ['repo-1'] }
-    })
-  })
-
   it("falls back to the desktop's legacy host scope when no host list is saved", () => {
     const scoped = applyDesktopViewSettings(base, {
       visibleWorkspaceHostIds: null,

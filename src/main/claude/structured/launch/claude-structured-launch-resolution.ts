@@ -2,7 +2,7 @@ import type { ClaudeAccountRecipe } from '../../../../shared/agent-session/lifec
 import { prepareClaudeLaunchAccount } from '../../claude-launch-account'
 import { assertStructuredAgentResolutionCurrent } from '../../../native-chat/structured-agent-command-resolution'
 import { activeProviderContext } from '../../../../shared/agent-session/agent-session-provider-context'
-import { getClaudeProfileRouter } from '../../../claude-accounts/claude-profile-installed-router'
+import { getClaudeProfileRouter } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type {
   Options as ClaudeAgentSdkOptions,
@@ -17,7 +17,7 @@ import {
   agentSessionProviderHandleRoot,
   claudeProviderHandleLeafUuid
 } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import type { ClaudeStructuredAuthPolicy } from '../../../claude-accounts/claude-structured-auth-policy'
+import type { ClaudeStructuredAuthPolicy } from '../../../claude-accounts/runtime-auth/claude-structured-auth-policy'
 import {
   claudeChildEnv,
   claudeProbeEnv,

@@ -52,7 +52,7 @@ vi.mock('expo-file-system', () => ({
       }
     }
 
-    write(content: string | Uint8Array, options?: { encoding?: string }): void {
+    writeSync(content: string | Uint8Array, options?: { encoding?: string }): void {
       storage.events.push({ operation: 'write', uri: this.uri, content, options })
       if (storage.writeFailure !== null) {
         storage.files.set(this.uri, new Uint8Array(storage.partialBytes))

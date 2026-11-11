@@ -1,6 +1,6 @@
 import { Fragment, useCallback } from 'react'
 import { DetailCardFocusBoundary } from '../components/detail-card-host'
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Platform, Pressable, StyleSheet, Text, View, type HostInstance } from 'react-native'
 import type { SessionTitleCard } from './tabs/use-session-title-card'
 import { StatusDot } from '../components/StatusDot'
 import type { ConnectionState } from '../transport/connection/connection-state'
@@ -36,7 +36,7 @@ export function MobileSessionTitleBlock({
   const titleKeepsKeyboard = useKeyboardPersistingTaps('always')
   const { openerRef } = details
   const attachOpener = useCallback(
-    (view: View | null) => {
+    (view: HostInstance | null) => {
       openerRef.current = view
       titleKeepsKeyboard(view)
     },

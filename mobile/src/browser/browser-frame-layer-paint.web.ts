@@ -1,15 +1,15 @@
-import type { Image, View } from 'react-native'
+import type { HostInstance, ImageInstance } from 'react-native'
 import type { FrameLayer } from './mobile-browser-frame-state'
 import type { BrowserFrameDisplayHandlers } from './browser-frame-layer-paint'
 
 // RN Web refs are DOM nodes without setNativeProps; write Image’s first-child background and View opacity directly.
 // Sibling accessibility img is prop-driven and retains mount frame until a pane render updates it.
-function elementOf(node: Image | View | null): HTMLElement | null {
+function elementOf(node: ImageInstance | HostInstance | null): HTMLElement | null {
   return node instanceof HTMLElement ? node : null
 }
 
 export function updateBrowserLayerVisibility(
-  layers: [View | null, View | null],
+  layers: [HostInstance | null, HostInstance | null],
   visible: FrameLayer
 ): void {
   for (const [index, layer] of layers.entries()) {
@@ -20,7 +20,7 @@ export function updateBrowserLayerVisibility(
   }
 }
 
-export function updateBrowserImageSource(image: Image | null, uri: string): void {
+export function updateBrowserImageSource(image: ImageInstance | null, uri: string): void {
   const host = elementOf(image)
   if (host === null) {
     return

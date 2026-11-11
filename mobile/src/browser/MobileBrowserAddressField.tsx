@@ -88,7 +88,7 @@ const styles = themedStyleSheet(() => ({
     height: ADDRESS_FIELD_HEIGHT
   },
   fileLabelHost: {
-    ...StyleSheet.absoluteFillObject
+    ...StyleSheet.absoluteFill
   },
   fileLabel: {
     flex: 1,

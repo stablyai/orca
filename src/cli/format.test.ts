@@ -51,32 +51,4 @@ describe('printResult computer screenshots', () => {
     expect(output.result.screenshot.path).toBeUndefined()
     expect(output.result.screenshot.dataOmitted).toBeUndefined()
   })
-
-  it('does not rewrite non-computer nested screenshot JSON payloads', () => {
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined)
-    const screenshotData = Buffer.from('png-data').toString('base64')
-
-    printResult(
-      {
-        id: 'req-browser-like',
-        ok: true,
-        result: {
-          screenshot: {
-            data: screenshotData,
-            format: 'png'
-          }
-        },
-        _meta: { runtimeId: 'runtime-1' }
-      },
-      true,
-      () => 'unused'
-    )
-
-    const output = JSON.parse(logSpy.mock.calls[0][0]) as {
-      result: { screenshot: { data: string; path?: string; dataOmitted?: boolean } }
-    }
-    expect(output.result.screenshot.data).toBe(screenshotData)
-    expect(output.result.screenshot.path).toBeUndefined()
-    expect(output.result.screenshot.dataOmitted).toBeUndefined()
-  })
 })

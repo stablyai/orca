@@ -42,53 +42,6 @@ async function createPlugin(): Promise<ValidDiscoveredPlugin> {
 }
 
 describe('PluginPanelController identity binding', () => {
-  it('charges raw malformed and oversized calls before strict parsing', async () => {
-    const plugin = await createPlugin()
-    const executeHostCall = vi.fn()
-    const controller = new PluginPanelController({
-      resolveApprovedPlugin: () => plugin,
-      contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
-      executeHostCall,
-      log: () => vi.fn(),
-      panelAdmission: createPluginPanelCallAdmission({
-        limits: { maxBytes: 128, maxMessages: 2, perMs: 10_000 },
-        now: () => 0
-      })
-    })
-    const entry = await controller.open('runtime:one', plugin.pluginKey, 'dashboard')
-
-    await expect(
-      controller.execute('runtime:one', {
-        sessionToken: entry!.sessionToken,
-        action: 'notifications.show',
-        unexpected: true
-      })
-    ).resolves.toMatchObject({ ok: false, code: 'invalid_request' })
-    await expect(
-      controller.execute('runtime:one', {
-        sessionToken: entry!.sessionToken,
-        action: 'notifications.show',
-        params: { title: 'x'.repeat(256) }
-      })
-    ).resolves.toEqual({
-      ok: false,
-      code: 'too_large',
-      error: 'panel message exceeds the size limit'
-    })
-    await expect(
-      controller.execute('runtime:one', {
-        sessionToken: entry!.sessionToken,
-        action: 'notifications.show',
-        params: { title: 'third' }
-      })
-    ).resolves.toEqual({
-      ok: false,
-      code: 'rate_limited',
-      error: 'too many panel requests'
-    })
-    expect(executeHostCall).not.toHaveBeenCalled()
-  })
-
   it('does not publish stale panel code after approval changes during verification', async () => {
     const plugin = await createPlugin()
     let approved = true

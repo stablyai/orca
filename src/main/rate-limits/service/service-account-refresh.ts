@@ -8,7 +8,7 @@ import {
 import {
   normalizeClaudeAccountSelectionTarget,
   type ClaudeAccountSelectionTarget
-} from '../../claude-accounts/runtime-selection'
+} from '../../claude-accounts/selection/runtime-selection'
 import type {
   RateLimitRuntimeTarget,
   RateLimitState,
