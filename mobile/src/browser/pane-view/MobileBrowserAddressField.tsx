@@ -1,13 +1,13 @@
 import { Platform, StyleSheet, Text, View } from 'react-native'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { TextField } from '../components/composer-input/TextField'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { colors } from '../../theme/mobile-theme'
+import { themedStyleSheet } from '../../theme/themed-styles'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { TextField } from '../../components/composer-input/TextField'
 import {
   COMPOSER_TEXT_SIZE,
   composerInputStyles
-} from '../components/composer-input/composer-input-styles'
+} from '../../components/composer-input/composer-input-styles'
 import { compactMobileBrowserFileAddress } from './browser-url'
 import { MobileBrowserLoadProgress } from './MobileBrowserLoadProgress'
 

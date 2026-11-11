@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { MobileSessionController } from '../session/use-mobile-session-controller'
+import type { MobileSessionController } from '../../session/use-mobile-session-controller'
 
 /**
  * Opens a link as a browser tab in this workspace, or undefined where only the phone's browser fits.

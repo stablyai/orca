@@ -6,13 +6,6 @@ import {
   type MobileBrowserViewMode
 } from './browser-screencast-request-parameters'
 
-export { MOBILE_BROWSER_FRAME_MIN_INTERVAL_MS } from './browser-screencast-request-parameters'
-export type {
-  BrowserStreamLayout,
-  MobileBrowserScreencastRequest,
-  MobileBrowserViewMode
-} from './browser-screencast-request-parameters'
-
 // Native socket frames have no bridge per-message cap; request desired density. Web sibling budgets area to fit its cap.
 export function buildMobileBrowserScreencastRequest(
   layout: BrowserStreamLayout | null,

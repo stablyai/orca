@@ -1,7 +1,10 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
-import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import type { SendRequestOptions } from '../transport/rpc/unvalidated-rpc-request-port'
-import { browserErrorMessage, shouldSurfaceBrowserError } from './mobile-browser-frame-state'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import type { SendRequestOptions } from '../../transport/rpc/unvalidated-rpc-request-port'
+import {
+  browserErrorMessage,
+  shouldSurfaceBrowserError
+} from '../screencast/mobile-browser-frame-state'
 
 export type BrowserPageParams = { worktree: string; page: string }
 // Centralize current-page guard, busy state and 15s default; caller supplies client/page/send options.

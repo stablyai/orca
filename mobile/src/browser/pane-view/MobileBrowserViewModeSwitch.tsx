@@ -1,11 +1,11 @@
 import { Pressable, View } from 'react-native'
 import { Monitor, Smartphone, type LucideIcon } from 'lucide-react-native'
-import type { Translate } from '../i18n/mobile-i18n'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, radii } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import type { MobileBrowserViewMode } from './browser-screencast-request'
+import type { Translate } from '../../i18n/mobile-i18n'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { colors, radii } from '../../theme/mobile-theme'
+import { themedStyleSheet } from '../../theme/themed-styles'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import type { MobileBrowserViewMode } from '../screencast/browser-screencast-request-parameters'
 
 type Props = {
   disabled: boolean

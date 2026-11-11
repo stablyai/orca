@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react'
 import { Animated, Easing, Platform, StyleSheet, View } from 'react-native'
-import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
-import { colors, radii } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useReducedMotionEnabled } from '../../platform/use-reduced-motion'
+import { colors, radii } from '../../theme/mobile-theme'
+import { themedStyleSheet } from '../../theme/themed-styles'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 
 // Match desktop progress: delay fast loads, ease toward 90%, finish on real stop.
 const SHOW_DELAY_MS = 200

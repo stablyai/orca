@@ -14,12 +14,14 @@ export function browserMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'browser.page-commands': ({ client, effect }) => {
-      const useRequest = modules.load<typeof import('../../../browser/use-mobile-browser-request')>(
-        'mobile/src/browser/use-mobile-browser-request.ts'
-      ).useMobileBrowserRequest
+      const useRequest = modules.load<
+        typeof import('../../../browser/page-interaction/use-mobile-browser-request')
+      >('mobile/src/browser/page-interaction/use-mobile-browser-request.ts').useMobileBrowserRequest
       const useCommands = modules.load<
-        typeof import('../../../browser/use-mobile-browser-commands')
-      >('mobile/src/browser/use-mobile-browser-commands.ts').useMobileBrowserCommands
+        typeof import('../../../browser/page-interaction/use-mobile-browser-commands')
+      >(
+        'mobile/src/browser/page-interaction/use-mobile-browser-commands.ts'
+      ).useMobileBrowserCommands
       const busyRef = { current: false }
       let busy = false
       let error: string | null = null

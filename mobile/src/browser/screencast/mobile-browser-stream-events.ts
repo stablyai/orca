@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
-import { displayBrowserUrl } from './browser-url'
+import { displayBrowserUrl } from '../pane-view/browser-url'
 import { shouldSurfaceBrowserError } from './mobile-browser-frame-state'
 
 // error leaves page blocked after failed answer; pending token disables buttons for sole in-flight answer.

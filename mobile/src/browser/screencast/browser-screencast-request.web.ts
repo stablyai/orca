@@ -1,5 +1,5 @@
-import { BRIDGE_MAX_MESSAGE_BYTES } from '../mobile-web-shell/bridge/bridge-caps'
-import { BRIDGE_PROTOCOL_VERSION } from '../mobile-web-shell/bridge/bridge-envelope'
+import { BRIDGE_MAX_MESSAGE_BYTES } from '../../mobile-web-shell/bridge/bridge-caps'
+import { BRIDGE_PROTOCOL_VERSION } from '../../mobile-web-shell/bridge/bridge-envelope'
 import { METADATA_KEYS } from './browser-screencast-protocol'
 import {
   assembleMobileBrowserScreencastRequest,
@@ -7,13 +7,6 @@ import {
   type BrowserStreamLayout,
   type MobileBrowserScreencastRequest,
   type MobileBrowserViewMode
-} from './browser-screencast-request-parameters'
-
-export { MOBILE_BROWSER_FRAME_MIN_INTERVAL_MS } from './browser-screencast-request-parameters'
-export type {
-  BrowserStreamLayout,
-  MobileBrowserScreencastRequest,
-  MobileBrowserViewMode
 } from './browser-screencast-request-parameters'
 
 // Worst-case quality 72 random-noise JPEG: real Page.startScreencast sweep (2026-09-20), 143 viewports from 320–1400×480–1600, 111 fit budget.

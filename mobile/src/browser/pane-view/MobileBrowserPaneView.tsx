@@ -11,9 +11,9 @@ import {
   type HostInstance
 } from 'react-native'
 import { ArrowUp, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react-native'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, pressedStyle } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { colors, pressedStyle } from '../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { MobileBrowserAddressField } from './MobileBrowserAddressField'
 import { MobileBrowserKeyRow } from './MobileBrowserKeyRow'
 import { MobileBrowserLoadFailure } from './MobileBrowserLoadFailure'
@@ -23,18 +23,18 @@ import {
 } from './MobileBrowserPointerModifiers'
 import { MobileBrowserToolbarIconButton } from './MobileBrowserToolbarIconButton'
 import { MobileBrowserViewModeSwitch } from './MobileBrowserViewModeSwitch'
-import { buttonColor } from './mobile-browser-frame-state'
+import { buttonColor } from '../screencast/mobile-browser-frame-state'
 import { mobileBrowserPaneStyles as styles } from './mobile-browser-pane-styles'
-import type { BrowserFrameLayerBinding } from './browser-frame-pacer'
+import type { BrowserFrameLayerBinding } from '../screencast/browser-frame-pacer'
 import type {
   BrowserFrameGeometry,
   BrowserTouchLayout,
   BrowserZoomState
-} from './browser-touch-geometry'
-import type { MobileBrowserViewMode } from './browser-screencast-request'
-import type { MobileBrowserTab } from './MobileBrowserPane'
-import type { BrowserDialogState } from './mobile-browser-stream-events'
-import { FieldTextInput } from '../components/composer-input/FieldTextInput'
+} from '../page-interaction/browser-touch-geometry'
+import type { MobileBrowserViewMode } from '../screencast/browser-screencast-request-parameters'
+import type { MobileBrowserTab } from '../../session/tabs/mobile-session-tabs'
+import type { BrowserDialogState } from '../screencast/mobile-browser-stream-events'
+import { FieldTextInput } from '../../components/composer-input/FieldTextInput'
 
 // Why: seeds layer 0 as the visible one; the pacer owns opacity after mount, so a render must not.
 const FRAME_LAYER_STYLES: [StyleProp<ViewStyle>, StyleProp<ViewStyle>] = [

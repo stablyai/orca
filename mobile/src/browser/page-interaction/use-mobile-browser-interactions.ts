@@ -4,14 +4,14 @@ import {
   type GestureResponderEvent,
   type PanResponderGestureState
 } from 'react-native'
-import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import {
   createPinchGesture,
   MAX_ZOOM,
   MIN_ZOOM,
   updatePinchZoom,
   type PinchGesture
-} from './mobile-browser-frame-state'
+} from '../screencast/mobile-browser-frame-state'
 import {
   clampBrowserZoomState,
   readLocalTouchPoint,
@@ -19,10 +19,10 @@ import {
   type BrowserTouchLayout,
   type BrowserZoomState
 } from './browser-touch-geometry'
-import type { BrowserPointerModifier } from './MobileBrowserPointerModifiers'
-import type { BrowserDialogState } from './mobile-browser-stream-events'
+import type { BrowserPointerModifier } from '../pane-view/MobileBrowserPointerModifiers'
+import type { BrowserDialogState } from '../screencast/mobile-browser-stream-events'
 import type { BrowserPageCommandSend, BrowserPageParams } from './use-mobile-browser-request'
-import type { BrowserScreencastFrameMetadata } from './browser-screencast-protocol'
+import type { BrowserScreencastFrameMetadata } from '../screencast/browser-screencast-protocol'
 
 import { useMobileBrowserCommands } from './use-mobile-browser-commands'
 const TAP_SLOP = 16

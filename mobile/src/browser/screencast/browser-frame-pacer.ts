@@ -1,6 +1,6 @@
 import type { HostInstance, ImageInstance, ImageLoadEvent } from 'react-native'
 import type { BrowserScreencastFrame } from './browser-screencast-protocol'
-import { MOBILE_BROWSER_FRAME_MIN_INTERVAL_MS } from './browser-screencast-request'
+import { MOBILE_BROWSER_FRAME_MIN_INTERVAL_MS } from './browser-screencast-request-parameters'
 import type { FrameLayer } from './mobile-browser-frame-state'
 import { createBrowserFrameDataUri } from './browser-frame-data-uri'
 import {
