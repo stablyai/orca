@@ -7,6 +7,11 @@ export type HangWatchdogWorkerData = {
   markerPath: string
   timeoutMs: number
   checkIntervalMs: number
+  tracePath?: string
 }
 
-export type MainToHangWatchdogWorkerMessage = { type: 'heartbeat' } | { type: 'shutdown' }
+export type MainToHangWatchdogWorkerMessage =
+  | { type: 'heartbeat' }
+  | { type: 'shutdown' }
+  | { type: 'power-event'; event: HangPowerReceipt['event']; observedAt: number }
+import type { HangPowerReceipt } from './hang-observations'
