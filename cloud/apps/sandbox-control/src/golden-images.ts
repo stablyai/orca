@@ -9,6 +9,7 @@
 // (`retired`, still bootable) until the next rotation succeeds, so a bad build never strands creates.
 // Snapshots only boot in the region they were taken in, so every region Orca creates in (the default
 // plus its fallbacks) runs this state machine on its own rows: one active image per region.
+import { RUNTIME_BUNDLE_UPLOAD_SCRIPT, runtimeBundleUrl } from './runtime-bundles'
 import { MANIFEST, PROVISION_SCRIPT, SOURCE_BUILD_SCRIPT, VM_SCRIPT_SOURCES } from '../image/vm-scripts.generated'
 import { VM_SCRIPTS, provisionEnv, resolveReleaseBundle, utf8Base64, type GoldenImageManifest } from '../image/golden-image'
 import { parseGitSource, resolveSourceHead, type AppRequest, type GitSource, type SourceHead } from './golden-source'
@@ -36,6 +37,8 @@ export type GoldenImageDeps = {
     /** Refresh this long before the active image expires (default 24 h). */
     refreshBeforeMs?: number
     fetch?: typeof fetch
+    /** ENV-STALE: where git-source builds publish their orcad bundle (runtime-bundles.ts). */
+    runtimeBundle?: { baseUrl: string; secret: string }
   }
 }
 
@@ -333,6 +336,7 @@ async function stepBuild(deps: GoldenImageDeps, row: GoldenRow): Promise<GoldenT
     return 'failed'
   }
   try {
+    await publishRuntimeBundle(deps, row, row.session_id)
     await finishBuild(deps, row.id, row.build_name!, row.session_id)
   } catch (error) {
     await fail(deps, row.id, row.build_name, String(error))
@@ -386,6 +390,20 @@ export async function installEntryPoints(deps: { provider: Pick<SandboxProviderA
   if (result.exitCode !== 0 || !result.stdout.includes('synced')) {
     throw new Error('entry_point_sync_failed')
   }
+}
+
+/** Uploads the build's orcad + in-VM CLI as a commit-pinned bundle. Best effort: never fails the build. */
+async function publishRuntimeBundle(deps: GoldenImageDeps, row: GoldenRow, sessionId: string): Promise<void> {
+  const commit = row.bundle_sha256?.startsWith('git:') ? row.bundle_sha256.slice('git:'.length) : null
+  const config = deps.config.runtimeBundle
+  if (!commit || !config) {
+    return
+  }
+  const url = await runtimeBundleUrl(config.baseUrl, config.secret, 'PUT', commit, deps.now(), 30 * 60_000)
+  const run = await deps.provider
+    .runCommand(sessionId, { command: 'bash', args: ['-c', RUNTIME_BUNDLE_UPLOAD_SCRIPT], env: { WANT: commit, URL: url }, timeoutMs: 180_000 })
+    .catch(() => null)
+  console.log(JSON.stringify({ event: 'runtime_bundle_publish', commit, region: row.region, exitCode: run?.exitCode ?? null }))
 }
 
 async function finishBuild(deps: GoldenImageDeps, id: string, name: string, sessionId: string): Promise<void> {

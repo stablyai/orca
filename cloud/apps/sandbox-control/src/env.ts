@@ -72,6 +72,13 @@ export type Env = {
   /** Dev only: dev accounts with this prefix (e.g. `dev:billing-test-`) are not exempt from billing. */
   SANDBOX_DEV_BILLING_ENFORCE_PREFIX?: string
 
+  /**
+   * ENV-STALE: each golden build's orcad + in-VM CLI as a commit-pinned bundle (runtime-bundles.ts); booting
+   * sandboxes whose orcad is behind the active golden install it. Absent = images stay frozen as before.
+   */
+  RUNTIME_BUNDLES?: R2Bucket
+  /** `off`: kill switch for the boot-time orcad refresh (bundles still publish). */
+  RUNTIME_REFRESH?: string
   /** Public URL of this Worker's /v1/egress/proxy; Vercel forwardURL rules point here. */
   EGRESS_PROXY_URL?: string
   /** Shortened session deadline (ms) for staging rollover rehearsals; refused when SANDBOX_ENV=prod. */
