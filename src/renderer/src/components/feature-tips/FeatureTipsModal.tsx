@@ -5,7 +5,7 @@ import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
   notifyOrchestrationSetupStateChanged
-} from '@/lib/orchestration-setup-state'
+} from '@/components/orchestration/setup/orchestration-setup-state'
 import { useAppStore } from '@/store/index'
 import { ChatUiHereTipDialog } from './ChatUiHereTipDialog'
 import {

@@ -22,7 +22,7 @@ import {
   servingExecutionHostId,
   type BundledSkillTarget
 } from '@/lib/skills/runtime/bundled-skill-target'
-import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
+import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
 import { useAppStore } from '@/store/index'
 import {
   selectFolderWorkspaces,

@@ -22,7 +22,7 @@ import { useMeasuredWidth } from './right-sidebar-measured-width'
 import {
   isPairedWebClientWindow,
   shouldRenderDesktopWindowChrome
-} from '@/lib/desktop-window-chrome'
+} from '@/app-shell/chrome/desktop-window-chrome'
 import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
 import { ActivityBarPositionMenu, useActivityBarContextPlugin } from './activity-bar-position-menu'
 import { RightSidebarTopActivityBar } from './right-sidebar-top-activity-bar'

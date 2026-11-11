@@ -4,7 +4,7 @@ import type { WorktreeActivationOptions } from './workspace/activation/worktree-
 import { getProjectHostSetupProjectionFromState } from '@/store/projects/project-host-setup-selector'
 import { resolveProjectPreferenceKey } from '../../../shared/project-preference-identity'
 import { writePersonalProjectPreference } from '@/runtime/personal-project-order-client'
-import { getResolvedExecutionHostIdForWorktree } from './resolved-worktree-execution-host'
+import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
 
 export function capturePersonalProjectOpening(
   state: AppState,

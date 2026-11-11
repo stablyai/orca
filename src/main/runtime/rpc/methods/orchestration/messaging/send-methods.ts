@@ -39,6 +39,8 @@ export const ORCHESTRATION_SEND_METHODS = [
     access: {
       kind: 'writes',
       caller: 'from',
+      callerPane: 'senderPaneKey',
+      server: 'on',
       targets: { to: 'party', threadId: 'message', run: 'run', payload: 'dispatch' }
     },
     permission: 'workspace',
@@ -171,6 +173,17 @@ export const ORCHESTRATION_SEND_METHODS = [
           })
           if (!recipient.ok) {
             throw new OrchestrationError(recipient.code, recipient.message)
+          }
+          // A paired Orca's former worker may since have taken up local work; it is no longer its to reach.
+          if (
+            orchestrationCaller?.kind === 'peer' &&
+            recipient.runId !== orchestrationCaller.peerRun.run_id
+          ) {
+            throw new OrchestrationError(
+              'forbidden',
+              `${params.to} now works outside the Run ${orchestrationCaller.peerRun.home_label} coordinates here. No effects were applied.`,
+              { effectsApplied: false }
+            )
           }
           to = recipient.to
           messageRunId = recipient.runId

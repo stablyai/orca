@@ -68,3 +68,53 @@ it('keeps a searched repository section editable when the query does not name th
     })
   )
 })
+
+it.each([
+  ['folder', 'new workspace', 'Setup script'],
+  ['folder', 'workspace is removed', 'Archive script'],
+  ['git', 'new worktree', 'Setup script'],
+  ['git', 'worktree is archived', 'Archive script']
+] as const)('finds editable %s hooks for %s', (kind, query, scriptLabel) => {
+  const repo: Repo = {
+    id: 'project-1',
+    path: '/tmp/sample-project',
+    displayName: 'Sample project',
+    badgeColor: '',
+    addedAt: 0,
+    ...(kind === 'folder' ? { kind: 'folder' as const } : {})
+  }
+  const updateRepo = vi.fn()
+  useAppStore.setState({
+    settings: getDefaultSettings('/tmp'),
+    settingsSearchQuery: query,
+    repos: [repo]
+  })
+  render(
+    <TooltipProvider>
+      <RepositoryPane
+        repo={repo}
+        yamlHooks={null}
+        hasHooksFile={false}
+        hooksInspectionReady
+        mayNeedUpdate={false}
+        updateRepo={updateRepo}
+        removeProject={vi.fn()}
+      />
+    </TooltipProvider>
+  )
+
+  const editor = screen.getByRole('textbox', { name: scriptLabel })
+  fireEvent.change(editor, { target: { value: 'echo workspace-hook' } })
+  fireEvent.blur(editor)
+  expect(updateRepo).toHaveBeenCalledWith(
+    'project-1',
+    expect.objectContaining({
+      hookSettings: expect.objectContaining({
+        scripts: expect.objectContaining({
+          [scriptLabel === 'Setup script' ? 'setup' : 'archive']: 'echo workspace-hook'
+        })
+      })
+    }),
+    expect.anything()
+  )
+})

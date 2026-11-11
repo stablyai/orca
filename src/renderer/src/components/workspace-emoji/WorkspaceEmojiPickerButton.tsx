@@ -5,7 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { lazyWithPreload } from '@/app-shell/startup/lazy-with-retry'
-import { insertWorkspaceEmojiAtSelection } from '@/lib/workspace-emoji-shortcodes'
+import { insertWorkspaceEmojiAtSelection } from '@/lib/workspace/display/workspace-emoji-shortcodes'
 import { cn } from '@/lib/class-names'
 
 // Why: keeps the picker out of the boot bundle; preloaded on hover/focus so the first open is instant.

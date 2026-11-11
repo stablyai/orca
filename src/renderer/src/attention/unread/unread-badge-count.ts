@@ -1,0 +1,81 @@
+import {
+  filterFolderWorkspacesForVisibleHosts,
+  filterProjectGroupsForVisibleHosts
+} from '../../../../shared/sidebar-list/host-filtering'
+import { getRenderableFolderWorkspaces } from '../../../../shared/sidebar-list/folder-workspace-lanes'
+import { worktreeMatchesVisibleHost } from '@/components/sidebar/worktree-list/listing/visible-worktree-host-scope'
+import {
+  filterFolderWorkspacesFromOtherDevices,
+  isWorkspaceOwnedBySomeoneElse
+} from '../../../../shared/workspace-creator-visibility'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Repo } from '../../../../shared/repo-types'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-contract'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { Tab } from '../../../../shared/tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { hasLiveTabMarker } from '@/store/slices/workspace-attention/workspace-live-markers'
+
+export type UnreadBadgeCountSources = {
+  worktreesByRepo: Readonly<Record<string, readonly Worktree[]>>
+  folderWorkspaces: readonly FolderWorkspace[]
+  projectGroups: readonly ProjectGroup[]
+  repoMap: Map<string, Repo>
+  /** null when the sidebar shows every host. */
+  visibleHostIds: ReadonlySet<ExecutionHostId> | null
+  defaultHostId: ExecutionHostId
+  /** null unless the sidebar hides workspaces created from other devices. */
+  hiddenOtherDevicePairings: ReadonlyMap<string, string> | null
+  tabsByWorktree?: Readonly<Record<string, readonly Pick<TerminalTab, 'id'>[]>>
+  unifiedTabsByWorktree?: Readonly<Record<string, readonly Pick<Tab, 'id' | 'contentType'>[]>>
+  unreadTerminalTabs?: Readonly<Record<string, StoredAgentAttentionUnread>>
+}
+
+/** Folder rows also need a live tab marker; worktree rows count their flag alone. */
+export function getUnreadBadgeCount(sources: UnreadBadgeCountSources): number {
+  const { visibleHostIds, defaultHostId } = sources
+  // Preserve the existing id-only count while narrowing it to visible hosts.
+  const unreadWorktrees = new Set<string>()
+  for (const worktrees of Object.values(sources.worktreesByRepo)) {
+    for (const worktree of worktrees) {
+      // Why: the sidebar never renders an archived worktree, nor one on a host it is not showing.
+      if (
+        worktree.isUnread &&
+        !worktree.isArchived &&
+        (!sources.hiddenOtherDevicePairings ||
+          !isWorkspaceOwnedBySomeoneElse(worktree, sources.hiddenOtherDevicePairings)) &&
+        worktreeMatchesVisibleHost(worktree, visibleHostIds, sources.repoMap, defaultHostId)
+      ) {
+        unreadWorktrees.add(worktree.id)
+      }
+    }
+  }
+  return unreadWorktrees.size + countUnreadFolderRows(sources)
+}
+
+/** Folder workspaces through the same membership steps the sidebar runs before building rows. */
+function countUnreadFolderRows(sources: UnreadBadgeCountSources): number {
+  const { projectGroups, visibleHostIds, defaultHostId, hiddenOtherDevicePairings } = sources
+  const unread = sources.folderWorkspaces.filter(
+    (folder) => folder.isUnread && hasLiveTabMarker(sources, folderWorkspaceKey(folder.id))
+  )
+  if (unread.length === 0) {
+    return 0
+  }
+  const onVisibleHosts = filterFolderWorkspacesForVisibleHosts(
+    unread,
+    projectGroups,
+    visibleHostIds,
+    defaultHostId
+  )
+  const rows = getRenderableFolderWorkspaces(
+    hiddenOtherDevicePairings
+      ? filterFolderWorkspacesFromOtherDevices(onVisibleHosts, hiddenOtherDevicePairings)
+      : onVisibleHosts,
+    filterProjectGroupsForVisibleHosts(projectGroups, visibleHostIds, defaultHostId)
+  )
+  return new Set(rows.map(({ folderWorkspace }) => folderWorkspace.id)).size
+}

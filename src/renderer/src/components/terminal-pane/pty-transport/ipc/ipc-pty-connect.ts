@@ -1,3 +1,4 @@
+import { admitTerminalNoticeLifetime } from '../../provider-notices/terminal-notice-lifetime'
 import { resolveAgentWorkspaceTrustOwner } from '../../../../../../shared/agent-launch/permissions/agent-workspace-trust-decision'
 import { terminalLaunchFacts } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { readTerminalSpawnDeferral } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
@@ -152,6 +153,12 @@ export async function connectIpcPty(
     handlers.registerData(spawnResult.id)
     if (context.isDestroyed()) {
       return
+    }
+    if (!hasPreHandlerPtyExit(spawnResult.id, spawnResult.incarnationId)) {
+      admitTerminalNoticeLifetime(spawnResult.id, {
+        incarnationId: spawnResult.incarnationId,
+        fresh: !admittedSessionId && !spawnResult.isReattach && !spawnResult.coldRestore
+      })
     }
     const exitedBeforeAttach = handlers.registerExit(spawnResult.id, spawnResult.incarnationId)
     if (exitedBeforeAttach) {

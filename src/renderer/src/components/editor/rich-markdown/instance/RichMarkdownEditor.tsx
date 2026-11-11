@@ -144,16 +144,20 @@ export default function RichMarkdownEditor({
     worktreeRoot
   })
 
-  const { serializeTimerRef, pendingEditEpochRef, flushPendingSerialization, flushOnFocusLeave } =
-    useRichMarkdownPendingSerialization({
-      fileId,
-      editorRef,
-      lastCommittedMarkdownRef,
-      originalSourceRef,
-      baseCanonicalRef,
-      onContentChangeRef,
-      reconcileRoundTripRef
-    })
+  const {
+    serializeTimerRef,
+    pendingEditGenerationRef,
+    flushPendingSerialization,
+    flushOnFocusLeave
+  } = useRichMarkdownPendingSerialization({
+    fileId,
+    editorRef,
+    lastCommittedMarkdownRef,
+    originalSourceRef,
+    baseCanonicalRef,
+    onContentChangeRef,
+    reconcileRoundTripRef
+  })
 
   const editor = useRichMarkdownEditorInstance({
     codec,
@@ -191,7 +195,7 @@ export default function RichMarkdownEditor({
     cancelAutoFocusRef,
     fileId,
     serializeTimerRef,
-    pendingEditEpochRef,
+    pendingEditGenerationRef,
     isInitializingRef,
     isApplyingProgrammaticUpdateRef,
     markdownCommentsRef: review.markdownCommentsRef,
@@ -279,7 +283,7 @@ export default function RichMarkdownEditor({
     rootRef,
     runtimeTarget,
     serializeTimerRef,
-    pendingEditEpochRef,
+    pendingEditGenerationRef,
     slashMenuSetter: menu.setSlashMenu,
     worktreeId,
     worktreeRoot

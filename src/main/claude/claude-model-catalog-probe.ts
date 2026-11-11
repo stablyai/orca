@@ -1,3 +1,4 @@
+import { withOrcaClaudeChatEntrypoint } from '../../shared/agent-launch/startup/claude-chat-entrypoint'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import {
   assertStructuredAgentResolutionCurrent,
@@ -88,7 +89,11 @@ export async function runClaudeListing(
         stdin: request.stdin,
         ...(request.cwd ? { cwd: request.cwd } : {})
       },
-      { site: request.site, inheritedEnv: env, signal: request.signal }
+      {
+        site: request.site,
+        inheritedEnv: withOrcaClaudeChatEntrypoint(env, process.platform),
+        signal: request.signal
+      }
     )
   }
   const result = await runClaudeBackgroundAttempts({
@@ -197,7 +202,10 @@ export function createClaudeModelCatalogProbe(
               {
                 site: 'claude-model-catalog-probe',
                 // The listing runs from the account folder; relative PATH entries still mean the chat's.
-                inheritedEnv: launchDirectory ? envWithPathRelativeTo(env, launchDirectory) : env,
+                inheritedEnv: withOrcaClaudeChatEntrypoint(
+                  launchDirectory ? envWithPathRelativeTo(env, launchDirectory) : env,
+                  process.platform
+                ),
                 signal,
                 partialOutput: {
                   timeoutMs: 2_000,

@@ -5,7 +5,7 @@ import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { extractRuntimeTransportDiagnostics } from '@/runtime/hosts/connections/runtime-status-probe-diagnostics'
 import { useAppStore } from '@/store/index'
 
-import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
+import { describeRuntimeCompatBlock } from '@/runtime/hosts/display/runtime-host-copy'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
 import { evaluateHostDetails, type RuntimeHostDetails } from './runtime-environment-host-details'

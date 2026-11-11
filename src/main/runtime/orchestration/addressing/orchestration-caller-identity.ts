@@ -1,4 +1,5 @@
 import type { RunRow } from '../db/orchestration-records'
+import type { PeerRunRow } from '../db/peer-runs/peer-run-store'
 import { isEquivalentPaneKey } from '../db/pane-key-match'
 import { currentRunCoordinatorOrcaSessionId } from '../db/runs/run-coordinator-orca-session'
 import {
@@ -16,12 +17,57 @@ export type OrchestrationCoordinatorKey = Pick<
 /** A caller the dispatch entry resolved from the Orca session id in its injected environment. */
 export type OrchestrationSessionCaller = OrchestrationCallerIdentity &
   Readonly<{
+    kind?: undefined
     orcaSessionId: OrcaSessionId
     /** The session record the request came from. */
     sessionId: OrcaSessionId
     /** Where the session runs, from its record; `worker-start --worktree current` places here. */
     workspaceId: string
   }>
+
+/** A paired Orca acting as the coordinator of its Run here, as its authenticated frame names it.
+ *  Its handle and binding key are its address, which no terminal or session here can have. */
+export type OrchestrationPeerCaller = OrchestrationCallerIdentity &
+  Readonly<{
+    kind: 'peer'
+    terminalHandle: string
+    paneKey: string
+    orcaSessionId: null
+    peerRun: PeerRunRow
+  }>
+
+/** The caller the dispatch entry resolved, which wins over any declared handle: a session from
+ *  its environment, or a paired Orca from its pairing. */
+export type OrchestrationEntryCaller = OrchestrationSessionCaller | OrchestrationPeerCaller
+
+/** The address, and Run binding key, of the paired Orca coordinating a conversation's Run here. */
+export function peerCoordinatorAddress(conversationId: string): string {
+  return `${PEER_ADDRESS_PREFIX}${conversationId}`
+}
+
+const PEER_ADDRESS_PREFIX = 'peer:'
+
+export function isPeerCoordinatorAddress(value: string | null | undefined): boolean {
+  return !!value?.startsWith(PEER_ADDRESS_PREFIX)
+}
+
+export function peerCoordinatorCaller(peerRun: PeerRunRow): OrchestrationPeerCaller {
+  const address = peerCoordinatorAddress(peerRun.conversation_id)
+  return Object.freeze({
+    kind: 'peer',
+    address,
+    terminalHandle: address,
+    paneKey: address,
+    orcaSessionId: null,
+    peerRun
+  })
+}
+
+export function isPeerCaller(
+  caller: OrchestrationCallerIdentity | null | undefined
+): caller is OrchestrationPeerCaller {
+  return !!caller && 'kind' in caller && caller.kind === 'peer'
+}
 
 /** A caller with neither a pane nor an Orca session id can never be bound to a Run. */
 export function hasRunBindingKey(caller: OrchestrationCoordinatorKey): boolean {

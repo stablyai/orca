@@ -7,14 +7,15 @@ import { HostListOverflowNote } from '../../../host-picker/HostListOverflowNote'
 import { searchHostsLabel } from '../../../host-picker/host-picker-copy'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/class-names'
-import type { SidebarHostOption } from '../../worktree-list/controls/sidebar-host-options'
+
 import {
+  type SidebarHostOption,
   getSidebarHostHealthLabel,
   shouldShowHostScopeControls
 } from '../../worktree-list/controls/sidebar-host-options'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 
-import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
+import { describeRuntimeCompatBlock } from '@/runtime/hosts/display/runtime-host-copy'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { canConnectAddRepoHost, canSelectAddRepoHost } from './add-repo-host-availability'
 
