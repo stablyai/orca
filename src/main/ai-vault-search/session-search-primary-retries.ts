@@ -1,7 +1,7 @@
+import { invalidateSessionSearchPhysical } from './session-search-dirty-transition'
 import type { SessionSearchCatalog } from './session-search-catalog'
 import { authorityRow } from './session-search-observation-authority'
 import { isInsideSessionRoot } from '../ai-vault/session-file-discovery'
-import { invalidateSessionSearchPhysical } from './session-search-dirty-transition'
 
 export const PRIMARY_FAILURE_SCOPE = 'primary-read-failures'
 
@@ -35,27 +35,6 @@ export function recordSessionSearchPrimaryFailure(
         rank: 0,
         ready: 0,
         tie: seed ? 0 : catalog.nextRevision()
-      }
-    ]
-  })
-}
-
-export function wakeSessionSearchPrimaryFailures(
-  catalog: SessionSearchCatalog,
-  scope: string,
-  prefix: string
-): void {
-  catalog.execute({
-    kind: 'put',
-    scope: `${scope}:primary-wakes`,
-    rows: [
-      {
-        key: prefix,
-        value: JSON.stringify({ cutoff: catalog.nextRevision() }),
-        parent: '',
-        group: '',
-        rank: 0,
-        ready: 1
       }
     ]
   })

@@ -67,8 +67,8 @@ export class SessionFileInventory extends SessionInventoryDirtyInputs {
     await this.failures.report(args.issues)
     await this.observations.failures.report(args.issues)
     if (!this.initialized) {
-      this.initialized = true
       await this.reconcile()
+      this.initialized = true
     }
   }
   async wakeFailures(receipt?: SessionSearchInputReceipt): Promise<void> {

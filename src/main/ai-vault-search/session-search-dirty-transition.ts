@@ -1,5 +1,4 @@
 import { SessionSearchAuthorityPage } from './session-search-authority-page'
-import { wakeSessionSearchPrimaryFailures } from './session-search-primary-retries'
 import { recordSessionSearchInput } from './session-search-observation-authority'
 import type { SessionSearchCatalog, SessionSearchCatalogRow } from './session-search-catalog'
 import type { SessionSearchObservationDebt } from './session-search-inventory-transition'
@@ -16,6 +15,27 @@ function entry(row: SessionSearchCatalogRow | undefined): Entry | undefined {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the matching frontier owns its encoded value and revision.
   return row ? (JSON.parse(row.value) as Entry) : undefined
 }
+export function wakeSessionSearchPrimaryFailures(
+  catalog: SessionSearchCatalog,
+  scope: string,
+  prefix: string
+): void {
+  catalog.execute({
+    kind: 'put',
+    scope: `${scope}:primary-wakes`,
+    rows: [
+      {
+        key: prefix,
+        value: JSON.stringify({ cutoff: catalog.nextRevision() }),
+        parent: '',
+        group: '',
+        rank: 0,
+        ready: 1
+      }
+    ]
+  })
+}
+
 export function invalidateSessionSearchPhysical(
   catalog: SessionSearchCatalog,
   scope: string,

@@ -19,8 +19,11 @@ import {
 import { reportSessionSearchBackgroundError } from './session-search-trace'
 import { SessionSearchCursorSnapshot } from './session-search-cursor-snapshot'
 import type { SessionSearchFileState, SessionSearchStateCounts } from './session-search-store'
-import type { SearchWorkerCommand, SearchWorkerResponse } from './session-search-worker-protocol'
-import type { SessionSearchSnapshotRow } from './session-search-worker-protocol'
+import type {
+  SearchWorkerCommand,
+  SearchWorkerResponse,
+  SessionSearchSnapshotRow
+} from './session-search-worker-protocol'
 
 /** Scanner-side cursor facts only; SQLite and durable staging belong to the writer thread. */
 export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {

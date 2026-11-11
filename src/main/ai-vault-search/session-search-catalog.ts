@@ -130,7 +130,6 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
     if (transitioned) {
       return transitioned
     }
-    // oxlint-disable-next-line typescript/switch-exhaustiveness-check -- Specialized commands were dispatched above; unsupported operations still throw.
     switch (command.kind) {
       case 'release-parent':
         this.db

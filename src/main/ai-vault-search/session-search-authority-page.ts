@@ -1,7 +1,10 @@
 import { dirname } from 'node:path'
 import { isInsideSessionRoot } from '../ai-vault/session-file-discovery'
 import type { SessionSearchCatalog, SessionSearchCatalogRow } from './session-search-catalog'
-import { authorityValue } from './session-search-observation-authority'
+export function authorityValue<T>(row: SessionSearchCatalogRow | undefined): T | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these connection-private records have one typed writer.
+  return row ? (JSON.parse(row.value) as T) : undefined
+}
 
 type Authority = { self: number; tree: number }
 

@@ -1,14 +1,12 @@
-import { SessionSearchAuthorityPage } from './session-search-authority-page'
+import { SessionSearchAuthorityPage, authorityValue } from './session-search-authority-page'
 import type { SessionSearchCatalog, SessionSearchCatalogRow } from './session-search-catalog'
+
+export { authorityValue } from './session-search-authority-page'
 
 type Authority = { self: number; tree: number }
 export type SessionSearchRemovalReceipt = { scope: string; revision: number; authority: number }
 export function authorityRow(catalog: SessionSearchCatalog, scope: string, key: string) {
   return catalog.execute({ kind: 'get', scope, key }).rows?.[0]
-}
-export function authorityValue<T>(row: SessionSearchCatalogRow | undefined): T | undefined {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these connection-private records have one typed writer.
-  return row ? (JSON.parse(row.value) as T) : undefined
 }
 export function putAuthorityValue(
   catalog: SessionSearchCatalog,
