@@ -12,6 +12,7 @@ import { BrowserSearchEngineSetting } from './BrowserSearchEngineSetting'
 import { BrowserLinkRoutingSetting } from './routing/BrowserLinkRoutingSetting'
 import { BrowserLinkRoutingModifierSetting } from './routing/BrowserLinkRoutingModifierSetting'
 import { BrowserLinkRoutingBackgroundSetting } from './routing/BrowserLinkRoutingBackgroundSetting'
+import { BrowserLinkRoutingSplitSetting } from './routing/BrowserLinkRoutingSplitSetting'
 import { BrowserTerminalLinkActionsSetting } from './routing/BrowserTerminalLinkActionsSetting'
 import { BrowserLocalhostWorktreeLabelsSetting } from './routing/BrowserLocalhostWorktreeLabelsSetting'
 import { BrowserClientHostedRemoteSetting } from './routing/BrowserClientHostedRemoteSetting'
@@ -130,6 +131,7 @@ export function BrowserPane({
   const showSitePermissions = matchesSettingsSearch(searchQuery, [browserSearchEntries[11]])
   const showProfileScope = matchesSettingsSearch(searchQuery, [browserSearchEntries[12]])
   const showLinkRoutingBackground = matchesSettingsSearch(searchQuery, [browserSearchEntries[13]])
+  const showLinkRoutingSplit = matchesSettingsSearch(searchQuery, [browserSearchEntries[14]])
   const showPasswords = matchesSettingsSearch(searchQuery, [getBrowserPasswordsSearchEntry(t)])
   const showBrowserUse = matchesSettingsSearch(searchQuery, getBrowserUsePaneSearchEntries())
   const isMac = isMacUserAgent()
@@ -266,7 +268,8 @@ export function BrowserPane({
       showSitePermissions ||
       showLinkRouting ||
       showLinkRoutingModifier ||
-      showLinkRoutingBackground ? (
+      showLinkRoutingBackground ||
+      showLinkRoutingSplit ? (
         <SettingsGroup>
           {showHomePage ? (
             <BrowserHomePageSetting
@@ -321,6 +324,10 @@ export function BrowserPane({
               settings={settings}
               updateSettings={updateSettings}
             />
+          ) : null}
+
+          {showLinkRoutingSplit ? (
+            <BrowserLinkRoutingSplitSetting settings={settings} updateSettings={updateSettings} />
           ) : null}
         </SettingsGroup>
       ) : null}

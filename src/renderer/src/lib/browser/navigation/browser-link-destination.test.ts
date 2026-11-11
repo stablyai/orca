@@ -17,6 +17,7 @@ import { makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import '@/store/slices/worktrees/worktree.test-fixture'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import './http-link-in-group-availability'
+import { getDefaultSettings } from '../../../../../shared/constants'
 
 let store: BrowserLinkTestStore
 beforeEach(() => {
@@ -193,5 +194,27 @@ describe('browser destination scope', () => {
         page
       )
     ).toBe(false)
+  })
+})
+
+describe('browser destination split preference', () => {
+  it('opens a tab in the lone source pane instead of splitting when splits are off', () => {
+    store.setState((state) => ({
+      settings: { ...getDefaultSettings('/home/dev'), openLinksInAppInSplit: false },
+      groupsByWorktree: { [WORKSPACE]: state.groupsByWorktree[WORKSPACE]!.slice(0, 1) },
+      unifiedTabsByWorktree: {
+        [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.slice(0, 1)
+      },
+      activeGroupIdByWorktree: { [WORKSPACE]: 'a' },
+      layoutByWorktree: { [WORKSPACE]: { type: 'leaf', groupId: 'a' } }
+    }))
+    const state = store.getState()
+    expect(
+      selectBrowserLinkDestination(
+        state,
+        browserLinkTestDestination(),
+        captureLinkOpenIntent(state, WORKSPACE, 'source')
+      )
+    ).toEqual({ status: 'ready', groupId: 'a', match: null })
   })
 })

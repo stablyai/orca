@@ -132,8 +132,9 @@ export function resolveLinkOpenSidePlacement(input: {
   layout?: TabGroupLayoutNode
   groups: readonly Pick<TabGroup, 'id' | 'activeTabId'>[]
   sourceGroupId: string | undefined
+  allowSplit?: boolean
 }): { groupId: string } | { split: TabSplitTarget } | null {
-  const { layout, groups, sourceGroupId } = input
+  const { layout, groups, sourceGroupId, allowSplit = true } = input
   const groupIds = new Set(groups.map((group) => group.id))
   const liveGroups = layout
     ? new Set(
@@ -154,5 +155,7 @@ export function resolveLinkOpenSidePlacement(input: {
       groupId: neighbor ?? [...liveGroups].find((id) => id !== sourceGroupId) ?? sourceGroupId
     }
   }
-  return { split: { sourceGroupId, splitDirection: 'right', activate: false } }
+  return allowSplit
+    ? { split: { sourceGroupId, splitDirection: 'right', activate: false } }
+    : { groupId: sourceGroupId }
 }

@@ -293,7 +293,8 @@ export function selectBrowserLinkDestination(
     const placement = resolveLinkOpenSidePlacement({
       layout: state.layoutByWorktree[worktreeId],
       groups,
-      sourceGroupId
+      sourceGroupId,
+      allowSplit: state.settings?.openLinksInAppInSplit !== false
     })
     return { status: 'ready', ...placement, match: null }
   }
