@@ -81,8 +81,20 @@ export function watchLaunchComposer(
     return
   }
   const stop = new AbortController()
+  // Only a startup dialog may admit sends through `stop`: the exit watch also aborts it once it settles,
+  // including after the composer wait timed out, which must still refuse.
+  let stoppedFromOutside = false
   const waitForComposer = (signal?: AbortSignal): Promise<string | null> => {
-    signal?.addEventListener('abort', () => stop.abort(), { once: true })
+    signal?.addEventListener(
+      'abort',
+      () => {
+        if (!stop.signal.aborted) {
+          stoppedFromOutside = true
+          stop.abort()
+        }
+      },
+      { once: true }
+    )
     return waitForFreshComposerOnPty(host, ptyId, agent, resolveDraftPasteReadyTimeoutMs(agent), {
       requireComposerMarker: false,
       stopOnDialog: true,
@@ -90,14 +102,17 @@ export function watchLaunchComposer(
     })
   }
   const watched = exitRuntime
-    ? failOnLaunchedAgentExit(exitRuntime, ptyId, agent, undefined, waitForComposer).catch(
+    ? failOnLaunchedAgentExit(exitRuntime, ptyId, agent, undefined, (signal) =>
+        // A failed composer wait refuses as before; only the exit watch's own rejection means the agent exited.
+        waitForComposer(signal).catch(() => null)
+      ).catch(
         // The agent exited to its shell: there is no composer to wait for, so sends go to the shell now.
         () => 'agent-exited'
       )
     : waitForComposer()
   const ready = watched.then(
     // A startup dialog stops the watch: it takes the next input, so sends reach it as before.
-    (readyPtyId) => readyPtyId !== null || stop.signal.aborted,
+    (readyPtyId) => readyPtyId !== null || (stop.signal.aborted && !stoppedFromOutside),
     () => false
   )
   watches.set(ptyId, ready)
