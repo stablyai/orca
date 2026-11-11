@@ -1732,7 +1732,6 @@
       "prMrLink": "Ссылка на PR/MR",
       "project": "Проект",
       "recent": "Недавние",
-      "recentProjectOrderDescription": "Недавняя активность рабочих пространств",
       "searchProjects": "Поиск проектов",
       "searchProjectsPlaceholder": "Поиск проектов…",
       "selectedCount": "{{count}} из {{total}}",
