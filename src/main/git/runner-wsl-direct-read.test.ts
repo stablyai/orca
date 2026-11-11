@@ -228,7 +228,10 @@ describe('WSL direct Git reads', () => {
       await expect(result).resolves.toEqual({ stdout: 'ok', stderr: '' })
 
       expect(execFileMock.mock.calls[0]?.[1]).toContain('--exec')
-      expect(execFileMock.mock.calls[1]?.[1]?.slice(3, 5)).toEqual(['sh', '-lc'])
+      expect(execFileMock.mock.calls[1]?.[1]?.slice(3, 5)).toEqual(['sh', '-c'])
+      expect(String(execFileMock.mock.calls[1]?.[1]?.at(-1))).toContain(
+        'exec "$_orca_wsl_shell" -ilc'
+      )
       expect(admissionEvents.map(({ phase, waiterId }) => [phase, waiterId])).toEqual([
         ['grant', 0],
         ['release', 0]

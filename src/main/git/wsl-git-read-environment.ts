@@ -81,7 +81,8 @@ function probeWslGitReadEnvironment(distro: string): Promise<ProbeOutcome> {
     `printf '%s\\0%s\\0%s' "$PATH" "$_orca_git_path" "$HOME"`
   ].join('\n')
   const captured = buildWslCapturedLoginShellCommand(probeCommand)
-  const args = buildWslExecArgs(distro, ['sh', '-lc', captured.command])
+  // Why: the outer sh only resolves the user's shell. -l would source ~/.profile as dash before the probe runs.
+  const args = buildWslExecArgs(distro, ['sh', '-c', captured.command])
   return new Promise((resolve) => {
     try {
       assertWslDistroAllowed('wsl.exe', args)

@@ -217,7 +217,7 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
       })
       expect(spawnMock).toHaveBeenCalledWith(
         'wsl.exe',
-        ['-d', 'Ubuntu', '--exec', 'sh', '-lc', expect.any(String)],
+        ['-d', 'Ubuntu', '--exec', 'sh', '-c', expect.any(String)],
         expect.objectContaining({
           // #16463: explicit native cwd avoids inherited deletable WSL UNC paths; discovery's guest cwd remains inside the command.
           cwd: expect.any(String),
@@ -226,6 +226,7 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
       )
       const shellCommand = spawnMock.mock.calls[0]?.[1]?.[5] as string
       expect(shellCommand).toContain('getent passwd')
+      expect(shellCommand).toContain('exec "$_orca_wsl_shell" -ilc')
       expect(shellCommand).toContain('/mnt/c/repo')
       expect(shellCommand).toContain("'cursor-agent'")
       expect(shellCommand).toContain('--list-models')
