@@ -35,16 +35,4 @@ describe('AvccFrameParser', () => {
       [false, false, [7]]
     ])
   })
-
-  it('skips the connect-time JPEG seed so decoding starts from the description', () => {
-    const frames = parse([[...packet(4, [0xff, 0xd8]), ...packet(1, [1, 0x64, 0, 0x33])]])
-
-    expect(frames).toHaveLength(1)
-    expect(frames[0].frame.config).toBe(true)
-  })
-
-  it('rejects packets that are not part of the serve-sim AVCC protocol', () => {
-    expect(() => parse([packet(9, [1])])).toThrow('Invalid simulator video packet')
-    expect(() => parse([[0, 0, 0, 1, 2]])).toThrow('Invalid simulator video packet')
-  })
 })

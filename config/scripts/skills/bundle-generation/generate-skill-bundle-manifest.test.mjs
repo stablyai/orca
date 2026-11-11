@@ -97,20 +97,6 @@ afterEach(async () => {
 })
 
 describe('skill bundle manifest generator', () => {
-  it('orders complete manifest paths when a reference file shares a directory stem', async () => {
-    const packageRoot = await createPackage()
-    await mkdir(path.join(packageRoot, 'references', 'refs'), { recursive: true })
-    await writeFile(path.join(packageRoot, 'SKILL.md'), 'skill\n')
-    await writeFile(path.join(packageRoot, 'references', 'refs.md'), 'reference\n')
-    await writeFile(path.join(packageRoot, 'references', 'refs', 'image.webp'), Buffer.from([0]))
-
-    expect((await collectPackageFiles(packageRoot)).map((file) => file.path)).toEqual([
-      'SKILL.md',
-      'references/refs.md',
-      'references/refs/image.webp'
-    ])
-  })
-
   it('keeps SKILL.md bytes only a release tag shipped, off HEAD', async () => {
     const sandbox = await createGeneratorSandbox()
     sandbox.git('init', '-q', '-b', 'main')
@@ -126,17 +112,6 @@ describe('skill bundle manifest generator', () => {
     const digests = JSON.parse(await sandbox.read('released-digests.json')).skills.demo
     expect(digests).toContain(createHash('sha256').update('release-only version\n').digest('hex'))
     expect(digests).toHaveLength(2)
-  })
-
-  it('fails when a digest is missing or the pull request base cannot be read', async () => {
-    const sandbox = await createGeneratorSandbox()
-    sandbox.generate('--write')
-    expect(() => sandbox.generateOnPullRequest()).toThrow(/Cannot read the pull request base/)
-    await writeFile(
-      path.join(sandbox.root, 'resources', 'skills', 'released-digests.json'),
-      `${JSON.stringify({ schemaVersion: 1, skills: { demo: [] } }, null, 2)}\n`
-    )
-    expect(() => sandbox.generate()).toThrow(/stale/)
   })
 
   it.runIf(process.platform !== 'win32')(

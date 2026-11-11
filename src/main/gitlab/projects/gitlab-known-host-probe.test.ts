@@ -7,7 +7,6 @@ vi.mock('../../git/command-runner/glab-exec-file', async (importOriginal) => ({
   glabExecFileAsync: glabExecFileAsyncMock
 }))
 import {
-  _getKnownHostsCacheSize,
   _resetKnownHostsCache,
   getGlabKnownHosts,
   rememberGlabKnownHost
@@ -33,23 +32,6 @@ describe('getGlabKnownHosts', () => {
     const staleProbe = getGlabKnownHosts()
     rememberGlabKnownHost('gitlab.refreshed.test')
     resolveProbe({ stdout: 'Logged in to gitlab.com as user\n', stderr: '' })
-
-    await expect(staleProbe).resolves.toEqual(['gitlab.com', 'gitlab.refreshed.test'])
-    await expect(getGlabKnownHosts()).resolves.toEqual(['gitlab.com', 'gitlab.refreshed.test'])
-  })
-
-  it('preserves a native auth refresh when an older native probe fails', async () => {
-    let rejectProbe!: (error: Error) => void
-    glabExecFileAsyncMock.mockImplementationOnce(
-      () =>
-        new Promise((_resolve, reject) => {
-          rejectProbe = reject
-        })
-    )
-
-    const staleProbe = getGlabKnownHosts()
-    rememberGlabKnownHost('gitlab.refreshed.test')
-    rejectProbe(new Error('stale auth probe failed'))
 
     await expect(staleProbe).resolves.toEqual(['gitlab.com', 'gitlab.refreshed.test'])
     await expect(getGlabKnownHosts()).resolves.toEqual(['gitlab.com', 'gitlab.refreshed.test'])

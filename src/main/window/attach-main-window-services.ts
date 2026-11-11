@@ -32,7 +32,7 @@ import type {
   UpdateInstallMode
 } from '../updater/lifecycle/updater-state'
 import { scheduleHistoryGc } from '../pty/history/terminal-history-gc'
-import { openCodeHookService, openCode2HookService } from '../opencode/hook-service'
+import { openCodeHookService, openCode2HookService } from '../opencode/status-hooks/hook-service'
 import { listLiveDaemonPtyIds } from '../daemon/providers/lifecycle/daemon-provider-state'
 import { hydrateLocalPtyRegistryAtBoot } from '../memory/hydrate-local-pty-registry'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'

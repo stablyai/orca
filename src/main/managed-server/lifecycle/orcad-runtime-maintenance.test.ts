@@ -11,7 +11,7 @@ import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairi
 import { PAIRING_OFFER_VERSION } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 
 import { orcadMigrationCutoverFixture } from '../migration/cutover/testing/orcad-migration-cutover-fixture'
-import { writeOrcadMigrationSourceCutover } from '../../persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
+import { writeOrcadMigrationSourceCutover } from '../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
 import {
   createManagedLifecycleHarness,
   MANAGED_LOCAL_PORT,
