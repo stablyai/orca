@@ -84,6 +84,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'rightSidebarTab',
   'rightSidebarExplorerView',
   'rightSidebarWidth',
+  'activityBarPosition',
   'markdownTocPanelWidth',
   'combinedDiffFileTreeWidth',
   'groupBy',

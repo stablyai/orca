@@ -17,6 +17,7 @@ import type {
   AgentActivityDisplayMode,
   ManualRepoOrderEntry,
   ProjectOrderBy,
+  ActivityBarPosition,
   RightSidebarExplorerView,
   RightSidebarTab,
   StatusBarItem,
@@ -48,6 +49,8 @@ export type PersistedUIState = {
   rightSidebarTab: RightSidebarTab
   rightSidebarExplorerView: RightSidebarExplorerView
   rightSidebarWidth: number
+  /** Right sidebar activity-bar edge. Missing on older profiles, which stay at the top. */
+  activityBarPosition?: ActivityBarPosition
   markdownTocPanelWidth?: number
   combinedDiffFileTreeWidth?: number
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
