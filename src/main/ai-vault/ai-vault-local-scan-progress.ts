@@ -13,6 +13,9 @@ export type LocalAiVaultScanProgressHandle = AiVaultServiceScanListener & {
 }
 
 const MAX_PROGRESS_ENTRIES = 8
+// Rescans re-check every file even when cached, and live agents' transcripts change each time.
+// Below this many reads that is seconds of quiet work, so windows keep the last finished strip.
+const AI_VAULT_SCAN_SHOWN_AFTER_CONTENT_READS = 50
 const latest = new Map<string, AiVaultScanProgress>()
 // Failed replacements restore the last finished progress for their key.
 const currentScans = new Map<
@@ -64,14 +67,24 @@ export function startLocalAiVaultScanProgress(
     stage: 'finding',
     agents: [],
     read: { done: 0, total: 0 },
+    contentReads: 0,
     startedAt: now(),
     settledAt: null
+  }
+  let shown = latest.get(scanKey) ?? null
+  const publishShown = (): void => {
+    const next =
+      current.contentReads >= AI_VAULT_SCAN_SHOWN_AFTER_CONTENT_READS ? current : fallback
+    if (next !== shown) {
+      shown = next
+      publish(scanKey, next)
+    }
   }
   const handle: LocalAiVaultScanProgressHandle = {
     work: (work) => {
       if (currentScans.get(scanKey)?.handle === handle) {
         current = { ...current, ...work }
-        publish(scanKey, current)
+        publishShown()
       }
     },
     finish: (work) => {
@@ -88,7 +101,7 @@ export function startLocalAiVaultScanProgress(
     }
   }
   currentScans.set(scanKey, { handle, fallback })
-  publish(scanKey, current)
+  publishShown()
   return handle
 }
 

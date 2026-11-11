@@ -29,7 +29,11 @@ import {
   yieldScanInventory,
   type CwdBucketInventory
 } from './session-scanner-scope-inventory'
-import { aiVaultScanWorkload, noteAiVaultScanWorkChanged } from './ai-vault-scan-progress'
+import {
+  aiVaultScanWorkload,
+  noteAiVaultScanContentRead,
+  noteAiVaultScanWorkChanged
+} from './ai-vault-scan-progress'
 import type {
   AiVaultScanOptions,
   FileWithMtime,
@@ -278,6 +282,7 @@ async function mayBeInScope(
   let known = resolve()
   const source = AI_VAULT_SCOPE_CWD_SOURCES[candidate.agent]
   if (known === 'read' && source.kind === 'read') {
+    noteAiVaultScanContentRead(signal)
     const read = await source.readCwd(candidate, signal)
     throwIfAiVaultScanCancelled(signal)
     if (read !== null) {

@@ -36,7 +36,13 @@ describe('AiVaultScanCoordinator', () => {
         key: 'scope',
         force: true,
         onCreate: (id) => {
-          startLocalAiVaultScanProgress('scope', id, () => 2_000)
+          // A read makes the replacement's own progress the visible one.
+          startLocalAiVaultScanProgress('scope', id, () => 2_000).work({
+            stage: 'finding',
+            agents: [],
+            read: { done: 0, total: 0 },
+            contentReads: 50
+          })
         },
         start: () =>
           new Promise<typeof EMPTY_RESULT>((resolve) => {

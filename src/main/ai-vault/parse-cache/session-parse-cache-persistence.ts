@@ -1,10 +1,15 @@
 // Scanner-owned SQLite rows back the hot cache; failures fall back to transcript parsing (#9210).
 import { stat } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname } from 'node:path'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import { splitOpenCodeSqliteCandidate } from '../../../shared/opencode-sqlite-session-path'
 import { SessionParseCacheDatabase } from './session-parse-cache-database'
 import { importLegacySessionParseCacheJson } from './session-parse-cache-legacy-json'
+import {
+  adoptUnversionedSessionParseCache,
+  pruneOtherSessionParseCacheVersions,
+  sessionParseCacheDatabasePath
+} from './session-parse-cache-version-files'
 import {
   scopeCwdStampOf,
   sessionParseCacheTranscriptPath,
@@ -112,10 +117,12 @@ function openedDatabase(): SessionParseCacheDatabase | null {
     return database ?? null
   }
   try {
-    database = new SessionParseCacheDatabase(
-      join(dirname(options.filePath), 'session-parse-cache.sqlite')
-    )
+    const directory = dirname(options.filePath)
+    const path = sessionParseCacheDatabasePath(directory)
+    adoptUnversionedSessionParseCache(directory, path)
+    database = new SessionParseCacheDatabase(path)
     importLegacySessionParseCacheJson(options.filePath, database, Date.now())
+    pruneOtherSessionParseCacheVersions(directory, path)
     void dropRowsForMissingTranscripts(database)
   } catch (error) {
     console.debug('[ai-vault] session parse cache database unavailable', error)

@@ -13,6 +13,7 @@ import SyncDatabase from '../sqlite/sync-database'
 import { SessionParseCacheDatabase } from './parse-cache/session-parse-cache-database'
 import { parseAgentSessionFileCached } from './parse-cache/session-scanner-parse-cache'
 import { isolatedScanRoots, jsonLines } from './session-scanner-test-fixtures'
+import { sessionParseCacheDatabasePath } from './parse-cache/session-parse-cache-version-files'
 
 let tempRoots: string[] = []
 
@@ -59,7 +60,7 @@ it.each([false, true])('keeps cold authority with read failure=%s', async (failR
   await flushSessionParseCachePersist()
   resetSessionParseCachePersistenceForTests()
   resetSessionParseCacheForTests()
-  const db = new SyncDatabase(join(root, 'session-parse-cache.sqlite'))
+  const db = new SyncDatabase(sessionParseCacheDatabasePath(root))
   for (const [index, session] of ['{', '1', '[]', 'true', '"scalar"', 'null', 'null'].entries()) {
     db.prepare('UPDATE rows SET session = ?, sidecar = ? WHERE path = ?').run(
       session,

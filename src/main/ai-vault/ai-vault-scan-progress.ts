@@ -98,6 +98,13 @@ export function noteAiVaultScanReading(signal: AbortSignal | undefined): void {
   reporter?.workChanged()
 }
 
+/** A transcript or session file is being read instead of served from the parse cache. */
+export function noteAiVaultScanContentRead(signal: AbortSignal | undefined): void {
+  const reporter = signal ? reporters.get(signal) : undefined
+  reporter?.tally.noteContentRead()
+  reporter?.workChanged()
+}
+
 export function aiVaultScanWorkload(signal: AbortSignal | undefined) {
   return tallyFor(signal)?.workload
 }

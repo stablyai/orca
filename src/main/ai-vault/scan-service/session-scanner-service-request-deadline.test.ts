@@ -9,7 +9,7 @@ import {
 } from './session-scanner-service-test-child'
 
 const SCAN = { type: 'request', operation: 'scan', options: {} } as const
-const WORK = { stage: 'finding', agents: [], read: { done: 0, total: 0 } } as const
+const WORK = { stage: 'finding', agents: [], read: { done: 0, total: 0 }, contentReads: 0 } as const
 
 function setup(): { children: AiVaultServiceTestChild[]; client: AiVaultScannerServiceClient } {
   const children: AiVaultServiceTestChild[] = []
