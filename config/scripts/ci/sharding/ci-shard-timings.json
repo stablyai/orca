@@ -4580,7 +4580,6 @@
       "src/renderer/src/components/editor/image-png-export.chromium.test.ts": 212,
       "src/renderer/src/components/editor/image-png-export.test.ts": 50,
       "src/renderer/src/components/editor/image-viewer-zoom-ownership.test.tsx": 2268,
-      "src/renderer/src/components/editor/image-viewer-zoom.test.ts": 47,
       "src/renderer/src/components/editor/notebook/kernel/ipynb-kernel-outputs.test.ts": 307,
       "src/renderer/src/components/editor/notebook/kernel/ipynb-kernel-session-start-lifetime.test.ts": 140,
       "src/renderer/src/components/editor/notebook/kernel/ipynb-kernel-session.test.ts": 180,

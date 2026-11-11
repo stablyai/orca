@@ -10,7 +10,6 @@ import type { TerminalRecord } from '../../../terminal/session/mobile-terminal-r
 import { mountFixture } from '../recorder-fixture-shape'
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
-import type * as MobileNativeChatReadability from '../../../session/native-chat/transcript/use-mobile-native-chat-readability'
 import type * as MobileNativeChatStopModule from '../../../session/native-chat/composer/use-mobile-native-chat-stop'
 
 const WORKSPACE = 'workspace-1'
@@ -134,30 +133,6 @@ export function sessionScreenReadMountAdapters(
             listModel.fetchTerminals(name === 'no-empty' ? { allowEmptyLoaded: false } : {})
           ),
         state: () => ({ terminals, known: terminalsRef.current }),
-        dispose: hook.unmount
-      }
-    },
-    'session.native-chat-readability': ({ client }) => {
-      const useReadability = modules.load<typeof MobileNativeChatReadability>(
-        'mobile/src/session/native-chat/transcript/use-mobile-native-chat-readability.ts'
-      ).useMobileNativeChatReadability
-      let readable = false
-      let worktreeId = `repo-1::/w`
-      const hook = hookMount(() => {
-        readable = useReadability(client, worktreeId)
-      })
-      return {
-        action(name) {
-          if (name === 'mount') {
-            return hook.mount()
-          }
-          if (name === 'reroute') {
-            worktreeId = 'repo-2::/w'
-            return hook.update()
-          }
-          throw new Error(`Unknown readability action: ${name}`)
-        },
-        state: () => ({ readable, worktreeId }),
         dispose: hook.unmount
       }
     },
