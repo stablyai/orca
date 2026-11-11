@@ -12,8 +12,6 @@ export type WorkerFailureEscalation = {
   payload: Record<string, unknown>
   /** Stable when one failure can be reported more than once; an existing id is not sent again. */
   id?: string
-  /** News that needs no action (a prompt that closed): normal status mail, not a high escalation. */
-  notice?: true
 }
 
 /** Escalate terminal/chat failures through one coordinator-mail path; mail failure must never break worker failure handling. */
@@ -55,8 +53,8 @@ export function escalateWorkerFailure(
       to,
       subject,
       body,
-      type: escalation.notice ? 'status' : 'escalation',
-      priority: escalation.notice ? 'normal' : 'high',
+      type: 'escalation',
+      priority: 'high',
       payload: JSON.stringify(escalation.payload),
       runId: dispatch.run_id
     })

@@ -9,7 +9,6 @@ import type { AcpToolTimeline } from '../timeline/acp-tool-timeline'
 import { AcpRpcError } from '../transport/acp-errors'
 import { ACP_FORM_ELICITATION_METHOD, acpFormElicitationPresentation } from './acp-form-elicitation'
 import { readAcpPermissionRequest } from '../protocol/acp-permission-requests'
-import { isAgentJournalPromptIntent } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 export function acpPermissionPresentation(
   params: unknown,
@@ -29,8 +28,7 @@ export function acpPermissionPresentation(
       detail: null,
       options: options.map((option) => ({
         id: option.optionId,
-        label: option.name,
-        ...(isAgentJournalPromptIntent(option.kind) ? { intent: option.kind } : {})
+        label: option.name
       })),
       resolution: pendingAcpResolution
     },

@@ -27,7 +27,6 @@ import { orchestrationCallerIdentity } from '../runs/run-scope'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 import { planWorkerFollowUp, startWorkerFollowUp } from './worker-follow-up'
 import { finishedWorkerSend, refuseFinishedRemoteWorker } from './finished-worker-mail'
-import { relayedDeliveryUnknownWarning, withDeliveryHoldWarning } from './send-delivery-hold'
 import {
   followThroughWorkerReport,
   passHeldWorkerMail,
@@ -224,7 +223,7 @@ export const ORCHESTRATION_SEND_METHODS = [
                     message: params
                   })
                 : plan
-            // The mail started the worker's next turn itself, so nothing holds it; `next` stays last.
+            // A dispatch: address carries no recipient warnings, so `next` stays last.
             if (followUp?.kind === 'started') {
               if (typeof followUp.receipt.dispatchId === 'string') {
                 passHeldWorkerMail(runtime, db, followUp.receipt.dispatchId)
@@ -247,9 +246,6 @@ export const ORCHESTRATION_SEND_METHODS = [
               messageRunId = runBound.runId
               sendWarnings.push(runBound.warning)
             }
-          }
-          if (federatedTarget) {
-            sendWarnings.push(relayedDeliveryUnknownWarning(to))
           }
           const federatedControl = sendFederatedControlMail({
             params,
@@ -287,10 +283,7 @@ export const ORCHESTRATION_SEND_METHODS = [
             db,
             params.type === 'worker_done' ? settledDispatchId(sent) : undefined
           )
-          // Read only once the mail is stored: an await before it could let the worker settle and miss it.
-          return federatedTarget || params.type === 'worker_done' || params.type === 'heartbeat'
-            ? sent
-            : withDeliveryHoldWarning(sent, runtime, db, to)
+          return sent
         }
         return sendGroupMessage({
           params,

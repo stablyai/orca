@@ -95,19 +95,6 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   {
-    path: ['orchestration', 'deny'],
-    summary: "Deny a worker's permission prompt with a reason; the worker carries on",
-    usage:
-      'orca orchestration deny --dispatch <dispatch_id> --prompt <approval_id> --reason <text> [--from <handle>] [--retry-request <id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'prompt', 'reason', 'from', 'retry-request'],
-    identityFlagRoles: { from: 'caller' },
-    notes: [
-      'The approval id is in the escalation that reported the prompt. Only a person can allow a prompt; agents can only deny one.',
-      "Orca picks the prompt's own refuse-once option, never a standing rule or a stop, and refuses when there is none.",
-      "When the agent's prompt takes no message, the reason reaches the worker as its next mail."
-    ]
-  },
-  {
     path: ['orchestration', 'worker-abandon'],
     summary: 'Fence a worker without claiming its process stopped',
     usage:

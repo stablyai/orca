@@ -2,10 +2,7 @@ import { z } from 'zod'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { OrchestrationCoordinatorKey } from '../addressing/orchestration-caller-identity'
 import type { OrchestrationDb } from '../db/orchestration-db'
-import { exposeUtcTimestamp } from '../db/utc-timestamp'
 import { currentRunCoordinatorOrcaSessionIdSql } from '../db/runs/run-coordinator-orca-session'
-import type { WorkerApprovalPayload } from '../../../../shared/orchestration/approvals/worker-approval-payload'
-import { readApprovalReport } from '../workers/approvals/worker-approval-report'
 
 const nullable = z.string().nullable()
 export const CrewAssignment = z.object({
@@ -131,44 +128,6 @@ export function readCrewTraffic(
   `)
       .all(JSON.stringify(aliases), cutoff, JSON.stringify(aliases), cutoff)
   )
-}
-
-// Why a bound: one coordinator's open and recently closed approvals, newest report each.
-const CREW_APPROVAL_ROWS = 100
-
-/** Each worker approval's newest report to this party: open ones, and ones closed since `closedSince`.
- *  Only Orca's own stop reports count, never a payload a worker sent itself. Oldest first. */
-export function readCrewApprovals(
-  db: OrchestrationDb,
-  aliases: string[],
-  closedSince: string
-): { approval: WorkerApprovalPayload; at: string }[] {
-  const rows = z
-    .object({ id: z.string(), payload: z.string(), created_at: z.string() })
-    .array()
-    .parse(
-      db.db
-        .prepare(`WITH reports AS (
-          SELECT id, payload, created_at, sequence, json_extract(payload, '$.approval.approvalId') AS approval_id
-          FROM messages WHERE to_handle IN (SELECT value FROM json_each(?))
-            AND id LIKE 'msg\\_stop\\_%' ESCAPE '\\' AND payload LIKE '%"approval":%' AND json_valid(payload)
-            AND json_type(payload, '$.approval') = 'object'
-        ), newest AS (SELECT approval_id, MAX(sequence) AS sequence FROM reports GROUP BY approval_id)
-        SELECT reports.id, reports.payload, reports.created_at FROM reports
-        JOIN newest ON newest.sequence = reports.sequence
-        WHERE json_extract(reports.payload, '$.approval.state') = 'open'
-          OR julianday(reports.created_at) >= julianday(?)
-        ORDER BY reports.sequence DESC LIMIT ${CREW_APPROVAL_ROWS}`)
-        .all(JSON.stringify(aliases), closedSince)
-    )
-  const shown: { approval: WorkerApprovalPayload; at: string }[] = []
-  for (const row of rows) {
-    const approval = readApprovalReport(row)
-    if (approval) {
-      shown.push({ approval, at: exposeUtcTimestamp(row.created_at) ?? row.created_at })
-    }
-  }
-  return shown.toReversed()
 }
 
 export function readCrewQuestions(db: OrchestrationDb, aliases: string[]) {

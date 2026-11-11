@@ -205,18 +205,11 @@ export function buildCrewSnapshot(
     return row
   }
   const snapshot = emptyCrew('ok')
-  const approvals = Map.groupBy(
-    host.sourceInputs.approvals(selfAliases(), now),
-    ({ approval }) => approval.worker.dispatchId
-  )
   for (const { assignment, worker, parent } of host.relations.get(self.address) ?? []) {
     if (parent.address === self.address) {
-      const row = decorate(worker, 'worker', assignment, `dispatch:${assignment.id}`)
-      const own = approvals.get(assignment.id)
-      if (own) {
-        row.approvals = own
-      }
-      snapshot.sections.managing.push(row)
+      snapshot.sections.managing.push(
+        decorate(worker, 'worker', assignment, `dispatch:${assignment.id}`)
+      )
     }
   }
   const parents = host.sourceInputs.parentInputs(selfAliases(), self.paneKey ? [self.paneKey] : [])
