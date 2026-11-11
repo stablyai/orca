@@ -87,6 +87,8 @@ const getEmptySnapshot = (): SessionOptionDescriptor[] => EMPTY_SNAPSHOT
 
 // Kept across remounts: a repeated hook model is not fresh evidence, and reapplying it would revert a newer pick.
 const appliedReportByScope = new Map<string, string>()
+// Apart from the hook's: the hook model lands first on each visit and must not make the same reply look new.
+const appliedFileReportByScope = new Map<string, string>()
 
 /** A tab that runs another agent starts over: a new session there carries none of the old one's picks. */
 function startScopeOverForAgent(scopeKey: string, agent: string): void {
@@ -245,19 +247,32 @@ export function useMobileNativeChatSessionOptions(
         ? matchNativeChatCatalogModelId(searched, reported, { allowUnlisted: true })
         : null)
     const applied = fileEffort ? `${matched}\0${fileEffort}` : matched
-    if (!matched || !applied || appliedReportByScope.get(scopeKey) === applied) {
+    const appliedByScope = fileModel ? appliedFileReportByScope : appliedReportByScope
+    if (!matched || !applied || appliedByScope.get(scopeKey) === applied) {
       return
     }
-    setBoundedScopeCacheEntry(appliedReportByScope, scopeKey, applied)
+    setBoundedScopeCacheEntry(appliedByScope, scopeKey, applied)
     surface.reportSessionOptions(
       fileEffort ? { model: matched, effort: fileEffort } : { model: matched }
     )
   }, [agent, catalog, discoveredModels, fileEffort, fileModel, reportedModel, scopeKey, surface])
 
-  const snapshot = useSyncExternalStore(
+  const liveSnapshot = useSyncExternalStore(
     surface?.subscribe ?? subscribeEmpty,
     surface?.getSnapshot ?? getEmptySnapshot,
     surface?.getSnapshot ?? getEmptySnapshot
+  )
+  // The catalog names a family; the session file names the version that actually answered.
+  const snapshot = useMemo(
+    () =>
+      fileModel
+        ? liveSnapshot.map((descriptor) =>
+            descriptor.category === 'model' && descriptor.valueSource === 'reported'
+              ? { ...descriptor, reportedModel: fileModel }
+              : descriptor
+          )
+        : liveSnapshot,
+    [fileModel, liveSnapshot]
   )
 
   const track = useCallback(
