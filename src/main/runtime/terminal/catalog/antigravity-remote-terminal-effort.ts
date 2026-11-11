@@ -11,17 +11,22 @@ export async function assertRemoteAntigravityEffort(
   runtime: OrcaRuntimeService,
   params: WorkerStartInput,
   server: ReturnType<OrcaRuntimeService['resolveOrchestrationWorkerServer']>,
-  timeoutMs: number
+  timeoutMs: number,
+  ordinaryWorker = false
 ): Promise<void> {
+  if (ordinaryWorker && (!params.worktree || /^(current|new-child)$/.test(params.worktree))) {
+    return
+  }
   await assertAntigravityTerminalEffort(
     {
-      discoverTerminalModels: (worktree, agentId, options) =>
+      discoverTerminalModels: async (worktree, agentId, options) => {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This paired RPC implements the same discovery result contract; unavailable methods reject and pass through admission.
-        runtime.callOrchestrationWorkerServer(
+        const result = (await runtime.callOrchestrationWorkerServer(
           server.environmentId,
           'agent.discoverTerminalModels',
           {
             agentId,
+            ...(ordinaryWorker ? { workerStart: true } : {}),
             ...(worktree ? { worktree } : {}),
             ...(options?.repo
               ? {
@@ -34,7 +39,13 @@ export async function assertRemoteAntigravityEffort(
           timeoutMs,
           undefined,
           { expectedEnvironmentPairingRevision: server.pairingRevision }
-        ) as Promise<DiscoverCommitMessageModelsResult>
+        )) as DiscoverCommitMessageModelsResult & {
+          workerStartMode?: 'terminal' | 'structured'
+        }
+        return ordinaryWorker && result.workerStartMode !== 'terminal'
+          ? { success: false, error: 'terminal_models_not_applicable' }
+          : result
+      }
     },
     {
       agent: params.agent,

@@ -14,6 +14,7 @@ export const AgentDiscoverTerminalModels = z.object({
     })
     .optional(),
   cwd: z.string().min(1).optional(),
+  workerStart: z.literal(true).optional(),
   uncached: z.boolean().optional()
 })
 

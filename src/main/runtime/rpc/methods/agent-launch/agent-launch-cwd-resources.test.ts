@@ -89,7 +89,7 @@ import {
   openTestJournalHostDatabase,
   closeTestJournalHostDatabase
 } from '../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { setAgentLaunchRecordStore } from './agent-launch.test-fixture'
+import { setAgentLaunchRecordStore, runtimeStub, rpcContext } from './agent-launch.test-fixture'
 import { RuntimeWorktreeLineageController } from '../../../workspaces/lineage/runtime-worktree-lineage-controller'
 import { formatAmbiguousCwdParentMessage } from '../../../workspaces/lineage/runtime-worktree-lineage-resolution'
 import { managedCwdLaunchFixture } from './managed-cwd-launch.test-fixture'
@@ -167,6 +167,98 @@ describe('CLI cwd resource frames, managed receipts and raw-path controls', () =
     if (failures.length > 0) {
       throw new AggregateError(failures, 'cwd resource fixture cleanup failed')
     }
+  })
+
+  it('runs Antigravity effort admission and saved replay through real agent launch CLI argv', async () => {
+    const records = await openTestAgentSessionRecordStore(directory)
+    setAgentLaunchRecordStore(records)
+    const host = Object.assign(runtimeStub({ settings: {} }), {
+      getRuntimeId: () => 'antigravity-cli-test',
+      discoverTerminalModels: vi.fn(async () => ({
+        success: true as const,
+        catalogOrigin: 'probe' as const,
+        capability: {
+          id: 'antigravity' as const,
+          label: 'Antigravity',
+          modelSource: 'dynamic' as const,
+          models: [],
+          defaultModelId: ''
+        },
+        defaultModelId: '',
+        models: [
+          { id: 'gemini-3.8-flash-high', label: 'High' },
+          { id: 'gemini-3.8-flash-low', label: 'Low' }
+        ]
+      }))
+    })
+    const dispatcher = new RpcDispatcher({
+      runtime: rpcContext(host, {}).runtime,
+      methods: AGENT_LAUNCH_METHODS
+    })
+    callMock.mockImplementation(async (method, params) => {
+      if (method === 'status.get') {
+        return agentLaunchHostFixture()
+      }
+      if (method !== 'agent.launchReplay') {
+        throw new Error(`Unexpected CLI method: ${method}`)
+      }
+      const response = await dispatcher.dispatch({
+        id: 'agy-cli',
+        authToken: 'fixture',
+        method,
+        params
+      })
+      if (!response.ok) {
+        throw new RuntimeRpcFailureError(response)
+      }
+      return response
+    })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const args = [
+      'agent',
+      'launch',
+      '--agent',
+      'antigravity',
+      '--surface',
+      'terminal',
+      '--worktree',
+      'id:wt-7',
+      '--model',
+      'gemini-3.8-flash-high',
+      '--effort',
+      'low',
+      '--json'
+    ]
+    const invoke = async (argv: string[]) => {
+      log.mockClear()
+      process.exitCode = 0
+      await main(argv, '/repo')
+      return JSON.parse(String(log.mock.calls.at(-1)?.[0]))
+    }
+    const conflict = await invoke(args)
+    expect(conflict.ok).toBe(false)
+    expect(conflict.error).toMatchObject({
+      code: 'invalid_argument',
+      message: expect.stringContaining('--model gemini-3.8-flash --effort low')
+    })
+    expect(host.createTerminal).not.toHaveBeenCalled()
+    host.discoverTerminalModels.mockRejectedValueOnce(new Error('method_not_found'))
+    const accepted = await invoke(args)
+    expect(accepted.ok).toBe(true)
+    expect(host.createTerminal).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        launchPreferences: { model: 'gemini-3.8-flash-high', effort: 'low' }
+      })
+    )
+    const launch = callMock.mock.calls.findLast(([method]) => method === 'agent.launchReplay')!
+    const operationId = String(launch[1].operationId)
+    host.discoverTerminalModels.mockClear()
+    const replay = await invoke([...args, '--retry-launch', operationId])
+    expect(replay.ok).toBe(true)
+    expect(host.discoverTerminalModels).not.toHaveBeenCalled()
+    expect(host.createTerminal).toHaveBeenCalledTimes(1)
   })
 
   it.each(['uuid', 'root+instances'] as const)(

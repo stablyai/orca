@@ -113,6 +113,49 @@ describe('AgentLaunchChoiceEditor model list', () => {
     expect(menus.get('Model')).toEqual(['__agent_default__', 'gpt-wrapped'])
   })
 
+  it('keeps structured models and efforts for a chat-only Antigravity Settings row', async () => {
+    call.mockResolvedValue({
+      origin: 'probe',
+      fetchedAt: 1,
+      models: [
+        {
+          id: 'gemini-3.8-flash',
+          label: 'Gemini 3.8 Flash',
+          isDefault: false,
+          efforts: [
+            { value: 'low', label: 'Low' },
+            { value: 'medium', label: 'Medium' },
+            { value: 'high', label: 'High' }
+          ]
+        }
+      ]
+    })
+    const save = vi.fn(async () => {})
+    render(
+      <TooltipProvider>
+        <AgentLaunchChoiceEditor
+          agent="antigravity"
+          label="Antigravity"
+          choices={{ model: 'gemini-3.8-flash' }}
+          userArgs=""
+          permission={undefined}
+          showArguments={false}
+          save={save}
+          catalogTarget={{ kind: 'local' }}
+        />
+      </TooltipProvider>
+    )
+    await waitFor(() =>
+      expect(menus.get('Model')).toEqual(['__agent_default__', 'gemini-3.8-flash'])
+    )
+    expect(menus.get('Reasoning effort')).toEqual(['__agent_default__', 'low', 'medium', 'high'])
+    expect(call).toHaveBeenCalledWith({ kind: 'local' }, 'agentSession.modelCatalog', {
+      agent: 'antigravity'
+    })
+    expect(terminalRead).not.toHaveBeenCalled()
+    expect(save).not.toHaveBeenCalled()
+  })
+
   it('shows CLI-grouped Antigravity models and efforts in agent Settings while preserving a saved variant', async () => {
     terminalRead.mockResolvedValue({
       origin: 'probe',

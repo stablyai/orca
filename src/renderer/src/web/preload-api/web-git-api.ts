@@ -237,7 +237,10 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     }),
     discoverTerminalModels: async () => ({
       success: false,
-      error: 'Terminal model discovery is unavailable in the web client.'
+      error: translate(
+        'agents.terminalModels.connectionUnavailable',
+        'Terminal model discovery is unavailable on this connection.'
+      )
     }),
     discoverCommitMessageModels: async () => ({
       success: false,

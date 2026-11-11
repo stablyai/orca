@@ -272,6 +272,9 @@ export function useHelperFollowUpCli() {
   function effects() {
     return {
       tasks: h.db.listTasks().length,
+      runs: h.db.db.prepare('SELECT id FROM runs ORDER BY id').all(),
+      links: h.db.db.prepare('SELECT * FROM remote_run_links ORDER BY conversation_id').all(),
+      placements: h.db.db.prepare('SELECT * FROM remote_placements ORDER BY task_id').all(),
       dispatches: h.db.db.prepare('SELECT COUNT(*) AS n FROM dispatch_contexts').get(),
       resources: h.db.db.prepare('SELECT * FROM worker_terminal_resources ORDER BY id').all(),
       closes: vi.mocked(h.runtime.closeTerminal).mock.calls.length,

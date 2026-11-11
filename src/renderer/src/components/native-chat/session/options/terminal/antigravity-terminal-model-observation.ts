@@ -1,3 +1,4 @@
+import { structuredAgentSessionOwnerInputs } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { useAppStore } from '@/store/index'
 import { observeAgentPickerAcquisition } from '../../../../agent/agent-launch-picker-acquisition'
 import { readAntigravityTerminalCatalog } from '@/runtime/terminal/terminal-model-discovery-client'
@@ -7,6 +8,7 @@ import type { AgentPickerEntry } from '../../../../../../../shared/agent-launch/
 import { resolveNativeChatModelDiscoveryContext } from '../catalog/native-chat-session-option-discovery'
 import { antigravityTerminalCatalogModels } from '../../../../../../../shared/agent-session/options/antigravity-model-efforts'
 import type { CatalogModel } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog-types'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../../../../../../shared/agent-launch/catalog/tui-agent-display-names'
 
 export function createAntigravityTerminalModelDemand(terminalTabId: string) {
   let stop: (() => void) | undefined
@@ -45,18 +47,14 @@ export function createAntigravityTerminalModelDemand(terminalTabId: string) {
       }
       refresh()
       // Closed panes have no subscription; status-only events never scan workspace or tab rows.
+      const ownerInputs = (state: ReturnType<typeof useAppStore.getState>) => [
+        state.tabsByWorktree,
+        state.projects,
+        ...structuredAgentSessionOwnerInputs(state)
+      ]
       const unsubscribe = useAppStore.subscribe((state, previous) => {
-        if (
-          state.tabsByWorktree !== previous.tabsByWorktree ||
-          state.worktreesByRepo !== previous.worktreesByRepo ||
-          state.folderWorkspaces !== previous.folderWorkspaces ||
-          state.repos !== previous.repos ||
-          state.projects !== previous.projects ||
-          state.projectGroups !== previous.projectGroups ||
-          state.restoredRuntimeHostIdByWorkspaceSessionKey !==
-            previous.restoredRuntimeHostIdByWorkspaceSessionKey ||
-          state.settings !== previous.settings
-        ) {
+        const before = ownerInputs(previous)
+        if (ownerInputs(state).some((value, index) => value !== before[index])) {
           refresh()
         }
       })
@@ -87,7 +85,7 @@ export function observeAntigravityTerminalModels(
 ): () => void {
   const entry: AgentPickerEntry = {
     agent: 'antigravity',
-    label: 'Antigravity',
+    label: TUI_AGENT_DISPLAY_NAMES.antigravity,
     rows: [],
     surfaces: ['terminal'],
     defaultSurface: 'terminal',

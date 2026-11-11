@@ -148,7 +148,7 @@ export function agentPickerCliDiscoveryRuntime(
 
 export function agentPickerCatalogSettingsKey(
   defaults: AgentPickerDefaultSettings | null | undefined,
-  settings: GlobalSettings
+  settings: GlobalSettings | null
 ) {
   return [
     defaults && {
@@ -159,9 +159,9 @@ export function agentPickerCatalogSettingsKey(
       nativeChatSessionOptions: defaults.nativeChatSessionOptions,
       nativeChatPermissionMode: defaults.nativeChatPermissionMode
     },
-    settings.agentCmdOverrides?.antigravity,
-    settings.agentDefaultEnv?.antigravity,
-    settings.terminalWindowsShell,
-    settings.terminalWindowsWslDistro
+    settings?.agentCmdOverrides?.antigravity,
+    settings?.agentDefaultEnv?.antigravity,
+    settings?.terminalWindowsShell,
+    settings?.terminalWindowsWslDistro
   ]
 }
