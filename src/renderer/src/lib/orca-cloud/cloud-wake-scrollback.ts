@@ -107,7 +107,7 @@ export function captureWakeScrollback(
 /** The divider, dim, between the restored output and the woken terminal. */
 export function wakeDividerLine(sleptAt: number, wokeAt: number): string {
   const label = translate(
-    'orcaCloudWorkspace.terminal.sleptDivider',
+    'orcaCloudWorkspace.terminal.sleptRangeDivider',
     'Slept {{range}} · processes stopped',
     { range: formatSleptRange(sleptAt, wokeAt) }
   )
