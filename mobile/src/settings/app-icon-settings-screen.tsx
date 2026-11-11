@@ -8,7 +8,7 @@ import {
   setAlternateAppIcon,
   supportsAlternateIcons
 } from 'expo-alternate-app-icons'
-import { APP_ICON_OPTIONS, type AppIconId } from '../../../src/shared/app-icon'
+import { APP_ICON_OPTIONS, type BuiltInAppIconId } from '../../../src/shared/app-icon'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
@@ -16,13 +16,13 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { APP_ICON_PREVIEWS } from './app-icon-previews'
 
 // Same choices as the desktop's App icon setting; the names match the expo-alternate-app-icons entries in app.json.
-const NATIVE_ICON_NAMES: Readonly<Record<AppIconId, string | null>> = {
+const NATIVE_ICON_NAMES: Readonly<Record<BuiltInAppIconId, string | null>> = {
   classic: null,
   watercolor: 'Watercolor',
   blue: 'Blue'
 }
 
-function appIconIdOfNativeName(name: string | null): AppIconId {
+function appIconIdOfNativeName(name: string | null): BuiltInAppIconId {
   return APP_ICON_OPTIONS.find((option) => NATIVE_ICON_NAMES[option.id] === name)?.id ?? 'classic'
 }
 
@@ -35,12 +35,12 @@ export default function AppIconSettingsScreen({
   useMobileColorScheme()
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const [selected, setSelected] = useState<AppIconId>(() =>
+  const [selected, setSelected] = useState<BuiltInAppIconId>(() =>
     supportsAlternateIcons ? appIconIdOfNativeName(getAppIconName()) : 'classic'
   )
   const [error, setError] = useState<string | null>(null)
 
-  const select = (id: AppIconId): void => {
+  const select = (id: BuiltInAppIconId): void => {
     if (id === selected) {
       return
     }
