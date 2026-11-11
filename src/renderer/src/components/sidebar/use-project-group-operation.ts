@@ -4,7 +4,6 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { findIndexedProjectGroupOwner } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { getProjectGroupingModelFromState } from '@/store/projects/project-host-setup-selector'
-import { getProjectGroupHostId } from '@/store/project-groups/project-group-owner-routing'
 import { persistedUIValuesEqual } from '../../../../shared/persisted-ui-equality'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { AppState } from '@/store/types'
@@ -39,10 +38,10 @@ function destinationExists(
   const current = findIndexedProjectGroupOwner(
     state.projectGroups,
     group.id,
-    getProjectGroupHostId(group)
+    getRepoExecutionHostId(group)
   )
   return Boolean(
-    current && projectGroupCatalog(getProjectGroupHostId(current)) === operation.catalogHostId
+    current && projectGroupCatalog(getRepoExecutionHostId(current)) === operation.catalogHostId
   )
 }
 

@@ -19,7 +19,6 @@ import type { GroupingSetup } from '../../../../shared/project-grouping'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { getProjectGroupHostId } from '@/store/project-groups/project-group-owner-routing'
 
 export type ProjectGroupEntrance =
   | { kind: 'header'; groupKey: string; catalogHostId: ExecutionHostId }
@@ -163,7 +162,7 @@ export function resolveProjectGroupOperation(
   }
   const destinations = new Map<string, ProjectGroup>()
   for (const destination of state.projectGroups) {
-    if (projectGroupCatalog(getProjectGroupHostId(destination)) === catalogHostId) {
+    if (projectGroupCatalog(getRepoExecutionHostId(destination)) === catalogHostId) {
       destinations.set(destination.id, destination)
     }
   }
