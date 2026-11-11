@@ -4555,6 +4555,12 @@
       "createFailed": "Failed to create workspace"
     },
     "hostedMerge": {
+      "confirmGitHubMerge": "Merge PR #{{number}}?",
+      "confirmGitHubSquash": "Squash and merge PR #{{number}}?",
+      "confirmGitHubRebase": "Rebase and merge PR #{{number}}?",
+      "confirmGitLabMerge": "Merge merge request #{{number}}?",
+      "confirmGitLabSquash": "Squash and merge merge request #{{number}}?",
+      "confirmGitLabRebase": "Rebase and merge merge request #{{number}}?",
       "merged": "Merged",
       "closed": "Closed",
       "conflicts": "Conflicts",

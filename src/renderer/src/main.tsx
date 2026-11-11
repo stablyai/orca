@@ -21,13 +21,14 @@ import { shouldEnableReactGrab } from './diagnostics/react-commits/react-grab-de
 import { I18nProvider } from './i18n/I18nProvider'
 import { useTranslate } from './i18n/use-translate'
 import { getOrCreateRendererRoot } from './app-shell/startup/react-renderer-root'
-import { primeTerminalWebglAddon } from './lib/pane-manager/pane-webgl-renderer'
+import './lib/pane-manager/terminal-rendering/pane-webgl-renderer'
+import { primeTerminalWebglAddon } from './lib/pane-manager/terminal-rendering/terminal-webgl-addon-loader'
 import { SkillWarningPreviewLauncher } from './components/skills/installation/preview/SkillWarningPreviewLauncher'
 import { installBrowserClientPageRenderer } from './components/browser-pane/browser-client-page-renderer-installation'
 import { registerBrowserClientPageGuestMessageHandler } from './components/browser-pane/browser-client-page-retained-elements'
 import { handleGuestWindowCloseMessage } from './components/browser-pane/host-guest/browser-page-window-close'
 import { installOsFileDropCancellationGuard } from './lib/files/drop/os-file-drop-cancellation-guard'
-import { installBodyOverlayAttributes } from './lib/body-overlay-attributes'
+import { installBodyOverlayAttributes } from './lib/overlay-interaction/body-overlay-attributes'
 import { applyWindowMaterialToDocument } from './app-shell/appearance/window-material-runtime'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()

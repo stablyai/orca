@@ -21,3 +21,16 @@ export function parseCodexAsyncQuestionsInput(input: unknown): AskPrompt | null 
   }
   return questions.length > 0 ? { questions, replyAsMessage: true } : null
 }
+
+/** Codex's default `chat.skip_question` key (Ctrl+]) as legacy, kitty and modifyOtherKeys bytes;
+ *  a remapped key is not seen. */
+const CODEX_SKIP_QUESTION_INPUTS: ReadonlySet<string> = new Set([
+  '\x1d',
+  '\x1b[93;5u',
+  '\x1b[93;5:1u',
+  '\x1b[27;5;93~'
+])
+
+export function isCodexSkipQuestionInput(data: string): boolean {
+  return CODEX_SKIP_QUESTION_INPUTS.has(data)
+}

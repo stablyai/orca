@@ -14,6 +14,7 @@ import {
 } from '../../coordinator/dispatch/task-dispatch-refusal'
 import { dispatchAssigneeOrcaSessionId } from '../../addressing/session-lineage/dispatch-assignee-orca-session-id'
 import { assertTakesNewWork } from '../worker-terminal/worker-terminal-transfer'
+import { retireRemotePlacement } from '../remote-owned/remote-placement-hold'
 
 export function createDispatchContext(
   this: OrchestrationDb,
@@ -97,6 +98,8 @@ export function createDispatchContext(
       from: 'ready',
       to: 'dispatched'
     })
+    // The Task runs here now; an earlier attempt on a paired server no longer speaks for it.
+    retireRemotePlacement(this, taskId)
     const dispatch = this.db
       .prepare('SELECT * FROM dispatch_contexts WHERE id = ?')
       .get(id) as DispatchContextRow

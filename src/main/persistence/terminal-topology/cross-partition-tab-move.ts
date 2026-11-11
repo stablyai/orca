@@ -19,7 +19,10 @@ import type {
 import { patchStoredSession } from '../../../shared/workspace-layout/workspace-layout-record-patch'
 import { saveWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-save'
 import { applyLayoutCommand } from '../../../shared/workspace-layout/workspace-layout-commands'
-import { editorViewsOfModel, type PartitionEditorViews } from '../loading-store/layout-editor-views'
+import {
+  editorViewsOfModel,
+  type PartitionEditorViews
+} from '../loading-store/workspace-sessions/layout-editor-views'
 
 type PartitionSession = {
   hostId: ExecutionHostId

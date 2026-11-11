@@ -29,8 +29,12 @@ import {
   getPRForBranchOutcome,
   getRepoSlug
 } from '../github/client'
-import { getMergeRequest, getMergeRequestForBranchOrThrow, getProjectSlug } from '../gitlab/client'
-import { createGitLabMergeRequest } from '../gitlab/merge-request-creation'
+import {
+  getMergeRequest,
+  getMergeRequestForBranchOrThrow,
+  getProjectSlug
+} from '../gitlab/merge-requests/merge-request-lookup'
+import { createGitLabMergeRequest } from '../gitlab/merge-requests/merge-request-creation'
 import {
   mapAzureDevOpsReview,
   mapBitbucketReview,

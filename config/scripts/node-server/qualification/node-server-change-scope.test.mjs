@@ -142,7 +142,9 @@ it.each([
     expected: 'should_run=true'
   },
   {
-    files: ['src/main/persistence/profile-state/profile-state-recovery-crash-boundaries.test.ts'],
+    files: [
+      'src/main/persistence/profile-state/recovery/profile-state-recovery-crash-boundaries.test.ts'
+    ],
     deferred: true,
     fullQualification: false,
     pullRequest: true,
