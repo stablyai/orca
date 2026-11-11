@@ -75,8 +75,10 @@ async function prepareEphemeralVmRecipeRequest(
         const displayName =
           useAppStore.getState().projects.find((project) => project.id === args.projectId)
             ?.displayName ?? sourceRepo?.displayName
+        // Why: the user picked an existing project; the VM's checkout joining it is not a new project.
         const setup = await store.setupProjectExistingFolder(
-          displayName ? { ...args, displayName } : args
+          displayName ? { ...args, displayName } : args,
+          { quiet: true }
         )
         if (setup) {
           // Why: until the create adopts it, the VM's primary checkout is not a workspace; the pending row stands for it.
