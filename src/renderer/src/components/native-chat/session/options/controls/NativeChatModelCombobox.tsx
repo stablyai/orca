@@ -109,13 +109,17 @@ export function NativeChatModelCombobox({
         </CommandEmpty>
         <NativeChatSessionOptionWriteGroup busy={busy}>
           <CommandGroup>
-            {choices.filter((choice) => !folded(choice)).map(renderChoice)}
-            <AgentPickerLegacyModelsToggle
-              total={legacyChoices.length}
-              expanded={legacyExpanded}
-              onToggle={() => setLegacyExpanded((expanded) => !expanded)}
-            />
-            {legacyExpanded ? legacyChoices.map(renderChoice) : null}
+            {/* One keyed array, so a row moving between sections keeps its highlight. */}
+            {[
+              ...choices.filter((choice) => !folded(choice)).map(renderChoice),
+              <AgentPickerLegacyModelsToggle
+                key="legacy-toggle"
+                total={legacyChoices.length}
+                expanded={legacyExpanded}
+                onToggle={() => setLegacyExpanded((expanded) => !expanded)}
+              />,
+              ...(legacyExpanded ? legacyChoices.map(renderChoice) : [])
+            ]}
           </CommandGroup>
         </NativeChatSessionOptionWriteGroup>
       </CommandList>

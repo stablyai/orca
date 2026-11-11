@@ -266,14 +266,18 @@ export function AgentLaunchSetupPanel({
               modelInArguments={modelInArguments}
               onSelect={editDraft}
             />
-            {modelRows.rows.map(renderModelRow)}
-            <AgentPickerLegacyModelsToggle
-              total={modelRows.legacyCount}
-              expanded={legacyExpanded}
-              disabled={disabled}
-              onToggle={() => setLegacyExpanded((expanded) => !expanded)}
-            />
-            {modelRows.legacyRows.map(renderModelRow)}
+            {/* One keyed array, so a row moving between sections keeps its highlight. */}
+            {[
+              ...modelRows.rows.map(renderModelRow),
+              <AgentPickerLegacyModelsToggle
+                key="legacy-toggle"
+                total={modelRows.legacyCount}
+                expanded={legacyExpanded}
+                disabled={disabled}
+                onToggle={() => setLegacyExpanded((expanded) => !expanded)}
+              />,
+              ...modelRows.legacyRows.map(renderModelRow)
+            ]}
           </CommandGroup>
         </CommandList>
       </Command>
