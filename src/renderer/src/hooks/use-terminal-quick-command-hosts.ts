@@ -16,6 +16,7 @@ import type {
   TerminalQuickCommandHostsSlice
 } from '@/store/terminals/terminal-quick-command-hosts'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { isOrcaCloudRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
 
 export type TerminalQuickCommandHost = {
   commands: readonly TerminalQuickCommand[]
@@ -35,6 +36,8 @@ export type HostedTerminalQuickCommand = {
   hostId: ExecutionHostId
   hostLabel: string
   key: string
+  /** Suggested from the project (a cloud workspace's package.json scripts); not saved, so not editable. */
+  suggested?: boolean
 }
 
 type TerminalQuickCommandHostState = {
@@ -174,6 +177,24 @@ export function useTerminalQuickCommandHosts(
       return DISABLED_TERMINAL_QUICK_COMMAND_HOSTS
     }
     const hostOptions = getTerminalQuickCommandHostOptions(settings, runtimeEnvironments)
+    const remoteEnvironment = remoteEnvironmentId
+      ? runtimeEnvironments.find((environment) => environment.id === remoteEnvironmentId)
+      : undefined
+    // An Orca Cloud workspace runs its commands on its sandbox only: this computer's commands
+    // can't run there, so offering them was a choice that always fails (JA-31).
+    if (remoteHostId && remoteEnvironment && isOrcaCloudRuntimeEnvironment(remoteEnvironment)) {
+      const ready =
+        remoteState?.supported === true &&
+        remoteState.connectionGeneration === remoteConnectionGeneration
+      return [
+        {
+          commands: ready ? remoteState.commands : [],
+          hostId: remoteHostId,
+          label:
+            hostOptions.find((host) => host.id === remoteHostId)?.label ?? remoteEnvironment.name
+        }
+      ]
+    }
     const result: TerminalQuickCommandHost[] = [
       {
         commands: settings?.terminalQuickCommands ?? [],

@@ -5139,6 +5139,9 @@
             "filePathsCannotContainEmptySegments": "File paths cannot contain empty segments.",
             "filePathsCannotContainDotSegments": "File paths cannot contain . or .. segments.",
             "filePathsCannotContainTildeSegments": "File paths cannot contain ~ segments."
+          },
+          "TabBarQuickCommandItem": {
+            "suggested": "From package.json"
           }
         }
       },
