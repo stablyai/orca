@@ -1346,7 +1346,8 @@
     "agentAccounts": {
       "pageDescription": "Sign-ins, account switching and usage for your agents.",
       "thisComputer": "This computer",
-      "selectedHost": "Selected host"
+      "selectedHost": "Selected host",
+      "jumpLabel": "Parts of this page"
     }
   },
   "menu": {
