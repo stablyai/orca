@@ -1,13 +1,4 @@
 import { RELEASE_SYNCHRONIZED_OUTPUT } from '../../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
-import { syncTerminalScrollIntentFromViewport } from '@/lib/pane-manager/terminal-scroll-intent'
-import {
-  beginTerminalScrollIntentBufferRebuild,
-  endTerminalScrollIntentBufferRebuild
-} from '@/lib/pane-manager/terminal-scroll-intent-rebuild'
-import {
-  cancelDeferredScrollRestore,
-  cancelPendingFitScrollRestore
-} from '@/lib/pane-manager/pane-scroll'
 import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-fit'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
@@ -28,6 +19,7 @@ import {
 } from '../reattach/cursor-agent-reattach-screen'
 
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
+import { keepWakeScrollPlace } from './wake-scroll-place'
 import {
   beginWakeScrollbackRestore,
   finishWakeScrollbackRestore,
@@ -208,20 +200,7 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
           preSleep,
           terminal,
           session.writeReplayDataAsync,
-          (line) => {
-            // The person's place wins: drop restores captured before it (a remount's first fit, at
-            // the bottom), scroll with intent enforcement paused (its synchronous "follow output"
-            // would snap back), then record the place as a pin for the fits still to come.
-            cancelDeferredScrollRestore(terminal)
-            cancelPendingFitScrollRestore(terminal)
-            beginTerminalScrollIntentBufferRebuild(terminal)
-            try {
-              terminal.scrollToLine(line)
-            } finally {
-              endTerminalScrollIntentBufferRebuild(terminal)
-            }
-            syncTerminalScrollIntentFromViewport(terminal, { allowBufferShrink: true })
-          }
+          keepWakeScrollPlace(terminal)
         )
         if (!isCurrentPayload()) {
           continue
