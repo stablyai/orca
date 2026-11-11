@@ -9,7 +9,8 @@ fi
 bash "$(dirname "${BASH_SOURCE[0]}")/prepare-ubuntu-apt.sh"
 
 # Eight minutes of command allowances leave room for tests within the job deadline.
-if timeout 45 sudo apt-get update -o Acquire::Languages=none && timeout 120 sudo apt-get install -y "$@"; then
+# Run deadlines as root so sudo cannot leave apt in a separate session.
+if sudo timeout --kill-after=10s 45 apt-get update -o Acquire::Languages=none && sudo timeout --kill-after=10s 120 apt-get install -y "$@"; then
   exit 0
 fi
 
@@ -21,7 +22,7 @@ done
 bash "$(dirname "${BASH_SOURCE[0]}")/use-ubuntu-apt-mirror.sh"
 bash "$(dirname "${BASH_SOURCE[0]}")/recover-ubuntu-dpkg.sh" || true
 # Unrelated repositories may fail refresh; apt still verifies the requested packages.
-if ! timeout 120 sudo apt-get update -o Acquire::Languages=none; then
+if ! sudo timeout --kill-after=10s 120 apt-get update -o Acquire::Languages=none; then
   echo 'Index refresh incomplete; attempting the requested packages with available authenticated indexes.' >&2
 fi
-timeout 150 sudo apt-get install -y "$@"
+sudo timeout --kill-after=10s 150 apt-get install -y "$@"
