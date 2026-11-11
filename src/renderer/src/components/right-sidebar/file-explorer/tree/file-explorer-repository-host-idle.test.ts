@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import type { GitRepositoryStatusRequest } from '../../../shared/git/status/git-repository-status'
-import { getRepositoryStatuses } from './repository-status'
-import { FileExplorerRepositoryObserver } from '../../../renderer/src/components/right-sidebar/file-explorer/tree/file-explorer-repository-observer'
+import type { GitRepositoryStatusRequest } from '../../../../../../shared/git/status/git-repository-status'
+import { getRepositoryStatuses } from '../../../../../../main/git/source-control/repository-status'
+import { FileExplorerRepositoryObserver } from './file-explorer-repository-observer'
 
 const { realpath, lstat, git } = vi.hoisted(() => ({
   realpath: vi.fn(async (path: string) => path),
@@ -14,10 +14,13 @@ const { realpath, lstat, git } = vi.hoisted(() => ({
   git: vi.fn()
 }))
 vi.mock('node:fs/promises', () => ({ realpath, lstat }))
-vi.mock('../../wsl/filesystem/wsl-unc-access-gate', () => ({
+vi.mock('../../../../../../main/wsl/filesystem/wsl-unc-access-gate', () => ({
   assertWslUncPathRunning: async () => {}
 }))
-vi.mock('../runner', () => ({ gitOptionalLocksDisabledEnv: () => ({}), gitExecFileAsync: git }))
+vi.mock('../../../../../../main/git/runner', () => ({
+  gitOptionalLocksDisabledEnv: () => ({}),
+  gitExecFileAsync: git
+}))
 afterEach(() => {
   vi.useRealTimers()
   vi.clearAllMocks()

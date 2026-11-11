@@ -135,7 +135,9 @@ it.each([1000, 10000])(
     siblingMetadata = 0
     let metadataVisits = 0
     const entries = Map.prototype.entries
-    const countEntries = function* (this: Map<unknown, unknown>) {
+    const countEntries = function* (
+      this: Map<unknown, unknown>
+    ): Generator<[unknown, unknown], undefined, unknown> {
       for (const pair of entries.call(this)) {
         if (typeof pair[0] === 'string' && /^folder\d+/.test(pair[0])) {
           metadataVisits++
@@ -144,12 +146,16 @@ it.each([1000, 10000])(
       }
     }
     vi.spyOn(Map.prototype, Symbol.iterator).mockImplementation(countEntries)
-    vi.spyOn(Map.prototype, 'values').mockImplementation(function* (this: Map<unknown, unknown>) {
+    vi.spyOn(Map.prototype, 'values').mockImplementation(function* (
+      this: Map<unknown, unknown>
+    ): Generator<unknown, undefined, unknown> {
       for (const [, value] of countEntries.call(this)) {
         yield value
       }
     })
-    vi.spyOn(Map.prototype, 'keys').mockImplementation(function* (this: Map<unknown, unknown>) {
+    vi.spyOn(Map.prototype, 'keys').mockImplementation(function* (
+      this: Map<unknown, unknown>
+    ): Generator<unknown, undefined, unknown> {
       for (const [key] of countEntries.call(this)) {
         yield key
       }
@@ -336,20 +342,27 @@ it.each([1000, 10000])('addresses one input without walking %i future retries', 
   fresh = true
   let walked = 0
   const entries = Map.prototype.entries
-  const countEntries = function* (this: Map<unknown, unknown>) {
+  const countEntries = function* (
+    this: Map<unknown, unknown>
+  ): Generator<[unknown, unknown], undefined, unknown> {
     for (const [key, value] of entries.call(this)) {
       if (typeof key === 'string' && /^folder\d+/.test(key)) {
         walked++
       }
-      yield [key, value] as [unknown, unknown]
+      const pair: [unknown, unknown] = [key, value]
+      yield pair
     }
   }
-  vi.spyOn(Map.prototype, 'values').mockImplementation(function* (this: Map<unknown, unknown>) {
+  vi.spyOn(Map.prototype, 'values').mockImplementation(function* (
+    this: Map<unknown, unknown>
+  ): Generator<unknown, undefined, unknown> {
     for (const [, value] of countEntries.call(this)) {
       yield value
     }
   })
-  vi.spyOn(Map.prototype, 'keys').mockImplementation(function* (this: Map<unknown, unknown>) {
+  vi.spyOn(Map.prototype, 'keys').mockImplementation(function* (
+    this: Map<unknown, unknown>
+  ): Generator<unknown, undefined, unknown> {
     for (const [key] of countEntries.call(this)) {
       yield key
     }
@@ -417,7 +430,7 @@ it.each([20, 200])(
     const entries = Map.prototype[Symbol.iterator]
     vi.spyOn(Map.prototype, Symbol.iterator).mockImplementation(function* (
       this: Map<unknown, unknown>
-    ) {
+    ): Generator<[unknown, unknown], undefined, unknown> {
       for (const pair of entries.call(this)) {
         if (typeof pair[0] === 'string' && /^(?:group\/)?repo\d+/.test(pair[0])) {
           visited++
@@ -589,7 +602,11 @@ it.each([1000, 10000])(
         }))
       )
     }
-    const partial = { ...initialParent, children: [child('stable')], more: true }
+    const partial: DirCache = {
+      ...initialParent,
+      children: [child('stable')],
+      more: { after: { name: 'stable', isDirectory: true } }
+    }
     const failed = { ...initialParent, children: [], error: 'unreadable' }
     fixture.rerender({ visible: false })
     probes.length = 0
