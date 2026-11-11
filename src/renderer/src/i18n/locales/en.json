@@ -1397,7 +1397,7 @@
       "orcaCloud": "Orca Cloud"
     },
     "orcaAccount": {
-      "descriptionWithCloud": "Sign-in, plan, team and Orca Cloud settings."
+      "descriptionIdentity": "The Orca account you’re signed in with."
     },
     "agentAccounts": {
       "searchTitle": "Agent accounts",
@@ -1469,7 +1469,8 @@
       "port": "Port",
       "pr": "PR",
       "task": "Task",
-      "automationItem": "Automation"
+      "automationItem": "Automation",
+      "cloudWorkspace": "Cloud workspace"
     },
     "linearIssue": {
       "createLabel": "Create worktree from Linear issue {{value0}}: {{value1}}",
@@ -14424,6 +14425,7 @@
             "unavailable": "Your keys appear here once Orca Cloud is reachable.",
             "emptyTitle": "No Orca API keys yet",
             "emptyBody": "Create a key to start workspaces, message agents and run routines from scripts, CI or any MCP client.",
+            "emptyBodyNoRoutines": "Create a key to start workspaces and message agents from scripts, CI or any MCP client.",
             "listLabel": "Orca API keys",
             "customScopeCount_one": "Custom · {{count}} scope",
             "customScopeCount_other": "Custom · {{count}} scopes",
@@ -14601,16 +14603,15 @@
           "sectionDescription": "For the Orca Cloud API, the orca CLI and MCP clients. Claude or Codex keys go in Cloud secrets."
         },
         "cloudRoutines": {
-          "queued": "Run queued. It shows up in the history below.",
           "pausedSr": "(paused)",
-          "createdByPerson": "by <person></person>",
+          "createdByName": "by {{name}}",
+          "formerMember": "Former member",
           "lastRun": "Last run:",
           "neverRun": "Never run",
           "nextRun": "Next run {{time}}",
           "runningShowHistory": "{{routineName}} is running. Show run history",
           "runNowLabel": "Run {{routineName}} now",
           "alreadyRunning": "A run is already in progress.",
-          "runningNow": "Running…",
           "runNow": "Run now",
           "more": "More actions for {{routineName}}",
           "hideHistory": "Hide run history",
@@ -20652,7 +20653,6 @@
           "makeOwnerBody": "Owners control billing and can manage other owners. To hand the team over, make {{value0}} an owner, then ask them to change your role.",
           "makeOwnerConfirm": "Make owner",
           "makeOwnerTitle": "Make {{value0}} an owner?",
-          "manage": "Members, invites and seats",
           "members": "Members",
           "membersList": "Team members and invites",
           "nextInvoice": "Next invoice (est.)",
@@ -20720,7 +20720,8 @@
           "totalPerMonth": "{{total}} per month",
           "totalPerYear": "{{total}} per year",
           "openProfile": "Open {{value0}}’s profile",
-          "viewProfile": "View profile"
+          "viewProfile": "View profile",
+          "seatsOnPlanBilling": "Seats and invoices are in"
         },
         "manageBilling": "Manage billing",
         "comparePlans": "Compare plans",
@@ -21042,7 +21043,26 @@
         "errorSeatSandboxLimitSelf_other": "You already have {{count}} sandboxes running, the most one seat can run. Put one to sleep or delete it, then try again.",
         "errorSeatSandboxLimitOwner_one": "{{name}} already has {{count}} sandbox running. This workspace runs on their seat, so ask them to put it to sleep, then try again.",
         "errorSeatSandboxLimitOwner_other": "{{name}} already has {{count}} sandboxes running. This workspace runs on their seat, so ask them to put one to sleep, then try again.",
-        "viewOwnerProfile": "View {{name}}'s profile"
+        "viewOwnerProfile": "View {{name}}'s profile",
+        "pinned": "Pinned",
+        "sectionActions": "Actions for section {{name}}",
+        "moveSectionUp": "Move section up",
+        "moveSectionDown": "Move section down",
+        "linkCopiedShort": "Link copied",
+        "copyLinkTo": "Copy link to {{number}}",
+        "unpin": "Unpin",
+        "pin": "Pin",
+        "moveUp": "Move up",
+        "moveDown": "Move down",
+        "linkNoAccess": "You don't have access to {{number}}.",
+        "linkOtherTeam2": "{{number}} is in {{team}}.",
+        "linkSwitchTeam": "Switch and open",
+        "prefsSaveFailed": "Couldn't save that change, so your other devices won't show it. Try again.",
+        "movedTo": "Moved {{name}} to position {{position}} in {{group}}",
+        "pinLimit": "You can pin up to {{count}} workspaces. Unpin one first.",
+        "pinnedName": "Pinned {{name}}",
+        "unpinnedName": "Unpinned {{name}}",
+        "otherWorkspaces": "Other workspaces"
       },
       "orcaCloud": {
         "QueuedPrompt": {
@@ -23243,7 +23263,9 @@
         "signInBrowser": "Finish signing in to {{agent}} in your browser…",
         "signInDevice": "Enter {{code}} at {{host}} to sign in to {{agent}}.",
         "signInPaste": "Paste the {{agent}} setup token in Settings to finish.",
-        "signInSaving": "Saving…"
+        "signInSaving": "Saving…",
+        "agentWillNotStartShort": "{{agent}} isn’t set up for Orca Cloud, so it won’t start.",
+        "agentWillNotStartIn": "{{agent}} isn’t set up for Orca Cloud, so it won’t start in {{workspace}}."
       }
     },
     "JiraIssueWorkspace": {

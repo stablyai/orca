@@ -89,6 +89,7 @@ function ProfileBody({ userId }: { userId: string }): React.JSX.Element {
       userId={userId}
       name={name}
       email={member?.email ?? null}
+      {...(member?.pictureUrl ? { pictureUrl: member.pictureUrl } : {})}
       role={member?.role ?? null}
       profile={profile}
       error={error}

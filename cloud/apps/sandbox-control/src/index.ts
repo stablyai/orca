@@ -25,7 +25,8 @@
 //   POST   /v1/device-sessions | GET | DELETE /:id  per-phone access (see device-sessions.ts)
 // Phones sign their own EdDSA tokens (device-sessions.ts) and act as their user, except that they
 // cannot enroll devices, manage secrets or connect GitHub.
-//   /v1/team/workspaces[/:id[/presence|wake|lease|grants[/:grantId]]], /v1/team/links/resolve, /v1/team/prompts
+//   /v1/team/workspaces[/:id[/presence|wake|lease|grants[/:grantId]]], /v1/team/links/resolve, /v1/team/prompts,
+//   /v1/team/prefs (src/workspace-prefs.ts), /v1/team/org (src/org-slugs.ts)
 //          team workspace registry, presence, per-device grants (src/workspaces.ts, src/grants.ts)
 //          POST /v1/team/workspaces/:id/wake?wait=30s: any member who can open it wakes it (single-flight,
 //          billed to the account, counted on the owner's seat like every wake) -> {state, endpoint: null, …}
@@ -191,7 +192,10 @@ import {
   userAuthorizeUrl
 } from './github-user-tokens'
 import { MEMBER_GIT_WINDOW_MS, memberGitRoutes, memberSentWithin, recordMemberSend } from './member-git'
+import { getWorkspacePrefs, putWorkspacePrefs } from './workspace-prefs'
+import { getOrgSlug, putOrgSlug } from './org-slugs'
 import {
+  LinkOtherOrgError,
   PatchSchema,
   PresenceSchema,
   WORKSPACE_ERROR_STATUS,
@@ -1146,7 +1150,12 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       return await internalInstallUrl(env, deps, url)
     }
     if (url.pathname.startsWith('/v1/internal/')) {
-      if (!(await isOperator(request, env.OPERATOR_TOKEN))) {
+      // Auth's member-removed push holds a token good for that one route, not the operator token.
+      const memberRemovedOnly =
+        url.pathname === '/v1/internal/org-members/removed' &&
+        request.method === 'POST' &&
+        (await isOperator(request, env.MEMBER_REMOVED_TOKEN))
+      if (!memberRemovedOnly && !(await isOperator(request, env.OPERATOR_TOKEN))) {
         return fail('not_found', 404)
       }
       const life = await lifecycleDeps(env, deps)
@@ -1487,6 +1496,8 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       url.pathname.startsWith('/v1/team/workspaces/') ||
       url.pathname === '/v1/team/links/resolve' ||
       url.pathname === '/v1/team/prompts' ||
+      url.pathname === '/v1/team/prefs' ||
+      url.pathname === '/v1/team/org' ||
       url.pathname.startsWith('/v1/team/members/') ||
       url.pathname === '/v1/team/pokes' ||
       url.pathname.startsWith('/v1/team/pokes/')
@@ -1866,7 +1877,32 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
   // Labels for teammates' lists; a failure here must never fail the request itself.
   await rememberCallerName(db, caller, now).catch((error: unknown) => console.warn('member_name_write_failed', String(error)))
   if (url.pathname === '/v1/team/links/resolve' && request.method === 'GET') {
-    return json(await resolveLink(db, caller, url, now))
+    try {
+      return json(await resolveLink(db, caller, url, now))
+    } catch (error) {
+      if (error instanceof LinkOtherOrgError) {
+        return json({ error: 'not_found', reason: 'other_org', orgId: error.orgId }, 404)
+      }
+      throw error
+    }
+  }
+  if (url.pathname === '/v1/team/prefs') {
+    if (request.method === 'GET') {
+      return json(await getWorkspacePrefs(db, caller))
+    }
+    if (request.method === 'PUT') {
+      return json(await putWorkspacePrefs(db, caller, await readJson(request), now))
+    }
+    return fail('not_found', 404)
+  }
+  if (url.pathname === '/v1/team/org') {
+    if (request.method === 'GET') {
+      return json(await getOrgSlug(db, caller, url, now))
+    }
+    if (request.method === 'PUT') {
+      return json(await putOrgSlug(db, caller, await readJson(request), now))
+    }
+    return fail('not_found', 404)
   }
   if (url.pathname === '/v1/team/prompts') {
     if (request.method === 'GET') {

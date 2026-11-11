@@ -28,7 +28,25 @@ const TOAST_ID = 'orca-cloud-agent-not-started'
 
 let teardown: (() => void) | null = null
 
-export function cloudAgentNotStartedMessage(agent: string, workspaceName: string | null): string {
+export function cloudAgentNotStartedMessage(
+  agent: string,
+  workspaceName: string | null,
+  { starting = false }: { starting?: boolean } = {}
+): string {
+  // While the sandbox is still starting nothing has failed yet: say it won't start (design-squad).
+  if (starting) {
+    return workspaceName
+      ? translate(
+          'components.newWorkspace.cloudStart.agentWillNotStartIn',
+          '{{agent}} isn’t set up for Orca Cloud, so it won’t start in {{workspace}}.',
+          { agent, workspace: workspaceName }
+        )
+      : translate(
+          'components.newWorkspace.cloudStart.agentWillNotStartShort',
+          '{{agent}} isn’t set up for Orca Cloud, so it won’t start.',
+          { agent }
+        )
+  }
   return workspaceName
     ? translate(
         'components.newWorkspace.cloudStart.agentNotStartedIn',
@@ -157,13 +175,19 @@ export function showCloudAgentNotStartedToast(
 ): void {
   teardown?.()
   const name = agentName(agent, translate)
+  // The workspace this prompt is about is still being created (its sandbox is starting).
+  const isStarting = (state: ReturnType<typeof useAppStore.getState>): boolean =>
+    Object.values(state.pendingWorktreeCreations ?? {}).some(
+      (creation) => creation.status === 'creating' && creation.request.name === workspaceName
+    )
   let switchedAway = false
   const render = (): void => {
     const signIn = cloudAgentSignInView(agent, readOrcaCloudAgentAccounts().setups[agent])
     const view: ToastView = signIn ?? {
       message: cloudAgentNotStartedMessage(
         name,
-        switchedAway && workspaceName.trim() ? workspaceName : null
+        switchedAway && workspaceName.trim() ? workspaceName : null,
+        { starting: isStarting(useAppStore.getState()) }
       ),
       action: {
         label: translate(
@@ -211,7 +235,13 @@ export function showCloudAgentNotStartedToast(
 
   // The create activates the new workspace (first change); any later change means the user moved.
   let createdOn: string | null | undefined
+  let starting = isStarting(useAppStore.getState())
   const stopWorkspace = useAppStore.subscribe((state, previous) => {
+    const nowStarting = isStarting(state)
+    if (nowStarting !== starting) {
+      starting = nowStarting
+      update()
+    }
     if (state.activeWorktreeId === previous.activeWorktreeId) {
       return
     }

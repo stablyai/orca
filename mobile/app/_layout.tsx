@@ -230,6 +230,7 @@ export default function RootLayout() {
                 <Stack.Screen name="cloud/new" options={{ headerShown: false }} />
                 <Stack.Screen name="cloud/access" options={{ headerShown: false }} />
                 <Stack.Screen name="cloud/w/[sandboxId]" options={{ headerShown: false }} />
+                <Stack.Screen name="cloud/[org]/[number]" options={{ headerShown: false }} />
                 <Stack.Screen
                   name="new-workspace"
                   options={{

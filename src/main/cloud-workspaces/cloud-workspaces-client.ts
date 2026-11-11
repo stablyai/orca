@@ -2,6 +2,7 @@
 // hosted sandbox driver: a short-lived Orca token (aud=orca-sandbox), never a provider credential.
 import { z } from 'zod'
 import { errorMessage } from '../../shared/error-message'
+import { cloudWorkspacePrefsMethods } from './cloud-workspaces-prefs-client'
 import { HOSTED_SANDBOX_STATUSES } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
 import type { SealedReadSnapshot } from '../../shared/cloud-workspaces/read-snapshot'
 import {
@@ -14,6 +15,7 @@ import {
   CloudWorkspacePresenceResponseSchema,
   CloudWorkspaceResponseSchema,
   OrgPromptsSchema,
+  type CloudWorkspaceLinkTarget,
   type CloudWorkspaceListQuery,
   type CloudWorkspacePatch,
   type OrgPrompts
@@ -35,7 +37,9 @@ export class CloudWorkspacesError extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
-    readonly reason?: string
+    readonly reason?: string,
+    /** A slug link for another org (`reason: other_org`) names that org, so a member can switch. */
+    readonly orgId?: string
   ) {
     super(reason ? `${code}:${reason}` : code)
     this.name = 'CloudWorkspacesError'
@@ -118,7 +122,8 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
       throw new CloudWorkspacesError(
         response.status,
         typeof err.error === 'string' ? err.error : 'error',
-        typeof err.reason === 'string' ? err.reason : undefined
+        typeof err.reason === 'string' ? err.reason : undefined,
+        typeof err.orgId === 'string' ? err.orgId.slice(0, 128) : undefined
       )
     }
     const parsed = schema.safeParse(payload)
@@ -131,6 +136,7 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
   const ws = (id: string) => `/v1/team/workspaces/${encodeURIComponent(id)}`
 
   return {
+    ...cloudWorkspacePrefsMethods(call),
     async list(query: CloudWorkspaceListQuery = {}) {
       const params = new URLSearchParams()
       for (const [key, value] of Object.entries(query)) {
@@ -208,8 +214,12 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
         CloudWorkspaceGrantListSchema.partial().passthrough()
       )
     },
-    async resolveLink(workspaceId: string, chatId?: string | null) {
-      const params = new URLSearchParams({ w: workspaceId })
+    async resolveLink(target: CloudWorkspaceLinkTarget, chatId?: string | null) {
+      const params = new URLSearchParams(
+        target.kind === 'id'
+          ? { w: target.workspaceId }
+          : { org: target.org, n: String(target.number) }
+      )
       if (chatId) {
         params.set('c', chatId)
       }
