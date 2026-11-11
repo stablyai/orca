@@ -158,14 +158,14 @@ describe('AgentHookServer ingestTerminalStatus', () => {
       'conn-1'
     )
     server.reconcileEndedProcessForPaneKeys([PANE], { preserveResumeIdentity: true })
-    expect(server.getStatusSnapshot()[0]).toMatchObject({ providerSessionOnly: true })
     server.ingestTerminalStatus({
       paneKey: PANE,
       connectionId: 'conn-1',
       payload: { state: 'working', prompt: '', agentType: 'claude' }
     })
 
-    expect(server.getStatusSnapshot()[0]?.providerSession).toBeUndefined()
+    expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'working' })
+    expect(server.getStatusSnapshot()[0].providerSession).toBeUndefined()
   })
 })
 

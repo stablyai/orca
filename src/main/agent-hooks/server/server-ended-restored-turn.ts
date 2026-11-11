@@ -6,6 +6,8 @@ export function endedRestoredTurn(
 ): EnrichedAgentHookEventPayload | null {
   if (
     !entry?.providerSession ||
+    !entry.payload.agentType ||
+    entry.payload.agentType === 'unknown' ||
     entry.providerSessionOnly ||
     (!entry.restoredUnconfirmed && entry.payload.state !== 'done')
   ) {
@@ -18,12 +20,23 @@ export function endedRestoredTurn(
     turnEndDisposition: _disposition,
     ...row
   } = entry
+  const agentPresence = {
+    ...entry.agentPresence,
+    agent: entry.payload.agentType,
+    ended: true as const
+  }
   if (entry.payload.state === 'done') {
-    return { ...row, turnEndedAt: entry.turnEndedAt, turnEndDisposition: entry.turnEndDisposition }
+    return {
+      ...row,
+      agentPresence,
+      turnEndedAt: entry.turnEndedAt,
+      turnEndDisposition: entry.turnEndDisposition
+    }
   }
   const payload = entry.payload
   return {
     ...row,
+    agentPresence,
     stateStartedAt: entry.receivedAt,
     payload: {
       state: 'done',
