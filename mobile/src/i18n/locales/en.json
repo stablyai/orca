@@ -3484,7 +3484,12 @@
       "commitThenPullPush": "Commit, then pull and push",
       "resolveConflicts": "Resolve conflicts before committing",
       "stageFile": "Stage at least one file to commit",
-      "enterMessage": "Enter a commit message to commit"
+      "enterMessage": "Enter a commit message to commit",
+      "statusConflicts": "Conflicts",
+      "statusNothingStaged": "Nothing staged",
+      "statusNeedsMessage": "Needs message",
+      "statusNotPublished": "Not published",
+      "statusNoBranch": "No branch"
     },
     "createPrAction": {
       "createReview": "Create {{titleLabel}}",
@@ -3561,7 +3566,15 @@
       "nothingToPushTo": "Nothing to push to {{upstreamName}}",
       "nothingToForcePushTo": "Nothing to force push to {{upstreamName}}",
       "rebaseFromNamedBase": "Rebase from {{baseRef}}",
-      "rebaseWithLatestFrom": "Rebase current branch with latest commits from {{baseRef}}"
+      "rebaseWithLatestFrom": "Rebase current branch with latest commits from {{baseRef}}",
+      "statusUpToDate": "Up to date",
+      "statusSetsUpstream": "Sets upstream",
+      "statusNotPublished": "Not published",
+      "statusNoBranch": "No branch",
+      "statusMayFail": "May fail",
+      "statusPublished": "Published",
+      "statusStashFirst": "Stash first",
+      "statusReplaces": "Replaces ↓{{behind}}"
     },
     "actions": {
       "createPr": "Create PR",
