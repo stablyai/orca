@@ -88,12 +88,21 @@ export function getWorktreeCardModeUpdates(mode: WorktreeCardMode): {
   }
 }
 
-export function isDefaultedCompactWorktreeCardProperties(
+/** Raw and normalized (UI-write) forms of today's Compact preset. */
+export function isCurrentCompactWorktreeCardProperties(
   properties: readonly unknown[] | null | undefined
 ): boolean {
   return (
     matchesWorktreeCardProperties(properties, COMPACT_WORKTREE_CARD_PROPERTIES) ||
-    matchesWorktreeCardProperties(properties, NORMALIZED_COMPACT_WORKTREE_CARD_PROPERTIES) ||
+    matchesWorktreeCardProperties(properties, NORMALIZED_COMPACT_WORKTREE_CARD_PROPERTIES)
+  )
+}
+
+export function isDefaultedCompactWorktreeCardProperties(
+  properties: readonly unknown[] | null | undefined
+): boolean {
+  return (
+    isCurrentCompactWorktreeCardProperties(properties) ||
     matchesWorktreeCardProperties(
       properties,
       LEGACY_COMPACT_WORKTREE_CARD_PROPERTIES_WITH_AUTOMATION
@@ -124,6 +133,8 @@ export type WorktreeCardDetails = {
   repoInTitle: boolean
   /** The identity meta row (repo, host, branch or folder path, detached HEAD); compact cards drop it. */
   metaRow: boolean
+  /** The branch or folder path in the meta row; the new card style makes it the opt-in Branch property. */
+  identity: boolean
   issue: boolean
   linearIssue: boolean
   jiraIssue: boolean
@@ -150,6 +161,7 @@ export function getWorktreeCardDetails(
     compactCards,
     repoInTitle: settings.newCardStyle || compactCards,
     metaRow,
+    identity: metaRow && (!settings.newCardStyle || shows('branch')),
     issue: shows('issue'),
     linearIssue: shows('linear-issue'),
     jiraIssue: shows('jira-issue'),

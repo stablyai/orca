@@ -66,13 +66,17 @@ export const ReplyParams = z.object({
   id: requiredString('Missing --id'),
   body: requiredString('Missing --body'),
   from: OptionalString,
-  run: OptionalString
+  run: OptionalString,
+  // Optional check: mail from a paired server always answers there.
+  on: OptionalString
 })
 
 export const InboxParams = z.object({
   limit: OptionalFiniteNumber,
   // Filter inbox by handle to agree with check --all.
-  terminal: OptionalString
+  terminal: OptionalString,
+  // Only this Run's mail; a paired Orca's inbox is always narrowed to its Run.
+  run: OptionalString
 })
 
 export const TaskCreateParams = z.object({
@@ -131,6 +135,8 @@ export const AskParams = z
     resume: OptionalString,
     options: OptionalString,
     timeoutMs: OptionalFiniteNumber,
+    /** false records a new question and returns at once; omitted keeps the older waiting form. */
+    wait: OptionalBoolean,
     from: OptionalString,
     run: OptionalString,
     compatibilityCliCommand: z.enum(['orca', 'orca-ide', 'orca-dev']).optional(),

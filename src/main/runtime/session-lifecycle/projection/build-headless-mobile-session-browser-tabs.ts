@@ -1,13 +1,16 @@
+import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from '../../session-tabs/mobile-session-publication-preservation'
 import { OrcaRuntimeWithPersistTerminalSurfaceRetirements } from '../../session-tabs/terminal-surface-retirements'
 import type {
   RuntimeMobileSessionBrowserTab,
-  RuntimeMobileSessionTabsResult,
-  RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTerminalTab
-} from '../../../../shared/runtime-types'
+} from '../../../../shared/runtime-mobile-session-tab-contracts'
+import type {
+  RuntimeMobileSessionTabsResult,
+  RuntimeMobileSessionTabsSnapshot
+} from '../../../../shared/runtime-session-contracts'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
-import { getRuntimeBrowserPageRegistry } from '../../runtime-browser-page-registry'
-import { holdAgentSessionInventory } from '../../structured-agent-session-inventory-hold'
+import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
+import { holdAgentSessionInventory } from '../../agent-session/structured-agent-session-inventory-hold'
 import type { Tab } from '../../../../shared/tab-types'
 import {
   captureTerminalCloseRequest,
@@ -15,30 +18,37 @@ import {
   type PaneCloseResolution,
   type RendererTerminalClose,
   type TerminalSurfaceCloseOptions
-} from '../../terminal-surface-close'
+} from '../../terminal/surface/terminal-surface-close'
 import type {
   TerminalPaneCloseTarget,
   TerminalSurfaceCloseTarget
-} from '../../../../shared/terminal-surface-close-target'
-import { retireTerminalSurfacesFromSnapshot } from '../../mobile-session-terminal-retirement'
-import type { PtyControllerInventory } from '../../runtime-pty-controller-contract'
+} from '../../../../shared/workspace-layout/terminal-surface-close-target'
+import { retireTerminalSurfacesFromSnapshot } from '../../terminal/surface/mobile-session-terminal-retirement'
+import type { PtyControllerInventory } from '../../terminal/lifecycle/runtime-pty-controller-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { captureAcknowledgedTerminalTabRetirement } from '../../workspace-session-terminal-tab-retirement-identity'
+import { captureAcknowledgedTerminalTabRetirement } from '../../terminal/surface/workspace-session-terminal-tab-retirement-identity'
 import { closeLeafOrTab } from '../../../persistence/terminal-topology/terminal-topology-commit'
 import { markAgentLaunchesClosedByUser } from '../../../agent-launch/agent-launch-pane-attachment'
 
 export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRuntimeWithPersistTerminalSurfaceRetirements {
+  protected abstract getRendererOwnedBrowserPageIds(
+    ...args: Parameters<BrowserOwnership['getRendererOwnedBrowserPageIds']>
+  ): ReturnType<BrowserOwnership['getRendererOwnedBrowserPageIds']>
   // Offscreen browser pages live outside renderer graphs; expose session rows or snapshots prune them and close fails with tab_not_found.
   protected buildHeadlessMobileSessionBrowserTabs(
     worktreeId: string
   ): RuntimeMobileSessionBrowserTab[] {
+    const backend = this.offscreenBrowserBackend
+    const rendererPageIds = this.getRendererOwnedBrowserPageIds(worktreeId)
     // Saved tabs whose page starts on first use are listed as running ones are.
     const serverTabs =
-      this.offscreenBrowserBackend && this.agentBrowserBridge?.tabList
+      backend && this.agentBrowserBridge?.tabList
         ? [
-            ...this.agentBrowserBridge.tabList(worktreeId).tabs,
+            ...this.agentBrowserBridge
+              .tabList(worktreeId)
+              .tabs.filter((tab) => backend.ownsTab(tab.browserPageId)),
             ...this.serveBrowserTabs.listUnstarted(worktreeId)
-          ]
+          ].filter((tab) => !rendererPageIds.has(tab.browserPageId))
         : []
     const publishedServerTabs = serverTabs.map((tab) => {
       const persistedProps = this.getPersistedUnifiedSessionTabProps(
@@ -57,6 +67,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
         loading: false,
         canGoBack: false,
         canGoForward: false,
+        faviconUrl: this.agentBrowserBridge?.getRemoteTabFaviconUrl(tab.browserPageId) ?? null,
         loadError: tab.loadError ?? undefined,
         certificateFailure: tab.certificateFailure ?? undefined,
         ...(persistedProps ? { color: persistedProps.color } : {}),
@@ -265,14 +276,10 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
     if (this.mobileSessionTabListeners.size === 0) {
       return
     }
-    const result = this.toMobileSessionTabsResult(snapshot)
-    const changeSequence = ++this.mobileSessionTabsChangeSequence
-    for (const subscription of this.mobileSessionTabListeners) {
-      subscription.listener(
-        this.projectMobileSessionTabsForClient(result, subscription.clientNavigationId),
-        changeSequence
-      )
-    }
+    this.createMobileSessionTabsDelivery()(
+      this.toMobileSessionTabsResult(snapshot),
+      ++this.mobileSessionTabsChangeSequence
+    )
   }
 
   /** Recompute this client's reconciliation holds and selection, setting and clearing flags so earlier frames or other clients cannot leak authority. */

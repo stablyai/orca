@@ -1,47 +1,22 @@
-import { applyRemoteViewerLaunchEnv } from '../../remote-viewer-launch-env'
+import { applyRemoteViewerLaunchEnv } from './remote-viewer-launch-env'
 import type { MobileTerminalCommandOptions, MobileTerminalCommand } from './mobile-terminal-startup'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
-import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
+import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { OrcaRuntimeWithMobileChatForkCreate } from './mobile-terminal-chat-fork-create'
-import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
-import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-session-contracts'
 import { randomUUID } from 'node:crypto'
-import { getRuntimeDesktopSurface } from '../../runtime-desktop-surface'
+import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 import type { IpcMainEvent } from 'electron'
 import {
   MOBILE_TERMINAL_READY_FALLBACK_MS,
-  MOBILE_TERMINAL_SURFACE_TIMEOUT_MS,
-  isClientDisconnectedError
-} from '../../orca-runtime-core'
+  MOBILE_TERMINAL_SURFACE_TIMEOUT_MS
+} from '../view/terminal-surface-deadlines'
+import { isClientDisconnectedError } from '../../client/runtime-client-disconnect'
 import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
-import { deterministicAgentSessionUuid } from '../../runtime-agent-launch-resolution'
+import { deterministicAgentSessionUuid } from './runtime-agent-launch-resolution'
 import { assertMobileTerminalShellSupported } from './mobile-terminal-shell-refusal'
 import { anchorTabOfCreate, mainPlacedAfter } from './mobile-terminal-create-anchor'
-
-export type MobileTerminalCreateOptions = {
-  terminalImageViewerSupported?: boolean
-  afterTabId?: string
-  sourceChatFork?: { sessionId: string }
-  targetGroupId?: string
-  command?: string
-  shellOverride?: string
-  cwd?: string
-  env?: Record<string, string>
-  envToDelete?: string[]
-  startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
-  agent?: TuiAgent
-  agentPrompt?: string
-  launchConfig?: SleepingAgentLaunchConfig
-  launchAgent?: TuiAgent
-  viewMode?: 'terminal' | 'chat'
-  activate?: boolean
-  clientNavigationId?: string
-  clientMutationId?: string
-  supportsSplitGroupPlacement?: boolean
-  signal?: AbortSignal
-}
+import type { MobileTerminalCreateOptions } from './mobile-terminal-create'
 
 export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWithMobileChatForkCreate {
   protected abstract resolveMobileSessionTerminalCommand(
@@ -88,7 +63,10 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     const pairedCreate = Boolean(opts.clientNavigationId)
     const graphEpoch = this.captureReadyGraphEpoch()
-    const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
+    // The paired client's own create: its user's act, as every start below.
+    const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector, undefined, {
+      wslUserAct: true
+    })
     const worktreeId = workspace.id
     const cwd = this.resolveWorkspaceTerminalStartupCwd(workspace, opts.cwd)
     assertMobileTerminalShellSupported(this.store, workspace, opts.shellOverride, cwd)
@@ -130,7 +108,10 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         opts.activate !== false,
         afterTabId,
         {
+          // The paired client's own create: its user's act.
+          wslUserAct: true,
           ...startupCommand,
+          ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
           cwd,
           identity: {
             tabId: deterministicAgentSessionUuid(`mobile-qoder-tab\0${seed}`),
@@ -151,6 +132,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         opts.activate !== false,
         afterTabId,
         {
+          wslUserAct: true,
           command: startupCommand.command,
           ...(opts.shellOverride ? { shellOverride: opts.shellOverride } : {}),
           cwd,
@@ -158,6 +140,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           envToDelete: startupCommand.envToDelete,
           startupCommandDelivery: startupCommand.startupCommandDelivery,
           launchAgent: startupCommand.launchAgent,
+          ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
           viewMode: opts.viewMode,
           targetGroupId: opts.targetGroupId,
           ...mainPlacedAfter(
@@ -223,6 +206,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           ...(startupCommand.envToDelete ? { envToDelete: startupCommand.envToDelete } : {}),
           ...(startupCommand.launchConfig ? { launchConfig: startupCommand.launchConfig } : {}),
           ...(startupCommand.launchAgent ? { launchAgent: startupCommand.launchAgent } : {}),
+          ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
           ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
           startupCommandDelivery: startupCommand.startupCommandDelivery,
           source: 'runtime-session',
@@ -277,6 +261,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           opts.activate !== false,
           afterTabId,
           {
+            wslUserAct: true,
             command: startupCommand.command,
             ...(opts.shellOverride ? { shellOverride: opts.shellOverride } : {}),
             cwd,
@@ -285,6 +270,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
             startupCommandDelivery: startupCommand.startupCommandDelivery,
             identity: { tabId: pendingSurface.tab.parentTabId, leafId: pendingSurface.tab.leafId },
             launchAgent: startupCommand.launchAgent,
+            ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
             viewMode: opts.viewMode,
             targetGroupId: opts.targetGroupId,
             supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,

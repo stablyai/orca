@@ -97,11 +97,14 @@ export function workspaceSettingsMounts(
         runSetup: false,
         trustedOrcaHooks: {},
         getWorktreeCreateCutoverSupport: async () => false,
+        getBranchIntentSupport: async () => false,
         // Pin an older host so create remains worktree.create rather than agent.launch.
         getAgentLaunchSupport: async () => false,
         transitionDrawer: (view: unknown) => context.effect('drawer', view),
         onCreated: (id: unknown, name: unknown) => context.effect('created', { id, name }),
-        onClose: () => context.effect('close', null)
+        onClose: () => context.effect('close', null),
+        // Not opened from a folder.
+        folderLaunch: undefined
       })
       let state: ReturnType<typeof useSubmit>
       const hook = hookMount(() => {

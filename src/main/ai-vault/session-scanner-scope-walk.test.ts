@@ -1,33 +1,33 @@
-import { link, mkdtemp, mkdir, rm, stat, utimes, writeFile } from 'node:fs/promises'
+import { link, mkdtemp, mkdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { zstdCompressSync } from 'node:zlib'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { truncateAiVaultListResult } from '../../shared/ai-vault-session-depth'
-import type { AiVaultListResult } from '../../shared/ai-vault-types'
+import { truncateAiVaultListResult } from '../../shared/ai-vault/scanning/ai-vault-session-depth'
+import type { AiVaultListResult } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { parseSessionCandidates } from './session-scanner-candidate-parse'
 import {
   MAX_UNLISTED_ENTRIES,
-  scopeCwdStampOf,
-  peekSessionParseCacheEntry,
-  setSessionParseCacheColdTier,
-  type PersistedSessionParseCacheEntry,
   storeSessionParseCacheEntry,
   storeSessionScopeCwd,
   resetSessionParseCacheForTests
-} from './session-parse-cache-store'
-import { createSessionParseStats, parseAgentSessionFileCached } from './session-scanner-parse-cache'
+} from './parse-cache/session-parse-cache-store'
+import {
+  createSessionParseStats,
+  parseAgentSessionFileCached
+} from './parse-cache/session-scanner-parse-cache'
 import { scanAiVaultSessions } from './session-scanner'
-import { createAntigravityWorkspaceResolver } from './session-scanner-antigravity-history'
+import { createAntigravityWorkspaceResolver } from './scanners/antigravity/session-scanner-antigravity-history'
 import { scanInScopeSessions } from './session-scanner-scope-walk'
 import * as eventLoop from '../../shared/event-loop-yield'
 import { AI_VAULT_SCOPE_CWD_SOURCES } from './session-scope-cwd'
-import { SessionParseCacheDatabase } from './session-parse-cache-database'
+import { SessionParseCacheDatabase } from './parse-cache/session-parse-cache-database'
 import SyncDatabase from '../sqlite/sync-database'
 import {
   initSessionParseCachePersistence,
   flushSessionParseCachePersist,
   resetSessionParseCachePersistenceForTests
-} from './session-parse-cache-persistence'
+} from './parse-cache/session-parse-cache-persistence'
 import {
   isolatedScanRoots,
   jsonLines,
@@ -140,6 +140,55 @@ async function writeRollout(sessionsDir: string, id: string, cwd: string, day: s
 }
 
 describe('scanAiVaultSessions — scope before the recency cap', () => {
+  it.each([undefined, ['/repo']])(
+    'lists a rollout once, as its plain file, beside its .zst archive (scope %j)',
+    async (scopePaths) => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-zst-twin-'))
+      tempRoots.push(root)
+      const roots = isolatedScanRoots(root)
+      const plain = await writeRollout(roots.codexSessionsDir, 'twin', '/repo', '11')
+      await writeFile(`${plain}.zst`, zstdCompressSync(await readFile(plain)))
+      const archived = await writeRollout(roots.codexSessionsDir, 'archived-only', '/repo', '13')
+      await writeFile(`${archived}.zst`, zstdCompressSync(await readFile(archived)))
+      await rm(archived)
+
+      const result = await scanAiVaultSessions({ ...roots, platform: 'darwin', scopePaths })
+
+      expect(
+        result.sessions
+          .filter((session) => session.agent === 'codex')
+          .map((session) => [session.sessionId, session.filePath])
+      ).toEqual(
+        expect.arrayContaining([
+          ['twin', plain],
+          ['archived-only', `${archived}.zst`]
+        ])
+      )
+      expect(result.sessions.filter((session) => session.agent === 'codex')).toHaveLength(2)
+    }
+  )
+
+  it('lists the live rollout when another account home holds only its archive', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-zst-homes-'))
+    tempRoots.push(root)
+    const homeA = join(root, 'codex-accounts', 'a', 'home', 'sessions')
+    const homeB = join(root, 'codex-accounts', 'b', 'home', 'sessions')
+    const archived = await writeRollout(homeA, 'moved', '/repo', '11')
+    await writeFile(`${archived}.zst`, zstdCompressSync(await readFile(archived)))
+    await rm(archived)
+    const live = await writeRollout(homeB, 'moved', '/repo', '11')
+
+    const result = await scanAiVaultSessions({
+      ...isolatedScanRoots(root),
+      additionalCodexSessionsDirs: [homeA, homeB],
+      platform: 'darwin'
+    })
+
+    expect(
+      result.sessions.filter((session) => session.agent === 'codex').map((s) => s.filePath)
+    ).toEqual([live])
+  })
+
   it('lists an older in-scope Codex session once across hardlinked homes', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-scope-walk-'))
     tempRoots.push(root)
@@ -276,66 +325,6 @@ it('delivers cancellation while traversing unchanged cached candidates', async (
   } finally {
     clearTimeout(timer)
   }
-})
-
-it('uses a cold parsed latest Codex cwd after its unlisted row is evicted', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'orca-scope-cold-cwd-'))
-  tempRoots.push(root)
-  const roots = isolatedScanRoots(root)
-  const path = join(roots.codexSessionsDir, 'rollout-cold-cwd.jsonl')
-  const content = [{ type: 'text', text: 'Find me' }]
-  await writeJsonlFile(path, [
-    { type: 'session_meta', payload: { id: 'cold-cwd', cwd: '/elsewhere' } },
-    { type: 'turn_context', payload: { cwd: '/repo' } },
-    { type: 'response_item', payload: { type: 'message', role: 'user', content } }
-  ])
-  await utimes(path, 1, 1)
-  for (const day of ['14', '15']) {
-    await writeRollout(roots.codexSessionsDir, `busy-${day}`, '/elsewhere', day)
-  }
-  const { mtimeMs, size: sizeBytes, mtime } = await stat(path)
-  const file = { path, mtimeMs, sizeBytes, modifiedAt: mtime.toISOString() }
-  const rows = new Map<string, PersistedSessionParseCacheEntry>()
-  const read = vi.fn((key: string) => rows.get(key))
-  setSessionParseCacheColdTier({
-    read,
-    readScopeCwds: (paths) => ({
-      found: new Map(
-        paths.flatMap((key) => {
-          const row = rows.get(key)
-          return row === undefined ? [] : [[key, { parsed: scopeCwdStampOf(row) }] as const]
-        })
-      ),
-      parsed: true,
-      read: true
-    }),
-    stored: (key, row) => rows.set(key, row),
-    deleted: (key) => rows.delete(key)
-  })
-  const scan = () =>
-    scanAiVaultSessions({ ...roots, platform: 'linux', limit: 1, scopePaths: ['/repo'] })
-  expect((await scan()).sessions.some((row) => row.filePath === path)).toBe(false)
-  const parsed = await parseAgentSessionFileCached(
-    { agent: 'codex', file, codexHome: null },
-    'linux'
-  )
-  expect(rows.get(path)?.session?.cwd).toBe('/repo')
-  for (let index = 0; index <= MAX_UNLISTED_ENTRIES; index++) {
-    storeSessionParseCacheEntry(`search-${index}`, {
-      mtimeMs: mtimeMs + 1,
-      sizeBytes: null,
-      platform: 'linux',
-      session: null,
-      resume: null
-    })
-  }
-  expect(peekSessionParseCacheEntry(path)).not.toHaveProperty('resume')
-  read.mockClear()
-  const found = (await scan()).sessions.filter((row) => row.filePath === path)
-  expect(found.map((row) => row.cwd)).toEqual(['/repo'])
-  expect(read).toHaveBeenCalledWith(path)
-  expect(peekSessionParseCacheEntry(path)?.session).toBe(parsed)
-  expect(await stat(path)).toMatchObject({ mtimeMs, size: sizeBytes })
 })
 
 it('walks a history larger than the spread-argument limit', async () => {

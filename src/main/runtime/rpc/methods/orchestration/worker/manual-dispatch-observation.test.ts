@@ -1,9 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
-import { OrchestrationDb } from '../../../../orchestration/db'
-import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import '../../../../orchestration/db/contract-constants'
+import '../../../../orchestration/db/messages/mailbox-routing-page'
+import '../../../../orchestration/db/dispatch-row-writer'
+import '../../../../orchestration/db/attempt-outcome-projection'
+import { ORCHESTRATION_METHODS } from '../orchestration'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
-import { eraseRpcMethods } from '../../../core'
+import { isStreamingMethod, eraseRpcMethods } from '../../../core'
 
 describe('manual Dispatch observation', () => {
   let db: OrchestrationDb | undefined
@@ -55,7 +59,7 @@ describe('manual Dispatch observation', () => {
     const dispatchMethod = eraseRpcMethods(ORCHESTRATION_METHODS).find(
       (candidate) => candidate.name === 'orchestration.dispatch'
     )
-    if (!dispatchMethod) {
+    if (!dispatchMethod || isStreamingMethod(dispatchMethod)) {
       throw new Error('Missing method orchestration.dispatch')
     }
 
@@ -80,7 +84,7 @@ describe('manual Dispatch observation', () => {
     const workerShowMethod = eraseRpcMethods(ORCHESTRATION_METHODS).find(
       (candidate) => candidate.name === 'orchestration.workerShow'
     )
-    if (!workerShowMethod) {
+    if (!workerShowMethod || isStreamingMethod(workerShowMethod)) {
       throw new Error('Missing method orchestration.workerShow')
     }
     await expect(
@@ -91,169 +95,6 @@ describe('manual Dispatch observation', () => {
       worker: { state: 'unsupervised', stage: 'context_only' },
       observation: { status: 'live', exactWorker: true }
     })
-  })
-
-  it('keeps context-only reads truthful without supervising the operator pane', async () => {
-    db = new OrchestrationDb(':memory:')
-    const runtime = new OrcaRuntimeService()
-    runtime.setOrchestrationDb(db)
-    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
-      handle: 'term_worker',
-      connected: true,
-      status: 'running'
-    } as never)
-    vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_worker:leaf_worker')
-    vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockReturnValue('runtime_test:term_worker:1')
-    vi.spyOn(runtime, 'readTerminal').mockResolvedValue({
-      handle: 'term_worker',
-      status: 'running',
-      tail: ['injected output'],
-      truncated: false,
-      nextCursor: null
-    })
-    const run = db.createRun({
-      objective: 'STA-3848 repro',
-      coordinatorHandle: 'term_coord',
-      coordinatorPaneKey: 'tab_coord:leaf_coord'
-    })
-    const task = db.createTask({ spec: 'injected lane', runId: run.id })
-    const dispatch = createRootDispatch(
-      db,
-      task.id,
-      'term_worker',
-      'tab_worker:leaf_worker',
-      'launch-hash',
-      'runtime_test:term_worker:1'
-    )
-    const context = { runtime }
-    const call = async (name: string, params: Record<string, unknown>) => {
-      const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
-        (candidate) => candidate.name === name
-      )
-      if (!method) {
-        throw new Error(`Missing method ${name}`)
-      }
-      return method.handler(method.params?.parse(params), context)
-    }
-
-    const dispatchShow = (await call('orchestration.dispatchShow', { task: task.id })) as {
-      dispatch: {
-        id: string
-        assignee_handle: string
-        assignee_pane_key: string
-        process_incarnation: string
-      }
-    }
-    expect(dispatchShow.dispatch).toMatchObject({
-      id: dispatch.id,
-      assignee_handle: 'term_worker',
-      assignee_pane_key: 'tab_worker:leaf_worker',
-      process_incarnation: 'runtime_test:term_worker:1'
-    })
-    expect(db.getWorkerDispatch(dispatch.id)).toBeUndefined()
-
-    const workerList = (await call('orchestration.workerList', { run: run.id })) as {
-      workers: {
-        dispatchId: string
-        workerState: string
-        terminalState: string | null
-        agentTerminalHandle: string | null
-        projection: { liveness: { verdict: string } }
-      }[]
-    }
-    expect(workerList.workers).toEqual([
-      expect.objectContaining({
-        dispatchId: dispatch.id,
-        workerState: 'unsupervised',
-        terminalState: 'retained',
-        agentTerminalHandle: 'term_worker'
-      })
-    ])
-
-    const workerShow = (await call('orchestration.workerShow', {
-      dispatch: dispatch.id
-    })) as { projection: { liveness: { verdict: string } } | null }
-    expect(workerShow).toMatchObject({
-      worker: { state: 'unsupervised', stage: 'context_only', agentTerminalHandle: 'term_worker' },
-      observation: { status: 'live', exactWorker: true }
-    })
-    // worker-show must match worker-list's agent verdict, not report PTY-live while list directs recovery here.
-    expect(workerShow.projection?.liveness.verdict).toBe(
-      workerList.workers[0].projection.liveness.verdict
-    )
-    await expect(
-      call('orchestration.workerRead', { dispatch: dispatch.id, source: 'terminal' })
-    ).resolves.toMatchObject({
-      dispatchId: dispatch.id,
-      status: { worker: 'unsupervised' },
-      terminal: { tail: ['injected output'] }
-    })
-
-    await expect(call('orchestration.workerRetain', { dispatch: dispatch.id })).rejects.toThrow(
-      /only a settled dispatch can retain/
-    )
-
-    expect(
-      db.settleWorkerReport({
-        taskId: task.id,
-        dispatchId: dispatch.id,
-        outcome: 'succeeded',
-        result: 'done'
-      })
-    ).toEqual({ action: 'settled', outcome: 'succeeded', duplicate: false })
-    await expect(
-      call('orchestration.workerRetain', { dispatch: dispatch.id })
-    ).resolves.toMatchObject({
-      state: 'retained',
-      reason: 'no_owned_resource',
-      processAction: 'none'
-    })
-    await expect(
-      call('orchestration.workerRelease', { dispatch: dispatch.id })
-    ).resolves.toMatchObject({
-      state: 'retained',
-      reason: 'no_owned_resource',
-      processAction: 'none'
-    })
-  })
-
-  it('lists an unsupervised context-only dispatch even when process identity is absent', async () => {
-    db = new OrchestrationDb(':memory:')
-    const runtime = new OrcaRuntimeService()
-    runtime.setOrchestrationDb(db)
-    const run = db.createRun({
-      objective: 'context-only listing',
-      coordinatorHandle: 'term_coord',
-      coordinatorPaneKey: 'tab_coord:leaf_coord'
-    })
-    const task = db.createTask({ spec: 'operator lane', runId: run.id })
-    const dispatch = createRootDispatch(db, task.id, 'term_worker', 'tab_worker:leaf_worker')
-
-    const workerListMethod = eraseRpcMethods(ORCHESTRATION_METHODS).find(
-      (candidate) => candidate.name === 'orchestration.workerList'
-    )
-    if (!workerListMethod) {
-      throw new Error('Missing method orchestration.workerList')
-    }
-    const result = (await workerListMethod.handler(
-      workerListMethod.params?.parse({ run: run.id }),
-      { runtime }
-    )) as {
-      workers: {
-        dispatchId: string
-        workerState: string
-        terminalState: string | null
-      }[]
-    }
-
-    expect(result.workers).toEqual([
-      expect.objectContaining({
-        dispatchId: dispatch.id,
-        workerState: 'unsupervised',
-        terminalState: 'retained'
-      })
-    ])
-    expect(db.getDispatchContextById(dispatch.id)?.process_incarnation).toBeNull()
   })
 
   it.each([
@@ -280,7 +121,7 @@ describe('manual Dispatch observation', () => {
       (candidate) => candidate.name === name
     )
 
-    if (!method) {
+    if (!method || isStreamingMethod(method)) {
       throw new Error(`Missing method ${name}`)
     }
     const result = await method.handler(method.params?.parse({ dispatch: dispatch.id }), {

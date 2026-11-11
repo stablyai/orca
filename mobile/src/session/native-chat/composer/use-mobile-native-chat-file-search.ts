@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { RpcClient } from '../../../transport/rpc-client'
+import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import {
   GenerationScopedRequestOwner,
   type RequestScope
-} from '../../../transport/generation-scoped-request-owner'
+} from '../../../query/generation-scoped-request-owner'
 import {
   nativeChatFileInventoryRead,
   nativeChatFileSearchRead
-} from '../../mobile-session-read-operations'
+} from '../../../files/native-chat-file-search-operations'
 import {
   getPreparedQuickOpenFiles,
   rankQuickOpenFiles
-} from '../../../../../src/shared/quick-open-path-search'
+} from '../../../../../src/shared/quick-open/quick-open-path-search'
 
 const FILE_SEARCH_DEBOUNCE_MS = 120
 const FILE_SEARCH_RESULT_LIMIT = 16
@@ -107,8 +107,8 @@ export function useMobileNativeChatFileSearch(args: {
           }
           queryCacheRef.current.set(normalizedQuery, paths)
           while (queryCacheRef.current.size > FILE_SEARCH_QUERY_CACHE_LIMIT) {
-            const oldest = queryCacheRef.current.keys().next().value as string | undefined
-            if (!oldest) {
+            const oldest = queryCacheRef.current.keys().next().value
+            if (oldest === undefined) {
               break
             }
             queryCacheRef.current.delete(oldest)
@@ -134,7 +134,11 @@ export function useMobileNativeChatFileSearch(args: {
             const accepted = nativeChatFileInventoryRead.interpret(response)
             return accepted.accepted ? accepted.value : null
           })
-          if (!loaded || inventory.commit(loaded.lease, loaded.value) !== 'committed') {
+          if (
+            !loaded ||
+            inventory.commit(loaded.lease, loaded.value) !== 'committed' ||
+            !isCurrentRequest()
+          ) {
             return
           }
           applyPaths(rankInventory(loaded.value, normalizedQuery))

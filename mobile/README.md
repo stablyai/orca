@@ -170,6 +170,47 @@ the script's `TESTS_OUTSIDE_PROGRAM` with a reason. Without that, a test exclude
 `tsconfig.test.json` — or a `Foo.test.tsx` shadowed by a `Foo.test.ts` beside it, which a wildcard
 `include` drops for the higher-priority extension — would leave the ratchet silently.
 
+## Localization
+
+UI copy goes through `src/i18n`, with the same call shape and languages as desktop:
+
+- In components and hooks: `const t = useMobileTranslation()`, then `t('area.thing.label', 'English text')`.
+  The function changes with the language, so list it in memo and callback dependencies.
+- In helpers and imperative code (alerts, notifications): `translate(key, fallback, options)` from
+  `src/i18n/mobile-i18n`, called when the text is shown, never at module scope.
+- Counts: `count === 1 ? t('x.files_one', '{{count}} file', { count }) : t('x.files_other', '{{count}} files', { count })`.
+- Dates and numbers: pass `getUiIntlLocale()` to `Intl` formatters instead of `undefined`.
+- Keep identity separate from display text: never compare or key on a translated string.
+
+Run `pnpm sync:mobile-localization` from the repo root to add new keys to `src/i18n/locales/en.json`;
+other catalogs may lag and fall back to English. `pnpm verify:mobile-localization` and
+`pnpm verify:mobile-localization-coverage` run in CI. iOS permission prompts live in `locales/<lang>.json`.
+
+## Android Release Signing
+
+`plugins/android-release-signing.js` adds a `release` signing config to the generated
+`android/app/build.gradle`. It reads `ORCA_ANDROID_KEYSTORE_PATH`, `ORCA_ANDROID_KEYSTORE_PASSWORD`,
+`ORCA_ANDROID_KEY_ALIAS` and `ORCA_ANDROID_KEY_PASSWORD` at build time; nothing is written into the
+project. Without them, local release builds keep Expo's debug key.
+
+`.github/workflows/mobile-android-release.yml` turns release signing on once the
+`ORCA_ANDROID_RELEASE_CERT_SHA256` repository variable (or `ORCA_ANDROID_REQUIRE_RELEASE_SIGNING=true`)
+is set. Until then it signs with the debug key as before and adds a warning to the run. Once it is
+on, the workflow fails before building if any of these is missing:
+
+| Name                               | Kind     | Value                                                   |
+| ---------------------------------- | -------- | ------------------------------------------------------- |
+| `ORCA_ANDROID_KEYSTORE_BASE64`     | secret   | the release keystore, base64-encoded                    |
+| `ORCA_ANDROID_KEYSTORE_PASSWORD`   | secret   | keystore password                                       |
+| `ORCA_ANDROID_KEY_ALIAS`           | secret   | key alias                                               |
+| `ORCA_ANDROID_KEY_PASSWORD`        | secret   | key password (same as the keystore password for PKCS12) |
+| `ORCA_ANDROID_RELEASE_CERT_SHA256` | variable | the key's certificate SHA-256 fingerprint               |
+
+After a release-signed build, the workflow checks that the APK's signing certificate matches
+`ORCA_ANDROID_RELEASE_CERT_SHA256` and is not the debug key, and publishes the fingerprint in the
+release notes. Android only installs an update signed by the same key as the installed app, so
+the keystore must be backed up: losing it means no existing install can be updated in place.
+
 ## Protocol Version Compatibility
 
 Mobile and desktop talk over a versioned protocol. Because mobile updates lag desktop by 24-48h via the App Store, both sides exchange version numbers on `status.get` so a genuinely incompatible combo can hard-block instead of silently misbehaving.
@@ -177,7 +218,7 @@ Mobile and desktop talk over a versioned protocol. Because mobile updates lag de
 Constants live in two files (Metro can't resolve outside `mobile/`):
 
 - `src/shared/protocol-version.ts` — `DESKTOP_PROTOCOL_VERSION`, `MIN_COMPATIBLE_MOBILE_VERSION`
-- `mobile/src/transport/protocol-version.ts` — `MOBILE_PROTOCOL_VERSION`, `MIN_COMPATIBLE_DESKTOP_VERSION`
+- `mobile/src/transport/connection/protocol-version.ts` — `MOBILE_PROTOCOL_VERSION`, `MIN_COMPATIBLE_DESKTOP_VERSION`
 
 Today all four are set so `evaluateCompat` always returns `{ kind: 'ok' }` — nothing blocks. The wire format is in place to flip a switch when needed.
 
@@ -199,7 +240,7 @@ Set `MIN_COMPATIBLE_MOBILE_VERSION` (kill-switch) when desktop ships a change th
 
 When a verdict is `blocked`, `mobile/src/components/ProtocolBlockScreen.tsx` renders a screen pointing the user at the update that clears it. When mobile is too old it opens the newest release if the installed app's update check knows one, otherwise the App Store (iOS) or GitHub Releases (Android). When desktop is too old it opens GitHub Releases.
 
-To exercise the block screen locally: set `MIN_COMPATIBLE_DESKTOP_VERSION = 999` in `mobile/src/transport/protocol-version.ts`, rebuild, pair to any desktop. Revert before merging.
+To exercise the block screen locally: set `MIN_COMPATIBLE_DESKTOP_VERSION = 999` in `mobile/src/transport/connection/protocol-version.ts`, rebuild, pair to any desktop. Revert before merging.
 
 ## Mock Server
 

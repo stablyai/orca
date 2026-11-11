@@ -1,38 +1,40 @@
-import { useCallback, useRef, useState } from 'react'
-import { buildAgentTuiClearInputForText } from '../../../../../src/shared/agent-tui-input-clear'
-import type { RpcClient } from '../../../transport/rpc-client'
-import type { ConnectionState } from '../../../transport/types'
+import {
+  addMobileNativeChatDraftImages,
+  readMobileNativeChatDraftInputs,
+  removeMobileNativeChatDraftImages,
+  returnMobileNativeChatDraftAttachments,
+  useMobileNativeChatDraftInputs,
+  mobileNativeChatDraftDestination,
+  type MobileNativeChatDraftDestination
+} from './mobile-native-chat-draft-inputs'
+import { useCallback, useMemo } from 'react'
+import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../../../transport/connection/connection-state'
 import type { MobileImageSource } from '../../../platform/media-picker-contract'
-import {
-  appendPendingNativeChatImages,
-  type PendingNativeChatImage
-} from './mobile-native-chat-image-attachment'
-import {
-  NO_NATIVE_CHAT_IMAGE_ATTACHMENTS,
-  withScopeAttachments,
-  type MobileNativeChatImagesByScope
-} from './mobile-native-chat-image-scope-state'
+import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
+import type { MobilePastedImages } from './mobile-native-chat-composer-paste'
 import {
   MOBILE_NATIVE_CHAT_IMAGE_SETTLE_MS,
   pasteMobileNativeChatImagePaths
 } from './mobile-native-chat-image-send'
 import {
   openMobileNativeChatSendBudget,
+  type MobileNativeChatSendIntent,
   type MobileNativeChatSendOutcome
-} from '../mobile-native-chat-send'
+} from './mobile-native-chat-send'
 import {
   clearMobileNativeChatInputStale,
   healMobileNativeChatStaleInput,
   isMobileNativeChatInputStale,
   markMobileNativeChatInputStale
-} from '../mobile-native-chat-stale-input'
+} from './mobile-native-chat-stale-input'
 import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite
-} from '../mobile-native-chat-terminal-write-lock'
+} from './mobile-native-chat-terminal-write-lock'
 import { useMobileNativeChatImageUpload } from './use-mobile-native-chat-image-upload'
 import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
-import type { StructuredMobileSendAttachment } from '../../use-mobile-structured-send-with-outcome'
+import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
 
 type CurrentRef<T> = { readonly current: T }
 type ShowToast = (message: string, durationMs?: number) => void
@@ -65,14 +67,15 @@ type Args = {
     imagePreviewUris?: string[],
     deadline?: number,
     attachments?: readonly StructuredMobileSendAttachment[],
-    sentAt?: number
+    sentAt?: number,
+    intent?: MobileNativeChatSendIntent
   ) => Promise<MobileNativeChatSendOutcome>
   /** Structured sessions send attachments without the terminal paste path. */
   readonly structuredNativeChat: boolean
   /** A structured chat's stored files ride the next send beside its images. */
   readonly files?: readonly PendingNativeChatFile[]
   /** Drops the files a send carried once the host took it. */
-  readonly onFilesSent?: (ids: readonly string[]) => void
+  readonly onFilesSent?: (ids: readonly string[], owner: MobileNativeChatDraftDestination) => void
   /** Launch-context text parked on the agent's TUI input line, or null. The
    *  paste's leading clear must cover every line of it, or the draft's earlier
    *  lines survive and ride along with the image. */
@@ -87,11 +90,11 @@ export type MobileNativeChatImageAttachments = {
   /** Pending chips for the active scope (tab) only. */
   readonly attachments: PendingNativeChatImage[]
   readonly isAttaching: boolean
-  readonly attachImage: (source: MobileImageSource) => Promise<void>
+  readonly attachImage: (source: MobileImageSource | MobilePastedImages) => Promise<void>
   readonly removeAttachment: (id: string) => void
   /** Ride any pending images along with `text`, then submit; clears the sent
    *  chips (and only those) once the send is accepted. */
-  readonly sendNativeChat: (text: string) => Promise<boolean>
+  readonly sendNativeChat: (text: string, intent?: MobileNativeChatSendIntent) => Promise<boolean>
 }
 
 const NO_FILES: readonly PendingNativeChatFile[] = []
@@ -119,20 +122,9 @@ export function useMobileNativeChatImageAttachments({
   onError,
   sleep = defaultSleep
 }: Args): MobileNativeChatImageAttachments {
-  const [attachmentsByScope, setAttachmentsByScope] = useState<MobileNativeChatImagesByScope>({})
-  const idCounter = useRef(0)
-  const attachments =
-    (scopeKey ? attachmentsByScope[scopeKey] : undefined) ?? NO_NATIVE_CHAT_IMAGE_ATTACHMENTS
-
-  const addUploadedImages = useCallback(
-    (scope: string, uploadedImages: Omit<PendingNativeChatImage, 'id'>[]) => {
-      setAttachmentsByScope((prev) => ({
-        ...prev,
-        [scope]: appendPendingNativeChatImages(prev[scope] ?? [], uploadedImages, idCounter)
-      }))
-    },
-    []
-  )
+  const images = useMobileNativeChatDraftInputs(scopeKey, 'images')
+  const pending = useMobileNativeChatDraftInputs(scopeKey, 'pending')
+  const attachments = useMemo(() => [...images], [images])
 
   const { attachImage, isAttaching } = useMobileNativeChatImageUpload({
     client,
@@ -142,7 +134,7 @@ export function useMobileNativeChatImageAttachments({
     scopeKey,
     structuredNativeChat,
     showToast,
-    onImagesUploaded: addUploadedImages,
+    onImagesUploaded: addMobileNativeChatDraftImages,
     onAttachSuccess,
     onError
   })
@@ -153,19 +145,13 @@ export function useMobileNativeChatImageAttachments({
       if (!scope) {
         return
       }
-      setAttachmentsByScope((prev) =>
-        withScopeAttachments(
-          prev,
-          scope,
-          (prev[scope] ?? []).filter((attachment) => attachment.id !== id)
-        )
-      )
+      removeMobileNativeChatDraftImages(scope, [id])
     },
     [scopeKey]
   )
 
   const sendNativeChat = useCallback(
-    async (text: string): Promise<boolean> => {
+    async (text: string, intent?: MobileNativeChatSendIntent): Promise<boolean> => {
       // Serialize clear/paste/submit ownership per terminal while allowing other
       // tabs to send. Shared with the prompt-card writes (answer/permission), so
       // a card tap can't interleave into a mid-flight paste sequence either.
@@ -180,40 +166,58 @@ export function useMobileNativeChatImageAttachments({
       const sentAt = Date.now()
       try {
         const scope = scopeKey
-        const pendingImages =
-          (scope ? attachmentsByScope[scope] : undefined) ?? NO_NATIVE_CHAT_IMAGE_ATTACHMENTS
+        // A queued message carries its own chips; the composer's are a later draft.
+        const queued = intent?.queued
+        if (!queued && (readMobileNativeChatDraftInputs(scope).pending ?? 0) > 0) {
+          return false
+        }
+        const pendingImages = queued ? queued.images : attachments
+        const sentImageIds = pendingImages.map((attachment) => attachment.id)
         // Hold Send until all selected files finish uploading.
-        const storedFiles = structuredNativeChat
-          ? files.flatMap((file) =>
-              file.path === null ? [] : [{ kind: 'file' as const, id: file.id, path: file.path }]
+        const sentFiles = structuredNativeChat
+          ? (queued?.files ?? files).filter(
+              (file): file is PendingNativeChatFile & { path: string } => file.path !== null
             )
           : []
-        if (structuredNativeChat && pendingImages.length + storedFiles.length > 0 && scope) {
+        const storedFiles = sentFiles.map(({ id, path }) => ({ kind: 'file' as const, id, path }))
+        const hasAttachments = scope !== null && pendingImages.length + storedFiles.length > 0
+        const destination =
+          scope && hasAttachments && !queued ? mobileNativeChatDraftDestination(scope) : null
+        // An unconfirmed send's text returns to the composer later; bring back the chips it carried too.
+        const sendIntent = destination
+          ? {
+              ...intent,
+              carried: { images: pendingImages, files: sentFiles },
+              onHandBack: () =>
+                returnMobileNativeChatDraftAttachments(destination, pendingImages, sentFiles)
+            }
+          : intent
+        if (structuredNativeChat && hasAttachments) {
           if (!client || !enabled || connState !== 'connected') {
             onError?.()
             onSendError('Message not sent (disconnected)')
             return false
           }
+          const previews = pendingImages.map((attachment) => attachment.previewUri)
+          const sendAttachments = [...pendingImages, ...storedFiles]
           const outcome = await baseSend(
             text,
-            pendingImages.map((attachment) => attachment.previewUri),
+            previews,
             deadline,
-            [...pendingImages, ...storedFiles]
+            sendAttachments,
+            undefined,
+            sendIntent
           )
-          if (outcome !== 'rejected') {
-            const sentIds = new Set(pendingImages.map((attachment) => attachment.id))
-            setAttachmentsByScope((prev) =>
-              withScopeAttachments(
-                prev,
-                scope,
-                (prev[scope] ?? []).filter((attachment) => !sentIds.has(attachment.id))
-              )
+          if (outcome !== 'rejected' && destination?.active) {
+            removeMobileNativeChatDraftImages(destination, sentImageIds)
+            onFilesSent?.(
+              storedFiles.map((file) => file.id),
+              destination
             )
-            onFilesSent?.(storedFiles.map((file) => file.id))
           }
           return outcome !== 'rejected'
         }
-        if (pendingImages.length === 0 || !scope) {
+        if (pendingImages.length === 0 || !hasAttachments) {
           // Heal stale paste before text-only sends; on failure retain the marker and submit no text.
           const staleTerminal = activeHandleRef.current
           if (staleTerminal && isMobileNativeChatInputStale(staleTerminal)) {
@@ -236,7 +240,10 @@ export function useMobileNativeChatImageAttachments({
               return false
             }
           }
-          return (await baseSend(text, undefined, deadline, undefined, sentAt)) !== 'rejected'
+          const outcome = await (intent
+            ? baseSend(text, undefined, deadline, undefined, sentAt, intent)
+            : baseSend(text, undefined, deadline, undefined, sentAt))
+          return outcome !== 'rejected'
         }
         const handle = activeHandleRef.current
         if (!client || !handle || !enabled || connState !== 'connected') {
@@ -244,6 +251,7 @@ export function useMobileNativeChatImageAttachments({
           onSendError('Message not sent (disconnected)')
           return false
         }
+        let inputWriteStarted = false
         try {
           const seededLaunchDraft = readSeededLaunchDraft()
           const pasted = await pasteMobileNativeChatImagePaths({
@@ -254,12 +262,15 @@ export function useMobileNativeChatImageAttachments({
             imagePaths: pendingImages.map((attachment) => attachment.path),
             followedByText: text.trim().length > 0,
             deadline,
-            ...(seededLaunchDraft
-              ? { clearInput: buildAgentTuiClearInputForText(seededLaunchDraft) }
-              : {})
+            onWriteStarted: () => {
+              inputWriteStarted = true
+            },
+            ...(seededLaunchDraft ? { seededText: seededLaunchDraft } : {})
           })
           if (!pasted) {
-            markMobileNativeChatInputStale(handle)
+            if (inputWriteStarted) {
+              markMobileNativeChatInputStale(handle)
+            }
             onError?.()
             onSendError('Message not sent')
             return false
@@ -281,27 +292,23 @@ export function useMobileNativeChatImageAttachments({
             pendingImages.map((attachment) => attachment.previewUri),
             textDeadline,
             undefined,
-            sentAt
+            sentAt,
+            sendIntent
           )
           if (outcome !== 'accepted') {
             // Rejected or unknown text/Enter may orphan an already-pasted path; both outcomes require healing.
             markMobileNativeChatInputStale(handle)
           }
-          if (outcome !== 'rejected') {
+          if (outcome !== 'rejected' && destination?.active) {
             // Drop only chips in this send, including unknown delivery to avoid duplicate retries; preserve newly attached chips.
-            const sentIds = new Set(pendingImages.map((attachment) => attachment.id))
-            setAttachmentsByScope((prev) =>
-              withScopeAttachments(
-                prev,
-                scope,
-                (prev[scope] ?? []).filter((attachment) => !sentIds.has(attachment.id))
-              )
-            )
+            removeMobileNativeChatDraftImages(destination, sentImageIds)
           }
           return outcome !== 'rejected'
         } catch {
-          // Contain transport rejection and keep chips; the next attempt’s leading clear removes any partial paste.
-          markMobileNativeChatInputStale(handle)
+          // Only attempted writes can leave partial input for the next action to heal.
+          if (inputWriteStarted) {
+            markMobileNativeChatInputStale(handle)
+          }
           onError?.()
           onSendError('Message not sent')
           return false
@@ -314,7 +321,7 @@ export function useMobileNativeChatImageAttachments({
     },
     [
       activeHandleRef,
-      attachmentsByScope,
+      attachments,
       baseSend,
       client,
       connState,
@@ -331,5 +338,11 @@ export function useMobileNativeChatImageAttachments({
     ]
   )
 
-  return { attachments, isAttaching, attachImage, removeAttachment, sendNativeChat }
+  return {
+    attachments,
+    isAttaching: isAttaching || (pending ?? 0) > 0,
+    attachImage,
+    removeAttachment,
+    sendNativeChat
+  }
 }

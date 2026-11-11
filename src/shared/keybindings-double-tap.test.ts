@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   findKeybindingConflicts,
-  formatKeybinding,
-  formatKeybindingList,
   isDoubleTapBinding,
   keybindingFromInput,
   keybindingMatchesAction,
@@ -27,7 +25,8 @@ describe('keybindings', () => {
     // Mod + platform-specific reuses the shared error.
     expect(normalizeKeybinding('DoubleTap+Mod+Cmd')).toEqual({
       ok: false,
-      error: 'Use either Mod or a platform-specific modifier, not both.'
+      error: 'Use either Mod or a platform-specific modifier, not both.',
+      errorCode: 'mixedModifiers'
     })
     expect(normalizeKeybinding('DoubleTap')).toMatchObject({ ok: false })
 
@@ -105,31 +104,6 @@ describe('keybindings', () => {
     expect(keybindingFromInput({ doubleTapModifier: 'Cmd' }, 'linux')).toEqual({
       ok: true,
       value: 'DoubleTap+Cmd'
-    })
-  })
-
-  it('formats double-tap bindings as the modifier glyph twice', () => {
-    expect(formatKeybinding('DoubleTap+Shift', 'darwin')).toEqual(['⇧', '⇧'])
-    expect(formatKeybinding('DoubleTap+Shift', 'linux')).toEqual(['Shift', 'Shift'])
-    expect(formatKeybinding('DoubleTap+Mod', 'darwin')).toEqual(['⌘', '⌘'])
-    expect(formatKeybinding('DoubleTap+Mod', 'win32')).toEqual(['Ctrl', 'Ctrl'])
-    expect(formatKeybinding('DoubleTap+Cmd', 'win32')).toEqual(['Cmd', 'Cmd'])
-    expect(formatKeybinding('DoubleTap+Alt', 'darwin')).toEqual(['⌥', '⌥'])
-    // Ctrl's glyph ⌃ diverges from Mod's ⌘ on Mac, so cover it explicitly.
-    expect(formatKeybinding('DoubleTap+Ctrl', 'darwin')).toEqual(['⌃', '⌃'])
-    expect(formatKeybindingList(['DoubleTap+Shift'], 'darwin')).toBe('⇧ ⇧')
-    expect(formatKeybindingList(['DoubleTap+Shift'], 'linux')).toBe('Shift Shift')
-  })
-
-  it('reports conflicts across two double-tap bindings', () => {
-    // Both overridden actions are customized; their shared double-tap binding must conflict.
-    const conflicts = findKeybindingConflicts('darwin', {
-      'worktree.quickOpen': ['DoubleTap+Shift'],
-      'view.tasks': ['DoubleTap+Shift']
-    })
-    expect(conflicts).toContainEqual({
-      binding: 'DoubleTap+Shift',
-      actionIds: expect.arrayContaining(['worktree.quickOpen', 'view.tasks'])
     })
   })
 

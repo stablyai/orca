@@ -16,8 +16,8 @@ import {
   REMOTE_NODE_RUNTIME_SELFTEST_FAILED,
   REMOTE_NODE_RUNTIME_VERIFIED_MARKER,
   REMOTE_WINDOWS_BUILD_UNSUPPORTED
-} from '../../ssh/orcad-remote-node-runtime-report'
-import { powerShellCommand } from '../../ssh/ssh-remote-powershell'
+} from './orcad-remote-node-runtime-report'
+import { powerShellCommand } from '../../ssh/remote-exec/ssh-remote-powershell'
 import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/powershell-native-argument'
 
 function windowsPath(...segments: string[]): string {

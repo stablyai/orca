@@ -256,3 +256,44 @@ describe('concurrent commands, both orders', () => {
     }
   })
 })
+
+it('transfers a removed folder edit view to its owner and drops views when the owner is deleted', () => {
+  const context = testContext()
+  const view = {
+    file: {
+      worktreeId: WS,
+      filePath: '/repo/note.md',
+      relativePath: 'note.md',
+      language: 'markdown'
+    },
+    view: { mode: 'edit' as const }
+  }
+  const model = build(context, [
+    {
+      type: 'openEditorTab',
+      workspace: 'folder:feature',
+      tabId: 'note-tab',
+      fileId: '/repo/note.md',
+      contentType: 'editor',
+      groupId: 'folder-group',
+      view
+    }
+  ]).model
+  const removed = applyLayoutTransition(model, {
+    type: 'ownerRemoved',
+    workspaces: ['folder:feature']
+  })
+  expect(removed.ok && removed.model.workspaces[WS]?.tabs.map((tab) => tab.id)).toEqual([
+    'note-tab'
+  ])
+  expect(
+    removed.ok && removed.model.workspaces[WS]?.editorFiles?.map((file) => file.filePath)
+  ).toEqual(['/repo/note.md'])
+  expect(removed.ok && removed.model.workspaces['folder:feature']).toBeUndefined()
+  if (!removed.ok) {
+    throw new Error(removed.code)
+  }
+  expect(checkWorkspaceLayoutModelRules([removed.model], [model])).toEqual([])
+  const ownerGone = applyLayoutTransition(model, { type: 'ownerRemoved', workspaces: [WS] })
+  expect(ownerGone.ok && ownerGone.model.workspaces['folder:feature']?.tabs).toEqual([])
+})

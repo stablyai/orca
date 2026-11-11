@@ -2,9 +2,9 @@ import type { IssueInfo, PRInfo } from '../../shared/github/pull-request-types'
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
-} from '../../shared/workspace-session-state-types'
+} from '../../shared/workspace-session/workspace-session-state-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
+import type { TerminalSurfaceCloseTarget } from '../../shared/workspace-layout/terminal-surface-close-target'
 
 export type WorkspaceSessionApi = {
   session: {
@@ -22,6 +22,8 @@ export type WorkspaceSessionApi = {
     }) => Promise<void>
     flush: () => Promise<void>
     readTerminalScrollback: (args: { ref: string }) => string | null
+    /** Stat-only: whether this machine's snapshot store holds `ref`. */
+    hasTerminalScrollback: (args: { ref: string }) => boolean
   }
   cache: {
     getGitHub: () => Promise<{

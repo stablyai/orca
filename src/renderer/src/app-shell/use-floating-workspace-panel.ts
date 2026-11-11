@@ -1,12 +1,19 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, type SetStateAction } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  type SetStateAction
+} from 'react'
 import {
   TOGGLE_FLOATING_TERMINAL_EVENT,
   requestFloatingTerminalOpenMaximized
-} from '@/lib/floating-terminal'
-import { createFloatingWorkspaceTourInteractionSnapshot } from '@/lib/floating-workspace-tour-interaction-snapshot'
+} from '@/components/floating-terminal/floating-terminal'
+import { createFloatingWorkspaceTourInteractionSnapshot } from '@/components/floating-terminal/floating-workspace-tour-interaction-snapshot'
 import { persistFloatingTerminalPanelOpen } from '../components/floating-terminal/floating-terminal-panel-view-state'
 import { useAppStore } from '../store'
-import { selectFloatingVisibleTabCount } from '../store/selectors'
+import { selectFloatingVisibleTabCount } from '../store/workspaces/floating/floating-workspace-panel-selector'
 
 export type FloatingWorkspacePanelState = ReturnType<typeof useFloatingWorkspacePanel>
 
@@ -116,16 +123,31 @@ export function useFloatingWorkspacePanel() {
     }
   }, [settingsHydrated, enabled, setOpenWithFocus])
 
-  return {
-    cancelReturnFocusFrame,
-    enabled,
-    open,
-    openMaximized,
-    setOpenWithFocus,
-    // Retain panes’ local state while closed once the floating workspace owns tabs.
-    shouldMountPanel: enabled && (open || visibleTabCount > 0),
-    showToggleButton: enabled && (triggerLocation === 'floating-button' || !statusBarVisible),
-    tourInteractionSnapshotRef,
-    visibleTabCount
-  }
+  const shouldMountPanel = enabled && (open || visibleTabCount > 0)
+  const showToggleButton = enabled && (triggerLocation === 'floating-button' || !statusBarVisible)
+  // Stable identity lets memoized root surfaces skip the App render each workspace switch causes.
+  return useMemo(
+    () => ({
+      cancelReturnFocusFrame,
+      enabled,
+      open,
+      openMaximized,
+      setOpenWithFocus,
+      // Retain panes’ local state while closed once the floating workspace owns tabs.
+      shouldMountPanel,
+      showToggleButton,
+      tourInteractionSnapshotRef,
+      visibleTabCount
+    }),
+    [
+      cancelReturnFocusFrame,
+      enabled,
+      open,
+      openMaximized,
+      setOpenWithFocus,
+      shouldMountPanel,
+      showToggleButton,
+      visibleTabCount
+    ]
+  )
 }

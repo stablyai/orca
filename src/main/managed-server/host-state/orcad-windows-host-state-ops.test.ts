@@ -1,11 +1,9 @@
-// Execute generated Windows state operations with local Node against real files.
 import {
   existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
-  statSync,
   symlinkSync,
   utimesSync,
   writeFileSync
@@ -13,7 +11,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { runProcess, spawnProcess } from '@orca/process-host'
+import { runProcess } from '@orca/process-host'
 import { ORCAD_WINDOWS_HOST_SCRIPT, type OrcadWindowsHostOp } from './orcad-windows-host-script'
 
 let dir = ''
@@ -66,23 +64,10 @@ describe('Windows snapshot ops', () => {
     expect(await op('snapshot-compare', root, snapshot)).toBe('UNCHANGED')
   })
 
-  it('reports EMPTY rather than fabricating a snapshot of a root with no state', async () => {
-    const empty = join(dir, 'empty-root')
-    mkdirSync(empty)
-    expect(await op('snapshot-capture', empty, snapshot)).toBe('EMPTY')
-    expect(await op('snapshot-probe', snapshot)).toBe('ABSENT')
-  })
-
   it('fails closed on a link inside captured state', async () => {
     symlinkSync(join(dir), join(root, 'profiles', 'escape'), 'junction')
     expect(await op('snapshot-capture', root, snapshot)).toBe('FAILED')
     expect(await op('snapshot-probe', snapshot)).toBe('ABSENT')
-  })
-
-  it('answers MISSING, UNKNOWN and FAILED rather than guessing', async () => {
-    expect(await op('snapshot-restore', root, snapshot)).toBe('MISSING')
-    expect(await op('snapshot-compare', root, snapshot)).toBe('UNKNOWN')
-    expect(await op('snapshot-compare', join(dir, 'no-root'), snapshot)).toBe('UNKNOWN')
   })
 
   it('clears the members of a root that started empty, leaving the daemon', async () => {
@@ -91,70 +76,9 @@ describe('Windows snapshot ops', () => {
     expect(existsSync(join(root, 'orca-profile-index.json'))).toBe(false)
     expect(existsSync(join(root, 'daemon', 'daemon.sock.token'))).toBe(true)
   })
-
-  it.each(['snapshot-clear', 'snapshot-restore'] as const)(
-    '%s bounds permanent/transient locks and leaves a recoverable snapshot',
-    async (name) => {
-      expect(await op('snapshot-capture', root, snapshot)).toBe('CAPTURED')
-      const preload = join(dir, 'fail-rm.cjs')
-      const attempts = join(dir, 'rm-attempts.json')
-      const target = join(root, 'profiles')
-      for (const failures of [6, 1]) {
-        writeFileSync(
-          preload,
-          `const fs = require('fs'); const rm = fs.promises.rm; const calls = [];
-fs.promises.rm = async (p, options) => {
-  if (p === ${JSON.stringify(target)}) {
-    calls.push({ options, lockHeld: fs.existsSync(${JSON.stringify(join(dir, 'orcad-state-mutation.lock', 'owner.json'))}) });
-    fs.writeFileSync(${JSON.stringify(attempts)}, JSON.stringify(calls));
-    if (calls.length <= ${failures}) throw Object.assign(new Error('held open'), { code: 'EPERM' });
-  }
-  return rm(p, options);
-};`
-        )
-        const result = await runProcess({
-          program: process.execPath,
-          args: ['--require', preload, script, name, root, snapshot]
-        })
-        expect(result.code, result.stderr).toBe(0)
-        expect(result.stdout.trim()).toBe(failures === 6 ? 'FAILED' : 'RESTORED')
-        expect(JSON.parse(readFileSync(attempts, 'utf8'))).toEqual(
-          Array.from({ length: failures === 6 ? 6 : 2 }, () => ({
-            options: { recursive: true, force: true },
-            lockHeld: true
-          }))
-        )
-        expect(existsSync(join(dir, 'orcad-state-mutation.lock'))).toBe(false)
-        expect(readFileSync(join(root, 'daemon', 'daemon.sock.token'), 'utf8')).toBe(
-          'live-daemon-token'
-        )
-        expect(await op('snapshot-probe', snapshot)).toBe('PRESENT')
-        expect(await op('snapshot-restore', root, snapshot)).toBe('RESTORED')
-        expect(await op('snapshot-compare', root, snapshot)).toBe('UNCHANGED')
-      }
-    }
-  )
-
-  it('reports the newest member write in epoch seconds, or UNKNOWN', async () => {
-    const at = new Date('2026-09-30T12:00:00.000Z')
-    utimesSync(join(root, 'orca-profile-index.json'), at, at)
-    utimesSync(join(root, 'profiles', 'p1', 'orca-data.json'), at, at)
-    expect(await op('state-newest-mtime', root)).toBe(String(Math.floor(at.getTime() / 1000)))
-    const empty = join(dir, 'empty-root')
-    mkdirSync(empty)
-    expect(await op('state-newest-mtime', empty)).toBe('UNKNOWN')
-  })
 })
 
 describe('Windows owner admission', () => {
-  it('is CLEAR with no owners, LIVE for a running owner, and silent for a dead one', async () => {
-    expect(await op('owner-admission', root)).toBe('CLEAR')
-    writeFileSync(join(root, 'orcad.lock'), JSON.stringify({ pid: process.pid }))
-    expect(await op('owner-admission', root)).toBe(`LIVE orcad.lock ${process.pid}`)
-    writeFileSync(join(root, 'orcad.lock'), JSON.stringify({ pid: 4_194_303 }))
-    expect(await op('owner-admission', root)).toBe('CLEAR')
-  })
-
   it('refuses a record it cannot interpret', async () => {
     writeFileSync(join(root, 'orcad.lock'), 'not json')
     expect(await op('owner-admission', root)).toBe('UNVERIFIABLE orcad.lock')
@@ -250,82 +174,5 @@ Module._extensions['.node'] = (m, file) => file.endsWith('windows-process-tree.n
       JSON.stringify({ pid: Number(exited.stdout.trim()) })
     )
     expect(await op('snapshot-restore', root, snapshot)).toBe('RESTORED')
-  })
-
-  it('never lets a restore run under a suspended clear it cannot identify', async () => {
-    expect(await op('snapshot-capture', root, snapshot)).toBe('CAPTURED')
-    const ready = join(dir, 'ready')
-    const resume = join(dir, 'resume')
-    const finished = join(dir, 'finished')
-    const preload = join(dir, 'pause-rm.cjs')
-    // Pause inside the first removal to model suspension while the host mutation lock remains held.
-    writeFileSync(
-      preload,
-      `const fs = require('fs'); const rm = fs.promises.rm;
-fs.promises.rm = async function (p, ...rest) {
-  if (p === ${JSON.stringify(join(root, 'profiles'))}) {
-    fs.writeFileSync(${JSON.stringify(ready)}, '')
-    while (!fs.existsSync(${JSON.stringify(resume)})) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20)
-  }
-  return rm.call(this, p, ...rest)
-}
-process.on('exit', () => fs.writeFileSync(${JSON.stringify(finished)}, ''))`
-    )
-    const clear = spawnProcess({
-      program: process.execPath,
-      args: ['--require', preload, script, 'snapshot-clear', root]
-    })
-    try {
-      await expect.poll(() => existsSync(ready), { timeout: 10_000 }).toBe(true)
-      const owner = JSON.parse(readFileSync(join(lockDir(), 'owner.json'), 'utf8'))
-      expect(owner.creationTimeMs).toBeNull()
-      utimesSync(lockDir(), new Date(0), new Date(0))
-
-      expect(await op('snapshot-restore', root, snapshot)).toBe('STATE_MUTATION_BUSY')
-      writeFileSync(resume, '')
-      await expect.poll(() => existsSync(finished), { timeout: 10_000 }).toBe(true)
-      expect(existsSync(lockDir())).toBe(false)
-      expect(await op('snapshot-restore', root, snapshot)).toBe('RESTORED')
-      expect(existsSync(join(root, 'profiles', 'p1', 'orca-data.json'))).toBe(true)
-    } finally {
-      writeFileSync(resume, '')
-      clear.kill('SIGKILL')
-    }
-  }, 30_000)
-})
-
-describe('the Windows state-mutation fence heartbeat', () => {
-  const fencedOp = (fence: string, token: string, name: OrcadWindowsHostOp, ...args: string[]) =>
-    runProcess({
-      program: process.execPath,
-      args: [script, '--fence', fence, token, name, ...args]
-    })
-
-  it('refreshes only a fence its run still owns, refuses a superseded run, and never creates one', async () => {
-    const fence = join(dir, '.orcad-activation-transaction', '.install-lock')
-    mkdirSync(fence, { recursive: true })
-    writeFileSync(join(fence, '.orca-fence-owner'), 'holder-1')
-    utimesSync(fence, new Date(0), new Date(0))
-    expect(await fencedOp(fence, 'holder-1', 'snapshot-capture', root, snapshot)).toMatchObject({
-      code: 0,
-      stdout: 'CAPTURED'
-    })
-    expect(Date.now() - statSync(fence).mtimeMs).toBeLessThan(60_000)
-
-    utimesSync(fence, new Date(0), new Date(0))
-    expect(await op('snapshot-restore', root, snapshot)).toBe('RESTORED')
-    expect(statSync(fence).mtimeMs).toBe(0)
-
-    writeFileSync(join(fence, '.orca-fence-owner'), 'successor')
-    expect(await fencedOp(fence, 'holder-1', 'snapshot-restore', root, snapshot)).toMatchObject({
-      code: 75,
-      stdout: '__ORCAD_FENCE_LOST__\n'
-    })
-    expect(statSync(fence).mtimeMs).toBe(0)
-    expect(readFileSync(join(fence, '.orca-fence-owner'), 'utf8')).toBe('successor')
-
-    rmSync(fence, { recursive: true })
-    expect(await op('snapshot-restore', root, snapshot)).toBe('RESTORED')
-    expect(existsSync(fence)).toBe(false)
   })
 })

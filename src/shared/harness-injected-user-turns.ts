@@ -1,4 +1,5 @@
-// Harness machinery must not become prompt-derived UI; unknown tags remain real user input.
+// Harness machinery uses user-role turns and fires prompt hooks, but must not become prompt-derived UI.
+// Match only observed tags: custom elements and Grok user_query are real input; false positives hide transcripts/titles or leave interrupted agents marked done.
 const LEADING_TAG_NAME = /^<([a-z][a-z0-9_-]*)(?:[\s>]|$)/i
 
 const KNOWN_HARNESS_TAG_NAMES = new Set([
@@ -53,7 +54,7 @@ export function isKnownHarnessInjectedUserTurnText(text: string): boolean {
   return HARNESS_INJECTED_TURN_PREFIXES.some((prefix) => normalized.startsWith(prefix))
 }
 
-// Why: nested same-tag content needs depth tracking; a single linear scan avoids quadratic rescans.
+// Nested same-tag content needs depth tracking rather than stopping at the first closing tag.
 function findMatchingCloseTagEnd(remaining: string, tagName: string): number | null {
   const tagRe = new RegExp(`<(?:(/)${tagName}>|${tagName}(?=[\\s>]|$))`, 'gi')
   let depth = 1
@@ -72,20 +73,16 @@ function findMatchingCloseTagEnd(remaining: string, tagName: string): number | n
   return null
 }
 
-// Only attributed source channels are machinery; bare channel tags remain user content.
-function isKnownHarnessEnvelopeStart(remaining: string, tagName: string): boolean {
-  return (
-    KNOWN_HARNESS_TAG_NAMES.has(tagName) ||
-    (tagName === 'channel' && /^<channel source=/i.test(remaining))
-  )
-}
-
 /** Remove leading known harness XML wrappers while preserving the real prompt after them. */
 export function stripKnownHarnessEnvelope(text: string): string {
   let remaining = text.trim()
   while (remaining) {
     const tagName = LEADING_TAG_NAME.exec(remaining)?.[1]?.toLowerCase()
-    if (!tagName || !isKnownHarnessEnvelopeStart(remaining, tagName)) {
+    if (
+      !tagName ||
+      (!KNOWN_HARNESS_TAG_NAMES.has(tagName) &&
+        !(tagName === 'channel' && /^<channel source=/i.test(remaining)))
+    ) {
       break
     }
     const closeTagEnd = findMatchingCloseTagEnd(remaining, tagName)

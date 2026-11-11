@@ -5,8 +5,11 @@ import {
   readProfileStateRevision
 } from './profile-state-revision'
 import {
+  PROFILE_STATE_DOCUMENT_ROW_COLUMNS,
+  readProfileStateDocumentRow
+} from './profile-state-document-parts-reader'
+import {
   ProfileStateDocumentCorruptionError,
-  validateProfileStateDocumentRow,
   type ProfileStateDocument,
   type ProfileStateParsedDocument,
   type ProfileStateValidatedDocument
@@ -45,7 +48,7 @@ export function readProfileStateDocuments(
         : readProfileStateAutomationRunsDocument(db, profileRevision)
   const rows = db
     .prepare(
-      `SELECT domain, payload, domain_version, revision, updated_at, content_hash
+      `SELECT ${PROFILE_STATE_DOCUMENT_ROW_COLUMNS}
        FROM profile_state_documents ORDER BY rowid`
     )
     .iterate()
@@ -55,9 +58,7 @@ export function readProfileStateDocuments(
     | ProfileStateValidatedDocument
   )[] = []
   for (const row of rows) {
-    const document = validateProfileStateDocumentRow(row, {
-      retainParsedValue: options.representation === 'parsed'
-    })
+    const document = readProfileStateDocumentRow(db, row, options.representation === 'parsed')
     assertProfileStateDocumentRevision(document.revision, profileRevision, document.domain)
     if (
       normalized !== undefined &&

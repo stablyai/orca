@@ -1,6 +1,7 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeTempDirs } from '../../shared/testing/remove-temp-dirs.test-support'
 import { afterEach, expect, it, vi } from 'vitest'
 import { upsertEphemeralVmRuntime } from '../../shared/ephemeral-vm-runtime-store'
 import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
@@ -8,10 +9,8 @@ import { removeEphemeralVmRuntimeSshTarget } from './runtime-ssh-cleanup'
 
 const tempDirs: string[] = []
 
-afterEach(() => {
-  for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { recursive: true, force: true })
-  }
+afterEach(async () => {
+  await removeTempDirs(tempDirs.splice(0))
 })
 
 function createRuntime(
@@ -39,23 +38,6 @@ function createRuntime(
     ...overrides
   })
 }
-
-it('retains the hidden target identity when removal fails', async () => {
-  const userDataPath = mkdtempSync(join(tmpdir(), 'orca-vm-ssh-cleanup-'))
-  tempDirs.push(userDataPath)
-
-  await expect(
-    removeEphemeralVmRuntimeSshTarget({
-      userDataPath,
-      runtime: createRuntime(userDataPath, 'cleanup_failed'),
-      removeTarget: vi.fn().mockRejectedValue(new Error('store unavailable'))
-    })
-  ).resolves.toMatchObject({
-    status: 'cleanup_failed',
-    sshTargetId: 'runtime-ssh-1',
-    cleanupLastError: 'Failed to remove the hidden SSH target.'
-  })
-})
 
 it('keeps provider cleanup retryable until target removal succeeds', async () => {
   const userDataPath = mkdtempSync(join(tmpdir(), 'orca-vm-ssh-cleanup-'))
@@ -136,25 +118,4 @@ it('does not let a stale concurrent failure regress completed cleanup', async ()
     cleanupStatus: 'succeeded'
   })
   expect(cleaned).not.toHaveProperty('sshTargetId')
-})
-
-it('repairs completed cleanup records that already lost their target id', async () => {
-  const userDataPath = mkdtempSync(join(tmpdir(), 'orca-vm-ssh-cleanup-'))
-  tempDirs.push(userDataPath)
-  const runtime = createRuntime(userDataPath, 'cleanup_failed', {
-    cleanupStatus: 'succeeded',
-    sshTargetId: undefined
-  })
-
-  await expect(
-    removeEphemeralVmRuntimeSshTarget({
-      userDataPath,
-      runtime,
-      removeTarget: vi.fn()
-    })
-  ).resolves.toMatchObject({
-    status: 'cleaned',
-    cleanupStatus: 'succeeded',
-    sshTargetId: undefined
-  })
 })

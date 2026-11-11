@@ -1,6 +1,7 @@
 import { win32 } from 'node:path'
 import { GROK_CHAT_HISTORY_FILE } from '../../shared/grok-session-paths'
-import { isOmpConversationDirectory } from '../ai-vault/session-scanner-omp-subagent-transcripts'
+import { isClaudeProjectBucketDirectory } from '../ai-vault/scanners/claude/claude-project-dir-encoding'
+import { isOmpConversationDirectory } from '../ai-vault/scanners/omp/session-scanner-omp-subagent-transcripts'
 
 export type SessionIdLookupAgent = 'claude' | 'codex' | 'grok' | 'omp'
 
@@ -16,7 +17,10 @@ function stem(path: string): string {
 }
 
 export const SESSION_FILE_ID_LAYOUTS: Record<SessionIdLookupAgent, SessionFileIdLayout> = {
-  claude: { fileMatchesId: (path, id) => win32.basename(path) === `${id}.jsonl` },
+  claude: {
+    fileMatchesId: (path, id) => win32.basename(path) === `${id}.jsonl`,
+    directoryPredicate: isClaudeProjectBucketDirectory
+  },
   codex: {
     fileMatchesId: (path, id) => {
       const name = stem(path)

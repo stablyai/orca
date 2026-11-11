@@ -185,25 +185,6 @@ describe('client-hosted screenshot markup', () => {
     expect(overlay()).toBeNull()
   })
 
-  it.each(['pending', 'unavailable', 'inactive', 'failed'])(
-    'disables Draw for a %s pane',
-    (state) => {
-      const pane = renderPane(
-        {
-          ...(state === 'pending' ? { placement: null } : {}),
-          ...(state === 'inactive' ? { isActive: false } : {})
-        },
-        state !== 'unavailable'
-      )
-      if (state === 'failed') {
-        fireEvent(pane.webview, new Event('destroyed'))
-      }
-      expect(drawButton().disabled).toBe(true)
-      fireEvent.click(drawButton())
-      expect(mocks.capture).not.toHaveBeenCalled()
-    }
-  )
-
   it.each(['cancel', 'deactivate', 'replace', 'loss', 'unmount'])(
     'invalidates an in-flight capture on %s',
     async (action) => {

@@ -1,28 +1,31 @@
+import { stopAgentSessionProviderRoot } from '../native-chat/agent-session-wire/termination/structured-agent-session-provider-exit-proof'
 import { randomUUID } from 'node:crypto'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
-import {
-  AgentSessionPreSpawnError,
-  AgentSessionAcquisitionRootExitObservedError,
-  AgentSessionAcquisitionExitUnprovenError,
-  AgentSessionAcquisitionExitProvenError,
-  type AgentSessionAcquisition,
-  type StructuredAgentSessionAcquireInput,
-  type StructuredAgentSessionAdapter
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import * as provider from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
+import * as acquisition from '../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
+import type {
+  AgentSessionAcquisition,
+  StructuredAgentSessionAcquireInput,
+  StructuredAgentSessionAdapter
+} from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { providerSpawnedProcessIdentity } from '../provider-process/provider-spawned-process-identity'
 import { ProviderAcquisitionStarts } from '../provider-process/provider-acquisition-starts'
+import { piStartExitError } from './rpc-exit-classification'
 import { compactPiRpcSession } from './rpc-compaction'
 import { buildPiRpcLaunch } from './rpc-launch'
 import type { PiRpcResolvedLaunch } from './rpc-launch-resolution'
 import { PiRpcSession, type PiRpcSessionDeps, type PiRpcConnection } from './rpc-session'
 import { dispatchPiRpcMessage } from './rpc-message-dispatch'
+import { piAcquireFailure } from './rpc-startup-outcome'
+import { openPiStart, watchPiStartExit } from './rpc-startup-open'
+import { AgentSessionStartEndings } from '../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
 import { applyPiRpcSessionOption } from './rpc-options'
 import { supportsSupervisedProviderChildLocation } from '../provider-process/supervised-provider-child-location'
 
 export type PiRpcSessionAdapterDeps = PiRpcSessionDeps & {
   resolveLaunch: (input: {
-    identity: StructuredAgentSessionAcquireInput['identity']
-    spawnToken: string
+    [K in 'identity' | 'spawnToken']: StructuredAgentSessionAcquireInput[K]
   }) => Promise<PiRpcResolvedLaunch>
   readProcessStartTime?: (pid: number) => Promise<number | null>
 }
@@ -32,6 +35,7 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
   private readonly acquiring = new Set<string>()
   private readonly starts = new ProviderAcquisitionStarts<PiRpcConnection>()
   private readonly retiring = new Set<Promise<void>>()
+  private readonly endings = new AgentSessionStartEndings()
   constructor(private readonly deps: PiRpcSessionAdapterDeps) {}
 
   supportsLocation = supportsSupervisedProviderChildLocation
@@ -43,25 +47,23 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
   async acquire(input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> {
     const id = input.identity.sessionId
     if (this.acquiring.has(id)) {
-      throw new AgentSessionPreSpawnError(new Error('Pi session already owns a child'))
+      throw new provider.AgentSessionPreSpawnError(new Error('Pi session already owns a child'))
     }
     this.acquiring.add(id)
     const attempt = this.starts.begin(input.signal)
     let session: PiRpcSession | undefined
     try {
       if (attempt.signal.aborted) {
-        throw new AgentSessionPreSpawnError(new Error('Pi closed while starting'))
+        throw new provider.AgentSessionPreSpawnError(new Error('Pi closed while starting'))
       }
       if (!(await this.starts.stopFailed(id))) {
-        throw new AgentSessionAcquisitionExitUnprovenError(
+        throw new acquisition.AgentSessionAcquisitionExitUnprovenError(
           new Error('Previous Pi start has not exited')
         )
       }
-      const previous = this.sessions.get(id)
-      if (previous?.connection.closed && previous.connection.rootVerdict === 'exited') {
-        this.acknowledgeSessionRelease(id)
-      } else if (previous) {
-        throw new AgentSessionPreSpawnError(new Error('Pi session already owns a child'))
+      this.acknowledgeSessionRelease(id)
+      if (this.sessions.has(id)) {
+        throw new provider.AgentSessionPreSpawnError(new Error('Pi session already owns a child'))
       }
       let launch: PiRpcResolvedLaunch
       try {
@@ -70,15 +72,19 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
           attempt.signal
         )
       } catch (error) {
-        throw new AgentSessionPreSpawnError(error)
+        // A start withdrawn while resolving is a close, not a failed preparation.
+        throw attempt.signal.aborted
+          ? new provider.AgentSessionPreSpawnError(error)
+          : provider.launchPreparationFailure(error)
       }
       if (attempt.signal.aborted) {
-        throw new AgentSessionPreSpawnError(new Error('Pi closed while starting'))
+        throw new provider.AgentSessionPreSpawnError(new Error('Pi closed while starting'))
       }
       const spec = buildPiRpcLaunch(launch)
       const fresh = !launch.sessionFile && !launch.forkFile
       session = new PiRpcSession(input, randomUUID(), spec, this.deps, launch, fresh)
       this.sessions.set(id, session)
+      watchPiStartExit(session, input, this.endings)
       this.starts.track(attempt, session.connection)
       const spawned = providerSpawnedProcessIdentity(
         input,
@@ -98,38 +104,27 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
       }
     } catch (error) {
       if (!session) {
-        throw error instanceof AgentSessionPreSpawnError ||
-          error instanceof AgentSessionAcquisitionExitUnprovenError
+        throw error instanceof provider.AgentSessionPreSpawnError ||
+          error instanceof acquisition.AgentSessionAcquisitionExitUnprovenError
           ? error
-          : new AgentSessionPreSpawnError(error)
+          : new provider.AgentSessionPreSpawnError(error)
       }
+      this.endings.retire(id, session.generation)
       const result = await session.close(false).catch(() => null)
-      if (result?.root === 'exited') {
-        if (session.connection.processless) {
-          throw new AgentSessionAcquisitionExitProvenError(error)
-        }
-        throw new AgentSessionAcquisitionRootExitObservedError(error)
+      const exited = piStartExitError(error, session.connection, result)
+      if (exited) {
+        throw piAcquireFailure(exited)
       }
       this.starts.retainFailed(id, session.connection)
-      throw new AgentSessionAcquisitionExitUnprovenError(error)
+      throw new acquisition.AgentSessionAcquisitionExitUnprovenError(error)
     } finally {
       this.starts.end(attempt)
       this.acquiring.delete(id)
     }
   }
 
-  open: NonNullable<StructuredAgentSessionAdapter['open']> = async (input) => {
-    const session = this.sessions.get(input.sessionId)
-    if (
-      !session ||
-      session.input.fence !== input.fence ||
-      session.generation !== input.acquisitionGeneration ||
-      session.connection.closed
-    ) {
-      throw new Error('Pi child changed before it opened')
-    }
-    return session.open(input.signal)
-  }
+  open: NonNullable<StructuredAgentSessionAdapter['open']> = (input) =>
+    openPiStart(this.sessions, this.endings, input)
 
   dispatch: StructuredAgentSessionAdapter['dispatch'] = async (input) => {
     const session = this.session(input.sessionId, input.fence)
@@ -219,18 +214,30 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
   readOptions: NonNullable<StructuredAgentSessionAdapter['readOptions']> = async (input) =>
     this.session(input.sessionId, input.fence).readOptions()
   readCommands = (id: string) => this.sessions.get(id)?.startup.commands
-  holdsDispatch(id: string): boolean {
-    return this.sessions.get(id)?.turns.holdsDispatch ?? false
-  }
-  heldSends(id: string): ReadonlySet<string> | undefined {
-    return this.sessions.get(id)?.heldSends
-  }
+  /** Pi's /name uses the owned running session; at-rest startup/teardown is not implemented. */
+  renameProviderSession: NonNullable<StructuredAgentSessionAdapter['renameProviderSession']> =
+    async ({ record, providerSessionId, name }) => {
+      const session = this.sessions.get(record.sessionId)
+      if (session?.connection.closed !== false) {
+        return
+      }
+      if (session.openedLink?.handle.nativeId === providerSessionId) {
+        await session.connection.request('set_session_name', { name }, { timeoutMs: 5_000 })
+      }
+    }
+  holdsDispatch = (id: string): boolean => this.sessions.get(id)?.turns.holdsDispatch ?? false
+  confirmIdle = (id: string) => this.sessions.get(id)?.dialogs.backgroundWork.confirmIdle()
+  heldSends = (id: string): ReadonlySet<string> | undefined => this.sessions.get(id)?.heldSends
+  startupEnding = (id: string, generation: string) => this.endings.get(id, generation)
+  retireStartup = (id: string, generation: string) => this.endings.retire(id, generation)
   holdsLiveProviderProcess(id: string, generation: string): boolean {
     const session = this.sessions.get(id)
     return session?.generation === generation && !session.connection.closed
   }
 
   closeSession(id: string): Promise<boolean> {
+    // A released or closed session's start has no reader left for its ending.
+    this.endings.retire(id)
     return this.close(id, true)
   }
   private async close(id: string, requested: boolean): Promise<boolean> {
@@ -239,11 +246,14 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
       return true
     }
     const result = await session.close(requested)
-    if (result.root !== 'exited') {
+    if (result.root !== 'exited' && !result.killDelivered) {
       return false
     }
-    if (result.tree !== 'exited') {
-      throw new AgentSessionAcquisitionRootExitObservedError(new Error('Pi root exit observed'))
+    if (result.root !== 'exited' || result.tree !== 'exited') {
+      throw new acquisition.AgentSessionAcquisitionRootExitObservedError(
+        new Error('Pi writer stopped without descendant exit proof'),
+        result.root === 'exited' ? 'exit-observed' : 'kill-delivered'
+      )
     }
     return true
   }
@@ -257,12 +267,14 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
     this.sessions.get(id)?.fail(new Error('Pi event sink failed'))
     return this.close(id, false)
   }
-  disposeSession(id: string): Promise<boolean> {
-    return this.closeSession(id)
-  }
+  disposeSession: NonNullable<StructuredAgentSessionAdapter['disposeSession']> = this.closeSession
   acknowledgeSessionRelease(id: string): void {
     const session = this.sessions.get(id)
-    if (!session?.connection.closed || session.connection.rootVerdict !== 'exited') {
+    if (
+      !session?.connection.closed ||
+      (session.connection.rootVerdict !== 'exited' &&
+        !session.connection.lastCloseResult?.killDelivered)
+    ) {
       return
     }
     this.sessions.delete(id)
@@ -271,7 +283,12 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
     void retirement.then(() => this.retiring.delete(retirement))
   }
   async closeAll(): Promise<void> {
-    await Promise.all([...this.sessions.keys()].map((id) => this.closeSession(id)))
+    this.endings.clear()
+    await Promise.all(
+      [...this.sessions.keys()].map((id) =>
+        stopAgentSessionProviderRoot(() => this.closeSession(id))
+      )
+    )
   }
   async drainObservedExits(): Promise<void> {
     await Promise.all([

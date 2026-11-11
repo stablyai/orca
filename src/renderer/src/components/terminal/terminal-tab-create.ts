@@ -1,9 +1,9 @@
 import { useAppStore } from '@/store'
-import { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
-import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
-import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
-import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createWebRuntimeSessionTerminal } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
+import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
+import { resolveTerminalWorktreeRoute } from '@/lib/workspace/ownership/terminal-worktree-route'
+import { persistAgentLaunchTabOrder } from '@/lib/agent-session/launch/pane/launch-agent-tab-order'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 
 export function createNewTerminalTab(
   activeWorktreeId: string | null,
@@ -38,7 +38,7 @@ export function createNewTerminalTab(
         ...(options?.command ? { command: options.command } : {}),
         activate: true
       },
-      ...(onSettled ? [{ notifyFailure: false }] : [])
+      { userAct: true, ...(onSettled ? { notifyFailure: false } : {}) }
     )
     if (onSettled) {
       void launch.then(

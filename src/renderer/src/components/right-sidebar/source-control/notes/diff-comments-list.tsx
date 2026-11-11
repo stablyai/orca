@@ -1,23 +1,28 @@
 import React, { useCallback, useMemo } from 'react'
 import { Check, Copy, Trash, Trash2 } from 'lucide-react'
-import { getDiffCommentLineLabel, getDiffCommentSource } from '@/lib/diff-comment-compat'
-import { formatDiffComment } from '@/lib/diff-comments-format'
+import {
+  getDiffCommentLineLabel,
+  getDiffCommentSource
+} from '@/lib/source-control/review/comments/diff-comment-compat'
+import { formatDiffComment } from '../../../../../../shared/diff-comments-format'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
 import { useCopyFeedbackState } from './copy-feedback'
 
 function getLocalizedDiffCommentLineLabel(
-  comment: Pick<DiffComment, 'lineNumber' | 'startLine'>
+  comment: Pick<DiffComment, 'lineNumber' | 'startLine'>,
+  t: Translate = translate
 ): string {
   // Line zero is the file-level note sentinel, not a real line.
   if (comment.lineNumber === 0) {
-    return translate(
+    return t(
       'auto.components.right.sidebar.source.control.diff.comments.list.cefacd0ec7',
       'whole file'
     )
   }
   if (comment.startLine !== undefined && comment.startLine !== comment.lineNumber) {
-    return translate(
+    return t(
       'auto.components.right.sidebar.SourceControl.d97ef8f221',
       'lines {{value0}}-{{value1}}',
       {
@@ -26,7 +31,7 @@ function getLocalizedDiffCommentLineLabel(
       }
     )
   }
-  return translate('auto.components.right.sidebar.SourceControl.6f8bfa0eb9', 'line {{value0}}', {
+  return t('auto.components.right.sidebar.SourceControl.6f8bfa0eb9', 'line {{value0}}', {
     value0: comment.lineNumber
   })
 }
@@ -43,6 +48,7 @@ export function DiffCommentsInlineList({
   // Open its diff/editor and reveal the note through scrollToDiffCommentId.
   onOpen: (comment: DiffComment) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const groups = useMemo(() => {
     const map = new Map<string, DiffComment[]>()
     for (const c of comments) {
@@ -73,7 +79,7 @@ export function DiffCommentsInlineList({
   if (comments.length === 0) {
     return (
       <div className="px-6 py-2 text-[11px] text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.right.sidebar.SourceControl.ac8cbe3bf5',
           'Hover over a line in the diff view and click the + to add a note.'
         )}
@@ -95,7 +101,7 @@ export function DiffCommentsInlineList({
                   onOpen(first)
                 }
               }}
-              title={translate(
+              title={t(
                 'auto.components.right.sidebar.SourceControl.0d963bf982',
                 'Open {{value0}}',
                 { value0: filePath }
@@ -107,12 +113,12 @@ export function DiffCommentsInlineList({
               type="button"
               className="shrink-0 rounded p-0.5 text-muted-foreground can-hover:opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover/file:opacity-100"
               onClick={() => onClearFile(filePath)}
-              title={translate(
+              title={t(
                 'auto.components.right.sidebar.SourceControl.59654650d3',
                 'Clear notes for {{value0}}',
                 { value0: filePath }
               )}
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.right.sidebar.SourceControl.59654650d3',
                 'Clear notes for {{value0}}',
                 { value0: filePath }
@@ -132,15 +138,15 @@ export function DiffCommentsInlineList({
                   // Keep copy/delete as siblings of the main target to avoid nested interactive elements.
                   className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded text-left"
                   onClick={() => onOpen(c)}
-                  title={translate(
+                  title={t(
                     'auto.components.right.sidebar.SourceControl.0b5b8c234c',
                     'Open {{value0}} ({{value1}})',
-                    { value0: c.filePath, value1: getLocalizedDiffCommentLineLabel(c) }
+                    { value0: c.filePath, value1: getLocalizedDiffCommentLineLabel(c, t) }
                   )}
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.right.sidebar.SourceControl.3eb9b2805e',
                     'Open note on {{value0}}',
-                    { value0: getLocalizedDiffCommentLineLabel(c) }
+                    { value0: getLocalizedDiffCommentLineLabel(c, t) }
                   )}
                 >
                   <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] leading-none tabular-nums text-muted-foreground">
@@ -148,12 +154,12 @@ export function DiffCommentsInlineList({
                   </span>
                   <span className="shrink-0 rounded bg-muted/70 px-1 py-0.5 text-[10px] leading-none text-muted-foreground">
                     {getDiffCommentSource(c) === 'markdown'
-                      ? translate('auto.components.right.sidebar.SourceControl.94c42b252e', 'MD')
-                      : translate('auto.components.right.sidebar.SourceControl.c56ba7fa06', 'Diff')}
+                      ? t('auto.components.right.sidebar.SourceControl.94c42b252e', 'MD')
+                      : t('auto.components.right.sidebar.SourceControl.c56ba7fa06', 'Diff')}
                   </span>
                   {c.sentAt ? (
                     <span className="shrink-0 rounded bg-muted/70 px-1 py-0.5 text-[10px] leading-none text-muted-foreground">
-                      {translate('auto.components.right.sidebar.SourceControl.655633c08a', 'Sent')}
+                      {t('auto.components.right.sidebar.SourceControl.655633c08a', 'Sent')}
                     </span>
                   ) : null}
                   <span className="block min-w-0 flex-1 whitespace-pre-wrap break-words text-[11px] leading-snug text-foreground">
@@ -164,11 +170,8 @@ export function DiffCommentsInlineList({
                   type="button"
                   className="shrink-0 rounded p-0.5 text-muted-foreground can-hover:opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
                   onClick={() => void handleCopyOne(c)}
-                  title={translate(
-                    'auto.components.right.sidebar.SourceControl.1623bf4e19',
-                    'Copy note'
-                  )}
-                  aria-label={translate(
+                  title={t('auto.components.right.sidebar.SourceControl.1623bf4e19', 'Copy note')}
+                  aria-label={t(
                     'auto.components.right.sidebar.SourceControl.c085946bda',
                     'Copy note on line {{value0}}',
                     { value0: c.lineNumber }
@@ -180,11 +183,8 @@ export function DiffCommentsInlineList({
                   type="button"
                   className="shrink-0 rounded p-0.5 text-muted-foreground can-hover:opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
                   onClick={() => onDelete(c.id)}
-                  title={translate(
-                    'auto.components.right.sidebar.SourceControl.b656381c18',
-                    'Delete note'
-                  )}
-                  aria-label={translate(
+                  title={t('auto.components.right.sidebar.SourceControl.b656381c18', 'Delete note')}
+                  aria-label={t(
                     'auto.components.right.sidebar.SourceControl.c321542ee2',
                     'Delete note on line {{value0}}',
                     { value0: c.lineNumber }

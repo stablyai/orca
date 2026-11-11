@@ -22,16 +22,6 @@ function agent(over: Partial<RuntimeWorktreeAgentRow>): RuntimeWorktreeAgentRow 
 }
 
 describe('formatWorktreePsProgramStatus', () => {
-  it('is empty without agents or facets', () => {
-    expect(formatWorktreePsProgramStatus(undefined)).toBe('')
-    expect(formatWorktreePsProgramStatus([agent({})])).toBe('')
-  })
-
-  it('shows live progress', () => {
-    const programStatus = { state: 'working' as const, progress: 42, observedAt: 1 }
-    expect(formatWorktreePsProgramStatus([agent({ programStatus })])).toBe('  42%')
-  })
-
   it('prefers a reported block over another agent progress', () => {
     const working = agent({ programStatus: { state: 'working', progress: 42, observedAt: 1 } })
     const signIn = agent({

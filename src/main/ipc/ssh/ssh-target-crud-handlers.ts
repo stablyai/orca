@@ -13,7 +13,7 @@ import {
 } from '../../ssh/config/ssh-config-host-picker'
 import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
 import { closeOrcadManagedTunnel } from '../../managed-server/lifecycle/orcad-managed-tunnel'
-import { rotateSshProviderAuthority } from '../../ssh/ssh-provider-authority'
+import { rotateSshProviderAuthority } from '../../ssh/connection/authority/ssh-provider-authority'
 import {
   getSshTargetRegistryStore,
   setSshTargetMutations
@@ -22,22 +22,33 @@ import {
   allowsDirectSshRelay,
   isManagedOrcadSshTarget,
   isRuntimeOwnedSshTarget
-} from '../../ssh/connection/ssh-connection-store'
+} from '../../ssh/targets/ssh-target-runtime-ownership'
 import { connectionManager, getCurrentMainWindow } from './ssh-ipc-context'
 import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
-import { fingerprintRuntimeSshTarget } from '../../ssh/runtime-ssh-target-fingerprint'
+import { fingerprintRuntimeSshTarget } from '../../ssh/runtime-access/runtime-ssh-target-fingerprint'
 import { removeRegisteredSshTarget } from './ssh-session-teardown'
 import { notifyReposChanged } from '../repos/repos-changed-notification'
-import { requestDesktopBrowserBridgeReconcile } from '../desktop-browser-bridge-reconcile'
+import {
+  requestDesktopBrowserBridgeReconcile,
+  setDesktopBrowserBridgeHostStopped
+} from '../browser/desktop-browser-bridge-reconcile'
+import { isRemoteCliControlAllowed } from '../../../shared/ssh-remote-cli-control'
 
 // Add/import can re-adopt orphaned workspaces; report them so the renderer refreshes repo ownership.
 function takeRepoReadoptions(): SshRepoReadoption[] {
   const store = getSshTargetRegistryStore()
-  if (!store || store.lastRepoReadoptions.length === 0) {
+  if (!store) {
     return []
   }
   const repoReadoptions = store.lastRepoReadoptions
   store.lastRepoReadoptions = []
+  return publishRepoReadoptions(repoReadoptions)
+}
+
+function publishRepoReadoptions(repoReadoptions: SshRepoReadoption[]): SshRepoReadoption[] {
+  if (repoReadoptions.length === 0) {
+    return []
+  }
   for (const targetId of new Set(
     repoReadoptions.flatMap(({ oldTargetId, newTargetId }) => [oldTargetId, newTargetId])
   )) {
@@ -123,6 +134,9 @@ function updateSshTarget(id: string, updates: SshTargetUpdateInput): SshTarget |
   )
   // Revoke desktop-browser control immediately when permission is disabled.
   requestDesktopBrowserBridgeReconcile()
+  if (isRemoteCliControlAllowed(updated)) {
+    setDesktopBrowserBridgeHostStopped(id, false)
+  }
   const environmentId = getManagedOrcadFenceEnvironmentId(updated ?? undefined)
   if (environmentId && updated) {
     // Edited managed hosts need fresh tunnels and transports; unserved hosts have no managed route to redial.
@@ -170,19 +184,28 @@ export function registerSshTargetCrudHandlers(): void {
 
   ipcMain.handle('ssh:removeTarget', (_event, args: { id: string }) => removeSshTarget(args.id))
 
-  ipcMain.handle('ssh:importConfig', (_event, args?: { reAdopt?: boolean }) => {
-    const targets = getSshTargetRegistryStore()!.importFromSshConfig(args)
-    const repoReadoptions = takeRepoReadoptions()
-    return { targets, repoReadoptions }
+  ipcMain.handle('ssh:importConfig', async (_event, args?: { reAdopt?: boolean }) => {
+    const { targets, repoReadoptions } =
+      await getSshTargetRegistryStore()!.importFromSshConfig(args)
+    return { targets, repoReadoptions: publishRepoReadoptions(repoReadoptions) }
   })
 
   // Prefill the add-host form without importing targets; bulk sync belongs to Settings.
   ipcMain.handle('ssh:listConfigHosts', (_event, args?: SshConfigHostListArgs) => {
+    const store = getSshTargetRegistryStore()!
+    // The import's own decision, read without waiting on ssh -G; until one exists the flags are alias-only.
+    const snapshot = store.currentSshRouteSnapshot()
+    if (args?.refresh === true || !snapshot) {
+      void store.refreshSshRouteSnapshot().catch(() => {})
+    }
     return listUserSshConfigHostSummaries(
-      getSshTargetRegistryStore()!.listTargets(),
+      store.listTargets(),
       args?.query,
-      getSshTargetRegistryStore()!.listSuppressedSshConfigAliases(),
-      { refresh: args?.refresh === true }
+      store.listSuppressedSshConfigAliases(),
+      {
+        refresh: args?.refresh === true,
+        routeDuplicateAliases: new Set(snapshot?.duplicateOf.keys() ?? [])
+      }
     )
   })
 

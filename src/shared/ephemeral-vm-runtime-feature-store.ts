@@ -1,13 +1,13 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { readNodeFileSyncWithinLimit } from './node-bounded-file-reader'
+import { readNodeFileSyncWithinLimit } from './file-content/node-bounded-file-reader'
 import {
   JsonStringifyByteLimitError,
   stringifyJsonWithinByteLimit
-} from './node-bounded-json-stringify'
-import { writeSecureJsonFileWithinLimit } from './bounded-secure-json-file'
-import { hardenExistingSecureFile } from './secure-file'
+} from './json-stream/node-bounded-json-stringify'
+import { writeSecureJsonFileWithinLimit } from './secure-storage/bounded-secure-json-file'
+import { hardenExistingSecureFile } from './secure-storage/secure-file'
 import {
   EphemeralVmRuntimeRecordSchema,
   type EphemeralVmRuntimeRecord
@@ -151,7 +151,7 @@ export function featureEntryFromRuntime(
 ): EphemeralVmRuntimeFeatureEntry | null {
   const recipeCheckoutMode = runtime.recipe?.checkoutMode
   const resultCheckoutMode =
-    runtime.recipeResult.schemaVersion === 2 ? runtime.recipeResult.checkoutMode : undefined
+    runtime.recipeResult?.schemaVersion === 2 ? runtime.recipeResult.checkoutMode : undefined
   if (!recipeCheckoutMode && !resultCheckoutMode) {
     return null
   }
@@ -192,7 +192,7 @@ function restoreRuntimeFeatures(
     ...(runtime.recipe && feature.recipeCheckoutMode
       ? { recipe: { ...runtime.recipe, checkoutMode: feature.recipeCheckoutMode } }
       : {}),
-    ...(feature.resultCheckoutMode
+    ...(feature.resultCheckoutMode && runtime.recipeResult
       ? {
           recipeResult: {
             ...runtime.recipeResult,
@@ -248,7 +248,7 @@ export function sortRuntimeFeatures<T extends { id: string; recipeId: string; cr
 ): T[] {
   return features
     .map((feature) => ({ feature, identity: featureIdentity(feature) }))
-    .sort((left, right) => left.identity.localeCompare(right.identity))
+    .sort((left, right) => left.identity.localeCompare(right.identity, 'en'))
     .map(({ feature }) => feature)
 }
 

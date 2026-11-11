@@ -1,4 +1,11 @@
-import type { Automation, AutomationRun } from '../../../shared/automations-types'
+import { getRepoSshConnectionId } from '../../../shared/execution-host'
+import {
+  automationRequiresHostReselection,
+  findAutomationRepo
+} from '../../../shared/automations/ownership/automation-repo-target'
+import type { Repo } from '../../../shared/repo-types'
+import type { Automation } from '../../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../../shared/automations/history/automation-run'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   automationCapturedHostIssue as resolveAutomationCapturedHostIssue,
@@ -11,17 +18,17 @@ import {
   type AutomationListParams,
   type AutomationListResult,
   type AutomationProjectionContext
-} from '../../../shared/automation-list-scope'
+} from '../../../shared/automations/ownership/automation-list-scope'
 import {
   assertAutomationOwnerFence as enforceAutomationOwnerFence,
   toAutomationOwnerPrecondition,
   type AutomationOwnerFenceOperation,
   type AutomationOwnerPrecondition
-} from '../../../shared/automation-owner-precondition'
+} from '../../../shared/automations/ownership/automation-owner-precondition'
 import {
   AUTOMATION_OWNER_CONFLICT_CODES,
   AutomationOwnerConflictError
-} from '../../../shared/automation-owner-conflict'
+} from '../../../shared/automations/ownership/automation-owner-conflict'
 import {
   nextSshTargetGeneration,
   resolveSshTargetGenerationHighWaterMark,
@@ -31,9 +38,9 @@ import {
   resolveAutomationWorkspaceHost,
   resolveAutomationWorkspaceSshTargetId,
   type AutomationWorkspaceSshPin
-} from '../../../shared/automation-workspace-pin'
-import { summarizeAutomationRunUsage } from '../../../shared/automation-usage-summary'
-import type { FolderWorkspaceHostState } from '../../../shared/folder-workspace-execution-host'
+} from '../../../shared/automations/ownership/automation-workspace-pin'
+import { summarizeAutomationRunUsage } from '../../../shared/automations/history/automation-usage-summary'
+import type { FolderWorkspaceHostState } from '../../../shared/folder-workspaces/folder-workspace-execution-host'
 
 export type AutomationStorageAuthority = 'desktop' | 'runtime'
 
@@ -105,8 +112,13 @@ export function automationProjectionContext(
   storageAuthority: AutomationStorageAuthority,
   withUsage: boolean
 ): AutomationProjectionContext {
+  const reposById = new Map<string, Repo[]>()
+  for (const repo of state.repos) {
+    const rows = reposById.get(repo.id) ?? []
+    rows.push(repo)
+    reposById.set(repo.id, rows)
+  }
   const usage = withUsage ? automationUsageSummaries(state) : null
-  const reposById = new Map(state.repos.map((repo) => [repo.id, repo]))
   const targetIdByGeneration = new Map(
     (state.sshTargets ?? []).flatMap((target) =>
       target.generation === undefined ? [] : [[target.generation, target.id] as const]
@@ -114,11 +126,18 @@ export function automationProjectionContext(
   )
   return {
     storageAuthority,
+    requiresHostReselection: (automation) =>
+      resolveAutomationWorkspaceHost(folderWorkspaceHostState(state), automation.workspaceId)
+        .kind === 'unpinned' &&
+      automationRequiresHostReselection(
+        automation,
+        reposById.get(automation.runContext?.repoId ?? automation.projectId) ?? []
+      ),
     sshTargetGeneration: (targetId) => sshTargetGenerationForConnection(state, targetId),
     sshTargetIdForGeneration: (generation) => targetIdByGeneration.get(generation),
-    repoConnectionId: (repoId) => {
-      const repo = reposById.get(repoId)
-      return repo ? repo.connectionId?.trim() || null : undefined
+    repoConnectionId: (repoId, automation) => {
+      const repo = findAutomationRepo(reposById.get(repoId) ?? [], repoId, automation?.runContext)
+      return repo ? getRepoSshConnectionId(repo) : undefined
     },
     workspaceHost: (automation) =>
       resolveAutomationWorkspaceHost(folderWorkspaceHostState(state), automation.workspaceId),

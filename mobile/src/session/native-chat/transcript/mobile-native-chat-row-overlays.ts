@@ -1,6 +1,6 @@
 import { createContext } from 'react'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
-import type { RpcClient } from '../../../transport/rpc-client'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
+import type { MobileNativeChatImageSource } from '../visual/mobile-native-chat-image-preview'
 
 export type MobileNativeChatViewedImage = { uri: string; label: string }
 
@@ -8,11 +8,14 @@ export type MobileNativeChatViewedImage = { uri: string; label: string }
 export type MobileNativeChatRowOverlays = {
   openImage: (image: MobileNativeChatViewedImage) => void
   openActions: (message: NativeChatMessage) => void
-  /** A structured chat's host client, which reads images from its attachment store. */
-  imageClient?: RpcClient
+  /** Confirms, then rewinds the chat to this user message; explains instead when it can't now. */
+  openRewind: (itemId: string) => void
+  /** Reads host image paths the phone cannot load itself. */
+  imageSource?: MobileNativeChatImageSource
 }
 
 export const MobileNativeChatRowOverlaysContext = createContext<MobileNativeChatRowOverlays>({
   openImage: () => {},
-  openActions: () => {}
+  openActions: () => {},
+  openRewind: () => {}
 })

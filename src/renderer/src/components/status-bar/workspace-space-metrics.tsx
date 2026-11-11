@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
-import { translate } from '@/i18n/i18n'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import {
   getWorkspaceSpaceScanDateTimeLabel,
   getWorkspaceSpaceScanTimeLabel
 } from './workspace-space-format'
-import { formatShortTimeAgo } from '@/lib/short-time-ago'
+import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 
 export function Metric({
   label,
@@ -53,6 +53,8 @@ export function UpdatedMetric({
   scannedAt: number | null
   isScanning: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
@@ -66,18 +68,17 @@ export function UpdatedMetric({
 
   return (
     <Metric
-      label={translate(
-        'auto.components.status.bar.WorkspaceSpaceManagerPanel.52b629eb84',
-        'Updated'
-      )}
-      title={scannedAt === null ? undefined : getWorkspaceSpaceScanDateTimeLabel(scannedAt)}
+      label={t('auto.components.status.bar.WorkspaceSpaceManagerPanel.52b629eb84', 'Updated')}
+      title={
+        scannedAt === null ? undefined : getWorkspaceSpaceScanDateTimeLabel(scannedAt, intlLocale)
+      }
       shortValue={scannedAt === null ? undefined : formatShortTimeAgo(scannedAt, now)}
       value={
         scannedAt === null
           ? isScanning
-            ? 'Scanning'
+            ? t('auto.components.status.bar.WorkspaceSpaceManagerPanel.scanning', 'Scanning')
             : '—'
-          : getWorkspaceSpaceScanTimeLabel(scannedAt, now)
+          : getWorkspaceSpaceScanTimeLabel(scannedAt, now, intlLocale)
       }
     />
   )

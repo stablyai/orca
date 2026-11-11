@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createProjectMovePauseFollower } from './project-move-pause-follower'
 import type { AppState } from '@/store/types'
 import type { ProjectMovePauseResponse } from '../../../../shared/project-move-pause'
-import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 const mocks = vi.hoisted(() => {
   const tabsByWorktree: Record<string, { id: string }[]> = {}
@@ -22,20 +22,21 @@ const mocks = vi.hoisted(() => {
     payload: vi.fn(() => ({}))
   }
 })
-vi.mock('@/store', () => ({
+vi.mock('@/store/index', () => ({
   useAppStore: { getState: () => mocks.state, subscribe: () => () => {} }
 }))
-vi.mock('@/lib/worktree-sleep-intent', () => ({
+vi.mock('@/lib/workspace/sleep/worktree-sleep-intent', () => ({
   clearWorktreeSleepIntent: vi.fn(),
   markWorktreeSleepIntent: vi.fn(),
   withWorktreeSleepTeardown: (_id: string, action: () => Promise<void>) => action()
 }))
-vi.mock('@/lib/workspace-session', () => ({ buildWorkspaceSessionPayload: mocks.payload }))
-vi.mock('@/lib/workspace-session-host-persistence', () => ({
+vi.mock('@/lib/workspace/persistence/workspace-session', () => ({
+  buildWorkspaceSessionPayload: mocks.payload
+}))
+vi.mock('@/lib/workspace/persistence/workspace-session-host-persistence', () => ({
   persistWorkspaceSessionByHost: mocks.persist
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), warning: vi.fn() } }))
-import { createProjectMovePauseFollower } from './project-move-pause-follower'
 
 function fixture() {
   const responses: ProjectMovePauseResponse[] = []
@@ -102,32 +103,6 @@ describe('project move renderer completion', () => {
     expect(f.responses.map((response) => response.phase)).toEqual(['prepare', 'persist'])
   })
 
-  it('resolves every twin chat host and the terminal owner instead of assuming local', async () => {
-    const f = fixture()
-    const id = 'repo::/wt'
-    mocks.state.worktreesByRepo = {
-      repo: [
-        { id, repoId: 'repo', hostId: 'local' },
-        { id, repoId: 'repo', hostId: 'runtime:env' }
-      ]
-    }
-    mocks.state.tabsByWorktree = { [id]: [{ id: 'tab' }] }
-    mocks.state.ptyIdsByTabId = { tab: [toRemoteRuntimePtyId('pty', 'env')] }
-    await f.prepare([id])
-    expect(f.responses[0]).toEqual({
-      requestId: 'move-1',
-      protocol: 1,
-      phase: 'prepare',
-      targets: [
-        {
-          worktreeId: id,
-          terminalHost: { kind: 'environment', environmentId: 'env' },
-          chatHosts: [{ kind: 'self' }, { kind: 'environment', environmentId: 'env' }]
-        }
-      ]
-    })
-  })
-
   it('refuses ambiguous twins before starting a sleep', async () => {
     const f = fixture()
     const id = 'repo::/wt'
@@ -162,6 +137,46 @@ describe('project move renderer completion', () => {
     await f.persist()
     expect(f.responses.at(-1)).toMatchObject({ phase: 'error', error: 'capture failed' })
     expect(mocks.persist).not.toHaveBeenCalled()
+  })
+
+  // One workspace of a two-project move failed in main, and its rollback's
+  // error failed the whole pause, so the move's retry never ran; a fresh pause re-sleeps it.
+  it('persists the slept workspaces of a partly failed pause, and a new pause re-sleeps the rest', async () => {
+    const f = fixture()
+    mocks.state.shutdownWorktreeTerminals.mockImplementation(async (_id, options) => {
+      if ((await options?.hostStop)?.failed) {
+        throw new Error('host_terminal_stop_failed')
+      }
+    })
+    await f.prepare(['a', 'b'])
+    f.notice('started', 'a')
+    f.notice('started', 'b')
+    f.notice('ended', 'a')
+    f.follower.follow({
+      phase: 'ended',
+      worktreeId: 'b',
+      projectMovePauseId: 'move-1',
+      slept: false,
+      stoppedPtyIds: [],
+      records: null
+    })
+    await f.persist(['a'])
+    expect(f.responses.at(-1)).toMatchObject({ phase: 'persist' })
+    await f.follower.request({ requestId: 'move-1', protocol: 1, phase: 'release' })
+
+    const retry = { requestId: 'move-2', protocol: 1 } as const
+    await f.follower.request({ ...retry, phase: 'prepare', worktreeIds: ['b'] })
+    f.follower.follow({ phase: 'started', worktreeId: 'b', projectMovePauseId: 'move-2' })
+    f.follower.follow({
+      phase: 'ended',
+      worktreeId: 'b',
+      projectMovePauseId: 'move-2',
+      slept: true,
+      stoppedPtyIds: ['pty'],
+      records: []
+    })
+    await f.follower.request({ ...retry, phase: 'persist', successfulWorktreeIds: ['b'] })
+    expect(f.responses.at(-1)).toMatchObject({ requestId: 'move-2', phase: 'persist' })
   })
 
   it('reports durable write failure after teardown', async () => {

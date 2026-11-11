@@ -1,11 +1,13 @@
-import { ImeInput } from '@/lib/ime-text-field'
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronUp, ChevronDown, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
-import { getFindRequestQuery } from '@/lib/find-query-bounds'
+import { useTranslate } from '@/i18n/use-translate'
+import { getFindRequestQuery } from '@/lib/text-search/find-query-bounds'
+import { useGuestEscape } from '../host-guest/use-guest-escape'
 
 type BrowserFindProps = {
+  browserPageId: string
   isOpen: boolean
   onClose: () => void
   webviewRef: React.RefObject<Electron.WebviewTag | null>
@@ -14,18 +16,33 @@ type BrowserFindProps = {
 }
 
 export default function BrowserFind({
+  browserPageId,
   isOpen,
   onClose,
   webviewRef,
   guestGeneration = null
 }: BrowserFindProps): React.JSX.Element | null {
+  const t = useTranslate()
   const inputRef = useRef<HTMLInputElement>(null)
   const wasOpenRef = useRef(isOpen)
-  const activeFindQueryRef = useRef<string | null>(null)
+  const activeFindRef = useRef<{
+    query: string
+    guestGeneration: number | null
+    webview: Electron.WebviewTag
+    requestId: number
+  } | null>(null)
   const [query, setQuery] = useState('')
-  const [activeMatch, setActiveMatch] = useState(0)
-  const [totalMatches, setTotalMatches] = useState(0)
+  const [result, setResult] = useState<{
+    query: string
+    guestGeneration: number | null
+    activeMatch: number
+    totalMatches: number
+  } | null>(null)
   const requestQuery = getFindRequestQuery(query)
+  const currentResult =
+    result?.query === requestQuery && result.guestGeneration === guestGeneration ? result : null
+  const activeMatch = currentResult?.activeMatch ?? 0
+  const totalMatches = currentResult?.totalMatches ?? 0
 
   const safeFindInPage = useCallback(
     (text: string, opts?: Electron.FindInPageOptions): void => {
@@ -34,12 +51,13 @@ export default function BrowserFind({
         return
       }
       try {
-        webview.findInPage(text, opts)
+        const requestId = webview.findInPage(text, opts)
+        activeFindRef.current = { query: text, guestGeneration, webview, requestId }
       } catch {
         // Ignore guest teardown races during navigation or tab close.
       }
     },
-    [webviewRef]
+    [webviewRef, guestGeneration]
   )
 
   const safeStopFindInPage = useCallback((): void => {
@@ -55,21 +73,27 @@ export default function BrowserFind({
   }, [webviewRef])
 
   // Electron findNext:true starts a new session; advancing the current selection requires false.
+  const isCurrentFind = useCallback(
+    (): boolean =>
+      activeFindRef.current?.query === requestQuery &&
+      activeFindRef.current.guestGeneration === guestGeneration &&
+      activeFindRef.current.webview === webviewRef.current,
+    [requestQuery, guestGeneration, webviewRef]
+  )
+
   const findNext = useCallback(() => {
     if (requestQuery) {
-      const findNext = activeFindQueryRef.current !== requestQuery
+      const findNext = !isCurrentFind()
       safeFindInPage(requestQuery, { forward: true, findNext })
-      activeFindQueryRef.current = requestQuery
     }
-  }, [requestQuery, safeFindInPage])
+  }, [requestQuery, safeFindInPage, isCurrentFind])
 
   const findPrevious = useCallback(() => {
     if (requestQuery) {
-      const findNext = activeFindQueryRef.current !== requestQuery
+      const findNext = !isCurrentFind()
       safeFindInPage(requestQuery, { forward: false, findNext })
-      activeFindQueryRef.current = requestQuery
     }
-  }, [requestQuery, safeFindInPage])
+  }, [requestQuery, safeFindInPage, isCurrentFind])
 
   useEffect(() => {
     if (isOpen) {
@@ -84,22 +108,21 @@ export default function BrowserFind({
     const wasOpen = wasOpenRef.current
     wasOpenRef.current = isOpen
     if (!isOpen) {
-      activeFindQueryRef.current = null
+      activeFindRef.current = null
       return
     }
     if (!requestQuery) {
-      activeFindQueryRef.current = null
+      activeFindRef.current = null
       safeStopFindInPage()
       return
     }
 
     // A reopen or a changed query starts a fresh session, so findNext must be true here.
     const runFind = (): void => {
-      if (activeFindQueryRef.current === requestQuery) {
+      if (isCurrentFind()) {
         return
       }
       safeFindInPage(requestQuery, { findNext: true })
-      activeFindQueryRef.current = requestQuery
     }
     if (!wasOpen) {
       runFind()
@@ -108,7 +131,7 @@ export default function BrowserFind({
     // Debounce typing to avoid highlight flashes; reopening and Enter still use the live query.
     const id = window.setTimeout(runFind, 200)
     return () => window.clearTimeout(id)
-  }, [isOpen, requestQuery, safeFindInPage, safeStopFindInPage])
+  }, [isOpen, requestQuery, safeFindInPage, safeStopFindInPage, isCurrentFind])
 
   // Rebind on generation changes: client-hosted restart swaps the guest without remounting or closing Find.
   useEffect(() => {
@@ -117,9 +140,22 @@ export default function BrowserFind({
       return
     }
     const handleFoundInPage = (event: Electron.FoundInPageEvent): void => {
+      const activeFind = activeFindRef.current
+      if (
+        !activeFind ||
+        activeFind.webview !== webview ||
+        activeFind.guestGeneration !== guestGeneration ||
+        activeFind.requestId !== event.result.requestId
+      ) {
+        return
+      }
       const { activeMatchOrdinal, matches } = event.result
-      setActiveMatch(activeMatchOrdinal)
-      setTotalMatches(matches)
+      setResult({
+        query: activeFind.query,
+        guestGeneration,
+        activeMatch: activeMatchOrdinal,
+        totalMatches: matches
+      })
     }
     webview.addEventListener('found-in-page', handleFoundInPage)
     return () => {
@@ -131,10 +167,12 @@ export default function BrowserFind({
     }
   }, [webviewRef, isOpen, guestGeneration])
 
-  if ((!isOpen || !requestQuery) && (activeMatch !== 0 || totalMatches !== 0)) {
-    setActiveMatch(0)
-    setTotalMatches(0)
+  if ((!isOpen || !requestQuery) && result !== null) {
+    setResult(null)
   }
+
+  // Like Chrome, Escape typed in the page closes the bar.
+  useGuestEscape(browserPageId, isOpen, onClose)
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -166,22 +204,19 @@ export default function BrowserFind({
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder={translate(
-          'auto.components.browser.pane.BrowserFind.636a69cd66',
-          'Find in page...'
-        )}
+        placeholder={t('auto.components.browser.pane.BrowserFind.636a69cd66', 'Find in page...')}
         className="min-w-0 flex-1 border-none bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
       />
 
-      {query ? (
+      {/* Why: a pending request has no count yet; blank avoids flashing "No matches". */}
+      {query && (currentResult !== null || !requestQuery) ? (
         <span className="shrink-0 text-xs text-zinc-400">
           {totalMatches > 0
-            ? translate(
-                'auto.components.browser.pane.BrowserFind.fc63f336aa',
-                '{{value0}} of {{value1}}',
-                { value0: activeMatch, value1: totalMatches }
-              )
-            : translate('auto.components.browser.pane.BrowserFind.7baca7b1b8', 'No matches')}
+            ? t('auto.components.browser.pane.BrowserFind.fc63f336aa', '{{value0}} of {{value1}}', {
+                value0: activeMatch,
+                value1: totalMatches
+              })
+            : t('auto.components.browser.pane.BrowserFind.7baca7b1b8', 'No matches')}
         </span>
       ) : null}
 
@@ -193,7 +228,7 @@ export default function BrowserFind({
         size="icon-xs"
         onClick={findPrevious}
         className="flex size-6 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-zinc-200"
-        title={translate('auto.components.browser.pane.BrowserFind.ca7aebbd7f', 'Previous match')}
+        title={t('auto.components.browser.pane.BrowserFind.ca7aebbd7f', 'Previous match')}
       >
         <ChevronUp size={14} />
       </Button>
@@ -204,7 +239,7 @@ export default function BrowserFind({
         size="icon-xs"
         onClick={findNext}
         className="flex size-6 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-zinc-200"
-        title={translate('auto.components.browser.pane.BrowserFind.5c0c02ae76', 'Next match')}
+        title={t('auto.components.browser.pane.BrowserFind.5c0c02ae76', 'Next match')}
       >
         <ChevronDown size={14} />
       </Button>
@@ -217,7 +252,7 @@ export default function BrowserFind({
         size="icon-xs"
         onClick={onClose}
         className="flex size-6 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-zinc-200"
-        title={translate('auto.components.browser.pane.BrowserFind.c9d5f63fdc', 'Close')}
+        title={t('auto.components.browser.pane.BrowserFind.c9d5f63fdc', 'Close')}
       >
         <X size={14} />
       </Button>

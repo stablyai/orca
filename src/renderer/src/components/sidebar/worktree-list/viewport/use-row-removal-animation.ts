@@ -22,6 +22,9 @@ export function getSidebarRowIdentityKeys(rows: readonly RenderRow[]): ReadonlyS
   for (const row of rows) {
     if (row.type === 'lineage-group') {
       row.rows.forEach((member) => keys.add(`wt:${member.rowKey}`))
+      if (row.folder) {
+        keys.add(getRenderRowKey(row.folder))
+      }
     } else {
       keys.add(getRenderRowKey(row))
     }

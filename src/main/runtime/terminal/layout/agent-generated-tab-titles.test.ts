@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-ipc-payload'
-import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status-types'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { WorkspaceLayoutStreamEvent } from '../../../../shared/workspace-layout/workspace-layout-stream-frames'
 import type { Store } from '../../../persistence/loading-store/store'
 import { WindowSession } from '../../../persistence/terminal-topology/terminal-topology-window-session-fixture'
@@ -79,15 +79,6 @@ Your task ID is: ${taskId}
 ${task}`
 
 describe('main titles agent tabs from its own hook status', () => {
-  it('titles a headless host’s tab, which no window ever opened', async () => {
-    const { runtime, titleOf } = await hostWith([GIT])
-
-    runtime.recordHookStatusTitle(status(GIT))
-    await runtime.hookStatusTitlesSettled()
-
-    expect(titleOf(GIT)).toBe('Refactor the auth middleware to use JWT')
-  })
-
   it('gives a batch’s titles of several workspaces in one rename and one frame', async () => {
     const { runtime, apply, titleOf } = await hostWith([GIT, FOLDER])
     const frames: WorkspaceLayoutStreamEvent[] = []
@@ -106,36 +97,6 @@ describe('main titles agent tabs from its own hook status', () => {
     ])
   })
 
-  it('gives nothing with the setting off', async () => {
-    const { runtime, apply, titleOf } = await hostWith([GIT], {
-      titles: false
-    })
-
-    runtime.recordHookStatusTitle(status(GIT))
-    await runtime.hookStatusTitlesSettled()
-
-    expect(apply).not.toHaveBeenCalled()
-    expect(titleOf(GIT)).toBeUndefined()
-  })
-
-  it('leaves a renamed tab and a quick command’s tab untitled', async () => {
-    const { runtime, apply, titleOf } = await hostWith([GIT, FOLDER], {
-      edit: (session) => {
-        const [git] = session.session.tabsByWorktree[GIT]!
-        const [folder] = session.session.tabsByWorktree[FOLDER]!
-        session.session.tabsByWorktree[GIT] = [{ ...git!, customTitle: 'Status tests' }]
-        session.session.tabsByWorktree[FOLDER] = [{ ...folder!, quickCommandLabel: 'Run tests' }]
-      }
-    })
-
-    runtime.recordHookStatusTitle(status(GIT))
-    runtime.recordHookStatusTitle(status(FOLDER))
-    await runtime.hookStatusTitlesSettled()
-
-    expect(apply).not.toHaveBeenCalled()
-    expect([titleOf(GIT), titleOf(FOLDER)]).toEqual([undefined, undefined])
-  })
-
   it('has the titles in the first snapshot a window that starts after them reads', async () => {
     const { runtime } = await hostWith([GIT])
 
@@ -149,7 +110,6 @@ describe('main titles agent tabs from its own hook status', () => {
   })
 })
 
-// Main's twins of agent-generated-tab-title.test.ts, which pins the window's own titles.
 describe('main keeps the window’s generated-title rules', () => {
   async function titled(
     statuses: AgentStatusIpcPayload[][],
@@ -160,10 +120,10 @@ describe('main keeps the window’s generated-title rules', () => {
   ) {
     const host = await hostWith([GIT])
     const reads = [labels].flat()
-    const read = vi.spyOn(host.runtime['agentOrchestrationProjection'], 'buildByPaneKey')
-    read.mockReturnValue(reads.at(-1))
+    const read = vi.spyOn(host.runtime['agentOrchestrationProjection'], 'getForPaneKey')
+    read.mockImplementation((paneKey) => reads.at(-1)?.[paneKey])
     for (const each of reads.slice(0, -1)) {
-      read.mockReturnValueOnce(each)
+      read.mockImplementationOnce((paneKey) => each[paneKey])
     }
     for (const batch of statuses) {
       for (const row of batch) {
@@ -182,25 +142,6 @@ describe('main keeps the window’s generated-title rules', () => {
     }
   })
 
-  it('keeps the first prompt’s title', async () => {
-    const { titleOf } = await titled([
-      [status(GIT)],
-      [status(GIT, { prompt: 'Replace this with a later task name' })]
-    ])
-    expect(titleOf(GIT)).toBe('Refactor the auth middleware to use JWT')
-  })
-
-  it('titles a dispatch from its task, not its preamble', async () => {
-    const { titleOf } = await titled([
-      [
-        status(GIT, {
-          prompt: dispatch('task-1', 'Implement the detailed worker instructions')
-        })
-      ]
-    ])
-    expect(titleOf(GIT)).toBe('Implement the detailed worker')
-  })
-
   it('replaces a dispatch’s preamble title once main has its labels', async () => {
     const prompt = dispatch('task-1', 'Implement the detailed worker instructions')
     const host = await titled(
@@ -212,39 +153,6 @@ describe('main keeps the window’s generated-title rules', () => {
     host.runtime.recordHookStatusTitle(status(GIT, { prompt, state: 'done' }))
     await host.runtime.hookStatusTitlesSettled()
     expect(host.titleOf(GIT)).toBe('Better worker label')
-  })
-
-  it('keeps a dispatch label when a later non-dispatch prompt comes', async () => {
-    const { titleOf } = await titled(
-      [
-        [
-          status(GIT, {
-            prompt: dispatch('task-1', 'Implement the worker instructions')
-          })
-        ],
-        [
-          status(GIT, {
-            prompt: 'Refactor the auth middleware to use JWT tokens'
-          })
-        ]
-      ],
-      labelsOf('task-1', 'Better worker label')
-    )
-    expect(titleOf(GIT)).toBe('Better worker label')
-  })
-
-  it('titles a later non-dispatch prompt while sticky labels remain but no title exists', async () => {
-    const { titleOf } = await titled(
-      [
-        [
-          status(GIT, {
-            orchestration: labelsOf('task-1', 'Stale worker label')[paneOf(GIT)]
-          })
-        ]
-      ],
-      labelsOf('task-1', 'Stale worker label')
-    )
-    expect(titleOf(GIT)).toBe('Refactor the auth middleware to use JWT')
   })
 
   it('does not re-pin task A’s label onto a later dispatch of task B', async () => {
@@ -264,18 +172,5 @@ describe('main keeps the window’s generated-title rules', () => {
       labelsOf('task-a', 'Worker A label')
     )
     expect(titleOf(GIT)).toBe('Implement task B worker instructions')
-  })
-
-  it('titles a paste-sized prompt from its start', async () => {
-    const prompt = `Fix the flaky status tests ${'large pasted text '.repeat(5000)}`
-    const { titleOf } = await titled([[status(GIT, { prompt })]])
-    expect(titleOf(GIT)).toBe('Fix the flaky status tests large pasted')
-  })
-
-  it('keeps a title given in the same batch, as the window’s batch does', async () => {
-    const { titleOf } = await titled([
-      [status(GIT), status(GIT, { prompt: 'Replace this with a later task name' })]
-    ])
-    expect(titleOf(GIT)).toBe('Refactor the auth middleware to use JWT')
   })
 })

@@ -1,9 +1,9 @@
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { ChevronLeft, SlidersHorizontal, List, ArrowDownUp, Eye } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -24,6 +24,7 @@ export function TaskPageLinearIssueToolbar({
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const {
     setTaskResumeState,
     linearViewOptions,
@@ -64,7 +65,7 @@ export function TaskPageLinearIssueToolbar({
                 linearContext: undefined
               })
             }}
-            aria-label={translate('auto.components.TaskPage.f397d513e3', 'Back')}
+            aria-label={t('auto.components.TaskPage.f397d513e3', 'Back')}
           >
             <ChevronLeft className="size-3.5" />
           </Button>
@@ -72,14 +73,14 @@ export function TaskPageLinearIssueToolbar({
         <div className="min-w-0 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
           {activeLinearIssueContextLabel ??
             (linearMode === 'in-orca'
-              ? translate('auto.components.TaskPage.linearModeHasWorktree', 'Has Workspace')
-              : translate('auto.components.TaskPage.60f68a2ef4', 'Linear issues'))}
+              ? t('auto.components.TaskPage.linearModeHasWorktree', 'Has Workspace')
+              : t('auto.components.TaskPage.60f68a2ef4', 'Linear issues'))}
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <div
           className="hidden items-center rounded-md border border-border/50 bg-background/70 p-0.5 md:flex"
-          aria-label={translate('auto.components.TaskPage.d47248df4d', 'Linear view mode')}
+          aria-label={t('auto.components.TaskPage.d47248df4d', 'Linear view mode')}
         >
           {linearViewOptions.map(({ id, label, Icon }) => {
             const active = linearViewMode === id
@@ -89,13 +90,9 @@ export function TaskPageLinearIssueToolbar({
                   <button
                     type="button"
                     onClick={() => setLinearViewMode(id)}
-                    aria-label={translate(
-                      'auto.components.TaskPage.af377b13b1',
-                      '{{value0}} view',
-                      {
-                        value0: label
-                      }
-                    )}
+                    aria-label={t('auto.components.TaskPage.af377b13b1', '{{value0}} view', {
+                      value0: label
+                    })}
                     aria-pressed={active}
                     className={cn(
                       'inline-flex size-6 items-center justify-center rounded text-muted-foreground transition hover:text-foreground',
@@ -106,7 +103,7 @@ export function TaskPageLinearIssueToolbar({
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  {translate('auto.components.TaskPage.af377b13b1', '{{value0}} view', {
+                  {t('auto.components.TaskPage.af377b13b1', '{{value0}} view', {
                     value0: label
                   })}
                 </TooltipContent>
@@ -122,13 +119,13 @@ export function TaskPageLinearIssueToolbar({
               className="gap-1 border-border/50 bg-background/70 text-[11px]"
             >
               <SlidersHorizontal className="size-3.5" />
-              {translate('auto.components.TaskPage.9c57663908', 'View')}
+              {t('auto.components.TaskPage.9c57663908', 'View')}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel className="flex items-center gap-2">
               <List className="size-3.5" />
-              {translate('auto.components.TaskPage.9c57663908', 'View')}
+              {t('auto.components.TaskPage.9c57663908', 'View')}
             </DropdownMenuLabel>
             <DropdownMenuRadioGroup
               value={linearViewMode}
@@ -144,7 +141,7 @@ export function TaskPageLinearIssueToolbar({
             <DropdownMenuSeparator />
             <DropdownMenuLabel className="flex items-center gap-2">
               <SlidersHorizontal className="size-3.5" />
-              {translate('auto.components.TaskPage.5659da12fc', 'Grouping')}
+              {t('auto.components.TaskPage.5659da12fc', 'Grouping')}
             </DropdownMenuLabel>
             <DropdownMenuRadioGroup
               value={linearGroupBy}
@@ -159,7 +156,7 @@ export function TaskPageLinearIssueToolbar({
             <DropdownMenuSeparator />
             <DropdownMenuLabel className="flex items-center gap-2">
               <ArrowDownUp className="size-3.5" />
-              {translate('auto.components.TaskPage.5d2d835467', 'Ordering')}
+              {t('auto.components.TaskPage.5d2d835467', 'Ordering')}
             </DropdownMenuLabel>
             <DropdownMenuRadioGroup
               value={linearOrderBy}
@@ -174,7 +171,7 @@ export function TaskPageLinearIssueToolbar({
             <DropdownMenuSeparator />
             <DropdownMenuLabel className="flex items-center gap-2">
               <Eye className="size-3.5" />
-              {translate('auto.components.TaskPage.a26a48252e', 'Display properties')}
+              {t('auto.components.TaskPage.a26a48252e', 'Display properties')}
             </DropdownMenuLabel>
             {linearDisplayPropertyOptions.map((property) => (
               <DropdownMenuCheckboxItem
@@ -189,7 +186,10 @@ export function TaskPageLinearIssueToolbar({
           </DropdownMenuContent>
         </DropdownMenu>
         <div className="text-[11px] text-muted-foreground">
-          {pagedLinearIssues.length} {translate('auto.components.TaskPage.b7bae28b6a', 'shown')}
+          {t('auto.components.TaskPage.shownCount', '{{count}} shown', {
+            count: pagedLinearIssues.length,
+            defaultValue_one: '{{count}} shown'
+          })}
         </div>
       </div>
     </div>

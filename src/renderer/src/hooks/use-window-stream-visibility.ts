@@ -3,7 +3,7 @@ import {
   getWindowParkVisible,
   subscribeWindowParkVisibility,
   WINDOW_HIDE_PARK_GRACE_MS
-} from '@/lib/window-park-visibility'
+} from '@/lib/window-activity/window-park-visibility'
 
 // Avoid renegotiating expensive streams during a quick app-switch round trip.
 export const WINDOW_STREAM_PARK_DELAY_MS = WINDOW_HIDE_PARK_GRACE_MS

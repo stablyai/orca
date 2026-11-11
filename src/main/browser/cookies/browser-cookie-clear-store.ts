@@ -3,34 +3,17 @@ import {
   openCookieDebuggerSession,
   type CookieClearDebugger
 } from './browser-cookie-debugger-session'
-import { normalizeCookieDomain } from './browser-cookie-import-policy'
+import { normalizeCookieDomain } from './policy/cookie-domain'
 import type {
   CookieClearIdentity,
   CookieClearPartitionKey,
   CookieClearStore,
-  CookieImportWriteStore
-} from './browser-cookie-import-clear'
+  CookieImportWriteStore,
+  CookieJarCdpReadStore
+} from './storage/cookie-store-contracts'
 import { restoreEveryCookieIdentity } from './browser-cookie-identity-restore'
 import { normalizeCookiePartitionSite } from './sources/browser-cookie-source-partition'
-
-type CdpCookiePartitionKey = {
-  topLevelSite?: string
-  hasCrossSiteAncestor?: boolean
-}
-
-type CdpCookie = {
-  name: string
-  value: string
-  domain?: string
-  path?: string
-  secure?: boolean
-  httpOnly?: boolean
-  session?: boolean
-  expires?: number
-  sameSite?: string
-  partitionKey?: CdpCookiePartitionKey | null
-  partitionKeyOpaque?: boolean
-}
+import type { CdpCookie } from './browser-cdp-cookie'
 
 function cdpSameSite(sameSite: Cookie['sameSite']): 'Strict' | 'Lax' | 'None' | undefined {
   if (sameSite === 'strict') {
@@ -96,7 +79,7 @@ function indexCdpCookies(cookies: readonly CdpCookie[]): Map<string, CdpCookie[]
   return index
 }
 
-function identityFromCdpCookie(url: string, cdpCookie: CdpCookie): CookieClearIdentity {
+export function identityFromCdpCookie(url: string, cdpCookie: CdpCookie): CookieClearIdentity {
   const partitionKey = partitionKeyFromCdp(cdpCookie)
   return {
     url,
@@ -209,7 +192,7 @@ async function writeIdentityWithCdp(
 
 export function openCookieClearStore(
   targetSession: Session
-): CookieClearStore & CookieImportWriteStore & { dispose: () => void } {
+): CookieClearStore & CookieImportWriteStore & CookieJarCdpReadStore & { dispose: () => void } {
   const { attach, dispose } = openCookieDebuggerSession(targetSession)
   return {
     get: (filter) => targetSession.cookies.get(filter),
@@ -224,6 +207,8 @@ export function openCookieClearStore(
     },
     writeCookieIdentity: async (identity) =>
       writeIdentityWithCdp((await attach()).debugger, identity, 'import'),
+    readAllCdpCookies: async () =>
+      cdpCookiesFromCommand(await (await attach()).debugger.sendCommand('Network.getAllCookies')),
     dispose
   }
 }

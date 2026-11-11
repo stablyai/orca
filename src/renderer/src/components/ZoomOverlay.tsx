@@ -1,13 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import { Search } from 'lucide-react'
-import { ZOOM_LEVEL_CHANGED_EVENT } from '@/lib/zoom-events'
-import type { ZoomLevelChangedEventDetail } from '@/lib/zoom-events'
+import {
+  ZOOM_LEVEL_CHANGED_EVENT,
+  type ZoomLevelChangedEventDetail
+} from '@/app-shell/chrome/zoom-events'
+
+import { useTranslate } from '@/i18n/use-translate'
 
 // Unmount after fading so the fixed overlay cannot interfere with Radix layering, outside clicks or focus.
 const DISPLAY_MS = 1500
 const FADE_MS = 300
 
 export function ZoomOverlay(): React.JSX.Element | null {
+  const t = useTranslate()
   const [visible, setVisible] = useState(false)
   const [detail, setDetail] = useState<ZoomLevelChangedEventDetail | null>(null)
   const hideTimerRef = useRef<number | undefined>(undefined)
@@ -44,7 +49,11 @@ export function ZoomOverlay(): React.JSX.Element | null {
   }
 
   const title =
-    detail.type === 'ui' ? 'UI Zoom' : detail.type === 'editor' ? 'Editor Zoom' : 'Terminal Zoom'
+    detail.type === 'ui'
+      ? t('auto.components.ZoomOverlay.uiZoom', 'UI Zoom')
+      : detail.type === 'editor'
+        ? t('auto.components.ZoomOverlay.editorZoom', 'Editor Zoom')
+        : t('auto.components.ZoomOverlay.terminalZoom', 'Terminal Zoom')
 
   return (
     <div

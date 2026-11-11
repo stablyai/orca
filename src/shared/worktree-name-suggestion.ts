@@ -1,5 +1,10 @@
 import { MARINE_CREATURES } from './marine-creatures'
-import { clampExhaustedTiers, creatureNameAtTier } from './worktree/retired-name-registry'
+import {
+  clampExhaustedTiers,
+  creatureNameAtTier,
+  EMPTY_RETIRED_NAME_REGISTRY,
+  type RetiredNameRegistry
+} from './worktree/retired-name-registry'
 
 /** Desktop and mobile share selection rules; callers supply live/retired names from their own stores. */
 
@@ -44,4 +49,20 @@ export function selectSuggestedCreatureName(
     }
     tier += 1
   }
+}
+
+/** Collisions use the on-disk basename, not displayName. Retired names may retain conversation state keyed by cwd; exhaustedTiers covers compacted names a host no longer lists. */
+export function suggestCreatureNameForPaths(
+  existingPaths: readonly string[],
+  random: () => number = Math.random,
+  retired: RetiredNameRegistry = EMPTY_RETIRED_NAME_REGISTRY
+): string {
+  const used = new Set<string>()
+  for (const path of existingPaths) {
+    used.add(normalizeSuggestedName(suggestionPathBasename(path)))
+  }
+  for (const retiredName of retired.names) {
+    used.add(normalizeSuggestedName(retiredName))
+  }
+  return selectSuggestedCreatureName(used, random, retired.exhaustedTiers)
 }

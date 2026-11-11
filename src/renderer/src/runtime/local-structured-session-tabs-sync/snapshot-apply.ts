@@ -3,17 +3,18 @@ import type {
   RuntimeMobileSessionTabsResult
 } from '../../../../shared/runtime-types'
 import { markStructuredAgentSessionLaunchesPublished } from '../../lib/agent-session/launch/structured-agent-session-launch-publication'
-import type { WorktreeRuntimeOwnerState } from '../../lib/worktree-runtime-owner-state'
-import { getExecutionHostIdForWorktree } from '../../lib/worktree-runtime-owner'
+import type { WorktreeRuntimeOwnerState } from '../../lib/workspace/ownership/worktree-runtime-owner-state'
+import { getExecutionHostIdForWorktree } from '../../lib/workspace/ownership/worktree-runtime-owner'
 import { applyWebSessionTabsSnapshot } from '../web-session-tabs-sync/snapshot-api'
 import { applyWebSessionTabsStorePatch } from '../web-session-tabs-sync/store-patch'
+import { receivedAgentSenderPublications } from '../web-session-tabs-sync/received-agent-sender-publications'
 import type { WebSessionTabsSyncState } from '../web-session-tabs-sync/state'
 import {
   admitRetiredValueUnderAuthority,
   noteRetiredValue,
   sameSessionTabsPublicationLineage
 } from '../web-session-tabs-sync/publisher-identity-fences'
-import { knownStructuredSessionWorktreeIds } from '../local-structured-session-tab-retirement'
+import { knownStructuredSessionWorktreeIds } from '../native-chat/local-sessions/local-structured-session-tab-retirement'
 import {
   localStructuredSessionEpochHistoryByWorktree,
   localStructuredSessionVersionByWorktree
@@ -23,19 +24,19 @@ import { projectLocalStructuredSessionTabs } from './snapshot-projection'
 import {
   hostSnapshotAffirmsAgentSessions,
   hostSnapshotAffirmsWorktreeContents
-} from '../host-session-snapshot-authority'
+} from '../web-session-tabs-sync/hydration/host-session-snapshot-authority'
 import { retireAbsentStructuredAgentSessionLaunchCancellationTombstones } from '../../lib/agent-session/launch/structured-agent-session-launch-registry'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import {
   beginStructuredAgentSessionAuthoritativeInventory,
   startStructuredAgentLaunchCancellationCleanup
-} from '../../lib/launch-cancel-tombstones-compat/structured-agent-session-launch-cancellation'
-import { suppressCancelledStructuredSessionTabs } from '../structured-agent-session-tab-retirement'
-import { LOCAL_STRUCTURED_SESSION_OWNER } from '../local-structured-session-owner'
-import { closeStructuredAgentSession } from '../structured-agent-session-close'
+} from '../../lib/agent-session/launch/structured-agent-session-launch-cancellation'
+import { suppressCancelledStructuredSessionTabs } from '../native-chat/tab-retirement/structured-agent-session-tab-retirement'
+import { LOCAL_STRUCTURED_SESSION_OWNER } from '../native-chat/local-sessions/local-structured-session-owner'
+import { closeStructuredAgentSession } from '../native-chat/requests/structured-agent-session-close'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { useAppStore } from '../../store'
-import { framesDrawWorkspace } from '../workspace-layout-frame-drawn-workspaces'
+import { framesDrawWorkspace } from '../workspace-layout/frames/workspace-layout-frame-drawn-workspaces'
 import { drawnChatLabelChanges, type DrawnChatLabel } from './frame-drawn-chat-tabs'
 
 /** The host saying it no longer publishes this worktree at all, rather than publishing an empty one. */
@@ -70,18 +71,28 @@ export function applyStructuredSessionTabSnapshots(
   const acceptedAgentSessions: { worktreeId: string; sessionId: string }[] = []
   const drawnChatLabels: DrawnChatLabel[] = []
   const settleStructuredSessionMirror = applyWebSessionTabsStorePatch(
-    (state) =>
-      applyLocalStructuredSessionTabSnapshots(state, snapshots, owner, undefined, {
-        ...options,
-        onAcceptedAgentSession: (worktreeId, sessionId) => {
-          acceptedAgentSessions.push({ worktreeId, sessionId })
-          options.onAcceptedAgentSession?.(worktreeId, sessionId)
+    (state, changedAgentPaneKeys) =>
+      applyLocalStructuredSessionTabSnapshots(
+        state,
+        snapshots,
+        owner,
+        undefined,
+        {
+          ...options,
+          onAcceptedAgentSession: (worktreeId, sessionId) => {
+            acceptedAgentSessions.push({ worktreeId, sessionId })
+            options.onAcceptedAgentSession?.(worktreeId, sessionId)
+          },
+          // Switch point: main places the listed chats' tabs; its frames draw them.
+          framesDraw: ORCA_LAYOUT_OWNER_IS_MAIN ? framesDrawWorkspace(state) : undefined,
+          onDrawnChatLabel: (change) => drawnChatLabels.push(change)
         },
-        // Switch point: main places the listed chats' tabs; its frames draw them.
-        framesDraw: ORCA_LAYOUT_OWNER_IS_MAIN ? framesDrawWorkspace(state) : undefined,
-        onDrawnChatLabel: (change) => drawnChatLabels.push(change)
-      }),
-    { frames: [] }
+        changedAgentPaneKeys
+      ),
+    { frames: [] },
+    undefined,
+    false,
+    snapshots.map(({ worktree }) => worktree)
   )
   settleStructuredSessionMirror()
   const { setTabLabel } = useAppStore.getState()
@@ -115,9 +126,16 @@ export function applyLocalStructuredSessionTabSnapshots<
   snapshots: readonly RuntimeMobileSessionTabsResult[],
   owner = LOCAL_STRUCTURED_SESSION_OWNER,
   now = Date.now(),
-  options: StructuredSessionSnapshotApplyOptions = {}
+  options: StructuredSessionSnapshotApplyOptions = {},
+  changedAgentPaneKeys?: Set<string>
 ): State {
   let next = state
+  // Received sender scopes apply before any tab check below can drop their frame.
+  const received = next.agentSenderPublicationsByHost ?? {}
+  const publications = receivedAgentSenderPublications(received, 'local', snapshots)
+  if (publications !== received) {
+    next = { ...next, agentSenderPublicationsByHost: publications }
+  }
   for (const snapshot of snapshots) {
     // Local inventory must not rewrite paired/SSH panes; execution hosts own their tabs.
     if (getExecutionHostIdForWorktree(next, snapshot.worktree) !== 'local') {
@@ -169,7 +187,8 @@ export function applyLocalStructuredSessionTabSnapshots<
         contentScope: 'agent-session',
         preserveLocalLayout: true,
         terminalPtyMode: 'local'
-      }
+      },
+      changedAgentPaneKeys
     )
     if (options.framesDraw?.(snapshot.worktree)) {
       // Main's frames own this workspace's tabs, so the patch (tab structure only here) is dropped.

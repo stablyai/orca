@@ -2,8 +2,8 @@ import TabBar from '@/components/tab-bar/TabBar'
 import { TabGroupSplitNodeTree } from '@/components/tab-group/TabGroupSplitNodeTree'
 import { WorkspaceTabDragLayer } from '@/components/tab-group/WorkspaceTabDragLayer'
 import { WorkspacePaneOverlayLayers } from '@/components/WorkspacePaneOverlayLayers'
-import { isTerminalImeInputContextRefreshing } from '@/components/terminal-pane/terminal-ime-input-context-refresh'
-import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
+import { isTerminalImeInputContextRefreshing } from '@/components/terminal-pane/input/ime/terminal-ime-input-context-refresh'
+import { buildDuplicatedBrowserTabOptions } from '@/lib/browser/workspace/duplicate-browser-tab-options'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { FloatingTerminalEmptyState } from './FloatingTerminalEmptyState'
 import { renderFloatingTerminalOrchestrationCard } from './FloatingTerminalOrchestrationCard'
@@ -11,66 +11,70 @@ import { FloatingTerminalOrchestrationDialog } from './FloatingTerminalOrchestra
 import { FloatingTerminalResizeHandles } from './FloatingTerminalResizeHandles'
 import { FloatingTerminalWindowControls } from './FloatingTerminalWindowControls'
 import type { useFloatingTerminalPanelController } from './use-floating-terminal-panel-controller'
+import type { Translate } from '@/i18n/use-translate'
 
 const NO_ACTIVITY_TERMINAL_PORTALS: [] = []
 
-export function renderFloatingTerminalPanelSurface({
-  open,
-  onOpenChange,
-  bounds,
-  maximized,
-  stagedBoundsRef,
-  setPanelNode,
-  commitUserBounds,
-  reportFloatingFocusFromTarget,
-  handleShortcutSurfaceKeyDown,
-  handleDragStart,
-  handleDragMove,
-  handleDragEnd,
-  handleTitlebarDoubleClick,
-  surface,
-  model,
-  terminalItems,
-  activeGroup,
-  activeTerminalId,
-  activeEditorUnifiedId,
-  activeBrowserId,
-  activeTab,
-  activeTabType,
-  expandedPaneByTabId,
-  closeFloatingItemConfirmed,
-  closeOthers,
-  closeToRight,
-  closeToLeft,
-  createFloatingTerminalTab,
-  createFloatingBrowserTab,
-  createFloatingMarkdownTab,
-  openFloatingMarkdownTab,
-  setTabCustomTitle,
-  setTabColor,
-  setTabPaneExpanded,
-  createBrowserTab,
-  closeAllFiles,
-  makePreviewFilePermanent,
-  pinFile,
-  toggleMaximized,
-  hasVisibleFloatingTabs,
-  managedBrowserCreationEnabled,
-  cwd,
-  panelViewportSettled,
-  focusPanelForShortcuts,
-  newTerminalShortcut,
-  newBrowserShortcut,
-  newMarkdownShortcut,
-  openMarkdownShortcut,
-  closeShortcut,
-  showOrchestrationSetup,
-  dismissOrchestrationSetup,
-  setOrchestrationDialogOpen,
-  previewUserBounds,
-  orchestrationDialogOpen,
-  refreshOrchestrationSetupVisibility
-}: ReturnType<typeof useFloatingTerminalPanelController>): React.JSX.Element {
+export function renderFloatingTerminalPanelSurface(
+  {
+    open,
+    onOpenChange,
+    bounds,
+    maximized,
+    stagedBoundsRef,
+    setPanelNode,
+    commitUserBounds,
+    reportFloatingFocusFromTarget,
+    handleShortcutSurfaceKeyDown,
+    handleDragStart,
+    handleDragMove,
+    handleDragEnd,
+    handleTitlebarDoubleClick,
+    surface,
+    model,
+    terminalItems,
+    activeGroup,
+    activeTerminalId,
+    activeEditorUnifiedId,
+    activeBrowserId,
+    activeTab,
+    activeTabType,
+    expandedPaneByTabId,
+    closeFloatingItemConfirmed,
+    closeOthers,
+    closeToRight,
+    closeToLeft,
+    createFloatingTerminalTab,
+    createFloatingBrowserTab,
+    createFloatingMarkdownTab,
+    openFloatingMarkdownTab,
+    setTabCustomTitle,
+    setTabColor,
+    setTabPaneExpanded,
+    createBrowserTab,
+    closeAllFiles,
+    makePreviewFilePermanent,
+    pinFile,
+    toggleMaximized,
+    hasVisibleFloatingTabs,
+    managedBrowserCreationEnabled,
+    cwd,
+    panelViewportSettled,
+    focusPanelForShortcuts,
+    newTerminalShortcut,
+    newBrowserShortcut,
+    newMarkdownShortcut,
+    openMarkdownShortcut,
+    closeShortcut,
+    showOrchestrationSetup,
+    dismissOrchestrationSetup,
+    setOrchestrationDialogOpen,
+    previewUserBounds,
+    orchestrationDialogOpen,
+    refreshOrchestrationSetupVisibility
+  }: ReturnType<typeof useFloatingTerminalPanelController>,
+  t?: Translate
+): React.JSX.Element {
   return (
     // Stay above notifications but below modals; separate shadow and border shells to keep rounded corners clean.
     <div
@@ -114,7 +118,7 @@ export function renderFloatingTerminalPanelSurface({
             className="relative flex h-full w-full min-h-0 flex-col overflow-hidden rounded-lg border border-black/14 bg-card dark:border-white/14"
           >
             <div
-              className="flex h-9 shrink-0 cursor-grab items-center border-b border-border bg-[var(--bg-titlebar,var(--card))] active:cursor-grabbing"
+              className="flex h-9 shrink-0 cursor-grab items-center border-b border-border bg-[var(--bg-titlebar,var(--tab-bar,var(--card)))] active:cursor-grabbing"
               data-floating-terminal-shortcut-surface
               onPointerDown={handleDragStart}
               onPointerMove={handleDragMove}
@@ -181,6 +185,12 @@ export function renderFloatingTerminalPanelSurface({
                   tabStripChrome="floating-panel"
                 />
               </div>
+              {/* Keep a grab area even when the tab strip overflows. */}
+              <div
+                className="h-full w-16 shrink-0 select-none"
+                data-floating-terminal-drag-handle
+                aria-hidden
+              />
               <FloatingTerminalWindowControls
                 maximized={maximized}
                 onToggleMaximized={toggleMaximized}
@@ -248,11 +258,14 @@ export function renderFloatingTerminalPanelSurface({
           </div>
         )}
       </WorkspaceTabDragLayer>
-      {renderFloatingTerminalOrchestrationCard({
-        visible: showOrchestrationSetup && activeTabType === 'terminal',
-        onDismiss: dismissOrchestrationSetup,
-        onEnable: () => setOrchestrationDialogOpen(true)
-      })}
+      {renderFloatingTerminalOrchestrationCard(
+        {
+          visible: showOrchestrationSetup && activeTabType === 'terminal',
+          onDismiss: dismissOrchestrationSetup,
+          onEnable: () => setOrchestrationDialogOpen(true)
+        },
+        t
+      )}
       {!maximized && (
         <FloatingTerminalResizeHandles
           bounds={bounds}

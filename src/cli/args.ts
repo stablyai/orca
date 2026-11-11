@@ -33,6 +33,10 @@ function setFlagValue(
   repeatable: ReadonlySet<string>
 ): void {
   const existing = flags.get(name)
+  // A later value must not erase an earlier missing repeatable-string value.
+  if (existing === true && repeatable.has(name) && !BOOLEAN_FLAGS.has(name)) {
+    return
+  }
   if (typeof existing === 'string' && repeatable.has(name)) {
     flags.set(name, `${existing}${REPEATED_FLAG_SEPARATOR}${value}`)
     return
@@ -215,9 +219,17 @@ export function findCommandSpec(
 export function validateCommandAndFlags(specs: CommandSpec[], parsed: ParsedArgs): void {
   const spec = findCommandSpec(specs, parsed.commandPath)
   if (!spec) {
+    const path = parsed.commandPath.join(' ')
+    // A real group is not a typo; point at its help instead of unrelated suggestions.
+    if (isCommandGroup(specs, parsed.commandPath)) {
+      throw new RuntimeClientError('invalid_argument', `Missing subcommand for: orca ${path}`, {
+        suggestions: [],
+        nextSteps: [`Run \`orca ${path} --help\` to list its commands.`]
+      })
+    }
     throw new RuntimeClientError(
       'invalid_argument',
-      `Unknown command: ${parsed.commandPath.join(' ')}`,
+      `Unknown command: ${path}`,
       unknownCommandData(specs, parsed.commandPath)
     )
   }
@@ -232,6 +244,7 @@ export function validateCommandAndFlags(specs: CommandSpec[], parsed: ParsedArgs
   }
 
   const pageAllowed = supportsBrowserPageFlag(spec)
+  const repeatable = new Set([...REPEATABLE_STRING_FLAGS, ...(spec.repeatableFlags ?? [])])
   for (const [flag, value] of parsed.flags) {
     const isGlobalFlag = GLOBAL_FLAGS.includes(flag)
     if (GLOBAL_VALUE_FLAGS.has(flag) && (typeof value !== 'string' || value.length === 0)) {
@@ -243,6 +256,9 @@ export function validateCommandAndFlags(specs: CommandSpec[], parsed: ParsedArgs
         `Unknown flag --${flag} for command: ${spec.path.join(' ')}`,
         unknownFlagData(flag, effectiveAllowedFlags(spec))
       )
+    }
+    if (repeatable.has(flag) && !BOOLEAN_FLAGS.has(flag) && typeof value !== 'string') {
+      throw new RuntimeClientError('invalid_argument', `Flag --${flag} requires a value.`)
     }
   }
 }

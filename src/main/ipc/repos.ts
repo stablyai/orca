@@ -1,6 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { registerRepoCatalogHandlers } from './repos/repo-catalog-handlers'
 import { registerProjectHostSetupHandlers } from './repos/project-host-setup-handlers'
 import { registerRepoCreationHandlers } from './repos/repo-creation-handlers'
@@ -21,6 +21,8 @@ export function registerRepoHandlers(
 ): void {
   // macOS window recreation re-registers these handlers.
   ipcMain.removeHandler('repos:list')
+  ipcMain.removeHandler('repos:listWslMoved')
+  ipcMain.removeHandler('repos:listHostCatalogSnapshots')
   ipcMain.removeHandler('repos:add')
   ipcMain.removeHandler('repos:removeForHost')
   ipcMain.removeHandler('repos:reorder')
@@ -36,6 +38,7 @@ export function registerRepoHandlers(
   ipcMain.removeHandler('projectGroups:list')
   ipcMain.removeHandler('projectGroups:create')
   ipcMain.removeHandler('projectGroups:update')
+  ipcMain.removeHandler('projectGroups:updateMany')
   ipcMain.removeHandler('projectGroups:delete')
   ipcMain.removeHandler('projectGroups:moveProject')
   ipcMain.removeHandler('projectGroups:scanNested')
@@ -50,6 +53,7 @@ export function registerRepoHandlers(
   ipcMain.removeHandler('repos:pickFolders')
   ipcMain.removeHandler('repos:pickDirectory')
   ipcMain.removeHandler('repos:clone')
+  ipcMain.removeHandler('repos:checkCloneTarget')
   ipcMain.removeHandler('repos:cloneAbort')
   ipcMain.removeHandler('repos:isGitAvailable')
   ipcMain.removeHandler('repos:getDefaultCreateProjectParent')
@@ -62,14 +66,22 @@ export function registerRepoHandlers(
   ipcMain.removeHandler('sparsePresets:remove')
 
   registerRepoCatalogHandlers(mainWindow, store, runtime)
-  registerProjectHostSetupHandlers(mainWindow, store)
-  registerRepoCreationHandlers(mainWindow, store)
+  const metadata = {
+    enqueueRepositoryMetadata: (
+      repos: Parameters<typeof runtime.repositoryForkBackfill.enqueue>[0]
+    ) => void runtime.repositoryForkBackfill.enqueue(repos),
+    resolveRepositoryMetadata: (
+      repo: Parameters<typeof runtime.repositoryForkBackfill.resolve>[0]
+    ) => runtime.repositoryForkBackfill.resolve(repo)
+  }
+  registerProjectHostSetupHandlers(mainWindow, store, metadata)
+  registerRepoCreationHandlers(mainWindow, store, metadata.enqueueRepositoryMetadata)
   registerProjectGroupHandlers(mainWindow, store)
   registerFolderWorkspaceHandlers(mainWindow, store, runtime)
-  registerNestedRepoImportHandler(mainWindow, store)
+  registerNestedRepoImportHandler(mainWindow, store, metadata.enqueueRepositoryMetadata)
   registerRepoUpdateHandler(mainWindow, store)
   registerSparsePresetHandlers(mainWindow, store)
   registerRepoFolderPickerHandlers(mainWindow)
-  registerRepoCloneHandlers(mainWindow, store)
+  registerRepoCloneHandlers(mainWindow, store, metadata.enqueueRepositoryMetadata)
   registerBaseRefQueryHandlers(store)
 }

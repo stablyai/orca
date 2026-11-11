@@ -1,4 +1,4 @@
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
   SkillDiscoveryTargetSchema,
@@ -6,17 +6,18 @@ import {
   type SkillDiscoveryTarget
 } from '../../shared/skills'
 import {
-  BundledSkillExecuteRequestSchema,
-  BundledSkillPlanRequestSchema,
+  BundledSkillAutoUpdateRequestSchema,
+  LocalBundledSkillExecuteRequestSchema,
+  LocalBundledSkillPlanRequestSchema,
   type BundledSkillInstallResult,
   type BundledSkillPlan
 } from '../../shared/bundled-skill-plan'
 import {
   discoverSkillsOnTarget,
   resolveSkillDiscoveryTarget
-} from '../skills/skill-discovery-target'
-import { unavailableWhileWslDistroStopped } from '../skills/skill-discovery-stopped-wsl-roots'
-import { runAsWslUserAct, wslDistroForPath } from '../wsl/wsl-unc-access-gate'
+} from '../skills/discovery/skill-discovery-target'
+import { unavailableWhileWslDistroStopped } from '../skills/discovery/skill-discovery-stopped-wsl-roots'
+import { runAsWslUserAct, wslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 import { registerSkillCloudIpcHandlers } from './skill-cloud-ipc-handlers'
 import { handleMainWindowSkillIpc } from './skill-ipc-main-window'
 
@@ -24,12 +25,12 @@ export function registerSkillsHandlers(store: Store, runtime?: OrcaRuntimeServic
   const discoverResolved = async (
     resolvedTarget: Awaited<ReturnType<typeof resolveSkillDiscoveryTarget>>,
     refresh: boolean,
-    userAct = false
+    readStoppedWslRootsFor?: 'all' | readonly string[]
   ): Promise<SkillDiscoveryResult> =>
     discoverSkillsOnTarget(resolvedTarget, store.getRepos(), {
       providerRootOverrides: await runtime?.resolveSkillDiscoveryProviderRoots(resolvedTarget),
       refresh,
-      ...(userAct ? { gateStoppedWslDistros: false } : {})
+      ...(readStoppedWslRootsFor ? { readStoppedWslRootsFor } : {})
     })
   // Passive UI mounts discovery, so it must not start a stopped WSL distro.
   const discover = async (target?: SkillDiscoveryTarget): Promise<SkillDiscoveryResult> => {
@@ -45,7 +46,8 @@ export function registerSkillsHandlers(store: Store, runtime?: OrcaRuntimeServic
   }
   // Share is a click on named skills: it may start their distro, as any user act may.
   const discoverForUserAct = async (
-    target?: SkillDiscoveryTarget
+    target?: SkillDiscoveryTarget,
+    skillDirectories?: readonly string[]
   ): Promise<SkillDiscoveryResult> => {
     const parsedTarget = target ? SkillDiscoveryTargetSchema.parse(target) : undefined
     const resolvedTarget = await resolveSkillDiscoveryTarget(parsedTarget)
@@ -56,7 +58,8 @@ export function registerSkillsHandlers(store: Store, runtime?: OrcaRuntimeServic
           ? wslDistroForPath(resolvedTarget.cwd)
           : null
     return runAsWslUserAct(distro, () =>
-      discoverResolved(resolvedTarget, parsedTarget?.refresh === true, true)
+      // Only the chosen skills' roots may start a stopped distro; without folders, any may.
+      discoverResolved(resolvedTarget, parsedTarget?.refresh === true, skillDirectories ?? 'all')
     )
   }
 
@@ -74,11 +77,16 @@ export function registerSkillsHandlers(store: Store, runtime?: OrcaRuntimeServic
   handleMainWindowSkillIpc(
     'skills:bundledPlan',
     async (_event, value: unknown): Promise<BundledSkillPlan> =>
-      runtime.planLocalBundledSkills(BundledSkillPlanRequestSchema.parse(value ?? {}))
+      runtime.planLocalBundledSkills(LocalBundledSkillPlanRequestSchema.parse(value ?? {}))
   )
   handleMainWindowSkillIpc(
     'skills:bundledExecute',
     async (_event, value: unknown): Promise<BundledSkillInstallResult> =>
-      runtime.executeLocalBundledSkills(BundledSkillExecuteRequestSchema.parse(value))
+      runtime.executeLocalBundledSkills(LocalBundledSkillExecuteRequestSchema.parse(value))
+  )
+  handleMainWindowSkillIpc(
+    'skills:bundledAutoUpdate',
+    async (_event, value: unknown): Promise<BundledSkillInstallResult> =>
+      runtime.autoUpdateLocalBundledSkills(BundledSkillAutoUpdateRequestSchema.parse(value))
   )
 }

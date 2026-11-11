@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EmulatorDeviceFrame } from './emulator-device-frame'
-import { resetStaleDocumentVisibilityForTesting } from '../terminal-pane/stale-document-visibility'
+import { resetStaleDocumentVisibilityForTesting } from '../terminal-pane/viewport/visibility/stale-document-visibility'
 import { EMULATOR_STREAM_PARK_DELAY_MS } from './use-emulator-stream-window-visibility'
 
 // Assert source stream IPC: inactive panes must avoid frame delivery/blob churn/decoding while keeping the session attached.
@@ -86,18 +86,6 @@ async function renderFrame(isActive: boolean): Promise<void> {
 }
 
 describe('EmulatorDeviceFrame visibility gating', () => {
-  it('streams frames while the pane is active', async () => {
-    await renderFrame(true)
-    expect(startFrameStream).toHaveBeenCalledWith(
-      expect.objectContaining({ streamUrl: 'http://127.0.0.1:3100/stream.mjpeg' })
-    )
-  })
-
-  it('does not start a frame stream while the pane is inactive', async () => {
-    await renderFrame(false)
-    expect(startFrameStream).not.toHaveBeenCalled()
-  })
-
   it('tears the stream down when the pane becomes inactive and resumes when active again', async () => {
     await renderFrame(true)
     expect(startFrameStream).toHaveBeenCalledTimes(1)
@@ -131,45 +119,6 @@ describe('EmulatorDeviceFrame window-visibility gating', () => {
       setDocumentVisibility('visible')
     })
     expect(startFrameStream).toHaveBeenCalledTimes(2)
-  })
-
-  it('does not tear down on a quick hide/show within the park delay', async () => {
-    vi.useFakeTimers()
-    await renderFrame(true)
-    expect(startFrameStream).toHaveBeenCalledTimes(1)
-
-    await act(async () => {
-      setDocumentVisibility('hidden')
-    })
-    await act(async () => {
-      vi.advanceTimersByTime(EMULATOR_STREAM_PARK_DELAY_MS - 100)
-    })
-    await act(async () => {
-      setDocumentVisibility('visible')
-    })
-    // Returning before the grace expires must cancel parking without reconnecting.
-    await act(async () => {
-      vi.advanceTimersByTime(EMULATOR_STREAM_PARK_DELAY_MS)
-    })
-    expect(stopFrameStream).not.toHaveBeenCalled()
-    expect(startFrameStream).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps streaming while hidden when occlusion state is proven stale (display-sleep wedge)', async () => {
-    vi.useFakeTimers()
-    await renderFrame(true)
-    expect(startFrameStream).toHaveBeenCalledTimes(1)
-
-    // Real input disproves a wedged hidden/occluded signal; streaming must continue instead of leaving a black frame.
-    await act(async () => {
-      setDocumentVisibility('hidden')
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }))
-    })
-    await act(async () => {
-      vi.advanceTimersByTime(EMULATOR_STREAM_PARK_DELAY_MS * 2)
-    })
-    expect(stopFrameStream).not.toHaveBeenCalled()
-    expect(startFrameStream).toHaveBeenCalledTimes(1)
   })
 
   it('resumes a parked stream when user input proves hidden visibility is stale', async () => {

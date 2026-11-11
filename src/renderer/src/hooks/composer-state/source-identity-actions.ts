@@ -4,6 +4,7 @@ type SourceIdentityActionsInput = Pick<
   ComposerModel,
   | 'applyLinkedWorkItem'
   | 'branchAutoNameRef'
+  | 'branchIntent'
   | 'branchNameOverride'
   | 'branchNameOverridePreservesNameEdits'
   | 'forkPushWarning'
@@ -12,6 +13,7 @@ type SourceIdentityActionsInput = Pick<
   | 'name'
   | 'pushTarget'
   | 'setBranchNameOverride'
+  | 'setBranchIntent'
   | 'setBranchNameOverridePreservesNameEdits'
   | 'setCreateError'
   | 'setForkPushWarning'
@@ -27,23 +29,27 @@ type SourceIdentityActionsInput = Pick<
   | 'setLinkedWorkItem'
   | 'setName'
   | 'setPushTarget'
-  | 'setReuseEligibleBranch'
   | 'setReuseSelectedBranch'
   | 'smartSourceSelectionRef'
 >
 
 import { useCallback } from 'react'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
-import { getLinkedWorkItemSuggestedName, getLinkedWorkItemWorkspaceName } from '@/lib/new-workspace'
+import '@/lib/workspace/creation/new-workspace'
+import {
+  getLinkedWorkItemSuggestedName,
+  getLinkedWorkItemWorkspaceName
+} from '../../../../shared/workspace-name'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { shouldApplyWorkspaceSourceAutoName } from '../../../../shared/new-workspace/workspace-source'
-import { isLinearLinkedWorkItem } from '@/lib/linear-linked-work-item'
+import { isLinearLinkedWorkItem } from '@/lib/work-items/linear/linear-linked-work-item'
 import { resolveComposerManualBranchNameChange } from '../composer-branch-selection'
 
 export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
   const {
     applyLinkedWorkItem,
     branchAutoNameRef,
+    branchIntent,
     branchNameOverride,
     branchNameOverridePreservesNameEdits,
     forkPushWarning,
@@ -52,6 +58,7 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
     name,
     pushTarget,
     setBranchNameOverride,
+    setBranchIntent,
     setBranchNameOverridePreservesNameEdits,
     setCreateError,
     setForkPushWarning,
@@ -67,7 +74,6 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
     setLinkedWorkItem,
     setName,
     setPushTarget,
-    setReuseEligibleBranch,
     setReuseSelectedBranch,
     smartSourceSelectionRef
   } = input
@@ -249,10 +255,12 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
         forkPushWarning
       })
       setBranchNameOverride(next.branchNameOverride)
+      if (branchIntent === 'create-new') {
+        setBranchIntent('create-new')
+      }
       setBranchNameOverridePreservesNameEdits(Boolean(next.branchNameOverride))
       setPushTarget(next.pushTarget)
       setForkPushWarning(next.forkPushWarning)
-      setReuseEligibleBranch(null)
       setReuseSelectedBranch(false)
       branchAutoNameRef.current = ''
     },
@@ -260,11 +268,12 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
       forkPushWarning,
       pushTarget,
       branchAutoNameRef,
+      branchIntent,
       setBranchNameOverride,
+      setBranchIntent,
       setBranchNameOverridePreservesNameEdits,
       setForkPushWarning,
       setPushTarget,
-      setReuseEligibleBranch,
       setReuseSelectedBranch,
       smartSourceSelectionRef
     ]

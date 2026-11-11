@@ -1,7 +1,8 @@
 import type { AppState } from '../../types'
-import '../../../../../shared/agent-session-resume'
-import { getAgentResumeArgv } from '../../../../../shared/agent-resume-argv'
-import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session-resume'
+import { sleepingAgentRecordIndex } from '../../terminals/sleeping-agent-record-index'
+import '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { getAgentResumeArgv } from '../../../../../shared/agent-launch/startup/agent-resume-argv'
+import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { RetainedAgentEntry } from './agent-status-contract'
 import {
   normalizePaneKeySet,
@@ -17,8 +18,8 @@ import {
   type CollectSleepingAgentSessionRecordsOptions
 } from './agent-status-sleeping-records'
 import { getLaunchConfigForEntry } from './agent-status-launch-config'
-import { agentTurnEndedOnPurpose } from '../../../../../shared/agent-main-agent-verdict'
-import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from '../../../../../shared/live-resume-anchor-record'
+import { agentTurnEndedOnPurpose } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
+import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from '../../../../../shared/agent-session/lifecycle/live-resume-anchor-record'
 
 export function collectSleepingAgentSessionRecordsForWorktree(
   state: AppState,
@@ -40,7 +41,10 @@ export function collectSleepingAgentSessionRecordsForWorktree(
   const promotedLiveRecoveryPaneKeys = new Set<string>()
 
   if (isManualWorktreeSleep) {
-    for (const existing of Object.values(state.sleepingAgentSessionsByPaneKey)) {
+    for (const [, existing] of sleepingAgentRecordIndex.entries(
+      state.sleepingAgentSessionsByPaneKey,
+      worktreeId
+    )) {
       const liveEntry = state.agentStatusByPaneKey[existing.paneKey]
       if (
         existing.worktreeId !== worktreeId ||

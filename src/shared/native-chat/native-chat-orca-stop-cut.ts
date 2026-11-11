@@ -3,14 +3,29 @@
 import {
   readAgentSessionOrcaStop,
   type AgentSessionOrcaStopCause
-} from '../agent-session-orca-stop'
-import { isRootAgentJournalItem } from '../agent-session-journal-producer'
-import type { AgentJournalRenderItem, AgentJournalSubmission } from '../agent-session-journal-types'
-import { STALE_SESSION_ROW_PREFIX } from '../agent-session-stop-row-identity'
-import { readAgentJournalTurn, readAgentJournalTurnOutcome } from '../agent-session-turn-record'
-import { agentTurnVerdict, type AgentTurnOutcome } from '../agent-turn-outcome'
-import { structuredAgentSessionCommandTurnItemIds } from '../structured-agent-session-command-entry'
-import { isStructuredAgentSessionNonRequestRow } from '../structured-agent-session-latest-request'
+} from '../agent-session/lifecycle/agent-session-orca-stop'
+import { isRootAgentJournalItem } from '../agent-session/journal/agent-session-journal-producer'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../agent-session/journal/agent-session-journal-types'
+import { STALE_SESSION_ROW_PREFIX } from '../agent-session/lifecycle/agent-session-stop-row-identity'
+import {
+  readAgentJournalTurn,
+  readAgentJournalTurnOutcome
+} from '../agent-session/lifecycle/agent-session-turn-record'
+import {
+  agentTurnVerdict,
+  type AgentTurnOutcome
+} from '../agent-status/lifecycle/agent-turn-outcome'
+import {
+  commandTurnsOf,
+  type AgentJournalBodyLookup
+} from '../agent-session/structured-agent-session-command-entry'
+import {
+  isStructuredAgentSessionNonRequestRow,
+  type StructuredAgentSessionLatestRequest
+} from '../agent-session/requests/structured-agent-session-latest-request'
 
 // Dedupe shutdown rows by stopped child; preserve the legacy prefix so older clients add no duplicate notice.
 export function orcaShutdownRowClientMessageId(
@@ -35,12 +50,14 @@ export type NativeChatOrcaStopCut = {
 /** Latest root turn only if no later request or in-flight send exists; steers/conversation commands do not count as new requests. */
 export function latestNativeChatTurnSinceRequest(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[]
+  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[],
+  /** With an indexed body read, only the turns this scan reaches are checked, not all history. */
+  bodyOf?: AgentJournalBodyLookup
 ): { turnItem: AgentJournalRenderItem; verdict: AgentTurnOutcome | null } | null {
   if (submissions.some((submission) => submission.dispatchState === 'pending')) {
     return null
   }
-  const commandTurns = structuredAgentSessionCommandTurnItemIds(items)
+  const commandTurns = commandTurnsOf(items, bodyOf)
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]!
     if (
@@ -80,13 +97,29 @@ export function findInNativeChatTurn<T>(
 
 export function latestNativeChatOrcaStopCut(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[]
+  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[],
+  bodyOf?: AgentJournalBodyLookup
 ): NativeChatOrcaStopCut | null {
-  const latest = latestNativeChatTurnSinceRequest(items, submissions)
+  const latest = latestNativeChatTurnSinceRequest(items, submissions, bodyOf)
   if (!latest || latest.verdict !== 'interruption') {
     return null
   }
   const turnItemId = latest.turnItem.itemId
   const cause = findInNativeChatTurn(items, turnItemId, orcaStopCauseOfRow)
   return cause ? { turnItemId, cause } : null
+}
+
+/** Intentional shutdown is cancellation in status; retain raw cut verdicts for Continue. */
+export function nativeChatStatusTurnOutcome(
+  request: StructuredAgentSessionLatestRequest | null,
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[],
+  bodyOf?: AgentJournalBodyLookup
+): AgentTurnOutcome | null {
+  const verdict = request
+    ? agentTurnVerdict({ state: request.turnState, outcome: request.outcome })
+    : null
+  const stop =
+    verdict === 'interruption' ? latestNativeChatOrcaStopCut(items, submissions, bodyOf) : null
+  return stop && stop.cause !== 'crash' ? 'cancellation' : verdict
 }

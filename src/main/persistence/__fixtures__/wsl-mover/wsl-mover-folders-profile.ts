@@ -1,5 +1,6 @@
-import type { Automation, AutomationRun } from '../../../../shared/automations-types'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { Automation } from '../../../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { WorkspaceLineage } from '../../../../shared/worktree/lineage-types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -46,7 +47,8 @@ export function foldersAndAutomationsWslMoverProfile(paths: WslMoverPaths): WslM
     kind: 'workspace-run' as const,
     projectId: 'project-auto',
     hostId: 'local' as const,
-    projectHostSetupId: paths.side === 'source' ? 'setup-local' : 'setup-wsl',
+    // A repo's own setup is keyed by the repo id on both sides (createSetupFromRepo, the export).
+    projectHostSetupId: 'repo-auto',
     repoId: 'repo-auto',
     path: repoAuto.path
   }

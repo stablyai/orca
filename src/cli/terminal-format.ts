@@ -1,5 +1,8 @@
-import { PTY_LIVE_NOTE, describeUnconfirmedCloseStop } from '../shared/pty-liveness-verdict'
-import { describeTerminalWaitBlockedReason } from '../shared/terminal-wait-blocked-reason-legacy-alias'
+import {
+  PTY_LIVE_NOTE,
+  describeUnconfirmedCloseStop
+} from '../shared/terminal/pty/lifecycle/pty-liveness-verdict'
+import { describeTerminalWaitBlockedReason } from '../shared/terminal/runtime-policy/terminal-wait-blocked-reason-legacy-alias'
 import { formatListingHostScope, type WithAnnotatedHostScope } from './omitted-host-scope-selectors'
 import type {
   RuntimeTerminalClose,
@@ -209,7 +212,7 @@ function promptObservationWarning(
   if (prompt.provider !== 'unsupported' && prompt.provider !== 'old-host') {
     return prompt.stages.includes('turn_started')
       ? null
-      : `input was accepted but no turn start was observed, so the Enter may have been swallowed. Confirm delivery by reissuing the exact command with --retry-request ${prompt.requestId} --wait-submit <seconds>; the same request ID replays the receipt instead of sending the prompt again.`
+      : `input was accepted, but no turn start was observed yet (a send without --wait-submit does not wait for one). Confirm delivery by reissuing the exact command with --retry-request ${prompt.requestId} --wait-submit <seconds>; the same request ID observes this prompt instead of sending it again.`
   }
   if (prompt.observation === 'unsupported') {
     return prompt.provider === 'old-host'

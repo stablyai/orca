@@ -25,6 +25,7 @@ export function BrowserPageChromeHeader({
   grab,
   grabAnnotations,
   annotationSend,
+  onOpenFind,
   markupIsActive,
   markupStart,
   markupCancel,
@@ -50,6 +51,7 @@ export function BrowserPageChromeHeader({
   grab: GrabModeHook
   grabAnnotations: ReturnType<typeof useBrowserPageGrabAnnotations>
   annotationSend: ReturnType<typeof useBrowserPageAnnotationSend>
+  onOpenFind: () => void
   markupIsActive: boolean
   markupStart: () => Promise<void>
   markupCancel: () => void
@@ -99,6 +101,11 @@ export function BrowserPageChromeHeader({
         markupCancel={markupCancel}
         grabElementShortcut={grabElementShortcut}
         browserAnnotationsLength={annotationSend.browserAnnotations.length}
+        notes={{
+          onCopyAll: annotationSend.handleCopyBrowserAnnotations,
+          onClear: annotationSend.handleClearBrowserAnnotations
+        }}
+        onOpenFind={onOpenFind}
         shareableArtifactFile={shareableArtifactFile}
         currentBrowserUrl={currentBrowserUrl}
         externalUrl={externalUrl}
@@ -121,6 +128,8 @@ export function BrowserPageChromeHeader({
         worktreeId={worktreeId}
         activeGroupId={annotationSend.activeGroupId}
         browserAnnotationsPrompt={annotationSend.browserAnnotationsPrompt}
+        includePageDetails={annotationSend.includePageDetails}
+        handleIncludePageDetailsChange={annotationSend.handleIncludePageDetailsChange}
         handleBrowserAnnotationsSentToAgent={annotationSend.handleBrowserAnnotationsSentToAgent}
         handleBrowserAnnotationsHandedOff={annotationSend.handleBrowserAnnotationsHandedOff}
         handleCopyBrowserAnnotations={annotationSend.handleCopyBrowserAnnotations}

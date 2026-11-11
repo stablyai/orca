@@ -1,42 +1,52 @@
 import { useState } from 'react'
-import { View, Text, TextInput, Pressable, Platform, type KeyboardTypeOptions } from 'react-native'
+import { ActivityIndicator, View, Text, Pressable, type KeyboardTypeOptions } from 'react-native'
+import type { LucideIcon } from 'lucide-react-native'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
-import { BottomDrawer } from './BottomDrawer'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { BottomDrawer } from './bottom-drawer/BottomDrawer'
+import { TextField } from './composer-input/TextField'
 
-type Props = {
-  visible: boolean
+type SheetProps = {
   title: string
   message?: string
-  defaultValue?: string
+  value: string
+  onChangeText: (value: string) => void
   placeholder?: string
   submitLabel?: string
   selectTextOnFocus?: boolean
   allowEmpty?: boolean
   keyboardType?: KeyboardTypeOptions
+  /** Shown under the field; the text stays so the user can retry. */
+  error?: string | null
+  /** A save in flight: Save is disabled so it can't be sent twice. */
+  busy?: boolean
+  /** Why Save is off or still waiting (e.g. the desktop is offline); shown under the field. */
+  notice?: { icon: LucideIcon; text: string } | null
+  /** Save is off for a reason the notice gives; the text stays editable. */
+  submitBlocked?: boolean
   onSubmit: (value: string) => void
   onCancel: () => void
+}
+
+type Props = Omit<
+  SheetProps,
+  'value' | 'onChangeText' | 'error' | 'busy' | 'notice' | 'submitBlocked'
+> & {
+  visible: boolean
+  defaultValue?: string
   /** Called once the drawer has gone, which is when the field stops holding the focus. */
   onAfterClose?: () => void
 }
 
 export function TextInputModal({
   visible,
-  title,
-  message,
   defaultValue = '',
-  placeholder,
-  submitLabel = 'Save',
-  selectTextOnFocus = false,
-  allowEmpty = false,
-  keyboardType,
-  onSubmit,
   onCancel,
-  onAfterClose
+  onAfterClose,
+  ...sheetProps
 }: Props) {
-  useMobileColorScheme()
   const [value, setValue] = useState(defaultValue)
   const [previousVisible, setPreviousVisible] = useState(visible)
   const [previousDefaultValue, setPreviousDefaultValue] = useState(defaultValue)
@@ -51,28 +61,59 @@ export function TextInputModal({
     }
   }
 
+  return (
+    <BottomDrawer visible={visible} onClose={onCancel} onAfterClose={onAfterClose}>
+      <TextInputSheetContent
+        {...sheetProps}
+        value={value}
+        onChangeText={setValue}
+        onCancel={onCancel}
+      />
+    </BottomDrawer>
+  )
+}
+
+/** The text sheet's body, for a drawer that is already open (e.g. a menu that swaps to it). */
+export function TextInputSheetContent({
+  title,
+  message,
+  value,
+  onChangeText,
+  placeholder,
+  submitLabel,
+  selectTextOnFocus = false,
+  allowEmpty = false,
+  keyboardType,
+  error,
+  busy = false,
+  notice,
+  submitBlocked = false,
+  onSubmit,
+  onCancel
+}: SheetProps) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+
+  const canSubmit = !busy && !submitBlocked && (allowEmpty || value.trim().length > 0)
+  const NoticeIcon = notice?.icon
+
   function handleSubmit() {
-    const trimmed = value.trim()
-    if (trimmed || allowEmpty) {
-      onSubmit(trimmed)
+    if (canSubmit) {
+      onSubmit(value.trim())
     }
   }
 
-  const canSubmit = allowEmpty || value.trim().length > 0
-
   return (
-    <BottomDrawer visible={visible} onClose={onCancel} onAfterClose={onAfterClose}>
+    <>
       <View style={styles.header}>
         <Text style={styles.title}>{title}</Text>
         {message ? <Text style={styles.message}>{message}</Text> : null}
       </View>
 
-      <TextInput
-        style={styles.input}
+      <TextField
         value={value}
-        onChangeText={setValue}
+        onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={colors.textMuted}
         autoFocus
         autoCapitalize="none"
         autoCorrect={false}
@@ -80,15 +121,23 @@ export function TextInputModal({
         keyboardType={keyboardType}
         returnKeyType="done"
         onSubmitEditing={handleSubmit}
-        selectionColor={colors.accentBlue}
       />
+
+      {error ? (
+        <Text style={styles.error}>{error}</Text>
+      ) : notice && NoticeIcon ? (
+        <View style={styles.notice}>
+          <NoticeIcon size={13} color={colors.textSecondary} style={styles.noticeIcon} />
+          <Text style={styles.noticeText}>{notice.text}</Text>
+        </View>
+      ) : null}
 
       <View style={styles.actions}>
         <Pressable
           style={({ pressed }) => [styles.cancelButton, pressed && styles.buttonPressed]}
           onPress={onCancel}
         >
-          <Text style={styles.cancelText}>Cancel</Text>
+          <Text style={styles.cancelText}>{t('common.cancel', 'Cancel')}</Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [
@@ -99,10 +148,13 @@ export function TextInputModal({
           disabled={!canSubmit}
           onPress={handleSubmit}
         >
-          <Text style={styles.submitText}>{submitLabel}</Text>
+          {busy ? (
+            <ActivityIndicator size="small" color={colors.bgBase} style={styles.submitSpinner} />
+          ) : null}
+          <Text style={styles.submitText}>{submitLabel ?? t('common.save', 'Save')}</Text>
         </Pressable>
       </View>
-    </BottomDrawer>
+    </>
   )
 }
 
@@ -121,16 +173,26 @@ const styles = themedStyleSheet(() => ({
     color: colors.textMuted,
     marginTop: 2
   },
-  // Match workspace input: bgRaised on bgPanel reads tappable; bgBase looked recessed.
-  input: {
-    backgroundColor: colors.bgRaised,
-    color: colors.textPrimary,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: Platform.OS === 'ios' ? spacing.sm + 2 : spacing.sm,
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
+  error: {
+    color: colors.statusRed,
+    fontSize: typography.metaSize,
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.xs
+  },
+  notice: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.xs
+  },
+  noticeIcon: {
+    marginTop: 2
+  },
+  noticeText: {
+    flex: 1,
+    color: colors.textSecondary,
+    fontSize: typography.metaSize,
+    lineHeight: 17
   },
   actions: {
     flexDirection: 'row',
@@ -141,16 +203,25 @@ const styles = themedStyleSheet(() => ({
   cancelButton: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   submitButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     backgroundColor: colors.textPrimary,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   buttonPressed: {
     opacity: 0.7
+  },
+  // Keeps the button's height while it spins.
+  submitSpinner: {
+    width: 14,
+    height: 14,
+    transform: [{ scale: 0.7 }]
   },
   submitButtonDisabled: {
     opacity: 0.4

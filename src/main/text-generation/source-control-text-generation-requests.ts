@@ -2,28 +2,32 @@ import {
   buildCommitMessagePrompt,
   splitGeneratedCommitMessage,
   type CommitMessageDraftContext
-} from '../../shared/commit-message-generation'
+} from '../../shared/source-control/ai/generation/commit-message-generation'
 import {
   buildPullRequestFieldsPrompt,
   parseGeneratedPullRequestFields,
   type GeneratedPullRequestFields,
   type PullRequestDraftContext
-} from '../../shared/pull-request-generation'
+} from '../../shared/source-control/ai/generation/pull-request-generation'
 import {
   buildBranchNamePrompt,
   sanitizeBranchSlug,
   type BranchNameWorkContext
-} from '../../shared/branch-name-from-work'
+} from '../../shared/source-control/ai/naming/branch-name-from-work'
 import {
   cleanGeneratedCommitMessage,
-  STAGED_DIFF_BYTE_BUDGET,
   stripPrefilledReasoningPreamble
-} from '../../shared/commit-message-prompt'
-import { isCustomAgentId } from '../../shared/commit-message-agent-spec'
-import { planCommitMessageGeneration } from '../../shared/commit-message-plan'
-import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
-import { formatLinkedIssueTemplateValue } from '../../shared/source-control-ai-action-variables'
-import { renderSourceControlActionCommandTemplate } from '../../shared/source-control-ai-actions'
+} from '../../shared/source-control/ai/generation/commit-message-agent-output'
+import { STAGED_DIFF_BYTE_BUDGET } from '../../shared/source-control/ai/generation/commit-message-prompt'
+import { isCustomAgentId } from '../../shared/source-control/ai/generation/commit-message-agent-spec'
+import { planCommitMessageGeneration } from '../../shared/source-control/ai/generation/commit-message-plan'
+import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control/ai/source-control-ai-operation-resolution'
+import { formatLinkedIssueTemplateValue } from '../../shared/source-control/ai/recipes/source-control-ai-action-variables'
+import { renderSourceControlActionCommandTemplate } from '../../shared/source-control/ai/recipes/source-control-ai-actions'
+import {
+  textGenerationFailure,
+  textGenerationFailureCodeFields
+} from '../../shared/text-generation-failure-copy'
 import { captureAgentGenerationFailureOutput } from './agent-failure-output'
 import { commandBackslashMode, runGenerationRequest } from './agent-generation-request'
 import { fitsLocalCommandLine } from './source-control-local-process'
@@ -111,11 +115,15 @@ export async function generateCommitMessage(input: {
   const result = await runGenerationRequest({
     ...input,
     prompt,
-    emptyResultName: 'message',
     operation: 'commit-message'
   })
   if (!result.success) {
-    return { success: false, error: result.error, canceled: result.canceled }
+    return {
+      success: false,
+      error: result.error,
+      canceled: result.canceled,
+      ...textGenerationFailureCodeFields(result)
+    }
   }
   try {
     return {
@@ -124,7 +132,10 @@ export async function generateCommitMessage(input: {
       agentLabel: result.agentLabel
     }
   } catch {
-    return { success: false, error: 'Generated commit message could not be parsed.' }
+    return {
+      success: false,
+      ...textGenerationFailure('commitMessageUnparseable')
+    }
   }
 }
 
@@ -153,7 +164,6 @@ export async function generatePullRequestFields(input: {
   const result = await runGenerationRequest({
     ...input,
     prompt,
-    emptyResultName: 'details',
     operation: 'pull-request-fields'
   })
   if (!result.success) {
@@ -161,7 +171,8 @@ export async function generatePullRequestFields(input: {
       success: false,
       error: result.error,
       canceled: result.canceled,
-      branchChangedByPreparation: context.branchChangedByPreparation
+      branchChangedByPreparation: context.branchChangedByPreparation,
+      ...textGenerationFailureCodeFields(result)
     }
   }
   try {
@@ -174,7 +185,7 @@ export async function generatePullRequestFields(input: {
   } catch {
     return {
       success: false,
-      error: 'Generated pull request details could not be parsed.',
+      ...textGenerationFailure('pullRequestDetailsUnparseable'),
       branchChangedByPreparation: context.branchChangedByPreparation
     }
   }
@@ -216,7 +227,6 @@ export async function generateBranchName(input: {
   const result = await runGenerationRequest({
     ...input,
     prompt,
-    emptyResultName: 'branch name',
     operation: 'branch-name'
   })
   if (!result.success) {

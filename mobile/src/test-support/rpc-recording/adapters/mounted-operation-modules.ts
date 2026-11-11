@@ -23,7 +23,6 @@ import { fileInventoryMountAdapters } from './file-inventory-mount-adapters'
 import { fileTapOpenMountAdapters } from './file-tap-open-mount-adapters'
 import { fileRequestMountAdapters } from './file-request-mount-adapters'
 import { githubPrMountAdapters } from './github-pr-mount-adapters'
-import { homeAccountsMountAdapters } from './home-accounts-mount-adapters'
 import { hostScreenMountAdapters } from './host-screen-mount-adapters'
 import { hostWorktreeActionMountAdapters } from './host-worktree-action-mount-adapters'
 import { hostedReviewMountAdapters } from './hosted-review-mount-adapters'
@@ -40,10 +39,7 @@ import { newWorkspaceRepositoryMountAdapters } from './new-workspace-repository-
 import { pairingJournalMountAdapters } from './pairing-journal-mount-adapters'
 import { prSidebarMountAdapters } from './pr-sidebar-mount-adapters'
 import { pushDismissalMountAdapters } from './push-dismissal-mount-adapters'
-import {
-  pushRegistrationMountAdapters,
-  pushRegistrationMountExposures
-} from './push-registration-mount-adapters'
+import { pushRegistrationMountAdapters } from './push-registration-mount-adapters'
 import { relayCredentialMountAdapters } from './relay-credential-mount-adapters'
 import { sessionNotesMountAdapters } from './session-notes-mount-adapters'
 import { sessionScreenReadMountAdapters } from './session-screen-read-mount-adapters'
@@ -119,7 +115,6 @@ export const MOUNTED_OPERATION_MODULES: readonly MountedOperationModule[] = [
   { source: 'file-tap-open-mount-adapters.ts', mounts: fileTapOpenMountAdapters },
   { source: 'file-request-mount-adapters.ts', mounts: fileRequestMountAdapters },
   { source: 'github-pr-mount-adapters.ts', mounts: githubPrMountAdapters },
-  { source: 'home-accounts-mount-adapters.ts', mounts: homeAccountsMountAdapters },
   { source: 'host-screen-mount-adapters.ts', mounts: hostScreenMountAdapters },
   {
     source: 'host-worktree-action-mount-adapters.ts',
@@ -145,8 +140,7 @@ export const MOUNTED_OPERATION_MODULES: readonly MountedOperationModule[] = [
   { source: 'push-dismissal-mount-adapters.ts', mounts: pushDismissalMountAdapters },
   {
     source: 'push-registration-mount-adapters.ts',
-    mounts: pushRegistrationMountAdapters,
-    exposes: pushRegistrationMountExposures
+    mounts: pushRegistrationMountAdapters
   },
   { source: 'relay-credential-mount-adapters.ts', mounts: relayCredentialMountAdapters },
   { source: 'session-notes-mount-adapters.ts', mounts: sessionNotesMountAdapters },

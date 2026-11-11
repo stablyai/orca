@@ -1,11 +1,11 @@
-import { e2eConfig } from '@/lib/e2e-config'
+import { e2eConfig } from '@/app-shell/startup/e2e-config'
 import { useStore } from 'zustand'
 import { createStore } from 'zustand/vanilla'
 import {
   DEFAULT_DICTATION_METER,
   dictationMeterStatesEqual,
   type DictationMeterState
-} from './dictation-audio-meter'
+} from '../../../../shared/dictation-audio-meter'
 
 const dictationMeterStore = createStore<DictationMeterState>(() => DEFAULT_DICTATION_METER)
 

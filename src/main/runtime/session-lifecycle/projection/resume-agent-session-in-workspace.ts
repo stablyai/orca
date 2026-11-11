@@ -1,20 +1,22 @@
 import { OrcaRuntimeWithAgentSessionResumeOwnership } from './agent-session-resume-ownership'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   agentProviderSessionsEqual,
   normalizeAgentProviderSession,
-  type AgentProviderSessionMetadata
-} from '../../../../shared/agent-session-resume'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+  type AgentProviderSessionMetadata,
+  type SleepingAgentLaunchConfig
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   getConnectionExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import type { OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal as OwnedMobileTerminalCreate } from '../../terminal/launch/mobile-terminal-owned-create'
-import { deterministicAgentSessionUuid } from '../../runtime-agent-launch-resolution'
+import { deterministicAgentSessionUuid } from '../../terminal/launch/runtime-agent-launch-resolution'
 import { isUnclaimedRunningSleepRecord } from './sleep-record-pane-claim'
 import type { ResumedAgentSession } from './agent-session-resume-claims'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import { WslHostWindowsOnlyAgentError } from '../../terminal/launch/wsl-host-agent-terminal-launch'
 
 export type AgentSessionResumeRefusal =
   | 'window_owns_wake'
@@ -22,10 +24,13 @@ export type AgentSessionResumeRefusal =
   | 'no_resume_command'
   | 'aborted'
   | 'create_failed'
+  | 'windows_only_cli'
 
 export type AgentSessionResumeResult =
   | { ok: true; handle: string; paneKey: string; ptyId: string }
-  | { ok: false; reason: AgentSessionResumeRefusal }
+  | { ok: false; reason: Exclude<AgentSessionResumeRefusal, 'windows_only_cli'> }
+  /** A WSL host found only a Windows copy of the agent CLI; message says how to fix it. */
+  | { ok: false; reason: 'windows_only_cli'; message: string }
 
 export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaRuntimeWithAgentSessionResumeOwnership {
   protected abstract createRuntimeOwnedMobileSessionTerminal(
@@ -42,6 +47,8 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
       captureHostId: ExecutionHostId
       /** Names the new pane, so a retry of one request reconciles the pane it may have started. */
       mutationId: string
+      /** The caller's complete recipe; without one, the conversation's own pane record supplies it. */
+      launchConfig?: SleepingAgentLaunchConfig
       signal?: AbortSignal
     }
   ): Promise<AgentSessionResumeResult> {
@@ -87,14 +94,21 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
   private async resumeClaimedAgentSession(
     worktreeId: string,
     session: ResumedAgentSession,
-    request: { captureHostId: ExecutionHostId; mutationId: string; signal?: AbortSignal },
+    request: {
+      captureHostId: ExecutionHostId
+      mutationId: string
+      launchConfig?: SleepingAgentLaunchConfig
+      signal?: AbortSignal
+    },
     create: {
       identity: { tabId: string; leafId: string }
       onPtySpawnDispatched: () => void
       onPtyCreated: (ptyId: string) => void
     }
   ): Promise<AgentSessionResumeResult> {
-    const refuse = (reason: AgentSessionResumeRefusal): AgentSessionResumeResult => ({
+    const refuse = (
+      reason: Exclude<AgentSessionResumeRefusal, 'windows_only_cli'>
+    ): AgentSessionResumeResult => ({
       ok: false,
       reason
     })
@@ -103,7 +117,10 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
     }
     let workspace
     try {
-      workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
+      // A resume the user asked for, as its create below.
+      workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`, undefined, {
+        wslUserAct: true
+      })
     } catch {
       return refuse('no_resume_command')
     }
@@ -132,10 +149,18 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
       return refuse('held_elsewhere')
     }
     const record = records[0]
-    const resume = this.resolveMobileSessionResumeCommand(workspace, {
-      ...session,
-      launchConfig: record?.launchConfig
-    })
+    let resume
+    try {
+      resume = this.resolveMobileSessionResumeCommand(workspace, {
+        ...session,
+        launchConfig: request.launchConfig ?? record?.launchConfig
+      })
+    } catch (error) {
+      if (error instanceof WslHostWindowsOnlyAgentError) {
+        return { ok: false, reason: 'windows_only_cli', message: error.message }
+      }
+      throw error
+    }
     if (!resume) {
       return refuse('no_resume_command')
     }
@@ -156,6 +181,8 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
       false,
       undefined,
       {
+        // A resume the user asked for (a vault or external-conversation reopen).
+        wslUserAct: true,
         command: resume.command,
         env: resume.env,
         startupCommandDelivery: resume.startupCommandDelivery,

@@ -1,6 +1,6 @@
 type GitExec = (args: string[]) => Promise<unknown>
 
-const FULL_GIT_OBJECT_ID_PATTERN = /^[0-9a-f]{40}$/i
+const FULL_GIT_OBJECT_ID_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i
 
 export function isFullGitObjectId(value: string): boolean {
   return FULL_GIT_OBJECT_ID_PATTERN.test(value.trim())

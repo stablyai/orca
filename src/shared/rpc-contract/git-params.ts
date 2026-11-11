@@ -1,6 +1,9 @@
+import { isGitHistoryRefName } from '../git/history/git-history-revisions'
+import { normalizeSourceControlAiActionDefaults } from '../source-control/ai/recipes/source-control-ai-actions'
 import { z } from 'zod'
 import { OptionalGitAdmissionTier } from './git-admission-tier-params'
 import { OptionalTuiAgent } from './worktree-params'
+import { CONFLICT_RESOLUTIONS } from '../source-control/listing/source-control-entry-actions'
 
 export const WorktreeSelector = z.object({
   worktree: z
@@ -45,9 +48,14 @@ export const GitFilePath = WorktreeSelector.extend({
     .pipe(z.string().min(1, 'Missing file path'))
 })
 
+export const GitResolveConflict = GitFilePath.extend({
+  resolution: z.enum(CONFLICT_RESOLUTIONS)
+})
+
 export const GitDiff = GitFilePath.extend({
   staged: z.boolean(),
-  compareAgainstHead: z.boolean().optional()
+  compareAgainstHead: z.boolean().optional(),
+  oldPath: z.string().optional()
 })
 
 export const GitBranchCompare = WorktreeSelector.extend({
@@ -74,9 +82,31 @@ export const GitCommitCompare = WorktreeSelector.extend({
     .pipe(FullGitObjectId)
 })
 
+export const GitSequencer = WorktreeSelector.extend({
+  operation: z.enum(['cherry-pick', 'revert'])
+})
+
+export const GitCreateBranch = WorktreeSelector.extend({
+  name: z.string().min(1),
+  startPoint: FullGitObjectId
+})
+
+export const GitCommitAction = WorktreeSelector.extend({ commitId: FullGitObjectId })
+
+export const GitHistoryRefName = z
+  .string()
+  .refine(isGitHistoryRefName, 'Expected full branch or tag ref names')
+export const GitRefs = WorktreeSelector.extend({ query: z.string().max(1000).optional() })
+
 export const GitHistory = WorktreeSelector.extend({
   limit: z.number().int().min(1).max(200).optional(),
-  baseRef: z.string().nullable().optional()
+  baseRef: z.string().nullable().optional(),
+  branchOnly: z.boolean().optional(),
+  refs: z
+    .union([z.literal('head'), z.literal('all'), z.array(GitHistoryRefName).max(1000)])
+    .optional(),
+  historyToken: z.string().max(100).optional(),
+  skip: z.number().int().min(0).optional()
 })
 
 export const GitBranchDiff = GitFilePath.extend({
@@ -124,16 +154,7 @@ export const CommitMessageAiSettings = z.object({
 })
 
 export const SourceControlAiSettings = CommitMessageAiSettings.omit({ customPrompt: true }).extend({
-  actions: z
-    .record(
-      z.string(),
-      z.object({
-        agentId: z.string().nullable().optional(),
-        commandInputTemplate: z.string().optional(),
-        agentArgs: z.string().optional()
-      })
-    )
-    .optional(),
+  actions: z.unknown().optional().transform(normalizeSourceControlAiActionDefaults),
   instructionsByOperation: z.record(z.string(), z.string()).optional(),
   modelOverridesByOperation: z
     .record(
@@ -155,16 +176,7 @@ export const SourceControlAiSettings = CommitMessageAiSettings.omit({ customProm
       openAfterCreate: z.boolean().optional()
     })
     .optional(),
-  launchActionDefaults: z
-    .record(
-      z.string(),
-      z.object({
-        agentId: z.string().nullable().optional(),
-        commandInputTemplate: z.string().optional(),
-        agentArgs: z.string().optional()
-      })
-    )
-    .optional()
+  launchActionDefaults: z.unknown().optional().transform(normalizeSourceControlAiActionDefaults)
 })
 
 export const ResolvedSourceControlAiGenerationParams = z.object({
@@ -248,7 +260,12 @@ export const GitRebaseFromBase = WorktreeSelector.extend({
     )
 })
 
+export const GitSwitchBranch = WorktreeSelector.extend({
+  target: z.object({ kind: z.enum(['local', 'remote', 'new']), name: z.string().min(1) })
+})
+
 export const GitCheckout = WorktreeSelector.extend({
+  detached: z.boolean().optional(),
   branch: z
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
@@ -259,7 +276,10 @@ export const GitCheckout = WorktreeSelector.extend({
         // Why: never let a branch arg be parsed as a git flag (arg injection).
         .refine((value) => !value.startsWith('-'), 'Branch must not start with -')
     )
-})
+}).refine(
+  (params) => !params.detached || FullGitObjectId.safeParse(params.branch).success,
+  'Expected a full git object id for detached checkout'
+)
 
 export const GitRemoteFileUrl = WorktreeSelector.extend({
   relativePath: z

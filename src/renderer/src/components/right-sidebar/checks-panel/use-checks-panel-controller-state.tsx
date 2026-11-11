@@ -1,32 +1,34 @@
 import { useCallback, useMemo, useRef, useState, type SetStateAction } from 'react'
-import { useWorktreeGitOwnerTarget } from '../worktree-git-owner-target'
-import { useWorktreeGitCopyHostId } from '@/lib/worktree-git-copy'
-import { useAppStore, type AppState } from '@/store'
-import { useActiveWorktree, useRepoById } from '@/store/selectors'
-import { useChecksPanelTerminalWorktree } from '../use-checks-panel-terminal-worktree'
-import { getConnectionId } from '@/lib/connection-context'
-import { readDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
+import { useWorktreeGitOwnerTarget } from '../source-control/sync/worktree-git-owner-target'
+import { useWorktreeGitCopyHostId } from '@/lib/workspace/ownership/worktree-git-copy'
+import { useAppStore } from '@/store/index'
+import type { AppState } from '@/store/types'
+import { useActiveWorktree } from '@/store/workspaces/selection/use-selected-worktree'
+import { selectReviewRepositoryForWorkspace } from '@/store/slices/hosted-review/workspace-review-repository'
+import { useChecksPanelTerminalWorktree } from './refresh/use-checks-panel-terminal-worktree'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
+import { readDetectedAgentsForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { getWorktreeGitIdentityDisplay } from '../../../../../shared/worktree/git-identity-display'
-import { resolveRepoWorktreeLaunchPlatform } from '@/lib/execution-host-facts'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
-import { normalizeGlobalWindowsRuntimeDefault } from '../../../../../shared/project-execution-runtime'
-import type { SourceControlAiWriteTarget } from '../../../../../shared/source-control-ai-recipe-save'
+import { resolveRepoWorktreeLaunchPlatform } from '@/runtime/hosts/platform/execution-host-facts'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { normalizeGlobalWindowsRuntimeDefault } from '../../../../../shared/execution-host/project-runtime-preference'
+import type { SourceControlAiWriteTarget } from '../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
 import { saveSourceControlAiActionRecipeForTarget } from '../source-control/ai/recipe-persistence'
 import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
-} from '../../../../../shared/source-control-ai-actions'
+} from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 import type { PRRefreshErrorType } from '../../../../../shared/github/pull-request-refresh-types'
 import type { GitLabProjectRef } from '../../../../../shared/gitlab-types'
-import type { PRCommentsListSelectionClearRequest } from '../pr-comments-list-selection'
+import type { PRCommentsListSelectionClearRequest } from './comments/pr-comments-list-selection'
 import {
   buildChecksPanelGitStatusContextKey,
   type ChecksPanelGitStatusSnapshot
-} from '../checks-panel-git-status-snapshot'
+} from './refresh/checks-panel-git-status-snapshot'
 import type { ChecksAgentComposerState, HostedReviewCreationSnapshot } from './panel-state-types'
 
 export function useChecksPanelControllerState() {
@@ -42,7 +44,7 @@ export function useChecksPanelControllerState() {
     isPanelVisible
   })
   const activeWorktreeId = activeWorktree?.id ?? null
-  const repo = useRepoById(activeWorktree?.repoId ?? null)
+  const repo = useAppStore((s) => selectReviewRepositoryForWorkspace(s, activeWorktree))
   const activeConnectionId = activeWorktreeId
     ? (getConnectionId(activeWorktreeId) ?? repo?.connectionId ?? null)
     : null
@@ -90,12 +92,18 @@ export function useChecksPanelControllerState() {
   )
 
   const [checks, setChecksState] = useState<PRCheckDetail[]>([])
+  // The GitLab parent pipeline from the same reply as its jobs; every other checks write clears it.
+  const [gitLabPipelineCheck, setGitLabPipelineCheck] = useState<PRCheckDetail | null>(null)
   // Distinguish failed reads from No checks configured.
   const [checksError, setChecksError] = useState<string | null>(null)
-  const setChecks = useCallback((next: SetStateAction<PRCheckDetail[]>) => {
-    setChecksError(null)
-    setChecksState(next)
-  }, [])
+  const setChecks = useCallback(
+    (next: SetStateAction<PRCheckDetail[]>, pipelineCheck: PRCheckDetail | null = null) => {
+      setChecksError(null)
+      setChecksState(next)
+      setGitLabPipelineCheck(pipelineCheck)
+    },
+    []
+  )
   const [checksLoading, setChecksLoading] = useState(false)
   const [comments, setCommentsState] = useState<PRComment[]>([])
   const [commentsError, setCommentsError] = useState<string | null>(null)
@@ -290,6 +298,7 @@ export function useChecksPanelControllerState() {
     resolveReviewThread,
     detectedAgentIds,
     checks,
+    gitLabPipelineCheck,
     setChecks,
     checksLoading,
     setChecksLoading,

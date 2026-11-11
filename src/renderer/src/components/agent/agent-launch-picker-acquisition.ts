@@ -1,0 +1,313 @@
+import { useAppViewExternalStore } from '@/store/retained-views/app-state-view'
+import { shallow } from 'zustand/shallow'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+
+/** Pending local IPC outlives observers; matching menus must retain its physical owner. */
+const pending = new Map<string, AgentPickerAcquisition>()
+type Observer = {
+  publish: (entries: AgentPickerEntry[]) => void
+  selected: () => TuiAgent | undefined
+}
+type Reads = {
+  settings?: () => Promise<AgentPickerEntry[] | undefined>
+  catalog: (
+    entry: AgentPickerEntry,
+    waitForListing: boolean
+  ) => Promise<AgentPickerEntry['catalog'] | undefined>
+  support: (entry: AgentPickerEntry) => Promise<AgentPickerEntry['structured'] | undefined>
+}
+type ReadKind = 'catalog' | 'refresh' | 'support'
+type SupportRead = {
+  state: 'queued' | 'pending' | 'settled'
+  value?: AgentPickerEntry['structured']
+}
+
+class AgentPickerAcquisition {
+  readonly observers = new Set<Observer>()
+  entries: AgentPickerEntry[]
+  settingsPending = false
+  private outstanding = { catalog: 0, refresh: 0, support: 0 }
+  private queued: Record<ReadKind, Set<number>>
+  private supports = new Map<number, SupportRead>()
+  private defaults: AgentPickerEntry[]
+
+  constructor(
+    readonly key: string,
+    private initial: AgentPickerEntry[],
+    private reads: Reads
+  ) {
+    this.entries = initial.map((entry) => ({
+      ...entry,
+      catalogRead:
+        entry.surfaces.length && entry.catalogRead !== 'unsupported' ? 'pending' : 'unsupported'
+    }))
+    this.defaults = initial
+    for (const [i, entry] of initial.entries()) {
+      if (entry.structuredDefaultsPending) {
+        this.supports.set(i, { state: 'queued' })
+      }
+    }
+    this.queued = {
+      catalog: new Set(
+        this.entries.flatMap((entry, i) => (entry.catalogRead === 'pending' ? [i] : []))
+      ),
+      refresh: new Set(),
+      support: new Set(this.supports.keys())
+    }
+  }
+
+  observe(observer: Observer) {
+    const first = this.observers.size === 0
+    this.observers.add(observer)
+    if (first) {
+      for (const [i, entry] of this.entries.entries()) {
+        if (
+          this.initial[i].catalogRead !== 'unsupported' &&
+          entry.surfaces.length &&
+          entry.catalogRead !== 'pending' &&
+          (entry.catalog.origin === 'unknown' ||
+            entry.catalogRead === 'failed' ||
+            entry.catalogRead === 'unsupported' ||
+            entry.catalog.unavailable !== undefined ||
+            entry.catalog.listingInProgress)
+        ) {
+          this.queued.catalog.add(i)
+          this.entries[i] = { ...entry, catalogRead: 'pending' }
+        }
+      }
+      for (const [i, read] of this.supports) {
+        if (read.state === 'settled') {
+          this.supports.set(i, { state: 'queued' })
+          this.queued.support.add(i)
+        }
+      }
+      if (!this.settingsPending && this.reads.settings) {
+        this.defaults = this.initial
+        this.readSettings(this.reads.settings)
+      }
+      this.entries = this.project()
+    }
+    observer.publish(this.entries)
+    this.admit('catalog')
+    this.admit('refresh')
+    this.admit('support')
+    return () => {
+      this.observers.delete(observer)
+      this.retire()
+    }
+  }
+
+  private publish() {
+    for (const observer of this.observers) {
+      observer.publish(this.entries)
+    }
+  }
+
+  private project(reopen = false) {
+    const defaults =
+      reopen && this.reads.settings && !this.settingsPending ? this.initial : this.defaults
+    return defaults.map((entry, i) => {
+      const read = this.supports.get(i)
+      const current = read && !(reopen && read.state === 'settled')
+      const next = {
+        ...entry,
+        catalog: this.entries[i].catalog,
+        catalogRead: this.entries[i].catalogRead,
+        ...(read
+          ? {
+              structured: (current && read.value) || entry.structured,
+              structuredDefaultsPending:
+                !current ||
+                read.state !== 'settled' ||
+                (!read.value && entry.structuredDefaultsPending !== false)
+            }
+          : {})
+      }
+      return shallow(this.entries[i], next) ? this.entries[i] : next
+    })
+  }
+
+  currentEntries() {
+    // Pending sibling I/O owns its request, never renewed authority for completed defaults.
+    return this.observers.size ? this.entries : this.project(true)
+  }
+
+  private readSettings(read: NonNullable<Reads['settings']>) {
+    this.settingsPending = true
+    void read()
+      .catch(() => undefined)
+      .then((entries) => {
+        if (entries) {
+          this.defaults = entries
+        }
+        this.settingsPending = false
+        this.entries = this.project()
+        this.publish()
+        this.retire()
+      })
+  }
+
+  private async readCatalog(entry: AgentPickerEntry, index: number, waitForListing: boolean) {
+    const catalog = await this.reads.catalog(entry, waitForListing)
+    // An open picker waits on a running listing, and again when a wait used its whole budget.
+    const refresh =
+      this.observers.size > 0 &&
+      (waitForListing ? catalog?.waitExpired : catalog?.listingInProgress) === true
+    if (refresh) {
+      this.queued.refresh.add(index)
+    }
+    this.entries = this.entries.map((e, i) =>
+      i === index
+        ? {
+            ...e,
+            ...(catalog ? { catalog } : {}),
+            catalogRead: !catalog ? 'failed' : refresh ? 'pending' : 'settled'
+          }
+        : e
+    )
+  }
+
+  private admit(kind: ReadKind) {
+    while (this.observers.size && this.outstanding[kind] < 2 && this.queued[kind].size) {
+      const priorities = [...this.observers].map((o) => o.selected())
+      const preferred = this.entries.findIndex((e) => priorities.includes(e.agent))
+      const index = this.queued[kind].has(preferred)
+        ? preferred
+        : this.queued[kind].values().next().value
+      if (index === undefined) {
+        break
+      }
+      this.queued[kind].delete(index)
+      this.outstanding[kind]++
+      const entry = this.entries[index]
+      if (kind === 'support') {
+        this.supports.set(index, { state: 'pending' })
+      }
+      const read =
+        kind !== 'support'
+          ? this.readCatalog(entry, index, kind === 'refresh').catch((error: unknown) => {
+              const unsupported =
+                typeof error === 'object' &&
+                error !== null &&
+                'code' in error &&
+                (error.code === 'method_not_found' ||
+                  error.code === 'structured_agent_session_unsupported' ||
+                  error.code === 'forbidden')
+              this.entries = this.entries.map((e, i) =>
+                i === index
+                  ? {
+                      ...e,
+                      catalogRead: unsupported ? 'unsupported' : 'failed'
+                    }
+                  : e
+              )
+            })
+          : this.reads
+              .support(entry)
+              .catch(() => undefined)
+              .then((value) => {
+                this.supports.set(index, { state: 'settled', value })
+                this.entries = this.project()
+              })
+      void read
+        .catch(() => undefined)
+        .then(() => {
+          this.outstanding[kind]--
+          this.publish()
+          this.admit(kind)
+          if (kind === 'catalog') {
+            this.admit('refresh')
+          }
+          this.retire()
+        })
+    }
+  }
+
+  private retire() {
+    if (
+      !this.observers.size &&
+      !this.settingsPending &&
+      !this.outstanding.catalog &&
+      !this.outstanding.refresh &&
+      !this.outstanding.support
+    ) {
+      pending.delete(this.key)
+    }
+  }
+
+  diagnostics() {
+    return {
+      observers: this.observers.size,
+      settings: Number(this.settingsPending),
+      ...this.outstanding
+    }
+  }
+}
+
+export function observeAgentPickerAcquisition(
+  key: string,
+  entries: AgentPickerEntry[],
+  reads: Reads,
+  observer: Observer
+) {
+  let resource = pending.get(key)
+  if (!resource) {
+    resource = new AgentPickerAcquisition(key, entries, reads)
+    pending.set(key, resource)
+  }
+  return resource.observe(observer)
+}
+
+export function currentAgentPickerAcquisition(key: string) {
+  const resource = pending.get(key)
+  return resource?.currentEntries()
+}
+
+export function agentPickerAcquisitionDiagnostics() {
+  return [...pending.values()].map((resource) => ({ key: resource.key, ...resource.diagnostics() }))
+}
+
+/**
+ * Live picker entries for one (inventory key, open) generation. Catalog and seed reads land one
+ * at a time for several seconds after the menu opens; holding them here instead of in the
+ * owner's React state lets only the components that render entries re-render as they land.
+ */
+export type AgentPickerInventorySource = {
+  getSnapshot: () => AgentPickerEntry[]
+  subscribe: (listener: () => void) => () => void
+}
+
+type WritableAgentPickerInventorySource = AgentPickerInventorySource & {
+  publish: (entries: readonly AgentPickerEntry[]) => void
+}
+
+export function createAgentPickerInventorySource(
+  initial: AgentPickerEntry[]
+): WritableAgentPickerInventorySource {
+  let entries = initial
+  const listeners = new Set<() => void>()
+  return {
+    getSnapshot: () => entries,
+    subscribe: (listener) => {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+    publish: (next) => {
+      // Why: a read that changed nothing (e.g. an unavailable catalog) must not re-render the menu.
+      if (next.length === entries.length && next.every((entry, i) => entry === entries[i])) {
+        return
+      }
+      entries = [...next]
+      for (const listener of listeners) {
+        listener()
+      }
+    }
+  }
+}
+
+export function useAgentPickerInventoryEntries(
+  source: AgentPickerInventorySource
+): AgentPickerEntry[] {
+  return useAppViewExternalStore(source.subscribe, source.getSnapshot, source.getSnapshot)
+}

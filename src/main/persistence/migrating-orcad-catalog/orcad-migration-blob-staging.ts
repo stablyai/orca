@@ -1,5 +1,5 @@
 // The manifest omits blobs; descriptor filenames make staged uploads resumable after restart.
-import { readdirSync, rmSync } from 'node:fs'
+import { readFileSync, readdirSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import {
   ORCAD_MIGRATION_BLOB_KINDS,
@@ -15,7 +15,7 @@ import {
   type OrcadMigrationBlobUploadState
 } from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
 import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
-import { syncDirectoryDurablySync } from '../../durable-file-write'
+import { syncDirectoryDurablySync } from '../../filesystem/durable-file-write'
 import {
   appendOrcadMigrationStagedChunk,
   ensureOrcadMigrationDirectory,
@@ -49,7 +49,9 @@ const receivedDirectoryPath: ReceivedBlobPathResolver = (root, manifest, descrip
 const RECEIVED_BLOB_DESTINATIONS: Record<OrcadMigrationBlobKind, ReceivedBlobPathResolver> = {
   'terminal-restore-hints': receivedDirectoryPath,
   'shell-history': receivedDirectoryPath,
-  'agent-session-records': receivedDirectoryPath
+  'agent-session-records': receivedDirectoryPath,
+  'terminal-history': receivedDirectoryPath,
+  'automation-run-history': receivedDirectoryPath
 }
 
 export function getOrcadMigrationReceivedBlobPath(
@@ -161,6 +163,23 @@ export function stagedOrcadMigrationBlobFiles(
     descriptor,
     path: stagedBlobPath(root, manifest, descriptor)
   }))
+}
+
+/** A blob's verified bytes, staged or already moved to received by an earlier commit attempt. */
+export function readOrcadMigrationBlob(
+  manifest: OrcadMigrationManifest,
+  root: string,
+  descriptor: OrcadMigrationBlobDescriptor
+): Buffer {
+  for (const path of [
+    stagedBlobPath(root, manifest, descriptor),
+    getOrcadMigrationReceivedBlobPath(root, manifest, descriptor)
+  ]) {
+    if (orcadMigrationFileMatches(path, descriptor)) {
+      return readFileSync(path)
+    }
+  }
+  throw new Error(`orcad_migration_blob_incomplete:${descriptor.blobKind}:${descriptor.key}`)
 }
 
 /** Reject missing or extra blobs, including leftovers from another capture. */

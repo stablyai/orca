@@ -1,7 +1,7 @@
 import { orderTerminalRowsByTabGroups } from '../../../shared/workspace-layout/terminal-row-order'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { sanitizeWorkspaceSessionTerminalRetirements } from '../../runtime/mobile-session-terminal-persistence-retirement'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import { sanitizeWorkspaceSessionTerminalRetirements } from '../../runtime/terminal/surface/mobile-session-terminal-persistence-retirement'
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
@@ -9,15 +9,20 @@ import {
 } from '../../../shared/execution-host'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
-import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session-browser-history'
-import { withoutRedundantGlobalFields } from '../../../shared/workspace-session-host-field-ownership'
+import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session/workspace-session-terminal-buffers'
+import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session/workspace-session-browser-history'
+import { withoutRedundantGlobalFields } from '../../../shared/workspace-session/workspace-session-host-field-ownership'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import { readTerminalScrollbackSnapshotSync } from '../../terminal-scrollback-snapshots'
+import { readTerminalScrollbackSnapshotSync } from '../../pty/scrollback/terminal-scrollback-snapshots'
+import {
+  hasTerminalScrollbackSnapshotSync,
+  readTerminalScrollbackSnapshot,
+  statTerminalScrollbackSnapshotSize
+} from '../../pty/scrollback/terminal-scrollback-snapshot-nonblocking-reads'
 import { preserveRuntimeAuthoredWorkspaceSessionFields } from '../runtime-authored-workspace-session-fields'
 import { dropClosedTerminalTabs } from '../closed-terminal-tab-write-fence'
 import { findWorktreeIdForTab } from '../restoring-sessions/pane-identity-migration'
-import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
+import { invalidateLocalWorktreeMetadataPruneInputs } from '../../workspaces/catalog/local-worktree-metadata-prune-gate'
 import { isWslMoveWorkspaceSessionFrozen } from '../moving-wsl-projects/wsl-move-scope-guard'
 import {
   removeWorkspaceSessionOwner,
@@ -25,8 +30,8 @@ import {
 } from '../restoring-sessions/session-owner-removal'
 
 import type { StoreRuntimeState } from './store-runtime-state'
-import type { WriteSchedulingOperations } from './write-scheduling'
-import { scheduleSave } from './write-scheduling'
+
+import { type WriteSchedulingOperations, scheduleSave } from './write-scheduling'
 import {
   preserveMissingWorkspaceSessionTerminalBindings,
   sshTargetIdForWorkspaceSessionHost
@@ -58,7 +63,11 @@ export class SessionHostPartitionOperations {
     scheduling: WriteSchedulingOperations,
     bindingRecovery: TerminalBindingRecoveryOperations
   ) {
-    this[sessionHostPartitionOperationsContext] = { runtime, scheduling, bindingRecovery }
+    this[sessionHostPartitionOperationsContext] = {
+      runtime,
+      scheduling,
+      bindingRecovery
+    }
   }
 
   getWorkspaceSession(hostId?: string | null): PersistedState['workspaceSession'] {
@@ -107,6 +116,27 @@ export class SessionHostPartitionOperations {
 
   readTerminalScrollbackSnapshot(ref: string): string | null {
     return readTerminalScrollbackSnapshotSync(
+      ref,
+      this[sessionHostPartitionOperationsContext].runtime.terminalScrollbackSnapshotStorage
+    )
+  }
+
+  hasTerminalScrollbackSnapshot(ref: string): boolean {
+    return hasTerminalScrollbackSnapshotSync(
+      ref,
+      this[sessionHostPartitionOperationsContext].runtime.terminalScrollbackSnapshotStorage
+    )
+  }
+
+  readTerminalScrollbackSnapshotAsync(ref: string): Promise<string | null> {
+    return readTerminalScrollbackSnapshot(
+      ref,
+      this[sessionHostPartitionOperationsContext].runtime.terminalScrollbackSnapshotStorage
+    )
+  }
+
+  statTerminalScrollbackSnapshotSize(ref: string): Promise<number | null> {
+    return statTerminalScrollbackSnapshotSize(
       ref,
       this[sessionHostPartitionOperationsContext].runtime.terminalScrollbackSnapshotStorage
     )

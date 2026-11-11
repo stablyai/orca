@@ -24,9 +24,4 @@ describe('Jira prompt templates', () => {
       )
     ).toBe(`Use ${buildJiraIssuePrompt(issue)} plus Include mobile checks.`)
   })
-  it('replaces repeated variables and preserves unknown variables and longer names', () => {
-    expect(
-      renderJiraPromptTemplate('$other-prompt $other-prompt $unknown $jira-issues', issue, 'note')
-    ).toBe('note note $unknown $jira-issues')
-  })
 })

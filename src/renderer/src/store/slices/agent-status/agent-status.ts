@@ -1,3 +1,4 @@
+import { agentSenderPublicationPatch } from '@/runtime/native-chat/agent-senders/agent-sender-publication-patch'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
@@ -58,7 +59,16 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
   }
   return {
     ...actions,
+    agentSenderPublicationsByHost: {},
+    setAgentSenderPublication: (host, publication) =>
+      storeSet((state) => {
+        const patch = agentSenderPublicationPatch(state, host, '*', publication)
+        return patch.agentSenderPublicationsByHost ? patch : state
+      }),
+    subscribeAgentStatusChanges: runtime.subscribeAgentStatusChanges,
+    updateAgentStatusState: runtime.set,
     agentStatusByPaneKey: {},
+    agentConversationsByPaneKey: {},
     runtimeAgentOrchestrationByPaneKey: {},
     migrationUnsupportedByPtyId: {},
     agentStatusEpoch: 0,

@@ -1,7 +1,8 @@
-import type { RpcSendParams } from '../transport/rpc-params-contract'
+import { translate } from '../i18n/mobile-i18n'
+import type { RpcSendParams } from '../../../src/shared/rpc-contract/rpc-send-params'
 import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../../../src/shared/worktree/hosted-review-links'
-import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import { refusedRpcMessageOrFallback } from '../transport/rpc/rpc-refusal-message'
+import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 import {
   worktreeLinkSet,
   worktreeSummaryRead,
@@ -53,7 +54,7 @@ export function buildWorktreeSetHostedReviewLinkParams(
 
 // Refusal without a message uses screen copy; transport errors retain their own message.
 async function setWorktreeReviewLink(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   params: RpcSendParams<'worktree.set'>,
   fallback: string
 ): Promise<MobilePrLinkOutcome> {
@@ -72,19 +73,22 @@ async function setWorktreeReviewLink(
 }
 
 export function linkMobilePr(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   prNumber: number
 ): Promise<MobilePrLinkOutcome> {
   return setWorktreeReviewLink(
     client,
     buildWorktreeSetLinkParams(worktreeId, prNumber),
-    'Failed to update linked pull request'
+    translate(
+      'sourceControl.prLink.updatePullRequestFailed',
+      'Failed to update linked pull request'
+    )
   )
 }
 
 export async function linkMobileHostedReview(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   provider: string,
   number: number,
@@ -95,19 +99,26 @@ export async function linkMobileHostedReview(
     return { ok: true }
   }
   // Link refresh failure is nonfatal: the review already exists, so keep its URL.
-  return setWorktreeReviewLink(client, params, 'Failed to update linked review')
+  return setWorktreeReviewLink(
+    client,
+    params,
+    translate('sourceControl.prLink.updateReviewFailed', 'Failed to update linked review')
+  )
 }
 
 // Like desktop, suppress the unlinked PR so branch discovery does not bring it straight back.
 export function unlinkMobilePr(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   prNumber: number
 ): Promise<MobilePrLinkOutcome> {
   return setWorktreeReviewLink(
     client,
     { ...buildWorktreeSetLinkParams(worktreeId, null), suppressedGitHubPR: prNumber },
-    'Failed to update linked pull request'
+    translate(
+      'sourceControl.prLink.updatePullRequestFailed',
+      'Failed to update linked pull request'
+    )
   )
 }
 
@@ -119,7 +130,7 @@ const NO_GITHUB_PR_LINK: WorktreeGitHubPRLink = {
 
 // Desktop's durable clear for a link the branch has moved past; a failed write only repeats the check next load.
 export async function clearMobileWorktreeReviewLink(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   shouldApply: (worktree: MobileWorktreeSummary) => boolean
 ): Promise<void> {
@@ -131,20 +142,23 @@ export async function clearMobileWorktreeReviewLink(
   await setWorktreeReviewLink(
     client,
     { worktree: `id:${worktreeId}`, ...CLEARED_HOSTED_REVIEW_SELECTION_UPDATES },
-    'Failed to update linked pull request'
+    translate(
+      'sourceControl.prLink.updatePullRequestFailed',
+      'Failed to update linked pull request'
+    )
   )
 }
 
 // Persisted links recover closed/merged PRs that branch lookup no longer returns.
 export async function fetchWorktreeGitHubPRLink(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string
 ): Promise<WorktreeGitHubPRLink> {
   return (await readWorktreeSummary(client, worktreeId)) ?? NO_GITHUB_PR_LINK
 }
 
 async function readWorktreeSummary(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string
 ): Promise<MobileWorktreeSummary | null> {
   try {

@@ -1,8 +1,9 @@
-import { useCallback, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type React from 'react'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
-import type { DiffSection } from '../../diff-section-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
 import { buildCombinedGitStatusSignature } from '../resolve-changes/combined-diff-git-status-signature'
 import { combinedDiffSectionsMatchEntryMetadata } from '../resolve-changes/combined-diff-section-cache-match'
 import { getCombinedDiffFileTreeSectionKey } from '../resolve-changes/combined-diff-section-identity'
@@ -11,11 +12,12 @@ import {
   collectCountedCombinedDiffPasses,
   getCombinedDiffCountingPassKey,
   shouldLoadCombinedDiffOnDemand
-} from '../../combined-diff-on-demand-load'
+} from '../load-sections/combined-diff-on-demand-load'
 import type { CombinedDiffEntrySet } from '../resolve-changes/use-combined-diff-entry-set'
 import type { CombinedDiffSectionLoadRegistry } from '../load-sections/combined-diff-section-load-registry'
 import { clearPendingSectionReloadTimers } from '../load-sections/combined-diff-section-load-registry'
 import { combinedDiffViewPreferences } from './combined-diff-view-memory'
+import { retainCombinedDiffEntryMetadata } from './retain-combined-diff-entry-metadata'
 import {
   claimCombinedDiffView,
   readCombinedDiffViewMemory,
@@ -35,28 +37,38 @@ export type CombinedDiffViewRestore = {
 
 export function useCombinedDiffViewRestore({
   entrySet,
+  file,
   gitStatusEntries,
   registry,
   setGeneration,
   setSectionHeights,
   setSections,
-  setSideBySide,
   succession,
-  viewStateKey,
-  worktreeId
+  viewStateKey
 }: {
   entrySet: CombinedDiffEntrySet
+  file: OpenFile
   gitStatusEntries: GitStatusEntry[]
   registry: CombinedDiffSectionLoadRegistry
   setGeneration: React.Dispatch<React.SetStateAction<number>>
   setSectionHeights: React.Dispatch<React.SetStateAction<Record<number, number>>>
   setSections: React.Dispatch<React.SetStateAction<DiffSection[]>>
-  setSideBySide: React.Dispatch<React.SetStateAction<boolean>>
   /** Set for tab-scoped keys so a reopened tab restores the view its closed predecessor left. */
   succession?: CombinedDiffViewSuccession
   viewStateKey: string
-  worktreeId: string
 }): CombinedDiffViewRestore {
+  const { worktreeId } = file
+  const ownerKey = JSON.stringify([worktreeId, file.filePath, file.runtimeEnvironmentId ?? null])
+  const sourceKey = useMemo(
+    () =>
+      JSON.stringify([
+        file.diffSource,
+        file.combinedAreaFilter,
+        file.branchCompare,
+        file.commitCompare
+      ]),
+    [file.diffSource, file.combinedAreaFilter, file.branchCompare, file.commitCompare]
+  )
   const {
     entries,
     entrySignature,
@@ -72,6 +84,8 @@ export function useCombinedDiffViewRestore({
     loadingIndicesRef,
     reloadTimersRef,
     sectionLoadTokensRef,
+    sectionsRef,
+    requestSectionReloadRef,
     supersededLoadIndicesRef
   } = registry
 
@@ -112,26 +126,62 @@ export function useCombinedDiffViewRestore({
   // Cache sections and scroll by pane so remount restores them before repaint.
   const initializedEntryStateRef = useRef<{
     viewStateKey: string
-    entrySignature: string
-    hasUncommittedEntriesSnapshot: boolean
+    ownerKey: string
+    sourceKey: string
+    entrySet: CombinedDiffEntrySet
   } | null>(null)
   useLayoutEffect(() => {
     const initializedEntryState = initializedEntryStateRef.current
+    // Fresh live arrays can change submodule admission without changing the cache signature.
     if (
       initializedEntryState?.viewStateKey === viewStateKey &&
-      initializedEntryState.entrySignature === entrySignature &&
-      initializedEntryState.hasUncommittedEntriesSnapshot === hasUncommittedEntriesSnapshot
+      initializedEntryState.ownerKey === ownerKey &&
+      initializedEntryState.sourceKey === sourceKey &&
+      initializedEntryState.entrySet.entrySignature === entrySignature &&
+      initializedEntryState.entrySet.hasUncommittedEntriesSnapshot ===
+        hasUncommittedEntriesSnapshot &&
+      (!shouldAutoReloadFromGitStatus || initializedEntryState.entrySet.entries === entries)
     ) {
       return
     }
     initializedEntryStateRef.current = {
       viewStateKey,
-      entrySignature,
-      hasUncommittedEntriesSnapshot
+      ownerKey,
+      sourceKey,
+      entrySet
+    }
+    let requiresFreshSections =
+      initializedEntryState?.viewStateKey === viewStateKey &&
+      (initializedEntryState.ownerKey !== ownerKey || initializedEntryState.sourceKey !== sourceKey)
+    if (
+      initializedEntryState?.viewStateKey === viewStateKey &&
+      initializedEntryState.ownerKey === ownerKey &&
+      initializedEntryState.sourceKey === sourceKey &&
+      initializedEntryState.entrySet.shouldAutoReloadFromGitStatus &&
+      shouldAutoReloadFromGitStatus
+    ) {
+      const retained = retainCombinedDiffEntryMetadata({
+        entrySet,
+        previousEntrySet: initializedEntryState.entrySet,
+        sections: sectionsRef.current
+      })
+      if (retained) {
+        if (retained.sections !== sectionsRef.current) {
+          sectionsRef.current = retained.sections
+          setSections(retained.sections)
+        }
+        for (const index of retained.changedIndices) {
+          if (loadedIndicesRef.current.has(index) || loadingIndicesRef.current.has(index)) {
+            requestSectionReloadRef.current(index)
+          }
+        }
+        return
+      }
+      requiresFreshSections = true
     }
     deferredLoadRequestsRef.current.clear()
     const memory = readCombinedDiffViewMemory(viewStateKey)
-    const cached = memory?.view
+    const cached = requiresFreshSections ? undefined : memory?.view
     const canRestoreSnapshotSectionsByKey =
       hasUncommittedEntriesSnapshot &&
       cached !== undefined &&
@@ -156,9 +206,9 @@ export function useCombinedDiffViewRestore({
               ...section,
               collapsed: collapsedPreference
             }))
+      sectionsRef.current = restoredSections
       setSections(restoredSections)
       setSectionHeights(cached.sectionHeights)
-      setSideBySide(combinedDiffViewPreferences.sideBySide ?? cached.sideBySide)
       loadedIndicesRef.current = new Set(
         cached.loadedIndices.filter((index) => {
           const section = restoredSections[index]
@@ -166,8 +216,8 @@ export function useCombinedDiffViewRestore({
         })
       )
       loadingIndicesRef.current.clear()
-      scrollOffsetRef.current = memory.scrollTop ?? 0
-      scrollAnchorRef.current = memory.scrollAnchor ?? null
+      scrollOffsetRef.current = memory?.scrollTop ?? 0
+      scrollAnchorRef.current = memory?.scrollAnchor ?? null
       latestDomScrollAnchorRef.current = scrollAnchorRef.current
       return
     }
@@ -218,6 +268,7 @@ export function useCombinedDiffViewRestore({
     setGeneration((prev) => prev + 1)
   }, [
     entries,
+    entrySet,
     entrySignature,
     generationRef,
     deferredLoadRequestsRef,
@@ -228,13 +279,16 @@ export function useCombinedDiffViewRestore({
     loadingIndicesRef,
     reloadTimersRef,
     sectionLoadTokensRef,
+    sectionsRef,
+    requestSectionReloadRef,
     supersededLoadIndicesRef,
     setGeneration,
     setSectionHeights,
     setSections,
-    setSideBySide,
     shouldAutoReloadFromGitStatus,
     treeMode,
+    ownerKey,
+    sourceKey,
     viewStateKey
   ])
 

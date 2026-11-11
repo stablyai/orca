@@ -1,14 +1,16 @@
 import {
   AGENT_MODEL_MAX_LENGTH,
+  normalizeOptionalField
+} from '../../agent-status/contracts/agent-status-field-normalization'
+import {
   normalizeAgentStatusPayload,
   type ParsedAgentStatusPayload
-} from '../../agent-status-types'
-import { normalizeOptionalField } from '../../agent-status-field-normalization'
-import { isAskUserQuestionTool } from '../../agent-question-answered-intent'
+} from '../../agent-status/contracts/agent-status-types'
+
 import {
   mainAgentTurnInterrupted,
   type AgentLeadStatusResolution
-} from '../../agent-lead-status-fold'
+} from '../../agent-status/lifecycle/agent-lead-status-fold'
 import {
   codexRosterToSnapshots,
   enrichCodexSubagentIdentity,
@@ -28,7 +30,9 @@ import type { HookListenerState } from '../listener-state'
 import { resolvePrompt, resolveToolState } from '../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import { readString } from '../tool-input-preview'
+import { applyCodexSessionStart } from './codex-session-start'
 import {
+  codexHookEventState,
   codexMainAgentStatusForPayload,
   codexLeadOutcomeForEvent,
   getOrCreateCodexSubagentRoster,
@@ -37,6 +41,7 @@ import {
   resolveCodexPaneStatus,
   setCodexMainAgentTurnState
 } from './codex-state'
+import { pendingCodexAsyncQuestion, trackCodexAsyncQuestions } from './codex-async-questions'
 
 export function buildCodexStatusPayload(
   state: HookListenerState,
@@ -44,7 +49,7 @@ export function buildCodexStatusPayload(
   promptText: string,
   paneKey: string,
   hookPayload: Record<string, unknown>,
-  options: AgentLeadStatusResolution & { updateLead: boolean }
+  options: AgentLeadStatusResolution & { updateLead: boolean; sessionBoundary?: true }
 ): ParsedAgentStatusPayload | null {
   const snapshot = options.updateLead
     ? resolveToolState(state, paneKey, extractToolFields('codex', eventName, hookPayload), {
@@ -52,18 +57,24 @@ export function buildCodexStatusPayload(
       })
     : (state.lastToolByPaneKey.get(paneKey) ?? {})
   const lead = state.codexLeadStateByPaneKey.get(paneKey)
+  // An approval or blocking question on screen wins; otherwise a waiting row shows the open async question.
+  const asyncQuestion =
+    options.stateName === 'waiting' && !snapshot.interactivePrompt
+      ? pendingCodexAsyncQuestion(state, paneKey)
+      : undefined
 
   return normalizeAgentStatusPayload({
     state: options.stateName,
     workingMode: options.workingMode,
+    sessionBoundary: options.sessionBoundary,
     prompt: resolvePrompt(state, paneKey, promptText, {
       resetOnNewTurn: options.updateLead && isNewTurnEvent('codex', eventName)
     }),
     agentType: 'codex',
     model: lead?.model,
-    toolName: snapshot.toolName,
+    toolName: asyncQuestion?.toolName ?? snapshot.toolName,
     toolInput: snapshot.toolInput,
-    interactivePrompt: snapshot.interactivePrompt,
+    interactivePrompt: asyncQuestion?.prompt ?? snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
     interrupted: mainAgentTurnInterrupted(lead),
@@ -154,27 +165,31 @@ export function normalizeCodexEvent(
   eventName: unknown,
   promptText: string,
   paneKey: string,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  originalEventName: unknown = eventName
 ): ParsedAgentStatusPayload | null {
   if (eventName === 'SubagentStart' || eventName === 'SubagentStop') {
     return normalizeCodexSubagentLifecycleEvent(state, eventName, paneKey, hookPayload)
   }
 
-  // Auto-allowed request_user_input still blocks on PreToolUse (Codex0.145+).
-  const isUserInputPreTool =
-    eventName === 'PreToolUse' &&
-    isAskUserQuestionTool(readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name'))
-  const stateName =
-    eventName === 'SessionStart' ||
-    eventName === 'UserPromptSubmit' ||
-    (eventName === 'PreToolUse' && !isUserInputPreTool) ||
-    eventName === 'PostToolUse'
-      ? 'working'
-      : eventName === 'PermissionRequest' || isUserInputPreTool
-        ? 'waiting'
-        : eventName === 'Stop' || eventName === 'Interrupt'
-          ? 'done'
-          : null
+  if (eventName === 'SessionStart' && originalEventName !== 'UserPromptSubmit') {
+    const start = applyCodexSessionStart(state, paneKey, {
+      sessionId: readString(hookPayload, 'session_id'),
+      source: readString(hookPayload, 'source'),
+      agentId: readString(hookPayload, 'agent_id'),
+      model: normalizeOptionalField(hookPayload.model, AGENT_MODEL_MAX_LENGTH)
+    })
+    return start && buildCodexStatusPayload(state, eventName, '', paneKey, hookPayload, start)
+  }
+
+  const activityEventName =
+    eventName === 'SessionStart' && originalEventName === 'UserPromptSubmit'
+      ? originalEventName
+      : eventName
+  const stateName = codexHookEventState(
+    activityEventName,
+    readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name')
+  )
   if (!stateName) {
     return null
   }
@@ -250,32 +265,36 @@ export function normalizeCodexEvent(
     transcriptPath,
     stateName
   )
+  // An open async question needs the user even while Codex keeps working.
+  const leadState =
+    trackCodexAsyncQuestions(state, paneKey, eventName, hookPayload) && ownedState === 'working'
+      ? 'waiting'
+      : ownedState
   const previousLead = state.codexLeadStateByPaneKey.get(paneKey)
   const transcript = state.codexSubagentTranscriptByPaneKey.get(paneKey)
   const turnId = readString(hookPayload, 'turn_id')
+  const sessionId = readString(hookPayload, 'session_id')
   // Why: Codex fires no Stop for a failed turn, so a Stop for one is the rollout's end replayed.
   const failedTurn =
     eventName === 'Stop' &&
     previousLead?.state !== 'done' &&
     turnId !== undefined &&
     codexTranscriptTurnEnd(transcript, turnId) === 'failed'
-  // Why: a compaction inside a running turn keeps that turn; one queued before the next turn follows an ended one.
-  const startsTurn =
-    eventName === 'UserPromptSubmit' ||
-    (eventName === 'SessionStart' &&
-      (readString(hookPayload, 'source') !== 'compact' ||
-        previousLead?.state === 'done' ||
-        !previousLead?.turnId ||
-        codexTranscriptTurnEnd(transcript, previousLead.turnId) !== undefined))
+  const startsTurn = activityEventName === 'UserPromptSubmit'
   const record = setCodexMainAgentTurnState(state, paneKey, {
-    state: ownedState,
+    state: leadState,
+    ...(startsTurn &&
+    ((turnId && turnId !== previousLead?.turnId) ||
+      (sessionId && sessionId !== previousLead?.sessionId))
+      ? { stateStartedAt: Date.now() }
+      : {}),
     ...(failedTurn
       ? { outcome: 'failure' as const }
-      : codexLeadOutcomeForEvent(eventName, previousLead, ownedState)),
+      : codexLeadOutcomeForEvent(eventName, previousLead, leadState)),
     model:
       normalizeOptionalField(hookPayload['model'], AGENT_MODEL_MAX_LENGTH) ??
       (eventName === 'SessionStart' ? undefined : previousLead?.model),
-    sessionId: readString(hookPayload, 'session_id'),
+    sessionId,
     turnId: turnId ?? (startsTurn ? null : undefined)
   })
   return buildCodexStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
@@ -284,25 +303,4 @@ export function normalizeCodexEvent(
   })
 }
 
-/** Replay rollout-confirmed root ends as missing Stops, including /review; drop delayed hooks once the lead moved to another turn. */
-export function codexHookEventForEndedTurn(
-  state: HookListenerState,
-  paneKey: string,
-  eventName: unknown,
-  hookPayload: Record<string, unknown>
-): unknown {
-  const turnId = readString(hookPayload, 'turn_id')
-  if (
-    !turnId ||
-    eventName === 'Stop' ||
-    eventName === 'Interrupt' ||
-    readString(hookPayload, 'agent_id')
-  ) {
-    return eventName
-  }
-  if (!codexTranscriptTurnEnd(state.codexSubagentTranscriptByPaneKey.get(paneKey), turnId)) {
-    return eventName
-  }
-  const leadTurnId = state.codexLeadStateByPaneKey.get(paneKey)?.turnId
-  return leadTurnId && leadTurnId !== turnId ? undefined : 'Stop'
-}
+export { codexHookEventForEndedTurn } from './codex-ended-turn-event'

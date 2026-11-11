@@ -4,9 +4,9 @@ import {
   FEATURE_INTERACTION_IDS,
   type FeatureInteractionState
 } from '../../shared/feature-interactions'
-import { FEATURE_TIP_IDS } from '../../shared/feature-tips'
+import { FEATURE_TIP_SEEN_IDS } from '../../shared/feature-tips'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 
 export const DEV_SHOW_FIRST_RUN_EDUCATION_ENV = 'ORCA_DEV_SHOW_FIRST_RUN_EDUCATION'
 
@@ -37,7 +37,7 @@ export function suppressDevEducationForStore(store: DevEducationStore, now = Dat
   }
 
   const ui = store.getUI()
-  const nextFeatureTipsSeenIds = mergeUnique(ui.featureTipsSeenIds, FEATURE_TIP_IDS)
+  const nextFeatureTipsSeenIds = mergeUnique(ui.featureTipsSeenIds, FEATURE_TIP_SEEN_IDS)
   const nextContextualToursSeenIds = mergeUnique(ui.contextualToursSeenIds, CONTEXTUAL_TOUR_IDS)
   const nextFeatureInteractions = fillFeatureInteractions(ui.featureInteractions, now)
 

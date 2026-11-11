@@ -1,4 +1,4 @@
-import { resolvePaneKey } from '../../../lib/agent-status-pane-ownership'
+import { resolvePaneKey } from '../../../lib/agent-status/ownership/agent-status-pane-ownership'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import type {
@@ -10,7 +10,7 @@ import type {
 import {
   resolveAgentPaneAuthorityKey,
   transferAgentPaneAuthorityAlias
-} from '../agent-pane-authority'
+} from './agent-pane-authority'
 import {
   buildAgentStatusLiveEntry,
   type AgentStatusLiveEntryBuild,
@@ -26,12 +26,13 @@ import {
 import {
   generatedTitleReplacesExisting,
   generatedTitleSourceText
-} from '../../../../../shared/agent-generated-tab-title-rules'
+} from '../../../../../shared/agent-status/presentation/agent-generated-tab-title-rules'
 
 export function createAgentStatusLiveActions(
   runtime: AgentStatusRuntime
 ): Pick<AgentStatusSlice, 'setAgentStatus' | 'setAgentStatuses' | 'transactAgentStatuses'> {
   const {
+    projectConversation,
     get,
     set,
     applyGeneratedTabTitleUpdate,
@@ -66,7 +67,7 @@ export function createAgentStatusLiveActions(
     }
     let built: AgentStatusLiveEntryBuild | AgentStatusLiveEntryRejection | null = null
     let liveEntryDelta: FreshnessLiveEntryDelta | null = null
-    set((state) => {
+    set((state, changedPaneKeys) => {
       const retirement = state.recentlyRetiredAgentStatusPaneKeys[paneKey]
       if (
         (retirement !== undefined &&
@@ -105,7 +106,11 @@ export function createAgentStatusLiveActions(
         return state
       }
       const previousEntries = state.agentStatusByPaneKey
-      const reduction = reduceAgentStatusLiveUpdate(state, built, updatedAt)
+      const reduction = reduceAgentStatusLiveUpdate(state, built, updatedAt, projectConversation)
+      changedPaneKeys.add(built.entry.paneKey)
+      for (const evicted of reduction.evictedEntries) {
+        changedPaneKeys.add(evicted.paneKey)
+      }
       liveEntryDelta = {
         previousEntries,
         nextEntries: reduction.patch.agentStatusByPaneKey ?? previousEntries,

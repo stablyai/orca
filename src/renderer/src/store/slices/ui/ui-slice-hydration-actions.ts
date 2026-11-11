@@ -1,11 +1,12 @@
+import { normalizeStatusBarUsageFormat } from '../../../../../shared/status-bar-usage-format'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import type { AppState } from '../../types'
-import { normalizeRightSidebarRoute } from '../../right-sidebar-route'
+import { normalizeRightSidebarRoute } from '../right-sidebar/right-sidebar-route'
 import {
   applyManualRepoOrder,
   normalizeManualRepoOrder
 } from '../../../../../shared/manual-repo-order'
-import { normalizeWorkspaceCleanupBrowseState } from '../../../../../shared/workspace-cleanup-browse-state'
+import { normalizeWorkspaceCleanupBrowseState } from '../../../../../shared/workspace-cleanup/workspace-cleanup-browse-state'
 import {
   normalizeExecutionHostScope,
   normalizeExecutionHostOrder,
@@ -16,9 +17,9 @@ import { normalizeContextualTourIds } from '../../../../../shared/contextual-tou
 import { normalizeFeatureTipIds } from '../../../../../shared/feature-tips'
 import {
   DEFAULT_HIDE_SLEEPING_WORKSPACES,
-  normalizeWorktreeCardProperties,
   normalizeAgentActivityDisplayMode
 } from '../../../../../shared/constants'
+import { normalizeWorktreeCardProperties } from '../../../../../shared/worktree/card-properties'
 import {
   normalizeActivityGroupBy,
   normalizeThreadReadFilter
@@ -30,9 +31,9 @@ import {
 } from '../../../../../shared/workspace-statuses'
 import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../../shared/pet-types'
 import { clampMarkdownTocPanelWidth } from '../../../../../shared/markdown-toc-panel-width'
-import { normalizeBrowserDevToolsDockLayout } from '../../../../../shared/browser-devtools-dock'
+import { normalizeBrowserDevToolsDockLayout } from '../../../../../shared/browser/devtools/browser-devtools-dock'
 import { clampCombinedDiffFileTreeWidth } from '../../../../../shared/combined-diff-file-tree-width'
-import { parsePersistedAutomationHostFilter } from '../../../../../shared/automation-host-filter'
+import { parsePersistedAutomationHostFilter } from '../../../../../shared/automations/ownership/automation-host-filter'
 import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
 import { normalizeBrowserPageZoomLevel } from '../../../../../shared/browser-page-zoom'
@@ -41,14 +42,19 @@ import { isReleaseChannel } from '../../../../../shared/release-channel'
 import {
   filterSetupScriptPromptDismissalsToValidRepos,
   sanitizeSetupScriptPromptDismissals
-} from '../../../lib/setup-script-prompt'
+} from '../../../runtime/repo-hooks/setup-script-prompt'
 import { isBundledPetId, DEFAULT_PET_ID } from '../../../components/pet/pet-models'
-import { getRepoHostIdentity } from '../repo-host-identity'
-import type { PersistedUIWriteBaseline } from '../persisted-ui-write-baseline'
+import { getRepoHostIdentity } from '../../../../../shared/repo-host-identity'
 import {
+  withWslMovedRepoIds,
+  withWslMovedSetupScriptDismissals
+} from '../../repos/wsl-moved-repo-ui-retention'
+
+import {
+  type PersistedUIWriteBaseline,
   capturePersistedUIWriteBaseline,
   diffPersistedUIWriteFields
-} from '../persisted-ui-write-baseline'
+} from './persisted-ui-write-baseline'
 import {
   hydrateTrustedOrcaHooks,
   hydrateUnexpectedSignoutDismissal,
@@ -75,7 +81,12 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
       set((s) => {
         const manualRepoOrder = normalizeManualRepoOrder(ui.manualRepoOrder)
         const orderedRepos = applyManualRepoOrder(s.repos, manualRepoOrder)
-        const validRepoIds = new Set(s.repos.map((repo) => repo.id))
+        const listedRepoIds = new Set(s.repos.map((repo) => repo.id))
+        // An empty catalog keeps everything; otherwise a moved repo whose host has not loaded stays.
+        const validRepoIds =
+          listedRepoIds.size === 0
+            ? listedRepoIds
+            : withWslMovedRepoIds(listedRepoIds, s.wslMovedProjects)
         const validRepoHostIdentities = new Set(s.repos.map(getRepoHostIdentity))
         const persistedFilterRepoIds = sanitizePersistedRepoIds(ui.filterRepoIds)
         const persistedAgentsFilterRepoIds = sanitizePersistedRepoIds(ui.agentsFilterRepoIds)
@@ -139,6 +150,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           // precisely the ones showing the bug, so absence must mean "exempt".
           alwaysShowDefaultBranchWorkspace: ui.alwaysShowDefaultBranchWorkspace !== false,
           ...sanitizeExplorerPreferences(ui),
+          gitGraphFiltersByWorktree: ui.gitGraphFiltersByWorktree ?? {},
           // Why: startup hydrates UI before repo catalogs, so defer repo-filter validation to the all-host refresh.
           filterRepoIds:
             validRepoIds.size === 0
@@ -168,6 +180,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           editorFontZoomLevel: ui.editorFontZoomLevel ?? 0,
           worktreeCardProperties: normalizeWorktreeCardProperties(ui.worktreeCardProperties),
           _worktreeCardModeDefaulted: ui._worktreeCardModeDefaulted === true,
+          showAgentModels: ui.showAgentModels !== false,
           agentActivityDisplayMode: normalizeAgentActivityDisplayMode(ui.agentActivityDisplayMode),
           workspaceStatuses: normalizeWorkspaceStatuses(ui.workspaceStatuses),
           workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
@@ -177,6 +190,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           statusBarVisible: ui.statusBarVisible ?? true,
           usagePercentageDisplay: normalizeUsagePercentageDisplay(ui.usagePercentageDisplay),
           statusBarUsageMode: normalizeStatusBarUsageMode(ui.statusBarUsageMode),
+          statusBarUsageFormat: normalizeStatusBarUsageFormat(ui.statusBarUsageFormat),
           // Why: default true so existing users see the pet on first enabling the flag; only an explicit Hide persists false.
           petVisible: ui.petVisible ?? ui.sidekickVisible ?? true,
           petSize: clampPetSize(ui.petSize ?? ui.sidekickSize ?? PET_SIZE_DEFAULT, {
@@ -206,6 +220,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             ? ui.releaseChannelOverride
             : null,
           updateReassuranceSeen: ui.updateReassuranceSeen ?? false,
+          seenMacosUpdateRequirement: ui.seenMacosUpdateRequirement ?? null,
           osc52ClipboardDefaultOnNoticePending: ui.osc52ClipboardDefaultOnNoticePending === true,
           browserDefaultUrl: ui.browserDefaultUrl ?? null,
           browserDefaultSearchEngine: ui.browserDefaultSearchEngine ?? null,
@@ -224,9 +239,13 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           setupScriptPromptDismissedRepoIds:
             validRepoHostIdentities.size === 0
               ? sanitizeSetupScriptPromptDismissals(ui.setupScriptPromptDismissedRepoIds)
-              : filterSetupScriptPromptDismissalsToValidRepos(
+              : withWslMovedSetupScriptDismissals(
                   ui.setupScriptPromptDismissedRepoIds,
-                  validRepoHostIdentities
+                  filterSetupScriptPromptDismissalsToValidRepos(
+                    ui.setupScriptPromptDismissedRepoIds,
+                    validRepoHostIdentities
+                  ),
+                  s.wslMovedProjects
                 ),
           setupGuideSidebarDismissed: ui.setupGuideSidebarDismissed === true,
           setupGuideBrowserMilestoneMigrated: ui.setupGuideBrowserMilestoneMigrated === true,
@@ -243,6 +262,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           statusBarCompactChangeNoticeDismissed: ui.statusBarCompactChangeNoticeDismissed !== false,
           // Why: default false so existing users still see the CTA; only explicit dismissal persists true.
           usageEmptyStateDismissed: ui.usageEmptyStateDismissed === true,
+          pluginsAlphaNoticeDismissed: ui.pluginsAlphaNoticeDismissed === true,
           codexTerminalServerIsolationNoticeSeen:
             ui.codexTerminalServerIsolationNoticeSeen === true,
           codexSharedSettingsNoticeSeen: ui.codexSharedSettingsNoticeSeen === true,

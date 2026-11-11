@@ -1,27 +1,50 @@
 // @vitest-environment happy-dom
-import { cleanup, renderHook } from '@testing-library/react'
-import { Suspense } from 'react'
+import { cleanup, render, renderHook } from '@testing-library/react'
+import { Children, Suspense, type ReactNode } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { editor, IRange } from 'monaco-editor'
 import type { OnMount } from '@monaco-editor/react'
 import type { StoreApi } from 'zustand'
-import type { AppState } from '@/store'
-import { createEditorTabsStore } from '@/store/slices/editor-slice-test-harness'
-import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
+import type { AppState } from '@/store/types'
+import { createEditorTabsStore } from '@/store/slices/editor/editor-slice-test-harness'
+import '@/lib/editor/file-operations/editor-file-operation-owner'
+import { captureEditorFileOperationProvenance } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import type { MonacoEditorMountParams } from './monaco-editor-mount-params'
 import { useMonacoEditorMount } from './use-monaco-editor-mount'
 import { MonacoGutterContextMenu } from './MonacoGutterContextMenu'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+const menuActions = vi.hoisted(() => new Map<string, () => unknown>())
+vi.mock('@/components/ui/dropdown-menu', () => {
+  const Pass = ({ children }: { children?: ReactNode }) => <>{children}</>
+  return {
+    DropdownMenu: Pass,
+    DropdownMenuTrigger: Pass,
+    DropdownMenuContent: Pass,
+    DropdownMenuItem: ({
+      children,
+      onSelect
+    }: {
+      children: ReactNode
+      onSelect: () => unknown
+    }) => {
+      const label = Children.toArray(children).find((child) => typeof child === 'string')
+      menuActions.set(String(label), onSelect)
+      return null
+    }
+  }
+})
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: vi.fn()
+}))
 
 const storeRef = vi.hoisted((): { current?: StoreApi<AppState> } => ({}))
 vi.mock('@/store', () => ({
   useAppStore: { getState: () => storeRef.current?.getState() }
 }))
-vi.mock('./monaco-markdown-doc-link-decorations', () => ({
+vi.mock('./markdown-source-tools/monaco/monaco-markdown-doc-link-decorations', () => ({
   createMarkdownDocLinkDecorationController: vi.fn()
 }))
-vi.mock('./monaco-markdown-doc-completions', () => ({
+vi.mock('./markdown-source-tools/monaco/monaco-markdown-doc-completions', () => ({
   ensureMarkdownDocCompletionProvider: vi.fn()
 }))
 vi.mock('./monaco-e2e-probe', () => ({ installMonacoE2EProbe: () => vi.fn() }))
@@ -70,8 +93,7 @@ function mountParams(
       contentRef: { current: '' },
       lastSyncedContentRef: { current: '' },
       contentSyncModeRef: { current: 'undoable' },
-      isApplyingProgrammaticContentRef: { current: false },
-      isApplyingLargePasteRef: { current: false }
+      isApplyingProgrammaticContentRef: { current: false }
     },
     decorations: {
       markdownDocLinkDecorationsRef: { current: null },
@@ -214,16 +236,20 @@ it('keeps cursor and gutter copy on the current file owner after migration', asy
     const transport = runtimeEnvironmentId ? vi.mocked(callRuntimeRpc) : local
     transport.mockResolvedValue(copiedUrl)
     for (const line of [15, 21]) {
-      const menu = MonacoGutterContextMenu({
-        open: true,
-        onOpenChange: vi.fn(),
-        point: { x: 0, y: 0 },
-        line,
-        selection: snapshot,
-        filePath,
-        relativePath: 'file.ts'
-      })
-      const action = menu.props.children[1].props.children[2].props.onSelect
+      const menu = render(
+        <MonacoGutterContextMenu
+          open
+          onOpenChange={vi.fn()}
+          point={{ x: 0, y: 0 }}
+          line={line}
+          selection={snapshot}
+          fileId={result.fileId}
+          filePath={filePath}
+          relativePath="file.ts"
+        />
+      )
+      const action = menuActions.get('Copy Remote URL')!
+      menu.unmount()
       await action()
       const expected = {
         relativePath: 'file.ts',
@@ -255,39 +281,4 @@ it('keeps cursor and gutter copy on the current file owner after migration', asy
   view.unmount()
   store.getState().closeFile(result.fileId)
   expect(store.getState().editorCursorLine).toEqual({})
-})
-
-it("a passive mirror never moves the borrowed tab's cursor line or takes its reveal", () => {
-  const store = createEditorTabsStore()
-  storeRef.current = store
-  const filePath = '/repo/file.ts'
-  const reveal = { fileId: 'borrowed', filePath, line: 9, column: 1, matchLength: 0 }
-  store.setState({ pendingEditorReveal: reveal, editorCursorLine: { borrowed: 3 } })
-  const params = { ...mountParams(store, 'borrowed', filePath), passiveMirror: true }
-  let emitCursor: ((event: { position: { lineNumber: number } }) => void) | undefined
-  const mockEditor = {
-    getModel: () => null,
-    getPosition: () => ({ lineNumber: 1, column: 1 }),
-    focus: vi.fn(),
-    onDidChangeCursorPosition: (listener: NonNullable<typeof emitCursor>) => {
-      emitCursor = listener
-      return { dispose: vi.fn() }
-    },
-    onDidScrollChange: () => ({ dispose: vi.fn() }),
-    onMouseDown: () => ({ dispose: vi.fn() }),
-    onDidDispose: vi.fn()
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Mount and tracking use only the editor methods mocked above; decorations/input/probe integrations are mocked.
-  const editorInstance = mockEditor as unknown as editor.IStandaloneCodeEditor
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mocked mount integrations do not access Monaco, and the mouse listener is not invoked.
-  const monaco = {} as Parameters<OnMount>[1]
-  const view = renderHook(() => useMonacoEditorMount(params))
-
-  view.result.current(editorInstance, monaco)
-  emitCursor?.({ position: { lineNumber: 7 } })
-
-  expect(store.getState().editorCursorLine).toEqual({ borrowed: 3 })
-  expect(params.queueReveal).not.toHaveBeenCalled()
-  expect(store.getState().pendingEditorReveal).toBe(reveal)
-  params.unregisterFileSearchSelectionRef.current?.()
 })

@@ -7,11 +7,11 @@ import { constants } from 'node:fs'
 import { lstat, open, readdir, realpath, type FileHandle } from 'node:fs/promises'
 import { basename, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { classifyImportSource } from './filesystem-import-source-stat'
-import { detectImageFileSignature, IMAGE_SIGNATURE_BYTES } from '../../image-file-signature'
+import { detectImageFileSignature, IMAGE_SIGNATURE_BYTES } from '../../media/image-file-signature'
 import type {
-  StagedExternalImportEntry,
-  StagedExternalImportSource
-} from '../../../shared/filesystem-import-result-types'
+  StagedRuntimeUploadEntry as StagedExternalImportEntry,
+  StagedRuntimeUploadSource as StagedExternalImportSource
+} from '../../../shared/file-import/runtime-upload-staging-contract'
 
 class RuntimeUploadSymlinkError extends Error {}
 

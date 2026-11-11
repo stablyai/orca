@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { getSystemPrefersDarkSnapshot } from '../components/terminal-pane/use-system-prefers-dark'
+import { getSystemPrefersDarkSnapshot } from '../hooks/theme/use-system-prefers-dark'
 import {
   canSkipRuntimeMobileSessionSyncKeyBuild,
   getRuntimeMobileSessionSyncKey,
@@ -9,7 +9,7 @@ import {
   scheduleRuntimeGraphSync,
   setRuntimeGraphStoreStateGetter,
   setRuntimeGraphSyncEnabled
-} from '../runtime/sync-runtime-graph'
+} from '../runtime/sync-runtime-graph/graph-sync-scheduler'
 import { useAppStore } from '../store'
 
 /** Keeps the mobile runtime graph republished as the store's session-visible state changes. */

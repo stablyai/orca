@@ -3,17 +3,19 @@ import { z } from 'zod'
 import {
   getChromeExtensionOrigin,
   parseChromeExtensionUrl
-} from '../../../../shared/browser-extension-url'
-import { browserManager } from '../../browser-manager'
-import { emitBrowserExtensionEvent } from '../browser-extension-api-host'
+} from '../../../../shared/browser/extensions/browser-extension-url'
+import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
+import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
+import { getBrowserExtensionContextSignal } from '../api-runtime/browser-extension-context-lifetime'
+import { getHostSessionState } from '../api-runtime/browser-extension-contexts'
 import { chooseDownloadSavePath } from './downloads-save-as'
 import {
   BrowserExtensionApiError,
   defineBrowserExtensionMethod,
   registerBrowserExtensionNamespace,
   type BrowserExtensionCaller
-} from '../browser-extension-namespace-registry'
-import { getActiveBrowserTabId } from '../browser-extension-tab-model'
+} from '../api-runtime/browser-extension-namespace-registry'
+import { getActiveBrowserTabId } from '../tabs-and-windows/browser-extension-tab-model'
 
 const WILL_DOWNLOAD_TIMEOUT_MS = 15_000
 let nextDownloadId = 1
@@ -152,8 +154,10 @@ function startDownload(
   owner: Electron.WebContents,
   url: string,
   options: z.infer<typeof optionsSchema>,
-  place: DownloadPlace
+  place: DownloadPlace,
+  signal: AbortSignal
 ): Promise<number> {
+  requireDownloadContext(signal)
   // Why: the tab can close during the save dialog or an earlier identical start.
   if (owner.isDestroyed()) {
     throw new BrowserExtensionApiError('The tab closed before the download started')
@@ -174,6 +178,7 @@ function startDownload(
       }
       clearTimeout(timer)
       caller.session.off('will-download', onWillDownload)
+      browserManager.markExtensionDownload(item)
       if (place.savePath !== undefined) {
         browserManager.requestDownloadSavePath(item, place.savePath)
       } else if (place.filename !== undefined) {
@@ -192,6 +197,12 @@ function startDownload(
   return started
 }
 
+function requireDownloadContext(signal: AbortSignal): void {
+  if (signal.aborted) {
+    throw new BrowserExtensionApiError('Extension context was unloaded')
+  }
+}
+
 async function download(
   caller: BrowserExtensionCaller,
   options: z.infer<typeof optionsSchema>
@@ -207,9 +218,15 @@ async function download(
   const filename = requestedFilename(options.filename)
   const url = resolveDownloadUrl(caller, options.url)
   const owner = downloadOwner(caller)
+  const state = getHostSessionState(caller.session)
+  if (!state) {
+    throw new BrowserExtensionApiError('Extension context was unloaded')
+  }
+  const signal = getBrowserExtensionContextSignal(state, caller.extension.id)
   const place: DownloadPlace = { filename }
   if (saveAs) {
     const savePath = await chooseDownloadSavePath(owner, url, filename)
+    requireDownloadContext(signal)
     if (savePath === null) {
       throw new BrowserExtensionApiError('Download canceled by the user')
     }
@@ -218,8 +235,8 @@ async function download(
   const key = `${owner.id} ${url}`
   const previous = startsInFlight.get(key) ?? Promise.resolve()
   const start = previous.then(
-    () => startDownload(caller, owner, url, options, place),
-    () => startDownload(caller, owner, url, options, place)
+    () => startDownload(caller, owner, url, options, place, signal),
+    () => startDownload(caller, owner, url, options, place, signal)
   )
   startsInFlight.set(key, start)
   try {

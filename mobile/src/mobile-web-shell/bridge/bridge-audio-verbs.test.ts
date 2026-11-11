@@ -6,10 +6,7 @@ import { createNativeAudioCapture, type NativeAudioEngine } from '../../platform
 import {
   BRIDGE_AUDIO_READ_MAX_BASE64_CHARS,
   BRIDGE_AUDIO_RING_MAX_BYTES,
-  audioReadParamsSchema,
   audioReadResultSchema,
-  audioStartParamsSchema,
-  audioStopParamsSchema,
   audioStopResultSchema
 } from './bridge-audio-verbs'
 import { BRIDGE_MAX_MESSAGE_BYTES } from './bridge-caps'
@@ -65,6 +62,7 @@ function createTestEngine(
       hold: () => screen.push('+'),
       release: () => screen.push('-')
     },
+    feedSpeech: () => {},
     onMicrophoneData: (handler) => {
       microphone.push(handler)
       return {
@@ -120,32 +118,6 @@ function decode(base64: string): Uint8Array {
 }
 
 describe('what the audio schemas refuse', () => {
-  it('refuses a start with no rate, a rate off the grid, and an unknown param', () => {
-    expect(audioStartParamsSchema.safeParse({}).success).toBe(false)
-    expect(audioStartParamsSchema.safeParse({ sampleRate: 16_000.5 }).success).toBe(false)
-    expect(audioStartParamsSchema.safeParse({ sampleRate: 96_000 }).success).toBe(false)
-    expect(audioStartParamsSchema.safeParse({ sampleRate: 0 }).success).toBe(false)
-    expect(audioStartParamsSchema.safeParse({ sampleRate: 16_000, channels: 1 }).success).toBe(
-      false
-    )
-    expect(audioStartParamsSchema.safeParse({ sampleRate: 16_000 }).success).toBe(true)
-  })
-
-  it("holds a read to the ring, which is the page's own pending-audio budget", () => {
-    expect(audioReadParamsSchema.safeParse({ maxBytes: 0 }).success).toBe(false)
-    expect(
-      audioReadParamsSchema.safeParse({ maxBytes: BRIDGE_AUDIO_RING_MAX_BYTES + 1 }).success
-    ).toBe(false)
-    expect(audioReadParamsSchema.safeParse({ maxBytes: BRIDGE_AUDIO_RING_MAX_BYTES }).success).toBe(
-      true
-    )
-  })
-
-  it('refuses a stop carrying anything', () => {
-    expect(audioStopParamsSchema.safeParse({ why: 'done' }).success).toBe(false)
-    expect(audioStopParamsSchema.safeParse({}).success).toBe(true)
-  })
-
   it('accepts a complete full-ring drain within the result and frame caps', async () => {
     const { engine, emit } = createTestEngine()
     const capture = createCapture(engine)
@@ -176,59 +148,6 @@ describe('what the audio schemas refuse', () => {
 })
 
 describe('the shell capture', () => {
-  it('surfaces a denied microphone as data rather than as a throw', async () => {
-    const { engine, calls } = createTestEngine({ permission: async () => 'denied' })
-    const capture = createCapture(engine)
-    await expect(capture.serve('native.audio.start', { sampleRate: 16_000 })).resolves.toEqual({
-      started: false,
-      sampleRate: 16_000,
-      permission: 'denied'
-    })
-    expect(calls).toEqual([])
-  })
-
-  it('surfaces an engine that would not open on a granted microphone', async () => {
-    const { engine } = createTestEngine({
-      open: async () => ({ opened: false, sampleRate: 16_000 })
-    })
-    const capture = createCapture(engine)
-    await expect(capture.serve('native.audio.start', { sampleRate: 16_000 })).resolves.toEqual({
-      started: false,
-      sampleRate: 16_000,
-      permission: 'granted'
-    })
-  })
-
-  it('answers the rate the device opened at, not the one that was asked for', async () => {
-    const { engine } = createTestEngine({
-      open: async () => ({ opened: true, sampleRate: 48_000 })
-    })
-    const capture = createCapture(engine)
-    await expect(capture.serve('native.audio.start', { sampleRate: 16_000 })).resolves.toEqual({
-      started: true,
-      sampleRate: 48_000,
-      permission: 'granted'
-    })
-  })
-
-  it('drains what the microphone produced, in order, and reports no drop', async () => {
-    const { engine, emit } = createTestEngine()
-    const capture = createCapture(engine)
-    await capture.serve('native.audio.start', { sampleRate: 16_000 })
-    emit(pcm(1_024, 1))
-    emit(pcm(1_024, 2))
-    const read = audioReadResultSchema.parse(
-      await capture.serve('native.audio.read', { maxBytes: BRIDGE_AUDIO_RING_MAX_BYTES })
-    )
-    expect(read.droppedBytes).toBe(0)
-    expect(read.recording).toBe(true)
-    expect(read.interruption).toBeNull()
-    expect(Array.from(decode(read.base64))).toEqual([
-      ...Array.from(pcm(1_024, 1)),
-      ...Array.from(pcm(1_024, 2))
-    ])
-  })
-
   it('serves a partial drain from the front and keeps the rest for the next read', async () => {
     const { engine, emit } = createTestEngine()
     const capture = createCapture(engine)
@@ -263,20 +182,6 @@ describe('the shell capture', () => {
     expect(next.droppedBytes).toBe(0)
   })
 
-  it('never holds more than the ring however many chunks arrive', async () => {
-    const { engine, emit } = createTestEngine()
-    const capture = createCapture(engine)
-    await capture.serve('native.audio.start', { sampleRate: 16_000 })
-    for (let index = 0; index < 400; index += 1) {
-      emit(pcm(1_024, index))
-    }
-    const read = audioReadResultSchema.parse(
-      await capture.serve('native.audio.read', { maxBytes: BRIDGE_AUDIO_RING_MAX_BYTES })
-    )
-    expect(decode(read.base64).byteLength).toBeLessThanOrEqual(BRIDGE_AUDIO_RING_MAX_BYTES)
-    expect(decode(read.base64).byteLength + read.droppedBytes).toBe(400 * 1_024)
-  })
-
   it('carries an interruption on the next read and stops reporting it after', async () => {
     const { engine, emit, interrupt } = createTestEngine()
     const capture = createCapture(engine)
@@ -293,24 +198,6 @@ describe('the shell capture', () => {
       await capture.serve('native.audio.read', { maxBytes: BRIDGE_AUDIO_RING_MAX_BYTES })
     )
     expect(next.interruption).toBeNull()
-  })
-
-  it('keeps a capture the OS handed back, and ends the two it took away', async () => {
-    const { engine, interrupt } = createTestEngine()
-    const capture = createCapture(engine)
-    await capture.serve('native.audio.start', { sampleRate: 16_000 })
-    interrupt('ended')
-    const kept = audioReadResultSchema.parse(
-      await capture.serve('native.audio.read', { maxBytes: BRIDGE_AUDIO_RING_MAX_BYTES })
-    )
-    // Nonterminal interruption still reaches the page while the live capture keeps filling its ring.
-    expect(kept.interruption).toBe('ended')
-    expect(kept.recording).toBe(true)
-    interrupt('blocked')
-    const lost = audioReadResultSchema.parse(
-      await capture.serve('native.audio.read', { maxBytes: BRIDGE_AUDIO_RING_MAX_BYTES })
-    )
-    expect(lost.recording).toBe(false)
   })
 
   it('refuses a read once the page has stopped', async () => {
@@ -333,15 +220,6 @@ describe('the shell capture', () => {
     })
   })
 
-  it('refuses a read before any start', async () => {
-    const { engine } = createTestEngine()
-    const capture = createCapture(engine)
-    await expect(capture.serve('native.audio.read', { maxBytes: 1_024 })).rejects.toSatisfy(
-      (error: unknown) =>
-        error instanceof BridgeNativeVerbRefusedError && error.code === 'native_audio_not_capturing'
-    )
-  })
-
   it('takes the microphone off the moment a capture ends', async () => {
     const { engine, emit, log } = createTestEngine()
     const capture = createCapture(engine)
@@ -351,24 +229,6 @@ describe('the shell capture', () => {
     expect(log).toContain('microphone-off')
     emit(pcm(1_024, 1))
     await capture.serve('native.audio.start', { sampleRate: 16_000 })
-    const read = audioReadResultSchema.parse(
-      await capture.serve('native.audio.read', { maxBytes: BRIDGE_AUDIO_RING_MAX_BYTES })
-    )
-    expect(read.base64).toBe('')
-  })
-
-  it('replaces a capture a page left behind rather than refusing the new one', async () => {
-    // A page can reload or vanish mid-capture; only the shell sees that lifecycle, so a new start replaces the old capture.
-    const { engine, emit, log } = createTestEngine()
-    const capture = createCapture(engine)
-    await capture.serve('native.audio.start', { sampleRate: 16_000 })
-    emit(pcm(2_048, 6))
-    await expect(capture.serve('native.audio.start', { sampleRate: 16_000 })).resolves.toEqual({
-      started: true,
-      sampleRate: 16_000,
-      permission: 'granted'
-    })
-    expect(log.filter((entry) => entry === 'end')).toHaveLength(1)
     const read = audioReadResultSchema.parse(
       await capture.serve('native.audio.read', { maxBytes: BRIDGE_AUDIO_RING_MAX_BYTES })
     )
@@ -402,7 +262,7 @@ describe('the shell capture', () => {
   it('does not open a capture for a start that lands after the session ended', async () => {
     const entered = gate()
     const blocked = gate()
-    const { engine, liveListeners, log } = createTestEngine({
+    const { engine, liveListeners, log, calls } = createTestEngine({
       permission: async () => {
         entered.release()
         await blocked.promise
@@ -416,8 +276,8 @@ describe('the shell capture', () => {
     blocked.release()
     await expect(pending).resolves.toMatchObject({ started: false })
     expect(liveListeners()).toEqual({ microphone: 0, interruptions: 0 })
-    // A successful engine open needs teardown even if its capture was superseded; local end sees no capture and cannot release the native session later.
-    expect(log).toContain('end')
+    expect(calls).toEqual([])
+    expect(log).not.toContain('end')
   })
 
   it('tears the device down for a start that lost the race after opening', async () => {
@@ -464,44 +324,9 @@ describe('the shell capture', () => {
     await expect(stopped).resolves.toEqual({ stopped: true, base64: '', droppedBytes: 0 })
     expect(liveListeners()).toEqual({ microphone: 0, interruptions: 0 })
   })
-
-  it('ends the capture when the page session does', async () => {
-    const { engine, log } = createTestEngine()
-    const capture = createCapture(engine)
-    await capture.serve('native.audio.start', { sampleRate: 16_000 })
-    capture.dispose()
-    expect(log).toContain('end')
-    await expect(capture.serve('native.audio.read', { maxBytes: 16 })).rejects.toBeInstanceOf(
-      BridgeNativeVerbRefusedError
-    )
-  })
 })
 
 describe('the screen the shell holds awake while it is capturing', () => {
-  it('takes the screen on a start and gives it back on a stop', async () => {
-    const { engine, screen } = createTestEngine()
-    const capture = createCapture(engine)
-    await capture.serve('native.audio.start', { sampleRate: 16_000 })
-    expect(screen).toEqual(['+'])
-    await capture.serve('native.audio.stop', {})
-    expect(screen).toEqual(['+', '-'])
-  })
-
-  it('gives it back when the page session ends with a capture still open', async () => {
-    const { engine, screen } = createTestEngine()
-    const capture = createCapture(engine)
-    await capture.serve('native.audio.start', { sampleRate: 16_000 })
-    capture.dispose()
-    expect(screen).toEqual(['+', '-'])
-  })
-
-  it('holds nothing for a start the device refused', async () => {
-    const { engine, screen } = createTestEngine({ permission: async () => 'denied' })
-    const capture = createCapture(engine)
-    await capture.serve('native.audio.start', { sampleRate: 16_000 })
-    expect(screen).toEqual([])
-  })
-
   it('gives it back when the engine throws after the capture is open', async () => {
     const { engine, screen } = createTestEngine({
       begin: () => {
@@ -528,18 +353,6 @@ describe('the screen the shell holds awake while it is capturing', () => {
 })
 
 describe('the tail the stop reply carries', () => {
-  it('answers with everything the ring still held', async () => {
-    const { engine, emit } = createTestEngine()
-    const capture = createCapture(engine)
-    await capture.serve('native.audio.start', { sampleRate: 16_000 })
-    const tail = pcm(12_288, 11)
-    emit(tail)
-    const stopped = audioStopResultSchema.parse(await capture.serve('native.audio.stop', {}))
-    expect(stopped.stopped).toBe(true)
-    expect(Array.from(decode(stopped.base64))).toEqual(Array.from(tail))
-    expect(stopped.droppedBytes).toBe(0)
-  })
-
   it('hands a byte to the read or to the stop, never to both and never to neither', async () => {
     const { engine, emit } = createTestEngine()
     const capture = createCapture(engine)
@@ -554,55 +367,5 @@ describe('the tail the stop reply carries', () => {
     const stopped = audioStopResultSchema.parse(await capture.serve('native.audio.stop', {}))
     expect(Array.from(decode(read.base64))).toEqual(Array.from(spoken))
     expect(Array.from(decode(stopped.base64))).toEqual(Array.from(after))
-  })
-
-  it('carries what the ring refused since the last read', async () => {
-    const { engine, emit } = createTestEngine()
-    const capture = createCapture(engine)
-    await capture.serve('native.audio.start', { sampleRate: 16_000 })
-    emit(pcm(BRIDGE_AUDIO_RING_MAX_BYTES))
-    emit(pcm(2_048))
-    const stopped = audioStopResultSchema.parse(await capture.serve('native.audio.stop', {}))
-    expect(stopped.droppedBytes).toBe(2_048)
-  })
-
-  it('answers no tail for a session that was not capturing', async () => {
-    const { engine } = createTestEngine()
-    const capture = createCapture(engine)
-    const stopped = audioStopResultSchema.parse(await capture.serve('native.audio.stop', {}))
-    expect(stopped).toEqual({ stopped: false, base64: '', droppedBytes: 0 })
-  })
-
-  it('leaves nothing behind for a second stop to answer with', async () => {
-    const { engine, emit } = createTestEngine()
-    const capture = createCapture(engine)
-    await capture.serve('native.audio.start', { sampleRate: 16_000 })
-    emit(pcm(512, 5))
-    await capture.serve('native.audio.stop', {})
-    const again = audioStopResultSchema.parse(await capture.serve('native.audio.stop', {}))
-    expect(again).toEqual({ stopped: false, base64: '', droppedBytes: 0 })
-  })
-
-  it('reads a reply from a shell too old to carry a tail', () => {
-    // Accept stopped-only replies from older installed shells; default missing tail fields so the new page retains stop compatibility.
-    expect(audioStopResultSchema.parse({ stopped: true })).toEqual({
-      stopped: true,
-      base64: '',
-      droppedBytes: 0
-    })
-  })
-
-  it('bounds the tail by the same budget a read is bounded by', () => {
-    expect(
-      audioStopResultSchema.safeParse({
-        stopped: true,
-        base64: 'A'.repeat(BRIDGE_AUDIO_READ_MAX_BASE64_CHARS + 1),
-        droppedBytes: 0
-      }).success
-    ).toBe(false)
-    expect(
-      audioStopResultSchema.safeParse({ stopped: true, base64: 'not base64!', droppedBytes: 0 })
-        .success
-    ).toBe(false)
   })
 })

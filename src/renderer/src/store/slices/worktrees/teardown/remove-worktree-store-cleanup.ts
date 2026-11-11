@@ -3,8 +3,8 @@ import { forgetCombinedDiffViewsForWorktrees } from '@/components/editor/combine
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { removeDeleteStatesForWorktreeIds } from './worktree-delete-state'
-import { removeWorktreeVisitEntries } from '@/lib/worktree-visit-recency'
-import { forgetAmbiguousOwnerWarnings } from '@/lib/ambiguous-owner-warning'
+import { removeWorktreeVisitEntries } from '@/lib/workspace/activation/worktree-visit-recency'
+import { forgetAmbiguousOwnerWarnings } from '@/lib/workspace/ownership/ambiguous-owner-warning'
 import { omitRecordKeys } from './record-key-omission'
 import { removeWorktreeLayout } from '../../tabs/worktree-layout-lifecycle'
 import { omitSleepingAgentSessionsForWorktrees } from './sleeping-agent-session-omission'
@@ -78,10 +78,8 @@ export function applyRemoveWorktreeSuccessState(
       remoteBranchConflictByWorktreeId: omitByWorktree(s.remoteBranchConflictByWorktreeId),
       fileSearchStateByWorktree: omitByWorktree(s.fileSearchStateByWorktree),
       remoteStatusesByWorktree: omitByWorktree(s.remoteStatusesByWorktree),
-      recentlyClosedEditorTabsByWorktree: omitByWorktree(s.recentlyClosedEditorTabsByWorktree),
       recentlyClosedTerminalTabsByWorktree: omitByWorktree(s.recentlyClosedTerminalTabsByWorktree),
       // Why: a deleted worktree's tabs can never be reopened; purge the kind list with the snapshot stacks above.
-      recentlyClosedTabKindsByWorktree: omitByWorktree(s.recentlyClosedTabKindsByWorktree),
       defaultTerminalTabsAppliedByWorktreeId: omitByWorktree(
         s.defaultTerminalTabsAppliedByWorktreeId
       ),
@@ -101,8 +99,10 @@ export function applyRemoveWorktreeSuccessState(
       editorCursorLine: omitByFileId(s.editorCursorLine),
       explorerDisplayRootByWorktree: omitByWorktree(s.explorerDisplayRootByWorktree),
       showDotfilesByWorktree: omitByWorktree(s.showDotfilesByWorktree),
+      gitGraphFiltersByWorktree: omitByWorktree(s.gitGraphFiltersByWorktree ?? {}),
       expandedDirs: omitByWorktree(s.expandedDirs),
       gitStatusHugeByWorktree: omitByWorktree(s.gitStatusHugeByWorktree),
+      gitStatusReadErrorByWorktree: omitByWorktree(s.gitStatusReadErrorByWorktree),
       // Why: git status/compare caches stop refreshing once the worktree is deleted; remove them so no stale badges/diffs linger.
       gitStatusByWorktree: omitByWorktree(s.gitStatusByWorktree),
       gitStatusHeadByWorktree: omitByWorktree(s.gitStatusHeadByWorktree),

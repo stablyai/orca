@@ -1,4 +1,6 @@
-import { translate } from '@/i18n/i18n'
+import { Trans } from 'react-i18next'
+import { i18n } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function JiraConnectCredentialGuide({
   isServer,
@@ -9,15 +11,16 @@ export function JiraConnectCredentialGuide({
   isServerBasic: boolean
   supportsScopedTokens: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   if (isServer) {
     return (
       <p className="text-xs text-muted-foreground">
         {isServerBasic
-          ? translate(
+          ? t(
               'auto.components.jira.connect.dialog.d8737db691',
               'Use your Jira Server or Data Center account username and password.'
             )
-          : translate(
+          : t(
               'auto.components.jira.connect.dialog.ccfb086d3e',
               'Create a personal access token in your Jira profile under Personal Access Tokens.'
             )}
@@ -27,28 +30,34 @@ export function JiraConnectCredentialGuide({
   return (
     <div className="space-y-2 text-xs text-muted-foreground">
       <p>
-        {translate('auto.components.jira.connect.dialog.8090504a3e', 'Create a token in')}{' '}
-        <button
-          type="button"
-          className="text-primary underline-offset-2 hover:underline"
-          onClick={() =>
-            window.api.shell.openUrl('https://id.atlassian.com/manage-profile/security/api-tokens')
-          }
-        >
-          {translate(
-            'auto.components.jira.connect.dialog.fdd26d81cc',
-            'Atlassian account settings'
+        <Trans
+          i18n={i18n}
+          defaults={t(
+            'auto.components.jira.connect.dialog.createTokenInSettings',
+            'Create a token in <link>Atlassian account settings</link>.'
           )}
-        </button>
-        .
+          components={{
+            link: (
+              <button
+                type="button"
+                className="text-primary underline-offset-2 hover:underline"
+                onClick={() =>
+                  window.api.shell.openUrl(
+                    'https://id.atlassian.com/manage-profile/security/api-tokens'
+                  )
+                }
+              />
+            )
+          }}
+        />
       </p>
       <p>
         {supportsScopedTokens
-          ? translate(
+          ? t(
               'jira.connect.scopedTokenGuide',
               'Scoped tokens need read:jira-work, write:jira-work, and read:jira-user. Leave email empty to use Bearer authentication.'
             )
-          : translate(
+          : t(
               'jira.connect.oldHostGuide',
               'This remote runtime requires an email and an unscoped API token. Update the remote runtime to use scoped tokens.'
             )}

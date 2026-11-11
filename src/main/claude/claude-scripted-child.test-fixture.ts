@@ -11,8 +11,8 @@ import type {
 import type {
   ScriptedAgentChild,
   ScriptedAgentChildFactory
-} from '../runtime/structured-agent-scripted-child.test-fixture'
-import { scriptedClaudeExitError } from '../runtime/structured-claude-scripted-runtime-test-support'
+} from '../runtime/agent-session/installation/structured-agent-scripted-child.test-fixture'
+import { scriptedClaudeExitError } from '../runtime/agent-session/installation/structured-claude-scripted-runtime-test-support'
 import { result, says } from './claude-captured-frame-builders.test-fixture'
 
 type Spawned = {
@@ -82,6 +82,7 @@ export const claudeScriptedChild: ScriptedAgentChildFactory = () => {
       exitVerdict: { root: 'live', tree: 'unverifiable' },
       initializationResult: () => init,
       getContextUsage: async () => ({}),
+      renameSession: async () => {},
       getSettings: async () => ({ effective: {} }),
       supportedModels: async () => [{ value: 'sonnet', displayName: 'Sonnet' }],
       setModel: async () => {},
@@ -147,7 +148,7 @@ export const claudeScriptedChild: ScriptedAgentChildFactory = () => {
         'exited'
           ? null
           : pid * 10,
-      resolveClaudeCommand: () => '/nonexistent/scripted-claude',
+      resolveClaudeCommand: () => ({ command: '/nonexistent/scripted-claude', prefixArgs: [] }),
       resolveClaudeAuthPolicy: () => ({ account: 'system' })
     },
     holdHandshakes: true,

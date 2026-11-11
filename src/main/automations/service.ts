@@ -1,27 +1,25 @@
 import {
   AutomationDispatchCancelledError,
   requestAutomationDispatch,
-  type AutomationRendererChannel
+  runAutomationRequestPrecheck
 } from './automation-dispatch-request'
-export type { AutomationRendererChannel } from './automation-dispatch-request'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import {
   isFinalAutomationRunStatus,
-  type Automation,
   type AutomationDispatchResult,
   type AutomationPrecheckResult,
   type AutomationRun
-} from '../../shared/automations-types'
+} from '../../shared/automations/history/automation-run'
+import type { Automation } from '../../shared/automations/automation-definition'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
-import { failedPrecheckResult, runAutomationPrecheck } from './precheck-runner'
 import {
   captureLegacyRunTarget,
   resolveAutomationRunTarget,
   type AutomationRunTargetResult
 } from './run-target-resolution'
 import { writeAutomationRunUsage } from './run-usage-collection'
-import type { HeadlessAutomationDispatcher } from './headless-dispatch'
+import type { AutomationLauncher, AutomationTerminalLauncher } from './automation-launch'
 import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
 import { clearAutomationDispatchTokens } from './dispatch-tokens'
 import {
@@ -31,13 +29,13 @@ import {
 import { createAutomationRunWriter, type AutomationRunWriter } from './automation-run-writer'
 import { reportAutomationScheduleDrift } from './schedule-drift-report'
 import {
-  describeScheduledRefusal,
-  missedBeyondGrace,
+  describeScheduledTickRefusal,
   recordMissedRun,
   recordRefusedAutomationRun,
-  recordUnevaluableAutomation,
-  WSL_MOVE_OWNED_BY_HOST
+  recordUnevaluableAutomation
 } from './dispatch-refusal'
+import type { RunTerminalRetention } from './run-terminal-retention'
+import { AutomationWakeGate } from './automation-wake-settle'
 import type {
   AutomationsChangedPayload,
   PublishAutomationsChanged
@@ -49,23 +47,23 @@ export class AutomationService {
   private readonly store: Store
   private readonly tickMs: number
   private timer: ReturnType<typeof setInterval> | null = null
-  private webContents: AutomationRendererChannel | null = null
-  private rendererReady = false
   private evaluating = false
   private stopped = false
   private dispatchGeneration = 0
   private readonly claudeUsage: ClaudeUsageStore | null
   private readonly codexUsage: CodexUsageStore | null
   private readonly allowRemoteHostScheduling: boolean
-  private readonly headlessDispatcher: HeadlessAutomationDispatcher | null
+  private readonly terminalLauncher: AutomationTerminalLauncher | null
+  private readonly chatDispatcher: AutomationLauncher | null
   private readonly automationLanes = new Map<string, Promise<void>>()
-  /** Close unused completed terminals on headless hosts; return the count. */
-  releaseFinishedRunTerminals: (() => Promise<number>) | null = null
+  /** Shares this service's lanes and tick; `drain` closes unused completed run terminals. */
+  readonly runTerminalRetention: RunTerminalRetention | null
   private readonly publish: PublishAutomationsChanged | null
   private readonly runs: AutomationRunWriter
   private readonly completionWatcher: AutomationRunCompletionWatcher | null
   /** Desktop automation traffic holds this lease to defer queued external probes. */
   externalProbePriority: (<T>(run: () => T) => T) | null = null
+  readonly wakeGate = new AutomationWakeGate(() => this.store)
 
   constructor(
     store: Store,
@@ -74,9 +72,11 @@ export class AutomationService {
       claudeUsage?: ClaudeUsageStore
       codexUsage?: CodexUsageStore
       allowRemoteHostScheduling?: boolean
-      headlessDispatcher?: HeadlessAutomationDispatcher
+      terminalLauncher?: AutomationTerminalLauncher
+      chatDispatcher?: AutomationLauncher
       terminalObserver?: AutomationRunTerminalObserver
       onAutomationsChanged?: PublishAutomationsChanged
+      runTerminalRetention?: (service: AutomationService) => RunTerminalRetention
     } = {}
   ) {
     this.store = store
@@ -84,7 +84,8 @@ export class AutomationService {
     this.claudeUsage = opts.claudeUsage ?? null
     this.codexUsage = opts.codexUsage ?? null
     this.allowRemoteHostScheduling = opts.allowRemoteHostScheduling ?? false
-    this.headlessDispatcher = opts.headlessDispatcher ?? null
+    this.terminalLauncher = opts.terminalLauncher ?? null
+    this.chatDispatcher = opts.chatDispatcher ?? null
     this.publish = opts.onAutomationsChanged ?? null
     this.runs = createAutomationRunWriter(store, this.publish)
     this.completionWatcher = opts.terminalObserver
@@ -95,22 +96,11 @@ export class AutomationService {
           markDispatchResult: (result) => this.markDispatchResult(result)
         })
       : null
+    this.runTerminalRetention = opts.runTerminalRetention?.(this) ?? null
   }
 
   publishAutomationsChanged(payload: AutomationsChangedPayload = {}): void {
     this.publish?.(payload)
-  }
-
-  setWebContents(webContents: AutomationRendererChannel | null): void {
-    this.webContents = webContents
-    this.rendererReady = false
-  }
-
-  setRendererReady(): void {
-    this.rendererReady = true
-    // Pane lookup becomes authoritative after the renderer publishes its window graph.
-    this.completionWatcher?.markTerminalSurfaceReady()
-    void this.evaluateDueRuns()
   }
 
   start(): void {
@@ -120,13 +110,12 @@ export class AutomationService {
     this.stopped = false
     this.timer = setInterval(() => {
       void this.evaluateDueRuns()
+      void this.runTerminalRetention?.sweep()
     }, this.tickMs)
+    // Settles unclaimed pending rows before catch-up could claim one again.
     this.completionWatcher?.reconcileRetainedRuns(this.store.listAutomationRuns())
     reportAutomationScheduleDrift(this.store.listAutomations())
-    // Headless hosts need startup catch-up without a renderer-ready notification.
-    if (this.rendererReady || this.headlessDispatcher) {
-      // Serve adopts PTYs and publishes its graph before start().
-      this.completionWatcher?.markTerminalSurfaceReady()
+    if (this.availableLauncher()) {
       void this.evaluateDueRuns()
     }
   }
@@ -151,7 +140,39 @@ export class AutomationService {
     const automation = captureLegacyRunTarget(this.store, listed, this.allowRemoteHostScheduling)
     const target = this.resolveTarget(automation)
     const run = await this.runs.createRun(automation, Date.now(), 'manual')
-    return await this.requestDispatch(automation, run, target, generation)
+    // The saved pending row is the acknowledgement; the lane owns execution behind earlier launches.
+    this.launchInLane(automation, run, target, generation)
+    return run
+  }
+
+  /** Detached so due runs start together; every failure after createRun settles the row. */
+  private launchInLane(
+    automation: Automation,
+    run: AutomationRun,
+    target: AutomationRunTargetResult,
+    generation: number,
+    afterCreate?: () => Promise<unknown>
+  ): void {
+    void (async () => {
+      // A blocked lane must not defer the schedule advance.
+      await afterCreate?.()
+      await this.requestDispatch(automation, run, target, generation)
+    })()
+      .catch((error: unknown) => this.recordFailedLaunch(run, generation, error))
+      .catch((writeError: unknown) =>
+        console.error('[automations] could not record a failed launch', writeError)
+      )
+  }
+
+  /** Only an unlaunched run of this generation fails; a flush error after launch is not a launch failure. */
+  private async recordFailedLaunch(run: AutomationRun, generation: number, error: unknown) {
+    const current = this.store.listAutomationRuns(run.automationId).find((r) => r.id === run.id)
+    const unlaunched = current?.status === 'pending' || current?.status === 'dispatching'
+    const active = !this.stopped && generation === this.dispatchGeneration
+    if (unlaunched && active && !(error instanceof AutomationDispatchCancelledError)) {
+      const message = error instanceof Error ? error.message : String(error)
+      await this.markDispatchResult({ runId: run.id, status: 'dispatch_failed', error: message })
+    }
   }
 
   async recordRefusedRun(automationId: string): Promise<void> {
@@ -167,28 +188,9 @@ export class AutomationService {
   }
 
   async runPrecheck(automationId: string, runId: string): Promise<AutomationPrecheckResult | null> {
-    const automation = this.store.listAutomations().find((entry) => entry.id === automationId)
-    if (!automation) {
-      throw new Error('Automation not found.')
-    }
-    const run = this.store.listAutomationRuns(automationId).find((entry) => entry.id === runId)
-    if (!run) {
-      throw new Error('Automation run not found.')
-    }
-    if (run.trigger !== 'scheduled' || !automation.precheck) {
-      return null
-    }
-    const target = this.resolveTarget(automation)
-    if (!target.ok) {
-      return failedPrecheckResult(automation.precheck, Date.now(), target.error)
-    }
-    return await runAutomationPrecheck({
-      precheck: automation.precheck,
-      target:
-        automation.executionTargetType === 'ssh'
-          ? { type: 'ssh', cwd: target.cwd, connectionId: automation.executionTargetId }
-          : { type: 'local', cwd: target.cwd }
-    })
+    return runAutomationRequestPrecheck(this.store, automationId, runId, (automation) =>
+      this.resolveTarget(automation)
+    )
   }
 
   async markDispatchResult(result: AutomationDispatchResult): Promise<AutomationRun> {
@@ -215,11 +217,15 @@ export class AutomationService {
   }
 
   private async evaluateDueRuns(): Promise<void> {
-    if (this.evaluating || this.stopped) {
+    // A run started in a dark wake is cut off by the next sleep.
+    if (this.evaluating || this.stopped || !this.wakeGate.admits(this.store, this.tickMs)) {
       return
     }
     this.evaluating = true
     const generation = this.dispatchGeneration
+    if (this.availableLauncher()) {
+      this.completionWatcher?.markTerminalSurfaceReady()
+    }
     try {
       const now = Date.now()
       for (const automation of this.store.listAutomations()) {
@@ -245,6 +251,7 @@ export class AutomationService {
       }
     } finally {
       this.evaluating = false
+      this.wakeGate.clear()
     }
   }
 
@@ -256,7 +263,7 @@ export class AutomationService {
       await this.runs.advanceNextRun(automation.id, now)
       return
     }
-    if (missedBeyondGrace({ automation, scheduledFor, now, tickMs: this.tickMs })) {
+    if (this.wakeGate.missedBeyondGrace({ automation, scheduledFor, now, tickMs: this.tickMs })) {
       await recordMissedRun({ runs: this.runs, automation, scheduledFor })
       await this.runs.advanceNextRun(automation.id, now)
       return
@@ -264,25 +271,22 @@ export class AutomationService {
 
     // Fold recurring refusals before creating rows so they do not evict real run history.
     const target = this.resolveTarget(automation)
-    const canDispatch = this.canDispatchToRenderer() || Boolean(this.headlessDispatcher)
-    const refusal = describeScheduledRefusal({ target, canDispatch })
+    const canDispatch = Boolean(this.availableLauncher())
+    const refusal = await describeScheduledTickRefusal(this.store, { target, canDispatch })
     // Once WSL owns the schedule, avoid churning skips on the retained local copy.
-    if (refusal === WSL_MOVE_OWNED_BY_HOST) {
+    if (refusal?.errorCode === 'wslMoveOwnedByHost') {
       await this.runs.advanceNextRun(automation.id, now)
       return
     }
-    if (refusal && (await this.runs.repeatSkip(automation.id, refusal, scheduledFor))) {
+    if (refusal && (await this.runs.repeatSkip(automation.id, refusal.error, scheduledFor))) {
       await this.runs.advanceNextRun(automation.id, now)
       return
     }
 
-    await this.requestDispatch(
-      automation,
-      await this.runs.createRun(automation, scheduledFor),
-      target,
-      generation
+    const run = await this.runs.createRun(automation, scheduledFor)
+    this.launchInLane(automation, run, target, generation, () =>
+      this.runs.advanceNextRun(automation.id, now)
     )
-    await this.runs.advanceNextRun(automation.id, now)
   }
 
   private resolveTarget(automation: Automation): AutomationRunTargetResult {
@@ -291,9 +295,9 @@ export class AutomationService {
     })
   }
 
-  private canDispatchToRenderer(): boolean {
-    const webContents = this.webContents
-    return Boolean(webContents && !webContents.isDestroyed() && this.rendererReady)
+  /** The terminal launcher, while a window graph can hold run terminals. */
+  private availableLauncher(): AutomationLauncher | null {
+    return this.terminalLauncher?.available() ? this.terminalLauncher.launch : null
   }
 
   /** Serialize dispatch and retention per automation until launch, without holding the lane during agent work. */
@@ -313,8 +317,9 @@ export class AutomationService {
           store: this.store,
           runs: this.runs,
           isActive: () => !this.stopped && generation === this.dispatchGeneration,
-          getRenderer: () => (this.canDispatchToRenderer() ? this.webContents : null),
-          headlessDispatcher: this.headlessDispatcher,
+          launcher: () => this.availableLauncher(),
+          chatDispatcher:
+            this.allowRemoteHostScheduling || this.availableLauncher() ? this.chatDispatcher : null,
           resolveTarget: (current) => this.resolveTarget(current),
           runPrecheck: () => this.runPrecheck(automation.id, run.id),
           markDispatchResult: (result) => this.markDispatchResult(result),

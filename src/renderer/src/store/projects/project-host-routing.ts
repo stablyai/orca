@@ -13,17 +13,16 @@ import {
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import {
-  assertRuntimeEnvironmentCapability,
-  callRuntimeRpc
-} from '../../runtime/runtime-rpc-client'
+import { assertRuntimeEnvironmentCapability } from '../../runtime/rpc/compatibility/runtime-capability-proof'
+import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { adoptEndpointProjectCatalog } from '../../../../shared/endpoint-catalog-adoption'
 import {
   SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE,
+  sshHostWithoutServerMessage,
   type ProjectHostSetupTarget
 } from '../../../../shared/project-host-setup-target'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import type { AppState } from '../types'
 import { findSoleHostCopy } from '../../../../shared/worktree/host-qualified-identity'
 
@@ -36,6 +35,13 @@ export function getProjectSetupRuntimeTarget(
     : { kind: 'local' }
 }
 
+/** Null for SSH hosts: setup refuses them before a folder check could matter. */
+export function getProjectCloneCheckTarget(
+  hostId: ProjectHostSetupExistingFolderArgs['hostId']
+): RuntimeClientTarget | null {
+  return parseExecutionHostId(hostId)?.kind === 'ssh' ? null : getProjectSetupRuntimeTarget(hostId)
+}
+
 // Why before dispatch: no process sets up `ssh:` hosts (managed ones are `runtime:`), and a
 // paired server's SSH host would otherwise reach this client's own API.
 export function assertNotSshProjectHost(
@@ -46,11 +52,23 @@ export function assertNotSshProjectHost(
   if (parsed?.kind !== 'ssh') {
     return
   }
-  throw new Error(
-    isPairedServerSshTarget(state, parsed.targetId)
-      ? SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE
-      : `SSH connection "${parsed.targetId}" not found or not connected`
+  if (isPairedServerSshTarget(state, parsed.targetId)) {
+    throw new Error(SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE)
+  }
+  throw new SshProjectHostWithoutServerError(
+    parsed.targetId,
+    state.sshTargetLabels.get(parsed.targetId) || parsed.targetId
   )
+}
+
+/** This computer's SSH host has no Orca server yet; Connect sets one up. */
+export class SshProjectHostWithoutServerError extends Error {
+  constructor(
+    readonly targetId: string,
+    hostLabel: string
+  ) {
+    super(sshHostWithoutServerMessage(hostLabel))
+  }
 }
 
 /**

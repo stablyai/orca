@@ -30,6 +30,13 @@ export function parseWslUncPath(path: string): WslUncPathInfo | null {
   }
 }
 
+/** Linux form of `value` when it is a UNC path of `distro` (either spelling, either slash). */
+export function wslUncPathToLinux(value: string, distro: string): string | null {
+  const parsed = parseWslUncPath(value)
+  // WSL resolves distro names case-insensitively, and so does every UNC path to one.
+  return parsed && parsed.distro.toLowerCase() === distro.toLowerCase() ? parsed.linuxPath : null
+}
+
 export function isWslUncPath(path: string): boolean {
   return parseWslUncPath(path) !== null
 }
@@ -60,6 +67,12 @@ export function toWindowsWslPath(linuxPath: string, distro: string): string {
 /** Keep a Linux path addressable through its distro, including drvfs mounts. */
 export function toWindowsWslUncPath(linuxPath: string, distro: string): string {
   return `\\\\wsl.localhost\\${distro}${linuxPath === '/' ? '\\' : linuxPath.replace(/\//g, '\\')}`
+}
+
+/** Both UNC spellings of a WSL path: `\\\\wsl.localhost\\` and the older `\\\\wsl$\\`. */
+export function toWindowsWslUncPathSpellings(linuxPath: string, distro: string): string[] {
+  const localhost = toWindowsWslUncPath(linuxPath, distro)
+  return [localhost, `\\\\wsl$${localhost.slice('\\\\wsl.localhost'.length)}`]
 }
 
 /** Resolve an absolute POSIX base within the repo’s WSL distro; Windows otherwise treats it as drive-relative and discards it (STA-4772). Other forms pass through.
@@ -154,4 +167,24 @@ export function uncRouteKey(cwd: string): string | null {
   }
   const server = cwd.slice(2).split(/[\\/]/, 1)[0]
   return `unc:${server.toLowerCase()}`
+}
+
+/** Match command routing: a native UNC cwd takes precedence over a distro hint. */
+export function wslDistroForCommand(cwd: string | undefined, override?: string): string | null {
+  if (process.platform !== 'win32') {
+    return null
+  }
+  return (cwd ? parseWslUncPath(cwd)?.distro : undefined) ?? override ?? null
+}
+
+/** `\\wsl.localhost\<distro>\mnt\c\x` → `C:\x`; null for any other path. */
+export function wslUncDrivePathToWindows(path: string, distro: string): string | null {
+  const linux = wslUncPathToLinux(path, distro)?.replace(/\\/g, '/')
+  // Same rule as foldWslUncPathCaseInsensitiveParts: only lowercase `/mnt` is drvfs, any letter case.
+  const match = linux?.match(/^\/mnt\/([a-zA-Z])(\/.*)?$/)
+  if (!match) {
+    return null
+  }
+  const tail = (match[2] ?? '').replace(/\/+$/, '').replace(/\//g, '\\')
+  return `${match[1].toUpperCase()}:${tail || '\\'}`
 }

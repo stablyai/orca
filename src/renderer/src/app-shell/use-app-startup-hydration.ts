@@ -1,20 +1,20 @@
-import { restoreStructuredLaunchSurfaces } from '@/lib/structured-agent-session-launch-surface'
+import { restoreStructuredLaunchSurfaces } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import { useEffect, useRef } from 'react'
-import { restoreLocalStructuredChatsAtStartup } from '@/runtime/local-structured-chats'
-import { syncZoomCSSVar } from '@/lib/ui-zoom'
-import { installCodexDetachedPaneRestartExecutor } from '@/components/terminal-pane/codex-detached-pane-restart-scheduler'
-import { useAppStore } from '../store'
+import { restoreLocalStructuredChatsAtStartup } from '@/runtime/native-chat/local-sessions/local-structured-chats'
+import { syncZoomCSSVar } from '@/app-shell/chrome/ui-zoom'
+import { installCodexDetachedPaneRestartExecutor } from '@/components/terminal-pane/account-restart/detached/codex-detached-pane-restart-scheduler'
+import { useAppStore } from '../store/index'
 import { reconcileHydratedWorkspaceTabModels } from './reconcile-hydrated-workspace-tab-models'
 import { useStartupActions } from './use-app-startup-actions'
 import { waitForNativeChatDraftsAtStartup } from './native-chat-draft-startup'
-import { WORKTREE_REFRESH_CONCURRENCY } from '../store/slices/worktrees'
-import { sweepRestoredCodexPanesForStaleAccounts } from '../lib/codex-stale-pane-sweep'
-import { fetchWorkspaceSessionWithRuntimeHostOwners } from '../lib/workspace-session-host-hydration'
+import { WORKTREE_REFRESH_CONCURRENCY } from '../store/slices/worktrees/listing/worktree-slice-constants'
+import { sweepRestoredCodexPanesForStaleAccounts } from '../lib/agent-session/accounts/codex/codex-stale-pane-sweep'
+import { fetchWorkspaceSessionWithRuntimeHostOwners } from '../lib/workspace/persistence/workspace-session-host-hydration'
 import {
   collectFolderWorkspaceKeysFromSession,
   collectWorktreeHydrationRepoIdsFromSession
-} from '../lib/workspace-session-hydration-keys'
-import { hydratePersistedUIAfterStartupRead } from '../lib/startup-ui-hydration'
+} from '../lib/workspace/persistence/workspace-session-hydration-keys'
+import { hydratePersistedUIAfterStartupRead } from './startup/startup-ui-hydration'
 import {
   logRendererStartupDiagnostic,
   timeRendererStartupStep,
@@ -23,37 +23,29 @@ import {
 import { recoverFromDegradedStartup } from '../startup/startup-degraded-recovery'
 import { restoreSshConnectionsForStartup } from '../startup/startup-ssh-connection-restore'
 import { collectActiveWorkspaceSshTargetIds } from '../startup/active-workspace-ssh-targets'
-import { publishTerminalViewAttributesAtAppStart } from '../components/terminal-pane/terminal-appearance'
-import { getSystemPrefersDark } from '../lib/terminal-theme'
+import { publishTerminalViewAttributesAtAppStart } from '../components/terminal-pane/appearance/terminal-appearance'
+import { getSystemPrefersDark } from '../lib/terminal/appearance/terminal-theme'
 import {
   collectTerminalProviderSnapshotPtyIds,
   refreshTerminalProviderSnapshotCapabilities
 } from '../components/terminal/terminal-provider-snapshot-capability'
+import { probeTerminalProviderGoneSessions } from '../components/terminal/terminal-provider-gone-sessions'
 import {
   getRepoExecutionHostId,
   isOwnedSshTargetId,
-  parseExecutionHostId,
-  toRuntimeExecutionHostId,
-  type ExecutionHostId
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId
 } from '../../../shared/execution-host'
+import { listRuntimeSessionHostsForStartup } from './startup-runtime-session-hosts'
 import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
-import type { OnboardingState } from '../../../shared/onboarding-state-types'
-import { ensureLocalRuntimeCapabilities } from '../runtime/local-runtime-capabilities'
+import { collectWslMovedWorkspaceKeysFromSession } from '../store/repos/wsl-moved-projects'
+import { wslMovedSessionReadApi } from '../store/repos/wsl-moved-local-session-rows'
+import { ensureLocalRuntimeCapabilities } from '../runtime/hosts/capabilities/local-runtime-capabilities'
 import {
   finishStartupWorktreeHydration,
   refreshStartupWorktrees
 } from '../startup/startup-worktree-refresh'
-
-async function listRuntimeSessionHostIdsForStartup(): Promise<ExecutionHostId[]> {
-  try {
-    return (await window.api.runtimeEnvironments.list()).map((environment) =>
-      toRuntimeExecutionHostId(environment.id)
-    )
-  } catch (err) {
-    console.warn('Failed to list runtime session hosts for startup:', err)
-    return []
-  }
-}
+import type { OnboardingState } from '../../../shared/onboarding-state-types'
 
 /** Hydrate settings/UI/catalog/session, reconnect and restore terminals before unlocking saves. Failure boots in degraded no-save mode to protect disk state. */
 export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingState) => void): void {
@@ -111,9 +103,16 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
         // Runtime session hosts need no repo state; overlap their IPC and handle rejection until the later await.
         const runtimeHostsPromise = timeRendererStartupStep(
           'list-runtime-session-hosts',
-          listRuntimeSessionHostIdsForStartup
+          listRuntimeSessionHostsForStartup
         )
         runtimeHostsPromise.catch(() => {})
+        // Before the session read: a moved project's local rows must leave before the host's merge in.
+        // Started before the repo list too; this startup load does not prune, so it need not wait.
+        const wslMovedProjectsPromise = useAppStore.getState().fetchWslMovedProjects()
+        // Desktop-only read; must land before the first live host catalog so that answer can drop deleted projects.
+        const hostCatalogSeedPromise = timeRendererStartupStep('seed-host-repo-catalogs', () =>
+          useAppStore.getState().seedReposFromHostCatalogSnapshots()
+        )
         // Skip remote catalogs for first paint; saved runtimes may wait a full connect timeout.
         await timeRendererStartupStep('fetch-repos-local', () =>
           actions.fetchReposForAllHosts({ remoteHosts: 'skip' })
@@ -130,13 +129,19 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
             actions.fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
           )
         })()
-        const sessionReadPromise = runtimeHostsPromise.then((startupRuntimeHostIds) =>
+        const sessionReadPromise = Promise.all([
+          runtimeHostsPromise,
+          wslMovedProjectsPromise,
+          hostCatalogSeedPromise
+        ]).then(([startupRuntimeHosts]) =>
           // Restore cached runtime-host partitions without network waits; skip unreadable ones.
           timeRendererStartupStep('session-get', () =>
             fetchWorkspaceSessionWithRuntimeHostOwners(
-              window.api.session,
+              // A moved workspace's retained rows share tab ids with its host's live ones.
+              wslMovedSessionReadApi(useAppStore.getState().wslMovedProjects),
               useAppStore.getState().repos,
-              startupRuntimeHostIds
+              startupRuntimeHosts.hostIds,
+              startupRuntimeHosts.sshHostIdByRuntimeHostId
             )
           )
         )
@@ -182,7 +187,14 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
         )
         if (!cancelled) {
           const sessionHydrationOptions = {
-            additionalValidWorkspaceKeys: collectFolderWorkspaceKeysFromSession(sessionRead.session)
+            additionalValidWorkspaceKeys: collectFolderWorkspaceKeysFromSession(
+              sessionRead.session
+            ),
+            wslMovedChatWorkspaceKeys: collectWslMovedWorkspaceKeysFromSession(
+              sessionRead.session,
+              useAppStore.getState().wslMovedProjects,
+              sessionRead.runtimeHostIdByWorkspaceSessionKey
+            )
           }
           timeRendererStartupSyncStep('hydrate-session-stores', () => {
             // The read's host-ownership fields are named as the hydration options it feeds.
@@ -216,6 +228,8 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           void timeRendererStartupStep('fetch-browser-session-profiles', () =>
             actions.fetchBrowserSessionProfiles()
           ).catch(() => {})
+          // Why: local and SSH tabs use this desktop's profiles even when Settings shows a paired server.
+          void actions.fetchBrowserSessionProfiles(LOCAL_EXECUTION_HOST_ID)
           const onboardingState = await onboardingPromise
           if (!cancelled) {
             onOnboardingLoadedRef.current(onboardingState)
@@ -249,17 +263,18 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           await timeRendererStartupStep('recover-legacy-worker-terminals-pre-reconnect', () =>
             window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
           )
+          const restoredPtyIds = collectTerminalProviderSnapshotPtyIds(useAppStore.getState())
+          // Unawaited: liveness answers only widen parking later and must never delay reconnect.
+          void probeTerminalProviderGoneSessions(restoredPtyIds)
           await timeRendererStartupStep('terminal-provider-snapshot-capabilities', () =>
-            refreshTerminalProviderSnapshotCapabilities(
-              collectTerminalProviderSnapshotPtyIds(useAppStore.getState())
-            )
+            refreshTerminalProviderSnapshotCapabilities(restoredPtyIds)
           )
           reconnectStarted = true
           await timeRendererStartupStep('reconnect-terminals', () =>
             actions.reconnectPersistedTerminals(abortController.signal)
           )
           await timeRendererStartupStep('recover-legacy-worker-terminals-post-reconnect', () =>
-            window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
+            window.api.app.recoverLegacyWorkerTerminalsForRendererStartup({ afterReconnect: true })
           )
           await restoreLocalStructuredChatsAtStartup(useAppStore.getState().settings, (restore) =>
             timeRendererStartupStep('project-structured-session-tabs', restore)

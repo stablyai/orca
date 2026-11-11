@@ -1,13 +1,15 @@
-import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
+import { translate } from '../i18n/mobile-i18n'
+import { refusedRpcMessageOrFallback } from '../transport/rpc/rpc-refusal-message'
 import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
 import { isMobileGitUnavailableReply } from './mobile-git-status'
 import { repoBaseRefListRead, repoDefaultBaseRefRead } from './mobile-repo-base-ref-operations'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { worktreeSummaryRead } from './mobile-worktree-metadata-operations'
 import {
   resolveSourceControlBaseRef,
   resolveSourceControlCompareBaseRef
-} from '../../../src/shared/source-control-base-ref-resolution'
+} from '../../../src/shared/source-control/decisions/source-control-base-ref-resolution'
 
 // The branch compare also honours desktop's compare-against-upstream setting.
 export type MobileBranchCompareTarget = {
@@ -16,11 +18,14 @@ export type MobileBranchCompareTarget = {
 }
 
 export async function resolveMobileBranchCompareBaseRef(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
-  compare?: MobileBranchCompareTarget
+  compare?: MobileBranchCompareTarget,
+  // A `worktree.show` reply the caller already asked for, so one open reads the worktree once.
+  worktreeShow?: Promise<RpcResponse>
 ): Promise<string | null> {
-  return (await resolveMobileBranchBaseRefs(client, worktreeId, compare)).compareBaseRef
+  return (await resolveMobileBranchBaseRefs(client, worktreeId, compare, worktreeShow))
+    .compareBaseRef
 }
 
 export type MobileBranchBaseRefs = {
@@ -31,9 +36,10 @@ export type MobileBranchBaseRefs = {
 
 // Desktop's pair: the compare base can be the upstream, while PRs and rebases target the effective base.
 export async function resolveMobileBranchBaseRefs(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
-  compare?: MobileBranchCompareTarget
+  compare?: MobileBranchCompareTarget,
+  worktreeShow?: Promise<RpcResponse>
 ): Promise<MobileBranchBaseRefs> {
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   if (!repoId) {
@@ -41,7 +47,9 @@ export async function resolveMobileBranchBaseRefs(
   }
 
   const [worktreeReply, repoReply] = await Promise.all([
-    worktreeSummaryRead.request(client, { worktree: `id:${worktreeId}` }).catch(() => null),
+    (worktreeShow ?? worktreeSummaryRead.request(client, { worktree: `id:${worktreeId}` })).catch(
+      () => null
+    ),
     repoBaseRefListRead.request(client).catch(() => null)
   ])
   const worktreeSummary = worktreeReply && worktreeSummaryRead.interpret(worktreeReply)
@@ -76,7 +84,7 @@ export async function resolveMobileBranchBaseRefs(
 }
 
 async function readDefaultBaseRef(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   repoId: string
 ): Promise<string | null> {
   const defaultReply = await repoDefaultBaseRefRead.request(client, { repo: `id:${repoId}` })
@@ -87,6 +95,11 @@ async function readDefaultBaseRef(
   try {
     return repoDefaultBaseRefRead.interpret(defaultReply)
   } catch (error) {
-    throw new Error(refusedRpcMessageOrFallback(error, 'Unable to resolve branch base'))
+    throw new Error(
+      refusedRpcMessageOrFallback(
+        error,
+        translate('sourceControl.branchBaseRef.resolveFailed', 'Unable to resolve branch base')
+      )
+    )
   }
 }

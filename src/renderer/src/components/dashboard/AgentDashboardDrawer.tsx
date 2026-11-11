@@ -4,12 +4,12 @@ import type { AgentSubjectReadIntent } from '@/attention/agent-subject-read-acti
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { revealDashboardAgent } from './reveal-dashboard-agent'
 import { AgentKanbanBoard } from '../dashboard-popout/AgentKanbanBoard'
-import { isXtermHelperTextarea } from '../terminal-pane/regular-terminal-focus-ownership'
+import { isXtermHelperTextarea } from '../terminal-pane/input/focus/regular-terminal-focus-ownership'
 import type { AgentRevealArgs } from '../dashboard-popout/AgentTerminalDialog'
 import {
   isWorkspaceBoardKeepOpenTarget,
   useWorkspaceKanbanOutsideDismiss
-} from '../sidebar/use-workspace-kanban-outside-dismiss'
+} from '../sidebar/workspace-board/surface/use-workspace-kanban-outside-dismiss'
 import {
   STATUS_BAR_RESERVE_HEIGHT,
   WORKSPACE_TOP_CHROME_HEIGHT
@@ -17,7 +17,8 @@ import {
 import { AgentDashboardSettingsMenu } from './AgentDashboardSettingsMenu'
 import { useLiveDashboardSnapshot } from './useLiveDashboardSnapshot'
 import { useAgentDashboardTelemetry } from '../dashboard-popout/use-agent-dashboard-telemetry'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { trackSidebarLiveWidth } from '@/components/sidebar/sidebar-live-width'
 
 // Nested interactive overlays own Escape before the companion sheet; exclude the sheet’s own role=dialog marker.
 const AGENT_BOARD_ESCAPE_BLOCKING_OVERLAY_SELECTOR = [
@@ -71,6 +72,7 @@ function AgentDashboardDrawerBody({
       containerClassName="h-full w-full bg-transparent"
       onAckAgent={handleAckAgent}
       onRevealAgent={handleRevealAgent}
+      onBrowserForeground={onFocusHandoff}
       onClose={onClose}
       headerActions={
         <AgentDashboardSettingsMenu
@@ -92,6 +94,7 @@ export function AgentDashboardDrawer({
   leftSidebarStyle,
   statusBarVisible
 }: AgentDashboardDrawerProps): React.JSX.Element {
+  const t = useTranslate()
   const open = useAppStore((s) => s.agentDashboardDrawerOpen)
   const setOpen = useAppStore((s) => s.setAgentDashboardDrawerOpen)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
@@ -135,11 +138,9 @@ export function AgentDashboardDrawer({
     close()
   }, [close])
   // Store-driven closes bypass close(); clear menu state for sidebar collapse and workspace-board exclusivity too.
-  useEffect(() => {
-    if (!open) {
-      setMenuOpen(false)
-    }
-  }, [open])
+  if (!open && menuOpen) {
+    setMenuOpen(false)
+  }
   const handleSheetOpenChange = useCallback(
     (nextOpen: boolean) => {
       // Radix can request coordinate-free dismissal; allow only the drawer’s guarded Escape/outside/close paths.
@@ -213,6 +214,7 @@ export function AgentDashboardDrawer({
       <SheetContent
         side="left"
         showCloseButton={false}
+        ref={trackSidebarLiveWidth}
         aria-describedby={undefined}
         className="workspace-kanban-sheet-content bg-worktree-sidebar p-0 sm:max-w-none"
         overlayStyle={{
@@ -242,7 +244,7 @@ export function AgentDashboardDrawer({
         onPointerDownOutside={guardSidebarInteraction}
         onInteractOutside={guardSidebarInteraction}
       >
-        <SheetTitle className="sr-only">{translate('dashboardPopout.title', 'Agents')}</SheetTitle>
+        <SheetTitle className="sr-only">{t('dashboardPopout.title', 'Agents')}</SheetTitle>
         {/* Closed SheetContent unmounts the live snapshot body, avoiding closed-path derivation. */}
         <div ref={boardRef} className="flex min-h-0 flex-1 flex-col">
           <AgentDashboardDrawerBody

@@ -1,6 +1,6 @@
-import type { ChildProcessHandle } from '@orca/process-host/process-spec'
-import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
-import { RipgrepSearchDiagnostics } from '../../shared/ripgrep-search-diagnostics'
+import type { ChildProcess } from 'node:child_process'
+import type { SearchOptions, SearchResult } from '../../shared/file-search/code-search-types'
+import { RipgrepSearchDiagnostics } from '../../shared/ripgrep/ripgrep-search-diagnostics'
 import { SearchSubprocessLineAccumulator } from '../../shared/search-subprocess-lines'
 import { throwIfSignalAborted, abortSignalReason } from '../../shared/abort-signal-reason'
 import {
@@ -10,7 +10,7 @@ import {
   finalize,
   ingestRgJsonLine,
   SEARCH_TIMEOUT_MS
-} from '../../shared/text-search'
+} from '../../shared/file-search/text-search'
 import {
   absorbPendingRipgrepSpawnError,
   classifySynchronousRipgrepSpawnFailure,
@@ -19,14 +19,16 @@ import {
   isRipgrepUnavailableExit,
   isTransientRipgrepSpawnError,
   ripgrepMissingCwdError
-} from '../../shared/ripgrep-process-availability'
-import { toWindowsWslPath } from '../wsl'
+} from '../../shared/ripgrep/ripgrep-process-availability'
+import { toWindowsWslPath } from '../../shared/wsl-paths'
 import { bundledRipgrepUnavailableError } from './bundled-ripgrep-path'
 import { spawnBundledRipgrep } from './bundled-ripgrep-spawn'
 import { stopBundledRipgrep } from './bundled-ripgrep-stop'
 
 // NTFS permits POSIX-created names/types Windows rg cannot open (1/2/1920); skip them without truncating the search.
 const WINDOWS_UNOPENABLE_PATH_OS_ERRORS: ReadonlySet<number> = new Set([1, 2, 1920])
+
+function ignoreCompletedSearchTerminationError(): void {}
 
 export function runBundledRipgrepTextSearch({
   options,
@@ -43,7 +45,7 @@ export function runBundledRipgrepTextSearch({
   wslDistro?: string
   wslDistroForOutput?: string
   signal?: AbortSignal
-  onSpawn: (child: ChildProcessHandle) => () => void
+  onSpawn: (child: ChildProcess) => () => void
 }): Promise<SearchResult> {
   throwIfSignalAborted(signal)
   const maxResults = Math.max(
@@ -54,7 +56,7 @@ export function runBundledRipgrepTextSearch({
     const rgArgs = buildRgArgs(options.query, '.', options)
 
     const acc = createAccumulator()
-    const lines = new SearchSubprocessLineAccumulator()
+    const lines = new SearchSubprocessLineAccumulator(undefined, 'discard')
     const diagnostics = new RipgrepSearchDiagnostics(
       process.platform === 'win32' && !wslDistroForOutput
         ? WINDOWS_UNOPENABLE_PATH_OS_ERRORS
@@ -63,7 +65,7 @@ export function runBundledRipgrepTextSearch({
     let resolved = false
     let processErrorObserved = false
     let unavailableExitObserved = false
-    let child: ChildProcessHandle | null = null
+    let child: ChildProcess | null = null
     let killTimeout: ReturnType<typeof setTimeout> | undefined
     let releaseChild: (() => void) | undefined
 
@@ -110,10 +112,7 @@ export function runBundledRipgrepTextSearch({
     }
     const rejectUnavailable = (): void => finish(Promise.reject(bundledRipgrepUnavailableError()))
     const processLine = (line: string): void => {
-      const verdict = ingestRgJsonLine(line, resultRootPath, acc, maxResults, transformAbsPath)
-      if (verdict === 'stop' && child) {
-        stopBundledRipgrep(child, Boolean(wslDistroForOutput))
-      }
+      ingestRgJsonLine(line, resultRootPath, acc, maxResults, transformAbsPath)
     }
 
     let nextChild: ReturnType<typeof spawnBundledRipgrep>
@@ -137,10 +136,14 @@ export function runBundledRipgrepTextSearch({
     const handleStdoutData = (chunk: string): void => {
       if (!lines.push(chunk, processLine)) {
         acc.truncated = true
+      }
+      if (acc.totalMatches >= maxResults) {
+        acc.truncated = true
+        child?.once('error', ignoreCompletedSearchTerminationError)
+        resolveOnce()
         if (child) {
           stopBundledRipgrep(child, Boolean(wslDistroForOutput))
         }
-        resolveOnce()
       }
     }
     const handleStderrData = (chunk: Buffer): void => {

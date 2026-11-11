@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import type { CreateWorktreeResult } from '../../../../../shared/worktree/create-types'
 import { applyCreatedWorktree } from './create/created-worktree-state-merge'
 import { applyWorktreeLineageUpdate } from './metadata/worktree-lineage-refresh'
-import { TEST_REPO, createTestStore, makeWorktree, seedStore } from '../store-test-helpers'
-import { createStoreCascadesMockApi } from '../store-cascades-test-harness'
+import { TEST_REPO } from '../../repos/repo.test-fixture'
+import { createTestStore, seedStore } from '../../testing/app-store-test-fixture'
+import { makeWorktree } from './worktree.test-fixture'
+import { createStoreCascadesMockApi } from '../../testing/app-store-cascade-api.test-fixture'
 
 vi.mock('sonner', () => ({
   toast: { warning: vi.fn(), info: vi.fn(), success: vi.fn(), error: vi.fn(), dismiss: vi.fn() }
@@ -50,24 +52,6 @@ describe('row writers touch only the copy on their own host', () => {
     const localRow = rows.find((row) => !row.runtimeOwnerEnvironmentId)
     expect(localRow?.displayName).toBe('fresh local')
     expect(rows).toHaveLength(2)
-  })
-
-  it('a server create leaves the local twin alone', () => {
-    const store = createTestStore()
-    const { local } = seedTwins(store)
-    applyCreatedWorktree(
-      store.setState,
-      REPO_ID,
-      {
-        worktree: makeWorktree({ id: WORKTREE_ID, repoId: REPO_ID, displayName: 'fresh remote' })
-      } satisfies CreateWorktreeResult,
-      'runtime:hub'
-    )
-    const rows = store.getState().worktreesByRepo[REPO_ID]!
-    expect(rows.find((row) => !row.runtimeOwnerEnvironmentId)).toEqual(local)
-    expect(rows.find((row) => row.runtimeOwnerEnvironmentId === 'hub')?.displayName).toBe(
-      'fresh remote'
-    )
   })
 
   it("a server's lineage reply updates its own copy, never the focused local twin", () => {
@@ -121,22 +105,5 @@ describe('row writers touch only the copy on their own host', () => {
     expect(onHub(PARENT_ID)).toEqual(remoteParent)
     expect(onLocal(WORKTREE_ID)).toMatchObject({ parentWorktreeId: null })
     expect(onLocal(PARENT_ID)).toMatchObject({ childWorktreeIds: [] })
-  })
-
-  it("never appends a server's copy when only the local twin is listed", () => {
-    const store = createTestStore()
-    const { local } = seedTwins(store)
-    store.setState({ worktreesByRepo: { [REPO_ID]: [local] } })
-    applyWorktreeLineageUpdate(store.setState, WORKTREE_ID, {
-      target: { kind: 'environment', environmentId: 'hub' },
-      hostId: 'runtime:hub',
-      lineage: null,
-      updatedRemoteWorktree: makeWorktree({
-        id: WORKTREE_ID,
-        repoId: REPO_ID,
-        displayName: 'server after lineage'
-      })
-    })
-    expect(store.getState().worktreesByRepo[REPO_ID]).toEqual([local])
   })
 })

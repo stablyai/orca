@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { CookieClearIdentity } from './browser-cookie-import-clear'
+import type { CookieClearIdentity } from './storage/cookie-store-contracts'
 import type { ValidatedCookie } from './sources/browser-cookie-validation'
 
 vi.mock('electron', () => ({ dialog: {}, session: {} }))
 vi.mock('./browser-cookie-import-diagnostics', () => ({
   diag: vi.fn(),
-  reasonWithDiagLog: (message: string) => message,
+  getDiagLogPath: () => 'cookie-import-diag.log',
   summarizeCookieImportError: String
 }))
 
-import { importValidatedCookies } from './browser-cookie-import-pipeline'
+import { importValidatedCookies } from './imports/import-validated-cookies'
 
 function cookie(name: string, overrides: Partial<ValidatedCookie> = {}): ValidatedCookie {
   return {

@@ -4,52 +4,32 @@
 import {
   agentSessionLeaseAdmitsWriter,
   agentSessionLeaseIsReleased
-} from '../../../shared/agent-session-lease-adjudication'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import { ORCA_AGENT_SESSION_ID_ENV } from '../../../shared/agent-session-caller-env'
-import {
-  ORCA_SESSION_ADDRESS_PREFIX,
-  isOrcaSessionId,
-  parseOrcaSessionAddress
-} from '../../../shared/orca-session-address'
-import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../shared/orchestration-session-caller-codes'
+} from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import { ORCA_AGENT_SESSION_ID_ENV } from '../../../shared/agent-session/lifecycle/agent-session-caller-env'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/orca-session-address-prefix'
+import { isOrcaSessionId, parseOrcaSessionAddress } from '../../../shared/orca-session-address'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../shared/orchestration/orchestration-session-caller-codes'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import type { OrchestrationSessionCaller } from '../orchestration/orchestration-caller-identity'
+import type {
+  OrchestrationEntryCaller,
+  OrchestrationSessionCaller
+} from '../orchestration/addressing/orchestration-caller-identity'
 import { OrchestrationError } from '../orchestration/orchestration-error'
-import { canonicalOrcaSessionId } from '../orchestration/canonical-orca-session-id'
-import type { OrchestrationDb } from '../orchestration/db'
+import { canonicalOrcaSessionId } from '../orchestration/addressing/session-lineage/canonical-orca-session-id'
+import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import {
   resolveDeclaredCallerParty,
   resolveOrcaSessionParty,
   resolveOrchestrationParty
-} from '../orchestration/orchestration-party'
-import { lookupOrcaAgentSession } from '../orchestration/structured-session-mail-address'
-import { conversationRecordReader } from '../orchestration/structured-session-lineage'
-import type { AgentSessionRecordStore } from '../agent-session-record-store'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { structuredWorkerHostScope } from '../structured-worker-identity'
+} from '../orchestration/addressing/orchestration-party'
+import { lookupOrcaAgentSession } from '../orchestration/mailbox/routing/structured-session-mail-address'
+import { conversationRecordReader } from '../orchestration/addressing/session-lineage/structured-session-lineage'
+import type { AgentSessionRecordStore } from '../agent-session/records/agent-session-record-store'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { structuredWorkerHostScope } from '../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import type { RpcRequest } from './core'
-
-type CallerParam = 'from' | 'terminal' | 'callerTerminalHandle'
-
-/** Add each caller-reading method here with a test; unlisted methods still validate session claims but carry no caller identity. */
-export const ORCHESTRATION_CALLER_PARAM: Readonly<Record<string, CallerParam>> = {
-  'orchestration.runCreate': 'from',
-  'orchestration.runUse': 'from',
-  'orchestration.runCurrent': 'from',
-  'orchestration.check': 'terminal',
-  'orchestration.send': 'from',
-  'orchestration.reply': 'from',
-  'orchestration.ask': 'from',
-  'orchestration.dispatch': 'from',
-  'orchestration.gateCreate': 'from',
-  'orchestration.gateResolve': 'from',
-  'orchestration.gateList': 'from',
-  'orchestration.taskCreate': 'callerTerminalHandle',
-  'orchestration.taskList': 'callerTerminalHandle',
-  'orchestration.taskUpdate': 'callerTerminalHandle',
-  'orchestration.workerStart': 'from'
-}
+import type { OrchestrationCallerField } from './methods/orchestration/access/orchestration-method-access'
 
 export type OrchestrationRequestRoute = {
   /** Set only by the paired WebSocket route: the request came from another host's client. */
@@ -59,7 +39,7 @@ export type OrchestrationRequestRoute = {
 export type ResolvedOrchestrationRequest = {
   /** The request with its declared caller bound to the session and its evidence reduced to it. */
   request: RpcRequest
-  caller?: OrchestrationSessionCaller
+  caller?: OrchestrationEntryCaller
 }
 
 const NO_EFFECTS = { effectsApplied: false } as const
@@ -74,18 +54,23 @@ const NEEDS_RUNNING_AGENT: ReadonlySet<string> = new Set([
 ])
 
 /** Detect session evidence or a declared session caller synchronously so terminal calls avoid another async hop. */
-export function needsOrchestrationCallerResolution(request: RpcRequest): boolean {
+export function needsOrchestrationCallerResolution(
+  request: RpcRequest,
+  callerField: OrchestrationCallerField | undefined
+): boolean {
   if (!request.method.startsWith('orchestration.')) {
     return false
   }
   return (
     request.orchestrationCompatibilityEvidence?.agentSessionId !== undefined ||
-    declaredSessionAddress(request) !== undefined
+    declaredSessionAddress(request, callerField) !== undefined
   )
 }
 
-function declaredSessionAddress(request: RpcRequest): string | undefined {
-  const name = ORCHESTRATION_CALLER_PARAM[request.method]
+function declaredSessionAddress(
+  request: RpcRequest,
+  name: OrchestrationCallerField | undefined
+): string | undefined {
   const params: unknown = request.params
   if (!name || !params || typeof params !== 'object' || Array.isArray(params)) {
     return undefined
@@ -99,11 +84,15 @@ function declaredSessionAddress(request: RpcRequest): string | undefined {
 export async function resolveOrchestrationSessionCaller(
   runtime: OrcaRuntimeService,
   request: RpcRequest,
-  route: OrchestrationRequestRoute | undefined
+  route: OrchestrationRequestRoute | undefined,
+  /** The method's declared caller field (its access declaration), if it reads one. */
+  callerField: OrchestrationCallerField | undefined
 ): Promise<ResolvedOrchestrationRequest> {
   const evidence = request.orchestrationCompatibilityEvidence
   if (evidence?.agentSessionId === undefined) {
-    return { request: bindDeclaredSessionAddress(runtime.getOrchestrationDb(), request) }
+    return {
+      request: bindDeclaredSessionAddress(runtime.getOrchestrationDb(), request, callerField)
+    }
   }
   const claimed: unknown = evidence?.agentSessionId
   if (route?.pairedDeviceId !== undefined) {
@@ -135,7 +124,7 @@ export async function resolveOrchestrationSessionCaller(
   return {
     request: {
       ...request,
-      params: bindDeclaredCaller(request.method, request.params, caller, db),
+      params: bindDeclaredCaller(callerField, request.params, caller, db),
       // Session identity wins; discard terminal attestation on the same request.
       orchestrationCompatibilityEvidence: { agentSessionId: sessionId }
     },
@@ -205,9 +194,12 @@ function assertSessionCanAct(sessionId: string, record: AgentSessionRecord, meth
 }
 
 /** A request with no session id that declares an `orca_session_id:` caller: a worker's is its handle. */
-function bindDeclaredSessionAddress(db: OrchestrationDb, request: RpcRequest): RpcRequest {
-  const name = ORCHESTRATION_CALLER_PARAM[request.method]
-  const declared = declaredSessionAddress(request)
+function bindDeclaredSessionAddress(
+  db: OrchestrationDb,
+  request: RpcRequest,
+  name: OrchestrationCallerField | undefined
+): RpcRequest {
+  const declared = declaredSessionAddress(request, name)
   const params: unknown = request.params
   if (!name || declared === undefined || !params || typeof params !== 'object') {
     return request
@@ -237,12 +229,11 @@ function declaredNamesCaller(
 
 /** The declared caller, if any, must name this session; it is then replaced by its address. */
 function bindDeclaredCaller(
-  method: string,
+  name: OrchestrationCallerField | undefined,
   params: unknown,
   caller: OrchestrationSessionCaller,
   db: OrchestrationDb
 ): unknown {
-  const name = ORCHESTRATION_CALLER_PARAM[method]
   if (!name || !params || typeof params !== 'object' || Array.isArray(params)) {
     return params
   }

@@ -6,15 +6,17 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { useAppStore } from '@/store'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { useGitHubTaskProjectTable } from '@/hooks/useGitHubTaskItems'
+import { gitHubSlugApiForTarget } from '@/runtime/repository-github/github-slug-owner-api'
 import type { GitHubWorkItemDetails } from '../../../../../shared/github/work-item-types'
-import type { ProjectWorkItemDetailsBySlugResult } from '../../../../../shared/github/project-result-types'
 import type { GitHubItemDialogProjectOrigin } from '@/components/GitHubItemDialog'
 import { LabelsEditor } from './LabelsEditor'
 import { AssigneesEditor } from './AssigneesEditor'
 import { CommentsList, NewCommentForm } from './Comments'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { projectViewErrorMessage } from '../project-view-error-copy'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function SlugDialogBody({
   projectOrigin,
@@ -25,13 +27,16 @@ export function SlugDialogBody({
   sourceTarget: RuntimeClientTarget
   onClose: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const { owner, repo, host, number, type, cacheKey } = projectOrigin
   const patchProjectIssueOrPr = useAppStore((s) => s.patchProjectIssueOrPr)
-  const projectViewCache = useAppStore((s) => s.projectViewCache)
+  const table = useGitHubTaskProjectTable(
+    useAppStore((s) => s.projectViewCache[cacheKey]?.data ?? null),
+    sourceTarget
+  )
 
   // Read Project rows reactively so optimistic table edits also update the open dialog.
   const row = useMemo(() => {
-    const table = projectViewCache[cacheKey]?.data
     if (!table) {
       return null
     }
@@ -42,7 +47,7 @@ export function SlugDialogBody({
           r.content.repository?.toLowerCase() === `${owner}/${repo}`.toLowerCase()
       ) ?? null
     )
-  }, [projectViewCache, cacheKey, owner, repo, number])
+  }, [table, owner, repo, number])
 
   const [details, setDetails] = useState<GitHubWorkItemDetails | null>(null)
   const [loading, setLoading] = useState(false)
@@ -55,16 +60,15 @@ export function SlugDialogBody({
     setLoading(true)
     setError(null)
     setDetails(null)
-    const target = sourceTarget
-    const request =
-      target.kind === 'environment'
-        ? callRuntimeRpc<ProjectWorkItemDetailsBySlugResult>(
-            target,
-            'github.project.workItemDetailsBySlug',
-            { owner, repo, host, number, type },
-            { timeoutMs: 30_000 }
-          )
-        : window.api.gh.projectWorkItemDetailsBySlug({ owner, repo, host, number, type })
+    const request = gitHubSlugApiForTarget(sourceTarget).projectWorkItemDetailsBySlug({
+      owner,
+      repo,
+      host,
+      number,
+      type,
+      // Opening an item is a click (E9).
+      wakeWslDistro: true
+    })
     request
       .then((res) => {
         if (rid !== requestIdRef.current) {
@@ -80,7 +84,11 @@ export function SlugDialogBody({
         if (rid !== requestIdRef.current) {
           return
         }
-        setError(err instanceof Error ? err.message : 'Failed to load details')
+        setError(
+          err instanceof Error
+            ? err.message
+            : translate('projectViews.picker.detailsFailed', 'Failed to load details')
+        )
       })
       .finally(() => {
         if (rid !== requestIdRef.current) {
@@ -129,7 +137,9 @@ export function SlugDialogBody({
       toast.error(projectViewErrorMessage(res.error))
       return
     }
-    setDetails((prev) => (prev ? { ...prev, body: bodyDraft } : prev))
+    setDetails((prev) =>
+      prev ? { ...prev, body: bodyDraft, bodyImageUrls: res.bodyImageUrls } : prev
+    )
   }, [bodyDraft, body, patchProjectIssueOrPr, cacheKey, row])
 
   const labels = row?.content.labels.map((l) => l.name) ?? []
@@ -174,7 +184,7 @@ export function SlugDialogBody({
                 }}
               >
                 {title ||
-                  translate(
+                  t(
                     'auto.components.github.project.slug.dialog.SlugDialogBody.7c302f8174',
                     'Untitled'
                   )}
@@ -187,8 +197,8 @@ export function SlugDialogBody({
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7"
-                onClick={() => void window.api.shell.openUrl(url)}
-                aria-label={translate(
+                onClick={(event) => openAppHttpLink(url, { event })}
+                aria-label={t(
                   'auto.components.github.project.slug.dialog.SlugDialogBody.69caf40ae8',
                   'Open in GitHub'
                 )}
@@ -201,7 +211,7 @@ export function SlugDialogBody({
               size="icon"
               className="h-7 w-7"
               onClick={onClose}
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.github.project.slug.dialog.SlugDialogBody.ae98897edf',
                 'Close'
               )}
@@ -258,10 +268,7 @@ export function SlugDialogBody({
         {loading && !details ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <LoaderCircle className="size-4 animate-spin" />{' '}
-            {translate(
-              'auto.components.github.project.slug.dialog.SlugDialogBody.e4ef8281e9',
-              'Loading…'
-            )}
+            {t('auto.components.github.project.slug.dialog.SlugDialogBody.e4ef8281e9', 'Loading…')}
           </div>
         ) : error ? (
           <div className="text-sm text-destructive">{error}</div>
@@ -278,13 +285,13 @@ export function SlugDialogBody({
                   />
                   <div className="flex gap-2">
                     <Button size="sm" onClick={() => void commitBody()}>
-                      {translate(
+                      {t(
                         'auto.components.github.project.slug.dialog.SlugDialogBody.e64f6c3eff',
                         'Save'
                       )}
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => setEditingBody(false)}>
-                      {translate(
+                      {t(
                         'auto.components.github.project.slug.dialog.SlugDialogBody.a91735d19f',
                         'Cancel'
                       )}
@@ -301,7 +308,11 @@ export function SlugDialogBody({
                     setEditingBody(true)
                   }}
                 >
-                  <CommentMarkdown content={body} variant="document" />
+                  <CommentMarkdown
+                    content={body}
+                    bodyImageUrls={details?.bodyImageUrls}
+                    variant="document"
+                  />
                 </button>
               ) : (
                 <button
@@ -313,7 +324,7 @@ export function SlugDialogBody({
                     setEditingBody(true)
                   }}
                 >
-                  {translate(
+                  {t(
                     'auto.components.github.project.slug.dialog.SlugDialogBody.41169e41fb',
                     'Add a description…'
                   )}
@@ -322,7 +333,7 @@ export function SlugDialogBody({
             </section>
             <section className="flex flex-col gap-3">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.github.project.slug.dialog.SlugDialogBody.598ad6a517',
                   'Comments'
                 )}

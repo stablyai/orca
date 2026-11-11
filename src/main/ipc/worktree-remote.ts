@@ -1,22 +1,25 @@
+import { readableWslDistroHoldText } from '../../shared/wsl-distro-stopped-hold'
+import { canCheckoutExistingLocalBranch } from '../runtime/workspaces/creation/runtime-worktree-create-git'
 /* eslint-disable max-lines */
 
-import { selectWorktreeCreateBranchSeed } from '../worktree-create-branch-seed'
-import { worktreeCreateGit } from '../git/worktree-create-git-executor'
-import { getStoredRepoExecutionHostId } from '../repo-execution-host'
+import { worktreeCreateGit } from '../git/worktrees/creation/worktree-create-git-executor'
+import { getStoredRepoExecutionHostId } from '../workspaces/execution-host/repo-execution-host'
 import type { BrowserWindow } from 'electron'
 import { existsSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
 import type { Repo } from '../../shared/repo-types'
 import type {
   CreateWorktreeArgs,
   CreateWorktreeProgressEvent,
   CreateWorktreeResult,
+  SetupTrustMismatch,
   WorktreeCheckoutProgress,
   WorktreeCreateBaseFallback
 } from '../../shared/worktree/create-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import type { WorkspaceLineage } from '../../shared/worktree/lineage-types'
 import type {
   AutomationWorkspaceProvenance,
   CliWorkspaceProvenance,
@@ -26,36 +29,51 @@ import type {
   WorktreeHeadIdentity
 } from '../../shared/worktree/types'
 import { getPRForBranch } from '../github/client'
-import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
-import type { AddWorktreeOptions, AddWorktreeResult } from '../git/worktree'
+import { addWorktree } from '../git/worktrees/creation/worktree-add'
+import { addSparseWorktree } from '../git/worktrees/creation/worktree-sparse-add'
+import type {
+  AddWorktreeOptions,
+  AddWorktreeResult
+} from '../git/worktrees/worktree-operation-options'
 import {
   consumePreparedWorktreeCreate,
   type PreparationRearmHolder
-} from '../worktree-create-preparation'
-import { getBranchConflictKind, resolveDefaultBaseRefWithLocalGit } from '../git/repo'
+} from '../workspaces/creation/preparation/worktree-create-preparation'
+import {
+  getBranchConflictKind,
+  getBranchConflictKindStrict,
+  resolveDefaultBaseRefWithLocalGit
+} from '../git/repo'
 import { WorktreeCreateCollisionError } from '../../shared/new-workspace/worktree-create-collision'
 import { resolveLocalGitUsername } from '../git/git-username'
-import { hasLocalWorktreeBaseRef } from '../git/worktree-base-ref-probe'
-import { resolveWorktreeCreateBase } from '../worktree-create-base'
+import { hasLocalWorktreeBaseRef } from '../git/worktrees/creation/worktree-base-ref-probe'
+import { resolveWorktreeCreateBase } from '../workspaces/creation/worktree-create-base'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
 import type { ForgeProviderId } from '../source-control/forge-provider'
 import { validateGitPushTarget } from '../git/push-target-validation'
 import { gitExecFileAsync } from '../git/runner'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
-  OrcaRuntimeService,
   RemoteFetchResult,
   RemoteTrackingBase
-} from '../runtime/orca-runtime'
+} from '../runtime/repositories/runtime-remote-fetch-controller'
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-lookup'
-import { getEffectiveHooks, loadHooks } from '../hooks'
-import { createSetupRunnerScript, resolveSetupRunnerShell } from '../worktree-runner-script'
+import { getEffectiveHooks, loadHooks } from '../workspace-hooks/hooks'
+import {
+  createSetupRunnerScript,
+  resolveSetupRunnerShell
+} from '../workspace-hooks/worktree-runner-script'
 import {
   getDefaultTabsLaunch,
   getEffectiveHooksFromConfig,
   shouldRunSetupForCreate
-} from '../effective-hook-config'
-import { isTuiAgent } from '../../shared/tui-agent-config'
-import { runWorktreeChangeInvalidators } from './worktree-change-invalidators'
+} from '../workspace-hooks/effective-hook-config'
+import {
+  checkCreatedWorktreeSetupTrust,
+  defaultTabsWithoutCommands
+} from '../workspace-hooks/created-worktree-setup-trust'
+import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
+import { runWorktreeChangeInvalidators } from './worktrees/listing/worktree-change-invalidators'
 
 type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
   automationProvenance?: AutomationWorkspaceProvenance
@@ -76,78 +94,94 @@ import {
 import { computeValidatedBranchName } from './worktree-branch-name'
 import { mergeWorktree } from './worktree-metadata-merge'
 import { resolveCreatedWorktree } from './created-worktree-reconciliation'
-import { notifyLineageRepos } from '../worktree-lineage-change-notification'
+import { notifyLineageRepos } from '../workspaces/catalog/worktree-lineage-change-notification'
 import { composeWorktreeId, getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import {
   getConnectionExecutionHostId,
   getRepoExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
-import type { BranchPrefixSettings } from '../../shared/branch-prefix'
+import type { BranchPrefixSettings } from '../../shared/git/branches/branch-prefix'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { sharesWorktreeLineageBoundary } from '../../shared/resolved-worktree-lineage'
+import { CrossStoreParentRefSchema } from '../../shared/rpc-contract/cross-store-parent-params'
+import { assertParentInAnotherStore } from '../runtime/workspaces/lineage/cross-store-parent-store-check'
+import {
+  crossStoreManualLineage,
+  recordCreatedWorktreeLineage
+} from '../runtime/workspaces/lineage/runtime-worktree-lineage-recording'
+import type { WorktreeLineageResolution } from '../runtime/workspaces/lineage/runtime-worktree-lineage-resolution'
 import {
   cleanupUnusedWorktreePushTargetRemoteWithExec,
   sameGitHubRemoteUrl,
   type GitRemoteExec,
   type WorktreePushTargetStore
-} from './worktree-push-target-cleanup'
-import { reconcileOrphanedPrRemotes } from './worktree-push-target-reconciliation'
+} from '../git/remotes/worktree-push-target-cleanup'
+import { reconcileOrphanedPrRemotes } from '../git/remotes/worktree-push-target-reconciliation'
 import {
   configureCreatedWorktreePushTargetWithExec,
   prepareWorktreePushTargetWithExec,
   remoteAlreadyMatchesUrl,
   restoreUpstreamAfterMaterialize
-} from './worktree-push-target-setup'
+} from '../git/remotes/worktree-push-target-setup'
 import {
   buildNarrowForkFetchRefspec,
   ensureRemoteTracksBranchNarrowly,
   forkRemoteTrackingRefExists
-} from '../git/fork-remote-refspec'
-import { migrateForkRemoteRefspecs } from './worktree-push-target-refspec-migration'
+} from '../git/refs/fork-remotes/fork-remote-refspec'
+import { migrateForkRemoteRefspecs } from '../git/remotes/worktree-push-target-refspec-migration'
 import {
   registerCreatedWorktreeRoot,
   registerWorktreeRootsForRepo
-} from './registered-worktree-roots-cache'
+} from './worktrees/removal/registered-worktree-roots-cache'
 import {
   createWorktreeCopiedPaths,
   createWorktreeLinkedPaths,
   createWorktreeSharedPaths
 } from './worktree-symlinks'
 import { formatWorktreeIncludeCopyWarning } from './worktree-include-copy-budget'
-import { resolveWorktreeIncludePaths } from '../git/worktree-include-file'
-import { resolveWorktreeSharedDirectories } from '../git/worktree-shared-directories'
+import { resolveWorktreeIncludePaths } from '../git/worktrees/content-paths/worktree-include-file'
+import { resolveWorktreeSharedDirectories } from '../git/worktrees/content-paths/worktree-shared-directories'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { attributedSparsePresetId } from './sparse-preset-attribution'
 import {
   buildSetupRunnerCommand,
   getSetupRunnerCommandPlatformForPath
-} from '../../shared/setup-runner-command'
-import { createSequencedSetupAgentCommands } from '../../shared/setup-agent-sequencing'
+} from '../../shared/agent-launch/startup/setup-runner-command'
+import { createSequencedSetupAgentCommands } from '../../shared/agent-launch/startup/setup-agent-sequencing'
 import {
   createWorktreeCreateTimingRecorder,
   localWorktreeCreateExecutionHost,
   type WorktreeCreateTimingRecorder
-} from '../worktree-create-timing'
+} from '../workspaces/creation/worktree-create-timing'
 import {
   getLocalProjectGitExecOptions,
   getLocalProjectWorktreeGitOptions,
   getWorktreeMirrorDistro
-} from '../project-runtime-git-options'
+} from '../workspaces/execution-host/project-runtime-git-options'
 import {
   getBranchNameOverrideCandidate,
   getGeneratedWorktreeCreateCandidate,
   getWorktreeCreateCandidate,
-  isGeneratedWorktreeCreateName,
   WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS
-} from '../worktree-create-candidates'
+} from '../workspaces/creation/worktree-create-candidates'
+import { isGeneratedWorktreeCreateName } from '../../shared/new-workspace/worktree-create-retry-policy'
 import {
   failedWorktreeCreationNeedsRetirement,
   getRetiredNameRegistryForRepo,
   retireGeneratedWorktreeName
-} from '../worktree-name-retirement'
+} from '../workspaces/removal/retirement/worktree-name-retirement'
 import { createRetiredNameLookup } from '../../shared/worktree/retired-name-registry'
-import { findPendingWorktreeRemovalConflict } from '../worktree-removal-table'
+import { findPendingWorktreeRemovalConflict } from '../workspaces/removal/worktree-removal-table'
+import {
+  exactNameBranchConflict,
+  exactNameLateCollision,
+  exactNameTakenError
+} from '../workspaces/creation/worktree-create-exact-name'
+import {
+  openWorktreeCreatePathClaim,
+  type WorktreeCreatePathClaim
+} from '../workspaces/creation/worktree-create-in-flight'
 import { isWslMoveWorktreeBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import {
   hostWorktreeTarget,
@@ -216,6 +250,7 @@ export function assertAttachableParentWorkspace(
 type CreatedWorktreeLineageRecords = {
   lineage: CreateWorktreeResult['lineage']
   workspaceLineage: CreateWorktreeResult['workspaceLineage']
+  crossStoreLineage?: CreateWorktreeResult['crossStoreLineage']
 }
 
 const NO_CREATED_WORKTREE_LINEAGE: CreatedWorktreeLineageRecords = {
@@ -223,12 +258,36 @@ const NO_CREATED_WORKTREE_LINEAGE: CreatedWorktreeLineageRecords = {
   workspaceLineage: null
 }
 
+/** `noteLineage`: the common create resolver's answer for a task id in the note, absent an explicit parent. */
 export function recordWorkspaceLineageForCreatedWorktree(
   store: Store,
   args: CreateWorktreeArgs,
   worktree: Worktree,
-  createdAt: number
+  createdAt: number,
+  noteLineage?: WorktreeLineageResolution
 ): CreatedWorktreeLineageRecords {
+  if (args.crossStoreParent) {
+    const { crossStoreLineage, warnings } = recordCreatedWorktreeLineage(
+      store,
+      worktree,
+      crossStoreManualLineage(args.crossStoreParent)
+    )
+    for (const warning of warnings) {
+      console.warn(`[worktree-create] ${warning.message}`)
+    }
+    return { ...NO_CREATED_WORKTREE_LINEAGE, crossStoreLineage: crossStoreLineage ?? null }
+  }
+  if (!args.parentWorkspace && noteLineage) {
+    const { lineage, workspaceLineage, warnings } = recordCreatedWorktreeLineage(
+      store,
+      worktree,
+      noteLineage
+    )
+    for (const warning of warnings) {
+      console.warn(`[worktree-create] ${warning.message}`)
+    }
+    return { lineage, workspaceLineage }
+  }
   if (!args.parentWorkspace || !worktree.instanceId) {
     return NO_CREATED_WORKTREE_LINEAGE
   }
@@ -257,7 +316,7 @@ export function recordWorkspaceLineageForCreatedWorktree(
     return NO_CREATED_WORKTREE_LINEAGE
   }
 
-  // Folder parents have no WorktreeLineage row and do not create sidebar nesting.
+  // Folder parents have no WorktreeLineage row; their link is the workspace lineage record.
   let lineage: CreateWorktreeResult['lineage'] = null
   let parentOutsideLineageBoundary = false
   let lineageOwnedByTwin = false
@@ -294,19 +353,47 @@ export function recordWorkspaceLineageForCreatedWorktree(
     return NO_CREATED_WORKTREE_LINEAGE
   }
 
-  const workspaceLineage = store.setWorkspaceLineage({
+  const row: WorkspaceLineage = {
     childWorkspaceKey,
     childInstanceId: worktree.instanceId,
     parentWorkspaceKey: args.parentWorkspace,
-    parentInstanceId: parentWorktreeMeta?.instanceId ?? null,
+    parentInstanceId:
+      parentScope.type === 'folder'
+        ? parentScope.folderWorkspaceId
+        : (parentWorktreeMeta?.instanceId ?? null),
     origin: 'manual',
     capture: {
       source: parentScope.type === 'worktree' ? 'manual-action' : 'active-workspace',
       confidence: 'explicit'
     },
     createdAt
-  })
+  }
+  if (parentScope.type === 'folder') {
+    // The checkout exists by now, so a same-id twin owning the bucket only warns.
+    const target = worktreeRowTarget(store, worktree)
+    const workspaceLineage = (target && store.setFolderParentLineage(target, row)) ?? null
+    if (!workspaceLineage) {
+      console.warn(
+        `[worktree-create] ${worktree.id}'s lineage is held by a same-path workspace on another host; skipping lineage`
+      )
+    }
+    return { lineage, workspaceLineage }
+  }
+  // A recorded worktree link already wrote this row as its workspace projection.
+  const workspaceLineage = lineage ? row : store.setWorkspaceLineage(row)
   return { lineage, workspaceLineage }
+}
+
+/** Same refusal as the RPC create, before any checkout exists: a well-formed ref from another store. */
+async function assertCreatableCrossStoreParent(
+  runtime: OrcaRuntimeService,
+  parent: NonNullable<CreateWorktreeArgs['crossStoreParent']>
+): Promise<void> {
+  // IPC args are unchecked.
+  if (!CrossStoreParentRefSchema.safeParse(parent).success) {
+    throw new Error('The parent on another machine is malformed.')
+  }
+  await assertParentInAnotherStore(parent, () => runtime.readStoreInstallationId())
 }
 
 async function spawnLocalStartupAndSetupTerminals(args: {
@@ -316,8 +403,12 @@ async function spawnLocalStartupAndSetupTerminals(args: {
   setup: CreateWorktreeResult['setup']
   defaultTabs: CreateWorktreeResult['defaultTabs']
   createdWithAgent: CreateWorktreeArgs['createdWithAgent']
+  /** An automation's create is background work: its terminals never start a stopped WSL distro (E9). */
+  automationCreate: boolean
 }): Promise<StagedStartupResult> {
-  const { runtime, worktree, startup, setup, defaultTabs, createdWithAgent } = args
+  const { runtime, worktree, startup, defaultTabs, createdWithAgent } = args
+  const userAct = args.automationCreate ? {} : { wslUserAct: true as const }
+  let { setup } = args
   if (!startup || defaultTabs?.tabs.length) {
     return { didSpawnSetup: false }
   }
@@ -345,6 +436,7 @@ async function spawnLocalStartupAndSetupTerminals(args: {
       ...(sequenced.startupEnv ? { env: { ...startup.env, ...sequenced.startupEnv } } : {})
     }
     wrappedSetupCommandStr = sequenced.setupCommand
+    setup = { ...setup, envVars: { ...setup.envVars, ...sequenced.setupEnv } }
   }
 
   try {
@@ -361,7 +453,8 @@ async function spawnLocalStartupAndSetupTerminals(args: {
         startupCommandDelivery: sequencedStartup.startupCommandDelivery,
         telemetry: sequencedStartup.telemetry,
         // Submitting renderer owns activation; background completion must not yank users who moved on (#9944).
-        surfaceOwner: false
+        surfaceOwner: false,
+        ...userAct
       },
       worktree
     )
@@ -371,7 +464,9 @@ async function spawnLocalStartupAndSetupTerminals(args: {
       surface: terminal.surface
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = readableWslDistroHoldText(
+      error instanceof Error ? error.message : String(error)
+    )
     warning = `Failed to create the startup terminal for ${worktree.path}: ${message}`
     console.warn(`[worktree-create] ${warning}`)
     return { didSpawnSetup: false, warning }
@@ -397,13 +492,16 @@ async function spawnLocalStartupAndSetupTerminals(args: {
           command: setupCommand,
           env: setup.envVars,
           activate: false,
-          surfaceOwner: false
+          surfaceOwner: false,
+          ...userAct
         },
         worktree
       )
       didSpawnSetup = true
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = readableWslDistroHoldText(
+        error instanceof Error ? error.message : String(error)
+      )
       const nextWarning = `failed to create the setup terminal for ${worktree.path}: ${message}`
       warning = appendWorktreeCreateWarning(warning, nextWarning)
       console.warn(`[worktree-create] ${warning}`)
@@ -446,49 +544,6 @@ async function resolveCreateBranchName(
     ...gitOptions
   })
   return branchNameOverride
-}
-
-function normalizeLocalBranchName(branchName: string | undefined): string {
-  return branchName?.replace(/^refs\/heads\//, '') ?? ''
-}
-
-async function canCheckoutExistingLocalBranch(
-  repoPath: string,
-  branchName: string,
-  baseBranch: string,
-  gitOptions: { wslDistro?: string } = {}
-): Promise<boolean> {
-  let localHead = ''
-  try {
-    const { stdout } = await gitExecFileAsync(
-      ['rev-parse', '--verify', '--quiet', `refs/heads/${branchName}^{commit}`],
-      {
-        cwd: repoPath,
-        ...gitOptions
-      }
-    )
-    localHead = stdout.trim()
-  } catch {
-    return false
-  }
-  if (normalizeLocalBranchName(baseBranch) !== branchName) {
-    if (!localHead) {
-      return false
-    }
-    try {
-      const { stdout } = await gitExecFileAsync(
-        ['rev-parse', '--verify', '--quiet', `${baseBranch}^{commit}`],
-        { cwd: repoPath, ...gitOptions }
-      )
-      if (stdout.trim() !== localHead) {
-        return false
-      }
-    } catch {
-      return false
-    }
-  }
-  const worktrees = await listWorktrees(repoPath, gitOptions)
-  return !worktrees.some((worktree) => normalizeLocalBranchName(worktree.branch) === branchName)
 }
 
 function hasLocalGitOptions(gitOptions: { wslDistro?: string }): boolean {
@@ -944,6 +999,7 @@ export function createLocalWorktree(
 ): Promise<CreateWorktreeResult> {
   // Always rearm consumed preparation, even if later copy, metadata or startup work fails.
   const rearm: PreparationRearmHolder = { fire: () => {} }
+  const pathClaim = openWorktreeCreatePathClaim()
   return worktreeCreateGit
     .run(() =>
       performLocalWorktreeCreate(
@@ -954,10 +1010,12 @@ export function createLocalWorktree(
         rearm,
         timing,
         runtime,
+        pathClaim,
         onWorkspaceCreated
       )
     )
     .finally(() => {
+      pathClaim.release()
       // Finish create timing before rearm so replacement preparation is not charged to this request.
       timing.finish()
       rearm.fire()
@@ -972,8 +1030,20 @@ async function performLocalWorktreeCreate(
   rearm: PreparationRearmHolder,
   timing: WorktreeCreateTimingRecorder,
   runtime: OrcaRuntimeService,
+  pathClaim: WorktreeCreatePathClaim,
   onWorkspaceCreated?: (worktreeId: string) => void
 ): Promise<CreateWorktreeResult> {
+  // Why: no await without a ref, so the common create keeps its synchronous probe start.
+  if (args.crossStoreParent !== undefined) {
+    await assertCreatableCrossStoreParent(runtime, args.crossStoreParent)
+  }
+  // A task id in the note names the parent here, as it does for every other create path.
+  const noteLineage =
+    args.comment && !args.parentWorkspace && !args.crossStoreParent
+      ? await runtime
+          .resolveLineageForWorktreeCreate({ comment: args.comment }, repo)
+          .catch(() => undefined)
+      : undefined
   const settings = store.getSettings()
   const worktreePathSettings = getWorktreePathSettings(
     repo,
@@ -999,7 +1069,6 @@ async function performLocalWorktreeCreate(
       : {})
   })
 
-  const branchSeed = selectWorktreeCreateBranchSeed(args, settings.autoRenameBranchFromWork)
   const requestedName = args.name
   const sanitizedName = sanitizeWorktreeName(args.name)
   const displayNameRequest = resolveWorktreeCreateDisplayNameRequest(
@@ -1145,12 +1214,13 @@ async function performLocalWorktreeCreate(
   let resolved = false
   let checkoutExistingBranch = false
   let selectedExistingLocalBranchName: string | null = null
-  let selectedRemoteBranchName: string | null = null
+  let selectedReuseBranchName: string | null = null
   let lastBranchConflictKind: 'local' | 'remote' | null = null
   let lastExistingPR: Awaited<ReturnType<typeof getPRForBranch>> | null = null
   let lastExistingReviewNumber: number | null = null
   const shouldRetireGeneratedName =
     args.nameWasGenerated === true && isGeneratedWorktreeCreateName(sanitizedName)
+  const exactName = args.branchIntent === 'create-exact'
   if (
     args.branchIntent === 'open-existing' &&
     args.branchNameOverride &&
@@ -1172,8 +1242,49 @@ async function performLocalWorktreeCreate(
       localWorktreeGitOptions
     )
     if (conflict === null) {
-      selectedRemoteBranchName = branchName
+      selectedReuseBranchName = branchName
     }
+  }
+  if (args.branchIntent === 'open-existing-v2') {
+    if (!args.branchNameOverride || args.pushTarget || getSelectedReviewBranch(args)) {
+      throw new Error(
+        'Reuse branch requires an explicit branch selection without a review push target.'
+      )
+    }
+    branchName = await resolveCreateBranchName(
+      repo.path,
+      args.branchNameOverride,
+      sanitizedName,
+      settings,
+      username,
+      localWorktreeGitOptions
+    )
+    checkoutExistingBranch = await canCheckoutExistingLocalBranch(
+      repo.path,
+      branchName,
+      baseBranch,
+      localWorktreeGitOptions,
+      true
+    )
+    if (!checkoutExistingBranch) {
+      if (remoteTrackingBase?.branch !== branchName) {
+        throw new Error(
+          `Branch "${branchName}" was not found locally. Select its remote branch again, or turn off Reuse branch.`
+        )
+      }
+      const conflict = await getBranchConflictKind(
+        repo.path,
+        branchName,
+        remoteTrackingBase.ref,
+        localWorktreeGitOptions
+      )
+      if (conflict) {
+        throw new WorktreeCreateCollisionError(
+          `Cannot reuse branch "${branchName}" because its name conflicts with an existing branch. Choose a different branch or turn off Reuse branch.`
+        )
+      }
+    }
+    selectedReuseBranchName = branchName
   }
   const pathIsAvailable = (): boolean => {
     worktreePath = ensurePathWithinWorkspace(
@@ -1182,7 +1293,9 @@ async function performLocalWorktreeCreate(
     )
     // Pending removals still own paths Git may already have deleted; skip them until teardown settles.
     return (
-      !existsSync(worktreePath) && !findPendingWorktreeRemovalConflict(repo.path, { worktreePath })
+      !existsSync(worktreePath) &&
+      !findPendingWorktreeRemovalConflict(repo.path, { worktreePath }) &&
+      pathClaim.claim(worktreePath)
     )
   }
   await timing.time('resolve_name', async () => {
@@ -1196,6 +1309,9 @@ async function performLocalWorktreeCreate(
       attempts < WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS;
       suffix += 1
     ) {
+      if (exactName && suffix > 1) {
+        throw exactNameTakenError(requestedName)
+      }
       effectiveSanitizedName = shouldRetireGeneratedName
         ? getGeneratedWorktreeCreateCandidate(
             sanitizedName,
@@ -1212,7 +1328,7 @@ async function performLocalWorktreeCreate(
         continue
       }
       attempts += 1
-      if (selectedRemoteBranchName) {
+      if (selectedReuseBranchName) {
         if (pathIsAvailable()) {
           resolved = true
           break
@@ -1226,7 +1342,7 @@ async function performLocalWorktreeCreate(
         selectedExistingLocalBranchName
           ? selectedExistingLocalBranchName
           : getBranchNameOverrideCandidate(args.branchNameOverride, suffix),
-        branchSeed ? getWorktreeCreateCandidate(branchSeed, suffix) : effectiveSanitizedName,
+        effectiveSanitizedName,
         settings,
         username,
         localWorktreeGitOptions
@@ -1244,21 +1360,35 @@ async function performLocalWorktreeCreate(
       const preferExistingBranch = Boolean(
         args.branchNameOverride || selectedExistingLocalBranchName
       )
-      checkoutExistingBranch = preferExistingBranch && (await tryExistingBranch())
-      lastBranchConflictKind = checkoutExistingBranch
-        ? null
-        : await getBranchConflictKind(
-            repo.path,
-            branchName,
-            baseBranch,
-            localWorktreeGitOptions,
-            preferExistingBranch ? undefined : tryExistingBranch
+      const allowImplicitReuse = args.branchIntent !== 'create-new' && !exactName
+      checkoutExistingBranch =
+        allowImplicitReuse && preferExistingBranch && (await tryExistingBranch())
+      lastBranchConflictKind = exactName
+        ? exactNameBranchConflict(
+            await getBranchConflictKindStrict(
+              repo.path,
+              branchName,
+              undefined,
+              localWorktreeGitOptions
+            ),
+            branchName
           )
+        : checkoutExistingBranch
+          ? null
+          : await getBranchConflictKind(
+              repo.path,
+              branchName,
+              allowImplicitReuse ? baseBranch : undefined,
+              localWorktreeGitOptions,
+              allowImplicitReuse && !preferExistingBranch ? tryExistingBranch : undefined
+            )
       if (checkoutExistingBranch && !selectedExistingLocalBranchName) {
         // Path retries must retain the adopted branch.
         selectedExistingLocalBranchName = branchName
       }
+      // A selected review may adopt its remote branch, but exact mode only creates a new one.
       const allowedPushTargetRemoteConflict =
+        !exactName &&
         lastBranchConflictKind &&
         isAllowedPushTargetRemoteConflict(lastBranchConflictKind, branchName, args)
       if (lastBranchConflictKind) {
@@ -1300,8 +1430,8 @@ async function performLocalWorktreeCreate(
         continue
       }
 
-      // Probe PR conflicts only after collision; avoid the common-path gh network round trip.
-      if (suffix > 1 && !checkoutExistingBranch) {
+      // Probe PR conflicts only after collision (or for an exact name); avoid the common-path gh network round trip.
+      if ((suffix > 1 || exactName) && !checkoutExistingBranch) {
         lastExistingPR = null
         try {
           lastExistingPR = await getLocalGitHubPrForBranch(
@@ -1392,6 +1522,9 @@ async function performLocalWorktreeCreate(
   const remoteTrackingBaseOption = remoteTrackingBase ? { remoteTrackingBase } : undefined
   const existingBranchOption = {
     checkoutExistingBranch,
+    ...(args.branchIntent === 'open-existing-v2' && !checkoutExistingBranch
+      ? { trackRemoteBranch: true }
+      : {}),
     ...remoteTrackingBaseOption,
     ...(suggestLocalBaseRefUpdate ? { suggestLocalBaseRefUpdate } : {})
   }
@@ -1400,11 +1533,21 @@ async function performLocalWorktreeCreate(
       ? { ...remoteTrackingBaseOption, suggestLocalBaseRefUpdate }
       : remoteTrackingBaseOption
   )
+  const newBranchOptions =
+    args.branchIntent === 'open-existing-v2'
+      ? addProjectGitOptions(existingBranchOption)
+      : preparedWorktreeOptions
   let addResult: AddWorktreeResult
   try {
     addResult =
       (await timing.time('git_worktree_add', async () => {
-        if (sparseDirectories.length === 0 && !checkoutExistingBranch) {
+        // Exact mode skips prepared checkouts so the final write is a non-forcing `worktree add -b`.
+        if (
+          sparseDirectories.length === 0 &&
+          !checkoutExistingBranch &&
+          args.branchIntent !== 'open-existing-v2' &&
+          !exactName
+        ) {
           const prepared = await consumePreparedWorktreeCreate({
             repoPath: repo.path,
             workspaceRoot,
@@ -1448,7 +1591,7 @@ async function performLocalWorktreeCreate(
             sparseDirectories,
             baseBranch,
             settings.refreshLocalBaseRefOnWorktreeCreate,
-            preparedWorktreeOptions
+            newBranchOptions
           )
         }
 
@@ -1470,14 +1613,20 @@ async function performLocalWorktreeCreate(
           baseBranch,
           settings.refreshLocalBaseRefOnWorktreeCreate,
           false,
-          preparedWorktreeOptions
+          newBranchOptions
         )
       })) ?? {}
   } catch (error) {
     if (shouldRetireGeneratedName && failedWorktreeCreationNeedsRetirement(error)) {
       await retireGeneratedWorktreeName(store, repo, settings, effectiveSanitizedName)
     }
-    throw error
+    throw exactName
+      ? await exactNameLateCollision(error, {
+          branchName,
+          worktreePath,
+          pathExists: async (path) => existsSync(path)
+        })
+      : error
   }
   // Creation makes the checkout listable; older detected scans must not publish or cache pre-create catalogs.
   runWorktreeChangeInvalidators(repo.id)
@@ -1519,6 +1668,7 @@ async function performLocalWorktreeCreate(
   const metaUpdates: Partial<WorktreeMeta> = {
     // Path IDs can be reused after external deletion; rotate instance identity to reject stale lineage.
     instanceId: randomUUID(),
+    ...(args.comment ? { comment: args.comment } : {}),
     ...(store.getProjectHostSetups
       ? getProjectHostSetupWorktreeMeta(store.getProjectHostSetups(), repo)
       : {}),
@@ -1533,7 +1683,9 @@ async function performLocalWorktreeCreate(
     ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
     ...(args.cliProvenance ? { cliProvenance: args.cliProvenance } : {}),
     baseRef: metadataBaseRef,
-    ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),
+    ...(checkoutExistingBranch || args.branchIntent === 'open-existing-v2'
+      ? { preserveBranchOnDelete: true }
+      : {}),
     ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),
     ...resolveWorktreeCreateDisplayNameMeta(
       requestedDisplayName,
@@ -1581,12 +1733,11 @@ async function performLocalWorktreeCreate(
     return { worktree: mergeWorktree(repo.id, created, meta) }
   })
   onWorkspaceCreated?.(worktreeId)
-  const { lineage: worktreeLineage, workspaceLineage } = recordWorkspaceLineageForCreatedWorktree(
-    store,
-    args,
-    worktree,
-    now
-  )
+  const {
+    lineage: worktreeLineage,
+    workspaceLineage,
+    crossStoreLineage
+  } = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now, noteLineage)
   // Reuse complete listing roots for authorization; incomplete recovery must not replace the repo's full root set.
   if (listingComplete) {
     registerWorktreeRootsForRepo(
@@ -1642,11 +1793,22 @@ async function performLocalWorktreeCreate(
   // Created branch hooks are authoritative; benign divergence from primary must not disable setup (#1280).
   let setup: CreateWorktreeResult['setup']
   let defaultTabs: CreateWorktreeResult['defaultTabs']
+  let setupTrustMismatch: SetupTrustMismatch | undefined
   await timing.time('prepare_setup', async () => {
     const createdYamlHooks = loadHooks(worktreePath)
     const createdEffectiveHooks = getEffectiveHooksFromConfig(repo, createdYamlHooks)
+    setupTrustMismatch = checkCreatedWorktreeSetupTrust(
+      repo,
+      createdYamlHooks,
+      args.setupDecision,
+      args
+    )
+    // Only the approved content may run; the client re-prompts with the branch's.
+    const setupDecision = setupTrustMismatch ? 'skip' : args.setupDecision
     try {
-      defaultTabs = getDefaultTabsLaunch(createdYamlHooks, repo, args.setupDecision)
+      const launch = getDefaultTabsLaunch(createdYamlHooks, repo, setupDecision)
+      // Approving the branch's commands opens the command tabs later.
+      defaultTabs = setupTrustMismatch ? defaultTabsWithoutCommands(launch) : launch
     } catch (error) {
       // Unapproved target-branch tab commands may create tabs but must not execute.
       console.warn(`[hooks] default tab commands skipped for ${worktreePath}:`, error)
@@ -1658,7 +1820,7 @@ async function performLocalWorktreeCreate(
     let shouldLaunchSetup = false
     if (setupScript) {
       try {
-        shouldLaunchSetup = shouldRunSetupForCreate(repo, args.setupDecision)
+        shouldLaunchSetup = shouldRunSetupForCreate(repo, setupDecision)
       } catch (error) {
         // Target branch can add unseen hooks; skip unapproved setup without failing the existing workspace.
         console.warn(`[hooks] setup hook skipped for ${worktreePath}:`, error)
@@ -1667,7 +1829,7 @@ async function performLocalWorktreeCreate(
     if (setupScript && shouldLaunchSetup) {
       try {
         // Main generates setup scripts without executing them; generation failure leaves the created workspace usable.
-        setup = createSetupRunnerScript(
+        setup = await createSetupRunnerScript(
           repo,
           worktreePath,
           setupScript,
@@ -1690,7 +1852,8 @@ async function performLocalWorktreeCreate(
       startup: args.startup,
       setup,
       defaultTabs,
-      createdWithAgent: args.createdWithAgent
+      createdWithAgent: args.createdWithAgent,
+      automationCreate: Boolean(args.automationProvenance)
     })
   )
 
@@ -1717,6 +1880,9 @@ async function performLocalWorktreeCreate(
     repo.id,
     worktreeLineage?.parentWorktreeId
   )
+  const createWarning = [includeCopyWarning, addResult.upstreamWarning, stagedStartup.warning]
+    .filter((warning): warning is string => Boolean(warning))
+    .reduce<string | undefined>(appendWorktreeCreateWarning, undefined)
   return {
     worktree: {
       ...worktree,
@@ -1727,6 +1893,7 @@ async function performLocalWorktreeCreate(
     },
     ...(worktreeLineage ? { lineage: worktreeLineage } : {}),
     ...(workspaceLineage ? { workspaceLineage } : {}),
+    ...(crossStoreLineage ? { crossStoreLineage } : {}),
     ...(provisionedByHost
       ? {}
       : {
@@ -1745,11 +1912,8 @@ async function performLocalWorktreeCreate(
       : {}),
     ...(stagedStartup.startupTerminal ? { startupTerminal: stagedStartup.startupTerminal } : {}),
     ...(baseFallback ? { baseFallback } : {}),
-    ...(stagedStartup.warning
-      ? { warning: appendWorktreeCreateWarning(includeCopyWarning, stagedStartup.warning) }
-      : includeCopyWarning
-        ? { warning: includeCopyWarning }
-        : {}),
+    ...(setupTrustMismatch ? { setupTrustMismatch } : {}),
+    ...(createWarning ? { warning: createWarning } : {}),
     timing: timing.finish()
   }
 }

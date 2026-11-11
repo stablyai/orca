@@ -41,13 +41,18 @@ export const ProjectHostSetupClone = z.object({
   hostId: RequestedHostId,
   url: requiredString('Missing clone URL'),
   destination: requiredString('Missing clone destination'),
+  folderName: OptionalString,
   displayName: OptionalString
 })
 
 export const LocalWindowsRuntimePreference = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('inherit-global') }),
   z.object({ kind: z.literal('windows-host') }),
-  z.object({ kind: z.literal('wsl'), distro: requiredString('Missing WSL distro') })
+  z.object({
+    kind: z.literal('wsl'),
+    distro: requiredString('Missing WSL distro'),
+    git: z.literal('windows-host').optional()
+  })
 ])
 
 export const ProjectUpdate = z.object({

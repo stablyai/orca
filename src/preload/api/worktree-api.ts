@@ -1,3 +1,5 @@
+import type { WorkspaceMetadataSet } from '../../shared/worktree/workspace-metadata-set'
+import type { SparsePresetFailure } from '../../shared/worktree/sparse-preset-failure'
 import type {
   ForgetRemovedWorktreesForExecutionHostArgs,
   ForgetRemovedWorktreesForExecutionHostResult,
@@ -15,8 +17,8 @@ import type { RetiredNameRegistry } from '../../shared/worktree/retired-name-reg
 import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
-} from '../../shared/folder-workspace-path-status'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+} from '../../shared/folder-workspaces/folder-workspace-path-status'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type {
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent
@@ -28,6 +30,8 @@ import type {
   CreateWorktreeResult,
   ForceDeleteWorktreeBranchResult,
   RemoveWorktreeResult,
+  RunApprovedWorktreeSetupArgs,
+  RunApprovedWorktreeSetupResult,
   SparsePreset
 } from '../../shared/worktree/create-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../shared/worktree/lineage-types'
@@ -59,8 +63,12 @@ export type WorktreeApi = {
     args: ForgetRemovedWorktreesForExecutionHostArgs
   ) => Promise<ForgetRemovedWorktreesForExecutionHostResult>
   cancelListDetected?: (args: { providerRequestId: ProviderRequestId }) => Promise<void>
+  /** User act: scan a local repo inside its WSL distro's user-act scope, which may start it. */
+  scanStartingWslDistro?: (args: { repoId: string }) => Promise<void>
   create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
   adoptProvisionedRoot: (args: AdoptProvisionedRootArgs) => Promise<CreateWorktreeResult>
+  /** Absent on clients whose host cannot run an existing worktree's approved setup. */
+  runApprovedSetup?: (args: RunApprovedWorktreeSetupArgs) => Promise<RunApprovedWorktreeSetupResult>
   /** Local creates report progress by creationId; remote/runtime creates emit nothing. */
   onCreateProgress: (callback: (data: CreateWorktreeProgressEvent) => void) => () => void
   prefetchCreateBase: (args: { repoId: string; baseBranch?: string }) => Promise<void>
@@ -70,6 +78,8 @@ export type WorktreeApi = {
     headRefName?: string
     baseRefName?: string
     isCrossRepository?: boolean
+    /** The user creating or launching from the PR: it may start a stopped WSL distro. */
+    wakeWslDistro?: boolean
   }) => Promise<GitHubPrStartPoint | { error: string }>
   /** Same-project MRs return a remote branch; forks fetch the MR head ref and return its SHA. */
   resolveMrBase: (args: {
@@ -78,6 +88,8 @@ export type WorktreeApi = {
     sourceBranch?: string
     targetBranch?: string
     isCrossRepository?: boolean
+    /** The user creating from the MR: it may start a stopped WSL distro. */
+    wakeWslDistro?: boolean
   }) => Promise<
     { baseBranch: string; compareBaseRef?: string; pushTarget?: GitPushTarget } | { error: string }
   >
@@ -88,7 +100,10 @@ export type WorktreeApi = {
   sleep: (request: WorkspaceSleepRequest) => Promise<WorkspaceSleepOutcome[]>
   sleepReopened: (worktreeId: string) => Promise<void>
   /** True once running, so the renderer's subsequent spawn reattaches. */
-  resumeSleptPane: (pane: { worktreeId: string; tabId: string; leafId: string }) => Promise<boolean>
+  resumeSleptPane: (
+    pane: { worktreeId: string; tabId: string; leafId: string },
+    automatic?: boolean
+  ) => Promise<boolean>
   /** Drops main's workspace-sleep record only while no tab holds its pane. */
   retireStrandedSleepRecord: (args: { worktreeId: string; paneKey: string }) => Promise<void>
   remove: (args: {
@@ -123,12 +138,16 @@ export type WorktreeApi = {
   listLineage: () => Promise<{
     lineage: Record<string, WorktreeLineage>
     workspaceLineage?: Record<string, WorkspaceLineage>
+    /** Read through validCrossStoreLineage; older hosts omit it. */
+    crossStoreLineage?: Record<string, unknown>
+    /** This store's identity, which other stores' records name; absent when unknown. */
+    installationId?: string
   }>
   updateLineage: (args: {
     worktreeId: string
     parentWorktreeId?: string
     noParent?: boolean
-  }) => Promise<WorktreeLineage | null>
+  }) => Promise<{ lineage: WorktreeLineage | null; workspaceLineage?: WorkspaceLineage | null }>
   persistSortOrder: (args: { orderedIds: string[]; hostIds?: string[] }) => Promise<void>
   /** Last failure output; memory-only, cleared on restart or when the failure clears. */
   getBranchRenameFailureOutput: (args: { worktreeId: string }) => Promise<string | null>
@@ -139,6 +158,7 @@ export type WorktreeApi = {
   onHeadIdentitiesChanged: (
     callback: (data: { repoId: string; identities: WorktreeHeadIdentity[] }) => void
   ) => () => void
+  onMetadataSet?: (callback: (set: WorkspaceMetadataSet) => void) => () => void
   onBaseStatus: (callback: (data: WorktreeBaseStatusEvent) => void) => () => void
   onRemoteBranchConflict: (
     callback: (data: WorktreeRemoteBranchConflictEvent) => void
@@ -190,7 +210,7 @@ export type SparsePresetsApi = {
     id?: string
     name: string
     directories: string[]
-  }) => Promise<SparsePreset>
+  }) => Promise<SparsePreset | SparsePresetFailure>
   remove: (args: { repoId: string; presetId: string }) => Promise<void>
   onChanged: (callback: (data: { repoId: string }) => void) => () => void
 }

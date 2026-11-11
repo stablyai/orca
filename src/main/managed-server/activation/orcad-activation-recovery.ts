@@ -14,15 +14,16 @@ import {
   withStaleOrcadActivationRecoveryLock
 } from './orcad-activation-lock'
 import { RemoteInstallLockBusyError } from '../install/remote-install-lock'
-import { ensureOrcadSlotServing, resolveOrcadSlotIdentity } from '../../ssh/orcad-recovery-slot'
+import { ensureOrcadSlotServing, resolveOrcadSlotIdentity } from './orcad-recovery-slot'
 import { reconcileOrcadDecommission } from '../lifecycle/orcad-decommission-recovery'
 import {
   recoverOrcadIncumbent,
   type OrcadIncumbentRecoveryOptions
-} from '../../ssh/orcad-incumbent-recovery'
+} from './orcad-incumbent-recovery'
 import type { OrcadManagedRefusal } from '../../../shared/orcad-managed-runtime'
-import { resumeInterruptedOrcadCandidate } from '../../ssh/orcad-interrupted-candidate-resume'
+import { resumeInterruptedOrcadCandidate } from './orcad-interrupted-candidate-resume'
 import { errorMessage } from '../../../shared/error-message'
+import { isOrcadLaunchFailure } from './orcad-launch-failure'
 
 export type OrcadActivationRecoveryResult =
   | { outcome: 'none' }
@@ -33,15 +34,23 @@ export type OrcadActivationRecoveryResult =
       activeVersion: string | null
       readiness: ServeReadiness | null
     }
-  | OrcadManagedRefusal
+  /** A launch failure behind an unverifiable refusal still ended a run. */
+  | (OrcadManagedRefusal & { launchFailure?: Error })
 
 type OrcadActivationRecoveryOptions = OrcadIncumbentRecoveryOptions
 
 export const ORCAD_RECOVERY_UNVERIFIABLE_CODE = 'orcad_recovery_unverifiable'
 
+/** Both pre-fence answers, read moments ago on this connect; they only skip the same two reads. */
+export type OrcadActivationIdlePreRead = { transactionAbsent: boolean; fenceOpen: boolean }
+
 export async function recoverInterruptedOrcadActivation(
-  options: OrcadActivationRecoveryOptions
+  options: OrcadActivationRecoveryOptions,
+  preRead?: OrcadActivationIdlePreRead
 ): Promise<OrcadActivationRecoveryResult> {
+  if (preRead?.transactionAbsent && preRead.fenceOpen) {
+    return { outcome: 'none' }
+  }
   try {
     if (
       !(await readOrcadActivationTransaction(options)) &&
@@ -77,7 +86,8 @@ export async function recoverInterruptedOrcadActivation(
       code: ORCAD_RECOVERY_UNVERIFIABLE_CODE,
       reason:
         `The interrupted activation could not be reconciled safely: ${errorMessage(error)} ` +
-        'The host remains fenced.'
+        'The host remains fenced.',
+      ...(isOrcadLaunchFailure(error) ? { launchFailure: error } : {})
     }
   }
 }
@@ -114,12 +124,15 @@ async function reconcileOrcadTransaction(
       readiness: await ensureOrcadSlotServing(options, identity)
     }
   }
+  let launchFailure: Error | undefined
   if (transaction.operation === 'activate' && plan.launchedVersion) {
     const readiness = await resumeInterruptedOrcadCandidate(options, transaction)
     if (readiness && 'outcome' in readiness) {
       return readiness
     }
-    if (readiness) {
+    if (readiness && 'launchFailure' in readiness) {
+      launchFailure = readiness.launchFailure
+    } else if (readiness) {
       return {
         outcome: 'recovered',
         resolution: 'committed',
@@ -138,7 +151,7 @@ async function reconcileOrcadTransaction(
     launchedFromState: plan.launchedFromState
   })
   return recovery.outcome === 'refused'
-    ? recovery
+    ? { ...recovery, ...(launchFailure ? { launchFailure } : {}) }
     : {
         outcome: 'recovered',
         resolution: 'restored-incumbent',

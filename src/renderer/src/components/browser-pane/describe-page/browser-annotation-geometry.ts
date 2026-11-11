@@ -5,8 +5,8 @@ import type {
   BrowserGrabPayload,
   BrowserGrabRect,
   BrowserPageAnnotation
-} from '../../../../../shared/browser-grab-types'
-import type { BrowserAnnotationViewportReport } from '../../../../../shared/browser-annotation-viewport-report'
+} from '../../../../../shared/browser/element-grab/browser-grab-types'
+import type { BrowserAnnotationViewportReport } from '../../../../../shared/browser/annotations/browser-annotation-viewport-report'
 import { translate } from '@/i18n/i18n'
 
 export type BrowserOverlaySide = 'top' | 'bottom' | 'left' | 'right'

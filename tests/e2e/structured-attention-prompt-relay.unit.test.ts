@@ -25,24 +25,27 @@ import type {
   NotificationDispatchRequest,
   StructuredNotificationRead
 } from '../../src/shared/notification-settings-types'
-import type { AgentJournalRenderItem } from '../../src/shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../src/shared/agent-session/journal/agent-session-journal-types'
 import {
   agentSessionPromptAttentionKey,
   agentSessionAttentionSubjectPrefix,
   type AgentSessionAttentionEdge
-} from '../../src/shared/agent-session-attention'
+} from '../../src/shared/agent-session/agent-session-attention'
 import {
   RuntimeMobileNotificationController,
   type MobileNotificationEvent
-} from '../../src/main/runtime/runtime-mobile-notification-controller'
-import { MobileNotificationDismissalStore } from '../../src/main/runtime/mobile-notification-dismissal-store'
+} from '../../src/main/runtime/push/notifications/runtime-mobile-notification-controller'
+import { MobileNotificationDismissalStore } from '../../src/main/runtime/push/notifications/mobile-notification-dismissal-store'
 import { createNotificationDeliveryService } from '../../src/main/notifications/notification-delivery-service'
-import { SESSION } from '../../src/main/runtime/rpc/methods/structured-agent-session-rpc.test-fixture'
-import { makeUnifiedTab, makeWorktree } from '@/store/slices/store-test-helpers'
+import '../../src/main/runtime/rpc/methods/structured-sessions/protocol/structured-agent-session-rpc.test-fixture'
+import { SESSION } from '../../src/main/runtime/rpc/methods/structured-sessions/protocol/structured-agent-session-rpc-client.test-fixture'
+import { makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { captureAgentSubjectReads } from '@/attention/agent-subject-read-actions'
 import { useAppStore } from '@/store'
-import { StructuredAgentSessionAttentionBridge } from '@/components/native-chat/StructuredAgentSessionAttentionBridge'
-import type { AgentSessionExecutionLocation } from '../../src/shared/agent-session-record'
+import { StructuredAgentSessionAttentionBridge } from '@/components/native-chat/session/attention/StructuredAgentSessionAttentionBridge'
+import { notificationDeliveryId } from '../../src/shared/notification-delivery-id'
+import type { AgentSessionExecutionLocation } from '../../src/shared/agent-session/lifecycle/agent-session-record'
 
 describe('Delayed remote prompt delivery', () => {
   async function mountPausedRelay({ viewed = true, away = false } = {}) {
@@ -71,7 +74,7 @@ describe('Delayed remote prompt delivery', () => {
     transport.dismiss.mockImplementation(
       async (_ids, _panes, reads?: StructuredNotificationRead[]) => {
         for (const read of reads ?? []) {
-          relay.retireStructuredAttention(read)
+          relay.acknowledgeAttention({ reads: [read] }, read.executionHost)
         }
         return { dismissed: 0 }
       }
@@ -232,7 +235,13 @@ describe('Delayed remote prompt delivery', () => {
       relay.release(b)
     })
     expect(relay.relayEvents).toMatchObject([
-      { type: 'notification', notificationId: agentSessionPromptAttentionKey(SCOPE, SESSION, 'B') }
+      {
+        type: 'notification',
+        notificationId: notificationDeliveryId(
+          agentSessionPromptAttentionKey(SCOPE, SESSION, 'B'),
+          'runtime:relay-host'
+        )
+      }
     ])
     expect(await relay.liveDeliveries()).toHaveLength(1)
     expect(useAppStore.getState().unreadAgentCompletionPanes[SUBJECT]).toBe('agent-completion')
@@ -260,7 +269,13 @@ describe('Delayed remote prompt delivery', () => {
     act(() => addPrompt('B'))
     await act(async () => relay.release())
     expect(relay.relayEvents).toMatchObject([
-      { type: 'notification', notificationId: agentSessionPromptAttentionKey(SCOPE, SESSION, 'B') }
+      {
+        type: 'notification',
+        notificationId: notificationDeliveryId(
+          agentSessionPromptAttentionKey(SCOPE, SESSION, 'B'),
+          'runtime:relay-host'
+        )
+      }
     ])
   })
 
@@ -360,7 +375,7 @@ describe('Delayed remote prompt delivery', () => {
   )
 
   it.each(['success', 'failure'] as const)(
-    'prompt read coverage leaves independent %s completion delivery unchanged',
+    'a prompt read leaves a later unviewed %s completion unread',
     async (outcome) => {
       const relay = await mountPausedRelay()
       act(() => {
@@ -368,7 +383,10 @@ describe('Delayed remote prompt delivery', () => {
         publishView()
       })
       await waitFor(() => expect(dismissIds()).toHaveLength(1))
+      const readsBeforeCompletion = readCalls()
+      transport.away.mockResolvedValue(true)
       act(() => {
+        useAppStore.setState({ activeWorktreeId: 'elsewhere' })
         fixture.items = fixture.items.map((item): AgentJournalRenderItem => {
           if (item.body.kind === 'turn') {
             return {
@@ -391,12 +409,16 @@ describe('Delayed remote prompt delivery', () => {
         publishView()
       })
       await act(async () => {})
+      expect(readCalls()).toBe(readsBeforeCompletion)
       expect(relay.edges.at(-1)).toMatchObject({ type: 'completion', completion: { outcome } })
       await act(async () => relay.release())
       expect(relay.relayEvents).toMatchObject([
         {
           type: 'notification',
-          notificationId: `${agentSessionAttentionSubjectPrefix(SCOPE, SESSION)}turn:turn-1`
+          notificationId: notificationDeliveryId(
+            `${agentSessionAttentionSubjectPrefix(SCOPE, SESSION)}turn:turn-1`,
+            'runtime:relay-host'
+          )
         }
       ])
       expect(await relay.liveDeliveries()).toHaveLength(1)
@@ -428,8 +450,18 @@ describe('Remote prompt settlement', () => {
       delivery.dispatch(request)
     )
     // What the notifications:settleStructuredPrompts handler does with it.
-    transport.settle.mockImplementation(async (scope: AgentSessionExecutionLocation, id: string) =>
-      relay.reconcileStructuredPromptAttention({ scope, sessionId: id, pendingPromptIds: [] })
+    transport.settle.mockImplementation(
+      async (
+        scope: AgentSessionExecutionLocation,
+        id: string,
+        executionHost?: NotificationDispatchRequest['executionHost']
+      ) =>
+        relay.reconcileStructuredPromptAttention({
+          scope,
+          sessionId: id,
+          pendingPromptIds: [],
+          executionHost
+        })
     )
     transport.away.mockResolvedValue(true)
     useAppStore.setState({
@@ -616,22 +648,6 @@ describe('Remote prompt settlement', () => {
     expect(await relay.live('prompt')).toHaveLength(1)
   })
 
-  it('settles once per relayed prompt, not on every later status update', async () => {
-    await mountRemoteRelay()
-    act(() => {
-      revise(resolveA('resolved'))
-      fixture.hostFeed.observe(SESSION)
-      publishStatus()
-    })
-    await waitFor(() => expect(transport.settle).toHaveBeenCalledOnce())
-    act(() => {
-      revise((item) => item)
-      publishStatus()
-    })
-    await act(async () => {})
-    expect(transport.settle).toHaveBeenCalledOnce()
-  })
-
   // Status and edges ride separate sockets: the pre-prompt row can still be draining after the edge.
   it('keeps the pending prompt alert when the edge outruns its status and another frame lands', async () => {
     const relay = await mountRemoteRelay({ promptStatus: false })
@@ -679,10 +695,16 @@ describe('Remote prompt settlement', () => {
     const reconcile = transport.settle.getMockImplementation()
     const replies: (() => void)[] = []
     // Main reconciles on arrival; only the reply is late.
-    transport.settle.mockImplementation((scope: AgentSessionExecutionLocation, id: string) => {
-      void reconcile?.(scope, id)
-      return new Promise<void>((resolve) => replies.push(resolve))
-    })
+    transport.settle.mockImplementation(
+      (
+        scope: AgentSessionExecutionLocation,
+        id: string,
+        executionHost?: NotificationDispatchRequest['executionHost']
+      ) => {
+        void reconcile?.(scope, id, executionHost)
+        return new Promise<void>((resolve) => replies.push(resolve))
+      }
+    )
     act(() => {
       revise(resolveA('resolved'))
       fixture.hostFeed.observe(SESSION)

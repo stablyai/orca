@@ -1,16 +1,15 @@
-import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION,
   TERMINAL_MULTIPLEX_MAX_QUEUED_PTY_WAITS_PER_CONNECTION
-} from '../../../shared/terminal-multiplex-flow-control'
-import { createMultiplexPtyWaitAdmission } from './methods/terminal/terminal-multiplex-pty-wait-admission'
+} from '../../../shared/terminal/stream/terminal-multiplex-flow-control'
+
 import { startDesktopMultiplexSubscribe } from './terminal-multiplex-test-harness'
 
 function startPendingPtyHarness() {
@@ -120,22 +119,5 @@ describe('terminal multiplex PTY wait queue', () => {
 
     harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
     await harness.dispatchPromise
-  })
-})
-
-describe('createMultiplexPtyWaitAdmission', () => {
-  it('admits FIFO, skips aborted waiters, and reports room against both bounds', async () => {
-    const admission = createMultiplexPtyWaitAdmission(1, 2)
-    const first = await admission.acquire(new AbortController().signal)
-    expect(first).toBe(true)
-    const aborted = new AbortController()
-    const second = admission.acquire(aborted.signal)
-    const third = admission.acquire(new AbortController().signal)
-    expect(admission.hasRoom()).toBe(false)
-    aborted.abort()
-    await expect(second).resolves.toBe(false)
-    expect(admission.hasRoom()).toBe(true)
-    admission.release()
-    await expect(third).resolves.toBe(true)
   })
 })

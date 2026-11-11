@@ -1,28 +1,33 @@
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import {
   addOrUpdateEnvironmentFromPairingCode,
   resolveEnvironment,
-  RuntimeEnvironmentStoreError,
   updateEnvironmentFromPairingCode
-} from '../../../shared/runtime-environment-store'
+} from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { RuntimeEnvironmentStoreError } from '../../../shared/remote-runtime/host-store/runtime-environment-store-records'
 import {
   parseHostAccessLink,
   type ParsedHostAccessLink
-} from '../../../shared/remote-pairing-address'
+} from '../../../shared/remote-runtime/pairing/remote-pairing-address'
 import {
   verifyRemotePairingRuntimeStatus,
   type RemotePairingFailure,
   type VerifyAndAddRuntimeEnvironmentResult
-} from '../../../shared/remote-pairing-verification'
+} from '../../../shared/remote-runtime/pairing/remote-pairing-verification'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
-import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
+import { exchangeRemotePairingTicket } from '../../../shared/remote-runtime/pairing/remote-pairing-ticket-exchange'
+import { sendRemoteRuntimeRequestOnSocket } from '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import {
   getPreferredPairingOffer,
   isEphemeralVmRuntimeEnvironment,
   redactRuntimeEnvironment
-} from '../../../shared/runtime-environments'
-import type { RuntimeStatus } from '../../../shared/runtime-types'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
+import {
+  remoteServerPairingFailureText,
+  type RemoteServerPairingFailureCode
+} from '../../../shared/remote-runtime/pairing/remote-server-pairing-failure-copy'
 
 type VerifyAndAddRuntimeEnvironmentArgs = {
   name: string
@@ -53,14 +58,17 @@ async function verifyPairingCode(
     }
   }
   try {
-    const response = await sendRemoteRuntimeRequest<RuntimeStatus>(
+    const response = await sendRemoteRuntimeRequestOnSocket<RuntimeStatus>(
       pairedRuntimeConnectionFromOffer(parsed.value.pairing),
       'status.get',
       undefined,
       15_000,
       undefined,
       undefined,
-      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+      undefined,
+      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+      undefined,
+      undefined
     )
     if (!response.ok) {
       return {
@@ -93,23 +101,23 @@ export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
   }
   const { link, runtimeStatus } = verified
   const usesSshTunnel = link.endpointKind === 'loopback' && args.allowLoopback === true
+  // Save a token only this computer holds; the link stops working once it is used.
+  const pairingCode = await exchangeRemotePairingTicket({
+    pairingCode: args.pairingCode,
+    offer: link.pairing,
+    hostCapabilities: runtimeStatus.capabilities
+  })
   let outcome: ReturnType<typeof addOrUpdateEnvironmentFromPairingCode>
   try {
     outcome = addOrUpdateEnvironmentFromPairingCode(userDataPath, {
       ...args,
+      pairingCode,
       // Only a verified key match permits updating an existing server identity.
       runtimeId: runtimeStatus.runtimeId,
       ...(usesSshTunnel ? { connectionDependency: 'ssh-tunnel' as const } : {})
     })
   } catch (error) {
-    return {
-      ok: false,
-      kind: 'environment-save-failed',
-      message:
-        error instanceof RuntimeEnvironmentStoreError && error.code === 'invalid_argument'
-          ? error.message
-          : 'Orca verified the host but could not save it. Check local settings storage and try again.'
-    }
+    return pairingSaveFailure(error, 'hostSaveFailed')
   }
   return {
     ok: true,
@@ -126,11 +134,7 @@ export async function verifyAndRepairRuntimeEnvironmentFromPairingCode(
 ): Promise<VerifyAndAddRuntimeEnvironmentResult> {
   const existing = resolveEnvironment(userDataPath, args.selector)
   if (isEphemeralVmRuntimeEnvironment(existing)) {
-    return {
-      ok: false,
-      kind: 'environment-save-failed',
-      message: 'This server belongs to a cloud workspace, which pairs it again when it resumes.'
-    }
+    return pairingSaveFailure(null, 'repairCloudWorkspace')
   }
   // SSH tunnel pairings legitimately use loopback links.
   const verified = await verifyPairingCode(
@@ -148,27 +152,46 @@ export async function verifyAndRepairRuntimeEnvironmentFromPairingCode(
       message: 'This pairing link is for a different server.'
     }
   }
+  const pairingCode = await exchangeRemotePairingTicket({
+    pairingCode: args.pairingCode,
+    offer: verified.link.pairing,
+    hostCapabilities: verified.runtimeStatus.capabilities
+  })
   let environment: ReturnType<typeof updateEnvironmentFromPairingCode>
   try {
     environment = updateEnvironmentFromPairingCode(userDataPath, existing.id, {
-      pairingCode: args.pairingCode,
+      pairingCode,
       // The verified same host may have restarted with a new runtimeId.
       runtimeId: verified.runtimeStatus.runtimeId
     })
   } catch (error) {
-    return {
-      ok: false,
-      kind: 'environment-save-failed',
-      message:
-        error instanceof RuntimeEnvironmentStoreError && error.code === 'invalid_argument'
-          ? error.message
-          : 'Orca verified the server but could not save the new pairing. Check local settings storage and try again.'
-    }
+    return pairingSaveFailure(error, 'repairSaveFailed')
   }
   return {
     ok: true,
     environment: redactRuntimeEnvironment(environment),
     runtimeStatus: verified.runtimeStatus
+  }
+}
+
+/** A store refusal keeps its own message and code; anything else gets the generic save failure. */
+function pairingSaveFailure(
+  error: unknown,
+  fallback: RemoteServerPairingFailureCode
+): RemotePairingFailure {
+  if (error instanceof RuntimeEnvironmentStoreError && error.code === 'invalid_argument') {
+    return {
+      ok: false,
+      kind: 'environment-save-failed',
+      message: error.message,
+      ...error.pairingFailure
+    }
+  }
+  return {
+    ok: false,
+    kind: 'environment-save-failed',
+    message: remoteServerPairingFailureText(fallback),
+    errorCode: fallback
   }
 }
 

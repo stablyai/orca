@@ -1,10 +1,10 @@
 import { BrowserError } from '../browser/browser-error'
 import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../shared/runtime-types'
-import type { RuntimeBrowserCommands } from '../runtime/browser/browser-commands'
+import type { RuntimeBrowserCommands } from '../runtime/browser/commands/browser-commands'
 import {
   browserUnavailableError,
   setRuntimeBrowserCommandsFactory
-} from '../runtime/runtime-browser-commands-factory'
+} from '../runtime/browser/installation/runtime-browser-commands-factory'
 import {
   resolveOrcadBrowserProvider,
   type OrcadBrowserProvider,
@@ -46,6 +46,7 @@ export function startOrcadBrowserProvider(options: OrcadBrowserProviderOptions):
       })
     },
     {
+      supportsGoogleCookieClear: () => provider?.supportsGoogleCookieClear?.() === true,
       headless: true,
       clientHostingWithoutEngine: true,
       isAvailable: engineAvailable

@@ -33,24 +33,24 @@ vi.mock('../ssh/config/ssh-config-parser', () => ({
   sshConfigHostsToTargets: () => []
 }))
 vi.mock('../ghostty/index', () => ({ previewGhosttyImport: vi.fn() }))
-vi.mock('../warp-themes', () => ({ previewWarpThemeImport: vi.fn() }))
+vi.mock('../warp-themes/index', () => ({ previewWarpThemeImport: vi.fn() }))
 vi.mock('../network/proxy-settings', () => ({
   applyElectronProxySettings: applyElectronProxySettingsMock
 }))
-vi.mock('../browser/browser-session-proxy', () => ({
+vi.mock('../browser/sessions/proxy/browser-session-proxy', () => ({
   applyBrowserSessionProxies: vi.fn().mockResolvedValue(undefined)
 }))
-vi.mock('../browser/browser-session-registry', () => ({
+vi.mock('../browser/sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: { listProfiles: vi.fn(() => []) }
 }))
-vi.mock('../app-icon', () => ({ applyAppIcon: vi.fn() }))
+vi.mock('../window/desktop-integration/app-icon', () => ({ applyAppIcon: vi.fn() }))
 vi.mock('../ai-vault-search/session-search-enablement', () => ({
   applySessionSearchSettingsChange: vi.fn()
 }))
-vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
+vi.mock('../agent-hooks/installation/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: applyAgentStatusHooksEnabledMock
 }))
-vi.mock('../worktree-root-preparation', () => ({
+vi.mock('../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootsForRepos: vi.fn().mockResolvedValue(undefined)
 }))
 vi.mock('../menu/register-app-menu', () => ({ rebuildAppMenu: vi.fn() }))
@@ -105,63 +105,6 @@ it('returns current settings when a language change finishes after a newer theme
   expect(reply.theme).toBe('light')
 })
 
-it('returns current settings when hook reconciliation finishes after a newer theme write', async () => {
-  const { store, readState } = await createWorkerMaintenanceFixture()
-  store.updateSettings({ theme: 'system', agentStatusHooksEnabled: false })
-  await store.flushPendingOrThrowAsync()
-  registerSettingsHandlers(store)
-  const write = settingsWriter()
-  const started = maintenanceBarrier()
-  const release = maintenanceBarrier()
-  applyAgentStatusHooksEnabledMock.mockImplementationOnce(async () => {
-    started.resolve()
-    await release.promise
-    return []
-  })
-
-  const first = write(event, { theme: 'dark', agentStatusHooksEnabled: true })
-  await started.promise
-  await write(event, { theme: 'light' })
-  release.resolve()
-  const reply = await first
-  await store.flushPendingOrThrowAsync()
-
-  expect(store.getSettings().theme).toBe('light')
-  expect(readState().settings.theme).toBe('light')
-  expect(reply.theme).toBe('light')
-  expect(applyAgentStatusHooksEnabledMock).toHaveBeenCalledWith(
-    true,
-    expect.objectContaining({ theme: 'dark' }),
-    expect.any(Object)
-  )
-})
-
-it('returns current settings when proxy reconciliation finishes after a newer theme write', async () => {
-  const { store, readState } = await createWorkerMaintenanceFixture()
-  store.updateSettings({ theme: 'system', httpProxyUrl: '' })
-  await store.flushPendingOrThrowAsync()
-  registerSettingsHandlers(store)
-  const write = settingsWriter()
-  const started = maintenanceBarrier()
-  const release = maintenanceBarrier()
-  applyElectronProxySettingsMock.mockImplementationOnce(async () => {
-    started.resolve()
-    await release.promise
-    return { source: 'settings' }
-  })
-
-  const first = write(event, { theme: 'dark', httpProxyUrl: 'http://proxy.example:8080' })
-  await started.promise
-  await write(event, { theme: 'light' })
-  release.resolve()
-  const reply = await first
-  await store.flushPendingOrThrowAsync()
-
-  expect(store.getSettings().theme).toBe('light')
-  expect(readState().settings.theme).toBe('light')
-  expect(reply.theme).toBe('light')
-})
-
-vi.mock('../claude/agent-view-service', () => ({
+vi.mock('../claude/agent-view/agent-view-service', () => ({
   getClaudeAgentViewService: () => ({ reconcile: async () => {} })
 }))

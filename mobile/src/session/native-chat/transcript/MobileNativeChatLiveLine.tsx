@@ -2,7 +2,8 @@ import { useContext } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
 import { nativeChatReasoningDisclosureKey } from '../../../../../src/shared/native-chat/transcript/native-chat-reasoning-row'
-import { formatNativeChatActiveTurnLabel } from '../../../../../src/shared/native-chat-turn-status'
+import { formatMobileNativeChatActiveTurnLabel } from './native-chat-turn-status-copy'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
 import { LoadingSpinner } from '../../../components/LoadingSpinner'
 import { colors, spacing, typography } from '../../../theme/mobile-theme'
@@ -16,18 +17,17 @@ import type { MobileNativeChatLiveLine as LiveLine } from './use-mobile-native-c
 export function MobileNativeChatLiveLine({
   line,
   onToggleReasoning,
-  fontScale,
-  onOpenFile
+  fontScale
 }: {
   line: LiveLine
   onToggleReasoning: (key: string) => void
   fontScale: number
-  onOpenFile?: (relativePath: string) => void
 }): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const { reasoning, reasoningExpanded } = line
   const open = reasoning !== null && reasoningExpanded
-  const label = formatNativeChatActiveTurnLabel(line)
+  const label = formatMobileNativeChatActiveTurnLabel(line, t)
   // Android has no inline selection; the finished row's long-press sheet copies the live text too.
   const { openActions } = useContext(MobileNativeChatRowOverlaysContext)
   return (
@@ -65,8 +65,8 @@ export function MobileNativeChatLiveLine({
           <MobileNativeChatReasoningBody
             positionKey={nativeChatReasoningDisclosureKey(reasoning.message.id)}
             markdown={reasoning.markdown}
+            streaming
             fontScale={fontScale}
-            onOpenFile={onOpenFile}
             onLongPress={INLINE_TEXT_SELECTION ? undefined : () => openActions(reasoning.message)}
           />
         </View>

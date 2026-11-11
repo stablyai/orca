@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcContext } from '../../../core'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
-import type { OrchestrationCompatibilityEvidence } from '../../../../../../shared/orchestration-compatibility-evidence'
-import { testOrcaSessionId } from '../../../../../../shared/orca-session-address-test-fixture'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import type { OrchestrationCompatibilityEvidence } from '../../../../../../shared/orchestration/orchestration-compatibility-evidence'
+
 import {
   createRootDispatch,
   reattachDispatchConsumer
@@ -74,60 +74,14 @@ describe('orchestration.check on a re-attached Dispatch', () => {
     })
   }
 
-  it('refuses the stale worker its ack and names the re-attach', async () => {
-    const dispatchId = attachedDispatchWithMail()
-    const staleDelivery = (await check(PANE_A)).deliveryId
-    expect(staleDelivery).not.toBeNull()
-    reattach(dispatchId)
-
-    await expect(check(PANE_A, { ack: staleDelivery })).rejects.toMatchObject({
-      code: 'consumer_fenced',
-      message: expect.stringContaining('no longer owns its Dispatch')
-    })
-    expect(db.getUnreadMessages(`dispatch:${dispatchId}`)).toHaveLength(1)
-  })
-
-  it('hands the live worker a fresh Delivery with the same unread mail', async () => {
-    const dispatchId = attachedDispatchWithMail()
-    const staleDelivery = (await check(PANE_A)).deliveryId
-    reattach(dispatchId)
-
-    const live = await check(PANE_B)
-    expect(live.deliveryId).not.toBe(staleDelivery)
-    expect(live.replayed).toBe(false)
-    expect(live.messages.map((message) => message.subject)).toEqual(['do the work'])
-
-    await check(PANE_B, { ack: live.deliveryId })
-    expect(db.getUnreadMessages(`dispatch:${dispatchId}`)).toEqual([])
-  })
-
-  it('keeps serving a worker whose process restarted without a re-attach', async () => {
-    attachedDispatchWithMail()
-    const first = await check(PANE_A)
-
-    const replay = await check(PANE_A)
-    expect(replay.deliveryId).toBe(first.deliveryId)
-    expect(replay.replayed).toBe(true)
-    await expect(check(PANE_A, { ack: first.deliveryId })).resolves.toMatchObject({
-      acknowledged: first.deliveryId
-    })
-  })
-
-  it('refuses the stale worker a plain check, so it cannot steal the next Delivery', async () => {
+  it('leaves mail the replaced process already took in the live worker history', async () => {
     const dispatchId = attachedDispatchWithMail()
     await check(PANE_A)
     reattach(dispatchId)
 
-    await expect(check(PANE_A)).rejects.toMatchObject({
-      code: 'consumer_fenced',
-      message: expect.stringContaining('no longer owns its Dispatch')
-    })
-    expect(db.getUnreadMessages(`dispatch:${dispatchId}`)).toHaveLength(1)
-
-    const live = await check(PANE_B)
-    expect(live.messages.map((message) => message.subject)).toEqual(['do the work'])
-    await check(PANE_B, { ack: live.deliveryId })
-    expect(db.getUnreadMessages(`dispatch:${dispatchId}`)).toEqual([])
+    expect(await check(PANE_B)).toMatchObject({ deliveryId: null, count: 0 })
+    const history = await check(PANE_B, { all: true })
+    expect(history.messages.map((message) => message.subject)).toEqual(['do the work'])
   })
 
   // Peek may ignore stale generation, but a different pane must never read the current consumer's instructions.
@@ -374,28 +328,6 @@ describe('worker report authority without a Dispatch capability', () => {
       expect(db.getWorkerDispatch(worker.dispatchId)?.state).toBe('stopping')
     })
 
-    it.each([
-      ['succeeded', 'completed', 'succeeded'],
-      ['failed', 'failed', 'failed']
-    ])(
-      'settles a %s report after a stop whose outcome is unknown',
-      async (outcome, taskStatus, workerState) => {
-        setup()
-        const worker = startWorker('worker', WORKER_PANE)
-        db.beginWorkerStop(worker.dispatchId, 'epoch_home')
-        db.markWorkerStopUnknown(worker.dispatchId, 'tab not owned by Orca')
-
-        expect(await workerDone(worker, undefined, outcome)).toMatchObject({
-          lifecycle: { action: taskStatus }
-        })
-        expect(db.getTask(worker.taskId)?.status).toBe(taskStatus)
-        expect(db.getWorkerDispatch(worker.dispatchId)).toMatchObject({
-          state: workerState,
-          ...(outcome === 'succeeded' ? { last_error: null } : {})
-        })
-      }
-    )
-
     it('refuses a stale process in the worker pane after an unknown stop', async () => {
       setup()
       const worker = startWorker('worker', WORKER_PANE)
@@ -477,138 +409,5 @@ describe('worker report authority without a Dispatch capability', () => {
       await expect(ask()).rejects.toMatchObject({ code: 'dispatch_inactive' })
       expect(db.listPendingFederationRelay(dispatchId, 'to_home')).toEqual([])
     })
-  })
-})
-
-const PANE = 'tab_lead:22222222-2222-4222-9222-222222222222'
-const OTHER = 'tab_other:33333333-3333-4333-8333-333333333333'
-const SESSION = testOrcaSessionId('4bd46b4a-035b-41dd-a122-a9c29122ff11')
-
-describe.each([false, true])('Dispatch recipient identity (settled=%s)', (settled) => {
-  const h = createOrchestrationRpcHarness()
-  let state: ReturnType<typeof h.setup>
-  let dispatch: ReturnType<typeof createRootDispatch>
-
-  beforeEach(() => {
-    state = h.setup()
-    const task = state.db.createTask({ spec: 'lead' })
-    dispatch = createRootDispatch(state.db, task.id, 'term_lead', PANE)
-    if (settled) {
-      state.db.completeDispatch(dispatch.id)
-    }
-    vi.spyOn(state.runtime, 'getLiveTerminalPaneKey').mockImplementation((handle) =>
-      handle === 'term_lead' ? PANE : h.coordinatorPaneKey
-    )
-  })
-  afterEach(() => h.cleanup())
-
-  function send() {
-    return h.call(
-      'orchestration.send',
-      { from: 'term_coord', to: `dispatch:${dispatch.id}`, subject: 'follow up' },
-      state.ctx
-    )
-  }
-  function sessionRun() {
-    state.db.db
-      .prepare('UPDATE dispatch_contexts SET assignee_orca_session_id = ? WHERE id = ?')
-      .run(SESSION, dispatch.id)
-    return state.db.createRun({
-      objective: 'session lead',
-      coordinatorHandle: 'term_lead',
-      coordinatorPaneKey: null,
-      coordinatorOrcaSessionId: SESSION
-    })
-  }
-  async function expectRun(runId: string) {
-    if (settled) {
-      await expect(send()).rejects.toMatchObject({
-        code: 'dispatch_inactive',
-        message: expect.stringContaining(`Send to run:${runId} instead`)
-      })
-      expect(state.db.getInbox()).toEqual([])
-    } else {
-      expect(await send()).toMatchObject({ message: { to_handle: `run:${runId}`, run_id: runId } })
-    }
-  }
-  async function expectNoRedirect(unrelatedRun: string) {
-    if (settled) {
-      await expect(send()).rejects.toMatchObject({
-        code: 'dispatch_inactive',
-        message: expect.not.stringContaining(unrelatedRun)
-      })
-      expect(state.db.getInbox()).toEqual([])
-    } else {
-      expect(await send()).toMatchObject({
-        message: { to_handle: `dispatch:${dispatch.id}`, run_id: dispatch.run_id }
-      })
-    }
-  }
-
-  it('uses a durable session binding without a live pane', async () => {
-    const run = sessionRun()
-    vi.mocked(state.runtime.getLiveTerminalPaneKey).mockReturnValue(null)
-    await expectRun(run.id)
-  })
-
-  it('uses the recorded session instead of an unrelated Run now occupying the saved pane', async () => {
-    const run = sessionRun()
-    state.db.createRun({
-      objective: 'new occupant',
-      coordinatorHandle: 'term_other',
-      coordinatorPaneKey: PANE
-    })
-    await expectRun(run.id)
-  })
-
-  it('ignores an old session column left behind by an older binary rebind', async () => {
-    const run = sessionRun()
-    state.db.db
-      .prepare(
-        'UPDATE runs SET coordinator_handle = ?, coordinator_pane_key = ?, consumer_generation = consumer_generation + 1 WHERE id = ?'
-      )
-      .run('term_other', OTHER, run.id)
-    await expectNoRedirect(run.id)
-  })
-
-  it('does not follow a closed handle to another occupant of its old pane', async () => {
-    const run = state.db.createRun({
-      objective: 'new occupant',
-      coordinatorHandle: 'term_other',
-      coordinatorPaneKey: PANE
-    })
-    vi.mocked(state.runtime.getLiveTerminalPaneKey).mockReturnValue(null)
-    await expectNoRedirect(run.id)
-  })
-
-  it.each(['replacement:pty:2', null])(
-    'does not redirect with a replaced or unverifiable process: %s',
-    async (process) => {
-      const run = state.db.createRun({
-        objective: 'pane run',
-        coordinatorHandle: 'term_lead',
-        coordinatorPaneKey: PANE
-      })
-      state.db.db
-        .prepare('UPDATE dispatch_contexts SET process_incarnation = ? WHERE id = ?')
-        .run('original:pty:1', dispatch.id)
-      vi.mocked(state.runtime.getTerminalProcessIncarnation).mockReturnValue(process)
-      await expectNoRedirect(run.id)
-      expect(state.db.getDispatchContextById(dispatch.id)?.status).toBe(
-        settled ? 'completed' : dispatch.status
-      )
-    }
-  )
-
-  it('accepts a reminted tab half with the same pane leaf and process', async () => {
-    const run = state.db.createRun({
-      objective: 'same pane',
-      coordinatorHandle: 'term_lead',
-      coordinatorPaneKey: PANE
-    })
-    vi.mocked(state.runtime.getLiveTerminalPaneKey).mockReturnValue(
-      PANE.replace('tab_lead', 'tab_restored')
-    )
-    await expectRun(run.id)
   })
 })

@@ -3,13 +3,14 @@ import { Terminal, type ITerminalInitOnlyOptions, type ITerminalOptions } from '
 import '@xterm/xterm/css/xterm.css'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
-import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { useAppStore } from '@/store'
-import type { MacOptionAsAlt } from '@/components/terminal-pane/terminal-shortcut-policy'
-import { subscribeToTerminalUserInput } from '@/components/terminal-pane/terminal-user-input-signal'
-import { installTerminalNativeCopyGutterTrim } from '@/components/terminal-pane/terminal-native-copy-gutter'
-import { isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
+import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
+import { useAppStore } from '@/store/index'
+import type { MacOptionAsAlt } from '@/components/terminal-pane/input/keyboard/terminal-option-shortcut-policy'
+import { subscribeToTerminalUserInput } from '@/components/terminal-pane/input/terminal-user-input-signal'
+import { installTerminalNativeCopyGutterTrim } from '@/components/terminal-pane/clipboard/terminal-native-copy-gutter'
+import { isWindowsUserAgent } from '@/app-shell/platform/user-agent-platform'
+import type { PreviewTerminalLinkHandlers } from '../dashboard-popout/preview-terminal-links'
 import { installPreviewTerminalCompatibility } from '../dashboard-popout/preview-terminal-compatibility'
 import { createPreviewClipboardPaster } from '../dashboard-popout/preview-terminal-paste'
 import { installPreviewImeBridge } from '../dashboard-popout/preview-terminal-ime-bridge'
@@ -31,6 +32,7 @@ export type StandaloneTerminalArgs = {
   getSettings: () => GlobalSettings | null
   getMacOptionAsAlt: () => MacOptionAsAlt
   getTerminalInput: () => DashboardCardTerminalInput | null
+  linkHandlers?: PreviewTerminalLinkHandlers
   requestClose?: () => void
 }
 
@@ -55,7 +57,8 @@ export function openStandaloneTerminal(args: StandaloneTerminalArgs): Standalone
   let replayDepth = 0
 
   const disposeCompatibility = installPreviewTerminalCompatibility(terminal, {
-    getSettings: args.getSettings
+    getSettings: args.getSettings,
+    ...(args.linkHandlers ? { linkHandlers: args.linkHandlers } : {})
   })
   const disposeNativeCopyGutterTrim = installTerminalNativeCopyGutterTrim(terminal).dispose
 

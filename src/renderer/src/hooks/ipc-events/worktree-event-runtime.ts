@@ -1,24 +1,28 @@
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { transitionLaunchDrafts } from '@/components/native-chat/drafts/native-chat-launch-draft-transition'
 import {
+  getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
+export const recentlyRenamedWorktreeIdExpiry = new Map<string, number>()
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
 import type { AppState } from '../../store/types'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeSortOrderUpdate } from '../../../../shared/worktree/sort-order-update'
 import {
   hasHostRowsForSortOrders,
-  patchWorktreeSortOrders
+  patchWorktreeSortOrderBatch
 } from '../../store/slices/worktrees/listing/worktree-sort-order-patch'
+import { createWorktreeSortOrderPublicationBatch } from './worktree-sort-order-publication-batch'
 import { buildRuntimeClientEventEnvironmentKey } from './runtime-environment-subscription-selection'
 import { useAppStore } from '../../store'
 import {
   captureWorkspaceSelection,
   isWorkspaceSelected,
   restoreWorkspaceSelection
-} from '@/lib/active-workspace-host'
+} from '@/lib/workspace/ownership/active-workspace-host'
 import {
   invalidateRemoteWorktreeLineage,
   isRemoteWorktreeLineageFresh
@@ -30,7 +34,7 @@ import {
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 const WORKTREE_RENAME_PURGE_GRACE_MS = 20_000
 
@@ -38,7 +42,6 @@ const WORKTREE_RENAME_PURGE_GRACE_MS = 20_000
 function runtimeSortOrderFence(environmentId: string): string {
   return buildRuntimeClientEventEnvironmentKey([environmentId])
 }
-const recentlyRenamedWorktreeIdExpiry = new Map<string, number>()
 
 function getAuthoritativeDetectedWorktreeIds(state: AppState, repoId: string): Set<string> | null {
   const detected = selectDetectedWorktreesByRepo(state)[repoId]
@@ -68,6 +71,9 @@ export function createWorktreeEventRuntime(
   unsubs: (() => void)[],
   isRuntimeEnvironmentActive: () => boolean
 ): WorktreeEventRuntime {
+  const sortOrderBatch = createWorktreeSortOrderPublicationBatch((patches) =>
+    useAppStore.setState((s) => patchWorktreeSortOrderBatch(s, patches))
+  )
   const handleWorktreesChanged = async (
     repoId: string,
     renamed?: { oldWorktreeId: string; newWorktreeId: string },
@@ -96,13 +102,28 @@ export function createWorktreeEventRuntime(
       )
     ) {
       // Why: the host published the saved values, so refetching the repo would only re-download them (#27268).
-      const { executionHostId, sortOrders } = options
-      useAppStore.setState((s) => patchWorktreeSortOrders(s, repoId, executionHostId, sortOrders))
-      // Keep the existing retry for a host whose lineage snapshot is not fresh.
-      if (!isRemoteWorktreeLineageFresh(useAppStore.getState, sortOrderOwner.environmentId)) {
-        await useAppStore.getState().fetchWorktreeLineage({ executionHostId })
+      const { executionHostId, sortOrders, sortOrderFence } = options
+      const submittedListing = selectWorktreesByRepo(useAppStore.getState())[repoId]
+      // Awaiting keeps this repo's later events (renames, structural refreshes) behind the patch.
+      const outcome = await sortOrderBatch.submit({
+        repoId,
+        hostId: executionHostId,
+        sortOrders,
+        isCurrent: () =>
+          sortOrderFence === runtimeSortOrderFence(sortOrderOwner.environmentId) &&
+          selectWorktreesByRepo(useAppStore.getState())[repoId] === submittedListing &&
+          hasHostRowsForSortOrders(useAppStore.getState(), repoId, executionHostId, sortOrders)
+      })
+      if (outcome === 'disposed') {
+        return
       }
-      return
+      if (outcome === 'applied') {
+        // Keep the existing retry for a host whose lineage snapshot is not fresh.
+        if (!isRemoteWorktreeLineageFresh(useAppStore.getState, sortOrderOwner.environmentId)) {
+          await useAppStore.getState().fetchWorktreeLineage({ executionHostId })
+        }
+        return
+      }
     }
     const localRefreshStartedWithRuntime =
       options?.forceLocalOwner === true && isRuntimeEnvironmentActive()
@@ -111,6 +132,24 @@ export function createWorktreeEventRuntime(
       renamed != null && useAppStore.getState().activeWorktreeId === renamed.oldWorktreeId
     const selectionBeforeRename = captureWorkspaceSelection(useAppStore.getState())
     if (renamed) {
+      const owners = new Set(
+        useAppStore
+          .getState()
+          .repos.filter(
+            (repo) =>
+              repo.id === repoId &&
+              (!options?.forceLocalOwner || !getRepoExecutionHostId(repo).startsWith('runtime:'))
+          )
+          .map(getRepoExecutionHostId)
+      )
+      const owner = options?.executionHostId ?? (owners.size === 1 ? [...owners][0] : undefined)
+      if (owner) {
+        transitionLaunchDrafts((source) =>
+          source.executionHostId === owner && source.workspaceId === renamed.oldWorktreeId
+            ? { executionHostId: owner, workspaceId: renamed.newWorktreeId }
+            : undefined
+        )
+      }
       // Shield both ids from the deletion diff across the rename's event burst — the worktree list lags the on-disk move.
       const expiry = Date.now() + WORKTREE_RENAME_PURGE_GRACE_MS
       recentlyRenamedWorktreeIdExpiry.set(renamed.oldWorktreeId, expiry)
@@ -211,6 +250,7 @@ export function createWorktreeEventRuntime(
     dispose() {
       disposed = true
       refreshQueue.dispose()
+      sortOrderBatch.dispose()
     },
     enqueue(event) {
       if (disposed) {

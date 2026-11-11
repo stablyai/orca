@@ -1,58 +1,13 @@
-import type { Cookie, Cookies } from 'electron'
+import type { Cookie } from 'electron'
+import type { CookieClearIdentity, CookieClearSession } from './storage/cookie-store-contracts'
+import { type ImportedDomainScope, domainIsInImportedScope } from './policy/cookie-import-scope'
+import { cookieRemovalUrl } from './storage/cookie-removal-url'
+import { isNonTransplantableCookieDomain } from './policy/cookie-import-exclusions'
+import { normalizeCookieDomain, registrableFamily } from './policy/cookie-domain'
 import { mapSettledWithConcurrency } from '../../../shared/map-with-concurrency'
-import type { ImportedDomainScope } from './browser-cookie-import-policy'
-import {
-  cookieRemovalUrl,
-  domainIsInImportedScope,
-  isNonTransplantableCookieDomain,
-  normalizeCookieDomain,
-  registrableFamily
-} from './browser-cookie-import-policy'
+import { withCookieMutationLock } from './mutation/cookie-mutation-lock'
 
 const COOKIE_CLEAR_CONCURRENCY = 8
-
-export type CookieClearPartitionKey = {
-  topLevelSite: string
-  hasCrossSiteAncestor: boolean
-}
-
-export type CookieClearIdentity = {
-  url: string
-  name: string
-  value: string
-  domain?: string
-  hostOnly?: boolean
-  path?: string
-  secure?: boolean
-  httpOnly?: boolean
-  sameSite: Cookie['sameSite']
-  expirationDate?: number
-  partitionKey?: CookieClearPartitionKey
-}
-
-export type CookieClearStore = Pick<Cookies, 'get' | 'remove'> & {
-  snapshotClearIdentities(
-    cookies: readonly { cookie: Cookie; url: string }[]
-  ): Promise<CookieClearIdentity[]>
-  restoreClearIdentities(identities: readonly CookieClearIdentity[]): Promise<void>
-}
-
-// Write through CDP identities because Electron cookies.set loses partition keys.
-export type CookieImportWriteStore = Pick<Cookies, 'get' | 'remove'> & {
-  writeCookieIdentity(identity: CookieClearIdentity): Promise<void>
-}
-
-// Exclude cookies.set and bulk clearData: neither preserves this per-cookie rollback contract.
-export type CookieClearSession = {
-  cookies: Pick<Cookies, 'get' | 'remove'>
-  snapshotClearIdentities: CookieClearStore['snapshotClearIdentities']
-  restoreClearIdentities: CookieClearStore['restoreClearIdentities']
-}
-
-/** Use the partition’s Electron Session as the shared lock key. */
-export type CookieMutationLockOwner = WeakKey
-
-const mutationLocks = new WeakMap<CookieMutationLockOwner, Promise<void>>()
 
 function cookieClearKey(url: string, name: string): string {
   return JSON.stringify([url, name])
@@ -73,35 +28,6 @@ export function identitiesFromClearCookies(
     sameSite: cookie.sameSite,
     expirationDate: cookie.expirationDate
   }))
-}
-
-/** Hold across clear, writes, and rollback so a stale rollback cannot undo a later import. */
-export async function acquireCookieMutationLock(
-  owner: CookieMutationLockOwner
-): Promise<() => void> {
-  const previous = mutationLocks.get(owner) ?? Promise.resolve()
-  let release!: () => void
-  const current = new Promise<void>((resolve) => {
-    release = resolve
-  })
-  mutationLocks.set(
-    owner,
-    previous.then(() => current)
-  )
-  await previous
-  return release
-}
-
-export async function withCookieMutationLock<T>(
-  owner: CookieMutationLockOwner,
-  run: () => Promise<T>
-): Promise<T> {
-  const release = await acquireCookieMutationLock(owner)
-  try {
-    return await run()
-  } finally {
-    release()
-  }
 }
 
 function removableCookieEntries(

@@ -1,3 +1,4 @@
+import type { PRComment } from '../../../../../shared/github/comment-types'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import type {
   GitHubAssignableUser,
@@ -5,10 +6,12 @@ import type {
   GitHubPRFileViewedState
 } from '../../../../../shared/github/pull-request-types'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
-import type { GitHubWorkItemDetails } from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
-import { getGitHubSourceRuntimeHost } from '@/lib/github-source-runtime-context'
-import { onGitHubWorkItemDetailsCacheMutation } from '@/lib/github-work-item-details-cache-events'
+import type {
+  GitHubWorkItem,
+  GitHubWorkItemDetails
+} from '../../../../../shared/github/work-item-types'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
+import { onGitHubWorkItemDetailsCacheMutation } from '@/lib/work-items/github/github-work-item-details-cache-events'
 
 // Bound cached details for instant reopen; refresh stale entries on open. See docs/gh-work-item-drawer-cache.md.
 export const WORK_ITEM_DETAILS_CACHE_MAX = 50
@@ -17,10 +20,25 @@ export const WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE = 'Unable to load details for
 export type WorkItemDetailsCacheEntry = {
   details: GitHubWorkItemDetails | null
   fetchedAt: number
-  pending?: Promise<GitHubWorkItemDetails | null>
+  pending?: Promise<GitHubWorkItemDetails | null> & { isCurrent?: () => boolean }
   error?: string
+  // Why: invalidation keeps the shown details but owes one fresh read; the read's start clears it.
+  rereadOwed?: true
+  viewed?: { requests: Map<string, object>; paths: ReadonlySet<string> }
 }
+export const optimisticWorkItemComments = new Map<string, PRComment[]>()
 export const workItemDetailsCache = new Map<string, WorkItemDetailsCacheEntry>()
+
+export function withWorkItemDetailsItem(
+  details: GitHubWorkItemDetails,
+  item: GitHubWorkItem
+): GitHubWorkItemDetails {
+  return {
+    ...details,
+    item,
+    ...(item.assignees === undefined ? {} : { assignees: item.assignees.map((user) => user.login) })
+  }
+}
 
 // Replace entry identity on every write so useSyncExternalStore snapshots stay stable between notifications.
 const workItemDetailsCacheListeners = new Set<() => void>()
@@ -45,42 +63,61 @@ export function getWorkItemDetailsCacheKey(args: {
   type: 'issue' | 'pr'
   number: number
   ownerRepo?: GitHubOwnerRepo | null
+  bindingKey?: string
 }): string {
   // NUL-separate routing axes to prevent key collisions; keep repoPath second for path-only invalidation events.
-  const sourceKey =
-    args.ownerRepo && !getGitHubSourceRuntimeHost(args.sourceContext)
-      ? githubRepoIdentityKey(args.ownerRepo)
-      : (args.issueSourcePreference ?? 'auto')
+  const sourceKey = args.ownerRepo
+    ? githubRepoIdentityKey(args.ownerRepo)
+    : (args.issueSourcePreference ?? 'auto')
   const keyParts = args.sourceCacheScope
     ? [args.repoId, args.repoPath, args.sourceCacheScope, sourceKey, args.type]
     : [args.repoId, args.repoPath, sourceKey, args.type]
+  keyParts.splice(2, 0, ...(args.bindingKey ? [args.bindingKey] : []))
   return [...keyParts, args.number].join('\0')
 }
 
 export function touchWorkItemDetailsCache(key: string, entry: WorkItemDetailsCacheEntry): void {
   // Reinsert as most recent; Map order supplies the eviction order.
+  const previous = workItemDetailsCache.get(key)
   workItemDetailsCache.delete(key)
-  workItemDetailsCache.set(key, entry)
+  workItemDetailsCache.set(key, { ...entry, viewed: entry.viewed ?? previous?.viewed })
   while (workItemDetailsCache.size > WORK_ITEM_DETAILS_CACHE_MAX) {
     const oldest = workItemDetailsCache.keys().next().value
     if (oldest === undefined) {
       break
     }
     workItemDetailsCache.delete(oldest)
+    optimisticWorkItemComments.delete(oldest)
   }
   notifyWorkItemDetailsCache()
 }
 
 export function invalidateWorkItemDetailsCacheForKey(key: string): void {
-  workItemDetailsCacheGeneration += 1
-  const existed = workItemDetailsCache.delete(key)
+  const existed = markWorkItemDetailsRereadOwed(key)
   if (existed) {
     notifyWorkItemDetailsCache()
   }
 }
 
-// Fence pending fetches on every invalidation so pre-mutation results cannot restore stale entries.
-export let workItemDetailsCacheGeneration = 0
+// Dropping `pending` is the fence: a settle applies only while the entry still holds its own request.
+// Retire the pending read and owe one replacement read, keeping loaded details; an entry without details goes cold.
+function markWorkItemDetailsRereadOwed(key: string): boolean {
+  const prev = workItemDetailsCache.get(key)
+  if (!prev) {
+    return false
+  }
+  if (prev.details) {
+    workItemDetailsCache.set(key, {
+      details: prev.details,
+      fetchedAt: prev.fetchedAt,
+      rereadOwed: true,
+      viewed: prev.viewed
+    })
+  } else {
+    workItemDetailsCache.delete(key)
+  }
+  return true
+}
 
 // Without an exact key, invalidate matching repo/type/number entries across source preferences.
 export function invalidateWorkItemDetailsCacheByMatch(args: {
@@ -103,12 +140,11 @@ export function invalidateWorkItemDetailsCacheByMatch(args: {
     const [keyRepoId, keyRepoPath] = key.split('\0')
     const matches = args.repoId ? keyRepoId === args.repoId : keyRepoPath === args.repoPath
     if (matches) {
-      workItemDetailsCache.delete(key)
+      markWorkItemDetailsRereadOwed(key)
       removed = true
     }
   }
   if (removed) {
-    workItemDetailsCacheGeneration += 1
     notifyWorkItemDetailsCache()
   }
 }
@@ -174,15 +210,34 @@ export function patchCachedPRReviewRequests(
   })
 }
 
-export function patchCachedWorkItemBody(cacheKey: string, body: string): void {
+// A user-started read (Refresh) retries its own superseded attempt; keyed by the request, so the mark ends with it.
+const userActionDetailsReads = new WeakSet<Promise<GitHubWorkItemDetails | null>>()
+export function markUserActionWorkItemDetailsRead(
+  read: Promise<GitHubWorkItemDetails | null>
+): void {
+  userActionDetailsReads.add(read)
+}
+
+// An issue's saved body drops `pending` so a read started before it settles superseded.
+// A retired ordinary read owes one replacement; a retired Refresh read is retried by its own loop.
+export function patchCachedWorkItemBody(
+  cacheKey: string,
+  body: string,
+  representation?: { bodyImageUrls?: Record<string, string> }
+): void {
   const prev = workItemDetailsCache.get(cacheKey)
   if (!prev?.details) {
     return
   }
+  const supersedesRead = prev.details.item.type === 'issue'
+  const retiresOrdinaryRead =
+    supersedesRead && prev.pending !== undefined && !userActionDetailsReads.has(prev.pending)
   touchWorkItemDetailsCache(cacheKey, {
     ...prev,
-    details: { ...prev.details, body },
+    details: { ...prev.details, body, ...representation },
     fetchedAt: Date.now(),
+    pending: supersedesRead ? undefined : prev.pending,
+    rereadOwed: retiresOrdinaryRead ? true : prev.rereadOwed,
     error: undefined
   })
 }
@@ -207,5 +262,28 @@ if (import.meta !== undefined && import.meta.hot) {
   import.meta.hot.dispose(() => {
     workItemMutatedUnsub?.()
     workItemDetailsCacheEventUnsub?.()
+  })
+}
+
+export const EMPTY_VIEWED_PATHS: ReadonlySet<string> = new Set()
+
+export function settleWorkItemComment(key: string, comment: PRComment): void {
+  const previous = workItemDetailsCache.get(key)
+  const comments = optimisticWorkItemComments.get(key) ?? []
+  optimisticWorkItemComments.set(key, [
+    ...comments.filter((item) => item.id !== comment.id),
+    comment
+  ])
+  const details = previous?.details
+  touchWorkItemDetailsCache(key, {
+    ...previous,
+    fetchedAt: 0,
+    error: undefined,
+    details: details
+      ? {
+          ...details,
+          comments: [...details.comments.filter((item) => item.id !== comment.id), comment]
+        }
+      : null
   })
 }

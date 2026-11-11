@@ -1,22 +1,23 @@
-import type { AppState } from '../../store'
+import type { AppState } from '../../store/types'
+import type { RetiredTerminalTabSweepState } from '../../store/terminals/retired-terminal-tab-state-sweep'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import type {
-  RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionFileTab,
   RuntimeMobileSessionMarkdownTab,
-  RuntimeMobileSessionTabGroup,
-  RuntimeMobileSessionTabsRemovedResult,
-  RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTerminalClientTab
-} from '../../../../shared/runtime-types'
+} from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type {
   BrowserCertificateFailure,
   BrowserPage,
   BrowserWorkspace
 } from '../../../../shared/browser-workspace-types'
 import type { Tab } from '../../../../shared/tab-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { OpenFile } from '../../store/slices/editor'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { OpenFile } from '../../store/slices/editor/types/open-file'
 import type { RuntimeBrowserPlacement } from '../../../../shared/runtime-browser-placement'
 
 export const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
@@ -169,7 +170,6 @@ export function resetReceivedSessionTabsFrameSequence(): void {
   receivedSessionTabsFrameSequence = 0
 }
 
-export type TerminalSurface = RuntimeMobileSessionTerminalClientTab
 export type ReadyTerminalSurface = RuntimeMobileSessionTerminalClientTab & { status: 'ready' }
 export type ReadyBrowserSurface = RuntimeMobileSessionBrowserTab & { browserPageId: string }
 export type ReadyEditorSurface = RuntimeMobileSessionMarkdownTab | RuntimeMobileSessionFileTab
@@ -180,7 +180,7 @@ export type MirroredTerminalTab = {
   hostTabId: string
   ptyIds: string[]
   layout: TerminalLayoutSnapshot
-  retainedSurfaceByPrunedLeafId?: ReadonlyMap<string, TerminalSurface>
+  retainedSurfaceByPrunedLeafId?: ReadonlyMap<string, RuntimeMobileSessionTerminalClientTab>
 }
 export type MirroredBrowserTab = {
   workspace: BrowserWorkspace
@@ -225,26 +225,21 @@ export type WebSessionTabsSyncState = Pick<
   | 'unreadTerminalTabs'
   | 'sortEpoch'
 > &
+  Partial<Pick<AppState, 'splitLandingGroupIds'>> &
+  Partial<RetiredTerminalTabSweepState> &
   Partial<
     Pick<
       AppState,
-      | 'acknowledgedAgentsByPaneKey'
-      | 'activityClearedAtByPaneKey'
-      | 'agentLaunchConfigByPaneKey'
+      | 'agentSenderPublicationsByHost'
       | 'automaticAgentResumeClaimsByTabId'
       // Client draft proves dirty-flag ownership (#21392); without one, follow host save state.
       | 'editorDrafts'
       // Why: the live index carries sticky detachments; absent here, views resolve by identity.
       | 'editorBufferIdOf'
       | 'localOnlyScrollbackByTabId'
-      | 'migrationUnsupportedByPtyId'
-      | 'manuallyUnreadTurnsByPaneKey'
-      | 'paneForegroundAgentByPaneKey'
       | 'pendingStartupByTabId'
-      | 'recentlyClosedAgentStatusTabIds'
-      | 'recentlyRetiredAgentStatusPaneKeys'
-      | 'retainedAgentsByPaneKey'
-      | 'retentionSuppressedPaneKeys'
+      | 'runtimePaneTitlesByTabId'
+      | 'sleepingAgentSessionsByPaneKey'
     >
   >
 
@@ -265,6 +260,7 @@ export type WebSessionTabsBatchRecordKey =
   | 'pendingStartupByTabId'
   | 'ptyIdsByTabId'
   | 'remoteBrowserPageHandlesByPageId'
+  | 'runtimePaneTitlesByTabId'
   | 'tabBarOrderByWorktree'
   | 'tabsByWorktree'
   | 'terminalLayoutsByTabId'
@@ -276,12 +272,9 @@ export type WebSessionOpenFilesIndex = {
   byWorktree: Map<string, OpenFile[]>
 }
 export type WebSessionTabsBatchContext = {
+  changedAgentPaneKeys?: Set<string>
   retractionPaneKeysByRecord?: WeakMap<object, Map<string, Set<string>>>
   agentPaneKeysByTabId: Map<string, Set<string>> | null
   changedRecords: Set<WebSessionTabsBatchRecordKey>
   openFilesIndex: WebSessionOpenFilesIndex | null
 }
-
-export type AgentTab = RuntimeMobileSessionAgentTab
-export type TabGroupSnapshot = RuntimeMobileSessionTabGroup
-export type RemovedTabsResult = RuntimeMobileSessionTabsRemovedResult

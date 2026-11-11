@@ -2,9 +2,10 @@ import { basename, extname } from 'node:path'
 import {
   aiVaultAgentLabel,
   type AiVaultAgent,
-  type AiVaultSession
-} from '../../shared/ai-vault-types'
-import { buildAiVaultResumeCommand } from '../../shared/ai-vault-resume-command'
+  type AiVaultSession,
+  type AiVaultSessionTitleKind
+} from '../../shared/ai-vault/contracts/ai-vault-types'
+import { buildAiVaultResumeCommand } from '../../shared/ai-vault/resume/ai-vault-resume-command'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import type {
   FileWithMtime,
@@ -16,7 +17,7 @@ import {
   NO_TRANSCRIPT_MESSAGES,
   type TranscriptMessageSink,
   type TranscriptSessionIdentity
-} from './session-transcript-consumers'
+} from './transcripts/session-transcript-consumers'
 
 export function createAccumulator(args: {
   agent: AiVaultAgent
@@ -97,6 +98,7 @@ export function finalizeSession(
     codexHome?: string | null
     executionHostId?: ExecutionHostId
     executionHostPlatform?: NodeJS.Platform | null
+    titleKind?: AiVaultSessionTitleKind
   } = {}
 ): AiVaultSession | null {
   const sessionId = accumulator.sessionId.trim()
@@ -119,6 +121,7 @@ export function finalizeSession(
     agent: accumulator.agent,
     sessionId,
     title,
+    ...(options.titleKind ? { titleKind: options.titleKind } : {}),
     cwd: accumulator.cwd,
     branch: accumulator.branch,
     model: accumulator.model,

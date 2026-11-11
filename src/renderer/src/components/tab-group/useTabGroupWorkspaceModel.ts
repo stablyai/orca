@@ -1,7 +1,7 @@
 import { useShallow } from 'zustand/react/shallow'
-import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
+import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { useAppStore } from '../../store'
 import { useTabGroupItemProjections } from './useTabGroupItemProjections'
 import { useTabGroupTabCloseCommands } from './useTabGroupTabCloseCommands'
@@ -11,7 +11,7 @@ import { useTabGroupCreationCommands } from './useTabGroupCreationCommands'
 
 const EMPTY_GROUPS: readonly TabGroup[] = []
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
-const EMPTY_BROWSER_TABS: readonly BrowserTabState[] = []
+const EMPTY_BROWSER_TABS: readonly BrowserWorkspace[] = []
 const EMPTY_TERMINAL_TABS: readonly TerminalTab[] = []
 const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: NonNullable<
   ReturnType<typeof useAppStore.getState>['terminalLayoutsByTabId']
