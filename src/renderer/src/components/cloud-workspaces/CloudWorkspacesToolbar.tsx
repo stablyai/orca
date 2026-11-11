@@ -47,6 +47,28 @@ export const INITIAL_CLOUD_WORKSPACE_FILTERS: CloudWorkspacesFilters = {
   routines: false
 }
 
+/** Below this many workspaces there is little to filter: the filters and refresh stay out of the way. */
+export const CLOUD_HOME_FILTERS_MIN = 5
+
+/**
+ * Whether Home shows its filter row (and refresh): only with enough workspaces to filter (JA-30),
+ * but always while any filter is off its default, so a filter that hides rows can still be undone.
+ */
+export function shouldShowCloudHomeFilters(
+  count: number,
+  filters: CloudWorkspacesFilters,
+  hasOrg: boolean
+): boolean {
+  const active =
+    (hasOrg && filters.scope !== INITIAL_CLOUD_WORKSPACE_FILTERS.scope) ||
+    filters.by !== ANY ||
+    filters.repo !== ANY ||
+    filters.archived ||
+    filters.running === true ||
+    filters.routines === true
+  return active || count >= CLOUD_HOME_FILTERS_MIN
+}
+
 /** Row 1: title, count and cost, refresh. Row 2: whose, by whom, which repo, running, routine runs, archived. */
 export function CloudWorkspacesToolbar({
   filters,
@@ -60,7 +82,8 @@ export function CloudWorkspacesToolbar({
   metaStale,
   reading,
   onRefresh,
-  routineRuns
+  routineRuns,
+  showFilters = true
 }: {
   filters: CloudWorkspacesFilters
   onFiltersChange: (next: Partial<CloudWorkspacesFilters>) => void
@@ -76,6 +99,8 @@ export function CloudWorkspacesToolbar({
   onRefresh: () => void
   /** What the Routine runs switch hides; the switch exists only when the team has routines. */
   routineRuns?: CloudWorkspaceRoutineRuns
+  /** False with only a few workspaces and no filter on: title and count only (JA-30). */
+  showFilters?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   // Routines start cloud workspaces on their own, so they sit next to the list they fill.
@@ -105,18 +130,20 @@ export function CloudWorkspacesToolbar({
               {t('auto.components.cloudWorkspaces.routines', 'Routines')}
             </Button>
           ) : null}
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            onClick={onRefresh}
-            aria-busy={reading}
-            aria-label={t('auto.components.cloudWorkspaces.refresh', 'Refresh cloud workspaces')}
-          >
-            <RefreshCw className={cn(reading && 'motion-safe:animate-spin')} />
-          </Button>
+          {showFilters ? (
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              onClick={onRefresh}
+              aria-busy={reading}
+              aria-label={t('auto.components.cloudWorkspaces.refresh', 'Refresh cloud workspaces')}
+            >
+              <RefreshCw className={cn(reading && 'motion-safe:animate-spin')} />
+            </Button>
+          ) : null}
         </span>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className={cn('flex flex-wrap items-center gap-2', !showFilters && 'hidden')}>
         {hasOrg && (
           <div className="flex h-7 shrink-0 items-center">
             <SettingsSegmentedControl

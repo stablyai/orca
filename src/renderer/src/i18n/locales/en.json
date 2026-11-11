@@ -20979,9 +20979,6 @@
         "emptyArchivedTitle": "No archived workspaces",
         "emptyFilteredBody": "Try another owner or repository.",
         "emptyFilteredTitle": "Nothing matches these filters",
-        "emptyMineTitle": "No cloud workspaces yet",
-        "emptyTeamBody": "Share a cloud workspace from its menu and everyone on your team can open it here.",
-        "emptyTeamTitle": "No team workspaces yet",
         "environmentName": "{{value0}} (cloud)",
         "errorConcurrencyLimit": "You're at your team's limit of running sandboxes. Put one to sleep or delete it, then try again.",
         "errorMemberConcurrencyLimit": "You're at your limit of running sandboxes. Put one to sleep or delete it, then try again.",
@@ -23709,7 +23706,6 @@
       }
     },
     "cloudWorkspaces": {
-      "emptyMineStartBody": "Start one and it keeps running while your laptop sleeps.",
       "newCloudWorkspace": "New cloud workspace"
     },
     "worktreeCreation": {
