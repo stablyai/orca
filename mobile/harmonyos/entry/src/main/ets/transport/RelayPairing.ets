@@ -7,7 +7,6 @@ import { randomBytes } from './crypto/Bytes';
 import { HostMeta, PairingJournal, hostIdFor, saveHost, hostRemovalTimestamp, hostPairingTimestamp,
   readHostPairingJournal, writeHostPairingJournal, hostPairingCancellationTimestamp, cancelHostPairing, clearHostPairingJournal, listHostPairingJournals } from '../storage/HostStore';
 
-const RECOVERY_GRACE_MS = 10 * 60 * 1000;
 const RECOVERY_TIMEOUT_MS = 25000;
 const RPC_TIMEOUT_MS = 8000;
 const activePairings = new Map<string, number>();
@@ -281,7 +280,8 @@ async function recoverPending(context: common.Context, journal: PairingJournal, 
         return true;
       }
     }
-    if (isActive() && !observedCommitted && (refused === kinds.length || relay.inviteExpiresAt + RECOVERY_GRACE_MS <= Date.now())) {
+    // An unexpired invite can be temporarily refused while reserved by another connection.
+    if (isActive() && !observedCommitted && kinds.length === 1 && refused === 1) {
       await clearHostPairingJournal(context, meta.id, journal);
     }
     return false;
