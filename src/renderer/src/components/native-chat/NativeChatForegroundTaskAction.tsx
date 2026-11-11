@@ -8,7 +8,7 @@ import {
   type ReactNode
 } from 'react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   agentSessionForegroundTaskKey,
   type AgentSessionForegroundTask,
@@ -55,6 +55,7 @@ export function NativeChatForegroundTasksProvider(props: {
 
 /** Both transcript calls and task rows name the same host-captured invocation. */
 export function NativeChatForegroundTaskAction(props: { toolUseId?: string; taskId?: string }) {
+  const t = useTranslate()
   const actions = useContext(Context)
   const task = actions?.tasks.find(
     (candidate) =>
@@ -74,8 +75,8 @@ export function NativeChatForegroundTaskAction(props: { toolUseId?: string; task
       onClick={() => actions.run(task)}
     >
       {pending
-        ? translate('components.native-chat.backgroundTasks.backgrounding', 'Backgrounding…')
-        : translate('components.native-chat.backgroundTasks.background', 'Background')}
+        ? t('components.native-chat.backgroundTasks.backgrounding', 'Backgrounding…')
+        : t('components.native-chat.backgroundTasks.background', 'Background')}
     </Button>
   )
 }

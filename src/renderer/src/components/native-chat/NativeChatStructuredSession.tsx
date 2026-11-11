@@ -72,6 +72,7 @@ import { useNativeChatHostSendGate } from '@/components/native-chat/host-access/
 import { useStructuredAgentSessionStartFailureFacts } from '@/components/native-chat/messages/notices/use-structured-agent-session-start-failure-facts'
 import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session/agent-session-approval-subject'
 import { NativeChatHostSetupContext } from '@/components/native-chat/host-access/native-chat-host-setup'
+import { useNativeChatWorkerApprovalSlots } from '@/components/native-chat/worker-approvals/NativeChatWorkerApprovals'
 
 export function NativeChatStructuredSession(props: Omit<NativeChatStructuredViewProps, 'mode'>) {
   const ownerWorktreeId = useNativeChatTabOwnerWorktreeId(props.tabId)
@@ -108,6 +109,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   const [optionPickerRequest, setOptionPickerRequest] =
     useState<NativeChatOptionPickerRequest | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
+  const workerApprovals = useNativeChatWorkerApprovalSlots(props, rootRef)
   const historyPhase = structuredChatHistoryPhase(provisionalLaunch, controller.status)
   const hostOutage = useNativeChatHostOutage(props.target)
   const hostNotice = useNativeChatHostOutageNotice(hostOutage)
@@ -313,6 +315,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                     structuredAttachments
                     runtimeContext={imageRuntimeContext}
                     deliveryNotices={deliveryNotices}
+                    trailing={workerApprovals.rows}
                   />
                 </NativeChatHostSetupContext.Provider>
               </NativeChatUsageLimitActionsProvider>
@@ -339,6 +342,8 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
             tasks={controller}
             messageListRef={submits.messageListRef}
           />
+          {/* Workers' approvals stay findable even while this chat has its own prompt. */}
+          {workerApprovals.strip}
           {prompt ? null : (
             <NativeChatStructuredComposerTabStrips
               tabId={props.tabId}

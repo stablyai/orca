@@ -77,9 +77,11 @@ export function NewWorkspaceComposerFooter({
           disabled={createDisabled}
           size="sm"
           className="text-xs"
+          // Why: the title already says what is created; the button keeps the full name for AT.
+          aria-label={primaryActionLabel}
         >
           {creating ? <LoaderCircle className="size-4 animate-spin" /> : null}
-          {primaryActionLabel}
+          {t('auto.components.NewWorkspaceComposerFooter.create', 'Create')}
           <ButtonKeyHint modifierLabel={submitShortcutModifierLabel} />
         </Button>
       </div>

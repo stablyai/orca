@@ -1,4 +1,4 @@
-import { windowDipToCssPx } from '@/lib/ui-zoom'
+import { windowDipToCssPx } from '@/app-shell/chrome/ui-zoom'
 import {
   useCallback,
   useEffect,

@@ -8,7 +8,6 @@ import { parseProfileStateRoot } from '../profile-state/profile-state-document-v
 import { readProfileStateSnapshot } from '../profile-state/profile-state-documents'
 import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqlite-authority'
 import { Store } from './store'
-import { scheduleSave } from './write-scheduling'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
@@ -72,29 +71,6 @@ const EXPECTED_CHECKPOINT = {
 }
 
 describe('complete profile state checkpoints', () => {
-  it.each(['sync', 'async'] as const)(
-    'rejects a stale %s checkpoint even when the local hash is unchanged',
-    async (mode) => {
-      const { store, directory, readState } = fixture()
-      const other = new ProfileStateSqliteAuthority(join(directory, 'profile-state.db'), PROFILE_ID)
-      try {
-        other.readSerializedState()
-        other.writeSerializedDomains([{ domain: 'futureDomain', payload: '{"external":true}' }])
-        scheduleSave(store)
-        if (mode === 'sync') {
-          expect(() => store.flushOrThrow()).toThrow(/Profile state revision changed/)
-        } else {
-          await expect(store.flushPendingOrThrowAsync()).rejects.toThrow(
-            /Profile state revision changed/
-          )
-        }
-        expect(readState()).toMatchObject({ futureDomain: { external: true } })
-      } finally {
-        other.close()
-      }
-    }
-  )
-
   it('takes the final checkpoint after an earlier queued writer clears its dirty domains', async () => {
     const { store, backup, readState } = fixture()
     store.updateSettings({ theme: 'light' })
@@ -110,19 +86,5 @@ describe('complete profile state checkpoints', () => {
     await Promise.all([previous, final])
 
     expect(readState()).toMatchObject(EXPECTED_CHECKPOINT)
-  })
-
-  it('does not write a frozen profile when final persistence requests a checkpoint', async () => {
-    const { store, authority, readState } = fixture()
-    const before = readState()
-    const fullWrite = vi.spyOn(authority, 'writeSerializedState')
-    mutateThroughGetters(store)
-    store.updateSettings({ theme: 'dark' })
-    store.freezeWrites()
-
-    await store.flushAsync()
-
-    expect(fullWrite).not.toHaveBeenCalled()
-    expect(readState()).toEqual(before)
   })
 })

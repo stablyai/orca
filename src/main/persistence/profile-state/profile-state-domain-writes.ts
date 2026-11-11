@@ -97,7 +97,7 @@ export function writeProfileStateDomains(
 
     const updates: PreparedProfileStateMutation[] = []
     const splitStates = new Map<string, ReturnType<typeof readSplitDomainWriteState>>()
-    for (const mutation of prepared) {
+    const admit = (mutation: PreparedProfileStateMutation): void => {
       const splitState = readSplitDomainWriteState(db, mutation.domain)
       splitStates.set(mutation.domain, splitState)
       if (splitState.kind === 'parts') {
@@ -106,7 +106,7 @@ export function writeProfileStateDomains(
         if (mutation.payload === null || mutation.payloadHash !== splitState.contentHash) {
           updates.push(mutation)
         }
-        continue
+        return
       }
       const existing = db
         .prepare(
@@ -131,7 +131,7 @@ export function writeProfileStateDomains(
           mutation.payload?.startsWith('[') &&
           currentAutomationRuns.contentHash === mutation.payloadHash
         ) {
-          continue
+          return
         }
         const normalized = prepareProfileStateAutomationRunsReplacement(
           db,
@@ -142,7 +142,7 @@ export function writeProfileStateDomains(
           if (normalized.changed) {
             updates.push({ ...mutation, automationRuns: normalized })
           }
-          continue
+          return
         }
       }
       const unchanged =
@@ -151,6 +151,9 @@ export function writeProfileStateDomains(
       if (!unchanged) {
         updates.push(mutation)
       }
+    }
+    for (const mutation of prepared) {
+      admit(mutation)
     }
     if (transaction.automationRunsAfter !== undefined) {
       const delta = prepareProfileStateAutomationRunsDelta(
@@ -161,9 +164,15 @@ export function writeProfileStateDomains(
         actualRevision
       )
       if (delta === undefined) {
-        throw new Error('Normalized automationRuns delta is unsupported')
-      }
-      if (delta.changed) {
+        // Histories per-run rows can't hold (e.g. duplicate run ids) save as one replacement row.
+        admit(
+          prepareProfileStateDomainMutation({
+            domain: 'automationRuns',
+            payload: JSON.stringify(transaction.automationRunsAfter),
+            domainVersion: PROFILE_STATE_DOCUMENT_VERSION
+          })
+        )
+      } else if (delta.changed) {
         updates.push({
           domain: 'automationRuns',
           payload: null,

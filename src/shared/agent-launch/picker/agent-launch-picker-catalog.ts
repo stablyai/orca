@@ -3,7 +3,10 @@ import {
   structuredModelEfforts
 } from '../../agent-session/options/structured-agent-session-discovered-model'
 import { createClaudeCatalogOptions } from '../../agent-session/options/agent-session-option-catalog-claude-codex'
-import type { CatalogOption } from '../../agent-session/options/agent-session-option-catalog-types'
+import type {
+  CatalogModel,
+  CatalogOption
+} from '../../agent-session/options/agent-session-option-catalog-types'
 import { getAgentSessionOptionLaunchCatalog } from '../../agent-session/options/agent-session-option-catalog'
 import { sourceControlActionOptions } from '../../source-control/ai/recipes/source-control-action-options'
 import {
@@ -24,7 +27,7 @@ export function agentPickerOptions(
 }
 
 export function agentPickerEntryOptions(
-  entry: AgentPickerEntry,
+  entry: Pick<AgentPickerEntry, 'agent' | 'catalog' | 'terminal' | 'textGeneration'>,
   model: string | undefined,
   surface: AgentPickerSurface
 ): CatalogOption[] {
@@ -102,11 +105,19 @@ export function agentPickerPermissions(agent: TuiAgent, surface: AgentPickerSurf
   )
 }
 
-export function agentPickerModels(entry: AgentPickerEntry): AgentPickerModel[] {
+export function agentPickerModels(
+  entry: Pick<AgentPickerEntry, 'agent' | 'catalog'>
+): AgentPickerModel[] {
   if (entry.catalog.origin !== 'unknown') {
     return entry.catalog.models
   }
-  return (getAgentSessionOptionLaunchCatalog(entry.agent)?.models ?? []).map((model) => ({
+  return (getAgentSessionOptionLaunchCatalog(entry.agent)?.models ?? []).map(
+    agentPickerModelFromCatalogModel
+  )
+}
+
+export function agentPickerModelFromCatalogModel(model: CatalogModel): AgentPickerModel {
+  return {
     id: model.id,
     label: model.label,
     description: model.description,
@@ -114,5 +125,5 @@ export function agentPickerModels(entry: AgentPickerEntry): AgentPickerModel[] {
     efforts: model.options.flatMap((option) =>
       option.id === 'effort' && option.kind.type === 'select' ? option.kind.choices : []
     )
-  }))
+  }
 }

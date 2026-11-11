@@ -1,5 +1,6 @@
 import type { GitLabProjectRef } from '../../shared/gitlab-types'
 import { normalizeGitLabRemoteHost } from '../../shared/git/remotes/git-remote-host-alias'
+import { getPublicForgeProviderForHost } from '../../shared/git/remotes/public-forge-host'
 
 export type ProjectRef = GitLabProjectRef
 
@@ -47,19 +48,6 @@ function knownHostMatches(urlHost: string, knownHost: string): boolean {
   return false
 }
 
-function makeProjectRef(
-  host: string,
-  path: string,
-  knownHosts: readonly string[]
-): ProjectRef | null {
-  const normalizedHost = normalizeGitLabRemoteHost(host)
-  const normalizedKnownHosts = knownHosts.map(normalizeGitLabHost)
-  if (!normalizedKnownHosts.some((knownHost) => knownHostMatches(normalizedHost, knownHost))) {
-    return null
-  }
-  return makeProjectRefForTrustedHost(normalizedHost, path)
-}
-
 export function parseRemoteProjectRefCandidate(remoteUrl: string): ProjectRef | null {
   const trimmed = remoteUrl.trim()
   if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) {
@@ -80,25 +68,24 @@ export function parseRemoteProjectRefCandidate(remoteUrl: string): ProjectRef | 
   }
 }
 
+export function parseGitLabProjectRefCandidate(remoteUrl: string): ProjectRef | null {
+  const candidate = parseRemoteProjectRefCandidate(remoteUrl)
+  if (!candidate) {
+    return null
+  }
+  const owner = getPublicForgeProviderForHost(candidate.host)
+  return owner && owner !== 'gitlab' ? null : candidate
+}
+
 export function parseGitLabProjectRef(
   remoteUrl: string,
   knownHosts: readonly string[] = DEFAULT_GITLAB_HOSTS
 ): ProjectRef | null {
-  const trimmed = remoteUrl.trim()
-  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) {
-    const scpLike = trimmed.match(/^(?:[^@/:]+@)?([^:\s/]+):([^\s]+?)(?:\.git)?$/)
-    if (scpLike) {
-      return makeProjectRef(scpLike[1], scpLike[2], knownHosts)
-    }
-  }
-
-  try {
-    const url = new URL(trimmed)
-    if (!['http:', 'https:', 'ssh:', 'git:', 'git+ssh:'].includes(url.protocol.toLowerCase())) {
-      return null
-    }
-    return makeProjectRef(hostIdentityFromUrl(url), url.pathname, knownHosts)
-  } catch {
+  const candidate = parseGitLabProjectRefCandidate(remoteUrl)
+  if (!candidate) {
     return null
   }
+  return knownHosts.some((host) => knownHostMatches(candidate.host, normalizeGitLabHost(host)))
+    ? candidate
+    : null
 }

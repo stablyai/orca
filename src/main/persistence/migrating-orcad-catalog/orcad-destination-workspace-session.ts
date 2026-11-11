@@ -3,7 +3,7 @@ import { isRecord } from '../../../shared/orcad-migration/orcad-migration-manife
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { SESSION_FOCUS_FIELDS } from '../../../shared/workspace-session/workspace-session-host-field-ownership'
-import { mergeWorkspaceSessions } from '../../orca-profiles/profile-project-session-state'
+import { mergeWorkspaceSessions } from '../../orca-profiles/project-transfer/profile-project-session-state'
 import { collectLayoutLeafIdsInOrder } from '../restoring-sessions/terminal-layout-normalization'
 
 const MERGED_SESSION_RECORD_FIELDS = [

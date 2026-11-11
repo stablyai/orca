@@ -22,6 +22,7 @@ import {
 } from './runtime-terminal-run-observer'
 import { closeEarlierHookReviewRunTerminals } from './hook-review-blocked-run-terminals'
 import { automationRunSetupSkip } from './automation-run-setup-skip'
+import { automationSystemSettled } from './automation-wake-settle'
 
 const MAX_REMEMBERED_LAUNCHES = 256
 
@@ -204,6 +205,7 @@ export function createRuntimeAutomationService(input: {
     },
     runTerminalRetention: (owner) => createRuntimeRunTerminalRetention(owner, store, runtime)
   })
+  service.wakeGate.settled = () => automationSystemSettled()
   runtime.setAutomationService(service)
   return service
 }
