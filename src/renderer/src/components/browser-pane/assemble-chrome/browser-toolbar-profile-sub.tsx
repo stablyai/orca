@@ -11,7 +11,7 @@ import {
 import { BrowserCookieImportDisclosure } from '@/components/BrowserCookieImportDisclosure'
 import { BrowserCookieImportMachineNotice } from '@/components/BrowserCookieImportMachineNotice'
 import { useTranslate } from '@/i18n/use-translate'
-import { translateBrowserSessionProfileLabel } from '@/lib/browser-session-profile-label'
+import { translateBrowserSessionProfileLabel } from '@/lib/browser/profiles/browser-session-profile-label'
 import { BROWSER_FAMILY_LABELS } from '../../../../../shared/browser/browser-family-labels'
 import type { BrowserSessionProfile } from '../../../../../shared/browser-workspace-types'
 
