@@ -1,3 +1,4 @@
+import { OrcaCloudNeedsRepoLine } from './run-on/OrcaCloudNeedsRepoLine'
 import { OrcaCloudWallLine } from './run-on/OrcaCloudWallLine'
 import React from 'react'
 import { FolderPlus, LoaderCircle, PlugZap } from 'lucide-react'
@@ -101,6 +102,8 @@ export function NewWorkspaceComposerProjectSection({
       ? cloudStart?.cloudOnly
       : undefined
   const t = useTranslate()
+  // RR-c1: "Choose repository" opens the Project picker at its GitHub repositories.
+  const [repoPickerSignal, setRepoPickerSignal] = React.useState(0)
   return (
     <fieldset disabled={disabled} className="space-y-1">
       {/* One row, two equal columns: Project | Run on. Picking a target never changes the rows
@@ -165,11 +168,18 @@ export function NewWorkspaceComposerProjectSection({
               triggerClassName="h-9 w-full border-input text-sm focus-visible:border-focus-ring focus-visible:ring-1 focus-visible:ring-focus-ring"
               invalid={Boolean(projectError)}
               describedBy={projectDescriptionId}
+              openSignal={repoPickerSignal}
             />
             {projectError ? (
               <p id={projectDescriptionId} className="text-[11px] text-destructive">
                 {projectError}
               </p>
+            ) : cloudStart?.needsGitHubRepo ? (
+              <OrcaCloudNeedsRepoLine
+                hasRepos={cloudStart.needsGitHubRepo.hasRepos}
+                onChooseRepository={() => setRepoPickerSignal((signal) => signal + 1)}
+                onAddRepository={onAddProject}
+              />
             ) : projectOptions.length === 0 ? (
               <p id={projectDescriptionId} className="text-[11px] text-muted-foreground">
                 {emptyProjectMessage ??

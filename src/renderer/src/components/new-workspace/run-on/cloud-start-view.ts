@@ -13,7 +13,27 @@ export type CloudStartView = {
   folderProject?: boolean
   /** JA-21b (flagged): Orca Cloud is selected and a billing wall applies; Create waits for the fix. */
   wall?: OrcaCloudWallNotice | null
+  /**
+   * RR-c1: Orca Cloud is selected but the project is a plain folder. Both selections stay; one line
+   * under Project says so and Create waits for a GitHub repository. `hasRepos`: any to choose from.
+   */
+  needsGitHubRepo?: { hasRepos: boolean } | null
 }
+
+/** RR-c1: Orca Cloud on a plain folder, with no GitHub repository picked yet: Create waits. */
+export function orcaCloudNeedsGitHubRepo(args: {
+  cloudSelected: boolean
+  folderProject: boolean
+  pickedRepo: boolean
+  repoCount: number
+}): { hasRepos: boolean } | null {
+  return args.cloudSelected && args.folderProject && !args.pickedRepo
+    ? { hasRepos: args.repoCount > 0 }
+    : null
+}
+
+/** The line under Project that explains why Create waits; Create's aria-describedby points here. */
+export const ORCA_CLOUD_NEEDS_REPO_ID = 'orca-cloud-needs-github-repo'
 
 export function prefersReducedMotion(): boolean {
   return (

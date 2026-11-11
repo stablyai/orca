@@ -23298,6 +23298,9 @@
         "askForPlan": "Ask for a Team plan"
       },
       "cloudOnly": {
+        "needsRepository": "Orca Cloud needs a GitHub repository.",
+        "chooseRepository": "Choose repository",
+        "addRepository": "Add a GitHub repository",
         "heading": "On GitHub · Orca Cloud only",
         "detail": "Orca Cloud clones it. No copy on this computer needed.",
         "moreAccess": "Give Orca Cloud access to more repositories…",

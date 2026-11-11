@@ -1,3 +1,4 @@
+import { ORCA_CLOUD_NEEDS_REPO_ID } from './run-on/cloud-start-view'
 import React from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -16,6 +17,7 @@ type NewWorkspaceComposerFooterProps = Pick<
   | 'createDisabled'
   | 'creating'
   | 'primaryActionLabel'
+  | 'cloudStart'
 > & {
   submitShortcutModifierLabel: string
 }
@@ -29,9 +31,16 @@ export function NewWorkspaceComposerFooter({
   createDisabled,
   creating,
   primaryActionLabel,
-  submitShortcutModifierLabel
+  submitShortcutModifierLabel,
+  cloudStart = null
 }: NewWorkspaceComposerFooterProps): React.JSX.Element {
   const t = useTranslate()
+  // RR-c1: why Create waits (a folder project on Orca Cloud), on hover and for screen readers.
+  const needsRepo = Boolean(cloudStart?.needsGitHubRepo)
+  const needsRepoReason = t(
+    'components.newWorkspace.cloudOnly.needsRepository',
+    'Orca Cloud needs a GitHub repository.'
+  )
   return (
     <>
       {createError ? (
@@ -68,19 +77,21 @@ export function NewWorkspaceComposerFooter({
             </span>
           </button>
         ) : null}
-        <Button
-          onClick={() => void onCreate()}
-          disabled={createDisabled}
-          size="sm"
-          className="ml-auto shrink-0"
-        >
-          {/* The footer's compact type, as before; the Button keeps its own variant styling. */}
-          <span className="flex items-center gap-1.5 whitespace-nowrap text-xs">
-            {creating ? <LoaderCircle className="size-4 animate-spin" /> : null}
-            {primaryActionLabel}
-            <ButtonKeyHint modifierLabel={submitShortcutModifierLabel} />
-          </span>
-        </Button>
+        <span className="ml-auto shrink-0" title={needsRepo ? needsRepoReason : undefined}>
+          <Button
+            onClick={() => void onCreate()}
+            disabled={createDisabled}
+            size="sm"
+            {...(needsRepo ? { 'aria-describedby': ORCA_CLOUD_NEEDS_REPO_ID } : {})}
+          >
+            {/* The footer's compact type, as before; the Button keeps its own variant styling. */}
+            <span className="flex items-center gap-1.5 whitespace-nowrap text-xs">
+              {creating ? <LoaderCircle className="size-4 animate-spin" /> : null}
+              {primaryActionLabel}
+              <ButtonKeyHint modifierLabel={submitShortcutModifierLabel} />
+            </span>
+          </Button>
+        </span>
       </div>
     </>
   )
