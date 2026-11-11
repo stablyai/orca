@@ -55,16 +55,23 @@ export function createGatedCallCollector(families, ratchetName) {
   const advice = new Map(families.flatMap((family) => Object.entries(family.advice)))
   const markers = [
     ...advice.keys(),
+    ...families.filter((family) => family.exportPattern).map(() => 'Sync'),
     ...new Set(
       families.flatMap((family) => family.modules.map((module) => path.posix.basename(module)))
     )
   ]
 
   function symbolsOf(key) {
-    const names = families
-      .filter((family) => family.modules.includes(key))
-      .flatMap((family) => Object.keys(family.advice))
-    return names.length > 0 ? new Set(names) : null
+    const matched = families.filter((family) => family.modules.includes(key))
+    if (!matched.length) {
+      return null
+    }
+    const names = new Set(matched.flatMap((family) => Object.keys(family.advice)))
+    const patterns = matched.map((family) => family.exportPattern).filter(Boolean)
+    names.has = (name) =>
+      Set.prototype.has.call(names, name) ||
+      (typeof name === 'string' && patterns.some((pattern) => pattern.test(name)))
+    return names
   }
 
   function gatedSymbolsFor(file, specifier) {
@@ -97,7 +104,11 @@ export function createGatedCallCollector(families, ratchetName) {
     }
     const used = new Set()
     let count = 0
-    const namespaces = new Map()
+    const namespaces = new Map(
+      families.flatMap((family) =>
+        (family.globals ?? []).map((name) => [name, new Set(Object.keys(family.advice))])
+      )
+    )
     const functions = new Map([...(symbolsOf(moduleKey(file)) ?? [])].map((name) => [name, name]))
     const aliases = []
     const members = []
@@ -279,7 +290,17 @@ export function createGatedCallCollector(families, ratchetName) {
   function adviceFor(symbols) {
     const groups = new Map()
     for (const symbol of symbols) {
-      groups.set(advice.get(symbol), [...(groups.get(advice.get(symbol)) ?? []), symbol])
+      groups.set(
+        advice.get(symbol) ??
+          families.find((family) => family.exportPattern?.test(symbol))?.defaultAdvice,
+        [
+          ...(groups.get(
+            advice.get(symbol) ??
+              families.find((family) => family.exportPattern?.test(symbol))?.defaultAdvice
+          ) ?? []),
+          symbol
+        ]
+      )
     }
     return [...groups].map(([advice, names]) => `${names.join(', ')}: ${advice}.`).join(' ')
   }

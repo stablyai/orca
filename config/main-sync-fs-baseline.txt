@@ -53,6 +53,7 @@
 5 src/main/browser/cookies/sources/browser-cookie-source-profiles.ts
 11 src/main/browser/cookies/staging/browser-session-cookie-staging.ts
 1 src/main/browser/downloads/browser-download-destination.ts
+2 src/main/browser/electron-fixtures/popup-identity-electron-probe.ts
 2 src/main/browser/extensions/api-runtime/browser-extension-worker-shim-source.ts
 8 src/main/browser/extensions/installation/browser-extension-install-store.ts
 1 src/main/browser/extensions/installation/browser-extension-load-directory.ts
@@ -62,7 +63,6 @@
 4 src/main/browser/extensions/profile-storage/browser-extension-profile-state-store.ts
 3 src/main/browser/extensions/profile-storage/browser-extension-retired-profile-storage.ts
 1 src/main/browser/guest-lifecycle/popups/compatibility/browser-popup-background-cdp-probe.ts
-2 src/main/browser/electron-fixtures/popup-identity-electron-probe.ts
 1 src/main/browser/identity/mode/browser-identity-mode-record.ts
 2 src/main/browser/identity/mode/browser-identity-mode-store.ts
 2 src/main/browser/network/egress/browser-route-egress-electron-launch.ts
@@ -116,7 +116,6 @@
 1 src/main/codex-accounts/codex-login-auth-snapshot.ts
 5 src/main/codex-accounts/codex-managed-home-lifecycle.ts
 6 src/main/codex-accounts/codex-managed-home-path.ts
-17 src/main/filesystem/atomic-file-publication.ts
 1 src/main/codex-accounts/guest-codex-account-homes.ts
 6 src/main/codex-accounts/host-codex-managed-home-ownership.ts
 2 src/main/codex-accounts/legacy-shared-auth-migration.ts
@@ -183,7 +182,6 @@
 2 src/main/daemon/admission/automatic-work-run-marker-store.ts
 5 src/main/daemon/admission/host-terminal-ledger.ts
 1 src/main/daemon/admission/legacy-restore-records.ts
-1 src/main/daemon/daemon-entry.ts
 1 src/main/daemon/endpoint/identity/daemon-endpoint-incarnation.ts
 3 src/main/daemon/endpoint/identity/daemon-pid-identity.ts
 2 src/main/daemon/endpoint/identity/daemon-pid-record-quarantine.ts
@@ -246,6 +244,7 @@
 7 src/main/emulator/serve-sim-execution.ts
 17 src/main/emulator/serve-sim-runtime-materializer.ts
 12 src/main/external-editors/external-editor-launch.ts
+17 src/main/filesystem/atomic-file-publication.ts
 9 src/main/filesystem/durable-file-write.ts
 2 src/main/filesystem/rolling-file-backup.ts
 2 src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry-path.ts
@@ -296,6 +295,7 @@
 13 src/main/kimi/hook-service.ts
 3 src/main/kiro/hook-service.ts
 1 src/main/kiro/standalone-hooks.ts
+3 src/main/lib/hidden-probe-cwd.ts
 4 src/main/linear/linear-credential-paths.ts
 3 src/main/linear/linear-legacy-viewer-store.ts
 1 src/main/linear/linear-token-store.ts
@@ -464,7 +464,6 @@
 1 src/main/qoder/workspace-trust.ts
 4 src/main/rate-limits/providers/cursor/cursor-auth.ts
 2 src/main/rate-limits/providers/grok/grok-auth.ts
-3 src/main/lib/hidden-probe-cwd.ts
 2 src/main/rate-limits/providers/opencode-go/opencode-go-api-key-source.ts
 1 src/main/rate-limits/providers/zcode/zcode-usage-credentials.ts
 3 src/main/ripgrep/bundled-ripgrep-path.ts
