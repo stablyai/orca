@@ -24,6 +24,7 @@ import { CloudWokeProcessesNotice } from '@/components/orca-cloud/offline/CloudW
 import { CloudWokeAgentNotice } from '@/components/orca-cloud/offline/CloudWokeAgentNotice'
 import {
   captureWakeProcessHint,
+  cursorBelowLastText,
   dismissWakeProcessHint,
   endsAtShellPrompt,
   getWakeCaptureTime,
@@ -148,7 +149,8 @@ export function TerminalPaneRecoveryPortals({
         // An agent TUI or full-screen app's last line is its own input, not a shell command.
         captureWakeProcessHint(pane.leafId, readTerminalTail(pane.terminal), {
           agentType: agentPanes[makePaneKey(tabId, pane.leafId)]?.agentType ?? null,
-          alternateScreen: pane.terminal.buffer.active.type === 'alternate'
+          alternateScreen: pane.terminal.buffer.active.type === 'alternate',
+          cursorBelowText: cursorBelowLastText(pane.terminal)
         })
       }
     } else {
