@@ -181,7 +181,7 @@ describe('waitForClone', () => {
         },
         destroy: async (id: string) => {
           destroyed.push(id)
-          return { id, status: 'destroyed' } as never
+          return { id, status: 'destroyed' as const }
         }
       }
     }
