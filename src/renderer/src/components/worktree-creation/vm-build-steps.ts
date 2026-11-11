@@ -4,7 +4,10 @@ import {
   type WorktreeCreationPhase
 } from '@/lib/workspace/creation/pending-worktree-creation'
 import type { WorktreeSetupStepState } from './worktree-setup-steps'
-import { orcaCloudCloneProgress } from './orca-cloud-build-log'
+import {
+  orcaCloudCloneProgress,
+  type OrcaCloudCloneProgress
+} from '@/lib/orca-cloud/orca-cloud-clone-progress'
 
 /** `clone` is Orca Cloud only: the repo clones in the sandbox after it starts. */
 export type VmBuildStepId = 'provision' | 'clone' | 'checks' | 'create'
@@ -18,8 +21,11 @@ export type VmBuildStep = {
   elapsedMs: number | null
   /** Git's percent while the clone or the workspace step checks out files. */
   percent: number | null
-  /** Clone only: what git is doing now (`checkout` = writing the files). */
-  stage?: 'download' | 'checkout'
+  /**
+   * Clone only: what git is doing now. `counting` = GitHub is still counting objects, so git has no
+   * percent yet (the row shows an indeterminate bar, never a frozen 0%).
+   */
+  stage?: 'counting' | 'download' | 'checkout'
   /** When the step started, if it has. */
   startedAt: number | null
 }
@@ -70,6 +76,21 @@ function step(
   }
 }
 
+function runningClone(
+  clone: OrcaCloudCloneProgress | null,
+  elapsedMs: number | null,
+  startedAt: number
+): VmBuildStep {
+  // No percent yet, or git's first 0% while GitHub counts objects: nothing to measure yet.
+  if (!clone || (!clone.percent && clone.stage !== 'checkout')) {
+    return { ...step('clone', 'running', elapsedMs, startedAt), stage: 'counting' }
+  }
+  return {
+    ...step('clone', 'running', elapsedMs, startedAt, { percent: clone.percent }),
+    stage: clone.stage ?? 'download'
+  }
+}
+
 /**
  * Provision, then the VM's environment checks, then the workspace (fetch + checkout, folded into one
  * row). A failed step keeps the steps before it done and shows how long it ran; a worktree id means
@@ -110,16 +131,11 @@ export function deriveVmBuildSteps(
     ? null
     : cloneAt === undefined
       ? step('clone', provisionDone ? 'done' : 'pending', null, undefined)
-      : clone?.endedAt !== null || check || workspacePhase
+      : clone?.ended || check || workspacePhase
         ? step('clone', 'done', span(cloneAt, afterClone), cloneAt)
         : failed
           ? step('clone', 'failed', span(cloneAt, entry.errorAt), cloneAt)
-          : {
-              ...step('clone', 'running', span(cloneAt, now), cloneAt, {
-                percent: clone?.percent ?? 0
-              }),
-              ...(clone?.stage ? { stage: clone.stage } : {})
-            }
+          : runningClone(clone, span(cloneAt, now), cloneAt)
 
   const checks = !check
     ? step('checks', 'pending', null, undefined)

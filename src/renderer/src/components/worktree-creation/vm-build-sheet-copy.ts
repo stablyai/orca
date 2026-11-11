@@ -85,10 +85,24 @@ export function headerTitle(
 }
 
 /** What the running clone is doing, in plain words. */
-export function cloneStageLabel(stage: 'download' | 'checkout' | undefined, t: Translate): string {
-  return stage === 'checkout'
-    ? t('auto.components.worktree.creation.VmBuildSheet.cloneCheckout', 'Checking out files…')
-    : t('auto.components.worktree.creation.VmBuildSheet.cloneDownload', 'Downloading history…')
+export function cloneStageLabel(
+  stage: 'counting' | 'download' | 'checkout' | undefined,
+  t: Translate
+): string {
+  switch (stage) {
+    case 'counting':
+      return t('auto.components.worktree.creation.VmBuildSheet.cloneCounting', 'Counting objects…')
+    case 'checkout':
+      return t(
+        'auto.components.worktree.creation.VmBuildSheet.cloneCheckout',
+        'Checking out files…'
+      )
+    default:
+      return t(
+        'auto.components.worktree.creation.VmBuildSheet.cloneDownload',
+        'Downloading history…'
+      )
+  }
 }
 
 /** Screen-reader text for a step's icon, which carries its state visually. */

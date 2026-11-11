@@ -85,6 +85,15 @@ export function VmBuildStepRow({
       {detail ? <p className="ml-6 text-xs text-muted-foreground">{detail}</p> : null}
       {step.percent !== null ? (
         <Progress value={step.percent} aria-labelledby={labelId} className="ml-6 h-1 w-auto" />
+      ) : step.state === 'running' && step.stage === 'counting' ? (
+        // No percent yet: an indeterminate bar (static and dim with reduced motion), never a 0%.
+        <span
+          role="progressbar"
+          aria-labelledby={labelId}
+          className="ml-6 block h-1 overflow-hidden rounded-full bg-primary/20"
+        >
+          <span className="block h-full w-2/5 animate-[skill-update-slide_1.35s_ease-in-out_infinite] rounded-full bg-primary motion-reduce:w-full motion-reduce:animate-none motion-reduce:opacity-40" />
+        </span>
       ) : null}
     </li>
   )

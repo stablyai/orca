@@ -4232,7 +4232,8 @@
             "runChecksAgain": "Run checks again",
             "cloneCloud": "Clone repository",
             "cloneCheckout": "Checking out files…",
-            "cloneDownload": "Downloading history…"
+            "cloneDownload": "Downloading history…",
+            "cloneCounting": "Counting objects…"
           },
           "VmBuildFailureCard": {
             "createFailedTitle": "Couldn’t create workspace",

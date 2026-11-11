@@ -7,6 +7,7 @@ import { deriveVmBuildSteps } from './vm-build-steps'
 import { classifyVmBuildFailure } from './vm-build-failure'
 import { holdRunningSteps } from './use-minimum-running-steps'
 import { humanizeOrcaCloudLogLine } from './orca-cloud-build-log'
+import { getCreationProgressLabel } from '@/lib/workspace/creation/pending-worktree-creation'
 import type { Translate } from '@/i18n/use-translate'
 
 const base = {
@@ -277,6 +278,55 @@ describe('Orca Cloud clone step', () => {
         cloud: true
       })
     ).toEqual({ kind: 'cloneFailed', reason: 'clone_timeout' })
+  })
+
+  it('shows counting (no frozen 0%) until git reports a percent', () => {
+    const at = (...extra: [string, number][]) =>
+      deriveVmBuildSteps({ ...base, ...lines(['[orca-cloud] cloning', 6000], ...extra) }, 9000, {
+        cloud: true
+      })[1]
+    expect(at()).toMatchObject({ state: 'running', percent: null, stage: 'counting' })
+    expect(at(['[orca-cloud] clone-progress 0 download', 7000])).toMatchObject({
+      percent: null,
+      stage: 'counting'
+    })
+    expect(at(['[orca-cloud] clone-progress 12 download', 8000])).toMatchObject({
+      percent: 12,
+      stage: 'download'
+    })
+  })
+
+  it('the sidebar line follows the active step', () => {
+    const t: Translate = (_key, fallback) => fallback
+    const entry = (
+      provisioningLog: string,
+      environmentCheck?: { status: 'running'; startedAt: number }
+    ) => ({
+      status: 'creating' as const,
+      phase: 'provisioning-vm' as const,
+      request: {
+        repoId: 'r',
+        name: 'n',
+        setupDecision: 'skip' as const,
+        ephemeralVmRecipe: {
+          sourceRepoId: 'r',
+          recipeId: 'cloud',
+          projectId: 'p',
+          provider: 'orca-cloud' as const
+        }
+      },
+      provisioningLog,
+      ...(environmentCheck ? { environmentCheck } : {})
+    })
+    expect(getCreationProgressLabel(entry('[orca-cloud] provisioning\n'), t)).toBe(
+      'Starting sandbox…'
+    )
+    expect(getCreationProgressLabel(entry('[orca-cloud] cloning\n'), t)).toBe(
+      'Cloning the repository…'
+    )
+    expect(
+      getCreationProgressLabel(entry('[orca-cloud] cloning\n[orca-cloud] connecting\n'), t)
+    ).toBe('Preparing environment…')
   })
 
   it('progress lines stay out of the plain log', () => {
