@@ -7,7 +7,7 @@ import {
   INITIAL_CLOUD_WORKSPACE_FILTERS,
   type CloudWorkspacesFilters
 } from './CloudWorkspacesToolbar'
-import { readShowRoutineRuns, writeShowRoutineRuns } from './cloud-workspaces-home-prefs'
+import { readHomeSwitches, writeHomeSwitches } from './cloud-workspaces-home-prefs'
 import type { CloudWorkspaceRoutineRuns } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 
 // The toolbar's trial banner and Routines entry read the preload bridge; neither is under test.
@@ -77,20 +77,26 @@ describe('Home toolbar: Routine runs switch', () => {
   })
 })
 
-describe('Routine runs preference', () => {
-  it('is remembered per account', () => {
+describe('Home switch preferences', () => {
+  it('remembers Running, Archived and Routine runs per account', () => {
     const store = new Map<string, string>()
     const storage = {
       getItem: (k: string) => store.get(k) ?? null,
       setItem: (k: string, v: string) => void store.set(k, v)
     } as unknown as Storage
-    expect(readShowRoutineRuns('u1:org', storage)).toBe(false)
-    writeShowRoutineRuns('u1:org', true, storage)
-    expect(readShowRoutineRuns('u1:org', storage)).toBe(true)
-    expect(readShowRoutineRuns('u2:org', storage)).toBe(false)
-    writeShowRoutineRuns('u1:org', false, storage)
-    expect(readShowRoutineRuns('u1:org', storage)).toBe(false)
-    store.set('orca.cloudWorkspacesHome.showRoutineRuns', 'not json')
-    expect(readShowRoutineRuns('u1:org', storage)).toBe(false)
+    const off = { running: false, archived: false, routines: false }
+    expect(readHomeSwitches('u1:org', storage)).toEqual(off)
+    writeHomeSwitches('u1:org', { routines: true }, storage)
+    writeHomeSwitches('u1:org', { running: true }, storage)
+    expect(readHomeSwitches('u1:org', storage)).toEqual({
+      running: true,
+      archived: false,
+      routines: true
+    })
+    expect(readHomeSwitches('u2:org', storage)).toEqual(off)
+    writeHomeSwitches('u1:org', { running: false, routines: false }, storage)
+    expect(readHomeSwitches('u1:org', storage)).toEqual(off)
+    store.set('orca.cloudWorkspacesHome.switches', 'not json')
+    expect(readHomeSwitches('u1:org', storage)).toEqual(off)
   })
 })

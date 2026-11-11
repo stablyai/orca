@@ -1,39 +1,48 @@
-// Home's Routine runs switch is remembered per signed-in account (user and team) on this desktop.
-// A preference only: it never decides access, so local storage is enough.
-const KEY = 'orca.cloudWorkspacesHome.showRoutineRuns'
+// Home's three list switches (Running, Archived, Routine runs) are remembered per signed-in account
+// (user and team) on this desktop. Preferences only: they never decide access, so local storage is enough.
+const KEY = 'orca.cloudWorkspacesHome.switches'
 
-function read(storage: Storage | undefined): Record<string, boolean> {
+export type HomeSwitches = { running: boolean; archived: boolean; routines: boolean }
+const OFF: HomeSwitches = { running: false, archived: false, routines: false }
+
+function read(storage: Storage | undefined): Record<string, Partial<HomeSwitches>> {
   try {
     const parsed: unknown = JSON.parse(storage?.getItem(KEY) ?? '{}')
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? (parsed as Record<string, boolean>)
+      ? (parsed as Record<string, Partial<HomeSwitches>>)
       : {}
   } catch {
     return {}
   }
 }
 
-export function readShowRoutineRuns(
+export function readHomeSwitches(
   account: string,
   storage: Storage | undefined = globalThis.localStorage
-): boolean {
-  return read(storage)[account] === true
+): HomeSwitches {
+  const saved = read(storage)[account] ?? {}
+  return {
+    running: saved.running === true,
+    archived: saved.archived === true,
+    routines: saved.routines === true
+  }
 }
 
-export function writeShowRoutineRuns(
+export function writeHomeSwitches(
   account: string,
-  on: boolean,
+  next: Partial<HomeSwitches>,
   storage: Storage | undefined = globalThis.localStorage
 ): void {
   const all = read(storage)
-  if (on) {
-    all[account] = true
-  } else {
+  const merged = { ...OFF, ...readHomeSwitches(account, storage), ...next }
+  if (!merged.running && !merged.archived && !merged.routines) {
     delete all[account]
+  } else {
+    all[account] = merged
   }
   try {
     storage?.setItem(KEY, JSON.stringify(all))
   } catch {
-    // Storage full or unavailable: the switch still works for this session.
+    // Storage full or unavailable: the switches still work for this session.
   }
 }

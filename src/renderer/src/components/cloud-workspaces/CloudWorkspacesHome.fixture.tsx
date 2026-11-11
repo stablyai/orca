@@ -8,7 +8,7 @@ import {
 } from './cloud-workspaces.test-fixture'
 import type { CloudReadSnapshotState } from '../../../../shared/cloud-workspaces/read-snapshot-state'
 import { getOrcaAccountKey } from '@/hooks/use-orca-account-key'
-import { writeShowRoutineRuns } from './cloud-workspaces-home-prefs'
+import { writeHomeSwitches } from './cloud-workspaces-home-prefs'
 
 const FIXTURE_ACCOUNT = getOrcaAccountKey(AUTH_STATUS)
 
@@ -194,7 +194,7 @@ export const withRoutinesEntry = defineFixture({
 
 /** Routine runs stay off Home; the Routine runs switch brings in-flight ones back, marked. */
 function stubWithRoutineRuns(): void {
-  writeShowRoutineRuns(FIXTURE_ACCOUNT, false)
+  writeHomeSwitches(FIXTURE_ACCOUNT, { running: false, archived: false, routines: false })
   const rows = teamWorkspaces()
   const run = workspace({
     id: 'sbx_0000000000000000000000e1',

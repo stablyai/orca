@@ -4,14 +4,14 @@ import {
   INITIAL_CLOUD_WORKSPACE_FILTERS,
   type CloudWorkspacesFilters
 } from './CloudWorkspacesToolbar'
-import { readShowRoutineRuns, writeShowRoutineRuns } from './cloud-workspaces-home-prefs'
+import { readHomeSwitches, writeHomeSwitches } from './cloud-workspaces-home-prefs'
 import { usePendingHomeFilters } from './cloud-workspaces-home-nav'
 
-/** Home's list filters for this account. The Routine runs switch is remembered; the rest start fresh. */
+/** Home's list filters for this account. The three switches are remembered; owner/repo/scope start fresh. */
 export function useCloudHomeFilters(account: string) {
   const initialFilters = (key: string): CloudWorkspacesFilters => ({
     ...INITIAL_CLOUD_WORKSPACE_FILTERS,
-    routines: readShowRoutineRuns(key)
+    ...readHomeSwitches(key)
   })
   const [filters, setFilters] = useState(() => initialFilters(account))
   usePendingHomeFilters(setFilters)
@@ -23,8 +23,13 @@ export function useCloudHomeFilters(account: string) {
   }
   const changeFilters = useCallback(
     (next: Partial<CloudWorkspacesFilters>) => {
-      if (next.routines !== undefined) {
-        writeShowRoutineRuns(account, next.routines)
+      const switches = {
+        ...(next.running !== undefined ? { running: next.running } : {}),
+        ...(next.archived !== undefined ? { archived: next.archived } : {}),
+        ...(next.routines !== undefined ? { routines: next.routines } : {})
+      }
+      if (Object.keys(switches).length > 0) {
+        writeHomeSwitches(account, switches)
       }
       setFilters((previous) => {
         // A different list (scope or archived) has different owners and repos; start unfiltered.
