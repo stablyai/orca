@@ -45,6 +45,7 @@ export function requestTimeout(value: number | null | undefined): number | null 
 const ACP_START_STEP_TIMEOUT_MS: Readonly<Partial<Record<string, number>>> = {
   initialize: 60_000,
   'session/new': 300_000,
+  'session/list': 60_000,
   'session/load': 300_000,
   'session/resume': 300_000,
   'session/fork': 300_000

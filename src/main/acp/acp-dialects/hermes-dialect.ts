@@ -8,5 +8,6 @@ export const HERMES_ACP_DIALECT: AcpDialect = {
     response.modes == null &&
     response.models == null &&
     response.configOptions == null &&
-    response._meta == null
+    response._meta == null,
+  reopenRebindsFolder: true
 }

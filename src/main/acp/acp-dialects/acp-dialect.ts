@@ -133,6 +133,8 @@ export type AcpDialect = {
   clientCapabilities?: Pick<ClientCapabilities, 'elicitation'>
   /** session/load answered, but this body means the session is gone. */
   loadedSessionMissing?(response: AcpLoadedSessionBody): boolean
+  /** Reopening moves a session to the requested folder, so confirm an adopted one is already there. */
+  reopenRebindsFolder?: true
   /** Claimed permission requests are never auto-approved. */
   request?(method: string, params: unknown): AcpRequestPresentation | undefined
   settleRequest?(method: string, params: unknown): AcpRequestSettlement | undefined

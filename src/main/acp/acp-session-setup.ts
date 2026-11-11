@@ -1,4 +1,4 @@
-import type { z } from 'zod'
+import { z } from 'zod'
 import type { AcpLoadedSessionBody } from './acp-dialects/acp-dialect'
 import { AcpAuthRequiredError, AcpRpcError, acpAuthRequiredError } from './acp-errors'
 import {
@@ -6,6 +6,7 @@ import {
   LoadSessionResponseSchema,
   ResumeSessionResponseSchema,
   AuthenticateResponseSchema,
+  SessionIdSchema,
   SessionModelStateSchema,
   type InitializeResponse,
   type NewSessionRequest
@@ -31,8 +32,42 @@ export type AcpSessionStartOptions = NewSessionRequest & {
   authMethodId?: string
   /** When set, an accepted load can still mean the session is gone. */
   loadedSessionMissing?: (response: AcpLoadedSessionBody) => boolean
+  /** Reopen only a session the agent lists for this folder; unlistable counts as not found. */
+  requireListedInFolder?: boolean
 }
 type Request = <T>(method: string, params: unknown, schema: z.ZodType<T>) => Promise<T>
+
+const listSessionsSchema = z.looseObject({
+  sessions: z.array(z.looseObject({ sessionId: SessionIdSchema })),
+  nextCursor: z.string().nullish()
+})
+
+async function isSessionListedInFolder(
+  sessionId: string,
+  cwd: string,
+  request: Request
+): Promise<boolean> {
+  const seen = new Set<string>()
+  let cursor: string | null | undefined
+  do {
+    const page = await request(
+      'session/list',
+      { cwd, ...(cursor ? { cursor } : {}) },
+      listSessionsSchema
+    )
+    if (page.sessions.some((session) => session.sessionId === sessionId)) {
+      return true
+    }
+    cursor = page.nextCursor
+    if (cursor && seen.has(cursor)) {
+      return false
+    }
+    if (cursor) {
+      seen.add(cursor)
+    }
+  } while (cursor)
+  return false
+}
 
 export async function setupAcpSession(
   initialized: InitializeResponse,
@@ -45,6 +80,7 @@ export async function setupAcpSession(
       resumePreference,
       authMethodId: _auth,
       loadedSessionMissing,
+      requireListedInFolder,
       ...params
     } = options
     if (sessionId === undefined) {
@@ -52,6 +88,13 @@ export async function setupAcpSession(
       return { kind: 'new', sessionId: response.sessionId, response }
     }
     const capabilities = initialized.agentCapabilities
+    if (
+      requireListedInFolder &&
+      (capabilities?.sessionCapabilities?.list == null ||
+        !(await isSessionListedInFolder(sessionId, params.cwd, request)))
+    ) {
+      throw new AcpRpcError(-32002, 'Resource not found')
+    }
     const load = capabilities?.loadSession === true
     const resume = capabilities?.sessionCapabilities?.resume != null
     if (load && (resumePreference !== 'resume' || !resume)) {

@@ -161,6 +161,23 @@ describe('ACP launch resolution', () => {
     }
   })
 
+  it.each([
+    ['adopted', true],
+    ['created', undefined],
+    ['resumed', undefined]
+  ] as const)('marks a head link of origin %s as adopted: %s', async (origin, adopted) => {
+    const handle: AgentSessionProviderHandle = {
+      transport: 'acp',
+      agent: 'grok',
+      nativeId: 'acp-1'
+    }
+    const record = grokRecord({
+      providerHandleChain: [{ linkId: 'head', origin, mintedAtFence: 1, observedAt: 1, handle }]
+    })
+    const launch = await resolver(record).resolve({ identity })
+    expect(launch.resume?.adopted).toBe(adopted)
+  })
+
   it('reads an outcome chat from its records, and a newer one as unreadable', async () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-acp-outcome-read-'))
     const database = openTestJournalHostDatabase(root)

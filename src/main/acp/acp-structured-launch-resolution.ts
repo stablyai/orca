@@ -58,6 +58,8 @@ export type AcpStructuredLaunch = StructuredAgentCommand & {
   resume: {
     sessionId: string
     key: string
+    /** This chat took over a session it did not start, so it may belong to another folder. */
+    adopted?: true
     /** A chat-created session with no exchanged turn may never have been saved. */
     mayBeUnsaved: () => boolean
     /** Lost conversations whose warning rows are missing; read after startup succeeds. */
@@ -239,6 +241,7 @@ export function acpStructuredLaunchPart(
           ? {
               sessionId: head.handle.nativeId,
               key: agentSessionProviderHandleKey(head.handle),
+              ...(head.origin === 'adopted' ? { adopted: true as const } : {}),
               mayBeUnsaved: () =>
                 head.origin === 'created' &&
                 nothingExchangedOn(deps.readJournal, identity.sessionId, head.handle.nativeId),

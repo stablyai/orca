@@ -87,7 +87,10 @@ export async function initializeAcpStructuredSession(
         cwd: launch.cwd,
         mcpServers: [],
         sessionId: resume.sessionId,
-        ...setup
+        ...setup,
+        ...(resume.adopted && spec.dialect.reopenRebindsFolder
+          ? { requireListedInFolder: true }
+          : {})
       })
       assertStarting()
       replayed = input.lanes.finishLoad()
