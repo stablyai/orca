@@ -122,6 +122,14 @@ describe('a dsh launch prompt whose first Enter the launchpad refused', () => {
     })
   })
 
+  // Federated worker-start attaches for at most 100 s, so a dispatch keeps the fixed budget.
+  it('keeps a worker dispatch inside the fixed budget', async () => {
+    await expect(launchDsh(fixture('launchpad-draft-starting'), 45, true, 60_000)).resolves.toEqual({
+      enters: 30,
+      pastes: 1
+    })
+  })
+
   // #30778: a fresh worker's tui-idle settles on dsh 0.17's boot `OSC 7501 idle`, before its session opens.
   it('presses Enter again for a worker dispatch the launchpad refused', async () => {
     await expect(launchDsh(fixture('launchpad-draft-starting'), 3, true)).resolves.toEqual({

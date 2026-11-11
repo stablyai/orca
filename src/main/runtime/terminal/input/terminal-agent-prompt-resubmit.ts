@@ -40,7 +40,13 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
       return 0
     }
     let deadline = Date.now() + held.heldBudgetMs
-    const hardDeadline = deadline + (readsLaunchDraft ? DSH_LAUNCHPAD_SUBMIT_EXTENSION_MS : 0)
+    // Worker dispatches stay inside the fixed budget: federated worker-start attaches for at most
+    // 100 s, so a longer wait would let the home dispatch report outcome_unknown mid-retry.
+    const launchpadExtensionMs =
+      readsLaunchDraft && options.inputKind !== 'orchestration'
+        ? DSH_LAUNCHPAD_SUBMIT_EXTENSION_MS
+        : 0
+    const hardDeadline = deadline + launchpadExtensionMs
     let resubmits = 0
     let gatedResubmits = 0
     try {
@@ -75,7 +81,7 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
             return resubmits
           }
           if (Date.now() >= deadline) {
-            if (Date.now() >= hardDeadline) {
+            if (launchpadExtensionMs === 0 || Date.now() >= hardDeadline) {
               return resubmits
             }
             deadline = hardDeadline
