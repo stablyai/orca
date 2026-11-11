@@ -186,6 +186,9 @@ export class RuntimeAutomationController {
     if (!targetChanged && patch.reuseSession && current.workspaceMode !== 'existing') {
       throw new Error('Session reuse requires an existing workspace target.')
     }
+    if (patch.onNoReusableSession && !(patch.reuseSession ?? current.reuseSession)) {
+      throw new Error('Skipping an unusable previous session requires session reuse.')
+    }
     const automation = this.store.updateAutomation(id, patch, { ...options, resolvedRepo })
     await this.store.flushPendingOrThrowAsync?.({ drainToStableGeneration: false })
     return automation
