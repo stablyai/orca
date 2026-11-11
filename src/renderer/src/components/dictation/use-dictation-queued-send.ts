@@ -16,17 +16,22 @@ export type DictationQueuedSendKind = 'chat' | 'terminal'
 
 export type DictationAutoSendCountdown = { deadline: number; delayMs: number }
 
-/** True once, when the composer's render reaches the countdown's send and no one took over meanwhile. */
-type AutoSendClaim = () => boolean
+/** The countdown's send on its way through the composer's render; either call ends the takeover watch. */
+type AutoSendHandoff = {
+  /** True once, when the render reaches it and no one took over meanwhile. */
+  claim: () => boolean
+  /** The composer went away or replaced it before the render did. */
+  dispose: () => void
+}
 
 type QueuedSend = (stillQueued: () => boolean) => void | Promise<void>
 
 type ComposerSendQueue = (root: HTMLElement, send: () => void) => boolean
 let composerSendQueue: ComposerSendQueue | null = null
 
-const composerAutoSends = new WeakMap<HTMLElement, (claim: AutoSendClaim) => void>()
+const composerAutoSends = new WeakMap<HTMLElement, (handoff: AutoSendHandoff) => void>()
 
-type PendingSend<Intent> = { intent?: Intent; claim?: AutoSendClaim }
+type PendingSend<Intent> = { intent?: Intent; handoff?: AutoSendHandoff }
 
 /**
  * A composer's Send: while it's being dictated into, it waits for the last words to land and render,
@@ -42,11 +47,12 @@ export function useSendAfterDictation<Intent>(
   useEffect(() => {
     const pending = pendingRef.current
     pendingRef.current = null
-    if (pending && (!pending.claim || pending.claim())) {
+    if (pending && (!pending.handoff || pending.handoff.claim())) {
       sendMessage(pending.intent)
     }
   }, [landedTick, sendMessage])
   const sendOnceRendered = useCallback((pending: PendingSend<Intent>) => {
+    pendingRef.current?.handoff?.dispose()
     pendingRef.current = pending
     setLandedTick((tick) => tick + 1)
   }, [])
@@ -55,11 +61,15 @@ export function useSendAfterDictation<Intent>(
     if (!sendsWhenDictationEnds || !element) {
       return
     }
-    const autoSend = (claim: AutoSendClaim): void => sendOnceRendered({ claim })
+    const autoSend = (handoff: AutoSendHandoff): void => sendOnceRendered({ handoff })
     composerAutoSends.set(element, autoSend)
     return () => {
       if (composerAutoSends.get(element) === autoSend) {
         composerAutoSends.delete(element)
+      }
+      if (pendingRef.current?.handoff) {
+        pendingRef.current.handoff.dispose()
+        pendingRef.current = null
       }
     }
   }, [root, sendsWhenDictationEnds, sendOnceRendered])
@@ -225,14 +235,20 @@ export function useDictationQueuedSend(
   )
 
   const countDownToAutoSend = useCallback((watch: AutoSendWatch): Promise<void> => {
-    const claim = (): boolean => {
-      const wanted = watch.live
+    const dispose = (): void => {
       watch.live = false
       watch.stopWatching()
       if (autoSendRef.current === watch) {
         autoSendRef.current = null
       }
-      return wanted
+    }
+    const handoff: AutoSendHandoff = {
+      claim: () => {
+        const wanted = watch.live
+        dispose()
+        return wanted
+      },
+      dispose
     }
     const delayMs = dictationAutoSendDelayMs(useAppStore.getState().settings?.voice)
     setAutoSend({ deadline: performance.now() + delayMs, delayMs })
@@ -242,7 +258,7 @@ export function useDictationQueuedSend(
         if (send) {
           const handOff = (): void => {
             watch.handedOff = true
-            send(claim)
+            send(handoff)
           }
           queuedRef.current = { run: watch.run, send: handOff }
         }
