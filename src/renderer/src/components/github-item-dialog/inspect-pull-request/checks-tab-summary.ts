@@ -1,5 +1,8 @@
 import { CircleDashed } from 'lucide-react'
-import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-panel/check-presentation'
+import {
+  CHECK_COLOR,
+  CHECK_ICON
+} from '@/components/right-sidebar/checks-panel/presentation/check-presentation'
 import type { getCheckCounts } from '@/components/pr-check-counts'
 
 export function getChecksTabSummaryPresentation(counts: ReturnType<typeof getCheckCounts>): {
@@ -14,9 +17,11 @@ export function getChecksTabSummaryPresentation(counts: ReturnType<typeof getChe
         ? CHECK_ICON.action_required
         : counts.pending > 0
           ? CHECK_ICON.pending
-          : counts.passing > 0
-            ? CHECK_ICON.success
-            : CircleDashed
+          : counts.cancelled > 0
+            ? CHECK_ICON.cancelled
+            : counts.passing > 0
+              ? CHECK_ICON.success
+              : CircleDashed
   const summaryColor =
     counts.failing > 0
       ? CHECK_COLOR.failure
@@ -24,8 +29,10 @@ export function getChecksTabSummaryPresentation(counts: ReturnType<typeof getChe
         ? CHECK_COLOR.action_required
         : counts.pending > 0
           ? CHECK_COLOR.pending
-          : counts.passing > 0
-            ? CHECK_COLOR.success
-            : 'text-muted-foreground'
+          : counts.cancelled > 0
+            ? CHECK_COLOR.cancelled
+            : counts.passing > 0
+              ? CHECK_COLOR.success
+              : 'text-muted-foreground'
   return { SummaryIcon, summaryColor }
 }

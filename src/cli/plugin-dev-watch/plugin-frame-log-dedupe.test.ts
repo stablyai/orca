@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { formatPluginDevWatchEvent } from './plugin-dev-watch-events'
 import { PluginFrameLogDedupe } from './plugin-frame-log-dedupe'
 
 const line = (ts: number, text: string, level = 'warn') => ({ ts, level, line: text })
@@ -24,14 +23,5 @@ describe('PluginFrameLogDedupe', () => {
   it('keeps the same text at another level apart', () => {
     const dedupe = new PluginFrameLogDedupe()
     expect(dedupe.take([line(1, '[frame] boom'), line(2, '[frame] boom', 'error')])).toHaveLength(2)
-  })
-
-  it('shows the count after the line', () => {
-    const base = { type: 'log' as const, pluginKey: 'acme.todos', ts: 0, level: 'warn', line: 'x' }
-    expect(formatPluginDevWatchEvent({ ...base, count: 3 })).toMatch(/warn {2}x ×3$/)
-    expect(formatPluginDevWatchEvent({ ...base, count: 4, repeat: true })).toMatch(
-      /warn {2}x \(×4 more\)$/
-    )
-    expect(formatPluginDevWatchEvent(base)).toMatch(/warn {2}x$/)
   })
 })

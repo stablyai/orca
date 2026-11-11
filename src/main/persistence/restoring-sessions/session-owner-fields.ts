@@ -1,12 +1,12 @@
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import {
   getWorktreeIdFromHostIdentity,
   isWorktreeHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
-import { SESSION_FIELDS_PRUNED_BY_OWNER_KEY } from '../../orca-profiles/profile-project-session-field-disposition'
+import { SESSION_FIELDS_PRUNED_BY_OWNER_KEY } from '../../orca-profiles/project-transfer/profile-project-session-field-disposition'
 
 // Repo-keyed topology revisions advance rather than delete; host-qualified recency keys need a scan.
 export const OWNER_KEYED_SESSION_FIELDS_DELETED_WITH_THEIR_OWNER =

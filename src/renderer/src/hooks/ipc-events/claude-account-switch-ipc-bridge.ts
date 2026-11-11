@@ -1,4 +1,4 @@
-import { handleRunningClaudeSessionsAfterSwitch } from '@/lib/claude-account-switch-sessions'
+import { handleRunningClaudeSessionsAfterSwitch } from '@/lib/provider-accounts/claude-account-switch-sessions'
 
 export function registerClaudeAccountSwitchIpcBridge(unsubs: (() => void)[]): void {
   const subscribe = window.api.claudeAccounts?.onSelectedElsewhere
@@ -7,7 +7,11 @@ export function registerClaudeAccountSwitchIpcBridge(unsubs: (() => void)[]): vo
   }
   unsubs.push(
     subscribe((change) => {
-      void handleRunningClaudeSessionsAfterSwitch({ owner: { kind: 'local' }, ...change })
+      void handleRunningClaudeSessionsAfterSwitch({
+        owner: { kind: 'local' },
+        ...change,
+        madeElsewhere: true
+      })
     })
   )
 }

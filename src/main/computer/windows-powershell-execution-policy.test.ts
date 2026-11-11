@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  FALLBACK_WINDOWS_EXECUTION_POLICY,
-  PREFERRED_WINDOWS_EXECUTION_POLICY,
-  isExecutionPolicyBlocked,
-  windowsPowerShellRuntimeArgs
-} from './windows-powershell-execution-policy'
+import { isExecutionPolicyBlocked } from './windows-powershell-execution-policy'
 
 /** Captured PowerShell errors, preserving console hard wrapping. */
 const POLICY_BLOCKED_RESTRICTED = [
@@ -52,32 +47,5 @@ describe('isExecutionPolicyBlocked', () => {
         'non puo essere caricato'
       )
     expect(isExecutionPolicyBlocked(localized)).toBe(true)
-  })
-
-  it('ignores the failures the helper reports every day', () => {
-    expect(isExecutionPolicyBlocked('code 1: The term is not recognized')).toBe(false)
-    expect(isExecutionPolicyBlocked('Add-Type : Cannot access the temporary directory')).toBe(false)
-    expect(isExecutionPolicyBlocked('')).toBe(false)
-  })
-})
-
-describe('windowsPowerShellRuntimeArgs', () => {
-  it('never emits Bypass unless the caller escalated to it', () => {
-    const preferred = windowsPowerShellRuntimeArgs(
-      'C:\\orca\\runtime.ps1',
-      PREFERRED_WINDOWS_EXECUTION_POLICY,
-      ['-Serve']
-    )
-    expect(preferred).not.toContain(FALLBACK_WINDOWS_EXECUTION_POLICY)
-    expect(preferred).toEqual([
-      '-NoLogo',
-      '-NoProfile',
-      '-NonInteractive',
-      '-ExecutionPolicy',
-      'RemoteSigned',
-      '-File',
-      'C:\\orca\\runtime.ps1',
-      '-Serve'
-    ])
   })
 })

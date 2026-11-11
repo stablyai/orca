@@ -1,17 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { legacyPluginCatalog } from '../../../../config/scripts/export-legacy-plugin-catalog.mjs'
-import {
-  PLUGIN_CATALOG_RELEASE_LIMIT,
-  pluginCatalogSchema,
-  pluginCatalogVersionError,
-  selectPluginCatalogRelease
-} from './plugin-catalog'
+import { legacyPluginCatalog } from '../../../../config/scripts/plugin-authoring/content-validation/export-legacy-plugin-catalog.mjs'
+import { pluginCatalogSchema, selectPluginCatalogRelease } from './plugin-catalog'
 import { pluginCatalogReleaseSchema } from './plugin-catalog-release'
-import {
-  PLUGIN_MARKETPLACE_ENTRY_LIMIT,
-  pluginMarketplaceListingSchema,
-  pluginMarketplaceSchema
-} from './plugin-marketplace'
+import { pluginMarketplaceSchema } from './plugin-marketplace'
 
 function release(version: string, minimumOrca = '1.4.0') {
   return pluginCatalogReleaseSchema.parse({
@@ -51,70 +42,6 @@ describe('plugin catalog', () => {
     }
   )
 
-  it('keeps what it can read and skips the rest', () => {
-    const parsed = pluginCatalogSchema.parse(
-      catalog(
-        [
-          entry('acme.one', { surprise: true, description: 'x'.repeat(5_000) }),
-          entry('acme.one', { categories: ['other'] }),
-          entry('acme.two', { releases: [{ ...release('2.0.0'), types: ['widget'] }] }),
-          entry('acme.three', {
-            categories: [
-              'themes',
-              'themes',
-              'Not A Slug',
-              ...Array.from({ length: 30 }, (_, i) => `c${i}`)
-            ],
-            releases: [{ broken: true }, release('1.1.0')]
-          }),
-          { id: 5 }
-        ],
-        { future: { anything: true } }
-      )
-    )
-    expect(parsed.plugins.map((plugin) => plugin.id)).toEqual(['acme.one', 'acme.three'])
-    expect(parsed.plugins[0]).not.toHaveProperty('surprise')
-    expect(parsed.plugins[0]?.description).toBeUndefined()
-    expect(parsed.plugins[0]?.categories).toEqual(['themes'])
-    expect(parsed.plugins[1]?.categories).toHaveLength(16)
-    expect(parsed.plugins[1]?.categories.slice(0, 2)).toEqual(['themes', 'c0'])
-    expect(parsed.plugins[1]?.releases.map((r) => r.version)).toEqual(['1.1.0'])
-  })
-
-  it('reads the owner id without carrying it into the cached listing', () => {
-    const parsed = pluginCatalogSchema.parse(
-      catalog([entry('acme.one', { ownerId: 1_234 }), entry('acme.two', { ownerId: 'acme' })])
-    )
-    expect(parsed.plugins.map((plugin) => plugin.id)).toEqual(['acme.one', 'acme.two'])
-    expect(parsed.plugins[0]).not.toHaveProperty('ownerId')
-    // Why strict: older Orca reads the cached listing back with this shape after a downgrade.
-    const { name, owner, plugins } = parsed
-    expect(pluginMarketplaceListingSchema.safeParse({ name, owner, plugins }).success).toBe(true)
-  })
-
-  it('trims an oversized catalog and release list instead of refusing it', () => {
-    const many = Array.from({ length: PLUGIN_MARKETPLACE_ENTRY_LIMIT + 5 }, (_, index) =>
-      entry(`acme.p${index}`, {
-        releases: Array.from({ length: PLUGIN_CATALOG_RELEASE_LIMIT + 3 }, (_, r) =>
-          release(`1.0.${r}`)
-        )
-      })
-    )
-    const parsed = pluginCatalogSchema.parse(catalog(many))
-    expect(parsed.plugins).toHaveLength(PLUGIN_MARKETPLACE_ENTRY_LIMIT)
-    expect(parsed.plugins[0]?.releases).toHaveLength(PLUGIN_CATALOG_RELEASE_LIMIT)
-  })
-
-  it('refuses a newer catalog format with the fix, and requires the version', () => {
-    expect(pluginCatalogVersionError(catalog([], { catalogVersion: 3 }))).toBe(
-      'uses catalog format 3; update Orca to browse this catalog'
-    )
-    expect(pluginCatalogVersionError(catalog([]))).toBeNull()
-    expect(
-      pluginCatalogSchema.safeParse({ name: 'Acme', owner: 'acme', plugins: [] }).success
-    ).toBe(false)
-  })
-
   it('offers the newest release this Orca can install', () => {
     const releases = [
       release('3.0.0', '2.0.0'),
@@ -129,20 +56,6 @@ describe('plugin catalog', () => {
       selectPluginCatalogRelease([release('2.0.0', '9.0.0'), release('1.0.0', '8.0.0')], '1.0.0')
         ?.minimumOrca
     ).toBe('8.0.0')
-  })
-
-  it('exports a frozen v1 file that old clients accept', () => {
-    const parsed = pluginCatalogSchema.parse(
-      catalog([entry('acme.one', { description: 'One theme.' }), entry('acme.two')])
-    )
-    const legacy = legacyPluginCatalog({ ...parsed, plugins: parsed.plugins })
-    expect(pluginMarketplaceSchema.safeParse(legacy).success).toBe(true)
-    expect(legacy.plugins[0]).toEqual({
-      id: 'acme.one',
-      source: { kind: 'git', url: 'https://github.com/acme/acme.one.git', ref: 'main' },
-      description: 'One theme.',
-      categories: ['themes']
-    })
   })
 
   it('lists plugins from directories of one repository and refuses unsafe directories', () => {

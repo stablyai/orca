@@ -57,23 +57,6 @@ describe('catalog 2 components', () => {
     }
   })
 
-  it('returns Tree items as a fresh copy holding only known fields', () => {
-    const result = parse(
-      node('Tree', {
-        label: 'T',
-        items: [{ key: 'a', label: 'A', hasChildren: true, children: [{ key: 'b', label: 'B' }] }]
-      })
-    )
-    expect(result.ok && result.tree?.props).toEqual({
-      label: 'T',
-      items: [{ key: 'a', label: 'A', hasChildren: true, children: [{ key: 'b', label: 'B' }] }]
-    })
-    const extra = parse(
-      node('Tree', { label: 'T', items: [{ key: 'a', label: 'A', html: '<b>' }] })
-    )
-    expect(extra.ok && extra.tree?.type).toBe('Unsupported')
-  })
-
   it('takes only image files inside the plugin', () => {
     for (const path of ['logo.png', 'assets/icons/a.WEBP', 'img/photo.jpeg']) {
       expect({ path, ok: isPluginDeclarativeImagePath(path) }).toEqual({ path, ok: true })

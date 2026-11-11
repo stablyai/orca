@@ -1,3 +1,6 @@
+import { waitForAiVaultScan } from '../ai-vault-scan-cancellation'
+import { rovoSessionCwd, rovoRoleFromKind } from './session-scanner-rovo-metadata'
+export { rovoSessionCwd, rovoRoleFromKind } from './session-scanner-rovo-metadata'
 import { foldOmpTranscriptTitle, type OmpTranscriptTitle } from './omp/session-scanner-omp-title'
 import { isOmpWrittenRecord } from './omp/session-scanner-omp-written-record'
 import {
@@ -10,8 +13,8 @@ import {
 } from '../../native-chat/wsl-transcript-fs-access'
 import { basename, dirname } from 'node:path'
 import { createInterface } from 'node:readline'
-import type { AiVaultSession } from '../../../shared/ai-vault-types'
-import { rovoTranscriptPathForMetadata } from '../../../shared/ai-vault-session-log-resource'
+import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
+import { rovoTranscriptPathForMetadata } from '../../../shared/ai-vault/session-display/ai-vault-session-log-resource'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { withOmpSubagentTranscriptCount } from './omp/session-scanner-omp-subagent-transcripts'
 import type {
@@ -45,28 +48,16 @@ type ParserSessionOptions = {
   executionHostPlatform?: NodeJS.Platform | null
 }
 
-/** Scope discovery reads cwd from metadata without opening the context file. */
-export function rovoSessionCwd(metadata: Record<string, unknown>): string | null {
-  return firstString(metadata, [
-    'workspace_path',
-    'workspacePath',
-    'workspace',
-    'cwd',
-    'working_directory',
-    'workingDirectory',
-    'project_path',
-    'projectPath'
-  ])
-}
-
 export async function parseRovoSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform,
-  messages?: TranscriptMessageSink
+  messages?: TranscriptMessageSink,
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
-  const metadata = asRecord(
-    JSON.parse(await wslGatedReadFile(file.path, 'utf-8', 'scan')) as unknown
+  const parsed: unknown = JSON.parse(
+    await waitForAiVaultScan(wslGatedReadFile(file.path, 'utf-8', 'scan', signal), signal)
   )
+  const metadata = asRecord(parsed)
   if (!metadata) {
     return null
   }
@@ -88,9 +79,16 @@ export async function parseRovoSessionFile(
   )
 
   const contextPath = rovoTranscriptPathForMetadata(file.path)
-  const context = await readJsonObjectIfExists(contextPath)
+  const context = await waitForAiVaultScan(readJsonObjectIfExists(contextPath, signal), signal)
   if (context) {
-    consumeRovoSessionContext(accumulator, context)
+    for (const message of arrayValue(context.messages)) {
+      consumeRovoSessionContext(accumulator, { messages: [message] })
+      await waitForAiVaultScan(messages?.drain?.() ?? Promise.resolve(), signal)
+    }
+    for (const entry of arrayValue(context.message_history)) {
+      consumeRovoSessionContext(accumulator, { message_history: [entry] })
+      await waitForAiVaultScan(messages?.drain?.() ?? Promise.resolve(), signal)
+    }
   }
 
   return finalizeSession(accumulator, platform)
@@ -139,16 +137,6 @@ export function consumeRovoHistoryEntry(
     accumulator.title ??= extractContentText(content)
   }
   addSessionContent(accumulator, role, content, record.timestamp)
-}
-
-export function rovoRoleFromKind(value: unknown): 'user' | 'assistant' | null {
-  if (value === 'request') {
-    return 'user'
-  }
-  if (value === 'response') {
-    return 'assistant'
-  }
-  return null
 }
 
 function rovoTextParts(parts: unknown[], role: 'user' | 'assistant'): string[] {

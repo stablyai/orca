@@ -1,8 +1,8 @@
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 
 export type HostPushState = {
   connection: {
-    client: RpcOperationSender | null
+    client: UnvalidatedRpcRequestPort | null
     support: ReturnType<typeof createHostPushSupportCompletion> | null
   }
   // An unanswered probe is unknown, not unsupported.

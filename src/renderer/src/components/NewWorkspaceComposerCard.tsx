@@ -1,28 +1,29 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
-import { getAgentCatalog } from '@/lib/agent-catalog'
-import { getScreenSubmitModifierLabel } from '@/lib/screen-submit-shortcut'
-import { resolveProjectCloneUrlPrefill } from '@/lib/project-clone-url-prefill'
+import { useAppStore } from '@/store/index'
+import { cn } from '@/lib/class-names'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
+import { getScreenSubmitModifierLabel } from '@/lib/keyboard/screen-submit-shortcut'
+import { resolveProjectCloneUrlPrefill } from '@/lib/workspace/creation/project-clone-url-prefill'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import {
   AddRemoteHostDialog,
   type AddRemoteHostMode
-} from '@/components/sidebar/AddRemoteHostDialog'
-import { lazyWithRetry } from '@/lib/lazy-with-retry'
+} from '@/components/sidebar/host-admission/ssh/AddRemoteHostDialog'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
 import type * as SetProjectLocationDialogModule from '@/components/new-workspace/SetProjectLocationDialog'
-import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-result'
+import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { withUiConnectTimeout } from '@/ssh/ssh-connect-ui-timeout'
 import { isSshConnectInFlight, trackSshConnect } from '@/ssh/ssh-connect-in-flight'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   DEFAULT_DISABLED_TUI_AGENTS,
   filterEnabledTuiAgents
-} from '../../../shared/tui-agent-selection'
-import type { RuntimeStatus } from '../../../shared/runtime-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+} from '../../../shared/agent-launch/catalog/tui-agent-selection'
+import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { NewWorkspaceComposerAdvancedSection } from './new-workspace/NewWorkspaceComposerAdvancedSection'
 import { NewWorkspaceComposerAgentSection } from './new-workspace/NewWorkspaceComposerAgentSection'
 import { NewWorkspaceComposerFooter } from './new-workspace/NewWorkspaceComposerFooter'
@@ -38,7 +39,7 @@ import {
 import { getSshStatusLabel } from './new-workspace/new-workspace-composer-ssh-status'
 import { useNewWorkspaceComposerFileDrop } from './new-workspace/use-new-workspace-composer-file-drop'
 import { useComposerFileDragOver } from './new-workspace/use-composer-file-drag-over'
-import { buildDefaultAgentSettingsUpdate } from '../../../shared/default-agent-settings'
+import { buildDefaultAgentSettingsUpdate } from '../../../shared/agent-launch/choices/default-agent-settings'
 
 // Lazy-load the project-location browser outside boot; warming shares this module entry with the click.
 const loadSetProjectLocationDialog = (): Promise<typeof SetProjectLocationDialogModule> =>
@@ -55,6 +56,7 @@ const SetProjectLocationDialog = lazyWithRetry(
 export default function NewWorkspaceComposerCard(
   props: NewWorkspaceComposerCardProps
 ): React.JSX.Element {
+  const t = useTranslate()
   useTranslation()
   const {
     contextualTourSource,
@@ -136,11 +138,11 @@ export default function NewWorkspaceComposerCard(
     needsSetupProjectHostSetupOptions.length > 0
   const sshStatusLabel = selectedRepoSshStatus
     ? getSshStatusLabel(selectedRepoSshStatus)
-    : translate('auto.components.NewWorkspaceComposerCard.notConnected', 'Not connected')
+    : t('auto.components.NewWorkspaceComposerCard.notConnected', 'Not connected')
   const connectButtonLabel =
     selectedRepoSshStatus === 'disconnected' || selectedRepoSshStatus === null
-      ? translate('auto.components.NewWorkspaceComposerCard.connect', 'Connect')
-      : translate('auto.components.NewWorkspaceComposerCard.reconnect', 'Reconnect')
+      ? t('auto.components.NewWorkspaceComposerCard.connect', 'Connect')
+      : t('auto.components.NewWorkspaceComposerCard.reconnect', 'Reconnect')
   const showSetupAgentStartupPolicy =
     setupControlsEnabled && setupConfig !== null && setupConfig.kind !== 'default-tabs'
   const agentCatalog = getAgentCatalog()
@@ -255,7 +257,7 @@ export default function NewWorkspaceComposerCard(
   )
   const handleNamePlainEnter = React.useCallback((): void => {
     const agentTrigger = composerRef?.current?.querySelector<HTMLElement>(
-      '[data-agent-combobox-root="true"][role="combobox"]'
+      '[data-agent-launch-picker-trigger="true"]'
     )
     agentTrigger?.focus()
   }, [composerRef])

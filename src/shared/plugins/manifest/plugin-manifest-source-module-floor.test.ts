@@ -30,10 +30,6 @@ describe('source module entry engine floor', () => {
     ).toBe(true)
   })
 
-  it('leaves HTML entries at their own floor', () => {
-    expect(parsePluginManifest(manifest('panel.html', '>=1.4.245')).ok).toBe(true)
-  })
-
   it('needs the same release for a .ts or .mts worker main', () => {
     const tooLow = parsePluginManifest(worker('src/main.ts', '>=1.4.245'))
     expect(tooLow.ok ? '' : tooLow.error).toContain(

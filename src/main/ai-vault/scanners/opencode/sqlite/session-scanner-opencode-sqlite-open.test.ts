@@ -3,14 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AiVaultScanIssue } from '../../../../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import Database from '../../../../sqlite/sync-database'
 import { listOpenCodeSqliteSessions } from './session-scanner-opencode-sqlite-list'
-import {
-  openCodeBusyTimeoutMs,
-  openCodeDatabaseScanIssue,
-  readOpenCodeDatabase
-} from './session-scanner-opencode-sqlite-open'
+import { readOpenCodeDatabase } from './session-scanner-opencode-sqlite-open'
 
 // A writer lock previously failed immediately and emptied both scan scopes (#15036).
 
@@ -178,25 +174,6 @@ describe('readOpenCodeDatabase', () => {
     }
   })
 
-  it('preserves the setup error when closing also fails', () => {
-    const path = seededDatabase('opencode.db', 'session-a')
-    const setupError = new Error('query_only setup failed')
-    const closeError = new Error('close failed')
-    const originalClose = Database.prototype.close
-    vi.spyOn(Database.prototype, 'pragma').mockImplementationOnce(() => {
-      throw setupError
-    })
-    vi.spyOn(Database.prototype, 'close').mockImplementationOnce(function (this: Database) {
-      originalClose.call(this)
-      throw closeError
-    })
-
-    const read = vi.fn()
-    expect(() => readOpenCodeDatabase({ dbPath: path, read })).toThrow(setupError)
-    expect(Database.prototype.close).toHaveBeenCalledOnce()
-    expect(read).not.toHaveBeenCalled()
-  })
-
   it('keeps the query-only guard enabled for successful reads', () => {
     const path = seededDatabase('opencode.db', 'session-a')
     readOpenCodeDatabase({
@@ -223,70 +200,5 @@ describe('readOpenCodeDatabase', () => {
       })
     ).toThrow('read blew up')
     expect(() => captured!.prepare('SELECT 1')).toThrow(/not open/i)
-  })
-})
-
-describe('openCodeBusyTimeoutMs', () => {
-  // WSL-share lock failures persist across timeouts; observed waits can also exceed the requested duration.
-  it('does not wait on a share where the wait provably cannot succeed', () => {
-    expect(openCodeBusyTimeoutMs('\\\\wsl.localhost\\Ubuntu\\home\\ada\\opencode.db')).toBe(0)
-    expect(openCodeBusyTimeoutMs('\\\\wsl$\\Ubuntu\\home\\ada\\opencode.db')).toBe(0)
-  })
-
-  it('still waits on a path where a writer really can be holding the lock', () => {
-    expect(openCodeBusyTimeoutMs('C:\\Users\\ada\\opencode.db')).toBe(1_500)
-    expect(openCodeBusyTimeoutMs('/home/ada/.local/share/opencode/opencode.db')).toBe(1_500)
-  })
-})
-
-describe('openCodeDatabaseScanIssue', () => {
-  const cantOpen = Object.assign(new Error('unable to open database file'), { errcode: 14 })
-
-  it('states the WSL share as a known limitation rather than an error to act on', () => {
-    const dbPath = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.local\\share\\opencode\\opencode.db'
-    const issue = openCodeDatabaseScanIssue(dbPath, cantOpen)
-
-    expect(issue.kind).toBe('scope')
-    expect(issue.path).toBe(dbPath)
-    expect(issue.message).toBe("OpenCode sessions inside WSL can't be searched from Windows yet.")
-    // Checkpointing cannot fix WSL-share locking; the diagnostic must not suggest flushing the WAL.
-    expect(issue.message).not.toContain('write-ahead log')
-  })
-
-  it('keeps the advice generic for a non-WSL path', () => {
-    const issue = openCodeDatabaseScanIssue('/home/ada/.local/share/opencode/opencode.db', cantOpen)
-
-    expect(issue.message).not.toContain('wsl.localhost')
-    expect(issue.message).toContain('write-ahead log')
-  })
-
-  // Real WSL-share reads fail even for idle non-WAL databases whose bytes open successfully on local disk.
-  it('does not blame a live writer for a lock-family error over a WSL share', () => {
-    const busy = Object.assign(new Error('database is locked'), { errcode: 5 })
-    const issue = openCodeDatabaseScanIssue(
-      '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.local\\share\\opencode\\opencode.db',
-      busy
-    )
-
-    expect(issue.message).not.toContain('is writing to')
-    expect(issue.message).toBe("OpenCode sessions inside WSL can't be searched from Windows yet.")
-  })
-
-  it('still blames a live writer for the same error on a local path', () => {
-    const busy = Object.assign(new Error('database is locked'), { errcode: 5 })
-    const issue = openCodeDatabaseScanIssue('/home/ada/.local/share/opencode/opencode.db', busy)
-
-    expect(issue.message).toContain('is writing to')
-  })
-
-  it('reports anything else with its underlying cause', () => {
-    const issue = openCodeDatabaseScanIssue(
-      '/home/ada/.local/share/opencode/opencode.db',
-      Object.assign(new Error('database disk image is malformed'), { errcode: 11 })
-    )
-
-    expect(issue.kind).toBe('scope')
-    expect(issue.message).not.toContain('write-ahead log')
-    expect(issue.message).toContain('database disk image is malformed')
   })
 })

@@ -1,8 +1,12 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
-import type { OrchestrationCallerIdentity } from '../../../../orchestration/orchestration-caller-identity'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import { isPeerCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import { isStructuredWorkerHandle } from '../../../../../../shared/orchestration/workers/structured-worker-handle'
+import type {
+  OrchestrationPartyIdentity as OrchestrationCallerIdentity,
+  OrchestrationPartyIdentity as OrchestrationParty
+} from '../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaSessionId } from '../../../../../../shared/orca-session-address'
 import { formatOrcaSessionAddress } from '../../../../../../shared/orca-session-address'
 import {
@@ -10,7 +14,6 @@ import {
   chatAssigneeOf,
   refuseChatSelfAssignment
 } from '../chat-assignee-admission'
-import type { OrchestrationParty } from '../../../../orchestration/orchestration-party'
 
 /** Before any effects, refuse coordinator self-assignment, foreign-workspace panes and terminals without agents. */
 export async function assertExplicitWorkerTerminalUsable(args: {
@@ -25,8 +28,9 @@ export async function assertExplicitWorkerTerminalUsable(args: {
   const targetPane = runtime.getTerminalPaneKey(terminal)
   const callerPane = coordinator?.paneKey ?? runtime.getTerminalPaneKey(from)
   // Structured coordinators may have no showable terminal; compare their handle/pane identity, or session address for handle-less callers.
+  // A paired Orca's coordinator has no terminal here either; its address is its handle.
   const coordinatorHandle =
-    coordinator?.terminalHandle === null
+    coordinator?.terminalHandle === null || isPeerCaller(coordinator)
       ? coordinator.address
       : isStructuredWorkerHandle(from)
         ? from

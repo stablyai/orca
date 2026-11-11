@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { DndContext } from '@dnd-kit/core'
 import { defineFixture } from '../../component-fixtures/component-fixture'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import TabBar from './TabBar'
 import type { TabBarProps } from './tab-bar-props'
 
@@ -16,6 +16,7 @@ const noop = (): void => {}
 function TabWidthFixture({
   count,
   titles = TITLES,
+  agentTabs = true,
   browserTabs,
   clientHostedBrowserRows,
   editorFiles,
@@ -23,6 +24,7 @@ function TabWidthFixture({
 }: {
   count: number
   titles?: string[]
+  agentTabs?: boolean
 } & Pick<
   TabBarProps,
   'browserTabs' | 'clientHostedBrowserRows' | 'editorFiles' | 'tabBarOrder'
@@ -37,7 +39,7 @@ function TabWidthFixture({
     color: null,
     sortOrder: index,
     createdAt: 0,
-    launchAgent: 'codex'
+    launchAgent: agentTabs ? 'codex' : undefined
   }))
 
   return (
@@ -201,4 +203,91 @@ export const singleHostedPage = defineFixture({
       ]}
     />
   )
+})
+
+function NonAgentTabsFixture(): React.JSX.Element {
+  return (
+    <TabWidthFixture
+      count={2}
+      titles={['sh', 'A very long terminal title '.repeat(8)]}
+      agentTabs={false}
+      tabBarOrder={['tab-0', 'browser-0', 'file-0', 'tab-1', 'browser-1', 'file-1']}
+      browserTabs={['Example', 'A very long browser page title '.repeat(8)].map((title, index) => ({
+        id: `browser-${index}`,
+        worktreeId: WORKSPACE_ID,
+        url: 'https://example.com',
+        title,
+        loading: false,
+        faviconUrl: null,
+        canGoBack: false,
+        canGoForward: false,
+        loadError: null,
+        createdAt: 0
+      }))}
+      editorFiles={['notes.md', `${'a-long-file-name-'.repeat(8)}.md`].map((name, index) => ({
+        id: `file-${index}`,
+        worktreeId: WORKSPACE_ID,
+        filePath: `/tmp/${name}`,
+        relativePath: name,
+        language: 'markdown',
+        isDirty: false,
+        mode: 'edit'
+      }))}
+      clientHostedBrowserRows={[
+        {
+          browserPageId: 'hosted-0',
+          worktreeId: WORKSPACE_ID,
+          url: 'https://example.com',
+          title: 'Hosted page',
+          loading: false,
+          browserHostClientId: 'client-0',
+          hostDeviceName: 'Phone',
+          hostAbsent: false
+        }
+      ]}
+    />
+  )
+}
+
+export const nonAgentTabs = defineFixture({
+  width: 1800,
+  render: () => <NonAgentTabsFixture />
+})
+
+export const nonAgentTabsOverflowing = defineFixture({
+  width: 420,
+  render: () => <NonAgentTabsFixture />
+})
+
+export const constrainedFiles = defineFixture({
+  width: 590,
+  render: () => (
+    <TabWidthFixture
+      count={0}
+      editorFiles={['first', 'second'].map((name, index) => ({
+        id: `file-${index}`,
+        worktreeId: WORKSPACE_ID,
+        filePath: `/tmp/${name}-${'long-name-'.repeat(12)}.md`,
+        relativePath: `${name}-${'long-name-'.repeat(12)}.md`,
+        language: 'markdown',
+        isDirty: false,
+        mode: 'edit'
+      }))}
+    />
+  )
+})
+
+function AgentIdentityFixture(): React.JSX.Element {
+  const [agentTabs, setAgentTabs] = useState(false)
+  return (
+    <>
+      <button onClick={() => setAgentTabs(!agentTabs)}>Toggle agent identity</button>
+      <TabWidthFixture count={2} titles={['sh', 'sh']} agentTabs={agentTabs} />
+    </>
+  )
+}
+
+export const agentIdentityChanges = defineFixture({
+  width: 900,
+  render: () => <AgentIdentityFixture />
 })

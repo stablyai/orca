@@ -17,7 +17,7 @@ vi.mock('./github-api-repository-remote-probe', () => ({
   getOriginGitHubApiRepository: remote,
   getGitHubApiRepositoryForRemote: remote
 }))
-vi.mock('../git/remote-name-listing', () => ({ shouldProbeGitRemote: async () => false }))
+vi.mock('../git/remotes/remote-name-listing', () => ({ shouldProbeGitRemote: async () => false }))
 vi.mock('./rate-limit', () => ({
   repositoryRateLimitGuard: () => ({ blocked: false }),
   noteRepositoryRateLimitSpend: () => {},
@@ -26,7 +26,7 @@ vi.mock('./rate-limit', () => ({
 vi.mock('./client/list/work-item-search-page', () => ({ usesGraphqlWorkItemSearch: () => false }))
 vi.mock('./client/lookup/pr-lookup-rate-limit', () => ({ assertRateLimitBudget: async () => {} }))
 
-vi.mock('../source-control/forge-provider', () => ({
+vi.mock('../source-control/forge-provider-detection', () => ({
   detectHostedReviewProvider: async () => 'github',
   getForgeProviderForRepository: async () => ({
     id: 'github',
@@ -53,7 +53,7 @@ import { getPRChecks } from './client/check/get-pr-checks'
 import { rerunPRChecks } from './client/check/rerun-pr-checks'
 import { getPRFileContents } from './work-item-details'
 import { resolveGitHubPrStartPoint } from './pr-start-point'
-import { RuntimeGitHubRepositoryQueryCommands } from '../runtime/runtime-github-repository-query-commands'
+import { RuntimeGitHubRepositoryQueryCommands } from '../runtime/integrations/github/runtime-github-repository-query-commands'
 import { clearGhAccountTokenCacheForTests } from './gh-account-token'
 import { clearGhCapabilityStateForTests } from './gh-capability-state'
 import { _resetGhRateLimitBreaker } from '../git/gh-rate-limit-breaker'
@@ -644,7 +644,7 @@ it.each(['error', 'absent'] as const)(
 it('recovers visible merged review through Bob complete membership iteration after Alice error and reuses Bob confirmation', async () => {
   request = (args, child, token) =>
     queueMicrotask(() => {
-      const membership = args.find((arg) => arg.includes('/commits/'))
+      const membership = args.find((arg) => arg.includes('/commits/') && arg.includes('/pulls?'))
       if (membership && token === 'Alice-token') {
         child.stderr?.emit('data', Buffer.from('request failed'))
         child.emit('exit', 1, null)
@@ -697,8 +697,11 @@ it('recovers visible merged review through Bob complete membership iteration aft
   })
   expect(
     requests
-      .filter((r) => r.args.some((arg) => arg.includes('/commits/')))
-      .map((r) => ({ endpoint: r.args.find((arg) => arg.includes('/commits/')), token: r.token }))
+      .filter((r) => r.args.some((arg) => arg.includes('/commits/') && arg.includes('/pulls?')))
+      .map((r) => ({
+        endpoint: r.args.find((arg) => arg.includes('/commits/') && arg.includes('/pulls?')),
+        token: r.token
+      }))
   ).toEqual([
     {
       endpoint: 'repos/acme/widgets/commits/bbbb2222bbbb2222/pulls?per_page=100&page=1',

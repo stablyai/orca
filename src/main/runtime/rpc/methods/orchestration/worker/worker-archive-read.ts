@@ -1,26 +1,26 @@
 import type {
   OrchestrationWorkerReadResult,
   OrchestrationWorkerReadSource
-} from '../../../../../../shared/orchestration-worker-output'
-import type { PtyLivenessVerdict } from '../../../../../../shared/pty-liveness-verdict'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+} from '../../../../../../shared/orchestration/workers/orchestration-worker-output'
+import type { PtyLivenessVerdict } from '../../../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type {
   WorkerTerminalArchiveRow,
   WorkerTerminalResourceRow
-} from '../../../../orchestration/worker-terminal-ownership'
+} from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import type {
   WorkerTerminalTailArchive,
   WorkerTranscriptSnapshotArchive
-} from '../../../../orchestration/worker-output-archive'
-import { clampWorkerTranscriptLimit } from '../../../../orchestration/worker-transcript-payload'
+} from '../../../../orchestration/workers/archives/worker-output-archive'
+import { clampWorkerTranscriptLimit } from '../../../../orchestration/workers/transcripts/worker-transcript-payload'
 import {
   createWorkerOutputSourceIdentity,
   decodeWorkerOutputCursor,
   encodeWorkerOutputCursor
-} from '../../../../orchestration/worker-output-cursor'
-import type { WorkerStructuredJournalArchive } from '../../../../orchestration/structured-worker-journal-archive'
-import { readArchivedStructuredJournal } from '../../orchestration-structured-worker-lifecycle'
+} from '../../../../orchestration/workers/transcripts/worker-output-cursor'
+import type { WorkerStructuredJournalArchive } from '../../../../orchestration/workers/archives/structured-worker-journal-archive'
+import { readArchivedStructuredJournal } from '../structured-workers/orchestration-structured-worker-lifecycle'
 
 const ARCHIVED_TERMINAL_PAGE_LINES = 2_000
 

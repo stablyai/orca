@@ -25,10 +25,10 @@ vi.mock('../../src/main/providers/agent-foreground-process', () => ({
   }
 }))
 
-import { createPtySubprocess } from '../../src/main/daemon/pty-subprocess'
-import { createPtyProcessEventEmitter } from '../../src/main/daemon/pty-subprocess-test-harness'
-import { createPaneForegroundAgentTracker } from '../../src/renderer/src/components/terminal-pane/pane-foreground-agent-tracker'
-import type { PaneForegroundAgentEntry } from '../../src/renderer/src/store/slices/pane-foreground-agent'
+import { createPtySubprocess } from '../../src/main/daemon/pty-subprocess/pty-subprocess'
+import { createPtyProcessEventEmitter } from '../../src/main/daemon/pty-subprocess/testing/pty-subprocess-test-harness'
+import { createPaneForegroundAgentTracker } from '../../src/renderer/src/components/terminal-pane/pty-connection/agent-identity/foreground-process/pane-foreground-agent-tracker'
+import type { PaneForegroundAgentEntry } from '../../src/renderer/src/store/slices/agent-status/pane-foreground-agent'
 
 function mockWindowsPty() {
   return {

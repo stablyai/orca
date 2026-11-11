@@ -8,6 +8,8 @@ export function getEmptyProjectPlaceholderRepoIds(args: {
   worktreesByRepo: Readonly<Record<string, readonly Worktree[] | undefined>>
   visibleWorktrees: readonly Worktree[]
   filterRepoIds: readonly string[]
+  /** Repos whose checkout a VM create in progress has not adopted; its pending row stands for them. */
+  pendingVmRepoIds?: ReadonlySet<string>
 }): Set<string> {
   if (args.groupBy !== 'repo') {
     return new Set()
@@ -17,7 +19,7 @@ export function getEmptyProjectPlaceholderRepoIds(args: {
   const visibleRepoIds = new Set(args.visibleWorktrees.map((worktree) => worktree.repoId))
   const placeholderRepoIds = new Set<string>()
   for (const repo of args.repos) {
-    if (filterSet && !filterSet.has(repo.id)) {
+    if ((filterSet && !filterSet.has(repo.id)) || args.pendingVmRepoIds?.has(repo.id)) {
       continue
     }
     const hasNoWorktrees = (args.worktreesByRepo[repo.id]?.length ?? 0) === 0

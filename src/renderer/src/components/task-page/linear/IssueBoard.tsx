@@ -1,5 +1,5 @@
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   resolveLinearIssueEmptyKind,
   shouldOfferLinearIssueFetchMore
@@ -19,6 +19,7 @@ export function TaskPageLinearIssueBoard({
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const {
     linearMode,
     setLinearIssueLimit,
@@ -51,10 +52,10 @@ export function TaskPageLinearIssueBoard({
         <div className="m-4 flex flex-col items-center justify-center rounded-md border border-border/50 bg-muted/50 px-6 py-14 text-center shadow-sm">
           <LinearIcon className="mb-4 size-8 text-muted-foreground/60" />
           <p className="text-base font-medium text-foreground">
-            {translate('auto.components.TaskPage.linearLoginUnreadableTitle', 'Reconnect Linear')}
+            {t('auto.components.TaskPage.linearLoginUnreadableTitle', 'Reconnect Linear')}
           </p>
           <p className="mt-2 text-sm text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.TaskPage.linearLoginUnreadableBody',
               'Unable to read saved Linear login. Reconnect it in Settings.'
             )}
@@ -85,10 +86,10 @@ export function TaskPageLinearIssueBoard({
       activeLinearIssueHasCollectionError ? (
         <div className="px-4 py-10 text-center">
           <p className="text-sm font-medium text-foreground">
-            {translate('auto.components.TaskPage.cc8795e07c', 'Unable to load Linear issues')}
+            {t('auto.components.TaskPage.cc8795e07c', 'Unable to load Linear issues')}
           </p>
           <p className="mt-2 text-sm text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.TaskPage.5ed38a49e5',
               'Review the workspace error below, then refresh.'
             )}
@@ -102,18 +103,15 @@ export function TaskPageLinearIssueBoard({
       !activeLinearIssueHasCollectionError ? (
         <div className="px-4 py-10 text-center">
           <p className="text-sm font-medium text-foreground">
-            {translate('auto.components.TaskPage.903c7af49f', 'No Linear issues found')}
+            {t('auto.components.TaskPage.903c7af49f', 'No Linear issues found')}
           </p>
           <p className="mt-2 text-sm text-muted-foreground">
             {(() => {
               if (linearMode === 'in-orca') {
                 if (linearSearchActive) {
-                  return translate(
-                    'auto.components.TaskPage.2bdefbcac3',
-                    'Try a different search query.'
-                  )
+                  return t('auto.components.TaskPage.2bdefbcac3', 'Try a different search query.')
                 }
-                return translate(
+                return t(
                   'auto.components.TaskPage.linearEmptyHasWorktree',
                   'No Linear tickets are linked to an Orca workspace yet. Start work from a Linear issue to see it here.'
                 )
@@ -126,24 +124,21 @@ export function TaskPageLinearIssueBoard({
                 filteredIssueCount: filteredLinearIssues.length
               })
               if (emptyKind === 'context') {
-                return translate(
+                return t(
                   'auto.components.TaskPage.25ff84769a',
                   'No issues match this Linear context.'
                 )
               }
               if (emptyKind === 'search') {
-                return translate(
-                  'auto.components.TaskPage.2bdefbcac3',
-                  'Try a different search query.'
-                )
+                return t('auto.components.TaskPage.2bdefbcac3', 'Try a different search query.')
               }
               if (emptyKind === 'server-attribute-filter') {
-                return translate(
+                return t(
                   'auto.components.TaskPage.linearEmptyAttributeFilter',
                   'No issues match the selected filters. Clear a filter or try different criteria.'
                 )
               }
-              return translate(
+              return t(
                 'auto.components.TaskPage.linearEmptyUnfilteredScope',
                 'No issues in this workspace scope. Try searching or adjusting teams.'
               )
@@ -158,16 +153,16 @@ export function TaskPageLinearIssueBoard({
         <div className="px-4 py-10 text-center">
           <p className="text-sm font-medium text-foreground">
             {linearMode === 'in-orca' && linearSearchActive
-              ? translate('auto.components.TaskPage.903c7af49f', 'No Linear issues found')
-              : translate(
+              ? t('auto.components.TaskPage.903c7af49f', 'No Linear issues found')
+              : t(
                   'auto.components.TaskPage.618107fab3',
                   'No fetched issues match the selected teams'
                 )}
           </p>
           <p className="mt-2 text-sm text-muted-foreground">
             {linearMode === 'in-orca' && linearSearchActive
-              ? translate('auto.components.TaskPage.2bdefbcac3', 'Try a different search query.')
-              : translate(
+              ? t('auto.components.TaskPage.2bdefbcac3', 'Try a different search query.')
+              : t(
                   'auto.components.TaskPage.592a55611b',
                   'Try selecting more teams or refreshing; team filters apply to the current fetched issue set.'
                 )}
@@ -191,7 +186,7 @@ export function TaskPageLinearIssueBoard({
                 )
               }}
             >
-              {translate('auto.components.TaskPage.linearFetchMore', 'Fetch more')}
+              {t('auto.components.TaskPage.linearFetchMore', 'Fetch more')}
             </Button>
           ) : null}
         </div>

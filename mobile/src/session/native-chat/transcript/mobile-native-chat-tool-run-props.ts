@@ -23,7 +23,6 @@ export type MobileNativeChatToolRunProps = {
   /** The turn is blocked on the reader's answer, so its calls decide liveness. */
   awaitingAnswer?: boolean
   fontScale?: number
-  onOpenFile?: (path: string) => void
   /** Thumbnails of the images the run's reads returned, drawn under its header. */
   viewedImages?: React.ReactNode
 }

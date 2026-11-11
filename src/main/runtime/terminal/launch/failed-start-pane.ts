@@ -3,20 +3,22 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import { isHibernationDoneRecord } from '../../../../shared/hibernation-done-record'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
-import type * as dependencies from '../../orca-runtime-create-terminal-dependencies'
+import type { PaneStartArgsOf } from './runtime-pane-admission'
+import type { TerminalCreateOptions } from './terminal-create-options'
+import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
 import {
   PaneResumeOutcomes,
   PaneStartStatuses,
   paneStartFailure,
   type PaneFactSources
-} from '../../pane-start-statuses'
-import type { LayoutCommandRunOptions, WindowLayoutCommand } from '../../runtime-layout-apply'
+} from '../surface/pane-start-statuses'
+import type { LayoutCommandRunOptions, WindowLayoutCommand } from '../layout/runtime-layout-apply'
 import {
   runLayoutPaneStarts,
   startsPanes,
   stopReplacedTerminals
 } from '../recovery/layout-command-pane-starts'
-import { allocateTerminalPaneIdentity } from '../../runtime-terminal-pane-identity'
+import { allocateTerminalPaneIdentity } from '../identity/runtime-terminal-pane-identity'
 import { OrcaRuntimeWithCreateTerminal } from './terminal-create'
 import { mainOwnsTabLayout } from './main-owned-tab-layout'
 import { PaneOwnerContentionError } from '../../../ipc/pty/pane/pane-spawn-operation'
@@ -116,7 +118,7 @@ export abstract class OrcaRuntimeWithFailedStartPanes extends OrcaRuntimeWithCre
     )
   }
 
-  protected paneStartStatusArgs: dependencies.PaneStartArgsOf = (opts) => {
+  protected paneStartStatusArgs: PaneStartArgsOf = (opts) => {
     const sink = this.paneStartStatuses
     return sink
       ? {
@@ -133,9 +135,9 @@ export abstract class OrcaRuntimeWithFailedStartPanes extends OrcaRuntimeWithCre
   // Not async: with the switch off this adds no await to every create.
   override createTerminal(
     worktreeSelector?: string,
-    opts: dependencies.TerminalCreateOptions = {},
+    opts: TerminalCreateOptions = {},
     ...evidence: TerminalWorkspaceCreationEvidence
-  ): Promise<dependencies.RuntimeTerminalCreate> {
+  ): Promise<RuntimeTerminalCreate> {
     // Keep main-owned failed panes visible regardless of which start step failed.
     if (
       ORCA_LAYOUT_OWNER_IS_MAIN &&
@@ -158,8 +160,8 @@ export abstract class OrcaRuntimeWithFailedStartPanes extends OrcaRuntimeWithCre
   startWindowTabTerminal(
     worktreeId: string,
     pane: { tabId: string; leafId: string },
-    opts: Omit<dependencies.TerminalCreateOptions, 'tabId' | 'leafId' | 'presentation'>
-  ): Promise<dependencies.RuntimeTerminalCreate> {
+    opts: Omit<TerminalCreateOptions, 'tabId' | 'leafId' | 'presentation'>
+  ): Promise<RuntimeTerminalCreate> {
     if (
       !ORCA_LAYOUT_OWNER_IS_MAIN ||
       !mainOwnsTabLayout(this.getWorkspaceSessionHostIdsForTab(worktreeId, pane.tabId))
@@ -187,7 +189,7 @@ export abstract class OrcaRuntimeWithFailedStartPanes extends OrcaRuntimeWithCre
   private async keepFailedStartPane(
     worktreeSelector: string,
     pane: FailedStartPane,
-    { title, wslUserAct }: dependencies.TerminalCreateOptions,
+    { title, wslUserAct }: TerminalCreateOptions,
     error: unknown,
     ...evidence: TerminalWorkspaceCreationEvidence
   ): Promise<void> {

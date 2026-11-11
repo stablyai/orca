@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { tabHasLivePty } from '../../../../shared/tab-has-live-pty'
-import { createTestStore, makeTab, makeWorktree } from '../slices/store-test-helpers'
-import { createStoreSessionMockApi } from '../slices/store-session-test-harness'
+import { createTestStore } from '../testing/app-store-test-fixture'
+import { makeTab } from './terminal-tab.test-fixture'
+import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
+import { createStoreSessionMockApi } from '../testing/app-store-session-api.test-fixture'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 

@@ -58,7 +58,7 @@ export function claudeProfileTranscriptDirs(): string[] {
 export async function listClaudeTranscriptFiles(
   profileDirs = claudeProfileTranscriptDirs()
 ): Promise<string[]> {
-  // Empty lists retain the legacy host-only worker contract.
+  // Empty lists retain the host-only worker contract.
   const roots = [
     ...new Set(profileDirs.length ? profileDirs : [CLAUDE_PROJECTS_DIR, CLAUDE_TRANSCRIPTS_DIR])
   ]

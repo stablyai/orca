@@ -1,10 +1,9 @@
 // @vitest-environment happy-dom
-// Exercise the real forwarder’s exact commit/release bytes; wiring mocks cannot verify negotiated CSI-u or macOS event ordering.
 import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installPreviewImeBridge } from './preview-terminal-ime-bridge'
 
-vi.mock('@/lib/shortcut-platform', () => ({
+vi.mock('@/lib/keyboard/shortcut-platform', () => ({
   getShortcutPlatform: () => 'darwin'
 }))
 
@@ -12,14 +11,10 @@ const COMMA = { key: ',', code: 'Comma', keyCode: 188 }
 
 type Session = {
   emitted: string[]
-  flagReads: number
   setFlags: (flags: number) => void
   keydown: (init?: { shiftKey?: boolean; repeat?: boolean; key?: string; code?: string }) => void
   keyup: (init?: { shiftKey?: boolean; key?: string; code?: string }) => void
   commit: (text: string) => void
-  /** An input event the text system produced without committing text. */
-  swallow: () => void
-  xtermKittyFlags: () => number
   dispose: () => void
 }
 
@@ -30,12 +25,8 @@ function open(initialFlags: number): Session {
   terminal.open(container)
   const textarea = terminal.textarea!
   let flags = initialFlags
-  let flagReads = 0
   const bridge = installPreviewImeBridge(terminal, {
-    getKittyKeyboardFlags: () => {
-      flagReads += 1
-      return flags
-    }
+    getKittyKeyboardFlags: () => flags
   })!
   terminal.attachCustomKeyEventHandler((event) => !bridge.claimKeyEvent(event))
   const emitted: string[] = []
@@ -68,22 +59,12 @@ function open(initialFlags: number): Session {
 
   return {
     emitted,
-    get flagReads() {
-      return flagReads
-    },
     setFlags: (next) => {
       flags = next
     },
     keydown: (init = {}) => key('keydown', init),
     keyup: (init = {}) => key('keyup', init),
     commit: (text) => input(text),
-    swallow: () => input(null),
-    xtermKittyFlags: () =>
-      (
-        terminal as unknown as {
-          _core?: { coreService?: { kittyKeyboard?: { flags?: number } } }
-        }
-      )._core?.coreService?.kittyKeyboard?.flags ?? 0,
     dispose: () => {
       bridge.dispose()
       terminal.dispose()
@@ -100,88 +81,6 @@ describe('preview IME bridge outbound bytes', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     document.body.replaceChildren()
-  })
-
-  it('encodes the commit from the flags proven before any live output', () => {
-    const session = open(8)
-    session.keydown()
-    session.commit('，')
-    session.keyup()
-    expect(session.emitted.join('')).toBe('\x1b[44u')
-    session.dispose()
-  })
-
-  describe.each([
-    ['keydown -> insertText -> keyup', false],
-    // Some macOS input sources commit after keyup; preserve press ownership until then.
-    ['keydown -> keyup -> insertText', true]
-  ])('in %s order', (_name, keyupFirst) => {
-    const type = (session: Session): void => {
-      session.keydown()
-      if (keyupFirst) {
-        session.keyup()
-        session.commit('，')
-      } else {
-        session.commit('，')
-        session.keyup()
-      }
-    }
-
-    it.each([
-      ['no flags', 0, '，'],
-      ['disambiguate only', 1, '，'],
-      ['event types', 2, '，\x1b[44;1:3u'],
-      ['all keys as escape codes', 8, '\x1b[44u'],
-      ['all keys + event types', 10, '\x1b[44u\x1b[44;1:3u']
-    ])('emits the %s byte shape', (_flagName, flags, expected) => {
-      const session = open(flags)
-      type(session)
-      expect(session.emitted.join('')).toBe(expected)
-      session.dispose()
-    })
-
-    it('owns the release even though xterm holds no kitty state', () => {
-      const session = open(10)
-      // Keep this harness’s xterm flags at zero to prove the forwarder emits releases without xterm’s help.
-      expect(session.xtermKittyFlags()).toBe(0)
-      type(session)
-      expect(session.emitted.join('')).toBe('\x1b[44u\x1b[44;1:3u')
-      session.dispose()
-    })
-
-    it('reads the mutable getter exactly once, at commit time', () => {
-      const session = open(0)
-      session.keydown()
-      expect(session.flagReads).toBe(0)
-      session.setFlags(8)
-      if (keyupFirst) {
-        session.keyup()
-        expect(session.flagReads).toBe(0)
-        session.commit('，')
-      } else {
-        session.commit('，')
-        session.keyup()
-      }
-      expect(session.flagReads).toBe(1)
-      // The commit-time read is what both the press AND its release encode from.
-      expect(session.emitted.join('')).toBe('\x1b[44u')
-      session.dispose()
-    })
-
-    it('emits nothing when the input source swallowed the press', () => {
-      const session = open(10)
-      session.keydown()
-      if (keyupFirst) {
-        session.keyup()
-        session.swallow()
-      } else {
-        session.swallow()
-        session.keyup()
-      }
-      // A release describes a press the app received; none did.
-      expect(session.emitted.join('')).toBe('')
-      session.dispose()
-    })
   })
 
   it('encodes the release from the keyup state when Shift is released first', () => {

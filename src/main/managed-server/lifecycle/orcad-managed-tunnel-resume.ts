@@ -1,9 +1,9 @@
-import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
+import { sendRemoteRuntimeRequestOnSocket } from '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import {
   getPreferredPairedRuntimeConnection,
   type KnownRuntimeEnvironment,
   type RuntimeSshTunnelLink
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import type { SshTarget } from '../../../shared/ssh-types'
 import type { OrcadManagedServing } from './orcad-managed-serving'
@@ -271,11 +271,17 @@ export async function probeManagedOrcadTunnel(
   timeoutMs: number
 ): Promise<boolean> {
   try {
-    await sendRemoteRuntimeRequest(
+    await sendRemoteRuntimeRequestOnSocket(
       getPreferredPairedRuntimeConnection(environment),
       'status.get',
       undefined,
-      timeoutMs
+      timeoutMs,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined
     )
     return true
   } catch {

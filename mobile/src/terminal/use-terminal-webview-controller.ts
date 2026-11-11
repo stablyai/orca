@@ -1,4 +1,4 @@
-import { parseTerminalKittyKeyboardFlags } from '../../../src/shared/terminal-kitty-keyboard-flags'
+import { parseTerminalKittyKeyboardFlags } from '../../../src/shared/terminal/protocol/input-modes/terminal-kitty-keyboard-flags'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { readTerminalCellBox, type TerminalCellBox } from './terminal-cell-box'
 import { fitDimensionsFromCell } from './terminal-grid-fit'
@@ -14,7 +14,7 @@ import { createTerminalWebViewPendingMessages } from './terminal-webview-pending
 import { dispatchTerminalWebViewNotification } from './terminal-webview-notification-dispatch'
 import { routeTerminalQueryReply } from './terminal-webview-query-reply-routing'
 import { useTerminalWebViewReadyPromises } from './terminal-webview-ready-promises'
-import { createTerminalWriteCoalescer } from './terminal-write-coalescer'
+import { createTerminalDocumentWrites } from './terminal-output-ack'
 import { isTerminalGestureInput } from './terminal-gesture-input'
 
 // Share readiness, queues, coalescing and imperative handles across hosts; only document command/notify transport differs.
@@ -23,6 +23,8 @@ export type TerminalWebViewTransport = {
   post: (command: TerminalWebViewCommand & { id: number }) => void
   // Native recovery must ping the exact retained document because iOS can lose its JS state; embedded pages have no separate process.
   pingsOnForegroundRecovery: () => boolean
+  // False for an in-process document: no bridge hop to batch writes for, and posts keep their callbacks (parse acks rely on it).
+  coalesce?: boolean
 }
 
 export function useTerminalWebViewController(
@@ -51,7 +53,7 @@ export function useTerminalWebViewController(
     onTextScaleChange,
     onCellBoxChange
   } = props
-  const { pingsOnForegroundRecovery, post } = transport
+  const { coalesce, pingsOnForegroundRecovery, post } = transport
   const isWebReadyRef = useRef(false)
   const pendingMessages = useMemo(() => createTerminalWebViewPendingMessages(), [])
   const messageIdRef = useRef(0)
@@ -92,10 +94,10 @@ export function useTerminalWebViewController(
     [pendingMessages, sendToDocument]
   )
 
-  // Coalesce busy PTY output to avoid paying bridge/IPC/paint overhead for every stream frame.
+  // Native coalesces busy PTY output to avoid paying bridge/IPC/paint overhead for every stream frame.
   const writeCoalescer = useMemo(
-    () => createTerminalWriteCoalescer((data) => postMessage({ type: 'write', data })),
-    [postMessage]
+    () => createTerminalDocumentWrites(postMessage, { coalesce }),
+    [coalesce, postMessage]
   )
 
   useEffect(() => {
@@ -249,6 +251,7 @@ export function useTerminalWebViewController(
       write(data: string) {
         writeCoalescer.write(data)
       },
+      ...writeCoalescer.parseAck,
       init({ cols, rows, initialData, preserveScroll, oscLinks, kittyFlags, frame }: TerminalInit) {
         // Arm ready before posting init so a synchronous reply cannot be lost.
         promises.armReady()

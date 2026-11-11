@@ -1,4 +1,4 @@
-import { quotePosixShell } from './shell-argument-quoting'
+import { quotePosixShell } from './shell/launch/shell-argument-quoting'
 
 export type PosixCommandPathLookupTarget =
   | { kind: 'literal'; value: string }

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { lstatSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
+import { readNodeFileSyncWithinLimit } from '../../shared/file-content/node-bounded-file-reader'
 import {
   ORCAD_MANAGED_STOP_REQUEST_MAX_BYTES,
   ORCAD_MANAGED_STOP_REQUEST_PREFIX,

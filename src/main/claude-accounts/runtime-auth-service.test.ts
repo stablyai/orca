@@ -11,14 +11,14 @@ const fakes = vi.hoisted(() => ({
   },
   wsl: {
     prepareLaunch: async (distro: string) => ({ runtime: 'wsl', wslDistro: distro }),
-    publish: async (_distro: string): Promise<void> => {},
-    runningDistros: async (): Promise<string[]> => [],
     preparation: async (distro: string) => ({
       runtime: 'wsl',
       wslDistro: distro,
       configDir: String.raw`\\wsl.localhost\Ubuntu\home\ada\.claude`,
       provenance: 'wsl:Ubuntu:system'
-    })
+    }),
+    publish: async (_distro: string): Promise<void> => {},
+    runningDistros: async (): Promise<string[]> => []
   }
 }))
 vi.mock('../wsl/execution/wsl-guest-environment', () => ({

@@ -6,7 +6,7 @@ import type {
   AgentLaunchTabPublished,
   AgentLaunchTabPublishReply,
   AgentLaunchTabPublishRequest
-} from '../../shared/agent-launch-tab-publication'
+} from '../../shared/agent-launch/contracts/agent-launch-tab-publication'
 
 const AGENT_LAUNCH_TAB_PUBLISH_TIMEOUT_MS = 10_000
 

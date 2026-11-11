@@ -25,12 +25,13 @@ import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { LinearIssueEditSection } from '@/components/linear-item-drawer-edit-section'
 import { LinearIssueCommentFooter } from '@/components/linear-item-drawer-comment-footer'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
 import type { LinearComment, LinearIssue } from '../../../shared/linear/issue-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { LinearEditState, LinearLocalComment } from '@/components/linear-item-drawer-types'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 function LinearIcon({ className }: { className?: string }): React.JSX.Element {
   return (
@@ -40,8 +41,8 @@ function LinearIcon({ className }: { className?: string }): React.JSX.Element {
   )
 }
 
-function formatRelativeTime(input: string): string {
-  return formatUiRelativeTimeFromDate(input)
+function formatRelativeTime(input: string, intlLocale?: string): string {
+  return formatUiRelativeTimeFromDate(input, undefined, intlLocale)
 }
 
 type LinearItemDrawerSheetProps = {
@@ -59,20 +60,24 @@ type LinearItemDrawerSheetProps = {
   onUse: (issue: LinearIssue) => void
 }
 
-export function renderLinearItemDrawerSheet({
-  issue,
-  onClose,
-  displayed,
-  sourceContext,
-  editState,
-  commentsLoading,
-  comments,
-  handleCommentAdded,
-  attachedWorkspaceLabel,
-  attachedWorkspace,
-  handleOpenOrUseIssue,
-  onUse
-}: LinearItemDrawerSheetProps): React.JSX.Element {
+export function renderLinearItemDrawerSheet(
+  {
+    issue,
+    onClose,
+    displayed,
+    sourceContext,
+    editState,
+    commentsLoading,
+    comments,
+    handleCommentAdded,
+    attachedWorkspaceLabel,
+    attachedWorkspace,
+    handleOpenOrUseIssue,
+    onUse
+  }: LinearItemDrawerSheetProps,
+  t: Translate = translate,
+  intlLocale?: string
+): React.JSX.Element {
   return (
     <Sheet open={issue !== null} onOpenChange={(open) => !open && onClose()}>
       <SheetContent
@@ -85,13 +90,12 @@ export function renderLinearItemDrawerSheet({
       >
         <VisuallyHidden.Root asChild>
           <SheetTitle>
-            {displayed?.title ??
-              translate('auto.components.LinearItemDrawer.39883467f4', 'Linear issue')}
+            {displayed?.title ?? t('auto.components.LinearItemDrawer.39883467f4', 'Linear issue')}
           </SheetTitle>
         </VisuallyHidden.Root>
         <VisuallyHidden.Root asChild>
           <SheetDescription>
-            {translate(
+            {t(
               'auto.components.LinearItemDrawer.04a442f796',
               'Preview and edit the selected Linear issue.'
             )}
@@ -118,7 +122,7 @@ export function renderLinearItemDrawerSheet({
                   <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
                     {displayed.workspaceName && <span>{displayed.workspaceName}</span>}
                     {displayed.team?.name && <span>{displayed.team.name}</span>}
-                    <span>· {formatRelativeTime(displayed.updatedAt)}</span>
+                    <span>· {formatRelativeTime(displayed.updatedAt, intlLocale)}</span>
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
@@ -129,7 +133,7 @@ export function renderLinearItemDrawerSheet({
                         size="icon"
                         className="size-7"
                         onClick={(event) => openAppHttpLink(displayed.url, { event })}
-                        aria-label={translate(
+                        aria-label={t(
                           'auto.components.LinearItemDrawer.0190b760c1',
                           'Open on Linear'
                         )}
@@ -138,7 +142,7 @@ export function renderLinearItemDrawerSheet({
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" sideOffset={6}>
-                      {translate('auto.components.LinearItemDrawer.0190b760c1', 'Open on Linear')}
+                      {t('auto.components.LinearItemDrawer.0190b760c1', 'Open on Linear')}
                     </TooltipContent>
                   </Tooltip>
                   <Tooltip>
@@ -148,7 +152,7 @@ export function renderLinearItemDrawerSheet({
                         size="icon"
                         className="size-7"
                         onClick={onClose}
-                        aria-label={translate(
+                        aria-label={t(
                           'auto.components.LinearItemDrawer.858d0630da',
                           'Close preview'
                         )}
@@ -157,7 +161,7 @@ export function renderLinearItemDrawerSheet({
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" sideOffset={6}>
-                      {translate('auto.components.LinearItemDrawer.9dc54172db', 'Close · Esc')}
+                      {t('auto.components.LinearItemDrawer.9dc54172db', 'Close · Esc')}
                     </TooltipContent>
                   </Tooltip>
                 </div>
@@ -185,7 +189,7 @@ export function renderLinearItemDrawerSheet({
               <div className="border-t border-border/40 px-4 py-4">
                 <div className="flex items-center gap-2 pb-3">
                   <span className="text-[13px] font-medium text-foreground">
-                    {translate('auto.components.LinearItemDrawer.fde849b2b6', 'Comments')}
+                    {t('auto.components.LinearItemDrawer.fde849b2b6', 'Comments')}
                   </span>
                   {comments.length > 0 && (
                     <span className="text-[12px] text-muted-foreground">{comments.length}</span>
@@ -197,7 +201,7 @@ export function renderLinearItemDrawerSheet({
                   </div>
                 ) : comments.length === 0 ? (
                   <p className="text-[13px] text-muted-foreground">
-                    {translate('auto.components.LinearItemDrawer.a4fcc57522', 'No comments yet.')}
+                    {t('auto.components.LinearItemDrawer.a4fcc57522', 'No comments yet.')}
                   </p>
                 ) : (
                   <div className="flex flex-col gap-3">
@@ -216,10 +220,10 @@ export function renderLinearItemDrawerSheet({
                           )}
                           <span className="text-[13px] font-semibold text-foreground">
                             {comment.user?.displayName ??
-                              translate('auto.components.LinearItemDrawer.48e17e8cbd', 'Unknown')}
+                              t('auto.components.LinearItemDrawer.48e17e8cbd', 'Unknown')}
                           </span>
                           <span className="text-[12px] text-muted-foreground">
-                            · {formatRelativeTime(comment.createdAt)}
+                            · {formatRelativeTime(comment.createdAt, intlLocale)}
                           </span>
                         </div>
                         <div className="px-3 py-2">
@@ -254,21 +258,18 @@ export function renderLinearItemDrawerSheet({
                     <Button
                       onClick={handleOpenOrUseIssue}
                       className="flex-1 justify-center gap-2"
-                      aria-label={translate(
+                      aria-label={t(
                         'auto.components.LinearItemDrawer.openAttachedWorkspace',
                         'Open workspace attached to issue'
                       )}
                     >
                       <FolderOpen className="size-4" />
-                      {translate(
-                        'auto.components.LinearItemDrawer.openWorkspace',
-                        'Open workspace'
-                      )}
+                      {t('auto.components.LinearItemDrawer.openWorkspace', 'Open workspace')}
                     </Button>
                     <DropdownMenuTrigger asChild>
                       <Button
                         size="icon"
-                        aria-label={translate(
+                        aria-label={t(
                           'auto.components.LinearItemDrawer.moreWorkspaceActions',
                           'More issue workspace actions'
                         )}
@@ -280,7 +281,7 @@ export function renderLinearItemDrawerSheet({
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onSelect={() => onUse(displayed)}>
                       <Plus className="size-4" />
-                      {translate(
+                      {t(
                         'auto.components.LinearItemDrawer.startNewWorkspace',
                         'Start new workspace'
                       )}
@@ -291,15 +292,12 @@ export function renderLinearItemDrawerSheet({
                 <Button
                   onClick={handleOpenOrUseIssue}
                   className="w-full justify-center gap-2"
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.LinearItemDrawer.04008e6c46',
                     'Start workspace from issue'
                   )}
                 >
-                  {translate(
-                    'auto.components.LinearItemDrawer.04008e6c46',
-                    'Start workspace from issue'
-                  )}
+                  {t('auto.components.LinearItemDrawer.04008e6c46', 'Start workspace from issue')}
                   <ArrowRight className="size-4" />
                 </Button>
               )}

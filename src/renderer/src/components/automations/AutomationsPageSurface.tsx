@@ -1,16 +1,19 @@
 import React from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { AutomationEditorDialog } from './AutomationEditorDialog'
-import { AutomationsDetailPane } from './AutomationsDetailPane'
+import { AutomationEditorDialog } from './authoring/AutomationEditorDialog'
+import { AutomationsDetailPane } from './details/AutomationsDetailPane'
 import { AutomationsPageSkeleton } from './AutomationsPageSkeleton'
-import { getAutomationAuthorityTarget } from './automation-host-client'
-import type { AutomationListRow } from './automation-list-row-identity'
-import type { AutomationHostRecoveryAction } from './automation-host-status-descriptors'
+import { getAutomationAuthorityTarget } from './hosts/automation-host-client'
+import {
+  automationProjectName,
+  type AutomationListRow
+} from './listing/automation-list-row-identity'
+import type { AutomationHostRecoveryAction } from './hosts/automation-host-status-descriptors'
 import { AutomationsPageTopBar } from './AutomationsPageTopBar'
 import type { AutomationsPageController } from './use-automations-page-controller'
-import { AutomationRunsDashboardSurface } from './AutomationRunsDashboardSurface'
-import { AutomationRunDetailsPage } from './AutomationRunDetailsPage'
+import { AutomationRunsDashboardSurface } from './runs/AutomationRunsDashboardSurface'
+import { AutomationRunDetailsPage } from './runs/AutomationRunDetailsPage'
 import { AutomationsPageDeleteDialogs } from './AutomationsPageDeleteDialogs'
 import { AutomationsPageListPanel } from './AutomationsPageListPanel'
 export function AutomationsPageSurface({
@@ -18,6 +21,7 @@ export function AutomationsPageSurface({
 }: {
   controller: AutomationsPageController
 }): React.JSX.Element {
+  const t = useTranslate()
   const {
     store,
     local,
@@ -32,6 +36,7 @@ export function AutomationsPageSurface({
     draftEffects,
     editorActions,
     saveAutomation,
+    migrateAction,
     managementActions,
     runActions,
     externalActions,
@@ -144,6 +149,7 @@ export function AutomationsPageSurface({
         canSave={presentation.canSaveDraft}
         createDestination={destination.createDestination.control}
         editDestination={destinationForm.editDestinationControl}
+        launchAuthority={destinationForm.editorSaveAuthority}
         notice={editorNotice}
         onNoticeRecover={(action) => {
           const host = editorNoticeHost ?? destination.editorRecoveryHost
@@ -224,15 +230,13 @@ export function AutomationsPageSurface({
           className="flex min-h-0 flex-1 items-center justify-center gap-2 text-sm text-muted-foreground"
         >
           <LoadingSpinner className="size-4" />
-          {translate(
-            'auto.components.automations.AutomationRunsDashboard.loading',
-            'Loading runs…'
-          )}
+          {t('auto.components.automations.AutomationRunsDashboard.loading', 'Loading runs…')}
         </div>
       ) : pageView === 'run' && selectedAutomationRunPage ? (
         <AutomationRunDetailsPage
           automation={selected}
           run={selectedAutomationRunPage}
+          history={local.selectedAutomationRuns}
           relativeNow={relativeNow}
           workspaceDisplay={runPage.selectedAutomationRunPageWorkspaceDisplay}
           viewState={runPage.selectedAutomationRunPageViewState}
@@ -244,6 +248,9 @@ export function AutomationsPageSurface({
             )
           }
           onOpenWorkspace={() => openRunWorkspace(selectedAutomationRunPage)}
+          onReviewSetup={(content) =>
+            runSelectedRowAction((row) => managementActions.reviewSkippedSetup(row, content))
+          }
           onBack={runPageOrigin === 'automation' ? showAutomationDetails : showRunsDashboard}
         />
       ) : pageView === 'run' ? (
@@ -266,18 +273,24 @@ export function AutomationsPageSurface({
           relativeNow={relativeNow}
           externalActionKey={externalActionKey}
           selectedRepoDisplayName={
-            presentation.selectedRepo?.displayName ??
-            translate('auto.components.automations.AutomationsPage.13118faadf', 'Unknown project')
+            (selected &&
+              automationProjectName(
+                selected,
+                presentation.selectedRepo,
+                repoMap,
+                !!destination.rowRecoveryHost(selectedRow?.key ?? null)?.servedBy
+              )) ??
+            t('auto.components.automations.AutomationsPage.13118faadf', 'Unknown project')
           }
           selectedRepoDefaultBaseRef={presentation.selectedRepo?.worktreeBaseRef ?? null}
           selectedWorkspaceName={
             selected?.workspaceMode === 'new_per_run'
-              ? translate(
+              ? t(
                   'auto.components.automations.AutomationsPage.cd8397cc32',
                   'New workspace each run'
                 )
               : (presentation.selectedWorktree?.displayName ??
-                translate(
+                t(
                   'auto.components.automations.AutomationsPage.missingWorkspace',
                   'Missing workspace'
                 ))
@@ -289,6 +302,8 @@ export function AutomationsPageSurface({
           requestExternalAction={externalActions.requestExternalAction}
           runNow={() => runSelectedRowAction(runActions.runNow)}
           openEditDialog={() => runSelectedRowAction(editorActions.openEditDialog)}
+          migrateAutomation={() => runSelectedRowAction(migrateAction.migrateAutomation)}
+          isMigrating={!!selectedRow && migrateAction.migratingRowKey === selectedRow.key}
           toggleAutomation={() => runSelectedRowAction(managementActions.toggleAutomation)}
           requestDeleteAutomation={() =>
             runSelectedRowAction(managementActions.requestDeleteAutomation)

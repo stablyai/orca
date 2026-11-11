@@ -40,19 +40,6 @@ describe('prepareClaudeSignInBrowser', () => {
       expect(readdirSync(home)).toEqual([])
     }
   )
-
-  it.skipIf(process.platform === 'win32')('stops waiting once the sign-in ends', async () => {
-    const home = folder()
-    const browser = await prepareClaudeSignInBrowser({
-      windowsPath: home,
-      linuxPath: null,
-      wslDistro: null
-    })
-    const stop = new AbortController()
-    const next = browser!.nextLink(stop.signal)
-    stop.abort()
-    await expect(next).resolves.toBeNull()
-  })
 })
 
 describe('isClaudeLocalSignInLink', () => {

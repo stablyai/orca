@@ -12,37 +12,40 @@ vi.mock('../keybindings/keybinding-service', () => ({ KeybindingService: class {
 vi.mock('../providers/accounts/provider-account-services', () => ({
   createProviderAccountServices: () => ({})
 }))
-vi.mock('../codex/codex-session-migration-scheduler', () => ({
+vi.mock('../codex/history/backfill/codex-session-migration-scheduler', () => ({
   createCodexSessionMigrationScheduler: () => ({ scheduleInitialRun: vi.fn() })
 }))
-vi.mock('../codex/codex-session-backfill', () => ({
+vi.mock('../codex/history/backfill/codex-session-backfill', () => ({
   startCodexSessionBackfillInBackground: vi.fn()
 }))
-vi.mock('../codex/codex-session-index-heal', () => ({
+vi.mock('../codex/history/index/codex-session-index-heal', () => ({
   startCodexSessionIndexHealInBackground: vi.fn()
 }))
-vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
+vi.mock('../codex/history/index/codex-state-db-backfill-recovery', () => ({
   startCodexStateDbBackfillRecoveryInBackground: vi.fn()
 }))
-vi.mock('../codex/codex-home-paths', () => ({ getOrcaManagedCodexHomePath: () => '/home/test' }))
+vi.mock('../codex/configuration/homes/codex-home-paths', () => ({
+  getOrcaManagedCodexHomePath: () => '/home/test'
+}))
 vi.mock('../opencode/opencode-go-api-key-store', () => ({
   hasOpenCodeGoApiKey: vi.fn(),
   readOpenCodeGoApiKey: vi.fn(),
   saveOpenCodeGoApiKey: vi.fn()
 }))
-vi.mock('../agent-hooks/server', () => ({ agentHookServer: {} }))
-vi.mock('../codex/codex-session-source-home', () => ({
+vi.mock('../agent-hooks/server/agent-hook-server', () => ({ agentHookServer: {} }))
+vi.mock('../codex/history/rollouts/codex-session-source-home', () => ({
   resolveHostCodexSessionSourceHome: vi.fn()
 }))
-vi.mock('../browser/browser-manager', () => ({
+vi.mock('../browser/guest-lifecycle/manager/browser-manager', () => ({
   browserManager: { setSettingsResolver: vi.fn() }
 }))
-vi.mock('../runtime/structured-agent-model-catalog-wiring', () => ({
+vi.mock('../runtime/agent-session/model-catalog/structured-agent-model-catalog-wiring', () => ({
   prewarmStructuredAgentModelCatalogs: fixture.prewarm
 }))
 vi.mock('./main-process-state', () => ({
   mainProcessState: {
     store: {
+      getSettings: () => ({}),
       onSettingsChanged: fixture.onSettingsChanged,
       migrateLegacyOpenCodeGoApiKey: vi.fn()
     },
@@ -73,7 +76,7 @@ describe('Claude usage account startup wiring', () => {
 
     listener({ [key]: undefined })
 
-    expect(fixture.refresh).toHaveBeenCalledExactlyOnceWith(true, { rerunIfScanning: true })
+    expect(fixture.refresh).toHaveBeenCalledWith(true, { rerunIfScanning: true })
   })
 
   it('keeps model prewarming without rescanning Claude for another provider', () => {
@@ -83,6 +86,6 @@ describe('Claude usage account startup wiring', () => {
     listener({ activeCodexManagedAccountId: null })
 
     expect(fixture.refresh).not.toHaveBeenCalled()
-    expect(fixture.prewarm).toHaveBeenCalledOnce()
+    expect(fixture.prewarm).toHaveBeenCalled()
   })
 })

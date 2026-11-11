@@ -1,4 +1,4 @@
-import type { DecisionGateRow, DispatchContextRow, GateStatus } from '../../types'
+import type { DecisionGateRow, DispatchContextRow, GateStatus } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'

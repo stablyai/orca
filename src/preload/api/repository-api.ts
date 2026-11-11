@@ -1,9 +1,12 @@
 import type { RepoCreateFailure } from '../../shared/repo-create-failure-copy'
+import type { CloneTargetArgs, CloneTargetCheck } from '../../shared/git/clone/clone-target-check'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { GhAccountBinding } from '../../shared/github/account-binding'
 import type {
   NestedRepoScanResult,
   ProjectGroup,
+  ProjectGroupUpdate,
+  ProjectGroupMutation,
   ProjectGroupImportMode,
   ProjectGroupImportResult
 } from '../../shared/project-group-types'
@@ -52,6 +55,7 @@ export type RepositoryApi = {
         | 'repoIcon'
         | 'upstream'
         | 'hookSettings'
+        | 'editorFormatter'
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
         | 'kind'
@@ -63,10 +67,11 @@ export type RepositoryApi = {
         | 'customWorktreeVisibilitySources'
         | 'worktreeVisibilitySourcePreferences'
         | 'projectGroupId'
-        | 'projectGroupOrder'
         | 'forkSyncMode'
+        | 'agentWorkspaceTrust'
       >
     > & {
+      projectGroupOrder?: number | null
       externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
       agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
       sourceControlAi?: Repo['sourceControlAi'] | null
@@ -77,7 +82,8 @@ export type RepositoryApi = {
   pickFolder: () => Promise<string | null>
   pickFolders: () => Promise<string[]>
   pickDirectory: () => Promise<string | null>
-  clone: (args: { url: string; destination: string }) => Promise<Repo>
+  clone: (args: CloneTargetArgs) => Promise<Repo>
+  checkCloneTarget: (args: CloneTargetArgs) => Promise<CloneTargetCheck>
   cloneAbort: () => Promise<void>
   create: (args: {
     parentPath: string
@@ -125,10 +131,10 @@ export type ProjectGroupsApi = {
     parentGroupId?: string | null
     createdFrom?: ProjectGroup['createdFrom']
   }) => Promise<ProjectGroup>
-  update: (args: {
-    groupId: string
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
-  }) => Promise<ProjectGroup | null>
+  update: (args: { groupId: string; updates: ProjectGroupUpdate }) => Promise<ProjectGroup | null>
+  updateMany: (args: {
+    mutations: readonly ProjectGroupMutation[]
+  }) => Promise<ProjectGroup[] | null>
   delete: (args: { groupId: string }) => Promise<boolean>
   moveProject: (args: {
     projectId: string

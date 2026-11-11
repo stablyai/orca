@@ -1,6 +1,6 @@
-import { webContents } from 'electron'
 import type { GitHubPRRefreshCandidate } from '../../shared/github/pull-request-refresh-types'
 import { refreshKey } from './pr-refresh-candidate-policy'
+import { prRefreshRenderers } from './pr-refresh-renderer-port'
 
 export class PRRefreshVisibility {
   private readonly visibleByWindow = new Map<
@@ -85,8 +85,7 @@ export class PRRefreshVisibility {
 
   private pruneDestroyedWindows(): void {
     for (const windowId of this.visibleByWindow.keys()) {
-      const contents = webContents.fromId(windowId)
-      if (!contents || contents.isDestroyed()) {
+      if (!prRefreshRenderers().isRendererOpen(windowId)) {
         this.visibleByWindow.delete(windowId)
       }
     }

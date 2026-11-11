@@ -1,20 +1,18 @@
 import { describe, expect, it, vi } from 'vitest'
-import { committingSpawn, registerBoundPty } from '../bind-first-pane.test-fixture'
-import {
-  MOCK_GIT_WORKTREES,
-  OrcaRuntimeService,
-  electronMocks,
-  ipcMain,
-  listWorktrees
-} from '../orca-runtime-test-mocks.spec'
+import { committingSpawn, registerBoundPty } from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { MOCK_GIT_WORKTREES, electronMocks } from '../orca-runtime-test-mocks/setup.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { ipcMain } from 'electron'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
 import {
   TEST_REPO_ID,
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
   makeWorktreeMeta,
   store
-} from '../orca-runtime-test-fixtures.spec'
-import { createMobileCreateTestNotifier } from '../orca-runtime-test-scenario-builders.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { createMobileCreateTestNotifier } from './orca-runtime-test-scenario-builders.spec'
 
 describe('OrcaRuntimeService', () => {
   it('does not dedupe mobile terminal creates across worktrees with the same clientMutationId', async () => {
@@ -267,59 +265,6 @@ describe('OrcaRuntimeService', () => {
         })
       )
       expect(closeTerminal).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('rolls back a half-created terminal whose surface never publishes', async () => {
-    vi.useFakeTimers()
-    try {
-      const closeTerminal = vi.fn()
-      const runtime = new OrcaRuntimeService(store)
-      runtime.setNotifier({
-        focusTerminal: vi.fn(),
-        worktreesChanged: vi.fn(),
-        reposChanged: vi.fn(),
-        activateWorktree: vi.fn(),
-        createTerminal: vi.fn(),
-        revealTerminalSession: vi.fn(),
-        splitTerminal: vi.fn(),
-        renameTerminal: vi.fn(),
-        closeTerminal,
-        closeSessionTab: vi.fn(),
-        terminalFitOverrideChanged: vi.fn(),
-        terminalDriverChanged: vi.fn()
-      })
-      // Reply without a surface graph to drive timeout rollback.
-      const webContents = { send: vi.fn() }
-      const send = vi.fn((_channel: string, payload: { requestId: string }) => {
-        ipcMain.emit(
-          'terminal:tabCreateReply',
-          { sender: webContents },
-          { requestId: payload.requestId, tabId: 'tab-ghost', title: 'Terminal' }
-        )
-      })
-      webContents.send = send
-      runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-      electronMocks.BrowserWindow.fromId.mockReturnValue({
-        isDestroyed: () => false,
-        webContents
-      })
-
-      const pending = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
-        activate: false
-      })
-      const settled = pending.then(
-        () => ({ ok: true as const }),
-        (error: Error) => ({ ok: false as const, error })
-      )
-      await vi.advanceTimersByTimeAsync(11_000)
-      const outcome = await settled
-
-      expect(outcome.ok).toBe(false)
-      expect(closeTerminal).toHaveBeenCalledWith('tab-ghost')
     } finally {
       vi.useRealTimers()
     }

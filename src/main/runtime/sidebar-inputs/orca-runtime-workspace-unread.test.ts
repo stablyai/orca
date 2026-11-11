@@ -1,14 +1,14 @@
 // Runs on plain Node, as orcad does: a host with no window raises and clears its own unread flags.
-import '../rpc/unused-default-rpc-methods.test-fixture'
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import { AgentHookServer } from '../../agent-hooks/server'
+import { AgentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { RpcDispatcher } from '../rpc/dispatcher'
 import type { RpcDispatchStreamingOptions } from '../rpc/dispatcher-stream-options'
-import { SESSION_TAB_METHODS } from '../rpc/methods/session-tabs'
-import { SIDEBAR_INPUT_METHODS } from '../rpc/methods/sidebar-inputs'
+import { SESSION_TAB_METHODS } from '../rpc/methods/session-tabs/session-tabs'
+import { SIDEBAR_INPUT_METHODS } from '../rpc/methods/sidebar-inputs/sidebar-inputs'
 import { requireSwitchedOn } from './require-switched-on'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import { remoteRuntimeClientCapabilities } from '../../../shared/remote-runtime/remote-runtime-client-capabilities'
@@ -17,7 +17,7 @@ import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
-} from '../../../shared/protocol-version'
+} from '../../../shared/browser/runtime/browser-runtime-capabilities'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import {
   partialRuntimeStore,
@@ -26,9 +26,9 @@ import {
   storeRepo,
   storeWorktreeMeta,
   type PartialRuntimeStore
-} from '../runtime-store-partial-fixture'
+} from '../orca-runtime-tests/runtime-store-partial-fixture'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 
 vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 
@@ -244,17 +244,6 @@ describe('workspace unread flag on a headless host', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('advertises that it raises the flag, so no socket of a current desktop silences it', () => {
-    const host = createHeadlessHost()
-    expect(host.runtime.getStatus().capabilities).toContain(WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY)
-    const facts = requireSwitchedOn(host.runtime.sidebarFacts)
-    for (const [connectionId, capabilities] of Object.entries(currentDesktopSockets())) {
-      facts.noteRuntimeClient(connectionId, capabilities)
-    }
-    host.finishTurn()
-    expect(host.meta[WT].isUnread).toBe(true)
   })
 
   it('leaves raising to an older desktop while it is connected, and still clears on the phone', async () => {

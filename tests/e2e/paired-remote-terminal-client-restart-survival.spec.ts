@@ -8,7 +8,7 @@ import type { Page } from '@stablyai/playwright-test'
 import {
   HOST_TERMINAL_SURFACE_SEPARATOR,
   toWebTerminalSurfaceTabId
-} from '../../src/shared/terminal-surface-id'
+} from '../../src/shared/workspace-layout/terminal-surface-id'
 import { closeElectronAppForE2E } from './helpers/electron-process-shutdown'
 import { expect, test } from './helpers/orca-app'
 import {
@@ -17,7 +17,7 @@ import {
   type PairedElectronClient
 } from './helpers/paired-electron-client'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
+import { quotePosixShell } from '../../src/shared/shell/launch/shell-argument-quoting'
 
 /** What a user would accept for "my terminal is back" after reopening the app. */
 const RESTORE_BUDGET_MS = 60_000

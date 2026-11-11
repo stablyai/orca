@@ -1,3 +1,4 @@
+import type { PRRefreshRendererPort } from './pr-refresh-renderer-port'
 import { vi, type Mock } from 'vitest'
 import { isWslUncPath } from '../../shared/wsl-paths'
 
@@ -36,20 +37,18 @@ export function createPRRefreshCoordinatorMocks(): PRRefreshCoordinatorMocks {
   }
 }
 
-export type ElectronModuleMock = {
-  webContents: {
-    getAllWebContents: PRRefreshCoordinatorMocks['getAllWebContentsMock']
-    fromId: PRRefreshCoordinatorMocks['webContentsFromIdMock']
-  }
-}
+export type RendererPortModuleMock = { prRefreshRenderers: () => PRRefreshRendererPort }
 
-export function electronModuleMock(mocks: PRRefreshCoordinatorMocks): ElectronModuleMock {
-  return {
-    webContents: {
-      getAllWebContents: mocks.getAllWebContentsMock,
-      fromId: mocks.webContentsFromIdMock
-    }
+/** Renderers are the mocked web contents; refresh events reach `sendToTrustedUIRendererMock`. */
+export function rendererPortModuleMock(mocks: PRRefreshCoordinatorMocks): RendererPortModuleMock {
+  const port: PRRefreshRendererPort = {
+    isRendererOpen: (id) => {
+      const contents = mocks.webContentsFromIdMock(id)
+      return contents !== undefined && !contents.isDestroyed()
+    },
+    sendToTrustedUI: (channel, payload) => mocks.sendToTrustedUIRendererMock(channel, payload)
   }
+  return { prRefreshRenderers: () => port }
 }
 
 export type ClientModuleMock = { getPRForBranchOutcome: Mock }
@@ -83,14 +82,6 @@ export function rateLimitModuleMock(mocks: PRRefreshCoordinatorMocks): RateLimit
     noteRepositoryRateLimitSpend: mocks.noteRepositoryRateLimitSpendMock,
     repositoryRateLimitGuard: mocks.repositoryRateLimitGuardMock,
     spendsSharedGitHubComQuota: mocks.spendsSharedGitHubComQuotaMock
-  }
-}
-
-export type IpcUiModuleMock = { sendToTrustedUIRenderer: Mock }
-
-export function ipcUiModuleMock(mocks: PRRefreshCoordinatorMocks): IpcUiModuleMock {
-  return {
-    sendToTrustedUIRenderer: mocks.sendToTrustedUIRendererMock
   }
 }
 

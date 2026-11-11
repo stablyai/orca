@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { hasActiveWorkspaceActivity } from '@/lib/worktree-activity-state'
-import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
-import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
-import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { VisibleWorktreeOptions } from '../../compute-visible-worktrees'
+import { hasActiveWorkspaceActivity } from '@/lib/workspace/activity/worktree-activity-state'
+import { recomputeOn } from '@/lib/recompute-on'
+import { hasWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-intent'
+import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import {
   cloneSleepingSweepRetentionState,
   createSleepingSweepRetentionState,
   updateSleepingSweepRetention
 } from '../../../../../../shared/sidebar-list/sleeping-sweep-retention'
+import type { Worktree } from '../../../../../../shared/worktree/types'
+import type { VisibleWorktreeOptions } from './compute-visible-worktrees'
 
 type SweepActivityInputs = Pick<
   VisibleWorktreeOptions,
@@ -18,6 +19,14 @@ type SweepActivityInputs = Pick<
   | 'worktreeIdsWithLiveAgent'
   | 'worktreeIdsWithStructuredChat'
 >
+
+const NO_RETAINED_IDS: ReadonlySet<string> = new Set()
+// Why: store-side readers (removal successor) must see the same grace rows the sidebar shows.
+let committedRetainedIds = NO_RETAINED_IDS
+
+export function getSidebarSleepingSweepRetainedIds(): ReadonlySet<string> {
+  return committedRetainedIds
+}
 
 /** Rows the "Hide sleeping" sweep must keep through a transient PTY rebind gap (#15996). */
 export function useSleepingSweepRetention(
@@ -39,7 +48,6 @@ export function useSleepingSweepRetention(
   const [graceTick, setGraceTick] = useState(0)
 
   const pass = useMemo(() => {
-    void graceTick
     if (!enabled) {
       return { retainedIds: undefined, nextExpiryInMs: null, state: null }
     }
@@ -61,7 +69,7 @@ export function useSleepingSweepRetention(
       isUnverifiableGap: (worktreeId) =>
         !hasWorktreeSleepIntent(worktreeId) && (tabsByWorktree?.[worktreeId]?.length ?? 0) > 0,
       // oxlint-disable-next-line react/purity -- Grace windows need wall time; the agent epoch sample stalls between bumps.
-      nowMs: Date.now()
+      nowMs: recomputeOn([graceTick], () => Date.now())
     })
     return { retainedIds, nextExpiryInMs, state }
   }, [
@@ -77,7 +85,11 @@ export function useSleepingSweepRetention(
 
   useEffect(() => {
     committedStateRef.current = pass.state ?? createSleepingSweepRetentionState()
-  }, [pass.state])
+    committedRetainedIds = pass.retainedIds ?? NO_RETAINED_IDS
+    return () => {
+      committedRetainedIds = NO_RETAINED_IDS
+    }
+  }, [pass.state, pass.retainedIds])
 
   // Wake at expiry or the final grace window would retain its row until an unrelated store write.
   const { nextExpiryInMs } = pass

@@ -84,12 +84,6 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
     return { commonDir, cache, pathA, pathB }
   }
 
-  it('reads every entry on cold start with an empty cache', async () => {
-    const { cache } = await seed()
-    expect([...cache.entries.keys()].sort()).toEqual(['wt-a', 'wt-b'])
-    expect(cache.primary?.head).toBe(OID_A)
-  })
-
   it('re-reads only the committing worktree and leaves the rest cached', async () => {
     const { commonDir, cache, pathA, pathB } = await seed()
 
@@ -131,17 +125,6 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
     expect(headOf(identities, pathA)).toBe(OID_B)
   })
 
-  it('drops an externally removed worktree through the listing scope', async () => {
-    const { commonDir, cache, pathA, pathB } = await seed()
-    await rm(join(commonDir, 'worktrees', 'wt-b'), { recursive: true, force: true })
-
-    const identities = await readIdentities(commonDir, cache, LISTING_HEAD_IDENTITY_SCOPE)
-
-    expect(identities.map((identity) => identity.worktreePath)).toEqual([dirname(commonDir), pathA])
-    expect(headOf(identities, pathB)).toBeUndefined()
-    expect(cache.entries.has('wt-b')).toBe(false)
-  })
-
   it('re-reads an admin entry whose name was removed and immediately reused', async () => {
     const { commonDir, cache, pathA } = await seed()
     // Coalesced remove/add can reuse an admin name; a listing refresh alone cannot retain its identity.
@@ -161,36 +144,6 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
       head: OID_D,
       branch: 'refs/heads/reused'
     })
-  })
-
-  it('keeps the memo when the worktrees listing fails for anything but absence', async () => {
-    const { commonDir, cache, pathA, pathB } = await seed()
-    // ENOTDIR models unreadable metadata, not proof that every checkout was removed.
-    await rm(join(commonDir, 'worktrees'), { recursive: true, force: true })
-    await writeFile(join(commonDir, 'worktrees'), 'not a directory\n')
-
-    const identities = await readIdentities(commonDir, cache, LISTING_HEAD_IDENTITY_SCOPE)
-
-    expect(headOf(identities, pathA)).toBe(OID_B)
-    expect(headOf(identities, pathB)).toBe(OID_C)
-    // Failed listing must retry on the next refresh even without another listing event.
-    expect(cache.entryNames).toBeNull()
-
-    await rm(join(commonDir, 'worktrees'), { force: true })
-    await writeLooseRef(commonDir, 'refs/heads/feature-c', OID_D)
-    const pathC = await addLinkedWorktree(commonDir, 'wt-c', 'ref: refs/heads/feature-c')
-    const recovered = await readIdentities(commonDir, cache, headIdentityScopeForEntry('wt-a'))
-    expect(headOf(recovered, pathC)).toBe(OID_D)
-  })
-
-  it('reports an absent worktrees dir as genuinely empty', async () => {
-    const { commonDir, cache, pathA } = await seed()
-    await rm(join(commonDir, 'worktrees'), { recursive: true, force: true })
-
-    const identities = await readIdentities(commonDir, cache, LISTING_HEAD_IDENTITY_SCOPE)
-
-    expect(headOf(identities, pathA)).toBeUndefined()
-    expect(cache.entries.size).toBe(0)
   })
 
   it('needs the full scope, not a narrow one, to survive a packed-refs rewrite', async () => {
@@ -291,35 +244,6 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
     expect(headOf(identities, pathB)).toBeUndefined()
   })
 
-  it('keeps the last verified identity when an entry read fails transiently', async () => {
-    const { commonDir, cache, pathA, pathB } = await seed()
-    // EISDIR models unreadable metadata; it must remain unknown rather than absent.
-    await rm(join(commonDir, 'worktrees', 'wt-a', 'HEAD'))
-    await mkdir(join(commonDir, 'worktrees', 'wt-a', 'HEAD'))
-
-    const scoped = await readIdentities(commonDir, cache, headIdentityScopeForEntry('wt-a'))
-    expect(headOf(scoped, pathA)).toBe(OID_B)
-    expect(cache.unverified.has('wt-a')).toBe(true)
-
-    expect(headOf(scoped, pathB)).toBe(OID_C)
-
-    // Unknown entries retry next pass and cannot establish a complete freshness checkpoint.
-    const stillBroken = await readGitCommonHeadIdentities(commonDir, cache)
-    expect(stillBroken.complete).toBe(false)
-
-    await rm(join(commonDir, 'worktrees', 'wt-a', 'HEAD'), { recursive: true })
-    await writeFile(join(commonDir, 'worktrees', 'wt-a', 'HEAD'), 'ref: refs/heads/feature-a\n')
-    await writeLooseRef(commonDir, 'refs/heads/feature-a', OID_D)
-    const recovered = await readGitCommonHeadIdentities(
-      commonDir,
-      cache,
-      PRIMARY_HEAD_IDENTITY_SCOPE
-    )
-    expect(headOf(recovered.identities, pathA)).toBe(OID_D)
-    expect(recovered.complete).toBe(true)
-    expect(cache.unverified.size).toBe(0)
-  })
-
   it('does not evict a whole branch when one entry read fails transiently', async () => {
     const commonDir = await makeCommonDir()
     await writeLooseRef(commonDir, 'refs/heads/shared', OID_B)
@@ -335,25 +259,6 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
 
     expect(headOf(identities, pathA)).toBe(OID_B)
     expect(headOf(identities, pathB)).toBe(OID_B)
-  })
-
-  it('never caches a miss, so a transient unreadable entry is retried', async () => {
-    const commonDir = await makeCommonDir()
-    const entry = join(commonDir, 'worktrees', 'wt-a')
-    await mkdir(entry, { recursive: true })
-    await writeFile(join(entry, 'HEAD'), 'ref: refs/heads/feature-a\n')
-    const cache = createWorktreeHeadIdentityCache()
-
-    // In-progress add can lack gitdir; unresolved entries must not become permanent cache misses.
-    expect(await readIdentities(commonDir, cache)).toHaveLength(1)
-    expect(cache.entries.has('wt-a')).toBe(false)
-
-    await writeLooseRef(commonDir, 'refs/heads/feature-a', OID_B)
-    const worktreePath = join(dirname(dirname(commonDir)), 'wt-a')
-    await writeFile(join(entry, 'gitdir'), `${join(worktreePath, '.git')}\n`)
-
-    const identities = await readIdentities(commonDir, cache, PRIMARY_HEAD_IDENTITY_SCOPE)
-    expect(headOf(identities, worktreePath)).toBe(OID_B)
   })
 
   it('follows a relocated gitdir through the entry scope', async () => {

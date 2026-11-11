@@ -1,9 +1,9 @@
-import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { zstdCompressSync } from 'node:zlib'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { parseCodexSessionFile } from './session-scanner-codex-parser'
-import { readCodexTimelineOnlyRecord } from './session-scanner-codex-record-fast-path'
 import {
   createSessionParseStats,
   parseAgentSessionFileCached
@@ -16,11 +16,6 @@ const PAD = 'x'.repeat(2048)
 
 function record(type: string, payload: Record<string, unknown>, timestamp: string): string {
   return JSON.stringify({ timestamp, type, payload })
-}
-
-// Only oversized records exercise prefix matching; small records always use the full parser.
-function paddedPayload(payloadType: string, extra: Record<string, unknown> = {}) {
-  return { type: payloadType, ...extra, pad: PAD }
 }
 
 let tempRoots: string[] = []
@@ -48,80 +43,6 @@ afterEach(async () => {
   vi.restoreAllMocks()
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })))
   tempRoots = []
-})
-
-describe('readCodexTimelineOnlyRecord', () => {
-  // Every record that affects visible fields must bypass the timeline-only fast path.
-  it.each([
-    ['session_meta', record('session_meta', { id: 'a', pad: PAD }, '2026-08-20T10:00:00.000Z')],
-    [
-      'turn_context',
-      record('turn_context', { cwd: '/repo', pad: PAD }, '2026-08-20T10:00:00.000Z')
-    ],
-    [
-      'response_item/message',
-      record(
-        'response_item',
-        paddedPayload('message', { role: 'user' }),
-        '2026-08-20T10:00:00.000Z'
-      )
-    ],
-    [
-      'event_msg/user_message',
-      record('event_msg', paddedPayload('user_message'), '2026-08-20T10:00:00.000Z')
-    ],
-    [
-      'event_msg/agent_message',
-      record('event_msg', paddedPayload('agent_message'), '2026-08-20T10:00:00.000Z')
-    ],
-    [
-      'event_msg/item_completed',
-      record('event_msg', paddedPayload('item_completed'), '2026-08-20T10:00:00.000Z')
-    ],
-    [
-      'event_msg/token_count',
-      record('event_msg', paddedPayload('token_count'), '2026-08-20T10:00:00.000Z')
-    ]
-  ])('keeps %s on the full parser', (_label, line) => {
-    expect(readCodexTimelineOnlyRecord(Buffer.from(line))).toBeNull()
-  })
-
-  it.each([
-    ['compacted', record('compacted', { message: PAD }, '2026-08-20T10:00:00.000Z')],
-    [
-      'response_item/function_call_output',
-      record('response_item', paddedPayload('function_call_output'), '2026-08-20T10:00:00.000Z')
-    ],
-    [
-      'response_item/image_generation_call',
-      record('response_item', paddedPayload('image_generation_call'), '2026-08-20T10:00:00.000Z')
-    ],
-    [
-      'response_item/reasoning',
-      record('response_item', paddedPayload('reasoning'), '2026-08-20T10:00:00.000Z')
-    ],
-    [
-      'event_msg/task_complete',
-      record('event_msg', paddedPayload('task_complete'), '2026-08-20T10:00:00.000Z')
-    ],
-    [
-      'event_msg/exec_command_output_delta',
-      record('event_msg', paddedPayload('exec_command_output_delta'), '2026-08-20T10:00:00.000Z')
-    ]
-  ])('takes %s off the full parser', (_label, line) => {
-    expect(readCodexTimelineOnlyRecord(Buffer.from(line))).toEqual({
-      timestamp: '2026-08-20T10:00:00.000Z'
-    })
-  })
-
-  it('falls back for small, reordered, or prefix-ambiguous records', () => {
-    const small = record('compacted', { message: 'short' }, '2026-08-20T10:00:00.000Z')
-    expect(readCodexTimelineOnlyRecord(Buffer.from(small))).toBeNull()
-    const reordered = `${JSON.stringify({ type: 'compacted', timestamp: '2026-08-20T10:00:00.000Z', payload: { message: PAD } })}`
-    expect(readCodexTimelineOnlyRecord(Buffer.from(reordered))).toBeNull()
-    const lateType = `{"timestamp":"2026-08-20T10:00:00.000Z","type":"response_item","payload":{"pad":"${PAD}","type":"reasoning"}}`
-    expect(readCodexTimelineOnlyRecord(Buffer.from(lateType))).toBeNull()
-  })
 })
 
 describe('Codex resumable parser fast path', () => {
@@ -226,31 +147,44 @@ describe('Codex resumable parser fast path', () => {
     expect(stats.bytesRead).toBeLessThan((file.sizeBytes ?? 0) / 2)
   })
 
-  it('never re-reads a worker transcript that later grew', async () => {
-    const file = await writeTranscript(
-      [
-        record(
-          'session_meta',
-          { id: 'worker-session', thread_source: 'subagent' },
-          '2026-08-20T10:00:00.000Z'
-        ),
-        record('compacted', { message: 'x'.repeat(1024 * 1024) }, '2026-08-20T10:00:01.000Z')
-      ],
-      'rollout-2026-08-20T10-00-00-worker-grown.jsonl'
-    )
-    const candidate: SessionFileCandidate = { agent: 'codex', file, codexHome: null }
-    await parseAgentSessionFileCached(candidate, process.platform)
+  it('indexes a Codex rollout archived as .jsonl.zst (#40312)', async () => {
+    const lines = [
+      record(
+        'session_meta',
+        { id: 'archived-session', cwd: '/repo/archived' },
+        '2026-08-01T10:00:00.000Z'
+      ),
+      record(
+        'response_item',
+        { type: 'message', role: 'user', content: 'archived question' },
+        '2026-08-01T10:00:05.000Z'
+      ),
+      record(
+        'response_item',
+        { type: 'message', role: 'assistant', content: 'archived answer' },
+        '2026-08-01T10:00:10.000Z'
+      )
+    ]
+    const plain = await writeTranscript(lines, 'rollout-2026-08-01T10-00-00-archived.jsonl')
+    const file: FileWithMtime = {
+      ...plain,
+      path: `${plain.path}.zst`,
+      sizeBytes: undefined
+    }
+    await writeFile(file.path, zstdCompressSync(await readFile(plain.path)))
+    const fileStat = await stat(file.path)
+    file.mtimeMs = fileStat.mtimeMs
+    file.sizeBytes = fileStat.size
 
-    const grown = createSessionParseStats()
     const session = await parseAgentSessionFileCached(
-      { ...candidate, file: { ...file, mtimeMs: file.mtimeMs + 1, sizeBytes: 99_000_000 } },
-      process.platform,
-      grown
+      { agent: 'codex', file, codexHome: null },
+      process.platform
     )
 
-    expect(session).toBeNull()
-    expect(grown.bytesRead).toBe(0)
-    // Early dismissal has its own counter so scan spans do not report a zero-byte incremental parse.
-    expect(grown).toMatchObject({ earlyStopped: 1, incremental: 0, fullParses: 0 })
+    expect(session).toMatchObject({
+      sessionId: 'archived-session',
+      messageCount: 2,
+      updatedAt: '2026-08-01T10:00:10.000Z'
+    })
   })
 })

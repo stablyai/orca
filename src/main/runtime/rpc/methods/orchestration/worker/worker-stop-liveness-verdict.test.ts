@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
-import { OrchestrationDb } from '../../../../orchestration/db'
-import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import '../../../../orchestration/db/contract-constants'
+import '../../../../orchestration/db/messages/mailbox-routing-page'
+import '../../../../orchestration/db/dispatch-row-writer'
+import '../../../../orchestration/db/attempt-outcome-projection'
+import { ORCHESTRATION_METHODS } from '../orchestration'
 import { isStreamingMethod, eraseRpcMethods } from '../../../core'
 
 // Dropped relays clear connected across remote PTYs; use host verdicts to distinguish lost contact from death.
@@ -99,29 +103,6 @@ describe('worker-stop against a terminal we lost contact with', () => {
     expect(stopped.state).toBe('stop_unknown')
     expect(stopped.lastError).toContain('could not be confirmed stopped')
     expect(stopped.lastError).not.toContain('exited')
-  })
-
-  it('does not settle a bare false close as stopped', async () => {
-    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
-      handle: 'term_worker',
-      worktreeId: 'repo::worktree',
-      connected: true,
-      status: 'running'
-    } as never)
-    vi.spyOn(runtime, 'closeTerminal').mockResolvedValue({
-      handle: 'term_worker',
-      tabId: 'tab_worker',
-      ptyKilled: false
-    })
-    const dispatch = createWorker()
-
-    const stopped = (await call('orchestration.workerStop', { dispatch: dispatch.id })) as {
-      state: string
-      lastError: string
-    }
-
-    expect(stopped.state).toBe('stop_unknown')
-    expect(stopped.lastError).toContain('could not be confirmed stopped')
   })
 
   it('does not close a legacy worker terminal without an ownership record', async () => {

@@ -1,5 +1,5 @@
 import { Search, X } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { Tabs, TabsList, TabsTrigger } from '../../ui/tabs'
@@ -35,9 +35,10 @@ export function PluginCatalogLayout({
   filters,
   children
 }: PluginCatalogLayoutProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <section
-      aria-label={translate('auto.components.pluginCatalog.PluginCatalogLayout.title', 'Plugins')}
+      aria-label={t('auto.components.pluginCatalog.PluginCatalogLayout.title', 'Plugins')}
       className="@container/plugin-list space-y-4"
     >
       <div className="flex flex-wrap items-center gap-2">
@@ -50,32 +51,26 @@ export function PluginCatalogLayout({
           }}
         >
           <TabsList
-            aria-label={translate(
+            aria-label={t(
               'auto.components.pluginCatalog.PluginCatalogLayout.filter',
               'Plugin filter'
             )}
           >
             <TabsTrigger value="all">
-              {translate('auto.components.pluginCatalog.PluginCatalogLayout.all', 'All')}
+              {t('auto.components.pluginCatalog.PluginCatalogLayout.all', 'All')}
             </TabsTrigger>
             <TabsTrigger value="installed">
-              {translate(
-                'auto.components.pluginCatalog.PluginCatalogLayout.installed',
-                'Installed'
-              )}
+              {t('auto.components.pluginCatalog.PluginCatalogLayout.installed', 'Installed')}
               <span className="text-xs font-normal tabular-nums text-muted-foreground">
                 {installedCount}
               </span>
             </TabsTrigger>
             <TabsTrigger value="available">
-              {translate(
-                'auto.components.pluginCatalog.PluginCatalogLayout.notInstalled',
-                'Not installed'
-              )}
+              {t('auto.components.pluginCatalog.PluginCatalogLayout.notInstalled', 'Not installed')}
             </TabsTrigger>
             {updateCount > 0 ? (
               <TabsTrigger value="updates">
-                {translate('auto.components.pluginCatalog.PluginCatalogLayout.updates', 'Updates')}
+                {t('auto.components.pluginCatalog.PluginCatalogLayout.updates', 'Updates')}
                 <span className="text-xs font-normal tabular-nums text-muted-foreground">
                   {updateCount}
                 </span>
@@ -88,11 +83,11 @@ export function PluginCatalogLayout({
           <Input
             value={search}
             className="pl-9"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.pluginCatalog.PluginCatalogLayout.searchLabel',
               'Search plugins'
             )}
-            placeholder={translate(
+            placeholder={t(
               'auto.components.pluginCatalog.PluginCatalogLayout.searchPlaceholder',
               'Search plugins'
             )}
@@ -103,7 +98,7 @@ export function PluginCatalogLayout({
               variant="ghost"
               size="icon-xs"
               className="absolute top-1/2 right-1.5 -translate-y-1/2"
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.pluginCatalog.PluginCatalogLayout.clearSearch',
                 'Clear search'
               )}

@@ -1,9 +1,10 @@
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
   buildAgentRowLineageTree,
   resolveAgentRowParentPaneKey,
   type AgentLineageSourceRow
 } from '../dashboard/agent-row-lineage-model'
+import { isRunningActivityState } from './activity-event-state'
 import type { ActivityLiveAgentState } from './activity-thread-types'
 
 type ChildAgentLineageEntry = Pick<AgentStatusEntry, 'terminalHandle' | 'orchestration'>
@@ -11,7 +12,7 @@ type ChildAgentLineageEntry = Pick<AgentStatusEntry, 'terminalHandle' | 'orchest
 /** Accept full threads or synthetic structural rows without casts; classifier tests pin compatibility. */
 export type ChildAgentClassifiableThread = {
   paneKey: string
-  /** Non-null while the pane's own turn is live (working, monitoring or waiting on the user). */
+  /** Running while the pane's own turn is live (working, monitoring or waiting on the user); unverifiable is not. */
   currentAgentState?: ActivityLiveAgentState | null
   currentAgentEntry?: ChildAgentLineageEntry | null
   latestEvent?: { entry: ChildAgentLineageEntry } | null
@@ -46,6 +47,14 @@ function firstReportedTerminalHandle(thread: ChildAgentClassifiableThread): stri
 export function collectHiddenChildAgentPaneKeys(
   threads: readonly ChildAgentClassifiableThread[]
 ): Set<string> {
+  return classifyChildAgents(threads).hidden
+}
+
+/** Each child's parent and the children a hidden-children view folds away. */
+export function classifyChildAgents(threads: readonly ChildAgentClassifiableThread[]): {
+  parentPaneKeyByChild: Map<string, string>
+  hidden: Set<string>
+} {
   const baseRows: AgentLineageSourceRow[] = threads.map((thread) => ({
     paneKey: thread.paneKey,
     entry: { terminalHandle: firstReportedTerminalHandle(thread) }
@@ -81,13 +90,22 @@ export function collectHiddenChildAgentPaneKeys(
   })
 
   const livePaneKeys = new Set(
-    threads.filter((thread) => thread.currentAgentState).map((thread) => thread.paneKey)
+    threads
+      .filter((thread) => isRunningActivityState(thread.currentAgentState))
+      .map((thread) => thread.paneKey)
   )
+  const tree = buildAgentRowLineageTree(rows)
+  const parentPaneKeyByChild = new Map<string, string>()
+  for (const [parentPaneKey, children] of tree.childrenByParentPaneKey) {
+    for (const child of children) {
+      parentPaneKeyByChild.set(child.paneKey, parentPaneKey)
+    }
+  }
   const hidden = new Set<string>()
-  for (const paneKey of buildAgentRowLineageTree(rows).childPaneKeys) {
+  for (const paneKey of tree.childPaneKeys) {
     if (!livePaneKeys.has(paneKey)) {
       hidden.add(paneKey)
     }
   }
-  return hidden
+  return { parentPaneKeyByChild, hidden }
 }

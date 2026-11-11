@@ -1,13 +1,16 @@
+import { withGitHubTargetOperation } from './github-work-item-operation'
+import { githubTaskKey, requireGitHubTaskTarget } from './github-task-identity'
+import {
+  matchesGitHubWorkItemTarget,
+  GitHubWorkItemTargetError
+} from '../../../src/shared/github/work-item-target'
 import type { ProviderCheckSummary } from '../../../src/shared/github/pull-request-types'
 import type { GitLabWorkItem } from './mobile-tasks-provider-detail-types'
 import type { ItemDetailMetadataEffectsModel } from './use-mobile-tasks-item-detail-metadata-effects'
 import { fetchJiraIssueDetail } from './mobile-jira-task-source'
 import { createJiraTask } from './mobile-tasks-item-mapping'
-import {
-  type HostedReviewDecision,
-  buildGitLabCheckSummary,
-  useEffect
-} from './mobile-tasks-dependencies'
+import type { HostedReviewDecision } from '../../../src/shared/source-control/hosted-review/hosted-review-contracts'
+import { buildGitLabCheckSummary, useEffect } from './mobile-tasks-dependencies'
 import { type TaskItem, createLinearTask } from './mobile-tasks-legacy-foundation'
 import {
   githubItemDetailRead,
@@ -29,6 +32,7 @@ function gitLabHydrationUnchanged(
     current.total === summary.total &&
     current.passed === summary.passed &&
     current.failed === summary.failed &&
+    current.cancelled === summary.cancelled &&
     current.pending === summary.pending &&
     current.neutral === summary.neutral &&
     current.scope === summary.scope &&
@@ -43,6 +47,7 @@ export type ItemDetailLoadingInput = Pick<
   | 'detailRequestItem'
   | 'client'
   | 'detailRefreshSeq'
+  | 'detailRefreshRequested'
   | 'hydrateActionItem'
   | 'setDetailError'
   | 'setDetailLoading'
@@ -58,6 +63,7 @@ export function useMobileTasksItemDetailLoading<Model extends ItemDetailLoadingI
     detailRequestItem: actionItem,
     client,
     detailRefreshSeq,
+    detailRefreshRequested,
     hydrateActionItem,
     setDetailError,
     setDetailLoading,
@@ -74,28 +80,37 @@ export function useMobileTasksItemDetailLoading<Model extends ItemDetailLoadingI
     }
 
     let stale = false
+    const canonical = detailRefreshRequested.current
+    detailRefreshRequested.current = false
     setDetailPayload(null)
     setDetailError('')
     setDetailLoading(true)
 
     const loadDetails = async (): Promise<void> => {
       if (actionItem.provider === 'github') {
-        const reply = await githubItemDetailRead.request(
+        const target = requireGitHubTaskTarget(actionItem.source)
+        const params = {
+          repo: `id:${actionItem.source.repoId}`,
+          number: target.number,
+          type: target.type
+        }
+        const reply = await withGitHubTargetOperation({
           client,
-          {
-            repo: `id:${actionItem.source.repoId}`,
-            number: actionItem.source.number,
-            type: actionItem.source.type
-          },
-          { timeoutMs: 30_000 }
-        )
+          params,
+          ownerRepo: target.repository,
+          read: true,
+          canonical,
+          send: (selected, exact, options) =>
+            githubItemDetailRead.request(selected, { ...params, ...exact }, options)
+        })
         const details = githubItemDetailRead.interpret(reply)
-        if (!details) {
-          throw new Error('Details not found')
+        if (!details?.item || !matchesGitHubWorkItemTarget(details.item, target)) {
+          throw new GitHubWorkItemTargetError(target)
         }
         if (!stale) {
           setDetailPayload({
             provider: 'github',
+            targetKey: githubTaskKey(actionItem.source),
             body: details.body ?? '',
             comments: details.comments ?? [],
             labels: details.item?.labels ?? actionItem.source.labels,
@@ -120,7 +135,9 @@ export function useMobileTasksItemDetailLoading<Model extends ItemDetailLoadingI
             repo: `id:${actionItem.source.repoId}`,
             iid: actionItem.source.number,
             type: actionItem.source.type,
-            projectRef: actionItem.source.projectRef
+            projectRef: actionItem.source.projectRef,
+            // A lost comment settles on any later read (refresh, Retry, reopen); desktop reads never ask.
+            markViewerComments: true
           },
           { timeoutMs: 30_000 }
         )

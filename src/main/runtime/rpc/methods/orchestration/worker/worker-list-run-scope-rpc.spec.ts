@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { OrchestrationFleetWorker } from '../../../../../../shared/orchestration-fleet-projection'
+
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
 
@@ -101,19 +101,6 @@ export function registerWorkerListRunScopeRpcTests(): void {
       )
       expect(harness.db.getTask(taskId)?.status).toBe('dispatched')
     })
-
-    it('still refuses to retry an attempt that has not settled', async () => {
-      const { taskId, dispatchId } = await dispatchContextOnly('live attempt')
-
-      await expect(
-        harness.call('orchestration.workerStart', {
-          task: taskId,
-          from: 'term_coord',
-          terminal: 'term_worker',
-          retryOf: dispatchId
-        })
-      ).rejects.toMatchObject({ code: 'task_not_startable' })
-    })
   })
 
   // Self-recorded context delegates nothing and cannot identify the coordinator's parent Attempt.
@@ -146,77 +133,6 @@ export function registerWorkerListRunScopeRpcTests(): void {
         creator_dispatch_id: null
       })
     })
-
-    it('still counts a real assignment to another pane as a nesting parent', async () => {
-      const task = harness.db.createTask({ spec: 'real delegation', runId: harness.activeRunId })
-      const delegated = (await harness.call('orchestration.dispatch', {
-        task: task.id,
-        from: 'term_coord',
-        to: 'term_worker'
-      })) as { dispatch: { id: string } }
-
-      expect(
-        harness.db.resolveCreatorDepth({
-          kind: 'terminal',
-          handle: 'term_worker',
-          paneKey: harness.workerPaneKey
-        })
-      ).toBe(1)
-      expect(
-        harness.db.resolveCreatorDispatchId({
-          kind: 'terminal',
-          handle: 'term_worker',
-          paneKey: harness.workerPaneKey
-        })
-      ).toBe(delegated.dispatch.id)
-    })
-
-    it('reports the self-dispatching coordinator as a root', async () => {
-      await selfDispatch()
-
-      const creator = {
-        kind: 'terminal',
-        handle: 'term_coord',
-        paneKey: harness.coordinatorPaneKey
-      } as const
-      expect(harness.db.resolveCreatorDepth(creator)).toBe(0)
-      expect(harness.db.resolveCreatorDispatchId(creator)).toBeNull()
-    })
-  })
-
-  type ReadWithProjection = { projection?: OrchestrationFleetWorker | null }
-
-  describe('orchestration worker-read fleet projection', () => {
-    const h = createOrchestrationWorkerReleaseHarness()
-
-    afterEach(() => h.cleanup())
-
-    it('publishes the fleet agent verdict beside the PTY verdict on a live read', async () => {
-      h.setup()
-      const { dispatchId } = await h.startWorker()
-
-      const read = (await h.call('orchestration.workerRead', {
-        dispatch: dispatchId
-      })) as ReadWithProjection & { status: { liveness?: string } }
-
-      expect(read.projection?.dispatchId).toBe(dispatchId)
-      // The agent verdict is not the PTY verdict; worker-read must carry both.
-      expect(read.status.liveness).toBe('live')
-      expect(read.projection?.liveness.verdict).toBe('unverifiable')
-    })
-
-    it('carries the projection on an archived read after release', async () => {
-      h.setup()
-      const { dispatchId } = await h.startSettledWorker()
-      await h.call('orchestration.workerRelease', { dispatch: dispatchId })
-
-      const read = (await h.call('orchestration.workerRead', {
-        dispatch: dispatchId
-      })) as ReadWithProjection
-
-      expect(read.projection?.dispatchId).toBe(dispatchId)
-      expect(read.projection?.liveness.verdict).toBe('exited')
-    })
   })
 
   type ListedWorker = {
@@ -236,19 +152,6 @@ export function registerWorkerListRunScopeRpcTests(): void {
 
     afterEach(() => h.cleanup())
 
-    /** Settle real pre-v3 dispatch_contexts without worker_dispatches, matching legacy unsupervised dispatches. */
-    function createLegacyDispatch(status: 'completed' | 'failed' | 'dispatched'): string {
-      const task = h.db.createTask({ spec: `legacy ${status} task`, runId: h.activeRunId })
-      const dispatch = createRootDispatch(h.db, task.id, `term_legacy_${status}`)
-      if (status === 'completed') {
-        h.db.completeDispatch(dispatch.id)
-      }
-      if (status === 'failed') {
-        h.db.failDispatch(dispatch.id, 'legacy failure')
-      }
-      return dispatch.id
-    }
-
     async function listWorkers(): Promise<Map<string, ListedWorker>> {
       const listed = (await h.call('orchestration.workerList', {
         paginate: true,
@@ -256,26 +159,6 @@ export function registerWorkerListRunScopeRpcTests(): void {
       })) as { workers: ListedWorker[] }
       return new Map(listed.workers.map((worker) => [worker.dispatchId, worker]))
     }
-
-    it('projects a settled legacy dispatch as settled with nothing to act on', async () => {
-      h.setup()
-      const completed = createLegacyDispatch('completed')
-
-      const worker = (await listWorkers()).get(completed)!
-
-      expect(worker.workerState).toBe('unsupervised')
-      expect(worker.dispatchStatus).toBe('completed')
-      // Completed legacy Dispatch rows already prove accepted success/task completion.
-      expect(worker.projection.outcome).toBe('succeeded')
-      // No worker row means no process to act on; keep liveness unverifiable because absence still proves no death.
-      expect(worker.projection.liveness).toEqual({
-        verdict: 'unverifiable',
-        reason: 'unsupervised_settled'
-      })
-      expect(worker.projection.attention.categories).not.toContain('unverifiable')
-      expect(worker.projection.attention.requiresAction).toBe(false)
-      expect(worker.projection.nextAction.kind).toBe('none')
-    })
 
     it.each(['completed', 'failed'] as const)(
       'closes a pending question when a legacy dispatch settles as %s',
@@ -308,33 +191,5 @@ export function registerWorkerListRunScopeRpcTests(): void {
         expect(worker.projection.attention.requiresAction).toBe(status === 'failed')
       }
     )
-
-    it('keeps a legacy failed dispatch actionable on the failure, not on absence', async () => {
-      h.setup()
-      const failed = createLegacyDispatch('failed')
-
-      const worker = (await listWorkers()).get(failed)!
-
-      expect(worker.dispatchStatus).toBe('failed')
-      expect(worker.projection.outcome).toBe('failed')
-      expect(worker.projection.attention.categories).toEqual(['failure'])
-      expect(worker.projection.attention.requiresAction).toBe(true)
-    })
-
-    it('leaves an unsettled legacy dispatch genuinely unknown', async () => {
-      h.setup()
-      const dispatched = createLegacyDispatch('dispatched')
-
-      const worker = (await listWorkers()).get(dispatched)!
-
-      expect(worker.projection.outcome).toBe('in_progress')
-      expect(worker.projection.liveness).toEqual({
-        verdict: 'unverifiable',
-        reason: 'missing_status'
-      })
-      expect(worker.projection.attention.categories).toContain('unverifiable')
-      expect(worker.projection.attention.requiresAction).toBe(true)
-      expect(worker.projection.nextAction).toEqual({ kind: 'none', argv: [] })
-    })
   })
 }

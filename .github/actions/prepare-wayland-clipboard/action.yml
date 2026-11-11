@@ -23,7 +23,7 @@ runs:
       run: |
         node --input-type=module <<'NODE'
         import { appendFileSync } from 'node:fs'
-        import { waylandClipboardFingerprint } from './config/scripts/build-wayland-clipboard.mjs'
+        import { waylandClipboardFingerprint } from './config/scripts/native-build/linux/build-wayland-clipboard.mjs'
         const fingerprint = waylandClipboardFingerprint(process.cwd(), process.arch)
         // Immutable invalid hits need a version bump here before publishing their repair.
         appendFileSync(process.env.GITHUB_OUTPUT, `key=wayland-clipboard-v1-${process.arch}-${fingerprint}\n`)

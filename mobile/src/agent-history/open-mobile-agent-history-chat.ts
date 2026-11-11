@@ -1,10 +1,10 @@
-import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
+import type { AiVaultSession } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import type { StructuredSessionOpenFailure } from '../../../src/shared/open-structured-agent-session'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   openMobileStructuredSession,
   mobileStructuredSessionHref
-} from '../session/open-mobile-structured-session'
+} from '../session/native-chat/agent-session/open-mobile-structured-session'
 
 /** Consume native opens and ambiguous failures; only an explicit pre-effect refusal resumes in a terminal. */
 export async function openMobileAgentHistoryChat(args: {

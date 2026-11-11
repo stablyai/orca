@@ -36,7 +36,7 @@ const retryAfter = new Map<string, number>()
 // A later caller with materially more budget deserves a retry after a starved probe.
 const probedWithBudget = new Map<string, number>()
 
-/** A payload that is not three absolute, single-line POSIX values is a failed probe. */
+/** A payload with invalid absolute, single-line POSIX values is a failed probe. */
 function parseProbePayload(payload: string | null): WslGuestEnvironment | null {
   if (payload === null) {
     return null

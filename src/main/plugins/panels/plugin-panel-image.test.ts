@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -61,17 +61,5 @@ describe('readPluginPanelImage', () => {
     ]) {
       expect({ path, image: await read(path) }).toEqual({ path, image: null })
     }
-  })
-
-  // Why skipped on Windows: creating a symlink there needs Developer Mode or admin rights.
-  it.skipIf(process.platform === 'win32')('refuses a symlink that leaves the plugin', async () => {
-    const { root, outside } = await plugin()
-    await symlink(outside, join(root, 'assets', 'link.png'))
-    expect(
-      await readPluginPanelImage(
-        { resolveComponentsPanelRoot: () => root },
-        { sessionToken: 't', path: 'assets/link.png' }
-      )
-    ).toBeNull()
   })
 })

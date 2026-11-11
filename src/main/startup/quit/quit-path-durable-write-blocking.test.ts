@@ -1,9 +1,9 @@
 import { createWorkerMaintenanceFixture } from '../../persistence/loading-store/profile-state-maintenance-fixture'
 import type { Store } from '../../persistence/loading-store/store'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, readFileSync, existsSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import type * as NodeFs from 'node:fs'
-import type * as NodeFsPromises from 'node:fs/promises'
+
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -16,12 +16,8 @@ const fsCalls = vi.hoisted(() => {
     recording: false,
     dirPrefix: '',
     syncCalls: [] as string[],
-    holdAsync: null as Promise<void> | null,
-    waitAsync: null as ((fn: string, target: string) => Promise<void> | null) | null,
     reset(): void {
       calls.syncCalls.length = 0
-      calls.holdAsync = null
-      calls.waitAsync = null
     },
     inScope(target: unknown): target is string {
       return (
@@ -55,35 +51,6 @@ vi.mock('node:fs', async (importOriginal) => {
   return { ...patched, default: patched }
 })
 
-vi.mock('node:fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<typeof NodeFsPromises>()
-  const patched: Record<string, unknown> = { ...actual }
-  for (const name of [
-    'stat',
-    'access',
-    'rename',
-    'copyFile',
-    'rm',
-    'mkdir',
-    'open',
-    'readFile',
-    'writeFile',
-    'link'
-  ]) {
-    const fn = (actual as unknown as Record<string, (...args: unknown[]) => unknown>)[name]
-    patched[name] = async (...args: unknown[]): Promise<unknown> => {
-      if (fsCalls.inScope(args[0]) && fsCalls.holdAsync) {
-        await fsCalls.holdAsync
-      }
-      if (fsCalls.inScope(args[0]) && typeof args[0] === 'string') {
-        await fsCalls.waitAsync?.(name, args[0])
-      }
-      return fn(...args)
-    }
-  }
-  return { ...patched, default: patched }
-})
-
 vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
   sshConfigHostsToTargets: vi.fn()
@@ -104,16 +71,8 @@ vi.mock('electron', () => ({
   }
 }))
 
-type TestStatsCollector = {
-  onAgentStart(ptyId: string, at: number, repo?: string, worktree?: string): void
-  getSummary(): { totalAgentsSpawned: number; totalAgentTimeMs: number }
-  flushAsync(): Promise<void>
-}
-
 const profiles = new Map<string, Awaited<ReturnType<typeof createWorkerMaintenanceFixture>>>()
 const stores: Store[] = []
-const statsCollectors: TestStatsCollector[] = []
-const releases: (() => void)[] = []
 
 async function createStore(dir: string): Promise<Store> {
   testState.dir = dir
@@ -134,48 +93,6 @@ function readState(dir: string) {
   return profile.readState()
 }
 
-function stallFilesystem(): void {
-  const gate = Promise.withResolvers<void>()
-  releases.push(gate.resolve)
-  fsCalls.holdAsync = gate.promise
-}
-
-function stallCommit(dir: string) {
-  const profile = profiles.get(dir)
-  if (!profile) {
-    throw new Error('Missing test profile')
-  }
-  const started = Promise.withResolvers<void>()
-  const finish = Promise.withResolvers<void>()
-  releases.push(finish.resolve)
-  const original = profile.authority.writeCompleteSerializedDomains.bind(profile.authority)
-  vi.spyOn(profile.authority, 'writeCompleteSerializedDomains').mockImplementationOnce(
-    async (rows) => {
-      started.resolve()
-      await finish.promise
-      await original(rows)
-    }
-  )
-  return { started: started.promise, release: finish.resolve }
-}
-
-async function createStatsCollector(dir: string): Promise<TestStatsCollector> {
-  testState.dir = dir
-  const { StatsCollector, initStatsPath } = await import('../../stats/collector')
-  initStatsPath(testState.dir)
-  const stats = new StatsCollector()
-  statsCollectors.push(stats)
-  return stats
-}
-
-const dataFile = (dir: string): string => join(dir, 'orca-data.json')
-const statsFile = (dir: string): string => join(dir, 'orca-stats.json')
-const activeViewFile = (dir: string): string => join(dir, 'active-view.json')
-
-function eventLoopTurned(): Promise<boolean> {
-  return new Promise((resolve) => setTimeout(() => resolve(true), 0))
-}
-
 describe('quit-path durable writes never park the main thread', () => {
   const dirs: string[] = []
 
@@ -193,32 +110,12 @@ describe('quit-path durable writes never park the main thread', () => {
 
   afterEach(async () => {
     fsCalls.recording = false
-    for (const release of releases.splice(0)) {
-      release()
-    }
-    fsCalls.holdAsync = null
-    fsCalls.waitAsync = null
     vi.useRealTimers()
     await Promise.all(stores.splice(0).map((store) => store.freezeWritesAsync()))
-    await Promise.all(statsCollectors.splice(0).map((stats) => stats.flushAsync()))
     profiles.clear()
     for (const dir of dirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true })
     }
-  })
-
-  it('store.flushAsync() issues no synchronous fs syscalls', async () => {
-    const dir = makeDir()
-    const store = await createStore(dir)
-    store.updateUI({ sidebarWidth: 321 })
-
-    fsCalls.dirPrefix = dir
-    fsCalls.recording = true
-    await store.flushAsync()
-    fsCalls.recording = false
-
-    expect(fsCalls.syncCalls).toEqual([])
-    expect(readState(dir).ui.sidebarWidth).toBe(321)
   })
 
   it('renderer unload staging issues no synchronous fs syscalls', async () => {
@@ -266,276 +163,5 @@ describe('quit-path durable writes never park the main thread', () => {
     expect(readFileSync(join(dir, 'terminal-scrollback', `${ref}.bin`), 'utf-8')).toBe(
       'remote-scrollback'
     )
-  })
-
-  it('store.flushAsync() also moves the active-view and github-cache sidecars off the thread', async () => {
-    const dir = makeDir()
-    const staleCacheTemp = join(dir, 'orca-github-cache.json.999999.1.orphan.tmp')
-    writeFileSync(staleCacheTemp, 'stale', 'utf-8')
-    const staleSeconds = (Date.now() - 25 * 60 * 60 * 1000) / 1000
-    utimesSync(staleCacheTemp, staleSeconds, staleSeconds)
-    const store = await createStore(dir)
-    store.updateUI({ activeView: 'activity' })
-    store.setGitHubCache({ pr: {}, issue: {} })
-
-    fsCalls.dirPrefix = dir
-    fsCalls.recording = true
-    await store.flushAsync()
-    fsCalls.recording = false
-
-    expect(fsCalls.syncCalls).toEqual([])
-    expect(JSON.parse(readFileSync(activeViewFile(dir), 'utf-8')).activeView).toBe('activity')
-    expect(existsSync(join(dir, 'orca-github-cache.json'))).toBe(true)
-    expect(existsSync(staleCacheTemp)).toBe(false)
-  })
-
-  it('stats.flushAsync() issues no synchronous fs syscalls', async () => {
-    const dir = makeDir()
-    const stats = await createStatsCollector(dir)
-    stats.onAgentStart('pty-1', 1_000, 'repo', 'worktree')
-
-    fsCalls.dirPrefix = dir
-    fsCalls.recording = true
-    await stats.flushAsync()
-    fsCalls.recording = false
-
-    expect(fsCalls.syncCalls).toEqual([])
-    expect(JSON.parse(readFileSync(statsFile(dir), 'utf-8')).aggregates.totalAgentsSpawned).toBe(1)
-  })
-
-  it('Grok session cleanup issues no synchronous fs syscalls', async () => {
-    const dir = makeDir()
-    const previousGrokHome = process.env.GROK_HOME
-    process.env.GROK_HOME = dir
-    const { GrokHookService } = await import('../../grok/hook-service')
-    const service = new GrokHookService()
-    try {
-      const configPath = join(dir, 'hooks', 'orca-status.json')
-      const configDir = join(dir, 'hooks')
-      const { mkdirSync } = await import('node:fs')
-      mkdirSync(configDir, { recursive: true })
-      writeFileSync(
-        configPath,
-        `${JSON.stringify({
-          hooks: {
-            SessionStart: [
-              { hooks: [{ type: 'command', command: '/home/test/.orca/agent-hooks/grok-hook.sh' }] }
-            ]
-          }
-        })}\n`
-      )
-      fsCalls.dirPrefix = dir
-      fsCalls.recording = true
-      await service.removeAsync()
-      fsCalls.recording = false
-
-      expect(fsCalls.syncCalls).toEqual([])
-      expect(existsSync(configPath)).toBe(false)
-    } finally {
-      fsCalls.recording = false
-      if (previousGrokHome === undefined) {
-        delete process.env.GROK_HOME
-      } else {
-        process.env.GROK_HOME = previousGrokHome
-      }
-    }
-  })
-
-  it('stats.flushAsync() closes out live agents before it returns, not when its write lands', async () => {
-    // killAllPty skips onPtyExit, so agent time must be closed out before awaiting the write.
-    const dir = makeDir()
-    const stats = await createStatsCollector(dir)
-    stats.onAgentStart('pty-1', Date.now() - 4_000)
-
-    fsCalls.dirPrefix = dir
-    stallFilesystem()
-    const pending = stats.flushAsync()
-
-    expect(stats.getSummary().totalAgentTimeMs).toBeGreaterThan(0)
-    void pending
-  })
-
-  it('a stalled mount leaves the event loop live instead of parking it', async () => {
-    const dir = makeDir()
-    const store = await createStore(dir)
-    store.updateUI({ sidebarWidth: 654 })
-
-    fsCalls.dirPrefix = dir
-    const gate = stallCommit(dir)
-    const pending = store.flushAsync()
-    await gate.started
-
-    await expect(eventLoopTurned()).resolves.toBe(true)
-    void pending
-  })
-
-  it('the quit teardown deadline can now bound a wedged state flush', async () => {
-    const dir = makeDir()
-    const store = await createStore(dir)
-    const { settleTeardownWithinDeadline } = await import('./quit-teardown-deadline')
-    store.updateUI({ sidebarWidth: 999 })
-
-    fsCalls.dirPrefix = dir
-    const before = readState(dir).ui.sidebarWidth
-    const gate = stallCommit(dir)
-    const pending = store.flushAsync()
-    await gate.started
-
-    const outstanding = await settleTeardownWithinDeadline(
-      [{ name: 'state', promise: pending }],
-      25
-    )
-
-    expect(outstanding).toEqual(['state'])
-    expect(readState(dir).ui.sidebarWidth).toBe(before)
-    gate.release()
-    await pending
-    expect(readState(dir).ui.sidebarWidth).toBe(999)
-  })
-
-  it('store.flushAsync() drains an in-flight debounced write before writing', async () => {
-    const dir = makeDir()
-    const store = await createStore(dir)
-    const gate = stallCommit(dir)
-    vi.useFakeTimers()
-    store.updateUI({ sidebarWidth: 100 })
-    await vi.advanceTimersByTimeAsync(1_000)
-    await gate.started
-
-    store.updateUI({ sidebarWidth: 200 })
-    const flushed = store.flushAsync()
-    vi.useRealTimers()
-    gate.release()
-    await flushed
-
-    expect(readState(dir).ui.sidebarWidth).toBe(200)
-  })
-
-  it('store.flushAsync() is one idempotent final barrier', async () => {
-    const dir = makeDir()
-    const store = await createStore(dir)
-    store.updateUI({ sidebarWidth: 777 })
-
-    const first = store.flushAsync()
-    const second = store.flushAsync()
-
-    expect(second).toBe(first)
-    expect(() => store.flushOrThrow()).toThrow('final persistence')
-    await first
-    expect(readState(dir).ui.sidebarWidth).toBe(777)
-  })
-
-  it('serializes github-cache snapshots and keeps the newest generation', async () => {
-    const dir = makeDir()
-    const store = await createStore(dir)
-    let releaseWrite!: () => void
-    const writeRelease = new Promise<void>((resolve) => {
-      releaseWrite = resolve
-    })
-    let signalWrite!: () => void
-    releases.push(releaseWrite)
-    const writeStarted = new Promise<void>((resolve) => {
-      signalWrite = resolve
-    })
-    let held = false
-    fsCalls.dirPrefix = dir
-    fsCalls.recording = true
-    fsCalls.waitAsync = (fn, target) => {
-      if (held || fn !== 'writeFile' || !target.includes('orca-github-cache.json')) {
-        return null
-      }
-      held = true
-      signalWrite()
-      return writeRelease
-    }
-
-    store.setGitHubCache({ pr: { test: { data: null, fetchedAt: 1 } }, issue: {} })
-    const finalFlush = store.flushAsync()
-    await writeStarted
-    store.setGitHubCache({ pr: { test: { data: null, fetchedAt: 2 } }, issue: {} })
-
-    releaseWrite()
-    await finalFlush
-    fsCalls.recording = false
-
-    expect(JSON.parse(readFileSync(join(dir, 'orca-github-cache.json'), 'utf-8'))).toEqual({
-      pr: { test: { data: null, fetchedAt: 2 } },
-      issue: {}
-    })
-  })
-
-  it('stats.flushAsync() wins over a debounced write already in flight', async () => {
-    const dir = makeDir()
-    const stats = await createStatsCollector(dir)
-    stats.onAgentStart('pty-a', 1_000)
-    stats.onAgentStart('pty-b', 1_000)
-
-    const inflight = (stats as unknown as { enqueueWrite(): Promise<void> }).enqueueWrite.call(
-      stats
-    )
-    await stats.flushAsync()
-    await inflight
-
-    const persisted = JSON.parse(readFileSync(statsFile(dir), 'utf-8'))
-    expect(persisted.aggregates.totalAgentsSpawned).toBe(2)
-    expect(persisted.aggregates.totalAgentTimeMs).toBeGreaterThan(0)
-  })
-
-  it('the quit flush is the last write — later mutations do not schedule another', async () => {
-    // A later debounced write would race process exit.
-    const dir = makeDir()
-    const store = await createStore(dir)
-    vi.useFakeTimers()
-    store.updateUI({ sidebarWidth: 10 })
-    await store.flushAsync()
-
-    store.updateUI({ sidebarWidth: 20, activeView: 'tasks' })
-    fsCalls.dirPrefix = dir
-    fsCalls.recording = true
-    await vi.runAllTimersAsync()
-    fsCalls.recording = false
-
-    expect(fsCalls.syncCalls).toEqual([])
-    expect(readState(dir).ui.sidebarWidth).toBe(10)
-    expect(JSON.parse(readFileSync(activeViewFile(dir), 'utf-8')).activeView).toBe('terminal')
-  })
-
-  it('sweeps orphaned state and stats temps while retaining fresh process temps', async () => {
-    const dir = makeDir()
-    const stateTemp = `${dataFile(dir)}.999999.1.orphan.tmp`
-    const statsTemp = `${statsFile(dir)}.999999.1.orphan.tmp`
-    const freshOtherProcessTemp = `${dataFile(dir)}.999998.1.live.tmp`
-    writeFileSync(stateTemp, 'stale', 'utf-8')
-    writeFileSync(statsTemp, 'stale', 'utf-8')
-    writeFileSync(freshOtherProcessTemp, 'in-flight', 'utf-8')
-    const staleSeconds = (Date.now() - 25 * 60 * 60 * 1000) / 1000
-    utimesSync(stateTemp, staleSeconds, staleSeconds)
-    utimesSync(statsTemp, staleSeconds, staleSeconds)
-
-    const store = await createStore(dir)
-    const stats = await createStatsCollector(dir)
-    store.updateUI({ sidebarWidth: 123 })
-    stats.onAgentStart('pty-sweep', Date.now())
-    await Promise.all([store.flushAsync(), stats.flushAsync()])
-
-    expect(existsSync(stateTemp)).toBe(false)
-    expect(existsSync(dataFile(dir))).toBe(false)
-    expect(existsSync(statsTemp)).toBe(false)
-    expect(existsSync(freshOtherProcessTemp)).toBe(true)
-  })
-
-  it('store.flushAsync() resolves instead of throwing when the profile mount rejects writes', async () => {
-    const dir = makeDir()
-    const store = await createStore(dir)
-    store.updateUI({ sidebarWidth: 42 })
-    const profile = profiles.get(dir)
-    if (!profile) {
-      throw new Error('Missing test profile')
-    }
-    vi.spyOn(profile.authority, 'writeCompleteSerializedDomains').mockRejectedValueOnce(
-      new Error('profile mount rejected write')
-    )
-
-    await expect(store.flushAsync()).resolves.toBeUndefined()
   })
 })

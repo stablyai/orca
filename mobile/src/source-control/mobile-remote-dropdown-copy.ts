@@ -1,4 +1,4 @@
-import type { RemoteDropdownCopy } from '../../../src/shared/source-control-dropdown-remote-copy'
+import type { RemoteDropdownCopy } from '../../../src/shared/source-control/dropdown/source-control-dropdown-remote-copy'
 import type { Translate } from '../i18n/mobile-i18n'
 import {
   localizedPushCount,
@@ -160,6 +160,15 @@ export function mobileRemoteDropdownCopy(t: Translate): RemoteDropdownCopy {
     manualForcePush: (ahead, behind, upstreamName) =>
       localizedManualForcePush(ahead, behind, upstreamName, t),
     unpublishedForcePush: (branchCommitsAhead) =>
-      localizedUnpublishedForcePush(branchCommitsAhead, t)
+      localizedUnpublishedForcePush(branchCommitsAhead, t),
+    statusUpToDate: t('sourceControl.remoteDropdown.statusUpToDate', 'Up to date'),
+    statusSetsUpstream: t('sourceControl.remoteDropdown.statusSetsUpstream', 'Sets upstream'),
+    statusNotPublished: t('sourceControl.remoteDropdown.statusNotPublished', 'Not published'),
+    statusNoBranch: t('sourceControl.remoteDropdown.statusNoBranch', 'No branch'),
+    statusMayFail: t('sourceControl.remoteDropdown.statusMayFail', 'May fail'),
+    statusPublished: t('sourceControl.remoteDropdown.statusPublished', 'Published'),
+    statusStashFirst: t('sourceControl.remoteDropdown.statusStashFirst', 'Stash first'),
+    statusReplaces: (behind) =>
+      t('sourceControl.remoteDropdown.statusReplaces', 'Replaces ↓{{behind}}', { behind })
   }
 }

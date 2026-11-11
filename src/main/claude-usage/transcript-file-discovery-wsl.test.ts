@@ -1,3 +1,4 @@
+import { listClaudeTranscriptFiles } from './transcript-file-discovery'
 import type { Dirent } from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -27,13 +28,11 @@ describe('selected WSL profile discovery', () => {
     mocks.gatedReaddir.mockReset().mockResolvedValue([entry])
   })
   it('uses only the explicit profile roots and gated UNC directory access', async () => {
-    const { listClaudeTranscriptFiles } = await import('./transcript-file-discovery')
     await expect(listClaudeTranscriptFiles([ROOT])).resolves.toEqual([FILE])
     expect(mocks.gatedReaddir).toHaveBeenCalledWith(ROOT, 'scan')
     expect(mocks.readdir).not.toHaveBeenCalled()
   })
   it('keeps unavailable profiles as an error, but treats definitive absence as empty', async () => {
-    const { listClaudeTranscriptFiles } = await import('./transcript-file-discovery')
     mocks.gatedReaddir.mockRejectedValueOnce(new Error('WSL unavailable'))
     await expect(listClaudeTranscriptFiles([ROOT])).rejects.toThrow('WSL unavailable')
     mocks.gatedReaddir.mockRejectedValueOnce(

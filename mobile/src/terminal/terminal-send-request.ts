@@ -1,4 +1,4 @@
-import type { SendRequestOptions } from '../transport/rpc-client'
+import type { SendRequestOptions } from '../transport/rpc/unvalidated-rpc-request-port'
 
 type TerminalSendParams = {
   readonly terminal: string

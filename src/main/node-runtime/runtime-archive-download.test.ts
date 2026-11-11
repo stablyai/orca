@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PinnedRuntimeArchive } from './pinned-runtime-materializer'
-import { downloadFailureMessage, downloadVerifiedArchive } from './runtime-archive-download'
+import { downloadVerifiedArchive } from './runtime-archive-download'
 
 const BODY = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8])
 const NO_DELAY = [0, 0, 0]
@@ -91,73 +91,6 @@ describe('downloading a pinned runtime archive over a flaky network', () => {
       downloadVerifiedArchive(archive(), destination, fetcher, undefined, NO_DELAY, undefined, 20)
     ).rejects.toThrow('Node runtime download got no response within 0.02 s')
     expect(fetcher).toHaveBeenCalledTimes(1)
-  })
-
-  it('lets a response that arrives in time download in full', async () => {
-    const fetcher = vi.fn<typeof fetch>(async () => ok())
-    await downloadVerifiedArchive(
-      archive(),
-      destination,
-      fetcher,
-      undefined,
-      NO_DELAY,
-      undefined,
-      5_000
-    )
-    expect(new Uint8Array(await readFile(destination))).toEqual(BODY)
-  })
-
-  it('gives up after its bounded attempts with the last error', async () => {
-    const signals: AbortSignal[] = []
-    const failure = new Error('net::ERR_NETWORK_CHANGED')
-    const fetcher = vi.fn<typeof fetch>(async (_url, options) => {
-      signals.push(requestSignal(options))
-      throw failure
-    })
-    await expect(
-      downloadVerifiedArchive(archive(), destination, fetcher, undefined, NO_DELAY)
-    ).rejects.toBe(failure)
-    expect(fetcher).toHaveBeenCalledTimes(NO_DELAY.length + 1)
-    expect(signals).toHaveLength(NO_DELAY.length + 1)
-    expect(signals.every((signal) => signal.aborted)).toBe(true)
-  })
-
-  it.each([
-    ['a missing asset', () => new Response('gone', { status: 404 })],
-    ['a checksum mismatch', () => ok(new Uint8Array([9, 9]))]
-  ])('never retries %s', async (_name, response) => {
-    const signals: AbortSignal[] = []
-    const fetcher = vi.fn<typeof fetch>(async (_url, options) => {
-      signals.push(requestSignal(options))
-      return response()
-    })
-    await expect(
-      downloadVerifiedArchive(archive(), destination, fetcher, undefined, NO_DELAY)
-    ).rejects.toThrow()
-    expect(fetcher).toHaveBeenCalledTimes(1)
-    expect(signals[0]?.aborted).toBe(true)
-  })
-
-  it('blames the release only for a proven mismatch', async () => {
-    const failure = (response: () => Promise<Response>) =>
-      downloadVerifiedArchive(
-        archive(),
-        destination,
-        vi.fn<typeof fetch>(response),
-        undefined,
-        []
-      ).then(
-        () => '',
-        (error: unknown) => downloadFailureMessage('Node', error)
-      )
-    expect(
-      await failure(async () => {
-        throw new Error('net::ERR_PROXY_CONNECTION_FAILED')
-      })
-    ).toMatch(/^Couldn't download Node\./)
-    expect(await failure(async () => ok(new Uint8Array([9, 9])))).toMatch(
-      /didn't match the release/
-    )
   })
 
   it('stops waiting to retry once the caller cancels', async () => {

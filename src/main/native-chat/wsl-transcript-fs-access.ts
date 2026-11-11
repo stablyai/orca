@@ -2,6 +2,7 @@ import { createReadStream, type Dirent, type Stats } from 'node:fs'
 import { access, lstat, open, readdir, readFile, stat, type FileHandle } from 'node:fs/promises'
 import { Readable } from 'node:stream'
 import { StringDecoder } from 'node:string_decoder'
+import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { runWslTranscriptFsTask, type WslTranscriptFsTaskPriority } from './wsl-transcript-fs-gate'
 import {
@@ -41,13 +42,14 @@ function runReusableFsOperation<T>(
   signal: AbortSignal | undefined,
   localTask: () => Promise<T>
 ): Promise<T> {
-  return isWslUncPath(request.path)
+  throwIfSignalAborted(signal)
+  const pending = isWslUncPath(request.path)
     ? admitWslTranscriptPath(request.path).then(() =>
         runWslTranscriptFsTask(
           { operation: request.operation, path: request.path, priority, signal },
           async (taskSignal) => {
             // Queued work runs later: ask again right before the touch.
-            await admitWslTranscriptPath(request.path)
+            await waitForPromiseWithSignal(admitWslTranscriptPath(request.path), taskSignal)
             return runWslTranscriptFsProcess<T>(
               request,
               taskSignal,
@@ -57,6 +59,7 @@ function runReusableFsOperation<T>(
         )
       )
     : localTask()
+  return waitForPromiseWithSignal(pending, signal)
 }
 
 export function wslGatedAccess(
@@ -84,7 +87,9 @@ export function transcriptFileStat(
   signal?: AbortSignal
 ): Promise<TranscriptFileStats> {
   const ssh = parseSshTranscriptPath(path)
-  return ssh ? statSshTranscript(ssh) : wslGatedStat(path, priority, signal)
+  return ssh
+    ? waitForPromiseWithSignal(statSshTranscript(ssh), signal)
+    : wslGatedStat(path, priority, signal)
 }
 
 export function wslGatedLstat(
@@ -127,7 +132,17 @@ export function openTranscriptFile(
     return Promise.resolve({ sshTranscript: ssh })
   }
   if (!isWslUncPath(path)) {
-    return open(path, 'r')
+    throwIfSignalAborted(signal)
+    const pending = open(path, 'r')
+    return waitForPromiseWithSignal(pending, signal).catch((error: unknown) => {
+      void pending
+        .then(
+          (handle) => handle.close(),
+          () => undefined
+        )
+        .catch(() => undefined)
+      throw error
+    })
   }
   return openAdmittedWslTranscriptFile(path, priority, signal)
 }
@@ -137,7 +152,7 @@ async function openAdmittedWslTranscriptFile(
   priority: WslTranscriptFsTaskPriority,
   signal?: AbortSignal
 ): Promise<TranscriptFileHandle> {
-  await admitWslTranscriptPath(path)
+  await waitForPromiseWithSignal(admitWslTranscriptPath(path), signal)
   return runWslTranscriptFsTask<TranscriptFileHandle>(
     {
       operation: 'open',
@@ -148,7 +163,7 @@ async function openAdmittedWslTranscriptFile(
       onAbandonedResult: (handle) => void closeTranscriptHandle(handle, path)
     },
     async (taskSignal) => {
-      await admitWslTranscriptPath(path)
+      await waitForPromiseWithSignal(admitWslTranscriptPath(path), taskSignal)
       return openWslTranscriptFsProcess(path, taskSignal, wslTranscriptFsLaneKey(path, priority))
     }
   )
@@ -167,17 +182,20 @@ export function readTranscriptFile(
   signal?: AbortSignal
 ): Promise<{ bytesRead: number; buffer: Buffer }> {
   if (isSshTranscriptHandle(handle)) {
-    return readSshTranscript(handle)
+    return waitForPromiseWithSignal(readSshTranscript(handle), signal)
   }
   // Process handle identity overrides path spelling; never route it into native FileHandle reads.
   if (!isWslUncPath(path) && !isWslTranscriptFsProcessHandle(handle)) {
-    return (handle as FileHandle).read(buffer, offset, length, position)
+    return waitForPromiseWithSignal(
+      (handle as FileHandle).read(buffer, offset, length, position),
+      signal
+    )
   }
   return runWslTranscriptFsTask(
     { operation: 'read', path, priority, signal, dedupe: false },
     async (taskSignal) => {
       // An open 9P handle still reconnects (and boots) a distro that stopped since the open.
-      await admitWslTranscriptPath(path)
+      await waitForPromiseWithSignal(admitWslTranscriptPath(path), taskSignal)
       if (!isWslTranscriptFsProcessHandle(handle)) {
         return (handle as FileHandle).read(buffer, offset, length, position)
       }
@@ -185,6 +203,17 @@ export function readTranscriptFile(
       buffer.set(body, offset)
       return { bytesRead: body.byteLength, buffer }
     }
+  )
+}
+
+/** An aborted close wait must not replace the read's own outcome or fail stream teardown. */
+function closeTranscriptHandleWithSignal(
+  handle: TranscriptFileHandle,
+  path: string,
+  signal?: AbortSignal
+): Promise<void> {
+  return waitForPromiseWithSignal(closeTranscriptHandle(handle, path), signal).catch(
+    (error: unknown) => (signal?.aborted ? undefined : Promise.reject(error))
   )
 }
 
@@ -228,7 +257,7 @@ export async function readTranscriptSlice(
     )
     return buffer.subarray(0, bytesRead)
   } finally {
-    await closeTranscriptHandle(handle, path)
+    await closeTranscriptHandleWithSignal(handle, path, signal)
   }
 }
 
@@ -289,7 +318,7 @@ async function* gatedChunks(
     }
   } finally {
     // Readable.destroy calls generator return, closing handles even after aborted head reads.
-    await closeTranscriptHandle(handle, path)
+    await closeTranscriptHandleWithSignal(handle, path, signal)
   }
 }
 

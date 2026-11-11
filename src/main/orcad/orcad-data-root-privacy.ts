@@ -1,6 +1,6 @@
 import { chmodSync, statSync } from 'node:fs'
 import process from 'node:process'
-import { restrictWindowsPathSync } from '../../shared/secure-path-windows-acl'
+import { restrictWindowsPathSync } from '../../shared/secure-storage/secure-path-windows-acl'
 
 type OrcadInstanceLockCode =
   | 'orcad_data_root_unusable'

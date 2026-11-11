@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { salvagedOptional } from '../../../src/shared/zod-salvage'
 
 // Page command schemas mirror runtime browser-core and adjacent pointer/keyboard/dialog methods.

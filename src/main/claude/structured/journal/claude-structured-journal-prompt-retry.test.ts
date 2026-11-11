@@ -5,7 +5,7 @@ import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionReadingControl
-} from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+} from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { ClaudePendingPrompt } from '../../claude-prompt-registry'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import { bindClaudeJournalReadingControl } from './claude-structured-session-journal-control'

@@ -7,7 +7,7 @@ import { expect, test } from './helpers/orca-app'
 import { launchPhoneMirrorTopology } from './helpers/phone-mirror-topology'
 import { openPairedSocket, type PairedMobileSocket } from './helpers/paired-mobile-client'
 import { RuntimeClient } from '../../src/cli/runtime/client'
-import { decodePairingOffer } from '../../src/shared/pairing'
+import { decodePairingOffer } from '../../src/shared/remote-runtime/pairing/pairing'
 import { z } from 'zod'
 
 type Frame = PairedMobileSocket['frames'][number]

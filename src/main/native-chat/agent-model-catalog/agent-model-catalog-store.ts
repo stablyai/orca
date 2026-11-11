@@ -1,3 +1,5 @@
+import { createAgentModelEffortDiscovery } from './agent-model-catalog-effort-discovery'
+import { createAgentModelCatalogFences } from './agent-model-catalog-fences'
 import {
   evictAgentModelCatalogEntries,
   createAgentModelCatalogEntryFactory,
@@ -6,7 +8,7 @@ import {
   agentModelCatalogEntryIsStale,
   pruneAgentModelCatalogPartialAttempts
 } from './agent-model-catalog-entry-lifetime'
-import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
+import { independentAgentModelCatalog } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 export type { AgentModelCatalogProbe } from './agent-model-catalog-discovery'
 import type { AgentModelCatalogPersistence } from './agent-model-catalog-persistence'
 import {
@@ -48,6 +50,8 @@ export const AGENT_MODEL_CATALOG_MAX_ENTRIES = 256
 import {
   refreshAgentModelCatalogListing,
   retireAgentModelCatalogListing,
+  type AgentModelCatalogListModels,
+  type AgentModelCatalogListingBudget,
   type InFlightListing
 } from './agent-model-catalog-lister'
 export type { AgentModelCatalogSessionAccess } from './agent-model-catalog-lister'
@@ -64,13 +68,24 @@ export class AgentModelCatalogStore {
   private readonly dueEntries = new Set<string>()
   private readonly partialAttempts = new Map<string, { agent: string; at: number }>()
   private readonly retirementRevisions = new Map<string, number>()
+  // Aborts when an agent's scopes are next retired.
+  readonly retirements = createAgentModelCatalogFences<string>()
   private readonly retiredObservations = new Set<string>()
   private persistence: AgentModelCatalogPersistence | null = null
+  readonly efforts: ReturnType<typeof createAgentModelEffortDiscovery>
   private readonly now: () => number
 
   constructor(options?: { now?: () => number }) {
     this.now = options?.now ?? Date.now
     this.failures = new AgentModelCatalogFailures(this.now)
+    this.efforts = createAgentModelEffortDiscovery({
+      entries: this.entries,
+      refreshes: this.refreshes,
+      attempts: this.partialAttempts,
+      failed: (key) => this.hasActiveFailure(key),
+      now: this.now,
+      cap: AGENT_MODEL_CATALOG_MAX_ENTRIES
+    })
   }
 
   /** In-process listings take precedence over hydrated entries. */
@@ -136,6 +151,7 @@ export class AgentModelCatalogStore {
 
   private retireListings(agent: string): void {
     this.retirementRevisions.set(agent, this.retirementRevision(agent) + 1)
+    this.retirements.retire(agent)
     for (const [fingerprint, flight] of this.refreshes) {
       if (flight.agent === agent) {
         retireAgentModelCatalogListing(this.refreshes, this.listingWaiters, fingerprint, flight)
@@ -233,16 +249,9 @@ export class AgentModelCatalogStore {
       this.failures.listed(fingerprint, agent, success.origin, success.unavailable)
     }
     if (source === 'discovery' && independentAgentModelCatalog(agent)) {
-      this.partialAttempts.delete(fingerprint)
+      this.efforts.catalogAttempted(fingerprint, agent, success.complete === true)
       if (success.complete !== true) {
-        this.partialAttempts.set(fingerprint, { agent, at: this.now() })
         this.failures.listed(fingerprint, agent, success.origin, success.unavailable)
-      }
-      while (this.partialAttempts.size > AGENT_MODEL_CATALOG_MAX_ENTRIES) {
-        const oldest = this.partialAttempts.keys().next().value
-        if (oldest !== undefined) {
-          this.partialAttempts.delete(oldest)
-        }
       }
     }
     this.evictOverCap()
@@ -253,21 +262,24 @@ export class AgentModelCatalogStore {
     return entry
   }
 
-  /** One probe per canonical scope; failures resolve null. */
+  /** One probe per canonical scope; failures resolve null. Its starter's budget bounds it. */
   refresh(
     fingerprint: string,
     agent: string,
-    listModels: () => Promise<AgentModelCatalogSuccess>,
-    current?: () => boolean,
-    signal?: AbortSignal
+    listModels: AgentModelCatalogListModels,
+    budget?: AgentModelCatalogListingBudget,
+    selectedModel?: string
   ): Promise<AgentModelCatalogEntry | null> {
     this.isListing(fingerprint)
     return refreshAgentModelCatalogListing({
       fingerprint,
       agent,
       listModels,
-      current,
-      signal,
+      selectedModel,
+      maxTargets: AGENT_MODEL_CATALOG_MAX_ENTRIES,
+      targetDue: (model) => this.efforts.due(fingerprint, model),
+      targetAttempted: (model) => this.efforts.attempted(fingerprint, agent, model),
+      budget,
       refreshes: this.refreshes,
       failures: this.failures,
       listingWaiters: this.listingWaiters,
@@ -277,7 +289,7 @@ export class AgentModelCatalogStore {
 
   isListing(fingerprint: string): boolean {
     const flight = this.refreshes.get(fingerprint)
-    if (flight?.current?.() === false) {
+    if (flight && !flight.current()) {
       retireAgentModelCatalogListing(this.refreshes, this.listingWaiters, fingerprint, flight)
     }
     return this.refreshes.has(fingerprint)
@@ -296,11 +308,11 @@ export class AgentModelCatalogStore {
   }
 
   pendingListing(
-    fingerprint: string,
-    waitForChange = false,
-    terminal = false
-  ): Promise<AgentModelCatalogEntry | null> | null {
-    return this.listingWaiters.wait(fingerprint, waitForChange, terminal)
+    ...wait: Parameters<AgentModelCatalogListingWaiters['wait']>
+  ): ReturnType<AgentModelCatalogListingWaiters['wait']> {
+    // Waiting on a queued listing keeps it queued.
+    this.refreshes.get(wait[0])?.hold(wait[3])
+    return this.listingWaiters.wait(...wait)
   }
 
   shouldRefresh(fingerprint: string): boolean {

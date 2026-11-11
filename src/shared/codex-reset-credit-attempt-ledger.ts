@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import type { CodexRateLimitResetOutcome } from './rate-limit-types'
 import type { CodexResetCreditExpectedScope } from './codex-reset-credit-scope'
 

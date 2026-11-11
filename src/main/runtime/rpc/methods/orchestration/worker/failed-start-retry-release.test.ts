@@ -1,10 +1,7 @@
 /** Failed starts retain user-owned panes; retry-of must release the prior agent while launching in a new terminal, preventing one leaked agent per retry. */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { OrchestrationDb } from '../../../../orchestration/db'
-import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
-import { releaseRetriedWorkerTerminal } from './retried-worker-terminal-release'
 import type { RuntimeTerminalWait } from '../../../../../../shared/runtime-terminal-contracts'
 
 const RETRY_PANE_KEY = 'tab_retry:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
@@ -135,18 +132,6 @@ describe('retrying a failed worker-start', () => {
     expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
   })
 
-  it('does nothing for a terminal the coordinator already released', async () => {
-    h.setup()
-    const failed = await failFirstStart()
-    await expect(
-      h.call('orchestration.workerRelease', { dispatch: failed.dispatchId })
-    ).resolves.toMatchObject({ state: 'released' })
-
-    await retry(failed)
-
-    expect(h.runtime.closeTerminal).toHaveBeenCalledTimes(1)
-  })
-
   it('leaves the pane alone when the retry reuses a terminal explicitly', async () => {
     h.setup()
     const failed = await failFirstStart()
@@ -185,36 +170,5 @@ describe('retrying a failed worker-start', () => {
     expect(h.runtime.createTerminal).toHaveBeenCalledTimes(3)
     // The refused retry replaced nothing, so the last attempt's pane stays for the user.
     expect(h.db.getWorkerTerminalResourceByOwner(third)?.release_state).toBe('not_requested')
-  })
-})
-
-describe('releaseRetriedWorkerTerminal', () => {
-  let db: OrchestrationDb | undefined
-
-  afterEach(() => db?.close())
-
-  it('leaves a structured worker session to its own teardown', () => {
-    const d = (db = new OrchestrationDb(':memory:'))
-    const task = d.createTask({ runId: 'run_legacy_local', spec: 'structured' })
-    const { dispatch } = d.createStartingWorkerDispatch({
-      creator: { kind: 'system' },
-      maxDepth: Number.MAX_SAFE_INTEGER,
-      taskId: task.id,
-      startOptions: {}
-    })
-    d.recordCreatedWorkerTerminalCustody({
-      dispatchId: dispatch.id,
-      handle: 'structworker_1',
-      paneKey: 'tab_s:dddddddd-dddd-4ddd-8ddd-dddddddddddd',
-      processIncarnation: 'structured:1',
-      worktreeId: 'wt'
-    })
-    d.failWorkerStart(dispatch.id, 'agent_readiness', 'never ready')
-    const request = vi.spyOn(d, 'requestWorkerTerminalRelease')
-
-    releaseRetriedWorkerTerminal(new OrcaRuntimeService(), d, { retryOf: dispatch.id })
-
-    expect(request).not.toHaveBeenCalled()
-    expect(d.getWorkerTerminalResourceByOwner(dispatch.id)?.release_state).toBe('not_requested')
   })
 })

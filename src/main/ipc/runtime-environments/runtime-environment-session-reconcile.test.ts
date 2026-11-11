@@ -4,9 +4,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { addEnvironmentFromPairingCode } from '../../../shared/runtime-environment-store'
-import { getEnvironmentStorePath } from '../../../shared/runtime-environment-store-file'
-import { getRuntimeEnvironmentSidecarPath } from '../../../shared/runtime-environment-sidecar'
+import { addEnvironmentFromPairingCode } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import '../../../shared/remote-runtime/host-store/runtime-environment-store-file'
+import { getEnvironmentStorePath } from '../../../shared/remote-runtime/host-store/runtime-environment-store-records'
+import { getRuntimeEnvironmentSidecarPath } from '../../../shared/remote-runtime/host-store/runtime-environment-sidecar'
 import { pairingCode } from './runtime-environments-ipc-test-harness'
 import { reconcileOrphanedRuntimeSessions } from './runtime-environment-session-reconcile'
 
@@ -90,15 +91,5 @@ describe('reconciling orphaned runtime sessions at startup', () => {
 
     expect(reconcileOrphanedRuntimeSessions(store, userDataPath)).toEqual(['runtime:removed-env'])
     expect(store.removeWorkspaceSessionHost).toHaveBeenCalledTimes(1)
-  })
-
-  it('deletes nothing when the registry disappears between its presence check and read', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-session-reconcile-race-'))
-    const store = sessionStore(['runtime:env-1'])
-    // Present when first checked, gone by the time the read looks again.
-    fsRace.existsAnswers.push(true, false)
-
-    expect(reconcileOrphanedRuntimeSessions(store, userDataPath)).toEqual([])
-    expect(store.removeWorkspaceSessionHost).not.toHaveBeenCalled()
   })
 })

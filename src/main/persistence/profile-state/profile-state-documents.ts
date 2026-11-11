@@ -19,6 +19,7 @@ import {
 } from './profile-state-automation-runs'
 
 import { readProfileStateDocuments } from './profile-state-document-reader'
+import { clearProfileStateDocumentParts } from './profile-state-document-parts-storage'
 
 import { readProfileStateRevision } from './profile-state-revision'
 import { readProfileStateJsonAcceptance } from './legacy-json/profile-state-json-acceptance'
@@ -95,6 +96,8 @@ export function importProfileStateJson(
     }
     const revision = actualRevision + 1
     clearProfileStateAutomationRuns(db)
+    // Imported rows are authoritative; the next write of a split domain re-splits it.
+    clearProfileStateDocumentParts(db)
     db.exec('DELETE FROM profile_state_documents')
     const automationRuns = entries.find((entry) => entry.domain === 'automationRuns')
     const normalizedRuns =

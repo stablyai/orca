@@ -8,9 +8,9 @@ import {
   subscribePluginEditorCapture,
   type PluginEditorCaptureStatus
 } from '@/components/editor/plugin-editor-capture-status'
-import { flushEditorFrames } from '@/components/editor/editor-pending-flush'
+import { flushEditorFrames } from '@/components/editor/save/flush/editor-pending-flush'
 import { useAppStore } from '@/store'
-import { usePluginViewCaptureStore } from '@/store/plugin-view-capture'
+import { usePluginViewCaptureStore } from '@/store/plugins/capture/plugin-view-capture'
 import { nextPaintedFrames, waitForColorScheme } from './plugin-view-panel-settle'
 
 type Rect = { x: number; y: number; width: number; height: number }

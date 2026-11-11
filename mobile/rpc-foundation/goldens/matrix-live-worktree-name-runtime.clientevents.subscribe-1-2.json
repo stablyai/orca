@@ -4,6 +4,11 @@
   "family": "live-worktree-name",
   "namedDeltas": [],
   "values": {
+    "0765cf4fde61": {
+      "name": "runtime.clientEvents.unsubscribe#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.unsubscribe\",\"params\":{\"subscriptionId\":\"sub-2\"}}"
+    },
     "0c439cbde351": {
       "name": "worktree.show#1",
       "ordinal": 2,
@@ -146,12 +151,28 @@
         }
       }
     },
+    "58644144d06d": {
+      "name": "streams-registered-at-teardown",
+      "ordinal": 7,
+      "value": [
+        {
+          "cancelled": true,
+          "method": "runtime.clientEvents.subscribe",
+          "payload": "runtime.clientEvents.subscribe#3"
+        }
+      ]
+    },
     "592ccd522724": {
       "crash": {
         "$rpc": "null"
       },
       "name": "Feature Work Renamed",
       "resolution": "present"
+    },
+    "6ab2ee0270ea": {
+      "name": "runtime.clientEvents.subscribe#3",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.subscribe\",\"params\":null}"
     },
     "7926694cda85": {
       "crash": {
@@ -257,11 +278,6 @@
       "name": "runtime.clientEvents.subscribe#1",
       "ordinal": 1,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.subscribe\",\"params\":null}"
-    },
-    "f2a62c2ca592": {
-      "name": "runtime.clientEvents.unsubscribe#1",
-      "ordinal": 5,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.unsubscribe\",\"params\":{\"subscriptionId\":\"sub-2\"}}"
     }
   },
   "recording": {
@@ -705,7 +721,7 @@
         "id": "live-worktree-name-stream.outer-refused:refreshed",
         "observation": {
           "sender": ["12087a0dcffa"],
-          "payloads": ["eef1ee3c2773", "d3fd2d2ea215"],
+          "payloads": ["eef1ee3c2773", "d3fd2d2ea215", "c686e7f77d44"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -717,7 +733,7 @@
         "id": "live-worktree-name-stream.outer-refused:re-subscribed",
         "observation": {
           "sender": ["12087a0dcffa"],
-          "payloads": ["eef1ee3c2773", "d3fd2d2ea215", "c686e7f77d44"],
+          "payloads": ["eef1ee3c2773", "d3fd2d2ea215", "c686e7f77d44", "6ab2ee0270ea"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "cutover": "eb79a9b3682a"
@@ -730,7 +746,13 @@
         "id": "live-worktree-name-stream.outer-refused:replayed",
         "observation": {
           "sender": ["12087a0dcffa"],
-          "payloads": ["eef1ee3c2773", "d3fd2d2ea215", "c686e7f77d44"],
+          "payloads": [
+            "eef1ee3c2773",
+            "d3fd2d2ea215",
+            "c686e7f77d44",
+            "6ab2ee0270ea",
+            "0765cf4fde61"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a",
             "cutover": "eb79a9b3682a"
@@ -743,7 +765,13 @@
         "id": "live-worktree-name-stream.outer-refused:unmounted",
         "observation": {
           "sender": ["12087a0dcffa"],
-          "payloads": ["eef1ee3c2773", "d3fd2d2ea215", "c686e7f77d44", "f2a62c2ca592"],
+          "payloads": [
+            "eef1ee3c2773",
+            "d3fd2d2ea215",
+            "c686e7f77d44",
+            "6ab2ee0270ea",
+            "0765cf4fde61"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a",
             "cutover": "eb79a9b3682a",
@@ -754,10 +782,30 @@
         }
       },
       {
+        "id": "live-worktree-name-stream.outer-refused:cleanup",
+        "observation": {
+          "sender": ["12087a0dcffa"],
+          "payloads": [
+            "eef1ee3c2773",
+            "d3fd2d2ea215",
+            "c686e7f77d44",
+            "6ab2ee0270ea",
+            "0765cf4fde61"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "cutover": "eb79a9b3682a",
+            "unmount": "eb79a9b3682a"
+          },
+          "state": "7926694cda85",
+          "effects": ["58644144d06d"]
+        }
+      },
+      {
         "id": "live-worktree-name-stream.outer-refused-no-message:refreshed",
         "observation": {
           "sender": ["12087a0dcffa"],
-          "payloads": ["eef1ee3c2773", "d3fd2d2ea215"],
+          "payloads": ["eef1ee3c2773", "d3fd2d2ea215", "c686e7f77d44"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -769,7 +817,7 @@
         "id": "live-worktree-name-stream.outer-refused-no-message:re-subscribed",
         "observation": {
           "sender": ["12087a0dcffa"],
-          "payloads": ["eef1ee3c2773", "d3fd2d2ea215", "c686e7f77d44"],
+          "payloads": ["eef1ee3c2773", "d3fd2d2ea215", "c686e7f77d44", "6ab2ee0270ea"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "cutover": "eb79a9b3682a"
@@ -782,7 +830,13 @@
         "id": "live-worktree-name-stream.outer-refused-no-message:replayed",
         "observation": {
           "sender": ["12087a0dcffa"],
-          "payloads": ["eef1ee3c2773", "d3fd2d2ea215", "c686e7f77d44"],
+          "payloads": [
+            "eef1ee3c2773",
+            "d3fd2d2ea215",
+            "c686e7f77d44",
+            "6ab2ee0270ea",
+            "0765cf4fde61"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a",
             "cutover": "eb79a9b3682a"
@@ -795,7 +849,13 @@
         "id": "live-worktree-name-stream.outer-refused-no-message:unmounted",
         "observation": {
           "sender": ["12087a0dcffa"],
-          "payloads": ["eef1ee3c2773", "d3fd2d2ea215", "c686e7f77d44", "f2a62c2ca592"],
+          "payloads": [
+            "eef1ee3c2773",
+            "d3fd2d2ea215",
+            "c686e7f77d44",
+            "6ab2ee0270ea",
+            "0765cf4fde61"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a",
             "cutover": "eb79a9b3682a",
@@ -806,10 +866,30 @@
         }
       },
       {
+        "id": "live-worktree-name-stream.outer-refused-no-message:cleanup",
+        "observation": {
+          "sender": ["12087a0dcffa"],
+          "payloads": [
+            "eef1ee3c2773",
+            "d3fd2d2ea215",
+            "c686e7f77d44",
+            "6ab2ee0270ea",
+            "0765cf4fde61"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "cutover": "eb79a9b3682a",
+            "unmount": "eb79a9b3682a"
+          },
+          "state": "7926694cda85",
+          "effects": ["58644144d06d"]
+        }
+      },
+      {
         "id": "live-worktree-name-stream.method-not-found:refreshed",
         "observation": {
           "sender": ["12087a0dcffa"],
-          "payloads": ["eef1ee3c2773", "d3fd2d2ea215"],
+          "payloads": ["eef1ee3c2773", "d3fd2d2ea215", "c686e7f77d44"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -821,7 +901,7 @@
         "id": "live-worktree-name-stream.method-not-found:re-subscribed",
         "observation": {
           "sender": ["12087a0dcffa"],
-          "payloads": ["eef1ee3c2773", "d3fd2d2ea215", "c686e7f77d44"],
+          "payloads": ["eef1ee3c2773", "d3fd2d2ea215", "c686e7f77d44", "6ab2ee0270ea"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "cutover": "eb79a9b3682a"
@@ -834,7 +914,13 @@
         "id": "live-worktree-name-stream.method-not-found:replayed",
         "observation": {
           "sender": ["12087a0dcffa"],
-          "payloads": ["eef1ee3c2773", "d3fd2d2ea215", "c686e7f77d44"],
+          "payloads": [
+            "eef1ee3c2773",
+            "d3fd2d2ea215",
+            "c686e7f77d44",
+            "6ab2ee0270ea",
+            "0765cf4fde61"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a",
             "cutover": "eb79a9b3682a"
@@ -847,7 +933,13 @@
         "id": "live-worktree-name-stream.method-not-found:unmounted",
         "observation": {
           "sender": ["12087a0dcffa"],
-          "payloads": ["eef1ee3c2773", "d3fd2d2ea215", "c686e7f77d44", "f2a62c2ca592"],
+          "payloads": [
+            "eef1ee3c2773",
+            "d3fd2d2ea215",
+            "c686e7f77d44",
+            "6ab2ee0270ea",
+            "0765cf4fde61"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a",
             "cutover": "eb79a9b3682a",
@@ -855,6 +947,26 @@
           },
           "state": "7926694cda85",
           "effects": []
+        }
+      },
+      {
+        "id": "live-worktree-name-stream.method-not-found:cleanup",
+        "observation": {
+          "sender": ["12087a0dcffa"],
+          "payloads": [
+            "eef1ee3c2773",
+            "d3fd2d2ea215",
+            "c686e7f77d44",
+            "6ab2ee0270ea",
+            "0765cf4fde61"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "cutover": "eb79a9b3682a",
+            "unmount": "eb79a9b3682a"
+          },
+          "state": "7926694cda85",
+          "effects": ["58644144d06d"]
         }
       }
     ]

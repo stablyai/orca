@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Check, ChevronRight } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type {
   BrowserExtensionContextMenuItem,
   BrowserExtensionContextMenuPayload
-} from '../../../../../shared/browser-extension-context-menu-types'
+} from '../../../../../shared/browser/extensions/browser-extension-context-menu-types'
 
 type ItemProps = {
   item: BrowserExtensionContextMenuItem

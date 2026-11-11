@@ -1,4 +1,4 @@
-import { abbreviateOrchestrationText } from '../../../shared/orchestration-task-summary'
+import { abbreviateOrchestrationText } from '../../../shared/orchestration/orchestration-task-summary'
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
 import { printOrchestrationResult } from './agent-view'
@@ -7,8 +7,8 @@ import {
   getOptionalStringFlag,
   getRequiredStringFlag
 } from '../../flags'
-import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../../shared/orchestration-run-pagination'
-import type { RunRemovedWork } from '../../../shared/orchestration-removed-work'
+import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../../shared/orchestration/orchestration-run-pagination'
+import type { RunRemovedWork } from '../../../shared/orchestration/orchestration-removed-work'
 import { callOrchestrationMutation } from './mutation-request'
 import { formatRemovedWorkListing, formatRunRemovedWorkLine } from './removed-work-format'
 import { resolveCoordinatorTerminalHandle } from './terminal-identity'

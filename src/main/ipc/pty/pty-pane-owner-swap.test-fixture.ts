@@ -4,12 +4,12 @@ import { PtyBindingPersistenceOperations } from '../../persistence/loading-store
 import { ptyBindingGenerationOf } from '../../persistence/loading-store/pty-binding-generations'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { PtyIpcSuiteFixtures } from './pty-ipc-test-harness'
-import { TerminalKilledError } from '../../daemon/daemon-pty-lifecycle-errors'
-import { SessionNotFoundError } from '../../daemon/daemon-errors'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { TerminalKilledError } from '../../daemon/providers/adapter/daemon-pty-lifecycle-errors'
+import { SessionNotFoundError } from '../../daemon/protocol/daemon-errors'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { registerPtyHandlers } from './register-handlers'
 import { setLocalPtyProvider } from './provider/registry'
-import { TerminalIntentionalStops } from '../../runtime/terminal-intentional-stops'
+import { TerminalIntentionalStops } from '../../runtime/terminal/stop/terminal-intentional-stops'
 
 // An explicit Mock return type keeps the exported fixture type portable.
 function stub(): Mock<(...args: unknown[]) => unknown> {

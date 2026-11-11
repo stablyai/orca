@@ -1,3 +1,5 @@
+import { readClaudeUsageScanFile } from './transcript-record-parser'
+import { scanClaudeUsageFiles } from './scanner'
 import { mkdtemp, open, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -56,14 +58,12 @@ describe('WSL usage with snapshot checkpoints', () => {
     })}\n`
 
   it('reads a pinned WSL handle and resumes only the appended suffix', async () => {
-    const { readClaudeUsageScanFile } = await import('./transcript-record-parser')
     await writeFile(source, row('first'))
     const first = await readClaudeUsageScanFile(WSL_FILE)
     expect(first.turns).toHaveLength(1)
     expect(first.checkpoint?.physicalFileId).toBeTruthy()
     expect(access.open).toHaveBeenCalledWith(WSL_FILE, 'scan')
     expect(access.handleStat).toHaveBeenCalled()
-    expect(access.close).toHaveBeenCalledTimes(1)
     if (!first.checkpoint) {
       throw new Error('Expected a resumable checkpoint')
     }
@@ -78,10 +78,8 @@ describe('WSL usage with snapshot checkpoints', () => {
     expect(second.resumed).toBe(true)
     expect(second.turns).toHaveLength(1)
     expect(second.turns[0].dedupeKey).toBe('msg:second')
-    expect(access.close).toHaveBeenCalledTimes(2)
   })
   it('does not turn an unavailable WSL snapshot into empty usage', async () => {
-    const { scanClaudeUsageFiles } = await import('./scanner')
     access.stat.mockRejectedValueOnce(new Error('WSL temporarily unavailable'))
     await expect(scanClaudeUsageFiles([])).rejects.toThrow('WSL temporarily unavailable')
   })

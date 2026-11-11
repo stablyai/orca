@@ -1,7 +1,7 @@
-import { getOrcaPushGatewayUrl } from '../orca-profiles/profile-cloud-auth-config'
+import { getOrcaPushGatewayUrl } from '../orca-profiles/cloud-auth/profile-cloud-auth-config'
 import { DesktopPushService } from '../runtime/push/desktop-push-service'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
+import type { OrcaRuntimeRpcServer } from '../runtime/rpc/server/runtime-rpc'
 import { mainProcessState as state } from './main-process-state'
 
 // Push authenticates by host keypair, so accountless hosts must register phones too; shared startup state supplies the runtime in both modes.

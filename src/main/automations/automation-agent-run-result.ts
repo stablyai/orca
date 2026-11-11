@@ -1,11 +1,11 @@
-import type { AgentLaunchResult } from '../../shared/agent-launch-intent'
+import type { AgentLaunchResult } from '../../shared/agent-launch/contracts/agent-launch-intent'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import type { AutomationRun } from '../../shared/automations-types'
+import type { AutomationRun } from '../../shared/automations/history/automation-run'
 import type { AutomationChatAgentLaunch } from './automation-chat-agent-launch'
-import { tuiAgentDisplayName } from '../../shared/tui-agent-display-names'
-import { parsePaneKey } from '../../shared/stable-pane-id'
+import { tuiAgentDisplayName } from '../../shared/agent-launch/catalog/tui-agent-display-names'
+import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { readAutomationRunReceipt } from './automation-run-receipt'
-import { AutomationRunLaunchError } from './headless-dispatch'
+import { AutomationRunLaunchError } from './automation-launch'
 
 export function publishedLaunchTarget(
   runtime: Pick<OrcaRuntimeService, 'getTerminalPaneKey' | 'getTerminalPtyIdForHandle'>,

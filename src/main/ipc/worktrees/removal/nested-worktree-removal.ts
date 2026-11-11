@@ -3,7 +3,7 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { listWorktreesStrict } from '../../../git/worktree'
+import { listWorktreesStrict } from '../../../git/worktrees/catalog/worktree-listing'
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import {
   SshHostNotServedError,
@@ -12,7 +12,8 @@ import {
 import { resolveWorktreeRemovalHomeForHost } from '../../../workspaces/removal/worktree-removal-execution-host-route'
 import {
   getNestedWorktreeRemovalPlan,
-  assertNestedWorktreeRemovalApproval
+  assertNestedWorktreeRemovalApproval,
+  removeNestedWorktreePlanChildren
 } from '../../../workspaces/removal/nested-worktree-removal-plan'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
@@ -57,29 +58,13 @@ export async function removeApprovedNestedWorktrees(args: {
   }
   const plan = await previewNestedWorktreeRemoval(context, repo, worktreePath, hostId)
   assertNestedWorktreeRemovalApproval(plan, removalArgs.approvedNestedWorktrees)
-  const preserved: NonNullable<RemoveWorktreeResult['nestedPreservedBranches']> = []
-  for (const child of plan.slice(0, -1)) {
-    try {
-      const result = await remove({
-        ...removalArgs,
-        hostId,
-        worktreeId: `${repo.id}::${child.path}`,
-        approvedNestedWorktrees: undefined,
-        expectedCheckout: child
-      })
-      if (result.preservedBranch) {
-        preserved.push({ worktreeId: `${repo.id}::${child.path}`, ...result.preservedBranch })
-      }
-    } catch (error) {
-      const kept =
-        preserved.length > 0
-          ? ` Branches kept after earlier deletions: ${preserved.map((item) => item.branchName).join(', ')}.`
-          : ''
-      throw new Error(
-        `Could not delete nested worktree ${child.path}: ${error instanceof Error ? error.message : String(error)}${kept}`,
-        { cause: error }
-      )
-    }
-  }
-  return preserved
+  return removeNestedWorktreePlanChildren(repo.id, plan, (worktreeId, child) =>
+    remove({
+      ...removalArgs,
+      hostId,
+      worktreeId,
+      approvedNestedWorktrees: undefined,
+      expectedCheckout: child
+    })
+  )
 }

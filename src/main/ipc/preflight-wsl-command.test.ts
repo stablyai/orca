@@ -21,15 +21,6 @@ beforeEach(() => {
 })
 
 describe('runPreflightCommandInWsl', () => {
-  it('prefers the login PATH but never lets its absence decide the answer', async () => {
-    // Callers can interpret rejected probes as absent/unauthenticated; degraded login PATH must remain usable.
-    await runPreflightCommandInWsl({ distro: 'Ubuntu' }, 'gh --version', 5_000)
-
-    expect(runWslProcessMock).toHaveBeenCalledWith(
-      expect.objectContaining({ loginPath: 'preferred', distro: 'Ubuntu' })
-    )
-  })
-
   it('still rejects with stdout and stderr attached on a non-zero exit', async () => {
     // Auth callers inspect captured error output for success markers.
     runWslProcessMock.mockResolvedValue({

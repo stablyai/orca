@@ -1,20 +1,20 @@
 import { app } from 'electron'
 import { KeybindingService } from '../keybindings/keybinding-service'
 import { createProviderAccountServices } from '../providers/accounts/provider-account-services'
-import { createCodexSessionMigrationScheduler } from '../codex/codex-session-migration-scheduler'
-import { startCodexSessionBackfillInBackground } from '../codex/codex-session-backfill'
-import { startCodexSessionIndexHealInBackground } from '../codex/codex-session-index-heal'
-import { startCodexStateDbBackfillRecoveryInBackground } from '../codex/codex-state-db-backfill-recovery'
-import { getOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
+import { createCodexSessionMigrationScheduler } from '../codex/history/backfill/codex-session-migration-scheduler'
+import { startCodexSessionBackfillInBackground } from '../codex/history/backfill/codex-session-backfill'
+import { startCodexSessionIndexHealInBackground } from '../codex/history/index/codex-session-index-heal'
+import { startCodexStateDbBackfillRecoveryInBackground } from '../codex/history/index/codex-state-db-backfill-recovery'
+import { getOrcaManagedCodexHomePath } from '../codex/configuration/homes/codex-home-paths'
 import {
   hasOpenCodeGoApiKey,
   readOpenCodeGoApiKey,
   saveOpenCodeGoApiKey
 } from '../opencode/opencode-go-api-key-store'
-import { agentHookServer } from '../agent-hooks/server'
-import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
-import { browserManager } from '../browser/browser-manager'
-import { prewarmStructuredAgentModelCatalogs } from '../runtime/structured-agent-model-catalog-wiring'
+import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
+import { resolveHostCodexSessionSourceHome } from '../codex/history/rollouts/codex-session-source-home'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
+import { prewarmStructuredAgentModelCatalogs } from '../runtime/agent-session/model-catalog/structured-agent-model-catalog-wiring'
 import { mainProcessState as state } from './main-process-state'
 
 // Settings that change which account or binary a new chat's agent runs under.
@@ -94,10 +94,11 @@ export function initializeMainProcessAccountServices(): void {
   state.keybindings = new KeybindingService({
     homePath: app.getPath('home'),
     getLegacyOverrides: () => store.getSettings().keybindings,
-    legacyTabSwitchSeed: {
-      isPending: () => store.getSettings().tabSwitchKeybindingSeed === 'pending',
-      markSeeded: () => store.updateSettings({ tabSwitchKeybindingSeed: 'done' })
-    }
+    legacyTabSwitchDefaults: store.getSettings().tabSwitchKeybindingSeed === 'legacy',
+    legacySearchDefaults:
+      (process.platform === 'darwin'
+        ? store.getSettings().searchKeybindingSeed
+        : store.getSettings().nonMacSearchKeybindingSeed) === 'legacy'
   })
   browserManager.setSettingsResolver(() => ({ keybindings: state.keybindings?.getOverrides() }))
 }

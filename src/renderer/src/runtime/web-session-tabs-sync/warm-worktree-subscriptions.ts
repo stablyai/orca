@@ -1,9 +1,12 @@
-import { getWindowParkVisible, subscribeWindowParkVisibility } from '@/lib/window-park-visibility'
-import { TERMINAL_WORKTREE_HOT_RETAIN_LIMIT } from '@/components/terminal-pane/terminal-hidden-view-parking'
-import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
-import { useAppStore } from '../../store'
+import {
+  getWindowParkVisible,
+  subscribeWindowParkVisibility
+} from '@/lib/window-activity/window-park-visibility'
+import { TERMINAL_WORKTREE_HOT_RETAIN_LIMIT } from '@/components/terminal-pane/parking/retention/terminal-hidden-view-parking'
+import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
+import { useAppStore } from '../../store/index'
 import type { AppState } from '../../store/types'
-import { getRuntimeEnvironmentRevision } from '../runtime-environment-revision'
+import { getRuntimeEnvironmentRevision } from '../rpc/environment-revisions/runtime-environment-revision'
 import type {
   ActiveSessionTabsSubscription,
   ActiveSubscriptionArgs,

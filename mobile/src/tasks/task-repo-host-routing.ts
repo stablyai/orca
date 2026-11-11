@@ -2,8 +2,8 @@ import { parseExecutionHostId, type ExecutionHostId } from '../../../src/shared/
 import {
   routeRpcClientCalls,
   scopeRpcClientToExecutionHost
-} from '../transport/execution-host-scoped-rpc-client'
-import type { RpcClient } from '../transport/rpc-client'
+} from '../worktree/execution-host-scoped-rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 
 type RoutedRepo = { id: string; executionHostId?: ExecutionHostId | null }
 

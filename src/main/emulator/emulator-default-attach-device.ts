@@ -6,6 +6,15 @@ import { emulatorFailureText } from '../../shared/emulator-failure-copy'
 const isIphone = (device: EmulatorDevice): boolean =>
   device.backend === 'ios' && /iPhone/i.test(device.name)
 
+export function findBootedWorkspaceDevice(
+  devices: EmulatorDevice[],
+  current?: string
+): EmulatorDevice | undefined {
+  return devices.find(
+    (device) => device.id === current && device.isAvailable && device.state === 'booted'
+  )
+}
+
 // The workspace's still-booted device, then the configured default, then any running device.
 export async function resolveDefaultAttachDevice(
   bridge: Pick<EmulatorBridge, 'listAllDevices'>,
@@ -17,8 +26,9 @@ export async function resolveDefaultAttachDevice(
   const all = await bridge.listAllDevices()
   const available = all.filter((device) => device.isAvailable)
   const booted = available.filter((device) => device.state === 'booted')
-  if (current && booted.some((device) => device.id === current)) {
-    return current
+  const currentDevice = findBootedWorkspaceDevice(all, current)
+  if (currentDevice) {
+    return currentDevice.id
   }
   if (configured) {
     return configured

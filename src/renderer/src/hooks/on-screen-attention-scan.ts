@@ -16,7 +16,7 @@ import {
   setPresenceGated
 } from './agent-auto-ack-presence'
 import type { AppState } from '@/store/types'
-import { selectFloatingWorkspacePanelVisible } from '@/store/floating-workspace-panel-selector'
+import { selectFloatingWorkspacePanelVisible } from '@/store/workspaces/floating/floating-workspace-panel-selector'
 import {
   acknowledgeViewedAutoAckTarget,
   readAgentAttentionTurnRecords,
@@ -31,7 +31,7 @@ import {
   onScreenHostId
 } from '@/store/slices/workspace-attention/workspace-unread-flag'
 import { paneKeyTabId } from '@/store/slices/workspace-attention/workspace-live-markers'
-import { isOrcaWindowForegroundFocused } from '@/components/terminal-pane/terminal-notification-pane-visibility'
+import { isOrcaWindowForegroundFocused } from '@/attention/orca-window-foreground-focus'
 import type { ClientWorkspaceViewReporter } from './client-workspace-view-report'
 
 type ScanStore = {

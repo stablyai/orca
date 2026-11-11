@@ -3,13 +3,13 @@ import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout as SessionTabsProj
 import type { OrcaRuntimeWithGetTerminalInteractiveWait as GetTerminalInteractiveWaitMethods } from '../terminal/wait/terminal-interactive-wait'
 import { OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal } from './pty-backed-session-publication'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { hasHostAuthoritativeTerminalMembership } from '../../persistence/terminal-topology/terminal-topology-membership'
 import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeSyncedLeaf
-} from '../../../shared/runtime-types'
-import { retireTerminalSurfacesFromSnapshot } from '../mobile-session-terminal-retirement'
+} from '../../../shared/runtime-session-contracts'
+import { retireTerminalSurfacesFromSnapshot } from '../terminal/surface/mobile-session-terminal-retirement'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
 
