@@ -147,7 +147,7 @@ export function CloudWorkspaceCardDetails({
           />
         ) : null}
         <Fact
-          label={t('orcaCloudWorkspace.card.sandboxHours', 'Sandbox hours')}
+          label={t('orcaCloudWorkspace.card.totalSandboxHours', 'Total sandbox hours')}
           value={sandboxHoursNumber(status.usage.totalMs)}
         />
         {status.archive?.expiresAt ? (

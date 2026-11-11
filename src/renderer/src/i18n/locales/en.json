@@ -27062,7 +27062,7 @@
       "more": "More actions",
       "details": "Details",
       "hideDetails": "Hide details",
-      "sandboxHours": "Sandbox hours",
+      "totalSandboxHours": "Total sandbox hours",
       "delete": "Delete"
     },
     "statusUnavailable": "Status unavailable",
