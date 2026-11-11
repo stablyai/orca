@@ -168,6 +168,10 @@ export function showCloudAgentNotStartedToast(
         run: () => void globalThis.window?.api?.orcaCloudAgents?.start({ agent })
       }
     }
+    if (!view.action) {
+      // Sonner keeps an updated toast's old button: drop it so a stale action can't linger.
+      toast.dismiss(TOAST_ID)
+    }
     toast.message(view.message, {
       id: TOAST_ID,
       ...(view.description ? { description: view.description } : {}),
