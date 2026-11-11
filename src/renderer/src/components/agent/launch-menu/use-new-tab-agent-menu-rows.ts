@@ -259,6 +259,7 @@ export function useAgentMenuObservation(
           workspace,
           launchCwd,
           executionHostId: facts.executionHostId,
+          hostCapabilities: input.hostCapabilities,
           pairingRevision: facts.pairingRevision,
           runtimeId: facts.runtimeId,
           settings,
