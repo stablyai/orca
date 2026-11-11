@@ -18,20 +18,33 @@ import {
  * completion restores the intent captured before it), it runs after that, last.
  */
 export function keepWakeScrollPlace(terminal: Terminal): (line: number) => void {
+  const place = (line: number): void => {
+    cancelDeferredScrollRestore(terminal)
+    cancelPendingFitScrollRestore(terminal)
+    beginTerminalScrollIntentBufferRebuild(terminal)
+    try {
+      terminal.scrollToLine(line)
+    } finally {
+      endTerminalScrollIntentBufferRebuild(terminal)
+    }
+    syncTerminalScrollIntentFromViewport(terminal, { allowBufferShrink: true })
+  }
   return (line) => {
     onTerminalScrollIntentBufferRebuildComplete(terminal, (completed) => {
       if (!completed) {
         return
       }
-      cancelDeferredScrollRestore(terminal)
-      cancelPendingFitScrollRestore(terminal)
-      beginTerminalScrollIntentBufferRebuild(terminal)
-      try {
-        terminal.scrollToLine(line)
-      } finally {
-        endTerminalScrollIntentBufferRebuild(terminal)
-      }
-      syncTerminalScrollIntentFromViewport(terminal, { allowBufferShrink: true })
+      place(line)
+      // The replay ran at the host's grid; the pane's own fit follows and keeps the pin by its
+      // distance from the bottom, which moves the line when the row count changes. Once, after it.
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          const { viewportY, baseY } = terminal.buffer.active
+          if (viewportY < baseY && viewportY !== line) {
+            place(line)
+          }
+        })
+      )
     })
   }
 }
