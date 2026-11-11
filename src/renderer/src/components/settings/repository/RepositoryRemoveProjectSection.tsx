@@ -150,20 +150,26 @@ export function RepositoryRemoveProjectSection({
   const hostLabels = useAppStore(
     useShallow((state) => setups.map((setup) => selectSetupHostLabel(state, setup, t)))
   )
-  const worktreesByRepo = useAppStore(selectWorktreesByRepo)
+  // Select only these repos' lists so writes to other repos don't re-render this pane.
+  const setupWorktrees = useAppStore(
+    useShallow((state) => setups.map((setup) => selectWorktreesByRepo(state)[setup.repoId]))
+  )
   const runtimeEnvironments = useAppStore((state) => state.runtimeEnvironments)
   // Removal can destroy a recipe VM, where "files stay on disk" would be false.
   const removesRecipeVm = useMemo(
     () =>
       setups.some(
-        (setup) =>
+        (setup, index) =>
           getRecipeVmRemovalTargets(
-            { worktreesByRepo, runtimeEnvironments },
+            {
+              worktreesByRepo: { [setup.repoId]: setupWorktrees[index] ?? [] },
+              runtimeEnvironments
+            },
             { id: setup.repoId, connectionId: setup.connectionId },
             setup.hostId
           ) !== null
       ),
-    [setups, worktreesByRepo, runtimeEnvironments]
+    [setups, setupWorktrees, runtimeEnvironments]
   )
   const groups = useMemo(() => groupSetupsByHost(setups, hostLabels), [setups, hostLabels])
   const hostCount = new Set(setups.map((setup) => setup.hostId)).size

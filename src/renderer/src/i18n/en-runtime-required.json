@@ -707,8 +707,6 @@
           "checkoutCount_other": "{{count}} checkouts",
           "hostCount_one": "{{count}} host",
           "hostCount_other": "{{count}} hosts",
-          "terminalCount_one": "{{count}} open terminal",
-          "terminalCount_other": "{{count}} open terminals",
           "terminalWarning_one": "{{count}} open terminal in this project will be closed.",
           "terminalWarning_other": "{{count}} open terminals in this project will be closed."
         },

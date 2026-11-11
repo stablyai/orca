@@ -14255,8 +14255,6 @@
           "hostCount_other": "{{count}} hosts",
           "checkoutCount_one": "{{count}} checkout",
           "checkoutCount_other": "{{count}} checkouts",
-          "terminalCount_one": "{{count}} open terminal",
-          "terminalCount_other": "{{count}} open terminals",
           "removeButton": "Remove…",
           "dialogTitle": "Remove {{name}}?",
           "terminalWarning_one": "{{count}} open terminal in this project will be closed.",
