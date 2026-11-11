@@ -47,7 +47,13 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
     tabId: string,
     options: MobileSessionTabCloseOptions = {}
   ): Promise<MobileSessionTabCloseOutcome> {
-    const graphEpoch = options.clientNavigationId ? this.captureReadyGraphEpoch() : null
+    // A closed desktop window is unavailable, not reloading. Paired closes still
+    // carry a device id, but there is no renderer epoch to fence, so the
+    // headless retirement below has to run. Reloading keeps failing closed.
+    let graphEpoch: number | null = null
+    if (options.clientNavigationId && this.graphStatus !== 'unavailable') {
+      graphEpoch = this.captureReadyGraphEpoch()
+    }
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorkspaceSelector(worktreeSelector)).id
