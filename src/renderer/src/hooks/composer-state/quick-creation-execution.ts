@@ -15,6 +15,7 @@ import { buildQuickCreationRequest, type QuickSubmitOptions } from './quick-crea
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
 import { resolveAgentSessionLaunchRoute } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import { ORCA_CLOUD_RECIPE_ID } from '../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
+import { parentWorktreeForRunOn } from '@/components/new-workspace/run-on/cloud-advanced-options'
 import { reportCloudStartAgentCoverage } from '@/lib/orca-cloud/cloud-first-start-agent-coverage'
 
 export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
@@ -210,7 +211,9 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         linkedLinearIssueOrganizationUrlKey,
         branchNameOverride: effectiveBranchNameOverride,
         branchIntent,
-        parentWorktreeId,
+        // DS-j: a parent picked before switching to Orca Cloud would fail the create cross-host.
+        parentWorktreeId:
+          parentWorktreeForRunOn(activeEphemeralVmRecipeId, parentWorktreeId) ?? null,
         // A lane's host-only column applies only when creating on that host.
         workspaceStatus:
           resolvedInitialWorkspaceStatus &&
