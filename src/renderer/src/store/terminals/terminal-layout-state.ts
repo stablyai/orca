@@ -1,6 +1,13 @@
 import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import {
+  isTerminalLeafId,
+  makePaneKey
+} from '../../../../shared/workspace-layout/stable-pane-id'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
 import { terminalLayoutEqual } from '../../../../shared/workspace-layout/terminal-layout-equality'
 import {
   normalizeTerminalLayoutPtyOwnership,
@@ -14,6 +21,32 @@ import {
 } from './terminal-pty-identities'
 import { transferNormalizedTerminalLayoutPtyOwnership } from './workspace-terminal-hydration-patch'
 import { recordChatPaneInLayoutOwner } from './terminal-chat-pane-layout-owner'
+
+function retainLaunchAgentLeafId(
+  tabsByWorktree: Record<string, TerminalTab[]>,
+  tabId: string,
+  layout: TerminalLayoutSnapshot
+): Record<string, TerminalTab[]> {
+  const leafId = layout.root?.type === 'leaf' ? layout.root.leafId : null
+  if (!leafId || !isTerminalLeafId(leafId)) {
+    return tabsByWorktree
+  }
+
+  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
+    const tabIndex = tabs.findIndex((tab) => tab.id === tabId)
+    if (tabIndex === -1) {
+      continue
+    }
+    const tab = tabs[tabIndex]
+    if (!tab?.launchAgent || tab.launchAgentLeafId === leafId) {
+      return tabsByWorktree
+    }
+    const nextTabs = [...tabs]
+    nextTabs[tabIndex] = { ...tab, launchAgentLeafId: leafId }
+    return { ...tabsByWorktree, [worktreeId]: nextTabs }
+  }
+  return tabsByWorktree
+}
 
 export function createTerminalLayoutActions(
   set: TerminalStoreSet,
@@ -101,15 +134,27 @@ export function createTerminalLayoutActions(
             normalized.snapshot
           )
         }
-        // Why: pane-title churn re-persists structurally identical snapshots; bailing keeps every pane selector asleep.
         const existing = s.terminalLayoutsByTabId[tabId]
-        if (existing && terminalLayoutEqual(existing, normalized.snapshot)) {
+        const nextTabsByWorktree = retainLaunchAgentLeafId(
+          s.tabsByWorktree,
+          tabId,
+          normalized.snapshot
+        )
+        const layoutChanged = !existing || !terminalLayoutEqual(existing, normalized.snapshot)
+        const tabsChanged = nextTabsByWorktree !== s.tabsByWorktree
+        // Why: pane-title churn re-persists structurally identical snapshots; bailing keeps every pane selector asleep.
+        if (!layoutChanged && !tabsChanged) {
           return s
         }
         return {
-          terminalLayoutsByTabId: replaceRecordEntries<
-            TerminalSlice['terminalLayoutsByTabId'][string]
-          >(s.terminalLayoutsByTabId, [[tabId, normalized.snapshot]])
+          ...(layoutChanged
+            ? {
+                terminalLayoutsByTabId: replaceRecordEntries<
+                  TerminalSlice['terminalLayoutsByTabId'][string]
+                >(s.terminalLayoutsByTabId, [[tabId, normalized.snapshot]])
+              }
+            : {}),
+          ...(tabsChanged ? { tabsByWorktree: nextTabsByWorktree } : {})
         }
       })
       transferNormalizedTerminalLayoutPtyOwnership(get(), tabId, ownershipTransfers)

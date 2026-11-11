@@ -70,4 +70,33 @@ describe('parseWorkspaceSession', () => {
       expect(result.value.browserUrlHistory?.at(-1)?.url).toBe('https://example.com/199')
     }
   })
+
+  it('keeps launchAgent and its stable leaf on a persisted terminal tab', () => {
+    const leafId = '77777777-7777-4777-8777-777777777777'
+    const tab = {
+      id: 'tab-codex',
+      ptyId: null,
+      worktreeId: 'worktree-codex',
+      title: 'demo-repo',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1_700_000_000_000,
+      launchAgent: 'codex',
+      launchAgentLeafId: leafId
+    }
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'worktree-codex',
+      activeTabId: 'tab-codex',
+      tabsByWorktree: { 'worktree-codex': [tab] },
+      terminalLayoutsByTabId: {}
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.tabsByWorktree['worktree-codex']?.[0]?.launchAgent).toBe('codex')
+      expect(result.value.tabsByWorktree['worktree-codex']?.[0]?.launchAgentLeafId).toBe(leafId)
+    }
+  })
 })
