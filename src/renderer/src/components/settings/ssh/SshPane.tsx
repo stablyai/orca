@@ -1,7 +1,6 @@
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import type { SshTarget } from '../../../../../shared/ssh-types'
 import { useAppStore } from '@/store/index'
 import { toastSshConnectFailure } from '@/ssh/ssh-connect-failure-toast'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -22,12 +21,8 @@ import {
 } from './targets/ssh-target-list-model'
 import { useSshBulkRemove } from './targets/use-ssh-bulk-remove'
 import { SshTargetForm } from './targets/SshTargetForm'
-import {
-  EMPTY_FORM,
-  type EditingTarget,
-  getEditingTargetForSshTarget
-} from '../../ssh-host-form/ssh-target-draft'
-
+import { EMPTY_FORM, getEditingTargetForSshTarget } from '../../ssh-host-form/ssh-target-draft'
+import type { EditingTarget } from '../../ssh-host-form/ssh-target-draft'
 import { buildSshTargetSavePayload } from './targets/ssh-target-save-payload'
 import { HostRemoveDialog } from '../../sidebar/HostRemoveDialog'
 import {
@@ -41,7 +36,8 @@ import { toSshExecutionHostId } from '../../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useSshAddTargetIntent } from './targets/use-ssh-add-target-intent'
-import { syncSshConfigTargetsPassively } from '../../../lib/ssh-config-passive-sync'
+import { syncSshConfigTargetsPassively } from '../../../runtime/hosts/ssh/ssh-config-passive-sync'
+import type { SshTarget } from '../../../../../shared/ssh-types'
 
 type SshPaneProps = { addTargetIntentSignal?: number }
 

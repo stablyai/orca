@@ -2,6 +2,9 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
+import { createStructuredAgentSessionLaunchIntent } from '@/lib/agent-session/launch/structured-agent-session-launch-intent'
+import { StructuredAgentSessionCreateUnknownOutcomeError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
+import { launchAndReconcile } from '@/lib/agent-session/launch/structured-agent-session-launch-recovery'
 
 const calls = vi.hoisted(() => ({
   log: new Array<string>(),
@@ -38,10 +41,6 @@ vi.mock('@/runtime/native-chat/tab-inventory/structured-session-tab-inventory', 
     throw new Error('host offline')
   })
 }))
-
-import { createStructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
-import { StructuredAgentSessionCreateUnknownOutcomeError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
-import { launchAndReconcile } from '@/lib/agent-session/launch/structured-agent-session-launch-recovery'
 
 function launchState(executionHostId: 'local' | 'runtime:server-1') {
   return {
