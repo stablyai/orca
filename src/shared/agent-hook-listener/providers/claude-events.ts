@@ -1,3 +1,7 @@
+import {
+  AGENT_MODEL_MAX_LENGTH,
+  normalizeOptionalField
+} from '../../agent-status/contracts/agent-status-field-normalization'
 import type { ParsedAgentStatusPayload } from '../../agent-status/contracts/agent-status-types'
 import { CLAUDE_NEW_SESSION_START_SOURCES } from './claude-session-start-sources'
 import {
@@ -40,6 +44,10 @@ import { recordClaudeTeammateSpawn } from './claude-teammate-spawn'
 
 const CLAUDE_HOOK_AGENT_ID_PREFIX = 'hook-agent-'
 
+function claudeReportedModel(hookPayload: Record<string, unknown>): string | undefined {
+  return normalizeOptionalField(hookPayload.model, AGENT_MODEL_MAX_LENGTH)
+}
+
 export function normalizeClaudeEvent(
   state: HookListenerState,
   eventName: unknown,
@@ -68,8 +76,13 @@ export function normalizeClaudeEvent(
     state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
     state.claudeActiveSessionCronPaneKeys.delete(paneKey)
     state.claudeLaunchedBackgroundTasksByPaneKey.delete(paneKey)
-    // New sessions start a new main-agent clock.
-    setClaudeMainAgentTurnState(state, paneKey, { state: 'done', stateStartedAt: Date.now() })
+    // New sessions start a new main-agent clock. An omitted model keeps the last reported one.
+    const model = claudeReportedModel(hookPayload)
+    setClaudeMainAgentTurnState(state, paneKey, {
+      state: 'done',
+      stateStartedAt: Date.now(),
+      ...(model ? { model } : {})
+    })
     return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
       stateName: 'done',
       updateToolSnapshot: true,
@@ -298,6 +311,7 @@ export function normalizeClaudeEvent(
       ? Date.now()
       : undefined
 
+  const reportedModel = eventAgentId === undefined ? claudeReportedModel(hookPayload) : undefined
   setClaudeMainAgentTurnState(state, paneKey, {
     state: reportedStateName,
     ...(taskWakeupTurn ? { taskWakeupTurn: true as const } : {}),
@@ -305,7 +319,8 @@ export function normalizeClaudeEvent(
     ...(isWaitingInducing && eventAgentId ? { waitingAgentId: eventAgentId } : {}),
     ...claudeWaitRequest(eventName, isAskUserQuestionWait, eventToolUseId, previousLead),
     ...(stateBeforeWait ? { stateBeforeWait } : {}),
-    ...(turnCompletedAt !== undefined ? { turnCompletedAt } : {})
+    ...(turnCompletedAt !== undefined ? { turnCompletedAt } : {}),
+    ...(reportedModel ? { model: reportedModel } : {})
   })
 
   const effectiveRoster = state.claudeSubagentRosterByPaneKey.get(paneKey)

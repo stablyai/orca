@@ -115,10 +115,12 @@ export function setClaudeMainAgentTurnState(
   now = Date.now()
 ): ClaudeLeadTurnState {
   const previous = state.claudeLeadStateByPaneKey.get(paneKey)
-  const { state: nextState, outcome, stateStartedAt, ...rest } = next
+  const { state: nextState, outcome, stateStartedAt, model, ...rest } = next
+  const retainedModel = model || previous?.model
   const record: ClaudeLeadTurnState = {
     ...rest,
-    ...continueMainAgentStatus(previous, { state: nextState, outcome, stateStartedAt }, now)
+    ...continueMainAgentStatus(previous, { state: nextState, outcome, stateStartedAt }, now),
+    ...(retainedModel ? { model: retainedModel } : {})
   }
   state.claudeLeadStateByPaneKey.set(paneKey, record)
   return record
