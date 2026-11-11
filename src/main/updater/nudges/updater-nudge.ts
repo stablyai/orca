@@ -2,10 +2,11 @@ import { app } from 'electron'
 import { fetchNudge, shouldApplyNudge } from './nudge-campaign'
 import { NUDGE_ACTIVATION_COOLDOWN_MS, NUDGE_POLL_INTERVAL_MS } from '../lifecycle/updater-state'
 import { UpdaterBuildSelection } from '../releases/updater-build-selection'
+import { runsAutoUpdater } from '../fork-auto-update-switch'
 
 export abstract class UpdaterNudge extends UpdaterBuildSelection {
   protected async checkForUpdateNudge(): Promise<void> {
-    if (!app.isPackaged) {
+    if (!runsAutoUpdater()) {
       return
     }
     if (this.nudgeCheckInFlight) {
