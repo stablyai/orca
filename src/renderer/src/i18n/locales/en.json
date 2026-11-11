@@ -28511,6 +28511,7 @@
     "removalEdited_other": "{{count}} changed files on this computer will be removed.",
     "removeCopy": "Remove copy",
     "title": "On this computer",
+    "syncedEmpty": "Synced · {{ago}}",
     "contextLabel": ".context folder",
     "contextHelper": "Plans and screenshots from this workspace, synced to this computer.",
     "mirrorLabel": "Mirror to this computer",

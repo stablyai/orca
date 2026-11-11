@@ -13,6 +13,22 @@ import { onCloudSyncFocusRequest } from '@/lib/orca-cloud/cloud-sync-store'
 const PANEL_POLL_MS = 5_000
 const HOVER_OPEN_MS = 250
 const HOVER_CLOSE_MS = 180
+const CARD_GAP_PX = 8
+
+/**
+ * The card opens beside the sidebar, not over the row it describes: from the mark to the sidebar's
+ * right edge, plus a gap. Outside the sidebar (fixtures, other hosts) it sits just right of the mark.
+ */
+export function cloudCardSideOffset(mark: HTMLElement | null): number {
+  const sidebar = mark?.closest('[data-left-sidebar]')
+  if (!mark || !sidebar) {
+    return 10
+  }
+  return Math.max(
+    10,
+    sidebar.getBoundingClientRect().right - mark.getBoundingClientRect().right + CARD_GAP_PX
+  )
+}
 
 /**
  * Sidebar mark for an Orca Cloud workspace: the Cloud host glyph with its live state as a corner badge,
@@ -49,6 +65,7 @@ function CloudWorkspaceMarkInner({
   const [open, setOpen] = useState<'hover' | 'pinned' | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const content = useRef<HTMLDivElement | null>(null)
+  const mark = useRef<HTMLButtonElement | null>(null)
   const clearTimer = useCallback(() => {
     if (timer.current) {
       clearTimeout(timer.current)
@@ -100,6 +117,7 @@ function CloudWorkspaceMarkInner({
     >
       <PopoverTrigger asChild>
         <button
+          ref={mark}
           type="button"
           aria-label={label}
           aria-haspopup="dialog"
@@ -136,7 +154,7 @@ function CloudWorkspaceMarkInner({
         ref={content}
         side="right"
         align="start"
-        sideOffset={10}
+        sideOffset={open ? cloudCardSideOffset(mark.current) : 10}
         focusRing
         className="w-72"
         aria-label={label}
