@@ -8,17 +8,37 @@ const MAX_HELD_BACK = 50
 export class HeldPeerConversations {
   private readonly held = new Map<string, { failures: number; retryAt: number }>()
 
-  /** What the next pull holds back, and how long it may wait before a held one is due again. */
+  /** What the next pull holds back, and how long it may wait before a held one is due again. Past
+   *  the cap, the soonest due go unnamed: the server returns them, and they are retried first. */
   forPull(now: number, maxWaitMs: number): { holdBack: string[]; waitMs: number } {
-    const holdBack: string[] = []
-    let waitMs = maxWaitMs
-    for (const [conversationId, hold] of this.held) {
-      if (hold.retryAt > now && holdBack.length < MAX_HELD_BACK) {
-        holdBack.push(conversationId)
-        waitMs = Math.min(waitMs, hold.retryAt - now)
+    const waiting = [...this.held].filter(([, hold]) => hold.retryAt > now)
+    waiting.sort(([, a], [, b]) => b.retryAt - a.retryAt)
+    return {
+      holdBack: waiting.slice(0, MAX_HELD_BACK).map(([conversationId]) => conversationId),
+      waitMs: this.msUntilDue(
+        waiting.map(([conversationId]) => conversationId),
+        now,
+        maxWaitMs
+      )
+    }
+  }
+
+  /** Until the first of these is due again, at most `maxMs`. */
+  msUntilDue(conversationIds: Iterable<string>, now: number, maxMs: number): number {
+    let ms = maxMs
+    for (const conversationId of conversationIds) {
+      const retryAt = this.held.get(conversationId)?.retryAt
+      if (retryAt !== undefined) {
+        ms = Math.min(ms, Math.max(0, retryAt - now))
       }
     }
-    return { holdBack, waitMs }
+    return ms
+  }
+
+  untilFirstDue(conversationIds: Iterable<string>, now: number, maxMs: number): Promise<void> {
+    return new Promise((resolve) => {
+      setTimeout(resolve, this.msUntilDue(conversationIds, now, maxMs)).unref?.()
+    })
   }
 
   isWaiting(conversationId: string, now: number): boolean {

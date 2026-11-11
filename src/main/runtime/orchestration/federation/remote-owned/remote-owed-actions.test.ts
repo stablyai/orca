@@ -401,7 +401,7 @@ describe('what the coordinating Orca owes a paired server', () => {
     })
 
     it("keeps reading the server's other conversations while an unreadable one waits out its own backoff", async () => {
-      retry.delayMs = 60_000
+      retry.delayMs = 10_000
       startedOnB()
       const { other, otherItem } = otherConversation()
       pulls.push([{ ...state(1), kind: 'worker_future' }], [otherItem])
@@ -414,7 +414,10 @@ describe('what the coordinating Orca owes a paired server', () => {
       expect(sent.find((s) => s.method === 'orchestration.peerMailAck')?.params).toEqual({
         acknowledgments: [{ conversationId: other.conversation_id, throughSequence: 7 }]
       })
-      expect(pullParams[1]).toMatchObject({ holdBack: [link.conversation_id] })
+      expect(pullParams[1]).toMatchObject({
+        holdBack: [link.conversation_id],
+        waitMs: expect.toSatisfy((ms: number) => ms > 0 && ms <= 10_000)
+      })
     })
   })
 })

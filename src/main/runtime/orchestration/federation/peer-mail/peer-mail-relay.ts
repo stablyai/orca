@@ -194,10 +194,18 @@ export class PeerMailRelay {
     }
     const through = new Map<string, number>()
     const stuck = new Map<string, unknown>()
+    // One clock for the batch, and a held conversation stays skipped to its end: none of its later
+    // items is imported, so the ack never passes the item it is waiting to retry.
+    const now = Date.now()
+    const heldBack = new Set<string>()
     let onlyHeldBack = true
     for (const item of items) {
       // An item that cannot be read holds back its own conversation only; the others keep moving.
-      if (stuck.has(item.conversationId) || loop.held.isWaiting(item.conversationId, Date.now())) {
+      if (stuck.has(item.conversationId) || heldBack.has(item.conversationId)) {
+        continue
+      }
+      if (loop.held.isWaiting(item.conversationId, now)) {
+        heldBack.add(item.conversationId)
         continue
       }
       onlyHeldBack = false
@@ -209,7 +217,7 @@ export class PeerMailRelay {
         }
       } catch (error) {
         stuck.set(item.conversationId, error)
-        loop.held.failed(item.conversationId, Date.now())
+        loop.held.failed(item.conversationId, now)
         noteRemoteRunLinkError(loop.db, item.conversationId, error)
         continue
       }
@@ -240,8 +248,8 @@ export class PeerMailRelay {
       )
     }
     if (onlyHeldBack) {
-      // A server too old to hold them back returns only them again: back off rather than re-pull hot.
-      throw new Error(`${environmentId} returned only conversations held back for a retry.`)
+      // Only conversations still waiting came back (an older server, or past the cap): no hot re-pull.
+      await loop.held.untilFirstDue(heldBack, now, PULL_WAIT_MS)
     }
   }
 

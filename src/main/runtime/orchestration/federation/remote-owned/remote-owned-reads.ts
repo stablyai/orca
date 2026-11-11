@@ -178,8 +178,9 @@ export function withRemoteWorkerRows<Page extends WorkerListPage>(
   }
   const names = new Map<string, string>()
   const name = (id: string, recorded: string | null): string => {
-    const known = names.get(id) ?? remoteServerName(runtime, id, recorded)
-    names.set(id, known)
+    const key = `${id}\n${recorded ?? ''}`
+    const known = names.get(key) ?? remoteServerName(runtime, id, recorded)
+    names.set(key, known)
     return known
   }
   const rows = listRemoteDispatches(db, { runId: params.run, limit: Math.max(0, maxRows) }).map(
