@@ -61,10 +61,8 @@ function dialogReason(lines: string[]): RuntimeTerminalWaitBlockedReason | null 
   return reason && STARTUP_MENU_REASONS.has(reason) ? reason : null
 }
 
-/** The rows of the Ink select just above the key footer, aimed from the highlighted row; [] when they do not read as one. */
-function inkMenuChoices(rows: string[], heading: string): NativeChatStartupMenuChoice[] {
-  // The dialog's own heading, not leftover text above it, sets how many rows are choices.
-  const expected = CLAUDE_MENU_CHOICE_COUNTS.find(([re]) => re.test(heading.toLowerCase()))?.[1]
+/** The last block of non-blank rows above the key footer, where Claude's Ink select paints its choices. */
+function inkChoiceBlock(rows: string[]): { start: number; end: number } {
   let end = rows.length - 1
   while (end >= 0 && !rows[end].trim()) {
     end -= 1
@@ -78,7 +76,14 @@ function inkMenuChoices(rows: string[], heading: string): NativeChatStartupMenuC
   while (start > 0 && rows[start - 1].trim()) {
     start -= 1
   }
-  const matches = rows.slice(start, end + 1).map((row) => INK_CHOICE_ROW_RE.exec(row))
+  return { start, end }
+}
+
+/** The choice rows aimed from the highlighted row; [] when they do not read as the heading's verified menu. */
+function inkMenuChoices(choiceRows: string[], heading: string): NativeChatStartupMenuChoice[] {
+  // The dialog's own heading, not leftover text above it, sets how many rows are choices.
+  const expected = CLAUDE_MENU_CHOICE_COUNTS.find(([re]) => re.test(heading.toLowerCase()))?.[1]
+  const matches = choiceRows.map((row) => INK_CHOICE_ROW_RE.exec(row))
   const cursor = matches.findIndex((match) => match?.[1] === '\u276f')
   if (
     matches.length !== expected ||
@@ -93,15 +98,43 @@ function inkMenuChoices(rows: string[], heading: string): NativeChatStartupMenuC
   })
 }
 
-/** The heading under Claude's dialog rule, unwrapped, shown on the card so its choices read in context. */
-function inkMenuHeading(rows: string[]): string | undefined {
+/** Rows joined into paragraphs: wrapped rows rejoin with a space, blank rows separate paragraphs. */
+function paragraphs(rows: string[]): string[] {
+  const out: string[] = []
+  let current: string[] = []
+  for (const row of [...rows, '']) {
+    const text = row.trim()
+    if (text) {
+      current.push(text)
+    } else if (current.length > 0) {
+      out.push(current.join(' '))
+      current = []
+    }
+  }
+  return out
+}
+
+/** Claude's dialog under its rule: the heading picks the menu, and the warning text is shown before any choice. */
+function inkMenu(
+  rows: string[]
+): { heading: string; description: string; choiceRows: string[] } | null {
   const rule = rows.findLastIndex((row) => DIALOG_RULE_RE.test(row.trim()))
   if (rule === -1) {
-    return undefined
+    return null
   }
-  const end = rows.findIndex((row, index) => index > rule && !row.trim())
-  const heading = rows.slice(rule + 1, end === -1 ? undefined : end)
-  return heading.map((row) => row.trim()).join(' ') || undefined
+  const block = inkChoiceBlock(rows)
+  if (block.start <= rule) {
+    return null
+  }
+  const text = paragraphs(rows.slice(rule + 1, block.start))
+  if (text.length === 0) {
+    return null
+  }
+  return {
+    heading: text[0],
+    description: text.join('\n\n'),
+    choiceRows: rows.slice(block.start, block.end + 1)
+  }
 }
 
 /** The card for the dialog on screen and whether its answers are aimed; null when no dialog owns the screen. */
@@ -123,10 +156,13 @@ export function startupDialogPrompt(
   if (agent !== 'claude' || reason !== 'agent-startup-menu-prompt') {
     return { prompt: buildNativeChatStartupMenuPrompt({ choices: [] }), aimed: true }
   }
-  const description = inkMenuHeading(rows)
-  const choices = inkMenuChoices(rows, description ?? '')
+  const menu = inkMenu(rows)
+  const choices = menu ? inkMenuChoices(menu.choiceRows, menu.heading) : []
   return {
-    prompt: buildNativeChatStartupMenuPrompt({ ...(description ? { description } : {}), choices }),
+    prompt: buildNativeChatStartupMenuPrompt({
+      ...(menu ? { description: menu.description } : {}),
+      choices
+    }),
     aimed: choices.length > 0
   }
 }

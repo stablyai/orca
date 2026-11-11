@@ -140,11 +140,14 @@ describe('TrustDialogStatusObserver', () => {
 
   const UP = '\x1b[A'
   const DOWN = '\x1b[B'
+  const MCP_DIALOG =
+    'New MCP server found in this project: scratch-echo\n\n' +
+    'MCP servers may execute code or access system resources. All tool calls require approval. Learn more in the MCP documentation.'
   // Keys verified against Claude Code 2.1.316 with a scratch config: arrows move the highlight, Enter picks it.
   it.each([
     [
       'claude-2-1-316-startup-mcp-server',
-      'New MCP server found in this project: scratch-echo',
+      MCP_DIALOG,
       [
         ['Use this MCP server', `${UP}${UP}\r`],
         ['Use this and all future MCP servers in this project', `${UP}\r`],
@@ -153,7 +156,7 @@ describe('TrustDialogStatusObserver', () => {
     ],
     [
       'claude-2-1-316-startup-mcp-server-narrow',
-      'New MCP server found in this project: scratch-echo',
+      MCP_DIALOG,
       [
         ['Use this MCP server', `${UP}${UP}\r`],
         ['Use this and all future MCP servers in this project', `${UP}\r`],
@@ -161,14 +164,12 @@ describe('TrustDialogStatusObserver', () => {
       ]
     ],
     // A wrapped choice reads as an extra row, so the arrows cannot be aimed.
-    [
-      'claude-2-1-316-startup-mcp-server-wrapped',
-      'New MCP server found in this project: scratch-echo',
-      []
-    ],
+    ['claude-2-1-316-startup-mcp-server-wrapped', MCP_DIALOG, []],
     [
       'claude-2-1-316-startup-api-key',
-      'Detected a custom API key in your environment',
+      'Detected a custom API key in your environment\n\n' +
+        'ANTHROPIC_API_KEY: xx-xxx-...000000000000000000AA\n\n' +
+        'Do you want to use this API key?',
       [
         ['Yes', `${UP}\r`],
         ['No (recommended)', '\r']
@@ -176,7 +177,10 @@ describe('TrustDialogStatusObserver', () => {
     ],
     [
       'claude-2-1-316-startup-bypass-permissions',
-      'WARNING: Claude Code running in Bypass Permissions mode',
+      'WARNING: Claude Code running in Bypass Permissions mode\n\n' +
+        'In Bypass Permissions mode, Claude Code will not ask for your approval before running potentially dangerous commands. This mode should only be used in a sandboxed container/VM that has restricted internet access and can easily be restored if damaged.\n\n' +
+        'By proceeding, you accept all responsibility for actions taken while running in Bypass Permissions mode.\n\n' +
+        'https://code.claude.com/docs/en/security',
       [
         ['No, exit', '\r'],
         ['Yes, I accept', `${DOWN}\r`]
@@ -184,25 +188,32 @@ describe('TrustDialogStatusObserver', () => {
     ],
     [
       'claude-2-1-316-startup-external-imports',
-      'Allow external CLAUDE.md file imports?',
+      'Allow external CLAUDE.md file imports?\n\n' +
+        "This project's CLAUDE.md or .claude/rules imports files outside the current working directory. Never allow this for third-party repositories.\n\n" +
+        'External imports: /private/tmp/xxxxxxxxxx/xxxxxxxxxxxxxxxxxxxxxx\u2026xxxxxxxxxxxxxxxxxxx/xxxxxxxxxx/outside/notes.md\n\n' +
+        'Important: Only use Claude Code with files you trust. Accessing untrusted files may pose security risks https://code.claude.com/docs/en/security',
       [
         ['No, disable external imports', '\r'],
         ['Yes, allow external imports', `${DOWN}\r`]
       ]
     ]
-  ])('offers %s a card with its own choices', async (name, description, choices) => {
-    const { published, prompts, recording, write } = await pane(name)
-    await write(recording, 1)
-    await vi.advanceTimersByTimeAsync(2_000)
-    expect(published).toEqual(['waiting'])
-    const card = parseInteractivePrompt(prompts[0], undefined, 'claude')
-    expect(card?.kind === 'approval' && card.approval).toEqual({
-      holdsComposer: true,
-      title: 'Claude is waiting for a choice in the terminal',
-      description,
-      options: choices.map(([label, send]) => ({ label, send }))
-    })
-  })
+  ])(
+    'offers %s a card with its warning text and its own choices',
+    async (name, description, choices) => {
+      const { published, prompts, recording, write } = await pane(name)
+      await write(recording, 1)
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(published).toEqual(['waiting'])
+      const card = parseInteractivePrompt(prompts[0], undefined, 'claude')
+      expect(card?.kind === 'approval' && card.approval).toEqual({
+        holdsComposer: true,
+        neutralOptions: true,
+        title: 'Claude is waiting for a choice in the terminal',
+        description,
+        options: choices.map(([label, send]) => ({ label, send }))
+      })
+    }
+  )
 
   // Codex's startup menu keys are not verified, so its card only locks Send and points at the terminal.
   it.each(['codex-0158-update-available-dialog', 'codex-0158-hooks-review-dialog'])(
@@ -214,6 +225,7 @@ describe('TrustDialogStatusObserver', () => {
       const card = parseInteractivePrompt(prompts[0], undefined, 'codex')
       expect(card?.kind === 'approval' && card.approval).toEqual({
         holdsComposer: true,
+        neutralOptions: true,
         title: 'Codex is waiting for a choice in the terminal',
         options: []
       })
@@ -230,8 +242,8 @@ describe('TrustDialogStatusObserver', () => {
     expect(recording).toContain(importRow)
     await write(recording.replace(importRow, importRow + extraRows))
     const card = parseInteractivePrompt(prompts[0], undefined, 'claude')
-    expect(card?.kind === 'approval' && card.approval.description).toBe(
-      'Allow external CLAUDE.md file imports?'
+    expect(card?.kind === 'approval' && card.approval.description).toMatch(
+      /^Allow external CLAUDE\.md file imports\?\n\n[^]*\/outside\/d\.md/
     )
   })
 

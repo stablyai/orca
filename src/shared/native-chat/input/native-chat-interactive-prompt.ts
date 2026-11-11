@@ -24,6 +24,8 @@ export type ChatApproval = {
   options: { label: string; send: string }[]
   /** Can't collapse: a freed composer's Return would answer the agent's startup dialog. */
   holdsComposer?: true
+  /** No option is styled as the default: the agent's own consent choices are shown as equals. */
+  neutralOptions?: true
 }
 
 /** A journal approval prompt as its card reads it; each option sends its id. */
@@ -103,6 +105,7 @@ export function parseApprovalFromStatus(
     // Labels are the menu's own rows; with none the card only locks Send and opens the terminal.
     return {
       holdsComposer: true,
+      neutralOptions: true,
       title: say('startupMenuTitle', { value0: formatAgentTypeLabel(agent) }),
       ...(startupMenu.description ? { description: startupMenu.description } : {}),
       options: startupMenu.choices

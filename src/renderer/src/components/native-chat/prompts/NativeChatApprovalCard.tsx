@@ -31,7 +31,7 @@ export type NativeChatApprovalCardProps = {
   onOpenTerminal?: () => void
 }
 
-/** PTY options are literal replies; structured options are journal ids. Style the first option as primary. */
+/** PTY options are literal replies; structured options are journal ids. The first option is primary unless the options are neutral. */
 export function NativeChatApprovalCard({
   approval,
   onChoose,
@@ -170,7 +170,7 @@ export function NativeChatApprovalCard({
                   onClick={() => onChoose(opt.send)}
                   className={cn(
                     'rounded-md px-4 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
-                    i === 0
+                    i === 0 && !approval.neutralOptions
                       ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                       : 'border border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground'
                   )}

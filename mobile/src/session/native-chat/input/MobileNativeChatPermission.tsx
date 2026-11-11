@@ -70,7 +70,7 @@ function MobileNativeChatPermissionImpl({
       <MobileNativeChatPermissionContext permission={permission} newerSubject={newerSubject} />
       <View testID="native-chat-approval-actions" style={styles.options}>
         {permission.options.map((option, index) => {
-          const isPrimary = index === 0
+          const isPrimary = index === 0 && !permission.neutralOptions
           return (
             <Pressable
               key={`${option.send}:${option.label}`}
@@ -259,6 +259,8 @@ const styles = themedStyleSheet(() => ({
   },
   option: {
     minHeight: 44,
+    // A long menu label wraps inside its button instead of running off the card.
+    maxWidth: '100%',
     justifyContent: 'center',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,

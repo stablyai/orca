@@ -79,11 +79,13 @@ export function parseNativeChatFolderTrustEnvelope(
 
 export type NativeChatStartupMenuChoice = { label: string; send: string }
 
-const STARTUP_MENU_TEXT_MAX = 300
+const STARTUP_MENU_LABEL_MAX = 300
+// Room for a full screen of warning text, which the user reads before answering.
+const STARTUP_MENU_DESCRIPTION_MAX = 4000
 const STARTUP_MENU_CHOICES_MAX = 9
 
-function isStartupMenuText(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0 && value.length <= STARTUP_MENU_TEXT_MAX
+function isStartupMenuText(value: unknown, max: number): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= max
 }
 
 /** A startup menu read off the screen; no choices means only the terminal can answer it. */
@@ -91,7 +93,8 @@ export function buildNativeChatStartupMenuPrompt(menu: {
   description?: string
   choices: NativeChatStartupMenuChoice[]
 }): string {
-  return JSON.stringify({ startupMenu: menu })
+  const description = menu.description?.slice(0, STARTUP_MENU_DESCRIPTION_MAX)
+  return JSON.stringify({ startupMenu: { ...menu, ...(description ? { description } : {}) } })
 }
 
 export function parseNativeChatStartupMenuEnvelope(
@@ -106,11 +109,18 @@ export function parseNativeChatStartupMenuEnvelope(
     const label: unknown = choice?.label
     const send: unknown = choice?.send
     // Only arrow keys then Return; anything else is not a menu-choice keystroke.
-    if (!isStartupMenuText(label) || typeof send !== 'string' || !MENU_KEYS_RE.test(send)) {
+    if (
+      !isStartupMenuText(label, STARTUP_MENU_LABEL_MAX) ||
+      typeof send !== 'string' ||
+      !MENU_KEYS_RE.test(send)
+    ) {
       return null
     }
     choices.push({ label, send })
   }
   const description = 'description' in menu ? menu.description : undefined
-  return { ...(isStartupMenuText(description) ? { description } : {}), choices }
+  return {
+    ...(isStartupMenuText(description, STARTUP_MENU_DESCRIPTION_MAX) ? { description } : {}),
+    choices
+  }
 }
