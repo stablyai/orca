@@ -49,9 +49,12 @@ export function isWaitingError(error: unknown): boolean {
   return WAITING_CODES.has(errorCode(error) ?? '')
 }
 
+/** Transport and orcad errors carry a string `code`. */
+const CodedError = z.looseObject({ code: z.string() })
+
 export function errorCode(error: unknown): string | null {
-  const code: unknown = error && typeof error === 'object' ? Reflect.get(error, 'code') : undefined
-  return typeof code === 'string' ? code : null
+  const parsed = CodedError.safeParse(error)
+  return parsed.success ? parsed.data.code : null
 }
 
 const WorktreeRows = z.looseObject({
