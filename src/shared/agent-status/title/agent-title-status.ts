@@ -1,6 +1,6 @@
 import { getDeepSeekBuildTitleStatus } from './providers/dsb-terminal-title'
 import { qoderTitleStatus } from './providers/qoder-terminal-title'
-import { jcodeIdentityTitleStatus } from './providers/jcode-terminal-title'
+import { isJcodeIdentityTerminalTitle } from './providers/jcode-terminal-title'
 import { cursorTitleStatus } from './providers/cursor-terminal-title'
 import {
   AGY_AGENT_NAME_RE,
@@ -280,9 +280,9 @@ function computeAgentStatusFromTitle(title: string): AgentStatus | null {
   if (title.startsWith(`${CLAUDE_IDLE} `) || title === CLAUDE_IDLE) {
     return 'idle'
   }
-  const jcodeStatus = jcodeIdentityTitleStatus(title)
-  if (jcodeStatus) {
-    return jcodeStatus
+  // Activity comes from jcodePaneTitleStatus; the identity alone says Jcode is at rest.
+  if (isJcodeIdentityTerminalTitle(title)) {
+    return 'idle'
   }
   // Read π ! as blocked before generic idle or OMP user waits disappear.
   const piCompatibleSeparatorStatus = getPiCompatibleTitleSeparatorStatus(title)

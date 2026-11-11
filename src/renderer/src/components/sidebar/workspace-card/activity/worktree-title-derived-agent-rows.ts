@@ -183,7 +183,8 @@ function buildTitleDerivedAgentRow(args: {
     return null
   }
   // Why: the title sets activity only; a plain title on a process-identified pane is idle.
-  const status = titleStatus ?? jcodePaneTitleStatus(title, agentType) ?? 'idle'
+  // Jcode's own tail outranks agent names its conversation title happens to mention.
+  const status = jcodePaneTitleStatus(title, agentType) ?? titleStatus ?? 'idle'
   const rowLabel =
     agentType === titleAgentType &&
     label &&

@@ -11,8 +11,8 @@ export function stripJcodeTitleStatus(title: string): string {
   return title.replace(JCODE_TITLE_STATUS_RE, '').trim()
 }
 
-// jcode, jcode Puppy and jcode/marsh Puppy (server name) are identity; user work labels contain more.
-const JCODE_IDENTITY_TITLE_RE = /^jcode(?:\/[\w-]+)?(?:\s+[^\s·]+)?$/iu
+// jcode, jcode Puppy and jcode/marsh Puppy (server name) are identity; a bare jcode/<dir> is a shell path.
+const JCODE_IDENTITY_TITLE_RE = /^jcode(?:(?:\/[\w-]+)?\s+[^\s·]+)?$/iu
 
 /** True when a jcode title says only which jcode session this is, not what it is doing. */
 export function isJcodeIdentityTerminalTitle(title: string | null | undefined): boolean {
@@ -28,20 +28,15 @@ export function isJcodeIdentityTerminalTitle(title: string | null | undefined): 
 // title_with_metrics: `· work ~2m05s` (or `· working`) mid-turn, `· last ~2m05s` after it.
 const JCODE_ACTIVITY_TAIL_RE = /\s·\s(?:(work|last)\s~(?:\d+h\d{2}m|\d+m\d{2}s|\d+s)|working)$/u
 
-function jcodeTitleActivity(title: string): 'working' | 'idle' | null {
-  const tail = JCODE_ACTIVITY_TAIL_RE.exec(title)
-  return tail ? (tail[1] === 'last' ? 'idle' : 'working') : null
-}
-
-/** A jcode identity title carries its own activity; without a tail it is at rest. */
-export function jcodeIdentityTitleStatus(title: string): 'working' | 'idle' | null {
-  return isJcodeIdentityTerminalTitle(title) ? (jcodeTitleActivity(title) ?? 'idle') : null
-}
-
-/** Conversation and SSH titles carry only the tail, which is too generic to identify Jcode, so it counts only in a Jcode pane. */
+/** The tail is too generic to identify Jcode, and title-only readers must not see a turn that a
+ *  later conversation title drops, so it counts only in a pane already known to run Jcode. */
 export function jcodePaneTitleStatus(
   title: string,
   agent: string | null | undefined
 ): 'working' | 'idle' | null {
-  return agent === 'jcode' ? jcodeTitleActivity(title) : null
+  if (agent !== 'jcode') {
+    return null
+  }
+  const tail = JCODE_ACTIVITY_TAIL_RE.exec(title)
+  return tail ? (tail[1] === 'last' ? 'idle' : 'working') : null
 }
