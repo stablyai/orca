@@ -169,14 +169,14 @@ export function RepositoryIconTabs({
           )}
           className="h-9 text-sm"
         />
-        {lucideIconOptions.length === 0 ? (
-          <p className="text-xs text-muted-foreground">
-            {t(
-              'auto.components.settings.RepositoryIconPicker.noLucideIconMatches',
-              'No icons match your search.'
-            )}
-          </p>
-        ) : null}
+        <p role="status" className="text-xs text-muted-foreground empty:hidden">
+          {lucideIconOptions.length === 0
+            ? t(
+                'auto.components.settings.RepositoryIconPicker.noLucideIconMatches',
+                'No icons match your search.'
+              )
+            : null}
+        </p>
         <div className="scrollbar-sleek grid max-h-52 grid-cols-10 gap-1.5 overflow-y-auto pr-1">
           {lucideIconOptions.map((option) => (
             <Tooltip key={option.name}>
