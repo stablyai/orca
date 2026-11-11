@@ -19,7 +19,8 @@ done
 # Read-only git and fetches never wait (they use the workspace's own credentials, set before ready).
 hold_for_member_setup() {
   local state="${HOME:-/nonexistent}/.orca-sandbox" ticks=0 since
-  [ -f "$state/git-setup.pending" ] || return 0
+  # A failed install on any boot (create or a later restart) refuses even with nothing pending.
+  [ -f "$state/git-setup.pending" ] || [ -f "$state/git-setup.failed" ] || return 0
   since="$(cat "$state/git-setup.pending" 2>/dev/null || echo 0)"
   case "$since" in '' | *[!0-9]*) since=0 ;; esac
   while [ -f "$state/git-setup.pending" ] && [ ! -f "$state/git-setup.ready" ] && [ ! -f "$state/git-setup.failed" ]; do

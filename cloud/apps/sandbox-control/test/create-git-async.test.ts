@@ -118,7 +118,14 @@ describe('create answers before member git setup', () => {
     // Desktops that do not send the feature parse the view strictly and never see the field.
     const strict = await t.h.call('GET', `/v1/sandboxes/${id}`, { bearer: await t.as('alice') })
     expect(strict.body.sandbox.gitSetup).toBeUndefined()
-    // Restart installs identities before it answers (unchanged); a success clears the failure.
+    // A restart whose install fails again keeps the failure (VM mark and flag): never a silent broken state.
+    const marksBefore = t.marks().length
+    const again = await t.h.call('POST', `/v1/sandboxes/${id}/restart`, { bearer: await t.as('alice') })
+    expect(again.status).toBe(200)
+    expect(t.marks().slice(marksBefore)).toEqual(['failed'])
+    const still = await t.h.call('GET', `/v1/sandboxes/${id}`, { bearer: await t.as('alice'), headers: GIT_SETUP_AWARE })
+    expect(still.body.sandbox.gitSetup).toBe('failed')
+    // Restart is the retry: it installs identities before it answers, and a success clears the failure.
     t.failMembers(0)
     const restarted = await t.h.call('POST', `/v1/sandboxes/${id}/restart`, { bearer: await t.as('alice') })
     expect(restarted.status).toBe(200)

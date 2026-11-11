@@ -80,6 +80,14 @@ describe('the git shim while member setup is pending', () => {
     expect(reachedRealGit(run.stderr)).toBe(false)
   })
 
+  it('refuses after a failed install on a later boot (restart), with nothing pending', () => {
+    writeFileSync(join(state, 'git-setup.failed'), `${now()}\n`)
+    const run = git(['push'])
+    expect(run.status).toBe(1)
+    expect(run.stderr).toContain("Orca couldn't set up your GitHub identity")
+    expect(run.ms).toBeLessThan(2_000)
+  })
+
   it('gives up after its wait instead of blocking forever, and says so', () => {
     writeFileSync(join(state, 'git-setup.pending'), `${now()}\n`)
     const run = git(['push'], 5)

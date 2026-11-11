@@ -429,8 +429,6 @@ async function boot(
     archived_at: null,
     archive_expires_at: null,
     retention_warned_at: null,
-    // A boot that installs identities before it answers starts the VM's setup clean (CREATE-GIT-ASYNC).
-    ...(gitSetupPending ? {} : { git_setup_failed_at: null }),
     github_token_expires_at: git?.expiresAt ?? null,
     egress_secret_hosts: routed.egress_secret_hosts,
     egress_allow_hosts: routed.egress_allow_hosts,
@@ -439,8 +437,15 @@ async function boot(
   })
   // Per-member git identities for `orca-git-as` (policy routes were refreshed above). A create that
   // defers them (CREATE-GIT-ASYNC) installs them after it answers, once the owner device is recorded.
-  if (!gitSetupPending && deps.memberIdentity && (await connectedMembers(deps.db, running)).length > 0) {
-    await syncMemberGit(deps, running, state.session.id)
+  if (!gitSetupPending && memberGitApplies(deps, running)) {
+    if ((await connectedMembers(deps.db, running)).length > 0) {
+      // Recorded like a create's: a failure marks the VM (its git refuses commits and pushes) and the row
+      // (gitSetup 'failed'); only a later successful install clears them. Restart re-runs this.
+      await settleMemberGit(deps, running, state.session.id, true)
+    } else if (running.git_setup_failed_at) {
+      // Nobody's identity to install on this boot: nothing is failing any more.
+      await deps.db.prepare('UPDATE sandboxes SET git_setup_failed_at = NULL WHERE id = ?').bind(running.id).run()
+    }
   }
   await deps.hooks?.afterBoot?.(running, state.session.id).catch(() => undefined)
   // Secrets saved while this VM booted missed prep's env; re-check once it is running (env-refresh.ts).
@@ -562,7 +567,7 @@ async function installMemberGit(deps: LifecycleDeps, row: SandboxRow, sessionId:
 
 /** Marks this boot's member setup in the VM (its `git` reads it); best effort, a lost mark times out there. */
 export const GIT_SETUP_MARK_SCRIPT =
-  'state="$HOME/.orca-sandbox"; mkdir -p "$state" && rm -f "$state/git-setup.pending" && date +%s >"$state/git-setup.$1"'
+  'state="$HOME/.orca-sandbox"; mkdir -p "$state" && rm -f "$state"/git-setup.pending "$state"/git-setup.ready "$state"/git-setup.failed && date +%s >"$state/git-setup.$1"'
 
 async function markGitSetup(deps: LifecycleDeps, sessionId: string, outcome: 'ready' | 'failed'): Promise<void> {
   await deps.provider
@@ -571,11 +576,12 @@ async function markGitSetup(deps: LifecycleDeps, sessionId: string, outcome: 're
 }
 
 /**
- * CREATE-GIT-ASYNC: after a create answered, install member identities (`install` false: no new
- * device, nothing to install) and settle the VM's pending setup either way. A failure stays on the
- * row (gitSetup 'failed') until a later sync succeeds.
+ * Installs member identities and records the outcome (CREATE-GIT-ASYNC): after a create answered, and on
+ * every later boot that installs them. `install` false (the VM is not running) only marks it. A failure
+ * marks the VM (`git-setup.failed`, its git refuses commits and pushes) and the row (gitSetup 'failed')
+ * until a later install succeeds.
  */
-export async function finishMemberGitAfterCreate(
+export async function settleMemberGit(
   deps: LifecycleDeps,
   row: SandboxRow,
   sessionId: string,
