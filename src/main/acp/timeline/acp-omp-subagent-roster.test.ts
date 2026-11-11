@@ -157,18 +157,21 @@ describe('OMP _omp/subagents roster', () => {
     ])
   })
 
-  it('ignores a malformed envelope and drops only malformed children', () => {
+  it('keeps a known child live when its roster status is unrecognized', () => {
+    const translator = newTranslator()
+    send(translator, roster(1, [{ id: 'known', status: 'running' }]))
+    translator.subagents.drainEvidence()
+    send(translator, roster(2, [{ id: 'known', status: 'future-status' }]))
+    expect(translator.subagents.drainEvidence()).toEqual([])
+    expect(translator.subagents.has('known')).toBe(true)
+  })
+
+  it('drops malformed entries without losing valid children', () => {
     const translator = newTranslator()
     expect(send(translator, { sessionId: SESSION, seq: 'x', children: [] })).toEqual([])
     send(
       translator,
-      roster(1, [
-        null,
-        { id: '', status: 'running' },
-        { id: 'ok', status: 'running' },
-        { id: 'bad', status: 'constructor' },
-        { id: 'proto', status: '__proto__' }
-      ])
+      roster(1, [null, { id: '', status: 'running' }, { id: 'ok', status: 'running' }])
     )
     const evidence = translator.subagents.drainEvidence()
     expect(evidence).toHaveLength(1)

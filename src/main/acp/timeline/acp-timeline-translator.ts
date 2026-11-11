@@ -228,6 +228,7 @@ export class AcpTimelineTranslator {
         ...this.subagents.translateRoster(
           extension.subagentRoster.seq,
           extension.subagentRoster.children,
+          extension.subagentRoster.retainedIds,
           join,
           at
         )

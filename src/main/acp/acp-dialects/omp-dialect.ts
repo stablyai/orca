@@ -70,7 +70,7 @@ function taskToolSubagents(
   })
 }
 
-// Negotiated: Orca advertises `clientCapabilities._meta["omp/subagents"]=true`; omp emits `_omp/subagents` only when both sides agree. Each notification is a full child snapshot (not a delta) with a per-session monotonic `seq`; a stale or duplicate seq is ignored, and a child omitted from a newer snapshot settles once as stopped. A snapshot supersedes task-tool progress for the session. Source-only: not deployed.
+// Negotiated: Orca advertises `clientCapabilities._meta["omp/subagents"]=true`; omp emits `_omp/subagents` only when both sides agree. Each notification is a full child snapshot (not a delta) with a per-session monotonic `seq`; a stale or duplicate seq is ignored, and a child omitted from a newer snapshot settles once as stopped. A snapshot supersedes task-tool progress for the session.
 const ROSTER_METHOD = '_omp/subagents'
 const rosterSchema = z.looseObject({
   sessionId: z.string(),
@@ -99,16 +99,24 @@ function rosterNotification(method: string, params: unknown): AcpDialectNotifica
   if (!roster.success) {
     return { disposition: 'ignore' }
   }
-  const children = roster.data.children.flatMap((entry): AcpSubagentUpdate[] => {
+  const children: AcpSubagentUpdate[] = []
+  const retainedIds: string[] = []
+  for (const entry of roster.data.children) {
     const child = rosterChildSchema.safeParse(entry)
-    const state =
-      child.success && Object.hasOwn(ROSTER_STATES, child.data.status)
-        ? ROSTER_STATES[child.data.status]
-        : undefined
-    const label = child.success ? child.data.description?.trim() : undefined
-    return child.success && state ? [{ id: child.data.id, state, ...(label ? { label } : {}) }] : []
-  })
-  return { disposition: 'map', subagentRoster: { seq: roster.data.seq, children } }
+    if (!child.success) {
+      continue
+    }
+    const state = Object.hasOwn(ROSTER_STATES, child.data.status)
+      ? ROSTER_STATES[child.data.status]
+      : undefined
+    if (state === undefined) {
+      retainedIds.push(child.data.id)
+      continue
+    }
+    const label = child.data.description?.trim()
+    children.push({ id: child.data.id, state, ...(label ? { label } : {}) })
+  }
+  return { disposition: 'map', subagentRoster: { seq: roster.data.seq, children, retainedIds } }
 }
 
 function contentText(block: ToolCallContent | undefined): string | undefined {
