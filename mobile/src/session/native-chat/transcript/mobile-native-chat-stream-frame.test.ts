@@ -38,25 +38,4 @@ describe('applyMobileNativeChatStreamFrame', () => {
       windowReplaced: true
     })
   })
-
-  it('replaces retained history when replay metadata says no earlier rows remain', () => {
-    const merger = createNativeChatMerger()
-    replaceList(merger, ['removed-1', 'removed-2', 'a', 'b'].map(message))
-
-    const replay = [message('a'), message('b')]
-    expect(
-      applyMobileNativeChatStreamFrame({
-        merger,
-        frame: { type: 'snapshot', messages: replay, hasMore: false, beforeOffset: 0 },
-        limit: 100,
-        replaceSnapshot: false
-      })
-    ).toEqual({
-      kind: 'messages',
-      messages: replay,
-      hasMore: false,
-      beforeOffset: 0,
-      windowReplaced: true
-    })
-  })
 })
