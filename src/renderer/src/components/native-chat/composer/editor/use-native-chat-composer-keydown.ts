@@ -30,7 +30,7 @@ export type UseNativeChatComposerKeyDownArgs = {
   completePickerItem: (item: NativeChatPickerItem) => void
   dispatchPickerCommand: (item: Extract<NativeChatPickerItem, { kind: 'command' }>) => void
   dismissPicker: (triggerKey: string) => void
-  interrupt: () => void
+  interrupt: (repeated?: boolean) => void
   send: (intent?: NativeChatComposerSendIntent) => void
   /** Cmd/Ctrl+Shift+Enter steers the head queued card, whatever the composer holds. */
   steerHead?: (() => boolean) | undefined
@@ -123,7 +123,7 @@ export function useNativeChatComposerKeyDown({
 
       if (event.key === 'Escape') {
         event.preventDefault()
-        interrupt()
+        interrupt(event.repeat)
         return
       }
       const modified = event.key === 'Enter' && (isMacPlatform() ? event.metaKey : event.ctrlKey)
