@@ -16,6 +16,7 @@ import {
 } from './helpers/markdown-editor-fixture'
 
 test.beforeEach(async ({ orcaPage }) => {
+  await orcaPage.setViewportSize({ width: 1440, height: 900 })
   await ensureTerminalVisible(orcaPage)
   await waitForActiveTerminalManager(orcaPage)
   await waitForPaneCount(orcaPage, 1)
@@ -80,6 +81,34 @@ test('closing sidebar after dismissing its overflow menu restores pane input', a
   await expect(moreTabs).toBeFocused()
   await toggle.click()
   await expect(input).toBeFocused()
+})
+
+test('closing sidebar after dismissing Explorer actions restores terminal input', async ({
+  orcaPage,
+  electronApp
+}, testInfo) => {
+  const input = orcaPage.getByRole('textbox', { name: 'Terminal input', exact: true })
+  const toggle = orcaPage.getByRole('button', { name: 'Toggle right sidebar', exact: true })
+  const tabId = await resolveActiveTabId(orcaPage)
+  if (!tabId) {
+    throw new Error('No active terminal tab')
+  }
+  await input.click()
+  await toggle.click()
+  await orcaPage.getByRole('button', { name: 'More Explorer Actions', exact: true }).click()
+  await orcaPage.keyboard.press('ArrowDown')
+  await orcaPage.keyboard.press('Escape')
+  await expect(orcaPage.getByRole('menu')).toHaveCount(0)
+  await toggle.click()
+  await orcaPage.keyboard.type('explorer-menu-focus-restored')
+  await expectTerminalAccessibilityText(orcaPage, tabId, 'explorer-menu-focus-restored')
+  await expect(input).toBeFocused()
+  await orcaPage.screenshot({ path: testInfo.outputPath('explorer-menu-focus.png') })
+  expect(
+    await electronApp.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows().every((window) => !window.isVisible() && !window.isFocused())
+    )
+  ).toBe(true)
 })
 
 test('closing sidebar search returns to the most recently used pane, not the opener', async ({
