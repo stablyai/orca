@@ -61,6 +61,14 @@ export async function runVmEnvironmentCheck(
 ): Promise<EnvironmentDoctorResult> {
   const signal = creationId ? beginVmEnvironmentCheckRun(creationId) : undefined
   try {
+    // Dev builds only: lets a real create exercise the unreachable-sandbox stop (and its sleep).
+    if (
+      import.meta.env.DEV &&
+      typeof localStorage !== 'undefined' &&
+      localStorage.getItem('orca:dev:envCheckFault') === 'unreachable'
+    ) {
+      throw new Error('Simulated unreachable sandbox (orca:dev:envCheckFault).')
+    }
     return await callRuntimeRpc<EnvironmentDoctorResult>(
       { kind: 'environment', environmentId },
       ENVIRONMENT_DOCTOR_METHOD,
