@@ -140,7 +140,13 @@ export function SortableTabContextMenu({
     if (!open) {
       return null
     }
-    const hostId = resolveWorktreeOperationRoute(state, tab.worktreeId)?.executionHostId
+    const hostId =
+      state.unifiedTabsByWorktree[tab.worktreeId]?.find((item) => item.id === unifiedTabId)
+        ?.executionHostId ??
+      resolveWorktreeOperationRoute(
+        { ...state, activeWorktreeId: null, activeWorkspaceExecutionHostId: null },
+        tab.worktreeId
+      )?.executionHostId
     return hostId && state.getKnownWorktreeById(tab.worktreeId, hostId) ? hostId : null
   })
   const keybindings = useAppStore((state) => state.keybindings)
