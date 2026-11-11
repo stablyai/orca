@@ -9,12 +9,12 @@ import { parseHostAccessLink } from '../../../../../../shared/remote-runtime/pai
 import {
   translateHostAccessLinkError,
   translateRemotePairingFailureDescription
-} from '@/lib/remote-pairing-copy'
+} from '@/lib/remote-pairing/remote-pairing-copy'
 import { AddRemoteHostSshConfigPicker } from './AddRemoteHostSshConfigPicker'
 import { AddRemoteHostSshFormPanel } from './AddRemoteHostSshFormPanel'
 import { AddRemoteHostServerFormPanel } from './AddRemoteHostServerFormPanel'
 import { AddWslHostDialogBody } from '../wsl/AddWslHostDialogBody'
-import { remoteServerPairingFailureMessage } from '@/lib/remote-server-pairing-error-copy'
+import { remoteServerPairingFailureMessage } from '@/lib/remote-pairing/remote-server-pairing-error-copy'
 import {
   addAllSshConfigHostsToOrca,
   loadSshConfigHostsForPicker,

@@ -1,5 +1,5 @@
 import type React from 'react'
-import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
 import type { PrimaryAction } from '../review/source-control-primary-action-types'
 
 export function handleSourceControlCommitShortcut(

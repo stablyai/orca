@@ -1,4 +1,4 @@
-import { hasWorkspaceFileDragType } from '@/lib/workspace-file-drag'
+import { hasWorkspaceFileDragType } from '@/lib/files/drop/workspace-file-drag'
 import { hasNativeFileDragTypes } from '../../../../../../shared/file-import/native-file-drop'
 import {
   type DroppedPathConsumer,

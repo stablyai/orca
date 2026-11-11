@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { View } from 'react-native'
 import { Platform } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { loadHostCatalog, loadHosts } from '../transport/hosts/host-store'
+import { loadHostCatalog, loadHosts } from '../host-catalog/host-store'
 import {
   startDiagnosticFetchTimeout,
   type DiagnosticFetchTimeout

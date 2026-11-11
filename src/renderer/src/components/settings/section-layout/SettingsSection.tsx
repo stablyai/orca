@@ -1,6 +1,6 @@
 import type React from 'react'
 import { createContext, useContext } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useAppStore } from '../../../store/index'
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { matchesSettingsSearch } from '../search/settings-search'

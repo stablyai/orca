@@ -24,7 +24,7 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
     await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('../../../host-chat-program-acquisition', () => ({
+vi.mock('../inventory/host-chat-program-acquisition', () => ({
   acquireAgentLaunchChoices: async () => ({ detected: ['codex'], offered: ['codex'] })
 }))
 

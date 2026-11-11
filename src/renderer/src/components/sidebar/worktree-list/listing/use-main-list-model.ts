@@ -1,19 +1,22 @@
 import { useCallback, useMemo, useState, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store'
-import { useDesktopSidebarFeed } from '@/lib/desktop-sidebar-feed'
+import { useAppStore } from '@/store/index'
+import { useDesktopSidebarFeed } from '@/components/sidebar/sidebar-feed/desktop-sidebar-feed'
 import {
   overlaySidebarPendingLayer,
   readSidebarPendingLayer,
   subscribeSidebarPendingLayer
-} from '@/lib/sidebar-pending-layer'
-import { useSidebarListSession } from '@/lib/sidebar-list-session'
-import { readEndedCreations, subscribeEndedCreations } from '@/lib/sidebar-ended-creations'
+} from '@/components/sidebar/sidebar-feed/sidebar-pending-layer'
+import { useSidebarListSession } from '@/components/sidebar/sidebar-feed/sidebar-list-session'
+import {
+  readEndedCreations,
+  subscribeEndedCreations
+} from '@/components/sidebar/sidebar-feed/sidebar-ended-creations'
 import {
   readHiddenVmCheckouts,
   subscribeHiddenVmCheckouts,
   withoutHiddenVmCheckouts
-} from '@/lib/vm-create-hidden-checkouts'
+} from '@/runtime/ephemeral-vm/vm-create-hidden-checkouts'
 import '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../../../shared/folder-workspaces/folder-workspace-host-id'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'

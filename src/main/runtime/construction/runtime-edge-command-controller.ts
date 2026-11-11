@@ -47,6 +47,7 @@ const BROWSER_COMMAND_NAMES = [
   'browserProceedCertificate',
   'browserTabShow',
   'browserTabCurrent',
+  'browserTabAnnotations',
   'browserTabSwitch',
   'browserHover',
   'browserDrag',

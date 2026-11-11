@@ -2,9 +2,9 @@ import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/m
 import { useMemo, useState, useSyncExternalStore } from 'react'
 import { shallow } from 'zustand/shallow'
 import type { AppState } from '@/store/types'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
-import { createLiveAgentWorktreeIdsSelector } from '@/lib/worktree-activity-state'
+import { createLiveAgentWorktreeIdsSelector } from '@/lib/workspace/activity/worktree-activity-state'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -28,7 +28,7 @@ import {
   readHiddenVmCheckouts,
   subscribeHiddenVmCheckouts,
   withoutHiddenVmWorktrees
-} from '@/lib/vm-create-hidden-checkouts'
+} from '@/runtime/ephemeral-vm/vm-create-hidden-checkouts'
 
 const EMPTY_WORKTREE_ID_SET: ReadonlySet<string> = new Set()
 

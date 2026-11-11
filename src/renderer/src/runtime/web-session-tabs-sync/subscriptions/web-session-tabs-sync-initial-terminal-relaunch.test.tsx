@@ -61,7 +61,7 @@ import { useWebSessionTabsSync } from '../use-web-session-tabs-sync'
 import { clearRuntimeEnvironmentConnectionGenerations as clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { resetWebRuntimeInitialTerminalBootstrapForTests } from '../initial-terminal/web-runtime-initial-terminal-bootstrap'
 import { resetWebRuntimeWakeTerminalRespawnForTests } from '../../hosted-terminals/restoration/web-runtime-wake-terminal-respawn'
-import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
+import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/runtime/hosted-terminals/restoration/web-runtime-worktree-terminal-after-wake'
 import {
   connectedRuntimeStatus,
   publicRuntimeEnvironment

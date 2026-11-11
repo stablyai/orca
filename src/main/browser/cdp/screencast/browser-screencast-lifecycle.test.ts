@@ -35,6 +35,7 @@ describe('browser screencast lifecycle', () => {
       maxHeight: 2160,
       everyNthFrame: 2,
       minFrameIntervalMs: 0,
+      holdPaint: () => () => {},
       onFrame
     })
 
@@ -80,6 +81,7 @@ describe('browser screencast lifecycle', () => {
         maxHeight: 1200,
         everyNthFrame: 2,
         minFrameIntervalMs: 0,
+        holdPaint: () => () => {},
         onFrame: vi.fn()
       },
       isClosed: () => false,
