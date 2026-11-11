@@ -155,6 +155,10 @@ export function NativeChatInteractiveCard({
         if (!activeRef.current || attempt !== attemptRef.current) {
           return
         }
+        // The dialog stays up until its status settles; keep the lock so no message types into it.
+        if (delivered && card.approval.holdsComposer) {
+          return
+        }
         settle()
         if (delivered) {
           onDismiss()

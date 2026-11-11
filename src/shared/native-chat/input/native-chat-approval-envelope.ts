@@ -10,12 +10,12 @@ export type NativeChatApprovalEnvelope = {
 }
 
 const ESCAPE = String.fromCharCode(27)
+const TRUST_KEYS_RE = new RegExp(`^(?:${ESCAPE}\\[[AB])*\r$`)
 
-/** Read the approval envelope published in agentStatus.interactivePrompt on PermissionRequest. */
-export function parseNativeChatApprovalEnvelope(
+function readEnvelopeField(
   interactivePrompt: string | undefined | null,
-  agent?: string
-): NativeChatApprovalEnvelope | null {
+  key: string
+): object | null {
   if (!interactivePrompt) {
     return null
   }
@@ -25,11 +25,20 @@ export function parseNativeChatApprovalEnvelope(
   } catch {
     return null
   }
-  if (typeof parsed !== 'object' || parsed === null || !('approval' in parsed)) {
+  if (typeof parsed !== 'object' || parsed === null) {
     return null
   }
-  const approval = parsed.approval
-  if (typeof approval !== 'object' || approval === null || !('tool' in approval)) {
+  const field: unknown = Object.entries(parsed).find(([name]) => name === key)?.[1]
+  return typeof field === 'object' && field !== null ? field : null
+}
+
+/** Read the approval envelope published in agentStatus.interactivePrompt on PermissionRequest. */
+export function parseNativeChatApprovalEnvelope(
+  interactivePrompt: string | undefined | null,
+  agent?: string
+): NativeChatApprovalEnvelope | null {
+  const approval = readEnvelopeField(interactivePrompt, 'approval')
+  if (!approval || !('tool' in approval)) {
     return null
   }
   const tool = approval.tool
@@ -43,4 +52,28 @@ export function parseNativeChatApprovalEnvelope(
     allowSend: nativeChatApprovalAcceptKey(agent),
     denySend: ESCAPE
   }
+}
+
+/** A folder-trust dialog read off the screen; `trustSend` moves to the trust choice and confirms. */
+/** A null `trustSend` means the trust choice could not be aimed; the card then offers only Exit. */
+export function buildNativeChatFolderTrustPrompt(trustSend: string | null): string {
+  return JSON.stringify({ folderTrust: trustSend ? { trustSend } : {} })
+}
+
+export function parseNativeChatFolderTrustEnvelope(
+  interactivePrompt: string | undefined | null
+): { trustSend: string | null; exitSend: string } | null {
+  const trust = readEnvelopeField(interactivePrompt, 'folderTrust')
+  if (!trust) {
+    return null
+  }
+  if (!('trustSend' in trust)) {
+    return { trustSend: null, exitSend: ESCAPE }
+  }
+  const trustSend = trust.trustSend
+  // Only arrow keys then Return; anything else is not a trust-choice keystroke.
+  if (typeof trustSend !== 'string' || !TRUST_KEYS_RE.test(trustSend)) {
+    return null
+  }
+  return { trustSend, exitSend: ESCAPE }
 }

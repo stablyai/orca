@@ -31,7 +31,8 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
 
   protected readonly trustDialogStatus = new TrustDialogStatusObserver({
     getPaneAgent: (ptyId) => this.getPaneAgentForTuiIdle(ptyId),
-    refreshForegroundAgent: (ptyId) => this.ptyForegroundAgent.refresh(ptyId),
+    // Native Claude's version-named process needs a scan; its identity is not stored (#33826).
+    identifyUnownedAgent: (ptyId) => this.ptyForegroundAgent.identifyUnowned(ptyId, () => true),
     readLaunchedAgentForeground: (ptyId, agent) => this.readLaunchedAgentForeground(ptyId, agent),
     getEmulator: (ptyId) =>
       this.ptysById.has(ptyId) ? this.headlessTerminals.get(ptyId)?.emulator : undefined,

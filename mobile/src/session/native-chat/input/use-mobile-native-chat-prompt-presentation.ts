@@ -41,12 +41,13 @@ export function useMobileNativeChatPromptPresentation({
   const respond = useCallback(
     async (send: string): Promise<boolean> => {
       const accepted = await respondPermission(send)
-      if (accepted) {
+      // A folder-trust dialog stays up until the host settles it; the card keeps the composer locked meanwhile.
+      if (accepted && !permission?.holdsComposer) {
         dismissPrompt()
       }
       return accepted
     },
-    [respondPermission, dismissPrompt]
+    [respondPermission, dismissPrompt, permission?.holdsComposer]
   )
   return {
     occurrenceKey: promptKey === null ? null : JSON.stringify([scopeKey, sessionKey, promptKey]),
