@@ -490,24 +490,21 @@ it('preserves unresolved browser ownership after restoring hostless content besi
     useAppStore.getState().unifiedTabsByWorktree[listed.id].find((tab) => tab.id === saved.id)
       ?.executionHostId
   ).toBeUndefined()
-  let explicitB: Tab | undefined
   act(() => {
-    explicitB = useAppStore.getState().createUnifiedTab(listed.id, 'agent-session', {
+    const explicitB = useAppStore.getState().createUnifiedTab(listed.id, 'agent-session', {
       id: 'b-chat',
       entityId: 'b-chat',
       label: 'B conversation',
       executionHostId: 'ssh:b',
       targetGroupId: 'twin-group'
     })
+    expect(explicitB.executionHostId).toBe('ssh:b')
   })
-  expect(explicitB?.executionHostId).toBe('ssh:b')
   const bResult = searchTabs('B conversation')[0]
   expect(bResult?.executionHostId).toBe('ssh:b')
-  let activation: ReturnType<typeof activateWorkspaceTabPaletteResult> | undefined
   act(() => {
-    activation = activateWorkspaceTabPaletteResult(bResult)
+    expect(activateWorkspaceTabPaletteResult(bResult)).toEqual({ status: 'activated' })
   })
-  expect(activation?.status).toBe('activated')
   expect(useAppStore.getState().activeWorkspaceExecutionHostId).toBe('ssh:b')
   await act(async () => {
     await useAppStore.getState().openNewBrowserTabInActiveWorkspace('twin-group')
