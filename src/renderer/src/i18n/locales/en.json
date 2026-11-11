@@ -1035,6 +1035,9 @@
         "updateFailed": "Could not update the setting on {{host}}."
       },
       "installCliForTerminal": "Install the {{value0}} CLI to open it in a terminal.",
+      "postPasteSubmit": "After pasting an action recipe",
+      "submitEnter": "Press Enter",
+      "submitCtrlEnter": "Press Ctrl+Enter",
       "chatRuntime": "Chat runtime",
       "chatChoiceTitle": "Open as chat or CLI",
       "chatChoiceDescription": "Choose whether each agent opens as a chat or in its CLI.",

@@ -23,6 +23,8 @@ import {
   AgentDefaultArgsInput,
   AgentDefaultEnvInput
 } from '../../../agent/launch-settings/AgentLaunchDefaultsEditor'
+import { AgentPostPasteSubmitInputControl } from './AgentPostPasteSubmitInputControl'
+import type { AgentPostPasteSubmitInput } from '../../../../../../shared/tui-agent-post-paste-submit'
 import { agentPermissionChoiceLabel } from '../../../agent/launch-settings/agent-permission-choice-label'
 import { AgentPermissionMenu } from '../../../agent/launch-settings/AgentPermissionMenu'
 import type { AgentPermissionChoiceRow } from '../../../agent/launch-settings/agent-permission-choice-row'
@@ -87,6 +89,8 @@ export type AgentCatalogRowProps = {
   onSaveOverride: (value: string) => void | Promise<void>
   onSaveArgs: (value: string) => void | Promise<void>
   onSaveEnv: (value: Record<string, string>) => void | Promise<void>
+  postPasteSubmitInput?: AgentPostPasteSubmitInput
+  onSavePostPasteSubmitInput?: (value: AgentPostPasteSubmitInput) => void | Promise<void>
   sessionSourceHome?: AgentSessionSourceHomeControl
   environmentNames?: readonly string[]
   /** Absent for agents without a configurable permission mode on this host. */
@@ -121,6 +125,8 @@ export function AgentCatalogRow({
   onSaveOverride,
   onSaveArgs,
   onSaveEnv,
+  postPasteSubmitInput,
+  onSavePostPasteSubmitInput,
   sessionSourceHome,
   environmentNames,
   environmentEditor,
@@ -353,6 +359,14 @@ export function AgentCatalogRow({
                     defaultEnv={defaultEnv}
                     envOverride={envOverride}
                     onSaveEnv={onSaveEnv}
+                  />
+                </div>
+              )}
+              {postPasteSubmitInput && onSavePostPasteSubmitInput && (
+                <div className="mt-2">
+                  <AgentPostPasteSubmitInputControl
+                    value={postPasteSubmitInput}
+                    onSave={onSavePostPasteSubmitInput}
                   />
                 </div>
               )}

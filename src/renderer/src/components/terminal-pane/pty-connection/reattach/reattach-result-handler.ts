@@ -210,7 +210,10 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       })
       return false
     }
-    session.setPanePtyFitBinding(ptyId)
+    session.setPanePtyFitBinding(
+      ptyId,
+      connectResult?.isReattach === true && connectResult.replay !== undefined
+    )
     // Commit session identity before replay can admit queued spawn callbacks.
     session.activePanePtyBinding = ptyId
     session.activePanePtyBindingBoundAt = performance.now()
