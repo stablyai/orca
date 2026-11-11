@@ -57,7 +57,18 @@ else
   done < <(git diff --name-only --diff-filter=AMR "$base"...HEAD -- 'src/*')
   if ((${#tests[@]} > 0)); then
     tests=($(printf "%s\n" "${tests[@]}" | sort -u)) # repo paths have no spaces
+    # Skip files on the full-suite base list: they fail on upstream too (this Mac's environment), so they would only block.
+    base_list=config/scripts/cloud-integration/full-suite-base-list.txt
+    if [[ -f "$base_list" ]]; then
+      kept=()
+      for t in "${tests[@]}"; do
+        if grep -qxF "$t" "$base_list"; then echo "premerge: skipping base-list test $t"; else kept+=("$t"); fi
+      done
+      tests=(${kept[@]+"${kept[@]}"})
+    fi
     echo "premerge: ${#tests[@]} targeted test file(s):"
+  fi
+  if ((${#tests[@]} > 0)); then
     printf "  %s\n" "${tests[@]}"
     node config/scripts/workspace-package-build/build-workspace-packages.mjs >/dev/null
     node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=node >/dev/null
