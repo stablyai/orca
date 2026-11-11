@@ -39,20 +39,25 @@ export default function AppIconSettingsScreen({
     supportsAlternateIcons ? appIconIdOfNativeName(getAppIconName()) : 'classic'
   )
   const [error, setError] = useState<string | null>(null)
+  // One change at a time, so a failure always falls back to an icon the system confirmed.
+  const [changing, setChanging] = useState(false)
 
   const select = (id: BuiltInAppIconId): void => {
-    if (id === selected) {
+    if (id === selected || changing) {
       return
     }
     setError(null)
+    setChanging(true)
     const previous = selected
     setSelected(id)
-    setAlternateAppIcon(NATIVE_ICON_NAMES[id]).catch(() => {
-      setSelected(previous)
-      setError(
-        t('settings.appIconScreen.changeFailed', 'Could not change the app icon. Try again.')
-      )
-    })
+    setAlternateAppIcon(NATIVE_ICON_NAMES[id])
+      .catch(() => {
+        setSelected(previous)
+        setError(
+          t('settings.appIconScreen.changeFailed', 'Could not change the app icon. Try again.')
+        )
+      })
+      .finally(() => setChanging(false))
   }
 
   return (
@@ -89,7 +94,8 @@ export default function AppIconSettingsScreen({
               <Pressable
                 key={option.id}
                 accessibilityRole="radio"
-                accessibilityState={{ checked: option.id === selected }}
+                accessibilityState={{ checked: option.id === selected, disabled: changing }}
+                disabled={changing}
                 accessibilityLabel={option.label}
                 style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
                 onPress={() => select(option.id)}

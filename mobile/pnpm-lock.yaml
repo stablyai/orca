@@ -228,8 +228,8 @@ importers:
         specifier: ^55.0.31
         version: 55.0.31(0def556739f9e1a9e497ee4bc3b81b41)
       expo-alternate-app-icons:
-        specifier: 8.0.0
-        version: 8.0.0(expo@55.0.31)(react-native@0.83.10(patch_hash=9430d1c3d0071e5b8e2c9d98f9ba5594ad3bb27f4f6e8f3884ab1f03658fb6f0)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.2(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)
+        specifier: 11.0.0
+        version: 11.0.0(expo@55.0.31)(react-native@0.83.10(patch_hash=9430d1c3d0071e5b8e2c9d98f9ba5594ad3bb27f4f6e8f3884ab1f03658fb6f0)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.2(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)
       expo-build-properties:
         specifier: ^55.0.18
         version: 55.0.18(expo@55.0.31)
@@ -4433,8 +4433,8 @@ packages:
     resolution: {integrity: sha512-2Zks0hf1VLFYI1kbh0I5jP3KHHyCHpkfyHBzsSXRFgl/Bg9mWYfMW8oD+PdMPlEwy5HNsR9JutYy6pMeOh61nw==}
     engines: {node: ^14.15.0 || ^16.10.0 || >=18.0.0}
 
-  expo-alternate-app-icons@8.0.0:
-    resolution: {integrity: sha512-iqvcxu3fNPtOtZ/y0/VPlxol9WUhkvbj7VI6SMwSAEAgOZ1D5k7KvF54U0oLC/i0k+HL0YOaIuZcLJuLaphIIw==}
+  expo-alternate-app-icons@11.0.0:
+    resolution: {integrity: sha512-9k25v/LIaX52FSOwKTZcCvh/VrpuITEtn9ini4Rs8k08YGDA26LIx7Jum6tngWfRQn9RbQD3uGA7vDTUEGUWFg==}
     peerDependencies:
       expo: '>=53'
       react: '*'
@@ -12227,7 +12227,7 @@ snapshots:
       jest-message-util: 29.7.0
       jest-util: 29.7.0
 
-  expo-alternate-app-icons@8.0.0(expo@55.0.31)(react-native@0.83.10(patch_hash=9430d1c3d0071e5b8e2c9d98f9ba5594ad3bb27f4f6e8f3884ab1f03658fb6f0)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.2(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.8)(supports-color@8.1.1))(react@19.2.8):
+  expo-alternate-app-icons@11.0.0(expo@55.0.31)(react-native@0.83.10(patch_hash=9430d1c3d0071e5b8e2c9d98f9ba5594ad3bb27f4f6e8f3884ab1f03658fb6f0)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.2(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.8)(supports-color@8.1.1))(react@19.2.8):
     dependencies:
       expo: 55.0.31(0def556739f9e1a9e497ee4bc3b81b41)
       react: 19.2.8

@@ -73,4 +73,24 @@ describe('app icon settings', () => {
     expect(checkedLabel()).toBe('Classic Orca')
     expect(JSON.stringify(renderer.toJSON())).toContain('Could not change the app icon')
   })
+  it('ignores another icon while a change is pending, then falls back to the confirmed one', async () => {
+    vi.mocked(getAppIconName).mockReturnValue(null)
+    let reject: (error: Error) => void = () => {}
+    vi.mocked(setAlternateAppIcon).mockReturnValue(
+      new Promise((_resolve, rejectChange) => {
+        reject = rejectChange
+      })
+    )
+    act(() => {
+      renderer = create(createElement(AppIconSettingsScreen))
+    })
+
+    await press('Watercolor Orca')
+    await press('Blue Orca')
+    expect(setAlternateAppIcon).toHaveBeenCalledOnce()
+    expect(checkedLabel()).toBe('Watercolor Orca')
+
+    await act(async () => reject(new Error('declined')))
+    expect(checkedLabel()).toBe('Classic Orca')
+  })
 })
