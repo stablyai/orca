@@ -42,12 +42,13 @@ function page(
   rows: CloudSetupStep[],
   agent: 'claude' | 'codex',
   label: string,
-  teamSwitch = false
+  teamSwitch = false,
+  patch: Partial<CloudSetupFlow> = {}
 ) {
   return (
     <div className="h-[560px]">
       <CloudSetupPage
-        flow={flow(rows, teamSwitch)}
+        flow={{ ...flow(rows, teamSwitch), ...patch }}
         projectName="Hello-World"
         prompt="Fix the flaky checkout test"
         agentLabel={label}
@@ -142,5 +143,23 @@ export const teamSwitchPlanUnknown = defineFixture({
       'claude',
       'Claude',
       true
+    )
+})
+
+/** N-10: sign-in opened in the browser; the waiting line and its actions sit flush-left too. */
+export const signedOutWaitingBrowser = defineFixture({
+  width: 1000,
+  render: () =>
+    page(
+      [
+        { id: 'account', state: 'needed', need: 'sign-in', canFix: true },
+        { id: 'plan', state: 'pending', need: 'trial' },
+        { id: 'github', state: 'needed', need: 'github', canFix: true },
+        { id: 'agent', state: 'optional' }
+      ],
+      'claude',
+      'Claude',
+      false,
+      { signingIn: true, inBrowser: true, copyLink: noop }
     )
 })
