@@ -6,6 +6,8 @@
 // wake. The mark lives outside the layout (asleepBrowserWorktreeIds), so sleep writes no layout.
 import { useAppStore } from '@/store'
 import { destroyWorktreeBrowserGuests } from '@/store/slices/browser/cleanup/browser-webview-cleanup'
+import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import { isWorktreeGoingToSleep, isWorktreeSuspendCommitted } from '@/lib/worktree-sleep-view'
 import type { BrowserWorkspace } from '../../../../../../shared/browser-workspace-types'
 
 type BrowserTabsByWorktree = Record<string, BrowserWorkspace[]>
@@ -46,9 +48,81 @@ export function selectAwakeBrowserTabsByWorktree(state: {
 // reported missing after the wake, its tab opens a new page at the same URL instead of closing.
 const reopenAfterSleep = new Set<string>()
 
-/** True once per slept page: the pane recreates the host page instead of closing the tab. */
-export function consumeReopenAfterSleep(browserPageId: string): boolean {
-  return reopenAfterSleep.delete(browserPageId)
+/**
+ * A slept page still owed a new host page. It stays owed until a host page answers for it again
+ * (a new one opened, or the old one still there), however many times "missing" is reported on
+ * the way: a wake that races the suspend reports it while the VM is still going down (LC2-P1).
+ */
+export function isAwaitingReopenAfterSleep(browserPageId: string): boolean {
+  return reopenAfterSleep.has(browserPageId)
+}
+
+/** A host page answered for this tab again: from now on a missing page is a real close. */
+export function settleReopenAfterSleep(browserPageId: string): void {
+  reopenAfterSleep.delete(browserPageId)
+}
+
+export function resetReopenAfterSleepForTest(): void {
+  reopenAfterSleep.clear()
+}
+
+type SandboxState = {
+  ephemeralVmRuntimesByWorkspaceId?: Record<string, { status: string } | undefined>
+  wakingEphemeralVmWorkspaceIds?: Record<string, boolean | undefined>
+  asleepBrowserWorktreeIds?: Record<string, number>
+}
+
+/** This window's view of a sleep in flight for one workspace (workspace-sleep-follower). */
+export type SleepInFlight = {
+  /** Sleep started and has not ended (also while the user presses Wake to continue). */
+  sleepIntent: boolean
+  goingToSleep: boolean
+  /** Main is committing the suspend: the VM still reads "running" but is going down. */
+  suspendCommitted: boolean
+}
+
+export function readSleepInFlight(worktreeId: string): SleepInFlight {
+  return {
+    sleepIntent: hasWorktreeSleepIntent(worktreeId),
+    goingToSleep: isWorktreeGoingToSleep(worktreeId),
+    suspendCommitted: isWorktreeSuspendCommitted(worktreeId)
+  }
+}
+
+/**
+ * The workspace's host can run pages that will last: no sleep in flight (a wake pressed while
+ * the suspend is still being committed included), not marked asleep, not waking, and its VM (if
+ * it has one) running. A page opened before all of this holds would die with the suspend.
+ */
+export function isBrowserSandboxUp(
+  state: SandboxState,
+  worktreeId: string,
+  sleep: SleepInFlight
+): boolean {
+  const runtime = state.ephemeralVmRuntimesByWorkspaceId?.[worktreeId]
+  return (
+    !sleep.sleepIntent &&
+    !sleep.goingToSleep &&
+    !sleep.suspendCommitted &&
+    !state.asleepBrowserWorktreeIds?.[worktreeId] &&
+    !state.wakingEphemeralVmWorkspaceIds?.[worktreeId] &&
+    (runtime === undefined || runtime.status === 'running')
+  )
+}
+
+/** What a pane does when its host page is reported missing (NEW-01, LC2-P1). */
+export function missingRemotePageAction(args: {
+  awaitingReopen: boolean
+  asleep: boolean
+  sandboxUp: boolean
+}): 'wait' | 'reopen' | 'close' {
+  if (args.asleep) {
+    return 'wait'
+  }
+  if (args.awaitingReopen) {
+    return args.sandboxUp ? 'reopen' : 'wait'
+  }
+  return 'close'
 }
 
 /** Sleep: drop the pages, keep the tabs, mark the workspace's tabs asleep. */
