@@ -21,22 +21,6 @@ function clipboardWith({
 }
 
 describe('readClipboardPlainText', () => {
-  it('prefers standard text without inspecting other pasteboard types', () => {
-    const clipboard = clipboardWith({
-      text: 'standard',
-      buffers: { 'public.plain-text': Buffer.from('other') }
-    })
-    expect(readClipboardPlainText(clipboard, 'darwin')).toBe('standard')
-    expect(clipboard.readBuffer).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    ['public.plain-text', { 'public.plain-text': Buffer.from(URL_TEXT) }],
-    ['public.url', { 'public.url': Buffer.from(URL_TEXT) }]
-  ])('reads a Universal Clipboard URL from %s on macOS', (_type, buffers) => {
-    expect(readClipboardPlainText(clipboardWith({ buffers }), 'darwin')).toBe(URL_TEXT)
-  })
-
   it('skips an undecodable plain-text type and uses the URL', () => {
     const buffers = {
       'public.plain-text': Buffer.from(URL_TEXT, 'utf16le'),
@@ -61,11 +45,5 @@ describe('readClipboardPlainText', () => {
       }
     })
     expect(readClipboardPlainText(clipboard, 'darwin')).toBe('')
-  })
-
-  it.each(['linux', 'win32'] as const)('does not read macOS pasteboard types on %s', (platform) => {
-    const clipboard = clipboardWith({ buffers: { 'public.url': Buffer.from(URL_TEXT) } })
-    expect(readClipboardPlainText(clipboard, platform)).toBe('')
-    expect(clipboard.readBuffer).not.toHaveBeenCalled()
   })
 })

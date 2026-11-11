@@ -4,6 +4,7 @@
     "src/main/index.ts",
     "src/preload/index.ts",
     "src/preload/browser-guest.ts",
+    "src/preload/browser-passkey-request.ts",
     "src/main/daemon/daemon-entry.ts",
     "src/main/plugins/workers/plugin-host-entry.ts",
     "src/main/computer/computer-sidecar.ts",

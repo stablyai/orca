@@ -190,9 +190,6 @@
 1 test-no-real-time-wait:src/main/git/worktrees/removal/remove-worktree-branch-cleanup.test.ts
 1 test-no-real-time-wait:src/main/git/worktrees/removal/worktree-prune-guard.test.ts
 1 test-no-real-time-wait:src/main/grok/grok-hook-stdin-no-eof.test.ts
-1 test-no-real-time-wait:src/main/ipc/filesystem/watcher-process/parcel-watcher-shallow-file-subscription.test.ts
-1 test-no-real-time-wait:src/main/ipc/filesystem/watcher-process/rebinding-file-watch-noise.test.ts
-1 test-no-real-time-wait:src/main/ipc/filesystem/watcher-process/rebinding-file-watch.test.ts
 4 test-no-real-time-wait:src/main/ipc/runtime-environments/runtime-environment-request-connections.test.ts
 1 test-no-real-time-wait:src/main/ipc/worktrees/creation/worktree-base-directory-poller-marker-fanout.test.ts
 2 test-no-real-time-wait:src/main/ipc/worktrees/git/worktree-git-status-attribution-real-git.test.ts
@@ -620,7 +617,6 @@
 4 test-no-wall-clock:tests/e2e/cross-version-wire/release-checkout.unit.test.ts
 2 test-no-wall-clock:tests/e2e/cross-version-wire/release-source-retention.unit.test.ts
 1 test-no-wall-clock:tests/e2e/host-cold-park-remote-subscriber.unit.test.ts
-2 test-timeout-needs-reason:mobile/src/terminal/document/native-document-bundle.test.ts
 1 test-timeout-needs-reason:src/cli/agent-launch-process.test.ts
 1 test-timeout-needs-reason:src/cli/runtime/serve-pid1-init-reaper.test.ts
 1 test-timeout-needs-reason:src/cli/skills-install.test.ts
@@ -682,7 +678,6 @@
 1 test-timeout-needs-reason:src/main/orcad/orcad-stop-request-shutdown.integration.test.ts
 1 test-timeout-needs-reason:src/main/orcad/orcad-windows-conpty-breakaway.integration.test.ts
 1 test-timeout-needs-reason:src/main/persistence/applying-settings/persistence-source-control-ai-migration.test.ts
-1 test-timeout-needs-reason:src/main/plugins/workers/plugin-worker-supervision.integration.test.ts
 2 test-timeout-needs-reason:src/main/providers/agent-foreground-process-git-bash.win32.test.ts
 1 test-timeout-needs-reason:src/main/providers/local-pty/local-pty-child-process-verdict.test.ts
 2 test-timeout-needs-reason:src/main/providers/startup-line-typed-length.live-shell.test.ts

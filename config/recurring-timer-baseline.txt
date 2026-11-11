@@ -27,8 +27,8 @@
 1 src/main/git/refs/maintenance/pack-refs-lock-ownership.ts
 1 src/main/hang-watchdog/main-thread-hang-watchdog-entry.ts
 1 src/main/hang-watchdog/main-thread-hang-watchdog.ts
-2 src/main/ipc/filesystem/watcher-process/parcel-watcher-shallow-file-subscription.ts
-1 src/main/ipc/filesystem/watcher-process/parcel-watcher-shallow-subscription.ts
+2 src/main/ipc/filesystem/watcher-process/native-subscriptions/parcel-watcher-shallow-file-subscription.ts
+1 src/main/ipc/filesystem/watcher-process/native-subscriptions/parcel-watcher-shallow-subscription.ts
 1 src/main/ipc/runtime-environments/runtime-environment-preference.ts
 1 src/main/ipc/worktrees/git/worktree-git-common-narrow-watch.ts
 1 src/main/ipc/worktrees/git/worktree-git-common-native-upgrade-poll.ts
