@@ -2290,7 +2290,9 @@
         "preparingCloudEnvironment": "Preparing environment…",
         "startingSandbox": "Starting sandbox…",
         "cloningRepository": "Cloning the repository…",
-        "updatingRepository": "Updating the repository…"
+        "updatingRepository": "Updating the repository…",
+        "cloudBlockedAsleep": "Asleep",
+        "cloudCouldNotOpen": "Couldn’t open"
       },
       "duplicatePairedServers": {
         "ambiguousSameServer": "{{value0}} and {{value1}} are the same server paired twice. Remove one in Settings > Remote Orca Servers."

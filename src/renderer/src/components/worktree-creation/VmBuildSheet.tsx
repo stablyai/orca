@@ -209,51 +209,54 @@ export function VmBuildSheet({
   return (
     <div data-vm-build-sheet className="flex min-h-full justify-center pt-12">
       <div className="flex w-full max-w-2xl flex-col gap-4">
-        <div className="flex min-h-7 items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="grid size-4 shrink-0 place-items-center">
-              {building ? (
-                <Loader2 aria-hidden className="size-4 text-muted-foreground animate-spin" />
-              ) : state === 'ready' ? (
-                <CircleCheck aria-hidden className="size-4 text-foreground" />
-              ) : gated ? (
-                <CircleAlert aria-hidden className="size-4 text-muted-foreground" />
-              ) : (
-                <AlertTriangle
-                  aria-hidden
-                  // Failed checks leave a running sandbox that needs a decision, not a broken start.
-                  className={cn(
-                    'size-4 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-90 motion-safe:duration-200',
-                    failure?.kind === 'checks' && !cloud
-                      ? 'text-status-warning-text'
-                      : 'text-destructive'
-                  )}
-                />
+        {/* JA-24: on Orca Cloud a failure card carries the one title; no page title above it. */}
+        {cloud && failure ? null : (
+          <div className="flex min-h-7 items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="grid size-4 shrink-0 place-items-center">
+                {building ? (
+                  <Loader2 aria-hidden className="size-4 text-muted-foreground animate-spin" />
+                ) : state === 'ready' ? (
+                  <CircleCheck aria-hidden className="size-4 text-foreground" />
+                ) : gated ? (
+                  <CircleAlert aria-hidden className="size-4 text-muted-foreground" />
+                ) : (
+                  <AlertTriangle
+                    aria-hidden
+                    // Failed checks leave a running sandbox that needs a decision, not a broken start.
+                    className={cn(
+                      'size-4 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-90 motion-safe:duration-200',
+                      failure?.kind === 'checks' && !cloud
+                        ? 'text-status-warning-text'
+                        : 'text-destructive'
+                    )}
+                  />
+                )}
+              </span>
+              {/* Retry lands focus here once the failure card collapses. The card announces failures. */}
+              <h2
+                data-vm-build-heading
+                tabIndex={-1}
+                aria-live={failure ? 'off' : 'polite'}
+                className="text-sm font-medium text-foreground outline-none"
+              >
+                {headerTitle(state, cloud, t, failure?.kind === 'create')}
+              </h2>
+              {/* Orca Cloud: each step carries its own timer, so the header has none. */}
+              {gated || cloud ? null : (
+                <span className="text-xs tabular-nums text-muted-foreground">{elapsedLabel}</span>
               )}
-            </span>
-            {/* Retry lands focus here once the failure card collapses. The card announces failures. */}
-            <h2
-              data-vm-build-heading
-              tabIndex={-1}
-              aria-live={failure ? 'off' : 'polite'}
-              className="text-sm font-medium text-foreground outline-none"
-            >
-              {headerTitle(state, cloud, t, failure?.kind === 'create')}
-            </h2>
-            {/* Orca Cloud: each step carries its own timer, so the header has none. */}
-            {gated || cloud ? null : (
-              <span className="text-xs tabular-nums text-muted-foreground">{elapsedLabel}</span>
-            )}
+            </div>
+            {building ? (
+              <Button type="button" variant="ghost" size="xs" onClick={onCancel}>
+                {t(
+                  'auto.components.worktree.creation.WorktreeCreationPanel.cancelProvisioning',
+                  'Cancel'
+                )}
+              </Button>
+            ) : null}
           </div>
-          {building ? (
-            <Button type="button" variant="ghost" size="xs" onClick={onCancel}>
-              {t(
-                'auto.components.worktree.creation.WorktreeCreationPanel.cancelProvisioning',
-                'Cancel'
-              )}
-            </Button>
-          ) : null}
-        </div>
+        )}
 
         <div>
           {/* An account refusal happens before anything starts, so there are no steps to show. */}
