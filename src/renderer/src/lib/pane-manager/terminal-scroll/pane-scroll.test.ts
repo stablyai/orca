@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { Terminal as HeadlessTerminal } from '@xterm/headless'
 import type { Terminal } from '@xterm/xterm'
-import { captureScrollState, restoreScrollState } from './pane-scroll'
+import { captureScrollState } from './pane-scroll-snapshot'
+import { restoreScrollState } from './pane-scroll'
 
 function writeHeadless(terminal: HeadlessTerminal, data: string): Promise<void> {
   return new Promise((resolve) => terminal.write(data, resolve))

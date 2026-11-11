@@ -1,5 +1,5 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { ScrollState } from '@/lib/pane-manager/pane-manager-types'
+import type { ScrollState } from '@/lib/pane-manager/terminal-scroll/pane-scroll-snapshot'
 import { resetAndRefreshAllTerminalWebglAtlases } from '@/lib/pane-manager/pane-manager-registry'
 import {
   flushTerminalOutput,

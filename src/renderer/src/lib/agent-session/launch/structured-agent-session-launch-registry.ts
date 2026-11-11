@@ -24,18 +24,6 @@ import {
   subscribeStructuredAgentLaunchStatus
 } from './structured-agent-session-launch-state-store'
 
-export {
-  deleteStructuredLaunchStateIfCurrent,
-  getPersistedStructuredAgentLaunchRecord,
-  getStructuredLaunchStateBySessionId,
-  notifyStructuredLaunchListeners,
-  publishStructuredLaunchChange,
-  setStructuredLaunchState,
-  structuredLaunchStates,
-  subscribeStructuredAgentLaunchStatus,
-  type StructuredLaunchState
-} from './structured-agent-session-launch-state-store'
-
 export type StructuredAgentLaunchStatus = 'idle' | 'pending' | 'unknown'
 export type StructuredAgentSessionLaunchLifecycle =
   | 'pending'
@@ -86,12 +74,6 @@ export function getStructuredAgentSessionLaunchLifecycle(
   }
   return getPersistedStructuredAgentLaunchRecord(sessionId)?.lifecycle ?? null
 }
-
-export {
-  getStructuredAgentSessionLaunchResumes,
-  structuredAgentSessionLaunchHasRetainedInput,
-  settleStructuredLaunchFirstMessageFromJournal
-} from './structured-agent-session-launch-input'
 
 /** The host a launch still owed an outcome was sent to, in memory or persisted across a reload. */
 export function getStructuredAgentSessionLaunchOwner(

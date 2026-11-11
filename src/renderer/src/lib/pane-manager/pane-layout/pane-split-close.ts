@@ -8,7 +8,7 @@ import type {
 import type { DragReorderCallbacks } from './pane-drag-reorder'
 import { updateMultiPaneState } from './pane-drag-reorder'
 import { promoteSibling, removeDividers, wrapInSplit } from './pane-tree-ops'
-import { captureScrollState } from '../terminal-scroll/pane-scroll'
+import { captureScrollState } from '../terminal-scroll/pane-scroll-snapshot'
 import { findPaneChildren } from './pane-tree-equalization'
 import { safeFit } from '../terminal-fit/pane-fit'
 import { applyDividerStyles, applyPaneOpacity } from './pane-divider'
