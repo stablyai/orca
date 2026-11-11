@@ -1,4 +1,5 @@
 // A restarted runtime can reissue a surviving worker PTY's handle while the worker keeps reporting with its env handle.
+// Env handle/pane are caller-selected consistency evidence, not caller authentication; the profile token is the boundary.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcContext } from '../../../core'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
@@ -27,7 +28,7 @@ describe('worker reports after a restart reissues the worker terminal handle', (
     harness.cleanup()
   })
 
-  /** The PTY survived the restart; only its handle changed. `paneIncarnation` is what now runs in the pane. */
+  /** The PTY survived the restart; only its handle changed. `paneIncarnation` is what the runtime now records for the pane. */
   function setup(paneIncarnation = INCARNATION): { taskId: string; dispatch: DispatchContextRow } {
     ;({ db, runtime, ctx } = harness.setup())
     const task = db.createTask({ spec: 'long worker task spanning a restart' })
@@ -86,7 +87,7 @@ describe('worker reports after a restart reissues the worker terminal handle', (
     )
   }
 
-  it('settles worker_done from the same process after its handle was reissued', async () => {
+  it('settles worker_done from the recorded process incarnation after its handle was reissued', async () => {
     const { taskId, dispatch } = setup()
 
     const result = await sendWorkerDone(taskId, dispatch.id, workerEnv())
@@ -97,7 +98,7 @@ describe('worker reports after a restart reissues the worker terminal handle', (
     expect(db.getTask(taskId)?.status).toBe('completed')
   })
 
-  it('admits an escalation from the same process after its handle was reissued', async () => {
+  it('admits an escalation from the recorded process incarnation after its handle was reissued', async () => {
     const { taskId, dispatch } = setup()
 
     const escalation = await harness.call(
@@ -115,7 +116,7 @@ describe('worker reports after a restart reissues the worker terminal handle', (
     expect(escalation).toMatchObject({ message: { type: 'escalation' } })
   })
 
-  it('still refuses a replacement process running in the worker pane', async () => {
+  it('still refuses when the worker pane records a replacement incarnation', async () => {
     const { taskId, dispatch } = setup(`${PTY_ID}:inc-replacement`)
 
     const result = await sendWorkerDone(taskId, dispatch.id, workerEnv())
@@ -161,7 +162,7 @@ describe('worker reports after a restart reissues the worker terminal handle', (
     })
   })
 
-  it('creates a question from the same process after its handle was reissued', async () => {
+  it('creates a question from the recorded process incarnation after its handle was reissued', async () => {
     setup()
     vi.spyOn(runtime, 'waitForMessage').mockResolvedValue('timed_out')
 
@@ -174,7 +175,7 @@ describe('worker reports after a restart reissues the worker terminal handle', (
     expect(asked).toMatchObject({ messageId: expect.stringMatching(/^msg_/), timedOut: true })
   })
 
-  it('refuses a question from a replacement process in the worker pane', async () => {
+  it('refuses a question when the worker pane records a replacement incarnation', async () => {
     setup(`${PTY_ID}:inc-replacement`)
     vi.spyOn(runtime, 'waitForMessage').mockResolvedValue('timed_out')
 

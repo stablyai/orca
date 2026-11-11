@@ -80,7 +80,8 @@ export const ORCHESTRATION_ASK_METHODS = [
           paneKey,
           dispatchId: remoteAttachment.dispatch_id,
           taskId: remoteAttachment.task_id,
-          workerState: remoteAttachment.state
+          workerState: remoteAttachment.state,
+          processIncarnation: reporter.processIncarnation
         })
       }
       const workingDispatch = db.getActiveDispatchForIdentity(from, paneKey)
@@ -93,7 +94,8 @@ export const ORCHESTRATION_ASK_METHODS = [
             address: from,
             paneKey: paneKey ?? null,
             orcaSessionId: orchestrationCaller?.orcaSessionId ?? null,
-            processIncarnation: () => runtime.getTerminalProcessIncarnation(from) ?? undefined
+            // A restart-reissued reporter proves its process by the same recovered incarnation.
+            processIncarnation: () => reporter.processIncarnation() ?? undefined
           },
           { run: undefined, dispatchId: undefined, dispatch: undefined },
           'question'
