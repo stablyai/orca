@@ -150,60 +150,62 @@ export function renderSettingsPage(
               view.isFocusedSetupGuidePane || view.isWidePluginsPane ? 'max-w-6xl' : 'max-w-[784px]'
             )}
           >
-            {navigation.visibleNavSections.length === 0 ? (
-              <div className="flex min-h-[24rem] items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card/30 text-sm text-muted-foreground">
-                {t(
-                  'auto.components.settings.Settings.noSettingsFoundForQuery',
-                  'No settings found for "{{value0}}"',
-                  { value0: model.settingsSearchQuery.trim() }
-                )}
-              </div>
-            ) : (
-              <SettingsContentScrollElementProvider value={interactions.contentScrollElement}>
-                <ActiveSettingsSectionProvider value={model.activeSectionId}>
-                  <SettingsTargetHighlightProvider
-                    value={model.highlightedSettingsTarget?.id ?? null}
-                  >
-                    {renderAgentsSettingsSection(context, t)}
-                    {renderAccountsSettingsSection(context, t)}
-                    {renderOrchestrationSettingsSection(context, t)}
-                    {renderLinearSettingsSection(context, t)}
-                    {renderDesktopCapabilitySettingsSections(context, t)}
-                    {renderOrcaAccountSettingsSection(context, t)}
-                    {renderSetupGuideSettingsSection(context, t)}
-                    {renderGeneralSettingsSection(context, t)}
-                    {renderIntegrationsSettingsSection(context, t)}
-                    {renderMobileSettingsSection(context, t)}
-                    {renderAutomationsSettingsSection(context, t)}
-                    {renderArtifactsSettingsSection(context, t)}
-                    {renderShareSkillsSettingsSection(context, t)}
-                    {renderSessionHistorySettingsSection(context, t)}
-                    {renderGitSettingsSection(context, t)}
-                    {renderTasksSettingsSection(context, t)}
-                    {renderTerminalSettingsSection(context, t)}
-                    {renderQuickCommandsSettingsSection(context, t)}
-                    {renderBrowserSettingsSection(context, t)}
-                    {renderMobileEmulatorSettingsSection(context, t)}
-                    {renderFloatingWorkspaceSettingsSection(context, t)}
-                    {renderAppearanceSettingsSection(context, t)}
-                    {renderChatSettingsSection(context)}
-                    {renderInputSettingsSection(context, t)}
-                    {renderNotificationsSettingsSection(context, t)}
-                    {renderShortcutsSettingsSection(context, t)}
-                    {renderStatsSettingsSection(context, t)}
-                    {renderServersSettingsSection(context, t)}
-                    {renderSshSettingsSection(context, t)}
-                    {renderDeveloperPermissionsSettingsSection(context, t)}
-                    {renderPrivacySettingsSection(context, t)}
-                    {renderAdvancedSettingsSection(context, t)}
-                    {renderDevSettingsSection(context, t)}
-                    {renderExperimentalSettingsSection(context, t)}
-                    {renderPluginsSettingsSection(context)}
-                    {renderProjectSettingsSections(context, t)}
-                  </SettingsTargetHighlightProvider>
-                </ActiveSettingsSectionProvider>
-              </SettingsContentScrollElementProvider>
-            )}
+            <SettingsContentScrollElementProvider value={interactions.contentScrollElement}>
+              <ActiveSettingsSectionProvider value={model.activeSectionId}>
+                <SettingsTargetHighlightProvider
+                  value={model.highlightedSettingsTarget?.id ?? null}
+                >
+                  {navigation.visibleNavSections.length === 0 ? (
+                    <div className="flex min-h-[24rem] items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card/30 text-sm text-muted-foreground">
+                      {t(
+                        'auto.components.settings.Settings.noSettingsFoundForQuery',
+                        'No settings found for "{{value0}}"',
+                        { value0: model.settingsSearchQuery.trim() }
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      {renderAgentsSettingsSection(context, t)}
+                      {renderAccountsSettingsSection(context, t)}
+                      {renderOrchestrationSettingsSection(context, t)}
+                      {renderLinearSettingsSection(context, t)}
+                      {renderDesktopCapabilitySettingsSections(context, t)}
+                      {renderOrcaAccountSettingsSection(context, t)}
+                      {renderSetupGuideSettingsSection(context, t)}
+                      {renderGeneralSettingsSection(context, t)}
+                      {renderIntegrationsSettingsSection(context, t)}
+                      {renderMobileSettingsSection(context, t)}
+                      {renderAutomationsSettingsSection(context, t)}
+                      {renderArtifactsSettingsSection(context, t)}
+                      {renderShareSkillsSettingsSection(context, t)}
+                      {renderSessionHistorySettingsSection(context, t)}
+                      {renderGitSettingsSection(context, t)}
+                      {renderTasksSettingsSection(context, t)}
+                      {renderTerminalSettingsSection(context, t)}
+                      {renderQuickCommandsSettingsSection(context, t)}
+                      {renderBrowserSettingsSection(context, t)}
+                      {renderMobileEmulatorSettingsSection(context, t)}
+                      {renderFloatingWorkspaceSettingsSection(context, t)}
+                      {renderAppearanceSettingsSection(context, t)}
+                      {renderChatSettingsSection(context)}
+                      {renderInputSettingsSection(context, t)}
+                      {renderNotificationsSettingsSection(context, t)}
+                      {renderShortcutsSettingsSection(context, t)}
+                      {renderStatsSettingsSection(context, t)}
+                      {renderServersSettingsSection(context, t)}
+                      {renderSshSettingsSection(context, t)}
+                      {renderDeveloperPermissionsSettingsSection(context, t)}
+                      {renderPrivacySettingsSection(context, t)}
+                      {renderAdvancedSettingsSection(context, t)}
+                      {renderDevSettingsSection(context, t)}
+                      {renderExperimentalSettingsSection(context, t)}
+                      {renderPluginsSettingsSection(context)}
+                    </>
+                  )}
+                  {renderProjectSettingsSections(context, t)}
+                </SettingsTargetHighlightProvider>
+              </ActiveSettingsSectionProvider>
+            </SettingsContentScrollElementProvider>
           </div>
         </div>
       </div>

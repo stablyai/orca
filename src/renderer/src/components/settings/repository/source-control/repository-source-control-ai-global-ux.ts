@@ -4,7 +4,7 @@ import type {
   UseRepositorySourceControlAiGlobalUxArgs
 } from './repository-source-control-ai-global-ux-types'
 import { liftActionPermissionArgs } from '../../../../../../shared/source-control/ai/recipes/source-control-action-permission-lift'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { CUSTOM_AGENT_ID } from '../../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
@@ -50,17 +50,21 @@ export function useRepositorySourceControlAiGlobalUx({
 }: UseRepositorySourceControlAiGlobalUxArgs) {
   const mountedRef = useMountedRef()
   const persistedSerialized = useMemo(() => JSON.stringify(persistedRepoAi), [persistedRepoAi])
-  const persistedRef = useRef(persistedRepoAi)
+  const persistedRef = useRef(persistedRepoAi ?? {})
+  const currentSnapshotRef = useRef(persistedRepoAi)
+  useLayoutEffect(() => {
+    currentSnapshotRef.current = persistedRepoAi
+  }, [persistedRepoAi])
   const repoIdRef = useRef(repoId)
   const updateRepoRef = useRef(updateRepo)
   repoIdRef.current = repoId
   updateRepoRef.current = updateRepo
 
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [immediateRepoAi, setImmediateRepoAi] = useState(persistedRepoAi)
+  const [immediateRepoAi, setImmediateRepoAi] = useState(persistedRepoAi ?? {})
   const immediateRepoAiRef = useRef(immediateRepoAi)
   immediateRepoAiRef.current = immediateRepoAi
-  const [baselineRepoAi, setBaselineRepoAi] = useState(persistedRepoAi)
+  const [baselineRepoAi, setBaselineRepoAi] = useState(persistedRepoAi ?? {})
   const setBaselineRepoAiRef = useRef(setBaselineRepoAi)
   setBaselineRepoAiRef.current = setBaselineRepoAi
   const [actionTextDrafts, setActionTextDrafts] = useState<
@@ -76,7 +80,7 @@ export function useRepositorySourceControlAiGlobalUx({
   const queueRef = useRef<ReturnType<typeof createRepoAiPersistQueue>>(undefined!)
   queueRef.current ??= createRepoAiPersistQueue({
     getRepoId: () => repoIdRef.current,
-    getPersisted: () => persistedRef.current,
+    getPersisted: () => (currentSnapshotRef.current === null ? null : persistedRef.current),
     setPersisted: (value) => {
       persistedRef.current = value
       if (mountedRef.current) {
@@ -92,7 +96,11 @@ export function useRepositorySourceControlAiGlobalUx({
     }
   })
 
+  // oxlint-disable-next-line react-doctor/no-derived-state-effect -- Why: reconcile authoritative readback with optimistic writes and explicit-Save drafts; null preserves the current session.
   useEffect(() => {
+    if (persistedRepoAi === null) {
+      return
+    }
     const repoChanged = lastSyncedRepoIdRef.current !== repoId
     lastSyncedRepoIdRef.current = repoId
     persistedRef.current = persistedRepoAi

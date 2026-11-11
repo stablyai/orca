@@ -1,3 +1,5 @@
+import { Trans } from 'react-i18next'
+import { i18n } from '@/i18n/i18n'
 import { createPortal } from 'react-dom'
 import {
   useLayoutEffect,
@@ -117,17 +119,23 @@ export function ContextualTourOverlaySurface({
     null
   )
   const panelHostSlot = panelHost?.getAttribute('data-slot')
+  const isProjectGroupingTip = activeTourId === 'project-grouping-upgrade'
   const hostedPanelClass = cn(
     PANEL_BASE_CLASSES,
     PANEL_ANIMATION_CLASSES,
     panelHostSlot === 'sheet-content'
       ? 'absolute z-[80] w-[min(20rem,calc(100%-1.5rem))]'
-      : 'absolute z-[80] w-[min(20rem,calc(100%-2rem))]'
+      : 'absolute z-[80] w-[min(20rem,calc(100%-2rem))]',
+    isProjectGroupingTip &&
+      (panelHostSlot === 'sheet-content'
+        ? 'w-[min(16rem,calc(100%-1.5rem))]'
+        : 'w-[min(16rem,calc(100%-2rem))]')
   )
   const floatingPanelClass = cn(
     PANEL_BASE_CLASSES,
     PANEL_ANIMATION_CLASSES,
-    'fixed w-[min(20rem,calc(100vw-1.5rem))]'
+    'fixed',
+    isProjectGroupingTip ? 'w-[min(16rem,calc(100vw-1.5rem))]' : 'w-[min(20rem,calc(100vw-1.5rem))]'
   )
 
   const stepKey = `${activeTourId}-${renderState.progress.current}`
@@ -178,7 +186,7 @@ export function ContextualTourOverlaySurface({
     <section
       ref={panelRef}
       aria-live="polite"
-      aria-label={renderState.title}
+      aria-label={renderState.title || renderState.body}
       data-contextual-tour-panel={activeTourId}
       data-placement={floatingPosition?.panelPlacement ?? undefined}
       role="dialog"
@@ -191,7 +199,13 @@ export function ContextualTourOverlaySurface({
         placement={floatingPosition?.panelPlacement ?? renderState.preferredPlacement ?? 'right'}
         style={floatingPosition?.arrowPosition ?? { visibility: 'hidden' }}
       />
-      <div key={stepKey} className="animate-in fade-in-0 duration-150 ease-out p-4">
+      <div
+        key={stepKey}
+        className={cn(
+          'animate-in fade-in-0 duration-150 ease-out',
+          isProjectGroupingTip ? 'p-3' : 'p-4'
+        )}
+      >
         <Button
           type="button"
           variant="ghost"
@@ -213,65 +227,98 @@ export function ContextualTourOverlaySurface({
         >
           <X />
         </Button>
-        <h2 className="flex items-center gap-2 pr-6 text-sm font-semibold tracking-tight text-foreground">
-          {renderState.badge === 'new' ? (
-            <Badge variant="secondary">{t('components.contextualTours.badgeNew', 'New')}</Badge>
-          ) : null}
-          <span className="min-w-0">{renderState.title}</span>
-        </h2>
-        <p className="mt-1.5 text-xs leading-5 text-muted-foreground">{renderState.body}</p>
+        {renderState.title ? (
+          <h2 className="flex items-center gap-2 pr-6 text-sm font-semibold tracking-tight text-foreground">
+            {renderState.badge === 'new' ? (
+              <Badge variant="secondary">{t('components.contextualTours.badgeNew', 'New')}</Badge>
+            ) : null}
+            <span className="min-w-0">{renderState.title}</span>
+          </h2>
+        ) : null}
+        <p
+          className={cn(
+            'text-xs text-muted-foreground',
+            isProjectGroupingTip ? 'pr-6 leading-4' : 'mt-1.5 leading-5'
+          )}
+        >
+          {renderState.body}
+        </p>
+        {isProjectGroupingTip ? (
+          <p className="mt-1 text-xs leading-4 text-muted-foreground">
+            <Trans
+              i18n={i18n}
+              defaults={t(
+                'settings.projectGrouping.upgrade.link',
+                'Change this grouping in <settings>Settings</settings>.'
+              )}
+              components={{
+                settings: (
+                  <button
+                    type="button"
+                    className="cursor-pointer font-medium text-popover-foreground underline underline-offset-2 hover:text-primary"
+                    onClick={() =>
+                      onStepAction({ kind: 'open-project-grouping-settings', label: '' })
+                    }
+                  />
+                )
+              }}
+            />
+          </p>
+        ) : null}
         {renderState.control ? <ContextualTourControl control={renderState.control} /> : null}
-        <div className="mt-3.5 flex items-center justify-between gap-3">
-          <ContextualTourProgressDots
-            current={renderState.progress.current}
-            total={renderState.progress.total}
-          />
-          <div className="flex items-center gap-1.5">
-            {!renderState.isFirstStep ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                aria-label={t(
-                  'auto.components.contextual.tours.ContextualTourOverlaySurface.4a9568f773',
-                  'Back'
-                )}
-                onClick={onBack}
-              >
-                <ArrowLeft />
-                {t(
-                  'auto.components.contextual.tours.ContextualTourOverlaySurface.4a9568f773',
-                  'Back'
-                )}
-              </Button>
-            ) : null}
-            {renderState.secondaryAction ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                onClick={() => onStepAction(renderState.secondaryAction!)}
-              >
-                {renderState.secondaryAction.label}
-              </Button>
-            ) : null}
-            {primaryAction ? (
-              <Button
-                type="button"
-                size="xs"
-                onClick={
-                  primaryAction.kind === defaultPrimaryAction.kind &&
-                  primaryAction.label === defaultPrimaryAction.label
-                    ? onNext
-                    : () => onStepAction(primaryAction)
-                }
-              >
-                {primaryAction.label}
-                {primaryAction.kind === 'next' && !renderState.isLastStep ? <ArrowRight /> : null}
-              </Button>
-            ) : null}
+        {!isProjectGroupingTip ? (
+          <div className="mt-3.5 flex items-center justify-between gap-3">
+            <ContextualTourProgressDots
+              current={renderState.progress.current}
+              total={renderState.progress.total}
+            />
+            <div className="flex items-center gap-1.5">
+              {!renderState.isFirstStep ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  aria-label={t(
+                    'auto.components.contextual.tours.ContextualTourOverlaySurface.4a9568f773',
+                    'Back'
+                  )}
+                  onClick={onBack}
+                >
+                  <ArrowLeft />
+                  {t(
+                    'auto.components.contextual.tours.ContextualTourOverlaySurface.4a9568f773',
+                    'Back'
+                  )}
+                </Button>
+              ) : null}
+              {renderState.secondaryAction ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => onStepAction(renderState.secondaryAction!)}
+                >
+                  {renderState.secondaryAction.label}
+                </Button>
+              ) : null}
+              {primaryAction ? (
+                <Button
+                  type="button"
+                  size="xs"
+                  onClick={
+                    primaryAction.kind === defaultPrimaryAction.kind &&
+                    primaryAction.label === defaultPrimaryAction.label
+                      ? onNext
+                      : () => onStepAction(primaryAction)
+                  }
+                >
+                  {primaryAction.label}
+                  {primaryAction.kind === 'next' && !renderState.isLastStep ? <ArrowRight /> : null}
+                </Button>
+              ) : null}
+            </div>
           </div>
-        </div>
+        ) : null}
       </div>
     </section>
   )

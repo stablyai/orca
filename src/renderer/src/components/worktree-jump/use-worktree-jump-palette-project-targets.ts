@@ -1,3 +1,9 @@
+import {
+  getRepoHostIdentity,
+  getRepoHostIdentityForParts
+} from '../../../../shared/repo-host-identity'
+import { useAppStore } from '@/store'
+import { getProjectGroupingIndexFromState } from '@/store/projects/project-host-setup-selector'
 import { useMemo } from 'react'
 import { buildImportedWorktreesCardCandidates } from '@/components/sidebar/worktree-list/listing/imported-worktrees-card-candidates'
 import {
@@ -25,6 +31,7 @@ type WorktreeJumpPaletteProjectTargetsInput = WorktreeJumpPaletteStoreState &
   Pick<WorktreeJumpPaletteWorktrees, 'hasQuery'>
 
 export function useWorktreeJumpPaletteProjectTargets({
+  settings,
   settingsSections,
   pluginCommands,
   pluginNewFiles,
@@ -44,6 +51,7 @@ export function useWorktreeJumpPaletteProjectTargets({
   groupHostIdByGroupId,
   defaultHostId
 }: WorktreeJumpPaletteProjectTargetsInput) {
+  const projectIndex = useAppStore(getProjectGroupingIndexFromState)
   const settingsResults = useMemo(
     () => buildCmdJSettingsResults(settingsSections),
     [settingsSections]
@@ -70,15 +78,19 @@ export function useWorktreeJumpPaletteProjectTargets({
         ids.add(repo.id)
       }
     }
-    for (const repoId of buildImportedWorktreesCardCandidates({
+    for (const candidate of buildImportedWorktreesCardCandidates({
       repos,
       detectedWorktreesByRepo,
       visibilityDefaultsByHost: worktreeVisibilityDefaultsByHost
-    }).keys()) {
-      ids.add(repoId)
+    }).values()) {
+      ids.add(getRepoHostIdentity(candidate.repo))
     }
     for (const creation of Object.values(pendingWorktreeCreations)) {
-      ids.add(creation.request.repoId)
+      ids.add(
+        creation.request.executionHostId
+          ? getRepoHostIdentityForParts(creation.request.repoId, creation.request.executionHostId)
+          : creation.request.repoId
+      )
     }
     return ids
   }, [
@@ -97,9 +109,19 @@ export function useWorktreeJumpPaletteProjectTargets({
         repos,
         projects,
         projectHostSetups,
+        settings,
+        projectIndex,
         renderableRepoIds: renderableProjectRepoIds
       }),
-    [projectGroups, projectHostSetups, projects, renderableProjectRepoIds, repos]
+    [
+      projectGroups,
+      projectHostSetups,
+      projects,
+      renderableProjectRepoIds,
+      repos,
+      settings,
+      projectIndex
+    ]
   )
   const projectTargetItems = useMemo<ProjectTargetPaletteItem[]>(
     () =>
@@ -110,6 +132,8 @@ export function useWorktreeJumpPaletteProjectTargets({
             repos,
             projects,
             projectHostSetups,
+            settings,
+            projectIndex,
             renderableRepoIds: renderableProjectRepoIds
           })
             .filter((result) => {
@@ -134,6 +158,8 @@ export function useWorktreeJumpPaletteProjectTargets({
       projectGroups,
       projectHostSetups,
       projects,
+      settings,
+      projectIndex,
       renderableProjectRepoIds,
       repos
     ]

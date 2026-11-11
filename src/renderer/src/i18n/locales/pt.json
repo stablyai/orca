@@ -5077,7 +5077,6 @@
           "externalWorktreesGlobal": "Padrão global: {{value0}}",
           "useGlobal": "Usar global",
           "removeProjectCheckout": "Remova este checkout do Orca. Outros checkouts deste projeto permanecem.",
-          "removeProjectKeepCheckouts": "Remova este projeto do Orca. Os checkouts que têm suas próprias configurações permanecem.",
           "07deadaa00": "Nome de Exibição",
           "41ccd99b57": "Runtime do Projeto",
           "04eebebbea": "Remover Projeto",

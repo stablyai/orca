@@ -1,4 +1,9 @@
 import {
+  createWebRuntimeStatusOwner,
+  observeWebRuntimeStatusForeground,
+  type WebRuntimeStatusOptions
+} from './web-runtime-status-observation'
+import {
   subscribeDedicatedWebRuntime,
   observeCrewSubscriptionSetup,
   enrollWebRuntimeSubscription,
@@ -8,11 +13,7 @@ import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pai
 import type { PairedE2EEClientHandshake } from '../../../shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
 import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
 import type { RuntimeEnvironmentSetupFailure } from '../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
-import { RuntimeHostStatusOwner } from '../../../shared/remote-runtime/host-status/runtime-host-status-owner'
-import type {
-  RuntimeHostStatusSnapshot,
-  RuntimeHostStatusResponse
-} from '../../../shared/remote-runtime/host-status/runtime-host-status'
+import type { RuntimeHostStatusOwner } from '../../../shared/remote-runtime/host-status/runtime-host-status-owner'
 import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from './web-runtime-request-registry'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { WebRuntimeConnectionTransport } from './web-runtime-connection-transport'
@@ -38,6 +39,9 @@ export class WebRuntimeClient {
   private readonly fileWatchTeardownRetries = new Map<string, Set<() => Promise<void>>>()
   private readonly childClients = new Set<WebRuntimeClient>()
 
+  private lastStatusEpoch = -1
+  private releaseStatusWake?: () => void
+
   readonly statusOwner?: RuntimeHostStatusOwner
 
   private readonly credential: WebRuntimeCredentialSource | undefined
@@ -51,12 +55,7 @@ export class WebRuntimeClient {
       allowKeyMigration?: boolean
       crewAttempt?: true
       assertCurrent?: () => void
-      status?: {
-        environmentId: string
-        pairingRevision: number
-        publish: (snapshot: RuntimeHostStatusSnapshot) => void
-        verified: (response: RuntimeHostStatusResponse) => void
-      }
+      status?: WebRuntimeStatusOptions
     } = {}
   ) {
     this.credential = options.credential
@@ -76,6 +75,10 @@ export class WebRuntimeClient {
           if (state === 'auth-failed') {
             this.statusOwner?.authenticationRejected()
           }
+          if (state === 'connected' && this.lastStatusEpoch !== this.connectionEpoch) {
+            this.lastStatusEpoch = this.connectionEpoch
+            this.statusOwner?.connectionChanged('connecting')
+          }
           this.statusOwner?.connectionChanged(
             state === 'connected'
               ? 'ready'
@@ -87,24 +90,15 @@ export class WebRuntimeClient {
       }
     )
     if (options.status) {
-      const status = options.status
-      this.statusOwner = new RuntimeHostStatusOwner({
-        ...status,
-        persistent: true,
-        request: (signal) =>
-          this.transport.call('status.get', undefined, {
-            timeoutMs: 15_000,
-            signal
-          }) as Promise<RuntimeHostStatusResponse>,
-        verified: (response) => {
-          status.verified(response)
-          return true
-        }
-      })
+      this.statusOwner = createWebRuntimeStatusOwner(this.transport, options.status)
       this.statusOwner.connectionChanged(
         this.transport.state === 'connected' ? 'ready' : 'connecting'
       )
       this.statusOwner.activate()
+      this.releaseStatusWake = observeWebRuntimeStatusForeground(
+        () => this.isDocumentVisible(),
+        () => this.statusOwner?.wake()
+      )
     }
   }
 
@@ -196,6 +190,8 @@ export class WebRuntimeClient {
   }
 
   close(options: { notifySubscriptions?: boolean } = {}): void {
+    this.releaseStatusWake?.()
+    this.releaseStatusWake = undefined
     this.statusOwner?.dispose()
     const shouldNotifySubscriptions = options.notifySubscriptions ?? true
     for (const child of Array.from(this.childClients)) {

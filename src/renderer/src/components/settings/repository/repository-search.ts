@@ -7,23 +7,37 @@ import {
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { searchKeywordTranslator } from '../search/settings-search-keywords'
+import {
+  searchKeywordTranslator,
+  projectGroupingSearchKeywords
+} from '../search/settings-search-keywords'
 import { getRepositoryGitAuthorSearchEntries } from './source-control/repository-git-author-search-entries'
 import { getRepositoryMcpConfigSearchEntries } from './mcp/mcp-config-search'
 import { getRepositoryGitHooksSearchEntries } from './hooks/repository-git-hooks-search-entries'
-import {
-  getRepositoryGitWorktreeSearchEntries,
-  getRepositoryGitWorktreeSearchMetadata
-} from './worktrees/repository-git-worktree-search-entries'
+import { getRepositoryGitWorktreeSearchEntries } from './worktrees/repository-git-worktree-search-entries'
 import { getRepositoryFormatterSearchEntry } from './RepositoryFormatterSection'
 import { getRepositoryAgentTrustSearchEntry } from './RepositoryAgentTrustSection'
 
-type RepositoryPaneSearchOptions = {
+export function projectGroupingSearchEntry(
+  displayName: string,
+  t: Translate = translate
+): SettingsSearchEntry {
+  return {
+    title: t('settings.projectGrouping.label', 'Group checkouts'),
+    description: t(
+      'settings.projectGrouping.overrideDescription',
+      'Overrides the default in General for every checkout of this repository.'
+    ),
+    keywords: [displayName, ...projectGroupingSearchKeywords(t)]
+  }
+}
+
+export type RepositoryPaneSearchOptions = {
   isLocalWindowsProject?: boolean
   windowsRuntimeSupported?: boolean
 }
 
-function getRepositorySearchParts(
+export function getRepositorySearchParts(
   repo: Repo,
   options: RepositoryPaneSearchOptions = {},
   t: Translate = translate
@@ -219,6 +233,7 @@ function getRepositorySearchParts(
     ]
   }
   return {
+    projectGrouping: isFolder ? undefined : projectGroupingSearchEntry(repo.displayName, t),
     agentTrust: getRepositoryAgentTrustSearchEntry(),
     jira,
     displayName,
@@ -240,6 +255,7 @@ export function getRepositoryPaneSearchEntries(
 ): SettingsSearchEntry[] {
   const parts = getRepositorySearchParts(repo, options, t)
   const entries = [
+    ...(parts.projectGrouping ? [parts.projectGrouping] : []),
     getRepositoryFormatterSearchEntry(t),
     parts.agentTrust,
     parts.jira,
@@ -269,38 +285,4 @@ export function getRepositoryPaneSearchEntries(
     entries.push(...parts.hooks)
   }
   return entries
-}
-
-export function getRepositoryPaneSearchMetadata(
-  repo: Repo,
-  options: RepositoryPaneSearchOptions = {},
-  t: Translate = translate
-) {
-  const parts = getRepositorySearchParts(repo, options, t)
-  const worktrees = isFolderRepo(repo) ? undefined : getRepositoryGitWorktreeSearchMetadata(repo, t)
-  const identity = [parts.agentTrust, parts.jira, parts.displayName, parts.icon]
-  if (parts.github) {
-    identity.push(parts.github)
-  }
-  if (parts.fork) {
-    identity.push(parts.fork)
-  }
-  if (parts.projectRuntime) {
-    identity.push(parts.projectRuntime)
-  }
-  if (worktrees) {
-    identity.push(...worktrees.identity)
-  }
-  identity.push(parts.removeProject)
-  return {
-    identity,
-    projectRuntime: parts.projectRuntime ? [parts.projectRuntime] : [],
-    sparsePresets: worktrees?.sparsePresets ?? [],
-    sharedPaths: worktrees?.sharedPaths ?? [],
-    sourceControlAi: parts.sourceControlAi ?? [],
-    mcp: parts.mcp ?? [],
-    hooks: parts.hooks ?? [],
-    // Host setups has no indexed descriptor; keep its existing empty-query admission.
-    hostSetups: [] satisfies SettingsSearchEntry[]
-  }
 }

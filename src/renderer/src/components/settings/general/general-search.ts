@@ -4,13 +4,26 @@ import { GENERAL_SETTING_ANCHORS, generalSetting } from './general-setting-ancho
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { getGeneralEditorSearchEntries } from '../editor/general-editor-search'
 import { translate } from '@/i18n/i18n'
-import { searchKeywords, translateSearchKeyword } from '../search/settings-search-keywords'
+import {
+  searchKeywords,
+  translateSearchKeyword,
+  projectGroupingSearchKeywords
+} from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { getGeneralProjectRuntimeSearchEntries } from './project-runtime/general-project-runtime-search'
 import { getGeneralSupportSearchEntries } from './general-support-search'
 import { getUpdateDelayDescription, getUpdateDelayTitle } from '../updates/update-delay-copy'
 
 export const getGeneralWorkspaceSearchDescriptors = createLocalizedCatalog(() => [
+  generalSetting(GENERAL_SETTING_ANCHORS.projectGrouping, {
+    title: translate('settings.projectGrouping.label', 'Group checkouts'),
+    description: translate(
+      'settings.projectGrouping.description',
+      'Choose which checkouts of a Git repository count as one project.'
+    ),
+    keywords: projectGroupingSearchKeywords(),
+    targetSectionId: GENERAL_SETTING_ANCHORS.projectGrouping
+  }),
   generalSetting(GENERAL_SETTING_ANCHORS.folder, {
     title: translate('auto.components.settings.general.search.0e030ce4e3', 'Workspace directory'),
     description: translate(

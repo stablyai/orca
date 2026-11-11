@@ -114,8 +114,9 @@ export function buildSidebarHostOptions(
       })
     }
   }
-  const activeRuntimeHostId = args.settings?.activeRuntimeEnvironmentId?.trim()
-    ? toRuntimeExecutionHostId(args.settings.activeRuntimeEnvironmentId.trim())
+  const activeRuntimeEnvironmentId = args.settings?.activeRuntimeEnvironmentId?.trim()
+  const activeRuntimeHostId = activeRuntimeEnvironmentId
+    ? toRuntimeExecutionHostId(activeRuntimeEnvironmentId)
     : null
   return buildExecutionHostRegistry({
     repos: args.repos,

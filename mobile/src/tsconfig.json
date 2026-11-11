@@ -1,0 +1,6 @@
+{
+  "extends": "../tsconfig.json",
+  "files": [],
+  "include": [],
+  "references": [{ "path": "../../config/tsconfig.test.mobile-project-controls.json" }]
+}

@@ -1,3 +1,4 @@
+import { withLegacyProjectGroupKeys } from '../project-section-legacy-grouping'
 import type { ProjectGroup } from '../project-group-types'
 import type { ServedProjectSections } from '../project-section-catalog-schema'
 import type { ProjectSectionRepo } from '../project-section-grouping'
@@ -32,7 +33,10 @@ export function buildSidebarFeedCatalog(
     ? {
         repos: served.repos.map(catalogRepo),
         projectGroups: served.projectGroups ?? hostProjectGroups,
-        projectGrouping: { projects: served.projects, projectHostSetups: served.setups }
+        projectGrouping: {
+          projects: served.projects,
+          projectHostSetups: withLegacyProjectGroupKeys(served.setups)
+        }
       }
     : {
         repos: hostRepos.map(catalogRepo),

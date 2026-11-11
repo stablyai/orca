@@ -1,3 +1,4 @@
+import { getProjectIdentityKey } from '../../../shared/project-host-setup-projection'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { ProjectHostSetup, ProjectHostSetupUpdateArgs } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
@@ -27,9 +28,11 @@ import {
 } from '../../workspaces/catalog/local-worktree-scan-generation'
 
 import type { StoreRuntimeState } from './store-runtime-state'
-
 import { type WriteSchedulingOperations, scheduleSave } from './write-scheduling'
-import { pruneDeregisteredRepoUiResidue } from './repo-lifecycle-ui-residue'
+import {
+  pruneDeregisteredRepoUiResidue,
+  retireRemovedProjectGroupingState
+} from './repo-lifecycle-ui-residue'
 import { isWslMoveProjectSessionFrozen } from '../moving-wsl-projects/wsl-move-scope-guard'
 import { dropOrcadTerminalRestoreHintsForWorktrees } from '../migrating-orcad-catalog/orcad-terminal-restore-hint-store'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
@@ -93,47 +96,43 @@ export class RepoLifecycleOperations {
   }
 
   removeProjectForHost(target: RepoHostTarget): void {
+    const state = this[repoLifecycleOperationsContext].runtime.state
     const id = target.id
     const hostId = getRepoExecutionHostId(target)
-    const repoRemoved = this[repoLifecycleOperationsContext].runtime.state.repos.some(
-      (repo) => repo.id === id && getRepoExecutionHostId(repo) === hostId
+    const removedProjectIds = new Set(
+      state.repos
+        .filter((repo) => repo.id === id && getRepoExecutionHostId(repo) === hostId)
+        .map(getProjectIdentityKey)
     )
-    this[repoLifecycleOperationsContext].runtime.state.repos = this[
-      repoLifecycleOperationsContext
-    ].runtime.state.repos.filter((r) => !(r.id === id && getRepoExecutionHostId(r) === hostId))
+    const repoRemoved = removedProjectIds.size > 0
+    state.repos = state.repos.filter((r) => !(r.id === id && getRepoExecutionHostId(r) === hostId))
     if (repoRemoved) {
       bumpLocalWorktreeScanGeneration(id)
     }
-    const idStillPresent = this[repoLifecycleOperationsContext].runtime.state.repos.some(
-      (r) => r.id === id
-    )
+    const idStillPresent = state.repos.some((r) => r.id === id)
     if (!idStillPresent) {
       retireLocalWorktreeScanGeneration(id)
       releaseWslStoppedWorktreeRescan(id)
       dropRepoRestoreHints(this, id)
-      delete this[repoLifecycleOperationsContext].runtime.state.sparsePresetsByRepo[id]
-      delete this[repoLifecycleOperationsContext].runtime.state.retiredWorktreeNamesByRepo?.[id]
+      delete state.sparsePresetsByRepo[id]
+      delete state.retiredWorktreeNamesByRepo?.[id]
     }
     syncProjectHostSetupCompatibilityState(this)
+    retireRemovedProjectGroupingState(state, removedProjectIds)
     // Paired repos may be absent locally while same-ID rows remain on another host; prune only this host.
     const pairedHost = parseExecutionHostId(hostId)?.kind === 'runtime'
     pruneWorktreeStateForRepo(this, id, idStillPresent || pairedHost ? hostId : null)
     if (!idStillPresent && !pairedHost) {
-      this[repoLifecycleOperationsContext].runtime.state.workspaceSession = removeLocalRepoSession(
-        this[repoLifecycleOperationsContext].runtime.state.workspaceSession,
+      state.workspaceSession = removeLocalRepoSession(state.workspaceSession, id)
+      state.workspaceSessionsByHostId = removeRepoFromHostWorkspaceSessions(
+        state.workspaceSessionsByHostId,
         id
       )
-      this[repoLifecycleOperationsContext].runtime.state.workspaceSessionsByHostId =
-        removeRepoFromHostWorkspaceSessions(
-          this[repoLifecycleOperationsContext].runtime.state.workspaceSessionsByHostId,
-          id
-        )
     } else if (pairedHost) {
-      const session =
-        this[repoLifecycleOperationsContext].runtime.state.workspaceSessionsByHostId?.[hostId]
+      const session = state.workspaceSessionsByHostId?.[hostId]
       if (session) {
-        this[repoLifecycleOperationsContext].runtime.state.workspaceSessionsByHostId = {
-          ...this[repoLifecycleOperationsContext].runtime.state.workspaceSessionsByHostId,
+        state.workspaceSessionsByHostId = {
+          ...state.workspaceSessionsByHostId,
           [hostId]: removeRepoFromWorkspaceSession(session, id)
         }
       }
@@ -283,6 +282,9 @@ export function syncProjectHostSetupCompatibilityState(owner: RepoLifecycleOpera
     owner[repoLifecycleOperationsContext].runtime.state,
     owner[repoLifecycleOperationsContext].runtime.state.repos
   )
+  if (compatibilityState.settings) {
+    owner[repoLifecycleOperationsContext].runtime.state.settings = compatibilityState.settings
+  }
   owner[repoLifecycleOperationsContext].runtime.state.projects = compatibilityState.projects
   owner[repoLifecycleOperationsContext].runtime.state.projectHostSetups =
     compatibilityState.projectHostSetups

@@ -7,6 +7,13 @@ import type {
 } from '../../shared/rich-markdown-context-menu'
 
 export type UiWindowApi = {
+  onCtrlTabKeyUp: (callback: () => void) => () => void
+  onToggleStatusBar: (callback: () => void) => () => void
+  onDictationKeyDown: (callback: () => void) => () => void
+  onExportPdfRequested: (callback: () => void) => () => void
+  onAppMenuPaste: (callback: () => void) => () => void
+  onAppMenuSelectionAction: (callback: (action: 'copy' | 'select-all') => void) => () => void
+  onEditableContextPaste: (callback: (data: { plainTextOnly: boolean }) => void) => () => void
   readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
   /** The clipboard's HTML when it may carry links; empty otherwise. */
   readClipboardLinkHtml: () => Promise<string>

@@ -1,3 +1,5 @@
+import { buildProjectGroupingIndex } from '../project-section-grouping'
+import type { ProjectGroupingSettings } from '../project-grouping'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toSshExecutionHostId,
@@ -39,15 +41,12 @@ export type OwnProjectCatalog = {
 export function buildSidebarProjectCatalog(
   own: OwnProjectCatalog,
   servers: readonly PairedServerCatalog[],
-  ui: Pick<PersistedUIState, 'manualRepoOrder' | 'projectOrderBy'> | undefined
+  ui: Pick<PersistedUIState, 'manualRepoOrder' | 'projectOrderBy'> | undefined,
+  settings?: ProjectGroupingSettings | null
 ): MobileProjectSectionCatalog {
   const local = { kind: 'local' } as const
-  // Fold each server into project groups established by earlier copies, matching mergeFetchedReposForHost.
-  let merged: Repo[] = own.repos.map((repo) => adoptEndpointRepo(local, repo))
-  for (const server of servers) {
-    merged = [...merged, ...applyInheritedProjectGroups(merged, server.repos)]
-  }
-  const repos = applyManualRepoOrder(merged, ui?.manualRepoOrder)
+  const ownRepos = own.repos.map((repo) => adoptEndpointRepo(local, repo))
+  const allRepos = [...ownRepos, ...servers.flatMap((server) => server.repos)]
   const hosts = [
     {
       hostId: LOCAL_EXECUTION_HOST_ID,
@@ -57,11 +56,31 @@ export function buildSidebarProjectCatalog(
   ]
   let rows: ProjectCatalogRows = { projects: [], projectHostSetups: [] }
   for (const { hostId, projection } of hosts) {
-    rows = mergeFetchedHostProjectCatalog({ previous: rows, fetched: projection, repos, hostId })
+    rows = mergeFetchedHostProjectCatalog({
+      previous: rows,
+      fetched: projection,
+      repos: allRepos,
+      hostId
+    })
   }
+  const projection = resolveProjectHostSetupProjection(
+    allRepos,
+    rows.projects,
+    rows.projectHostSetups
+  )
+  const grouping = buildProjectGroupingIndex({
+    projects: projection.projects,
+    projectHostSetups: projection.setups,
+    settings
+  })
+  let merged = ownRepos
+  for (const server of servers) {
+    merged = [...merged, ...applyInheritedProjectGroups(merged, server.repos, settings, grouping)]
+  }
+  const repos = applyManualRepoOrder(merged, ui?.manualRepoOrder)
   return buildMobileProjectSectionCatalog(
     repos,
-    resolveProjectHostSetupProjection(repos, rows.projects, rows.projectHostSetups),
+    projection,
     ui?.projectOrderBy ?? 'manual',
     [
       ...own.projectGroups.map((group) => ({
@@ -71,6 +90,7 @@ export function buildSidebarProjectCatalog(
           : LOCAL_EXECUTION_HOST_ID
       })),
       ...servers.flatMap((server) => server.projectGroups)
-    ]
+    ],
+    settings
   )
 }

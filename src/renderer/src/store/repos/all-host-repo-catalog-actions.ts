@@ -1,3 +1,4 @@
+import { carryFetchedProjectGroupingOverrides } from './project-grouping-preferences'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -62,13 +63,14 @@ export function createAllHostRepoCatalogActions(
         if (!isCurrent(fence)) {
           return false
         }
+        const previousProjects = get().projects
         let hostRepos: Repo[] = []
         set((s) => {
           // Why: skip a catalog whose env was tombstoned mid-load (removed), not one merely absent from the not-yet-hydrated saved list (#8881).
           if (isRemovedRuntimeHostId(catalog.hostId, s.removedRuntimeEnvironmentIds)) {
             return s
           }
-          const result = mergeFetchedRepoCatalog(catalog, s.repos)
+          const result = mergeFetchedRepoCatalog(catalog, s.repos, s.settings, s)
           const reconciliation = reconcileSupersededSshRepos(result.repos, s)
           const finalizedRepos = applyManualRepoOrder(reconciliation.repos, s.manualRepoOrder)
           const mergedProjectCompatibility = mergeFetchedHostProjectCatalog({
@@ -89,6 +91,7 @@ export function createAllHostRepoCatalogActions(
           )
           return {
             repos: finalizedRepos,
+            ...(fence.target.kind === 'local' ? { localRepoCatalogHydrated: true } : {}),
             pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
             ...reconcileFetchedCatalogWorktreeState(
               s,
@@ -107,6 +110,7 @@ export function createAllHostRepoCatalogActions(
         })
         noteLiveRepoCatalogApplied(get, catalog.hostId)
         // Why: keep the safe-auto fork sync (as fetchRepos does) so cold-start, which now routes here, still updates safe-auto forks.
+        carryFetchedProjectGroupingOverrides(get, previousProjects)
         scheduleSafeAutoForkSync(hostRepos)
         if (options?.onHostLoaded) {
           const onHostLoaded = options.onHostLoaded

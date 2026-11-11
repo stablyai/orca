@@ -1,10 +1,14 @@
 import { useCallback } from 'react'
-import {
-  getRepoExecutionHostId,
-  LOCAL_EXECUTION_HOST_ID
-} from '../../../../../../shared/execution-host'
+import type { Repo } from '../../../../../../shared/repo-types'
+import type { ProjectGroupOperation } from '../../project-group-operation'
+import type {
+  ProjectGroupAttempt,
+  ProjectGroupOperationOwner
+} from '../../use-project-group-operation'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 import { getRepoWorkspaceCreationTargetHint } from '@/lib/workspace/creation/project-host-workspace-target'
 import { resolveReviewRepository } from '@/lib/source-control/review/review-owner'
+import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import {
   createWorktreeContextMenuDeleteIntent,
   deferWorktreeContextMenuDeleteIntent
@@ -22,8 +26,6 @@ import {
   preserveDeleteSiblingPosition
 } from './worktree-context-menu-policy'
 import type { useAppStore } from '@/store/index'
-import type { Repo } from '../../../../../../shared/repo-types'
-import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 
 function resolveChildWorktreeRepository(repos: readonly Repo[], worktree: Worktree): Repo | null {
   return resolveReviewRepository(repos, {
@@ -39,16 +41,17 @@ export function useWorktreeContextMenuCommands(args: {
   activeContextWorktrees: readonly Worktree[]
   batchDeleteWorktrees: readonly Worktree[]
   createGroupDialogActiveRef: React.MutableRefObject<boolean>
-  createProjectGroup: ReturnType<typeof useAppStore.getState>['createProjectGroup']
+  operationOwner: ProjectGroupOperationOwner
+  groupOperation: ProjectGroupOperation | null
+  createGroupAttempt: ProjectGroupAttempt | null
   folderWorkspaceId: string | null
   getState: () => ReturnType<typeof useAppStore.getState>
   isMultiContext: boolean
-  moveProjectToGroup: ReturnType<typeof useAppStore.getState>['moveProjectToGroup']
   onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: string) => void
   openModal: ReturnType<typeof useAppStore.getState>['openModal']
   repo: Repo | null | undefined
   scopeRef: React.RefObject<HTMLDivElement | null>
-  setCreateGroupDialogOpen: (open: boolean) => void
+  setCreateGroupAttempt: (attempt: ProjectGroupAttempt | null) => void
   setMenuOpenState: (open: boolean) => void
   setWorkspaceUnreadByUser: ReturnType<typeof useAppStore.getState>['setWorkspaceUnreadByUser']
   setWorktreesPinnedAndReveal: ReturnType<
@@ -83,43 +86,45 @@ export function useWorktreeContextMenuCommands(args: {
     args.setWorktreesPinnedAndReveal([args.worktree], !args.worktree.isPinned)
   }, [args])
   const handleCreateGroupFromRepo = useCallback(() => {
-    if (!args.repo) {
+    if (!args.groupOperation) {
       return
     }
-    args.createGroupDialogActiveRef.current = true
-    args.setCreateGroupDialogOpen(true)
+    const attempt = args.operationOwner.capture(args.groupOperation)
+    if (attempt) {
+      args.createGroupDialogActiveRef.current = true
+      args.setCreateGroupAttempt(attempt)
+    }
   }, [args])
   const handleCreateGroupDialogOpenChange = useCallback(
     (open: boolean) => {
-      args.createGroupDialogActiveRef.current = open
-      args.setCreateGroupDialogOpen(open)
+      if (!open) {
+        if (args.createGroupAttempt) {
+          args.operationOwner.cancel(args.createGroupAttempt)
+        }
+        args.createGroupDialogActiveRef.current = false
+        args.setCreateGroupAttempt(null)
+      }
     },
     [args]
   )
   const handleSubmitNewProjectGroup = useCallback(
-    async (name: string) => {
-      if (!args.repo) {
-        return
-      }
-      const group = await args.createProjectGroup(name, getRepoExecutionHostId(args.repo))
-      if (group) {
-        await args.moveProjectToGroup(args.repo, group.id)
-      }
-    },
+    async (name: string) =>
+      args.createGroupAttempt
+        ? args.operationOwner.submitNew(args.createGroupAttempt, name)
+        : false,
     [args]
   )
   const handleMoveProjectToGroup = useCallback(
     (groupId: string) => {
-      if (!args.repo || args.repo.projectGroupId === groupId) {
-        return
+      if (args.groupOperation) {
+        void args.operationOwner.move(args.groupOperation, groupId)
       }
-      void args.moveProjectToGroup(args.repo, groupId)
     },
     [args]
   )
   const handleRemoveProjectFromGroup = useCallback(() => {
-    if (args.repo) {
-      void args.moveProjectToGroup(args.repo, null)
+    if (args.groupOperation) {
+      void args.operationOwner.move(args.groupOperation, null)
     }
   }, [args])
   const handleAssignWorkspaceStatus = useCallback(

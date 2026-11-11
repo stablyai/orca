@@ -1,3 +1,4 @@
+import { getProjectGroupingIndexFromState } from '@/store/projects/project-host-setup-selector'
 import { useDeferredValue, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
@@ -144,6 +145,7 @@ export function useAgentPaneThreads(args: {
     showChildAgents = false,
     badgeOnly = false
   } = args
+  const grouping = useAppStore(getProjectGroupingIndexFromState)
   const agentsVisibleHostIds = useAppStore((s) => s.agentsVisibleHostIds)
   const agentsFilterRepoIds = useAppStore((s) => s.agentsFilterRepoIds)
   const hideWorkspacesFromOtherDevices = useAppStore((s) => s.agentsHideWorkspacesFromOtherDevices)
@@ -265,8 +267,11 @@ export function useAgentPaneThreads(args: {
   )
 
   const visibleThreadGroups = useMemo(
-    () => (badgeOnly ? EMPTY_GROUPS : buildActivityThreadGroups(visibleThreads, groupBy)),
-    [visibleThreads, groupBy, badgeOnly]
+    () =>
+      badgeOnly
+        ? EMPTY_GROUPS
+        : buildActivityThreadGroups(visibleThreads, groupBy, undefined, storeData.repos, grouping),
+    [visibleThreads, groupBy, badgeOnly, grouping, storeData.repos]
   )
 
   return {

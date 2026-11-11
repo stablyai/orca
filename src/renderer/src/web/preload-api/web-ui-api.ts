@@ -1,3 +1,4 @@
+import { createWebHostUiWriter } from './web-host-ui-writer'
 import { subscribeWebWorkspaceSleep } from './web-workspace-sleep-notices'
 import { savePastedTextAsWebAgentSessionAttachment } from './web-pasted-text-upload'
 import { createWebExplorerRootSync } from './web-explorer-root-sync'
@@ -23,7 +24,7 @@ import {
   mergeOsc52ClipboardNoticePending,
   mergeWebUIState
 } from './web-preference-normalization'
-import { readLocalWebUIState } from './web-preferences-store'
+import { readLocalWebUIState } from './web-local-ui-state'
 import { callRuntimeResult } from './web-runtime-calls'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import { UI_STORAGE_KEY, noopUnsubscribe, writeJson } from './web-storage'
@@ -38,6 +39,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     explorerRoots.prepare(environmentId, hostUpdates)
     return { environmentId, hostUpdates }
   }
+  const writeHostUI = createWebHostUiWriter()
   let zoomLevel = readLocalWebUIState().uiZoomLevel
   return {
     ...createWebJiraFilterStateApi(),
@@ -74,26 +76,26 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       }
     },
     /** Persists locally first and attempts the host write without propagating offline failures to fire-and-forget callers. */
-    set: async (updates) => {
+    set: async (updates, context) => {
       const next = mergeWebUIState(readLocalWebUIState(), updates)
       writeJson(UI_STORAGE_KEY, next)
       zoomLevel = next.uiZoomLevel
       // Older hosts lack stripping; sending browser runtime:web-* keys would overwrite desktop order.
       const { environmentId, hostUpdates } = prepareHostUpdates(updates)
       try {
-        await callRuntimeResult('ui.set', hostUpdates, 15_000)
+        await writeHostUI(hostUpdates, context)
         explorerRoots.acknowledge(environmentId, hostUpdates)
       } catch {
         // Why: unpaired/offline web clients still need local UI persistence.
       }
     },
     /** Rejects failed or stripped host updates so the diff writer cannot acknowledge preferences the host never received. */
-    setWithAck: async (updates) => {
+    setWithAck: async (updates, context) => {
       const next = mergeWebUIState(readLocalWebUIState(), updates)
       writeJson(UI_STORAGE_KEY, next)
       zoomLevel = next.uiZoomLevel
       const { environmentId, hostUpdates } = prepareHostUpdates(updates)
-      await callRuntimeResult('ui.set', hostUpdates, 15_000)
+      await writeHostUI(hostUpdates, context)
       explorerRoots.acknowledge(environmentId, hostUpdates)
       if (
         updates.explorerDisplayRootByWorktree !== undefined &&

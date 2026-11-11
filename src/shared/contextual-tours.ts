@@ -1,6 +1,8 @@
 import type { FeatureInteractionId } from './feature-interactions'
+import { PROJECT_GROUPING_TIP_TOUR } from './project-grouping-upgrade-tour'
 
 export type ContextualTourId =
+  | 'project-grouping-upgrade'
   | 'workspace-board'
   | 'workspace-agent-sessions'
   | 'browser'
@@ -25,6 +27,7 @@ export type ContextualTourStepActionKind =
   | 'open-tasks'
   | 'open-getting-started'
   | 'open-client-hosted-browser-settings'
+  | 'open-project-grouping-settings'
 
 export type ContextualTourStepAction = {
   kind: ContextualTourStepActionKind
@@ -60,6 +63,7 @@ export type ContextualTour = {
 }
 
 export const CONTEXTUAL_TOURS = [
+  PROJECT_GROUPING_TIP_TOUR,
   {
     id: 'workspace-board',
     steps: [

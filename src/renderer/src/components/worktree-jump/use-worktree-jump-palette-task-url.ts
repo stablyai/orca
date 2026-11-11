@@ -1,3 +1,4 @@
+import { getProjectGroupingIndexFromState } from '@/store/projects/project-host-setup-selector'
 import { useLinearIssueResult } from '@/hooks/linear-issue-committed-state'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
@@ -49,9 +50,12 @@ function getComposerDefaultWorkspaceTarget(state: ReturnType<typeof useAppStore.
     state.repos,
     eligibleRepos,
     state.activeRepoId,
-    state.runtimeEnvironments
+    state.runtimeEnvironments,
+    state.settings,
+    getProjectGroupingIndexFromState(state)
   )
   const resolution = resolveWorkspaceCreationTarget({
+    grouping: getProjectGroupingIndexFromState(state),
     eligibleRepos,
     projects: state.projects,
     projectHostSetups: state.projectHostSetups,

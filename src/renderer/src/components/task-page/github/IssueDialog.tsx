@@ -1,3 +1,4 @@
+import { getRepoHostIdentity } from '../../../../../shared/repo-host-identity'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { useRef, useState } from 'react'
 import { getGitHubRuntimeRepoId } from '@/lib/work-items/github/github-source-runtime-context'
@@ -171,7 +172,7 @@ export function TaskPageGitHubIssueDialog({
                 </SelectTrigger>
                 <SelectContent>
                   {selectedRepos.map((r) => (
-                    <SelectItem key={r.id} value={r.id}>
+                    <SelectItem key={getRepoHostIdentity(r)} value={getRepoHostIdentity(r)}>
                       <RepoBadgeLabel name={r.displayName} color={r.badgeColor} />
                     </SelectItem>
                   ))}

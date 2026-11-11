@@ -37,6 +37,7 @@ on:
       - 'src/main/runtime/integrations/github/runtime-github-repository-query-commands.ts'
       - 'src/main/github/issue-field-options.ts'
       - 'config/tsconfig.test.mobile-host-declarations.json'
+      - 'config/tsconfig.test.project-grouping-host-declarations.json'
       - 'config/tsconfig.node.json'
       - 'src/types/build-constants.d.ts'
       - 'src/main/native-chat/agent-session-wire/**'
@@ -73,6 +74,24 @@ on:
       - 'config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs'
       - 'config/scripts/typecheck/project-execution/tsrs-typecheck-compiler.mjs'
       - 'config/scripts/tool-invocation/pinned-bun-executable.mjs'
+      - 'config/tsconfig.test.mobile-project-controls.json'
+      - 'config/tsconfig.test.mobile-host-declarations.json'
+      - 'config/tsconfig.test.project-grouping-host-declarations.json'
+      - 'config/tsconfig.test.pane-launch.json'
+      - 'config/tsconfig.web.json'
+      # Checked declarations follow the real desktop fixture, renderer ambient and preload graph.
+      - 'src/main/**'
+      - 'src/renderer/**'
+      - 'src/preload/**'
+      - 'src/types/**'
+      - 'src/wsl-guest/claude-agent-view-plugin.ts'
+      - 'src/wsl-guest/omp-status-extension.ts'
+      - 'src/wsl-guest/opencode-canonical-config.ts'
+      - 'src/wsl-guest/opencode-overlay-mirror.ts'
+      - 'src/wsl-guest/plugin-overlay.ts'
+      - 'src/wsl-guest/plugin-sources.ts'
+      - 'config/scripts/test-runtime/environment/vitest-host-ports-setup.ts'
+      - 'package.json'
       - 'config/oxlint-code-quality-native-plugins.json'
       - 'config/.bun-version'
       - '.github/actions/install-node-dependencies/**'
@@ -96,6 +115,9 @@ on:
       - '!src/main/**/*.test.[jt]s'
       - '!src/main/**/*.test.[jt]sx'
       - '!src/main/**/*.test.[cm][jt]s'
+      - '!src/renderer/**/*.test.[jt]s'
+      - '!src/renderer/**/*.test.[jt]sx'
+      - '!src/renderer/**/*.test.[cm][jt]s'
   # Check matching source inputs on main too: independently passing PRs can conflict after merge, and verify is PR-only.
   push:
     branches:
@@ -126,6 +148,7 @@ on:
       - 'src/main/runtime/integrations/github/runtime-github-repository-query-commands.ts'
       - 'src/main/github/issue-field-options.ts'
       - 'config/tsconfig.test.mobile-host-declarations.json'
+      - 'config/tsconfig.test.project-grouping-host-declarations.json'
       - 'config/tsconfig.node.json'
       - 'src/types/build-constants.d.ts'
       - 'src/main/native-chat/agent-session-wire/**'
@@ -160,6 +183,24 @@ on:
       - 'config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs'
       - 'config/scripts/typecheck/project-execution/tsrs-typecheck-compiler.mjs'
       - 'config/scripts/tool-invocation/pinned-bun-executable.mjs'
+      - 'config/tsconfig.test.mobile-project-controls.json'
+      - 'config/tsconfig.test.mobile-host-declarations.json'
+      - 'config/tsconfig.test.project-grouping-host-declarations.json'
+      - 'config/tsconfig.test.pane-launch.json'
+      - 'config/tsconfig.web.json'
+      # Checked declarations follow the real desktop fixture, renderer ambient and preload graph.
+      - 'src/main/**'
+      - 'src/renderer/**'
+      - 'src/preload/**'
+      - 'src/types/**'
+      - 'src/wsl-guest/claude-agent-view-plugin.ts'
+      - 'src/wsl-guest/omp-status-extension.ts'
+      - 'src/wsl-guest/opencode-canonical-config.ts'
+      - 'src/wsl-guest/opencode-overlay-mirror.ts'
+      - 'src/wsl-guest/plugin-overlay.ts'
+      - 'src/wsl-guest/plugin-sources.ts'
+      - 'config/scripts/test-runtime/environment/vitest-host-ports-setup.ts'
+      - 'package.json'
       - 'config/.bun-version'
       - '.github/actions/install-node-dependencies/**'
       - '.github/actions/setup-pnpm/**'
@@ -173,6 +214,9 @@ on:
       - '!src/main/**/*.test.[jt]s'
       - '!src/main/**/*.test.[jt]sx'
       - '!src/main/**/*.test.[cm][jt]s'
+      - '!src/renderer/**/*.test.[jt]s'
+      - '!src/renderer/**/*.test.[jt]sx'
+      - '!src/renderer/**/*.test.[cm][jt]s'
 
 concurrency:
   # Key main concurrency by commit: GitHub replaces pending runs even with cancel-in-progress:false, hiding middle-merge regressions.
@@ -271,10 +315,10 @@ jobs:
         run: node node_modules/oxlint/bin/oxlint --config config/oxlint-code-quality-native-plugins.json mobile --deny-warnings
 
       # Call installed tools so pnpm's dependency refresh cannot race between checks.
+      # Host declaration emission and the test ratchet each load the desktop graph; keep their peaks separate.
       - name: Typecheck
         id: production-types
-        background: true
-        run: node ../config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs --compiler=bun --bun-threads=2 --project=mobile/tsconfig.json
+        run: node ../config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs --compiler=bun --bun-threads=2 --project=mobile/tsconfig.json --project=config/tsconfig.test.mobile-project-controls.json --mobile-host-declarations
 
       # Why a ratchet and not the raw typecheck: mobile/tsconfig.json excludes test files, so until
       # tsconfig.test.json existed nothing checked them, and at introduction 127 of the 632 had
@@ -283,7 +327,7 @@ jobs:
       # declarations and strictly checks the phone/host contract tests against them.
       - name: Typecheck tests (ratchet)
         id: test-types
-        background: true
+        if: ${{ !cancelled() && steps.production-types.outcome != 'skipped' }}
         run: node scripts/check-tests-typecheck-ratchet.mjs
 
       # Run bridged recording corpus unconditionally: reject growing/unclassified divergence and changed verdicts among 103 C1 goldens. Share worker time instead of a separate skippable env-gated step.
@@ -317,7 +361,6 @@ jobs:
           no-cache: true
 
       # Compiler work (including the ratchet's declaration emission) finishes before Vitest workers start.
-      - wait: [production-types, test-types]
 
       - name: Test
         if: steps.test-scope.outputs.should_run != 'false'
@@ -431,14 +474,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Host declaration emission and the test ratchet each load the desktop graph; keep their peaks separate.
       - name: Typecheck
         id: production-types
-        background: true
-        run: node ../config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs --compiler=bun --bun-threads=2 --project=mobile/tsconfig.json
+        run: node ../config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs --compiler=bun --bun-threads=2 --project=mobile/tsconfig.json --project=config/tsconfig.test.mobile-project-controls.json --mobile-host-declarations
 
       - name: Typecheck tests (ratchet)
         id: test-types
-        background: true
+        if: ${{ !cancelled() && steps.production-types.outcome != 'skipped' }}
         run: node scripts/check-tests-typecheck-ratchet.mjs
 
       # Run all golden consumers, including mutant/page-bridge suites; failures name the recording and rpc:record command.
@@ -458,8 +501,6 @@ jobs:
         with:
           bun-version-file: config/.bun-version
           no-cache: true
-
-      - wait: [production-types, test-types]
 
       - name: Test
         env:

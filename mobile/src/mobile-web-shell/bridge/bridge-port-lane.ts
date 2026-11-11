@@ -1,5 +1,6 @@
 import type { BridgeQueuedObservation, BridgeFixturePost } from './bridge-port-pair-contract'
-import type { BridgeNativeVerb } from './bridge-native-verbs'
+import { storageReadParamsSchema, type BridgeNativeVerb } from './bridge-native-verbs'
+import { BridgeNativeVerbRefusedError } from '../bridge-host-errors'
 
 type Lane = {
   sent: string[]
@@ -93,8 +94,24 @@ export function readAll<TMessage>(
 }
 
 // Keep a valid default reply per verb table row so unconfigured native calls do not fail as malformed shell results.
-export function defaultVerbAnswer(verb: BridgeNativeVerb): unknown {
+export function defaultVerbAnswer(
+  verb: BridgeNativeVerb,
+  params: unknown,
+  storage: Readonly<Record<string, string>>
+): unknown {
   switch (verb) {
+    case 'native.storage.read':
+      return { value: storage[storageReadParamsSchema.parse(params).key] ?? null }
+    case 'native.pdf.view':
+      throw new BridgeNativeVerbRefusedError(
+        'native_verb_failed',
+        'no PDF viewer exists in this pair'
+      )
+    case 'native.image.act':
+      throw new BridgeNativeVerbRefusedError(
+        'native_verb_failed',
+        'no image actions exist in this pair'
+      )
     case 'native.clipboard.write':
       return { written: true }
     case 'native.clipboard.read':
@@ -114,6 +131,7 @@ export function defaultVerbAnswer(verb: BridgeNativeVerb): unknown {
     case 'native.audio.stop':
       return { stopped: true, base64: '', droppedBytes: 0 }
   }
+  return undefined
 }
 
 export function neutralObservation(): BridgeQueuedObservation {

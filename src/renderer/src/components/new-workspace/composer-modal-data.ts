@@ -10,7 +10,10 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace-source'
 import type { WorkspaceStatus } from '../../../../shared/worktree/types'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
-import type { WorkspaceCreationTargetHint } from '@/lib/workspace/creation/project-host-workspace-target'
+import type {
+  WorkspaceCreationTargetHint,
+  WorkspaceCreationProjectScope
+} from '@/lib/workspace/creation/project-host-workspace-target'
 
 export type ComposerModalData = {
   recovery?: {
@@ -29,6 +32,7 @@ export type ComposerModalData = {
   linkedWorkItem?: LinkedWorkItemSummary | null
   initialGitHubWorkItem?: GitHubWorkItem | null
   taskSourceContext?: TaskSourceContext | null
+  initialProjectScope?: WorkspaceCreationProjectScope | null
   initialWorkspaceTarget?: WorkspaceCreationTargetHint | null
   initialBaseBranch?: string
   initialParentWorktreeId?: string
@@ -39,3 +43,5 @@ export type ComposerModalData = {
   contextualTourSource?: string
   setupGuideTourRequestId?: string
 }
+
+export type QuickAgentPick = Omit<NonNullable<ComposerModalData['recovery']>, 'note'>

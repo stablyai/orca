@@ -1,3 +1,4 @@
+export { buildWorkspaceStatusLookup } from './workspace-status-lookup'
 import type { WorkspaceStatus, WorkspaceStatusDefinition, Worktree } from './worktree/types'
 import { DEFAULT_STATUS_VISUALS, DEFAULT_WORKSPACE_STATUSES } from './workspace-status-defaults'
 import {
@@ -245,15 +246,24 @@ export function clampWorkspaceBoardColumnWidth(value: unknown): number {
 
 export function isWorkspaceStatusId(
   value: string,
-  statuses: readonly WorkspaceStatusDefinition[]
+  statuses: readonly WorkspaceStatusDefinition[],
+  lookup?: ReadonlyMap<string, WorkspaceStatusDefinition>
 ): value is WorkspaceStatus {
+  if (lookup) {
+    return lookup.has(value)
+  }
   return statuses.some((status) => status.id === value)
 }
 
 export function getDefaultWorkspaceStatusId(
-  statuses: readonly WorkspaceStatusDefinition[]
+  statuses: readonly WorkspaceStatusDefinition[],
+  lookup?: ReadonlyMap<string, WorkspaceStatusDefinition>
 ): WorkspaceStatus {
-  return statuses.some((status) => status.id === DEFAULT_WORKSPACE_STATUS_ID)
+  return (
+    lookup
+      ? lookup.has(DEFAULT_WORKSPACE_STATUS_ID)
+      : statuses.some((status) => status.id === DEFAULT_WORKSPACE_STATUS_ID)
+  )
     ? DEFAULT_WORKSPACE_STATUS_ID
     : (statuses[0]?.id ?? DEFAULT_WORKSPACE_STATUS_ID)
 }
@@ -283,11 +293,12 @@ export function mergeHostWorkspaceStatuses(
 
 export function getWorkspaceStatus(
   worktree: Pick<Worktree, 'workspaceStatus'>,
-  statuses: readonly WorkspaceStatusDefinition[]
+  statuses: readonly WorkspaceStatusDefinition[],
+  lookup?: ReadonlyMap<string, WorkspaceStatusDefinition>
 ): WorkspaceStatus {
-  return worktree.workspaceStatus && isWorkspaceStatusId(worktree.workspaceStatus, statuses)
+  return worktree.workspaceStatus && isWorkspaceStatusId(worktree.workspaceStatus, statuses, lookup)
     ? worktree.workspaceStatus
-    : getDefaultWorkspaceStatusId(statuses)
+    : getDefaultWorkspaceStatusId(statuses, lookup)
 }
 
 export function getWorkspaceStatusGroupKey(status: WorkspaceStatus): string {
@@ -296,14 +307,15 @@ export function getWorkspaceStatusGroupKey(status: WorkspaceStatus): string {
 
 export function getWorkspaceStatusFromGroupKey(
   groupKey: string,
-  statuses: readonly WorkspaceStatusDefinition[]
+  statuses: readonly WorkspaceStatusDefinition[],
+  lookup?: ReadonlyMap<string, WorkspaceStatusDefinition>
 ): WorkspaceStatus | null {
   if (!groupKey.startsWith(WORKSPACE_STATUS_GROUP_PREFIX)) {
     return null
   }
   try {
     const status = decodeURIComponent(groupKey.slice(WORKSPACE_STATUS_GROUP_PREFIX.length))
-    return isWorkspaceStatusId(status, statuses) ? status : null
+    return isWorkspaceStatusId(status, statuses, lookup) ? status : null
   } catch {
     return null
   }

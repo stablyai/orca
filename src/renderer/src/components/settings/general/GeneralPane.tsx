@@ -1,3 +1,4 @@
+import type { SettingsUpdate } from '@/store/slices/settings/create-settings-slice'
 import type React from 'react'
 import { useEffect, useRef } from 'react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
@@ -11,7 +12,8 @@ import { GeneralWorkspaceSettingsSection } from './GeneralWorkspaceSettingsSecti
 import {
   getGeneralCliSearchEntries,
   getGeneralNavigationSearchEntries,
-  getGeneralUpdateSearchEntries
+  getGeneralUpdateSearchEntries,
+  getGeneralWorkspaceSearchDescriptors
 } from './general-search'
 import { getGeneralEditorSearchDescriptors } from '../editor/general-editor-search'
 import { getGeneralSupportSearchEntries } from './general-support-search'
@@ -29,6 +31,8 @@ import { GeneralConfirmationsSection } from './GeneralConfirmationsSection'
 import { GeneralSearchResults } from './GeneralSearchResults'
 import { getGeneralSubPageTitle, type GeneralSubPage } from './general-sub-pages'
 import { useOpenInMenuDraft } from './OpenInMenuSetting'
+import { ProjectGroupingSetting } from '../ProjectGroupingSetting'
+import { GENERAL_SETTING_ANCHORS } from './general-setting-anchors'
 
 export function getDesktopPlatformFromUserAgent(userAgent: string): 'darwin' | 'win32' | 'other' {
   if (userAgent.includes('Mac')) {
@@ -59,7 +63,7 @@ const EMPTY_WSL_DISTROS: string[] = []
 
 type GeneralPaneProps = {
   settings: GlobalSettings
-  updateSettings: (updates: Partial<GlobalSettings>) => void
+  updateSettings: (updates: SettingsUpdate) => void
   updateSettingsOrThrow?: (updates: Partial<GlobalSettings>) => void | Promise<void>
   fontSuggestions: string[]
   onRequestFontSuggestions?: () => void
@@ -149,6 +153,15 @@ function GeneralRootSettings({
   const tabsEntries = getGeneralNavigationSearchEntries()
   const runtimeEntries = getGeneralProjectRuntimeSearchEntries()
   const showRuntime = shouldShowProjectRuntimeSection(wslSupportedPlatform, query, runtimeEntries)
+  const showProjectGrouping =
+    showNavigation ||
+    showRuntime ||
+    matchesSettingsSearch(
+      query,
+      getGeneralWorkspaceSearchDescriptors()
+        .filter(({ sectionId }) => sectionId === GENERAL_SETTING_ANCHORS.projectGrouping)
+        .map(({ entry }) => entry)
+    )
   const autoSaveEntries = getGeneralEditorSearchDescriptors()
     .filter((descriptor) => descriptor.page === null)
     .map(({ entry }) => entry)
@@ -210,8 +223,14 @@ function GeneralRootSettings({
           </SearchableSetting>
         </SettingsGroup>
       ) : null}
-      {showNavigation || showRuntime ? (
+      {showProjectGrouping ? (
         <SettingsGroup title={t('settings.general.workspaces.title', 'Workspaces')}>
+          <ProjectGroupingSetting
+            id={GENERAL_SETTING_ANCHORS.projectGrouping}
+            forceVisible={showNavigation || showRuntime}
+            settings={settings}
+            updateSettings={updateSettings}
+          />
           {showNavigation ? (
             <>
               <SettingsNavigationRow

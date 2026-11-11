@@ -1,3 +1,4 @@
+import { getProjectGroupingIndexFromState } from '@/store/projects/project-host-setup-selector'
 import { useAppStore } from '@/store'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -15,6 +16,7 @@ type ProjectTargetActionsInput = Pick<
   | 'projectHostSetups'
   | 'projectOptions'
   | 'projects'
+  | 'settings'
   | 'repos'
   | 'setBaseBranch'
   | 'setBranchNameOverride'
@@ -52,20 +54,18 @@ import {
 } from '@/lib/workspace/creation/new-workspace-project-options'
 import { translate } from '@/i18n/i18n'
 import { getFolderSourceRepos } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
-import { resolveWorkspaceCreationRepoId } from '@/lib/workspace/creation/project-host-workspace-target'
+import { getNewWorkspaceDialogEligibleRepos } from '../../../../shared/new-workspace-dialog-repo'
+import { resolveWorkspaceCreationTarget } from '@/lib/workspace/creation/project-host-workspace-target'
 
 export function useProjectTargetActions(input: ProjectTargetActionsInput) {
   const {
     actionableHostIds,
-    eligibleRepos,
     handleRepoChange,
     initialProjectGroupAppliedRef,
     isProjectGroupTarget,
     linkedWorkItem,
     projectGroups,
-    projectHostSetups,
     projectOptions,
-    projects,
     repos,
     setBaseBranch,
     setBranchNameOverride,
@@ -207,29 +207,31 @@ export function useProjectTargetActions(input: ProjectTargetActionsInput) {
       const preferredHostId =
         selectedWorkspaceTarget.status === 'ready' ? selectedWorkspaceTarget.target.hostId : null
       // Prefer focusedHostScope rather than hard-pin hostId, so projects available only on another host remain selectable.
-      const nextRepoId = resolveWorkspaceCreationRepoId({
-        eligibleRepos,
-        projects,
-        projectHostSetups: getProjectRowHostSetups(projectOptions, projectHostSetups),
-        projectId: option?.kind === 'project' ? option.projectId : projectId,
+      const state = useAppStore.getState()
+      const next = resolveWorkspaceCreationTarget({
+        grouping: getProjectGroupingIndexFromState(state),
+        settings: state.settings,
+        eligibleRepos: getNewWorkspaceDialogEligibleRepos(state.repos),
+        projects: state.projects,
+        projectHostSetups: getProjectRowHostSetups(projectOptions, state.projectHostSetups),
+        projectId,
         focusedHostScope: preferredHostId ?? workspaceHostScope,
         actionableHostIds
       })
-      if (!nextRepoId) {
+      if (next.status !== 'ready') {
         return
       }
-      handleRepoChange(nextRepoId, { forceResetStartFrom: isProjectGroupTarget })
+      handleRepoChange(next.target.repoId, { forceResetStartFrom: isProjectGroupTarget })
+      setSelectedProjectHostSetupOverrideId(next.target.projectHostSetupId)
+      setSelectedProjectHostSetupOverrideHostId(next.target.hostId)
     },
     [
       applyProjectGroupSelection,
-      eligibleRepos,
       actionableHostIds,
       handleRepoChange,
       isProjectGroupTarget,
       projectGroups,
-      projectHostSetups,
       projectOptions,
-      projects,
       repos,
       selectedWorkspaceTarget,
       workspaceHostScope,

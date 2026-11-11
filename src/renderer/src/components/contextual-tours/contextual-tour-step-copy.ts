@@ -1,3 +1,4 @@
+import { getProjectGroupingUpgradeTipCopy } from './project-grouping-upgrade-tip-copy'
 import { translate } from '@/i18n/i18n'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import type { ContextualTourStepId } from '../../../../shared/contextual-tours'
@@ -18,6 +19,7 @@ const getProjectsCollapseModifierLabel = (): string =>
 
 // Thunks resolve translate() in the language active at render time; `satisfies` makes a step without copy a type error.
 const LOCALIZED_STEP_COPY: Partial<Record<string, StepCopyThunk>> = {
+  'project-grouping-upgrade': getProjectGroupingUpgradeTipCopy,
   'workspace-board-plan': () => ({
     title: translate(
       'auto.components.contextual.tours.contextual.tour.step.copy.workspace.board.plan.title',

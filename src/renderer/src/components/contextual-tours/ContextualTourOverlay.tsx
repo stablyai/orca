@@ -360,6 +360,10 @@ export function ContextualTourOverlay(): JSX.Element | null {
       setSidebarOpen,
       openTaskPage,
       openModal,
+      openProjectGroupingSettings: () => {
+        openSettingsTarget({ pane: 'general', repoId: null, sectionId: 'general-projects' })
+        openSettingsPage()
+      },
       openClientHostedBrowserSettings: () => {
         openSettingsTarget({
           pane: 'browser',

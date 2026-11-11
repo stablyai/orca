@@ -1,16 +1,20 @@
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { Repo } from '../../../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../../../shared/project-group-types'
+import type { ProjectGroupOperation } from '../../project-group-operation'
+
 import { useCallback, useMemo, useRef, useState } from 'react'
+import {
+  type ProjectGroupAttempt,
+  useProjectGroupOperationOwner
+} from '../../use-project-group-operation'
+
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { projectRemovalTargets } from '../../workspace-actions/deletion/removal-unsaved-files'
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { translate } from '@/i18n/i18n'
 import { selectProjectGroupRemovalTargets } from '@/store/project-groups/project-group-removal-targets'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { Repo } from '../../../../../../shared/repo-types'
-import {
-  getRepoExecutionHostId,
-  type ExecutionHostId
-} from '../../../../../../shared/execution-host'
 import { refreshFolderProjectGroup } from './project-group-folder-refresh'
 import {
   selectDetectedWorktreesByRepo,
@@ -18,7 +22,7 @@ import {
 } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export type ProjectGroupNameDialogState =
-  | { type: 'create-from-repo'; repo: Repo }
+  | { type: 'create-from-repo'; repo: Repo; attempt: ProjectGroupAttempt }
   // hostId is the group row's owner host, so the mutation is not routed to whichever host has focus.
   | {
       type: 'rename'
@@ -83,8 +87,7 @@ export function useProjectGroupDialogs(args: {
   projectGroups: readonly ProjectGroup[]
 }) {
   const { repos, repoMap, projectGroups } = args
-  const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
-  const createProjectGroup = useAppStore((s) => s.createProjectGroup)
+  const operationOwner = useProjectGroupOperationOwner()
   const updateProjectGroup = useAppStore((s) => s.updateProjectGroup)
   const deleteProjectGroupWithContainedProjects = useAppStore(
     (s) => s.deleteProjectGroupWithContainedProjects
@@ -93,84 +96,81 @@ export function useProjectGroupDialogs(args: {
   const [nameDialog, setNameDialog] = useState<ProjectGroupNameDialogState | null>(null)
   const [deleteDialog, setDeleteDialog] = useState<ProjectGroupDeleteDialogState | null>(null)
 
-  const handleCreateGroupFromRepo = useCallback((repo: Repo) => {
-    setNameDialog({ type: 'create-from-repo', repo })
-  }, [])
+  const handleCreateGroupFromRepo = useCallback(
+    (operation: ProjectGroupOperation) => {
+      const attempt = operationOwner.capture(operation)
+      if (attempt) {
+        setNameDialog({ type: 'create-from-repo', repo: operation.members[0]!, attempt })
+      }
+    },
+    [operationOwner]
+  )
 
   const handleMoveProjectToGroup = useCallback(
-    (repo: Repo, groupId: string) => {
-      if (repo.projectGroupId === groupId) {
-        return
-      }
-      void moveProjectToGroup(repo, groupId)
+    (operation: ProjectGroupOperation, groupId: string) => {
+      void operationOwner.move(operation, groupId)
     },
-    [moveProjectToGroup]
+    [operationOwner]
   )
 
   const handleRemoveProjectFromGroup = useCallback(
-    (repo: Repo) => {
-      void moveProjectToGroup(repo, null)
+    (operation: ProjectGroupOperation) => {
+      void operationOwner.move(operation, null)
     },
-    [moveProjectToGroup]
+    [operationOwner]
   )
 
-  const handleRefreshProjectGroup = useCallback(
-    async (group: ProjectGroup): Promise<void> => {
-      if (refreshingGroupIds.current.has(group.id)) {
-        return
-      }
-      refreshingGroupIds.current.add(group.id)
-      // Why: scans of large folders can take seconds; show progress so repeat clicks aren't silently ignored.
-      const loadingToastId = toast.loading(
-        translate(
-          'auto.components.sidebar.WorktreeList.projectGroupRefreshing',
-          'Refreshing {{group}}…',
-          { group: group.name }
-        )
+  const handleRefreshProjectGroup = useCallback(async (group: ProjectGroup): Promise<void> => {
+    if (refreshingGroupIds.current.has(group.id)) {
+      return
+    }
+    refreshingGroupIds.current.add(group.id)
+    // Why: scans of large folders can take seconds; show progress so repeat clicks aren't silently ignored.
+    const loadingToastId = toast.loading(
+      translate(
+        'auto.components.sidebar.WorktreeList.projectGroupRefreshing',
+        'Refreshing {{group}}…',
+        { group: group.name }
       )
-      try {
-        await refreshFolderProjectGroup(group, {
-          getRepos: () => useAppStore.getState().repos,
-          getProjectGroups: () => useAppStore.getState().projectGroups,
-          scanNestedRepos: useAppStore.getState().scanNestedRepos,
-          importNestedRepos: useAppStore.getState().importNestedRepos,
-          moveProjectToGroup
-        })
-      } catch (error) {
-        console.error('Failed to refresh project group:', error)
-        toast.error(
-          translate(
-            'auto.components.sidebar.WorktreeList.projectGroupRefreshScanFailed',
-            'Could not scan this project group'
-          ),
-          { description: error instanceof Error ? error.message : String(error) }
-        )
-      } finally {
-        toast.dismiss(loadingToastId)
-        refreshingGroupIds.current.delete(group.id)
-      }
-    },
-    [moveProjectToGroup]
-  )
+    )
+    try {
+      await refreshFolderProjectGroup(group, {
+        getRepos: () => useAppStore.getState().repos,
+        getProjectGroups: () => useAppStore.getState().projectGroups,
+        scanNestedRepos: useAppStore.getState().scanNestedRepos,
+        importNestedRepos: useAppStore.getState().importNestedRepos,
+        moveProjectToGroup: useAppStore.getState().moveProjectToGroup
+      })
+    } catch (error) {
+      console.error('Failed to refresh project group:', error)
+      toast.error(
+        translate(
+          'auto.components.sidebar.WorktreeList.projectGroupRefreshScanFailed',
+          'Could not scan this project group'
+        ),
+        { description: error instanceof Error ? error.message : String(error) }
+      )
+    } finally {
+      toast.dismiss(loadingToastId)
+      refreshingGroupIds.current.delete(group.id)
+    }
+  }, [])
 
   const handleRenameProjectGroup = useCallback(
     (groupId: string, currentName: string, hostId?: ExecutionHostId) => {
+      operationOwner.cancel()
       setNameDialog({ type: 'rename', groupId, currentName, hostId })
     },
-    []
+    [operationOwner]
   )
 
   const handleSubmitProjectGroupName = useCallback(
-    async (name: string) => {
+    async (name: string): Promise<boolean | void> => {
       if (!nameDialog) {
         return
       }
       if (nameDialog.type === 'create-from-repo') {
-        const group = await createProjectGroup(name, getRepoExecutionHostId(nameDialog.repo))
-        if (group) {
-          await moveProjectToGroup(nameDialog.repo, group.id)
-        }
-        return
+        return operationOwner.submitNew(nameDialog.attempt, name)
       }
       const renamed = await updateProjectGroup(
         nameDialog.groupId,
@@ -193,7 +193,7 @@ export function useProjectGroupDialogs(args: {
         )
       }
     },
-    [createProjectGroup, moveProjectToGroup, nameDialog, updateProjectGroup]
+    [operationOwner, nameDialog, updateProjectGroup]
   )
 
   const deleteTargets = useMemo(() => {
@@ -266,7 +266,13 @@ export function useProjectGroupDialogs(args: {
 
   return {
     nameDialog,
-    setNameDialog,
+    setNameDialog: (value: ProjectGroupNameDialogState | null) => {
+      if (!value && nameDialog?.type === 'create-from-repo') {
+        operationOwner.cancel(nameDialog.attempt)
+      }
+      setNameDialog(value)
+    },
+    operationOwner,
     deleteDialog,
     setDeleteDialog,
     deleteProjectCount,

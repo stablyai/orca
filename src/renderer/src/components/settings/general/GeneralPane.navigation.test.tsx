@@ -92,8 +92,9 @@ function NavigationHarness({
         subPage={generalSubPage}
         fontSuggestions={[]}
         updateSettings={(updates) => {
-          onWrite(updates)
-          setSettings((current) => ({ ...current, ...updates }))
+          const patch = typeof updates === 'function' ? updates(settings) : updates
+          onWrite(patch)
+          setSettings((current) => ({ ...current, ...patch }))
         }}
         onSelectSubPage={(page, sectionId) => {
           if (sectionId) {

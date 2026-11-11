@@ -4,7 +4,11 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { AppState } from '@/store/types'
 import type { WorktreePurgeTarget } from '@/store/slices/worktrees/teardown/worktree-purge-target'
-import { collectRemovalUnsavedFiles } from '@/components/editor/save/flush/removal-unsaved-editor-files'
+import {
+  flushRemovalPendingEdits,
+  lastViewUnsavedFiles,
+  collectRemovalUnsavedFiles
+} from '@/components/editor/save/flush/removal-unsaved-editor-files'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getKnownRepoWorktreeIds } from '@/store/repos/repo-removal'
 
@@ -39,9 +43,15 @@ export function projectRemovalTargets(
 export function blockRemovalForUnsavedFiles(
   getState: () => AppState,
   targets: readonly WorktreePurgeTarget[],
-  name: string
+  name: string,
+  preparedClosedFileIds?: ReadonlySet<string>
 ): boolean {
-  const count = collectRemovalUnsavedFiles(getState, targets).length
+  if (preparedClosedFileIds) {
+    flushRemovalPendingEdits(getState(), preparedClosedFileIds)
+  }
+  const count = preparedClosedFileIds
+    ? lastViewUnsavedFiles(getState(), preparedClosedFileIds).length
+    : collectRemovalUnsavedFiles(getState, targets).length
   if (count === 0) {
     return false
   }

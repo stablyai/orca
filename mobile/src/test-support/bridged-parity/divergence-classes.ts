@@ -116,13 +116,13 @@ export const BRIDGED_PARITY_EXCLUSIONS: Readonly<Partial<Record<BridgedParityCla
 
 // Pin strict History verdicts and unchanged legacy counts in both directions.
 export const BRIDGED_PARITY_BASELINE: Readonly<Record<BridgedParityClass | 'identical', number>> = {
-  identical: 385,
+  identical: 384,
   'reply-meta-required': 0,
   'result-absent-settlement': 328,
   'result-absent-observation': 6,
   'result-absent-stream-release': 1,
   'params-undefined': 27,
-  'write-ordinal': 30,
+  'write-ordinal': 31,
   unclassified: 0
 }
 
@@ -160,6 +160,7 @@ export const BRIDGED_PARITY_MEMBERS: Readonly<
   ],
   'result-absent-stream-release': ['matrix-session.native-chat-page-nativechat.subscribe-1-1'],
   'write-ordinal': [
+    'new-workspace-repositories-fulfilled',
     'diff-review-notes-refused-before-compare',
     'diff-review-snapshot',
     'diff-review-status-unavailable',

@@ -8,9 +8,7 @@ type TargetChangeActionsInput = Pick<
   | 'folderSourceRepos'
   | 'hostOptions'
   | 'linkedWorkItem'
-  | 'projectHostSetupOptions'
   | 'repoId'
-  | 'selectedRepoProjectId'
   | 'setBaseBranch'
   | 'setBranchNameOverride'
   | 'setBranchNameOverridePreservesNameEdits'
@@ -43,13 +41,12 @@ import {
 } from '@/lib/work-items/linear/linear-linked-work-item'
 import { shouldPreserveWorkspaceSourceOnRepoChange } from '../../../../shared/new-workspace/workspace-source'
 import {
-  buildProjectHostSetupOptions,
+  buildReadyProjectHostSetupOptions,
   getProjectHostSetupSelectionKey,
   type ProjectHostSetupOption,
   type ReadyProjectHostSetupOption
 } from '@/lib/workspace/creation/project-host-setup-options'
 import { useAppStore } from '@/store'
-import '@/lib/workspace/creation/new-workspace-composer-repo'
 import { getNewWorkspaceDialogEligibleRepos } from '../../../../shared/new-workspace-dialog-repo'
 
 export function useTargetChangeActions(input: TargetChangeActionsInput) {
@@ -60,9 +57,7 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
     folderSourceRepos,
     hostOptions,
     linkedWorkItem,
-    projectHostSetupOptions,
     repoId,
-    selectedRepoProjectId,
     setBaseBranch,
     setBranchNameOverride,
     setBranchNameOverridePreservesNameEdits,
@@ -239,20 +234,16 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
         candidate: Pick<ProjectHostSetupOption, 'id' | 'hostId'>
       ): boolean =>
         candidate.id === setupId || getProjectHostSetupSelectionKey(candidate) === setupId
-      const option = projectHostSetupOptions.find(matchesSelection)
-      // Rebuild new setups through normal eligibility/host/dedupe policy before selecting; raw records can retarget away from the chosen location.
-      const target =
-        option?.kind === 'ready'
-          ? option
-          : buildProjectHostSetupOptions({
-              projectId: selectedRepoProjectId,
-              projectHostSetups: useAppStore.getState().projectHostSetups,
-              eligibleRepos: getNewWorkspaceDialogEligibleRepos(useAppStore.getState().repos),
-              hosts: hostOptions
-            }).find(
-              (candidate): candidate is ReadyProjectHostSetupOption =>
-                matchesSelection(candidate) && candidate.kind === 'ready'
-            )
+      // Revalidate ready rows and newly completed setups against the current catalog before selecting.
+      const state = useAppStore.getState()
+      const target = buildReadyProjectHostSetupOptions({
+        projectHostSetups: state.projectHostSetups.filter(matchesSelection),
+        eligibleRepos: getNewWorkspaceDialogEligibleRepos(state.repos),
+        hosts: hostOptions
+      }).find(
+        (candidate): candidate is ReadyProjectHostSetupOption =>
+          matchesSelection(candidate) && candidate.kind === 'ready'
+      )
       if (!target) {
         return
       }
@@ -267,8 +258,6 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
     [
       handleRepoChange,
       hostOptions,
-      projectHostSetupOptions,
-      selectedRepoProjectId,
       setSelectedProjectHostSetupOverrideId,
       setSelectedProjectHostSetupOverrideHostId
     ]

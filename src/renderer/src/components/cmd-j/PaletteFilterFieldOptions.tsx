@@ -18,19 +18,24 @@ export type PaletteFilterGroup = {
   heading: string
   options: readonly PaletteFilterOption[]
   selected: readonly string[]
+  partial?: ReadonlySet<string>
+  full?: ReadonlySet<string>
 }
 
 function FilterOptionRow({
   option,
   isSelected,
+  isPartial,
   isActive,
   onToggle
 }: {
   option: PaletteFilterOption
+  isPartial?: boolean
   isSelected: boolean
   isActive: boolean
   onToggle: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <button
       type="button"
@@ -52,7 +57,10 @@ function FilterOptionRow({
       >
         {isSelected ? <Check className="size-3" aria-hidden="true" /> : null}
       </span>
-      <span className="min-w-0 flex-1 truncate text-foreground">{option.label}</span>
+      <span className="min-w-0 flex-1 truncate text-foreground">
+        {option.label}
+        {isPartial ? ` · ${t('projectFilter.partial', 'Partial')}` : ''}
+      </span>
       <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground/70">
         {option.count}
       </span>
@@ -88,10 +96,11 @@ export function PaletteFilterFieldOptions({
       rankPaletteFilterOptions({
         options: group.options,
         selectedIds: selected,
+        fullIds: group.full ?? selected,
         query: normalizedQuery,
         rankMode
       }),
-    [group.options, selected, normalizedQuery, rankMode]
+    [group.options, group.full, selected, normalizedQuery, rankMode]
   )
 
   // The scroller remounts after empty results; state reattaches the native wheel listener to its replacement.
@@ -202,8 +211,8 @@ export function PaletteFilterFieldOptions({
       ? t('worktreeJumpPalette.filter.clearHosts', 'Clear hosts')
       : t('worktreeJumpPalette.filter.clearProjects', 'Clear projects')
 
-  const canSelectAll = ranked.unselectedCount > 0
-  const canClear = ranked.selectedCount > 0
+  const canSelectAll = ranked.completionIds.length > 0
+  const canClear = group.selected.length > 0
 
   return (
     <>
@@ -289,6 +298,7 @@ export function PaletteFilterFieldOptions({
                   <FilterOptionRow
                     option={option}
                     isSelected={selected.has(option.id)}
+                    isPartial={group.partial?.has(option.id)}
                     isActive={virtualItem.index === activeIndex}
                     onToggle={() => onToggle(option.id)}
                   />
@@ -303,13 +313,13 @@ export function PaletteFilterFieldOptions({
           {canSelectAll ? (
             <button
               type="button"
-              onClick={() => onSelectAllMatching(ranked.unselectedIds)}
+              onClick={() => onSelectAllMatching(ranked.completionIds)}
               className="rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
             >
               {t(
                 'worktreeJumpPalette.filter.selectAllMatching',
                 'Select all matching ({{value0}})',
-                { value0: ranked.unselectedCount }
+                { value0: ranked.completionIds.length }
               )}
             </button>
           ) : (

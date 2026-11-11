@@ -125,3 +125,13 @@ function parseGitHubCacheSidecar(text: string): GitHubCache | null {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
+
+export function readStoredGitHubCache(dataFile: string): StoredGitHubCache | null {
+  try {
+    return readGitHubCacheDatabase(dataFile)
+  } catch (error) {
+    // A disposable cache must never block startup; the first poll refills it.
+    console.warn('[persistence] Failed to read github cache:', error)
+    return null
+  }
+}

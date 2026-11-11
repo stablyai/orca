@@ -1,3 +1,4 @@
+import { PROJECT_REPO_FILTER_EXACT_CAPABILITY } from './project-repo-filter-capability'
 import {
   PROJECT_GROUP_UPDATE_MANY_RUNTIME_CAPABILITY,
   PROJECT_ROOT_ORDER_RUNTIME_CAPABILITY
@@ -90,6 +91,7 @@ export const SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY =
 // Individual protocol exports must not retain the unused host capability aggregate.
 export const RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
   [
+    PROJECT_REPO_FILTER_EXACT_CAPABILITY,
     ...EMULATOR_RUNTIME_CAPABILITIES,
     SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY,
     ...HOST_RUNTIME_CAPABILITIES,

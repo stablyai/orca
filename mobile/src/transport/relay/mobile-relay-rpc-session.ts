@@ -1,3 +1,4 @@
+import { buildRelayLivenessTimeoutLog } from './relay-connection-log'
 import type { MobileRelayRpcSession } from './mobile-relay-rpc-session-contract'
 import {
   throwIfSignalAborted,
@@ -180,15 +181,7 @@ export function connectMobileRelayRpcSession(args: {
     voluntaryProbeMinIntervalMs: 10_000,
     sendProbe: (_identity, id) => state === 'connected' && sendFrame(livenessProbeFrame(id)),
     onTimeout: (evidence) => {
-      args.onLog?.({
-        id: `relay-liveness-${logSessionId}-${++logSequence}`,
-        ts: Date.now(),
-        level: 'error',
-        code: 'liveness-timeout',
-        path: 'relay',
-        message: 'Relay health check failed',
-        detail: `${evidence.reason}; ${evidence.missedProbes}/${evidence.missedProbeLimit} probes missed; last authenticated activity ${evidence.lastInboundAgeMs}ms ago`
-      })
+      args.onLog?.(buildRelayLivenessTimeoutLog(logSessionId, ++logSequence, evidence))
     },
     terminate: () => fail(new Error('relay session liveness timeout'))
   })
@@ -217,6 +210,9 @@ export function connectMobileRelayRpcSession(args: {
       await settleMobileRuntimeCapabilities((method, params) =>
         sendRpc(method, params, requestTimeoutMs, true)
       )
+      if (closed) {
+        return
+      }
       livenessWatchdog.start(livenessIdentity)
       publishState('connected')
     } catch (error) {

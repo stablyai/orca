@@ -26,9 +26,11 @@ import { useTranslate } from '@/i18n/use-translate'
 
 export function RepositoryIconPicker({
   repo,
+  websiteInput,
   updateRepo
 }: {
   repo: Repo
+  websiteInput?: { website: string; setWebsite: (value: string) => void }
   updateRepo: (repoId: string, updates: Partial<Repo>) => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -163,6 +165,7 @@ export function RepositoryIconPicker({
       <RepositoryIconColorSection badgeColor={repo.badgeColor} onBadgeColorChange={setBadgeColor} />
 
       <RepositoryIconTabs
+        websiteInput={websiteInput}
         initialTab={initialTab}
         selectedLucideName={selectedLucideName}
         selectedEmoji={selectedEmoji}

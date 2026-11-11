@@ -1250,6 +1250,28 @@
         "antigravityIde": "Antigravity IDE"
       }
     },
+    "projectGrouping": {
+      "repository": "By repository",
+      "host": "Separate by host",
+      "folder": "Separate by folder",
+      "label": "Group checkouts",
+      "overrideDescription": "Overrides the default in General for every checkout of this repository.",
+      "description": "Choose which checkouts of a Git repository count as one project.",
+      "useDefault": "Use default ({{mode}})",
+      "removeHost": "Remove this project from Orca on {{host}}.",
+      "search": {
+        "projects": "projects",
+        "repository": "repository",
+        "checkout": "checkout",
+        "host": "host",
+        "folder": "folder"
+      },
+      "removeAddress": "Remove these checkouts from Orca.",
+      "upgrade": {
+        "body": "Orca now groups multiple checkouts of the same repo into one project.",
+        "link": "Change this grouping in <settings>Settings</settings>."
+      }
+    },
     "network": {
       "proxyUrlErrors": {
         "tooLong": "Proxy URL is too long.",
@@ -9073,7 +9095,6 @@
           "b0a0c14a1c": "Project-specific display details for the sidebar and tabs.",
           "removeProjectAllHosts": "Remove this project from Orca on all configured hosts.",
           "removeProjectCheckout": "Remove this checkout from Orca. Other checkouts of this project stay.",
-          "removeProjectKeepCheckouts": "Remove this project from Orca. Checkouts that have their own settings stay.",
           "ee5a290616": "Opened as folder. Git features are unavailable for this workspace.",
           "323debba71": "Type:",
           "availableHostsDescription": "Hosts where this project is set up.",
@@ -24682,6 +24703,16 @@
   "wslDistroHold": {
     "terminalStopped": "The WSL distro {{distro}} is stopped, so Orca didn't start this terminal. Start the distro, then try again.",
     "terminalUnverifiable": "Orca couldn't check whether the WSL distro {{distro}} is running, so it didn't start this terminal. Start the distro, then try again."
+  },
+  "projectFilter": {
+    "partial": "Partial"
+  },
+  "projects": {
+    "partiallySelected": "Partially selected",
+    "savedSelection": "Saved project selection",
+    "savedUnavailable": "Saved project selection · Unavailable projects",
+    "unavailable": "Unavailable projects",
+    "unavailableSource": "Unavailable"
   },
   "plugins": {
     "frameSaveAs": {

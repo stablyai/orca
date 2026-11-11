@@ -1,3 +1,4 @@
+import type { ProjectRepoFilterWriteIntent } from '../../shared/project-repo-filter-capability'
 import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
@@ -83,9 +84,15 @@ export type UiCommandEventApi = {
   getJiraSavedFilters?: () => Promise<JiraSavedFilterState>
   mutateJiraSavedFilters?: (mutation: JiraSavedFilterMutation) => Promise<JiraSavedFilterState>
   get: () => Promise<PersistedUIState>
-  set: (args: Partial<PersistedUIState>) => Promise<void>
+  set: (
+    args: Partial<PersistedUIState>,
+    context?: { projectFilter?: ProjectRepoFilterWriteIntent }
+  ) => Promise<void>
   /** Unlike web set, rejects transport failures so the diff writer retries unacknowledged patches. */
-  setWithAck?: (args: Partial<PersistedUIState>) => Promise<void>
+  setWithAck?: (
+    args: Partial<PersistedUIState>,
+    context?: { projectFilter?: ProjectRepoFilterWriteIntent }
+  ) => Promise<void>
   recordFeatureInteraction: (id: FeatureInteractionId) => Promise<PersistedUIState>
   onStateChanged: (callback: (ui: PersistedUIState) => void) => () => void
   onOpenSettings: (callback: () => void) => () => void
@@ -170,13 +177,6 @@ export type UiCommandEventApi = {
   onSelectFloatingIndex: (callback: (payload: { index: number }) => void) => () => void
   onSwitchRecentTab: (callback: () => void) => () => void
   onCtrlTabKeyDown: (callback: (data: { shiftKey: boolean }) => void) => () => void
-  onCtrlTabKeyUp: (callback: () => void) => () => void
-  onToggleStatusBar: (callback: () => void) => () => void
-  onDictationKeyDown: (callback: () => void) => () => void
-  onExportPdfRequested: (callback: () => void) => () => void
-  onAppMenuPaste: (callback: () => void) => () => void
-  onAppMenuSelectionAction: (callback: (action: 'copy' | 'select-all') => void) => () => void
-  onEditableContextPaste: (callback: (data: { plainTextOnly: boolean }) => void) => () => void
   onActivateWorktree: (
     callback: (data: {
       repoId: string

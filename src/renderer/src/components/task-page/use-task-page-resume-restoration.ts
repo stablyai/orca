@@ -16,8 +16,6 @@ export function useTaskPageResumeRestoration(model: TaskPageJiraListStateModel) 
     listLinearCustomViews,
     fetchLinearCustomView,
     linearConnected,
-    resolvedInitialSelection,
-    setRepoSelection,
     visibleTaskProviders,
     taskSource,
     setTaskSource,
@@ -60,7 +58,6 @@ export function useTaskPageResumeRestoration(model: TaskPageJiraListStateModel) 
         visibleTaskProviders
       )
     )
-    setRepoSelection(resolvedInitialSelection)
     const nextGithubMode = taskResumeState?.githubMode ?? 'items'
     setGithubMode(nextGithubMode)
     const preset = taskResumeState?.githubItemsPreset
@@ -100,7 +97,6 @@ export function useTaskPageResumeRestoration(model: TaskPageJiraListStateModel) 
     persistedUIReady,
     settings,
     pageData.taskSource,
-    resolvedInitialSelection,
     taskResumeState,
     visibleTaskProviders,
     setTaskSearchInput,
@@ -114,7 +110,6 @@ export function useTaskPageResumeRestoration(model: TaskPageJiraListStateModel) 
     setTaskSource,
     setJiraSearchInput,
     setLinearOrderBy,
-    setRepoSelection,
     setLinearDisplayProperties,
     setLinearIssueFiltersByWorkspaceId,
     setGithubMode,

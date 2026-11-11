@@ -3,6 +3,11 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../rpc/rpc-client-contract'
 import { useHostStatusGates, type HostStatusGates } from './host-status-gates'
+import { stubRpcClient } from '../rpc/rpc-client-test-stub'
+
+vi.mock('react-native', () => ({
+  AppState: { addEventListener: () => ({ remove: () => {} }) }
+}))
 
 const recordHostAppVersionMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 
@@ -22,15 +27,15 @@ describe('useHostStatusGates', () => {
   })
 
   it('fails closed when the same host reconnects on a replaced client', async () => {
-    const firstClient = {
+    const firstClient = stubRpcClient({
       sendRequest: vi.fn().mockResolvedValue({
         ok: true,
         result: { capabilities: ['browser.screencast.v1'], floatingWorkspaceEnabled: true }
       })
-    } as unknown as RpcClient
-    const secondClient = {
+    })
+    const secondClient = stubRpcClient({
       sendRequest: vi.fn().mockReturnValue(new Promise(() => {}))
-    } as unknown as RpcClient
+    })
     let gates: HostStatusGates | undefined
     let renderer: ReactTestRenderer | undefined
 

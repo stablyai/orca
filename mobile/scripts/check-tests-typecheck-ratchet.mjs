@@ -14,7 +14,20 @@ const ERROR_LINE = /^(\S.*?)\(\d+,\d+\): error TS\d+:/
 
 // Tests outside the RN program. Checked transfers are the roots of tsconfig.test.node.json and must pass
 // that strict program; the rest are legacy runtime-only allowances whose bodies nothing typechecks.
-export const TESTS_OUTSIDE_PROGRAM = new Map([])
+export const TESTS_OUTSIDE_PROGRAM = new Map([
+  [
+    'src/mobile-web-shell/mobile-web-shell-project-controls.test.ts',
+    'Real persistence/socket/bridge joins: checked whole by config/tsconfig.test.mobile-project-controls.json after checked host declaration emit and both installs; executed by the Mobile CI Node role'
+  ],
+  [
+    'src/mobile-web-shell/mobile-web-shell-nested-project-filter.test.ts',
+    'Normal publisher/persistence/socket join: checked whole by config/tsconfig.test.mobile-project-controls.json after checked host declaration emit and both installs; executed by the Mobile CI Node role'
+  ],
+  [
+    'src/worktree/project-sections-owner-recovery.test.ts',
+    'Node-side: imports the desktop runtime and RPC handlers; checked by config/tsconfig.node.json against Node libraries'
+  ]
+])
 
 // Normalize tsc’s host separators to POSIX baseline paths or Windows reports every entry stale and added.
 const toPosix = (filePath) => filePath.replaceAll('\\', '/')

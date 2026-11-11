@@ -9,12 +9,14 @@ type Selection = { label: string; detail?: string }
 
 /** The form's "Where" group: which project, and which host it runs on. */
 export function NewWorktreeProjectTargetFields({
+  disabled = false,
   project,
   runTarget,
   projectBadgeColor,
   onOpenProject,
   onOpenRunTarget
 }: {
+  disabled?: boolean
   project: Selection | null
   runTarget: (Selection & { hostId: string }) | null
   projectBadgeColor: string | null
@@ -44,6 +46,7 @@ export function NewWorktreeProjectTargetFields({
             ) : null
           }
           value={projectValue}
+          disabled={disabled}
           navigates
           onPress={onOpenProject}
           accessibilityLabel={`${projectTitle}, ${projectValue}`}
@@ -55,7 +58,7 @@ export function NewWorktreeProjectTargetFields({
           value={runTargetValue}
           navigates
           // A run target belongs to a project; until one is picked there is nothing to choose.
-          disabled={project === null}
+          disabled={disabled || project === null}
           onPress={onOpenRunTarget}
           accessibilityLabel={`${runOnTitle}, ${runTargetValue}`}
         />

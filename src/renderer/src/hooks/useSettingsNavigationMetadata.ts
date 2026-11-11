@@ -14,8 +14,8 @@ import {
   useWindowsTerminalCapabilities
 } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
-import { useAppStore } from '@/store/index'
-import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
+import { useAppStore } from '@/store'
+import { getProjectGroupingModelFromState } from '@/store/projects/project-host-setup-selector'
 import {
   useChatSettingsOwnPermissions,
   useStructuredAgentSessionHostQueuesMessages
@@ -36,7 +36,6 @@ import type { ProjectGroupingModel } from '../../../shared/project-section-group
 import type { Repo } from '../../../shared/repo-types'
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
 
-// Share Settings/Cmd+J visibility without Settings pane UI imports; an architecture test enforces this boundary.
 // Share Settings/Cmd+J visibility without Settings pane UI imports; an architecture test enforces this boundary.
 
 export { isWebClientLocation } from '@/app-shell/platform/web-client-location'
@@ -84,12 +83,6 @@ export function buildSettingsNavigationMetadata(
   const runtimeEnvironmentsSearchEntry = isWebClient
     ? getWebRuntimeEnvironmentsSearchEntry()
     : getRuntimeEnvironmentsSearchEntry()
-  const reposById = new Map<string, Repo>()
-  for (const repo of repos) {
-    if (!reposById.has(repo.id)) {
-      reposById.set(repo.id, repo)
-    }
-  }
   const options: SettingsNavigationBuildOptions = {
     isMac,
     isWindows,
@@ -112,7 +105,7 @@ export function buildSettingsNavigationMetadata(
     ...buildSetupSettingsSections(options, t),
     ...buildWorkflowSettingsSections(options, terminalPaneSearchEntries, t),
     ...buildInterfaceSettingsSections(options, t),
-    ...buildRemoteSettingsSections(options, runtimeEnvironmentsSearchEntry, reposById, t)
+    ...buildRemoteSettingsSections(options, runtimeEnvironmentsSearchEntry, t)
   ]
 }
 
@@ -121,7 +114,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   // The locale subscription must also invalidate the memo or labels retain the previous language.
   const languageRevision = useUiLanguageRevision()
   const repos = useAppStore((state) => state.repos)
-  const projectHostSetupProjection = useProjectHostSetupProjection()
+  const projectGrouping = useAppStore(getProjectGroupingModelFromState)
   const settings = useAppStore((state) => state.settings)
   const [managedBrowserCreationEnabled, mobileEmulatorCreationEnabled] = useAppStore(
     useShallow((state) => {
@@ -182,10 +175,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
           isDev: import.meta.env.DEV,
           isLinearConnected,
           repos,
-          projectGrouping: {
-            projects: projectHostSetupProjection.projects,
-            projectHostSetups: projectHostSetupProjection.setups
-          }
+          projectGrouping
         },
         t
       ),
@@ -202,7 +192,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
       mobileEmulatorCreationEnabled,
       isLinearConnected,
       repos,
-      projectHostSetupProjection,
+      projectGrouping,
       languageRevision,
       t
     ]

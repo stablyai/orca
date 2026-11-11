@@ -1,3 +1,5 @@
+import { useAppStore } from '@/store'
+import { getProjectGroupingIndexFromState } from '@/store/projects/project-host-setup-selector'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { cn } from '@/lib/class-names'
 import TaskProjectSourceCombobox from '@/components/task-project-source-combobox'
@@ -40,14 +42,15 @@ export function TaskPageGitLabFilters({
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
+  const grouping = useAppStore(getProjectGroupingIndexFromState)
   const t = useTranslate()
   const {
     updateSettings,
+    settings,
     eligibleRepos,
     repoSelection,
     setRepoSelection,
     taskPickerGroups,
-    taskPickerRepos,
     gitLabIssueFilters,
     gitLabMRFilters,
     getTaskPickerRepoHostLabel,
@@ -96,7 +99,7 @@ export function TaskPageGitLabFilters({
             selected={repoSelection}
             getRepoHostLabel={getTaskPickerRepoHostLabel}
             onChange={(next) => {
-              const normalized = normalizeTaskRepoSelection(eligibleRepos, next)
+              const normalized = normalizeTaskRepoSelection(eligibleRepos, next, settings, grouping)
               setRepoSelection(normalized)
               void updateSettings({
                 defaultRepoSelection: [...normalized]
@@ -107,8 +110,7 @@ export function TaskPageGitLabFilters({
               })
             }}
             onSelectAll={() => {
-              const allIds = new Set(taskPickerRepos.map((r) => r.id))
-              setRepoSelection(allIds)
+              setRepoSelection(null)
               void updateSettings({
                 defaultRepoSelection: null
               }).catch(() => {

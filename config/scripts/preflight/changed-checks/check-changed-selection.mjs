@@ -260,6 +260,19 @@ const TYPECHECK_INPUTS = [
   },
   { config: 'config/tsconfig.tc.cli.json', inputs: ['src/cli/', 'src/shared/', 'src/main/'] },
   {
+    config: 'config/tsconfig.test.pane-launch.json',
+    inputs: [
+      'src/main/',
+      'src/renderer/',
+      'src/preload/',
+      'src/shared/',
+      'src/cli/',
+      'src/wsl-guest/',
+      'config/',
+      'mobile/src/'
+    ]
+  },
+  {
     config: 'src/packages/process-host/tsconfig.test.json',
     inputs: ['src/packages/process-host/']
   }
@@ -375,7 +388,9 @@ export function planChangedChecks(files, { scriptsDir, listDirectory }) {
   const checks = [...listRatchetChecks(scriptsDir), ...VERIFY_CHECKS]
   return {
     staticAnalysis: jobs.static_analysis,
-    typecheckProjects: jobs.typecheck ? selectTypecheckProjects(files) : [],
+    typecheckProjects: selectTypecheckProjects(files).filter(
+      (config) => jobs.typecheck || config === 'config/tsconfig.test.pane-launch.json'
+    ),
     unitTests: jobs.test
       ? splitUnitTestInputs(files, listDirectory)
       : { related: [], colocated: [] },

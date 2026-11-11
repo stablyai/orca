@@ -2,6 +2,7 @@ import type { SettingsSearchEntry } from '../search/settings-search'
 import type { GeneralSubPage } from './general-sub-pages'
 
 export const GENERAL_SETTING_ANCHORS = {
+  projectGrouping: 'general-projects',
   folder: 'general-workspace-folder',
   nesting: 'general-workspace-nesting',
   worktrees: 'general-global-worktree-visibility',
@@ -29,6 +30,7 @@ export const GENERAL_SETTING_ANCHORS = {
 } as const
 
 export const GENERAL_SETTING_OWNERS: Readonly<Record<string, GeneralSubPage | null>> = {
+  [GENERAL_SETTING_ANCHORS.projectGrouping]: null,
   [GENERAL_SETTING_ANCHORS.folder]: 'folder',
   [GENERAL_SETTING_ANCHORS.nesting]: 'folder',
   [GENERAL_SETTING_ANCHORS.worktrees]: 'worktrees',

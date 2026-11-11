@@ -1,7 +1,12 @@
+import { buildProjectSetupRepoLookup } from '../../project-setup-repo-lookup'
+import type { ProjectGroupingSettings } from '../../../../../shared/project-grouping'
+import {
+  buildProjectGroupingIndex,
+  type ProjectGroupingIndex
+} from '../../../../../shared/project-section-grouping'
 import {
   getExecutionHostLabel,
   isRuntimeOwnedSshTargetId,
-  LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
@@ -19,8 +24,10 @@ import type { ProjectHostSetup } from '../../../../../shared/project-types'
 import type { Repo } from '../../../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
+import { getPendingSetupDetail } from '../../project-host-setup-detail-labels'
 import {
   dedupeReadySetupRows,
+  compareProjectHostSetupOptions,
   type SelectedProjectHostSetup
 } from './project-host-setup-row-dedupe'
 
@@ -65,7 +72,6 @@ export function getProjectHostSetupSelectionKey(
 }
 
 type BuildReadySetupOptionsInput = {
-  projectId: string
   projectHostSetups: readonly ProjectHostSetup[]
   eligibleRepos: readonly Repo[]
   hosts: readonly ExecutionHostRegistryEntry[]
@@ -80,6 +86,9 @@ type BuildNeedsSetupOptionsInput = {
 }
 
 type BuildProjectHostSetupOptionsInput = {
+  groupKey?: string | null
+  grouping?: ProjectGroupingIndex
+  settings?: ProjectGroupingSettings | null
   projectId: string | null
   projectHostSetups: readonly ProjectHostSetup[]
   eligibleRepos: readonly Repo[]
@@ -89,6 +98,9 @@ type BuildProjectHostSetupOptionsInput = {
 }
 
 export function buildProjectHostSetupOptions({
+  groupKey,
+  grouping,
+  settings,
   projectId,
   projectHostSetups,
   eligibleRepos,
@@ -98,15 +110,27 @@ export function buildProjectHostSetupOptions({
   if (!projectId) {
     return []
   }
-  const readyOptions = buildReadySetupOptions({
-    projectId,
-    projectHostSetups,
+  const index =
+    grouping ??
+    buildProjectGroupingIndex({
+      projects: [{ id: projectId, displayName: '' }],
+      projectHostSetups,
+      settings
+    })
+  const group = groupKey ? index.groupByKey.get(groupKey) : undefined
+  const groupedSetups = projectHostSetups.filter((setup) =>
+    group
+      ? index.groupByRepoHost.get(`${setup.hostId}\0${setup.repoId}`)?.key === group.key
+      : setup.projectId === projectId
+  )
+  const readyOptions = buildReadyProjectHostSetupOptions({
+    projectHostSetups: groupedSetups,
     eligibleRepos,
     hosts,
     selectedSetup
   })
   const readySetupByHost = new Map(readyOptions.map((option) => [option.hostId, option]))
-  const pendingSetupByHost = getPendingSetupByHost(projectId, projectHostSetups)
+  const pendingSetupByHost = getPendingSetupByHost(groupedSetups)
   return [
     ...readyOptions,
     ...buildNeedsSetupOptions({
@@ -119,12 +143,11 @@ export function buildProjectHostSetupOptions({
 }
 
 function getPendingSetupByHost(
-  projectId: string,
   projectHostSetups: readonly ProjectHostSetup[]
 ): Map<ExecutionHostId, ProjectHostSetup> {
   const setups = new Map<ExecutionHostId, ProjectHostSetup>()
   for (const setup of projectHostSetups) {
-    if (setup.projectId !== projectId || setup.setupState === 'ready') {
+    if (setup.setupState === 'ready') {
       continue
     }
     if (!setups.has(setup.hostId)) {
@@ -134,22 +157,20 @@ function getPendingSetupByHost(
   return setups
 }
 
-function buildReadySetupOptions({
-  projectId,
+export function buildReadyProjectHostSetupOptions({
   projectHostSetups,
   eligibleRepos,
   hosts,
   selectedSetup
 }: BuildReadySetupOptionsInput): ReadyProjectHostSetupOption[] {
-  const eligibleRepoIds = new Set(eligibleRepos.map((repo) => repo.id))
+  const repoLookup = buildProjectSetupRepoLookup(eligibleRepos)
   const hostById = new Map(hosts.map((host) => [host.id, host]))
   const options = projectHostSetups
     .filter((setup) => {
       const host = hostById.get(setup.hostId)
       return (
-        setup.projectId === projectId &&
         setup.setupState === 'ready' &&
-        eligibleRepoIds.has(setup.repoId) &&
+        Boolean(repoLookup.resolve(setup)) &&
         Boolean(host) &&
         !isEphemeralVmProjectHost(host) &&
         !isRuntimeOwnedSshSetupHost(setup.hostId)
@@ -278,34 +299,4 @@ function getHostConnectAction(
     return { kind: 'runtime', environmentId: parsed.environmentId }
   }
   return undefined
-}
-
-function getPendingSetupDetail(setup: ProjectHostSetup): string {
-  switch (setup.setupState) {
-    case 'not-set-up':
-      return 'Project tracked on this host but not set up'
-    case 'setting-up':
-      return 'Project setup is in progress'
-    case 'error':
-      return 'Project setup needs attention'
-    case 'unsupported':
-      return 'Project is unsupported on this host'
-    case 'ready':
-      return setup.path
-  }
-}
-
-function compareProjectHostSetupOptions(
-  a: ProjectHostSetupOption,
-  b: ProjectHostSetupOption
-): number {
-  if (a.hostId === LOCAL_EXECUTION_HOST_ID && b.hostId !== LOCAL_EXECUTION_HOST_ID) {
-    return -1
-  }
-  if (b.hostId === LOCAL_EXECUTION_HOST_ID && a.hostId !== LOCAL_EXECUTION_HOST_ID) {
-    return 1
-  }
-  const aDetail = a.kind === 'ready' ? a.path : a.detail
-  const bDetail = b.kind === 'ready' ? b.path : b.detail
-  return a.label.localeCompare(b.label) || aDetail.localeCompare(bDetail)
 }

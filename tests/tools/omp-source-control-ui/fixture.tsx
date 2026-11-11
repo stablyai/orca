@@ -1,7 +1,7 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import { getDefaultSettings } from '../../../src/shared/constants'
-import type { GlobalSettings } from '../../../src/shared/global-settings-types'
+import type { SettingsUpdate } from '../../../src/renderer/src/store/slices/settings/create-settings-slice'
 import { CommitMessageAiPane } from '../../../src/renderer/src/components/settings/source-control/CommitMessageAiPane'
 import { TooltipProvider } from '../../../src/renderer/src/components/ui/tooltip'
 import { useAppStore } from '../../../src/renderer/src/store'
@@ -17,11 +17,12 @@ settings.sourceControlAi = {
   actions: {},
   customAgentCommand: ''
 }
-const updateSettings = async (patch: Partial<GlobalSettings>): Promise<void> => {
+const updateSettings = async (updates: SettingsUpdate): Promise<void> => {
   const current = useAppStore.getState().settings
   if (!current) {
     throw new Error('Settings fixture not initialized')
   }
+  const patch = typeof updates === 'function' ? updates(current) : updates
   useAppStore.setState({ settings: { ...current, ...patch } })
 }
 useAppStore.setState({ settings, repos: [], settingsSearchQuery: '', updateSettings })

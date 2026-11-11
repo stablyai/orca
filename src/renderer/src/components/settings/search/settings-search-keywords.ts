@@ -60,3 +60,18 @@ export function uniqueKeywords(values: string[]): string[] {
   }
   return result
 }
+
+export function projectGroupingSearchKeywords(t: Translate = translate): string[] {
+  return [
+    ...translateSearchKeyword('settings.projectGrouping.search.projects', 'projects', undefined, t),
+    ...translateSearchKeyword(
+      'settings.projectGrouping.search.repository',
+      'repository',
+      undefined,
+      t
+    ),
+    ...translateSearchKeyword('settings.projectGrouping.search.checkout', 'checkout', undefined, t),
+    ...translateSearchKeyword('settings.projectGrouping.search.host', 'host', undefined, t),
+    ...translateSearchKeyword('settings.projectGrouping.search.folder', 'folder', undefined, t)
+  ]
+}

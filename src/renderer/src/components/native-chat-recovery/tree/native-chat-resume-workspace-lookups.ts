@@ -26,6 +26,15 @@ export function useWorkspaceWorktree(workspaceId: string, hostId: ExecutionHostI
 export function useRepoIdByWorkspace(
   workspaces: readonly ResumeWorkspaceGroup[]
 ): (group: ResumeWorkspaceGroup) => string | null {
+  const positions = useMemo(() => {
+    const first = new Map<ResumeWorkspaceGroup, number>()
+    workspaces.forEach((group, index) => {
+      if (!first.has(group)) {
+        first.set(group, index)
+      }
+    })
+    return first
+  }, [workspaces])
   const ids = workspaces.map((group) => group.workspaceId)
   const hosts = workspaces.map((group) => group.candidates[0]?.executionHostId)
   const joined = useAppStore((store) =>
@@ -33,8 +42,8 @@ export function useRepoIdByWorkspace(
   )
   const repoIds = joined.split('\0')
   return (group) => {
-    const index = workspaces.indexOf(group)
-    const repoId = index === -1 ? '' : (repoIds[index] ?? '')
+    const index = positions.get(group)
+    const repoId = index === undefined ? '' : (repoIds[index] ?? '')
     return repoId === '' ? null : repoId
   }
 }

@@ -183,7 +183,7 @@ describe('getMobileWorkspaceLineageChildren across machines', () => {
     const children = getMobileWorkspaceLineageChildren(
       [parent, twin, child],
       { ownInstallationId: 'mac-install', servers: [server] },
-      ['repo-1']
+      (row) => row.repoId === 'repo-1'
     )
     expect(children.size).toBe(0)
   })
@@ -206,10 +206,13 @@ describe('getMobileWorkspaceLineageChildren under folder workspaces', () => {
     }
   })
   const childrenOf = (rows: Worktree[], filterRepoIds: string[] = []) =>
-    [...getMobileWorkspaceLineageChildren(rows, undefined, filterRepoIds)].map(([key, list]) => [
-      key,
-      list.map((row) => row.worktreeId)
-    ])
+    [
+      ...getMobileWorkspaceLineageChildren(
+        rows,
+        undefined,
+        (row) => filterRepoIds.length === 0 || filterRepoIds.includes(row.repoId)
+      )
+    ].map(([key, list]) => [key, list.map((row) => row.worktreeId)])
 
   it('nests a workspace under the folder workspace its host reports', () => {
     expect(childrenOf([folder, child])).toEqual([['|folder:f-1', ['repo::/src/api']]])

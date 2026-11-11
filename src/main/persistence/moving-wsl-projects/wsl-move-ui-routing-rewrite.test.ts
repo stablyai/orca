@@ -87,6 +87,53 @@ function dismissal(
 }
 
 describe('WSL move UI routing rewrite', () => {
+  it.each([100, 1000])(
+    'indexes the manifest once for %i grouped keys on initial rewrite and replay',
+    (count) => {
+      let reads = 0
+      const repositories = Array.from({ length: count }, (_, i) => ({
+        ...source.state.repos[0],
+        get id() {
+          reads++
+          return `repo-${i}`
+        },
+        upstream: { owner: 'org', repo: `app-${i}` }
+      }))
+      const cutover = wslMoveCutoverFixture(
+        'scale',
+        'destination-committed',
+        {},
+        { repoIds: repositories.map((repo) => repo.id) }
+      )
+      cutover.manifest.payload.repositories = repositories
+      const grouped = repositories.map(
+        (_, i) => `project:github:org/app-${i}::host:local::local::wsl:ubuntu`
+      )
+      reads = 0
+      const indexed = wslMoveRewriteScope({
+        cutover,
+        rewritePath: createUncToLinuxPathRewriter('Ubuntu'),
+        destinationHostId: HOST,
+        recordSeededHostWorkspaceIds: () => {}
+      })
+      expect(reads).toBeLessThanOrEqual(5 * count)
+      reads = 0
+      const input = { ...EMPTY_UI, collapsedGroups: grouped }
+      const result = rewriteWslMoveUiRouting(input, indexed)
+      expect(result.collapsedGroups).toHaveLength(2 * count)
+      expect(reads).toBe(0)
+      const replayScope = wslMoveRewriteScope({
+        cutover,
+        rewritePath: createUncToLinuxPathRewriter('Ubuntu'),
+        destinationHostId: HOST,
+        recordSeededHostWorkspaceIds: () => {}
+      })
+      expect(reads).toBeLessThanOrEqual(5 * count)
+      const replay = rewriteWslMoveUiRouting({ ...input, ...result }, replayScope)
+      expect(replay.collapsedGroups ?? result.collapsedGroups).toEqual(result.collapsedGroups)
+    }
+  )
+
   it("copies only the moved project's rows to the host's form, keeping the local ones", () => {
     const ui = profileUi()
     const updates = rewriteWslMoveUiRouting(ui, scope)
@@ -181,6 +228,48 @@ describe('WSL move UI routing rewrite', () => {
       'repo-b::/home/dev/lib': true,
       [MOVED_ON_HOST]: false
     })
+  })
+
+  it('carries host and folder project collapse keys only for the moved project', () => {
+    const project = 'project:github:org/app'
+    const host = `${project}::host:local::local::wsl:ubuntu`
+    const folder = `${host}::setup:repo-a`
+    const other = 'project:github:org/other::host:local::local::wsl:ubuntu'
+    const scoped = { ...scope, projectInScope: (id: string) => id === 'github:org/app' }
+    const original = {
+      ...EMPTY_UI,
+      collapsedGroups: [host, folder, other, 'lineage:unrelated'],
+      filterRepoIds: ['repo-a', 'local\0repo-a', 'local\0repo-b']
+    }
+    const updates = rewriteWslMoveUiRouting(original, scoped)
+    expect(updates.filterRepoIds).toEqual([...original.filterRepoIds, `${HOST}\0repo-a`])
+    expect(updates.collapsedGroups).toEqual([
+      ...original.collapsedGroups,
+      `${project}::host:${HOST}::${HOST}::default`,
+      `${project}::host:${HOST}::${HOST}::default::setup:repo-a`
+    ])
+    expect(rewriteWslMoveUiRouting({ ...original, ...updates }, scoped)).toEqual({})
+  })
+
+  it('does not copy another distro collapse when only Ubuntu moved', () => {
+    const project = 'project:github:org/app'
+    const ubuntu = `${project}::host:local::local::wsl:ubuntu`
+    const debian = `${project}::host:local::local::wsl:debian`
+    const scoped = { ...scope, projectInScope: (id: string) => id === 'github:org/app' }
+    for (const suffix of ['', '::setup:repo-a']) {
+      const original = { ...EMPTY_UI, collapsedGroups: [debian + suffix] }
+      expect(rewriteWslMoveUiRouting(original, scoped)).toEqual({})
+      const collapsed = {
+        ...original,
+        collapsedGroups: [...original.collapsedGroups, ubuntu + suffix]
+      }
+      const updates = rewriteWslMoveUiRouting(collapsed, scoped)
+      expect(updates.collapsedGroups).toEqual([
+        ...collapsed.collapsedGroups,
+        `${project}::host:${HOST}::${HOST}::default${suffix}`
+      ])
+      expect(rewriteWslMoveUiRouting({ ...collapsed, ...updates }, scoped)).toEqual({})
+    }
   })
 
   it('changes nothing on a second run', () => {

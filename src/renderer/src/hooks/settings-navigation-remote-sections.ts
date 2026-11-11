@@ -1,3 +1,4 @@
+import { buildProjectSetupRepoLookup } from '@/lib/project-setup-repo-lookup'
 import { getAdvancedPaneSearchEntries } from '@/components/settings/advanced/advanced-search'
 import { getDeveloperPermissionsPaneSearchEntries } from '@/components/settings/developer-permissions/developer-permissions-search'
 import { getExperimentalPaneSearchEntries } from '@/components/settings/advanced/experimental-search'
@@ -13,7 +14,6 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsNavSection } from '@/components/settings/navigation/settings-navigation-types'
 import { getRepoKindLabel } from '../../../shared/repo-kind'
-import type { Repo } from '../../../shared/repo-types'
 import {
   Blocks,
   Bug,
@@ -37,9 +37,9 @@ export function buildRemoteSettingsSections(
     projectGrouping
   }: SettingsNavigationBuildOptions,
   runtimeEnvironmentsSearchEntry: SettingsNavSection['searchEntries'][number],
-  reposById: ReadonlyMap<string, Repo>,
   t: Translate = translate
 ): SettingsNavSection[] {
+  const repoLookup = buildProjectSetupRepoLookup(repos)
   const showDesktopOnlySettings = !isWebClient
   return [
     ...(showDesktopOnlySettings
@@ -155,26 +155,48 @@ export function buildRemoteSettingsSections(
       : []),
     // Collapse host-specific repo rows to one project entry using the same inputs as settings panes.
     ...buildSettingsProjectList(repos, projectGrouping).map((settingsProject) => {
-      const { project, representativeRepoId, setups, checkoutLabel } = settingsProject
-      const representativeRepo = reposById.get(representativeRepoId) ?? repos[0]
+      const {
+        project,
+        representativeRepoId,
+        setups,
+        checkoutLabel,
+        selectionKey,
+        representativeHostId
+      } = settingsProject
+      const representativeRepo = repoLookup.resolve({
+        hostId: representativeHostId,
+        repoId: representativeRepoId
+      })
       const hostSummary =
         setups.length > 1
           ? t('auto.hooks.useSettingsNavigationMetadata.projectHostsSummary', '{{value0}} hosts', {
               value0: setups.length
             })
-          : (setups[0]?.path ?? representativeRepo.path)
+          : (setups[0]?.path ?? representativeRepo?.path ?? '')
       return {
-        id: `repo-${representativeRepoId}`,
+        id: `repo-${selectionKey}`,
         title: checkoutLabel ?? project.displayName,
         description: `${getRepoKindLabel(project)} • ${hostSummary}`,
         icon: SlidersHorizontal,
-        searchEntries: getRepositoryPaneSearchEntries(
-          representativeRepo,
-          {
-            windowsRuntimeSupported: isWindowsTerminalHost
-          },
-          t
-        ),
+        badgeColor: representativeRepo?.badgeColor,
+        repoIcon: representativeRepo?.repoIcon,
+        upstream: representativeRepo?.upstream,
+        isRemote: Boolean(representativeRepo?.connectionId),
+        searchEntries: representativeRepo
+          ? getRepositoryPaneSearchEntries(
+              representativeRepo,
+              {
+                windowsRuntimeSupported: isWindowsTerminalHost
+              },
+              t
+            )
+          : [
+              {
+                title: checkoutLabel ?? project.displayName,
+                description: hostSummary,
+                keywords: setups.map((setup) => setup.path)
+              }
+            ],
         group: 'repositories'
       }
     })

@@ -10,8 +10,10 @@ import { watchRefusedWslRead } from '@/runtime/hosts/wsl/wsl-refused-read-watch'
 export function useRepositoryIssueCommand({
   repoId,
   repoHostIdentity,
-  selectedHostId
+  selectedHostId,
+  enabled = true
 }: {
+  enabled?: boolean
   repoId: string
   repoHostIdentity: string
   selectedHostId: ExecutionHostId
@@ -41,6 +43,9 @@ export function useRepositoryIssueCommand({
   }, [])
 
   useEffect(() => {
+    if (!enabled) {
+      return
+    }
     updateIssueCommandDraft('')
     setHasSharedIssueCommand(false)
     setIssueCommandSaveError(null)
@@ -90,7 +95,7 @@ export function useRepositoryIssueCommand({
         )
       }
     }
-  }, [repoHostIdentity, repoId, selectedHostId, updateIssueCommandDraft])
+  }, [enabled, repoHostIdentity, repoId, selectedHostId, updateIssueCommandDraft])
 
   const commitIssueCommand = useCallback(async (): Promise<void> => {
     if (contentUnknownRef.current) {

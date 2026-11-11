@@ -12,6 +12,8 @@ import type { activateAndRevealWorkspace as ActivateWorkspace } from '@/lib/work
 import type { WorkspaceTabPaletteActivationResult } from '@/lib/workspace/search/tabs/workspace-tab-palette-activation'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
 import { makeFolderWorkspace, makeRepo, makeWorktree } from './worktree-jump-palette-test-fixtures'
+import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
+import { getDefaultSettings } from '../../../../shared/constants'
 
 const { activateAndRevealWorkspace } = vi.hoisted(() => ({
   activateAndRevealWorkspace: vi.fn<typeof ActivateWorkspace>(() => ({ primaryTabId: null }))
@@ -232,6 +234,41 @@ describe('WorktreeJumpPalette', () => {
       navigationIntent: 'user-open',
       executionHostId: 'runtime:builder'
     })
+  })
+
+  it('announces the selected project count as checkouts regroup', async () => {
+    const first = {
+      ...makeRepo(),
+      gitRemoteIdentity: {
+        canonicalKey: 'github.com/org/harbor',
+        remoteName: 'origin',
+        remoteUrl: 'https://github.com/org/harbor'
+      }
+    }
+    const second = { ...first, id: 'repo-2', path: '/repos/second' }
+    const notes = { ...makeRepo(), id: 'notes', path: '/repos/notes' }
+    const repos = [first, second, notes]
+    const projection = projectHostSetupProjectionFromRepos(repos)
+    await renderPalette({
+      repos,
+      projects: projection.projects,
+      projectHostSetups: projection.setups,
+      worktreesByRepo: {},
+      settings: getDefaultSettings(''),
+      filterRepoIds: ['repo-1', 'repo-2', 'notes']
+    })
+
+    expect(testContainer.querySelector('[aria-live="polite"]')?.textContent).toContain(
+      'Filter: 2 active.'
+    )
+    await act(async () => {
+      useAppStore.setState({
+        settings: { ...getDefaultSettings(''), projectGroupingMode: 'folder' }
+      })
+    })
+    expect(testContainer.querySelector('[aria-live="polite"]')?.textContent).toContain(
+      'Filter: 3 active.'
+    )
   })
 
   it('refreshes the folder catalog while the palette is open', async () => {

@@ -34,6 +34,10 @@ import { useRepositoryIssueCommand } from './use-repository-issue-command'
 import { getRepositoryHookScriptDescription } from './repository-git-hooks-search-entries'
 
 type RepositoryHooksSectionProps = {
+  controller?: {
+    hooks: ReturnType<typeof useRepositoryHookSettingsDraft>
+    issue: ReturnType<typeof useRepositoryIssueCommand>
+  }
   repo: Repo
   yamlHooks: OrcaHooks | null
   hasHooksFile: boolean
@@ -45,7 +49,30 @@ type RepositoryHooksSectionProps = {
   onUpdateHookSettings: (settings: RepoHookSettings) => void
 }
 
-export function RepositoryHooksSection({
+export function RepositoryHooksSection(props: RepositoryHooksSectionProps): React.JSX.Element {
+  return props.controller ? (
+    <RepositoryHooksView {...props} controller={props.controller} />
+  ) : (
+    <LocalRepositoryHooks {...props} />
+  )
+}
+function LocalRepositoryHooks(props: RepositoryHooksSectionProps): React.JSX.Element {
+  const selectedHostId = getRepoExecutionHostId(props.repo)
+  const repoHostIdentity = `${selectedHostId}\0${props.repo.id}`
+  const hooks = useRepositoryHookSettingsDraft({
+    repo: props.repo,
+    repoHostIdentity,
+    onUpdateHookSettings: props.onUpdateHookSettings
+  })
+  const issue = useRepositoryIssueCommand({
+    repoId: props.repo.id,
+    repoHostIdentity,
+    selectedHostId
+  })
+  return <RepositoryHooksView {...props} controller={{ hooks, issue }} />
+}
+function RepositoryHooksView({
+  controller,
   repo,
   yamlHooks,
   hasHooksFile,
@@ -54,13 +81,13 @@ export function RepositoryHooksSection({
   copiedTemplate,
   forceVisible = false,
   onCopyTemplate,
-  onUpdateHookSettings
-}: RepositoryHooksSectionProps): React.JSX.Element {
+  onUpdateHookSettings: _onUpdateHookSettings
+}: RepositoryHooksSectionProps & {
+  controller: NonNullable<RepositoryHooksSectionProps['controller']>
+}): React.JSX.Element {
   const t = useTranslate()
   useTranslation()
   const settingsSearchQuery = useAppStore((state) => state.settingsSearchQuery)
-  const selectedHostId = getRepoExecutionHostId(repo)
-  const repoHostIdentity = `${selectedHostId}\0${repo.id}`
   const yamlState = yamlHooks
     ? 'loaded'
     : hasHooksFile
@@ -68,13 +95,9 @@ export function RepositoryHooksSection({
         ? 'update-available'
         : 'invalid'
       : 'missing'
-  const {
-    hookSettingsDraft,
-    updateScriptDraft,
-    commitScriptDraft,
-    flushScriptDraftOnUnmount,
-    updateHookSettingsPolicyDraft
-  } = useRepositoryHookSettingsDraft({ repo, repoHostIdentity, onUpdateHookSettings })
+  const { hookSettingsDraft, updateScriptDraft, commitScriptDraft, updateHookSettingsPolicyDraft } =
+    controller.hooks
+  const issueCommand = controller.issue
   const isFolder = isFolderRepo(repo)
   const localHookFields = getLocalHookFields(t, isFolder)
   const selectedSetupRunPolicy: SetupRunPolicy =
@@ -106,7 +129,7 @@ export function RepositoryHooksSection({
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false)
 
   return (
-    <div ref={flushScriptDraftOnUnmount}>
+    <div>
       <SettingsGroup
         title={
           isFolder
@@ -214,11 +237,7 @@ export function RepositoryHooksSection({
           </div>
         ) : null}
         {isFolder ? null : (
-          <RepositoryIssueCommandRow
-            repo={repo}
-            repoHostIdentity={repoHostIdentity}
-            forceVisible={forceVisible}
-          />
+          <RepositoryIssueCommandRow issueCommand={issueCommand} forceVisible={forceVisible} />
         )}
         <SearchableSetting
           title={t('auto.components.settings.RepositoryHooksSection.c9bc1bfd8f', 'Advanced')}
@@ -257,22 +276,15 @@ export function RepositoryHooksSection({
   )
 }
 
-/** The issue command needs a GitHub repo, so only Git projects mount its file inspection. */
+/** The concrete repository session owns the Git-only command inspection and draft. */
 function RepositoryIssueCommandRow({
-  repo,
-  repoHostIdentity,
+  issueCommand,
   forceVisible
 }: {
-  repo: Repo
-  repoHostIdentity: string
+  issueCommand: ReturnType<typeof useRepositoryIssueCommand>
   forceVisible: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  const issueCommand = useRepositoryIssueCommand({
-    repoId: repo.id,
-    repoHostIdentity,
-    selectedHostId: getRepoExecutionHostId(repo)
-  })
   return (
     <SearchableSetting
       title={t(

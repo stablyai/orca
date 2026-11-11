@@ -1,3 +1,4 @@
+import { getProjectFilterWrite } from './ui-slice-project-filter-write'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import { workspaceHostScopeForVisibleHosts } from '../../../../../shared/workspace-view/workspace-host-visibility'
 import { createAgentsViewPreferenceActions } from './ui-slice-agents-view-preference-actions'
@@ -154,11 +155,24 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
       }),
 
     filterRepoIds: [],
-    setFilterRepoIds: (ids) => set({ filterRepoIds: ids }),
+    setFilterRepoIds: (ids) =>
+      set({
+        filterRepoIds: ids,
+        persistedUIProjectFilterWrite: getProjectFilterWrite(get(), ids)
+      }),
 
     ...createAgentsViewPreferenceActions(set),
 
     collapsedGroups: new Set<string>(),
+    removeCollapsedGroups: (matches) =>
+      set((s) => {
+        const next = new Set([...s.collapsedGroups].filter((key) => !matches(key)))
+        if (next.size === s.collapsedGroups.size) {
+          return s
+        }
+        window.api.ui.set({ collapsedGroups: [...next] }).catch(console.error)
+        return { collapsedGroups: next }
+      }),
     toggleCollapsedGroup: (key) =>
       set((s) => {
         const next = new Set(s.collapsedGroups)

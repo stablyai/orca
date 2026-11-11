@@ -41,6 +41,7 @@ import {
   getVisibleSidebarHostIdSet
 } from '../../../../../../shared/sidebar-list/host-filtering'
 import { mergeDraggedHostSectionOrder } from '../../../../../../shared/sidebar-list/host-section-order'
+import { useHeaderRevealPlacements } from './use-header-reveal-placements'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
@@ -48,7 +49,10 @@ import { sidebarWorkspaceRowFilters } from '../controls/sidebar-filter-actions'
 import type { SidebarListModel, SidebarListModelArgs } from './sidebar-list-model'
 import { withWindowCreations } from './window-worktree-creations'
 export { withWindowCreations } from './window-worktree-creations'
-import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-keys'
+import {
+  getPendingCreationHostById,
+  selectPendingWorktreeCreationKeys
+} from './pending-worktree-creation-keys'
 import { collectRenderedSidebarRowKeys } from './rendered-row-keys'
 import { useEffectiveCollapsedGroups } from './use-collapsed-groups'
 import { useSidebarExternalWorktreeCards } from './use-external-worktree-cards'
@@ -178,7 +182,8 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
           ? [args.agentSendTargetWorktreeId]
           : undefined,
         importedWorktreesByRepo,
-        newExternalWorktreesInboxByRepo
+        newExternalWorktreesInboxByRepo,
+        creationHostById: getPendingCreationHostById(pendingCreationKeys)
       }),
     [
       domains,
@@ -186,6 +191,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
       catalog,
       view,
       rankedIds,
+      pendingCreationKeys,
       args.agentSendTargetWorktreeId,
       importedWorktreesByRepo,
       newExternalWorktreesInboxByRepo
@@ -247,6 +253,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
     () => renderSidebarFeedRows(planned, view, effectiveCollapsedGroups, hostDragActive),
     [planned, view, effectiveCollapsedGroups, hostDragActive]
   )
+  const headerRevealPlacements = useHeaderRevealPlacements(planned, view)
   const sectionRows = useMemo(
     () =>
       rendered.sectionRows.map((row): HostSectionRow => {
@@ -267,17 +274,16 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
     [sectionRows]
   )
   const allRepoIds = useMemo(() => repos.map((repo) => repo.id), [repos])
-  const { orderedHostOptions } = planned
   const handleReorderHostSections = useCallback(
     (orderedVisibleHostIds: ExecutionHostId[]) =>
       setWorkspaceHostOrder(
         mergeDraggedHostSectionOrder(
           orderedVisibleHostIds,
           workspaceHostOrder,
-          orderedHostOptions.map((host) => host.id)
+          planned.orderedHostOptions.map((host) => host.id)
         )
       ),
-    [orderedHostOptions, setWorkspaceHostOrder, workspaceHostOrder]
+    [planned.orderedHostOptions, setWorkspaceHostOrder, workspaceHostOrder]
   )
 
   return {
@@ -290,6 +296,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
     externalWorktreeCards,
     rowModel: {
       occurrencePlan: planned.plan.occurrencePlan,
+      headerRevealPlacements,
       hostOptions: planned.orderedHostOptions,
       effectiveCollapsedGroups,
       rows: rendered.rows,

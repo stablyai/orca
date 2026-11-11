@@ -10,11 +10,15 @@ import {
 export function buildCatalogOwnerIndex<
   T extends { id: string; connectionId?: string | null; executionHostId?: string | null }
 >(
-  records: readonly T[]
+  records: readonly T[],
+  firstDisplayPositions?: Map<string, number>
 ): ReadonlyMap<string, { kind: 'resolved'; owner: T } | { kind: 'ambiguous' }> {
   const next = new Map<string, { kind: 'resolved'; owner: T } | { kind: 'ambiguous' }>()
-  for (const record of records) {
+  for (const [position, record] of records.entries()) {
     const id = record.id
+    if (firstDisplayPositions && !firstDisplayPositions.has(id)) {
+      firstDisplayPositions.set(id, position)
+    }
     const hostId = getRepoExecutionHostId(record)
     const current = next.get(id)
     if (!current) {

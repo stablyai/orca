@@ -1,3 +1,4 @@
+import type { Repo } from '../../../../../../shared/repo-types'
 import type { SourceControlAiModelEdits } from '../../../../../../shared/source-control/ai/settings/source-control-ai-action-model-edits'
 import type { ActionArgumentChoices } from '../../../../../../shared/source-control/ai/recipes/source-control-action-argument-document'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
@@ -15,6 +16,7 @@ import type {
 
 export type RepositorySourceControlAiActionRowsProps = {
   repoId: string
+  repo: Repo
   repoAi: RepoSourceControlAiOverrides
   /** Unsaved menu edits per action, so a reopened picker folds its next Use into them. */
   actionTextDrafts?: Partial<

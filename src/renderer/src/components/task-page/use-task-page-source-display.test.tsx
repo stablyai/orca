@@ -9,9 +9,8 @@ import type { WorkItemsCacheSources } from '@/store/github/cache/cache-model'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
-
 import { getTaskPageRepoSourceContext } from '../../lib/work-items/task-repo-source-context'
-
+import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
 import {
   Q1,
   Q2,
@@ -31,10 +30,15 @@ vi.mock('@/components/github/PRFilterDropdowns', () => ({ default: () => null })
 
 installSourceDisplayTestLifecycle()
 
-function mount(repos: Repo[], query = Q1) {
+function mount(
+  repos: Repo[],
+  query = Q1,
+  projectGroupingMode: 'repository' | 'host' = 'repository'
+) {
   useAppStore.setState({
     repos,
     settings: createGlobalSettingsFixture({
+      projectGroupingMode,
       defaultRepoSelection: [...new Set(repos.map((r) => r.id))]
     }),
     taskPageData: { taskSource: 'github' }
@@ -121,7 +125,7 @@ describe('Tasks source display', () => {
   })
 
   it('keeps each host copy and selected row on its own history', async () => {
-    mount([repo, sshTwin])
+    mount([repo, sshTwin], Q1, 'host')
     await fetchList(repo, Q1, sources(fork))
     applyQuery(Q2)
     expect(view.githubSourceDisplayState.map((state) => state.sources?.issues ?? null)).toEqual([
@@ -133,7 +137,8 @@ describe('Tasks source display', () => {
     expect(setIssueSourcePreference).toHaveBeenCalledWith('repo', '/repo', 'origin', 'local')
 
     // A row that leaves the selection forgets its history.
-    act(() => view.setRepoSelection(new Set()))
+    act(() => view.setRepoSelection(new Set([getRepoHostIdentity(sshTwin)])))
+    expect(view.selectedRepos).toEqual([sshTwin])
     act(() => view.setRepoSelection(new Set(['repo'])))
     expect(view.githubSourceDisplayState.map((state) => state.sources?.issues ?? null)).toEqual([
       null,

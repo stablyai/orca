@@ -20,6 +20,7 @@ import type { WorktreeHostContextOf } from './worktree-host-context-labels'
 import type { MobileLineageStores } from './mobile-workspace-lineage'
 
 export function useWorkspaceSections(args: {
+  exactProjectRepoFilters?: boolean
   displayWorktrees: Worktree[]
   hostContextOf: WorktreeHostContextOf
   sortMode: WorkspaceSortBy
@@ -62,8 +63,13 @@ export function useWorkspaceSections(args: {
   } = args
 
   const uniqueRepos = useMemo(
-    () => buildFilterRepos(filterCatalogRepos, displayWorktrees),
-    [filterCatalogRepos, displayWorktrees, t]
+    () =>
+      buildFilterRepos(
+        filterCatalogRepos,
+        displayWorktrees,
+        args.exactProjectRepoFilters ? projectCatalog.grouping : undefined
+      ),
+    [filterCatalogRepos, displayWorktrees, projectCatalog.grouping, args.exactProjectRepoFilters, t]
   )
 
   const repoById = useMemo(

@@ -30,6 +30,7 @@ export function SearchableSetting({
   return (
     <div
       data-settings-row=""
+      data-highlighted={highlighted ? 'true' : undefined}
       className={cn(
         'scroll-mt-6 w-full',
         highlighted && 'rounded-md bg-accent ring-2 ring-ring/50',

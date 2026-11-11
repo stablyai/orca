@@ -1,3 +1,4 @@
+import type { ProjectGroupingUpgradeTipAudience } from '../../shared/project-grouping-upgrade-tip-audience'
 import type { ChatUiLaunchTipVariant } from '../../shared/native-chat/chat-ui-launch-tip-audience'
 import type { OnboardingState } from '../../shared/onboarding-state-types'
 
@@ -9,6 +10,7 @@ export type OnboardingApi = {
       checklist?: Partial<OnboardingState['checklist']>
     }
   ) => Promise<OnboardingState>
+  getProjectGroupingUpgradeTipAudience: () => Promise<ProjectGroupingUpgradeTipAudience>
   /** Fixed from the profile saved before Chat UI left Experimental. */
   getChatUiLaunchTipVariant: () => Promise<ChatUiLaunchTipVariant>
 }

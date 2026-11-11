@@ -1,3 +1,4 @@
+import type { Repo } from '../../../../../../shared/repo-types'
 import { useEffect, useRef, useState } from 'react'
 import { Plus, RefreshCcw } from 'lucide-react'
 import type { SparsePreset } from '../../../../../../shared/worktree/create-types'
@@ -19,11 +20,8 @@ type SparsePresetSettingsSectionProps = {
   repoId: string
 }
 
-export function SparsePresetSettingsSection({
-  repoId
-}: SparsePresetSettingsSectionProps): React.JSX.Element {
+export function useSparsePresetSettingsDraft(repoId: string, repo: Repo | undefined) {
   const t = useTranslate()
-  const repo = useAppStore((s) => s.repos.find((entry) => entry.id === repoId))
   const presets = useAppStore((s) => s.sparsePresetsByRepo[repoId])
   const loadStatus = useAppStore((s) => s.sparsePresetsLoadStatusByRepo[repoId] ?? 'idle')
   const loadError = useAppStore((s) => s.sparsePresetsErrorByRepo[repoId])
@@ -64,7 +62,7 @@ export function SparsePresetSettingsSection({
   }
 
   useEffect(() => {
-    if (presets === undefined && loadStatus === 'idle') {
+    if (repo && presets === undefined && loadStatus === 'idle') {
       void fetchSparsePresets(repoId).catch((error: unknown) => {
         if (mountedRef.current) {
           setOperationError(
@@ -73,7 +71,7 @@ export function SparsePresetSettingsSection({
         }
       })
     }
-  }, [fetchSparsePresets, loadStatus, mountedRef, presets, repoId])
+  }, [fetchSparsePresets, loadStatus, mountedRef, presets, repoId, repo])
 
   const sortedPresets = presets ?? []
   const parsedDirectories = draft ? parseSparsePresetDirectories(draft.directoriesText, t) : null
@@ -185,6 +183,87 @@ export function SparsePresetSettingsSection({
     }
   }
 
+  return {
+    draft,
+    setDraft,
+    submitting,
+    confirmingDeleteId,
+    deletingPresetId,
+    operationError,
+    sectionRef,
+    closeDraft,
+    presets,
+    loadStatus,
+    loadError,
+    fetchSparsePresets,
+    mountedRef,
+    setOperationError,
+    sortedPresets,
+    parsedDirectories,
+    nameError,
+    canSaveDraft,
+    visibleError,
+    startNewPreset,
+    startEditPreset,
+    handleSaveDraft,
+    handleDeletePreset,
+    setConfirmingDeleteId
+  }
+}
+
+type SparsePresetController = ReturnType<typeof useSparsePresetSettingsDraft>
+export function SparsePresetSettingsSection(
+  props: SparsePresetSettingsSectionProps & {
+    controller?: SparsePresetController
+    currentRepo?: Repo
+  }
+): React.JSX.Element {
+  return props.controller ? (
+    <SparsePresetSettingsView {...props} controller={props.controller} />
+  ) : (
+    <LocalSparsePresetSettings {...props} />
+  )
+}
+function LocalSparsePresetSettings(props: SparsePresetSettingsSectionProps): React.JSX.Element {
+  const repo = useAppStore((s) => s.repos.find((entry) => entry.id === props.repoId))
+  const controller = useSparsePresetSettingsDraft(props.repoId, repo)
+  return <SparsePresetSettingsView {...props} currentRepo={repo} controller={controller} />
+}
+function SparsePresetSettingsView({
+  repoId,
+  currentRepo: repo,
+  controller
+}: SparsePresetSettingsSectionProps & {
+  currentRepo?: Repo
+  controller: SparsePresetController
+}): React.JSX.Element {
+  const t = useTranslate()
+  const {
+    draft,
+    setDraft,
+    submitting,
+    confirmingDeleteId,
+    deletingPresetId,
+    operationError,
+    sectionRef,
+    closeDraft,
+    presets,
+    loadStatus,
+    loadError,
+    fetchSparsePresets,
+    mountedRef,
+    setOperationError,
+    sortedPresets,
+    parsedDirectories,
+    nameError,
+    canSaveDraft,
+    visibleError,
+    startNewPreset,
+    startEditPreset,
+    handleSaveDraft,
+    handleDeletePreset,
+    setConfirmingDeleteId
+  } = controller
   const draftEditor = draft ? (
     <SparsePresetInlineEditor
       draft={draft}

@@ -24,7 +24,7 @@ export function selectPendingWorktreeCreationKeys(
   const keys: { visible: string[]; hidden: string[] } = { visible: [], hidden: [] }
   for (const creation of Object.values(pendingWorktreeCreations)) {
     keys[pendingWorktreeCreationIsVisible(creation) ? 'visible' : 'hidden'].push(
-      `${creation.creationId} ${creation.request.repoId}`
+      `${creation.creationId} ${creation.request.executionHostId ?? creation.request.workspaceRunContext?.hostId ?? 'local'}\0${creation.request.repoId}`
     )
   }
   if (keys.visible.length === 0) {
@@ -35,4 +35,24 @@ export function selectPendingWorktreeCreationKeys(
   }
   keysBySource.set(pendingWorktreeCreations, keys)
   return keys[visibility]
+}
+
+export function decodePendingWorktreeCreationKeys(pendingCreationKeys: readonly string[]) {
+  return pendingCreationKeys.map((key) => {
+    const separator = key.indexOf(' ')
+    return {
+      creationId: key.slice(0, separator),
+      repoId: key.slice(key.indexOf('\0', separator) + 1),
+      hostId: key.slice(separator + 1, key.indexOf('\0', separator))
+    }
+  })
+}
+
+export function getPendingCreationHostById(pendingCreationKeys: readonly string[]) {
+  return new Map(
+    decodePendingWorktreeCreationKeys(pendingCreationKeys).map((key) => [
+      key.creationId,
+      key.hostId
+    ])
+  )
 }

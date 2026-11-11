@@ -9,6 +9,7 @@ export const FEATURE_EDUCATION_CONTEXTUAL_TOUR_IDS = [
   'automations',
   'floating-workspace',
   'workspace-creation',
+  'project-grouping-upgrade',
   'projects-collapse-all'
 ] as const satisfies readonly ContextualTourId[]
 

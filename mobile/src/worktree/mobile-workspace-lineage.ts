@@ -125,12 +125,13 @@ function getCrossStoreView(
 /** Children keyed by parent row identity, over valid edges between the given rows: a worktree parent,
  * else a folder workspace parent in the child's store, else (with `stores`) a parent on another
  * machine; lineage loops nest nothing.
- * Edges resolve over every row, then `filterRepoIds` keeps those with both ends shown: a hidden
+ * Edges resolve over every row, then `shown` keeps those with both ends shown: a hidden
  * twin must still make a parent ambiguous. */
 export function getMobileWorkspaceLineageChildren<Row extends MobileLineageRow>(
   listed: readonly Row[],
   stores?: MobileLineageStores,
-  filterRepoIds: readonly string[] = []
+  // Project filters can name one host's checkout, so the caller owns host-aware matching.
+  shown: (row: Row) => boolean = () => true
 ): Map<string, Row[]> {
   const rows = getResolutionRows(listed)
   // The shared policy: worktree parent, then folder workspace, then another store. The phone trusts
@@ -150,8 +151,6 @@ export function getMobileWorkspaceLineageChildren<Row extends MobileLineageRow>(
     keepSameStoreCycles: true
   })
   const parentByChild = new Map([...resolved].map(([child, parent]) => [child, parent.worktree]))
-  const shown = (row: Row): boolean =>
-    filterRepoIds.length === 0 || filterRepoIds.includes(row.repoId)
   const childrenByParentId = new Map<string, Row[]>()
   for (const worktree of listed) {
     const parent = parentByChild.get(getWorktreeRowIdentity(worktree))

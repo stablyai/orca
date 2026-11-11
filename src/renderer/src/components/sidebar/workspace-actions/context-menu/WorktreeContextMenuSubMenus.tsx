@@ -97,8 +97,8 @@ export function WorktreeLineageSubMenu({ model }: { model: WorktreeContextMenuMo
 // Kept here as well as the project header: that header menu only renders when grouping by project.
 export function WorktreeProjectGroupSubMenu({ model }: { model: WorktreeContextMenuModel }) {
   const t = useTranslate()
-  const { repo, projectGroups, isDeleting } = model
-  if (!repo) {
+  const { groupOperation, isDeleting } = model
+  if (!groupOperation) {
     return null
   }
   return (
@@ -112,28 +112,28 @@ export function WorktreeProjectGroupSubMenu({ model }: { model: WorktreeContextM
           <FolderPlus className="size-3.5" />
           {t('auto.components.sidebar.WorktreeContextMenu.503ec0f8e6', 'New group from project')}
         </DropdownMenuItem>
-        {repo.projectGroupId ? (
+        {groupOperation.grouped ? (
           <DropdownMenuItem onSelect={model.handleRemoveProjectFromGroup} disabled={isDeleting}>
             <CircleX className="size-3.5" />
             {t('auto.components.sidebar.WorktreeContextMenu.d35dfeae58', 'Remove from group')}
           </DropdownMenuItem>
         ) : null}
-        {projectGroups.length > 0 ? (
+        {groupOperation.destinations.length > 0 ? (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuLabel>
               {t('auto.components.sidebar.WorktreeContextMenu.76865d827f', 'Move to group')}
             </DropdownMenuLabel>
             <DropdownMenuRadioGroup
-              value={repo.projectGroupId ?? ''}
+              value={groupOperation.uniformGroupId ?? ''}
               onValueChange={model.handleMoveProjectToGroup}
             >
-              {projectGroups.map((group) => (
+              {groupOperation.destinations.map((group) => (
                 <DropdownMenuRadioItem
                   key={group.id}
                   value={group.id}
                   textValue={group.name}
-                  disabled={isDeleting || repo.projectGroupId === group.id}
+                  disabled={isDeleting || groupOperation.uniformGroupId === group.id}
                 >
                   <span className="max-w-48 truncate">{group.name}</span>
                 </DropdownMenuRadioItem>

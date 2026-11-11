@@ -3,8 +3,12 @@ import {
   isRuntimeOwnedSshTargetId,
   parseExecutionHostId
 } from '../../../../../shared/execution-host'
-import '../../../../../shared/new-workspace-dialog-repo'
-import { getProjectIdentityKey } from '../../../../../shared/project-host-setup-projection'
+import type { ProjectGroupingSettings } from '../../../../../shared/project-grouping'
+import {
+  buildRepoProjectGroupingIndex,
+  getProjectGroupForRepo,
+  type ProjectGroupingIndex
+} from '../../../../../shared/project-section-grouping'
 import type { Repo } from '../../../../../shared/repo-types'
 import {
   isEphemeralVmRuntimeEnvironment,
@@ -34,7 +38,9 @@ export function resolveComposerActiveRepoId(
   repos: readonly Repo[],
   eligibleRepos: readonly Repo[],
   activeRepoId: string | null | undefined,
-  runtimeEnvironments: readonly RuntimeEnvironmentSource[]
+  runtimeEnvironments: readonly RuntimeEnvironmentSource[],
+  settings?: ProjectGroupingSettings | null,
+  grouping?: ProjectGroupingIndex
 ): string | null {
   if (!activeRepoId) {
     return activeRepoId ?? null
@@ -43,11 +49,13 @@ export function resolveComposerActiveRepoId(
   if (!activeRepo || !isPerWorkspaceRuntimeRepo(activeRepo, runtimeEnvironments)) {
     return activeRepoId
   }
-  const projectKey = getProjectIdentityKey(activeRepo)
+  const projectIndex = grouping ?? buildRepoProjectGroupingIndex(repos, settings)
+  const projectKey =
+    getProjectGroupForRepo(projectIndex, activeRepo)?.key ?? `project:repo:${activeRepo.id}`
   const sibling = eligibleRepos.find(
     (repo) =>
-      getProjectIdentityKey(repo) === projectKey &&
-      !isPerWorkspaceRuntimeRepo(repo, runtimeEnvironments)
+      (getProjectGroupForRepo(projectIndex, repo)?.key ?? `project:repo:${repo.id}`) ===
+        projectKey && !isPerWorkspaceRuntimeRepo(repo, runtimeEnvironments)
   )
   return sibling?.id ?? activeRepoId
 }

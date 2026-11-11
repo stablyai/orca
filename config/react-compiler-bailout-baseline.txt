@@ -424,6 +424,7 @@
 1 src/renderer/src/components/settings/quick-commands/QuickCommandsPane.tsx
 1 src/renderer/src/components/settings/repository/RepositoryFormatterSection.tsx
 3 src/renderer/src/components/settings/repository/RepositoryJiraProjectSection.tsx
+2 src/renderer/src/components/settings/repository/RepositoryRemoveProjectButton.tsx
 3 src/renderer/src/components/settings/repository/hosts/RepositoryHostSetupActions.tsx
 2 src/renderer/src/components/settings/repository/identity/RepositoryIconPicker.tsx
 1 src/renderer/src/components/settings/repository/mcp/McpConfigSection.tsx
@@ -497,6 +498,8 @@
 1 src/renderer/src/components/sidebar/project-admission/host-selection/use-add-repo-wsl-host-paths.ts
 1 src/renderer/src/components/sidebar/project-admission/nested-import/useAddRepoNestedImportFlow.ts
 2 src/renderer/src/components/sidebar/sidebar-feedback/SidebarFeedbackDialog.tsx
+2 src/renderer/src/components/sidebar/use-project-group-operation.ts
+2 src/renderer/src/components/sidebar/use-worktree-visibility-recovery.ts
 2 src/renderer/src/components/sidebar/useRenderedSetupScriptPromptState.ts
 2 src/renderer/src/components/sidebar/workspace-actions/context-menu/use-worktree-context-menu-commands.ts
 1 src/renderer/src/components/sidebar/workspace-actions/context-menu/use-worktree-context-menu-secondary-actions.ts
@@ -524,7 +527,7 @@
 2 src/renderer/src/components/sidebar/workspace-card/review/WorkspaceAttachmentSearch.tsx
 1 src/renderer/src/components/sidebar/workspace-card/review/use-workspace-reference-details.ts
 1 src/renderer/src/components/sidebar/workspace-visibility/dialog/HiddenWorktreeRecoveryList.tsx
-3 src/renderer/src/components/sidebar/workspace-visibility/dialog/WorktreeVisibilityDialog.tsx
+2 src/renderer/src/components/sidebar/workspace-visibility/dialog/WorktreeVisibilityDialog.tsx
 4 src/renderer/src/components/sidebar/worktree-list/drag/host-header-drag.ts
 5 src/renderer/src/components/sidebar/worktree-list/drag/project-group-header-drag.ts
 8 src/renderer/src/components/sidebar/worktree-list/drag/project-header-drag.ts
@@ -621,7 +624,7 @@
 1 src/renderer/src/components/task-page/use-task-page-global-effects.ts
 8 src/renderer/src/components/task-page/use-task-page-provider-metadata.ts
 38 src/renderer/src/components/task-page/use-task-page-provider-state.ts
-31 src/renderer/src/components/task-page/use-task-page-repo-selection.ts
+29 src/renderer/src/components/task-page/use-task-page-repo-selection.ts
 13 src/renderer/src/components/task-page/use-task-page-runtime-hosts.ts
 7 src/renderer/src/components/task-page/use-task-page-search-actions.ts
 8 src/renderer/src/components/task-page/use-task-page-source-availability.ts
@@ -664,6 +667,7 @@
 2 src/renderer/src/components/use-google-cookie-clear.ts
 2 src/renderer/src/components/use-jira-issue-comment-submission.ts
 2 src/renderer/src/components/use-jira-issue-remote-details.ts
+2 src/renderer/src/components/use-resume-project-group-keys.ts
 2 src/renderer/src/components/use-task-creation-draft-retention.ts
 1 src/renderer/src/components/use-terminal-editor-close-dialog-actions.ts
 1 src/renderer/src/components/use-terminal-keyboard-shortcuts.ts

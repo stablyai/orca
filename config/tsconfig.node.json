@@ -3,6 +3,7 @@
   "include": [
     "../electron.vite.config.*",
     "./vitest.config.ts",
+    "./scripts/test-runtime/environment/renderer-test-assets.ts",
     "./build-plugins/**/*",
     "./scripts/test-runtime/environment/vitest-host-ports-setup.ts",
     "./scripts/test-runtime/environment/vitest-caller-identity-env-setup.ts",
@@ -39,7 +40,8 @@
   ],
   "exclude": [
     "../src/main/runtime/orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-mail.test.ts",
-    "../src/main/runtime/rpc/methods/orchestration/orchestration-check-ambiguous-caller.test.ts"
+    "../src/main/runtime/rpc/methods/orchestration/orchestration-check-ambiguous-caller.test.ts",
+    "../src/main/persistence/applying-settings/project-grouping-peer-roundtrip.test.ts"
   ],
   "compilerOptions": {
     "composite": true,

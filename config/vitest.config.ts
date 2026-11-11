@@ -1,4 +1,4 @@
-import { globSync, readFileSync } from 'node:fs'
+import { globSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { normalizePath, transformWithOxc, type Plugin } from 'vite'
@@ -17,6 +17,7 @@ import { readRunFilters } from './scripts/test-runtime/execution-policy/vitest-r
 import { createWorkspaceSourceResolver } from './scripts/workspace/source-exports/workspace-source-exports.mjs'
 import { moduleCacheResolutionKey } from './scripts/test-runtime/module-cache/vitest-module-cache-resolution-key'
 import { vitestReactCompiler } from './build-plugins/vitest-react-compiler'
+import { rendererTestAssets } from './scripts/test-runtime/environment/renderer-test-assets'
 
 const nodeRuntimeInclude = process.versions.bun
   ? getNodeRuntimeInclude({ filters: readRunFilters() })
@@ -47,18 +48,7 @@ const transforms = {
     } satisfies Plugin,
     ...(moduleCachePath ? [moduleCacheResolutionKey()] : []),
     ...vitestReactCompiler(),
-    {
-      // Unit tests have no asset server; retain real catalog parsing through fetch(data:).
-      name: 'locale-catalog-test-assets',
-      enforce: 'pre' as const,
-      load(id: string) {
-        if (/\/i18n\/locales\/[A-Za-z-]+\.json\?url$/.test(id)) {
-          const catalog = readFileSync(id.slice(0, -4)).toString('base64')
-          return `export default ${JSON.stringify(`data:application/json;base64,${catalog}`)}`
-        }
-        return null
-      }
-    }
+    rendererTestAssets()
   ],
   define: {
     ORCA_FEATURE_WALL_ENABLED: 'true',

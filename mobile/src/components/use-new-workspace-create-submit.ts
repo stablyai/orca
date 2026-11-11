@@ -238,7 +238,6 @@ export function useNewWorkspaceCreateSubmit(args: {
       if (presenting()) {
         triggerSuccess()
       }
-      args.onClose()
       args.onCreated(result.worktreeId, result.name, result.warning)
     } catch (error) {
       // A lost reply may still have created it.

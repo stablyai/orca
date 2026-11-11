@@ -1,3 +1,4 @@
+import { projectRepoFilterMatcher } from '../project-grouping'
 import type { WorktreeLineage } from '../worktree/lineage-types'
 import type { Worktree } from '../worktree/types'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
@@ -44,7 +45,7 @@ export function selectVisibleSidebarWorktrees({
   forcedVisibleWorktreeIds
 }: VisibleSidebarWorktreeInputs): Worktree[] {
   // Keep valid nonarchived ancestors despite ordinary filters so children retain their hierarchy.
-  const selectedRepoIds = filterRepoIds.length > 0 ? new Set(filterRepoIds) : null
+  const selectedRepoIds = projectRepoFilterMatcher(filterRepoIds)
 
   let all = filterWorkspaceRows(rows, filters, facts)
 
@@ -91,7 +92,7 @@ function addVisibleLineageAncestors(
   worktrees: Worktree[],
   ancestorByIdentity: ReadonlyMap<string, Worktree>,
   lineageById: Record<string, WorktreeLineage>,
-  selectedRepoIds: ReadonlySet<string> | null,
+  selectedRepoIds: (repoId: string, hostId: string) => boolean,
   lineageParentIdentities: SidebarLineageParentIdentities | undefined
 ): Worktree[] {
   const result: Worktree[] = []
@@ -113,7 +114,7 @@ function addVisibleLineageAncestors(
     visiting.add(identity)
     const parent = parentByIdentity.get(identity)
     // Repository filters are hard boundaries; ordinary filters may retain ancestors.
-    if (parent && (!selectedRepoIds || selectedRepoIds.has(parent.repoId))) {
+    if (parent && selectedRepoIds(parent.repoId, parent.hostId ?? 'local')) {
       addWithAncestors(parent)
     }
     if (!included.has(identity)) {

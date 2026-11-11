@@ -18,7 +18,7 @@ import {
   isLegacyOpenCodeSessionCookie,
   isLegacySshPtyOwnerLease
 } from '../leasing-ssh-ptys/secret-validation'
-import { readGitHubCacheDatabase } from './github-cache-database'
+import { readStoredGitHubCache } from './github-cache-database'
 import { retainLegacyOpenCodeGoApiKey } from './legacy-opencode-go-api-key-migration'
 import {
   gcStaleWorktreeMeta,
@@ -286,6 +286,10 @@ export class LoadedStateParsingOperations {
         parsed,
         audience
       ),
+      projectGroupingUpgradeTipAudience: this.cohorts.captureProjectGroupingUpgradeTipAudience(
+        parsed,
+        result.repos
+      ),
       chatUiLaunchTipAudience: audience
     }
 
@@ -314,17 +318,5 @@ export class LoadedStateParsingOperations {
       workspaceSessionBytes: Buffer.byteLength(JSON.stringify(migrated.workspaceSession))
     }))
     return migrated
-  }
-}
-
-function readStoredGitHubCache(
-  dataFile: string
-): ReturnType<typeof readGitHubCacheDatabase> | null {
-  try {
-    return readGitHubCacheDatabase(dataFile)
-  } catch (error) {
-    // A disposable cache must never block startup; the first poll refills it.
-    console.warn('[persistence] Failed to read github cache:', error)
-    return null
   }
 }

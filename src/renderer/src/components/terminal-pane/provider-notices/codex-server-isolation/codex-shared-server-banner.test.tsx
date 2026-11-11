@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { getDefaultSettings } from '../../../../../../shared/constants'
+import type { SettingsUpdate } from '@/store/slices/settings/create-settings-slice'
 import { CodexSharedServerBanner } from './CodexSharedServerBanner'
 import type { CodexSharedServerStatus } from '../../../../../../shared/codex-shared-server-command'
 import {
@@ -71,7 +72,7 @@ let isCodexOnSharedServer: ReturnType<
 let disableCodexSharedServerAutoStart: ReturnType<typeof vi.fn<(id: string) => Promise<boolean>>>
 let stopCodexSharedServer: ReturnType<typeof vi.fn<(id: string) => Promise<boolean>>>
 let writeClipboardText: ReturnType<typeof vi.fn<(text: string) => Promise<void>>>
-let updateSettings: ReturnType<typeof vi.fn<(updates: Partial<GlobalSettings>) => Promise<void>>>
+let updateSettings: ReturnType<typeof vi.fn<(updates: SettingsUpdate) => Promise<void>>>
 let nextPtyId = 0
 let ptyId: string
 let admitted: ReturnType<typeof admitTerminalNoticeLifetime>
@@ -141,8 +142,10 @@ beforeEach(() => {
   disableCodexSharedServerAutoStart = vi.fn(() => Promise.resolve(true))
   stopCodexSharedServer = vi.fn(() => Promise.resolve(true))
   writeClipboardText = vi.fn(() => Promise.resolve())
-  updateSettings = vi.fn((updates: Partial<GlobalSettings>) => {
-    setState({ ...useAppStore.getState().settings, ...updates })
+  updateSettings = vi.fn((update: SettingsUpdate) => {
+    const current = useAppStore.getState().settings ?? getDefaultSettings('/home/me')
+    const updates = typeof update === 'function' ? update(current) : update
+    setState({ ...current, ...updates })
     return Promise.resolve()
   })
   Object.defineProperty(window, 'api', {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getLocalExecutionHostLabel } from '../../../src/shared/execution-host'
 import {
+  buildNewWorkspaceGrouping,
   buildNewWorkspaceProjectOptions,
   buildNewWorkspaceRunTargetOptions,
   getNewWorkspaceRunTarget
@@ -9,6 +10,83 @@ import {
 const LOCAL_HOST_LABEL = getLocalExecutionHostLabel('darwin')
 
 describe('new workspace project targets', () => {
+  it('keeps the actual old-desktop split rule and names each served folder choice by host and path', () => {
+    const a = {
+      id: 'a',
+      displayName: 'app',
+      path: '/repos/a',
+      upstream: { owner: 'org', repo: 'app' }
+    }
+    const repos = [
+      a,
+      { ...a, id: 'b', path: '/repos/b' },
+      { ...a, id: 'c', executionHostId: 'runtime:server' as const }
+    ]
+    const legacy = buildNewWorkspaceGrouping(repos, null)
+    expect(legacy.groups).toHaveLength(3)
+    const options = buildNewWorkspaceProjectOptions(
+      repos,
+      { projectGroupingMode: 'folder' },
+      undefined,
+      'darwin',
+      new Map([['runtime:server', 'Build box']])
+    )
+    expect(options.map((option) => option.detail)).toEqual([
+      `${LOCAL_HOST_LABEL} · /repos/a`,
+      `${LOCAL_HOST_LABEL} · /repos/b`,
+      'Build box · /repos/a'
+    ])
+    for (const option of options) {
+      expect(
+        buildNewWorkspaceRunTargetOptions(repos, option.id, null, undefined, {
+          projectGroupingMode: 'folder'
+        }).map((target) => target.repo)
+      ).toEqual([option.repo])
+    }
+  })
+
+  it('keeps physical aliases in the same project and preserves concrete run-target choices', () => {
+    const pending = { id: 'pending', path: '/repos/app', displayName: 'app' }
+    const identified = {
+      ...pending,
+      id: 'identified',
+      gitRemoteIdentity: {
+        canonicalKey: 'gitlab.com/org/app',
+        remoteName: 'origin',
+        remoteUrl: 'https://gitlab.com/org/app.git'
+      }
+    }
+    const repos = [
+      pending,
+      identified,
+      { ...identified, id: 'second', path: '/repos/second' },
+      { ...identified, executionHostId: 'runtime:server' as const }
+    ]
+    for (const [mode, count] of [
+      ['repository', 1],
+      ['host', 2],
+      ['folder', 3]
+    ] as const) {
+      const settings = { projectGroupingMode: mode }
+      const options = buildNewWorkspaceProjectOptions(repos, settings)
+      expect(options).toHaveLength(count)
+      const aliasGroup = options.find((option) => option.repo.id === 'pending')
+      const targets = buildNewWorkspaceRunTargetOptions(
+        repos,
+        aliasGroup?.id ?? null,
+        null,
+        undefined,
+        settings
+      )
+      expect(targets.map((target) => target.id)).toContain('local::pending')
+      expect(targets.map((target) => target.id)).toContain('local::identified')
+      expect(targets.some((target) => target.repo.id === 'second')).toBe(mode !== 'folder')
+      expect(targets.some((target) => target.hostId === 'runtime:server')).toBe(
+        mode === 'repository'
+      )
+    }
+  })
+
   it('groups local and SSH checkouts of the same project', () => {
     const upstream = { owner: 'stablyai', repo: 'orca' }
     const options = buildNewWorkspaceProjectOptions([
@@ -75,7 +153,7 @@ describe('new workspace project targets', () => {
     })
   })
 
-  it('shows one target per host when the project has multiple local worktrees', () => {
+  it('keeps every checkout selectable when a host has multiple folders', () => {
     const upstream = { owner: 'stablyai', repo: 'orca' }
     const repos = [
       { id: 'local-a', displayName: 'orca-a', path: '/src/orca-a', upstream },
@@ -88,12 +166,26 @@ describe('new workspace project targets', () => {
         upstream
       }
     ]
-    const projectId = buildNewWorkspaceProjectOptions(repos)[0]?.id ?? null
+    const projectId =
+      buildNewWorkspaceProjectOptions(repos, { projectGroupingMode: 'repository' })[0]?.id ?? null
 
-    expect(buildNewWorkspaceRunTargetOptions(repos, projectId, 'darwin')).toEqual([
-      expect.objectContaining({ id: 'local', label: LOCAL_HOST_LABEL, detail: '/src/orca-a' }),
+    expect(
+      buildNewWorkspaceRunTargetOptions(repos, projectId, 'darwin', undefined, {
+        projectGroupingMode: 'repository'
+      })
+    ).toEqual([
       expect.objectContaining({
-        id: 'ssh:build-server',
+        id: 'local::local-a',
+        label: LOCAL_HOST_LABEL,
+        detail: '/src/orca-a'
+      }),
+      expect.objectContaining({
+        id: 'local::local-b',
+        label: LOCAL_HOST_LABEL,
+        detail: '/src/orca-b'
+      }),
+      expect.objectContaining({
+        id: 'ssh:build-server::ssh',
         label: 'build-server',
         detail: '/home/dev/orca'
       })

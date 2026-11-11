@@ -122,9 +122,8 @@
 1 src/renderer/src/components/sidebar/workspace-card/review/workspace-reference-refresh-targets.ts
 1 src/renderer/src/components/sidebar/workspace-card/surface/worktree-card-secondary-rows.tsx
 1 src/renderer/src/components/sidebar/workspace-card/template/card-activity-parts.tsx # parity oracle keeps the old secondary-rows read until it is deleted
-1 src/renderer/src/components/sidebar/workspace-visibility/dialog/WorktreeVisibilityDialog.tsx
 1 src/renderer/src/components/sidebar/workspace-visibility/dialog/worktree-visibility-host-target.ts
-2 src/renderer/src/components/sidebar/worktree-list/controls/sidebar-host-options.ts
+1 src/renderer/src/components/sidebar/worktree-list/controls/sidebar-host-options.ts
 1 src/renderer/src/components/sidebar/worktree-list/controls/use-sidebar-host-scope-options.ts
 1 src/renderer/src/components/sidebar/worktree-list/controls/workspace-options-menu-items.tsx
 1 src/renderer/src/components/sidebar/worktree-list/listing/SavedHostScopeWidenGate.tsx
@@ -135,7 +134,6 @@
 1 src/renderer/src/components/sidebar/worktree-list/listing/visible-worktree-options-from-state.ts
 2 src/renderer/src/components/sidebar/worktree-list/listing/visible-worktrees.ts
 1 src/renderer/src/components/sidebar/worktree-list/listing/worktree-filter-visibility.ts
-1 src/renderer/src/components/sidebar/worktree-list/rows/ProjectGroupDialogs.tsx
 1 src/renderer/src/components/skills/SkillsPage.tsx
 1 src/renderer/src/components/skills/setup/linear-agent-skill-install-cta.tsx
 1 src/renderer/src/components/source-control/BaseRefPicker.tsx
@@ -308,7 +306,7 @@
 3 src/renderer/src/store/repos/create-repo-slice.ts
 1 src/renderer/src/store/slices/runtime-status/create-runtime-status-slice.ts
 2 src/renderer/src/store/slices/settings/settings-owner-hydration-publication.ts
-5 src/renderer/src/store/slices/settings/create-settings-slice.ts
+4 src/renderer/src/store/slices/settings/create-settings-slice.ts
 1 src/renderer/src/store/terminals/terminal-tab-retirement.ts
 2 src/renderer/src/store/slices/workspace-attention/workspace-unread-characterization-fixture.ts
 1 src/renderer/src/store/slices/settings/worktree-visibility-owner-settings.ts
@@ -328,7 +326,8 @@
 1 src/renderer/src/store/terminals/terminal-tab-close-providers.ts
 1 src/renderer/src/web/preload-api/web-app-api.ts
 3 src/renderer/src/web/preload-api/web-preference-normalization.ts
-20 src/renderer/src/web/preload-api/web-preferences-store.ts
+18 src/renderer/src/web/preload-api/web-preferences-store.ts
+1 src/renderer/src/web/preload-api/web-local-ui-state.ts
 13 src/renderer/src/web/preload-api/web-settings-api.ts
 9 src/renderer/src/web/preload-api/web-ui-api.ts
 3 src/renderer/src/web/preload-api/web-workspace-session-api.ts

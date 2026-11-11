@@ -26,7 +26,10 @@ export function withWindowCreations(
     const creationId = key.slice(0, separator)
     if (!domains.creations.has(creationId)) {
       creations ??= new Map(domains.creations)
-      creations.set(creationId, { repoId: key.slice(separator + 1) })
+      const hostSeparator = key.indexOf('\0', separator)
+      creations.set(creationId, {
+        repoId: key.slice((hostSeparator === -1 ? separator : hostSeparator) + 1)
+      })
     }
   }
   return creations ? { ...domains, creations } : domains

@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ProjectHostSetup } from '../../../../../shared/project-types'
 import type { Repo } from '../../../../../shared/repo-types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import { projectHostSetupProjectionFromRepos } from '../../../../../shared/project-host-setup-projection'
 import {
   buildSettingsProjectList,
   getSettingsProjectHostRepo,
-  getSettingsEntryHostSelection,
   getSettingsProjectRemovalScope,
+  getSettingsTargetHostSelection,
   removeSettingsProjectFromAllHosts,
   resolveSettingsTargetRepoId
 } from './settings-project-list'
@@ -45,55 +45,69 @@ const gitRemote = {
 }
 
 describe('buildSettingsProjectList', () => {
-  it("keeps a clone's host pick when its sibling clone is removed", () => {
-    const cloneA = makeRepo({ id: 'clone-a', gitRemoteIdentity: gitRemote })
-    const cloneATwin = makeRepo({
-      id: 'clone-a',
-      gitRemoteIdentity: gitRemote,
-      executionHostId: 'runtime:mac'
-    })
-    const cloneB = makeRepo({ id: 'clone-b', gitRemoteIdentity: gitRemote })
-    const [splitCloneA] = buildSettingsProjectList([cloneA, cloneB, cloneATwin])
-    const hostSelection: Record<string, ExecutionHostId> = {
-      [splitCloneA.selectionKey]: 'runtime:mac'
+  it('removes every registration of a physical checkout and resolves its alias deep link', async () => {
+    const repos = [
+      makeRepo({ id: 'identified', path: '/repos/app', gitRemoteIdentity: gitRemote }),
+      makeRepo({ id: 'pending', path: '/repos/app' })
+    ]
+    const projection = projectHostSetupProjectionFromRepos(repos)
+    for (const mode of ['repository', 'host', 'folder'] as const) {
+      const entries = buildSettingsProjectList(repos, {
+        projects: projection.projects,
+        projectHostSetups: projection.setups,
+        settings: { projectGroupingMode: mode }
+      })
+      expect(entries).toHaveLength(1)
+      expect(getSettingsTargetHostSelection(entries, 'pending', 'local')).toMatchObject({
+        selectionKey: entries[0].selectionKey,
+        setupId: 'pending'
+      })
+      const remaining = new Set(repos.map((repo) => repo.id))
+      await removeSettingsProjectFromAllHosts(entries[0].setups, async (id, { hostId }) => {
+        expect(hostId).toBe('local')
+        remaining.delete(id)
+      })
+      expect(remaining.size).toBe(0)
     }
-
-    const [unsplit] = buildSettingsProjectList([cloneA, cloneATwin])
-
-    expect(unsplit.selectionKey).not.toBe(splitCloneA.selectionKey)
-    expect(getSettingsEntryHostSelection(unsplit, hostSelection, {}).hostId).toBe('runtime:mac')
   })
 
-  it("does not take a sibling clone's host pick", () => {
-    const projects = buildSettingsProjectList([
+  it('groups same-host clones by repository by default and separates them when requested', () => {
+    const repos = [
       makeRepo({ id: 'clone-a', gitRemoteIdentity: gitRemote }),
       makeRepo({ id: 'clone-b', gitRemoteIdentity: gitRemote })
+    ]
+    const projection = projectHostSetupProjectionFromRepos(repos)
+    expect(buildSettingsProjectList(repos)).toHaveLength(1)
+    const entries = buildSettingsProjectList(repos, {
+      projects: projection.projects,
+      projectHostSetups: projection.setups,
+      settings: { projectGroupingMode: 'folder' }
+    })
+    expect(entries).toHaveLength(2)
+    expect(entries.map(getSettingsProjectRemovalScope)).toEqual(['checkout', 'checkout'])
+    expect(entries.map((entry) => entry.setups.map((setup) => setup.repoId))).toEqual([
+      ['clone-a'],
+      ['clone-b']
     ])
-    const hostSelection: Record<string, ExecutionHostId> = { [projects[1].selectionKey]: 'local' }
-
-    expect(getSettingsEntryHostSelection(projects[0], hostSelection, {}).hostId).toBeUndefined()
   })
 
-  it('keeps other hosts in a project-level entry when same-host clones split', () => {
-    const repos: Repo[] = [
+  it('removes only the displayed host group', () => {
+    const repos = [
       makeRepo({ id: 'clone-a', gitRemoteIdentity: gitRemote }),
       makeRepo({ id: 'clone-b', gitRemoteIdentity: gitRemote }),
-      makeRepo({ id: 'remote-9', gitRemoteIdentity: gitRemote, executionHostId: 'ssh:box' })
+      makeRepo({ id: 'remote', gitRemoteIdentity: gitRemote, executionHostId: 'ssh:box' })
     ]
-
-    const projects = buildSettingsProjectList(repos)
-
-    expect(projects.map((entry) => entry.setups.map((setup) => setup.repoId))).toEqual([
-      ['clone-a'],
-      ['clone-b'],
-      ['remote-9']
+    const projection = projectHostSetupProjectionFromRepos(repos)
+    const entries = buildSettingsProjectList(repos, {
+      projects: projection.projects,
+      projectHostSetups: projection.setups,
+      settings: { projectGroupingMode: 'host' }
+    })
+    expect(entries.map((entry) => entry.setups.map((setup) => setup.repoId))).toEqual([
+      ['clone-a', 'clone-b'],
+      ['remote']
     ])
-    expect(projects[2].checkoutLabel).toBeUndefined()
-    expect(projects.map(getSettingsProjectRemovalScope)).toEqual([
-      'checkout',
-      'checkout',
-      'split-project'
-    ])
+    expect(entries.map(getSettingsProjectRemovalScope)).toEqual(['host:local', 'host:ssh:box'])
   })
 })
 

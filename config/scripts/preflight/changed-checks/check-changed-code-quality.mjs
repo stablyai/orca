@@ -1,3 +1,5 @@
+import { normalizeSourceLine, createMovedCodeMatcher, isMovedCode } from './moved-code-matcher.mjs'
+export { isMovedCode, createMovedCodeMatcher } from './moved-code-matcher.mjs'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
@@ -6,7 +8,16 @@ import { pathToFileURL } from 'node:url'
 import { runProcessSync } from '@orca/process-host'
 import { scanAstGrep } from '../../static-analysis/structural-scan/ast-grep-scan.mjs'
 import { resolvePullRequestDiffBase } from '../../git/pr-diff-base/git-pull-request-diff-base.mjs'
-import { resolveOxlintInvocation } from '../../tool-invocation/oxlint-cli-invocation.mjs'
+import {
+  parseOxlintOutput,
+  resolveOxlintInvocation
+} from '../../tool-invocation/oxlint-cli-invocation.mjs'
+import {
+  partitionMobileJoinedFiles,
+  runMobileJoinedOxlintScan
+} from './mobile-joined-code-quality.mjs'
+
+export { partitionMobileJoinedFiles, runMobileJoinedOxlintScan }
 import { createExistingTypeAssertionMatcher } from '../../static-analysis/type-assertion-budget/existing-type-assertions.mjs'
 import {
   JS_PLUGINS_CONFIG,
@@ -219,15 +230,6 @@ export function collectAddedLineRanges(
   return { comparisonBase, rangesByFile }
 }
 
-function parseOxlintOutput(stdout, label) {
-  const start = stdout.indexOf('{')
-  const end = stdout.lastIndexOf('}')
-  if (start === -1 || end === -1) {
-    throw new Error(`${label} did not return Oxlint JSON output.`)
-  }
-  return JSON.parse(stdout.slice(start, end + 1))
-}
-
 function normalizedDiagnosticPath(root, filename) {
   const absolutePath = path.isAbsolute(filename) ? filename : path.join(root, filename)
   return path.relative(root, absolutePath).split(path.sep).join('/')
@@ -245,11 +247,6 @@ function diagnosticLineRange(root, filename, span) {
   const source = readFileSync(absolutePath)
   const highlighted = source.subarray(span.offset, span.offset + span.length).toString('utf8')
   return { start: startLine, end: startLine + (highlighted.match(/\n/g)?.length ?? 0) }
-}
-
-// Split files mark moved code added; exempt diagnostic blocks already verbatim/contiguous in touched base files to avoid demanding unrelated edits.
-function normalizeSourceLine(line) {
-  return line.replace(/\s+/g, ' ').trim()
 }
 
 function readBaseSourceBatch(root, comparisonBase, files) {
@@ -341,52 +338,6 @@ export function collectBaseLineBlocks(root, comparisonBase, files = null) {
   return collectBaseSources(root, comparisonBase, files).map(({ source }) =>
     source.split(/\r?\n/).map(normalizeSourceLine).filter(Boolean)
   )
-}
-
-export function isMovedCode(highlightedLines, baseBlocks) {
-  return createMovedCodeMatcher(baseBlocks)(highlightedLines)
-}
-
-export function createMovedCodeMatcher(baseBlocks) {
-  // Base-revision blocks stay fixed for the gate run; normalize each visited block once.
-  const normalizedBlocks = new Map()
-  return (highlightedLines) => matchMovedCode(highlightedLines, baseBlocks, normalizedBlocks)
-}
-
-function matchMovedCode(highlightedLines, baseBlocks, normalizedBlocks) {
-  const needle = highlightedLines.map(normalizeSourceLine).filter((line) => line !== '')
-  if (needle.length === 0) {
-    return false
-  }
-  // Moved diagnostics can extend into changed dependency arrays; require same base anchor, preserved order and near-complete span rather than exact whole-block equality.
-  const MIN_COVERAGE = 0.9
-  return baseBlocks.some((block) => {
-    let haystack = normalizedBlocks.get(block)
-    if (!haystack) {
-      haystack = block.map(normalizeSourceLine).filter((line) => line !== '')
-      normalizedBlocks.set(block, haystack)
-    }
-    for (let start = 0; start < haystack.length; start += 1) {
-      if (haystack[start] !== needle[0]) {
-        continue
-      }
-      let matched = 1
-      let cursor = start + 1
-      for (let index = 1; index < needle.length && cursor < haystack.length; index += 1) {
-        while (cursor < haystack.length && haystack[cursor] !== needle[index]) {
-          cursor += 1
-        }
-        if (cursor < haystack.length) {
-          matched += 1
-          cursor += 1
-        }
-      }
-      if (matched / needle.length >= MIN_COVERAGE) {
-        return true
-      }
-    }
-    return false
-  })
 }
 
 function diagnosticHighlightedLines(root, filename, span) {
@@ -560,6 +511,23 @@ function runOxlintScan(root, scan, files) {
   return parseOxlintOutput(result.stdout, scan.label).diagnostics ?? []
 }
 
+export function parseCodeQualityOptions(args) {
+  const options = { requestedBase: undefined, mobileHostDeclarations: false }
+  for (const argument of args) {
+    if (argument === '--') {
+      continue
+    }
+    if (argument === '--mobile-host-declarations') {
+      options.mobileHostDeclarations = true
+    } else if (argument.startsWith('--') || options.requestedBase !== undefined) {
+      throw new Error(`Unknown changed-code quality argument: ${argument}`)
+    } else {
+      options.requestedBase = argument
+    }
+  }
+  return options
+}
+
 /** ast-grep matches as Oxlint-shaped diagnostics; `info` flaky-test rules are owned by their ratchet. */
 export function runAstGrepScan(root, files) {
   return scanAstGrep(root, { minSeverity: 'warning', paths: files }).map((match) => ({
@@ -578,9 +546,10 @@ export function runAstGrepScan(root, files) {
   }))
 }
 
-export function main(
+export async function main(
   root = process.cwd(),
-  requestedBase = process.argv.slice(2).find((argument) => argument !== '--')
+  requestedBase,
+  { mobileHostDeclarations = false } = {}
 ) {
   const { comparisonBase, rangesByFile } = collectAddedLineRanges(root, requestedBase)
   const files = [...rangesByFile.keys()]
@@ -596,11 +565,30 @@ export function main(
     source.split(/\r?\n/).map(normalizeSourceLine).filter(Boolean)
   )
   const movedCodeMatcher = createMovedCodeMatcher(baseBlocks)
+  const partitions = mobileHostDeclarations ? partitionMobileJoinedFiles(root, files) : null
+  if (partitions) {
+    console.log(
+      `Mobile type-aware partitions: ${JSON.stringify({
+        joined: partitions.joined,
+        joinedCount: partitions.joined.length,
+        rest: partitions.rest,
+        restCount: partitions.rest.length,
+        totalCount: files.length
+      })}`
+    )
+  }
   const existingAssertionMatcher = createExistingTypeAssertionMatcher(baseSources)
 
   let failures = 0
   for (const scan of OXLINT_SCANS) {
-    const diagnostics = runOxlintScan(root, scan, files).filter(
+    let findings
+    if (scan.label === 'type-aware code quality' && partitions?.joined.length) {
+      findings = partitions.rest.length ? runOxlintScan(root, scan, partitions.rest) : []
+      findings.push(...(await runMobileJoinedOxlintScan(root, scan, partitions.joined)))
+    } else {
+      findings = runOxlintScan(root, scan, files)
+    }
+    const diagnostics = findings.filter(
       (diagnostic) =>
         !isSuppressedDiagnostic(diagnostic, root) &&
         !isCastingDirectiveUnusedWarning(diagnostic, root) &&
@@ -654,5 +642,6 @@ export function main(
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  process.exit(main())
+  const options = parseCodeQualityOptions(process.argv.slice(2))
+  process.exit(await main(process.cwd(), options.requestedBase, options))
 }

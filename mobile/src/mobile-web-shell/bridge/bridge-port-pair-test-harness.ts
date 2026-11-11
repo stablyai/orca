@@ -84,10 +84,10 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     onNavigate: (href) => navigations.push(href),
     onExternalLink: (url) => externalLinks.push(url),
     onHaptic: (kind) => haptics.push(kind),
-    // No device exists in this pair; answer each native verb with its declared shape and prove it was not forwarded.
-    serveNativeVerb: (verb, params) => {
-      return options.serveNativeVerb?.(verb, params) ?? Promise.resolve(defaultVerbAnswer(verb))
-    },
+    // No device exists in this pair; native replies/refusals stay on the shell without desktop forwarding.
+    serveNativeVerb: (verb, params) =>
+      options.serveNativeVerb?.(verb, params) ??
+      Promise.resolve(defaultVerbAnswer(verb, params, options.storage ?? {})),
     onNavigateBack: () => {
       backPops.push('popped')
       return 'popped'

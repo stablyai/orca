@@ -1,3 +1,7 @@
+import { useMemo } from 'react'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import type { Repo } from '../../../../../shared/repo-types'
+import { getRepoHostIdentity } from '../../../../../shared/repo-host-identity'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import {
   getGitHubPRStateChips,
@@ -19,7 +23,6 @@ import { hasUpstreamCandidateDivergence, hasDivergentSources } from '../task-pag
 import IssueSourceIndicator from '@/components/github/IssueSourceIndicator'
 import IssueSourceSelector, { issueSourceChipClass } from '@/components/github/IssueSourceSelector'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
-import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
 import { deriveGitHubTaskPreset } from './task-page-preset-highlight'
 import {
   deriveGitHubPRStateChip,
@@ -102,6 +105,21 @@ export function TaskPageGitHubFilters({
     handleTaskSearchKeyDown,
     githubTasksBusy
   } = model
+  const selectedByHostId = useMemo(() => {
+    const hosts = new Map<string, Map<string, Repo>>()
+    for (const repo of selectedRepos) {
+      const hostId = getRepoExecutionHostId(repo)
+      let repos = hosts.get(hostId)
+      if (!repos) {
+        repos = new Map()
+        hosts.set(hostId, repos)
+      }
+      if (!repos.has(repo.id)) {
+        repos.set(repo.id, repo)
+      }
+    }
+    return hosts
+  }, [selectedRepos])
   const highlightedPreset = deriveGitHubTaskPreset(activeGithubTaskKind, appliedTaskQuery)
   const prStateChip = deriveGitHubPRStateChip(appliedTaskQuery)
   const prWhoChip = deriveGitHubPRWhoChip(appliedTaskQuery)
@@ -236,7 +254,7 @@ export function TaskPageGitHubFilters({
                   // Why: restore a non-empty draft (accidental dismissal recoverable); empty default guards a stale draft after a repo change.
                   const seed = resolveNewIssueOpenSeed({
                     draft: useAppStore.getState().newIssueDraft,
-                    selectedRepoIds: selectedRepos.map((r) => r.id)
+                    selectedRepoIds: selectedRepos.map(getRepoHostIdentity)
                   })
                   setNewIssueTitle(seed.title)
                   setNewIssueBody(seed.body)
@@ -299,7 +317,7 @@ export function TaskPageGitHubFilters({
           <div className="flex flex-wrap items-center gap-2">
             {rows.map((s) => {
               // Why the host: a twin's rows share the id (and maybe the path); each row has its own preference.
-              const repo = selectedRepos.find((r) => repoMatchesHostIdentity(r, s.repoId, s.hostId))
+              const repo = selectedByHostId.get(s.hostId)?.get(s.repoId)
               const showRepoBadgeLabel = selectedRepos.length > 1 && repo
               const selectorRenderable = hasUpstreamCandidateDivergence(s)
               // Why: render the indicator standalone — it has its own chip styles, so nesting it in our chip would double-border it.

@@ -266,6 +266,7 @@ export function useHostWorktreeCatalog(args: {
       if (!embedded) {
         return startWorktreeRefresh()
       }
+      return undefined
     }, [embedded, startWorktreeRefresh])
   )
 
@@ -274,6 +275,7 @@ export function useHostWorktreeCatalog(args: {
     if (embedded) {
       return startWorktreeRefresh()
     }
+    return undefined
   }, [embedded, startWorktreeRefresh])
 
   // A read stuck on a replaced client must not hold the list back: TanStack joins a read in flight.

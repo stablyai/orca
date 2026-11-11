@@ -1,3 +1,5 @@
+import type { ProjectGroupingIndex } from '../../../../shared/project-section-grouping'
+import type { ProjectGroupingSettings } from '../../../../shared/project-grouping'
 import type { Repo } from '../../../../shared/repo-types'
 import { applyInheritedProjectGroups } from '../../../../shared/project-group-inheritance'
 import { reconcileCatalogRows } from '../../../../shared/catalog-row-reconcile'
@@ -13,10 +15,17 @@ export function mergeFetchedReposForHost(
   previous: readonly Repo[],
   fetched: readonly Repo[],
   hostId: string,
+  settings?: ProjectGroupingSettings | null,
+  grouping?: ProjectGroupingIndex,
   /** The rows when the request went out; omitted, every row of the host is the answer's to drop. */
   reposAtRequest?: readonly Repo[]
 ): readonly Repo[] {
-  const fetchedWithProjectGroups = applyInheritedProjectGroups(previous, fetched)
+  const fetchedWithProjectGroups = applyInheritedProjectGroups(
+    previous,
+    fetched,
+    settings,
+    grouping
+  )
   const fetchedIdentities = new Set(fetchedWithProjectGroups.map(getRepoRowIdentity))
   const requested = reposAtRequest ? new Set(reposAtRequest.map(getRepoRowIdentity)) : null
   const preserved = previous.filter((repo) => {

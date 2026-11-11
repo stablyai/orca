@@ -1,3 +1,4 @@
+import { buildWorkspaceStatusLookup } from '../../../../../../shared/workspace-statuses'
 import type React from 'react'
 import type { AppState } from '@/store/types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
@@ -50,6 +51,10 @@ type BuildArgs = {
 
 export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtualRowContext {
   const { props, runtime, session, statusDrag, headerDrag, primaryActive, reveal } = args
+  const workspaceStatusById =
+    props.groupBy === 'workspace-status'
+      ? buildWorkspaceStatusLookup(props.workspaceStatuses)
+      : undefined
   return {
     renderRows: args.renderRows,
     firstHeaderIndex: args.firstHeaderIndex,
@@ -58,6 +63,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
     measureVirtualRowElement: args.measureVirtualRowElement,
     groupBy: props.groupBy,
     workspaceStatuses: props.workspaceStatuses,
+    workspaceStatusById,
     activeWorktreeId: props.activeWorktreeId,
     worktreeDragState: runtime.worktreeDragState,
     orderedHostIds: headerDrag.orderedHostIds,
@@ -76,6 +82,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       groupBy: props.groupBy,
       collapsedGroups: props.collapsedGroups,
       workspaceStatuses: props.workspaceStatuses,
+      workspaceStatusById,
       projectGroups: args.projectGroups,
       highlightedRevealRowKey: reveal.highlightedRevealRowKey,
       dragOverStatus: runtime.dragOverStatus,

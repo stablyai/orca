@@ -1,5 +1,22 @@
+import type { WorktreeVisibilityDefaults } from '../../../../../../shared/global-settings-types'
+import type { Repo } from '../../../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../../../shared/project-group-types'
+
+import type { GroupHeaderRow } from '../../../../../../shared/sidebar-list/row-types'
+import {
+  type ExecutionHostId,
+  getRepoExecutionHostId
+} from '../../../../../../shared/execution-host'
 import { useTranslation } from 'react-i18next'
-import React from 'react'
+import React, { useMemo, useState } from 'react'
+import { useProjectGroupOperation } from '../../use-project-group-operation'
+import {
+  type ProjectGroupOperation,
+  currentProjectGroupMember,
+  resolveProjectGroupOperation
+} from '../../project-group-operation'
+import { useAppStore } from '@/store'
+import { getProjectGroupingIndexFromState } from '@/store/projects/project-host-setup-selector'
 import { useRepoSshGate } from '@/hooks/use-repo-ssh-gate'
 import {
   CircleX,
@@ -29,9 +46,7 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { getRepositoryIconSectionId } from '@/components/settings/repository/repository-settings-targets'
 import { WslMoveProjectMenuItem } from '@/components/wsl-move/WslMoveProjectMenuItem'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { Repo } from '../../../../../../shared/repo-types'
-import type { WorktreeVisibilityDefaults } from '../../../../../../shared/global-settings-types'
+
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
 import {
   effectiveExternalWorktreeVisibility,
@@ -68,33 +83,84 @@ function getWorktreeVisibilityMenuLabel(
 
 export type RepoHeaderProjectActions = {
   getWorktreeVisibilityDefaults: (repo: Repo) => WorktreeVisibilityDefaults | undefined
-  onOpenRepoSettings: (projectId: string, sectionId?: string) => void
-  onOpenWorktreeVisibility: (repo: Repo) => void
-  onCreateGroupFromRepo: (repo: Repo) => void
-  onMoveProjectToGroup: (repo: Repo, groupId: string) => void
-  onRemoveProjectFromGroup: (repo: Repo) => void
-  onRemoveProject: (repo: Repo) => void
+  onOpenRepoSettings: (projectId: string, sectionId?: string, hostId?: ExecutionHostId) => void
+  onOpenWorktreeVisibility: (
+    repo: Repo,
+    scope?: GroupHeaderRow['projectScope'],
+    hostId?: ExecutionHostId
+  ) => void
+  onCreateGroupFromRepo: (operation: ProjectGroupOperation) => void
+  onMoveProjectToGroup: (operation: ProjectGroupOperation, groupId: string) => void
+  onRemoveProjectFromGroup: (operation: ProjectGroupOperation) => void
+  onRemoveProject: (repo: Repo, scope?: GroupHeaderRow['projectScope']) => void
   /** `pinHost`: the header's rows all sit on its repo's host, so that registration names the host. */
-  onCreateForRepo: (repo: Repo, options: { pinHost: boolean }) => void
+  onCreateForRepo: (
+    repo: Repo,
+    options: { pinHost: boolean; projectScope?: GroupHeaderRow['projectScope'] }
+  ) => void
+}
+
+/** Navigation carries H, never a host/raw convenience-map winner or an armed removal. */
+export function openProjectRemovalSettings(
+  repo: Repo,
+  scope?: GroupHeaderRow['projectScope']
+): void {
+  const state = useAppStore.getState()
+  if (!currentProjectGroupMember(state, repo)) {
+    return
+  }
+  const key = scope?.key ?? resolveProjectGroupOperation(state, { kind: 'repo', repo })?.groupKey
+  if (!key || !getProjectGroupingIndexFromState(state).groupByKey.has(key)) {
+    return
+  }
+  state.openSettingsTarget({
+    pane: 'repo',
+    repoId: repo.id,
+    hostId: getRepoExecutionHostId(repo),
+    sectionId: `repo-${key}`
+  })
+  state.openSettingsPage()
 }
 
 // Memoized: the sidebar re-renders every header row when the active workspace changes.
 export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjectActionsMenu({
   repo,
+  contextRepo = repo,
+  projectScope,
+  hostId,
   label,
-  projectGroups,
   actions
 }: {
-  repo: Repo
+  repo?: Repo
+  contextRepo?: Repo
+  projectScope?: GroupHeaderRow['projectScope']
+  hostId?: ExecutionHostId
   label: string
   projectGroups: readonly ProjectGroup[]
   actions: RepoHeaderProjectActions
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const t = useTranslate()
   // Memoized: subscribe so a language change still repaints its labels.
   useTranslation()
+  const [open, setOpen] = useState(false)
+  const catalogHostId =
+    hostId ?? projectScope?.catalogHostId ?? (repo ? getRepoExecutionHostId(repo) : undefined)
+  const groupKey = projectScope ? projectScope.key : null
+  const entrance = useMemo(
+    () =>
+      groupKey !== null && catalogHostId
+        ? { kind: 'header' as const, groupKey, catalogHostId }
+        : repo
+          ? { kind: 'repo' as const, repo }
+          : null,
+    [groupKey, catalogHostId, repo]
+  )
+  const operation = useProjectGroupOperation(open, entrance)
+  if (!contextRepo) {
+    return null
+  }
   return (
-    <DropdownMenu modal={false}>
+    <DropdownMenu modal={false} open={open} onOpenChange={setOpen}>
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
@@ -133,55 +199,88 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
         onClick={stopRepoHeaderMenuEvent}
         onKeyDown={stopRepoHeaderMenuEvent}
       >
-        <DropdownMenuItem onSelect={() => actions.onOpenRepoSettings(repo.id)}>
+        <DropdownMenuItem
+          onSelect={() =>
+            actions.onOpenRepoSettings(
+              contextRepo.id,
+              undefined,
+              getRepoExecutionHostId(contextRepo)
+            )
+          }
+        >
           <SlidersHorizontal className="size-3.5" />
           {t('auto.components.sidebar.WorktreeList.2cdffbc728', 'Project Settings')}
         </DropdownMenuItem>
         <DropdownMenuItem
-          onSelect={() => actions.onOpenRepoSettings(repo.id, getRepositoryIconSectionId(repo.id))}
+          onSelect={() =>
+            actions.onOpenRepoSettings(
+              contextRepo.id,
+              getRepositoryIconSectionId(contextRepo.id),
+              getRepoExecutionHostId(contextRepo)
+            )
+          }
         >
           <Shapes className="size-3.5" />
           {t('auto.components.sidebar.WorktreeList.e82d3589a1', 'Change Project Icon')}
         </DropdownMenuItem>
-        {isGitRepoKind(repo) ? (
-          <DropdownMenuItem onSelect={() => actions.onOpenWorktreeVisibility(repo)}>
+        {isGitRepoKind(contextRepo) ||
+        projectScope?.registrations.some((setup) => setup.kind !== 'folder') ? (
+          <DropdownMenuItem
+            onSelect={() => actions.onOpenWorktreeVisibility(contextRepo, projectScope, hostId)}
+          >
             <Eye className="size-3.5" />
-            {getWorktreeVisibilityMenuLabel(repo, actions.getWorktreeVisibilityDefaults(repo), t)}
+            {projectScope && projectScope.registrations.length > 1
+              ? t(
+                  'auto.components.sidebar.WorktreeVisibilityDialog.83a5ba8dd1',
+                  'Non-Orca worktrees'
+                )
+              : getWorktreeVisibilityMenuLabel(
+                  contextRepo,
+                  actions.getWorktreeVisibilityDefaults(contextRepo),
+                  t
+                )}
           </DropdownMenuItem>
         ) : null}
-        <DropdownMenuItem onSelect={() => actions.onCreateGroupFromRepo(repo)}>
-          {/* Not FolderPlus: that now means "Add project" in the sidebar header above. */}
-          <FolderTree className="size-3.5" />
-          {t('auto.components.sidebar.WorktreeList.cbfd565f83', 'New group from project')}
-        </DropdownMenuItem>
-        {projectGroups.length > 0 ? (
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <FolderInput className="size-3.5" />
-              {t('auto.components.sidebar.WorktreeList.4a08fb55f2', 'Move to group')}
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              {projectGroups.map((group) => (
-                <DropdownMenuItem
-                  key={group.id}
-                  disabled={repo.projectGroupId === group.id}
-                  onSelect={() => actions.onMoveProjectToGroup(repo, group.id)}
-                >
-                  <span className="max-w-48 truncate">{group.name}</span>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
+        {operation ? (
+          <>
+            <DropdownMenuItem onSelect={() => actions.onCreateGroupFromRepo(operation)}>
+              {/* Not FolderPlus: that now means "Add project" in the sidebar header above. */}
+              <FolderTree className="size-3.5" />
+              {t('auto.components.sidebar.WorktreeList.cbfd565f83', 'New group from project')}
+            </DropdownMenuItem>
+            {operation.destinations.length > 0 ? (
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <FolderInput className="size-3.5" />
+                  {t('auto.components.sidebar.WorktreeList.4a08fb55f2', 'Move to group')}
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  {operation.destinations.map((group) => (
+                    <DropdownMenuItem
+                      key={group.id}
+                      disabled={operation.uniformGroupId === group.id}
+                      onSelect={() => actions.onMoveProjectToGroup(operation, group.id)}
+                    >
+                      <span className="max-w-48 truncate">{group.name}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            ) : null}
+            {operation.grouped ? (
+              <DropdownMenuItem onSelect={() => actions.onRemoveProjectFromGroup(operation)}>
+                <CircleX className="size-3.5" />
+                {t('auto.components.sidebar.WorktreeList.64e55f7f01', 'Remove from group')}
+              </DropdownMenuItem>
+            ) : null}
+          </>
         ) : null}
-        {repo.projectGroupId ? (
-          <DropdownMenuItem onSelect={() => actions.onRemoveProjectFromGroup(repo)}>
-            <CircleX className="size-3.5" />
-            {t('auto.components.sidebar.WorktreeList.64e55f7f01', 'Remove from group')}
-          </DropdownMenuItem>
-        ) : null}
-        <WslMoveProjectMenuItem repo={repo} />
+        {repo ? <WslMoveProjectMenuItem repo={repo} /> : null}
         <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive" onSelect={() => actions.onRemoveProject(repo)}>
+        <DropdownMenuItem
+          variant="destructive"
+          onSelect={() => actions.onRemoveProject(contextRepo, projectScope)}
+        >
           <Trash2 className="size-3.5" />
           {t('auto.components.sidebar.WorktreeList.c83968f87f', 'Remove Project')}
         </DropdownMenuItem>
@@ -194,18 +293,21 @@ export const RepoHeaderCreateWorkspaceButton = React.memo(function RepoHeaderCre
   repo,
   label,
   pinHost = false,
+  projectScope,
   onCreateForRepo
 }: {
   repo: Repo
   label: string
   pinHost?: boolean
+  projectScope?: GroupHeaderRow['projectScope']
   onCreateForRepo: RepoHeaderProjectActions['onCreateForRepo']
 }): React.JSX.Element {
   const t = useTranslate()
   // Memoized: subscribe so a language change still repaints its labels.
   useTranslation()
   const sshGate = useRepoSshGate(repo)
-  const createState = getRepoHeaderCreateState({ repo, label, sshGate }, t)
+  const createState =
+    projectScope && !pinHost ? undefined : getRepoHeaderCreateState({ repo, label, sshGate }, t)
   const fallbackLabel = t(
     'auto.components.sidebar.WorktreeList.bb85cd86ba',
     'Create workspace for {{value0}}',
@@ -248,7 +350,7 @@ export const RepoHeaderCreateWorkspaceButton = React.memo(function RepoHeaderCre
             onClick={(event) => {
               event.preventDefault()
               event.stopPropagation()
-              onCreateForRepo(repo, { pinHost })
+              onCreateForRepo(repo, { pinHost, ...(projectScope ? { projectScope } : {}) })
             }}
           >
             <Plus className="size-3" />

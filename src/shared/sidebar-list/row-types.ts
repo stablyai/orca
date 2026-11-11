@@ -1,3 +1,4 @@
+import type { GroupingSetup } from '../project-grouping'
 import type { WorktreeOccurrence } from '../worktree-occurrence-plan'
 import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../project-group-types'
@@ -37,6 +38,14 @@ export type GroupHeaderRow = {
   count: number
   icon: SidebarHeaderIcon
   repo?: Repo
+  contextRepo?: Repo
+  displayRepo?: Repo
+  projectScope?: {
+    catalogHostId?: ExecutionHostId
+    key: string
+    registrations: readonly GroupingSetup[]
+    context?: { repoId: string; hostId: ExecutionHostId; setupId?: string }
+  }
   projectGroup?: ProjectGroup | { id: null; name: 'Ungrouped'; tabOrder: number }
   projectGroupDepth?: number
   hostId?: ExecutionHostId
@@ -128,7 +137,7 @@ export type FolderWorkspaceRow = {
 }
 
 /** Stable create/repo identity only: subscribing to full progress records would rebuild the list on phase/loader churn. */
-export type PendingCreationRef = { creationId: string; repoId: string }
+export type PendingCreationRef = { creationId: string; repoId: string; hostId?: string }
 
 export type Row =
   | GroupHeaderRow
@@ -143,12 +152,18 @@ export function getHeaderDragRepo(row: GroupHeaderRow): Repo | undefined {
   return row.repeated ? undefined : (row.anchorRepo ?? row.repo)
 }
 
+export type ProjectSectionNotice =
+  | { kind: 'imported'; candidate: ImportedWorktreesCardCandidate }
+  | { kind: 'external'; candidate: NewExternalWorktreesInboxCandidate }
+
 /** A project header whose rows all sit on its own repo's host; one spanning hosts still lists them in hostRepos.
- * A header with no rows is not one: its repo is whichever registration repoMap kept, not proof of a host. */
+ * A header with no rows is not one: its repo is whichever registration repoMap kept, not proof of a host.
+ * A logical project (projectScope) offers its whole group unless a host section or filter gave it a hostId. */
 export function isSingleHostProjectHeader(row: GroupHeaderRow): boolean {
   return (
     row.repo !== undefined &&
     row.hostRepos === undefined &&
+    (row.hostId !== undefined || row.projectScope === undefined) &&
     (row.hostId !== undefined || row.count > 0)
   )
 }

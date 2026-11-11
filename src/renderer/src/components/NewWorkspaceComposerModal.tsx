@@ -1,16 +1,11 @@
-import type { ComposerModalData } from './new-workspace/composer-modal-data'
+import type { ComposerModalData, QuickAgentPick } from './new-workspace/composer-modal-data'
 import { toast } from 'sonner'
 import {
   formatWorkspaceCreateError,
   getWorkspaceCreateErrorToastMessage
 } from '@/lib/workspace/creation/workspace-create-error-format'
-import type {
-  AgentPickerDraft,
-  AgentPickerEntry
-} from '../../../shared/agent-launch/picker/agent-launch-picker'
 import { DirectWorkItemSetupDialog } from './new-workspace/DirectWorkItemSetupDialog'
 import { agentChoicePending } from '@/lib/agent-session/launch/inventory/host-chat-program'
-import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
@@ -145,6 +140,7 @@ function QuickTabBody({
     initialGitHubWorkItem: modalData.initialGitHubWorkItem ?? null,
     initialTaskSourceContext: modalData.taskSourceContext ?? null,
     initialWorkspaceTarget: modalData.initialWorkspaceTarget ?? null,
+    initialProjectScope: modalData.initialProjectScope ?? null,
     initialRepoId: modalData.initialRepoId,
     initialEphemeralVmRecipeId: modalData.initialEphemeralVmRecipeId,
     initialProjectGroupId: modalData.initialProjectGroupId,
@@ -197,9 +193,9 @@ function QuickTabBody({
     offeredAgentIds &&
     new Set([...offeredAgentIds, ...(quickAgent && choicePending(quickAgent) ? [quickAgent] : [])])
   // Why keyed by agent: a pick repaired to another agent must not carry the old one's surface.
-  const [quickAgentPick, setQuickAgentPick] = useState<
-    Omit<NonNullable<ComposerModalData['recovery']>, 'note'>
-  >(modalData.recovery ?? { agent: null })
+  const [quickAgentPick, setQuickAgentPick] = useState<QuickAgentPick>(
+    modalData.recovery ?? { agent: null }
+  )
   const observation = useAgentMenuObservation(
     cardProps.agentRows?.target ?? null,
     active && Boolean(cardProps.agentRows),
@@ -217,9 +213,9 @@ function QuickTabBody({
   const handleQuickAgentChange = useCallback(
     (
       agent: TuiAgent | null,
-      surface?: AgentLaunchSurface,
-      draft?: AgentPickerDraft,
-      entry?: AgentPickerEntry
+      surface?: QuickAgentPick['surface'],
+      draft?: QuickAgentPick['draft'],
+      entry?: QuickAgentPick['entry']
     ) => {
       setQuickAgentOverride(agent)
       setQuickAgentPick({ agent, surface, draft, entry, contextKey: observation.contextKey })

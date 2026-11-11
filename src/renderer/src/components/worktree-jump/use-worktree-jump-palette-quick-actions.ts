@@ -5,6 +5,7 @@ import {
   probeGitGraphSupport
 } from '@/lib/source-control/graph/git-graph-tab'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { getProjectGroupingIndexFromState } from '@/store/projects/project-host-setup-selector'
 import { useAppStore } from '@/store/index'
 import { runWorktreeDelete } from '@/components/sidebar/workspace-actions/deletion/delete-worktree-flow'
 import { buildCmdJQuickActionContext } from '@/components/cmd-j/quick-action-context'
@@ -38,7 +39,9 @@ function getComposerPrefetchRepoId(
       state.repos,
       eligibleRepos,
       state.activeRepoId,
-      state.runtimeEnvironments
+      state.runtimeEnvironments,
+      state.settings,
+      getProjectGroupingIndexFromState(state)
     ),
     focusedHostScope: state.workspaceHostScope
   })

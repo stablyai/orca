@@ -1,3 +1,5 @@
+import { PROJECT_REPO_FILTER_EXACT_CAPABILITY } from '../../../../src/shared/project-repo-filter-capability'
+import { AppState } from 'react-native'
 import { useEffect, useMemo, useState } from 'react'
 import type { RpcClient } from '../rpc/rpc-client-contract'
 import type { ConnectionState } from './connection-state'
@@ -9,6 +11,9 @@ import { recordHostDescriptorFromStatus } from '../../host-descriptors/host-desc
 import { readConnectionStatusProbe, startRuntimeStatusProbe } from './runtime-status-probe'
 
 export type HostStatusGates = {
+  statusGeneration?: number
+  exactProjectRepoFilters?: boolean
+  projectRepoFilterSupport?: 'unknown' | 'legacy' | 'exact'
   hostCapabilities: string[]
   floatingWorkspaceEnabled: boolean
   desktopAppVersion: string | null
@@ -26,6 +31,7 @@ export type HostStatusGates = {
 type LoadedHostStatusGates = Omit<HostStatusGates, 'statusPending'> & {
   hostId: string | undefined
   client: RpcClient
+  generation: number | undefined
 }
 
 export type HostProtocolWindow = Pick<
@@ -86,7 +92,14 @@ function readProbedGates(
   }
   let gates = gatesByProbedStatus.get(status)
   if (!gates) {
-    gates = { ...hostStatusGatesFromStatus(status), statusPending: false }
+    const exact = status.capabilities?.includes(PROJECT_REPO_FILTER_EXACT_CAPABILITY) === true
+    gates = {
+      ...hostStatusGatesFromStatus(status),
+      statusGeneration: client?.getGeneration?.(),
+      exactProjectRepoFilters: exact,
+      projectRepoFilterSupport: exact ? 'exact' : 'legacy',
+      statusPending: false
+    }
     gatesByProbedStatus.set(status, gates)
   }
   return gates
@@ -114,24 +127,90 @@ export function useHostStatusGates(args: {
   }
 
   useEffect(() => {
-    if (connState !== 'connected' || !client) {
+    if (!client) {
       return
     }
-    return startHostStatusRead(client, hostId, (gates) => {
-      setLoaded({ hostId, client, ...gates })
-      setUnverified(false)
+    let probe: ReturnType<typeof startHostStatusRead> | null = null
+    let generation = client.getGeneration?.()
+    let firstRead = true
+    let epoch = 0
+    const read = () => {
+      const connected = connState === 'connected' && client.getState() === 'connected'
+      const nextGeneration = client.getGeneration?.()
+      if (!connected || nextGeneration !== generation) {
+        ++epoch
+        probe?.()
+        probe = null
+        setUnverified(true)
+      }
+      generation = nextGeneration
+      if (!connected) {
+        return
+      }
+      if (probe) {
+        setUnverified(true)
+        probe.wake()
+        return
+      }
+      const currentEpoch = ++epoch
+      if (!firstRead || !seeded) {
+        setUnverified(true)
+      }
+      firstRead = false
+      probe = startHostStatusRead(client, hostId, (gates) => {
+        if (
+          epoch !== currentEpoch ||
+          client.getState() !== 'connected' ||
+          client.getGeneration?.() !== generation
+        ) {
+          return
+        }
+        setLoaded({ hostId, client, generation, ...gates })
+        setUnverified(false)
+      })
+    }
+    const unsubscribe = client.onStateChange(read)
+    const foreground = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        read()
+      }
     })
-  }, [client, connState, hostId])
+    read()
+    return () => {
+      ++epoch
+      probe?.()
+      unsubscribe()
+      foreground.remove()
+    }
+  }, [client, connState, hostId, seeded])
 
   const probed = readProbedGates(client, connState)
   if (probed) {
     return probed
   }
   // Why: effects run after render, so key loaded gates by host and client to fail closed during route reuse.
-  const proven = loaded && loaded.hostId === hostId && loaded.client === client ? loaded : null
+  const proven =
+    loaded &&
+    loaded.hostId === hostId &&
+    loaded.client === client &&
+    loaded.generation === client?.getGeneration?.()
+      ? loaded
+      : null
   // The seed stands only for the connection the shell proved it on; after a drop the page reads again.
   if (!proven && seeded && !unverified && connState === 'connected' && client !== null) {
-    return { ...seeded, statusPending: false }
+    return {
+      ...seeded,
+      statusGeneration: client.getGeneration?.(),
+      exactProjectRepoFilters: seeded.hostCapabilities.includes(
+        PROJECT_REPO_FILTER_EXACT_CAPABILITY
+      ),
+      projectRepoFilterSupport: seeded.hostCapabilities.includes(
+        PROJECT_REPO_FILTER_EXACT_CAPABILITY
+      )
+        ? 'exact'
+        : 'legacy',
+      statusPending: false
+    }
   }
   if (!proven) {
     return {
@@ -141,10 +220,24 @@ export function useHostStatusGates(args: {
       compatVerdict: { kind: 'ok' },
       hostProtocolWindow: EMPTY_HOST_PROTOCOL_WINDOW,
       statusPending: connState === 'connected' && client !== null,
-      statusReadable: false
+      statusReadable: false,
+      exactProjectRepoFilters:
+        loaded !== null &&
+        loaded.hostId === hostId &&
+        loaded.client === client &&
+        loaded.hostCapabilities.includes(PROJECT_REPO_FILTER_EXACT_CAPABILITY),
+      projectRepoFilterSupport: 'unknown'
     }
   }
   return {
+    statusGeneration: proven.generation,
+    exactProjectRepoFilters: proven.hostCapabilities.includes(PROJECT_REPO_FILTER_EXACT_CAPABILITY),
+    projectRepoFilterSupport:
+      connState !== 'connected' || unverified || !proven.statusReadable
+        ? 'unknown'
+        : proven.hostCapabilities.includes(PROJECT_REPO_FILTER_EXACT_CAPABILITY)
+          ? 'exact'
+          : 'legacy',
     hostCapabilities: proven.hostCapabilities,
     floatingWorkspaceEnabled: proven.floatingWorkspaceEnabled,
     desktopAppVersion: proven.desktopAppVersion,
@@ -161,7 +254,7 @@ function startHostStatusRead(
   client: RpcClient,
   hostId: string | undefined,
   settle: (gates: Omit<HostStatusGates, 'statusPending'>) => void
-): () => void {
+): ReturnType<typeof startRuntimeStatusProbe> {
   let settledClosed = false
   // Settle conservative gates once so transient failures cannot trap navigation or repeatedly rerender identical state.
   const settleClosed = () => {

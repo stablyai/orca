@@ -1,4 +1,3 @@
-import './direct-rpc-client'
 import type { RpcStreamSubscribeOptions } from './rpc-client-stream-request'
 import type { RelayHostReachability } from '../relay/relay-host-reachability'
 import type { MobileConnectionPath } from '../connection/stable-logical-rpc-client'
