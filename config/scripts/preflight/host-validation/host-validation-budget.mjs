@@ -54,9 +54,12 @@ function tryListen(port) {
   })
 }
 
-export async function delegateHostValidation() {
+export async function delegateHostValidation({ waitTimeoutMs = null } = {}) {
   if (process.platform === 'win32' || process.env.GITHUB_ACTIONS === 'true') {
     return false
+  }
+  if (waitTimeoutMs !== null && (!Number.isSafeInteger(waitTimeoutMs) || waitTimeoutMs < 0)) {
+    throw new Error('Validation admission timeout must be a nonnegative integer')
   }
   const defaultPort =
     43000 + (createHash('sha256').update(homedir()).digest().readUInt16BE() % 2000)
@@ -90,9 +93,21 @@ export async function delegateHostValidation() {
   const startedAt = performance.now()
   let server
   let heartbeat
+  let firstAttempt = true
   try {
     while (!controller.signal.aborted) {
+      const immediateAttempt = firstAttempt && waitTimeoutMs === 0
+      firstAttempt = false
       server = await tryListen(port)
+      const remaining =
+        waitTimeoutMs === null ? Infinity : waitTimeoutMs - (performance.now() - startedAt)
+      if (remaining <= 0 && !(server && immediateAttempt)) {
+        server?.close()
+        server = null
+        throw new Error(
+          'Host validation lane is busy; validation did not start. Retry this command after the active validation completes, or resolve a loopback port conflict. Checks were not skipped.'
+        )
+      }
       if (server) {
         break
       }
@@ -104,7 +119,9 @@ export async function delegateHostValidation() {
         announce()
         heartbeat = setInterval(announce, 15_000)
       }
-      await delay(250 + Math.random() * 250, undefined, { signal: controller.signal })
+      await delay(Math.min(250 + Math.random() * 250, remaining), undefined, {
+        signal: controller.signal
+      })
     }
     if (controller.signal.aborted) {
       return true

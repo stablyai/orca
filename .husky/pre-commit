@@ -1,2 +1,2 @@
 #!/usr/bin/env sh
-node config/scripts/preflight/host-validation/run-host-validation.mjs -- pnpm exec lint-staged
+node config/scripts/preflight/host-validation/run-host-validation.mjs --wait-timeout=30 -- pnpm exec lint-staged

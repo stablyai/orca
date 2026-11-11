@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, readFileSync, existsSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -31,12 +31,12 @@ async function setup() {
   await new Promise((resolve) => reservation.close(resolve))
   const root = mkdtempSync(join(tmpdir(), 'orca-validation-'))
   directories.push(root)
-  const start = (name, env = {}, args = []) => {
+  const start = (name, env = {}, args = [], entry = fixture) => {
     const cwd = join(root, name)
     mkdirSync(cwd)
     const child = spawn(
       process.env.ORCA_TEST_NODE_EXECUTABLE ?? process.execPath,
-      [fixture, ...args],
+      [entry, ...args],
       {
         cwd,
         env: {
@@ -65,6 +65,7 @@ async function setup() {
     child.stderr.on('data', append)
     return {
       child,
+      cwd,
       output: () => output,
       wait: (text) =>
         output.includes(text)
@@ -157,6 +158,64 @@ it.skipIf(process.platform === 'win32')(
     await expect.poll(() => gone(owner.child) && gone(owner.pid) && gone(owner.group)).toBe(true)
     next.child.stdin.write('0\n')
     expect(await next.closed).toEqual({ code: 0, signal: null })
+  },
+  20_000
+)
+
+it.skipIf(process.platform === 'win32')(
+  'preserves descendant cleanup when a canceled intermediate exits first',
+  async () => {
+    const start = await setup()
+    const first = start('owner', {}, ['--cleanup-on-cancel'])
+    await first.wait('"running"')
+    first.child.kill('SIGTERM')
+    expect(await first.closed).toEqual({ code: 143, signal: null })
+    const marker = join(first.cwd, 'cleanup-marker')
+    expect(existsSync(marker) ? readFileSync(marker, 'utf8') : null).toBe('cleaned')
+  },
+  20_000
+)
+
+it.skipIf(process.platform === 'win32')(
+  'bounds hook admission without running or skipping its validation, then permits retry',
+  async () => {
+    const start = await setup()
+    const first = start('owner')
+    const owner = running(await first.wait('"running"'))
+    const wrapper = fileURLToPath(new URL('./run-host-validation.mjs', import.meta.url))
+    const args = [
+      '--wait-timeout=0',
+      '--',
+      process.env.ORCA_TEST_NODE_EXECUTABLE ?? process.execPath,
+      '-e',
+      'console.log("validated")'
+    ]
+    const blocked = start('hook', {}, args, wrapper)
+    expect(await blocked.closed).toEqual({ code: 1, signal: null })
+    expect(blocked.output()).toContain('validation did not start')
+    expect(blocked.output()).not.toContain('validated')
+    expect(gone(owner.pid)).toBe(false)
+    first.child.stdin.write('0\n')
+    expect(await first.closed).toEqual({ code: 0, signal: null })
+    const retry = start('retry', {}, args, wrapper)
+    expect(await retry.closed).toEqual({ code: 0, signal: null })
+    expect(retry.output()).toContain('validated')
+  },
+  20_000
+)
+
+it.skipIf(process.platform === 'win32')(
+  'rejects a late successful bind and releases it for the next command',
+  async () => {
+    const start = await setup()
+    const late = start('late', {}, ['--late-admission'])
+    expect(await late.closed).toEqual({ code: 1, signal: null })
+    expect(late.output()).toContain('validation did not start')
+    expect(late.output()).not.toContain('admitted-late')
+    const retry = start('retry')
+    await retry.wait('"running"')
+    retry.child.stdin.write('0\n')
+    expect(await retry.closed).toEqual({ code: 0, signal: null })
   },
   20_000
 )

@@ -1,18 +1,38 @@
 import { spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
+import { once } from 'node:events'
+import { join } from 'node:path'
 import { delegateHostValidation } from '../host-validation-budget.mjs'
 
-if (!(await delegateHostValidation())) {
-  if (process.argv.includes('--complete')) {
-    console.log('nested-complete')
+const lateAdmission = process.argv.includes('--late-admission')
+if (lateAdmission) {
+  let firstRead = true
+  Object.defineProperty(performance, 'now', {
+    value: () => {
+      const time = firstRead ? 0 : 1000
+      firstRead = false
+      return time
+    }
+  })
+}
+
+if (!(await delegateHostValidation({ waitTimeoutMs: lateAdmission ? 1 : null }))) {
+  if (process.argv.includes('--complete') || lateAdmission) {
+    console.log(lateAdmission ? 'admitted-late' : 'nested-complete')
   } else {
     const child = spawn(
       process.execPath,
-      ['-e', "process.on('SIGINT', () => {}); setInterval(() => {}, 1000)"],
+      [
+        join(import.meta.dirname, 'validation-descendant.mjs'),
+        ...(process.argv.includes('--cleanup-on-cancel')
+          ? [join(process.cwd(), 'cleanup-marker')]
+          : [])
+      ],
       {
-        stdio: 'ignore'
+        stdio: ['ignore', 'pipe', 'ignore']
       }
     )
+    await once(child.stdout, 'data')
     console.log(
       JSON.stringify({
         event: 'running',

@@ -45,6 +45,12 @@ process.on('message', (message, server) => {
       return
     }
     finished = true
+    if (stopping) {
+      if (process.connected) {
+        process.send({ type: 'result', code }, () => {})
+      }
+      return
+    }
     if (!process.connected) {
       stopGroup()
     }
