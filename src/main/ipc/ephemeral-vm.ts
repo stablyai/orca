@@ -1,4 +1,9 @@
 import { app, ipcMain } from 'electron'
+import {
+  noteCloudCreatePhase,
+  noteCloudCreateProvisionChunk,
+  registerCloudCreatePhaseNotes
+} from './cloud-create-phase-timing'
 import type { Store } from '../persistence/loading-store/store'
 import {
   getEphemeralVmRecipeResultConnection,
@@ -85,6 +90,7 @@ export type EphemeralVmProvisionIpcResult =
     } & EphemeralVmFailure)
 
 export function registerEphemeralVmHandlers(store: Store, pluginService?: PluginService): void {
+  registerCloudCreatePhaseNotes()
   installHostedSandbox(store)
   ipcMain.removeHandler('ephemeralVm:listRecipes')
   ipcMain.removeHandler('ephemeralVm:listRecipeCatalog')
@@ -146,6 +152,7 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
       if (refused) {
         return provisionFailure(refused)
       }
+      noteCloudCreatePhase(args.provisionId, 'provision-start')
       const controller = args.provisionId ? new AbortController() : null
       if (args.provisionId && controller) {
         activeProvisionControllers.set(args.provisionId, controller)
@@ -154,6 +161,7 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
         if (!args.provisionId) {
           return
         }
+        noteCloudCreateProvisionChunk(args.provisionId, chunk)
         _event.sender.send('ephemeralVm:provisionEvent', {
           provisionId: args.provisionId,
           stream,
@@ -213,6 +221,21 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
             stderr: redactEphemeralVmRecipeDiagnosticText(result.start.stderr)
           }
         }
+        // Why: a started runtime that fails to connect or pair is cleaned up, not leaked.
+        const failAfterStart = async (error: unknown): Promise<EphemeralVmProvisionIpcResult> => {
+          await cleanupEphemeralVmRuntime({
+            userDataPath: app.getPath('userData'),
+            repoPath: repo.repo.path,
+            recipe,
+            runtimeId: result.runtime.id
+          }).catch(() => undefined)
+          return {
+            ok: false,
+            error: error instanceof Error ? error.message : String(error),
+            stdout: redactEphemeralVmRecipeDiagnosticText(result.start.stdout),
+            stderr: redactEphemeralVmRecipeDiagnosticText(result.start.stderr)
+          }
+        }
         const connection = getEphemeralVmRecipeResultConnection(result.start.result)
         if (connection.type === 'ssh') {
           try {
@@ -237,18 +260,7 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
               warnings: getEphemeralVmRecipeResultWarnings(result.start.result)
             }
           } catch (error) {
-            await cleanupEphemeralVmRuntime({
-              userDataPath: app.getPath('userData'),
-              repoPath: repo.repo.path,
-              recipe,
-              runtimeId: result.runtime.id
-            }).catch(() => undefined)
-            return {
-              ok: false,
-              error: error instanceof Error ? error.message : String(error),
-              stdout: redactEphemeralVmRecipeDiagnosticText(result.start.stdout),
-              stderr: redactEphemeralVmRecipeDiagnosticText(result.start.stderr)
-            }
+            return failAfterStart(error)
           }
         }
 
@@ -260,24 +272,14 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
             source: 'ephemeral-vm'
           })
         } catch (error) {
-          await cleanupEphemeralVmRuntime({
-            userDataPath: app.getPath('userData'),
-            repoPath: repo.repo.path,
-            recipe,
-            runtimeId: result.runtime.id
-          }).catch(() => undefined)
-          return {
-            ok: false,
-            error: error instanceof Error ? error.message : String(error),
-            stdout: redactEphemeralVmRecipeDiagnosticText(result.start.stdout),
-            stderr: redactEphemeralVmRecipeDiagnosticText(result.start.stderr)
-          }
+          return failAfterStart(error)
         }
         const runtime = requireEphemeralVmRecipeResult(
           updateEphemeralVmRuntimeStatus(app.getPath('userData'), result.runtime.id, {
             runtimeEnvironmentId: environment.id
           })
         )
+        noteCloudCreatePhase(args.provisionId, 'provision-end')
         return {
           ok: true,
           connectionType: 'orca-server',
