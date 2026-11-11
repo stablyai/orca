@@ -96,11 +96,24 @@ describe('Bitbucket credential connection', () => {
 
   it('saves an access token Bitbucket accepts without account access (STA-14576)', async () => {
     const conn = await loadModule()
-    // Bitbucket answers /user with 403 for every repository, project or workspace access token.
-    globalThis.fetch = vi.fn<typeof fetch>(async () => new Response(null, { status: 403 }))
+    globalThis.fetch = vi.fn<typeof fetch>(
+      async () => new Response('<html>Forbidden</html>', { status: 403 })
+    )
+    const proxied = await conn.connectBitbucket({ authMode: 'token', accessToken: 'repo-token' })
+    expect(proxied.ok).toBe(false)
+    expect(conn.getBitbucketConnectionStatus().source).toBe('none')
 
+    // Bitbucket's /user answer for every repository, project or workspace access token.
+    globalThis.fetch = vi.fn<typeof fetch>(async () =>
+      Response.json(
+        {
+          type: 'error',
+          error: { message: 'Token is invalid or not supported for this endpoint.' }
+        },
+        { status: 403 }
+      )
+    )
     const result = await conn.connectBitbucket({ authMode: 'token', accessToken: 'repo-token' })
-
     expect(result).toEqual({ ok: true, account: null })
     expect(conn.getBitbucketConnectionStatus().source).toBe('stored')
   })
