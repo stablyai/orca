@@ -252,6 +252,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
       if (existsSync(sourceModelDir)) {
         await rm(sourceModelDir, { recursive: true, force: true })
       }
+      await rm(previousSpeechModelDir(sourceModelDir), { recursive: true, force: true })
     }
     this.modelStates.delete(modelId)
   }
