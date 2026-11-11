@@ -32,7 +32,11 @@ function setup(assignee = HANDLE) {
   const dispatch = createRootDispatch(db, task.id, assignee, assignee === HANDLE ? PANE : undefined)
   const waiting = new Set<string>()
   const notify = vi.fn()
-  const deps = { getDb: () => db, isWaitingForMail: (m: string) => waiting.has(m), notify }
+  const deps = {
+    getDb: (): OrchestrationDb | null => db,
+    isWaitingForMail: (m: string) => waiting.has(m),
+    notify
+  }
   const mail = () => db.getUnreadRunMailbox(run.id, 100, ['escalation'])
   return { db, run, dispatch, waiting, notify, deps, mail }
 }
@@ -72,6 +76,7 @@ function terminal(ctx: ReturnType<typeof setup>, current: { row: AgentStatusIpcP
     },
     getHandle: () => HANDLE,
     getProcessIncarnation: () => null,
+    takeOpenApproval: () => null,
     readScreen: async () => ({
       handle: HANDLE,
       status: 'running',

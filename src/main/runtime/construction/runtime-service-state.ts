@@ -48,6 +48,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { mainListsEveryPane } from '../terminal/surface/main-terminal-surfaces'
 import { TUI_IDLE_QUIESCENCE_MS } from '../terminal/wait/terminal-idle-policy'
 import { readScreenClearingBlockedTail } from '../terminal/wait/blocked-tail-screen-clear'
+import { structuredMailboxCustody } from '../orchestration/mailbox/routing/structured-session-mail-target'
 
 export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithAgentOrchestrationDependencies {
   protected readonly stopRequestedPtyIds = new Set<string>()
@@ -311,7 +312,9 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
   protected readonly workerTurnStopReportDeps: WorkerTurnStopReportDeps = {
     getDb: () => this._orchestrationDb,
     isWaitingForMail: (mailbox) => (this.messageWaiters.get(mailbox)?.size ?? 0) > 0,
-    notify: (handle, messageType) => this.notifyMessageArrived(handle, messageType)
+    notify: (handle, messageType) => this.notifyMessageArrived(handle, messageType),
+    isChatMailbox: (mailbox) =>
+      typeof structuredMailboxCustody(mailbox, this._orchestrationDb) === 'object'
   }
 
   protected readonly lostWorkerReport: LostWorkerReport = {

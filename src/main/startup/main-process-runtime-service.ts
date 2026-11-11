@@ -183,6 +183,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched, runtime)
   )
   agentHookServer.setCliWriterExecutionMatcher(observedPaneIdentities, runtime)
+  agentHookServer.setClaudePermissionHolds(runtime.terminalWorkerApprovals)
   // Main records pane resume state from accepted status.
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     agentHookServer.subscribeEnrichedStatus((enriched) =>
