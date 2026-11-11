@@ -65,7 +65,8 @@ function WorkspaceRow(props: {
         <Text style={styles.title} numberOfLines={1}>
           {workspace.workspaceName}
         </Text>
-        <Text style={styles.subtitle} numberOfLines={1}>
+        {/* Two lines so the desktop name at the end stays visible; same-named workspaces differ only by it. */}
+        <Text style={styles.subtitle} numberOfLines={2}>
           {where ? `${status} · ${where}` : status}
         </Text>
       </View>
