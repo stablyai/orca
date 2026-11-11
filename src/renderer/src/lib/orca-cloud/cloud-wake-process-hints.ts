@@ -87,6 +87,12 @@ export function detectForegroundCommand(lines: readonly string[]): WakeShellComm
   return null
 }
 
+/** The tail ends at an idle shell prompt: nothing (no agent, no process) is running in the pane. */
+export function endsAtShellPrompt(lines: readonly string[]): boolean {
+  const last = lastTextRow(lines)
+  return last >= 0 && isIdlePrompt(lines[last]!.replace(/\s+$/, ''))
+}
+
 function lastTextRow(lines: readonly string[]): number {
   let last = lines.length - 1
   while (last >= 0 && lines[last]!.trim() === '') {
@@ -112,11 +118,8 @@ export function wakeHintForPane(
   if (agent !== 'claude' && agent !== 'codex') {
     return null
   }
-  const last = lastTextRow(lines)
   // An agent row outlives the agent: back at a shell prompt, nothing of it was running.
-  return last >= 0 && !isIdlePrompt(lines[last]!.replace(/\s+$/, ''))
-    ? { restartAgent: agent }
-    : null
+  return lastTextRow(lines) >= 0 && !endsAtShellPrompt(lines) ? { restartAgent: agent } : null
 }
 
 type TailSource = {
@@ -176,6 +179,8 @@ export function historyEndOffsetPx(
 
 // Keyed by the pane's durable leaf id; cleared once the pane has shown (or dismissed) its line.
 const hints = new Map<string, WakeProcessHint>()
+// When each hinted pane was looked at (asleep): agent evidence newer than this came after the sleep.
+const capturedAt = new Map<string, number>()
 // Panes already looked at in this sleep: the first look sees the pre-sleep scrollback.
 const captured = new Set<string>()
 // Panes whose pre-sleep scrollback had any text: greyed while waking until the new terminal attaches.
@@ -194,7 +199,8 @@ function emit(): void {
 export function captureWakeProcessHint(
   leafId: string,
   lines: readonly string[],
-  facts: WakePaneFacts = {}
+  facts: WakePaneFacts = {},
+  now = Date.now()
 ): void {
   if (captured.has(leafId)) {
     return
@@ -207,6 +213,7 @@ export function captureWakeProcessHint(
   const hint = wakeHintForPane(lines, facts)
   if (hint) {
     hints.set(leafId, hint)
+    capturedAt.set(leafId, now)
   }
   if (hasHistory || hint) {
     emit()
@@ -236,6 +243,11 @@ export function getWakeProcessHint(leafId: string): WakeProcessHint | null {
   return hints.get(leafId) ?? null
 }
 
+/** When the pane's hint was captured (while asleep), or null when it has none. */
+export function getWakeCaptureTime(leafId: string): number | null {
+  return hints.has(leafId) ? (capturedAt.get(leafId) ?? null) : null
+}
+
 function subscribe(listener: () => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)
@@ -249,6 +261,7 @@ export function useWakeProcessHintsVersion(): number {
 /** Tests only. */
 export function resetWakeProcessHintsForTests(): void {
   hints.clear()
+  capturedAt.clear()
   captured.clear()
   withHistory.clear()
   version = 0
