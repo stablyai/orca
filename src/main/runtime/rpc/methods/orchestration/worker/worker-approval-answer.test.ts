@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 import type { AgentJournalApprovalItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
@@ -10,11 +11,14 @@ import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-t
 import { approvalReportId } from '../../../../orchestration/workers/approvals/worker-approval-report'
 import type { ChatWorkerPrompt } from '../../../../orchestration/workers/approvals/chat-worker-approval-prompt'
 
-const chat = vi.hoisted(() => ({
-  isChat: true,
-  answer: vi.fn(),
-  prompt: null as ChatWorkerPrompt | null
-}))
+const chat = vi.hoisted(() => {
+  const state: {
+    isChat: boolean
+    answer: ReturnType<typeof vi.fn>
+    prompt: ChatWorkerPrompt | null
+  } = { isChat: true, answer: vi.fn(), prompt: null }
+  return state
+})
 
 vi.mock('../../../../orchestration/mailbox/routing/structured-session-mail-target', () => ({
   structuredMailboxCustody: () =>
@@ -99,9 +103,14 @@ function setup(approvalId: string) {
       .filter((message) => message.subject.startsWith('Worker approval '))
       .map((message) => message.body)
   const mailToWorker = () =>
-    db.db
-      .prepare(`SELECT body FROM messages WHERE to_handle = ?`)
-      .all(`dispatch:${dispatch.id}`) as { body: string }[]
+    z
+      .object({ body: z.string() })
+      .array()
+      .parse(
+        db.db
+          .prepare(`SELECT body FROM messages WHERE to_handle = ?`)
+          .all(`dispatch:${dispatch.id}`)
+      )
   return { call, closings, mailToWorker }
 }
 
