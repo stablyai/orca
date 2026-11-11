@@ -79,3 +79,34 @@ export function parseClaudeStatusLineBody(body: unknown): ClaudeStatusLineRateLi
   const configDir = typeof fields.configDir === 'string' ? fields.configDir.trim() : ''
   return { configDir: configDir || null, fiveHour, sevenDay }
 }
+
+/** The window Claude reports for this session; null when the payload does not state one. */
+export function parseClaudeStatusLineSessionWindow(
+  body: unknown
+): { sessionId: string; windowTokens: number } | null {
+  if (typeof body !== 'object' || body === null) {
+    return null
+  }
+  const { payload: rawPayload } = body as { payload?: unknown }
+  if (typeof rawPayload !== 'string' || !rawPayload) {
+    return null
+  }
+  let payload: unknown
+  try {
+    payload = JSON.parse(rawPayload)
+  } catch {
+    return null
+  }
+  if (typeof payload !== 'object' || payload === null) {
+    return null
+  }
+  const { session_id: sessionId, context_window: contextWindow } = payload as {
+    session_id?: unknown
+    context_window?: { context_window_size?: unknown } | null
+  }
+  const windowTokens = finiteNumber(contextWindow?.context_window_size)
+  if (typeof sessionId !== 'string' || !sessionId || !windowTokens || windowTokens <= 0) {
+    return null
+  }
+  return { sessionId, windowTokens }
+}
