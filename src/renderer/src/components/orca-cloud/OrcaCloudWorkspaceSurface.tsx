@@ -21,6 +21,7 @@ import type { CloudWakeProgressEvent } from '../../../../shared/hosted-sandbox/c
 import { CloudArchivedWorkspaceView, type ArchiveLoad } from './CloudArchivedWorkspaceView'
 import { CloudWakingOverlay } from './CloudWakingOverlay'
 import { CloudWorkspaceNotice } from './CloudWorkspaceNotice'
+import { CloudSetupNotices } from './CloudSetupNotices'
 import { useConfirmedRestart } from './use-cloud-panel-actions'
 import { useCloudVersionSkewNotice } from './use-cloud-version-skew-notice'
 import { CloudWorkspaceOfflineView } from './offline/CloudWorkspaceOfflineView'
@@ -335,6 +336,10 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
   }
   if (layer === null && versionSkewNotice) {
     notices.push(versionSkewNotice)
+  }
+  if (layer === null && view.state !== 'sleeping' && view.state !== 'archived') {
+    // What the environment check found that didn't need to stop the create (env-check-ux).
+    notices.push(<CloudSetupNotices key="setup" workspaceId={workspaceId} />)
   }
   if (layer === null && view.oom) {
     notices.push(

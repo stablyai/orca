@@ -7,7 +7,10 @@ import { useOrcaBillingStatus } from '@/components/billing/use-orca-billing-stat
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { resolveVmEnvironmentCheckDecision } from '@/lib/ephemeral-vm-environment-check-decision'
+import {
+  isAwaitingVmEnvironmentCheckDecision,
+  resolveVmEnvironmentCheckDecision
+} from '@/lib/ephemeral-vm-environment-check-decision'
 import { openPlansPage } from '@/components/billing/plans/plans-page-store'
 import { ORCA_BILLING_OVERAGE_SECTION_ID } from '@/components/new-workspace/orca-cloud-run-target-access'
 import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
@@ -19,7 +22,6 @@ import { VmBuildStepRow } from './VmBuildStepRow'
 import { firstBuildLogErrorLine, VmBuildLog } from './VmBuildLog'
 import { VmBuildFailureCard } from './VmBuildFailureCard'
 import { VmBuildAgentSignInRow } from './VmBuildAgentSignInRow'
-import { VmBuildCloudAgentsRow } from './cloud-agents-row/VmBuildCloudAgentsRow'
 import { VmBuildSecretsRow } from '../cloud-secrets-ask/VmBuildSecretsRow'
 import { OrcaCloudQueuedPrompt } from '@/components/orca-cloud/OrcaCloudQueuedPrompt'
 import {
@@ -99,7 +101,6 @@ export function VmBuildSheet({
   onReturnToComposer,
   onEditRecipe,
   agentSignInRow,
-  cloudAgentsRow,
   secretsRow,
   stepTimings
 }: {
@@ -117,8 +118,6 @@ export function VmBuildSheet({
   onEditRecipe: () => void
   /** Fixtures only: a fixed sign-in row in place of the live one. */
   agentSignInRow?: React.ReactNode
-  /** Fixtures only: a fixed cloud Agents row (null for none) in place of the live one. */
-  cloudAgentsRow?: React.ReactNode
   /** Fixtures only: a fixed Secrets row (null for none) in place of the live one. */
   secretsRow?: React.ReactNode
   /** Fixtures only: measured step timings in place of the control plane's. */
@@ -204,7 +203,9 @@ export function VmBuildSheet({
                   // Failed checks leave a running sandbox that needs a decision, not a broken start.
                   className={cn(
                     'size-4 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-90 motion-safe:duration-200',
-                    failure?.kind === 'checks' ? 'text-status-warning-text' : 'text-destructive'
+                    failure?.kind === 'checks' && !cloud
+                      ? 'text-status-warning-text'
+                      : 'text-destructive'
                   )}
                 />
               )}
@@ -255,15 +256,8 @@ export function VmBuildSheet({
                   t={t}
                 />
               ))}
-              {/* Orca Cloud: one fixed-height row from the Orca account, never a per-sandbox sign-in
-                  (spec §5b). Other VMs keep the host's own sign-in row. */}
-              {cloud ? (
-                cloudAgentsRow !== undefined ? (
-                  cloudAgentsRow
-                ) : (
-                  <VmBuildCloudAgentsRow creationId={creationId} entry={entry} />
-                )
-              ) : null}
+              {/* Orca Cloud: agent setup happens after create (the setup page and the workspace's
+                  sign-in strip), so the build card has no agent row. Other VMs keep the host's own. */}
               {agentSignInRow ??
                 (!cloud && entry.vmEnvironmentId ? (
                   <VmBuildAgentSignInRow
@@ -282,7 +276,11 @@ export function VmBuildSheet({
           <VmBuildFailureCard
             failure={failure}
             cloud={cloud}
-            vmKept={failure?.kind === 'checks' || Boolean(entry.request.ephemeralVmRuntimeId)}
+            vmKept={
+              failure?.kind === 'checks'
+                ? failure.sandbox !== 'deleted'
+                : Boolean(entry.request.ephemeralVmRuntimeId)
+            }
             firstErrorLine={firstErrorLine}
             canFixWithAgent={Boolean(recipe)}
             canManageBilling={canManageBilling}
@@ -305,6 +303,11 @@ export function VmBuildSheet({
                   : onRetry,
               onEditRecipe,
               onOpenAnyway: () => resolveVmEnvironmentCheckDecision(creationId, 'open-anyway'),
+              // A paused create deletes this sandbox and starts over; one already gone just retries.
+              onStartAgain: () =>
+                isAwaitingVmEnvironmentCheckDecision(creationId)
+                  ? resolveVmEnvironmentCheckDecision(creationId, 'restart')
+                  : onRetry(),
               // Nothing was created, so leaving a billing refusal hands the typed prompt back.
               onDismiss:
                 isBillingFailure(failure) && typedComposerPrompt(entry).trim()

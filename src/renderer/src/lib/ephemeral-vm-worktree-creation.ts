@@ -7,6 +7,7 @@ import type { Repo } from '../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
 import { cleanupFailedEphemeralVmWorkspace } from '@/lib/ephemeral-vm-failed-create-cleanup'
 import { gateVmCreateOnEnvironmentCheck } from '@/lib/ephemeral-vm-environment-check'
+import { orcaCloudGitHubRepoUrl } from '@/lib/orca-cloud/use-orca-cloud-repo-access'
 import { showVmBuildFailureToast } from '@/components/worktree-creation/vm-build-failure-toast'
 import { ephemeralVmErrorText } from '@/lib/ephemeral-vm-error-copy'
 import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/worktree-creation-surface'
@@ -147,16 +148,36 @@ async function prepareEphemeralVmRecipeRequest(
       path: preparedTarget.setup.repo.path
     }
   }
-  const proceed =
-    Boolean(useAppStore.getState().pendingWorktreeCreations[creationId]) &&
-    (!preparedTarget.environmentId ||
-      (await gateVmCreateOnEnvironmentCheck(
-        creationId,
-        preparedTarget.environmentId,
-        preparedTarget.setup.repo.path
-      )))
-  if (!proceed) {
+  const gate = !useAppStore.getState().pendingWorktreeCreations[creationId]
+    ? 'stop'
+    : !preparedTarget.environmentId
+      ? 'proceed'
+      : await gateVmCreateOnEnvironmentCheck(
+          creationId,
+          preparedTarget.environmentId,
+          preparedTarget.setup.repo.path,
+          recipe.provider === 'orca-cloud'
+            ? {
+                runtimeId: preparedTarget.runtimeId,
+                // `inherit` follows the project's setup policy, which runs it on create.
+                setupRunsOnCreate: request.setupDecision !== 'skip',
+                repoId: preparedTarget.setup.repo.id,
+                hostId: preparedTarget.setup.setup.hostId,
+                repoUrl: orcaCloudGitHubRepoUrl(
+                  useAppStore.getState().repos.find((repo) => repo.id === recipe.sourceRepoId)
+                )
+              }
+            : undefined
+        )
+  if (gate !== 'proceed') {
     await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest, creationId)
+    if (gate === 'restart' && useAppStore.getState().pendingWorktreeCreations[creationId]) {
+      // Lazy: the creation flow imports this module.
+      const { retryBackgroundWorktreeCreation } = await import(
+        '@/lib/workspace/creation/worktree-creation-flow'
+      )
+      retryBackgroundWorktreeCreation(creationId)
+    }
     return null
   }
   useAppStore.getState().updatePendingWorktreeCreation(creationId, {
