@@ -65,10 +65,15 @@ export async function workerCommandArgs(
     return undefined
   }
   const worktree = await resolveWorkspace?.(request.data.worktreeId)
+  const { folder } = request.data
+  // Why undefined, not an error: palette and shortcut runs took no args before badges, so a
+  // paired server's workspace keeps running them; only a badge's folder can't be honored.
+  if (!worktree && !folder) {
+    return undefined
+  }
   if (!worktree) {
     throw new Error('This workspace is not available on this computer.')
   }
-  const { folder } = request.data
   if (!folder) {
     return { worktree } satisfies PluginWorkspaceCommandArgs
   }

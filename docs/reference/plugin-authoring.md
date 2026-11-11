@@ -354,7 +354,7 @@ orca.commands.register('unity.open', async ({ worktree, folder }) => {
 
 Badges show on workspaces this computer serves, including folder workspaces. Workspaces Orca
 reaches through a server, such as a paired Orca server, get none, since the command runs on this
-computer. `"host": "local"` also leaves out workspaces on SSH hosts, such as for a command that
+computer; run there from the palette or a shortcut, the command gets no arguments. `"host": "local"` also leaves out workspaces on SSH hosts, such as for a command that
 starts a desktop app.
 
 ### Custom editors
