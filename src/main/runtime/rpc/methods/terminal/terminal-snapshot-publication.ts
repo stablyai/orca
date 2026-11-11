@@ -168,11 +168,10 @@ function budgetedPublication(
 function overMobileSnapshotBudget(
   data: string,
   serialized: SnapshotVariableMeta & { cols: number; rows: number },
-  budget: MobileSnapshotByteBudget | undefined,
-  rawBudgetBytes = MOBILE_SNAPSHOT_BYTE_BUDGET
+  budget: MobileSnapshotByteBudget | undefined
 ): boolean {
   return budget === undefined
-    ? terminalStreamByteLengthExceeds(data, rawBudgetBytes)
+    ? terminalStreamByteLengthExceeds(data, MOBILE_SNAPSHOT_BYTE_BUDGET)
     : terminalSnapshotPayloadJsonBytes(
         budgetedPublication(data, serialized, budget),
         budget.streamId
@@ -200,10 +199,8 @@ export async function serializeBudgetedMobileSnapshot(
   runtime: TerminalBufferSource,
   ptyId: string,
   snapshotByteBudget?: MobileSnapshotByteBudget,
-  /** Rows to try first: more than the phone default for a WSL-moved pane or a desktop subscriber. */
-  firstRows = MOBILE_SUBSCRIBE_SCROLLBACK_ROWS,
-  /** Raw-text budget when no capped-client budget applies (a desktop subscriber gets more). */
-  rawBudgetBytes = MOBILE_SNAPSHOT_BYTE_BUDGET
+  /** Rows to try first; only a WSL-moved pane asks for more than the default. */
+  firstRows = MOBILE_SUBSCRIBE_SCROLLBACK_ROWS
 ): Promise<SerializedSnapshot> {
   if (isTerminalSnapshotForcedUnavailable()) {
     return null
@@ -224,12 +221,7 @@ export async function serializeBudgetedMobileSnapshot(
       return null
     }
     const data = (serialized.scrollbackAnsi ?? '') + serialized.data
-    const overByteBudget = overMobileSnapshotBudget(
-      data,
-      serialized,
-      snapshotByteBudget,
-      rawBudgetBytes
-    )
+    const overByteBudget = overMobileSnapshotBudget(data, serialized, snapshotByteBudget)
     if (!overByteBudget || rows === 0) {
       return publishedCandidate(serialized, data, rows, overByteBudget, snapshotByteBudget)
     }
