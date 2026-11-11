@@ -20564,7 +20564,6 @@
           "browsePlugins": "Explorar plugins",
           "browseThemePlugins": "Explorar plugins de temas",
           "colorMode": "Modo de cor",
-          "colorModeCaption": "Claro, escuro ou igual ao sistema.",
           "darkLook": "Visual escuro",
           "darkLooks": "Visuais escuros",
           "lightLook": "Visual claro",
@@ -20580,10 +20579,8 @@
           "slotLabel": "Visual a editar",
           "sourceBuiltIn": "Integrado",
           "sourceCommunity": "Paleta do terminal",
-          "themes": "Tema",
-          "themesCaption": "Opcional. Vá além com temas do app e paletas do terminal."
-        },
-        "subtitle": "Escolha claro ou escuro e, se quiser, um tema. Altere ambos quando quiser em Configurações."
+          "themes": "Tema"
+        }
       },
       "integrations": {
         "capabilities": {
