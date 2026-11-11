@@ -8,6 +8,8 @@ import {
   type SettingsSearchableSelectOption
 } from '../form-controls/SettingsSearchableSelect'
 import type { SettingsHostScope } from './settings-host-scope'
+import { useSettingsActiveSection } from './settings-active-section'
+import { isOrcaCloudSettingsSectionId } from '@/hooks/settings-navigation-orca-cloud-sections'
 
 const LOCAL_VALUE = 'local'
 const ENVIRONMENT_VALUE_PREFIX = 'environment:'
@@ -25,7 +27,15 @@ export function shouldShowSettingsHostScopePicker(
   return environments.length > 0 || scope.target.kind === 'environment'
 }
 
-export function SettingsHostScopePicker({
+export function SettingsHostScopePicker(
+  props: SettingsHostScopePickerProps
+): React.JSX.Element | null {
+  // Orca Cloud pages are team-level: a host doesn't apply there, so no Host switcher.
+  const activeSectionId = useSettingsActiveSection()
+  return isOrcaCloudSettingsSectionId(activeSectionId) ? null : <HostScopeSelect {...props} />
+}
+
+function HostScopeSelect({
   scope,
   environments,
   onChoose
