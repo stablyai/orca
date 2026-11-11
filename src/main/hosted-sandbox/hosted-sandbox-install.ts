@@ -160,8 +160,7 @@ export function installHostedSandbox(
     userDataPath,
     driver,
     windows: () => BrowserWindow.getAllWindows(),
-    // Create and wake both connect: MCP servers, skills and commands follow this computer's, and
-    // files sync back to it.
+    // Create and wake both connect: MCP servers, skills and commands follow this computer's.
     onConnected: (runtimeEnvironmentId) => {
       void mcpSync.sync(runtimeEnvironmentId, 'connect')
       void agentConfigSync.sync(runtimeEnvironmentId, 'connect')
@@ -224,10 +223,7 @@ export function installHostedSandbox(
     }
   })
   setCloudOfflineService(offline)
-  const disposeCloudSync = installCloudSync({
-    userDataPath,
-    windows: () => BrowserWindow.getAllWindows()
-  })
+  installCloudSync(userDataPath)
   // Records land after the step answers and wakes can come from any path, so reconcile on a slow beat too.
   let beat: ReturnType<typeof setTimeout> | null = null
   let beats = 0
@@ -276,7 +272,6 @@ export function installHostedSandbox(
     setOrcaCloudActiveAccountResolver(null)
     offline.dispose()
     setCloudOfflineService(null)
-    disposeCloudSync()
   })
 }
 

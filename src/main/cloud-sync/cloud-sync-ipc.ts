@@ -1,7 +1,7 @@
 // Wires cloud → this computer sync into main: the orcad transport (on its own queue lane, so sync
 // never competes with the window's reads), lifecycle signals, and the window's IPC.
 import { mkdir } from 'node:fs/promises'
-import { ipcMain, shell, type BrowserWindow } from 'electron'
+import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { onEphemeralVmRuntimesChanged } from '../../shared/ephemeral-vm-runtime-store-events'
 import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
 import { ORCA_CLOUD_SYNC_CHANNELS as CH } from '../../shared/cloud-sync/cloud-sync-contract'
@@ -91,10 +91,12 @@ export function getCloudSyncService(): CloudSyncService | null {
   return service
 }
 
-export function installCloudSync(deps: {
-  userDataPath: string
-  windows: () => readonly BrowserWindow[]
-}): () => void {
+/** Installs once per app run; stops (sessions, timers, IPC) when the app quits. */
+export function installCloudSync(
+  userDataPath: string,
+  windows: () => readonly BrowserWindow[] = () => BrowserWindow.getAllWindows()
+): () => void {
+  const deps = { userDataPath, windows }
   const store = createCloudSyncStore(deps.userDataPath)
   const sync = createCloudSyncService({
     store,
@@ -173,7 +175,7 @@ export function installCloudSync(deps: {
   }
   void sync.reconcile().finally(scheduleBeat)
 
-  return () => {
+  const dispose = (): void => {
     stopped = true
     if (beat) {
       clearTimeout(beat)
@@ -186,4 +188,6 @@ export function installCloudSync(deps: {
     service = null
     void sync.dispose()
   }
+  app.once('will-quit', dispose)
+  return dispose
 }
