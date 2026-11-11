@@ -148,9 +148,12 @@ export function buildPaneAccountRestartStartup(
  */
 export function buildFreshAccountRestartCommand(
   agent: AccountRestartAgent,
-  args: AccountRestartPane
+  args: AccountRestartPane,
+  /** RA-11d: the pane's recorded launch args (model, effort, …); the defaults when absent. */
+  agentArgs?: string | null
 ): string {
-  return withOrcaCloudSessionEnv(buildFreshAccountRestartStartup(agent, args), args).command
+  return withOrcaCloudSessionEnv(buildFreshAccountRestartStartup(agent, args, agentArgs), args)
+    .command
 }
 
 export function buildCodexAccountRestartStartup(
@@ -161,7 +164,8 @@ export function buildCodexAccountRestartStartup(
 
 function buildFreshAccountRestartStartup(
   agent: AccountRestartAgent,
-  args: AccountRestartTarget
+  args: AccountRestartTarget,
+  agentArgs?: string | null
 ): AgentAccountRestartStartup {
   const state = useAppStore.getState()
   const target = resolveAccountRestartLaunchTarget(
@@ -174,7 +178,8 @@ function buildFreshAccountRestartStartup(
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
     platform: target.platform,
     agentHostPlatform: target.agentHostPlatform,
-    shell: resolveStartupShell(target.platform, target.shell)
+    shell: resolveStartupShell(target.platform, target.shell),
+    ...(agentArgs?.trim() ? { agentArgs } : {})
   })
   if (!command.ok) {
     throw new Error(command.error)
