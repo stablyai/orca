@@ -203,6 +203,11 @@ export async function runArchiveCloudWorkspace(
   const sleep = (id: string): Promise<readonly { completed: boolean }[] | void> =>
     isCloudWorkspaceDeleting(id) ? Promise.resolve() : runSleepWorktree(id)
   const localCopy = await cloudSyncRemovalPreview(workspaceId).catch(() => undefined)
+  // A Delete that started while the preview was read found no queued archive to cancel yet:
+  // the workspace is going away, so this archive never queues (INT-T1).
+  if (isCloudWorkspaceDeleting(workspaceId)) {
+    return
+  }
   await runArchiveWithUndo(workspaceId, {
     ...options,
     ...(localCopy ? { localCopy } : {}),
