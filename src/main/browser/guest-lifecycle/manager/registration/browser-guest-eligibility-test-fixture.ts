@@ -53,7 +53,7 @@ export class EligibilityGuest extends DestroyedGuestTestContents {
       this.debugged = false
       this.debugger.emit('detach')
     },
-    sendCommand: vi.fn(async () => undefined)
+    sendCommand: vi.fn(async (): Promise<void> => undefined)
   })
   private finish = (): void => {}
   private readonly load = new Promise<void>((resolve) => {

@@ -147,19 +147,21 @@ it.each(['claim', 'retain', 'pending'] as const)(
       const accepted = fleet.attach(3, 'accepted')
       await clean(accepted, 'accepted')
     } else {
-      agent(() =>
-        kind === 'claim'
-          ? claimBrowserMemoryPage(pageId)()
-          : retainBrowserMemoryPageForAgent(pageId)
+      const release = agent(() =>
+        kind === 'claim' ? claimBrowserMemoryPage(pageId) : retainBrowserMemoryPageForAgent(pageId)
       )
       fleet.attach(3, 'pressure')
       await Promise.resolve()
+      expect(attempts).toEqual([])
       expect(
         channels.get('browser:getGuestDiscardProtection')?.(
           { sender: native.get(99) },
           { browserPageId: pageId, webContentsId: guest.id }
         )
       ).toMatchObject({ protection: 'protected', reason: 'held' })
+      if (typeof release === 'function') {
+        release()
+      }
     }
     expect(attempts).toEqual([])
   }
@@ -173,13 +175,23 @@ it.each(['lease', 'lifecycle', 'viewport'] as const)(
     await clean(guest, pageId)
     const operation = claimBrowserMemoryPage(pageId)
     let release = (): void => guest.debugger.detach()
+    let rejectInitialization = (_error: Error): void => {}
+    let initialization: Promise<unknown> = Promise.resolve()
     if (kind === 'lease') {
       release = acquireElectronDebugger(guest.asWebContents()).release
     } else {
-      guest.debugger.sendCommand.mockRejectedValue(new Error('Initialization failed'))
+      const attached = new Promise<void>((resolve) => {
+        guest.debugger.sendCommand.mockImplementationOnce(
+          () =>
+            new Promise<void>((_resolve, reject) => {
+              rejectInitialization = reject
+              resolve()
+            })
+        )
+      })
       if (kind === 'viewport') {
         vi.spyOn(console, 'warn').mockImplementation(() => {})
-        await expect(
+        initialization = expect(
           manager.setViewportOverride(pageId, {
             width: 375,
             height: 667,
@@ -197,15 +209,18 @@ it.each(['lease', 'lifecycle', 'viewport'] as const)(
           commandQueues: new Map(),
           processingQueues: new Set()
         })
-        await expect(
+        initialization = expect(
           new CdpDebuggerLifecycle(state).ensureDebuggerAttached(guest.asWebContents())
         ).rejects.toThrow('Initialization failed')
       }
+      await attached
     }
-    operation()
     fleet.attach(3, 'pressure')
     await Promise.resolve()
     expect(attempts).toEqual([])
+    rejectInitialization(new Error('Initialization failed'))
+    await initialization
+    operation()
     guest.devtools = true
     guest.emit('devtools-opened')
     release()
@@ -217,6 +232,21 @@ it.each(['lease', 'lifecycle', 'viewport'] as const)(
     expect(freed).toEqual([pageId])
   }
 )
+
+it('publishes native DevTools acquisition from a clean debugger-free page', async () => {
+  fleet = createEligibilityFleet(native, 32)
+  const { guest, pageId, attempts, freed } = fleet
+  await clean(guest, pageId)
+  guest.devtools = true
+  guest.emit('devtools-opened')
+  fleet.attach(3, 'pressure')
+  await Promise.resolve()
+  expect(attempts).toEqual([])
+  guest.devtools = false
+  guest.emit('devtools-closed')
+  await Promise.resolve()
+  expect(freed).toEqual([pageId])
+})
 
 it('repairs a missed acquisition hint once and never inherits a closed page hold', async () => {
   fleet = createEligibilityFleet(native, 32)
