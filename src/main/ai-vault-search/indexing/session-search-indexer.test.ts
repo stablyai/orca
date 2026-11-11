@@ -78,7 +78,7 @@ function transcriptPath(name = SESSION_ID): string {
 function rowFor(path: string) {
   return harness.read((db: SyncDatabase) =>
     db.prepare('SELECT state, fail_count AS failCount FROM files WHERE path = ?').get(path)
-  ) as { state: string; failCount: number } | undefined
+  )
 }
 
 function readsPerPass(files: number): { passDeadlineMs: number; discoveryDeadlineMs: number } {
