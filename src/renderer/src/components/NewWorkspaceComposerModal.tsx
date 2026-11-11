@@ -39,6 +39,7 @@ import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/works
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { useComposerCloudStart } from './new-workspace/run-on/use-composer-cloud-start'
+import { composerAgentSelection } from './new-workspace/composer-agent-cli'
 import { HiddenComposer, useCloudAutoStartReveal } from './new-workspace/composer-cloud-auto-start'
 
 // Keep Add Project’s clone/SSH machinery outside the composer entry render, matching App loading.
@@ -174,7 +175,7 @@ function QuickTabBody({
   const [quickAgentOverride, setQuickAgentOverride] = useState<TuiAgent | null | undefined>(
     modalData.recovery?.agent
   )
-  const { orcaCloud, orcaCloudModel, quickAgent, chipAgentIds, agentNotice } =
+  const { orcaCloud, orcaCloudModel, quickAgent, chipAgentIds, agentNotice, statusLabels } =
     useComposerQuickAgent(cardProps, settings, quickAgentOverride, setQuickAgentOverride)
   // Why keyed by agent: a pick repaired to another agent must not carry the old one's surface.
   const [quickAgentPick, setQuickAgentPick] = useState<
@@ -396,10 +397,11 @@ function QuickTabBody({
           agentMenuModel
             ? {
                 model: agentMenuModel,
-                selection: launchSelection,
+                selection: composerAgentSelection(launchSelection, orcaCloud),
                 surface: quickAgentSurface,
                 contextKey: observation.contextKey,
-                onPick: handleQuickAgentChange
+                onPick: handleQuickAgentChange,
+                statusLabels
               }
             : undefined
         }

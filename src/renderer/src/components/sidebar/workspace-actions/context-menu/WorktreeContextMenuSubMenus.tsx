@@ -1,3 +1,4 @@
+import type React from 'react'
 import {
   CircleX,
   Copy,
@@ -26,7 +27,14 @@ import {
   isWorktreeParentPickerDisabled
 } from './worktree-context-menu-policy'
 
-export function WorktreeCopySubMenu({ model }: { model: WorktreeContextMenuModel }) {
+export function WorktreeCopySubMenu({
+  model,
+  leading
+}: {
+  model: WorktreeContextMenuModel
+  /** Items that go first (a cloud workspace's link): one Copy menu, nothing copied from two places. */
+  leading?: React.ReactNode
+}) {
   const t = useTranslate()
   return (
     <DropdownMenuSub>
@@ -35,6 +43,7 @@ export function WorktreeCopySubMenu({ model }: { model: WorktreeContextMenuModel
         {t('auto.components.sidebar.WorktreeContextMenu.copySubmenu', 'Copy')}
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent>
+        {leading}
         <DropdownMenuItem onSelect={model.handleCopyPath} disabled={model.isDeleting}>
           <Copy className="size-3.5" />
           {t('auto.components.sidebar.WorktreeContextMenu.copyPathOption', 'Path')}
