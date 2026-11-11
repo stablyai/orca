@@ -19,14 +19,21 @@ export function mobileDictationAutoSendDelayMs(
 
 export type MobileDictationAutoSendCountdown = {
   readonly scope: string
+  readonly conversation: string
   readonly deadline: number
   readonly delayMs: number
 }
 
 // One dictation, at most one send: armed when a chat dictation starts, counted down only once its own words land whole.
 export class MobileDictationAutoSend {
-  private armed: { readonly scope: string; readonly delayMs: number } | null = null
+  private armed: {
+    readonly scope: string
+    readonly delayMs: number
+    readonly conversation: string
+  } | null = null
   private countdown: MobileDictationAutoSendCountdown | null = null
+  // The agent session and terminal the chat in front sends to; unknown until the screen says.
+  private conversation: string | null = null
   private timer: ReturnType<typeof setTimeout> | null = null
   private readonly senders = new Map<string, () => void>()
   private readonly listeners = new Set<() => void>()
@@ -34,7 +41,20 @@ export class MobileDictationAutoSend {
   /** A dictation started: any earlier one's send is withdrawn, and this one may send if it goes into a chat's draft with the setting on. */
   arm(chatScope: string | null, delayMs: number | null): void {
     this.withdraw()
-    this.armed = chatScope !== null && delayMs !== null ? { scope: chatScope, delayMs } : null
+    const conversation = this.conversation
+    this.armed =
+      chatScope !== null && delayMs !== null && conversation !== null
+        ? { scope: chatScope, delayMs, conversation }
+        : null
+  }
+
+  /** Where the chat in front sends now; a send armed for another conversation is withdrawn, so it never lands elsewhere. */
+  sendsTo(conversation: string): void {
+    this.conversation = conversation
+    const pending = this.countdown ?? this.armed
+    if (pending && pending.conversation !== conversation) {
+      this.withdraw()
+    }
   }
 
   /** The user took over or moved away: the draft stays and nothing sends. */
@@ -56,6 +76,7 @@ export class MobileDictationAutoSend {
     }
     const countdown = {
       scope: armed.scope,
+      conversation: armed.conversation,
       deadline: Date.now() + armed.delayMs,
       delayMs: armed.delayMs
     }

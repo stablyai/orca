@@ -63,7 +63,7 @@ export function useMobileSessionDictation(
   const sessionKey = JSON.stringify([hostId, executionHost ?? null, worktreeId])
   const [instance] = useState(() => ({}))
   const [inFront, setInFront] = useState(true)
-  const autoSend = useMobileSessionDictationAutoSend(connState === 'connected')
+  const autoSend = useMobileSessionDictationAutoSend(scope)
   useFocusEffect(
     useCallback(() => {
       setInFront(true)

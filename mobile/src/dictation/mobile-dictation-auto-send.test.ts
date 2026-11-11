@@ -10,6 +10,7 @@ describe('MobileDictationAutoSend', () => {
     autoSend = new MobileDictationAutoSend()
     sent = []
     autoSend.register('chat-a', () => sent.push('chat-a'))
+    autoSend.sendsTo('session-1')
   })
 
   afterEach(() => {
@@ -28,6 +29,14 @@ describe('MobileDictationAutoSend', () => {
   it("keeps a failed dictation's words so far as a draft", () => {
     autoSend.arm('chat-a', 2000)
     expect(autoSend.start({ partial: true })).toBeNull()
+    vi.advanceTimersByTime(2000)
+    expect(sent).toEqual([])
+  })
+
+  it('keeps the draft when the agent session behind the chat is replaced mid-countdown', () => {
+    autoSend.arm('chat-a', 2000)
+    autoSend.start({ partial: false })
+    autoSend.sendsTo('session-2')
     vi.advanceTimersByTime(2000)
     expect(sent).toEqual([])
   })
