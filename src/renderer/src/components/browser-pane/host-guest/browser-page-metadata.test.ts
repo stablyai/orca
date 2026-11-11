@@ -1,8 +1,12 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, renderHook } from '@testing-library/react'
+import { useEffect } from 'react'
 import type { BrowserGuestMetadata } from '../../../../../shared/browser/guest-lifecycle/browser-guest-metadata'
 import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
 import type { AttachBrowserPageWebviewArgs } from './attach-browser-page-webview'
+
+const adapters = vi.hoisted(() => ({ ensureViewport: vi.fn(), ensureWebview: vi.fn() }))
 
 vi.mock('@/components/native-chat/media/visuals/NativeChatVisualGuestThemePublisher', () => ({
   publishNativeChatVisualGuestTheme: () => {}
@@ -19,7 +23,13 @@ vi.mock('./webview-registry', () => ({
   isBrowserPageRendererRecoveryPending: () => false,
   moveFocusToRendererBeforeWebviewDetach() {}
 }))
-vi.mock('./browser-page-viewport', () => ({ parkBrowserPageViewport() {} }))
+vi.mock('./browser-page-viewport', () => ({
+  parkBrowserPageViewport() {},
+  applyBrowserPageViewportLayout() {},
+  syncBrowserPageChromeInset() {},
+  ensureBrowserPageViewport: adapters.ensureViewport
+}))
+vi.mock('./browser-page-webview', () => ({ ensureBrowserPageWebview: adapters.ensureWebview }))
 vi.mock('./browser-system-resume', () => ({ subscribeBrowserSystemResume: () => () => {} }))
 vi.mock('../annotate/browser-annotation-viewport-message', () => ({
   consumeBrowserAnnotationViewportMessage() {}
@@ -27,6 +37,8 @@ vi.mock('../annotate/browser-annotation-viewport-message', () => ({
 
 import { useAppStore } from '@/store'
 import { bindBrowserPageWebviewListeners } from './bind-browser-page-webview-listeners'
+import { attachBrowserPageWebview } from './attach-browser-page-webview'
+import { useBrowserPageWebviewUrlSync } from '../navigate/use-browser-page-webview-url-sync'
 import {
   acceptBrowserGuestMetadata,
   cachedBrowserGuestMetadata,
@@ -90,6 +102,7 @@ function mount(state: BrowserGuestMetadata, initiallyLoading = false) {
   const update = vi.fn(useAppStore.getState().updateBrowserPageState)
   const setUrl = vi.fn(useAppStore.getState().setBrowserPageUrl)
   const address = vi.fn()
+  const history = vi.fn()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: DOM guest with the native identity used by production cache, no synchronous metadata methods.
   const webview = Object.assign(document.createElement('webview'), {
     getWebContentsId: () => 42
@@ -130,7 +143,7 @@ function mount(state: BrowserGuestMetadata, initiallyLoading = false) {
     onSetUrlRef: ref(setUrl),
     setBrowserOverlayViewport: () => {},
     setAddressBarValue: address,
-    addBrowserHistoryEntryRef: ref(() => {}),
+    addBrowserHistoryEntryRef: ref(history),
     annotationViewportBridgeTokenRef: ref('token'),
     initialBrowserUrlRef: ref(first.url),
     validateVisibleGuestRegistrationRef: ref(() => {}),
@@ -152,6 +165,9 @@ function mount(state: BrowserGuestMetadata, initiallyLoading = false) {
     update,
     setUrl,
     address,
+    history,
+    args,
+    container,
     webview,
     dispose,
     page: () => useAppStore.getState().browserPagesByWorkspace['workspace-a'][0]
@@ -159,6 +175,128 @@ function mount(state: BrowserGuestMetadata, initiallyLoading = false) {
 }
 
 describe('mounted browser metadata application', () => {
+  it.each([
+    {
+      kind: 'navigation' as const,
+      oldUrl: 'https://example.test/held-redirect',
+      currentUrl: 'https://example.test/b'
+    },
+    {
+      kind: 'in-page' as const,
+      oldUrl: 'https://example.test/a',
+      currentUrl: 'https://example.test/a#hidden'
+    }
+  ])(
+    'adopts a hidden $kind on attach without replaying the old request',
+    ({ kind, oldUrl, currentUrl }) => {
+      const view = mount(nativeState({ url: oldUrl }))
+      view.dispose()
+      acceptBrowserGuestMetadata(
+        nativeState({ revision: 2, kind, url: currentUrl, title: 'Hidden destination' })
+      )
+      view.webview.setAttribute('src', currentUrl)
+      const destinations: string[] = []
+      Object.defineProperty(view.webview, 'src', {
+        configurable: true,
+        get: () => view.webview.getAttribute('src') ?? '',
+        set: (url: string) => {
+          destinations.push(url)
+          view.webview.setAttribute('src', url)
+        }
+      })
+      adapters.ensureViewport.mockReturnValue({
+        container: view.container,
+        content: view.container
+      })
+      adapters.ensureWebview.mockReturnValue({
+        created: false,
+        container: view.container,
+        webview: view.webview
+      })
+      const mounted = renderHook(() => {
+        const url = useAppStore(
+          (state) => state.browserPagesByWorkspace['workspace-a']?.[0]?.url ?? ''
+        )
+        useEffect(() => {
+          view.args.browserTabUrlRef.current = url
+        }, [url])
+        useEffect(() => attachBrowserPageWebview(view.args), [])
+        useBrowserPageWebviewUrlSync({
+          browserTabId: 'page-a',
+          browserTabUrl: url,
+          workspaceId: 'workspace-a',
+          isActive: true,
+          isPaintable: true,
+          slotViewport: view.container,
+          webviewRef: view.args.webviewRef,
+          chromeHeaderRef: { current: null },
+          lastKnownWebviewUrlRef: view.args.lastKnownWebviewUrlRef,
+          keepAddressBarFocusRef: view.args.keepAddressBarFocusRef,
+          addressBarInputRef: view.args.addressBarInputRef,
+          focusWebviewNow: () => false
+        })
+      })
+      disposers.push(mounted.unmount)
+      expect(view.page()).toMatchObject({
+        url: currentUrl,
+        title: 'Hidden destination',
+        loading: false
+      })
+      expect(view.address).toHaveBeenLastCalledWith(currentUrl)
+      expect(destinations).toEqual([])
+
+      act(() => useAppStore.getState().setBrowserPageUrl('page-a', 'https://example.test/next'))
+      expect(destinations).toEqual(['https://example.test/next'])
+      act(() => useAppStore.setState({ browserPagesByWorkspace: {} }))
+      expect(destinations).toEqual(['https://example.test/next'])
+    }
+  )
+
+  it('keeps an untitled document identifiable through title, Stop and retained replay', () => {
+    const view = mount(
+      nativeState({ url: 'https://kagi.com/search?token=test-only&q=orca', title: 'Results' })
+    )
+    acceptBrowserGuestMetadata(
+      nativeState({
+        revision: 2,
+        kind: 'title',
+        url: 'https://kagi.com/search?token=test-only&q=orca',
+        title: '',
+        loading: true
+      })
+    )
+    expect(view.page().title).toBe('https://kagi.com/search?q=orca')
+    expect(view.history).toHaveBeenLastCalledWith(
+      'https://kagi.com/search?q=orca',
+      'https://kagi.com/search?q=orca',
+      null
+    )
+    acceptBrowserGuestMetadata(
+      nativeState({
+        revision: 3,
+        kind: 'stop',
+        url: 'https://kagi.com/search?token=test-only&q=orca',
+        title: ''
+      })
+    )
+    expect(view.page().title).toBe('https://kagi.com/search?q=orca')
+    expect(useAppStore.getState().browserTabsByWorktree['worktree-a'][0].title).toBe(
+      'https://kagi.com/search?q=orca'
+    )
+    view.dispose()
+    const dispose = bindBrowserPageWebviewListeners({
+      container: view.container,
+      webview: view.webview,
+      needsInitialNavigation: false,
+      onContainerDragOver: () => {},
+      onContainerDrop: () => {},
+      dismissAddressBarSuggestions: () => {},
+      args: view.args
+    })
+    disposers.push(dispose)
+    expect(view.page().title).toBe('https://kagi.com/search?q=orca')
+  })
+
   it('keeps the saved title before the first document commits', () => {
     const view = mount(nativeState({ navigationRevision: 0, url: '', title: '', loading: true }))
     expect(view.page().title).toBe('Saved title')

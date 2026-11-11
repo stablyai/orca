@@ -233,6 +233,7 @@ export function BrowserPagePane({
   useBrowserPageWebviewUrlSync({
     browserTabId: browserTab.id,
     browserTabUrl: browserTab.url,
+    workspaceId,
     isActive,
     isPaintable,
     slotViewport,

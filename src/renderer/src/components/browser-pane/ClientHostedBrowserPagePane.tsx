@@ -216,7 +216,8 @@ export function ClientHostedBrowserPagePane({
       const url = redactKagiSessionToken(state.url)
       const metadata = {
         url,
-        title: state.title || url,
+        title:
+          state.title || (url && !isBlankBrowserUrl(url) ? getBrowserDisplayTitle('', url) : url),
         loading: state.loading,
         canGoBack: state.canGoBack,
         canGoForward: state.canGoForward

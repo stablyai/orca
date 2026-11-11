@@ -1,7 +1,6 @@
 import { issueBrowserGuestNavigation } from '../host-guest/browser-guest-metadata-cache'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
 import '../../../../../shared/constants'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import {
   normalizeBrowserNavigationUrl,
   normalizeExternalBrowserUrl,
@@ -26,18 +25,7 @@ export function toDisplayUrl(url: string): string {
   return isBlankBrowserUrl(url) ? '' : redactKagiSessionToken(url)
 }
 
-export function getBrowserDisplayTitle(title: string | null | undefined, url: string): string {
-  if (
-    url === 'about:blank' ||
-    url === ORCA_BROWSER_BLANK_URL ||
-    title === 'about:blank' ||
-    title === ORCA_BROWSER_BLANK_URL ||
-    !title
-  ) {
-    return 'New Tab'
-  }
-  return title
-}
+export { getBrowserDisplayTitle } from '../../../../../shared/browser/browser-display-title'
 
 export function isChromiumErrorPage(url: string): boolean {
   return url.startsWith('chrome-error://')
