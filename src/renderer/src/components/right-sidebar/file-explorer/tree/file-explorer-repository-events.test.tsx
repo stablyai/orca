@@ -91,7 +91,7 @@ it.each([1, 10])(
             { once: true }
           )
           await new Promise<void>((resolve) => {
-            // ast-grep-ignore: test-no-real-time-wait -- Fake time models an in-flight Git read; no wall-clock wait.
+            // ast-grep-ignore: test-no-real-time-wait-tsx -- Fake time models an in-flight Git read; no wall-clock wait.
             setTimeout(resolve, 500)
           })
           return {
