@@ -93,16 +93,12 @@ jobs:
           pnpm vitest run --config config/vitest.config.ts
           config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-group-recovery.test.mjs
           config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-processes.test.mjs
-          src/main/computer/sidecar-client.test.ts
-          src/main/computer/macos-native-provider-client.test.ts
-          src/main/computer/macos-native-provider-socket.test.ts
-          src/main/computer/macos-computer-use-permissions.test.ts
-          src/main/computer/macos-computer-use-permission-status.test.ts
+          src/main/computer/sidecar-transport/sidecar-client.test.ts
+          src/main/computer/macos-native/macos-native-provider-client.test.ts
           src/main/providers/windows-shell-preflight-runtime.windows.test.ts
-          src/main/computer/desktop-script-provider-actions.test.ts
-          src/main/computer/desktop-script-provider-cache-lifecycle.test.ts
-          src/main/computer/desktop-script-provider-errors.test.ts
-          src/main/computer/desktop-script-provider-action-errors.test.ts
+          src/main/computer/desktop-script/actions/desktop-script-provider-actions.test.ts
+          src/main/computer/desktop-script/desktop-script-provider-cache-lifecycle.test.ts
+          src/main/computer/desktop-script/actions/desktop-script-provider-action-errors.test.ts
           src/cli/format.test.ts
           src/cli/handlers/computer-action-validation.test.ts
           src/cli/handlers/computer-state-formatting.test.ts
