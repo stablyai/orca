@@ -181,7 +181,11 @@ export function RepositoryHooksSection({
           )}
           className="py-4"
           forceVisible={forceVisible}
-          keywords={['wait for setup before starting agent', 'wait for setup to complete', 'setup']}
+          keywords={[
+            'wait for setup before starting agent',
+            'wait for setup to complete before starting agent',
+            'setup'
+          ]}
         >
           <RepositorySetupAgentStartupSetting
             setupAgentStartupPolicy={selectedSetupAgentStartupPolicy}

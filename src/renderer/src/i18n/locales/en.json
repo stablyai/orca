@@ -11299,7 +11299,7 @@
             "cedbe6c02c": "When to run setup",
             "eefc3e51ef": "GitHub account",
             "f94afd4078": "Keep fork up to date",
-            "waitForSetupToComplete": "wait for setup to complete"
+            "waitForSetupToCompleteBeforeAgent": "wait for setup to complete before starting agent"
           }
         },
         "runtime": {
