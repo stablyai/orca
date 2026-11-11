@@ -52,18 +52,15 @@ describe('terminal error toast on an Orca Cloud workspace that sleeps', () => {
     expect(container.textContent).toBe('')
   })
 
-  it('asleep: a neutral line, no red error and no "file an issue" (also for the old "VM" wording)', () => {
+  it('asleep: no red toast either (the pane shows the calm asleep line), also for the old "VM" wording', () => {
     seed('sleeping')
     for (const error of [
       RUNTIME_ENVIRONMENT_ASLEEP_MESSAGE,
       "This workspace's VM is asleep. Open the workspace to wake it."
     ]) {
       const { container, unmount } = render(toast('ws', error))
-      expect(container.querySelector('[data-cloud-asleep-terminal-notice]')?.textContent).toBe(
-        'This workspace is asleep. Open it to wake it.'
-      )
-      expect(container.textContent).not.toContain('file an issue')
       expect(container.querySelector('[data-terminal-error-toast]')).toBeNull()
+      expect(container.textContent).not.toContain('file an issue')
       unmount()
     }
   })
