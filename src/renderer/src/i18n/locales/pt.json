@@ -24084,6 +24084,13 @@
       }
     }
   },
+  "editorGitChangePeek": {
+    "previous": "Alteração anterior",
+    "next": "Próxima alteração",
+    "copy": "Copiar linhas originais",
+    "revert": "Reverter alteração",
+    "close": "Fechar"
+  },
   "editorConflicts": {
     "kind": {
       "addedByUs": "Adicionado por nós",

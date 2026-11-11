@@ -11,7 +11,7 @@ import {
   buildGitChangeGutterDecorations,
   type GitChangeOverviewRulerColors
 } from './git-change-gutter-decorations'
-import { computeGitChangeHunks } from './git-change-hunks'
+import { computeGitChangeHunks, type GitChangeHunk } from './git-change-hunks'
 import {
   getGitHeadBaselineKey,
   loadGitHeadBaseline,
@@ -25,6 +25,12 @@ const REPAINT_DEBOUNCE_MS = 150
 const REPAINT_MAX_WAIT_MS = 500
 const MAX_GUTTER_LINES = 20_000
 const BASELINE_RETRY_DELAYS_MS = [2000, 8000, 30_000] as const
+const NO_HUNKS: readonly GitChangeHunk[] = []
+
+export type MonacoGitChangeGutter = {
+  hunks: readonly GitChangeHunk[]
+  baseline: GitHeadBaseline
+}
 
 function readOverviewRulerColors(): GitChangeOverviewRulerColors {
   const styles = getComputedStyle(document.documentElement)
@@ -94,7 +100,7 @@ export function useMonacoGitChangeGutter(params: {
   worktreeId: string | undefined
   relativePath: string
   eligible: boolean
-}): void {
+}): MonacoGitChangeGutter {
   const { mountedEditor, fileId, worktreeId, relativePath, eligible } = params
   const fileBaselineKey = useAppStore((state) => {
     if (!eligible || !worktreeId || state.settings?.editorGitChangeGutterEnabled !== true) {
@@ -132,6 +138,7 @@ export function useMonacoGitChangeGutter(params: {
   // Until the editor mounts its length is unknown, and there is nothing to paint on anyway.
   const baselineKey = !mountedEditor || modelIsTooLong ? null : fileBaselineKey
   const [baseline, setBaseline] = useState<GitHeadBaseline>(null)
+  const [hunks, setHunks] = useState(NO_HUNKS)
   // Repaint on theme change: the overview ruler holds resolved colors.
   const isDarkTheme = useDocumentDarkTheme()
 
@@ -152,6 +159,7 @@ export function useMonacoGitChangeGutter(params: {
   useEffect(() => {
     const model = mountedEditor?.getModel()
     if (!mountedEditor || !model || !baseline) {
+      setHunks(NO_HUNKS)
       return
     }
     const collection = mountedEditor.createDecorationsCollection()
@@ -161,11 +169,12 @@ export function useMonacoGitChangeGutter(params: {
     const paint = (): void => {
       timer = null
       lastPaintAt = Date.now()
-      const hunks =
+      const painted =
         baseline.length > MAX_GUTTER_LINES
           ? null
           : computeGitChangeHunks(baseline, model.getLinesContent())
-      collection.set(hunks ? buildGitChangeGutterDecorations(hunks, overviewRulerColors) : [])
+      collection.set(painted ? buildGitChangeGutterDecorations(painted, overviewRulerColors) : [])
+      setHunks(painted && painted.length > 0 ? painted : NO_HUNKS)
     }
     paint()
     const contentSub = model.onDidChangeContent(() => {
@@ -183,4 +192,6 @@ export function useMonacoGitChangeGutter(params: {
       collection.clear()
     }
   }, [mountedEditor, baseline, isDarkTheme])
+
+  return { hunks, baseline }
 }

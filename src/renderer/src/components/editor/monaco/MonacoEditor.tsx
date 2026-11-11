@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import Editor from '@monaco-editor/react'
 import type { editor, IRange } from 'monaco-editor'
 import type { MarkdownDocument } from '../../../../../shared/file-listing/file-document'
@@ -29,6 +30,8 @@ import { useMonacoEditorDecorations } from './use-monaco-editor-decorations'
 import { useMonacoGitBlame } from '../blame/use-monaco-git-blame'
 import { useMonacoEditorMount } from './use-monaco-editor-mount'
 import { useMonacoGitChangeGutter } from '../git-change-gutter/use-monaco-git-change-gutter'
+import { useMonacoGitChangePeek } from '../git-change-gutter/use-monaco-git-change-peek'
+import { GitChangePeek } from '../git-change-gutter/GitChangePeek'
 import { snapshotMonacoViewState } from './monaco-view-state-persistence'
 import { MonacoMarkdownAnnotationOverlay } from '../markdown-source-tools/monaco/MonacoMarkdownAnnotationOverlay'
 import { usePluginSyntaxLanguage } from './use-plugin-syntax-language'
@@ -220,13 +223,14 @@ export default function MonacoEditor({
     markdownDocuments,
     conflictDecorationsEnabled
   })
-  useMonacoGitChangeGutter({
+  const gitChangeGutter = useMonacoGitChangeGutter({
     mountedEditor,
     fileId,
     worktreeId,
     relativePath,
     eligible: gitChangeGutterEligible
   })
+  const gitChangePeek = useMonacoGitChangePeek({ mountedEditor, ...gitChangeGutter })
 
   const handleMount = useMonacoEditorMount({
     fileId,
@@ -354,6 +358,9 @@ export default function MonacoEditor({
         keepCurrentModel
       />
 
+      {gitChangePeek
+        ? createPortal(<GitChangePeek {...gitChangePeek} />, gitChangePeek.domNode)
+        : null}
       {toastNode}
       <MonacoGutterContextMenu
         open={gutterMenuOpen}

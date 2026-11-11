@@ -23522,6 +23522,13 @@
       }
     }
   },
+  "editorGitChangePeek": {
+    "previous": "Cambio anterior",
+    "next": "Cambio siguiente",
+    "copy": "Copiar líneas originales",
+    "revert": "Revertir cambio",
+    "close": "Cerrar"
+  },
   "editorConflicts": {
     "kind": {
       "addedByUs": "Añadido por nosotros",
