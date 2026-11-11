@@ -27893,7 +27893,6 @@
     "pasteToken": "Paste token",
     "tryAgain": "Try again",
     "dismiss": "Dismiss",
-    "signInAgain": "Sign in again",
     "signInHere": "Sign in for this workspace",
     "checking": "Checking agent sign-in",
     "readyDetail": "Every cloud workspace uses it. Nothing to do here.",
@@ -27917,7 +27916,6 @@
     "offerDetail": "Sign in to {{agents}} once. Every cloud workspace uses it.",
     "stillOpens": "The workspace still opens.",
     "expired": "Your {{agent}} sign-in for Orca Cloud expired",
-    "expiredDetail": "Sign in again once. Every cloud workspace picks it up.",
     "agentSignIn": "{{agent}} sign-in",
     "paused": "Orca account sign-in is paused",
     "pausedDetail": "This sign-in stays with this workspace.",
@@ -27925,7 +27923,8 @@
     "errorDetail": "The workspace still opens. Agents can sign in later.",
     "groupAccount": "{{agents}} from your Orca account",
     "groupKey": "{{agents}} with {{key}}",
-    "notOffered": "Signs in for each cloud workspace for now"
+    "notOffered": "Signs in for each cloud workspace for now",
+    "expiredDetailRenew": "Renew once. Every cloud workspace picks it up."
   },
   "agentAccountsOverview": {
     "action": {

@@ -2802,10 +2802,6 @@
       "updateServerUnreachable": "Couldn't reach the update server. Try again in a few minutes."
     }
   },
-  "vmBuildAgents": {
-    "expiredDetail": "Sign in again once. Every cloud workspace picks it up.",
-    "signInAgain": "Sign in again"
-  },
   "workspace": {
     "links": {
       "linkedCount_one": "{{count}} linked",

@@ -128,7 +128,10 @@ export function buildAgentsRowText(
         title: t('vmBuildAgents.expired', 'Your {{agent}} sign-in for Orca Cloud expired', {
           agent: agentName(model.agent, t)
         }),
-        detail: t('vmBuildAgents.expiredDetail', 'Renew once. Every cloud workspace picks it up.')
+        detail: t(
+          'vmBuildAgents.expiredDetailRenew',
+          'Renew once. Every cloud workspace picks it up.'
+        )
       }
     case 'killSwitch':
       return {
