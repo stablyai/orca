@@ -9,10 +9,12 @@ import {
   resetWebRuntimeInitialTerminalBootstrapForTests
 } from '@/runtime/web-session-tabs-sync/initial-terminal/web-runtime-initial-terminal-bootstrap'
 
-const mocks = vi.hoisted(() => ({
-  create: vi.fn(),
-  tabsByWorktree: {} as Record<string, unknown[]>
-}))
+const mocks = vi.hoisted(
+  (): { create: ReturnType<typeof vi.fn>; tabsByWorktree: Record<string, unknown[]> } => ({
+    create: vi.fn(),
+    tabsByWorktree: {}
+  })
+)
 vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminal: mocks.create
 }))
