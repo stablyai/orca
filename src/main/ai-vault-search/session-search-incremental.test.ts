@@ -380,11 +380,23 @@ it('retains title-only work through admission refusal and wakes held-out publica
     expect(title()).toEqual({ title: 'Delivered title' })
     expect(subject.status().phase).toBe('current')
     const request = SessionSearchWorkerClient.prototype.request
+    const admitted = new Map<number, Promise<unknown>>()
     let foreignCommit = false
     const gate = vi
       .spyOn(SessionSearchWorkerClient.prototype, 'request')
       .mockImplementation(async function (this: SessionSearchWorkerClient, command) {
+        if (command.op === 'begin') {
+          const accepted = request.call(this, command).then((result) => {
+            expect(result.accepted).toBe(true)
+            return result
+          })
+          admitted.set(command.handle, accepted)
+          return accepted
+        }
         if (!foreignCommit && command.op === 'finish') {
+          const begin = admitted.get(command.handle)
+          expect(begin).toBeDefined()
+          await begin
           foreignCommit = true
           harness.write((db) =>
             db
