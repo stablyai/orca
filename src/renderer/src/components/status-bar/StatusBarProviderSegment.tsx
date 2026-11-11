@@ -1,7 +1,6 @@
 import { cn } from '@/lib/utils'
 import React from 'react'
 import type {
-  OwnerNotSetUpPlaceholder,
   ProviderRateLimits,
   RateLimitWindow
 } from '../../../../shared/rate-limit-types'
@@ -21,7 +20,6 @@ import {
   getProviderUsageStatusLabel
 } from './tooltip'
 import { getProviderDisplayName } from '../../../../shared/usage-provider-windows'
-import { getOwnerNotSetUpLabelParts } from './owner-not-set-up-copy'
 import { isClaudeUsageWaitingForClaude } from './usage-error-copy'
 import { getTightestUsageSection, getUsageHeadlineSection } from './UsageRosterPanel'
 import { formatBareUsagePercentage, formatUsagePercentageLabel } from './usage-percentage-label'
@@ -87,27 +85,6 @@ export function ProviderLetterBadge({ p }: { p: ProviderRateLimits }): React.JSX
         className={`inline-block h-2 w-2 rounded-full ${hasData ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
       />
       {getProviderLetter(p.provider)}
-    </span>
-  )
-}
-
-// Why only the host name truncates: the phrase around it must stay readable in every locale.
-function OwnerNotSetUpLabel({
-  placeholder
-}: {
-  placeholder: OwnerNotSetUpPlaceholder
-}): React.JSX.Element {
-  const t = useTranslate()
-  const { before, host, after } = getOwnerNotSetUpLabelParts(placeholder, t)
-  return (
-    <span className="text-[11px] font-medium">
-      {before}
-      {host ? (
-        <span data-owner-host className="inline-block max-w-28 truncate align-bottom">
-          {host}
-        </span>
-      ) : null}
-      {after}
     </span>
   )
 }
@@ -288,14 +265,16 @@ export function ProviderSegment({
   }
 
   if (p.usageMetadata?.ownerNotSetUp) {
+    // Why calm: "Not configured on Orca Cloud" sat in the bar for good in every cloud workspace
+    // (JA-07/NS-03). Same quiet "--" as a failed read; the reason stays on hover and in the card.
+    const reason = getProviderUsageErrorMessage(p, t)
     return (
       <span
-        className="inline-flex items-center gap-1 text-muted-foreground"
-        title={getProviderUsageErrorMessage(p, t)}
+        className="inline-flex items-center gap-1 text-muted-foreground/60"
+        title={reason}
+        aria-label={reason}
       >
-        <ProviderIcon provider={provider} />
-        {/* Why "--" when compact: an icon alone would read as a healthy chip. */}
-        {compact ? '--' : <OwnerNotSetUpLabel placeholder={p.usageMetadata.ownerNotSetUp} />}
+        <ProviderIcon provider={provider} /> --
       </span>
     )
   }

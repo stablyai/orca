@@ -51,4 +51,26 @@ describe('ProviderSegment calm error', () => {
     expect(html).not.toContain(`>${label}<`)
     expect(html).not.toContain('lucide-triangle-alert')
   })
+
+  it('owner not set up (e.g. "Not configured on Orca Cloud") is the same quiet "--"', async () => {
+    const { ProviderSegment } = await import('./StatusBar')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: minimal placeholder fixture.
+    const p = {
+      provider: 'codex',
+      session: null,
+      weekly: null,
+      updatedAt: 0,
+      error: 'Not configured on Orca Cloud',
+      status: 'error',
+      usageMetadata: {
+        ownerNotSetUp: { kind: 'not-configured', ownerLabel: 'Orca Cloud', signInSavedHereOnly: false }
+      }
+    } as unknown as ProviderRateLimits
+    const html = renderToStaticMarkup(
+      <ProviderSegment p={p} compact={false} display="used" mode="verbose" />
+    )
+    expect(html).toContain('--')
+    expect(html).toContain('Not configured on Orca Cloud')
+    expect(html).not.toContain('>Not configured on')
+  })
 })

@@ -19,12 +19,26 @@ function errorProvider(
   } as unknown as ProviderRateLimits
 }
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: minimal placeholder fixture data.
+const notConfiguredOnCloud = {
+  provider: 'codex',
+  session: null,
+  weekly: null,
+  updatedAt: 0,
+  error: 'Not configured on Orca Cloud',
+  status: 'error',
+  usageMetadata: {
+    ownerNotSetUp: { kind: 'not-configured', ownerLabel: 'Orca Cloud', signInSavedHereOnly: false }
+  }
+} as unknown as ProviderRateLimits
+
 export const calmErrors = defineFixture({
   width: 360,
   render: () => (
     <div className="flex h-6 items-center gap-4 border-t border-border px-3 text-xs">
       <ProviderSegment p={errorProvider('cursor', 'stale-token')} compact={false} display="used" />
       <ProviderSegment p={errorProvider('gemini', 'unknown')} compact={false} display="used" />
+      <ProviderSegment p={notConfiguredOnCloud} compact={false} display="used" />
     </div>
   )
 })
