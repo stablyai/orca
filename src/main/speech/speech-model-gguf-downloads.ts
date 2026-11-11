@@ -51,6 +51,13 @@ const GGUF_DOWNLOADS = {
     'nemotron-3.5-asr-streaming-0.6b-Q8_0.gguf',
     751_094_240,
     'b94545b313b3223fda7b2857a52681da813935c2127643d1e9ff0c23d988089c'
+  ],
+  'gigaam-v3-ctc-punct-ru-int8': [
+    'handy-computer/gigaam-v3-e2e-ctc-gguf',
+    '59717de63d50dd9dd93b3249da6ad3f2f1c4ad6b',
+    'gigaam-v3-e2e-ctc-Q8_0.gguf',
+    272_151_136,
+    '9ccce4750dc813a493d96ca15ee251712bedec15ac9a02fa3d2bd732f08ae5eb'
   ]
 } satisfies Record<string, GgufDownload>
 

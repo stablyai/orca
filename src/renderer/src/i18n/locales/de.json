@@ -20711,7 +20711,8 @@
             "whisperTiny": "Kleinster Download. Gut zum Ausprobieren.",
             "whisperTurbo": "Die meisten Sprachen, rund 100. Langsam ohne GPU.",
             "senseVoice": "Schnell. Für Chinesisch, Japanisch und Koreanisch.",
-            "nemotron": "{{languages}} Sprachen, darunter Arabisch, Hindi und Japanisch."
+            "nemotron": "{{languages}} Sprachen, darunter Arabisch, Hindi und Japanisch.",
+            "gigaamV3": "Nur Russisch. Zeichensetzung und Groß- und Kleinschreibung."
           }
         },
         "vocabulary": {

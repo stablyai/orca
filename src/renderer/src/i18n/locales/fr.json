@@ -20816,7 +20816,8 @@
             "whisperTiny": "Le plus petit téléchargement. Idéal pour essayer la dictée.",
             "whisperTurbo": "Le plus de langues, environ 100. Lent sans GPU.",
             "senseVoice": "Rapide. Pour le chinois, le japonais et le coréen.",
-            "nemotron": "{{languages}} langues, dont l’arabe, l’hindi et le japonais."
+            "nemotron": "{{languages}} langues, dont l’arabe, l’hindi et le japonais.",
+            "gigaamV3": "Russe uniquement. Ponctuation, majuscules et minuscules."
           }
         },
         "vocabulary": {

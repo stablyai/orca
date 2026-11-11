@@ -19991,7 +19991,8 @@
             "whisperTiny": "下载最小。适合试用听写。",
             "whisperTurbo": "语言最多，约 100 种。没有 GPU 时较慢。",
             "senseVoice": "速度快。适用于中文、日语和韩语。",
-            "nemotron": "{{languages}} 种语言，包括阿拉伯语、印地语和日语。"
+            "nemotron": "{{languages}} 种语言，包括阿拉伯语、印地语和日语。",
+            "gigaamV3": "仅支持俄语。支持标点和大小写。"
           }
         },
         "vocabulary": {

@@ -21681,7 +21681,8 @@
             "whisperTiny": "O menor download. Bom para experimentar o ditado.",
             "whisperTurbo": "Mais idiomas, cerca de 100. Lento sem GPU.",
             "senseVoice": "Rápido. Para chinês, japonês e coreano.",
-            "nemotron": "{{languages}} idiomas, incluindo árabe, hindi e japonês."
+            "nemotron": "{{languages}} idiomas, incluindo árabe, hindi e japonês.",
+            "gigaamV3": "Só russo. Pontuação e maiúsculas e minúsculas."
           }
         },
         "vocabulary": {

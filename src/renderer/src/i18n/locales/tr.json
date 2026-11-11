@@ -20693,7 +20693,8 @@
             "whisperTiny": "En küçük indirme. Dikteyi denemek için iyi.",
             "whisperTurbo": "En çok dil, yaklaşık 100. GPU olmadan yavaş.",
             "senseVoice": "Hızlı. Çince, Japonca ve Korece için.",
-            "nemotron": "Arapça, Hintçe ve Japonca dahil {{languages}} dil."
+            "nemotron": "Arapça, Hintçe ve Japonca dahil {{languages}} dil.",
+            "gigaamV3": "Yalnızca Rusça. Noktalama ve büyük/küçük harf kullanımı."
           }
         },
         "vocabulary": {

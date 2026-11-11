@@ -20499,7 +20499,8 @@
             "whisperTiny": "La descarga más pequeña. Bueno para probar el dictado.",
             "whisperTurbo": "La mayoría de idiomas, unos 100. Lento sin GPU.",
             "senseVoice": "Rápido. Para chino, japonés y coreano.",
-            "nemotron": "{{languages}} idiomas, entre ellos árabe, hindi y japonés."
+            "nemotron": "{{languages}} idiomas, entre ellos árabe, hindi y japonés.",
+            "gigaamV3": "Solo ruso. Puntuación y mayúsculas y minúsculas."
           }
         },
         "vocabulary": {

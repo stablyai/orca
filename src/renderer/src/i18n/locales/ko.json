@@ -19992,7 +19992,8 @@
             "whisperTiny": "가장 작은 다운로드. 받아쓰기를 체험해 보기에 좋습니다.",
             "whisperTurbo": "가장 많은 약 100개 언어. GPU가 없으면 느립니다.",
             "senseVoice": "빠름. 중국어, 일본어, 한국어용.",
-            "nemotron": "아랍어, 힌디어, 일본어를 포함한 {{languages}}개 언어."
+            "nemotron": "아랍어, 힌디어, 일본어를 포함한 {{languages}}개 언어.",
+            "gigaamV3": "러시아어 전용. 문장 부호와 대소문자 지원."
           }
         },
         "vocabulary": {

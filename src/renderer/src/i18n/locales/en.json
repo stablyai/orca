@@ -21560,7 +21560,8 @@
             "whisperTiny": "Smallest download. Good for trying dictation out.",
             "whisperTurbo": "Most languages, about 100. Slow without a GPU.",
             "senseVoice": "Fast. For Chinese, Japanese and Korean.",
-            "nemotron": "{{languages}} languages, including Arabic, Hindi and Japanese."
+            "nemotron": "{{languages}} languages, including Arabic, Hindi and Japanese.",
+            "gigaamV3": "Russian only. Punctuation and capitalization."
           }
         },
         "vocabulary": {

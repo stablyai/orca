@@ -123,6 +123,18 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     replacedBy: 'sense-voice-zh-en-ja-ko-yue'
   },
   {
+    id: 'gigaam-v3-ctc-punct-ru-int8',
+    label: 'GigaAM v3 RU',
+    type: 'nemo-ctc',
+    provider: 'local',
+    language: 'ru',
+    ...getGgufSpeechModelDownload('gigaam-v3-ctc-punct-ru-int8'),
+    languages: ['ru'],
+    licence: 'MIT',
+    sampleRate: 16000,
+    streaming: false
+  },
+  {
     id: 'whisper-tiny',
     label: 'Whisper Tiny',
     type: 'whisper',

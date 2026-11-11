@@ -19992,7 +19992,8 @@
             "whisperTiny": "最小のダウンロード。音声入力のお試しに。",
             "whisperTurbo": "最多の約 100 言語。GPU がないと低速です。",
             "senseVoice": "高速。中国語、日本語、韓国語向け。",
-            "nemotron": "アラビア語、ヒンディー語、日本語を含む {{languages}} 言語。"
+            "nemotron": "アラビア語、ヒンディー語、日本語を含む {{languages}} 言語。",
+            "gigaamV3": "ロシア語専用。句読点と大文字・小文字に対応。"
           }
         },
         "vocabulary": {

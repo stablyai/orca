@@ -49,6 +49,11 @@ export function speechModelDescription(
         '{{languages}} languages, including Arabic, Hindi and Japanese.',
         { languages }
       )
+    case 'gigaam-v3-ctc-punct-ru-int8':
+      return t(
+        'components.settings.voice.models.about.gigaamV3',
+        'Russian only. Punctuation and capitalization.'
+      )
     default:
       return undefined
   }
