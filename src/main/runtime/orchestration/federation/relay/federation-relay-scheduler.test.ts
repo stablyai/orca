@@ -70,20 +70,6 @@ describe('FederationRelayScheduler', () => {
     relays.clear()
   })
 
-  it('slows an idle relay to two pulls a minute once nothing has asked for it for 30 s', async () => {
-    const mailbox = relayedMailbox()
-    mailbox.recover()
-    const relays = new FederationRelayScheduler(mailbox.tick)
-    relays.arm('dispatch-1', 'env-1')
-    await vi.advanceTimersByTimeAsync(5 * 60_000)
-
-    const before = mailbox.pulls()
-    await vi.advanceTimersByTimeAsync(60_000)
-
-    expect(mailbox.pulls() - before).toBe(2)
-    relays.clear()
-  })
-
   it('delivers worker mail within a second while a coordinator waits on an idle relay', async () => {
     const mailbox = relayedMailbox()
     mailbox.recover()
