@@ -11,7 +11,11 @@ afterEach(() => h.cleanup())
 
 type StopReceipt = { state: string; alreadySettled: boolean; processAction: string }
 
-function fireExit(handle: string, cause: TerminalExitCause = OPERATOR_CLOSE_EXIT_CAUSE): void {
+function fireExit(
+  handle: string,
+  cause: TerminalExitCause = OPERATOR_CLOSE_EXIT_CAUSE,
+  exitCode = 0
+): void {
   ;(
     h.runtime as unknown as {
       failActiveDispatchOnExit: (
@@ -21,7 +25,7 @@ function fireExit(handle: string, cause: TerminalExitCause = OPERATOR_CLOSE_EXIT
         cause: TerminalExitCause
       ) => void
     }
-  ).failActiveDispatchOnExit(handle, h.workerPaneKey, 0, cause)
+  ).failActiveDispatchOnExit(handle, h.workerPaneKey, exitCode, cause)
 }
 
 describe('a worker whose process exits while its own stop is in flight', () => {
@@ -56,6 +60,20 @@ describe('a worker whose process exits while its own stop is in flight', () => {
       dispatch: dispatchId
     })) as StopReceipt
     expect(receipt.state).toBe('stopped')
+  })
+
+  it('keeps an unverified stop sentinel from counting as a completed stop', async () => {
+    const { dispatchId } = await h.startWorker()
+    vi.mocked(h.runtime.closeTerminal).mockImplementation(async (handle) => {
+      fireExit(handle, { kind: 'unknown', reason: 'stop_unverified' }, -1)
+      throw new Error('Terminal handle is stale')
+    })
+
+    const receipt = (await h.call('orchestration.workerStop', {
+      dispatch: dispatchId
+    })) as StopReceipt
+    expect(receipt.state).toBe('stop_unknown')
+    expect(h.db.getWorkerDispatch(dispatchId)?.state).toBe('stop_unknown')
   })
 
   it('accepts an exit observed while inspecting the process before close', async () => {
