@@ -20,6 +20,16 @@ function zcodeTranscriptDatabasePaths(wslHomeDirs: readonly string[]): string[] 
   return [homedir(), ...wslHomeDirs].map((home) => join(home, '.zcode', 'cli', 'db', 'db.sqlite'))
 }
 
+/** Readers for every listed WSL root; the registry drops any distro left out. */
+export async function configureOpenCodeTranscriptWslReaders(
+  roots: readonly string[],
+  signal: AbortSignal
+): Promise<void> {
+  const readers = await waitForPromiseWithSignal(prepareOpenCodeWslReaders(roots), signal)
+  signal.throwIfAborted()
+  configureOpenCodeWslReaders(readers)
+}
+
 export async function discoverOpenCodeTranscriptDatabase(
   sessionId?: string,
   signal?: AbortSignal,
@@ -98,12 +108,7 @@ export async function discoverOpenCodeTranscriptDatabase(
         await waitForPromiseWithSignal(getAiVaultWslScanHomeDirs(), boundedSignal)
       ).slice(0, 32)
       if (homes.length > 0) {
-        const readers = await waitForPromiseWithSignal(
-          prepareOpenCodeWslReaders(homes),
-          boundedSignal
-        )
-        boundedSignal.throwIfAborted()
-        configureOpenCodeWslReaders(readers)
+        await configureOpenCodeTranscriptWslReaders(homes, boundedSignal)
       }
       const wsl = await findSession(zcodeTranscriptDatabasePaths(homes))
       if (wsl) {
@@ -141,12 +146,7 @@ export async function discoverOpenCodeTranscriptDatabase(
     const primaryWsl = primary.filter((path) => openCodeWslPath(path))
     const readerRoots = [...new Set([...homes, ...primaryWsl])]
     if (readerRoots.length > 0) {
-      const readers = await waitForPromiseWithSignal(
-        prepareOpenCodeWslReaders(readerRoots),
-        boundedSignal
-      )
-      boundedSignal.throwIfAborted()
-      configureOpenCodeWslReaders(readers)
+      await configureOpenCodeTranscriptWslReaders(readerRoots, boundedSignal)
     }
     const wsl = await findSession([...primaryWsl, ...sources.flat()])
     if (wsl) {

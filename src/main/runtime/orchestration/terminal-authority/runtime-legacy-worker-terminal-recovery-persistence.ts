@@ -3,6 +3,10 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import { retireTerminalSurfaceFromPersistence } from '../../terminal/surface/mobile-session-terminal-persistence-retirement'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import {
+  reportWorkerTurnStop,
+  type WorkerTurnStopReportDeps
+} from '../workers/turn-stops/worker-turn-stop-report'
+import {
   planLegacyWorkerTerminalRecovery,
   type LegacyWorkerTerminalRecoveryPlan
 } from './release/orchestration-legacy-worker-terminal-recovery'
@@ -14,6 +18,12 @@ import type {
 import { cloneWorkspaceSessionState } from '../../../persistence/restoring-sessions/session-owner-fields'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../../../persistence/restoring-sessions/workspace-session-write-rollback'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+
+/** Where a running worker a recovery pass finds gone is reported, with its terminal's last lines. */
+export type LostWorkerReport = {
+  reportDeps: WorkerTurnStopReportDeps
+  lastOutput: (ptyId: string) => Promise<string | undefined>
+}
 
 export class RuntimeLegacyWorkerTerminalRecoveryPersistence {
   constructor(
@@ -108,12 +118,45 @@ export class RuntimeLegacyWorkerTerminalRecoveryPersistence {
     }
   }
 
-  reconcileMissing(candidate: LegacyWorkerRecoveryCandidate): boolean {
+  reconcileMissing(
+    candidate: LegacyWorkerRecoveryCandidate,
+    lostWorkers: LostWorkerReport | null = null
+  ): boolean {
     try {
-      this.getDb().reconcileMissingWorkerTerminal(
+      const db = this.getDb()
+      const before = db.getDispatchContextById(candidate.dispatchId)
+      const worker = db.reconcileMissingWorkerTerminal(
         candidate.dispatchId,
         'The assigned worker terminal is no longer live after orchestration recovery.'
       )
+      const settled = db.getDispatchContextById(candidate.dispatchId)?.status
+      // Only a running worker this pass failed; a pending stop ends as asked, and settled rows were told before.
+      if (
+        lostWorkers &&
+        before &&
+        ['pending', 'dispatched'].includes(before.status) &&
+        worker.state === 'abandoned' &&
+        (settled === 'failed' || settled === 'circuit_broken')
+      ) {
+        // Its last output is read from saved history, so the report follows the settlement.
+        void lostWorkers
+          .lastOutput(candidate.ptyId)
+          .catch(() => undefined)
+          .then((lastOutput) =>
+            reportWorkerTurnStop(
+              db,
+              { kind: 'local', dispatch: before },
+              {
+                from: candidate.terminalHandle,
+                reason: 'lost',
+                cause: 'its terminal was gone when Orca restarted',
+                lastOutput,
+                settled
+              },
+              lostWorkers.reportDeps
+            )
+          )
+      }
       return true
     } catch (error) {
       console.warn('[orchestration] failed to reconcile missing worker terminal', {

@@ -105,9 +105,9 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
 
 /** The database each schema file creates tables in; a new schema file fails the census. */
 export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
-  'src/main/ai-vault-search/session-search-query-schema.ts': 'ai-vault-search',
-  'src/main/ai-vault-search/session-search-schema.ts': 'ai-vault-search',
-  'src/main/ai-vault-search/session-search-write-buffer.ts': 'ai-vault-search-staging',
+  'src/main/ai-vault-search/storage/session-search-query-schema.ts': 'ai-vault-search',
+  'src/main/ai-vault-search/storage/session-search-schema.ts': 'ai-vault-search',
+  'src/main/ai-vault-search/storage/session-search-write-buffer.ts': 'ai-vault-search-staging',
   'src/main/ai-vault/parse-cache/session-parse-cache-database.ts': 'ai-vault-parse-cache',
   'src/main/ai-vault/parse-cache/session-scope-cwds-table.ts': 'ai-vault-parse-cache',
   'src/main/browser/cookies/staging/browser-cookie-staged-import.ts': 'browser-cookie-import',
@@ -123,7 +123,7 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
     'pi-branch-import',
   'src/main/native-chat/agent-session-journal/queued-messages/queued-message-schema.ts':
     'agent-session-journal',
-  'src/main/persistence/profile-state/profile-state-database-schema.ts': 'profile-state',
+  'src/main/persistence/profile-state/database/profile-state-database-schema.ts': 'profile-state',
   'src/main/runtime/orchestration/db/schema/create-core-tables-sql.ts': 'orchestration',
   'src/main/runtime/orchestration/db/schema/create-graph-tables-sql.ts': 'orchestration',
   'src/main/runtime/orchestration/db/schema/migrate-legacy-contract-storage.ts': 'orchestration',

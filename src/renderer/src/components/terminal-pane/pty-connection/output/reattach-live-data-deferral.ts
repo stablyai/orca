@@ -1,7 +1,7 @@
 import { deliverTerminalDataWithDeferredCredit } from '@/lib/pane-manager/terminal-output/terminal-delivery-credit'
 import { waitForTerminalReplayWritesParsed } from '../../snapshots/replay-guard'
 import { flushTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
-import { enforceTerminalCurrentScrollIntent } from '@/lib/pane-manager/terminal-scroll-intent'
+import { enforceTerminalCurrentScrollIntent } from '@/lib/pane-manager/terminal-scroll/terminal-scroll-intent'
 import {
   MAX_DEFERRED_REATTACH_LIVE_CHARS,
   DeferredReattachLiveDataQueue

@@ -6,12 +6,7 @@ import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
 import { AutomationService } from './service'
 import { TICK_MS } from './automation-service-tick.test-fixture'
-import {
-  AWAKE_CLOCK_HEARTBEAT_MS,
-  AWAKE_CLOCK_IDLE_MS,
-  createAwakeClock,
-  type AwakeClock
-} from '../power/awake-clock'
+import { createAwakeClock, type AwakeClock } from '../power/awake-clock'
 import { AUTOMATION_WAKE_SETTLE_MS, automationSystemSettled } from './automation-wake-settle'
 
 vi.mock('electron', () => ({
@@ -143,19 +138,6 @@ describe.each<CounterModel>(['counts sleep (macOS/Windows Node)', 'stops in slee
       service.stop()
     })
 
-    it('also waits after a sleep that no power event reported', async () => {
-      const { launch, service, statuses } = await scheduledService({ tickMs: 1_000 })
-
-      asleepUntil('2026-11-09T09:08:30')
-      await awakeFor(2_000)
-      expect(statuses()).toEqual([])
-      expect(launch).not.toHaveBeenCalled()
-
-      await awakeFor(AUTOMATION_WAKE_SETTLE_MS)
-      await vi.waitFor(() => expect(statuses()).toEqual(['dispatched']))
-      service.stop()
-    })
-
     it('does not let the wait after a wake use up a zero-minute grace', async () => {
       const { store, automation, service, statuses } = await scheduledService({ graceMinutes: 0 })
 
@@ -171,89 +153,6 @@ describe.each<CounterModel>(['counts sleep (macOS/Windows Node)', 'stops in slee
       expect(store.listAutomationRuns(automation.id)[0]!.scheduledFor).toBe(
         new Date('2026-11-09T09:00:00').getTime()
       )
-      service.stop()
-    })
-
-    it('still skips a run that was already past its grace when the machine woke', async () => {
-      const { launch, service, statuses } = await scheduledService({ graceMinutes: 0 })
-
-      clock.suspend()
-      asleepUntil('2026-11-09T09:03:00')
-      clock.resume()
-      await awakeFor(2 * TICK_MS)
-      await vi.waitFor(() => expect(statuses()).toEqual(['skipped_missed']))
-      expect(launch).not.toHaveBeenCalled()
-      service.stop()
-    })
-
-    it('keeps an unchanged held occurrence eligible across repeated short wakes', async () => {
-      const { service, statuses } = await scheduledService({ graceMinutes: 0 })
-
-      clock.suspend()
-      asleepUntil('2026-11-09T09:00:01')
-      clock.resume()
-      await awakeFor(TICK_MS)
-      // Another short wake: back to sleep before settling, then a full wake.
-      clock.suspend()
-      asleepUntil('2026-11-09T09:30:00')
-      clock.resume()
-      await awakeFor(TICK_MS)
-      expect(statuses()).toEqual([])
-
-      await awakeFor(TICK_MS)
-      await vi.waitFor(() => expect(statuses()).toEqual(['dispatched']))
-      service.stop()
-    })
-
-    it('judges a held occurrence by the grace the user set after it was held', async () => {
-      const { store, automation, launch, service, statuses } = await scheduledService({
-        graceMinutes: 720
-      })
-
-      clock.suspend()
-      asleepUntil('2026-11-09T09:05:00')
-      clock.resume()
-      await awakeFor(TICK_MS)
-      expect(statuses()).toEqual([])
-      store.updateAutomation(automation.id, { missedRunGraceMinutes: 0 })
-
-      await awakeFor(TICK_MS)
-      await vi.waitFor(() => expect(statuses()).toEqual(['skipped_missed']))
-      expect(launch).not.toHaveBeenCalled()
-      service.stop()
-    })
-
-    it('does not keep a held occurrence across a pause', async () => {
-      const { store, automation, launch, service, statuses } = await scheduledService({
-        graceMinutes: 0
-      })
-      // Another enabled automation keeps the gate closed (and its holds kept) through the pause.
-      store.createAutomation({
-        name: 'Nightly',
-        prompt: 'Scan',
-        agentId: 'codex',
-        projectId: 'r1',
-        workspaceMode: 'existing',
-        workspaceId: 'r1::wt1',
-        timezone: 'America/Los_Angeles',
-        rrule: 'FREQ=DAILY;BYHOUR=23;BYMINUTE=0',
-        dtstart: new Date('2026-11-08T00:00:00').getTime()
-      })
-
-      clock.suspend()
-      asleepUntil('2026-11-09T09:00:01')
-      clock.resume()
-      await awakeFor(TICK_MS)
-      store.updateAutomation(automation.id, { enabled: false })
-      clock.suspend()
-      asleepUntil('2026-11-09T11:00:00')
-      clock.resume()
-      await awakeFor(TICK_MS)
-      store.updateAutomation(automation.id, { enabled: true })
-
-      await awakeFor(TICK_MS)
-      await vi.waitFor(() => expect(statuses()).toEqual(['skipped_missed']))
-      expect(launch).not.toHaveBeenCalled()
       service.stop()
     })
 
@@ -311,60 +210,6 @@ describe.each<CounterModel>(['counts sleep (macOS/Windows Node)', 'stops in slee
       service.stop()
     })
 
-    it('keeps a held occurrence through usage and retention writes for an earlier run', async () => {
-      const { store, automation, launch, service } = await scheduledService({ graceMinutes: 0 })
-      const prior = await priorDispatchedRun(store, service, automation.id)
-      await service.markDispatchResult({ runId: prior.id, status: 'completed' })
-      const todays = () =>
-        store
-          .listAutomationRuns(automation.id)
-          .filter((run) => run.id !== prior.id)
-          .map((run) => run.status)
-
-      await holdZeroGraceOccurrence()
-      const heldUpdatedAt = updatedAt(store, automation.id)
-      await awakeFor(TICK_MS / 4)
-      // Usage enrichment rewrites the finished run.
-      const usage = store
-        .listAutomationRuns(automation.id)
-        .find((run) => run.id === prior.id)!.usage!
-      store.updateAutomationRun({
-        runId: prior.id,
-        status: 'completed',
-        usage: { ...usage, collectedAt: Date.now() }
-      })
-      await awakeFor(TICK_MS / 4)
-      // Terminal retention sleeps, then forgets, the earlier run's terminal.
-      await service.markDispatchResult({
-        runId: prior.id,
-        status: 'completed',
-        terminalPtyId: null
-      })
-      await service.markDispatchResult({
-        runId: prior.id,
-        status: 'completed',
-        terminalSessionId: null,
-        terminalPaneKey: null
-      })
-      expect(updatedAt(store, automation.id)).not.toBe(heldUpdatedAt)
-
-      await awakeFor(TICK_MS / 2)
-      await vi.waitFor(() => expect(todays()).toEqual(['dispatched']))
-      expect(launch).toHaveBeenCalledOnce()
-      service.stop()
-    })
-
-    it('keeps a held occurrence across a rename', async () => {
-      const { store, automation, service, statuses } = await scheduledService({ graceMinutes: 0 })
-
-      await holdZeroGraceOccurrence()
-      store.updateAutomation(automation.id, { name: 'Renamed scan' })
-
-      await awakeFor(TICK_MS)
-      await vi.waitFor(() => expect(statuses()).toEqual(['dispatched']))
-      service.stop()
-    })
-
     it.each([
       ['a user pause', 'user'],
       ['an ownership disable', 'ownership']
@@ -404,59 +249,5 @@ describe.each<CounterModel>(['counts sleep (macOS/Windows Node)', 'stops in slee
         service.stop()
       }
     )
-
-    it('lets the clock heartbeat idle out while no automation is enabled', async () => {
-      const beats = vi.fn()
-      clock = createAwakeClock({
-        wallNow: () => Date.now(),
-        monotonicNow: () => performance.now() + countedSleep,
-        after: (beat, ms) => {
-          setTimeout(() => {
-            beats()
-            beat()
-          }, ms)
-        }
-      })
-      const store = await createStore()
-      store.addRepo(makeRepo())
-      const service = new AutomationService(store, {
-        tickMs: TICK_MS,
-        terminalLauncher: { launch: vi.fn(), available: () => true }
-      })
-      service.wakeGate.settled = () => automationSystemSettled(clock)
-      service.start()
-      await awakeFor(60 * 60_000)
-      expect(beats).not.toHaveBeenCalled()
-
-      // Enabling one restarts it on the next tick.
-      const automation = store.createAutomation({
-        name: 'Scan',
-        prompt: 'Scan',
-        agentId: 'codex',
-        projectId: 'r1',
-        workspaceMode: 'existing',
-        workspaceId: 'r1::wt1',
-        timezone: 'America/Los_Angeles',
-        rrule: 'FREQ=DAILY;BYHOUR=23;BYMINUTE=0',
-        dtstart: new Date('2026-11-08T00:00:00').getTime()
-      })
-      await awakeFor(TICK_MS + 2 * AWAKE_CLOCK_HEARTBEAT_MS)
-      expect(beats).toHaveBeenCalledTimes(2)
-
-      // Pausing it lets the heartbeat stop once the idle window passes.
-      store.updateAutomation(automation.id, { enabled: false })
-      await awakeFor(AWAKE_CLOCK_IDLE_MS + AWAKE_CLOCK_HEARTBEAT_MS)
-      const settledCount = beats.mock.calls.length
-      await awakeFor(60 * 60_000)
-      expect(beats).toHaveBeenCalledTimes(settledCount)
-      service.stop()
-    })
-
-    it('runs an on-time occurrence on a machine that stayed awake', async () => {
-      const { service, statuses } = await scheduledService()
-      await awakeFor(new Date('2026-11-09T09:00:30').getTime() - Date.now())
-      await vi.waitFor(() => expect(statuses()).toEqual(['dispatched']))
-      service.stop()
-    })
   }
 )

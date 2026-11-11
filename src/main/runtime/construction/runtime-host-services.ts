@@ -242,7 +242,7 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
     persist: (resolutions) => this.legacyWorkerRecoveryPersistence.persist(resolutions),
     rollback: (candidate) => this.rollbackLegacyWorkerTerminalSurface(candidate),
     reconcileMissing: (candidate) =>
-      this.legacyWorkerRecoveryPersistence.reconcileMissing(candidate),
+      this.legacyWorkerRecoveryPersistence.reconcileMissing(candidate, this.lostWorkerReport),
     notifyResolution: (candidate, resolution) =>
       this.notifier?.resolveLegacyWorkerTerminalRecovery?.(candidate.paneKey, resolution),
     canRecoverPersistentLocalPtys: () => this.canRecoverPersistentLocalPtysFn(),

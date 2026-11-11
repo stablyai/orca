@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { CodexResetCreditAttemptLedger } from '../../shared/codex-reset-credit-attempt-ledger'
 import type { CodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
-import { ProfileStateWriterError } from '../persistence/profile-state/profile-state-writer-errors'
+import { ProfileStateWriterError } from '../persistence/profile-state/writer/profile-state-writer-errors'
 import { CodexResetCreditLedger } from './codex-reset-credit-ledger'
 
 function scope(accountId: string): CodexResetCreditExpectedScope {

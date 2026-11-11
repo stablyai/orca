@@ -126,24 +126,30 @@ export function useNativeChatStructuredComposerTransport(args: {
       fork: nativeChatForkCommand(fork, controller.isWorking),
       capturePresentation: controller.capturePresentation,
       ...(sideChat ? { sideChat } : {}),
-      send: (text, attachments, ...request) =>
-        sendBlockedReason === null &&
-        sendThroughLaunch(
-          text,
+      send: (text, attachments, ...request) => {
+        if (sendBlockedReason !== null) {
+          return false
+        }
+        const requiresSession =
           attachments.length > 0 ||
-            request[0]?.prepareAttachments !== undefined ||
-            Boolean(request[0]?.skills?.length),
-          () =>
-            controller.send(
-              text,
-              attachments.map(({ path, connectionId }) => ({
-                path,
-                previewUri: path,
-                ...(connectionId ? { connectionId } : {})
-              })),
-              ...request
-            )
-        ),
+          request[0]?.prepareAttachments !== undefined ||
+          Boolean(request[0]?.skills?.length)
+        if (starting && requiresSession) {
+          onError(nativeChatSessionAttachmentNotReadyNotice(props.agent, true))
+          return false
+        }
+        return sendThroughLaunch(text, requiresSession, () =>
+          controller.send(
+            text,
+            attachments.map(({ path, connectionId }) => ({
+              path,
+              previewUri: path,
+              ...(connectionId ? { connectionId } : {})
+            })),
+            ...request
+          )
+        )
+      },
       dispatchCommand: (text: string, onSent?: () => void) =>
         dispatchStructuredAgentSessionComposerCommand(
           text,
@@ -170,7 +176,7 @@ export function useNativeChatStructuredComposerTransport(args: {
             }
           }
         : {}),
-      sendOut: controller.sendOut || starting,
+      sendOut: controller.sendOut,
       sendFollowUp: controller.sendFollowUp,
       ...(sendBlockedReason !== null ? { sendBlockedReason } : {}),
       optionsSurface: controller.optionSurface,
