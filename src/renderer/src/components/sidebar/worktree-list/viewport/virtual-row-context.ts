@@ -19,6 +19,7 @@ import type { WorktreeVirtualRowContext } from '../rows/virtual-row-dispatch'
 import type { RepoHeaderProjectActions } from '../rows/repo-header-project-actions'
 
 import type { ProjectHeaderHostContext } from '../rows/project-header-host-context'
+import { isProjectColorAccentsEnabled } from '../rows/project-color-accent'
 
 type BuildArgs = {
   props: VirtualizedWorktreeViewportProps
@@ -83,6 +84,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
     onWorkspaceStatusDrop: statusDrag.handleWorkspaceStatusDrop,
     header: {
       groupBy: props.groupBy,
+      projectColorAccents: isProjectColorAccentsEnabled(args.settings),
       collapsedGroups: props.collapsedGroups,
       workspaceStatuses: props.workspaceStatuses,
       projectGroups: args.projectGroups,

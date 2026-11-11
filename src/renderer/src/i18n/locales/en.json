@@ -8378,7 +8378,11 @@
           "d2b4ddbea0": "Show Orca Mobile button",
           "657a7230a2": "IDE font",
           "95a5581f66": "Minimize to tray on close",
-          "e90c5d745a": "Window & sidebar"
+          "e90c5d745a": "Window & sidebar",
+          "sidebarProjectColorAccents": {
+            "title": "Project color accents",
+            "description": "When grouped by project, outline each project with its badge color."
+          }
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -10596,7 +10600,14 @@
             "96e32c1118": "MiniMax usage",
             "e8d2710689": "Muse usage",
             "aff6e6afdf": "IDE font",
-            "ba1f9d39a6": "Antigravity usage"
+            "ba1f9d39a6": "Antigravity usage",
+            "sidebarProjectColorAccents": {
+              "title": "Project color accents",
+              "description": "When grouped by project, outline each project with its badge color.",
+              "color": "color",
+              "group": "group",
+              "badge": "badge"
+            }
           }
         },
         "auto": {
