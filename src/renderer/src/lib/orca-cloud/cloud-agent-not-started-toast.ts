@@ -160,9 +160,12 @@ export function cloudAgentSignInView(
   }
 }
 
+/** A create counts as this toast's when it started at most this long before the toast was asked for. */
+const CREATION_MATCH_SLACK_MS = 5_000
+
 export function showCloudAgentNotStartedToast(
   agent: OrcaCloudAccountAgent,
-  workspaceName: string,
+  requestedName: string,
   {
     onlyWhenAway = false
   }: {
@@ -175,18 +178,34 @@ export function showCloudAgentNotStartedToast(
 ): void {
   teardown?.()
   const name = agentName(agent, translate)
+  const askedAt = Date.now()
+  // The create this prompt is about: the one with the requested name, else the newest create started
+  // around this call (the name is often generated later, e.g. an empty name becomes "chinook").
+  // Once found it is followed by id, and its real name is the one the toast shows.
+  let creationId: string | null = null
+  let workspaceName = requestedName.trim()
+  const creationFor = (state: ReturnType<typeof useAppStore.getState>) => {
+    const creations = Object.values(state.pendingWorktreeCreations ?? {})
+    if (creationId) {
+      return creations.find((creation) => creation.creationId === creationId)
+    }
+    const found =
+      creations.find((creation) => workspaceName && creation.request.name === workspaceName) ??
+      creations
+        .filter((creation) => creation.startedAt >= askedAt - CREATION_MATCH_SLACK_MS)
+        .sort((a, b) => b.startedAt - a.startedAt)[0]
+    if (found) {
+      creationId = found.creationId
+      workspaceName = found.request.name.trim() || workspaceName
+    }
+    return found
+  }
   // The workspace this prompt is about is still being created (its sandbox is starting).
   const isStarting = (state: ReturnType<typeof useAppStore.getState>): boolean =>
-    Object.values(state.pendingWorktreeCreations ?? {}).some(
-      (creation) => creation.status === 'creating' && creation.request.name === workspaceName
-    )
+    creationFor(state)?.status === 'creating'
   // DS-p: the prompt is about a workspace that exists. It waits until the sandbox is up (the create
   // moved past provisioning, or finished); a refused create (e.g. the team's running limit) never
   // shows it, only its own error.
-  const creationFor = (state: ReturnType<typeof useAppStore.getState>) =>
-    Object.values(state.pendingWorktreeCreations ?? {}).find(
-      (creation) => creation.request.name === workspaceName
-    )
   let sandboxUp = false
   let sawCreation = false
   const settle = (state: ReturnType<typeof useAppStore.getState>): 'up' | 'refused' | 'waiting' => {
@@ -207,7 +226,7 @@ export function showCloudAgentNotStartedToast(
     const view: ToastView = signIn ?? {
       message: cloudAgentNotStartedMessage(
         name,
-        switchedAway && workspaceName.trim() ? workspaceName : null,
+        switchedAway && workspaceName ? workspaceName : null,
         { starting: isStarting(useAppStore.getState()) }
       ),
       action: {
