@@ -78,6 +78,10 @@ const {
   verifyStaticAppImagePackage
 } = require('./scripts/desktop-distribution/appimage/static-appimage-package-contract.cjs')
 const {
+  appImageServeLauncherFpmArgs,
+  writeAppImageServeLauncher
+} = require('./scripts/desktop-distribution/appimage/appimage-serve-launcher.cjs')
+const {
   appImageNodeRuntimeFpmArgs,
   placeAppImageNodeRuntime,
   verifyAppImageNodeRuntimeServesPty
@@ -417,6 +421,7 @@ module.exports = {
     // FpmTarget replaces this with deb/rpm while building those artifacts from the shared app tree.
     if (context.electronPlatformName === 'linux') {
       writeFileSync(join(resourcesDir, 'package-type'), 'AppImage')
+      writeAppImageServeLauncher(context)
     }
     if (context.electronPlatformName === 'darwin') {
       applyMacHelperFolderUsageDescriptions(
@@ -738,7 +743,7 @@ module.exports = {
     afterInstall: 'resources/linux/packaging/after-install.sh',
     afterRemove: 'resources/linux/packaging/after-remove.sh',
     // Why: only an AppImage's files can vanish under a running daemon (see appimage-node-runtime.cjs).
-    fpm: appImageNodeRuntimeFpmArgs
+    fpm: [...appImageNodeRuntimeFpmArgs, ...appImageServeLauncherFpmArgs]
   },
   rpm: {
     packageName: 'orca-ide',
@@ -757,7 +762,7 @@ module.exports = {
     afterInstall: 'resources/linux/packaging/after-install.sh',
     afterRemove: 'resources/linux/packaging/after-remove.sh',
     // Why: only an AppImage's files can vanish under a running daemon (see appimage-node-runtime.cjs).
-    fpm: appImageNodeRuntimeFpmArgs
+    fpm: [...appImageNodeRuntimeFpmArgs, ...appImageServeLauncherFpmArgs]
   },
   beforeBuild: electronBuilderNativeRebuild,
   // Dual-arch builds need target node-pty rebuilds or Intel Macs get arm64 binaries and posix_spawnp failure.
