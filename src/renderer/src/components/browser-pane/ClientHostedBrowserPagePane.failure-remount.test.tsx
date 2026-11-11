@@ -22,7 +22,10 @@ vi.mock('./browser-client-page-renderer-installation', () => ({
 
 import { useAppStore } from '@/store'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { installClientHostedPaneApi } from './client-hosted-browser-pane-test-rig'
+import {
+  installClientHostedPaneApi,
+  reportClientHostedGuestMetadata
+} from './client-hosted-browser-pane-test-rig'
 import { ClientHostedBrowserPagePane } from './ClientHostedBrowserPagePane'
 
 const PLACEMENT = {
@@ -38,6 +41,7 @@ let webview: ReturnType<typeof createWebview>
 beforeEach(() => {
   installClientHostedPaneApi()
   webview = createWebview()
+  reportClientHostedGuestMetadata({ webContentsId: 42, url: FAILED_URL, title: 'Selfsigned' })
   mocks.attach.mockReturnValue({
     webview,
     detach: vi.fn(),
@@ -53,6 +57,77 @@ afterEach(() => {
 
 /** Worktree switches unmount chrome while retaining the guest; use the real store because clearing loadError also deletes its certificate record. */
 describe('ClientHostedBrowserPagePane failure records across a remount', () => {
+  it('retains the saved title until a first committed document exists, including a failed first load', () => {
+    reportClientHostedGuestMetadata({
+      webContentsId: 42,
+      navigationRevision: 0,
+      url: '',
+      title: '',
+      kind: 'snapshot'
+    })
+    render(<StoreDrivenPane />)
+    expect(storedPage().title).toBe('Selfsigned')
+    act(() => reportClientHostedGuestMetadata({ webContentsId: 42, kind: 'start', loading: true }))
+    expect(storedPage().title).toBe('Selfsigned')
+    act(() => reportClientHostedGuestMetadata({ webContentsId: 42, kind: 'stop', loading: false }))
+    expect(storedPage().url).toBe(FAILED_URL)
+    expect(storedPage().title).toBe('Selfsigned')
+    act(() =>
+      reportClientHostedGuestMetadata({
+        webContentsId: 42,
+        kind: 'failure',
+        loading: false,
+        loadError: { code: -105, description: 'ERR_NAME_NOT_RESOLVED', validatedUrl: FAILED_URL }
+      })
+    )
+    expect(storedPage().title).toBe('Selfsigned')
+  })
+
+  it('reconciles a hidden commit on settlement even when metadata publication never answers', () => {
+    vi.mocked(window.api.browser.publishClientPageMetadata).mockImplementation(
+      () => new Promise(() => {})
+    )
+    const view = render(<StoreDrivenPane />)
+    act(() => view.unmount())
+    reportClientHostedGuestMetadata({
+      webContentsId: 42,
+      kind: 'navigation',
+      url: 'https://example.internal/next',
+      loading: true,
+      navigationRevision: 2
+    })
+    render(<StoreDrivenPane />)
+    act(() => reportClientHostedGuestMetadata({ webContentsId: 42, kind: 'stop', loading: false }))
+    expect(storedPage().url).toBe('https://example.internal/next')
+    expect(storedPage().loading).toBe(false)
+    expect(storedPage().loadError).toBeNull()
+  })
+
+  it('clears a standing failure after a successful same-URL reload', () => {
+    render(<StoreDrivenPane />)
+    failLoad()
+    act(() =>
+      reportClientHostedGuestMetadata({
+        webContentsId: 42,
+        kind: 'start',
+        loading: true,
+        loadError: null,
+        hasCertificateFailure: false
+      })
+    )
+    expect(storedPage().loadError?.validatedUrl).toBe(FAILED_URL)
+    act(() =>
+      reportClientHostedGuestMetadata({
+        webContentsId: 42,
+        kind: 'navigation',
+        navigationRevision: 2
+      })
+    )
+    expect(storedPage().loadError).toBeNull()
+    expect(useAppStore.getState().browserCertificateFailuresByPageId['page-a']).toBeUndefined()
+    expect(screen.queryByRole('heading', { name: "Connection isn't secure" })).toBeNull()
+  })
+
   it('keeps the failure and the certificate record when the guest still sits on the failed page', () => {
     const view = render(<StoreDrivenPane />)
     failLoad()
@@ -73,7 +148,7 @@ describe('ClientHostedBrowserPagePane failure records across a remount', () => {
 
     act(() => view.unmount())
     // Failed guests report chrome-error://chromewebdata/, which matches neither recorded URL.
-    webview.getURL.mockReturnValue('chrome-error://chromewebdata/')
+    reportClientHostedGuestMetadata({ webContentsId: 42, errorPage: true })
     render(<StoreDrivenPane />)
 
     expect(storedPage().loadError?.validatedUrl).toBe(FAILED_URL)
@@ -87,7 +162,14 @@ describe('ClientHostedBrowserPagePane failure records across a remount', () => {
 
     act(() => view.unmount())
     // A navigation while unmounted is observable only through remount sync.
-    webview.getURL.mockReturnValue('https://example.internal/recovered')
+    reportClientHostedGuestMetadata({
+      webContentsId: 42,
+      kind: 'navigation',
+      url: 'https://example.internal/recovered',
+      loadError: null,
+      hasCertificateFailure: false,
+      errorPage: false
+    })
     render(<StoreDrivenPane />)
 
     expect(storedPage().loadError).toBeNull()
@@ -131,6 +213,13 @@ function failLoad(): void {
   })
   act(() => {
     useAppStore.getState().setBrowserPageCertificateFailure('page-a', certificateFailure())
+    reportClientHostedGuestMetadata({
+      webContentsId: 42,
+      kind: 'failure',
+      loading: false,
+      hasCertificateFailure: true,
+      loadError: { code: -202, description: 'ERR_CERT_AUTHORITY_INVALID', validatedUrl: FAILED_URL }
+    })
   })
 }
 

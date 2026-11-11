@@ -233,7 +233,6 @@ export function BrowserPagePane({
   useBrowserPageWebviewUrlSync({
     browserTabId: browserTab.id,
     browserTabUrl: browserTab.url,
-    browserTabLoading: browserTab.loading,
     isActive,
     isPaintable,
     slotViewport,
@@ -242,9 +241,6 @@ export function BrowserPagePane({
     lastKnownWebviewUrlRef,
     keepAddressBarFocusRef,
     addressBarInputRef,
-    browserTabUrlRef,
-    addressBarValueRef,
-    onUpdatePageStateRef,
     focusWebviewNow
   })
   const reload = useBrowserPageReloadActions({

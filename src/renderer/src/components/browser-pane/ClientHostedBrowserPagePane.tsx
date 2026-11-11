@@ -1,14 +1,13 @@
+import type { BrowserGuestMetadata } from '../../../../shared/browser/guest-lifecycle/browser-guest-metadata'
 import { useCallback, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import { useBrowserAgentCursor } from './agent-cursor/use-browser-agent-cursor'
 import { BrowserPageFeedbackBadge } from './assemble-chrome/browser-page-feedback-badge'
 import { BrowserLinkStatusBubble } from './assemble-chrome/browser-link-status-bubble'
 import { useAppStore } from '@/store'
 import type { BrowserLoadError } from '../../../../shared/browser-workspace-types'
-import {
-  readBrowserClientPageGuestMetadataIfLive,
-  createBrowserClientPageLoadFailureHandler,
-  bindBrowserClientPageGuestEvents
-} from './browser-client-page-guest-metadata'
+import { createBrowserClientPageLoadFailureHandler } from './browser-client-page-guest-metadata'
+import { subscribeBrowserGuestMetadata } from './host-guest/browser-guest-metadata-cache'
+import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import {
   forgetBrowserClientPageMetadataReports,
   startBrowserClientPageMetadataPublisher
@@ -32,7 +31,6 @@ import { useWebviewGuestFocus } from './assemble-chrome/browser-page-guest-focus
 import { RemoteRuntimeEgressIndicator } from './assemble-chrome/browser-egress-indicator'
 import { useBrowserPageWebviewShortcuts } from './host-guest/use-browser-page-webview-shortcuts'
 import { useBrowserPageZoomFeedback } from './host-guest/use-browser-page-zoom-feedback'
-import { isPageDocumentNavigationStart } from './host-guest/browser-page-webview-navigation-handlers'
 import { ClientHostedBrowserLoadFailure } from './client-hosted-browser-load-failure'
 import { useClientHostedPageUrlSubmission } from './navigate/use-client-hosted-page-url-submission'
 import '@/lib/browser/documents/file-preview'
@@ -40,7 +38,6 @@ import { convertBrowserPageToWorkspaceDoc } from '@/lib/browser/documents/file-p
 import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
 import { BrowserNewTabPage } from './new-tab/BrowserNewTabPage'
 import { useBrowserPageReloadActions } from './navigate/use-browser-page-reload-actions'
-import { resolveActiveBrowserLoadFailure } from './navigate/browser-load-failure-for-url'
 import { consumeBrowserPageDeferredNavigation } from './navigate/browser-page-deferred-navigation'
 import { getBrowserDisplayTitle, toDisplayUrl } from './describe-page/browser-page-url-display'
 import type { ClientHostedBrowserPagePaneProps } from './describe-page/browser-page-types'
@@ -117,7 +114,6 @@ export function ClientHostedBrowserPagePane({
 
   useBrowserClientHostedPopupNotices(browserTab.id)
   useBrowserClientHostedPermissionNotices(browserTab.id)
-  // Only consume the one-time tour after placement and attachment make its controls usable.
   useClientHostedBrowserIntroTour(isActive && !attachmentError && placement !== null)
   useBrowserPageFindShortcuts({ ...shortcutOwner, setFindOpen })
   useBrowserPageWebviewShortcuts({
@@ -137,6 +133,11 @@ export function ClientHostedBrowserPagePane({
     setAddressBarValue
   })
   const runDeferredNavigation = useEffectEvent(navigateToUrl)
+  const readPendingPageMetadata = useEffectEvent(() => ({
+    url: browserTab.url,
+    title: browserTab.title,
+    loading: browserTab.loading
+  }))
   // The guest lives in a body-level host that paints above the pane, so the cursor joins it there.
   const getAgentCursorHost = useCallback(
     () => webviewRef.current?.parentElement ?? null,
@@ -170,7 +171,7 @@ export function ClientHostedBrowserPagePane({
       return
     }
     const webview = attachment.webview
-    // Guest loss uses the existing recovery notice and clears pending loading state.
+    let guestAvailable = true
     let releaseGuest = (): void => attachment.detach()
     const guestLoss = watchBrowserClientPageGuestLoss({
       webview,
@@ -178,16 +179,11 @@ export function ClientHostedBrowserPagePane({
       browserPageId: browserTab.id,
       pageHostGeneration,
       onLost: () => {
+        guestAvailable = false
         releaseGuest()
         retryGuestRecoveryRef.current()
       }
     })
-    // Main can destroy the guest while its tag still holds the stale id.
-    const attachedMetadata = readBrowserClientPageGuestMetadataIfLive(webview)
-    if (!attachedMetadata) {
-      guestLoss.lose('unreadable')
-      return guestLoss.dispose()
-    }
     const publisher = startBrowserClientPageMetadataPublisher({
       browserPageId: browserTab.id,
       environmentId: runtimeEnvironmentId,
@@ -201,72 +197,95 @@ export function ClientHostedBrowserPagePane({
     })
     webviewRef.current = webview
     setAttachmentError(null)
-    // Reconcile restored failures once; failed navigations this session may never commit a URL.
-    activeLoadFailureRef.current = resolveActiveBrowserLoadFailure(
-      activeLoadFailureRef.current,
-      attachedMetadata.url
-    )
-    const syncNavigation = (event?: Event): void => {
-      const eventUrl = (event as (Event & { url?: string }) | undefined)?.url
-      const metadata = readBrowserClientPageGuestMetadataIfLive(webview, eventUrl)
-      if (!metadata) {
+    let appliedUrl: string | null = null
+    const receiveMetadata = (state: BrowserGuestMetadata | null): void => {
+      if (!state || state.kind === 'retired') {
         guestLoss.lose('unreadable')
         return
       }
-      // A commit is a successful load; did-stop-loading must preserve the preceding did-fail-load overlay.
-      if (event?.type === 'did-navigate') {
+      const metadata = {
+        url: redactKagiSessionToken(state.url || 'about:blank'),
+        title: state.title,
+        loading: state.loading,
+        canGoBack: state.canGoBack,
+        canGoForward: state.canGoForward
+      }
+      if (
+        state.kind === 'navigation' ||
+        ((state.kind === 'stop' || (state.kind === 'snapshot' && !state.loading)) &&
+          state.navigationRevision > 0 &&
+          !state.loadError &&
+          !state.hasCertificateFailure &&
+          !state.errorPage)
+      ) {
         activeLoadFailureRef.current = null
+      }
+      if (state.kind === 'navigation') {
         setFindOpen(false)
       }
+      if (state.loadError) {
+        activeLoadFailureRef.current = state.loadError
+      }
       const activeLoadFailure = activeLoadFailureRef.current
-      // URL writes clear certificate challenges, so preserve them while a failure stands.
-      if (!activeLoadFailure) {
-        setUrlFromGuest(browserTab.id, metadata.url, { preserveLoadError: true })
+      const observeUrl =
+        state.navigationRevision > 0 &&
+        !state.errorPage &&
+        !state.loadError &&
+        !state.hasCertificateFailure &&
+        (state.kind === 'navigation' ||
+          state.kind === 'in-page' ||
+          state.kind === 'stop' ||
+          (state.kind === 'snapshot' && state.navigationRevision > 0 && !state.loading))
+      if (observeUrl && !activeLoadFailure) {
+        if (appliedUrl !== metadata.url) {
+          appliedUrl = metadata.url
+          setUrlFromGuest(browserTab.id, metadata.url, { preserveLoadError: true })
+        }
+        setAddressBarValueFromPage(toDisplayUrl(metadata.url))
       }
       updatePageStateFromGuest(browserTab.id, {
-        title: metadata.title,
-        loading: metadata.loading,
+        ...(state.navigationRevision > 0 ? { title: metadata.title } : {}),
+        ...(state.kind === 'snapshot' && state.navigationRevision === 0
+          ? {}
+          : { loading: metadata.loading }),
         canGoBack: metadata.canGoBack,
         canGoForward: metadata.canGoForward,
         loadError: activeLoadFailure
       })
-      publisher.publish(metadata)
-      // Address-bar suggestions use the client's URL history, including client-hosted pages.
-      recordHistoryFromGuest(metadata.url, getBrowserDisplayTitle(metadata.title, metadata.url))
-      setAddressBarValueFromPage(toDisplayUrl(metadata.url))
+      if (state.navigationRevision > 0) {
+        publisher.publish(metadata)
+      } else if (state.kind !== 'title') {
+        const pending = readPendingPageMetadata()
+        publisher.publish({
+          ...metadata,
+          ...pending,
+          loading: state.kind === 'snapshot' ? pending.loading : state.loading
+        })
+      }
+      if (observeUrl || state.kind === 'title') {
+        recordHistoryFromGuest(metadata.url, getBrowserDisplayTitle(metadata.title, metadata.url))
+      }
     }
-    const onStart = (event: Electron.DidStartNavigationEvent): void => {
-      if (!isPageDocumentNavigationStart(event)) {
-        return
-      }
-      // Why: a standing failure (and its auto-retry) stays up until a load commits or fails anew.
-      updatePageStateFromGuest(browserTab.id, { loading: true })
-      const startMetadata = readBrowserClientPageGuestMetadataIfLive(webview, undefined, true)
-      if (!startMetadata) {
-        guestLoss.lose('unreadable')
-        return
-      }
-      publisher.publish(startMetadata)
-    }
-    const onFailLoad = createBrowserClientPageLoadFailureHandler(
-      webview,
-      () => guestLoss.lose('unreadable'),
-      (loadError) => {
-        activeLoadFailureRef.current = loadError
-        updatePageStateFromGuest(browserTab.id, { loading: false, loadError })
-      }
-    )
-    const unbind = bindBrowserClientPageGuestEvents(webview, onStart, syncNavigation, onFailLoad)
+    const onFailLoad = createBrowserClientPageLoadFailureHandler(webview, (loadError) => {
+      activeLoadFailureRef.current = loadError
+      updatePageStateFromGuest(browserTab.id, { loading: false, loadError })
+    })
+    webview.addEventListener('did-fail-load', onFailLoad)
+    let unsubscribeMetadata = (): void => {}
     const cleanupGuest = (): void => {
-      unbind()
+      unsubscribeMetadata()
+      webview.removeEventListener('did-fail-load', onFailLoad)
       guestLoss.dispose()
       publisher.dispose()
       forgetBrowserClientPageMetadataReports(browserTab.id)
       attachment.detach()
     }
     releaseGuest = cleanupGuest
-    syncNavigation()
-    // Resume navigation submitted before host adoption.
+    unsubscribeMetadata = subscribeBrowserGuestMetadata(browserTab.id, webview, receiveMetadata)
+    if (!guestAvailable) {
+      cleanupGuest()
+      return cleanupGuest
+    }
     const deferredUrl = consumeBrowserPageDeferredNavigation(browserTab.id)
     if (deferredUrl) {
       runDeferredNavigation(deferredUrl)

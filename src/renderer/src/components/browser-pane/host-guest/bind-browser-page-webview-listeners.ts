@@ -1,3 +1,5 @@
+import { subscribeBrowserGuestMetadata } from './browser-guest-metadata-cache'
+import { getBrowserDisplayTitle } from '../describe-page/browser-page-url-display'
 import { publishNativeChatVisualGuestTheme } from '@/components/native-chat/media/visuals/NativeChatVisualGuestThemePublisher'
 import { normalizeBrowserGuestSrc } from '../../../../../shared/browser/extensions/browser-extension-url'
 import '../../../../../shared/constants'
@@ -48,7 +50,6 @@ export function bindBrowserPageWebviewListeners({
     onUpdatePageStateRef,
     setGuestRecoveryGeneration,
     focusAddressBarNow,
-    syncNavigationState,
     syncBrowserAnnotationViewportBridge,
     faviconUrlRef,
     addressBarInputRef,
@@ -84,7 +85,6 @@ export function bindBrowserPageWebviewListeners({
       onUpdatePageStateRef,
       setGuestRecoveryGeneration,
       focusAddressBarNow,
-      syncNavigationState,
       syncBrowserAnnotationViewportBridge
     })
 
@@ -142,19 +142,55 @@ export function bindBrowserPageWebviewListeners({
   webview.addEventListener('focus', dismissAddressBarSuggestions)
   webview.addEventListener('did-start-navigation', handleDidStartNavigation)
   webview.addEventListener('did-redirect-navigation', handleDidRedirectNavigation)
-  webview.addEventListener('did-stop-loading', handleDidStopLoading)
   // Why: close find only on full 'did-navigate', not the shared handler, which also fires on SPA in-page hash/pushState changes.
   const handleFindCloseOnNavigate = (): void => {
     setFindOpen(false)
+    const recovery = recoveryNavigationValidationRef.current
+    if (recovery?.started) {
+      recovery.committed = true
+    }
   }
 
-  webview.addEventListener('did-navigate', handleFullDidNavigate)
   webview.addEventListener('did-navigate', handleFindCloseOnNavigate)
-  webview.addEventListener('did-navigate-in-page', handleDidNavigateInPage)
-  webview.addEventListener('page-title-updated', handleTitleUpdate)
   webview.addEventListener('page-favicon-updated', handleFaviconUpdate)
   webview.addEventListener('did-fail-load', handleFailLoad)
   webview.addEventListener('console-message', handleAnnotationViewportMessage)
+
+  const unsubscribeMetadata = subscribeBrowserGuestMetadata(browserTabId, webview, (metadata) => {
+    if (!metadata || metadata.kind === 'retired') {
+      return
+    }
+    const { kind, url, title, loading, canGoBack, canGoForward } = metadata
+    if (metadata.loadError) {
+      activeLoadFailureRef.current = metadata.loadError
+    }
+    if (kind === 'navigation') {
+      handleFullDidNavigate({ url })
+    } else if (kind === 'in-page') {
+      handleDidNavigateInPage({ url })
+    }
+    if (kind === 'title' && metadata.navigationRevision > 0) {
+      handleTitleUpdate({ title })
+    }
+    const settlement =
+      kind === 'stop' || (kind === 'snapshot' && !loading && metadata.navigationRevision > 0)
+        ? handleDidStopLoading()
+        : null
+    onUpdatePageStateRef.current(browserTabId, {
+      ...settlement,
+      ...(metadata.navigationRevision > 0
+        ? { title: getBrowserDisplayTitle(title, url || browserTabUrlRef.current) }
+        : {}),
+      canGoBack,
+      canGoForward,
+      ...(metadata.loadError
+        ? { loadError: metadata.loadError }
+        : kind === 'navigation'
+          ? { loadError: activeLoadFailureRef.current }
+          : {}),
+      ...(kind === 'snapshot' && metadata.navigationRevision === 0 ? {} : { loading })
+    })
+  })
 
   if (needsInitialNavigation) {
     publishNativeChatVisualGuestTheme()
@@ -172,6 +208,7 @@ export function bindBrowserPageWebviewListeners({
   }
 
   return () => {
+    unsubscribeMetadata()
     webview.removeEventListener('did-attach', handleDidAttach)
     webview.removeEventListener('dom-ready', handleDomReady)
     webview.removeEventListener('render-process-gone', guestRecovery.recoverRenderer)
@@ -179,11 +216,7 @@ export function bindBrowserPageWebviewListeners({
     webview.removeEventListener('focus', dismissAddressBarSuggestions)
     webview.removeEventListener('did-start-navigation', handleDidStartNavigation)
     webview.removeEventListener('did-redirect-navigation', handleDidRedirectNavigation)
-    webview.removeEventListener('did-stop-loading', handleDidStopLoading)
-    webview.removeEventListener('did-navigate', handleFullDidNavigate)
     webview.removeEventListener('did-navigate', handleFindCloseOnNavigate)
-    webview.removeEventListener('did-navigate-in-page', handleDidNavigateInPage)
-    webview.removeEventListener('page-title-updated', handleTitleUpdate)
     webview.removeEventListener('page-favicon-updated', handleFaviconUpdate)
     webview.removeEventListener('did-fail-load', handleFailLoad)
     webview.removeEventListener('console-message', handleAnnotationViewportMessage)
