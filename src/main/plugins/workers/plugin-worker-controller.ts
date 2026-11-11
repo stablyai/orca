@@ -93,7 +93,8 @@ export class PluginWorkerController {
           this.options.contentVerifier.verifyNow({
             pluginKey: plugin.pluginKey,
             rootDir: plugin.rootDir,
-            contentHash: spec.reviewedContentHash ?? null
+            contentHash: spec.reviewedContentHash ?? null,
+            devFolder: plugin.isDev
           })
       })
       if (!this.options.isCurrentApproved(spec)) {
