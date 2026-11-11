@@ -213,9 +213,10 @@ export function ClientHostedBrowserPagePane({
         releaseGuest()
         return
       }
+      const url = redactKagiSessionToken(state.url)
       const metadata = {
-        url: redactKagiSessionToken(state.url),
-        title: state.title,
+        url,
+        title: state.title || url,
         loading: state.loading,
         canGoBack: state.canGoBack,
         canGoForward: state.canGoForward

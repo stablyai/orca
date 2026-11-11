@@ -289,6 +289,29 @@ describe('ClientHostedBrowserPagePane failure records across a remount', () => {
     })
   })
 
+  it('keeps a useful local and published identity when the current document clears its title', async () => {
+    await act(async () => {
+      render(<StoreDrivenPane />)
+    })
+    await act(async () => {
+      reportClientHostedGuestMetadata({
+        webContentsId: 42,
+        kind: 'title',
+        title: ''
+      })
+    })
+    expect(storedPage()).toMatchObject({
+      url: 'https://selfsigned.internal/',
+      title: 'https://selfsigned.internal/'
+    })
+    expect(
+      vi.mocked(window.api.browser.publishClientPageMetadata).mock.calls.at(-1)?.[0].params
+    ).toMatchObject({
+      url: 'https://selfsigned.internal/',
+      title: 'https://selfsigned.internal/'
+    })
+  })
+
   it('retains the saved title until a first committed document exists, including a failed first load', () => {
     reportClientHostedGuestMetadata({
       webContentsId: 42,
