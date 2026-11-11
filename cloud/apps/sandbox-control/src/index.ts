@@ -1840,7 +1840,9 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
   }
   if (url.pathname.startsWith('/v1/team/members/') || url.pathname.startsWith('/v1/team/pokes')) {
     try {
-      const answer = await teamPresenceRoute(db, caller, request, url, now, () => readJson(request))
+      const answer = await teamPresenceRoute(db, caller, request, url, now, () => readJson(request), {
+        activitySharing: env.TEAMMATE_ACTIVITY_SHARING === 'team' ? 'team' : 'opt_in'
+      })
       return answer === null ? fail('not_found', 404) : json(answer)
     } catch (error) {
       if (error instanceof TeamPresenceError) {

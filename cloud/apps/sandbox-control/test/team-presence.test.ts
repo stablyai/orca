@@ -86,6 +86,14 @@ describe('teammate profiles', () => {
     expect(tokenAndCompute - own.usdMicros[today - 1]).toBe(500_000 + 300_000)
   })
 
+  it('shares every teammate\'s activity when the account config says team', async () => {
+    const h = await createHarness({ TEAMMATE_ACTIVITY_SHARING: 'team' })
+    const bob = await h.token('bob', 'acme', 'sandbox', { org_role: 'member' })
+    const seen = await h.call('GET', '/v1/team/members/alice/profile', { bearer: bob })
+    expect(seen.body.profile.usage.levels).toHaveLength(182)
+    expect(seen.body.profile.usage.own).toBeNull()
+  })
+
   it('keeps personal accounts to themselves and rejects bad ids', async () => {
     const t = await team()
     const solo = { sub: 'solo', orgRole: 'owner' as const, org: '' }

@@ -129,7 +129,16 @@ function requireTeam(caller: SandboxCaller): void {
   }
 }
 
-export async function memberProfile(db: D1Database, caller: SandboxCaller, userId: string, url: URL, now: number) {
+export type ActivitySharing = 'opt_in' | 'team'
+
+export async function memberProfile(
+  db: D1Database,
+  caller: SandboxCaller,
+  userId: string,
+  url: URL,
+  now: number,
+  activitySharing: ActivitySharing = 'opt_in'
+) {
   const self = userId === caller.userId
   if (!self && !caller.orgId) {
     // A personal account has no teammates.
@@ -153,7 +162,7 @@ export async function memberProfile(db: D1Database, caller: SandboxCaller, userI
     caller.orgId && !self ? pokesEnabled(db, caller.accountId, userId) : Promise.resolve(false)
   ])
   // Your own heatmap always; a teammate's only when they chose to share it.
-  const usage = self || theirs ? await memberDailyUsage(db, caller.accountId, userId, now, utcOffsetMin) : null
+  const usage = self || theirs || activitySharing === 'team' ? await memberDailyUsage(db, caller.accountId, userId, now, utcOffsetMin) : null
   return {
     profile: {
       userId,
@@ -292,7 +301,8 @@ export async function teamPresenceRoute(
   request: Request,
   url: URL,
   now: number,
-  readJson: () => Promise<unknown>
+  readJson: () => Promise<unknown>,
+  options: { activitySharing?: ActivitySharing } = {}
 ): Promise<unknown | null> {
   const member = /^\/v1\/team\/members\/([^/]+)\/(profile|poke)$/.exec(url.pathname)
   if (member) {
@@ -306,7 +316,7 @@ export async function teamPresenceRoute(
       throw new TeamPresenceError(400, 'invalid_request')
     }
     if (member[2] === 'profile' && request.method === 'GET') {
-      return memberProfile(db, caller, userId, url, now)
+      return memberProfile(db, caller, userId, url, now, options.activitySharing)
     }
     if (member[2] === 'poke' && request.method === 'POST') {
       return sendPoke(db, caller, userId, now)
