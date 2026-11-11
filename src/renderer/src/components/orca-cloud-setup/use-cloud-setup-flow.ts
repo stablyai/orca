@@ -104,7 +104,9 @@ export function useCloudSetupFlow(
   const access = accessOverride ?? fetched
   const availability = useLiveAvailability(request.repoId, request.availability, !accessOverride)
   const [sessionId, setSessionId] = useState<string | null>(null)
-  const [inBrowser, setInBrowser] = useState(false)
+  // The step that was current when the browser opened. A setup session covers every step it was
+  // opened for, so it waits on all of them; a single hop (GitHub install, billing) only on its own.
+  const [browserStep, setBrowserStep] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [agentSkipped, setAgentSkipped] = useState(() => isCloudSetupAgentSkipped(request.agent))
   const githubOverride = useMemo<CloudSetupStep | null>(
@@ -154,6 +156,11 @@ export function useCloudSetupFlow(
     stepsRef.current = steps
   }, [steps])
 
+  const markInBrowser = useCallback(
+    () => setBrowserStep(cloudSetupPageModel(stepsRef.current).current?.id ?? null),
+    []
+  )
+
   const fallback = useCallback(
     () => setupActionFor(stepsRef.current, access, availability)?.(),
     [access, availability]
@@ -163,20 +170,20 @@ export function useCloudSetupFlow(
   const continueInBrowser = useCallback(() => {
     const needs = sessionNeedsFrom(stepsRef.current)
     if (needs.length > 0 && needs.every((need) => need === 'github')) {
-      setInBrowser(true)
+      markInBrowser()
       void openInstall()
       return
     }
     const start = getCloudSetupStarter()
     if (!start) {
-      setInBrowser(true)
+      markInBrowser()
       fallback()
       return
     }
     setBusy(true)
     void start({ repoId: request.repoId, needs })
       .then((opened) => {
-        setInBrowser(true)
+        markInBrowser()
         if (opened) {
           setSessionId(opened.sessionId)
         } else {
@@ -185,7 +192,7 @@ export function useCloudSetupFlow(
       })
       .catch(() => fallback())
       .finally(() => setBusy(false))
-  }, [fallback, openInstall, request.repoId])
+  }, [fallback, markInBrowser, openInstall, request.repoId])
 
   const startTrial = useCallback(() => {
     setBusy(true)
@@ -200,15 +207,15 @@ export function useCloudSetupFlow(
   }, [continueInBrowser])
 
   const fixBilling = useCallback(() => {
-    setInBrowser(true)
+    markInBrowser()
     invalidateOrcaCloudBilling({ refetchNow: false })
     fallback()
-  }, [fallback])
+  }, [fallback, markInBrowser])
 
   const installGitHub = useCallback(() => {
-    setInBrowser(true)
+    markInBrowser()
     void openInstall()
-  }, [openInstall])
+  }, [markInBrowser, openInstall])
 
   const skipAgent = useCallback(() => {
     rememberCloudSetupAgentSkipped(request.agent)
@@ -220,7 +227,7 @@ export function useCloudSetupFlow(
   return {
     ...model,
     busy,
-    inBrowser,
+    inBrowser: browserStep !== null && (sessionId !== null || model.current?.id === browserStep),
     error,
     canManageBilling: access.state === 'no-plan' ? access.canManageBilling : true,
     teamAction: switchTeam?.action ?? null,
