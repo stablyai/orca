@@ -51,6 +51,9 @@ export function createElectronModuleMock(): Record<string, unknown> {
     app: {
       focus: vi.fn()
     },
+    nativeImage: {
+      createFromDataURL: (dataUrl: string) => ({ dataUrl, isEmpty: () => false })
+    },
     shell: {
       openExternal: shellOpenExternalMock
     }

@@ -1,4 +1,5 @@
 import { formatAgentTypeLabel } from '../../shared/agent-status/presentation/agent-type-label'
+import type { NativeImage } from 'electron'
 import type { NotificationDispatchRequest } from '../../shared/notification-settings-types'
 
 type NotificationTranslator = (key: string, fallback: string) => string
@@ -16,6 +17,7 @@ export function buildNotificationOptions(
   title: string
   body: string
   silent?: boolean
+  icon?: NativeImage
 } {
   if (args.source === 'terminal-bell') {
     const attention = translate('notifications.bell.attentionRequested', 'Attention requested')

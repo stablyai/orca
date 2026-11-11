@@ -44,8 +44,9 @@ function register(
   const reconcileStructuredPromptAttention = (state: StructuredAttentionState) =>
     controller?.reconcileStructuredPromptAttention(state)
   registerNotificationHandlers(
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these paths read only getSettings; Store is a class, so a structural double needs the cast.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these paths read only getSettings and getRepo; Store is a class, so a structural double needs the cast.
     {
+      getRepo: () => undefined,
       getSettings: () => ({
         notifications: {
           enabled: true,
