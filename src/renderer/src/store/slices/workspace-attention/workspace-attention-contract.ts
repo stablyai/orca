@@ -34,7 +34,10 @@ export type WorkspaceAttentionSlice = {
   /** An admitted, unviewed agent completion or prompt (terminal or structured chat). */
   markAgentAttentionUnread: (write: AgentAttentionUnreadWrite) => void
   /** Read all markers of tabs shown in a focused, present window. screenArrived includes tab/workspace/host/focus changes and settles flags even without removed markers. */
-  readOnScreenAttention: (screen: OnScreenAttention, options: { screenArrived: boolean }) => void
+  readOnScreenAttention: (
+    screen: OnScreenAttention,
+    options: { screenArrived: boolean; markersRead?: boolean }
+  ) => void
   /** Workspaces the user marked unread this session, so the slot can say so instead of guessing. Renderer-local. */
   workspacesMarkedUnreadByUser: Record<string, true>
   /** Sidebar "Mark as read" (also removes every marker and reads every agent in the workspace) / "Mark as unread". */

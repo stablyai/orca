@@ -125,13 +125,17 @@ export const createWorkspaceAttentionSlice: StateCreator<
         markPaneUnread(subjectKey, reason)
       }
     },
-    readOnScreenAttention: ({ workspaceIds, targets }, { screenArrived }) => {
+    readOnScreenAttention: ({ workspaceIds, targets }, { screenArrived, markersRead }) => {
       // Arriving fulfils "come back to this", even while other tabs still hold markers.
       if (screenArrived) {
         setWorkspacesMarkedUnreadByUser(workspaceIds, false)
       }
-      // Read marker-free flags on screen arrival (manual unread/restart/peer), not on every scan.
-      if (removeAndDismiss(targets.map((target) => target.tabId)) !== null || screenArrived) {
+      // Agent acknowledgement may already have removed this scan's completion markers.
+      if (
+        removeAndDismiss(targets.map((target) => target.tabId)) !== null ||
+        markersRead ||
+        screenArrived
+      ) {
         for (const workspaceId of workspaceIds) {
           settleWorkspaceUnreadFlag(set, get, workspaceId, onScreenHostId(get(), workspaceId))
         }
