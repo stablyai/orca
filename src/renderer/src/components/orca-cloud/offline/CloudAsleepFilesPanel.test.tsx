@@ -3,7 +3,7 @@
 import { cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CloudOfflineSnapshot } from '../../../../../shared/hosted-sandbox/cloud-workspace-offline-api'
-import { CloudAsleepFilesPanel, formatWhen } from './CloudAsleepFilesPanel'
+import { CloudAsleepFilesPanel, changeStatusLetter, formatWhen } from './CloudAsleepFilesPanel'
 
 const NOW = 1_800_000_000_000
 const DAY = 24 * 60 * 60 * 1000
@@ -43,6 +43,12 @@ describe('asleep Files tab (RA-10)', () => {
   it('shows recent times relatively and old ones as a date', () => {
     expect(formatWhen(NOW - 47_000, NOW, 'en-US', t)).toBe('47s ago')
     expect(formatWhen(NOW - 5362 * DAY, NOW, 'en-US', t)).toMatch(/^[A-Z][a-z]{2} \d{1,2}, \d{4}$/)
+  })
+
+  it('shows a change status as one letter, like the explorer (the snapshot says "modified")', () => {
+    expect(
+      ['modified', 'untracked', 'added', 'deleted', 'renamed', '?', 'M'].map(changeStatusLetter)
+    ).toEqual(['M', 'U', 'A', 'D', 'R', 'U', 'M'])
   })
 
   it('lists changed files, then recent commits on the branch, then Wake', async () => {

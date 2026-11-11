@@ -10,6 +10,15 @@ import type { CloudOfflineSnapshot } from '../../../../../shared/hosted-sandbox/
 
 const RELATIVE_LIMIT_MS = 30 * 24 * 60 * 60 * 1000
 
+/** The snapshot names a change's status in words ("modified", "untracked"); the explorer's letter. */
+export function changeStatusLetter(status: string): string {
+  const word = status.trim().toLowerCase()
+  if (word === 'untracked' || word === '?' || word === '??') {
+    return 'U'
+  }
+  return (word[0] ?? '?').toUpperCase()
+}
+
 /** "47s ago" for anything recent; a date beyond about a month ("5,362 days ago" is unreadable). */
 export function formatWhen(at: number, now: number, locale: string, t: Translate): string {
   const ago = Math.max(0, now - at)
@@ -132,7 +141,9 @@ function SavedChanges({
       <ul className="flex flex-col gap-0.5">
         {git.changes.map((change) => (
           <li key={change.path} className="flex min-w-0 items-baseline gap-2">
-            <span className="w-3 shrink-0 font-mono text-muted-foreground">{change.status}</span>
+            <span className="w-3 shrink-0 font-mono text-muted-foreground" title={change.status}>
+              {changeStatusLetter(change.status)}
+            </span>
             <span className="min-w-0 truncate font-mono text-foreground" title={change.path}>
               {change.path}
             </span>
