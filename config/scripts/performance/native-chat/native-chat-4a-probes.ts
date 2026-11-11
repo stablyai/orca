@@ -1,20 +1,10 @@
 // Arm-neutral 4a probes: renderer-clock end points, host CPU/event-loop work, memory and on-disk storage, read from outside product code.
 import { readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
-import type { Performance as NodePerformance } from 'node:perf_hooks'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
-import { retryTransientMainEvaluate } from '../../../../tests/e2e/helpers/electron-main-evaluate-retry'
 import { summarizeEventLoopDelay } from '../../../../tests/e2e/helpers/event-loop-delay-report'
 
-type ProbeState = { seen: Map<string, number>; mutations: number[]; watch: Set<string> }
-
-declare global {
-  // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
-  interface Window {
-    /** The 4a visibility probe, installed by installVisibilityProbe. */
-    __4a?: ProbeState
-  }
-}
+export { installVisibilityProbe, watchMarkers } from './native-chat-4a-visibility'
 
 /** The refusal some writes (create, fork) carry inside a successful call: `{ ok: false, refusal }`. */
 function inResultRefusal(result: unknown): { refusal: unknown } | null {
@@ -62,59 +52,6 @@ export async function rpc<T>(
   return { value, refused, startedAt: answer.startedAt, hostMs: answer.hostMs }
 }
 
-/** Install once per page: records when text first appears in the chat root and every transcript mutation batch. */
-export async function installVisibilityProbe(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    if (window.__4a) {
-      return
-    }
-    const state: ProbeState = { seen: new Map(), mutations: [], watch: new Set() }
-    window.__4a = state
-    const check = (): void => {
-      const now = performance.now()
-      state.mutations.push(now)
-      if (state.mutations.length > 200_000) {
-        state.mutations.splice(0, 100_000)
-      }
-      if (state.watch.size === 0) {
-        return
-      }
-      // Text still in the composer is not sent: count only occurrences outside it.
-      // Hidden tabs can stay mounted; only the chat the user sees counts.
-      const root = [...document.querySelectorAll('[data-native-chat-root="true"]')].find(
-        (candidate) => candidate.checkVisibility()
-      )
-      const text = root?.textContent ?? ''
-      const draft = root?.querySelector('[role="textbox"]')?.textContent ?? ''
-      const count = (value: string, marker: string): number => value.split(marker).length - 1
-      for (const marker of state.watch) {
-        if (count(text, marker) > count(draft, marker)) {
-          state.seen.set(marker, now)
-          state.watch.delete(marker)
-        }
-      }
-    }
-    new MutationObserver(check).observe(document.body, {
-      subtree: true,
-      childList: true,
-      characterData: true
-    })
-  })
-}
-
-export async function watchMarkers(page: Page, markers: string[]): Promise<void> {
-  await page.evaluate((markers) => {
-    const state = window.__4a
-    if (!state) {
-      throw new Error('4a visibility probe not installed')
-    }
-    for (const marker of markers) {
-      state.seen.delete(marker)
-      state.watch.add(marker)
-    }
-  }, markers)
-}
-
 /** Renderer-clock time a marker became visible, waiting up to `timeoutMs`. */
 export async function markerSeenAt(
   page: Page,
@@ -133,6 +70,7 @@ export async function markerSeenAt(
       { timeout: timeoutMs, polling: 16 }
     )
     .catch(async (error: unknown) => {
+      await page.evaluate((marker) => window.__4a?.cancel(marker), marker)
       throw new Error(
         `${marker} not visible in ${timeoutMs} ms (${await visibleChatState(page)})`,
         {
@@ -140,7 +78,11 @@ export async function markerSeenAt(
         }
       )
     })
-  return rendererTime(handle)
+  try {
+    return await rendererTime(handle)
+  } finally {
+    await handle.dispose()
+  }
 }
 
 /** One line on the chat the user sees, for timeout messages. */
@@ -171,36 +113,7 @@ export async function mutationGaps(page: Page, from: number, to: number): Promis
 
 export const rendererNow = (page: Page): Promise<number> => page.evaluate(() => performance.now())
 
-export type HostWork = { processCpuMs: number; mainThreadEluActiveMs: number }
-
-/** Process CPU covers all process threads; main-thread ELU is active wall time, not CPU attribution. */
-export async function hostWorkMark(app: ElectronApplication): Promise<() => Promise<HostWork>> {
-  // Main-process callbacks see Node's performance, not the DOM one this file is typed against.
-  const start = await retryTransientMainEvaluate(() =>
-    app.evaluate(() => ({
-      cpu: process.cpuUsage(),
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this callback runs in Electron's main process, where performance is Node's perf_hooks object; the DOM lib this file needs types it as the browser one.
-      elu: (performance as unknown as NodePerformance).eventLoopUtilization()
-    }))
-  )
-  return async () => {
-    const delta = await retryTransientMainEvaluate(() =>
-      app.evaluate((_electron, start) => {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: main-process callback; performance is Node's perf_hooks object, typed here by the DOM lib.
-        const node = performance as unknown as NodePerformance
-        return {
-          cpu: process.cpuUsage(start.cpu),
-          elu: node.eventLoopUtilization(node.eventLoopUtilization(), start.elu)
-        }
-      }, start)
-    )
-    const processCpuMs = (delta.cpu.user + delta.cpu.system) / 1000
-    return {
-      processCpuMs,
-      mainThreadEluActiveMs: delta.elu.active
-    }
-  }
-}
+export { hostWorkMark, type HostWork } from './native-chat-4a-host-work'
 
 /** All SQLite/journal files under the profile, so WAL growth and file growth read the same on both storage designs. */
 export function storageBytes(

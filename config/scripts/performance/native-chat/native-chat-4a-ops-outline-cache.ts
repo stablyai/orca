@@ -1,4 +1,6 @@
 // Classify outline reads from persisted source/cache keys, independently of process warmth or UI restoration.
+import { admitOutline, outlineSourceKey as sourceKey } from './native-chat-4a-cache-admission'
+import { HISTORY_PAGE_CONTENT_BUDGET_BYTES } from '../../../../src/main/native-chat/agent-session-wire/publication/history/agent-session-history-page-bounds'
 import { rpc } from './native-chat-4a-probes'
 import {
   addRow,
@@ -16,9 +18,6 @@ import {
   type OutlineCacheState
 } from './native-chat-4a-source-observer'
 import { replyPrompt } from './native-chat-4a-workloads'
-
-const sourceKey = (state: OutlineCacheState): string =>
-  JSON.stringify([state.epoch, state.sequence, state.revision])
 
 export async function outlineCacheRows(ctx: RunContext): Promise<void> {
   const sessionId = ctx.manifest.largeSessionId
@@ -42,7 +41,7 @@ export async function outlineCacheRows(ctx: RunContext): Promise<void> {
   })
   const miss = addRow(ctx, {
     family: 'outline',
-    operation: 'conversationOutline, observed source-key miss',
+    operation: 'conversationOutline, observed source-key/budget miss',
     variant: 'large chat',
     context
   })
@@ -64,20 +63,57 @@ export async function outlineCacheRows(ctx: RunContext): Promise<void> {
     }
     return
   }
+  const observe = (): OutlineCacheState => {
+    const state = outlineCacheState(file, sessionId)
+    if (!state) {
+      throw new Error('persisted cache observation unavailable')
+    }
+    return {
+      ...state,
+      matchesSource: state.matchesSource && state.budgetBytes === HISTORY_PAGE_CONTENT_BUDGET_BYTES
+    }
+  }
+  const attempts: OutlineCacheState[] = []
+  let observations = 0
+  let requests = 0
+  const admit = () =>
+    admitOutline({
+      observe,
+      record: (state) => {
+        observations += 1
+        if (attempts.length < 320 && JSON.stringify(attempts.at(-1)) !== JSON.stringify(state)) {
+          attempts.push(state)
+        }
+      },
+      request: async (before) => {
+        const sample = await measured(ctx, async () => {
+          const atRequest = observe()
+          if (
+            !atRequest.eligible ||
+            atRequest.matchesSource ||
+            sourceKey(before) !== sourceKey(atRequest)
+          ) {
+            return {}
+          }
+          requests += 1
+          const answer = await rpc(page(ctx), 'agentSession.conversationOutline', { sessionId })
+          return { hostMs: answer.hostMs, evidence: { cacheBefore: atRequest } }
+        })
+        if (
+          sample.evidence &&
+          sourceKey(observe()) === sourceKey(before) &&
+          miss.samples.length === 0
+        ) {
+          miss.samples.push(sample)
+        }
+      }
+    })
+  let cached: OutlineCacheState | undefined
   try {
-    await rpc(page(ctx), 'agentSession.conversationOutline', { sessionId })
-    const deadline = Date.now() + 30_000
-    let cached = outlineCacheState(file, sessionId)!
-    while (!cached.matchesSource && Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, 25))
-      cached = outlineCacheState(file, sessionId)!
-    }
-    if (!cached.matchesSource) {
-      throw new Error('outline materialization was not persisted for the current source')
-    }
+    cached = await admit()
     await sampled(ctx, hit, ctx.workload.samples, async () => {
-      const before = outlineCacheState(file, sessionId)!
-      if (!before.matchesSource) {
+      const before = observe()
+      if (!before.matchesSource || !before.eligible) {
         throw new Error('persisted hit precondition lost')
       }
       let served: unknown
@@ -86,7 +122,7 @@ export async function outlineCacheRows(ctx: RunContext): Promise<void> {
         served = answer.value
         return { hostMs: answer.hostMs }
       })
-      const after = outlineCacheState(file, sessionId)!
+      const after = observe()
       if (
         !after.matchesSource ||
         sourceKey(before) !== sourceKey(after) ||
@@ -97,17 +133,15 @@ export async function outlineCacheRows(ctx: RunContext): Promise<void> {
       }
       return {
         ...sample,
-        extra: {
-          sourceSequence: before.sequence,
-          sourceRevision: before.revision,
-          cacheBudgetBytes: before.budgetBytes!
-        }
+        evidence: { cacheBefore: before, cacheAfter: after, servedEqualsPersisted: true }
       }
     })
-    if (hit.skipped) {
-      throw new Error(hit.skipped)
-    }
-    const before = outlineCacheState(file, sessionId)!
+  } catch (error) {
+    hit.skipped = `unexercised: ${String(error).slice(0, 250)}`
+  }
+  // Every arm performs this same real mutation even if admission was unavailable.
+  try {
+    const before = observe()
     const mutation = await measured(ctx, async () => {
       const started = Date.now()
       const answer = await send(page(ctx), ctx.arm, sessionId, replyPrompt(tag))
@@ -115,50 +149,37 @@ export async function outlineCacheRows(ctx: RunContext): Promise<void> {
       await waitForIdle(page(ctx), sessionId)
       return { hostMs: answer.hostMs, e2eMs: Date.now() - started }
     })
-    const stale = outlineCacheState(file, sessionId)!
-    invalidation.context = {
-      ...context,
-      sourceKeyBefore: sourceKey(before),
-      sourceKeyAfter: sourceKey(stale)
+    const stale = observe()
+    if (
+      !cached ||
+      !before.matchesSource ||
+      sourceKey(before) === sourceKey(stale) ||
+      stale.matchesSource
+    ) {
+      invalidation.skipped =
+        'real mutation lacked an observed persisted-hit to stale-cache transition; unexercised'
+    } else {
+      invalidation.samples.push({
+        ...mutation,
+        evidence: { cacheBefore: before, cacheAfter: stale }
+      })
     }
-    if (sourceKey(before) === sourceKey(stale) || stale.matchesSource) {
-      throw new Error(
-        'mutation did not leave an observed invalid cache key; no invalidation/miss claim'
-      )
-    }
-    invalidation.samples.push({
-      ...mutation,
-      extra: {
-        sourceSequence: stale.sequence,
-        cacheSequence: stale.cacheSequence ?? Number.NaN,
-        sourceRevision: stale.revision,
-        cacheRevision: stale.cacheRevision ?? Number.NaN
-      }
-    })
-    await sampled(ctx, miss, 1, async () => {
-      const atRequest = outlineCacheState(file, sessionId)!
-      if (atRequest.matchesSource || sourceKey(atRequest) !== sourceKey(stale)) {
-        throw new Error('observed miss precondition lost before request')
-      }
-      const sample = await measured(ctx, async () => ({
-        hostMs: (await rpc(page(ctx), 'agentSession.conversationOutline', { sessionId })).hostMs
-      }))
-      if (sourceKey(outlineCacheState(file, sessionId)!) !== sourceKey(atRequest)) {
-        throw new Error('source changed during observed miss')
-      }
-      return {
-        ...sample,
-        extra: {
-          sourceSequence: atRequest.sequence,
-          cacheSequence: atRequest.cacheSequence ?? Number.NaN,
-          sourceRevision: atRequest.revision,
-          cacheRevision: atRequest.cacheRevision ?? Number.NaN
-        }
-      }
-    })
+    await admit()
   } catch (error) {
-    for (const row of rows.filter((entry) => entry.samples.length === 0 && !entry.skipped)) {
-      row.skipped = `classification failed: ${String(error).slice(0, 250)}`
+    for (const row of [invalidation, miss].filter((entry) => entry.samples.length === 0)) {
+      row.skipped = `unexercised: ${String(error).slice(0, 250)}`
+    }
+  } finally {
+    for (const row of rows) {
+      row.context = {
+        ...context,
+        observations,
+        admissionRequests: requests,
+        admissionTransitions: JSON.stringify(attempts)
+      }
+      if (!row.samples.length && !row.skipped) {
+        row.skipped = 'required cache transition not observed; unexercised'
+      }
     }
   }
 }

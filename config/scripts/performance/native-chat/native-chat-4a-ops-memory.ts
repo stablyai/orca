@@ -1,13 +1,11 @@
 // Main-process residency on an independent, uniform completed-tool seed; subscriptions retain no payloads in the driver.
-import { existsSync, mkdirSync, renameSync } from 'node:fs'
-import path from 'node:path'
+import { workerMemory } from './native-chat-4a-worker-memory'
 import { setTimeout as delay } from 'node:timers/promises'
-import { seedDirFor, seededChats, type Manifest } from './native-chat-4a-fixture'
+import { seededChats } from './native-chat-4a-fixture'
 import type { Row } from './native-chat-4a-report'
 import { stat } from './native-chat-4a-report'
 import { page, type RunContext } from './native-chat-4a-run-context'
 import { history } from './native-chat-4a-session'
-import type { ConversionObserver } from './native-chat-4a-sqlite-observer'
 import type { Workload } from './native-chat-4a-workloads'
 
 const METRICS = ['heapUsed', 'rss', 'external', 'arrayBuffers'] as const
@@ -20,7 +18,10 @@ const PHASES = [
   'activation delta post-GC'
 ] as const
 type Phase = (typeof PHASES)[number]
-type Memory = Partial<Record<(typeof METRICS)[number], number>>
+type Memory = Partial<Record<(typeof METRICS)[number], number>> & {
+  workers?: Awaited<ReturnType<typeof workerMemory>>
+  workerError?: string
+}
 const WINDOW = 5
 const INTERVAL_MS = 1000
 const SETTLE_TIMEOUT_MS = 60_000
@@ -55,7 +56,8 @@ export function memoryShape(workload: Workload): Record<string, number | string>
     toolOutputBytes: h.toolOutputBytes,
     outputPayloadBytes: (h.fillerChats + 1) * h.tools * h.toolOutputBytes,
     activation: 'agentSession.history then held agentSession.subscribe per chat; no provider start',
-    source: 'Electron main process.memoryUsage(); RSS is resident bytes, not physical footprint',
+    source:
+      'main-isolate memoryUsage plus read-only NodeWorker inspector inventory/heap; RSS is whole-process resident bytes, not physical footprint',
     settling: 'last 5 samples, 1s apart, heapUsed/RSS range <= max(5% of minimum, 8MiB); 60s limit'
   }
 }
@@ -113,11 +115,17 @@ export async function memoryRows(ctx: RunContext): Promise<void> {
       row.skipped = reason
     }
   }
-  const snapshot = (): Promise<Memory> =>
-    ctx.launch.app.evaluate(() => {
+  const snapshot = async (): Promise<Memory> => {
+    const memory = await ctx.launch.app.evaluate(() => {
       const { heapUsed, rss, external, arrayBuffers } = process.memoryUsage()
       return { heapUsed, rss, external, arrayBuffers }
     })
+    try {
+      return { ...memory, workers: await workerMemory(ctx.launch.app) }
+    } catch (error) {
+      return { ...memory, workerError: `worker attribution unexercised: ${String(error)}` }
+    }
+  }
   const measure = async (phase: Phase): Promise<void> => {
     const started = Date.now()
     const samples: Memory[] = []
@@ -148,7 +156,13 @@ export async function memoryRows(ctx: RunContext): Promise<void> {
         const value = METRICS.find((metric) => metric === row.operation)
         const bytes = value ? sample[value] : undefined
         if (typeof bytes === 'number' && Number.isFinite(bytes)) {
-          row.samples.push({ extra: { bytes } })
+          row.samples.push({
+            extra: { bytes, observedWorkerCount: sample.workers?.count ?? Number.NaN },
+            evidence: {
+              workerInventory: sample.workers ?? null,
+              workerError: sample.workerError ?? null
+            }
+          })
         }
       }
       if (!stable) {
@@ -188,7 +202,13 @@ export async function memoryRows(ctx: RunContext): Promise<void> {
       if (left.skipped || right.skipped || !a || !b) {
         row.skipped = left.skipped ?? right.skipped ?? 'baseline or active counter unavailable'
       } else {
-        row.samples.push({ extra: { bytes: b.p50 - a.p50 } })
+        row.samples.push({
+          extra: { bytes: b.p50 - a.p50 },
+          evidence: {
+            workerInventoriesBefore: left.samples.map((sample) => sample.evidence),
+            workerInventoriesAfter: right.samples.map((sample) => sample.evidence)
+          }
+        })
       }
     }
   }
@@ -265,42 +285,4 @@ export async function memoryRows(ctx: RunContext): Promise<void> {
   }
 }
 
-export async function seedMemoryProfile(
-  out: string,
-  workload: Workload,
-  seed: (workload: Workload, runDir: string) => Promise<Manifest>,
-  log: (line: string) => void
-): Promise<{
-  memoryProfile?: { seedDir: string; manifest: Manifest }
-  memorySeedFailure?: string
-}> {
-  const runDir = path.join(out, 'memory')
-  mkdirSync(runDir, { recursive: true })
-  try {
-    const manifest = await seed(memoryWorkload(workload), runDir)
-    return { memoryProfile: { seedDir: seedDirFor(runDir, manifest), manifest } }
-  } catch (error) {
-    const memorySeedFailure = `memory seed failed: ${String(error).slice(0, 250)}`
-    log(memorySeedFailure)
-    const profile = path.join(out, 'profile')
-    if (existsSync(profile)) {
-      renameSync(profile, path.join(out, `failed-memory-seed-${Date.now()}`))
-    }
-    return { memorySeedFailure }
-  }
-}
-
-export async function convertedMemoryRows(
-  ctx: RunContext,
-  observer: ConversionObserver
-): Promise<void> {
-  // Conversion completes before the baseline on this otherwise untouched copy.
-  if (
-    observer.databaseFile &&
-    !(await observer.allReady(seededChats(ctx.manifest), 2 * 60 * 60_000))
-  ) {
-    throw new Error('memory profile conversion did not finish within 2h')
-  }
-  await observer.stop()
-  await memoryRows(ctx)
-}
+export { seedMemoryProfile, convertedMemoryRows } from './native-chat-4a-memory-profile'

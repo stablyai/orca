@@ -1,5 +1,6 @@
 // 4a read rows on the retained large chat: history pages, item detail, outline, fork, and record operations on the many-chat profile.
 import { outlineCacheRows } from './native-chat-4a-ops-outline-cache'
+import { historyShape } from './native-chat-4a-history-shape'
 import { randomUUID } from 'node:crypto'
 import { operationId } from './native-chat-4a-arm'
 import { rendererTime, rpc } from './native-chat-4a-probes'
@@ -26,9 +27,19 @@ export async function read(
 ): Promise<Sample> {
   return measured(ctx, async () => {
     const answer = await rpc(page(ctx), method, params, allowRefusal ? { allowRefusal: true } : {})
+    const shape =
+      method === 'agentSession.history'
+        ? historyShape(
+            answer.value,
+            typeof params === 'object' && params !== null && 'cursor' in params
+              ? params.cursor
+              : null
+          )
+        : null
     return {
       hostMs: answer.hostMs,
-      extra: { bytes: bytesOf(answer.value), refused: Number(answer.refused) }
+      ...(shape ? { evidence: { history: shape } } : {}),
+      extra: { bytes: shape?.bytes ?? bytesOf(answer.value), refused: Number(answer.refused) }
     }
   })
 }

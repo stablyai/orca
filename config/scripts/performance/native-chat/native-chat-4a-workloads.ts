@@ -57,8 +57,8 @@ export type Workload = {
 
 const MiB = 1024 * 1024
 
-function streamCases(sizes: number[]): StreamCase[] {
-  return sizes.flatMap((bytes) => [
+const streamCases = (sizes: number[]): StreamCase[] =>
+  sizes.flatMap((bytes) => [
     { tag: `blocks-${bytes / MiB}m`, bytes, shape: 'blocks' as const },
     { tag: `nobreak-${bytes / MiB}m`, bytes, shape: 'nobreak' as const },
     {
@@ -68,7 +68,6 @@ function streamCases(sizes: number[]): StreamCase[] {
       toolOutputBytes: bytes
     }
   ])
-}
 
 export const WORKLOADS: Record<Workload['profile'], Workload> = {
   smoke: {
@@ -205,6 +204,7 @@ export const toolBurstPrompt = (workload: Workload, tag: string): string =>
     op: 'history',
     tag,
     tools: 8,
+    toolIdPrefix: tag,
     toolRunMs: 250,
     toolOutputBytes: workload.history.toolOutputBytes,
     replyBytes: workload.history.replyBytes

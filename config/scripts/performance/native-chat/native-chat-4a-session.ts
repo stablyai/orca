@@ -8,7 +8,13 @@ import { rendererTime, rpc, visibleChatState } from './native-chat-4a-probes'
 
 type HistoryItem = {
   itemId: string
-  body?: { kind?: string; role?: string; state?: string; output?: { byteLength?: number } }
+  body?: {
+    kind?: string
+    role?: string
+    state?: string
+    callId?: string
+    output?: { byteLength?: number }
+  }
 }
 export type HistoryPage = {
   epoch: string
@@ -226,7 +232,13 @@ export async function waitForControls(page: Page, timeoutMs = 60_000): Promise<v
       )
       const composer = root?.querySelector('[role="textbox"]')
       // The working flag is an attribute of the root itself.
-      return Boolean(composer && root?.hasAttribute('data-native-chat-working'))
+      return Boolean(
+        composer instanceof HTMLElement &&
+        composer.isContentEditable &&
+        composer.getAttribute('aria-disabled') !== 'true' &&
+        !composer.hasAttribute('disabled') &&
+        root?.hasAttribute('data-native-chat-working')
+      )
     },
     null,
     { timeout: timeoutMs, polling: 16 }
