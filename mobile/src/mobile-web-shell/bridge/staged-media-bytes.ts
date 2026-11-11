@@ -1,3 +1,5 @@
+import { AGENT_SESSION_ATTACHMENT_CHUNK_BYTES } from '../../../../src/shared/agent-session/agent-session-attachments'
+import { encodeBase64Bytes } from '../../transport/encryption/base64-byte-codec'
 import { BRIDGE_MEDIA_READ_MAX_BYTES, type BridgeMediaItem } from './bridge-media-verbs'
 import type { NativeVerbs } from './use-native-verbs'
 import { MobileImageBase64Accumulator } from '../../files/attachments/mobile-image-base64-accumulator'
@@ -41,6 +43,56 @@ export async function readStagedMediaItem(
     )
   }
   return accumulator.finish()
+}
+
+// Stream an item as upload-sized base64 chunks without holding the file. Short shell reads are regrouped so every chunk but the last is exactly one upload chunk (a multiple of three bytes, so padding appears only at the end). The caller owns the handle.
+export async function* readStagedMediaChunks(
+  verbs: NativeVerbs,
+  item: BridgeMediaItem
+): AsyncGenerator<string> {
+  let carry = new Uint8Array(0)
+  let offset = 0
+  for (;;) {
+    // Even empty items need one read to learn eof; the schema refuses zero-length requests.
+    const length = Math.max(
+      1,
+      Math.min(
+        BRIDGE_MEDIA_READ_MAX_BYTES,
+        AGENT_SESSION_ATTACHMENT_CHUNK_BYTES,
+        item.byteLength - offset
+      )
+    )
+    const chunk = await verbs.readMedia(item.handle, offset, length)
+    const bytes = decodeBase64(chunk.base64)
+    offset += bytes.byteLength
+    if (bytes.byteLength > 0) {
+      const joined = new Uint8Array(carry.byteLength + bytes.byteLength)
+      joined.set(carry)
+      joined.set(bytes, carry.byteLength)
+      let start = 0
+      while (joined.byteLength - start >= AGENT_SESSION_ATTACHMENT_CHUNK_BYTES) {
+        yield encodeBase64Bytes(
+          joined.subarray(start, start + AGENT_SESSION_ATTACHMENT_CHUNK_BYTES)
+        )
+        start += AGENT_SESSION_ATTACHMENT_CHUNK_BYTES
+      }
+      carry = joined.slice(start)
+    }
+    if (chunk.eof) {
+      break
+    }
+    if (bytes.byteLength === 0) {
+      throw new Error(`the shell answered no bytes for ${item.handle} and did not report the end`)
+    }
+  }
+  if (offset !== item.byteLength) {
+    throw new Error(
+      `the shell answered ${offset} bytes for an item it declared as ${item.byteLength}`
+    )
+  }
+  if (carry.byteLength > 0) {
+    yield encodeBase64Bytes(carry)
+  }
 }
 
 // Keep finally cleanup quiet so it cannot replace the original read refusal.

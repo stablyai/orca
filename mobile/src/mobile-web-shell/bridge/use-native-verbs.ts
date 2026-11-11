@@ -3,6 +3,7 @@ import * as z from 'zod'
 import { usePageBridgeClient } from '../../transport/connection/client-context.web'
 import {
   mediaNameResultSchema,
+  mediaPickLargeResultSchema,
   mediaPickResultSchema,
   mediaReadResultSchema,
   mediaReleaseResultSchema,
@@ -48,9 +49,12 @@ export type NativeVerbs = {
   // Require pick/read/release together; swallowed release refusal would retain every staged file until TTL and exhaust eight handles. Clipboard image availability uses the same complete path.
   canPickMedia: boolean
   canNameMedia: boolean
+  // Optional grant: shells before large files lack it, and pickMedia then refuses files over their own ceiling.
+  canPickLargeFile: boolean
   writeClipboardText: (value: string) => Promise<boolean>
   readClipboardText: () => Promise<string>
   pickMedia: (source: BridgeMediaSource, multiple: boolean) => Promise<readonly BridgeMediaItem[]>
+  pickLargeFile: () => Promise<readonly BridgeMediaItem[]>
   readMedia: (handle: string, offset: number, length: number) => Promise<BridgeMediaChunk>
   releaseMedia: (handle: string) => Promise<boolean>
   nameMedia: (handle: string) => Promise<string | null>
@@ -170,12 +174,15 @@ export function useNativeVerbs(): NativeVerbs {
       canPickMedia:
         has('native.media.pick') && has('native.media.read') && has('native.media.release'),
       canNameMedia: has('native.media.name'),
+      canPickLargeFile: has('native.media.picklarge'),
       writeClipboardText: async (value) =>
         (await call('native.clipboard.write', { mime, value }, clipboardWriteResultSchema)).written,
       readClipboardText: async () =>
         (await call('native.clipboard.read', { mime }, clipboardReadResultSchema)).value,
       pickMedia: async (source, multiple) =>
         (await call('native.media.pick', { source, multiple }, mediaPickResultSchema)).items,
+      pickLargeFile: async () =>
+        (await call('native.media.picklarge', {}, mediaPickLargeResultSchema)).items,
       readMedia: (handle, offset, length) =>
         call('native.media.read', { handle, offset, length }, mediaReadResultSchema),
       releaseMedia: async (handle) =>

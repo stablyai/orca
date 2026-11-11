@@ -1,9 +1,9 @@
 import * as z from 'zod'
 import {
-  agentSessionAttachmentAppends,
   base64DecodedByteLength,
   type AgentSessionAttachmentUploadCommitResult
 } from '../../../../src/shared/agent-session/agent-session-attachments'
+import type { PickedMobileFile } from '../../platform/media-picker-contract'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
 
@@ -57,22 +57,55 @@ const attachmentUploadAbort = bindDeferredRpcOperation(
 
 type MobileAgentSessionAttachmentRpcSender = Parameters<typeof attachmentUploadStart.request>[0]
 
+// DOMException is not a global in the native app; build the AbortError the way the bridge does.
+function uploadAborted(): Error {
+  return Object.assign(new Error('The upload was cancelled'), { name: 'AbortError' })
+}
+
+/** Sends the file chunk by chunk as it is read; signal is checked before every append and before commit. */
 export async function uploadMobileAgentSessionAttachment(
   client: MobileAgentSessionAttachmentRpcSender,
-  args: { sessionId: string; name: string; base64: string }
+  args: {
+    sessionId: string
+    file: PickedMobileFile
+    signal?: AbortSignal
+    onProgress?: (sentBytes: number) => void
+  }
 ): Promise<AgentSessionAttachmentUploadCommitResult> {
+  const { file, signal } = args
+  if (signal?.aborted) {
+    throw uploadAborted()
+  }
   const { uploadId } = attachmentUploadStart.interpret(
     await attachmentUploadStart.request(client, {
       sessionId: args.sessionId,
-      name: args.name,
-      byteLength: base64DecodedByteLength(args.base64)
+      name: file.name,
+      byteLength: file.byteLength
     })
   )
   try {
-    for (const chunk of agentSessionAttachmentAppends(args.base64)) {
+    let sent = 0
+    const append = async (contentBase64: string): Promise<void> => {
+      if (signal?.aborted) {
+        throw uploadAborted()
+      }
       attachmentUploadAppend.interpret(
-        await attachmentUploadAppend.request(client, { uploadId, ...chunk })
+        await attachmentUploadAppend.request(client, { uploadId, offset: sent, contentBase64 })
       )
+      sent += base64DecodedByteLength(contentBase64)
+      args.onProgress?.(sent)
+    }
+    let appended = false
+    for await (const contentBase64 of file.chunks()) {
+      await append(contentBase64)
+      appended = true
+    }
+    if (!appended) {
+      // Even an empty file needs one empty append before commit.
+      await append('')
+    }
+    if (signal?.aborted) {
+      throw uploadAborted()
     }
     return attachmentUploadCommit.interpret(
       await attachmentUploadCommit.request(client, { uploadId })
