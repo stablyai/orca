@@ -1,6 +1,8 @@
-// Private layer, Orca Cloud only: a cloud Claude/Codex pane that started without a sign-in sits at
-// its own "Not logged in" screen, but SessionStart reports it as done. The sidebar row says why
-// instead of "Done", using the Orca account's Agent accounts and the sandbox's own sign-in report.
+// Private layer, Orca Cloud only: a cloud Claude/Codex pane whose agent isn't signed in sits at its
+// own "Not logged in" screen, yet its row would read "Done". The row says why instead. The source of
+// truth is the Orca account's Agent accounts (credential state and providerState, via the shared
+// coverage selector), combined with "no turn finished"; the sandbox's own sign-in report can
+// clear it (signedIn) or add to it (signedOut).
 import type { AgentDotState } from '@/components/AgentStateDot'
 import type { Translate } from '@/i18n/use-translate'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
@@ -9,43 +11,38 @@ import {
   type HostAgentSignInAgent,
   type HostAgentSignInEntry
 } from '../../../../shared/host-agent-sign-in-status'
-import { orcaCloudAgentCoverage } from './orca-cloud-agent-accounts-model'
-import type { OrcaCloudAgentAccountsState } from './orca-cloud-agent-accounts-store'
+import {
+  orcaCloudAgentCoverageFromAccounts,
+  type OrcaCloudAgentAccountsRead
+} from './orca-cloud-agent-accounts-model'
 
-export type CloudAgentRowSignIn = 'notSignedIn' | 'expired'
+export type CloudAgentRowSignIn = 'needsSignIn' | 'expired'
 
 export function cloudRowSignInAgent(agentType: string): HostAgentSignInAgent | null {
   return HOST_AGENT_SIGN_IN_AGENTS.find((agent) => agent === agentType) ?? null
 }
 
-/** The entry fields that show whether this session has finished a turn. */
+/** The turn evidence on a row: what only a turn that ran and ended leaves behind. */
 export type CloudRowTurnEvidence = Pick<
   AgentStatusEntry,
-  'sessionBoundary' | 'prompt' | 'lastAssistantMessage' | 'stateHistory' | 'turnEndedAt'
+  'lastAssistantMessage' | 'stateHistory' | 'turnEndedAt'
 >
 
 /**
- * True when nothing shows a finished turn. A local hook row says so with `sessionBoundary`. A row
- * mirrored from a cloud host can arrive without it: once the agent's title is newer than the
- * SessionStart hook (or the hook goes stale), the host projects a bare title-derived `done`
- * (runtime-mobile-agent-status-builder's last branch). So an empty prompt, no reply, no history
- * and no turn end count too.
+ * True when no turn has finished: no state history, no turn end and no assistant reply. Hook
+ * markers such as sessionBoundary are not used: a row mirrored from a cloud host can lack them.
  */
 export function hasNoFinishedTurn(entry: CloudRowTurnEvidence): boolean {
-  if (entry.sessionBoundary === true) {
-    return true
-  }
   return (
-    !entry.prompt?.trim() &&
-    !entry.lastAssistantMessage?.trim() &&
     (entry.stateHistory?.length ?? 0) === 0 &&
-    entry.turnEndedAt === undefined
+    entry.turnEndedAt === undefined &&
+    !entry.lastAssistantMessage?.trim()
   )
 }
 
 /**
- * Only a row that has not finished a turn this session can be waiting on sign-in: a finished
- * turn proves the agent reached its provider, so its Done stays.
+ * Only a row that has not finished a turn can be waiting on sign-in: a finished turn proves the
+ * agent reached its provider, so its Done stays.
  */
 export function isCloudRowSignInCandidate(row: {
   agentType: string
@@ -61,25 +58,26 @@ export function isCloudRowSignInCandidate(row: {
   )
 }
 
-/** The sandbox's own verdict wins; without one, the Orca account's coverage decides. */
+/**
+ * Agent accounts decide: not set up -> needsSignIn, expired or revoked -> expired. A sandbox that
+ * reports the agent signedIn (an account placeholder, a key, or a /login there) clears the row;
+ * one that reports signedOut needs sign-in too. A paused or never-offered provider, or a read
+ * not ready yet, shows nothing; the row updates when the read lands.
+ */
 export function cloudAgentRowSignIn(
   agent: HostAgentSignInAgent,
-  accounts: Pick<OrcaCloudAgentAccountsState, 'load' | 'keyKinds'>,
+  accounts: OrcaCloudAgentAccountsRead,
   hostEntry: HostAgentSignInEntry | null
 ): CloudAgentRowSignIn | null {
-  // Signed in on the sandbox (account placeholder, key or a /login there): nothing to show.
   if (hostEntry?.state === 'signedIn' || hostEntry?.state === 'notInstalled') {
     return null
   }
-  const coverage =
-    accounts.load.kind === 'ready'
-      ? orcaCloudAgentCoverage(agent, accounts.load.status, accounts.keyKinds[agent]).kind
-      : null
+  const coverage = orcaCloudAgentCoverageFromAccounts(agent, accounts)?.kind
   if (coverage === 'expired') {
     return 'expired'
   }
-  if (hostEntry?.state === 'signedOut' || coverage === 'notSetUp') {
-    return 'notSignedIn'
+  if (coverage === 'notSetUp' || hostEntry?.state === 'signedOut') {
+    return 'needsSignIn'
   }
   return null
 }

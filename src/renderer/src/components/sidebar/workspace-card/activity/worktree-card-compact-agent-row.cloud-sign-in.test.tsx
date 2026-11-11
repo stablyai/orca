@@ -220,13 +220,39 @@ describe('CompactAgentRow on an Orca Cloud workspace whose agent is not signed i
     expect(container.textContent).toContain('Done - Claude')
   })
 
-  it('keeps Done for a mirrored row once the prompt ran', () => {
+  it('keeps Done for a mirrored row with an assistant reply', () => {
     const mirrored = makeMirroredAgent(CLOUD_WORKTREE)
     const container = renderRow({
       ...mirrored,
-      entry: { ...mirrored.entry, prompt: 'Fix the login redirect' }
+      entry: { ...mirrored.entry, lastAssistantMessage: 'Fixed the redirect.' }
     })
     expect(container.textContent).not.toContain('Needs sign-in')
+  })
+
+  it('ignores sessionBoundary: turn evidence alone decides', () => {
+    const finished = makeAgent(CLOUD_WORKTREE, false)
+    const container = renderRow({
+      ...finished,
+      entry: { ...finished.entry, sessionBoundary: true }
+    })
+    expect(container.textContent).toContain('Done - Claude')
+  })
+
+  it('shows Sign-in expired for a revoked Orca account sign-in', () => {
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'revoked' }))
+    const container = renderRow(makeMirroredAgent(CLOUD_WORKTREE))
+    expect(container.textContent).toContain('Sign-in expired - Claude')
+  })
+
+  it('shows nothing extra while the Orca account path is paused (providerState disabled)', () => {
+    const paused = accounts({ state: 'none' })
+    if (paused.load.kind === 'ready') {
+      paused.load.status.credentials.providerEnabled = { claude: false, codex: true }
+      paused.load.status.credentials.providerState = { claude: 'disabled', codex: 'on' }
+    }
+    setOrcaCloudAgentAccountsStateForTest(paused)
+    const container = renderRow(makeMirroredAgent(CLOUD_WORKTREE))
+    expect(container.textContent).toContain('Done - Claude')
   })
 
   it('leaves the same mirrored shape on a local workspace unchanged', () => {
@@ -278,7 +304,35 @@ describe('DashboardAgentRow (full row) on an Orca Cloud workspace', () => {
     const container = renderFullRow(makeAgent(LOCAL_WORKTREE, true))
     expect(fullRowLabel(container)).toBe('Done')
     expect(container.textContent).not.toContain('Needs sign-in')
-    expect(container.querySelector('button[title*="Agent accounts"]')).toBeNull()
+    expect(container.querySelector('[data-cloud-sign-in-status]')).toBeNull()
+  })
+})
+
+describe('a row that renders before the Agent accounts read lands', () => {
+  it('picks up Needs sign-in once the accounts load (restored row)', () => {
+    setOrcaCloudAgentAccountsStateForTest({
+      ...accounts({ state: 'none' }),
+      load: { kind: 'loading' }
+    })
+    const container = renderRow(makeMirroredAgent(CLOUD_WORKTREE))
+    expect(container.textContent).toContain('Done - Claude')
+    act(() => setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'none' })))
+    expect(container.textContent).toContain('Needs sign-in - Claude')
+  })
+
+  it('picks it up once the cloud environment is known', () => {
+    useAppStore.setState({ runtimeEnvironments: [] })
+    const container = renderFullRow(makeMirroredAgent(CLOUD_WORKTREE))
+    expect(fullRowLabel(container)).toBe('Done')
+    act(() => useAppStore.setState({ runtimeEnvironments: [cloudEnvironment] }))
+    expect(fullRowLabel(container)).toBe('Needs sign-in')
+  })
+
+  it('goes back to Done when Claude is set up', () => {
+    const container = renderRow(makeMirroredAgent(CLOUD_WORKTREE))
+    expect(container.textContent).toContain('Needs sign-in - Claude')
+    act(() => setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'active' })))
+    expect(container.textContent).toContain('Done - Claude')
   })
 })
 
@@ -286,6 +340,16 @@ function click(element: Element): void {
   act(() => {
     element.dispatchEvent(new MouseEvent('click', { bubbles: true }))
   })
+}
+
+function statusButtons(container: HTMLElement): HTMLButtonElement[] {
+  return Array.from(container.querySelectorAll<HTMLButtonElement>('[data-cloud-sign-in-status]'))
+}
+
+/** Keyboard focus opens the app tooltip; read its content, not a title attribute. */
+function focusTooltip(button: HTMLButtonElement): string | null {
+  act(() => button.focus())
+  return document.body.querySelector('[role="tooltip"]')?.textContent ?? null
 }
 
 describe.each([
@@ -296,13 +360,33 @@ describe.each([
     useAppStore.setState({ activeView: 'terminal', settingsNavigationTarget: null })
   })
 
-  it('names where to set up, and clicking the status opens Agent accounts, not the pane', () => {
+  it('has a focusable dot and text, with no native title', () => {
+    const [dot, text] = statusButtons(render(makeAgent(CLOUD_WORKTREE, true)))
+    expect(dot.getAttribute('aria-label')).toBe('Needs sign-in')
+    expect(text.textContent).toBe('Needs sign-in')
+    expect(dot.hasAttribute('title') || text.hasAttribute('title')).toBe(false)
+  })
+
+  it('shows the app tooltip on keyboard focus of the text', () => {
+    const [, text] = statusButtons(render(makeAgent(CLOUD_WORKTREE, true)))
+    expect(focusTooltip(text)).toBe('Set up once in Settings → Agent accounts')
+  })
+
+  it('shows the app tooltip on keyboard focus of the dot', () => {
+    const [dot] = statusButtons(render(makeAgent(CLOUD_WORKTREE, true)))
+    expect(focusTooltip(dot)).toBe('Set up once in Settings → Agent accounts')
+  })
+
+  it('tells an expired sign-in to renew', () => {
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'expired' }))
+    const [, text] = statusButtons(render(makeAgent(CLOUD_WORKTREE, true)))
+    expect(focusTooltip(text)).toBe('Renew in Settings → Agent accounts')
+  })
+
+  it('clicking the text opens Agent accounts, not the pane', () => {
     const onActivate = vi.fn()
-    const container = render(makeAgent(CLOUD_WORKTREE, true), onActivate)
-    const text = container.querySelector('button[title]')
-    expect(text?.getAttribute('title')).toBe('Set up once in Settings → Agent accounts')
-    expect(text?.textContent).toBe('Needs sign-in')
-    click(text!)
+    const [, text] = statusButtons(render(makeAgent(CLOUD_WORKTREE, true), onActivate))
+    click(text)
     expect(onActivate).not.toHaveBeenCalled()
     expect(useAppStore.getState().activeView).toBe('settings')
     expect(useAppStore.getState().settingsNavigationTarget).toMatchObject({
@@ -311,22 +395,12 @@ describe.each([
     })
   })
 
-  it('opens Agent accounts from the dot too', () => {
+  it('clicking the dot opens Agent accounts too', () => {
     const onActivate = vi.fn()
-    const container = render(makeAgent(CLOUD_WORKTREE, true), onActivate)
-    const dot = container.querySelector('button:not([title])')
-    expect(dot).not.toBeNull()
-    click(dot!)
+    const [dot] = statusButtons(render(makeAgent(CLOUD_WORKTREE, true), onActivate))
+    click(dot)
     expect(onActivate).not.toHaveBeenCalled()
     expect(useAppStore.getState().activeView).toBe('settings')
-  })
-
-  it('tells an expired sign-in to renew', () => {
-    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'expired' }))
-    const container = render(makeAgent(CLOUD_WORKTREE, true))
-    expect(container.querySelector('button[title]')?.getAttribute('title')).toBe(
-      'Renew in Settings → Agent accounts'
-    )
   })
 
   it('still activates the pane when the rest of the row is clicked', () => {

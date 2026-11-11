@@ -4,7 +4,14 @@ import React, { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { AgentStateDot } from '@/components/AgentStateDot'
+import {
+  StateIndicatorTooltip,
+  type StateIndicatorTooltipSide
+} from '@/components/StateIndicatorTooltip'
 import { openOrcaCloudAgentAccounts } from '@/components/new-workspace/OrcaCloudAgentSetupRow'
+
+/** What the status shows: its label, and the tooltip naming the fix. */
+export type CloudAgentRowStatusText = { label: string; tooltip: string | null }
 
 /** The composer's "Set up once" target, plus opening Settings, which the sidebar has closed. */
 export function openCloudAgentAccountsSettings(): void {
@@ -12,13 +19,19 @@ export function openCloudAgentAccountsSettings(): void {
   useAppStore.getState().openSettingsPage()
 }
 
+/** A focusable status button: the app tooltip names the fix on hover and on keyboard focus. */
 export function CloudAgentRowSignInTarget({
   tooltip,
+  tooltipSide = 'top',
+  ariaLabel,
   className,
   children
 }: {
-  /** Native title; null when the child (a state dot) draws its own tooltip. */
+  /** Null shows no tooltip (StateIndicatorTooltip passes the button through). */
   tooltip: string | null
+  tooltipSide?: StateIndicatorTooltipSide
+  /** For the dot, whose button has no text of its own. */
+  ariaLabel?: string
   className?: string
   children: React.ReactNode
 }): React.JSX.Element {
@@ -27,53 +40,60 @@ export function CloudAgentRowSignInTarget({
     openCloudAgentAccountsSettings()
   }, [])
   return (
-    <button
-      type="button"
-      className={cn(
-        'inline-flex min-w-0 shrink-0 cursor-pointer items-center rounded-sm text-left',
-        'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
-        className
-      )}
-      title={tooltip ?? undefined}
-      onClick={handleClick}
-      onMouseDown={(e) => e.stopPropagation()}
-      onPointerDown={(e) => e.stopPropagation()}
-    >
-      {children}
-    </button>
+    <StateIndicatorTooltip label={tooltip} side={tooltipSide}>
+      <button
+        type="button"
+        className={cn(
+          'inline-flex min-w-0 shrink-0 cursor-pointer items-center rounded-sm text-left',
+          'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+          className
+        )}
+        aria-label={ariaLabel}
+        data-cloud-sign-in-status=""
+        onClick={handleClick}
+        onMouseDown={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        {children}
+      </button>
+    </StateIndicatorTooltip>
   )
 }
 
-/** The full row's status dot: the attention dot, opening Agent accounts. */
+/** The status dot: the attention dot, opening Agent accounts. Its tooltip is the button's. */
 export function CloudAgentRowSignInDot({
-  tooltip,
+  status,
+  tooltipSide,
   size
 }: {
-  tooltip: string
+  status: CloudAgentRowStatusText
+  tooltipSide?: StateIndicatorTooltipSide
   size: 'sm' | 'md'
 }): React.JSX.Element {
   return (
-    <CloudAgentRowSignInTarget tooltip={null}>
-      <AgentStateDot state="permission" size={size} title={tooltip} />
+    <CloudAgentRowSignInTarget
+      tooltip={status.tooltip}
+      tooltipSide={tooltipSide}
+      ariaLabel={status.label}
+    >
+      <AgentStateDot state="permission" size={size} title={null} />
     </CloudAgentRowSignInTarget>
   )
 }
 
 /** The full row's label slot: the text links to Agent accounts; the rest of the slot opens the pane. */
 export function CloudAgentRowSignInLabel({
-  label,
-  tooltip,
+  status,
   emphasis
 }: {
-  label: string
-  tooltip: string
+  status: CloudAgentRowStatusText
   /** Matches the full row's label: bold when unvisited, brighter on the selected-row fill. */
   emphasis: 'unvisited' | 'highlighted' | 'muted'
 }): React.JSX.Element {
   return (
     <span className="block min-w-0 flex-1 truncate text-[11px] leading-snug">
       <CloudAgentRowSignInTarget
-        tooltip={tooltip}
+        tooltip={status.tooltip}
         className={cn(
           'inline hover:underline',
           emphasis === 'unvisited'
@@ -83,7 +103,7 @@ export function CloudAgentRowSignInLabel({
               : 'font-normal text-muted-foreground'
         )}
       >
-        {label}
+        {status.label}
       </CloudAgentRowSignInTarget>
     </span>
   )

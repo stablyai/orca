@@ -27,7 +27,10 @@ import {
 import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useCloudAgentRowStatus } from '@/components/orca-cloud/use-cloud-agent-row-sign-in'
-import { CloudAgentRowSignInTarget } from '@/components/orca-cloud/CloudAgentRowSignInTarget'
+import {
+  CloudAgentRowSignInDot,
+  CloudAgentRowSignInTarget
+} from '@/components/orca-cloud/CloudAgentRowSignInTarget'
 
 function getCompactAgentPrimary(
   agent: DashboardAgentRowData,
@@ -147,7 +150,8 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const dotState = cloudStatus?.dotState ?? reportedDotState
   const conversationName = useAgentRowConversationName(agent)
   const primary = cloudStatus?.label ?? getCompactAgentPrimary(agent, conversationName)
-  const signInTooltip = cloudStatus?.tooltip ?? null
+  // Send-target mode owns row clicks, so only outside it is the status a link to Settings.
+  const signIn = cloudStatus?.tooltip ? cloudStatus : null
   const isLineageChild = agent.lineage?.depth === 1
   // Hold assistant text per positive turn clock; commit in an effect so discarded renders cannot cache messages.
   const turn = agent.entry.stateStartedAt
@@ -240,10 +244,8 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       ) : (
         <>
           {/* Show the actionable disabled reason over every hit area. */}
-          {signInTooltip ? (
-            <CloudAgentRowSignInTarget tooltip={null}>
-              <AgentStateDot state={dotState} size="sm" title={signInTooltip} tooltipSide="right" />
-            </CloudAgentRowSignInTarget>
+          {signIn ? (
+            <CloudAgentRowSignInDot status={signIn} tooltipSide="right" size="sm" />
           ) : (
             <AgentStateDot
               state={dotState}
@@ -262,9 +264,9 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
             className="min-w-0 flex-1 truncate"
             title={sendTargetDisabledReason ? undefined : rowTitle}
           >
-            {signInTooltip ? (
+            {signIn ? (
               <CloudAgentRowSignInTarget
-                tooltip={signInTooltip}
+                tooltip={signIn.tooltip}
                 className={cn('inline hover:underline', leadClassName)}
               >
                 {leadingText}

@@ -10,6 +10,7 @@ import {
   type OrcaCloudAgentSetupFailure,
   type OrcaCloudAgentsStatus
 } from '../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
+import type { OrcaCloudAgentAccountsState } from './orca-cloud-agent-accounts-store'
 
 /** The names that make a key cover an agent, as the control plane counts them (coveredByKey). */
 const KEY_NAMES: Record<OrcaCloudAccountAgent, readonly string[]> = {
@@ -147,4 +148,21 @@ export function orcaCloudAgentCoverage(
   return credential.state === 'expired' || credential.state === 'revoked'
     ? { kind: 'expired' }
     : { kind: 'notSetUp' }
+}
+
+/** The renderer's one Agent accounts read, as the coverage selectors take it. */
+export type OrcaCloudAgentAccountsRead = Pick<OrcaCloudAgentAccountsState, 'load' | 'keyKinds'>
+
+/**
+ * One agent's coverage from the shared Agent accounts read; null until that read is ready.
+ * The single selector for every cloud surface that reacts to it: the launch hold and strip
+ * (cloudAgentStripReason) and the sidebar/dashboard agent rows (cloudAgentRowSignIn).
+ */
+export function orcaCloudAgentCoverageFromAccounts(
+  agent: OrcaCloudAccountAgent,
+  accounts: OrcaCloudAgentAccountsRead
+): OrcaCloudAgentCoverage | null {
+  return accounts.load.kind === 'ready'
+    ? orcaCloudAgentCoverage(agent, accounts.load.status, accounts.keyKinds[agent])
+    : null
 }

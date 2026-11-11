@@ -170,3 +170,23 @@ export const fullClaudeCoveredDone = cloudRowFixture(
   row('claude', 'Fix the login redirect'),
   'full'
 )
+
+/** Keyboard focus on the status text opens the app tooltip that names the fix. */
+function focusStatusText(frame: HTMLElement): void {
+  frame.querySelectorAll<HTMLButtonElement>('[data-cloud-sign-in-status]')[1]?.focus()
+}
+
+export const claudeNeedsSignInTooltip = defineFixture({
+  ...cloudRowFixture(accounts({ state: 'none' }, { state: 'none' }), row('claude', null)),
+  width: 360,
+  interact: focusStatusText
+})
+
+export const fullClaudeSignInExpiredTooltip = defineFixture({
+  ...cloudRowFixture(
+    accounts({ state: 'expired' }, { state: 'none' }),
+    row('claude', null),
+    'full'
+  ),
+  interact: focusStatusText
+})

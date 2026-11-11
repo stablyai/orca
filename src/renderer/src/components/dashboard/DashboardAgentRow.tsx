@@ -224,7 +224,8 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const cloudStatus = useCloudAgentRowStatus(agent, reportedDotState, sendTargetStatus)
   const dotState: AgentDotState = cloudStatus?.dotState ?? reportedDotState
   const displayLabel = cloudStatus?.label ?? promptLabel
-  const signInTooltip = cloudStatus?.tooltip ?? null
+  // Send-target mode owns row clicks, so only outside it is the status a link to Settings.
+  const signIn = cloudStatus?.tooltip ? cloudStatus : null
   const dotTooltipLabel = agentStateProgressLabel(
     dotState,
     presentation.progress,
@@ -312,8 +313,8 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       ) : null}
       <div className="flex items-center gap-1.5">
         {/* Why: state dot sits in the leading gutter so the eye can scan one column for row state. */}
-        {signInTooltip ? (
-          <CloudAgentRowSignInDot tooltip={signInTooltip} size={stateDotSize} />
+        {signIn ? (
+          <CloudAgentRowSignInDot status={signIn} size={stateDotSize} />
         ) : (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -341,10 +342,9 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
           </span>
         )}
         {/* Why: interpolate-size:allow-keywords is the only way to animate height to/from auto without measuring in JS; falls back to an instant swap where unsupported. */}
-        {signInTooltip ? (
+        {signIn ? (
           <CloudAgentRowSignInLabel
-            label={displayLabel}
-            tooltip={signInTooltip}
+            status={signIn}
             emphasis={isUnvisited ? 'unvisited' : highlighted ? 'highlighted' : 'muted'}
           />
         ) : (
