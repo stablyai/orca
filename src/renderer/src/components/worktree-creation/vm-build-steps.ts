@@ -6,6 +6,7 @@ import {
 import type { WorktreeSetupStepState } from './worktree-setup-steps'
 import {
   orcaCloudCloneProgress,
+  orcaCloudPlannedRepoMode,
   type OrcaCloudCloneProgress
 } from '@/lib/orca-cloud/orca-cloud-clone-progress'
 
@@ -115,6 +116,11 @@ export function deriveVmBuildSteps(
     ? orcaCloudCloneProgress(entry.provisioningLog ?? '', entry.provisioningLogStamps ?? [])
     : null
   const cloneAt = clone?.startedAt ?? undefined
+  // Known before the step renders (boot plan) or once the create answers; never changes after.
+  const cloneMode =
+    clone?.mode ??
+    (cloud ? orcaCloudPlannedRepoMode(entry.provisioningLog ?? '') : null) ??
+    undefined
   const afterClone = clone?.endedAt ?? check?.startedAt ?? createAt
   const provisionDone = Boolean(check) || workspacePhase || cloneAt !== undefined
 
@@ -134,7 +140,10 @@ export function deriveVmBuildSteps(
   const cloneStep: VmBuildStep | null = !cloud
     ? null
     : cloneAt === undefined
-      ? step('clone', provisionDone ? 'done' : 'pending', null, undefined)
+      ? {
+          ...step('clone', provisionDone ? 'done' : 'pending', null, undefined),
+          ...(cloneMode ? { cloneMode } : {})
+        }
       : clone?.ended || check || workspacePhase
         ? {
             ...step('clone', 'done', span(cloneAt, afterClone), cloneAt),

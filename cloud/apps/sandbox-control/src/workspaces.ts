@@ -1,6 +1,6 @@
 // Team workspace registry: the cloud-owned list of an org's workspaces (who made it, who owns it,
 // repo/branch, state, last activity, visibility, section, cost) and who is in each one right now.
-//   GET   /v1/team/workspaces?scope=mine|team|all&by=<userId>&repo=<url>&section=<s>&archived=exclude|include|only
+//   GET   /v1/team/workspaces?scope=mine|team|all&by=<userId>&repo=<url>&section=<s>&archived=exclude|include|only&routines=exclude|include
 //   GET   /v1/team/workspaces/:id
 //   PATCH /v1/team/workspaces/:id {title?, branch?, visibility?, section?, archived?, ownerUserId?, tokenUsdMicros?}
 //   POST  /v1/team/workspaces/:id/presence {clientId, state: viewing|typing|left, chatId?}
@@ -13,6 +13,7 @@ import type { SandboxCaller } from './auth'
 import type { MachineSize } from './entitlements'
 import { getSandbox, touchActivity, updateRegistry, type SandboxRow } from './store'
 import { memberNamesFor } from './member-names'
+import { recordTokenSpend } from './member-usage'
 import { readSnapshotTimes } from './read-snapshots'
 import { sandboxView } from './wire'
 import { accountForSlug, orgIdOf, slugForAccount } from './org-slugs'
@@ -216,7 +217,9 @@ export async function workspaceViews(db: D1Database, caller: SandboxCaller, rows
       // Display names (token `name` claim) for the ids above; the roster wins where it has one.
       memberNames,
       // When its sleeping read-only copy was saved ("As of"); only for those who may read it.
-      readSnapshotAt: canOpen(caller, row) ? (readAt.get(row.id) ?? null) : null
+      readSnapshotAt: canOpen(caller, row) ? (readAt.get(row.id) ?? null) : null,
+      // Started by a routine run (Home hides these unless its Routine runs filter is on).
+      fromRoutine: isRoutineRun(row)
     }
   })
 }
@@ -226,8 +229,15 @@ const ListQuery = z.object({
   by: z.string().min(1).max(128).optional(),
   repo: z.string().min(1).max(2048).optional(),
   section: z.string().min(1).max(64).optional(),
-  archived: z.enum(['exclude', 'include', 'only']).default('exclude')
+  archived: z.enum(['exclude', 'include', 'only']).default('exclude'),
+  /** Routine runs stay off Home unless asked for (`include`), like Conductor's routine filter. */
+  routines: z.enum(['exclude', 'include']).default('exclude')
 })
+
+/** A routine run's VM: tagged at create, and keyed `routine-…` while it boots. */
+export function isRoutineRun(row: SandboxRow): boolean {
+  return (row as { origin?: string | null }).origin === 'routine' || row.workspace_id.startsWith('routine-')
+}
 
 export async function listWorkspaces(db: D1Database, caller: SandboxCaller, url: URL, now: number) {
   const query = ListQuery.safeParse(Object.fromEntries(url.searchParams))
@@ -242,7 +252,7 @@ export async function listWorkspaces(db: D1Database, caller: SandboxCaller, url:
     .prepare(`SELECT * FROM sandboxes WHERE account_id = ? AND status <> 'destroyed' ORDER BY COALESCE(last_activity_at, updated_at) DESC LIMIT 500`)
     .bind(caller.accountId)
     .all<SandboxRow>()
-  const rows = results.filter((row) => {
+  const matching = results.filter((row) => {
     if (q.scope === 'mine' ? row.user_id !== caller.userId : q.scope === 'team' ? !canSee(caller, row) : false) {
       return false
     }
@@ -252,7 +262,8 @@ export async function listWorkspaces(db: D1Database, caller: SandboxCaller, url:
     if (q.repo && row.repo_url !== q.repo) {
       return false
     }
-    if (row.hidden) {
+    // Hidden rows are machine-made: only routine runs ever come back (below), and only when asked for.
+    if (row.hidden && !isRoutineRun(row)) {
       return false
     }
     if (q.section && row.section !== q.section) {
@@ -260,7 +271,47 @@ export async function listWorkspaces(db: D1Database, caller: SandboxCaller, url:
     }
     return q.archived === 'include' || (q.archived === 'only') === (row.archived_at !== null)
   })
-  return { workspaces: await workspaceViews(db, caller, rows, now) }
+  const runs = matching.filter(isRoutineRun)
+  const rows = q.routines === 'include' ? matching : matching.filter((row) => !isRoutineRun(row))
+  const hidden = q.routines === 'include' ? [] : runs
+  const [views, routineCount, hiddenCompute, routineNames] = await Promise.all([
+    workspaceViews(db, caller, rows, now),
+    db.prepare('SELECT COUNT(*) AS n FROM routines WHERE account_id = ? AND deleted_at IS NULL').bind(caller.accountId).first<{ n: number }>(),
+    computeMsFor(db, hidden.map((row) => row.id)),
+    routineNamesFor(db, caller.accountId, rows.filter(isRoutineRun))
+  ])
+  return {
+    workspaces: views.map((view, i) => ({ ...view, routineName: routineNames.get(rows[i]!.id) ?? null })),
+    // Home: offer the Routine runs switch only when the team has routines, and say what it hides
+    // (its count and hours still belong in the team's totals).
+    routineRuns: {
+      routines: routineCount?.n ?? 0,
+      hidden: hidden.length,
+      hiddenRunning: hidden.filter((row) => row.status === 'running' || row.status === 'creating').length,
+      hiddenComputeMs: hidden.reduce((sum, row) => sum + costView(row, hiddenCompute.get(row.id) ?? 0, now).computeMs, 0)
+    }
+  }
+}
+
+/** sandbox id -> its routine's name, for routine runs being listed. */
+async function routineNamesFor(db: D1Database, accountId: string, rows: readonly SandboxRow[]): Promise<Map<string, string>> {
+  const refs = [...new Set(rows.flatMap((row) => ((row as { origin_ref?: string | null }).origin_ref ? [(row as { origin_ref: string }).origin_ref] : [])))]
+  if (refs.length === 0) {
+    return new Map()
+  }
+  const { results } = await db
+    .prepare(`SELECT id, name FROM routines WHERE account_id = ? AND id IN (${refs.map(() => '?').join(', ')})`)
+    .bind(accountId, ...refs)
+    .all<{ id: string; name: string }>()
+  const byRoutine = new Map(results.map((r) => [r.id, r.name]))
+  const out = new Map<string, string>()
+  for (const row of rows) {
+    const name = byRoutine.get((row as { origin_ref?: string | null }).origin_ref ?? '')
+    if (name) {
+      out.set(row.id, name)
+    }
+  }
+  return out
 }
 
 const SECTION = z.string().trim().min(1).max(64).regex(/^[^\u0000-\u001f]+$/)
@@ -327,6 +378,12 @@ export async function patchWorkspace(
   })
   if (!next) {
     throw new WorkspaceError('not_found')
+  }
+  if (patch.tokenUsdMicros !== undefined) {
+    // Dated per reporter for teammate profiles' heatmap; the label above is only a running total.
+    await recordTokenSpend(db, row.account_id, caller.userId, row.token_usd_micros, patch.tokenUsdMicros, now).catch((error: unknown) =>
+      console.warn('member_usage_write_failed', String(error))
+    )
   }
   const ownerChanged = patch.ownerUserId !== undefined && patch.ownerUserId !== row.user_id
   const wentPrivate = row.visibility === 'team' && next.visibility === 'private'

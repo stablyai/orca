@@ -2,6 +2,7 @@
 // hosted sandbox driver: a short-lived Orca token (aud=orca-sandbox), never a provider credential.
 import { z } from 'zod'
 import { errorMessage } from '../../shared/error-message'
+import { cloudWorkspacePrefsMethods } from './cloud-workspaces-prefs-client'
 import { HOSTED_SANDBOX_STATUSES } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
 import type { SealedReadSnapshot } from '../../shared/cloud-workspaces/read-snapshot'
 import {
@@ -13,17 +14,18 @@ import {
   CloudWorkspaceListResponseSchema,
   CloudWorkspacePresenceResponseSchema,
   CloudWorkspaceResponseSchema,
-  CloudOrgSlugSchema,
-  CloudWorkspacePrefsSchema,
   OrgPromptsSchema,
-  type CloudOrgSlug,
   type CloudWorkspaceLinkTarget,
-  type CloudWorkspacePrefs,
-  type CloudWorkspacePrefsDocument,
   type CloudWorkspaceListQuery,
   type CloudWorkspacePatch,
   type OrgPrompts
 } from '../../shared/cloud-workspaces/cloud-workspaces-wire'
+import {
+  PokeInboxSchema,
+  PokeSentSchema,
+  PokeSettingsSchema,
+  TeammateProfileResponseSchema
+} from '../../shared/cloud-workspaces/team-presence-wire'
 
 const NoteSentSchema = z.object({ ok: z.literal(true) })
 /** DELETE and POST suspend on /v1/sandboxes/:id answer with the sandbox's new state, not `{ok}`. */
@@ -134,6 +136,7 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
   const ws = (id: string) => `/v1/team/workspaces/${encodeURIComponent(id)}`
 
   return {
+    ...cloudWorkspacePrefsMethods(call),
     async list(query: CloudWorkspaceListQuery = {}) {
       const params = new URLSearchParams()
       for (const [key, value] of Object.entries(query)) {
@@ -142,13 +145,11 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
         }
       }
       const qs = params.toString()
-      return (
-        await call(
-          'GET',
-          `/v1/team/workspaces${qs ? `?${qs}` : ''}`,
-          CloudWorkspaceListResponseSchema
-        )
-      ).workspaces
+      return call(
+        'GET',
+        `/v1/team/workspaces${qs ? `?${qs}` : ''}`,
+        CloudWorkspaceListResponseSchema
+      )
     },
     async get(id: string) {
       return (await call('GET', ws(id), CloudWorkspaceResponseSchema)).workspace
@@ -270,26 +271,34 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
     putOrgPrompts(document: OrgPrompts['document'], revision: number): Promise<OrgPrompts> {
       return call('PUT', '/v1/team/prompts', OrgPromptsSchema, { document, revision })
     },
-    /** This member's synced arrangement (pins, order, sections) for the current account. */
-    getPrefs(): Promise<CloudWorkspacePrefs> {
-      return call('GET', '/v1/team/prefs', CloudWorkspacePrefsSchema)
+    async teammateProfile(userId: string, utcOffsetMin: number) {
+      const qs = new URLSearchParams({ utcOffsetMin: String(utcOffsetMin) })
+      return (
+        await call(
+          'GET',
+          `/v1/team/members/${encodeURIComponent(userId)}/profile?${qs}`,
+          TeammateProfileResponseSchema
+        )
+      ).profile
     },
-    /** Compare-and-set: a stale `revision` answers 409 `conflict`; re-read and re-apply. */
-    putPrefs(
-      document: CloudWorkspacePrefsDocument,
-      revision: number,
-      deviceId?: string
-    ): Promise<CloudWorkspacePrefs> {
-      return call('PUT', '/v1/team/prefs', CloudWorkspacePrefsSchema, {
-        document,
-        revision,
-        ...(deviceId ? { deviceId } : {})
-      })
+    async poke(userId: string) {
+      return (
+        await call(
+          'POST',
+          `/v1/team/members/${encodeURIComponent(userId)}/poke`,
+          PokeSentSchema,
+          {}
+        )
+      ).poke
     },
-    /** The org's link slug; `name` (the org name this client shows) names it the first time. */
-    getOrgSlug(name?: string | null): Promise<CloudOrgSlug> {
-      const qs = name ? `?${new URLSearchParams({ name: name.slice(0, 120) })}` : ''
-      return call('GET', `/v1/team/org${qs}`, CloudOrgSlugSchema)
+    pokeInbox() {
+      return call('GET', '/v1/team/pokes', PokeInboxSchema)
+    },
+    async setPokesEnabled(enabled: boolean) {
+      return (await call('PUT', '/v1/team/pokes/settings', PokeSettingsSchema, { enabled })).enabled
+    },
+    async markPokesSeen(ids: string[]) {
+      await call('POST', '/v1/team/pokes/seen', NoteSentSchema, { ids })
     }
   }
 }

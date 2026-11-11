@@ -57,14 +57,31 @@ export const CloudWorkspaceSchema = z.object({
   memberNames: z.record(z.string(), z.string().max(80)).optional().catch(undefined),
   // When the last sleeping read snapshot was stored (ms), present only when the caller can open the
   // workspace; drives "As of" in lists without fetching the blob. Older control planes omit it.
-  readSnapshotAt: z.number().nullable().optional().catch(undefined)
+  readSnapshotAt: z.number().nullable().optional().catch(undefined),
+  // Started by a routine run. Home lists these only with its Routine runs filter on (routines=include).
+  // Older control planes omit it.
+  fromRoutine: z.boolean().optional().catch(undefined),
+  // The routine that started it, for routine runs (shown as "Routine · <name>").
+  routineName: z.string().max(200).nullable().optional().catch(undefined)
 })
 
 export type CloudWorkspace = z.infer<typeof CloudWorkspaceSchema>
 export type CloudWorkspacePresence = z.infer<typeof CloudWorkspacePresenceSchema>
 
+/** What Home's Routine runs switch hides (counts and hours stay in the team's totals). */
+export const CloudWorkspaceRoutineRunsSchema = z.object({
+  /** Routines the team has: the switch is offered only when there is at least one. */
+  routines: z.number().int().min(0),
+  hidden: z.number().int().min(0),
+  hiddenRunning: z.number().int().min(0),
+  hiddenComputeMs: z.number().min(0)
+})
+export type CloudWorkspaceRoutineRuns = z.infer<typeof CloudWorkspaceRoutineRunsSchema>
+
 export const CloudWorkspaceListResponseSchema = z.object({
-  workspaces: z.array(CloudWorkspaceSchema)
+  workspaces: z.array(CloudWorkspaceSchema),
+  // Older control planes omit it.
+  routineRuns: CloudWorkspaceRoutineRunsSchema.optional().catch(undefined)
 })
 export const CloudWorkspaceResponseSchema = z.object({ workspace: CloudWorkspaceSchema })
 export const CloudWorkspacePresenceResponseSchema = z.object({
@@ -135,6 +152,8 @@ export type CloudWorkspaceListQuery = {
   repo?: string
   section?: string
   archived?: 'exclude' | 'include' | 'only'
+  /** Routine runs are left out unless `include` (older control planes ignore it and leave them out). */
+  routines?: 'exclude' | 'include'
 }
 
 export type CloudWorkspacePatch = {

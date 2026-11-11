@@ -15,19 +15,37 @@ import { ORCA_CLOUD_RECIPE_ID } from '../../../../shared/hosted-sandbox/orca-clo
 import { agentName } from '@/components/settings/agent-accounts/orca-cloud-accounts-copy'
 import { prefersReducedMotion } from '@/components/new-workspace/run-on/cloud-start-view'
 import { CloudSetupPage } from './CloudSetupPage'
+import { closeSetupPageWhenCreateTakesOver } from './cloud-setup-handoff'
 import { useCloudSetupFlow } from './use-cloud-setup-flow'
 
 /** How long every row must read done before the page starts the workspace. */
 const SETTLE_MS = 1_500
 
 function reopenComposer(request: CloudSetupPageRequest, autoStart: boolean): void {
-  closeCloudSetupPage()
+  // A GitHub-only repository can't be preselected; the composer opens for one more Start.
+  const hiddenStart = autoStart && !request.cloudOnlyRepo
+  if (!hiddenStart) {
+    closeCloudSetupPage()
+  } else {
+    // Warm the start screen's chunk so it is ready the frame the create takes over.
+    void import('@/components/worktree-creation/WorktreeCreationPanel').catch(() => undefined)
+  }
   useAppStore.getState().openModal('new-workspace-composer', {
     ...request.composer,
     initialEphemeralVmRecipeId: ORCA_CLOUD_RECIPE_ID,
-    // A GitHub-only repository can't be preselected; the composer opens for one more Start.
-    ...(autoStart && !request.cloudOnlyRepo ? { cloudAutoStart: true } : {})
+    ...(hiddenStart ? { cloudAutoStart: true } : {})
   })
+  if (hiddenStart) {
+    // The page stays up until the start screen has painted: nothing under it may flash.
+    closeSetupPageWhenCreateTakesOver({
+      getState: () => useAppStore.getState(),
+      subscribe: (listener) => useAppStore.subscribe(listener),
+      startScreenShown: () => document.querySelector('[data-vm-build-sheet]') !== null,
+      closePage: closeCloudSetupPage,
+      setTimer: (callback, ms) => window.setTimeout(callback, ms),
+      clearTimer: (handle) => window.clearTimeout(handle)
+    })
+  }
 }
 
 function ActiveCloudSetupPage({ request }: { request: CloudSetupPageRequest }): React.JSX.Element {

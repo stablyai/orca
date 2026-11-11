@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from 'react'
-import { GitBranch, Loader2, Lock } from 'lucide-react'
+import { GitBranch, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { type Translate, useIntlLocale, useTranslate } from '@/i18n/use-translate'
@@ -7,10 +7,7 @@ import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { keybindingMatchesAction } from '../../../../shared/keybindings/matching'
-import {
-  formatWorkspaceNumber,
-  type CloudWorkspace
-} from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
+import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { CloudStateDot } from '../orca-cloud/CloudStateDot'
 import type { CloudDotState } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 import { MemberAvatar, PresenceStack } from './CloudMemberAvatars'
@@ -31,9 +28,10 @@ import {
   type MemberDirectory
 } from './cloud-workspace-format'
 import { cloudWorkspaceTitle } from './open-cloud-workspace'
+import { CloudWorkspaceRowBadges } from './CloudWorkspaceRowBadges'
 
 /** The shared Orca Cloud dot vocabulary (shape and tone), same as the sidebar and panel. */
-function dotState(w: CloudWorkspace): CloudDotState {
+export function dotState(w: CloudWorkspace): CloudDotState {
   if (w.archivedAt !== null) {
     return 'archived'
   }
@@ -56,7 +54,7 @@ function dotState(w: CloudWorkspace): CloudDotState {
 }
 
 /** Glossary lifecycle states only: a sandbox going to sleep already reads as Asleep. */
-function statusLabel(w: CloudWorkspace, t: Translate): string {
+export function statusLabel(w: CloudWorkspace, t: Translate): string {
   if (w.archivedAt !== null) {
     return t('auto.components.cloudWorkspaces.statusArchived', 'Archived')
   }
@@ -248,46 +246,28 @@ export function CloudWorkspaceRow({
             >
               {title}
             </span>
-            {w.visibility === 'private' && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Lock
-                    role="img"
-                    className="size-3 shrink-0 text-muted-foreground"
-                    aria-label={t('auto.components.cloudWorkspaces.private', 'Private')}
-                  />
-                </TooltipTrigger>
-                <TooltipContent side="top">
-                  {w.ownerUserId === selfId
-                    ? t(
-                        'auto.components.cloudWorkspaces.privateTooltipYou',
-                        'Private — only you can see it'
-                      )
-                    : t(
-                        'auto.components.cloudWorkspaces.privateTooltip',
-                        'Private — only {{name}} can open it',
-                        {
-                          name: ownerName
-                        }
-                      )}
-                </TooltipContent>
-              </Tooltip>
-            )}
-            {/* Its W-number shows on hover or focus only; the space is held so nothing shifts. */}
-            {w.number ? (
-              <span
-                className={cn(
-                  'shrink-0 font-mono text-2xs tabular-nums text-muted-foreground opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 motion-safe:transition-opacity',
-                  revealOpen && 'opacity-100'
-                )}
-              >
-                {formatWorkspaceNumber(w.number)}
-              </span>
-            ) : null}
+            <CloudWorkspaceRowBadges
+              workspace={w}
+              selfId={selfId}
+              ownerName={ownerName}
+              revealNumber={revealOpen}
+            />
           </span>
           <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
             <MemberAvatar userId={w.ownerUserId} directory={directory} selfId={selfId} size="sm" />
             <span className="shrink-0">{ownerName}</span>
+            {w.fromRoutine === true && (
+              <>
+                <span aria-hidden>·</span>
+                <span className="truncate">
+                  {w.routineName
+                    ? t('auto.components.cloudWorkspaces.routineRunOf', 'Routine · {{name}}', {
+                        name: w.routineName
+                      })
+                    : t('auto.components.cloudWorkspaces.routineRun', 'Routine run')}
+                </span>
+              </>
+            )}
             {showStatus && (
               <>
                 <span aria-hidden>·</span>

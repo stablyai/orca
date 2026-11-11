@@ -1,4 +1,5 @@
-export type VmEnvironmentCheckDecision = 'open-anyway' | 'retry' | 'cancel'
+/** `restart`: delete this sandbox and start the create over on a fresh one. */
+export type VmEnvironmentCheckDecision = 'open-anyway' | 'retry' | 'restart' | 'cancel'
 
 // Dependency-free so the pending-creation store can stop a VM build's checks when the user dismisses it.
 const waiting = new Map<string, (decision: VmEnvironmentCheckDecision) => void>()
@@ -21,6 +22,11 @@ export function awaitVmEnvironmentCheckDecision(
       resolve(decision)
     })
   })
+}
+
+/** True while a paused create is waiting on the user (false once it gave up on its own). */
+export function isAwaitingVmEnvironmentCheckDecision(creationId: string): boolean {
+  return waiting.has(creationId)
 }
 
 export function resolveVmEnvironmentCheckDecision(

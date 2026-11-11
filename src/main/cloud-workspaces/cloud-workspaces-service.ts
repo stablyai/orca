@@ -6,9 +6,11 @@ import { openSealedGrant } from '../../shared/cloud-workspaces/sealed-grant'
 import { errorMessage } from '../../shared/error-message'
 import type {
   CloudWorkspaceLinkTarget,
+  CloudWorkspace,
   CloudWorkspaceListQuery,
   CloudWorkspacePatch,
   CloudWorkspacePrefsDocument,
+  CloudWorkspaceRoutineRuns,
   OrgPrompts
 } from '../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
@@ -31,6 +33,11 @@ const TYPING_HOLD_MS = 6_000
 export type CloudWorkspacesResult<T> =
   | { ok: true; value: T }
   | { ok: false; error: string; reason?: string; status?: number; orgId?: string }
+
+/** A list read, plus what Home's Routine runs switch hides (absent from older control planes). */
+export type CloudWorkspaceListResult =
+  | { ok: true; value: CloudWorkspace[]; routineRuns?: CloudWorkspaceRoutineRuns }
+  | { ok: false; error: string; reason?: string; status?: number }
 
 /** Where this desktop already has a cloud workspace locally (owner: the hosted runtime it created). */
 export type LocalCloudWorkspace = {
@@ -142,13 +149,17 @@ export function createCloudWorkspacesService(deps: {
 
   return {
     available: true as const,
-    list: (query: CloudWorkspaceListQuery) =>
-      wrap(async () => {
-        const workspaces = await client.list(query)
+    list: async (query: CloudWorkspaceListQuery): Promise<CloudWorkspaceListResult> => {
+      let routineRuns: CloudWorkspaceRoutineRuns | undefined
+      const result = await wrap(async () => {
+        const page = await client.list(query)
+        routineRuns = page.routineRuns
         // Cheap when already registered; catches a sign-in or account switch since the last list.
         void reader?.register()
-        return workspaces
-      }),
+        return page.workspaces
+      })
+      return result.ok && routineRuns ? { ...result, routineRuns } : result
+    },
     /** Sign-out: revoke this device's reader key server-side (callers bound the wait). */
     revokeReaderKey: (timeoutMs: number) => reader?.revoke(timeoutMs) ?? Promise.resolve(),
     /** A sleeping workspace's sealed snapshot, opened on this device; never wakes it. */
@@ -174,6 +185,12 @@ export function createCloudWorkspacesService(deps: {
     getOrgPrompts: () => wrap(() => client.getOrgPrompts()),
     putOrgPrompts: (document: OrgPrompts['document'], revision: number) =>
       wrap(() => client.putOrgPrompts(document, revision)),
+    teammateProfile: (userId: string, utcOffsetMin: number) =>
+      wrap(() => client.teammateProfile(userId, utcOffsetMin)),
+    poke: (userId: string) => wrap(() => client.poke(userId)),
+    pokeInbox: () => wrap(() => client.pokeInbox()),
+    setPokesEnabled: (enabled: boolean) => wrap(() => client.setPokesEnabled(enabled)),
+    markPokesSeen: (ids: string[]) => wrap(() => client.markPokesSeen(ids)),
     localWorkspaces: () => localWorkspaces(),
     noteSent: (id: string) => wrap(() => client.noteSent(id)),
     sleep: (id: string) => wrap(() => client.sleep(id)),

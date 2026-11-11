@@ -28,6 +28,11 @@ export function createWebCloudWorkspacesApi(): PreloadApi['cloudWorkspaces'] {
     getPrefs: () => Promise.resolve(NOT_CONFIGURED),
     putPrefs: () => Promise.resolve(NOT_CONFIGURED),
     getOrgSlug: () => Promise.resolve(NOT_CONFIGURED),
+    teammateProfile: () => Promise.resolve(NOT_CONFIGURED),
+    poke: () => Promise.resolve(NOT_CONFIGURED),
+    pokeInbox: () => Promise.resolve(NOT_CONFIGURED),
+    setPokesEnabled: () => Promise.resolve(NOT_CONFIGURED),
+    markPokesSeen: () => Promise.resolve(NOT_CONFIGURED),
     onOpenLink: () => () => {},
     consumePendingLink: () => Promise.resolve(null)
   }

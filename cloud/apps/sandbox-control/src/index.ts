@@ -9,6 +9,7 @@
 //          the public API's POST /v1/workspaces/:id/wake answers the same fields plus `workspace`)
 //   POST   /v1/sandboxes/:id/restart                              -> {sandbox, connection}
 //   GET    /v1/sandboxes/:id/status                               -> {sandbox, status} (live metrics, cost)
+//   GET    /v1/sandboxes/boot-plan?repo=<url>                     -> {repo: 'clone' | 'update'}
 //   GET    /v1/sandboxes/:id/clone                                -> {clone: {state, percent?, stage?, reason?}}
 //   POST   /v1/sandboxes/:id/archive {pullRequests?, checkouts?}  -> {sandbox}
 //   GET    /v1/sandboxes/:id/archive                              -> {archive}
@@ -29,6 +30,8 @@
 //          team workspace registry, presence, per-device grants (src/workspaces.ts, src/grants.ts)
 //          POST /v1/team/workspaces/:id/wake?wait=30s: any member who can open it wakes it (single-flight,
 //          billed to the account, counted on the owner's seat like every wake) -> {state, endpoint: null, …}
+//   /v1/team/members/:userId/(profile|poke), /v1/team/pokes[/settings|/seen]
+//          teammate profiles (usage heatmap, recent workspaces) and opt-in Pokes (src/team-presence.ts)
 // /v1/sandboxes/* is the owner's lifecycle API: only the workspace's owner (and, for suspend and
 // destroy, an org admin) can reach a row there, because resume hands back an orcad pairing offer.
 // Browser (GitHub redirects): GET /v1/github/setup, GET /v1/github/callback
@@ -142,6 +145,8 @@ import { credentialTargets, type CredentialTarget } from './provider-env'
 import type { Keyring } from './secrets-crypto'
 import { ProviderError, type SandboxProviderApi } from './sandbox-provider'
 import { readCloneStatus } from './clone-status'
+import { readIdempotencyKey, withIdempotency } from './api/idempotency'
+import { ApiError } from './api/caller'
 import { ensureAutoEnvironment, expireAutoEnvironments, touchEnvironment } from './auto-environments'
 import { DesktopCommandError, VmCommandError, startDesktop } from './sandbox-vm-commands'
 import { forgetShareLink, handleShareGateway } from './share-gateway'
@@ -152,7 +157,7 @@ import { getSandbox, getSandboxByProviderName, listAccountSandboxes, markUserSle
 import { createVercelSandboxApi } from './vercel-sandbox-api'
 import { advanceAllBuilds, tickBuild, unfinishedBuilds, type BuildDeps } from './environment-builds'
 import { environmentErrorResponse, handleEnvironmentRoute, isEnvironmentRoute } from './environment-routes'
-import { EnvironmentError } from './environments'
+import { EnvironmentError, resolveEnvironmentBoot } from './environments'
 import type { GoldenImageProviderApi } from './golden-image-provider'
 import { CreateRequestSchema, LeaseRequestSchema, parseWakeWait, readyView, sandboxView } from './wire'
 import { ArchiveRequestSchema } from './sandbox-vm-inspect'
@@ -206,6 +211,7 @@ import {
   workspaceViews
 } from './workspaces'
 import { rememberCallerName } from './member-names'
+import { TeamPresenceError, teamPresenceRoute } from './team-presence'
 import { sweepSessionCpu } from './session-cpu'
 import type { SandboxCaller } from './auth'
 
@@ -1486,13 +1492,30 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       url.pathname === '/v1/team/links/resolve' ||
       url.pathname === '/v1/team/prompts' ||
       url.pathname === '/v1/team/prefs' ||
-      url.pathname === '/v1/team/org'
+      url.pathname === '/v1/team/org' ||
+      url.pathname.startsWith('/v1/team/members/') ||
+      url.pathname === '/v1/team/pokes' ||
+      url.pathname.startsWith('/v1/team/pokes/')
     ) {
       const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
       if (!caller) {
         return fail('unauthorized', 401)
       }
       return await workspaceRoute(request, url, env, deps, caller)
+    }
+    if (url.pathname === '/v1/sandboxes/boot-plan' && request.method === 'GET') {
+      // Whether a create of this repo would clone it or update a prebuilt copy, so the desktop names
+      // its repository step once, before the create answers (environments.ts resolveEnvironmentBoot).
+      const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
+      if (!caller) {
+        return fail('unauthorized', 401)
+      }
+      const repo = url.searchParams.get('repo') ?? ''
+      if (repo.length === 0 || repo.length > 2048) {
+        return fail('invalid_request', 400)
+      }
+      const source = await resolveEnvironmentBoot(env.SANDBOX_DB, caller.accountId, { repoUrl: repo }).catch(() => null)
+      return json({ repo: source?.repoDir ? 'update' : 'clone' })
     }
     const match =
       /^\/v1\/sandboxes(?:\/([A-Za-z0-9_]+)(?:\/(suspend|resume|lease|rollover|wake|restart|status|clone|archive|unarchive|env\/refresh|egress\/hosts|ssh-keys|desktop))?)?$/.exec(
@@ -1529,14 +1552,39 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         return fail('not_found', 404)
       }
       await consumeCreateToken(life.db, life.config.guardrails!, caller.accountId, life.now())
-      const body = CreateRequestSchema.safeParse(await readJson(request))
+      const raw = await readJson(request)
+      const body = CreateRequestSchema.safeParse(raw)
       if (!body.success) {
         return fail('invalid_request', 400)
       }
-      // Desktops that show the clone as its own step ask for it in the background (GET .../clone).
-      const ready = await createSandbox(life, caller, { ...body.data, cloneInBackground: features.includes('clone-progress') })
-      await recordOwnerDeviceAndSync(life, ready.row, ready.connection.pairingCode)
-      return readyResponse(ready, features.includes('repo-update'))
+      // Idempotency-Key (one per Create press): a re-sent create with the same key and body answers
+      // with the sandbox the first one made, for 24 h, instead of starting another (PC-8).
+      let timings: Ready['timings']
+      try {
+        const response = await withIdempotency(
+          life.db,
+          { accountId: caller.accountId, scope: `sandbox.create:${caller.userId}`, key: readIdempotencyKey(request), body: raw, now: life.now() },
+          async () => {
+            // Desktops that show the clone as its own step ask for it in the background (GET .../clone).
+            const ready = await createSandbox(life, caller, { ...body.data, cloneInBackground: features.includes('clone-progress') })
+            await recordOwnerDeviceAndSync(life, ready.row, ready.connection.pairingCode)
+            timings = ready.timings
+            return { status: 200, body: readyView(ready.row, ready.connection, ready.cloning, features.includes('repo-update')) }
+          }
+        )
+        const timing = Object.entries(timings ?? {})
+          .map(([phase, ms]) => `${phase};dur=${ms}`)
+          .join(', ')
+        if (timing) {
+          response.headers.set('server-timing', timing)
+        }
+        return response
+      } catch (error) {
+        if (error instanceof ApiError) {
+          return fail(error.code, error.status, error.reason)
+        }
+        throw error
+      }
     }
     const row = await getSandbox(env.SANDBOX_DB, id)
     const route = `${request.method} ${action ?? ''}`
@@ -1862,6 +1910,26 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
   }
   if (url.pathname === '/v1/team/workspaces') {
     return request.method === 'GET' ? json(await listWorkspaces(db, caller, url, now)) : fail('not_found', 404)
+  }
+  if (url.pathname.startsWith('/v1/team/members/') || url.pathname.startsWith('/v1/team/pokes')) {
+    try {
+      const answer = await teamPresenceRoute(db, caller, request, url, now, () => readJson(request), {
+        activitySharing: env.TEAMMATE_ACTIVITY_SHARING === 'team' ? 'team' : 'opt_in'
+      })
+      return answer === null ? fail('not_found', 404) : json(answer)
+    } catch (error) {
+      if (error instanceof TeamPresenceError) {
+        const response = json(
+          { error: error.code, ...(error.reason ? { reason: error.reason } : {}), ...(error.retryAfterMs ? { retryAfterMs: error.retryAfterMs } : {}) },
+          error.status
+        )
+        if (error.retryAfterMs) {
+          response.headers.set('retry-after', String(Math.ceil(error.retryAfterMs / 1000)))
+        }
+        return response
+      }
+      throw error
+    }
   }
   const match = /^\/v1\/team\/workspaces\/(sbx_[0-9a-f]{24})(?:\/(presence|wake|lease|grants|sent|read-snapshot)(?:\/(grt_[0-9a-f]{24}))?)?$/.exec(url.pathname)
   if (!match) {
