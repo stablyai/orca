@@ -105,13 +105,15 @@ A user-managed Cloudflare Tunnel or reverse proxy can provide a connection witho
 1. In **Settings → Remote Orca Servers**, create a new access link and choose **Custom address**. Paste the public HTTPS URL, or its `wss://` equivalent. HTTPS is converted to WSS; do not append the local listener port to the public URL. An explicit public port and any proxy route are preserved.
 1. Generate the access link. Use **Pair another Orca client** for a desktop client, or the generated web-client URL for a browser.
 
+For a headless host, follow the [`orca serve` setup](#alternative-orca-serve) and advertise the tunnel with `orca serve --pairing-address wss://orca.example.com`. On Linux, use `orca-ide serve --pairing-address wss://orca.example.com`. Paste the printed access link into **Add Server** on the client. To generate another link while the server is running, use [`orca pair --address wss://orca.example.com`](#pair-without-restarting-the-server). A server-only install has no paired web client.
+
 The browser link retains proxy routing parameters. Choose routing parameter names other than `pairing`, `pair`, `code`, and `token`, which Orca reserves for importing legacy browser links.
 
 For browser access, route the web client's hostname or path prefix to the same Orca server for both the page and its assets. Browsers drop the page's query parameters when loading relative assets. For example, a proxy that serves `/orca/web-index.html?route=red` must also send requests for `/orca/assets/...` to that server.
 
 The public endpoint uses TLS, while the local connector can reach Orca over loopback HTTP. Keep the existing Orca pairing and access grants enabled. If your tunnel has additional authentication, each client must be able to complete that authentication before opening its WebSocket; browser login pages do not authenticate native clients automatically.
 
-[Cloudflare Quick Tunnels](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/) are useful for temporary testing, but their hostnames change each time the connector starts and they have no uptime guarantee. After a hostname change, generate a new access link for new clients and update existing clients' endpoint configuration. Use a stable named tunnel for ongoing access. Keep access links private and revoke test grants when finished.
+[Cloudflare Quick Tunnels](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/) are useful for temporary testing, but their hostnames change each time the connector starts and they have no uptime guarantee. After a hostname change, generate a new access link for new clients and update existing clients' endpoint configuration. Browser pairing is stored per origin, so generate and open a new web-client URL to pair the browser at the new hostname. Use a stable named tunnel for ongoing access. Keep access links private and revoke test grants when finished.
 
 For the native mobile companion, use a mobile-scoped pairing link and the [custom tunnel setup](/docs/mobile#use-your-own-tunnel). A mobile-scoped grant cannot open the full browser client.
 
