@@ -3,9 +3,9 @@ import { createMainWindow, loadMainWindow } from '../window/createMainWindow'
 import {
   recordCrashBreadcrumb,
   recordCoalescedCrashBreadcrumb
-} from '../crash-reporting/crash-breadcrumb-store'
-import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
-import { shouldRecoverRendererAfterProcessGone } from '../crash-reporting/process-gone-classification'
+} from '../crash-reporting/breadcrumbs/crash-breadcrumb-store'
+import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
+import { shouldRecoverRendererAfterProcessGone } from '../crash-reporting/process-exits/process-gone-classification'
 import { resolveConsent } from '../telemetry/consent'
 import { trackAppOpenedOnce } from '../telemetry/client'
 import { ensureWindowsUserDataAclGrant } from './windows-user-data-acl'

@@ -1,7 +1,10 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import { hashProfileStateJson } from '../../persistence/profile-state/profile-state-documents'
-import { isRecord } from '../../persistence/profile-state/profile-state-document-validation'
+import '../../persistence/profile-state/documents/profile-state-documents'
+import {
+  hashProfileStatePayload as hashProfileStateJson,
+  isRecord
+} from '../../persistence/profile-state/documents/profile-state-document-validation'
 import { getOrcaProfileMoveIntentDirectory } from '../profile-storage-paths'
 import {
   validateProfileProjectDomainChanges,

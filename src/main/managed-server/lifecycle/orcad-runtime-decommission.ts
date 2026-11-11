@@ -24,7 +24,7 @@ import {
 } from './orcad-managed-runtime-context'
 import { closeOrcadManagedTunnel, ensureOrcadManagedTunnel } from './orcad-managed-tunnel'
 import { clearManagedOrcadUpdateDeferral } from './orcad-managed-update-deferrals'
-import { removeOrcadMigrationJournalsForDestination } from '../../persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
+import { removeOrcadMigrationJournalsForDestination } from '../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
 import { decommissionRemoteOrcad } from '../install/orcad-remote-decommission'
 import { withManagedOrcadLifecycle } from './orcad-managed-lifecycle'
 import { collectManagedTerminalCensus } from './orcad-terminal-census-client'

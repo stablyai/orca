@@ -11,10 +11,10 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
 import {
   exportProfileStateJson,
-  hashProfileStateJson,
   importProfileStateJson
-} from '../../persistence/profile-state/profile-state-documents'
-import { openProfileStateDatabase } from '../../persistence/profile-state/profile-state-database'
+} from '../../persistence/profile-state/documents/profile-state-documents'
+import { hashProfileStatePayload as hashProfileStateJson } from '../../persistence/profile-state/documents/profile-state-document-validation'
+import { openProfileStateDatabase } from '../../persistence/profile-state/database/profile-state-database'
 import {
   persistProfileProjectMoveIntent,
   recoverPendingProfileProjectMoves

@@ -22,11 +22,11 @@ vi.mock('../browser/client-pages/renderer/browser-client-page-renderer-runtime',
 
 import { createMainWindow } from './createMainWindow'
 import { ipcMain } from 'electron'
-import { shouldRecoverRendererAfterProcessGone } from '../crash-reporting/process-gone-classification'
+import { shouldRecoverRendererAfterProcessGone } from '../crash-reporting/process-exits/process-gone-classification'
 import {
   resetExpectedTeardownStateForTest,
   resolveExpectedTeardownScope
-} from '../crash-reporting/expected-teardown-state'
+} from '../crash-reporting/process-exits/expected-teardown-state'
 import {
   attachClientPageRendererMock,
   browserWindowMock,

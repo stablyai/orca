@@ -1,0 +1,308 @@
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  utimesSync,
+  writeFileSync
+} from 'node:fs'
+import { tmpdir } from 'node:os'
+import type * as Os from 'node:os'
+import { join } from 'node:path'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+type ViewerFixture = {
+  displayName: string
+  email: string | null
+  organizationId: string
+  organizationName: string
+  organizationUrlKey: string
+}
+
+let tempHome = ''
+let fixtures = new Map<string, ViewerFixture>()
+let linearClientMock: ReturnType<typeof vi.fn>
+
+type SafeStorageMockOptions = {
+  encryptionAvailable?: boolean
+  decryptString?: (value: Buffer) => string
+}
+
+function writeLegacyLinearFiles(token: string, viewer: Record<string, unknown>): void {
+  writeLegacyLinearToken(token, viewer)
+}
+
+function writeLegacyLinearToken(token: string | Buffer, viewer: Record<string, unknown>): void {
+  const orcaDir = join(tempHome, '.orca')
+  mkdirSync(orcaDir, { recursive: true })
+  writeFileSync(join(orcaDir, 'linear-token.enc'), token)
+  writeFileSync(join(orcaDir, 'linear-viewer.json'), JSON.stringify(viewer), {
+    encoding: 'utf-8'
+  })
+}
+
+function workspaceTokenPath(workspaceId: string): string {
+  return join(
+    tempHome,
+    '.orca',
+    'linear-tokens',
+    `${Buffer.from(workspaceId).toString('base64url')}.enc`
+  )
+}
+
+function writeMultiWorkspaceFiles(
+  workspaces: { id: string; token: string | Buffer; credentialRevision?: number }[],
+  selectedWorkspaceId: string
+): void {
+  const orcaDir = join(tempHome, '.orca')
+  mkdirSync(join(orcaDir, 'linear-tokens'), { recursive: true })
+  writeFileSync(
+    join(orcaDir, 'linear-workspaces.json'),
+    JSON.stringify({
+      version: 1,
+      activeWorkspaceId: workspaces[0]?.id ?? null,
+      selectedWorkspaceId,
+      workspaces: workspaces.map((workspace) => ({
+        id: workspace.id,
+        organizationId: workspace.id,
+        organizationName: workspace.id,
+        displayName: 'Ada',
+        email: 'ada@example.com',
+        credentialRevision: workspace.credentialRevision
+      }))
+    }),
+    { encoding: 'utf-8' }
+  )
+  for (const workspace of workspaces) {
+    writeFileSync(workspaceTokenPath(workspace.id), workspace.token)
+  }
+}
+
+async function loadClientModule(options: SafeStorageMockOptions = {}) {
+  vi.resetModules()
+  linearClientMock = vi.fn(function LinearClient(
+    this: { viewer: Promise<unknown> },
+    { apiKey }: { apiKey: string }
+  ) {
+    const fixture = fixtures.get(apiKey)
+    if (!fixture) {
+      throw new Error('Invalid API key')
+    }
+    this.viewer = Promise.resolve({
+      displayName: fixture.displayName,
+      email: fixture.email,
+      organization: Promise.resolve({
+        id: fixture.organizationId,
+        name: fixture.organizationName,
+        urlKey: fixture.organizationUrlKey
+      })
+    })
+  })
+  const { setSecretStore } = await import('../../../shared/secret-store')
+  setSecretStore({
+    isEncryptionAvailable: () => options.encryptionAvailable ?? false,
+    encryptString: (value) => Buffer.from(value),
+    decryptString: options.decryptString ?? ((value) => value.toString('utf-8')),
+    describeProtectionGap: () => null
+  })
+  vi.doMock('os', async () => {
+    const actual = await vi.importActual<typeof Os>('os')
+    return { ...actual, homedir: () => tempHome }
+  })
+  class AuthenticationLinearError extends Error {}
+  // Mock the lazy loader; createRequire bypasses mocks on the raw SDK module.
+  vi.doMock('../requests/linear-sdk', () => ({
+    createLinearClient: (options: { apiKey: string }) => new linearClientMock(options),
+    loadLinearSdk: () => ({
+      AuthenticationLinearError,
+      LinearClient: linearClientMock
+    })
+  }))
+
+  return import('./linear-account-client')
+}
+
+beforeEach(() => {
+  tempHome = mkdtempLike('orca-linear-client-')
+  fixtures = new Map([
+    [
+      'token-alpha',
+      {
+        displayName: 'Ada',
+        email: 'ada@example.com',
+        organizationId: 'org-alpha',
+        organizationName: 'Alpha',
+        organizationUrlKey: 'alpha'
+      }
+    ],
+    [
+      'token-beta',
+      {
+        displayName: 'Grace',
+        email: 'grace@example.com',
+        organizationId: 'org-beta',
+        organizationName: 'Beta',
+        organizationUrlKey: 'beta'
+      }
+    ]
+  ])
+  vi.restoreAllMocks()
+})
+
+function mkdtempLike(prefix: string): string {
+  return mkdtempSync(join(tmpdir(), prefix))
+}
+
+describe('Linear client workspace storage', () => {
+  it('stores multiple workspaces and remembers the selected workspace', async () => {
+    const linear = await loadClientModule()
+
+    await expect(linear.connect('token-alpha')).resolves.toMatchObject({
+      ok: true,
+      workspace: { id: 'org-alpha', organizationName: 'Alpha' }
+    })
+    await expect(linear.connect('token-beta')).resolves.toMatchObject({
+      ok: true,
+      workspace: { id: 'org-beta', organizationName: 'Beta' }
+    })
+
+    expect(linear.getStatus()).toMatchObject({
+      connected: true,
+      selectedWorkspaceId: 'org-beta',
+      workspaces: [
+        { id: 'org-alpha', organizationName: 'Alpha' },
+        { id: 'org-beta', organizationName: 'Beta' }
+      ]
+    })
+
+    expect(linear.selectWorkspace('all')).toMatchObject({ selectedWorkspaceId: 'all' })
+
+    linear.disconnect('org-alpha')
+    expect(linear.getStatus()).toMatchObject({
+      connected: true,
+      workspaces: [{ id: 'org-beta', organizationName: 'Beta' }]
+    })
+  })
+
+  it('migrates legacy token storage to a real workspace id when explicitly tested', async () => {
+    writeLegacyLinearFiles('token-alpha', {
+      displayName: 'Ada',
+      email: 'ada@example.com',
+      organizationName: 'Alpha'
+    })
+    const linear = await loadClientModule()
+
+    await expect(linear.testConnection('legacy')).resolves.toMatchObject({
+      ok: true,
+      workspace: { id: 'org-alpha', organizationName: 'Alpha' }
+    })
+
+    const status = linear.getStatus()
+    expect(status).toMatchObject({
+      connected: true,
+      selectedWorkspaceId: 'org-alpha',
+      workspaces: [{ id: 'org-alpha', organizationName: 'Alpha' }]
+    })
+    expect(status.workspaces?.some((workspace) => workspace.id === 'legacy')).toBe(false)
+    expect(existsSync(join(tempHome, '.orca', 'linear-token.enc'))).toBe(false)
+    expect(readFileSync(join(tempHome, '.orca', 'linear-workspaces.json'), 'utf-8')).toContain(
+      'org-alpha'
+    )
+  })
+
+  it('preserves plaintext legacy token fallback when safeStorage cannot decrypt it', async () => {
+    writeLegacyLinearFiles('token-alpha', {
+      displayName: 'Ada',
+      email: 'ada@example.com',
+      organizationName: 'Alpha'
+    })
+    const linear = await loadClientModule({
+      encryptionAvailable: true,
+      decryptString: () => {
+        throw new Error('not encrypted')
+      }
+    })
+
+    await expect(linear.testConnection('legacy')).resolves.toMatchObject({
+      ok: true,
+      workspace: { id: 'org-alpha', organizationName: 'Alpha' }
+    })
+
+    expect(linearClientMock).toHaveBeenCalledWith({ apiKey: 'token-alpha' })
+  })
+})
+
+describe('Linear workspace file cross-process visibility', () => {
+  it('recovers a token that appears after metadata was first read without it', async () => {
+    writeMultiWorkspaceFiles([{ id: 'ws-alpha', token: 'token-alpha' }], 'ws-alpha')
+    const path = workspaceTokenPath('ws-alpha')
+    rmSync(path)
+    const linear = await loadClientModule()
+    expect(linear.getStatus().connected).toBe(false)
+    writeFileSync(path, 'token-alpha')
+    expect(linear.getStatus().connected).toBe(true)
+    expect(linear.getClients('ws-alpha')).toHaveLength(1)
+  })
+
+  it('refreshes legacy Linear credentials when another process replaces or removes the token', async () => {
+    writeLegacyLinearFiles('token-alpha', {
+      displayName: 'Ada',
+      email: 'ada@example.com',
+      organizationName: 'Alpha'
+    })
+    const linear = await loadClientModule()
+    expect(linear.getClients('legacy')[0]?.apiKey).toBe('token-alpha')
+    const path = join(tempHome, '.orca', 'linear-token.enc')
+    writeFileSync(path, 'token-beta')
+    expect(linear.getClients('legacy')[0]?.apiKey).toBe('token-beta')
+    rmSync(path)
+    expect(linear.getStatus().connected).toBe(false)
+    expect(linear.getClients('legacy')).toEqual([])
+  })
+
+  it('preserves external credential revisions and captured request deadlines', async () => {
+    writeMultiWorkspaceFiles(
+      [{ id: 'ws-alpha', token: 'token-alpha', credentialRevision: 3 }],
+      'ws-alpha'
+    )
+    // Equal timestamps isolate credential revisions from filesystem clock resolution.
+    utimesSync(join(tempHome, '.orca', 'linear-workspaces.json'), 1, 1)
+    const linear = await loadClientModule()
+    const signal = new AbortController().signal
+    const captured = linear.getClients('ws-alpha', signal)[0]
+    expect(captured?.workspace.credentialRevision).toBe(3)
+
+    writeMultiWorkspaceFiles(
+      [{ id: 'ws-alpha', token: 'token-alpha', credentialRevision: 4 }],
+      'ws-alpha'
+    )
+
+    expect(linear.getStatus().workspaces?.[0]?.credentialRevision).toBe(4)
+    const current = linear.getClients('ws-alpha', signal)[0]
+    expect(current?.workspace.credentialRevision).toBe(4)
+    expect(linearClientMock).toHaveBeenLastCalledWith({ apiKey: 'token-alpha', signal })
+    expect(captured?.workspace.credentialRevision).toBe(3)
+    expect(captured?.apiKey).toBe('token-alpha')
+  })
+
+  it('observes a disconnect written by another process', async () => {
+    writeMultiWorkspaceFiles([{ id: 'ws-alpha', token: 'token-alpha' }], 'ws-alpha')
+    const linear = await loadClientModule()
+    expect(linear.getStatus()).toMatchObject({ connected: true })
+    writeMultiWorkspaceFiles([], '')
+    expect(linear.getStatus()).toMatchObject({ connected: false, workspaces: [] })
+  })
+  it('picks up a workspace connected by another Orca process', async () => {
+    // Shared ~/.orca metadata must refresh without restarting other Orca processes.
+    const linear = await loadClientModule()
+    expect(linear.getStatus()).toMatchObject({ connected: false })
+
+    writeMultiWorkspaceFiles([{ id: 'ws-alpha', token: 'token-alpha' }], 'ws-alpha')
+
+    expect(linear.getStatus()).toMatchObject({
+      connected: true,
+      activeWorkspaceId: 'ws-alpha'
+    })
+  })
+})
