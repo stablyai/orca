@@ -437,7 +437,10 @@ describe('commands about a worker a paired server owns', () => {
     )
 
     expect(response.ok).toBe(false)
-    expect(db.getTask(String(sent[0].params.adoptTaskId))?.status).toBe('failed')
+    const taskId = String(sent[0].params.adoptTaskId)
+    expect(db.getTask(taskId)?.status).toBe('failed')
+    // Kept, so a later start of this Task there is refused here rather than by the server.
+    expect(getRemotePlacement(db, taskId)).toMatchObject({ task_id: taskId })
   })
 
   it("shows this Orca's record of a worker whose pairing was re-made", async () => {
@@ -696,6 +699,19 @@ describe('commands about a worker a paired server owns', () => {
     })
     server = { ...server, homePeerFingerprint: 'cred_a_new', pairingRevision: 2 }
     await call('orchestration.workerRead', { dispatch: 'ctx_b1' })
+    // A refused start opens the Run's next link, which no server Run answers for yet.
+    await call('orchestration.taskUpdate', {
+      id: taskId,
+      status: 'ready',
+      callerTerminalHandle: 'term_coord'
+    })
+    const refused = await call('orchestration.workerStart', {
+      from: 'term_coord',
+      on: 'devB',
+      task: taskId,
+      worktree: 'new-top-level'
+    })
+    expect(refused.ok).toBe(false)
     answers['orchestration.workerList'] = [
       {
         result: {

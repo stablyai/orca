@@ -160,8 +160,7 @@ export async function startRemoteOwnedWorker(
       agent: started.data.agent ?? null
     })
     if (!recorded) {
-      // A re-made pairing keeps the reservation but can never answer for it; a reset already removed it.
-      releaseRemotePlacement(db, taskId, forward.key)
+      // A reset already removed the reservation; a re-made pairing keeps it, so a later start of the Task there is refused here.
       throw new OrchestrationError(
         'run_not_found',
         `Run ${run.id} was reset, or its pairing with ${server.name} re-made, while this start was waiting, so this Orca records nothing for the worker it started there (Dispatch ${started.data.dispatchId}).`,

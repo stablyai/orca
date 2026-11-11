@@ -148,8 +148,8 @@ async function routeServerCall(
   }
   if (request.method === 'orchestration.workerList') {
     const runId = stringField(values, 'run')
-    // A Run lists what it placed there, under its latest link even once a re-pair closed it: the
-    // server reads it as any read, by its own Run's ID. No Run lists the server as a whole.
+    // A Run lists what it placed there, by the server's Run for its latest link that started one,
+    // even once a re-pair closed it; the server reads it as any read. No Run lists the server as a whole.
     const link = runId ? latestLinkFor(db, runId, server.environmentId) : undefined
     if (runId && !link?.peer_run_id) {
       return {
@@ -157,17 +157,25 @@ async function routeServerCall(
         result: emptyWorkerListPage(numberField(values, 'limit') ?? ORCHESTRATION_FLEET_PAGE_MAX)
       }
     }
-    const answer = await runtime.callOrchestrationWorkerServer(
-      server.environmentId,
-      request.method,
-      { ...paramsForServer(access, values), ...(link ? { run: link.peer_run_id } : {}) },
-      READ_TIMEOUT_MS,
-      undefined,
-      { expectedEnvironmentPairingRevision: server.pairingRevision }
-    )
-    return {
-      handled: true,
-      result: link ? inServerTerms(answer, { server: server.name, link }) : answer
+    const params = {
+      ...paramsForServer(access, values),
+      ...(link ? { run: link.peer_run_id } : {})
+    }
+    try {
+      const answer = await runtime.callOrchestrationWorkerServer(
+        server.environmentId,
+        request.method,
+        params,
+        READ_TIMEOUT_MS,
+        undefined,
+        { expectedEnvironmentPairingRevision: server.pairingRevision }
+      )
+      return { handled: true, result: inServerTerms(answer, { server: server.name, link }) }
+    } catch (error) {
+      throw inServerTerms(
+        explainRemoteServerFailure(error, { server: server.name, method: request.method, params }),
+        { server: server.name, link }
+      )
     }
   }
   {
@@ -286,7 +294,8 @@ function latestLinkFor(
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns exactly its row shape.
   return db.db
     .prepare(
-      `SELECT * FROM remote_run_links WHERE run_id = ? AND environment_id = ?
+      `SELECT * FROM remote_run_links
+       WHERE run_id = ? AND environment_id = ? AND peer_run_id IS NOT NULL
        ORDER BY rowid DESC LIMIT 1`
     )
     .get(runId, environmentId) as RemoteRunLinkRow | undefined
