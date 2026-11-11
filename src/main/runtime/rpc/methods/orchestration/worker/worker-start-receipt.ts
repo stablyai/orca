@@ -1,5 +1,6 @@
-import type { OrchestrationDb } from '../../../../orchestration/db'
-import type { WorkerDispatchRow } from '../../../../orchestration/types'
+import { formatTerminalStartFailure } from '../../../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import type { WorkerDispatchRow } from '../../../../orchestration/db/orchestration-records'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { tearDownFailedWorkerStart } from './failed-worker-start-teardown'
 import {
@@ -8,8 +9,9 @@ import {
   type WorkerSetupReceipt
 } from './worker-topology'
 import type { OrchestrationWorkerLaunchReceipt } from './worker-launch-preferences'
-import type { WorkerStartModeReceipt } from '../../orchestration-worker-start-mode'
-import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
+import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../shared/agent-launch/contracts/agent-launch-intent'
+import { replaceDispatchCapabilities } from '../../../../orchestration/terminal-authority/views/worker-terminal-redaction'
+import { redactString } from '../../../../../observability/redactor'
 
 type WorkerStartFailureArgs = {
   runtime: OrcaRuntimeService
@@ -68,21 +70,27 @@ export async function failWorkerStartWithReceipt(args: WorkerStartFailureArgs): 
     await tearDownFailedWorkerStart({
       runtime: args.runtime,
       structuredSession: args.structuredSession,
-      dispatchId: args.dispatchId
+      dispatchId: args.dispatchId,
+      error: args.error
     })
   }
 }
 
 function failedWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
-  const reason = args.error instanceof Error ? args.error.message : String(args.error)
+  // A launch's printed output can echo its injected capability or other secrets; the receipt must never carry them.
+  const reason = redactString(
+    replaceDispatchCapabilities(
+      formatTerminalStartFailure(args.error) ??
+        (args.error instanceof Error ? args.error.message : String(args.error))
+    ).value
+  )
   const unknown = isUnknownWorkerStartOutcome(args.error, args.failedStage)
   const worker = unknown
     ? args.db.markWorkerStartUnknown(args.dispatchId, args.failedStage, reason)
     : args.db.failWorkerStart(args.dispatchId, args.failedStage, reason)
-  // Offer cleanup only for this start's created, still-owned terminal; structured teardown, user takeover and unsettled unknown outcomes need none here.
+  // Offer cleanup for this start's still-owned resource, including a chat retaining its refused task.
   const residual = unknown ? undefined : args.db.getWorkerTerminalResourceByOwner(args.dispatchId)
-  const releasable =
-    residual?.ownership_state === 'owned' && !isStructuredWorkerHandle(residual.terminal_handle)
+  const releasable = residual?.ownership_state === 'owned'
   return {
     runId: args.runId,
     taskId: args.taskId,
@@ -98,7 +106,7 @@ function failedWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
     residualResources: JSON.parse(worker.residual_resources) as unknown[],
     ...(releasable
       ? {
-          recovery: `This start created a terminal that never ran the Task. Close it with: orca orchestration worker-release --dispatch ${args.dispatchId}`
+          recovery: `This start left a worker session open. Close it with: orca orchestration worker-release --dispatch ${args.dispatchId}`
         }
       : {}),
     ...(unknown

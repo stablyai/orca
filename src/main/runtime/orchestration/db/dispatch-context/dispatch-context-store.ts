@@ -1,15 +1,19 @@
-import type { DispatchContextRow } from '../../types'
+import type { DispatchContextRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
-import { parsePaneKey } from '../../../../../shared/stable-pane-id'
-import { CURRENT_CONTRACT_VERSION } from '../contract-constants'
+import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
+import { ORCHESTRATION_CONTRACT_VERSION as CURRENT_CONTRACT_VERSION } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { generateId } from '../generated-id'
 import { paneKeyMatchSuffix } from '../pane-key-match'
 import { claimDispatchContextRow } from '../dispatch-row-writer'
 import { recordedCreatorIdentity, type DispatchCreator } from '../dispatch-depth'
 import type { OrchestrationDb } from '../orchestration-db'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
-import { taskNotFoundError, taskNotStartableError } from '../../task-dispatch-refusal'
-import { dispatchAssigneeOrcaSessionId } from '../../dispatch-assignee-orca-session-id'
+import {
+  taskNotFoundError,
+  taskNotStartableError
+} from '../../coordinator/dispatch/task-dispatch-refusal'
+import { dispatchAssigneeOrcaSessionId } from '../../addressing/session-lineage/dispatch-assignee-orca-session-id'
+import { assertTakesNewWork } from '../worker-terminal/worker-terminal-transfer'
 
 export function createDispatchContext(
   this: OrchestrationDb,
@@ -20,6 +24,8 @@ export function createDispatchContext(
     assigneePaneKey?: string
     launchTokenHash?: string
     processIncarnation?: string
+    /** The assignee's serialized host scope, matching its worker-terminal custody row. */
+    hostScope?: string | null
     /** Who is dispatching, for nesting depth. Required so a new caller must decide. */
     creator: DispatchCreator
     maxDepth: number
@@ -39,14 +45,7 @@ export function createDispatchContext(
     )
   }
 
-  // Lock the pane too so handle remint cannot admit a second dispatch.
-  const existing = this.findActiveDispatchForAssignee(assigneeHandle, assigneePaneKey)
-
-  if (existing) {
-    throw new Error(
-      `Terminal ${assigneeHandle} already has an active dispatch (${existing.id} for task ${existing.task_id})`
-    )
-  }
+  assertTakesNewWork(this, params, taskId)
 
   // Accumulate failure_count across task retries.
   const prior = this.db

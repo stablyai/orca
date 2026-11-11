@@ -1,5 +1,5 @@
-import type { StructuredChatTabNames } from '@/runtime/structured-chat-tab-name'
-import type { AgentLaunchRouteView } from '@/lib/agent-launch-route-input'
+import { agentVerdictDisplayMark } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
+import type { StructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import type { AppState } from '@/store/types'
 import {
   DASHBOARD_MAX_MAP_WORKSPACES,
@@ -8,7 +8,7 @@ import {
   type DashboardWorkspace
 } from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   resolveDashboardCardTerminalInput,
   type DashboardCardTerminalInputState
@@ -16,15 +16,16 @@ import {
 import { readDashboardClientHost } from './dashboard-client-host'
 import { dashboardCardParentPaneKey } from './agent-row-lineage'
 import { lastEnteredDoneAt } from './agent-finished-timestamp'
-import { selectTerminalLayoutsForWorktree } from '../sidebar/worktree-agent-row-selectors'
-import { EMPTY_WORKTREE_AGENT_ORCHESTRATION } from '../sidebar/worktree-agent-orchestration-batch'
+import { selectTerminalLayoutsForWorktree } from '../sidebar/workspace-card/activity/worktree-agent-row-selectors'
+import '../sidebar/workspace-card/activity/worktree-agent-orchestration-batch'
+import { EMPTY_WORKTREE_AGENT_ORCHESTRATION } from '../sidebar/workspace-card/activity/worktree-agent-orchestration-index'
 import {
   finishWorktreeAgentRowsCachePass,
   selectWorktreeAgentRowsCached,
   startWorktreeAgentRowsCachePass,
   type WorktreeAgentRowsCache
 } from './worktree-agent-rows-cache'
-import { selectRuntimePaneTitlesForWorktree } from '../sidebar/worktree-card-status-inputs'
+import { selectRuntimePaneTitlesForWorktree } from '../sidebar/workspace-card/activity/worktree-card-status-inputs'
 import {
   resolveDashboardCardContext,
   type DashboardCardContextState
@@ -40,14 +41,11 @@ import {
   rowConversationName,
   rowTask
 } from './dashboard-card-labels'
-import {
-  buildDashboardWorktreeLaunchOptions,
-  type DashboardLaunchDetectionState
-} from './dashboard-worktree-launch-options'
 import { buildDashboardSnapshotFilterOptions } from './dashboard-snapshot-filter-options'
 import { groupSubagentsByParentPaneKey } from './dashboard-subagent-cards'
 import { selectDashboardOrchestration } from './dashboard-orchestration-selection'
 import { dashboardRowBucketProjection, readAgentRowTurnRecords } from './dashboard-row-bucket'
+import type { Translate } from '@/i18n/use-translate'
 
 /** Keep builder inputs as a Pick so tests need only construct the store slices read here. */
 export type DashboardSnapshotState = Pick<
@@ -68,8 +66,14 @@ export type DashboardSnapshotState = Pick<
   DashboardCardContextState &
   Partial<
     DashboardCardTerminalInputState &
-      DashboardLaunchDetectionState &
-      Pick<AppState, 'runtimeEnvironments' | 'sshTargetLabels' | 'unifiedTabsByWorktree'>
+      Pick<
+        AppState,
+        | 'runtimeEnvironments'
+        | 'sshTargetLabels'
+        | 'unifiedTabsByWorktree'
+        | 'activeWorktreeId'
+        | 'activeWorkspaceExecutionHostId'
+      >
   >
 
 export type DashboardSnapshotInput = DashboardSnapshotState & { chatNames: StructuredChatTabNames }
@@ -79,14 +83,14 @@ export function buildDashboardSnapshot(
   state: DashboardSnapshotInput,
   now: number,
   options: {
-    launchRouteStore?: AgentLaunchRouteView
     includeCardDetails?: boolean
     includeFilterOptions?: boolean
     /** Cache only row derivation; review/host/status inputs still require fresh card assembly. */
     rowsCache?: WorktreeAgentRowsCache
     /** Freshness token for rowsCache (agentStatusEpoch); required for the cache to be safe. */
     rowsGeneration?: unknown
-  } = {}
+  } = {},
+  t?: Translate
 ): DashboardSnapshot {
   const cards: DashboardCard[] = []
   const workspaces: DashboardWorkspace[] | undefined =
@@ -132,7 +136,7 @@ export function buildDashboardSnapshot(
       ? groupSubagentsByParentPaneKey(rows)
       : undefined
     const context = includeCardDetails
-      ? resolveDashboardCardContext(state, repo, worktree)
+      ? resolveDashboardCardContext(state, repo, worktree, t)
       : undefined
     if (workspaces && workspaces.length < DASHBOARD_MAX_MAP_WORKSPACES) {
       const hostMetadata = dashboardCardMapWorkspaceMetadata(
@@ -208,6 +212,7 @@ export function buildDashboardSnapshot(
         agentType: row.agentType,
         bucket,
         dotState,
+        verdict: agentVerdictDisplayMark(row.entry) ?? undefined,
         ...(workingMode ? { workingMode } : {}),
         task: isTitleDerived ? '' : rowTask(row),
         repoId: workspace.projectId,
@@ -262,17 +267,6 @@ export function buildDashboardSnapshot(
     ...(workspaces ? { workspaces } : {}),
     showIdle,
     filterOptions,
-    // Count-only callers offer no launcher; skip host-detection lookups for sidebar rebuilds.
-    ...(includeCardDetails
-      ? {
-          launchableAgentsByWorktreeId: buildDashboardWorktreeLaunchOptions(
-            state,
-            cards,
-            workspaces,
-            options.launchRouteStore
-          )
-        }
-      : {}),
     repoIconsByRepoId
   }
 }

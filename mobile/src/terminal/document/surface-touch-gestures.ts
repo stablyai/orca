@@ -1,6 +1,6 @@
 import { getCellHeight, getTotalScale } from './cell-metrics'
 import type { TerminalDocumentScope } from './document-scope'
-import { scheduleDocumentFrame } from './document-frame-registry'
+import { cancelDocumentFrame, scheduleDocumentFrame } from './document-frame-registry'
 import { touchesInRoot } from './document-host-seams'
 import { clampPan } from './fit-scale'
 import { notify } from './host-notify'
@@ -21,12 +21,16 @@ import {
 import { updateTransform } from './viewport-transform'
 import { viewportPoint } from './viewport-cell'
 import { attachSurfaceWheelHandler } from './wheel-scroll'
+import { stopSurfaceTouchGestures } from './surface-touch-gesture-stop'
+
+export { stopSurfaceTouchGestures }
 
 const RELEASE_VELOCITY_MAX_AGE_MS = 100
 
 type TerminalGestureSurface = HTMLElement & { __orcaSurfaceHandlersAttached?: boolean }
 
 export type TerminalTouchState = {
+  active: boolean
   lastX: number
   lastY: number
   lastTime: number
@@ -100,8 +104,9 @@ export function attachSurfaceEventHandlers(
       if (targetSurface !== scope.surface || dispatcherShouldBlockSurface(scope)) {
         return
       }
+      notify(scope, { type: 'terminal-interaction' })
       if (scope.touchGesture.momentumId) {
-        cancelAnimationFrame(scope.touchGesture.momentumId)
+        cancelDocumentFrame(scope, scope.touchGesture.momentumId)
         scope.touchGesture.momentumId = null
         // A touch that stopped momentum must not also fire a tap.
         scope.tapCandidate = null
@@ -125,6 +130,7 @@ export function attachSurfaceEventHandlers(
         scope.touchGesture.velY = 0
         scope.touchGesture.accumDelta = 0
       }
+      scope.touchGesture.active = touches.length > 0
     },
     { capture: true, passive: true }
   )
@@ -132,14 +138,19 @@ export function attachSurfaceEventHandlers(
   targetSurface.addEventListener(
     'touchmove',
     function (e) {
-      if (targetSurface !== scope.surface || dispatcherShouldBlockSurface(scope)) {
+      if (
+        targetSurface !== scope.surface ||
+        scope.touchDispatch.mode === 'select-drag' ||
+        !scope.term
+      ) {
         return
       }
-      if (!scope.term) {
-        return
-      }
+      // Claim inactive and interrupted moves too, or xterm's own touch scroller moves the buffer.
       e.preventDefault()
       e.stopPropagation()
+      if (!scope.interactionActive || !scope.touchGesture.active) {
+        return
+      }
 
       const touches = touchesInRoot(scope.root, e.touches)
       if (touches.length === 2) {
@@ -210,7 +221,7 @@ export function attachSurfaceEventHandlers(
       if (targetSurface !== scope.surface || dispatcherShouldBlockSurface(scope)) {
         return
       }
-      if (!scope.term) {
+      if (!scope.term || !scope.touchGesture.active) {
         return
       }
 
@@ -240,6 +251,7 @@ export function attachSurfaceEventHandlers(
       }
 
       if (touches.length === 0) {
+        scope.touchGesture.active = false
         // A finger resting after its last move has no remaining momentum to launch.
         const rested = Date.now() - scope.touchGesture.lastTime > RELEASE_VELOCITY_MAX_AGE_MS
         let vel = rested ? 0 : scope.touchGesture.velY
@@ -295,14 +307,4 @@ export function attachSurfaceEventHandlers(
 
 export function startSurfaceTouchGestures(scope: TerminalDocumentScope) {
   attachSurfaceEventHandlers(scope, scope.surface!)
-}
-
-export function stopSurfaceTouchGestures(scope: TerminalDocumentScope) {
-  if (scope.touchGesture.momentumId !== null) {
-    cancelAnimationFrame(scope.touchGesture.momentumId)
-    scope.touchGesture.momentumId = null
-  }
-  scope.touchGesture.velY = 0
-  scope.touchGesture.accumDelta = 0
-  scope.touchGesture.isPinching = false
 }

@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'expo-router'
 import { PickerModal } from '../components/PickerModal'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { hostPickerOptions } from '../components/use-connected-host-picker'
-import { selectConnectableHostProfiles } from '../transport/host-catalog-selection'
-import { loadHostCatalog } from '../transport/host-store'
-import type { HostProfile } from '../transport/types'
+import { selectConnectableHostProfiles } from '../host-catalog/host-catalog-selection'
+import { loadHostCatalog } from '../host-catalog/host-store'
+import type { HostProfile } from '../host-catalog/host-profile'
 
 // Keep picker and loading drawer in the overlay’s window so the load can start as selection leaves.
 export function NewWorkspaceHostPicker({
@@ -14,6 +15,7 @@ export function NewWorkspaceHostPicker({
   hostIds: readonly string[]
   onPick: (hostId: string) => void
 }) {
+  const t = useMobileTranslation()
   const router = useRouter()
   const hosts = useOfferedHosts(hostIds)
   const [open, setOpen] = useState(true)
@@ -27,7 +29,7 @@ export function NewWorkspaceHostPicker({
   }, [nothingToPick, router])
   return (
     <PickerModal
-      title="Create Workspace On"
+      title={t('newWorkspace.hostPicker.title', 'Create Workspace On')}
       visible={hosts !== null && !nothingToPick && open}
       options={hostPickerOptions(hosts ?? [])}
       selected=""

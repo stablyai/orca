@@ -1,25 +1,25 @@
 import { useCallback, useState } from 'react'
-import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
+import { requireGitOwnerTarget } from '../sync/worktree-git-owner-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { toast } from 'sonner'
-import { getConnectionId } from '@/lib/connection-context'
+import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
 import { basename } from '@/lib/path'
-import { bulkUnstageRuntimeGitPaths } from '@/runtime/runtime-git-working-tree-client'
+import { bulkUnstageRuntimeGitPaths } from '@/runtime/source-control/git/runtime-git-working-tree-client'
 import { translate } from '@/i18n/i18n'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import {
   getDiscardAllPaths,
   runDiscardAllForArea,
   type DiscardAllArea
-} from '../../../../../../shared/source-control-discard-all-sequence'
+} from '../../../../../../shared/source-control/listing/source-control-discard-all-sequence'
 import { discardDeletesEntryFile } from './discard-confirmation'
-import { readIpcErrorMessage } from '@/lib/ipc-error'
+import { readIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import {
   dismissSourceControlEntryFailureToast,
   showSourceControlEntryFailureToast
 } from './source-control-entry-failure-toast'
 import type { PendingDiscardConfirmation } from './discard-dialog'
-import type { SourceControlEntryGroups } from '../../../../../../shared/source-control-section-order'
+import type { SourceControlEntryGroups } from '../../../../../../shared/source-control/listing/source-control-section-order'
 
 export function useSourceControlDiscardConfirmation({
   activeRepoTarget,
@@ -44,6 +44,7 @@ export function useSourceControlDiscardConfirmation({
   discardSingle: (path: string) => Promise<void>
   refreshActiveGitStatusAfterMutation: () => Promise<void>
 }) {
+  const scope = useSourceControlScope()
   const [pendingDiscard, setPendingDiscard] = useState<PendingDiscardConfirmation | null>(null)
   // Reset during render so a worktree switch cannot paint its predecessor's confirmation.
   const [pendingDiscardWorktreeId, setPendingDiscardWorktreeId] = useState(activeWorktreeId)
@@ -88,7 +89,7 @@ export function useSourceControlDiscardConfirmation({
       }
       setIsExecutingBulk(true)
       try {
-        const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+        const connectionId = sourceControlConnectionId(scope, activeWorktreeId)
         // Aggregate per-file errors into one toast rather than spamming partial failures.
         const errors: unknown[] = []
         const result = await runDiscardAllForArea(area, paths, {
@@ -122,27 +123,33 @@ export function useSourceControlDiscardConfirmation({
           // Limit bulk failures to the first error and sample paths so the toast stays readable.
           const firstMsg = readIpcErrorMessage(errors[0])
           const sample = result.failed.slice(0, 3).join(', ')
-          const more = result.failed.length > 3 ? `, +${result.failed.length - 3} more` : ''
-          toast.error(
-            result.failed.length === 1
+          const hiddenCount = result.failed.length - 3
+          const samplePaths =
+            hiddenCount > 0
               ? translate(
-                  'auto.components.right.sidebar.SourceControl.discardFailedSingular',
-                  'Failed to discard {{count}} file',
-                  { count: result.failed.length }
+                  'auto.components.right.sidebar.SourceControl.discardFailedSampleMore',
+                  '{{paths}}, +{{count}} more',
+                  {
+                    paths: sample,
+                    count: hiddenCount,
+                    defaultValue_one: '{{paths}}, +{{count}} more'
+                  }
                 )
-              : translate(
-                  'auto.components.right.sidebar.SourceControl.discardFailedPlural',
-                  'Failed to discard {{count}} files',
-                  { count: result.failed.length }
-                ),
+              : sample
+          toast.error(
+            translate(
+              'auto.components.right.sidebar.SourceControl.discardFailed',
+              'Failed to discard {{count}} files',
+              { count: result.failed.length, defaultValue_one: 'Failed to discard {{count}} file' }
+            ),
             {
               description: firstMsg
                 ? translate(
-                    'auto.components.right.sidebar.SourceControl.dc5a6465fc',
-                    '{{value0}} (e.g. {{value1}}{{value2}})',
-                    { value0: firstMsg, value1: sample, value2: more }
+                    'auto.components.right.sidebar.SourceControl.discardFailedWithSample',
+                    '{{error}} (e.g. {{paths}})',
+                    { error: firstMsg, paths: samplePaths }
                   )
-                : `${sample}${more}`
+                : samplePaths
             }
           )
         }
@@ -155,6 +162,7 @@ export function useSourceControlDiscardConfirmation({
       }
     },
     [
+      scope,
       activeRepoTarget,
       worktreePath,
       activeWorktreeId,

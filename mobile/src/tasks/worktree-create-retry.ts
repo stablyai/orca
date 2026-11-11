@@ -1,6 +1,7 @@
-import type { TuiAgent } from '../../../src/shared/tui-agent'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcResponse } from '../transport/types'
+import { translate } from '../i18n/mobile-i18n'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import {
   agentLaunchRun,
   agentLaunchReplayRun,
@@ -14,12 +15,12 @@ import {
 } from '../../../src/shared/new-workspace/worktree-create-retry-policy'
 import {
   agentLaunchCreateParams,
-  isAgentLaunchReplayUnsupportedRefusal,
   isAgentLaunchUnsupportedRefusal,
   readAgentLaunchCreateOutcome,
   type WorktreeCreateAgentLaunch
 } from './agent-launch-request'
-import { structuredSessionOperationId } from '../session/structured-session-operation-id'
+import { isAgentLaunchReplayUnsupportedRefusal } from '../../../src/shared/agent-launch/contracts/agent-launch-replay-refusal'
+import { structuredSessionOperationId } from '../session/native-chat/agent-session/structured-session-operation-id'
 import { WORKTREE_CREATE_TIMEOUT_MS } from './workspace-create-timeout'
 import type { WorkspaceCreateParams } from './workspace-create-params'
 import type {
@@ -34,16 +35,24 @@ import {
 // Branches and remote PRs outlive worktrees and escape local preflight dedupe; retry host collision errors with numeric suffixes.
 export type WorktreeCreateResult =
   | { worktreeId: string; name: string; warning?: string }
-  | { error: string }
+  /** `replayed`: the refusal answered a resend after a lost reply, so the first send may have created it. */
+  | { error: string; replayed?: true }
+
+export type WorktreeCreateParent = Required<
+  Pick<WorkspaceCreateParams, 'parentWorkspace' | 'parentWorkspaceOrigin'>
+>
 
 export type CreateWorktreeWithNameRetryArgs = {
   client: RpcClient
   baseName: string
   nameWasGenerated?: boolean
-  buildParams: (name: string) => WorkspaceCreateParams
+  buildParams: (name: string, attempt: number) => WorkspaceCreateParams
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
+  branchIntentSupported?: boolean | Promise<boolean>
   agentLaunch?: WorktreeCreateAgentLaunch
   maxAttempts?: number
+  /** The workspace the new worktree is attached to, on every attempt. */
+  parent?: WorktreeCreateParent
   mintMutationId?: () => string
   mintLaunchOperationId?: () => string
 }
@@ -60,11 +69,22 @@ export async function createWorktreeWithNameRetry(
   const mintMutationId = args.mintMutationId ?? defaultWorktreeCreateMutationId
   const mintLaunchOperationId = args.mintLaunchOperationId ?? structuredSessionOperationId
   let lastError: string | null = null
+  let lastReplayed = false
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const candidateName = args.nameWasGenerated
       ? getGeneratedWorktreeCreateRetryCandidate(baseName, attempt)
       : getClientWorktreeCreateCandidate(baseName, attempt)
-    const candidateParams = buildParams(candidateName)
+    const candidateParams = { ...buildParams(candidateName, attempt), ...args.parent }
+    if (attempt === 0 && candidateParams.branchIntent) {
+      if ((await args.branchIntentSupported) !== true) {
+        return {
+          error: translate(
+            'workspace.branchChoice.hostUpdateRequired',
+            'Update Orca on the workspace host to reuse a branch or explicitly create a separate branch.'
+          )
+        }
+      }
+    }
     // Only advertised idempotency permits replay; use one key per candidate and a new key for each collision suffix.
     const params = worktreeCreateIdempotency
       ? { ...candidateParams, clientMutationId: mintMutationId() }
@@ -78,6 +98,7 @@ export async function createWorktreeWithNameRetry(
       worktreeCreateIdempotency
     )
     let response = sent.response
+    let replayed = sent.replayed
     if (
       !response.ok &&
       !sent.replayed &&
@@ -88,9 +109,15 @@ export async function createWorktreeWithNameRetry(
     ) {
       // Method refusal can mean the client advertisement lagged the probe; downgrade permanently for this create.
       launch = null
-      response = (
-        await sendWorktreeCreateResilient(client, null, null, params, worktreeCreateIdempotency)
-      ).response
+      const fallback = await sendWorktreeCreateResilient(
+        client,
+        null,
+        null,
+        params,
+        worktreeCreateIdempotency
+      )
+      response = fallback.response
+      replayed = fallback.replayed
     }
     // Ledger refusal may follow creation; never retry unnamed. Inspect raw refusal messages for legacy collision handling.
     if (response.ok) {
@@ -102,15 +129,27 @@ export async function createWorktreeWithNameRetry(
           ...(created.warning ? { warning: created.warning } : {})
         }
       }
-      lastError = 'Failed to create workspace'
+      lastError = translate('tasks.worktreeCreateRetry.createFailed', 'Failed to create workspace')
       break
     }
     lastError = response.error.message
-    if (launch?.replay || !isRetryableWorktreeCreateConflict(lastError ?? '')) {
+    lastReplayed = replayed
+    // A replayed refusal may follow a create whose reply was lost; another name could be a second worktree.
+    if (
+      replayed ||
+      candidateParams.branchIntent === 'open-existing-v2' ||
+      launch?.replay ||
+      !isRetryableWorktreeCreateConflict(lastError ?? '')
+    ) {
       break
     }
   }
-  return { error: lastError ?? 'Failed to create workspace' }
+  return {
+    error:
+      lastError ??
+      translate('tasks.worktreeCreateRetry.createFailed', 'Failed to create workspace'),
+    ...(lastReplayed ? { replayed: true as const } : {})
+  }
 }
 
 async function resolveAgentLaunchRoute(

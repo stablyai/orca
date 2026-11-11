@@ -1,11 +1,13 @@
 import { existsSync, readFileSync } from 'node:fs'
+import { readProfileStateSplitDocumentForRow } from './profile-state-document-parts-reader'
 import type Database from '../../sqlite/sync-database'
 import {
   ProfileStateRecoveryCommandError,
+  profileStateRepairSectionApproval,
   type ProfileStateRecoveryRepairSection
 } from '../../../shared/profile-state-recovery-command'
 import type { ProfileStateMaintenance } from './profile-state-access'
-import { profileHasPendingProjectMove } from '../../orca-profiles/profile-project-move-record'
+import { profileHasPendingProjectMove } from '../../orca-profiles/project-transfer/profile-project-move-record'
 import { readProfileStateAutomationRunsDocument } from './profile-state-automation-runs'
 import { profileStateDatabaseBackups } from './profile-state-backup-path'
 import {
@@ -28,10 +30,7 @@ import {
   readProfileStateRevision
 } from './profile-state-revision'
 
-export type ProfileStateRepairSection = {
-  domain: string
-  /** Newest readable backup, or null to initialize this section empty. */
-  backupId: string | null
+export type ProfileStateRepairSection = ProfileStateRecoveryRepairSection & {
   backupCreatedAtMs?: number
 }
 
@@ -128,7 +127,9 @@ function sameSections(
   planned: readonly ProfileStateRepairSection[]
 ): boolean {
   const key = (sections: readonly ProfileStateRecoveryRepairSection[]): string =>
-    JSON.stringify(sections.map(({ domain, backupId }) => `${domain}\0${backupId}`).sort())
+    JSON.stringify(
+      sections.map((section) => JSON.stringify(profileStateRepairSectionApproval(section))).sort()
+    )
   return key(approved) === key(planned)
 }
 
@@ -155,6 +156,9 @@ export function planProfileStateSectionRepair(
   const repairedState = scan.intact
   const backups = profileStateDatabaseBackups(location.databaseFile)
   const resolved = new Map<string, ProfileStateRepairSection>()
+  if (scan.currentHistory) {
+    resolved.set('automationRuns', { domain: 'automationRuns', source: 'current' })
+  }
   for (const backup of backups) {
     const pending = [...scan.damaged].filter((domain) => !resolved.has(domain))
     if (pending.length === 0) {
@@ -196,7 +200,12 @@ export function planProfileStateSectionRepair(
   }
 }
 
-type SectionScan = { revision: number; intact: Map<string, unknown>; damaged: Set<string> }
+type SectionScan = {
+  revision: number
+  intact: Map<string, unknown>
+  damaged: Set<string>
+  currentHistory: boolean
+}
 
 function scanProfileStateSections(db: Database.Database): SectionScan | undefined {
   const revision = readProfileStateRevision(db)
@@ -218,6 +227,7 @@ function scanProfileStateSections(db: Database.Database): SectionScan | undefine
     damaged.add('automationRuns')
     normalizedRuns = null
   }
+  const normalizedHistoryIntact = normalizedRuns !== undefined && !damaged.has('automationRuns')
   const rows = db
     .prepare(
       `SELECT domain, payload, domain_version, revision, updated_at, content_hash
@@ -228,7 +238,9 @@ function scanProfileStateSections(db: Database.Database): SectionScan | undefine
     const domain = isRecord(row) && typeof row.domain === 'string' ? row.domain : undefined
     let document: ReturnType<typeof validateProfileStateDocumentRow>
     try {
-      document = validateProfileStateDocumentRow(row, { retainParsedValue: true })
+      document =
+        readProfileStateSplitDocumentForRow(db, row, true) ??
+        validateProfileStateDocumentRow(row, { retainParsedValue: true })
     } catch (error) {
       if (!(error instanceof ProfileStateDocumentCorruptionError) || domain === undefined) {
         throw error
@@ -245,8 +257,13 @@ function scanProfileStateSections(db: Database.Database): SectionScan | undefine
     }
     intact.set(document.domain, document.value)
   }
-  if (normalizedRuns && !damaged.has('automationRuns')) {
+  if (normalizedRuns && normalizedHistoryIntact) {
     intact.set('automationRuns', normalizedRuns.value)
   }
-  return { revision, intact, damaged }
+  return {
+    revision,
+    intact,
+    damaged,
+    currentHistory: normalizedHistoryIntact && damaged.has('automationRuns')
+  }
 }

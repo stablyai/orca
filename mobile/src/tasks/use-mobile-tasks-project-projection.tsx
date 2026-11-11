@@ -15,11 +15,11 @@ import {
   type ProjectListEntry,
   type RepoSummary,
   groupDetailComments,
-  isTaskProvider,
   normalizeProjectTableForMobileSort,
   projectFieldVisibilityKey,
   projectSummaryFields
 } from './mobile-tasks-legacy-foundation'
+import { isTaskProvider } from '../../../src/shared/work-items/task-providers'
 
 export function useMobileTasksProjectProjection(model: WorkspaceAndProjectStateModel) {
   const {

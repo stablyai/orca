@@ -1,5 +1,6 @@
+import { isClaudeConversationEntry } from './claude-conversation-fork-boundary'
 import { open } from 'node:fs/promises'
-import { claudeRecord } from './claude-structured-item-translation'
+import { claudeRecord } from './structured/journal/claude-structured-item-translation'
 
 // Read backward to the saved leaf so catch-up costs only the appended stretch, not the whole conversation.
 
@@ -20,6 +21,7 @@ export async function readClaudeTranscriptTail(input: {
   leafUuid: string
   maxBytes?: number
   check: () => void
+  onLeafAbsent?: () => void
 }): Promise<ClaudeTranscriptTail | null> {
   const maxBytes = input.maxBytes ?? CLAUDE_TRANSCRIPT_TAIL_MAX_BYTES
   const handle = await open(input.filePath, 'r')
@@ -67,7 +69,11 @@ export async function readClaudeTranscriptTail(input: {
       }
       pieces.push(chunk.subarray(0, end))
     }
-    return endLine()?.uuid === input.leafUuid ? found() : null
+    if (endLine()?.uuid === input.leafUuid) {
+      return found()
+    }
+    input.onLeafAbsent?.()
+    return null
   } finally {
     await handle.close()
   }
@@ -86,13 +92,19 @@ function parseRow(bytes: Buffer): Record<string, unknown> | null {
 }
 
 /** Walk parent links back from the newest row; rows on other branches and sidechains drop out. */
-function mainChain(rows: Record<string, unknown>[], leafUuid: string): ClaudeTranscriptTail {
+export function mainChain(rows: Record<string, unknown>[], leafUuid: string): ClaudeTranscriptTail {
   const byUuid = new Map<string, Record<string, unknown>>()
   let newest: Record<string, unknown> | null = null
   for (const row of rows) {
-    if (typeof row.uuid === 'string' && row.isSidechain !== true) {
+    if (
+      typeof row.uuid === 'string' &&
+      row.isSidechain !== true &&
+      row.parent_tool_use_id == null
+    ) {
       byUuid.set(row.uuid, row)
-      newest = row
+      if (isClaudeConversationEntry(row)) {
+        newest = row
+      }
     }
   }
   const chain: Record<string, unknown>[] = []

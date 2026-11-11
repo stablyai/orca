@@ -1,13 +1,14 @@
 import { useEffect } from 'react'
+import { translate } from '../i18n/mobile-i18n'
 import { worktreeActivate } from '../host-screen/host-screen-operations'
 import { headlessActivationNeedsHostRenderer } from '../worktree/worktree-activation-result'
-import { createInitialSessionAutoCreateState } from './use-initial-session-terminal-autocreate'
-import type { MobileSessionKeyboardStateModel } from './use-mobile-session-keyboard-state'
-import type { RpcResponse } from '../transport/types'
+import { createInitialSessionAutoCreateState } from '../terminal/session/use-initial-session-terminal-autocreate'
+import type { MobileSessionKeyboardStateModel } from '../terminal/session/use-mobile-session-keyboard-state'
+import { withoutSessionTabHostOwnership } from './tabs/mobile-session-tab-status-clock'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 
 export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) {
   const {
-    hostId,
     worktreeId,
     created,
     isFloatingWorkspaceRoute,
@@ -16,6 +17,9 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     setTerminals,
     terminalsRef,
     setSessionTabs,
+    readLastSessionTabs,
+    watchLastSessionTabs,
+    sessionTabsRef,
     appliedSnapshotMarkerRef,
     closedTabTombstonesRef,
     setTerminalsLoaded,
@@ -28,6 +32,7 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     sessionTabActionSheetKeyboardHideSubRef,
     sessionTabActionSheetRequestSeqRef,
     initializedHandlesRef,
+    terminalResume,
     terminalDiagnosticsRef,
     activeHandleRef,
     activeSessionTabTypeRef,
@@ -36,11 +41,12 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     pendingBrowserFocusPageIdRef,
     pendingTerminalActivationAttemptRef,
     initialSessionAutoCreateRef,
-    bufferedTerminalDraftState,
     clearPendingLiveInputCommit,
     clearDelayedActionTimers,
     showToast,
     clearTerminalCache,
+    setSplitTerminalHandles,
+    terminalPaneViewportsRef,
     fetchTerminals,
     ensureSessionTabs
   } = scope
@@ -50,6 +56,8 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     sessionTabActionSheetKeyboardHideSubRef.current?.remove()
     sessionTabActionSheetKeyboardHideSubRef.current = null
     clearTerminalCache()
+    setSplitTerminalHandles(null)
+    terminalPaneViewportsRef.current.clear()
     activeHandleRef.current = null
     activeSessionTabTypeRef.current = null
     pendingSelectionRef.current = null
@@ -60,7 +68,6 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     terminalDiagnosticsRef.current.resetRoute()
     appliedSnapshotMarkerRef.current = { epoch: null, version: -1 }
     closedTabTombstonesRef.current.clear()
-    bufferedTerminalDraftState.resetDrafts()
     for (const queued of terminalGestureInputQueuesRef.current.values()) {
       if (queued.timer) {
         clearTimeout(queued.timer)
@@ -71,27 +78,43 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     setActiveHandle(null)
     setTerminals([])
     terminalsRef.current = []
-    setSessionTabs([])
+    // Paint the last strip, from memory or the phone's store, until the host's snapshot replaces it (which treats
+    // it as the previous strip). Nothing is active yet, so the body still says connecting or offline.
+    const lastTabs = readLastSessionTabs()
+    setSessionTabs(lastTabs ? withoutSessionTabHostOwnership(lastTabs) : [])
+    // A strip read from the store after this mount (a slow boot read, an in-page open) still paints while
+    // the host hasn't sent one and nothing is drawn.
+    const stopLateTabs = lastTabs
+      ? null
+      : watchLastSessionTabs((tabs) => {
+          stopLateTabs?.()
+          if (
+            appliedSnapshotMarkerRef.current.version === -1 &&
+            sessionTabsRef.current.length === 0
+          ) {
+            setSessionTabs(withoutSessionTabHostOwnership([...tabs]))
+          }
+        })
     setActiveSessionTabId(null)
     clearPendingLiveInputCommit()
     setMarkdownDocs(new Map())
     setFileDocs(new Map())
     clearDelayedActionTimers()
     return () => {
+      stopLateTabs?.()
       sessionTabActionSheetRequestSeqRef.current += 1
       sessionTabActionSheetKeyboardHideSubRef.current?.remove()
-      bufferedTerminalDraftState.clearPendingRestorations()
       clearPendingLiveInputCommit()
       clearDelayedActionTimers()
     }
   }, [
     clearDelayedActionTimers,
     clearPendingLiveInputCommit,
-    bufferedTerminalDraftState.clearPendingRestorations,
     clearTerminalCache,
-    hostId,
-    bufferedTerminalDraftState.resetDrafts,
-    worktreeId
+    setSplitTerminalHandles,
+    terminalPaneViewportsRef,
+    readLastSessionTabs,
+    watchLastSessionTabs
   ])
 
   // Every setTimeout goes through addTimer into `timers`, which the returned cleanup clears.
@@ -101,7 +124,11 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
       return
     }
     // Keep xterm visible while reconnect history hydrates.
-    if (initializedHandlesRef.current.size === 0) {
+    const showsTerminalOutput =
+      initializedHandlesRef.current.size > 0 ||
+      terminalResume.holdsAny() ||
+      terminalResume.anyCatchingUp()
+    if (!showsTerminalOutput) {
       setTerminalsLoaded(false)
     }
     // Clear initialization so reconnect scrollback replaces stale content instead of being ignored.
@@ -123,7 +150,13 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
           activation?.accepted === true &&
           headlessActivationNeedsHostRenderer(activation.value)
         ) {
-          showToast('Open Orca on the host to wake sleeping agents.', 3000)
+          showToast(
+            translate(
+              'session.useStartup.wakeAgents',
+              'Open Orca on the host to wake sleeping agents.'
+            ),
+            3000
+          )
         }
       }
       if (client && created !== '1' && !isFloatingWorkspaceRoute) {
@@ -137,19 +170,12 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
           .then(reportActivationOutcome)
           .catch(() => null)
       }
-      if (disposed) {
-        return
-      }
-      await ensureSessionTabs().catch(() => null)
-      if (disposed) {
-        return
-      }
+      // Both join the focus refresh's in-flight reads; its 2 s tick re-lists while the tab stream is unconfirmed or a handle is pending.
+      void ensureSessionTabs().catch(() => null)
       await fetchTerminals({ allowEmptyLoaded: false })
       if (disposed) {
         return
       }
-      addTimer(() => void fetchTerminals({ allowEmptyLoaded: false }), 750)
-      addTimer(() => void fetchTerminals({ allowEmptyLoaded: true }), 1500)
       if (client && created === '1' && !isFloatingWorkspaceRoute) {
         addTimer(() => {
           if (activeHandleRef.current) {
@@ -187,6 +213,7 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     ensureSessionTabs,
     isFloatingWorkspaceRoute,
     showToast,
+    terminalResume,
     worktreeId
   ])
 }

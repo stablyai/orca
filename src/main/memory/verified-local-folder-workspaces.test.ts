@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { FolderWorkspaceHostState } from '../../shared/folder-workspace-execution-host'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { FolderWorkspaceHostState } from '../../shared/folder-workspaces/folder-workspace-execution-host'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
 import { getVerifiedLocalFolderWorkspaceKeys } from './verified-local-folder-workspaces'

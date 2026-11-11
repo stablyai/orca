@@ -2,10 +2,13 @@ import { app, ipcMain } from 'electron'
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import type { ReleaseBuildListResult, UpdateCheckOptions } from '../../shared/update-status-types'
 import { RELEASE_CHANNELS, type ReleaseChannel } from '../../shared/release-channel'
-import { isTrustedUIRenderer } from '../ipc/ui'
-import type { Store } from '../persistence'
+import { getTrustedUIRendererWindow, isTrustedUIRenderer } from '../ipc/ui'
+import type { Store } from '../persistence/loading-store/store'
 import { logStartupMilestone } from '../startup/startup-diagnostics'
-import { applyProxyToElectronUpdaterSession } from '../updater/electron-updater-proxy-session'
+import { applyProxyToElectronUpdaterSession } from '../updater/lifecycle/electron-updater-proxy-session'
+import { updaterErrorMessage } from '../updater/lifecycle/updater-coded-error'
+import { updaterCodedMessage } from '../../shared/updater-failure-copy'
+import { normalizeUpdateDelayDays } from '../../shared/update-delay'
 import {
   checkForUpdatesFromMenu,
   dismissAvailableUpdate,
@@ -16,11 +19,13 @@ import {
   listAvailableReleaseBuilds,
   quitAndInstall,
   setupAutoUpdater,
-  showLinuxPackage,
-  type PreQuitCleanupFailureMode,
-  type UpdateInstallMode,
-  type UpdaterSetupOptions
-} from '../updater'
+  showLinuxPackage
+} from '../updater/updater-service'
+import type {
+  PreQuitCleanupFailureMode,
+  UpdateInstallMode
+} from '../updater/lifecycle/updater-state'
+import type { UpdaterSetupOptions } from '../updater/lifecycle/updater-setup'
 
 const UPDATER_SETUP_FALLBACK_MS = 15_000
 
@@ -39,6 +44,7 @@ type UpdaterSetupHooks = {
 
 function buildUpdaterSetupOptions(store: Store, options?: UpdaterSetupHooks): UpdaterSetupOptions {
   return {
+    getMainWindow: getTrustedUIRendererWindow,
     getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
     onBeforeQuit: async () => {
       try {
@@ -64,6 +70,7 @@ function buildUpdaterSetupOptions(store: Store, options?: UpdaterSetupHooks): Up
       store.updateUI({ dismissedUpdateNudgeId: id })
     },
     getReleaseChannelOverride: () => store.getUI().releaseChannelOverride ?? null,
+    getUpdateDelayDays: () => normalizeUpdateDelayDays(store.getSettings().updateDelayDays),
     onBeforeQuitFailure: options?.onBeforeUpdateQuitFailure,
     installMode: options?.updateInstallMode
   }
@@ -174,7 +181,7 @@ export function registerUpdaterHandlers(_store: Store): void {
       options?: { force?: boolean }
     ): Promise<ReleaseBuildListResult> => {
       if (!RELEASE_CHANNELS.includes(channel)) {
-        return { ok: false, channel, message: `Unknown release channel "${channel}".` }
+        return { ok: false, channel, ...updaterCodedMessage('unknownReleaseChannel', { channel }) }
       }
       try {
         return {
@@ -184,7 +191,7 @@ export function registerUpdaterHandlers(_store: Store): void {
         }
       } catch (error) {
         // Return expected network/rate-limit failures as data for the build picker.
-        return { ok: false, channel, message: String((error as Error)?.message ?? error) }
+        return { ok: false, channel, ...updaterErrorMessage(error) }
       }
     }
   )

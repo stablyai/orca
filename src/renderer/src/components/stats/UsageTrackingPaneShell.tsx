@@ -99,7 +99,7 @@ export function UsageTrackingPaneShell(props: UsageTrackingPaneShellProps): Reac
         <div className="flex shrink-0 items-center gap-2 self-start">
           {props.headerAction}
           <DropdownMenu>
-            <TooltipProvider delayDuration={250}>
+            <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <DropdownMenuTrigger asChild>
@@ -122,7 +122,7 @@ export function UsageTrackingPaneShell(props: UsageTrackingPaneShellProps): Reac
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-          <TooltipProvider delayDuration={250}>
+          <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button

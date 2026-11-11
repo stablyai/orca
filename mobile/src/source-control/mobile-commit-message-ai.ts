@@ -1,16 +1,17 @@
-import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
+import { translate } from '../i18n/mobile-i18n'
+import { refusedRpcMessageOrFallback } from '../transport/rpc/rpc-refusal-message'
 import {
   gitCancelGenerateCommitMessageRun,
   gitGenerateCommitMessageRun,
   type MobileGenerateCommitMessageResult
 } from './mobile-git-mutation-operations'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 
 export type { MobileGenerateCommitMessageResult }
 
 // Collapse refusals and malformed payloads to the same failed-generation verdict.
 export async function requestMobileCommitMessage(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string
 ): Promise<MobileGenerateCommitMessageResult> {
   const reply = await gitGenerateCommitMessageRun.request(client, {
@@ -21,13 +22,19 @@ export async function requestMobileCommitMessage(
   } catch (error) {
     return {
       success: false,
-      error: refusedRpcMessageOrFallback(error, 'Failed to generate commit message')
+      error: refusedRpcMessageOrFallback(
+        error,
+        translate(
+          'sourceControl.commitMessageAi.generateFailed',
+          'Failed to generate commit message'
+        )
+      )
     }
   }
 }
 
 export async function cancelMobileCommitMessage(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string
 ): Promise<void> {
   const reply = await gitCancelGenerateCommitMessageRun.request(client, {

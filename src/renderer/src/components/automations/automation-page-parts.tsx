@@ -1,26 +1,38 @@
 import React from 'react'
 import type { Badge } from '@/components/ui/badge'
-import { cn } from '@/lib/utils'
-import type { AutomationRun } from '../../../../shared/automations-types'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/class-names'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
+import type { PendingAutomationSetupReview } from './authoring/automation-setup-review'
+import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { formatUiNarrowRelativeTime } from '@/i18n/relative-time-format'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 
 // Reuse one formatter across run cells; per-cell construction dominates large-history rendering.
-const automationDateTimeFormatter = new Intl.DateTimeFormat(undefined, {
+const AUTOMATION_DATE_TIME_OPTIONS: Intl.DateTimeFormatOptions = {
   month: 'short',
   day: 'numeric',
   hour: 'numeric',
   minute: '2-digit'
-})
+}
 
-export function formatAutomationDateTime(value: number | null | undefined): string {
+export function formatAutomationDateTime(
+  value: number | null | undefined,
+  t: Translate = translate,
+  intlLocale?: string
+): string {
   if (!value) {
-    return 'Never'
+    return t('auto.components.automations.automationPageParts.never', 'Never')
   }
-  return automationDateTimeFormatter.format(value)
+  return uiDateTimeFormat(AUTOMATION_DATE_TIME_OPTIONS, intlLocale).format(value)
 }
 
 export function formatAutomationRelativeTime(
   value: number | null | undefined,
-  now = Date.now()
+  now = Date.now(),
+  t: Translate = translate,
+  intlLocale?: string
 ): string | null {
   if (!value) {
     return null
@@ -30,29 +42,27 @@ export function formatAutomationRelativeTime(
   const minuteMs = 60 * 1000
   const hourMs = 60 * minuteMs
   const dayMs = 24 * hourMs
-  const format = (amount: number, unit: string): string => `${amount}${unit}`
-  let text: string
+  const sign = diffMs >= 0 ? 1 : -1
   if (absMs < minuteMs) {
-    text = 'now'
-  } else if (absMs < hourMs) {
-    text = format(Math.round(absMs / minuteMs), 'm')
-  } else if (absMs < dayMs) {
-    text = format(Math.round(absMs / hourMs), 'h')
-  } else {
-    text = format(Math.round(absMs / dayMs), 'd')
+    return t('auto.components.automations.automationPageParts.now', 'now')
   }
-  if (text === 'now') {
-    return text
+  if (absMs < hourMs) {
+    return formatUiNarrowRelativeTime(sign * Math.round(absMs / minuteMs), 'minute', intlLocale)
   }
-  return diffMs >= 0 ? `in ${text}` : `${text} ago`
+  if (absMs < dayMs) {
+    return formatUiNarrowRelativeTime(sign * Math.round(absMs / hourMs), 'hour', intlLocale)
+  }
+  return formatUiNarrowRelativeTime(sign * Math.round(absMs / dayMs), 'day', intlLocale)
 }
 
 export function formatAutomationDateTimeWithRelative(
   value: number | null | undefined,
-  now = Date.now()
+  now = Date.now(),
+  t?: Translate,
+  intlLocale?: string
 ): string {
-  const absolute = formatAutomationDateTime(value)
-  const relative = formatAutomationRelativeTime(value, now)
+  const absolute = formatAutomationDateTime(value, t, intlLocale)
+  const relative = formatAutomationRelativeTime(value, now, t, intlLocale)
   return relative ? `${absolute} (${relative})` : absolute
 }
 
@@ -71,26 +81,38 @@ export function getAutomationRunStatusVariant(
   return 'dot'
 }
 
-export function getAutomationRunStatusLabel(status: AutomationRun['status']): string {
+export function getAutomationRunStatusLabel(
+  status: AutomationRun['status'],
+  t: Translate = translate
+): string {
   switch (status) {
     case 'pending':
-      return 'Queued'
+      return t('auto.components.automations.automationPageParts.runStatusPending', 'Queued')
     case 'dispatching':
-      return 'Starting'
+      return t('auto.components.automations.automationPageParts.runStatusDispatching', 'Starting')
     case 'dispatched':
-      return 'Launched'
+      return t('auto.components.automations.automationPageParts.runStatusDispatched', 'Launched')
     case 'completed':
-      return 'Done'
+      return t('auto.components.automations.automationPageParts.runStatusCompleted', 'Done')
     case 'skipped_precheck':
-      return 'Precheck skipped'
+      return t(
+        'auto.components.automations.automationPageParts.runStatusSkippedPrecheck',
+        'Precheck skipped'
+      )
     case 'skipped_missed':
-      return 'Skipped'
+      return t('auto.components.automations.automationPageParts.runStatusSkippedMissed', 'Skipped')
     case 'skipped_unavailable':
-      return 'Unavailable'
+      return t(
+        'auto.components.automations.automationPageParts.runStatusSkippedUnavailable',
+        'Unavailable'
+      )
     case 'skipped_needs_interactive_auth':
-      return 'Needs credentials'
+      return t(
+        'auto.components.automations.automationPageParts.runStatusSkippedNeedsInteractiveAuth',
+        'Needs credentials'
+      )
     case 'dispatch_failed':
-      return 'Failed'
+      return t('auto.components.automations.automationPageParts.runStatusDispatchFailed', 'Failed')
   }
 }
 
@@ -134,6 +156,52 @@ export function AutomationRunErrorNotice({
       )}
     >
       <span className="font-medium">{label}</span> {error}
+    </div>
+  )
+}
+
+/** The run's new workspace skipped setup because its branch's setup differs from the approved one. */
+export function AutomationRunSetupSkippedNotice({
+  review,
+  onReview,
+  className
+}: {
+  /** Null once the automation approved setup again. */
+  review: PendingAutomationSetupReview | null
+  onReview?: () => void
+  className?: string
+}): React.JSX.Element {
+  const t = useTranslate()
+  const canReview = Boolean(review?.content && onReview)
+  return (
+    <div
+      role="status"
+      className={cn(
+        'flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-status-warning-border bg-status-warning-background px-3 py-2 text-sm text-status-warning-text',
+        className
+      )}
+    >
+      <span className="min-w-0 flex-1">
+        {!review
+          ? t(
+              'automations.setupTrust.skippedSinceApproved',
+              "Setup didn't run for this run because its branch's orca.yaml setup commands changed. They've since been approved, so later runs run them."
+            )
+          : canReview
+            ? t(
+                'automations.setupTrust.skippedReview',
+                "Setup didn't run: this run's branch has different orca.yaml setup commands than the ones approved for this automation. Review them to run setup in later runs."
+              )
+            : t(
+                'auto.components.automations.AutomationsPage.setupSkippedChanged',
+                "Setup didn't run: this run's branch has different orca.yaml setup commands than the ones approved when the automation was saved. Save the automation again to review the current commands."
+              )}
+      </span>
+      {canReview ? (
+        <Button type="button" variant="outline" size="xs" onClick={onReview}>
+          {t('automations.setupTrust.reviewAction', 'Review and approve setup')}
+        </Button>
+      ) : null}
     </div>
   )
 }

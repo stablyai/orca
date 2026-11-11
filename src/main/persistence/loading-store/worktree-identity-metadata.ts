@@ -1,4 +1,5 @@
-import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachment-mutation'
+import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachments/workspace-attachment-mutation'
+import type { DiffCommentBaseMutation } from '../../../shared/diff-comment-mutation'
 import { randomUUID } from 'node:crypto'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
@@ -10,25 +11,21 @@ import {
 } from '../../../shared/worktree/host-qualified-identity'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { StoreRuntimeState } from './store-runtime-state'
-import type { WriteSchedulingOperations } from './write-scheduling'
-import { scheduleSave } from './write-scheduling'
+
+import { type WriteSchedulingOperations, scheduleSave } from './write-scheduling'
 import { mergeWorktreeMetaForWrite } from './worktree-meta-write-normalization'
+import { WORKTREE_METADATA_DOMAINS } from '../profile-save-domains'
 import {
   isLocalOnlyWorktreeMetaId,
   worktreeMetaHostFor
 } from '../../../shared/worktree/local-only-worktree-meta-ids'
 
-type MetadataRuntime = Pick<StoreRuntimeState, 'state'>
+type MetadataRuntime = Pick<StoreRuntimeState, 'state'> &
+  Partial<Pick<StoreRuntimeState, 'worktreeMetaWriteListeners'>>
 type WorktreeMetaState = Pick<
   PersistedState,
   'worktreeMeta' | 'worktreeMetaByIdentity' | 'worktreeIdentityAliases'
 >
-
-export const WORKTREE_METADATA_DOMAINS = [
-  'worktreeMeta',
-  'worktreeMetaByIdentity',
-  'worktreeIdentityAliases'
-] as const
 
 export function resolveAliasIdentityKey(
   state: WorktreeMetaState,
@@ -227,7 +224,7 @@ export function setWorktreeMetaForHost(
   scheduling: WriteSchedulingOperations,
   worktreeId: string,
   requestedHostId: ExecutionHostId,
-  meta: Partial<WorktreeMeta> & WorkspaceAttachmentMutation
+  meta: Partial<WorktreeMeta> & WorkspaceAttachmentMutation & DiffCommentBaseMutation
 ): WorktreeMeta {
   const state = runtime.state
   const executionHostId = worktreeMetaHostFor(worktreeId, requestedHostId)
@@ -264,5 +261,13 @@ export function setWorktreeMetaForHost(
     state.worktreeMeta[worktreeId] = updated
   }
   scheduleSave(scheduling, WORKTREE_METADATA_DOMAINS)
+  for (const listener of runtime.worktreeMetaWriteListeners ?? []) {
+    try {
+      listener({ worktreeId, hostId: executionHostId, previous: existing, next: updated })
+    } catch (error) {
+      // The row is already written; an observer's failure must not report the write as failed.
+      console.error('[worktree-meta] write listener failed:', error)
+    }
+  }
   return updated
 }

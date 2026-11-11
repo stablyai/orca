@@ -1,5 +1,6 @@
+import { projectPRCheckOwner } from '../../../../../shared/github/complete-pr-check-owner'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/links'
 import { getRegistryMergedTaskPageGitHubWorkItem } from './task-page-github-work-item-mutation-composition'
 import {
@@ -32,7 +33,10 @@ export function patchTaskPageGitHubWorkItemPages(
         return
       }
       nextPage ??= page.slice()
-      nextPage[itemIndex] = { ...item, ...patch }
+      nextPage[itemIndex] = projectPRCheckOwner(
+        patch,
+        projectPRCheckOwner(item, { ...item, ...patch })
+      )
     })
     if (nextPage) {
       nextPages ??= pages.slice()

@@ -210,3 +210,12 @@ export function _resetTracerForTests(): void {
   activeSink = null
   // Context tests should create their own withSpan scope.
 }
+
+/** Worker spans are already redacted before crossing the internal transport. */
+export function recordRelayedSpan(record: unknown): void {
+  try {
+    activeSink?.push(record)
+  } catch {
+    /* Diagnostics cannot fail a request. */
+  }
+}

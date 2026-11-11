@@ -1,26 +1,24 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import type { ClosedUnsavedFile } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
+import { getEditorFileOperationContext } from '@/lib/editor/file-operations/editor-file-operation-owner'
 import {
   assertEditorFileOperationCurrent,
-  captureEditorFileOperationProvenance,
-  getEditorFileOperationContext
-} from '@/lib/editor-file-operation-owner'
-import { createUntitledMarkdownFile } from '@/lib/create-untitled-markdown'
+  captureEditorFileOperationProvenance
+} from '@/lib/editor/file-operations/editor-file-operation-provenance'
+import { createUntitledMarkdownFile } from '@/lib/editor/file-operations/create-untitled-markdown'
 import { translate } from '@/i18n/i18n'
 
 function closedUnsavedFilesToastTitle(count: number, workspace: string): string {
-  return count === 1
-    ? translate(
-        'components.workspace.delete.unsavedEdits.closedToast_one',
-        'Closed {{count}} file with unsaved edits from {{workspace}}',
-        { count, workspace }
-      )
-    : translate(
-        'components.workspace.delete.unsavedEdits.closedToast_other',
-        'Closed {{count}} files with unsaved edits from {{workspace}}',
-        { count, workspace }
-      )
+  return translate(
+    'components.workspace.delete.unsavedEdits.closedToast',
+    'Closed {{count}} files with unsaved edits from {{workspace}}',
+    {
+      count,
+      workspace,
+      defaultValue_one: 'Closed {{count}} file with unsaved edits from {{workspace}}'
+    }
+  )
 }
 
 /** Recovery creates new files only in the active workspace, never at the removed paths. */

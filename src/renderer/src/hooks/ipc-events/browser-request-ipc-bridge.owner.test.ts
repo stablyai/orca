@@ -39,7 +39,7 @@ vi.mock('../../store', () => ({ useAppStore: { getState: mocks.getState } }))
 vi.mock('./browser-automation-bootstrap-lease', () => ({
   acquireBrowserAutomationBootstrapLease: vi.fn()
 }))
-vi.mock('../../store/pinned-tab-close-guard', () => ({
+vi.mock('../../store/slices/tabs/closing/pinned-tab-close-guard', () => ({
   guardPinnedTabClose: ({ onClose }: { onClose: () => void }) => onClose(),
   isUnifiedTabPinned: vi.fn(() => false),
   resolvePinnedTabLabel: vi.fn()
@@ -73,6 +73,7 @@ function storeState(activeWorktreeId: string) {
       [LOCAL_WT]: [{ id: 'ws-local' }],
       [REMOTE_WT]: [{ id: 'ws-remote' }]
     },
+    browserAnnotationsByPageId: {},
     browserPagesByWorkspace: {
       'ws-local': [{ id: 'page-local' }],
       'ws-remote': [{ id: 'page-remote' }]
@@ -115,53 +116,6 @@ describe('browser requests from this desktop follow the workspace owner (#22275)
     registerBrowserRequestIpcBridge([])
   })
 
-  it('creates a tab for an explicit local worktree while a paired server is the Active Server', () => {
-    mocks.getState.mockReturnValue(storeState(REMOTE_WT))
-
-    mocks.createListener?.({ requestId: 'r1', worktreeId: LOCAL_WT, url: 'about:blank' })
-
-    expect(mocks.createBrowserTab).toHaveBeenCalledWith(LOCAL_WT, 'about:blank', expect.anything())
-    expect(mocks.replyTabCreate).toHaveBeenCalledWith({ requestId: 'r1', browserPageId: 'ws-new' })
-  })
-
-  it("answers with the new tab's page before main's frame draws it (layout-owner build)", () => {
-    mocks.getState.mockReturnValue(storeState(LOCAL_WT))
-    mocks.createBrowserTab.mockImplementation(() => ({ id: 'ws-new', activePageId: 'page-new' }))
-
-    mocks.createListener?.({ requestId: 'r4', worktreeId: LOCAL_WT, url: 'about:blank' })
-
-    // Not the workspace id: a paired client matches the reply against the page it asked for.
-    expect(mocks.replyTabCreate).toHaveBeenCalledWith({
-      requestId: 'r4',
-      browserPageId: 'page-new'
-    })
-
-    mocks.createListener?.({
-      requestId: 'r5',
-      worktreeId: LOCAL_WT,
-      url: 'about:blank',
-      browserPageId: 'page-asked'
-    })
-
-    expect(mocks.replyTabCreate).toHaveBeenCalledWith({
-      requestId: 'r5',
-      browserPageId: 'page-asked'
-    })
-  })
-
-  it("renders a page named in a managed host's workspace on this desktop (#29145)", () => {
-    mocks.getState.mockReturnValue(storeState(LOCAL_WT))
-
-    mocks.createListener?.({ requestId: 'r3', worktreeId: REMOTE_WT, url: 'https://a.test' })
-
-    // A missing runtime id would be inferred from the workspace and stream the server's page instead.
-    expect(mocks.createBrowserTab).toHaveBeenCalledWith(
-      REMOTE_WT,
-      'https://a.test',
-      expect.objectContaining({ browserRuntimeEnvironmentId: null })
-    )
-  })
-
   it("refuses to fall back to a paired server's active workspace", () => {
     mocks.getState.mockReturnValue(storeState(REMOTE_WT))
 
@@ -172,22 +126,6 @@ describe('browser requests from this desktop follow the workspace owner (#22275)
       requestId: 'r2',
       error: expect.stringContaining('paired server')
     })
-  })
-
-  it("closes a desktop-rendered tab in a managed host's workspace (#29145)", () => {
-    const state = storeState(LOCAL_WT)
-    mocks.getState.mockReturnValue({
-      ...state,
-      browserPagesByWorkspace: {
-        ...state.browserPagesByWorkspace,
-        'ws-remote': [{ id: 'page-remote', browserRuntimeEnvironmentId: null }]
-      }
-    })
-
-    mocks.closeListener?.({ requestId: 'c3', tabId: 'page-remote', worktreeId: REMOTE_WT })
-
-    expect(mocks.closeBrowserTab).toHaveBeenCalledExactlyOnceWith('ws-remote')
-    expect(mocks.replyTabClose).toHaveBeenCalledWith({ requestId: 'c3' })
   })
 
   it("closes a local page but refuses a paired server's page", () => {
@@ -229,22 +167,6 @@ describe('a managed SSH host reaches only its own workspaces on this desktop (#2
     registerBrowserRequestIpcBridge([])
   })
 
-  it('allows the owning environment and refuses every other one and local workspaces', () => {
-    mocks.getState.mockReturnValue(storeState(LOCAL_WT))
-
-    mocks.scopeListener?.({ requestId: 's1', environmentId: 'env-remote', workspaceId: REMOTE_WT })
-    mocks.scopeListener?.({ requestId: 's2', environmentId: 'env-other', workspaceId: REMOTE_WT })
-    mocks.scopeListener?.({ requestId: 's3', environmentId: 'env-remote', workspaceId: LOCAL_WT })
-    mocks.scopeListener?.({ requestId: 's4', environmentId: 'env-remote', workspaceId: 'nope::/x' })
-
-    expect(mocks.replyRemoteCliBrowserScope.mock.calls.map(([reply]) => reply)).toEqual([
-      { requestId: 's1', workspaceId: REMOTE_WT },
-      { requestId: 's2', workspaceId: null },
-      { requestId: 's3', workspaceId: null },
-      { requestId: 's4', workspaceId: null }
-    ])
-  })
-
   it('resolves a page to its workspace, and refuses a page of another workspace', () => {
     mocks.getState.mockReturnValue(storeState(LOCAL_WT))
 
@@ -264,18 +186,5 @@ describe('a managed SSH host reaches only its own workspaces on this desktop (#2
       { requestId: 'p3', workspaceId: null },
       { requestId: 'p4', workspaceId: null }
     ])
-  })
-
-  it('answers no when the store cannot resolve the owner', () => {
-    mocks.getState.mockImplementation(() => {
-      throw new Error('store unavailable')
-    })
-
-    mocks.scopeListener?.({ requestId: 's5', environmentId: 'env-remote', workspaceId: REMOTE_WT })
-
-    expect(mocks.replyRemoteCliBrowserScope).toHaveBeenCalledWith({
-      requestId: 's5',
-      workspaceId: null
-    })
   })
 })

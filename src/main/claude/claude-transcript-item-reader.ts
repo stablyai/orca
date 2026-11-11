@@ -1,11 +1,12 @@
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalRenderItem,
-  type AgentJournalTurnScope
-} from '../../shared/agent-session-journal-types'
-import { HISTORY_CATCH_UP_MAX_OPERATIONS } from '../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
-import type { StructuredAgentSessionTransitionJournal } from '../native-chat/agent-session-wire/structured-agent-session-transition'
-import { parseAgentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+  type AgentJournalItemBody,
+  type AgentJournalRenderItem
+} from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/agent-session-journal-turn-scope'
+import { HISTORY_CATCH_UP_MAX_OPERATIONS } from '../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
+import type { StructuredAgentSessionTransitionJournal } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
+import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { claudePromptUuidForSubmission } from './structured/claude-structured-session-id'
 
 /** Every saved item used by the projection is a conditional commit dependency, even if equal. */
@@ -15,6 +16,7 @@ export function createClaudeTranscriptItemReader(
 ) {
   const dependencies = new Map<string, AgentJournalRenderItem>()
   let localPrompts: Map<string, string> | undefined
+  let promptTurns: Map<string, string[]> | undefined
   const saved = (key: string) => {
     const held = dependencies.get(key)
     if (held) {
@@ -63,20 +65,45 @@ export function createClaudeTranscriptItemReader(
       const scope = scopeOf(item)
       return scope.kind === 'turn' ? scope : undefined
     }
-    let scope: AgentJournalTurnScope | undefined
-    journal.visitItems((itemId, _sequence, body) => {
-      if (
-        body.kind === 'turn' &&
-        body.userItemId &&
-        journal.canonicalItemId(body.userItemId) === item.itemId
-      ) {
-        const turn = saved(itemId)
-        if (turn) {
-          scope = scopeOf({ ...item, turnScope: { kind: 'turn', turnItemId: itemId } })
+    // One pass, like localPrompts: a stale entry cannot commit past the catch-up guard.
+    if (!promptTurns) {
+      const turns = new Map<string, string[]>()
+      journal.visitItems((itemId, _sequence, body) => {
+        if (body.kind === 'turn' && body.userItemId) {
+          const user = journal.canonicalItemId(body.userItemId)
+          const held = turns.get(user)
+          if (held) {
+            held.push(itemId)
+          } else {
+            turns.set(user, [itemId])
+          }
         }
+      })
+      promptTurns = turns
+    }
+    let scope: AgentJournalTurnScope | undefined
+    for (const turnItemId of promptTurns.get(item.itemId) ?? []) {
+      if (saved(turnItemId)) {
+        scope = scopeOf({ ...item, turnScope: { kind: 'turn', turnItemId } })
       }
-    })
+    }
     return scope
   }
   return { saved, localPrompt, scopeOf, promptScope, dependencies }
+}
+
+/** A restored call cannot undo its saved result or discard its original call metadata. */
+export function claudeRestoredItemBody(
+  body: AgentJournalItemBody,
+  existing: AgentJournalItemBody
+): AgentJournalItemBody {
+  if (body.kind === 'tool-call' && existing.kind === 'tool-call') {
+    return body.state === 'running'
+      ? existing
+      : { ...existing, ...body, name: existing.name, input: existing.input }
+  }
+  if (body.kind === 'message' && body.role === 'reasoning' && existing.kind === 'message') {
+    return { ...existing, ...body }
+  }
+  return body
 }

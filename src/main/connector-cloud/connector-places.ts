@@ -11,17 +11,17 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
-import { splitGitRemoteKey } from '../../shared/git-remote-identity'
+import { splitGitRemoteKey } from '../../shared/git/remotes/git-remote-identity'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { isFolderRepo } from '../../shared/repo-kind'
 import type { AgentLaunchParams } from '../../shared/rpc-contract/agent-launch-params'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { readAllWorktreeMetaForHost } from '../persistence/host-qualified-worktree-meta'
-import type { RuntimeStore } from '../runtime/runtime-store-contract'
+import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 import {
   runtimeVisibleProjectGroups,
   runtimeVisibleRepos
-} from '../runtime/runtime-visible-catalog'
+} from '../runtime/workspaces/catalog/runtime-visible-catalog'
 
 const Place = z.union([
   z.tuple([z.literal('git'), z.string().min(1), z.string().min(1)]),

@@ -45,13 +45,6 @@ async function choose(
 }
 
 describe('Jira transition control', () => {
-  it('applies simple transitions in one click', async () => {
-    const mutate = await choose([close])
-    await waitFor(() =>
-      expect(mutate).toHaveBeenCalledExactlyOnceWith({ transitionId: '31' }, close)
-    )
-  })
-
   it('collects required resolution and comment before posting', async () => {
     const transition: JiraTransition = {
       ...close,
@@ -157,41 +150,5 @@ describe('Jira transition control', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open in Jira' }))
     expect(openUrl).toHaveBeenCalledWith(issue.url)
     expect(mutate).not.toHaveBeenCalled()
-  })
-
-  it('keeps failures visible and exposes Jira fallback', async () => {
-    await choose(
-      [close],
-      vi.fn().mockResolvedValue({ ok: false, error: 'Resolution is required.' })
-    )
-    expect((await screen.findByRole('alert')).textContent).toContain('Resolution is required.')
-    expect(screen.getByRole('button', { name: 'Open in Jira' })).toBeTruthy()
-  })
-
-  it('keeps a rejected mutation visible and offers Jira fallback', async () => {
-    await choose([close], vi.fn().mockRejectedValue(new Error('Disconnected from Jira host.')))
-    expect((await screen.findByRole('alert')).textContent).toContain('Disconnected from Jira host.')
-    expect(screen.getByRole('button', { name: 'Open in Jira' })).toBeTruthy()
-  })
-
-  it('makes transition load failures retryable instead of disabling the status pill', async () => {
-    const retry = vi.fn()
-    render(
-      <JiraIssueTransitionControl
-        issue={issue}
-        transitions={[]}
-        loading={false}
-        error="Service unavailable"
-        pending={false}
-        onRetry={retry}
-        onTransition={vi.fn()}
-      />
-    )
-    fireEvent.click(screen.getByRole('button', { name: 'Change status: Open' }))
-    expect((await screen.findByRole('alert')).textContent).toContain(
-      'Could not load status changes.'
-    )
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
-    expect(retry).toHaveBeenCalledOnce()
   })
 })

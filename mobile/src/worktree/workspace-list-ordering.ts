@@ -90,8 +90,13 @@ export function sortWorktrees(
   )
 }
 
+type WorktreeStatusInputs = Pick<
+  Worktree,
+  'hasHostSidebarActivity' | 'status' | 'liveTerminalCount' | 'sidebarStatus'
+>
+
 export function getWorktreeStatus(
-  w: Worktree
+  w: WorktreeStatusInputs
 ): 'working' | 'active' | 'permission' | 'done' | 'inactive' {
   // Match desktop sidebar activity; retained/background PTYs alone must not imply an active workspace.
   if (w.hasHostSidebarActivity === false) {
@@ -127,6 +132,15 @@ function isHostVerdictDotStatus(value: string | undefined): value is WorktreeSta
   return value !== undefined && HOST_VERDICT_DOT_STATUSES.has(value)
 }
 
-export function getWorktreeDotStatus(w: Worktree): WorktreeStatus {
+/** A row from the phone's store has its agent state stripped (K1); only a live read fills its dot. */
+export function hasWorktreeAgentState(w: WorktreeStatusInputs): boolean {
+  return (
+    w.status !== undefined ||
+    w.sidebarStatus !== undefined ||
+    w.hasHostSidebarActivity !== undefined
+  )
+}
+
+export function getWorktreeDotStatus(w: WorktreeStatusInputs): WorktreeStatus {
   return isHostVerdictDotStatus(w.sidebarStatus) ? w.sidebarStatus : getWorktreeStatus(w)
 }

@@ -1,15 +1,18 @@
+import { useGitHubImagePending } from '@/components/github/use-github-image-uploads'
+import type { GitHubImageUploadAddress } from '@/components/github/github-image-upload'
 import React from 'react'
 import { Check, LoaderCircle, Pencil, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
-import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
 import { formatRelativeTime } from '@/components/github/work-item-state-presentation'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { MentionOption } from '../page-types'
 import { MentionTextarea } from '../mentions/textarea'
 
 export function ConversationDescription({
+  imageUploadAddress,
   authorLabel,
   updatedAt,
   canEditBody,
@@ -19,6 +22,7 @@ export function ConversationDescription({
   bodySaving,
   bodyChanged,
   body,
+  bodyImageUrls,
   resolvedBodyDraft,
   bodyTextareaRef,
   mentionOptions,
@@ -28,6 +32,7 @@ export function ConversationDescription({
   onSave,
   onDraftChange
 }: {
+  imageUploadAddress?: GitHubImageUploadAddress | (() => GitHubImageUploadAddress)
   authorLabel: string
   updatedAt: string
   canEditBody: boolean
@@ -37,6 +42,7 @@ export function ConversationDescription({
   bodySaving: boolean
   bodyChanged: boolean
   body: string
+  bodyImageUrls?: Record<string, string>
   resolvedBodyDraft: string
   bodyTextareaRef: React.RefObject<HTMLTextAreaElement | null>
   mentionOptions: MentionOption[]
@@ -46,13 +52,22 @@ export function ConversationDescription({
   onSave: () => void
   onDraftChange: (value: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
+  const images = useGitHubImagePending()
+  const save = () => {
+    if (!images.pendingRef.current) {
+      onSave()
+    }
+  }
   return (
     <div className="rounded-lg border border-border/50 bg-card shadow-xs">
       <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2 text-[12px] text-muted-foreground">
         <span className="font-medium text-foreground">{authorLabel}</span>
         <span>
-          {translate('auto.components.PullRequestPage.169a93b29a', 'updated')}{' '}
-          {formatRelativeTime(updatedAt)}
+          {t('auto.components.PullRequestPage.updatedRelativeTime', 'updated {{time}}', {
+            time: formatRelativeTime(updatedAt, intlLocale)
+          })}
         </span>
         {canEditBody && !loading && detailsLoaded ? (
           bodyEditing ? (
@@ -66,21 +81,21 @@ export function ConversationDescription({
                 onClick={onCancelEdit}
               >
                 <X className="size-3.5" />
-                {translate('auto.components.PullRequestPage.6591b1fa82', 'Cancel')}
+                {t('auto.components.PullRequestPage.6591b1fa82', 'Cancel')}
               </Button>
               <Button
                 type="button"
                 size="xs"
                 className="gap-1.5"
-                disabled={bodySaving || !bodyChanged}
-                onClick={onSave}
+                disabled={bodySaving || !bodyChanged || images.pending}
+                onClick={save}
               >
                 {bodySaving ? (
                   <LoaderCircle className="size-3.5 animate-spin" />
                 ) : (
                   <Check className="size-3.5" />
                 )}
-                {translate('auto.components.PullRequestPage.4a337ac05f', 'Save')}
+                {t('auto.components.PullRequestPage.4a337ac05f', 'Save')}
               </Button>
             </div>
           ) : (
@@ -92,16 +107,13 @@ export function ConversationDescription({
                   size="icon-xs"
                   className="ml-auto size-7"
                   onClick={onStartEdit}
-                  aria-label={translate(
-                    'auto.components.PullRequestPage.da9aaa8bcf',
-                    'Edit description'
-                  )}
+                  aria-label={t('auto.components.PullRequestPage.da9aaa8bcf', 'Edit description')}
                 >
                   <Pencil className="size-3.5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                {translate('auto.components.PullRequestPage.da9aaa8bcf', 'Edit description')}
+                {t('auto.components.PullRequestPage.da9aaa8bcf', 'Edit description')}
               </TooltipContent>
             </Tooltip>
           )
@@ -114,6 +126,11 @@ export function ConversationDescription({
           </div>
         ) : bodyEditing ? (
           <MentionTextarea
+            imageUpload={{
+              address: imageUploadAddress,
+              onPending: images.onPending,
+              enabled: !bodySaving
+            }}
             textareaRef={bodyTextareaRef}
             value={resolvedBodyDraft}
             onValueChange={onDraftChange}
@@ -125,10 +142,10 @@ export function ConversationDescription({
               }
               if (isScreenSubmitShortcut(event) && !bodySaving && bodyChanged) {
                 event.preventDefault()
-                onSave()
+                save()
               }
             }}
-            placeholder={translate('auto.components.PullRequestPage.778683ec84', 'Description')}
+            placeholder={t('auto.components.PullRequestPage.778683ec84', 'Description')}
             rows={12}
             mentionOptions={mentionOptions}
             wrapperClassName="flex min-h-64 w-full items-stretch"
@@ -137,13 +154,14 @@ export function ConversationDescription({
         ) : body.trim() ? (
           <CommentMarkdown
             content={body}
+            bodyImageUrls={bodyImageUrls}
             variant="document"
             githubRepo={markdownGitHubRepo}
             className="min-w-0 max-w-full overflow-hidden break-words text-[14px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
           />
         ) : (
           <span className="italic text-muted-foreground">
-            {translate('auto.components.PullRequestPage.c8ea6c7c4c', 'No description provided.')}
+            {t('auto.components.PullRequestPage.c8ea6c7c4c', 'No description provided.')}
           </span>
         )}
       </div>

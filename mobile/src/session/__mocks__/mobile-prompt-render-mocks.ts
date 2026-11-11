@@ -3,6 +3,7 @@ import { vi } from 'vitest'
 vi.mock('react-native', async () => {
   const React = await import('react')
   return {
+    ...(await import('../../test-support/react-native-motion-stub')).reactNativeMotionStub(),
     ActivityIndicator: 'ActivityIndicator',
     Image: 'Image',
     Platform: { OS: 'ios' },
@@ -40,6 +41,8 @@ vi.mock('lucide-react-native', () =>
     [
       'ArrowDown',
       'ArrowUp',
+      'ListEnd',
+      'CornerDownRight',
       'ChevronDown',
       'ChevronUp',
       'ChevronsDownUp',
@@ -73,7 +76,16 @@ vi.mock('../native-chat/input/MobileNativeChatSessionOptionPickers', () => ({
   MobileNativeChatSessionOptionPickers: 'SessionOptions'
 }))
 vi.mock('../native-chat/composer/MobileNativeChatComposerMenu', () => ({
-  MobileNativeChatComposerMenu: 'Suggestions'
+  MobileNativeChatComposerSuggestions: 'Suggestions'
 }))
 vi.mock('../../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
+vi.mock('../../components/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))
+vi.mock('react-native-reanimated', async () => {
+  const { useRef } = await import('react')
+  return {
+    default: { ScrollView: 'ScrollView' },
+    useAnimatedRef: () => useRef(null),
+    useSharedValue: (value: unknown) => useRef({ value }).current
+  }
+})
 vi.mock('../../components/MobileMarkdown', () => ({ MobileMarkdown: 'Markdown' }))

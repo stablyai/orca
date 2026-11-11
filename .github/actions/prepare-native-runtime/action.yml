@@ -54,7 +54,7 @@ runs:
       env:
         NATIVE_RUNTIME: ${{ inputs.native-runtime }}
         NODE_VERSION: ${{ inputs.node-version }}
-        NATIVE_SOURCE_HASH: ${{ hashFiles('.npmrc', 'config/pnpmfile.cjs', '.github/actions/prepare-native-runtime/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/initialize-windows-native-toolchain.mjs', 'config/scripts/capture-windows-native-environment.cmd', 'config/scripts/rebuild-native-deps.mjs', 'config/scripts/node-pty-job-ownership.cjs', 'config/scripts/windows-pe-machine.cjs', 'config/scripts/windows-process-tree-gyp-rebuild.mjs', 'config/scripts/windows-process-tree-creation-time.cjs', 'config/scripts/install-electron-package-binary.mjs', 'config/scripts/electron-platform-path.mjs', 'config/scripts/zip-extractor-command.mjs', 'src/shared/zip-extractor-command.ts', 'config/scripts/shared-electron-dist-cache.mjs', 'config/scripts/space-sharing-copy.mjs', 'config/scripts/shared-tree-publish.mjs', 'config/scripts/native-build-entry.cjs', 'config/scripts/native-build-entry-probe.cjs', 'config/scripts/shared-native-build.mjs', 'config/scripts/orcad-prebuild-node-gyp.mjs', 'config/scripts/msbuild-file-tracking.mjs', 'config/scripts/native-dependency-lock-digest.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch', 'native/windows-registry/src/addon.cc', 'native/windows-registry/binding.gyp', 'native/windows-registry/package.json', 'native/windows-registry/index.js', 'native/windows-security/src/addon.cc', 'native/windows-security/binding.gyp', 'native/windows-security/package.json', 'native/windows-security/index.js') }}
+        NATIVE_SOURCE_HASH: ${{ hashFiles('.npmrc', 'config/pnpmfile.cjs', '.github/actions/prepare-native-runtime/action.yml', 'config/scripts/native-build/node-addons/ensure-native-runtime.mjs', 'config/scripts/native-build/windows/initialize-windows-native-toolchain.mjs', 'config/scripts/native-build/windows/capture-windows-native-environment.cmd', 'config/scripts/native-build/node-addons/rebuild-native-deps.mjs', 'config/scripts/native-build/node-addons/node-pty-job-ownership.cjs', 'config/scripts/native-build/windows/windows-pe-machine.cjs', 'config/scripts/native-build/windows/windows-process-tree-gyp-rebuild.mjs', 'config/scripts/native-build/windows/windows-process-tree-creation-time.cjs', 'config/scripts/electron-installation/platform-layout/install-electron-package-binary.mjs', 'config/scripts/electron-installation/platform-layout/electron-platform-path.mjs', 'config/scripts/zip-extractor-command.mjs', 'src/shared/zip-extractor-command.ts', 'config/scripts/electron-installation/shared-dist-cache/shared-electron-dist-cache.mjs', 'config/scripts/artifact-storage/reflink-copy/space-sharing-copy.mjs', 'config/scripts/artifact-storage/atomic-publication/shared-tree-publish.mjs', 'config/scripts/native-build/node-addons/native-build-entry.cjs', 'config/scripts/native-build/node-addons/native-build-entry-probe.cjs', 'config/scripts/native-build/node-addons/shared-native-build.mjs', 'config/scripts/orcad-distribution/prebuilds/orcad-prebuild-node-gyp.mjs', 'config/scripts/native-build/windows/msbuild-file-tracking.mjs', 'config/scripts/native-build/node-addons/native-dependency-lock-digest.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch', 'native/windows-registry/src/addon.cc', 'native/windows-registry/binding.gyp', 'native/windows-registry/package.json', 'native/windows-registry/index.js', 'native/windows-security/src/addon.cc', 'native/windows-security/src/isolated-spawn.cc', 'native/windows-security/src/isolated-spawn.h', 'native/windows-security/binding.gyp', 'native/windows-security/package.json', 'native/windows-security/index.js') }}
       run: |
         scope="${ImageOS:-$RUNNER_OS}"
         if [ -r /etc/os-release ]; then
@@ -64,7 +64,7 @@ runs:
         pnpm_version="$(pnpm --version)"
         test -n "$pnpm_version"
         # Locked native closures and the Electron release, not the whole lockfile.
-        lock_digest="$(node config/scripts/native-dependency-lock-digest.mjs)"
+        lock_digest="$(node config/scripts/native-build/node-addons/native-dependency-lock-digest.mjs)"
         test -n "$lock_digest"
         printf 'scope=%s\n' "$scope" >> "$GITHUB_OUTPUT"
         printf 'key=native-modules-%s-%s-%s-%s-node%s-pnpm%s-%s-%s\n' "$RUNNER_OS" "$scope" "$RUNNER_ARCH" "$NATIVE_RUNTIME" "$NODE_VERSION" "$pnpm_version" "$NATIVE_SOURCE_HASH" "$lock_digest" >> "$GITHUB_OUTPUT"
@@ -119,7 +119,7 @@ runs:
       run: |
         # A cache hit can contain unusable addons; probe before skipping the rebuild toolchain.
         if [ "$NATIVE_RUNTIME" = node ] && [ "$NATIVE_CACHE_HIT" = true ] &&
-          node config/scripts/ensure-native-runtime.mjs --check-only; then
+          node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --check-only; then
           exit 0
         fi
         npm install -g node-gyp@11.5.0
@@ -132,7 +132,7 @@ runs:
         NATIVE_RUNTIME: ${{ inputs.native-runtime }}
       run: |
         if [ "$RUNNER_OS" = Windows ] && [ "$NATIVE_RUNTIME" = node ]; then
-          node config/scripts/initialize-windows-native-toolchain.mjs
+          node config/scripts/native-build/windows/initialize-windows-native-toolchain.mjs
         else
-          node config/scripts/ensure-native-runtime.mjs --runtime="$NATIVE_RUNTIME"
+          node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime="$NATIVE_RUNTIME"
         fi

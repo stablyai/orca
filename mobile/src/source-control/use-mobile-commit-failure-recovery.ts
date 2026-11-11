@@ -1,16 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ConnectionState } from '../transport/types'
-import type { RpcClient } from '../transport/rpc-client'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import type { ConnectionState } from '../transport/connection/connection-state'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { triggerError, triggerSuccess } from '../platform/haptics'
+import { translate } from '../i18n/mobile-i18n'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
-import { launchAgentWithPrompt, promptedLaunchNotice } from '../session/pr-ai-triage-launch'
-import { resolveMobileAgentLaunchAvailability } from '../session/mobile-agent-launch-availability'
+import { launchAgentWithPrompt, promptedLaunchNotice } from './review/pr-ai-triage-launch'
+import { resolveMobileAgentLaunchAvailability } from '../session/agent-launch/mobile-agent-launch-availability'
 import {
   buildFixCommitFailurePrompt,
-  type MobileCommitFailureRecovery,
   hasExpandedCommitFailureDetails,
   summarizeCommitFailure
-} from './mobile-commit-failure-recovery'
+} from '../../../src/shared/source-control/recovery/source-control-commit-failure'
+import type { MobileCommitFailureRecovery } from './mobile-commit-failure-recovery'
 
 type Params = {
   client: RpcClient | null
@@ -52,9 +53,11 @@ export function useMobileCommitFailureRecovery({
   const summary = useMemo(() => (failure ? summarizeCommitFailure(failure.error) : null), [failure])
   const availability = resolveMobileAgentLaunchAvailability(hostStatus)
 
-  useEffect(() => {
+  const [launchErrorFailure, setLaunchErrorFailure] = useState(failure)
+  if (launchErrorFailure !== failure) {
+    setLaunchErrorFailure(failure)
     setLaunchError(null)
-  }, [failure])
+  }
 
   const hasDetails = useMemo(
     () => (failure && summary ? hasExpandedCommitFailureDetails(failure.error, summary) : false),
@@ -79,7 +82,12 @@ export function useMobileCommitFailureRecovery({
       return false
     }
     if (!client || connState !== 'connected') {
-      setLaunchError('Waiting for desktop...')
+      setLaunchError(
+        translate(
+          'sourceControl.useMobileCommitFailureRecovery.waitingForDesktop',
+          'Waiting for desktop...'
+        )
+      )
       triggerError()
       return false
     }
@@ -113,7 +121,14 @@ export function useMobileCommitFailureRecovery({
       return notice.succeeded
     } catch (err) {
       triggerError()
-      setLaunchError(err instanceof Error ? err.message : 'Failed to launch agent')
+      setLaunchError(
+        err instanceof Error
+          ? err.message
+          : translate(
+              'sourceControl.useMobileCommitFailureRecovery.launchFailed',
+              'Failed to launch agent'
+            )
+      )
       return false
     } finally {
       inFlightRef.current = false

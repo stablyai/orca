@@ -1,4 +1,4 @@
-import { codexOpenCodeTokenSessions } from '../usage/agent-token-usage'
+import { codexOpenCodeTokenSessions } from '../usage/reporting/token-usage/agent-token-usage'
 import { app } from 'electron'
 import { join } from 'node:path'
 import type {
@@ -11,7 +11,7 @@ import type {
   OpenCodeUsageSnapshot,
   OpenCodeUsageSummary
 } from '../../shared/opencode-usage-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type {
   OpenCodeUsageDailyAggregate,
   OpenCodeUsagePersistedState,
@@ -29,8 +29,8 @@ import {
   buildOpenCodeUsageRecentSessions,
   buildOpenCodeUsageSummary
 } from './snapshot-rollups'
-import { UsageProviderStoreLifecycle } from '../usage/usage-provider-store-lifecycle'
-import { splitUsageCacheFileViaWorker } from '../usage/usage-scan-worker-spawn'
+import { UsageProviderStoreLifecycle } from '../usage/provider-lifecycle/usage-provider-store-lifecycle'
+import { splitUsageCacheFileViaWorker } from '../usage/scan-worker/usage-scan-worker-spawn'
 
 let _openCodeUsageFile: string | null = null
 

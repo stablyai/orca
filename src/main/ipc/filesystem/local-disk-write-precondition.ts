@@ -5,7 +5,7 @@ import {
   getDiskBaselineSignature,
   diskBaselineSignatureLength,
   utf8ByteSizeCanDecodeToLength
-} from '../../../shared/disk-baseline-signature'
+} from '../../../shared/file-write/disk-baseline-signature'
 import {
   compareDiskWritePrecondition,
   FILE_WRITE_OK,
@@ -13,12 +13,12 @@ import {
   type FileWriteDiskComparison,
   type FileWriteDiskPrecondition,
   type FileWriteResult
-} from '../../../shared/file-write-disk-precondition'
+} from '../../../shared/file-write/file-write-disk-precondition'
 import { readlink, realpath, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, normalize, resolve } from 'node:path'
 import { runKeyedSerializedOperation } from '../../cli/keyed-promise-queue'
-import { serializedParentDirectoryKey } from '../../destination-serialized-local-rename'
-import { windowsFsPath } from '../../wsl/wsl-unc-drive-fs-path'
+import { serializedParentDirectoryKey } from '../../filesystem/destination-serialized-local-rename'
+import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import {
   assertLocalWriteTargetIsRegularFile,
   FileTooLargeError,
@@ -171,15 +171,39 @@ export async function writeLocalTextFileWithDiskPrecondition(
     await writeFile(filePath, content, 'utf-8')
     return FILE_WRITE_OK
   }
-  const pathKey = await editorWritePathKey(filePath)
+  // Refuse symlink loops whose baseline and shared lock cannot be proven.
+  return runSerializedLocalFileWrite(filePath, compareAndWrite, () => ({
+    ok: false,
+    diskConflict: 'changed'
+  }))
+}
+
+/** Runs one compare-and-write under the path and inode locks every editor save of the file shares. */
+export function runLocalEditorWrite(
+  filePath: string,
+  compareAndWrite: () => Promise<FileWriteResult>
+): Promise<FileWriteResult> {
+  return runSerializedLocalFileWrite(filePath, compareAndWrite, () => ({
+    ok: false,
+    diskConflict: 'changed'
+  }))
+}
+
+/** Every in-process writer that checks a file before replacing it shares this lock, so no two pass the check together. */
+export async function runSerializedLocalFileWrite<T>(
+  filePath: string,
+  write: () => Promise<T>,
+  unprovableLock: () => T
+): Promise<T> {
+  const lockPath = windowsFsPath(filePath)
+  const pathKey = await editorWritePathKey(lockPath)
   if (pathKey === null) {
-    // Refuse symlink loops whose baseline and shared lock cannot be proven.
-    return { ok: false, diskConflict: 'changed' }
+    return unprovableLock()
   }
   return runKeyedSerializedOperation(editorWritesByPath, pathKey, async () => {
-    const inodeKey = await editorWriteInodeKey(filePath)
+    const inodeKey = await editorWriteInodeKey(lockPath)
     return inodeKey === null
-      ? compareAndWrite()
-      : runKeyedSerializedOperation(editorWritesByInode, inodeKey, compareAndWrite)
+      ? write()
+      : runKeyedSerializedOperation(editorWritesByInode, inodeKey, write)
   })
 }

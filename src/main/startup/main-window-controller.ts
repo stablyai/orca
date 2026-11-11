@@ -38,7 +38,7 @@ import {
 } from './synthetic-title-runtime'
 import { requireMainWindowServices } from './main-window-service-readiness'
 import { recordRendererLaunchFailureProbe } from '../window/renderer-launch-failure-probe'
-import { trackBrowserExtensionMainWindow } from '../browser/extensions/browser-extension-window-model'
+import { trackBrowserExtensionMainWindow } from '../browser/extensions/tabs-and-windows/browser-extension-window-model'
 
 import { isResourceWindowVisible } from '../window/resource-view-admission'
 import {
@@ -198,6 +198,7 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
       recordCrashBreadcrumb('renderer_reload_requested', { ignoreCache })
   })
   state.mainWindow = window
+  state.hasOpenedMainWindow = true
   const publishResourceVisibility = (): void => {
     if (!window.isDestroyed()) {
       window.webContents.send('memory:resourceWindowVisibility', isResourceWindowVisible(window))
@@ -234,7 +235,6 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
       }
     }
     clearExpectedRendererReload(rendererWebContentsId)
-    state.automations?.setWebContents(null)
     clearMainWindowAgentStatusListeners()
   })
   logStartupMilestone('load-start')

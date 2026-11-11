@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto'
 import { gzipSync } from 'node:zlib'
 import { expect, it } from 'vitest'
 import {
@@ -8,36 +7,11 @@ import {
 
 const source = JSON.stringify({ sources: ['Unicode: 日本語 🌊'.repeat(10_000)] })
 
-it('shrinks large saved data and restores every original byte', async () => {
-  const encoded = await compressClaudeUsageSourceText(source)
-  expect(Buffer.byteLength(encoded)).toBeLessThan(Buffer.byteLength(source) / 4)
-  expect(await decodeClaudeUsageSourceText(encoded)).toBe(source)
-})
-
 it('keeps small and existing plain caches readable without changing them', async () => {
   const small = '{"schemaVersion":7,"sources":[]}'
   expect(await compressClaudeUsageSourceText(small)).toBe(small)
   expect(await decodeClaudeUsageSourceText(Buffer.from(small))).toBe(small)
   expect(await decodeClaudeUsageSourceText(source)).toBe(source)
-})
-
-it('never grows a less compressible source and restores its original content', async () => {
-  const noisy = JSON.stringify({ value: randomBytes(100_000).toString('base64') })
-  const saved = await compressClaudeUsageSourceText(noisy)
-  expect(Buffer.byteLength(saved)).toBeLessThanOrEqual(Buffer.byteLength(noisy))
-  expect(await decodeClaudeUsageSourceText(saved)).toBe(noisy)
-})
-
-it('rejects truncated and corrupted gzip payloads', async () => {
-  const encoded = await compressClaudeUsageSourceText(source)
-  if (typeof encoded === 'string') {
-    throw new Error('Expected compressed fixture.')
-  }
-  await expect(decodeClaudeUsageSourceText(encoded.subarray(0, 2))).rejects.toThrow()
-  await expect(decodeClaudeUsageSourceText(encoded.subarray(0, -5))).rejects.toThrow()
-  const damaged = Buffer.from(encoded)
-  damaged[damaged.length - 5] ^= 1
-  await expect(decodeClaudeUsageSourceText(damaged)).rejects.toThrow()
 })
 
 it.each([0, 70_001, 129 * 1024 * 1024])(

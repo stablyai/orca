@@ -1,3 +1,5 @@
+import type { LayoutClientVisibility } from '../../../shared/workspace-layout/workspace-layout-client-visibility'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type {
   CommandOf,
   LayoutApplyOutcome,
@@ -79,7 +81,9 @@ export class LayoutCommandPersistence {
     command: LayoutCommand,
     hostIds: readonly string[] = [],
     run: {
+      admit?: (partitions?: readonly WorkspaceSessionState[]) => boolean
       live?: LayoutLiveContext
+      visibility?: LayoutClientVisibility
       stopBeforeWrite?: (ptyIds: readonly string[]) => boolean
       onEffects?: (effects: LayoutEffects) => void
     } = {}
@@ -92,20 +96,25 @@ export class LayoutCommandPersistence {
       resolved,
       (hostId) => context.sessions.getWorkspaceSession(hostId),
       applyLayout(resolved, command, topologyCommitContext(context), {
-        live: run.live,
+        live: { ...run.live, visibility: run.visibility },
         stopBeforeWrite: run.stopBeforeWrite,
         noteEffects: (noted) => (effects = noted)
       })
     )
+    const admitted = (): DurableProfileStateMutation<LayoutApplyOutcome> =>
+      run.admit &&
+      !run.admit(resolved.map((hostId) => context.sessions.getWorkspaceSession(hostId)))
+        ? { value: { ok: false, code: 'tab_not_found' }, persist: false }
+        : commit()
     // Applied closes must stay closed even when persistence fails.
     const applied: Promise<LayoutApplyOutcome> =
       ORCA_LAYOUT_OWNER_IS_MAIN && context.writeLater && isTerminalClose(command)
         ? keptOnWriteFailure(
             (mutate) => context.runtime.runDurableMutation(mutate),
-            writingOnly(resolved, commit),
+            writingOnly(resolved, admitted),
             context.writeLater
           )
-        : context.runtime.runDurableMutation(writingOnly(resolved, commit))
+        : context.runtime.runDurableMutation(writingOnly(resolved, admitted))
     if (!run.onEffects) {
       return applied
     }
@@ -154,7 +163,8 @@ export class LayoutCommandPersistence {
   moveTabToWorkspaceAcrossPartitions(
     command: CommandOf<'moveTabToWorkspace'>,
     fromHostId: string,
-    toHostId: string
+    toHostId: string,
+    run?: { visibility?: LayoutClientVisibility }
   ): Promise<LayoutApplyOutcome> {
     const commit = topologyCommitContext(this[layoutCommandPersistenceContext])
     const [from, to] = [resolveHostId(fromHostId), resolveHostId(toHostId)]
@@ -167,7 +177,8 @@ export class LayoutCommandPersistence {
           views: partitionEditorViewsOf(runtime, from)
         },
         { hostId: to, session: commit.getSession(to), views: partitionEditorViewsOf(runtime, to) },
-        command
+        command,
+        run?.visibility
       )
       if (!moved.sessions) {
         return { value: moved.value, persist: false }

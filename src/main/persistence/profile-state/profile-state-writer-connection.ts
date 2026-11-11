@@ -93,9 +93,9 @@ export class ProfileStateWriterConnection {
     this.draining = true
   }
 
-  close(): Promise<void> {
+  close(options: { refreshLegacyDocuments?: boolean } = {}): Promise<void> {
     this.stopAdmission()
-    this.closePromise ??= this.finishClose()
+    this.closePromise ??= this.finishClose(options.refreshLegacyDocuments === true)
     return this.closePromise
   }
 
@@ -118,12 +118,12 @@ export class ProfileStateWriterConnection {
     return this.thread?.exited ?? true
   }
 
-  private async finishClose(): Promise<void> {
+  private async finishClose(refreshLegacyDocuments: boolean): Promise<void> {
     await this.active?.promise.catch(() => {})
     if (!this.failure && !this.didExit) {
       const closeRequestId = this.nextId
       try {
-        await this.dispatch({ command: 'close' })
+        await this.dispatch({ command: 'close', refreshLegacyDocuments })
       } finally {
         // Ownership requires observed exit, not timeout or termination request.
         await this.awaitExit(closeRequestId)

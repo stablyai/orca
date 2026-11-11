@@ -20,10 +20,12 @@ export type GitExecOptions = {
   /** Rechecks owner eligibility after admission, before starting the child. */
   canStart?: () => boolean
   wslDistro?: string
+  /** Runs the host's Git even in a WSL-runtime project (local-git-runtime-route.ts); say why. */
+  hostGit?: true
   preferWslDirectGit?: boolean
   useConfiguredSshCommandForNetwork?: boolean
   terminationBarrier?: boolean
-  captureWslLoginShellOutput?: boolean
+  observeChildTermination?: (terminated: Promise<void>, writes: boolean) => void
   /** Scheduler priority for this child; status is the safe default. */
   admissionTier?: GitAdmissionTier
   /** Skips general admission; only for a caller that bounds its own concurrency (worktree deletes). */

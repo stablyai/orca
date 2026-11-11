@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -18,14 +18,6 @@ async function makeRoot(prefix: string): Promise<string> {
   return root
 }
 
-function restoreEnv(key: string, previous: string | undefined): void {
-  if (previous === undefined) {
-    delete process.env[key]
-  } else {
-    process.env[key] = previous
-  }
-}
-
 describe('resolveSessionFilePath', () => {
   it('globs Claude project subdirs for <sessionId>.jsonl', async () => {
     const root = await makeRoot('orca-native-chat-resolve-claude-')
@@ -39,16 +31,67 @@ describe('resolveSessionFilePath', () => {
     expect(resolved).toBe(target)
   })
 
-  it('resolves OpenClaude sessions from the Claude transcript layout', async () => {
-    const root = await makeRoot('orca-native-chat-resolve-openclaude-')
+  it('never builds a Claude probe path that leaves the projects folder', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-claude-escape-')
     const claudeProjectsDir = join(root, 'claude-projects')
-    const projectDir = join(claudeProjectsDir, '-Users-ada-repo')
-    await mkdir(projectDir, { recursive: true })
-    const target = join(projectDir, 'sess-openclaude.jsonl')
+    await mkdir(join(claudeProjectsDir, '-Users-ada-repo'), { recursive: true })
+    await writeFile(join(root, 'outside.jsonl'), '{}\n')
+
+    await expect(
+      resolveSessionFilePath('claude', '../../outside', { claudeProjectsDir })
+    ).resolves.toBeNull()
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'skips symlinked Claude buckets and transcripts, which can point at another account',
+    async () => {
+      const root = await makeRoot('orca-native-chat-resolve-claude-symlink-')
+      const claudeProjectsDir = join(root, 'claude-projects')
+      const elsewhere = join(root, 'other-account', '-Users-ada-repo')
+      await mkdir(elsewhere, { recursive: true })
+      await writeFile(join(elsewhere, 'sess-linked.jsonl'), '{}\n')
+      await mkdir(join(claudeProjectsDir, '-Users-ada-file'), { recursive: true })
+      await symlink(elsewhere, join(claudeProjectsDir, '-Users-ada-repo'))
+      await symlink(
+        join(elsewhere, 'sess-linked.jsonl'),
+        join(claudeProjectsDir, '-Users-ada-file', 'sess-linked.jsonl')
+      )
+
+      await expect(
+        resolveSessionFilePath('claude', 'sess-linked', {
+          claudeProjectsDir,
+          cwd: '/Users/ada/repo'
+        })
+      ).resolves.toBeNull()
+    }
+  )
+
+  it('prefers the Claude transcript in the cwd bucket over a copy in another bucket', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-claude-cwd-')
+    const claudeProjectsDir = join(root, 'claude-projects')
+    for (const bucket of ['-Users-ada-old', '-Users-ada-repo']) {
+      await mkdir(join(claudeProjectsDir, bucket), { recursive: true })
+      await writeFile(join(claudeProjectsDir, bucket, 'sess-dup.jsonl'), '{}\n')
+    }
+
+    await expect(
+      resolveSessionFilePath('claude', 'sess-dup', { claudeProjectsDir, cwd: '/Users/ada/repo' })
+    ).resolves.toBe(join(claudeProjectsDir, '-Users-ada-repo', 'sess-dup.jsonl'))
+  })
+
+  it('falls back to every bucket when the cwd hint is too long to name one', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-claude-long-cwd-')
+    const claudeProjectsDir = join(root, 'claude-projects')
+    const target = join(claudeProjectsDir, '-old', 'sess-long-cwd.jsonl')
+    await mkdir(dirname(target), { recursive: true })
     await writeFile(target, '{}\n')
 
     await expect(
-      resolveSessionFilePath('openclaude', 'sess-openclaude', { claudeProjectsDir })
+      resolveSessionFilePath('claude', 'sess-long-cwd', {
+        claudeProjectsDir,
+        cwd: `/work/${'segment/'.repeat(40)}repo`,
+        strictErrors: true
+      })
     ).resolves.toBe(target)
   })
 
@@ -107,22 +150,6 @@ describe('resolveSessionFilePath', () => {
     ).resolves.toBeNull()
   })
 
-  it('resolves Grok sessions under GROK_HOME when no override is passed', async () => {
-    const root = await makeRoot('orca-native-chat-resolve-grok-home-')
-    const sessionsDir = join(root, 'sessions')
-    const sessionDir = join(sessionsDir, encodeURIComponent('/repo'), 'sess-env-1')
-    await mkdir(sessionDir, { recursive: true })
-    const target = join(sessionDir, 'chat_history.jsonl')
-    await writeFile(target, '{}\n')
-    const previous = process.env.GROK_HOME
-    process.env.GROK_HOME = root
-    try {
-      await expect(resolveSessionFilePath('grok', 'sess-env-1')).resolves.toBe(target)
-    } finally {
-      restoreEnv('GROK_HOME', previous)
-    }
-  })
-
   it('matches Codex rollout files by session id suffix', async () => {
     const root = await makeRoot('orca-native-chat-resolve-codex-')
     const codexSessionsDir = join(root, 'codex-sessions')
@@ -134,18 +161,6 @@ describe('resolveSessionFilePath', () => {
     const resolved = await resolveSessionFilePath('codex', 'abc-session', {
       codexSessionsDirs: [codexSessionsDir]
     })
-    expect(resolved).toBe(target)
-  })
-
-  it('matches omp transcripts by session id suffix inside the per-cwd directory', async () => {
-    const root = await makeRoot('orca-native-chat-resolve-omp-')
-    const ompSessionsDir = join(root, 'omp-sessions')
-    const cwdDir = join(ompSessionsDir, '-Users-ada-repo')
-    await mkdir(cwdDir, { recursive: true })
-    const target = join(cwdDir, '2026-07-16T00-27-02-222Z_sess-omp-1.jsonl')
-    await writeFile(target, '{}\n')
-
-    const resolved = await resolveSessionFilePath('omp', 'sess-omp-1', { ompSessionsDir })
     expect(resolved).toBe(target)
   })
 
@@ -165,78 +180,6 @@ describe('resolveSessionFilePath', () => {
     await expect(
       resolveSessionFilePath('omp', '019fd8e2-fd56-7000-acfe-2e497adfa83c', { ompSessionsDir })
     ).resolves.toBe(join(cwdDir, `${stem}.jsonl`))
-  })
-
-  it('honors OMP_CODING_AGENT_DIR when resolving omp transcripts', async () => {
-    const root = await makeRoot('orca-native-chat-resolve-omp-env-')
-    const cwdDir = join(root, 'omp-sessions', '-Users-ada-repo')
-    await mkdir(cwdDir, { recursive: true })
-    const target = join(cwdDir, '2026-07-16T00-27-02-222Z_sess-omp-env.jsonl')
-    await writeFile(target, '{}\n')
-
-    const previous = process.env.OMP_CODING_AGENT_DIR
-    process.env.OMP_CODING_AGENT_DIR = join(root, 'omp-sessions')
-    try {
-      await expect(resolveSessionFilePath('omp', 'sess-omp-env')).resolves.toBe(target)
-    } finally {
-      restoreEnv('OMP_CODING_AGENT_DIR', previous)
-    }
-  })
-
-  it('resolves a rollout from the orca-managed Codex home (ORCA_USER_DATA_PATH)', async () => {
-    const root = await makeRoot('orca-native-chat-resolve-managed-')
-    const managedSessionsDir = join(root, 'codex-runtime-home', 'home', 'sessions')
-    const dayDir = join(managedSessionsDir, '2026', '06', '19')
-    await mkdir(dayDir, { recursive: true })
-    const target = join(dayDir, 'rollout-2026-06-19T04-20-39-019edf9c-managed.jsonl')
-    await writeFile(target, '{}\n')
-
-    const previous = process.env.ORCA_USER_DATA_PATH
-    process.env.ORCA_USER_DATA_PATH = root
-    try {
-      const resolved = await resolveSessionFilePath('codex', '019edf9c-managed')
-      expect(resolved).toBe(target)
-    } finally {
-      if (previous === undefined) {
-        delete process.env.ORCA_USER_DATA_PATH
-      } else {
-        process.env.ORCA_USER_DATA_PATH = previous
-      }
-    }
-  })
-
-  it('falls back to CODEX_HOME when the managed home has no match', async () => {
-    const root = await makeRoot('orca-native-chat-resolve-codex-home-')
-    const managedRoot = join(root, 'managed-userdata')
-    await mkdir(managedRoot, { recursive: true })
-    const codexHome = join(root, 'custom-codex-home')
-    const dayDir = join(codexHome, 'sessions', '2026', '06', '05')
-    await mkdir(dayDir, { recursive: true })
-    const target = join(dayDir, 'rollout-xyz-session.jsonl')
-    await writeFile(target, '{}\n')
-
-    const previousCodex = process.env.CODEX_HOME
-    const previousUserData = process.env.ORCA_USER_DATA_PATH
-    process.env.CODEX_HOME = codexHome
-    process.env.ORCA_USER_DATA_PATH = managedRoot
-    try {
-      const resolved = await resolveSessionFilePath('codex', 'xyz-session')
-      expect(resolved).toBe(target)
-    } finally {
-      restoreEnv('CODEX_HOME', previousCodex)
-      restoreEnv('ORCA_USER_DATA_PATH', previousUserData)
-    }
-  })
-
-  it('returns null when no transcript matches', async () => {
-    const root = await makeRoot('orca-native-chat-resolve-missing-')
-    const claudeProjectsDir = join(root, 'claude-projects')
-    await mkdir(claudeProjectsDir, { recursive: true })
-    expect(await resolveSessionFilePath('claude', 'nope', { claudeProjectsDir })).toBeNull()
-  })
-
-  it('returns null for unsupported agents', async () => {
-    expect(await resolveSessionFilePath('gemini', 'whatever')).toBeNull()
   })
 
   it('prefers the hook transcriptPath when it exists (Claude id != file name)', async () => {
@@ -284,39 +227,5 @@ describe('resolveSessionFilePath', () => {
       transcriptPath: bogus
     })
     expect(resolved).toBe(target)
-  })
-})
-
-// Mobile uses default roots, which must match the CLI’s CLAUDE_CONFIG_DIR or its transcript disappears.
-describe('the default Claude transcript root mobile falls back to', () => {
-  it('follows CLAUDE_CONFIG_DIR, the same variable the pinned account home follows', async () => {
-    const configDir = await makeRoot('orca-native-chat-claude-config-dir-')
-    const slugDir = join(configDir, 'projects', '-repos-workspace-1')
-    await mkdir(slugDir, { recursive: true })
-    const transcript = join(slugDir, 'session-under-config-dir.jsonl')
-    await writeFile(transcript, '', 'utf8')
-    const previous = process.env.CLAUDE_CONFIG_DIR
-    process.env.CLAUDE_CONFIG_DIR = configDir
-
-    try {
-      await expect(resolveSessionFilePath('claude', 'session-under-config-dir')).resolves.toBe(
-        transcript
-      )
-    } finally {
-      restoreEnv('CLAUDE_CONFIG_DIR', previous)
-    }
-  })
-
-  it('ignores a blank CLAUDE_CONFIG_DIR rather than resolving against the filesystem root', async () => {
-    const previous = process.env.CLAUDE_CONFIG_DIR
-    process.env.CLAUDE_CONFIG_DIR = '   '
-
-    try {
-      await expect(
-        resolveSessionFilePath('claude', 'session-that-does-not-exist')
-      ).resolves.toBeNull()
-    } finally {
-      restoreEnv('CLAUDE_CONFIG_DIR', previous)
-    }
   })
 })

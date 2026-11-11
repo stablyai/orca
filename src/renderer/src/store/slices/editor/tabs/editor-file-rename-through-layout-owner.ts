@@ -1,12 +1,15 @@
 // In layout-owner builds propose per-workspace rename IDs to main; its frame atomically rekeys drafts/buffers/autosave gate. Refusal changes nothing.
 
-import { isTwinWorkspace, runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
-import { sendLayoutApply } from '@/runtime/layout-apply-send'
+import {
+  isTwinWorkspace,
+  runtimeEnvironmentIdUnlessTwin
+} from '@/lib/workspace/ownership/resolve-owner'
+import { sendLayoutApply } from '@/runtime/workspace-layout/commands/layout-apply-send'
 import {
   expectContentRekey,
   framesShowTabRekeys,
   type TabRekey
-} from '@/runtime/layout-owner-content-rekeys'
+} from '@/runtime/workspace-layout/intents/layout-owner-content-rekeys'
 import type { EditorFileRename } from '../../../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { AppState } from '../../../types'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
@@ -15,6 +18,7 @@ import type { OpenFilePathRekey, RekeyOpenFilesResult } from '../types/open-file
 import { isEditorTabContentType } from './editor-tab-content-type'
 import { restorableEditorFile } from './editor-tab-layout-owner'
 import { layoutEditorViewOfOpenFile } from './open-file-layout-view'
+import { rekeyEditorBytesDocuments } from '@/components/editor/save/bytes/editor-bytes-document-boxes'
 
 /** Main's renames: an edit-mode file's record moves from its old path; a view takes the new one. */
 function renamesOf(
@@ -81,7 +85,12 @@ export function renameEditorFilesThroughLayoutOwner(
   const after = new Map((planned.patch.openFiles ?? []).map((file) => [file.id, file]))
   const rekeyHere = (own: readonly OpenFilePathRekey[]) => (s: AppState) => {
     const next = rekeyOpenFilesPatch(s, own, moveOperationId)
-    return next.ok ? next.patch : {}
+    if (!next.ok) {
+      return {}
+    }
+    // Why here: this runs as the rename lands, so the old tab's close never frees its bytes.
+    rekeyEditorBytesDocuments(own)
+    return next.patch
   }
   // Each file's own workspace: the same path can be open in more than one.
   const byWorktree = new Map<string, OpenFilePathRekey[]>()

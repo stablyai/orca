@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 
 // Required identity fields reject unusable rows; optional fields salvage older-host replies.

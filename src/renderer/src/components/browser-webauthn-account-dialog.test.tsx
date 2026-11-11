@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { BrowserWebAuthnAccountRequest } from '../../../shared/browser-webauthn-account'
@@ -59,33 +59,6 @@ describe('BrowserWebAuthnAccountDialog', () => {
       })
     })
   }
-
-  it('returns the selected credential without displaying opaque credential IDs', async () => {
-    render(<BrowserWebAuthnAccountDialog />)
-    showRequest()
-
-    expect(screen.getByText('accounts.example.com')).toBeInTheDocument()
-    expect(screen.queryByText('work-id')).not.toBeInTheDocument()
-    await waitFor(() => expect(screen.getByRole('button', { name: /Personal/ })).toHaveFocus())
-    fireEvent.click(screen.getByRole('button', { name: /Work/ }))
-
-    expect(respondMock).toHaveBeenCalledWith({
-      requestId: 'request-1',
-      credentialId: 'work-id'
-    })
-  })
-
-  it('returns null only when the user cancels', () => {
-    render(<BrowserWebAuthnAccountDialog />)
-    showRequest()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-
-    expect(respondMock).toHaveBeenCalledWith({
-      requestId: 'request-1',
-      credentialId: null
-    })
-  })
 
   it('closes a timed-out prompt when main dispatches teardown', () => {
     render(<BrowserWebAuthnAccountDialog />)

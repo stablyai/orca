@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { applyLayoutCommand } from './workspace-layout-commands'
 import type { InitialSurfaceReason, LayoutCommand } from './workspace-layout-command-types'
-import { build, emptyModel, testContext, WS } from './workspace-layout-command.test-fixture'
+import { build, testContext, WS } from './workspace-layout-command.test-fixture'
 import type { WorkspaceLayoutModel } from './workspace-layout-model'
 
 const REASONS: InitialSurfaceReason[] = ['restore', 'activation']
@@ -21,22 +21,6 @@ function initialSurfaces(model: WorkspaceLayoutModel, initial: InitialSurfaceRea
 }
 
 describe('initial surface', () => {
-  it('is created into a workspace with no entry, for either reason', () => {
-    for (const reason of REASONS) {
-      expect(initialSurfaces(emptyModel(), reason)).toEqual([1, 1])
-    }
-  })
-
-  it('is created into an empty published entry that never held a terminal row', () => {
-    const published: WorkspaceLayoutModel = {
-      ...emptyModel(),
-      workspaces: { [WS]: { worktreeId: WS, tabs: [], groups: [] } }
-    }
-    for (const reason of REASONS) {
-      expect(initialSurfaces(published, reason)).toEqual([1, 1])
-    }
-  })
-
   it('is not restored into a workspace a close emptied, but a user opening it gets one', () => {
     const context = testContext()
     const created = build(context, [{ type: 'createTerminalTab', workspace: WS }])

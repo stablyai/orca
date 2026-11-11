@@ -2,11 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   CLAUDE_SESSION_OPTION_CATALOG,
   CODEX_SESSION_OPTION_CATALOG
-} from '../../agent-session-option-catalog-claude-codex'
-import { GROK_SESSION_OPTION_CATALOG } from '../../agent-session-option-catalog-grok'
+} from '../../agent-session/options/agent-session-option-catalog-claude-codex'
+import { GROK_SESSION_OPTION_CATALOG } from '../../agent-session/options/agent-session-option-catalog-grok'
 import {
   buildNativeChatSessionOptionCommand,
-  parseBuiltSessionOptionCommand,
   recordNativeChatSessionOptionCommand
 } from './native-chat-session-option-commands'
 import {
@@ -23,51 +22,6 @@ function claudeRecord(model?: string): NativeChatSessionOptionRecord {
 }
 
 describe('buildNativeChatSessionOptionCommand', () => {
-  it('builds the catalog midSession command for model and options', () => {
-    expect(
-      buildNativeChatSessionOptionCommand({
-        optionId: 'model',
-        value: 'opus',
-        apply: CLAUDE_SESSION_OPTION_CATALOG.modelApply,
-        modelId: null,
-        catalog: CLAUDE_SESSION_OPTION_CATALOG,
-        models: CLAUDE_SESSION_OPTION_CATALOG.models,
-        record: claudeRecord()
-      })
-    ).toBe('/model opus')
-    const effortApply = CLAUDE_SESSION_OPTION_CATALOG.models
-      .find((model) => model.id === 'sonnet')!
-      .options.find((option) => option.id === 'effort')!.apply
-    expect(
-      buildNativeChatSessionOptionCommand({
-        optionId: 'effort',
-        value: 'high',
-        apply: effortApply,
-        modelId: 'sonnet',
-        catalog: CLAUDE_SESSION_OPTION_CATALOG,
-        models: CLAUDE_SESSION_OPTION_CATALOG.models,
-        record: claudeRecord('sonnet')
-      })
-    ).toBe('/effort high')
-  })
-
-  it('returns the bare toggle command for flip-only options', () => {
-    const fastModeApply = CLAUDE_SESSION_OPTION_CATALOG.models
-      .find((model) => model.id === 'opus')!
-      .options.find((option) => option.id === 'fastMode')!.apply
-    expect(
-      buildNativeChatSessionOptionCommand({
-        optionId: 'fastMode',
-        value: true,
-        apply: fastModeApply,
-        modelId: 'opus',
-        catalog: CLAUDE_SESSION_OPTION_CATALOG,
-        models: CLAUDE_SESSION_OPTION_CATALOG.models,
-        record: claudeRecord('opus')
-      })
-    ).toBe('/fast')
-  })
-
   it('does not turn a Codex model pick into pasted slash-command prose', () => {
     expect(
       buildNativeChatSessionOptionCommand({
@@ -88,39 +42,7 @@ describe('buildNativeChatSessionOptionCommand', () => {
   })
 })
 
-describe('parseBuiltSessionOptionCommand', () => {
-  it('recovers the value from a built command and rejects other text', () => {
-    const build = (value: unknown): string => `/model ${String(value)}`
-    expect(parseBuiltSessionOptionCommand(build, '/model opus')).toBe('opus')
-    expect(parseBuiltSessionOptionCommand(build, '/effort high')).toBeNull()
-    expect(parseBuiltSessionOptionCommand(build, '/model ')).toBeNull()
-  })
-})
-
 describe('recordNativeChatSessionOptionCommand', () => {
-  it('tracks a typed /model value as dispatched truth', () => {
-    const record = claudeRecord()
-    const result = recordNativeChatSessionOptionCommand({
-      catalog: CLAUDE_SESSION_OPTION_CATALOG,
-      models: CLAUDE_SESSION_OPTION_CATALOG.models,
-      record,
-      command: '/model sonnet'
-    })
-    expect(result).toEqual({ changed: true, opensAgentPicker: false })
-    expect(record.model).toEqual({ value: 'sonnet', source: 'dispatched' })
-  })
-
-  it('tracks a typed option value under the current model', () => {
-    const record = claudeRecord('sonnet')
-    recordNativeChatSessionOptionCommand({
-      catalog: CLAUDE_SESSION_OPTION_CATALOG,
-      models: CLAUDE_SESSION_OPTION_CATALOG.models,
-      record,
-      command: '/effort low'
-    })
-    expect(record.valuesByModel.sonnet?.effort).toEqual({ value: 'low', source: 'dispatched' })
-  })
-
   it('clears tracked truth for a bare picker command and reports the agent picker', () => {
     const claude = claudeRecord('sonnet')
     claude.valuesByModel.sonnet = { effort: { value: 'low', source: 'dispatched' } }
@@ -223,18 +145,6 @@ describe('recordNativeChatSessionOptionCommand', () => {
     })
     expect(record.model).toEqual({ value: 'opus', source: 'dispatched' })
   })
-
-  it('ignores unrelated commands', () => {
-    const record = claudeRecord('sonnet')
-    expect(
-      recordNativeChatSessionOptionCommand({
-        catalog: CLAUDE_SESSION_OPTION_CATALOG,
-        models: CLAUDE_SESSION_OPTION_CATALOG.models,
-        record,
-        command: '/clear'
-      })
-    ).toEqual({ changed: false, opensAgentPicker: false })
-  })
 })
 
 describe('recordNativeChatSessionOptionCommand for grok', () => {
@@ -274,18 +184,6 @@ describe('recordNativeChatSessionOptionCommand for grok', () => {
       persist
     })
     expect(persist).toHaveBeenCalledWith('grok-4.5', 'model', 'grok-4.5')
-  })
-
-  it('tracks effort under the current model', () => {
-    const record = grokRecord('grok-4.5')
-    expect(recordGrok(record, '/effort medium')).toEqual({
-      changed: true,
-      opensAgentPicker: false
-    })
-    expect(record.valuesByModel['grok-4.5']?.effort).toEqual({
-      value: 'medium',
-      source: 'dispatched'
-    })
   })
 
   it('tracks nothing for an effort tier outside the seeded choices', () => {

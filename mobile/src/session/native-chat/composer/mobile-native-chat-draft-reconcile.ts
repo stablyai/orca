@@ -1,16 +1,16 @@
 import {
   isImageRefBlock,
   type NativeChatMessage
-} from '../../../../../src/shared/native-chat-types'
+} from '../../../../../src/shared/native-chat/native-chat-types'
 import {
   hasImagePromptMarker,
   isImageSourceUserTurn,
   normalizeImageTranscriptMessages,
   normalizeNativeChatUserText,
   normalizedNativeChatUserMessageText
-} from '../../../../../src/shared/native-chat-image-transcript-markers'
-import { nativeChatPendingOccurrence } from '../../../../../src/shared/native-chat-pending-occurrence'
-import type { NativeChatPendingSend } from '../../../../../src/shared/native-chat-pending-sends'
+} from '../../../../../src/shared/native-chat/transcript/native-chat-image-transcript-markers'
+import { nativeChatPendingOccurrence } from '../../../../../src/shared/native-chat/transcript/native-chat-pending-occurrence'
+import type { NativeChatPendingSend } from '../../../../../src/shared/native-chat/transcript/native-chat-pending-sends'
 
 export type UnconfirmedSend = {
   draftKey: string
@@ -19,10 +19,6 @@ export type UnconfirmedSend = {
   normalizedText: string
   baselineTailMessageId: string | null
   deadline: ReturnType<typeof setTimeout> | null
-}
-
-export function normalizedUserText(message: NativeChatMessage): string | null {
-  return normalizedNativeChatUserMessageText(message)
 }
 
 export type PendingImagePreviewEcho = Pick<
@@ -161,7 +157,7 @@ export function findLandedImagePreviewEchoes(
         return false
       }
       if (targetText) {
-        const text = normalizedUserText(message)
+        const text = normalizedNativeChatUserMessageText(message)
         if (text === null) {
           return false
         }
@@ -199,7 +195,9 @@ export function findLandedUnconfirmedSends(
     if (message.role !== 'user') {
       continue
     }
-    const key = isImageSourceUserTurn(message) ? '' : (normalizedUserText(message) ?? '')
+    const key = isImageSourceUserTurn(message)
+      ? ''
+      : (normalizedNativeChatUserMessageText(message) ?? '')
     const current = userMessagesByText.get(key) ?? []
     current.push({ id: message.id, index })
     userMessagesByText.set(key, current)

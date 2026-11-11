@@ -1,16 +1,21 @@
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import { lowerActionArgumentChoices } from '../../../../../../shared/source-control/ai/recipes/source-control-action-argument-document'
+import {
+  sourceControlActionSelectedPreferences,
+  sourceControlActionExecutionArgs
+} from '../../../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import { readActionModelSelection } from '../../../../../../shared/source-control/ai/recipes/source-control-action-model-selection'
 import {
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
-  resolveSourceControlActionCommandTemplate,
   type SourceControlActionId,
   type SourceControlActionRecipe
-} from '../../../../../../shared/source-control-ai-actions'
+} from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type {
   RepoSourceControlAiOverrides,
   SourceControlAiSettings
-} from '../../../../../../shared/source-control-ai-types'
-import type { CustomAgentId } from '../../../../../../shared/commit-message-agent-spec'
-import { isCustomAgentId } from '../../../../../../shared/commit-message-agent-spec'
+} from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
+import type { CustomAgentId } from '../../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
+import { isCustomAgentId } from '../../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 
 export const ACTION_MODE_INHERIT = 'inherit'
 export const ACTION_MODE_OVERRIDE = 'override'
@@ -18,18 +23,11 @@ export const DEFAULT_AGENT_VALUE = '__default_agent__'
 export const CUSTOM_COMMAND_MODE_INHERIT = 'inherit'
 export const CUSTOM_COMMAND_MODE_REPO = 'repo'
 
-export function readInheritedCommandTemplate(
-  source: SourceControlAiSettings,
-  actionId: SourceControlActionId
-): string {
-  return resolveSourceControlActionCommandTemplate(source.actions, actionId)
-}
-
 export function readInheritedAgentArgs(
   source: SourceControlAiSettings,
   actionId: SourceControlActionId
 ): string {
-  return source.actions?.[actionId]?.agentArgs?.trim() ?? ''
+  return lowerActionArgumentChoices(source.actions?.[actionId] ?? {}) ?? ''
 }
 
 export function actionAgentSelectValue(
@@ -51,25 +49,6 @@ export function resolveAgentArgsPlaceholderAgent(
   return defaultTuiAgent && defaultTuiAgent !== 'blank' ? defaultTuiAgent : null
 }
 
-export function completeRepoActionRecipe(
-  recipe: SourceControlActionRecipe,
-  actionId: SourceControlActionId
-): NonNullable<
-  NonNullable<RepoSourceControlAiOverrides['actionOverrides']>[SourceControlActionId]
-> {
-  const commandInputTemplate =
-    typeof recipe.commandInputTemplate === 'string'
-      ? recipe.commandInputTemplate
-      : DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES[actionId]
-  return {
-    agentId: recipe.agentId ?? null,
-    commandInputTemplate,
-    ...(typeof recipe.agentArgs === 'string' ? { agentArgs: recipe.agentArgs } : {}),
-    ...(recipe.launchPreferences ? { launchPreferences: recipe.launchPreferences } : {}),
-    ...(recipe.surface ? { surface: recipe.surface } : {})
-  }
-}
-
 export function actionScopeLabel(hasOverride: boolean): string {
   return hasOverride ? 'Customized for this repository' : 'Using global settings'
 }
@@ -88,12 +67,27 @@ export function commandTemplateStateLabel(args: {
 }
 
 export function agentArgsStateLabel(args: {
-  hasOverride: boolean
-  inheritedAgentArgs: string
-  repoAgentArgs: string
+  recipe: SourceControlActionRecipe
+  agent: TuiAgent | null
+  override: NonNullable<RepoSourceControlAiOverrides['actionOverrides']>[SourceControlActionId]
 }): string {
-  if (args.hasOverride) {
-    return args.repoAgentArgs.trim() ? 'Repository custom args' : 'No args'
+  const choices = args.agent
+    ? sourceControlActionSelectedPreferences(args.recipe, args.agent)
+    : undefined
+  const hasChoices =
+    choices?.agentId === args.agent &&
+    Boolean(choices?.model || Object.keys(choices?.options ?? {}).length)
+  if (
+    !(
+      args.agent ? sourceControlActionExecutionArgs(args.recipe, args.agent) : args.recipe.agentArgs
+    )?.trim() &&
+    !hasChoices
+  ) {
+    return 'No args'
   }
-  return args.inheritedAgentArgs.trim() ? 'Global custom args' : 'No args'
+  const ownChoices = args.override?.launchPreferences
+  const ownsChoices = Boolean(readActionModelSelection(ownChoices))
+  return args.override?.agentArgs !== undefined || ownsChoices
+    ? 'Repository custom args'
+    : 'Global custom args'
 }

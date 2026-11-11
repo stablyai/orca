@@ -1,10 +1,13 @@
-import { debounceRuntimeFileRequest } from '@/runtime/runtime-file-request-debounce'
+import { debounceRuntimeFileRequest } from '@/runtime/files/runtime-file-request-debounce'
 import { useEffect, useRef } from 'react'
-import { quickOpenRecentCandidateSet } from '../../../shared/quick-open-recent-candidates'
-import { cancelRuntimeFileList, listRuntimeFiles } from '@/runtime/runtime-file-search-client'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { quickOpenRecentCandidateSet } from '../../../shared/quick-open/quick-open-recent-candidates'
+import {
+  cancelRuntimeFileList,
+  listRuntimeFiles
+} from '@/runtime/files/search/runtime-file-search-client'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
 import { translate } from '@/i18n/i18n'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 
 type EligibleRecentResult = { paths: string[]; error?: string }
 type EligibleRecentRequest = {

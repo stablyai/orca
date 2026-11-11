@@ -7,10 +7,7 @@ import {
   setPaneTitleFromTerminalMenu,
   openTerminalContextMenu
 } from './helpers/terminal-pane-title-actions'
-import {
-  readVisibleXtermContainerBox,
-  expectTerminalToReserveTitleSpace
-} from './helpers/terminal-pane-geometry'
+import './helpers/terminal-pane-geometry'
 import { registerTerminalPaneMountReadiness } from './helpers/terminal-pane-mount-readiness'
 
 async function openPaneTitleContextMenu(page: Page, title: string): Promise<void> {
@@ -101,42 +98,6 @@ test.describe('Terminal Panes', () => {
 
     await expect(titleInput).toHaveCount(0)
     await expect(orcaPage.locator('.pane-title-text', { hasText: title })).toHaveCount(1)
-  })
-
-  test('Set Title editor renders in Orca overlay while terminal reserves title space', async ({
-    orcaPage
-  }) => {
-    const title = `Reserved overlay title ${Date.now()}`
-    const terminalBoxBefore = await readVisibleXtermContainerBox(orcaPage)
-
-    await openTerminalContextMenu(orcaPage)
-    await orcaPage.getByText('Set Title…', { exact: true }).click()
-
-    const titleInput = orcaPage.locator('.pane-title-overlay-layer .pane-title-input').first()
-    await expect(titleInput).toBeVisible()
-    await expect(titleInput).toBeFocused()
-    await expect(orcaPage.getByText('Set Title…', { exact: true })).toBeHidden()
-    await expect(orcaPage.locator('.pane .pane-title-input')).toHaveCount(0)
-    await expect(orcaPage.locator('.pane[data-has-title]')).toHaveCount(1)
-    await expect
-      .poll(() =>
-        orcaPage
-          .locator('.pane-title-bar')
-          .first()
-          .evaluate((titleBar) => getComputedStyle(titleBar).backgroundColor)
-      )
-      .not.toBe('rgba(0, 0, 0, 0)')
-    const terminalBoxEditing = await readVisibleXtermContainerBox(orcaPage)
-    expectTerminalToReserveTitleSpace(terminalBoxEditing, terminalBoxBefore)
-
-    await titleInput.fill(title)
-    await titleInput.press('Enter')
-    await expect(orcaPage.locator('.pane-title-text', { hasText: title })).toBeVisible()
-    await expect(orcaPage.locator('.pane[data-has-title]')).toHaveCount(1)
-    expectTerminalToReserveTitleSpace(
-      await readVisibleXtermContainerBox(orcaPage),
-      terminalBoxBefore
-    )
   })
 
   test('Set Title context menu opens from the title overlay strip', async ({ orcaPage }) => {

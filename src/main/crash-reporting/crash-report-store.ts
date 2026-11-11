@@ -3,7 +3,8 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { app } from 'electron'
-import { grantDirAclAsync, isPermissionError } from '../win32-utils'
+import { grantDirAclAsync } from '../windows/windows-directory-acl'
+import { isPermissionError } from '../filesystem/permission-errors'
 import {
   formatCrashReportText,
   sanitizeCrashReportBreadcrumbs,

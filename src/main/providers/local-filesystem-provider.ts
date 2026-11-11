@@ -1,10 +1,13 @@
 import { constants, copyFile, lstat, mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
-import { readAuthorizedDocPreviewFile } from '../../shared/doc-preview-file-access'
-import { renameLocalPathSerializedByDestination } from '../destination-serialized-local-rename'
-import type { resolveAuthorizedPath as ResolveAuthorizedPath } from '../ipc/filesystem/filesystem-auth'
-import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
+import {
+  readAuthorizedDocPreviewFile,
+  readAuthorizedDocPreviewFileChunk
+} from '../../shared/document-preview/doc-preview-file-access'
+import { renameLocalPathSerializedByDestination } from '../filesystem/destination-serialized-local-rename'
+import type { resolveAuthorizedPath as ResolveAuthorizedPath } from '../ipc/filesystem/access/filesystem-auth'
+import { isENOENT } from '../ipc/filesystem/access/filesystem-path-containment'
 import {
   assertNotExists,
   rethrowWithUserMessage
@@ -12,16 +15,16 @@ import {
 import { classifyFilesystemDirectoryEntries } from '../ipc/filesystem/filesystem-symlink-directory-entries'
 import { getLocalGitOptionsForRegisteredWorktree } from '../ipc/local-worktree-runtime-options'
 import { listMarkdownDocuments } from '../ipc/markdown-documents'
-import type { RuntimeStore } from '../runtime/runtime-store-contract'
+import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 import { runBundledRipgrepTextSearch } from '../ripgrep/bundled-ripgrep-text-search'
 import { resolveBundledRipgrepWslRouting } from '../ripgrep/bundled-ripgrep-wsl-routing'
 import type { IFilesystemProvider } from './filesystem-provider-contract'
 import type {
   FileWriteDiskPrecondition,
   FileWriteResult
-} from '../../shared/file-write-disk-precondition'
+} from '../../shared/file-write/file-write-disk-precondition'
 import { writeLocalTextFileWithDiskPrecondition } from '../ipc/filesystem/local-disk-write-precondition'
-import { windowsFsPath } from '../wsl/wsl-unc-drive-fs-path'
+import { windowsFsPath } from '../wsl/filesystem/wsl-unc-drive-fs-path'
 
 export type LocalFilesystemProviderOptions = {
   /** Read lazily so a call that fails earlier never touches the store. */
@@ -31,7 +34,9 @@ export type LocalFilesystemProviderOptions = {
 }
 
 /** Local twins for runtime commands; reads/listing/watching retain call sites with different limits/shapes. */
-export type LocalFilesystemProvider = Required<Pick<IFilesystemProvider, 'listMarkdownDocuments'>> &
+export type LocalFilesystemProvider = Required<
+  Pick<IFilesystemProvider, 'listMarkdownDocuments' | 'readDocPreviewFileChunk'>
+> &
   Pick<
     IFilesystemProvider,
     | 'readDir'
@@ -104,6 +109,7 @@ export function createLocalFilesystemProvider(
       )
     },
     readDocPreviewFile: readAuthorizedDocPreviewFile,
+    readDocPreviewFileChunk: readAuthorizedDocPreviewFileChunk,
     writeFile: async (filePath, content) => {
       await writeTextFile(filePath, content, undefined)
     },

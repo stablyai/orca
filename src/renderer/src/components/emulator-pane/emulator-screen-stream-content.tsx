@@ -1,8 +1,9 @@
 import { Loader2 } from 'lucide-react'
-import { useEffect, type CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { useEmulatorFrameStream } from './use-emulator-frame-stream'
 import { useEmulatorVideoStream } from './use-emulator-video-stream'
-import { translate } from '@/i18n/i18n'
+import { scrcpyDeviceIdFromStreamUrl } from './emulator-scrcpy-stream-url'
+import { useTranslate } from '@/i18n/use-translate'
 import type { VisualStreamGeometry } from './emulator-device-frame-layout'
 
 type StreamSize = {
@@ -11,6 +12,7 @@ type StreamSize = {
 }
 
 type EmulatorScreenStreamContentProps = {
+  deviceId?: string
   loading: boolean
   onStreamError: () => void
   onStreamSize: (size: StreamSize) => void
@@ -22,10 +24,8 @@ type EmulatorScreenStreamContentProps = {
   streamRotation?: VisualStreamGeometry['streamRotation']
 }
 
-// Android sessions stream H.264 over scrcpy://<serial>; iOS uses an MJPEG http URL.
-const SCRCPY_PREFIX = 'scrcpy://'
-
 export function EmulatorScreenStreamContent({
+  deviceId,
   loading,
   onStreamError,
   onStreamSize,
@@ -36,28 +36,41 @@ export function EmulatorScreenStreamContent({
   streamKey,
   streamRotation = 0
 }: EmulatorScreenStreamContentProps) {
-  const androidDeviceId =
-    previewUrl && previewUrl.startsWith(SCRCPY_PREFIX)
-      ? previewUrl.slice(SCRCPY_PREFIX.length)
-      : null
+  const t = useTranslate()
+  const androidDeviceId = scrcpyDeviceIdFromStreamUrl(previewUrl)
+  const iosVideoSession =
+    !androidDeviceId && deviceId && previewUrl ? `${deviceId}\n${previewUrl}\n${streamKey}` : null
+  const [failedIosVideoSession, setFailedIosVideoSession] = useState<string | null>(null)
+  const iosVideo = iosVideoSession !== null && iosVideoSession !== failedIosVideoSession
+  const videoDeviceId = androidDeviceId ?? (iosVideo ? deviceId : undefined)
 
-  const video = useEmulatorVideoStream(
-    androidDeviceId ?? undefined,
+  const { canvasRef, error: videoError } = useEmulatorVideoStream(
+    videoDeviceId,
     streamKey,
-    showStream && Boolean(androidDeviceId),
-    onStreamSize
+    showStream && Boolean(videoDeviceId),
+    onStreamSize,
+    iosVideo ? 'avcc' : 'annex-b'
   )
+  const iosVideoFailed = iosVideo && Boolean(videoError)
+  const jpeg = !androidDeviceId && (!iosVideo || iosVideoFailed)
   const frameStream = useEmulatorFrameStream(
-    androidDeviceId ? undefined : previewUrl,
+    jpeg ? previewUrl : undefined,
     streamKey,
-    showStream && Boolean(previewUrl) && !androidDeviceId
+    showStream && Boolean(previewUrl) && jpeg
   )
+  const mediaError = frameStream.error ?? (androidDeviceId ? videoError : null)
 
   useEffect(() => {
-    if (frameStream.error || video.error) {
+    if (iosVideoFailed) {
+      setFailedIosVideoSession(iosVideoSession)
+    }
+  }, [iosVideoFailed, iosVideoSession])
+
+  useEffect(() => {
+    if (mediaError) {
       onStreamError()
     }
-  }, [frameStream.error, video.error, onStreamError])
+  }, [mediaError, onStreamError])
 
   const mediaStyle = resolveStreamMediaStyle(streamRotation, screenAspectRatio)
   const mediaClassName =
@@ -65,13 +78,13 @@ export function EmulatorScreenStreamContent({
       ? 'block h-full w-full bg-black object-contain'
       : 'absolute left-1/2 top-1/2 block max-w-none bg-black object-contain'
 
-  if (androidDeviceId && showStream && !video.error) {
+  if (videoDeviceId && showStream && !videoError) {
     return (
       <canvas
-        ref={video.canvasRef}
+        ref={canvasRef}
         className={mediaClassName}
         style={mediaStyle}
-        aria-label={translate(
+        aria-label={t(
           'auto.components.emulator.pane.emulator.screen.stream.content.5ee64cd44e',
           'Emulator screen'
         )}
@@ -84,7 +97,7 @@ export function EmulatorScreenStreamContent({
       <img
         key={`${previewUrl}::${streamKey ?? ''}`}
         src={frameStream.frameUrl}
-        alt={translate(
+        alt={t(
           'auto.components.emulator.pane.emulator.screen.stream.content.5ee64cd44e',
           'Emulator screen'
         )}
@@ -103,8 +116,8 @@ export function EmulatorScreenStreamContent({
     )
   }
 
-  const waitingForFrame = showStream && !frameStream.error && !video.error
-  const displayError = streamError || Boolean(frameStream.error) || Boolean(video.error)
+  const waitingForFrame = showStream && !mediaError
+  const displayError = streamError || Boolean(mediaError)
 
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-muted/20 text-muted-foreground">
@@ -112,7 +125,7 @@ export function EmulatorScreenStreamContent({
         <>
           <Loader2 className="size-6 animate-spin text-primary" />
           <span className="text-xs">
-            {translate(
+            {t(
               'auto.components.emulator.pane.emulator.screen.stream.content.5f818f12ab',
               'Connecting emulator…'
             )}
@@ -120,14 +133,14 @@ export function EmulatorScreenStreamContent({
         </>
       ) : displayError ? (
         <span className="px-6 text-center text-xs">
-          {translate(
+          {t(
             'auto.components.emulator.pane.emulator.screen.stream.content.36841af608',
             'Stream disconnected'
           )}
         </span>
       ) : (
         <span className="px-6 text-center text-xs">
-          {translate(
+          {t(
             'auto.components.emulator.pane.emulator.screen.stream.content.8b1a0d8694',
             'Emulator preview'
           )}
@@ -144,10 +157,12 @@ function resolveStreamMediaStyle(
   if (streamRotation === 0 || screenAspectRatio <= 0) {
     return undefined
   }
+  // A half turn keeps the frame's own proportions; only quarter turns swap them.
+  const halfTurn = streamRotation === 180
   return {
-    height: `${100 * screenAspectRatio}%`,
+    height: `${halfTurn ? 100 : 100 * screenAspectRatio}%`,
     transform: `translate(-50%, -50%) rotate(${streamRotation}deg)`,
     transformOrigin: 'center',
-    width: `${100 / screenAspectRatio}%`
+    width: `${halfTurn ? 100 : 100 / screenAspectRatio}%`
   }
 }

@@ -1,4 +1,6 @@
-import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY, type RuntimeCapability } from './protocol-version'
+import './protocol-version'
+import type { RuntimeCapability } from './protocol-version'
+import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from './browser/runtime/browser-runtime-capabilities'
 
 // Raise unread on exactly one side: capable hosts own it, and capable clients defer to them. Legacy hosts and client-hosted pages need client-side raising.
 export const WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY = 'workspace-unread.host-raises.v1' as const

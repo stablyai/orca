@@ -1,4 +1,5 @@
 import { isCurrentPtyExit, ptyOwnership } from './ownership-state'
+import { wslBridgePtyPresence } from '../../../agent-hooks/wsl-relay/wsl-bridge-pty-presence'
 import {
   localBackgroundStreamUnsub,
   localDataUnsub,
@@ -13,6 +14,8 @@ import { localProvider } from './registry'
 import { clearProviderPtyState } from './state-cleanup'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { providerSnapshotRequiredPtys, visibleRendererPtys } from '../delivery/visibility-state'
+import { markPtyEscapeBoundaryUnknown } from '../delivery/pty-escape-boundary'
+import { discardPendingPtyDataAcrossGap } from '../delivery/accept'
 import type { PtyIpcSession } from '../session'
 import { publishPtyEndpointLoss } from '../../../runtime/terminal/pty-endpoint-loss-signal'
 
@@ -27,6 +30,7 @@ export function bindProviderListeners(session: PtyIpcSession): void {
     localProvider.onWriteUnavailable?.((payload) => {
       // Before the window check: a headless host has no window, only remote streams.
       publishPtyEndpointLoss(payload.id)
+      session.runtime?.notePtyEndpointLoss(payload.id)
       if (
         !session.mainWindow ||
         session.mainWindow.isDestroyed() ||
@@ -53,6 +57,9 @@ export function bindProviderListeners(session: PtyIpcSession): void {
       }
       if (payload.kind === 'dataGap') {
         providerSnapshotRequiredPtys.add(payload.id)
+        // The kept tail may start inside an escape whose head the provider dropped.
+        markPtyEscapeBoundaryUnknown(payload.id)
+        discardPendingPtyDataAcrossGap(session, payload.id)
         session.runtime?.notePtyDataGap(payload.id, payload.sequenceChars ?? payload.droppedChars)
         session.sendModelRestoreNeededMarker(
           payload.id,
@@ -86,6 +93,8 @@ export function bindProviderListeners(session: PtyIpcSession): void {
       if (!isCurrentPtyExit(payload)) {
         return
       }
+      // Its distro's hook relay may idle out once no bridge terminal remains.
+      wslBridgePtyPresence.noteExited(payload.id)
       const syntheticExit = session.consumeSyntheticKillExit(payload.id, payload.incarnationId)
       // Daemon restart replaces processes while their panes survive.
       const settleRestartStop = payload.replacedByRestart

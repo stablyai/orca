@@ -1,3 +1,4 @@
+import { LINEAR_AUTHENTICATION_ERROR } from '../../shared/integration-credential-errors'
 import type { LinearIssue } from '../../shared/linear/issue-types'
 import type {
   LinearCustomViewModel,
@@ -26,7 +27,16 @@ export function clampLimit(limit = 20): number {
   return Math.min(Math.max(1, Math.floor(limit)), LINEAR_PROJECT_API_PAGE_SIZE_MAX)
 }
 
-export function coalesce<T>(key: string, load: () => Promise<T>, force = false): Promise<T> {
+export function coalesce<T>(
+  key: string,
+  load: () => Promise<T>,
+  force = false,
+  signal?: AbortSignal
+): Promise<T> {
+  // Request-owned cancellation must neither join nor replace independent readers' work.
+  if (signal !== undefined) {
+    return load()
+  }
   const existing = inFlight.get(key) as Promise<T> | undefined
   if (existing && !force) {
     return existing
@@ -56,7 +66,7 @@ export function workspaceError(
       workspaceId: entry.workspace.id,
       workspaceName: entry.workspace.organizationName,
       type: 'auth',
-      message: 'Linear authentication expired for this workspace.'
+      message: LINEAR_AUTHENTICATION_ERROR
     }
   }
 

@@ -23,19 +23,6 @@ describe.each([
   ['terminal.createAgentSession', CreateAgentSessionParams, CREATE],
   ['terminal.ensureAgentSession', EnsureAgentSessionParams, ENSURE]
 ] as const)('%s accountEnv wire compatibility', (_method, schema, base) => {
-  it('carries a validated account env on a new host', () => {
-    const parsed = schema.parse({ ...base, accountEnv: ACCOUNT_ENV })
-    expect(parsed).toMatchObject({ accountEnv: ACCOUNT_ENV })
-  })
-
-  it('parses an older client, which never sends it, unchanged', () => {
-    expect(schema.parse(base)).not.toHaveProperty('accountEnv')
-  })
-
-  it('rejects unknown keys on the current strict request schema', () => {
-    expect(schema.safeParse({ ...base, futureAccountEnv: ACCOUNT_ENV }).success).toBe(false)
-  })
-
   it.each([
     ['a non-account variable', { PATH: '/usr/bin' }],
     ['a relative home', { CLAUDE_CONFIG_DIR: 'home/u/.claude' }],

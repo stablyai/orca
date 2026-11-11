@@ -1,4 +1,4 @@
-import type { FeatureInteractionId } from '../../../shared/feature-interactions'
+import type { FeatureInteractionId } from '../../../shared/feature-interaction-catalog'
 import { isBrowserPaneUiRuntimeRpcParams } from '../../../shared/runtime-rpc-feature-interaction-source'
 import type { OrcaRuntimeService } from '../orca-runtime'
 
@@ -13,7 +13,8 @@ export function getRuntimeFeatureInteractionId(
   if (method === 'browser.profileClearDefaultCookies') {
     return hasBooleanResult(result, 'cleared') ? 'cookie-import' : null
   }
-  if (method === 'browser.screencast.unsubscribe') {
+  // Stream control (unsubscribe, frame acks) is not a browser-use interaction.
+  if (method.startsWith('browser.screencast.')) {
     return null
   }
   if (method.startsWith('browser.') && isBrowserPaneUiRuntimeRpcParams(rawParams)) {

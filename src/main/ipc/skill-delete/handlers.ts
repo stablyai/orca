@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import {
   SkillDeleteRequestSchema,
@@ -11,8 +11,8 @@ import {
   previewSkillDeleteRequest,
   runSkillDeleteRequest,
   type SkillDeleteRequestDependencies
-} from '../../skills/skill-delete/request-service'
-import { resolveSkillDiscoveryTarget } from '../../skills/skill-discovery-target'
+} from '../../skills/skill-delete/skill-delete-request'
+import { resolveSkillDiscoveryTarget } from '../../skills/discovery/skill-discovery-target'
 import { handleMainWindowSkillIpc } from '../skill-ipc-main-window'
 
 /** Local IPC only: remote scan/delete use renderer runtime RPC, so their capability checks stay on that transport. */

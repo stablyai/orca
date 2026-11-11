@@ -1,10 +1,8 @@
 import { useEffect, useMemo } from 'react'
-import { useAppStore } from '../store'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
-import {
-  isConnectedRuntimeHostState,
-  runtimeHostConnectionStateForEntry
-} from '@/runtime/runtime-host-connection-state'
+import { useAppStore } from '../store/index'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
+import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
+import { isConnectedRuntimeHostState } from '../../../shared/remote-runtime/host-status/runtime-host-connection-state'
 import {
   getLandingPreflightIssues,
   hasGitHubBackedProject,
@@ -51,7 +49,8 @@ export function useLandingPreflightRuntime(): { preflightIssues: PreflightIssue[
     void refreshPreflightStatus()
     const handleWindowActive = (): void => {
       if (document.visibilityState === 'visible') {
-        void refreshPreflightStatus({ force: true })
+        // Focus is a user act on the focused workspace, the only one preflight checks.
+        void refreshPreflightStatus({ force: true, wakeWslDistro: true })
       }
     }
     document.addEventListener('visibilitychange', handleWindowActive)

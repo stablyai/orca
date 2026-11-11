@@ -1,12 +1,12 @@
 import { useCallback, useRef, useState } from 'react'
 import type { RefCallback } from 'react'
-import type { OpenFile } from '@/store/slices/editor'
-import { useWorktreeById } from '@/store/selectors'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import { useWorktreeById } from '@/store/workspaces/selection/use-selected-worktree'
 import { basename } from '@/lib/path'
-import { renameFileOnDisk } from '@/lib/rename-file'
+import { renameFileOnDisk } from '@/lib/editor/file-operations/rename-file'
 import { getUntitledFileRoot } from './untitled-file-rename-path'
 import { useAppStore } from '@/store'
-import { editorTabDocumentFolderAccess } from '@/lib/local-file-access'
+import { editorTabDocumentFolderAccess } from '@/lib/files/access/local-file-access'
 
 type EditorHeaderFileRenameState = {
   canRename: boolean

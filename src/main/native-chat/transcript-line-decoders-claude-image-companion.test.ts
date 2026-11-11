@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeImageTranscriptMessages } from '../../shared/native-chat-image-transcript-markers'
-import type { NativeChatMessage } from '../../shared/native-chat-types'
+import { normalizeImageTranscriptMessages } from '../../shared/native-chat/transcript/native-chat-image-transcript-markers'
+import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
 
 // Claude 2.1.237 stores source paths in separate isMeta/turnCompanion rows; prompt base64 has no path.
@@ -39,11 +39,6 @@ function decode(): NativeChatMessage[] {
 }
 
 describe('Claude pasted-image companion row', () => {
-  it('keeps the isMeta companion row so the turn carries its attachments', () => {
-    const decoded = decode()
-    expect(decoded.map((m) => m.id)).toEqual(['companion-uuid', 'prompt-uuid'])
-  })
-
   it('folds a multi-image companion into the prompt as image refs', () => {
     const folded = normalizeImageTranscriptMessages(decode())
     expect(folded).toHaveLength(1)

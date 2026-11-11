@@ -1,22 +1,25 @@
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../../shared/repo-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import React, { useMemo, useState, useCallback } from 'react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useShallow } from 'zustand/react/shallow'
-import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
-import { parseGitHubIssueOrPRLink } from '@/lib/github-links'
+import { getGitHubRepoRoutingTarget } from '@/lib/work-items/github/github-source-runtime-context'
+import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/links'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import { translate } from '@/i18n/i18n'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { useTranslate } from '@/i18n/use-translate'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { gitHubSlugApiForTarget } from '@/runtime/repository-github/github-slug-owner-api'
 import { githubProjectHost } from '../../../../../shared/github/project-identity'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { LoaderCircle, ChevronDown, Check } from 'lucide-react'
 import type { TaskPageGitHubWorkItemMutationRunner } from '../linear/task-page-linear-jira-list-model'
 import { GitHubAssigneeAvatar } from './Avatars'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 export function GHAssigneesCell({
   item,
   repo,
@@ -28,6 +31,7 @@ export function GHAssigneesCell({
   sourceContext?: TaskSourceContext | null
   workItemMutation: TaskPageGitHubWorkItemMutationRunner
 }): React.JSX.Element {
+  const t = useTranslate()
   const ownerTarget = useAppStore(
     useShallow((s) => getGitHubRepoRoutingTarget(s, repo?.id ?? null, sourceContext))
   )
@@ -101,14 +105,10 @@ export function GHAssigneesCell({
                 number: item.number,
                 updates
               }
-              const res =
-                target.kind === 'environment'
-                  ? await callRuntimeRpc<
-                      Awaited<ReturnType<typeof window.api.gh.updateIssueBySlug>>
-                    >(target, 'github.project.updateIssueBySlug', args, {
-                      timeoutMs: 30_000
-                    })
-                  : await window.api.gh.updateIssueBySlug(args)
+              const res = await gitHubSlugApiForTarget(target).updateIssueBySlug({
+                ...args,
+                wakeWslDistro: true
+              })
               if (!res.ok) {
                 throw new Error(res.error.message)
               }
@@ -142,11 +142,16 @@ export function GHAssigneesCell({
                       updates
                     })
               if (res && res.ok === false) {
-                throw new Error(res.error)
+                throw new Error(codeHostErrorText(res))
               }
               return res
             }
-            throw new Error('No GitHub repository context available for this issue.')
+            throw new Error(
+              translate(
+                'auto.components.TaskPage.noGitHubRepositoryContext',
+                'No GitHub repository context available for this issue.'
+              )
+            )
           }
         })
       } finally {
@@ -189,10 +194,10 @@ export function GHAssigneesCell({
           type="button"
           aria-label={
             assignees.length
-              ? translate('auto.components.TaskPage.bb63046423', 'Assigned to {{value0}}', {
+              ? t('auto.components.TaskPage.bb63046423', 'Assigned to {{value0}}', {
                   value0: assignees.map((a) => a.login).join(', ')
                 })
-              : translate('auto.components.TaskPage.7f94eb6395', 'Assign issue')
+              : t('auto.components.TaskPage.7f94eb6395', 'Assign issue')
           }
           aria-busy={pendingLogin !== null}
           onClick={(event) => event.stopPropagation()}
@@ -219,17 +224,17 @@ export function GHAssigneesCell({
       >
         {!owner || !repoName ? (
           <div className="px-2 py-2 text-xs text-muted-foreground">
-            {translate('auto.components.TaskPage.53e002d895', 'Issue has no repo slug.')}
+            {t('auto.components.TaskPage.53e002d895', 'Issue has no repo slug.')}
           </div>
         ) : metadata.loading ? (
           <div className="px-2 py-2 text-xs text-muted-foreground">
-            {translate('auto.components.TaskPage.0eacf48491', 'Loading…')}
+            {t('auto.components.TaskPage.0eacf48491', 'Loading…')}
           </div>
         ) : metadata.error ? (
           <div className="px-2 py-2 text-xs text-destructive">{metadata.error}</div>
         ) : metadata.data.length === 0 ? (
           <div className="px-2 py-2 text-xs text-muted-foreground">
-            {translate('auto.components.TaskPage.edf4bc4135', 'No assignable users.')}
+            {t('auto.components.TaskPage.edf4bc4135', 'No assignable users.')}
           </div>
         ) : (
           metadata.data.map((user) => {

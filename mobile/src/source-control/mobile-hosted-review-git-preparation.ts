@@ -1,9 +1,10 @@
-import type { RpcSendParams } from '../transport/rpc-params-contract'
+import { translate } from '../i18n/mobile-i18n'
+import type { RpcSendParams } from '../../../src/shared/rpc-contract/rpc-send-params'
 import {
   hostReplyErrorTextOrFallback,
   refusedRpcMessageOrFallback
-} from '../transport/rpc-refusal-message'
-import type { RpcResponse } from '../transport/types'
+} from '../transport/rpc/rpc-refusal-message'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import {
   gitBulkStageRun,
   gitCommitRun,
@@ -12,7 +13,7 @@ import {
 } from './mobile-git-mutation-operations'
 import { gitStatusProjectionRead } from './mobile-git-read-operations'
 import type { MobileGitStatusResult } from './mobile-git-status'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 
 export type MobileHostedReviewStatusReadResult =
   | { ok: true; status: MobileGitStatusResult | null }
@@ -21,7 +22,7 @@ export type MobileHostedReviewStatusReadResult =
 export type MobileHostedReviewMutationResult = { ok: true } | { ok: false; error: string }
 
 export async function readMobileHostedReviewGitStatus(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string
 ): Promise<MobileHostedReviewStatusReadResult> {
   const reply = await gitStatusProjectionRead.request(client, { worktree: `id:${worktreeId}` })
@@ -30,7 +31,13 @@ export async function readMobileHostedReviewGitStatus(
   } catch (error) {
     return {
       ok: false,
-      error: refusedRpcMessageOrFallback(error, 'Unable to refresh source control')
+      error: refusedRpcMessageOrFallback(
+        error,
+        translate(
+          'sourceControl.hostedReviewGitPreparation.refreshFailed',
+          'Unable to refresh source control'
+        )
+      )
     }
   }
 }
@@ -64,7 +71,7 @@ async function settleMobileHostedReviewMutation(
 }
 
 export function pushMobileHostedReviewBranch(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   params: RpcSendParams<'git.push'>,
   fallback: string
 ): Promise<MobileHostedReviewMutationResult> {
@@ -76,30 +83,33 @@ export function pushMobileHostedReviewBranch(
 }
 
 export function fastForwardMobileHostedReviewBranch(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string
 ): Promise<MobileHostedReviewMutationResult> {
   return settleMobileHostedReviewMutation(
     () => gitFastForwardRun.request(client, { worktree: `id:${worktreeId}` }),
     (reply) => gitFastForwardRun.interpret(reply),
-    'Could not update the remote branch. Retry Create PR.'
+    translate(
+      'sourceControl.hostedReviewGitPreparation.updateBranchFailed',
+      'Could not update the remote branch. Retry Create PR.'
+    )
   )
 }
 
 export function stageMobileHostedReviewPaths(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   filePaths: string[]
 ): Promise<MobileHostedReviewMutationResult> {
   return settleMobileHostedReviewMutation(
     () => gitBulkStageRun.request(client, { worktree: `id:${worktreeId}`, filePaths }),
     (reply) => gitBulkStageRun.interpret(reply),
-    'Failed to stage changes'
+    translate('sourceControl.hostedReviewGitPreparation.stageFailed', 'Failed to stage changes')
   )
 }
 
 export async function commitMobileHostedReviewStagedChanges(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   message: string
 ): Promise<MobileHostedReviewMutationResult> {
@@ -107,16 +117,34 @@ export async function commitMobileHostedReviewStagedChanges(
   try {
     reply = await gitCommitRun.request(client, { worktree: `id:${worktreeId}`, message })
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : 'Commit failed' }
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : translate('sourceControl.hostedReviewGitPreparation.commitFailed', 'Commit failed')
+    }
   }
   let outcome: ReturnType<typeof gitCommitRun.interpret>
   try {
     outcome = gitCommitRun.interpret(reply)
   } catch (error) {
-    return { ok: false, error: refusedRpcMessageOrFallback(error, 'Commit failed') }
+    return {
+      ok: false,
+      error: refusedRpcMessageOrFallback(
+        error,
+        translate('sourceControl.hostedReviewGitPreparation.commitFailed', 'Commit failed')
+      )
+    }
   }
   // Acceptance can still carry an in-band commit failure.
   return outcome.success === true
     ? { ok: true }
-    : { ok: false, error: hostReplyErrorTextOrFallback(outcome.error, 'Commit failed') }
+    : {
+        ok: false,
+        error: hostReplyErrorTextOrFallback(
+          outcome.error,
+          translate('sourceControl.hostedReviewGitPreparation.commitFailed', 'Commit failed')
+        )
+      }
 }

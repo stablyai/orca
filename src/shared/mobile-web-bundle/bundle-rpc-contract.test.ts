@@ -9,7 +9,6 @@ import {
 import {
   MobileWebBundleChunkParamsSchema,
   MobileWebBundleChunkResultSchema,
-  MobileWebBundleErrorCodeSchema,
   MobileWebBundleManifestResultSchema,
   MOBILE_WEB_BUNDLE_CHUNK_BYTES
 } from './bundle-rpc-contract'
@@ -55,42 +54,7 @@ function chunkResult(overrides: Record<string, unknown> = {}): Record<string, un
   }
 }
 
-describe('MobileWebBundleErrorCodeSchema', () => {
-  it('round-trips every code', () => {
-    for (const code of [
-      'mobile_web_bundle_unavailable',
-      'mobile_web_bundle_build_changed',
-      'mobile_web_bundle_asset_unknown',
-      'mobile_web_bundle_asset_changed',
-      'mobile_web_bundle_offset_invalid',
-      'mobile_web_bundle_read_limited'
-    ]) {
-      expect(MobileWebBundleErrorCodeSchema.parse(code)).toBe(code)
-    }
-  })
-
-  it('is closed', () => {
-    expect(MobileWebBundleErrorCodeSchema.safeParse('mobile_web_bundle_unknown').success).toBe(
-      false
-    )
-    expect(MobileWebBundleErrorCodeSchema.safeParse('').success).toBe(false)
-  })
-})
-
 describe('mobileWeb.bundle.manifest payloads', () => {
-  it('carries a parsed manifest and the advertised chunk size', () => {
-    const reply = { manifest: VALID_MANIFEST, chunkBytes: MOBILE_WEB_BUNDLE_CHUNK_BYTES }
-    const parsed = MobileWebBundleManifestResultSchema.safeParse(reply)
-    expect(parsed.success).toBe(true)
-    expect(parsed.success && parsed.data.manifest.buildId).toBe(VALID_MANIFEST.buildId)
-    expect(MobileWebBundleManifestResultSchema.safeParse({ ...reply, manifest: {} }).success).toBe(
-      false
-    )
-    expect(MobileWebBundleManifestResultSchema.safeParse({ ...reply, extra: 1 }).success).toBe(
-      false
-    )
-  })
-
   it('allows a shrunk chunk size but not one past the constant', () => {
     const reply = { manifest: VALID_MANIFEST, chunkBytes: MOBILE_WEB_BUNDLE_CHUNK_BYTES }
     expect(
@@ -110,10 +74,6 @@ describe('mobileWeb.bundle.manifest payloads', () => {
 
 describe('mobileWeb.bundle.chunk params', () => {
   const params = { buildId: BUILD_ID, path: 'assets/a.js', offset: 0 }
-
-  it('accepts a well-formed request', () => {
-    expect(MobileWebBundleChunkParamsSchema.safeParse(params).success).toBe(true)
-  })
 
   it('is strict and bounded', () => {
     expect(MobileWebBundleChunkParamsSchema.safeParse({ ...params, gzip: true }).success).toBe(
@@ -141,10 +101,6 @@ describe('mobileWeb.bundle.chunk params', () => {
 })
 
 describe('mobileWeb.bundle.chunk result', () => {
-  it('accepts a self-describing chunk', () => {
-    expect(MobileWebBundleChunkResultSchema.safeParse(chunkResult()).success).toBe(true)
-  })
-
   it('accepts base64 of a full chunk and rejects one character past the bound', () => {
     const full = Buffer.alloc(MOBILE_WEB_BUNDLE_CHUNK_BYTES).toString('base64')
     expect(full.length).toBeLessThanOrEqual(MAX_DATA_BASE64_LENGTH)

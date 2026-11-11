@@ -10,11 +10,8 @@ import {
   type GhRateLimitBucket
 } from '../gh-rate-limit-breaker'
 import { extractExecError, parseRetryAfterMs } from '../exec-error'
-import {
-  resolveCommand,
-  resolveDefaultWslCli,
-  type ResolvedCommand
-} from './wsl-command-resolution'
+import { resolveCommand, type ResolvedCommand } from './wsl-command-resolution'
+import { resolveDefaultWslCliFallback } from './default-wsl-cli-fallback'
 import {
   canFallBackToHostGitHubCli,
   isHostCommandMissing,
@@ -24,6 +21,7 @@ import { execFileCaptureToTermination } from './exec-file-capture'
 import { logHostedCliDeadlineKill } from './hosted-cli-deadline-log'
 import type { GitExecOptions } from './git-exec-options'
 import { argsLookIdempotent } from './gh-idempotency'
+import { GhExecutableAbsenceBatch } from './gh-executable-absence-batch'
 import { applyGhHostToArgs, explicitGhHostname, explicitGhRepoHostname } from './gh-host-args'
 import { isGhBoundAccountError, resolveBoundGhExecEnv } from './gh-bound-account-env'
 import {
@@ -41,7 +39,8 @@ import {
 
 // cwd is optional; wslDistro routes global calls when Windows has no host gh binary.
 // Retry only idempotent calls: a failed response can follow a completed write.
-export type GhExecOptions = Omit<GitExecOptions, 'cwd'> & {
+export type GhExecOptions = Omit<GitExecOptions, 'cwd' | 'stdin'> & {
+  stdin?: string | Uint8Array
   cwd?: string
   wslDistro?: string
   idempotent?: boolean
@@ -180,6 +179,13 @@ export async function ghExecFileWithScopeAsync(
       if (lifetime) {
         await lifetime.waitPending(options.signal)
       }
+      const availability = GhExecutableAbsenceBatch.assertAvailable(
+        resolved,
+        boundEnv ?? options.env ?? process.env
+      )
+      if (availability) {
+        await availability
+      }
       // gh may be a shim chain; terminate the whole tree so descendants cannot outlive the deadline.
       const { stdout, stderr } = await execFileCaptureToTermination(
         resolved.binary,
@@ -200,6 +206,7 @@ export async function ghExecFileWithScopeAsync(
       if (lifetime) {
         await lifetime.waitPending(options.signal)
       }
+      GhExecutableAbsenceBatch.recordSuccess(resolved, boundEnv ?? options.env ?? process.env)
       return {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Capture decodes stdout with the requested string encoding above.
         stdout: stdout as string,
@@ -247,7 +254,7 @@ export async function ghExecFileWithScopeAsync(
         !options.wslDistro &&
         isHostCommandMissing(err, 'gh')
       ) {
-        const wslResolved = resolveDefaultWslCli('gh', args)
+        const wslResolved = await resolveDefaultWslCliFallback('gh', args)
         if (wslResolved) {
           // Global calls have no cwd to route WSL-only Windows installs.
           resolved = wslResolved
@@ -279,6 +286,11 @@ export async function ghExecFileWithScopeAsync(
         await sleep(delayMs, options.signal)
         continue
       }
+      await GhExecutableAbsenceBatch.recordMissing(
+        resolved,
+        boundEnv ?? options.env ?? process.env,
+        err
+      )
       throw err
     } finally {
       lifetime?.seal()

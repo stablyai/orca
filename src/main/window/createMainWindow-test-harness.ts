@@ -16,9 +16,9 @@ export const attachRouteGuestMock: MainWindowSpy = vi.fn(() => false)
 export const retireRouteRendererMock: MainWindowSpy = vi.fn()
 export const attachClientPageRendererMock: MainWindowSpy = vi.fn()
 export const retireClientPageRendererMock: MainWindowSpy = vi.fn()
-export const buildFromTemplateMock: Mock<(...args: unknown[]) => { popup: MainWindowSpy }> = vi.fn(
-  () => ({ popup: menuPopupMock })
-)
+export const buildFromTemplateMock: Mock<
+  (...args: unknown[]) => { popup: MainWindowSpy; closePopup: MainWindowSpy }
+> = vi.fn(() => ({ popup: menuPopupMock, closePopup: vi.fn() }))
 export const notificationMock: Mock<(...args: unknown[]) => { show: MainWindowSpy }> = vi.fn(
   function () {
     return { show: notificationShowMock }
@@ -145,7 +145,11 @@ export function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
 }
 
 export type RendererRecoveryWindowHarness = {
-  browserWindowInstance: { loadFile: Mock<() => Promise<void>>; loadURL: Mock<() => Promise<void>> }
+  browserWindowInstance: {
+    loadFile: Mock<() => Promise<void>>
+    loadURL: Mock<() => Promise<void>>
+    webContents: { send: Mock }
+  }
   windowHandlers: Record<string, (...args: any[]) => void>
 }
 
@@ -161,6 +165,7 @@ export function createRendererRecoveryWindowHarness(): RendererRecoveryWindowHar
     }),
     setZoomLevel: vi.fn(),
     setBackgroundThrottling: vi.fn(),
+    setWebRTCIPHandlingPolicy: vi.fn(),
     invalidate: vi.fn(),
     setWindowOpenHandler: vi.fn(),
     send: vi.fn()

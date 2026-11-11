@@ -1,14 +1,27 @@
+import { nativeChatPreferenceFor } from '../../../shared/structured-native-chat-launch-route'
+import {
+  readAgentLaunchModeSettings,
+  decideAgentLaunchMode
+} from '../../agent-launch/agent-launch-mode'
 import { describe, expect, it } from 'vitest'
 import {
   encodeTerminalStreamFrame,
   decodeTerminalStreamFrame,
   TerminalStreamOpcode
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   BrowserScreencastOpcode,
   encodeBrowserScreencastFrame
-} from '../../../shared/browser-screencast-protocol'
-import { RelayedPhoneReplies, rewriteRelayedPhoneRequest } from './relayed-phone-frames'
+} from '../../../shared/browser/screencast/browser-screencast-protocol'
+import { COMPRESSED_FRAMES_CLIENT_CAPABILITY } from '../../../shared/remote-runtime/e2ee/paired-e2ee-compressed-frame'
+import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../shared/browser/runtime/browser-runtime-capabilities'
+import {
+  declareRelayedPhoneCapabilities,
+  RelayedPhoneReplies,
+  relayedPhoneCapabilities,
+  rewriteRelayedPhoneRequest,
+  withRelayedLaunchChatDefault
+} from './relayed-phone-frames'
 
 const DESKTOP_TOKEN = 'a'.repeat(48)
 const HOST_TOKEN = 'b'.repeat(48)
@@ -39,12 +52,25 @@ describe('rewriteRelayedPhoneRequest', () => {
       }
     })
   })
+})
 
-  it('can re-id a frame the relay sends on its own behalf', () => {
-    const frame = JSON.stringify({ id: 'phone-id', method: 'm', params: {} })
-    expect(
-      JSON.parse(rewriteRelayedPhoneRequest(frame, DESKTOP_TOKEN, HOST_TOKEN, 'relay-id'))
-    ).toEqual({ id: 'relay-id', method: 'm', params: {} })
+describe('relayed phone capabilities', () => {
+  // The relaying desktop rewrites stream ids and reply bookkeeping, which compressed frames would hide.
+  it('never offers a paired server compressed frames, at auth or on update', () => {
+    const phone = ['agent-session.turn-item.v1', COMPRESSED_FRAMES_CLIENT_CAPABILITY]
+    const update = JSON.stringify({
+      id: 'r1',
+      method: 'runtime.clientCapabilities.update',
+      params: { clientCapabilities: phone }
+    })
+
+    expect(relayedPhoneCapabilities(phone)).toEqual([
+      'agent-session.turn-item.v1',
+      BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY
+    ])
+    expect(JSON.parse(declareRelayedPhoneCapabilities(update)).params.clientCapabilities).toEqual(
+      relayedPhoneCapabilities(phone)
+    )
   })
 })
 
@@ -118,3 +144,47 @@ describe('RelayedPhoneReplies', () => {
     expect(relay.takeOpenRequestIds()).toEqual(['open'])
   })
 })
+
+it.each(['chat', 'terminal'] as const)(
+  'stamps resolved %s desktop defaults and exceptions independently of host settings',
+  (agentDefaultSurface) => {
+    const desktop = {
+      agentDefaultSurface,
+      nativeChatProviders: { codex: agentDefaultSurface !== 'chat' }
+    }
+    for (const agent of ['claude', 'codex']) {
+      const frame = JSON.stringify({
+        id: agent,
+        method: 'agent.launch',
+        params: { agent, nativeChatDefault: false }
+      })
+      const stamped = JSON.parse(
+        withRelayedLaunchChatDefault(frame, 'agent.launch', (id) =>
+          nativeChatPreferenceFor(desktop, id)
+        )
+      )
+      const settings = readAgentLaunchModeSettings(
+        {
+          requireStore: () => ({
+            getSettings: () => ({
+              agentDefaultSurface: agentDefaultSurface === 'chat' ? 'terminal' : 'chat'
+            })
+          })
+        },
+        stamped.params
+      )
+      const chat = nativeChatPreferenceFor(desktop, agent)
+      expect(stamped.params.nativeChatDefault).toBe(chat)
+      expect(decideAgentLaunchMode({ placement: { agent }, settings }).mode).toBe(
+        chat ? 'structured' : 'terminal'
+      )
+      expect(
+        decideAgentLaunchMode({
+          placement: { agent },
+          settings,
+          surface: chat ? 'terminal' : 'chat'
+        }).mode
+      ).toBe(chat ? 'terminal' : 'structured')
+    }
+  }
+)

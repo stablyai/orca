@@ -1,18 +1,20 @@
 import { DatabaseSync } from 'node:sqlite'
+import { browserCookieImportFailure } from '../../../../shared/browser-cookie-import-failure-copy'
 import type { BrowserCookieImportResult } from '../../../../shared/browser-workspace-types'
 import {
   isGoogleSourceBoundCookie,
   isNonTransplantableCookieDomain
-} from '../browser-cookie-import-policy'
-import { createChromiumCookieSnapshot } from '../../chromium-cookie-snapshot'
+} from '../policy/cookie-import-exclusions'
+import { createChromiumCookieSnapshot } from './chromium-cookie-snapshot'
 import { planImportWrites } from '../browser-cookie-import-write'
 import { readChromiumRowPartition } from '../sources/browser-cookie-source-partition'
 import { diag } from '../browser-cookie-import-diagnostics'
-import type { DetectedBrowser } from '../sources/browser-cookie-detection-types'
-import type { CookieImportOptions } from '../browser-cookie-import-pipeline'
+import type { DetectedBrowser } from '../sources/browser-cookie-source-profiles'
+import type { CookieImportOptions } from '../imports/cookie-import-contracts'
 import type { ChromiumImportContext } from './import-context'
 import type { Session } from 'electron'
 import { getEncryptionKey } from '../sources/browser-cookie-key'
+import { isMacPrivacyDenial } from '../sources/browser-cookie-macos-privacy-denial'
 
 export type ChromiumImportPreparation =
   | { context: ChromiumImportContext }
@@ -29,12 +31,8 @@ export async function prepareChromiumCookieImport(
     sourceSnapshot = createChromiumCookieSnapshot(browser.cookiesPath)
   } catch (err) {
     diag(`  Chromium snapshot failed: ${String(err)}`)
-    return {
-      result: {
-        ok: false,
-        reason: `Could not copy ${browser.label} cookies database. Try closing ${browser.label} first.`
-      }
-    }
+    const code = isMacPrivacyDenial(err) ? 'macFullDiskAccess' : 'databaseCopyFailed'
+    return { result: browserCookieImportFailure(code, { browser: browser.label }) }
   }
 
   let sourceDb: InstanceType<typeof DatabaseSync> | null = null
@@ -57,7 +55,7 @@ export async function prepareChromiumCookieImport(
     sourceDb = null
     diag(`  source has ${sourceRows.length} cookies`)
     if (sourceRows.length === 0) {
-      return { result: { ok: false, reason: `No cookies found in ${browser.label}.` } }
+      return { result: browserCookieImportFailure('noCookies', { browser: browser.label }) }
     }
 
     // Plan partition skips before decryption so an unreadable value cannot hide a skipped family.
@@ -84,14 +82,11 @@ export async function prepareChromiumCookieImport(
       )
     })
     const sourceKey = needsSourceKey
-      ? getEncryptionKey(browser.keychainService!, browser.keychainAccount!, browser)
+      ? await getEncryptionKey(browser.keychainService!, browser.keychainAccount!, browser)
       : null
     if (needsSourceKey && !sourceKey) {
       return {
-        result: {
-          ok: false,
-          reason: `Could not access ${browser.label} encryption key. The OS may have denied access.`
-        }
+        result: browserCookieImportFailure('encryptionKeyDenied', { browser: browser.label })
       }
     }
 

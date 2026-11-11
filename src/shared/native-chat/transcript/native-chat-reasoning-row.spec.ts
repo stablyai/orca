@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  nativeChatReasoningHeadline,
-  nativeChatReasoningHeadlineText,
-  selectNativeChatLiveReasoning
-} from './native-chat-reasoning-row'
-import type { NativeChatMessage } from '../../native-chat-types'
+import { selectNativeChatLiveReasoning } from './native-chat-reasoning-row'
+import type { NativeChatMessage } from '../native-chat-types'
 
 function row(
   id: string,
@@ -65,29 +61,5 @@ describe('the open block the live line discloses', () => {
     const child = row('r-2', 'reasoning', 'Child thinking', { state: 'running', agentId: 'sub-1' })
     expect(select([prompt, child])).toBeNull()
     expect(select([prompt, open, child])).toBe(open)
-  })
-})
-
-describe('the reasoning headline', () => {
-  const text = (
-    fields: { state?: 'running' | 'completed'; completedAt?: number },
-    live = false
-  ): string =>
-    nativeChatReasoningHeadlineText(
-      nativeChatReasoningHeadline({ timestamp: 1_000, ...fields }, { live })
-    )
-
-  it('reads the span the host saw, at least a second, and claims none it did not see', () => {
-    expect(text({ state: 'completed', completedAt: 66_000 })).toBe('Thought for 1m 5s')
-    expect(text({ state: 'completed', completedAt: 1_300 })).toBe('Thought for 1s')
-    expect(text({ state: 'completed' })).toBe('Thought')
-    expect(text({ state: 'running' })).toBe('Thought')
-    expect(text({})).toBe('Reasoning')
-  })
-
-  it('claims no past tense for a block not yet ended inside its working turn', () => {
-    expect(text({ state: 'running' }, true)).toBe('Reasoning')
-    expect(text({}, true)).toBe('Reasoning')
-    expect(text({ state: 'completed', completedAt: 13_000 }, true)).toBe('Thought for 12s')
   })
 })

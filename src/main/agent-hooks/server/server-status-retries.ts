@@ -1,18 +1,22 @@
+import { ClaudeHelperKillPoller } from '../../../shared/agent-hook-listener/providers/claude-helper-kill-poller'
 import { pollCodexTranscriptStatus } from '../../../shared/agent-hook-listener/providers/codex-transcript-poll'
-import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
+import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import {
   hasPendingAgentResultText,
   preparePendingGrokResultDiscovery
 } from '../../../shared/agent-hook-listener/grok-result-discovery'
-import type { AgentHookSource } from '../../../shared/agent-hook-relay'
-import { pickHostTurnEnd } from '../../../shared/agent-status-types'
+import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
+import { pickHostTurnEnd } from '../../../shared/agent-status/contracts/agent-status-types'
 import {
+  museHookPollPane,
+  museLogOffset,
+  nextMusePollDelay,
   shouldPollHookTranscript,
   hookTranscriptWatchPath,
   transcriptPollUpdate
 } from '../../../shared/agent-hook-listener/transcript-poll-policy'
-import { AgentTranscriptPollScheduler } from '../../../shared/agent-transcript-poll-scheduler'
-import type { EnrichedAgentHookEventPayload } from './server-types'
+import { AgentTranscriptPollScheduler } from '../../../shared/agent-hook-listener/transcripts/agent-transcript-poll-scheduler'
+import type { EnrichedAgentHookEventPayload, IncomingAgentHookEvent } from './server-types'
 import {
   ASSISTANT_MESSAGE_RETRY_ATTEMPTS,
   ASSISTANT_MESSAGE_RETRY_MS,
@@ -24,16 +28,69 @@ type TranscriptPoll = {
   source: AgentHookSource
   body: unknown
   original: EnrichedAgentHookEventPayload
+  delayMs?: number
 }
 
 export abstract class AgentHookServerStatusRetries extends AgentHookServerStatusUpdate {
+  private observedLocalHook?: { accepted: boolean; receivedAt?: number }
+  private readonly claudeHelperKills = new ClaudeHelperKillPoller(this.state, {
+    current: (paneKey) => this.state.lastStatusByPaneKey.get(paneKey),
+    publish: (event) => {
+      this.applyRestatedStatus(event)
+    },
+    listening: () =>
+      this.server?.listening === true && this.statusHooksEnabled && this.ownerStateInitialized
+  })
+
   private readonly transcriptPollScheduler = new AgentTranscriptPollScheduler<TranscriptPoll>(
     CODEX_SUBAGENT_POLL_MS,
     (paneKey, poll) => this.runTranscriptPoll(paneKey, poll)
   )
 
+  protected applyObservedLocalHook(
+    incoming: IncomingAgentHookEvent,
+    onAccepted?: () => void,
+    receivedAt?: number
+  ): EnrichedAgentHookEventPayload | undefined {
+    const previous = this.observedLocalHook
+    const context = { accepted: false, receivedAt }
+    this.observedLocalHook =
+      incoming.payload.agentType === 'claude' && incoming.connectionId === null
+        ? context
+        : undefined
+    try {
+      return this.applyNormalizedStatus(incoming, () => {
+        onAccepted?.()
+        context.accepted = true
+      })
+    } finally {
+      this.observedLocalHook = previous
+    }
+  }
+
+  protected override commitStatusRowMutation(
+    before: EnrichedAgentHookEventPayload | null | undefined,
+    after: EnrichedAgentHookEventPayload | null | undefined,
+    emit = true
+  ): boolean {
+    const hook = this.observedLocalHook
+    // Held/restated rows retain their stamp; only a newly admitted typed hook owns observation.
+    if (hook?.accepted) {
+      hook.accepted = false
+      if (after?.observation?.origin === 'hook' && after.observation !== before?.observation) {
+        this.claudeHelperKills.schedule(after, hook.receivedAt)
+      }
+    }
+    return super.commitStatusRowMutation(before, after, emit)
+  }
+
+  protected activateClaudeHelperObservations(): void {
+    this.claudeHelperKills.activate()
+  }
+
   protected clearAllTranscriptPolls(): void {
     this.transcriptPollScheduler.clearAll()
+    this.claudeHelperKills.clearAll()
   }
 
   protected clearAssistantMessageRetry(paneKey: string): void {
@@ -47,13 +104,18 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
 
   protected clearTranscriptPoll(paneKey: string): void {
     this.transcriptPollScheduler.clear(paneKey)
+    this.claudeHelperKills.clear(paneKey)
   }
 
   protected scheduleTranscriptPoll(
     source: AgentHookSource,
     body: unknown,
-    original: EnrichedAgentHookEventPayload
+    original: EnrichedAgentHookEventPayload,
+    delayMs?: number
   ): void {
+    if (source === 'claude') {
+      return
+    }
     // Nested CLIs inherit pane keys; another provider must not clear this transcript poll.
     if (source !== 'codex' && source !== 'muse') {
       return
@@ -62,11 +124,25 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
       this.transcriptPollScheduler.clear(original.paneKey)
       return
     }
+    // Codex keeps the scheduler's cadence; a Muse poll without a delay is a fresh hook's 1s poll.
+    const museDelayMs = source === 'muse' ? (delayMs ?? nextMusePollDelay()) : undefined
     this.transcriptPollScheduler.schedule(
       original.paneKey,
-      { source, body, original },
-      hookTranscriptWatchPath(this.state, source, original.paneKey)
+      { source, body, original, delayMs: museDelayMs },
+      hookTranscriptWatchPath(this.state, source, original.paneKey),
+      museDelayMs
     )
+  }
+
+  protected rearmIgnoredMuseHook(body: unknown): void {
+    const paneKey = museHookPollPane(this.state, body, this.env)
+    if (!paneKey) {
+      return
+    }
+    const poll = this.transcriptPollScheduler.peek(paneKey)
+    if (poll?.source === 'muse' && this.state.lastStatusByPaneKey.get(paneKey) === poll.original) {
+      this.scheduleTranscriptPoll('muse', poll.body, poll.original)
+    }
   }
 
   private runTranscriptPoll(paneKey: string, poll: TranscriptPoll): void {
@@ -79,6 +155,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     ) {
       return
     }
+    const logOffset = source === 'muse' ? museLogOffset(this.state, paneKey) : undefined
     const normalized =
       source === 'codex'
         ? pollCodexTranscriptStatus(this.state, original, body, this.env)
@@ -89,7 +166,9 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     const update = transcriptPollUpdate(source, original, normalized)
     const next = update ? this.applyNormalizedStatus(update) : original
     if (next) {
-      this.scheduleTranscriptPoll(source, body, next)
+      const quiet = !update && museLogOffset(this.state, paneKey) === logOffset
+      const delayMs = source === 'muse' ? nextMusePollDelay(poll.delayMs, quiet) : undefined
+      this.scheduleTranscriptPoll(source, body, next, delayMs)
     }
   }
 

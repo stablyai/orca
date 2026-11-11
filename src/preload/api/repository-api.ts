@@ -1,8 +1,12 @@
+import type { RepoCreateFailure } from '../../shared/repo-create-failure-copy'
+import type { CloneTargetArgs, CloneTargetCheck } from '../../shared/git/clone/clone-target-check'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { GhAccountBinding } from '../../shared/github/account-binding'
 import type {
   NestedRepoScanResult,
   ProjectGroup,
+  ProjectGroupUpdate,
+  ProjectGroupMutation,
   ProjectGroupImportMode,
   ProjectGroupImportResult
 } from '../../shared/project-group-types'
@@ -20,9 +24,15 @@ import type {
   ProjectUpdateArgs
 } from '../../shared/project-types'
 import type { BaseRefDefaultResult, BaseRefSearchResult, Repo } from '../../shared/repo-types'
+import type { WslMovedProject } from '../../shared/wsl-move/wsl-moved-project'
+import type { HostRepoCatalogSnapshot } from '../../shared/host-repo-catalog-snapshot'
 
 export type RepositoryApi = {
   list: () => Promise<Repo[]>
+  /** Local projects a WSL host now owns: read-only, listed only for their existing chats. */
+  listWslMoved: () => Promise<WslMovedProject[]>
+  /** Saved WSL host project lists by environment id; desktop-only, never contacts a host. */
+  listHostCatalogSnapshots: () => Promise<Record<string, HostRepoCatalogSnapshot>>
   add: (args: {
     path: string
     kind?: 'git' | 'folder'
@@ -45,6 +55,7 @@ export type RepositoryApi = {
         | 'repoIcon'
         | 'upstream'
         | 'hookSettings'
+        | 'editorFormatter'
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
         | 'kind'
@@ -56,10 +67,11 @@ export type RepositoryApi = {
         | 'customWorktreeVisibilitySources'
         | 'worktreeVisibilitySourcePreferences'
         | 'projectGroupId'
-        | 'projectGroupOrder'
         | 'forkSyncMode'
+        | 'agentWorkspaceTrust'
       >
     > & {
+      projectGroupOrder?: number | null
       externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
       agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
       sourceControlAi?: Repo['sourceControlAi'] | null
@@ -70,13 +82,14 @@ export type RepositoryApi = {
   pickFolder: () => Promise<string | null>
   pickFolders: () => Promise<string[]>
   pickDirectory: () => Promise<string | null>
-  clone: (args: { url: string; destination: string }) => Promise<Repo>
+  clone: (args: CloneTargetArgs) => Promise<Repo>
+  checkCloneTarget: (args: CloneTargetArgs) => Promise<CloneTargetCheck>
   cloneAbort: () => Promise<void>
   create: (args: {
     parentPath: string
     name: string
     kind: 'git' | 'folder'
-  }) => Promise<{ repo: Repo } | { error: string }>
+  }) => Promise<{ repo: Repo } | RepoCreateFailure>
   isGitAvailable: () => Promise<boolean>
   getDefaultCreateProjectParent: () => Promise<string>
   onCloneProgress: (callback: (data: { phase: string; percent: number }) => void) => () => void
@@ -118,10 +131,10 @@ export type ProjectGroupsApi = {
     parentGroupId?: string | null
     createdFrom?: ProjectGroup['createdFrom']
   }) => Promise<ProjectGroup>
-  update: (args: {
-    groupId: string
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
-  }) => Promise<ProjectGroup | null>
+  update: (args: { groupId: string; updates: ProjectGroupUpdate }) => Promise<ProjectGroup | null>
+  updateMany: (args: {
+    mutations: readonly ProjectGroupMutation[]
+  }) => Promise<ProjectGroup[] | null>
   delete: (args: { groupId: string }) => Promise<boolean>
   moveProject: (args: {
     projectId: string

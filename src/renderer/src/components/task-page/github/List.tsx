@@ -1,6 +1,6 @@
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
-import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store/index'
+import { cn } from '@/lib/class-names'
 import {
   GITHUB_TASK_HEADER_SURFACE_CLASS,
   GITHUB_TASK_STICKY_ID_HEADER_CLASS,
@@ -8,7 +8,7 @@ import {
   GITHUB_TASK_STICKY_ID_CELL_CLASS,
   GITHUB_TASK_STICKY_TITLE_CELL_CLASS
 } from '../task-page-source-context'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { LoaderCircle } from 'lucide-react'
 import { TaskPageGitHubRows } from './Rows'
@@ -19,10 +19,11 @@ export function TaskPageGitHubList({
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const {
     selectedRepos,
     githubEmptyState,
-    tasksLoading,
+    githubListPending,
     tasksError,
     failedCount,
     githubUnavailable,
@@ -93,24 +94,24 @@ export function TaskPageGitHubList({
           )}
         >
           <span className={GITHUB_TASK_STICKY_ID_HEADER_CLASS}>
-            {translate('auto.components.TaskPage.eb10c32872', 'ID')}
+            {t('auto.components.TaskPage.eb10c32872', 'ID')}
           </span>
           <span className={GITHUB_TASK_STICKY_TITLE_HEADER_CLASS}>
-            {translate('auto.components.TaskPage.5eccb3c841', 'Title / Context')}
+            {t('auto.components.TaskPage.5eccb3c841', 'Title / Context')}
           </span>
           {activeGithubTaskKind === 'issues' ? (
-            <span>{translate('auto.components.TaskPage.8aba10579d', 'Assignees')}</span>
+            <span>{t('auto.components.TaskPage.8aba10579d', 'Assignees')}</span>
           ) : null}
           {showPRManagementColumns ? (
             <>
-              <span>{translate('auto.components.TaskPage.f6fa3c97d0', 'Reviewers')}</span>
-              <span>{translate('auto.components.TaskPage.a7396b05c6', 'Checks')}</span>
-              <span>{translate('auto.components.TaskPage.443f7dd928', 'Merge')}</span>
+              <span>{t('auto.components.TaskPage.f6fa3c97d0', 'Reviewers')}</span>
+              <span>{t('auto.components.TaskPage.a7396b05c6', 'Checks')}</span>
+              <span>{t('auto.components.TaskPage.443f7dd928', 'Merge')}</span>
             </>
           ) : (
-            <span>{translate('auto.components.TaskPage.154b0fa623', 'Status')}</span>
+            <span>{t('auto.components.TaskPage.154b0fa623', 'Status')}</span>
           )}
-          <span>{translate('auto.components.TaskPage.f362667d55', 'Updated')}</span>
+          <span>{t('auto.components.TaskPage.f362667d55', 'Updated')}</span>
           <span />
         </div>
 
@@ -126,7 +127,7 @@ export function TaskPageGitHubList({
             role="alert"
             className="border-b border-border/50 bg-destructive/10 px-4 py-3 text-sm text-destructive"
           >
-            {translate(
+            {t(
               'auto.components.TaskPage.75a38d7df8',
               'GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly.'
             )}
@@ -136,9 +137,15 @@ export function TaskPageGitHubList({
         {!tasksError && !githubUnavailable && failedCount > 0 ? (
           // Why: per-repo partial-failure signal, distinct from a hard IPC reject (tasksError); the two are mutually exclusive.
           <div className="border-b border-border/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-200">
-            {failedCount} {translate('auto.components.TaskPage.7762f4b03a', 'of')}{' '}
-            {selectedRepos.length}{' '}
-            {translate('auto.components.TaskPage.d1766fd62d', 'projects failed to load')}
+            {t(
+              'auto.components.TaskPage.projectsFailedToLoad',
+              '{{failed}} of {{count}} projects failed to load',
+              {
+                failed: failedCount,
+                count: selectedRepos.length,
+                defaultValue_one: '{{failed}} of {{count}} project failed to load'
+              }
+            )}
           </div>
         ) : null}
 
@@ -156,7 +163,7 @@ export function TaskPageGitHubList({
                 className="flex items-center justify-between gap-3 border-b border-border/50 bg-destructive/10 px-4 py-3 text-sm text-destructive"
               >
                 <span>
-                  {translate('auto.components.TaskPage.0c0de0fc0e', "Couldn't load issues from")}{' '}
+                  {t('auto.components.TaskPage.0c0de0fc0e', "Couldn't load issues from")}{' '}
                   <span className="font-mono">
                     {err.source.owner}/{err.source.repo}
                   </span>{' '}
@@ -166,15 +173,15 @@ export function TaskPageGitHubList({
                   variant="outline"
                   size="sm"
                   onClick={() => handleRetryIssuesFetch(s.sourceKey)}
-                  disabled={tasksLoading || retryingSourceKeys.has(s.sourceKey)}
+                  disabled={githubListPending || retryingSourceKeys.has(s.sourceKey)}
                 >
                   {retryingSourceKeys.has(s.sourceKey) ? (
                     <span className="flex items-center gap-1">
                       <LoaderCircle className="h-3 w-3 animate-spin" />
-                      {translate('auto.components.TaskPage.5b6b2af943', 'Retrying…')}
+                      {t('auto.components.TaskPage.5b6b2af943', 'Retrying…')}
                     </span>
                   ) : (
-                    translate('auto.components.TaskPage.0bfbf62f75', 'Retry')
+                    t('auto.components.TaskPage.0bfbf62f75', 'Retry')
                   )}
                 </Button>
               </div>
@@ -190,12 +197,12 @@ export function TaskPageGitHubList({
             className="flex items-center justify-between gap-3 border-b border-border/50 bg-muted/40 px-4 py-3 text-sm text-muted-foreground"
           >
             <span>
-              {translate(
+              {t(
                 'auto.components.TaskPage.noGithubSourceDetected',
                 'No GitHub source detected for'
               )}{' '}
               <span className="font-mono">{r.label}</span> —{' '}
-              {translate(
+              {t(
                 'auto.components.TaskPage.noGithubSourceDetectedHint',
                 'it may have no GitHub remote, or the source could not be resolved.'
               )}
@@ -204,15 +211,15 @@ export function TaskPageGitHubList({
               variant="outline"
               size="sm"
               onClick={() => handleRetryIssuesFetch(r.sourceKey)}
-              disabled={tasksLoading || retryingSourceKeys.has(r.sourceKey)}
+              disabled={githubListPending || retryingSourceKeys.has(r.sourceKey)}
             >
               {retryingSourceKeys.has(r.sourceKey) ? (
                 <span className="flex items-center gap-1">
                   <LoaderCircle className="h-3 w-3 animate-spin" />
-                  {translate('auto.components.TaskPage.5b6b2af943', 'Retrying…')}
+                  {t('auto.components.TaskPage.5b6b2af943', 'Retrying…')}
                 </span>
               ) : (
-                translate('auto.components.TaskPage.0bfbf62f75', 'Retry')
+                t('auto.components.TaskPage.0bfbf62f75', 'Retry')
               )}
             </Button>
           </div>

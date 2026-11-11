@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { basename, dirname, isAbsolute, resolve } from 'node:path'
 import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { writeFileAtomically } from '../codex-accounts/fs-utils'
+import { writeFileAtomically } from '../filesystem/atomic-file-publication'
 import { isDirectory } from './claude-profile-homes'
 
 const MAX_OBSERVED_CONFIG_DIRS = 32

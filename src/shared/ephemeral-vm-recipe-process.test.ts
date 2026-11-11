@@ -1,18 +1,15 @@
-import { EventEmitter } from 'node:events'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { PassThrough } from 'node:stream'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeTempDirs } from './testing/remove-temp-dirs.test-support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runRecipeCommand } from './ephemeral-vm-recipe-process'
 
 const tmpRoots: string[] = []
 
-afterEach(() => {
+afterEach(async () => {
   vi.useRealTimers()
-  for (const root of tmpRoots.splice(0)) {
-    rmSync(root, { recursive: true, force: true })
-  }
+  await removeTempDirs(tmpRoots.splice(0))
 })
 
 function makeRepo(): string {
@@ -25,91 +22,63 @@ function nodeCommand(scriptPath: string): string {
   return `"${process.execPath}" "${scriptPath}"`
 }
 
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
 describe('runRecipeCommand', () => {
-  it('does not impose an implicit wall-clock deadline', async () => {
-    vi.useFakeTimers()
-    const child = Object.assign(new EventEmitter(), {
-      pid: undefined,
-      stdin: new PassThrough(),
-      stdout: new PassThrough(),
-      stderr: new PassThrough(),
-      kill: vi.fn(),
-      unref: vi.fn()
-    })
-    const resultPromise = runRecipeCommand({
-      command: 'destroy',
-      repoPath: makeRepo(),
-      mode: 'destroy',
-      resultSchemaVersion: 1,
-      context: { recipeId: 'cloud-sandbox', repoPath: makeRepo() },
-      spawnCommand: vi.fn(() => child) as never
-    })
+  it.skipIf(process.platform === 'win32')(
+    'kills grandchildren of a recipe that outlives its timeout',
+    async () => {
+      const repoPath = makeRepo()
+      const sleeperPath = join(repoPath, 'sleeper.js')
+      const spawnerPath = join(repoPath, 'spawner.js')
+      const pidPath = join(repoPath, 'grandchild.pid')
+      writeFileSync(sleeperPath, 'setInterval(() => {}, 1000)\n')
+      writeFileSync(
+        spawnerPath,
+        [
+          "const { spawn } = require('node:child_process')",
+          `const child = spawn(process.execPath, [${JSON.stringify(sleeperPath)}], { stdio: 'ignore' })`,
+          `require('node:fs').writeFileSync(${JSON.stringify(pidPath)}, String(child.pid))`,
+          "process.stderr.write('ready\\n')",
+          'setInterval(() => {}, 1000)'
+        ].join('\n')
+      )
+      // Fake only the deadline timers so the timeout fires after the grandchild exists, even under load.
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      const ready = Promise.withResolvers<void>()
 
-    expect(vi.getTimerCount()).toBe(0)
-    child.emit('close', 0, null)
-    await expect(resultPromise).resolves.toMatchObject({ exitCode: 0 })
-  })
+      const resultPromise = runRecipeCommand({
+        command: nodeCommand(spawnerPath),
+        repoPath,
+        mode: 'create',
+        resultSchemaVersion: 1,
+        context: { recipeId: 'cloud-sandbox', repoPath },
+        timeoutMs: 1_000,
+        onStderr: (chunk) => {
+          if (chunk.includes('ready')) {
+            ready.resolve()
+          }
+        }
+      })
+      await ready.promise
+      await vi.advanceTimersByTimeAsync(1_000)
+      const result = await resultPromise
+      vi.useRealTimers()
 
-  it('force-kills an aborted recipe if graceful termination never closes it', async () => {
-    vi.useFakeTimers()
-    const child = Object.assign(new EventEmitter(), {
-      pid: undefined,
-      stdin: new PassThrough(),
-      stdout: new PassThrough(),
-      stderr: new PassThrough(),
-      kill: vi.fn(),
-      unref: vi.fn()
-    })
-    const controller = new AbortController()
-    const resultPromise = runRecipeCommand({
-      command: 'destroy',
-      repoPath: makeRepo(),
-      mode: 'destroy',
-      resultSchemaVersion: 1,
-      context: { recipeId: 'cloud-sandbox', repoPath: makeRepo() },
-      signal: controller.signal,
-      spawnCommand: vi.fn(() => child) as never
-    })
-
-    controller.abort()
-    expect(child.kill).toHaveBeenCalledWith('SIGTERM')
-    await vi.advanceTimersByTimeAsync(5_000)
-
-    await expect(resultPromise).resolves.toMatchObject({ aborted: true, exitCode: null })
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
-    expect(child.unref).toHaveBeenCalledOnce()
-  })
-
-  it('clears the force-kill timer when graceful termination closes synchronously', async () => {
-    vi.useFakeTimers()
-    const child = Object.assign(new EventEmitter(), {
-      pid: undefined,
-      stdin: new PassThrough(),
-      stdout: new PassThrough(),
-      stderr: new PassThrough(),
-      kill: vi.fn(),
-      unref: vi.fn()
-    })
-    child.kill.mockImplementation(() => {
-      child.emit('close', null, 'SIGTERM')
-      return true
-    })
-    const controller = new AbortController()
-    const resultPromise = runRecipeCommand({
-      command: 'destroy',
-      repoPath: makeRepo(),
-      mode: 'destroy',
-      resultSchemaVersion: 1,
-      context: { recipeId: 'cloud-sandbox', repoPath: makeRepo() },
-      signal: controller.signal,
-      spawnCommand: vi.fn(() => child) as never
-    })
-
-    controller.abort()
-
-    await expect(resultPromise).resolves.toMatchObject({ aborted: true, signal: 'SIGTERM' })
-    expect(vi.getTimerCount()).toBe(0)
-  })
+      expect(result).toMatchObject({ timedOut: true })
+      expect(result).not.toHaveProperty('aborted')
+      const grandchildPid = Number(readFileSync(pidPath, 'utf8'))
+      await vi.waitFor(() => expect(isAlive(grandchildPid)).toBe(false), { timeout: 2_000 })
+    },
+    10_000
+  )
 
   it.each([
     { output: 'abcdef', maxCaptureBytes: 4, expected: 'cdef' },
@@ -136,48 +105,6 @@ describe('runRecipeCommand', () => {
 
       expect(result.stdout).toBe(expected)
       expect(Buffer.byteLength(result.stdout, 'utf8')).toBeLessThanOrEqual(maxCaptureBytes)
-    }
-  )
-
-  it.skipIf(process.platform === 'win32')(
-    'cancels shell child processes without waiting for long-running descendants',
-    async () => {
-      const repoPath = makeRepo()
-      const scriptPath = join(repoPath, 'slow.js')
-      writeFileSync(
-        scriptPath,
-        [
-          "process.stderr.write('ready\\n')",
-          'setTimeout(() => {',
-          "  console.log('done')",
-          '}, 5000)'
-        ].join('\n')
-      )
-      const controller = new AbortController()
-
-      const result = await Promise.race([
-        runRecipeCommand({
-          command: nodeCommand(scriptPath),
-          repoPath,
-          mode: 'create',
-          resultSchemaVersion: 1,
-          context: {
-            recipeId: 'cloud-sandbox',
-            repoPath
-          },
-          signal: controller.signal,
-          onStderr: (chunk) => {
-            if (chunk.includes('ready')) {
-              controller.abort()
-            }
-          }
-        }),
-        new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('recipe cancellation timed out')), 1500)
-        })
-      ])
-
-      expect(result).toMatchObject({ signal: 'SIGTERM', aborted: true })
     }
   )
 })

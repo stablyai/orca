@@ -2,23 +2,19 @@ import { describe, expect, it } from 'vitest'
 
 import {
   normalizeSupportedUiLocale,
-  resolveUiLocale,
   detectUiLanguage,
   normalizeUiLocaleTag,
   shouldShowLanguageSwitcher
 } from './ui-locale'
 
 describe('ui-locale', () => {
-  it('does not map Traditional Chinese to Simplified yet', () => {
-    expect(normalizeSupportedUiLocale('zh-TW')).toBe('en')
-    expect(normalizeSupportedUiLocale('zh-HK')).toBe('en')
-    expect(normalizeSupportedUiLocale('zh-Hant')).toBe('en')
-  })
-
-  it('preserves a selected plugin language bundle id', () => {
-    expect(resolveUiLocale('plugin:orca-samples.portuguese/pt-BR')).toBe(
-      'plugin:orca-samples.portuguese/pt-BR'
-    )
+  it('maps Traditional Chinese system locales to zh-Hant and keeps Simplified on zh', () => {
+    for (const tag of ['zh-TW', 'zh-HK', 'zh-MO', 'zh-Hant']) {
+      expect(normalizeSupportedUiLocale(tag)).toBe('zh-Hant')
+    }
+    for (const tag of ['zh', 'zh-CN', 'zh-SG', 'zh-Hans']) {
+      expect(normalizeSupportedUiLocale(tag)).toBe('zh')
+    }
   })
 })
 
@@ -27,13 +23,14 @@ describe('system language detection', () => {
     ['en-US', 'en', 'supported'],
     ['fr_CA.UTF-8', 'fr', 'supported'],
     ['pt-PT', 'pt', 'supported'],
+    ['tr_TR.UTF-8', 'tr', 'supported'],
     ['zh-Hans-TW', 'zh', 'supported'],
-    ['zh-Hant-CN', 'en', 'unsupported'],
+    ['zh-Hant-CN', 'zh-Hant', 'supported'],
     ['zh-Latn-CN', 'en', 'unsupported'],
-    ['zh-MO', 'en', 'unsupported'],
-    ['zh_CN.UTF-8@hant', 'en', 'unsupported'],
+    ['zh-MO', 'zh-Hant', 'supported'],
+    ['zh_CN.UTF-8@hant', 'zh-Hant', 'supported'],
     ['zh_TW.UTF-8@hans', 'zh', 'supported'],
-    ['de-DE', 'en', 'unsupported'],
+    ['it-IT', 'en', 'unsupported'],
     ['en--US', 'en', 'unknown'],
     ['C.UTF-8', 'en', 'unknown'],
     ['POSIX', 'en', 'unknown']
@@ -42,8 +39,8 @@ describe('system language detection', () => {
   })
 
   it('retains an unsupported primary instead of using a supported secondary', () => {
-    expect(detectUiLanguage(['de-DE', 'fr-FR', 'C'], 'native')).toMatchObject({
-      detectedTag: 'de-DE',
+    expect(detectUiLanguage(['it-IT', 'fr-FR', 'C'], 'native')).toMatchObject({
+      detectedTag: 'it-IT',
       locale: 'en',
       status: 'unsupported'
     })

@@ -1,12 +1,12 @@
-import { normalizeHostTurnRevision } from '../../../shared/agent-hook-interrupt-reconciliation'
-import { readAgentProcessPresence } from '../../../shared/agent-process-presence'
-import { track } from '../../telemetry/client'
+import { normalizeHostTurnRevision } from '../../../shared/agent-hook-listener/transport/agent-hook-interrupt-reconciliation'
+import { readAgentProcessPresence } from '../../../shared/agent-status/process/agent-process-presence'
+import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import {
   isTurnEndDisposition,
   normalizeAgentStatusPayload
-} from '../../../shared/agent-status-types'
-import { isTurnEndedAt } from '../../../shared/agent-hook-turn-end-timing'
-import { restoreShedStatusFields } from '../../../shared/agent-hook-relay'
+} from '../../../shared/agent-status/contracts/agent-status-types'
+import { isTurnEndedAt } from '../../../shared/agent-hook-listener/state/agent-hook-turn-end-timing'
+import { restoreShedStatusFields } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import {
   MAX_PANE_KEY_LEN,
   warnOnHookEnvOrVersionMismatch
@@ -16,15 +16,15 @@ import {
   isClaudeCompactCompletionConsumed,
   markClaudeCompactCompletionConsumed,
   resolveLegacyCompactTrigger
-} from '../../../shared/claude-compact-completion'
-import { launchTokenHash } from '../../../shared/agent-hook-spool'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
-import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
+} from '../../../shared/agent-hook-listener/providers/claude-compact-completion'
+import { launchTokenHash } from '../../../shared/agent-hook-listener/transport/agent-hook-spool'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import type { IncomingAgentHookEvent } from './server-types'
 import {
   AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES,
   canAdmitLegacyAgentStatus,
   olderPeerAgentStatusLegacyMode
-} from '../../../shared/agent-status-legacy-adapter'
+} from '../../../shared/agent-status/transport/agent-status-legacy-adapter'
 import { isValidPiProviderSessionOnly } from './server-status-identity'
 import {
   normalizeRemoteEnvelopeFields,
@@ -33,6 +33,11 @@ import {
 import { AgentHookServerIngestStructuredChildren } from './server-ingest-structured-children'
 
 export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestStructuredChildren {
+  /** Call as each relay link starts, before its first envelope. */
+  beginRemoteRelaySession(connectionId: string): void {
+    this.relaySessions.begin(connectionId)
+  }
+
   /** Relay payloads cross the SSH trust boundary and require canonical validation here. */
   ingestRemote(envelope: RemoteAgentStatusEnvelope, connectionId: string | null): void {
     if (
@@ -61,7 +66,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     let paneKey = this.resolvePaneKeyAlias(physicalPaneKey)
     const parsedPaneKey = parsePaneKey(paneKey)
     if (paneKey.length === 0) {
-      track('agent_hook_unattributed', { reason: 'empty_pane_key' })
+      trackEmptyPaneKeyHook(envelope, this.attributionDiagnostics)
       return
     }
     if (paneKey.length > MAX_PANE_KEY_LEN || !parsedPaneKey) {
@@ -247,9 +252,10 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       env: envelope.env,
       expectedEnv: this.env
     })
-    const event: AgentHookEventPayload & { authorityRestartId?: string } = {
+    const event: IncomingAgentHookEvent = {
       paneKey,
       agentPresence: readAgentProcessPresence(envelope.agentPresence),
+      ...this.relaySessions.rootProof(trimmedConnectionId, physicalPaneKey, envelope.agentPresence),
       source: effectiveSource,
       ...(restartedAuthority?.authorityRestartId
         ? { authorityRestartId: restartedAuthority.authorityRestartId }
@@ -281,6 +287,11 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
         typeof envelope.claudeRunningNonAgentTask === 'boolean'
           ? envelope.claudeRunningNonAgentTask
           : undefined,
+      codexRosterAuthority: this.relaySessions.codexRosterAuthority(
+        trimmedConnectionId,
+        normalizedPayload,
+        envelope.shedFields
+      ),
       payload: normalizedPayload
     }
     this.recordCurrentAuthorityObservation(event)

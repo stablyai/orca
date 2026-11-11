@@ -1,12 +1,6 @@
 // Convert only the moved distro's UNC paths; unrelated paths remain unchanged.
-import { parseWslUncPath } from '../../../shared/wsl-paths'
-import type { OrcadMigrationPathRewriter } from '../../ssh/orcad-migration-path-rewrite'
-
-export function wslUncPathToLinux(value: string, distro: string): string | null {
-  const parsed = parseWslUncPath(value)
-  // Distro names compare case-insensitively in WSL UNC paths.
-  return parsed && parsed.distro.toLowerCase() === distro.toLowerCase() ? parsed.linuxPath : null
-}
+import { wslUncPathToLinux } from '../../../shared/wsl-paths'
+import type { OrcadMigrationPathRewriter } from '../migrating-orcad-catalog/path-rewrite/orcad-migration-path-rewrite'
 
 export function createUncToLinuxPathRewriter(distro: string): OrcadMigrationPathRewriter {
   const fileUrl = new RegExp(`^file://(?:wsl\\.localhost|wsl\\$)/([^/]+)(/.*)?$`, 'i')

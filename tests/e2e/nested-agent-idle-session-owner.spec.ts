@@ -17,12 +17,11 @@ import {
 import { readHookEndpoint } from './helpers/agent-hook-endpoint'
 import {
   claudeTranscriptLines,
-  enableNativeChatSetting,
   toggleTerminalTabToChatView
 } from './helpers/native-chat-transcript-fixture'
 import { createDesktopMobilePairingOffer } from './helpers/paired-electron-client'
 import { pairMobileClient } from './helpers/paired-mobile-client'
-import { readAgentProcess } from '../../src/shared/agent-process-presence-probe'
+import { readAgentProcess } from '../../src/shared/agent-status/process/agent-process-presence-probe'
 import { resolveMobileNativeChat } from '../../mobile/src/session/native-chat/mobile-native-chat-eligibility'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-session-contracts'
 
@@ -99,7 +98,6 @@ test('idle Claude keeps chat, mobile transcript, and return identity through nes
       )
     )
     .toBe('done')
-  await enableNativeChatSetting(orcaPage)
   await toggleTerminalTabToChatView(orcaPage, { tabId, worktreeId: descriptor.worktreeId })
   const chat = orcaPage.locator('[data-native-chat-root="true"]')
   await expect(chat.getByText(REPLY, { exact: true })).toBeVisible()

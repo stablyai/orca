@@ -1,4 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, type RefObject } from 'react'
+import { currentSoftKeyboardHeight } from '../platform/keyboard-occlusion'
 import {
   clearTerminalLiveInputFocusTimer,
   focusTerminalLiveInputTarget,
@@ -9,8 +10,6 @@ import {
 
 type TerminalLiveInputFocusContext = {
   readonly canSend: boolean
-  readonly keyboardHeight: number
-  readonly liveInputEnabled: boolean
   readonly reopenFocusedInputWhenKeyboardHidden: boolean
 }
 
@@ -33,27 +32,18 @@ export function useTerminalLiveInputFocus<T extends TerminalLiveInputFocusTarget
   activeHandleRef,
   canSend,
   inputRef,
-  keyboardHeight,
   lifecycleIdentity,
   lifecycleKey,
   reopenFocusedInputWhenKeyboardHidden,
-  liveInputEnabled,
   timerRef
 }: UseTerminalLiveInputFocusOptions<T>): TerminalLiveInputFocusHandlers {
   const contextRef = useRef<TerminalLiveInputFocusContext>({
     canSend,
-    keyboardHeight,
-    liveInputEnabled,
     reopenFocusedInputWhenKeyboardHidden
   })
   useLayoutEffect(() => {
-    contextRef.current = {
-      canSend,
-      keyboardHeight,
-      liveInputEnabled,
-      reopenFocusedInputWhenKeyboardHidden
-    }
-  }, [canSend, keyboardHeight, liveInputEnabled, reopenFocusedInputWhenKeyboardHidden])
+    contextRef.current = { canSend, reopenFocusedInputWhenKeyboardHidden }
+  }, [canSend, reopenFocusedInputWhenKeyboardHidden])
 
   const resetLiveInputFocus = useCallback(() => {
     clearTerminalLiveInputFocusTimer(timerRef)
@@ -65,11 +55,11 @@ export function useTerminalLiveInputFocus<T extends TerminalLiveInputFocusTarget
 
   const focusLiveInput = useCallback(() => {
     const context = contextRef.current
-    if (!context.canSend || !context.liveInputEnabled) {
+    if (!context.canSend) {
       return
     }
     focusTerminalLiveInputTarget(inputRef.current, {
-      keyboardHeight: context.keyboardHeight,
+      keyboardHeight: currentSoftKeyboardHeight(),
       reopenFocusedInputWhenKeyboardHidden: context.reopenFocusedInputWhenKeyboardHidden,
       refocus: () => scheduleTerminalLiveInputFocus(timerRef, focusLiveInput)
     })
@@ -78,7 +68,7 @@ export function useTerminalLiveInputFocus<T extends TerminalLiveInputFocusTarget
   const handleTerminalTap = useCallback(
     (handle: string) => {
       const context = contextRef.current
-      if (handle !== activeHandleRef.current || !context.canSend || !context.liveInputEnabled) {
+      if (handle !== activeHandleRef.current || !context.canSend) {
         return
       }
       // WKWebView still owns first responder during its touchend notification.

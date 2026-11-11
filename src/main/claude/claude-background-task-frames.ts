@@ -2,7 +2,7 @@ import { classifyClaudeBackgroundTaskKind } from '../../shared/claude-background
 import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskRunState
-} from '../../shared/agent-session-wire'
+} from '../../shared/agent-session/agent-session-background-task-wire'
 import { ownRetainedString } from '../../shared/own-retained-string'
 
 const MAX_TASK_ID_LENGTH = 512
@@ -88,3 +88,15 @@ export function liveClaudeTaskRunState(status: unknown): AgentSessionBackgroundT
       return null
   }
 }
+
+export const CLAUDE_BACKGROUND_TASK_ROW_SUBTYPES: ReadonlySet<string> = new Set([
+  'task_started',
+  'task_updated',
+  'task_progress',
+  'task_notification'
+])
+
+export const CLAUDE_BACKGROUND_TASK_SILENT_REFRESH_SUBTYPES: ReadonlySet<string> = new Set([
+  'task_progress',
+  'background_tasks_changed'
+])

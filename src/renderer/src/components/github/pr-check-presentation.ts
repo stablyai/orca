@@ -1,3 +1,5 @@
+import { getIntlLocale, translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { getCheckConclusion } from '@/components/pr-check-counts'
 import type {
   PRCheckAnnotation,
@@ -5,36 +7,49 @@ import type {
   PRCheckJob
 } from '../../../../shared/github/check-types'
 
-export function getCheckStatusLabel(check: PRCheckDetail): string {
+export function getCheckStatusLabel(check: PRCheckDetail, t: Translate = translate): string {
+  if (check.gitlabAllowedFailure === true && check.conclusion === 'neutral') {
+    return t('checks.gitlabAllowedFailure', 'Allowed to fail')
+  }
   const conclusion = getCheckConclusion(check)
   if (conclusion === 'success') {
-    return 'Successful'
+    return t('auto.components.github.prCheckPresentation.successful', 'Successful')
   }
   if (conclusion === 'failure') {
-    return 'Failed'
+    return t('auto.components.editor.CheckRunDetailsPanel.4c8e1b2d73', 'Failed')
   }
   if (conclusion === 'cancelled') {
-    return 'Cancelled'
+    return t('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')
   }
   if (conclusion === 'timed_out') {
-    return 'Timed out'
+    return t('auto.components.editor.CheckRunDetailsPanel.2f6d8a1c45', 'Timed out')
   }
   if (conclusion === 'action_required') {
-    return 'Action required'
+    return t('auto.components.editor.CheckRunDetailsPanel.actionRequired', 'Action required')
   }
   if (conclusion === 'neutral') {
-    return 'Neutral'
+    return t('auto.components.editor.CheckRunDetailsPanel.5a1c8e3d67', 'Neutral')
   }
   if (conclusion === 'skipped') {
-    return 'Skipped'
+    return t('auto.components.editor.CheckRunDetailsPanel.7b3e9d4f12', 'Skipped')
   }
   if (check.status === 'queued') {
-    return 'Queued'
+    return t('auto.components.right.sidebar.checks.panel.content.b4e8a1c902', 'Queued')
   }
   if (check.status === 'in_progress') {
-    return 'In progress'
+    return t('auto.components.github.prCheckPresentation.inProgress', 'In progress')
   }
-  return 'Pending'
+  return t('auto.components.editor.CheckRunDetailsPanel.3d9f2b8e14', 'Pending')
+}
+
+export function isGitLabAllowedFailureJob(check: PRCheckDetail, job: PRCheckJob): boolean {
+  return (
+    check.gitlabAllowedFailure === true &&
+    check.conclusion === 'neutral' &&
+    job.conclusion === 'neutral' &&
+    check.gitlabJobId !== undefined &&
+    job.id === check.gitlabJobId
+  )
 }
 
 export function getCheckDetailsKey(check: PRCheckDetail): string {
@@ -81,7 +96,10 @@ export function getKeyedCheckJobs(jobs: PRCheckJob[]): { key: string; item: PRCh
   return withUniqueKeys(jobs, getCheckJobKey)
 }
 
-export function formatCheckTimestamp(input: string | null | undefined): string | null {
+export function formatCheckTimestamp(
+  input: string | null | undefined,
+  intlLocale: string = getIntlLocale()
+): string | null {
   if (!input) {
     return null
   }
@@ -89,7 +107,7 @@ export function formatCheckTimestamp(input: string | null | undefined): string |
   if (Number.isNaN(date.getTime())) {
     return null
   }
-  return date.toLocaleString(undefined, {
+  return date.toLocaleString(intlLocale, {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',

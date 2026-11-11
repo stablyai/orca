@@ -1,0 +1,250 @@
+import type {
+  WorkspaceStatus,
+  WorkspaceStatusDefinition
+} from '../../../../../../shared/worktree/types'
+import {
+  parseWorkspaceLaneFullIds,
+  resolveFullLaneDropIndex
+} from './workspace-kanban-filtered-drop-index'
+import '../../workspace-status/presentation/workspace-status'
+import { getWorkspaceStatus } from '../../../../../../shared/workspace-statuses'
+import {
+  collectDropWrites,
+  uniqueDraggedKeys,
+  type DropWriteRows
+} from '../../worktree-list/drag/dragged-worktree-copies'
+import {
+  buildManualOrderUpdatesForGroupDrop,
+  shouldWriteManualOrderForGroupDrop,
+  type WorktreeDragGroup
+} from '../../worktree-list/drag/worktree-manual-order'
+import type { WorktreeMetaBatchUpdate } from '../../../../store/slices/worktrees/metadata/worktree-meta-update-options'
+import {
+  CARD_SELECTOR,
+  getCardDropTarget,
+  PIN_DROP_TARGET,
+  removeCardDropIndicator,
+  STATUS_DROP_TARGET,
+  updateCardDropIndicator,
+  type WorkspaceKanbanCardDropTarget
+} from './workspace-kanban-card-pointer-drag-dom'
+import { getWorkspaceKanbanVirtualLaneItemIds } from '../viewport/workspace-kanban-virtual-lane-layout'
+
+const BOARD_SELECTOR = '[data-workspace-board-selection-surface]'
+const BOARD_SHEET_SELECTOR = '[data-workspace-board-sheet]'
+const LANE_SCROLL_SELECTOR = '[data-workspace-board-lane-scroll]'
+const EXTERNAL_DRAG_TARGET_ATTR = 'data-workspace-board-external-drag-target'
+
+let externalDragTargetElement: HTMLElement | null = null
+let logicalDropGroupsRegistration: { groups: readonly WorktreeDragGroup[] } | null = null
+
+function getWorkspaceKanbanBoardElement(): HTMLElement | null {
+  return document.querySelector<HTMLElement>(BOARD_SELECTOR)
+}
+
+export function hasWorkspaceKanbanSidebarDropBoard(): boolean {
+  return getWorkspaceKanbanBoardElement() !== null
+}
+
+export function isWorkspaceKanbanSidebarDropPointInBoard(x: number, y: number): boolean {
+  const board = getWorkspaceKanbanBoardElement()
+  if (!board) {
+    return false
+  }
+  const hitSurface = board.closest<HTMLElement>(BOARD_SHEET_SELECTOR) ?? board
+  const rect = hitSurface.getBoundingClientRect()
+  return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+}
+
+function getLaneCardIds(lane: HTMLElement): HTMLElement[] {
+  return Array.from(lane.querySelectorAll<HTMLElement>(CARD_SELECTOR))
+}
+
+/** Lanes key cards by host identity, so same-id copies on two hosts keep separate slots. */
+function getCardWorktreeKey(card: HTMLElement): string | undefined {
+  return card.dataset.workspaceBoardCardId
+}
+
+/** Prefer the virtualizer’s complete view over mounted cards; fullLaneIds also retains search-hidden members. */
+function toLaneDropIds(lane: HTMLElement): { fullLaneIds: string[]; viewIds: string[] } {
+  const publishedFullLaneIds = parseWorkspaceLaneFullIds(lane.dataset.workspaceLaneFullIds)
+  const laneScroll = lane.querySelector<HTMLElement>(LANE_SCROLL_SELECTOR)
+  const virtualItemIds = laneScroll ? getWorkspaceKanbanVirtualLaneItemIds(laneScroll) : null
+  if (virtualItemIds) {
+    const viewIds = [...virtualItemIds]
+    return { fullLaneIds: publishedFullLaneIds ?? viewIds, viewIds }
+  }
+  const cards = getLaneCardIds(lane)
+  return {
+    fullLaneIds: publishedFullLaneIds ?? cards.flatMap((card) => getCardWorktreeKey(card) ?? []),
+    viewIds: cards
+      .filter((card) => card.offsetParent !== null)
+      .flatMap((card) => getCardWorktreeKey(card) ?? [])
+  }
+}
+
+function getStatusDropTargetElement(
+  board: HTMLElement,
+  status: WorkspaceStatus
+): HTMLElement | null {
+  return (
+    Array.from(board.querySelectorAll<HTMLElement>(STATUS_DROP_TARGET)).find(
+      (element) => element.dataset.workspaceStatus === status
+    ) ?? null
+  )
+}
+
+function setExternalDragTargetElement(element: HTMLElement | null): void {
+  if (externalDragTargetElement === element) {
+    return
+  }
+  externalDragTargetElement?.removeAttribute(EXTERNAL_DRAG_TARGET_ATTR)
+  externalDragTargetElement = element
+  externalDragTargetElement?.setAttribute(EXTERNAL_DRAG_TARGET_ATTR, 'true')
+}
+
+export function clearWorkspaceKanbanSidebarDropTargetVisual(): void {
+  setExternalDragTargetElement(null)
+  removeCardDropIndicator()
+}
+
+export function registerWorkspaceKanbanSidebarDropGroups(
+  groups: readonly WorktreeDragGroup[]
+): () => void {
+  const registration = { groups }
+  logicalDropGroupsRegistration = registration
+  return () => {
+    if (logicalDropGroupsRegistration === registration) {
+      logicalDropGroupsRegistration = null
+    }
+  }
+}
+
+export function getWorkspaceKanbanSidebarDropGroups(): WorktreeDragGroup[] {
+  if (logicalDropGroupsRegistration) {
+    return logicalDropGroupsRegistration.groups.map((group) => ({
+      key: group.key,
+      worktreeIds: [...group.worktreeIds]
+    }))
+  }
+
+  const board = getWorkspaceKanbanBoardElement()
+  if (!board) {
+    return []
+  }
+
+  return Array.from(board.querySelectorAll<HTMLElement>(STATUS_DROP_TARGET)).flatMap((lane) => {
+    const status = lane.dataset.workspaceStatus
+    if (!status) {
+      return []
+    }
+    return [{ key: status, worktreeIds: toLaneDropIds(lane).fullLaneIds }]
+  })
+}
+
+export function getWorkspaceKanbanSidebarDropTarget(
+  x: number,
+  y: number
+): WorkspaceKanbanCardDropTarget {
+  const board = getWorkspaceKanbanBoardElement()
+  if (!board) {
+    return { status: null, isPinDrop: false, dropIndex: 0 }
+  }
+  return getCardDropTarget(board, x, y)
+}
+
+/** Translate view to full-lane indexes once at commit, including tracked drops committed after leaving the lane. */
+export function resolveWorkspaceKanbanSidebarFullLaneDropIndex(
+  status: WorkspaceStatus,
+  viewDropIndex: number
+): number {
+  const board = getWorkspaceKanbanBoardElement()
+  const lane = board ? getStatusDropTargetElement(board, status) : null
+  if (!lane) {
+    return viewDropIndex
+  }
+  const { fullLaneIds, viewIds } = toLaneDropIds(lane)
+  return resolveFullLaneDropIndex({
+    fullLaneIds,
+    renderedIds: viewIds,
+    filteredDropIndex: viewDropIndex
+  })
+}
+
+export function updateWorkspaceKanbanSidebarDropTargetVisual(args: {
+  x: number
+  y: number
+  shouldShowDropIndicator: (target: WorkspaceKanbanCardDropTarget) => boolean
+}): WorkspaceKanbanCardDropTarget {
+  const board = getWorkspaceKanbanBoardElement()
+  if (!board) {
+    clearWorkspaceKanbanSidebarDropTargetVisual()
+    return { status: null, isPinDrop: false, dropIndex: 0 }
+  }
+
+  const target = getCardDropTarget(board, args.x, args.y)
+  const targetElement = target.isPinDrop
+    ? board.querySelector<HTMLElement>(PIN_DROP_TARGET)
+    : target.status
+      ? getStatusDropTargetElement(board, target.status)
+      : null
+  setExternalDragTargetElement(targetElement)
+
+  if (target.status && args.shouldShowDropIndicator(target)) {
+    updateCardDropIndicator(board, target)
+  } else {
+    removeCardDropIndicator()
+  }
+
+  return target
+}
+
+export function buildWorkspaceKanbanSidebarDropUpdates(args: {
+  worktreeIds: readonly string[]
+  status: WorkspaceStatus
+  dropIndex: number
+  groups: readonly WorktreeDragGroup[]
+  /** The rows each id may write; a twin's id names another host's copy too. */
+  rowsFor: DropWriteRows
+  /** Manual ranks by host identity, as board lanes key their cards. */
+  allWorktreeKeys: readonly string[]
+  rankByKey: ReadonlyMap<string, number>
+  workspaceStatuses: readonly WorkspaceStatusDefinition[]
+  sortBy: string
+  now: number
+}): {
+  updates: WorktreeMetaBatchUpdate[]
+  shouldSwitchToManual: boolean
+} {
+  const sourceGroupKeys = args.worktreeIds.flatMap((worktreeId) =>
+    args.rowsFor.status(worktreeId).map((row) => getWorkspaceStatus(row, args.workspaceStatuses))
+  )
+  const writeManualOrder = shouldWriteManualOrderForGroupDrop({
+    sortBy: args.sortBy,
+    sourceGroupKeys,
+    targetGroupKey: args.status
+  })
+  const order = writeManualOrder
+    ? buildManualOrderUpdatesForGroupDrop({
+        groups: args.groups,
+        targetGroupKey: args.status,
+        // Rank only the copies this drop writes, not a same-id twin on another host.
+        draggedIds: uniqueDraggedKeys(args.worktreeIds.flatMap(args.rowsFor.status)),
+        dropIndex: args.dropIndex,
+        now: args.now,
+        rankByWorktreeId: args.rankByKey,
+        allWorktreeIds: args.allWorktreeKeys
+      })
+    : { changed: false, updates: new Map<string, { manualOrder: number }>() }
+
+  return {
+    updates: collectDropWrites({
+      rowsFor: args.rowsFor,
+      statusIds: args.worktreeIds,
+      status: args.status,
+      workspaceStatuses: args.workspaceStatuses,
+      orderUpdatesByKey: order.updates
+    }),
+    shouldSwitchToManual: writeManualOrder && order.changed
+  }
+}

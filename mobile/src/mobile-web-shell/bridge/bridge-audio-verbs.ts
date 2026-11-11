@@ -1,11 +1,11 @@
-import { z } from 'zod'
-import { MOBILE_DICTATION_MAX_PENDING_AUDIO_BYTES } from '../../hooks/mobile-dictation-pending-audio-budget'
+import * as z from 'zod'
+import { MAX_DICTATION_AUDIO_CHUNK_BYTES } from '../../../../src/shared/rpc-contract/speech-params'
 
 // The shell owns microphone PCM and its wake lock; the page owns dictation state/RPCs. Pull from the ring through existing request/reply rather than adding a push frame.
 // Keep verb grant segments lowercase: a camel-cased audio.readChunk would fail manifest grammar and reject the whole bundle.
 
-// Use the page’s pending-audio budget; a larger shell ring would hand the page bytes its own queue refuses.
-export const BRIDGE_AUDIO_RING_MAX_BYTES = MOBILE_DICTATION_MAX_PENDING_AUDIO_BYTES
+// A full ring drain goes to the host as one chunk, so stay within its chunk cap; shipped shells validate maxBytes against this.
+export const BRIDGE_AUDIO_RING_MAX_BYTES = MAX_DICTATION_AUDIO_CHUNK_BYTES
 
 // Base64 uses four chars per three bytes; a full ring drain fits the message cap.
 export const BRIDGE_AUDIO_READ_MAX_BASE64_CHARS = Math.ceil(BRIDGE_AUDIO_RING_MAX_BYTES / 3) * 4
@@ -19,7 +19,7 @@ export const BRIDGE_AUDIO_PERMISSIONS = ['granted', 'denied', 'undetermined'] as
 
 export type BridgeAudioPermission = (typeof BRIDGE_AUDIO_PERMISSIONS)[number]
 
-// Return interruptions with the existing 500 ms read poll rather than a new verb/push lane; the page applies the native interruption state.
+// Return interruptions with the page's existing read poll rather than a new verb/push lane; the page applies the native interruption state.
 export const BRIDGE_AUDIO_INTERRUPTIONS = ['began', 'ended', 'blocked'] as const
 
 export type BridgeAudioInterruption = (typeof BRIDGE_AUDIO_INTERRUPTIONS)[number]

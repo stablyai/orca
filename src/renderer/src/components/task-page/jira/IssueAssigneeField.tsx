@@ -3,10 +3,10 @@ import type { TaskPageComposerActionsModel } from '../use-task-page-composer-act
 import { getJiraSelfUser } from '@/components/jira-self-user'
 import { JiraUserPicker, type JiraUserPickerFixedOption } from '@/components/jira-user-picker'
 import { hasJiraAssigneeCreateField } from '@/components/task-page/jira/task-page-jira-create-fields'
-import { getJiraProjectSelectionKey } from '@/components/task-page-jira-project-selection'
-import { jiraListAssignableUsersForProject } from '@/runtime/runtime-jira-client'
-import { translate } from '@/i18n/i18n'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { getJiraProjectSelectionKey } from '@/components/task-page/jira/task-page-jira-project-selection'
+import { jiraListAssignableUsersForProject } from '@/runtime/jira/runtime-jira-user-fields-client'
+import { useTranslate } from '@/i18n/use-translate'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 
 export function TaskPageJiraIssueAssigneeField({
   model
@@ -25,6 +25,7 @@ export function TaskPageJiraIssueAssigneeField({
     | 'providerRuntimeContextKey'
   >
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const {
     settings,
     jiraTaskSourceContext,
@@ -51,8 +52,8 @@ export function TaskPageJiraIssueAssigneeField({
   const selfUser = model.jiraStatusCurrent
     ? getJiraSelfUser(jiraStatus, projectSiteId ?? null)
     : null
-  const assigneeLabel = translate('components.jiraIssueAssigneeField.label', 'Assignee')
-  const automaticLabel = translate('components.jiraIssueAssigneeField.automatic', 'Automatic')
+  const assigneeLabel = t('components.jiraIssueAssigneeField.label', 'Assignee')
+  const automaticLabel = t('components.jiraIssueAssigneeField.automatic', 'Automatic')
   const fixedOptions: JiraUserPickerFixedOption[] = [
     {
       key: 'automatic',
@@ -63,11 +64,9 @@ export function TaskPageJiraIssueAssigneeField({
       ? [
           {
             key: 'self',
-            label: translate(
-              'components.jiraIssueAssigneeField.assignToMe',
-              'Assign to me ({{name}})',
-              { name: selfUser.displayName }
-            ),
+            label: t('components.jiraIssueAssigneeField.assignToMe', 'Assign to me ({{name}})', {
+              name: selfUser.displayName
+            }),
             onSelect: () => setNewJiraIssueAssignee(selfUser)
           }
         ]

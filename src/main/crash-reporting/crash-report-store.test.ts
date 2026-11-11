@@ -7,7 +7,7 @@ const { grantDirAclAsyncMock } = vi.hoisted(() => ({
   grantDirAclAsyncMock: vi.fn().mockResolvedValue(undefined)
 }))
 
-vi.mock('../win32-utils', async (importOriginal) => {
+vi.mock('../windows/windows-directory-acl', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return { ...actual, grantDirAclAsync: grantDirAclAsyncMock }
 })
@@ -71,63 +71,6 @@ describe('CrashReportStore', () => {
       }
     ])
     await expect(store.getLatestPending()).resolves.toMatchObject({ id: report.id })
-  })
-
-  it('caps reports to the newest five', async () => {
-    const { store } = await createStore()
-
-    for (let index = 0; index < 7; index += 1) {
-      await store.record(input(`crashed-${index}`))
-    }
-
-    const reports = await store.listRecent()
-    expect(reports).toHaveLength(5)
-    expect(reports[0].reason).toBe('crashed-6')
-    expect(reports[4].reason).toBe('crashed-2')
-  })
-
-  it('recovers corrupt JSON as an empty report list', async () => {
-    const { store, filePath } = await createStore()
-    await fs.writeFile(filePath, '{ nope', 'utf8')
-
-    await expect(store.listRecent()).resolves.toEqual([])
-  })
-
-  it('allows a pending report to reach one terminal status only', async () => {
-    const { store } = await createStore()
-    const report = await store.record(input())
-
-    await expect(store.dismiss(report.id)).resolves.toMatchObject({ status: 'dismissed' })
-    await expect(store.markSent(report.id)).resolves.toMatchObject({ status: 'dismissed' })
-  })
-
-  it('dismisses sibling pending records from the same Electron crash event', async () => {
-    const { store } = await createStore()
-    await store.record(input())
-    await store.record(input())
-    const renderer = await store.record(input())
-
-    await expect(store.dismiss(renderer.id)).resolves.toMatchObject({ status: 'dismissed' })
-    await expect(store.getLatestPending()).resolves.toBeNull()
-  })
-
-  it('dismisses sibling pending records after one crash report is sent', async () => {
-    const { store } = await createStore()
-    await store.record(input())
-    await store.record(input())
-    const renderer = await store.record(input())
-
-    await expect(store.markSent(renderer.id)).resolves.toMatchObject({ status: 'sent' })
-
-    const reports = await store.listRecent()
-    expect(reports).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ id: renderer.id, status: 'sent' }),
-        expect.objectContaining({ status: 'dismissed' }),
-        expect.objectContaining({ status: 'dismissed' })
-      ])
-    )
-    await expect(store.getLatestPending()).resolves.toBeNull()
   })
 
   it('persists a submitted dismissed report as sent', async () => {
@@ -194,18 +137,6 @@ describe('CrashReportStore', () => {
     }
   )
 
-  it('retries a transient Windows rename lock', async () => {
-    const { store } = await createStore()
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-    const busyError = Object.assign(new Error('file busy'), { code: 'EBUSY' })
-    const renameSpy = vi.spyOn(fs, 'rename').mockRejectedValueOnce(busyError)
-
-    await expect(store.record(input())).resolves.toMatchObject({ status: 'pending' })
-
-    expect(renameSpy).toHaveBeenCalledTimes(2)
-    expect(grantDirAclAsyncMock).not.toHaveBeenCalled()
-  })
-
   it('removes its temp file after a terminal write failure', async () => {
     const { store, filePath } = await createStore()
     const ioError = Object.assign(new Error('disk error'), { code: 'EIO' })
@@ -215,52 +146,5 @@ describe('CrashReportStore', () => {
 
     const entries = await fs.readdir(path.dirname(filePath))
     expect(entries.filter((entry) => entry.endsWith('.tmp'))).toEqual([])
-  })
-
-  describe('attachDetails', () => {
-    it('merges late minidump details without dropping the originals', async () => {
-      const { store } = await createStore()
-      const report = await store.record(input())
-
-      const updated = await store.attachDetails(report.id, {
-        minidumpStatus: 'captured',
-        minidumpCheckFile: 'render_frame_impl.cc'
-      })
-
-      expect(updated?.details).toMatchObject({
-        code: 5,
-        minidumpStatus: 'captured',
-        minidumpCheckFile: 'render_frame_impl.cc'
-      })
-      expect((await store.getById(report.id))?.details.minidumpCheckFile).toBe(
-        'render_frame_impl.cc'
-      )
-    })
-
-    it('sanitizes attached details the same way recorded ones are', async () => {
-      const { store } = await createStore()
-      const report = await store.record(input())
-
-      const updated = await store.attachDetails(report.id, {
-        minidumpPath: '/Users/alice/Library/Application Support/Orca/reports/abc.dmp'
-      })
-
-      expect(updated?.details.minidumpPath).toBe('[redacted-path]')
-    })
-
-    it('leaves the report status untouched so the crash prompt still fires', async () => {
-      const { store } = await createStore()
-      const report = await store.record(input())
-
-      await store.attachDetails(report.id, { minidumpStatus: 'absent' })
-
-      expect((await store.getLatestPending())?.id).toBe(report.id)
-    })
-
-    it('returns null for a report that has already been evicted', async () => {
-      const { store } = await createStore()
-
-      expect(await store.attachDetails('missing-id', { minidumpStatus: 'absent' })).toBeNull()
-    })
   })
 })

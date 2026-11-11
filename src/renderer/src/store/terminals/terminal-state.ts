@@ -1,21 +1,28 @@
-import type { ClosedTerminalTabTombstonesByTabId } from '../../../../shared/closed-terminal-tab-tombstones'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { FreshWorkspaceAgentLaunch } from '@/lib/workspace/creation/worktree-startup-payload'
+import type { ClosedTerminalTabTombstonesByTabId } from '../../../../shared/workspace-layout/closed-terminal-tab-tombstones'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
 import type {
   PaneResumeOutcome,
   PaneStartStatus
 } from '../../../../shared/workspace-layout/workspace-layout-published'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type {
   SavedResumeStartupSource,
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
+import type { StartupCommandDelivery } from '../../../../shared/agent-launch/startup/codex-startup-delivery'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
-import type { AgentStartedTelemetry } from '../../lib/worktree-startup-payload'
-import type { NativeChatLaunchDraft, NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
-import type { HostSessionSlices } from '@/lib/workspace-session-host-split'
+import type { AgentStartedTelemetry } from '../../lib/workspace/creation/worktree-startup-payload'
+import type {
+  NativeChatLaunchDraft,
+  NativeChatLaunchPrompt
+} from '@/components/native-chat/drafts/native-chat-launch-prompt'
+import type { HostSessionSlices } from '@/lib/workspace/persistence/workspace-session-host-split'
 import type {
   AccountRestartAgent,
   AutomaticAgentResumeClaim,
@@ -24,7 +31,7 @@ import type {
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { TerminalActions } from './terminal-actions'
-import type { AgentPaneLaunchRequest } from '../../../../shared/agent-pane-launch-request'
+import type { AgentPaneLaunchRequest } from '../../../../shared/agent-launch/contracts/agent-pane-launch-request'
 import type { PairedTerminalTabCloseIntentSlice } from './paired-terminal-tab-close-intent-actions'
 
 export type TerminalState = {
@@ -57,7 +64,8 @@ export type TerminalState = {
   pendingStartupByTabId: Record<
     string,
     {
-      command: string
+      /** Absent when the startup carries only spawn env, e.g. a paired viewer's plain terminal (#39852). */
+      command?: string
       delivery?: 'terminal-paste'
       startupCommandDelivery?: StartupCommandDelivery
       env?: Record<string, string>
@@ -68,8 +76,10 @@ export type TerminalState = {
       resumeSource?: SavedResumeStartupSource
       launchToken?: string
       launchAgent?: TuiAgent
+      trustWorktreeId?: string
       /** The agent launch the pane's own spawn starts, instead of `command`. */
       agentLaunch?: AgentPaneLaunchRequest
+      freshAgentLaunch?: FreshWorkspaceAgentLaunch
       agentArgsOverride?: string | null
       draftPrompt?: string
       sessionOptions?: Record<string, SessionOptionValue>

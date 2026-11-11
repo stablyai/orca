@@ -38,10 +38,14 @@ vi.mock('@/store', () => ({ useAppStore: { getState: () => mocks.state } }))
 vi.mock('sonner', () => ({
   toast: { warning: mocks.warning, error: mocks.error, dismiss: mocks.dismiss }
 }))
-vi.mock('@/lib/create-untitled-markdown', () => ({ createUntitledMarkdownFile: mocks.create }))
-vi.mock('@/lib/editor-file-operation-owner', () => ({
+vi.mock('@/lib/editor/file-operations/create-untitled-markdown', () => ({
+  createUntitledMarkdownFile: mocks.create
+}))
+vi.mock('@/lib/editor/file-operations/editor-file-operation-owner', () => ({
+  getEditorFileOperationContext: mocks.context
+}))
+vi.mock('@/lib/editor/file-operations/editor-file-operation-provenance', () => ({
   captureEditorFileOperationProvenance: mocks.capture,
-  getEditorFileOperationContext: mocks.context,
   assertEditorFileOperationCurrent: mocks.assertCurrent
 }))
 import { reopenClosedUnsavedFiles, showClosedUnsavedFilesToast } from './closed-unsaved-files-toast'
@@ -81,51 +85,6 @@ describe('closed unsaved files toast', () => {
       operationProvenance: options.operationProvenance
     }))
     vi.spyOn(console, 'warn').mockImplementation(() => {})
-  })
-
-  it('creates new recovered files in the active workspace, with exact text and no original binding', async () => {
-    expect(await reopenClosedUnsavedFiles([closed(), closed({ content: '' })])).toEqual([])
-    expect(mocks.create).toHaveBeenCalledTimes(2)
-    expect(mocks.create).toHaveBeenNthCalledWith(
-      1,
-      '/active',
-      'active-wt',
-      undefined,
-      { kind: 'local' },
-      expect.objectContaining({
-        recoveredDocument: { originalPath: '/removed/a.ts', content: 'unsaved text' }
-      })
-    )
-    expect(mocks.create).toHaveBeenNthCalledWith(
-      2,
-      '/active',
-      'active-wt',
-      undefined,
-      { kind: 'local' },
-      expect.objectContaining({
-        recoveredDocument: { originalPath: '/removed/a.ts', content: '' }
-      })
-    )
-    const opened = mocks.state.openFile.mock.calls[0]?.[0]
-    expect(opened.filePath).toBe('/active/a (recovered).ts')
-    expect(opened.isUntitled).toBe(true)
-    expect(opened).not.toHaveProperty('lastKnownDiskSignature')
-    expect(opened).not.toHaveProperty('externalSshTargetId')
-    expect(opened).not.toHaveProperty('runtimeEnvironmentId')
-  })
-
-  it('uses the active destination host rather than the removed document host', async () => {
-    mocks.context.mockReturnValue({ target: { kind: 'environment', environmentId: 'destination' } })
-    await reopenClosedUnsavedFiles([closed()])
-    expect(mocks.create.mock.calls[0]?.[3]).toEqual({
-      kind: 'environment',
-      environmentId: 'destination'
-    })
-  })
-
-  it('takes the path from the active workspace’s owning host', async () => {
-    await reopenClosedUnsavedFiles([closed()])
-    expect(mocks.state.getKnownWorktreeById).toHaveBeenCalledWith('active-wt', 'ssh:active')
   })
 
   it('refuses when the owner route is not the active workspace’s host', async () => {

@@ -62,17 +62,16 @@ export const C1_PAGE_CLOSURE: PageClosurePins = {
   },
   'host-worktree-refresh': {
     'host-worktree-refresh-stream': 'write-ordinal',
-    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-1-1':
-      'result-absent-stream-release',
-    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-1-2':
-      'result-absent-stream-release',
-    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-1-3':
-      'result-absent-stream-release',
+    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-1-1': 'write-ordinal',
+    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-1-2': 'result-absent-observation',
+    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-1-3': 'result-absent-observation',
     'matrix-host-worktree-refresh-runtime.clientevents.subscribe-2-1': 'write-ordinal'
   },
   'host.worktree-actions': {
     'host-worktree-actions-pin-open-delete': 'identical',
+    'host-worktree-delete-archive-hook-failed': 'identical',
     'host-worktree-delete-refused': 'identical',
+    'matrix-host.worktree-actions-repo.hooks-1': 'result-absent-settlement',
     'matrix-host.worktree-actions-worktree.activate-1': 'result-absent-settlement',
     'matrix-host.worktree-actions-worktree.rm-1': 'result-absent-settlement',
     'matrix-host.worktree-actions-worktree.set-1': 'result-absent-settlement'

@@ -1,5 +1,5 @@
 import type { Repo } from '../repo-types'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import type { DetectedWorktreeListResult, Worktree } from './types'
 import { parseWorkspaceKey } from '../workspace-scope'
 import { getRepoIdFromWorktreeId } from './id'

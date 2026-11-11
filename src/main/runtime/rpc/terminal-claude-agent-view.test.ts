@@ -1,8 +1,8 @@
-import './unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { agentHookServer } from '../../agent-hooks/server'
+import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { RpcDispatcher } from './dispatcher'
+import { createTerminalInputReservation } from '../terminal/input/terminal-input-admission'
 import { TERMINAL_CLAUDE_AGENT_VIEW_METHODS } from './methods/terminal/terminal-claude-agent-view-method'
 
 const identity = {
@@ -86,7 +86,9 @@ it.each(['permission', 'new-session', 'new-mod', 'new-pty', 'mobile-lock'] as co
             })
           })
         }
+        expect(options?.inputSource).toBe('desktop')
         await options?.beforeWrite?.('pty')
+        createTerminalInputReservation(runtime, options?.inputSource, undefined)('pty')
         write()
         return { handle: 'terminal', accepted: true, bytesWritten: 8 }
       })

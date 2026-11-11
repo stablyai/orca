@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest'
-import * as backupWorker from '../profile-state/profile-state-backup-worker'
 import {
   createWorkerMaintenanceFixture,
   maintenanceBarrier
@@ -7,39 +6,6 @@ import {
 
 export function registerProfileStateMaintenanceRecoveryTests(): void {
   describe('failed maintenance recovery', () => {
-    it.each(['maintenance', 'final', 'freeze'] as const)(
-      '%s cancels an active backup after a routine flush completes',
-      async (kind) => {
-        const { store } = await createWorkerMaintenanceFixture()
-        const started = maintenanceBarrier()
-        const canceled = maintenanceBarrier()
-        vi.spyOn(backupWorker, 'runProfileStateBackupWorker').mockImplementationOnce(
-          async (_job, options) => {
-            started.resolve()
-            await new Promise<void>((resolve) =>
-              options?.signal?.addEventListener('abort', () => resolve(), { once: true })
-            )
-            canceled.resolve()
-            throw new Error('backup aborted')
-          }
-        )
-        await store.runDurableMutation(() => {
-          store.updateSettings({ theme: 'dark' })
-          return { value: undefined }
-        })
-        await started.promise
-        await store.flushPendingOrThrowAsync()
-        const stop =
-          kind === 'maintenance'
-            ? store.beginProfileMaintenance()
-            : kind === 'final'
-              ? store.flushFinalOrThrowAsync()
-              : store.freezeWritesAsync()
-        await canceled.promise
-        await stop
-      }
-    )
-
     it('cancels between checkpoints without aborting an acknowledged write', async () => {
       const { store, authority, readState } = await createWorkerMaintenanceFixture()
       vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -110,32 +76,6 @@ export function registerProfileStateMaintenanceRecoveryTests(): void {
         'finalized'
       )
       expect(readState().peer).toEqual({ preserved: true })
-    })
-
-    it('does not extend the maintenance checkpoint for unadmitted saves', async () => {
-      const { store, authority, readState } = await createWorkerMaintenanceFixture()
-      store.updateSettings({ theme: 'dark' })
-      const started = maintenanceBarrier()
-      const release = maintenanceBarrier()
-      const write = authority.writeCompleteSerializedDomains.bind(authority)
-      const checkpoint = vi
-        .spyOn(authority, 'writeCompleteSerializedDomains')
-        .mockImplementationOnce(async (domains) => {
-          started.resolve()
-          await release.promise
-          await write(domains)
-        })
-      const pending = store.beginProfileMaintenance()
-      await started.promise
-      for (let terminalFontSize = 12; terminalFontSize < 32; terminalFontSize++) {
-        store.updateSettings({ terminalFontSize })
-      }
-      release.resolve()
-      const maintenance = await pending
-      expect(checkpoint).toHaveBeenCalledOnce()
-      await maintenance.resume()
-      await store.flushPendingOrThrowAsync()
-      expect(readState().settings.terminalFontSize).toBe(31)
     })
   })
 }

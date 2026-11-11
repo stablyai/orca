@@ -1,22 +1,24 @@
-import type { TuiAgent } from '../../../src/shared/tui-agent'
-import type { RpcClient } from '../transport/rpc-client'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { resolveComposerMrBase, resolveComposerPrBase } from './composer-source-base-resolve'
-import type {
-  MobileComposerCreateSelection,
-  MobileLinkedWorkItem
-} from './mobile-composer-source-types'
+import type { MobileComposerCreateSelection } from './mobile-composer-source-types'
 import { resolveMobileWorkspaceCreateName } from './mobile-workspace-name'
 import type { WorkspaceAgentChoice } from './workspace-agent-selection'
+import { toTaskItem } from './composer-work-item-task'
 import {
   startupAgentCreateFields,
   buildTaskWorkspaceCreateParams,
   type WorkspaceCreateParams,
-  type WorkspaceCreateSetupDecision,
-  type WorkspaceCreateTaskItem
+  type WorkspaceCreateSetupDecision
 } from './workspace-create-params'
-import { createWorktreeWithNameRetry, type WorktreeCreateResult } from './worktree-create-retry'
+import {
+  createWorktreeWithNameRetry,
+  type WorktreeCreateParent,
+  type WorktreeCreateResult
+} from './worktree-create-retry'
 import type { WorktreeCreateAgentLaunch } from './agent-launch-request'
 import type { WorktreeCreateIdempotencyProbe } from './worktree-create-idempotency-policy'
+import { getClientWorktreeCreateCandidate } from '../../../src/shared/new-workspace/worktree-create-retry-policy'
 
 // Host resolution applies agent permission flags and shell quoting.
 export type WorkspaceCreateAgentBundle = {
@@ -34,6 +36,8 @@ export type CreateWorkspaceFromComposerArgs = {
   note: string | undefined
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
   agentLaunchSupported: WorktreeCreateAgentLaunch['supported']
+  branchIntentSupported?: boolean | Promise<boolean>
+  parent?: WorktreeCreateParent
 }
 
 export async function createWorkspaceFromComposerSource(
@@ -55,55 +59,6 @@ function resolveComposerAgentLaunch(
   return agentId ? { agent: agentId, supported } : undefined
 }
 
-function toTaskItem(item: MobileLinkedWorkItem, targetRepoId: string): WorkspaceCreateTaskItem {
-  if (item.provider === 'github') {
-    return {
-      provider: 'github',
-      source: {
-        type: item.type === 'pr' ? 'pr' : 'issue',
-        repoId: item.repoId ?? targetRepoId,
-        number: item.number,
-        title: item.title,
-        url: item.url
-      }
-    }
-  }
-  if (item.provider === 'gitlab') {
-    return {
-      provider: 'gitlab',
-      source: {
-        type: item.type === 'mr' ? 'mr' : 'issue',
-        repoId: item.repoId ?? targetRepoId,
-        number: item.number,
-        title: item.title,
-        url: item.url
-      }
-    }
-  }
-  if (item.provider === 'jira') {
-    return {
-      provider: 'jira',
-      source: {
-        key: item.jiraIdentifier ?? '',
-        title: item.title,
-        url: item.url
-      }
-    }
-  }
-  return {
-    provider: 'linear',
-    source: {
-      identifier: item.linearIdentifier ?? '',
-      title: item.title,
-      url: item.url,
-      ...(item.linearWorkspaceId ? { workspaceId: item.linearWorkspaceId } : {}),
-      ...(item.linearOrganizationUrlKey
-        ? { organizationUrlKey: item.linearOrganizationUrlKey }
-        : {})
-    }
-  }
-}
-
 async function createWorkItemWorkspace(args: {
   client: RpcClient
   selection: Extract<MobileComposerCreateSelection, { kind: 'work-item' }>
@@ -114,6 +69,7 @@ async function createWorkItemWorkspace(args: {
   nameIsAutoManaged?: boolean
   note: string | undefined
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
+  parent?: WorktreeCreateParent
 }): Promise<WorktreeCreateResult> {
   const { client, selection, targetRepoId, setupDecision, agent, workspaceName, note } = args
   const item = selection.item
@@ -155,6 +111,7 @@ async function createWorkItemWorkspace(args: {
   const baseName = String(params.name)
   // Keep linked work items on terminals: structured sessions cannot hold their unsent URL draft and would submit it as a turn.
   return createWorktreeWithNameRetry({
+    parent: args.parent,
     client,
     baseName,
     worktreeCreateIdempotency: args.worktreeCreateIdempotency,
@@ -173,6 +130,8 @@ async function createBranchWorkspace(args: {
   note: string | undefined
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
   agentLaunchSupported: WorktreeCreateAgentLaunch['supported']
+  branchIntentSupported?: boolean | Promise<boolean>
+  parent?: WorktreeCreateParent
 }): Promise<WorktreeCreateResult> {
   const {
     client,
@@ -203,11 +162,13 @@ async function createBranchWorkspace(args: {
       fallback: selection.localBranchName
     })
     return createWorktreeWithNameRetry({
+      parent: args.parent,
       client,
       baseName,
       worktreeCreateIdempotency: args.worktreeCreateIdempotency,
       ...(agentLaunch ? { agentLaunch } : {}),
       maxAttempts: 1,
+      branchIntentSupported: args.branchIntentSupported,
       buildParams: (name) =>
         applyCommon({
           repo: `id:${targetRepoId}`,
@@ -217,7 +178,8 @@ async function createBranchWorkspace(args: {
             : {}),
           setupDecision,
           baseBranch: selection.refName,
-          branchNameOverride: selection.localBranchName
+          branchNameOverride: selection.localBranchName,
+          branchIntent: 'open-existing-v2'
         })
     })
   }
@@ -227,22 +189,28 @@ async function createBranchWorkspace(args: {
     fallback: selection.branchNameOverride || selection.localBranchName
   })
   return createWorktreeWithNameRetry({
+    parent: args.parent,
     client,
     baseName,
     worktreeCreateIdempotency: args.worktreeCreateIdempotency,
+    branchIntentSupported: args.branchIntentSupported,
     ...(agentLaunch ? { agentLaunch } : {}),
-    buildParams: (candidate) => {
+    buildParams: (candidate, attempt) => {
       const params: WorkspaceCreateParams = {
         repo: `id:${targetRepoId}`,
         name: candidate,
         setupDecision,
+        branchIntent: 'create-new',
         baseBranch: selection.baseBranch,
         ...(manualDisplayName
           ? { displayName: manualDisplayName, displayNameKind: 'user' as const }
           : {})
       }
       if (selection.branchNameOverride) {
-        params.branchNameOverride = candidate
+        params.branchNameOverride = getClientWorktreeCreateCandidate(
+          selection.branchNameOverride,
+          attempt
+        )
       }
       return applyCommon(params)
     }
@@ -260,6 +228,7 @@ async function createNewBranchWorkspace(args: {
   note: string | undefined
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
   agentLaunchSupported: WorktreeCreateAgentLaunch['supported']
+  parent?: WorktreeCreateParent
 }): Promise<WorktreeCreateResult> {
   const {
     client,
@@ -277,6 +246,7 @@ async function createNewBranchWorkspace(args: {
   const comment = note?.trim()
   // Preserve typed git branch names, including slashes; sanitize only the folder, and retry suffixes against the branch name.
   return createWorktreeWithNameRetry({
+    parent: args.parent,
     client,
     baseName: selection.branchName,
     worktreeCreateIdempotency: args.worktreeCreateIdempotency,

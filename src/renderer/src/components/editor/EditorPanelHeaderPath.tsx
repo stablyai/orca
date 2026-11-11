@@ -1,4 +1,4 @@
-import { ImeInput } from '@/lib/ime-text-field'
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import { useEffect, useRef, useState } from 'react'
 import { Eye, Pencil } from 'lucide-react'
 import {
@@ -10,11 +10,11 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
-import { translate } from '@/i18n/i18n'
-import type { OpenFile } from '@/store/slices/editor'
+import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
+import { useTranslate } from '@/i18n/use-translate'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import { useEditorHeaderFileRename } from './editor-header-file-rename'
 import { getEditorHeaderCopyState } from './editor-header'
 import { splitPathForDisplay } from './editor-path-display'
@@ -35,10 +35,11 @@ export function EditorPanelHeaderPath({
   onCopyPath,
   onOpenMarkdownPreview
 }: EditorPanelHeaderPathProps): React.JSX.Element {
+  const t = useTranslate()
   const [pathMenuOpen, setPathMenuOpen] = useState(false)
   const [pathMenuPoint, setPathMenuPoint] = useState({ x: 0, y: 0 })
   const skipMenuFocusRestoreRef = useRef(false)
-  const headerCopyState = getEditorHeaderCopyState(activeFile)
+  const headerCopyState = getEditorHeaderCopyState(activeFile, t)
   const displayPath = splitPathForDisplay(headerCopyState.pathLabel)
   const canCopyHeaderPath = headerCopyState.copyText !== null
   // Why: virtual editor tabs use synthetic ids instead of on-disk paths.
@@ -75,7 +76,7 @@ export function EditorPanelHeaderPath({
           <ImeInput
             ref={renameInputRef}
             data-editor-header-rename-input="true"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.editor.EditorPanelHeader.1bb1e226ec',
               'Rename file {{value0}}',
               { value0: currentFileName }
@@ -137,7 +138,7 @@ export function EditorPanelHeaderPath({
           />
         </DropdownMenuTrigger>
         <DropdownMenuContent
-          className="w-56"
+          className="min-w-56"
           sideOffset={0}
           align="start"
           onCloseAutoFocus={(event) => {
@@ -156,7 +157,7 @@ export function EditorPanelHeaderPath({
             }}
           >
             <Pencil className="w-3.5 h-3.5 mr-1.5" />
-            {translate('auto.components.editor.EditorPanelHeader.84cdc0794b', 'Rename')}
+            {t('auto.components.editor.EditorPanelHeader.84cdc0794b', 'Rename')}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           {!isVirtualEditorTab && (
@@ -167,10 +168,7 @@ export function EditorPanelHeaderPath({
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={onOpenMarkdownPreview}>
                 <Eye className="w-3.5 h-3.5 mr-1.5" />
-                {translate(
-                  'auto.components.editor.EditorPanelHeader.4157f3cbf3',
-                  'Open Markdown Preview'
-                )}
+                {t('auto.components.editor.EditorPanelHeader.4157f3cbf3', 'Open Markdown Preview')}
                 <DropdownMenuShortcut>{markdownPreviewShortcutLabel}</DropdownMenuShortcut>
               </DropdownMenuItem>
             </>

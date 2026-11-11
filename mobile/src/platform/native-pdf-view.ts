@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { Platform } from 'react-native'
-import { Directory, File as FsFile, Paths } from 'expo-file-system'
-import { useFocusEffect } from 'expo-router'
+import { File as FsFile } from 'expo-file-system'
+import { useFocusEffect, useNavigation } from 'expo-router'
 import { presentPdf } from '../../modules/orca-mobile-web-shell/src'
 import { getRuntimePathBasename } from '../../../src/shared/cross-platform-path'
 import { PDF_MIME_TYPE } from '../files/mobile-file-media'
@@ -15,10 +15,10 @@ import {
   type BridgePdfOpenParams
 } from '../mobile-web-shell/bridge/bridge-native-verbs'
 import { BridgeNativeVerbRefusedError } from '../mobile-web-shell/bridge-host-errors'
-import { scopeRpcClientToExecutionHost } from '../transport/execution-host-scoped-rpc-client'
-import { useHostClient } from '../transport/host-client-hooks'
-import { discardUnreturnedMediaFile } from './native-media-device'
-import type { RpcClient } from '../transport/rpc-client'
+import { scopeRpcClientToExecutionHost } from '../worktree/execution-host-scoped-rpc-client'
+import { useHostClient } from '../transport/connection/host-client-hooks'
+import { discardUnreturnedMediaFile, freshCacheFolder } from './native-media-device'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 
 function pdfFileSink(file: FsFile): MobileMediaSink {
   file.create({ overwrite: true })
@@ -36,15 +36,19 @@ function pdfFileSink(file: FsFile): MobileMediaSink {
   }
 }
 
-// An external viewer may still read the last PDF, so earlier ones are cleared only when the next starts.
-// Each open gets its own folder so an aborted download's cleanup cannot delete its replacement.
-export function createNativePdfViewer(readClient: () => RpcClient | null) {
+export function createNativePdfViewer(
+  readClient: () => RpcClient | null,
+  isFocused: () => boolean
+) {
   let current: AbortController | null = null
   const open = async ({
     worktreeId,
     relativePath,
     executionHost
   }: BridgePdfOpenParams): Promise<Record<string, never>> => {
+    if (!isFocused()) {
+      throw new Error('the PDF page is not focused')
+    }
     const client = readClient()
     if (!client) {
       throw new Error('no desktop connection to download the PDF from')
@@ -52,12 +56,7 @@ export function createNativePdfViewer(readClient: () => RpcClient | null) {
     current?.abort()
     const controller = new AbortController()
     current = controller
-    const root = new Directory(Paths.cache, 'orca-pdf')
-    if (root.exists) {
-      root.delete()
-    }
-    const folder = new Directory(root, `${Date.now()}-${Math.random().toString(36).slice(2)}`)
-    folder.create({ intermediates: true })
+    const folder = freshCacheFolder('orca-pdf')
     const uri = await downloadMobileFileMedia(
       executionHost ? scopeRpcClientToExecutionHost(client, executionHost) : client,
       { worktreeId, relativePath, mimeType: PDF_MIME_TYPE },
@@ -94,11 +93,15 @@ export function useNativePdfViewer(
   sessionId: string | null
 ): (params: unknown) => Promise<unknown> {
   const { client } = useHostClient(hostId)
+  const navigation = useNavigation()
   const clientRef = useRef(client)
   useLayoutEffect(() => {
     clientRef.current = client
   }, [client])
-  const viewer = useMemo(() => createNativePdfViewer(() => clientRef.current), [sessionId])
+  const viewer = useMemo(
+    () => createNativePdfViewer(() => clientRef.current, navigation.isFocused),
+    [navigation, sessionId]
+  )
   useFocusEffect(useCallback(() => () => viewer.dispose(), [viewer]))
   return viewer.serve
 }

@@ -15,29 +15,6 @@ function credential(claims: Record<string, unknown> = {}): string {
 }
 
 describe('native Antigravity credential format', () => {
-  it('reads the installed macOS go-keyring wrapper and preserves the entire native blob', () => {
-    const contents = credential({
-      iss: 'https://accounts.google.com',
-      sub: 'synthetic-subject',
-      email: 'test@example.invalid',
-      email_verified: true
-    })
-    const decoded = decodeAntigravityKeychainValue(
-      `  ${encodeAntigravityKeychainValue(contents)}\n`
-    )
-    expect(parseAntigravityNativeCredential(decoded)).toEqual({
-      contents,
-      authMethod: 'consumer',
-      identity: {
-        issuer: 'https://accounts.google.com',
-        subject: 'synthetic-subject',
-        email: 'test@example.invalid'
-      },
-      accessToken: 'synthetic-access',
-      refreshToken: 'synthetic-refresh'
-    })
-  })
-
   it('accepts older hex wrappers, plain JSON, and UTF-8 account labels', () => {
     const contents = credential({ name: 'テスト' })
     const hex = `go-keyring-encoded:${Buffer.from(contents).toString('hex').toUpperCase()}`
@@ -84,15 +61,24 @@ describe('native Antigravity credential format', () => {
       ).identity
     ).toEqual({ issuer: 'https://accounts.google.com', subject: 'synthetic', email: null })
   })
-
-  it('retains credentials without an ID token, expiry or refresh token', () => {
-    const contents = '{ "auth_method": "future", "token": { "access_token": "synthetic" } }'
-    expect(parseAntigravityNativeCredential(contents)).toEqual({
+  it('preserves the legacy direct OAuth token without inventing an auth method', () => {
+    const contents =
+      '{"access_token":"fixture-only","refresh_token":"fixture-refresh","expiry":"2030-01-01T00:00:00Z"}'
+    expect(parseAntigravityNativeCredential(contents)).toMatchObject({
       contents,
-      authMethod: 'future',
-      identity: null,
-      accessToken: 'synthetic',
-      refreshToken: null
+      authMethod: '',
+      accessToken: 'fixture-only',
+      refreshToken: 'fixture-refresh'
     })
+    for (const authMethod of ['', undefined]) {
+      const rewritten = JSON.stringify({ token: JSON.parse(contents), auth_method: authMethod })
+      expect(parseAntigravityNativeCredential(rewritten)).toMatchObject({
+        contents: rewritten,
+        authMethod: ''
+      })
+    }
+    expect(() =>
+      parseAntigravityNativeCredential('{"auth_method":"consumer","access_token":"fixture-only"}')
+    ).toThrow('could not be decoded')
   })
 })

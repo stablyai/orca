@@ -1,5 +1,5 @@
-import { z } from 'zod'
-import { isAgentSessionOptions } from '../agent-session-record'
+import * as z from 'zod'
+import { isAgentSessionOptions } from '../agent-session/lifecycle/agent-session-record'
 import { measureUtf8ByteLength } from '../utf8-byte-limits'
 
 export const AgentSessionOptions = z.record(z.string(), z.string()).refine(isAgentSessionOptions)
@@ -7,6 +7,13 @@ export const AgentSessionOptions = z.record(z.string(), z.string()).refine(isAge
 export const MAX_PROMPT_BYTES = 256 * 1024
 export const MAX_BLOCKS = 64
 export const MAX_OPTION_LABEL = 512
+
+export const CompactInstructions = z
+  .string()
+  .min(1)
+  .refine(
+    (text) => !measureUtf8ByteLength(text, { stopAfterBytes: MAX_PROMPT_BYTES }).exceededLimit
+  )
 
 export const SendImageRefBlock = z
   .object({

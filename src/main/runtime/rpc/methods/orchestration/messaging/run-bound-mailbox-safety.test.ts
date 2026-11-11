@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcContext } from '../../../core'
-import type { OrchestrationDb, RunRow } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import type { RunRow, DispatchContextRow } from '../../../../orchestration/db/orchestration-records'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { DispatchContextRow } from '../../../../orchestration/types'
+
 import {
   createRootDispatch,
   reattachDispatchConsumer
@@ -222,18 +223,6 @@ describe('mail for a lead whose pane coordinates its own Run', () => {
     return call('orchestration.check', { terminal: 'term_lead', ...params })
   }
 
-  function deliveryIdOf(result: unknown): string {
-    if (
-      typeof result === 'object' &&
-      result !== null &&
-      'deliveryId' in result &&
-      typeof result.deliveryId === 'string'
-    ) {
-      return result.deliveryId
-    }
-    throw new Error('check returned no delivery')
-  }
-
   it('routes dispatch:<id> mail to the Run the assignee pane now coordinates', async () => {
     setup()
     const leadRun = bindLeadRun()
@@ -270,7 +259,7 @@ describe('mail for a lead whose pane coordinates its own Run', () => {
     const first = await leadInbox()
     expect(first).toMatchObject({ messages: [{ subject: 'Sent before the lead bound a Run' }] })
 
-    const second = await leadInbox({ ack: deliveryIdOf(first) })
+    const second = await leadInbox()
     expect(second).toMatchObject({ messages: [{ subject: 'Sub-worker report' }] })
   })
 
@@ -339,7 +328,7 @@ describe('mail for a lead whose pane coordinates its own Run', () => {
     expect(result).not.toHaveProperty('warnings')
   })
 
-  it('keeps a reply on the raw handle when the sender has no Run or live pane', async () => {
+  it('refuses a reply when the sender has no Run or live pane, storing nothing', async () => {
     setup()
     const note = db.insertMessage({
       from: 'term_offline',
@@ -348,13 +337,11 @@ describe('mail for a lead whose pane coordinates its own Run', () => {
       runId: rootRun.id
     })
 
-    const reply = await call('orchestration.reply', {
-      id: note.id,
-      from: 'term_coord',
-      body: 'Ack'
-    })
-
-    expect(reply).toMatchObject({ message: { to_handle: 'term_offline', run_id: rootRun.id } })
+    await expect(
+      call('orchestration.reply', { id: note.id, from: 'term_coord', body: 'Ack' })
+    ).rejects.toMatchObject({ code: 'terminal_not_found' })
+    expect(db.getMessageById(note.id)?.read).toBe(0)
+    expect(db.getAllMessagesForHandle('term_offline')).toHaveLength(0)
   })
 })
 
@@ -440,14 +427,14 @@ describe('Run-bound lead mailbox boundaries', () => {
     runMail()
     const first = await check()
     expect(first).toMatchObject({ runId: dispatch.run_id, messages: [{ id: old.id }] })
-    expect(await check({ ack: deliveryId(first) })).toMatchObject({
+    expect(await check()).toMatchObject({
       runId: leadRun.id,
       messages: [{ subject: 'Run report' }]
     })
     expect(state.db.getMessageById(privateMail.id)).toMatchObject({ read: 0, run_id: foreign.id })
   })
 
-  it('treats types as a wake condition and replays the entire residual FIFO batch', async () => {
+  it('treats types as a wake condition and returns the entire residual FIFO batch', async () => {
     residual('older status')
     residual('decision needed', 'question')
     runMail()
@@ -455,13 +442,8 @@ describe('Run-bound lead mailbox boundaries', () => {
     expect(first).toMatchObject({
       messages: [{ subject: 'older status' }, { subject: 'decision needed' }]
     })
-    expect(await check({ wait: true, types: 'worker_done' })).toMatchObject({
-      deliveryId: deliveryId(first),
-      replayed: true
-    })
-    expect(await check({ ack: deliveryId(first) })).toMatchObject({
+    expect(await check()).toMatchObject({
       runId: leadRun.id,
-      acknowledged: deliveryId(first),
       messages: [{ subject: 'Run report' }]
     })
   })
@@ -484,16 +466,12 @@ describe('Run-bound lead mailbox boundaries', () => {
     }
   )
 
-  it('replays an outstanding Run batch before exposing older nonmatching residual mail', async () => {
+  it('hands older nonmatching residual mail to the check after a filtered Run wait', async () => {
     residual('status')
     runMail()
     const first = await check({ wait: true, types: 'question' })
     expect(first).toMatchObject({ runId: leadRun.id })
-    expect(await check()).toMatchObject({ deliveryId: deliveryId(first), replayed: true })
-    expect(await check({ ack: deliveryId(first) })).toMatchObject({
-      acknowledged: deliveryId(first),
-      messages: [{ subject: 'status' }]
-    })
+    expect(await check()).toMatchObject({ messages: [{ subject: 'status' }] })
   })
 
   it('keeps explicit Run checks scoped and refuses the parent Run', async () => {
@@ -580,20 +558,18 @@ describe('Run-bound lead mailbox boundaries', () => {
     expect(state.db.hasOutstandingMailboxDelivery(`dispatch:${dispatch.id}`)).toBe(false)
   })
 
-  it('refuses an explicit sender Run that would silently redirect into another Run', async () => {
-    await expect(
+  it('lets the owning Run address its Dispatch after the assignee binds a child Run', async () => {
+    const send = (run: string) =>
       h.call(
         'orchestration.send',
-        {
-          from: 'term_coord',
-          to: `dispatch:${dispatch.id}`,
-          run: dispatch.run_id,
-          subject: 'wrong scope'
-        },
+        { from: 'term_coord', to: `dispatch:${dispatch.id}`, run, subject: `via ${run}` },
         state.ctx
       )
-    ).rejects.toMatchObject({ code: 'recipient_run_mismatch' })
-    expect(state.db.getInbox()).toEqual([])
+    await expect(send(leadRun.id)).rejects.toMatchObject({ code: 'dispatch_run_mismatch' })
+    expect(await send(dispatch.run_id)).toMatchObject({
+      message: { to_handle: `run:${leadRun.id}`, run_id: leadRun.id },
+      warnings: [{ code: 'recipient_run_bound_redirect' }]
+    })
   })
 
   it('wakes a parked Run check for Dispatch mail sent after binding', async () => {

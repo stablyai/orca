@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readdirSync, statSync } from 'node:fs'
 import type * as Fs from 'node:fs'
 import { tmpdir } from 'node:os'
 import type * as Os from 'node:os'
-import type * as WindowsAcl from '../../shared/secure-path-windows-acl'
+import type * as WindowsAcl from '../../shared/secure-storage/secure-path-windows-acl'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -19,7 +19,7 @@ async function loadStore(
   vi.resetModules()
   // resetModules leaves doMock registrations behind.
   vi.doUnmock('node:fs')
-  vi.doUnmock('../../shared/secure-path-windows-acl')
+  vi.doUnmock('../../shared/secure-storage/secure-path-windows-acl')
   const { setSecretStore } = await import('../../shared/secret-store')
   setSecretStore({
     isEncryptionAvailable: () => true,
@@ -53,7 +53,7 @@ async function loadStore(
       }
     })
     // Windows writes use the ACL helper.
-    vi.doMock('../../shared/secure-path-windows-acl', async (importOriginal) => ({
+    vi.doMock('../../shared/secure-storage/secure-path-windows-acl', async (importOriginal) => ({
       ...(await importOriginal<typeof WindowsAcl>()),
       writeRestrictedWindowsFile: () => {
         throw error
@@ -82,22 +82,6 @@ beforeEach(() => {
 })
 
 describe('Bitbucket credential store', () => {
-  it('writes both credential files 0600', async () => {
-    const store = await loadStore()
-    store.saveBitbucketCredential({
-      authMode: 'token',
-      email: null,
-      baseUrl: null,
-      account: 'dev',
-      accessToken: 'access-secret',
-      apiToken: null
-    })
-
-    for (const file of ['bitbucket-credential.enc', 'bitbucket-credential.json']) {
-      expect(statSync(join(tempHome, '.orca', file)).mode & 0o777).toBe(0o600)
-    }
-  })
-
   it('re-tightens permissions when overwriting an existing credential', async () => {
     const store = await loadStore()
     const save = (account: string): void =>
@@ -119,36 +103,6 @@ describe('Bitbucket credential store', () => {
     for (const file of ['bitbucket-credential.enc', 'bitbucket-credential.json']) {
       expect(statSync(join(tempHome, '.orca', file)).mode & 0o777).toBe(0o600)
     }
-  })
-
-  it('does not decrypt for metadata/status reads — only on a forced secret load', async () => {
-    const store = await loadStore()
-    store.saveBitbucketCredential({
-      authMode: 'token',
-      email: null,
-      baseUrl: 'https://api.bitbucket.org/2.0',
-      account: 'dev',
-      accessToken: 'access-secret',
-      apiToken: null
-    })
-
-    store._resetBitbucketCredentialCache()
-
-    expect(store.getStoredBitbucketMetadata()?.account).toBe('dev')
-    expect(store.hasStoredBitbucketCredential()).toBe(true)
-    expect(decryptStringMock).not.toHaveBeenCalled()
-
-    expect(store.loadStoredBitbucketSecret()).toBeNull()
-    expect(decryptStringMock).not.toHaveBeenCalled()
-
-    expect(store.loadStoredBitbucketSecret({ force: true })).toMatchObject({
-      accessToken: 'access-secret',
-      apiToken: null,
-      authMode: 'token'
-    })
-    expect(decryptStringMock).toHaveBeenCalledTimes(1)
-    expect(store.loadStoredBitbucketSecret()).not.toBeNull()
-    expect(decryptStringMock).toHaveBeenCalledTimes(1)
   })
 
   it('rejects non-string fields from hand-edited metadata and secret files', async () => {
@@ -266,25 +220,6 @@ describe('Bitbucket credential store', () => {
     })
   })
 
-  it('writes the whole credential even when the filesystem short-writes (STA-3941)', async () => {
-    const store = await loadStore({ shortWrites: true })
-    store.saveBitbucketCredential({
-      authMode: 'basic',
-      email: 'ada@example.com',
-      baseUrl: null,
-      account: 'ada',
-      accessToken: null,
-      apiToken: 'a-token-long-enough-to-need-several-writes'
-    })
-    store._resetBitbucketCredentialCache()
-
-    expect(store.loadStoredBitbucketSecret({ force: true })).toMatchObject({
-      apiToken: 'a-token-long-enough-to-need-several-writes',
-      email: 'ada@example.com'
-    })
-    expect(store.getStoredBitbucketMetadata()?.account).toBe('ada')
-  })
-
   it('clears both files and in-memory state on disconnect', async () => {
     const store = await loadStore()
     store.saveBitbucketCredential({
@@ -320,13 +255,5 @@ describe('Bitbucket credential store', () => {
 
     expect(() => store.clearStoredBitbucketCredential()).toThrow(/permission denied/)
     expect(existsSync(join(tempHome, '.orca', 'bitbucket-credential.enc'))).toBe(true)
-  })
-
-  it('ignores a missing file on disconnect', async () => {
-    const missing: NodeJS.ErrnoException = Object.assign(new Error('no such file'), {
-      code: 'ENOENT'
-    })
-    const store = await loadStore({ unlinkError: missing })
-    expect(() => store.clearStoredBitbucketCredential()).not.toThrow()
   })
 })

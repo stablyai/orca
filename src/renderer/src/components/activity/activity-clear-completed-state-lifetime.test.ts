@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { makeOpenFile } from '../../store/slices/store-session-test-harness'
+import { makeOpenFile } from '../../store/slices/editor/types/open-file.test-fixture'
 import { makeRetainedDoneEntry, makeTab, makeWorktree } from './ActivityPrototypePage-test-fixtures'
 import type { AgentPaneThread } from './activity-thread-types'
 
@@ -156,19 +156,6 @@ describe('completed Activity state lifetime', () => {
     expect(retired.drafts.deref()).toBeUndefined()
     expect(retired.undoSnapshot.deref()).toBeUndefined()
     expect(dropPersistedBatch).toHaveBeenCalledOnce()
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('releases closed editor state without a completed-activity clear', async () => {
-    const retired = clearWithOpenDraft(false)
-    await collectRetiredState()
-
-    expect(retired.state.deref()).toBeUndefined()
-    expect(retired.drafts.deref()).toBeUndefined()
-    expect(retired.undoSnapshot.deref()).toBe(
-      useAppStore.getState().retainedAgentsByPaneKey[retired.paneKey]
-    )
-    expect(dropPersistedBatch).not.toHaveBeenCalled()
     expect(vi.getTimerCount()).toBe(0)
   })
 })

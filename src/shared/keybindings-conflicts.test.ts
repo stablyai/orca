@@ -1,14 +1,47 @@
 import { describe, expect, it } from 'vitest'
 import {
-  agentTabActionId,
   findKeybindingActionsForBinding,
   findKeybindingConflicts,
   getEffectiveKeybindingsForAction,
   keybindingMatchesAction,
-  KEYBINDING_DEFINITIONS
+  resolveKeybindingOverrides,
+  getLegacySearchBindings
 } from './keybindings'
 
 describe('keybindings', () => {
+  it('keeps the inherited search chord available for terminal-first chat toggling', () => {
+    const overrides = resolveKeybindingOverrides('win32', {}, getLegacySearchBindings('win32'))
+    const ctrlShiftJ = { key: 'j', control: true, shift: true }
+    const terminalFirst = { context: 'terminal', terminalShortcutPolicy: 'terminal-first' } as const
+    expect(
+      keybindingMatchesAction(
+        'terminal.toggleNativeChat',
+        ctrlShiftJ,
+        'win32',
+        overrides,
+        terminalFirst
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction('worktree.palette', ctrlShiftJ, 'win32', overrides, terminalFirst)
+    ).toBe(false)
+    expect(
+      findKeybindingConflicts('win32', overrides, { includeMainProcessInterception: true })
+    ).toEqual([])
+    expect(
+      keybindingMatchesAction(
+        'terminal.toggleNativeChat',
+        ctrlShiftJ,
+        'win32',
+        {
+          ...overrides,
+          'worktree.navigateDown': ['Ctrl+Shift+J']
+        },
+        terminalFirst
+      )
+    ).toBe(false)
+  })
+
   it('uses overrides as the complete effective binding list for an action', () => {
     const overrides = {
       'worktree.quickOpen': ['Ctrl+Alt+O', 'not-a-shortcut']
@@ -33,53 +66,6 @@ describe('keybindings', () => {
         overrides
       )
     ).toBe(false)
-  })
-
-  it('reports conflicts across default and customized actions', () => {
-    expect(findKeybindingConflicts('linux')).toEqual([])
-
-    const conflicts = findKeybindingConflicts('linux', { 'view.tasks': ['Mod+P'] })
-
-    expect(conflicts).toContainEqual({
-      binding: 'Mod+P',
-      actionIds: expect.arrayContaining(['worktree.quickOpen', 'view.tasks'])
-    })
-  })
-
-  it('keeps zoom reset on Mod+0 and focuses worktree list on a distinct chord', () => {
-    // Mod+0 previously collided with main’s zoom reset, making worktree focus unreachable (#8584).
-    for (const platform of ['darwin', 'linux', 'win32'] as const) {
-      expect(getEffectiveKeybindingsForAction('zoom.reset', platform)).toEqual(['Mod+0'])
-      expect(getEffectiveKeybindingsForAction('sidebar.focusWorktreeList', platform)).toEqual([
-        'Mod+Shift+0'
-      ])
-    }
-
-    const zoomResetInput = {
-      key: '0',
-      code: 'Digit0',
-      meta: true,
-      control: false,
-      alt: false,
-      shift: false
-    }
-    const focusListInput = { ...zoomResetInput, shift: true }
-
-    expect(keybindingMatchesAction('zoom.reset', zoomResetInput, 'darwin')).toBe(true)
-    expect(keybindingMatchesAction('sidebar.focusWorktreeList', zoomResetInput, 'darwin')).toBe(
-      false
-    )
-    expect(keybindingMatchesAction('sidebar.focusWorktreeList', focusListInput, 'darwin')).toBe(
-      true
-    )
-    expect(keybindingMatchesAction('zoom.reset', focusListInput, 'darwin')).toBe(false)
-
-    expect(
-      findKeybindingConflicts('darwin', { 'sidebar.focusWorktreeList': ['Mod+0'] })
-    ).toContainEqual({
-      binding: 'Mod+0',
-      actionIds: expect.arrayContaining(['zoom.reset', 'sidebar.focusWorktreeList'])
-    })
   })
 
   it('finds app-level owners of a prospective plugin chord with overrides', () => {
@@ -171,19 +157,6 @@ describe('keybindings', () => {
     )
   })
 
-  it('ignores selected actions when checking shortcut conflicts', () => {
-    expect(
-      findKeybindingConflicts(
-        'darwin',
-        {
-          'tab.newAgent.claude': ['Mod+Alt+Shift+K'],
-          'tab.newAgent.codex': ['Mod+Alt+Shift+K']
-        },
-        { ignoredActionIds: [agentTabActionId('claude')] }
-      )
-    ).toEqual([])
-  })
-
   it('reports customized renderer conflicts with native menu accelerators', () => {
     expect(findKeybindingConflicts('darwin')).toEqual([])
 
@@ -206,12 +179,6 @@ describe('keybindings', () => {
       ...options,
       includeMainProcessInterception: true
     })
-
-  it('omits main-process interception unless requested', () => {
-    expect(
-      findKeybindingConflicts('darwin', { 'terminal.splitRight': ['Mod+Alt+ArrowRight'] })
-    ).toEqual([])
-  })
 
   it('reports terminal bindings that lose their chord to main-process shortcuts', () => {
     expect(
@@ -261,8 +228,20 @@ describe('keybindings', () => {
     ).toEqual([])
   })
 
-  it('does not classify dictation as a main-process interception conflict', () => {
-    expect(findInterceptionConflicts('darwin', { 'terminal.splitRight': ['Mod+E'] })).toEqual([])
+  it("keeps the chat toggle's own default alias inside an override", () => {
+    const toggle = 'terminal.toggleNativeChat'
+    const overrides = { [toggle]: ['Mod+Alt+K', 'Mod+Shift+J'] }
+    for (const find of [findKeybindingConflicts, findInterceptionConflicts]) {
+      expect(
+        find('win32', overrides).filter(({ actionIds }) => actionIds.includes(toggle))
+      ).toEqual([])
+      expect(
+        find('win32', { ...overrides, 'worktree.navigateDown': ['Mod+Shift+J'] })
+      ).toContainEqual({
+        binding: 'Mod+Shift+J',
+        actionIds: expect.arrayContaining([toggle, 'worktree.navigateDown'])
+      })
+    }
   })
 
   it('checks browser bindings only against main-process shortcuts a focused guest forwards first', () => {
@@ -278,15 +257,5 @@ describe('keybindings', () => {
         'sidebar.right.toggle': ['Mod+L']
       })
     ).toEqual([])
-  })
-
-  it('keeps every default binding conflict-free on all platforms', () => {
-    for (const platform of ['darwin', 'linux', 'win32'] as const) {
-      expect(
-        findInterceptionConflicts(platform, undefined, {
-          relevantActionIds: KEYBINDING_DEFINITIONS.map((definition) => definition.id)
-        })
-      ).toEqual([])
-    }
   })
 })

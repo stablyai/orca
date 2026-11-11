@@ -1,13 +1,23 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { OptionalString, requiredString } from './rpc-param-primitives'
 
 export const AUDIO_BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/
 
 export const DICTATION_SAMPLE_RATE = 16_000
 
+/** Cloud transcription takes at most this much audio per dictation. */
+export const CLOUD_DICTATION_MAX_SECONDS = 10 * 60
+
 export const PCM_BYTES_PER_SAMPLE = 2
 
 export const MAX_DICTATION_AUDIO_SECONDS = 5
+
+// The host drops a phone dictation it hasn't heard from for this long, so the phone waits no longer for a reconnect.
+export const MOBILE_DICTATION_RECONNECT_GRACE_MS = 30_000
+
+// The speech a phone holds through a reconnect, and so what the host holds back behind a missing resend.
+export const MOBILE_DICTATION_MAX_PENDING_AUDIO_BYTES =
+  (DICTATION_SAMPLE_RATE * PCM_BYTES_PER_SAMPLE * MOBILE_DICTATION_RECONNECT_GRACE_MS) / 1000
 
 export const MAX_DICTATION_AUDIO_CHUNK_BYTES =
   DICTATION_SAMPLE_RATE * PCM_BYTES_PER_SAMPLE * MAX_DICTATION_AUDIO_SECONDS
@@ -21,7 +31,9 @@ export function isValidAudioBase64(value: string): boolean {
 
 export const DictationStart = z.object({
   dictationId: requiredString('Missing dictation ID'),
-  modelId: OptionalString
+  modelId: OptionalString,
+  /** Picks the repo's dictionary terms; older hosts strip it. */
+  worktreeId: OptionalString
 })
 
 export const DictationChunk = z.object({
@@ -34,12 +46,21 @@ export const DictationChunk = z.object({
     )
     // Buffer.from silently discards malformed base64; refuse corrupt PCM instead.
     .refine(isValidAudioBase64, 'Audio chunk must be base64'),
-  sampleRate: z.number().finite().positive()
+  sampleRate: z.number().finite().positive(),
+  // Counts up from 0 per dictation, so a chunk resent after a drop is fed once.
+  seq: z.number().int().nonnegative().optional()
 })
 
 export const DictationHandle = z.object({
   dictationId: requiredString('Missing dictation ID')
 })
+
+// Nullable: older phones and every read without a worktree send null.
+export const SpeechSetupRead = z
+  .object({
+    worktreeId: OptionalString
+  })
+  .nullable()
 
 export const SpeechModelAction = z.object({
   modelId: requiredString('Missing model ID')
@@ -48,7 +69,8 @@ export const SpeechModelAction = z.object({
 export const DictationSetup = z.object({
   enabled: z.boolean().optional(),
   modelId: OptionalString,
-  dictationMode: z.enum(['toggle', 'hold']).optional()
+  dictationMode: z.enum(['toggle', 'hold']).optional(),
+  dictationHoldToRecord: z.boolean().optional()
 })
 
 /** Why the cap: an OpenAI key is ~200 characters; anything far longer is a paste mistake. */

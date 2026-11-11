@@ -1,7 +1,9 @@
 import { useCallback, useState } from 'react'
 import { RefreshCw } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { colors } from '../theme/mobile-theme'
+import { translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { colors, radii, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
@@ -59,16 +61,18 @@ export function describeNativeWebViewEngineError(
     parts.push(description)
   }
   if (typeof statusCode === 'number') {
-    parts.push(`status ${statusCode}`)
+    parts.push(
+      translate('terminal.webviewEngineErrorState.status', 'status {{statusCode}}', { statusCode })
+    )
   }
   if (typeof code === 'number') {
-    parts.push(`code ${code}`)
+    parts.push(translate('terminal.webviewEngineErrorState.code', 'code {{code}}', { code }))
   }
   if (typeof domain === 'string') {
     parts.push(domain)
   }
   if (native?.didCrash === true) {
-    parts.push('renderer crashed')
+    parts.push(translate('terminal.webviewEngineErrorState.rendererCrashed', 'renderer crashed'))
   }
   return parts.join(' - ')
 }
@@ -78,15 +82,24 @@ export function TerminalWebViewEngineErrorOverlay({
   onReload
 }: TerminalWebViewEngineErrorOverlayProps) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   return (
     <View style={styles.errorOverlay}>
-      <Text style={styles.errorTitle}>Terminal failed to load</Text>
+      <Text style={styles.errorTitle}>
+        {t('terminal.webviewEngineErrorState.title', 'Terminal failed to load')}
+      </Text>
       <Text style={styles.errorDetail} numberOfLines={4}>
         {message}
       </Text>
-      <Pressable accessibilityRole="button" style={styles.reloadButton} onPress={onReload}>
+      <Pressable
+        accessibilityRole="button"
+        style={({ pressed }) => [styles.reloadButton, pressed && pressedStyle]}
+        onPress={onReload}
+      >
         <RefreshCw size={16} color={colors.bgBase} />
-        <Text style={styles.reloadButtonText}>Reload</Text>
+        <Text style={styles.reloadButtonText}>
+          {t('terminal.webviewEngineErrorState.reload', 'Reload')}
+        </Text>
       </Pressable>
     </View>
   )
@@ -119,7 +132,7 @@ const styles = themedStyleSheet(() => ({
     gap: 8,
     minHeight: 36,
     paddingHorizontal: 14,
-    borderRadius: 6,
+    borderRadius: radii.control,
     backgroundColor: colors.surfaceBright
   },
   reloadButtonText: {

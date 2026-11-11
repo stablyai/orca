@@ -17,9 +17,9 @@ import {
   type ConfirmationDialogContextValue,
   type ConfirmationDialogOptions
 } from '@/components/confirmation-dialog-context'
-import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store/index'
+import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 
 type ConfirmationDialogRequest = {
   id: number
@@ -32,6 +32,7 @@ export function ConfirmationDialogProvider({
 }: {
   children: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const nextIdRef = useRef(0)
   const confirmButtonRef = useRef<HTMLButtonElement>(null)
   const [queue, setQueue] = useState<ConfirmationDialogRequest[]>([])
@@ -108,8 +109,12 @@ export function ConfirmationDialogProvider({
       if (confirmed && dontAskAgain) {
         request.options.dontAskAgain?.onConfirmed()
       }
-      if (confirmed) {
-        request.options.fields?.onConfirmed(fieldValues)
+      const fields = request.options.fields
+      if (confirmed && fields) {
+        const defaults = Object.fromEntries(
+          fields.inputs.map((field) => [field.id, field.defaultValue ?? ''])
+        )
+        fields.onConfirmed({ ...defaults, ...fieldValues })
       }
       // Why: queued prompts must not inherit this request's preference or typed values.
       setDontAskAgain(false)
@@ -182,7 +187,7 @@ export function ConfirmationDialogProvider({
                     id={`confirmation-dialog-field-${field.id}`}
                     type={field.type ?? 'text'}
                     autoComplete={field.autoComplete}
-                    value={fieldValues[field.id] ?? ''}
+                    value={fieldValues[field.id] ?? field.defaultValue ?? ''}
                     onChange={(event) => {
                       const { value } = event.target
                       setFieldValues((current) => ({ ...current, [field.id]: value }))
@@ -190,7 +195,9 @@ export function ConfirmationDialogProvider({
                     onKeyDown={(event) => {
                       if (event.key === 'Enter') {
                         event.preventDefault()
-                        settleActiveRequest(true)
+                        if (!(guarded && event.repeat)) {
+                          settleActiveRequest(true)
+                        }
                       }
                     }}
                   />
@@ -210,7 +217,7 @@ export function ConfirmationDialogProvider({
                 className="text-sm font-normal text-foreground/80"
               >
                 {displayedRequest.options.dontAskAgain.label ??
-                  translate('auto.components.confirmation.dialog.92bac3217e', "Don't ask again")}
+                  t('auto.components.confirmation.dialog.92bac3217e', "Don't ask again")}
               </Label>
             </div>
           ) : null}
@@ -219,22 +226,24 @@ export function ConfirmationDialogProvider({
               Icon && '-mx-6 -mb-6 rounded-b-lg border-t border-border bg-muted/30 px-6 py-4'
             )}
           >
-            <Button
-              type="button"
-              variant={displayedRequest?.options.cancelVariant ?? 'outline'}
-              size={buttonSize}
-              onKeyDown={ignoreRepeatedKey}
-              onClick={(event) => {
-                if (!isFreshClick(event)) {
-                  return
-                }
-                activeRequestRef.current?.options.onCancelClicked?.()
-                settleActiveRequest(false)
-              }}
-            >
-              {displayedRequest?.options.cancelLabel ??
-                translate('auto.components.confirmation.dialog.56f5c60e0c', 'Cancel')}
-            </Button>
+            {displayedRequest?.options.acknowledgeOnly ? null : (
+              <Button
+                type="button"
+                variant={displayedRequest?.options.cancelVariant ?? 'outline'}
+                size={buttonSize}
+                onKeyDown={ignoreRepeatedKey}
+                onClick={(event) => {
+                  if (!isFreshClick(event)) {
+                    return
+                  }
+                  activeRequestRef.current?.options.onCancelClicked?.()
+                  settleActiveRequest(false)
+                }}
+              >
+                {displayedRequest?.options.cancelLabel ??
+                  t('auto.components.confirmation.dialog.56f5c60e0c', 'Cancel')}
+              </Button>
+            )}
             <Button
               ref={confirmButtonRef}
               type="button"
@@ -248,7 +257,7 @@ export function ConfirmationDialogProvider({
               }}
             >
               {displayedRequest?.options.confirmLabel ??
-                translate('auto.components.confirmation.dialog.8490e5d36a', 'Confirm')}
+                t('auto.components.confirmation.dialog.8490e5d36a', 'Confirm')}
             </Button>
           </DialogFooter>
         </DialogContent>

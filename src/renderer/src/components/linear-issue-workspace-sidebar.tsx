@@ -3,13 +3,12 @@ import { ChevronDown, Clipboard, FolderOpen, GitBranch } from 'lucide-react'
 
 import { LinearIssueEditSection, type LinearEditState } from '@/components/LinearItemDrawer'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { buildLinearIssueContextSnapshot } from '@/lib/linear-issue-context-snapshot'
-import { buildContainedLinkedContextBlock } from '@/lib/linked-work-item-context'
-import { translate } from '@/i18n/i18n'
+import { buildLinearIssueContextSnapshot } from '@/lib/work-items/linear/linear-issue-context-snapshot'
+import { buildContainedLinkedContextBlock } from '@/lib/work-items/linked-work-item-context'
+import { useTranslate } from '@/i18n/use-translate'
 import { buildLinearIssueBranchName } from '@/components/linear-issue-workspace-text'
 import type { LinearComment, LinearIssue } from '../../../shared/linear/issue-types'
-import type { LinearProjectSummary } from '../../../shared/linear/project-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import { copyLinearIssueText } from './linear-issue-clipboard'
 import { LinearIssueProjectSelector } from './linear-issue-project-selector'
 
@@ -20,19 +19,18 @@ function LinearIssueWorkspaceAttachmentCard({
   label: string | null
   onOpen: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <section className="rounded-xl border border-border/60 bg-card text-card-foreground shadow-xs">
       <div className="flex h-10 items-center gap-1 border-b border-border/50 px-4 text-sm font-medium text-muted-foreground">
-        <span>
-          {translate('auto.components.LinearIssueWorkspace.workspaceSection', 'Workspace')}
-        </span>
+        <span>{t('auto.components.LinearIssueWorkspace.workspaceSection', 'Workspace')}</span>
       </div>
       <div className="p-3">
         {label ? (
           <button
             type="button"
             onClick={onOpen}
-            aria-label={translate(
+            aria-label={t(
               'auto.components.LinearIssueWorkspace.openAttachedWorkspace',
               'Open workspace attached to issue'
             )}
@@ -43,7 +41,7 @@ function LinearIssueWorkspaceAttachmentCard({
           </button>
         ) : (
           <div className="px-2 py-1.5 text-sm text-muted-foreground">
-            {translate('auto.components.LinearIssueWorkspace.noWorkspaceYet', 'None yet')}
+            {t('auto.components.LinearIssueWorkspace.noWorkspaceYet', 'None yet')}
           </div>
         )}
       </div>
@@ -58,28 +56,25 @@ function LinearIssueActionsCard({
   issue: LinearIssue
   comments: LinearComment[]
 }): React.JSX.Element {
+  const t = useTranslate()
   const actionItems = [
     {
-      label: translate('auto.components.LinearIssueWorkspace.9a9a884236', 'Copy URL'),
+      label: t('auto.components.LinearIssueWorkspace.9a9a884236', 'Copy URL'),
       icon: Clipboard,
-      action: () => void copyLinearIssueText(issue.url, 'URL')
+      action: () => void copyLinearIssueText(issue.url, 'url')
     },
     {
-      label: translate('auto.components.LinearIssueWorkspace.30c1242f3a', 'Copy identifier'),
+      label: t('auto.components.LinearIssueWorkspace.30c1242f3a', 'Copy identifier'),
       icon: Clipboard,
-      action: () => void copyLinearIssueText(issue.identifier, 'Identifier')
+      action: () => void copyLinearIssueText(issue.identifier, 'identifier')
     },
     {
-      label: translate(
-        'auto.components.LinearIssueWorkspace.5d670ec8dc',
-        'Copy suggested branch name'
-      ),
+      label: t('auto.components.LinearIssueWorkspace.5d670ec8dc', 'Copy suggested branch name'),
       icon: GitBranch,
-      action: () =>
-        void copyLinearIssueText(buildLinearIssueBranchName(issue), 'Suggested branch name')
+      action: () => void copyLinearIssueText(buildLinearIssueBranchName(issue), 'branchName')
     },
     {
-      label: translate('auto.components.LinearIssueWorkspace.f6c6381593', 'Copy prompt'),
+      label: t('auto.components.LinearIssueWorkspace.f6c6381593', 'Copy prompt'),
       icon: Clipboard,
       action: () => {
         const renderedText = buildLinearIssueContextSnapshot(issue, comments)
@@ -89,14 +84,14 @@ function LinearIssueActionsCard({
             version: 1,
             renderedText
           }) ?? renderedText
-        void copyLinearIssueText(prompt, 'Prompt')
+        void copyLinearIssueText(prompt, 'prompt')
       }
     }
   ]
   return (
     <section className="rounded-xl border border-border/60 bg-card text-card-foreground shadow-xs">
       <div className="flex h-10 items-center gap-1 border-b border-border/50 px-4 text-sm font-medium text-muted-foreground">
-        <span>{translate('auto.components.LinearIssueWorkspace.c23e79e5c0', 'Actions')}</span>
+        <span>{t('auto.components.LinearIssueWorkspace.c23e79e5c0', 'Actions')}</span>
         <ChevronDown className="size-3.5" />
       </div>
       <div className="space-y-1 p-3">
@@ -130,8 +125,6 @@ export function LinearIssueWorkspaceSidebar({
   comments,
   editState,
   attachedWorkspaceLabel,
-  onEditStateChange,
-  onProjectChanged,
   onOpenAttachedWorkspace,
   sourceContext
 }: {
@@ -139,8 +132,6 @@ export function LinearIssueWorkspaceSidebar({
   comments: LinearComment[]
   editState: LinearEditState
   attachedWorkspaceLabel: string | null
-  onEditStateChange: (patch: Partial<LinearEditState>) => void
-  onProjectChanged: (project: LinearProjectSummary) => void
   onOpenAttachedWorkspace: () => void
   sourceContext?: TaskSourceContext | null
 }): React.JSX.Element {
@@ -149,15 +140,10 @@ export function LinearIssueWorkspaceSidebar({
       <LinearIssueEditSection
         issue={issue}
         editState={editState}
-        onEditStateChange={onEditStateChange}
         layout="properties"
         sourceContext={sourceContext}
       />
-      <LinearIssueProjectSelector
-        issue={issue}
-        onProjectChanged={onProjectChanged}
-        sourceContext={sourceContext}
-      />
+      <LinearIssueProjectSelector issue={issue} sourceContext={sourceContext} />
       <LinearIssueWorkspaceAttachmentCard
         label={attachedWorkspaceLabel}
         onOpen={onOpenAttachedWorkspace}

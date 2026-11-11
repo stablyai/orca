@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { SshHostServerStatusLine } from './ssh-host-server-status-copy'
 
 // Why a cap: a refusal can list every blocking tab; the whole text stays behind "Details".
@@ -10,7 +11,8 @@ const REFUSAL_LEAD = /^This SSH host cannot move yet:\s*/
 /** A refusal Move anyway clears: say what stays on this computer, so moving is the obvious next step. */
 export function leaveBehindLine(
   detail: string | undefined,
-  inlineChars: number
+  inlineChars: number,
+  t: Translate = translate
 ): SshHostServerStatusLine {
   const reason = detail?.trim() ?? ''
   const items = reason.replace(REFUSAL_LEAD, '').replace(/\.$/, '')
@@ -18,12 +20,12 @@ export function leaveBehindLine(
   return {
     tone: 'warning',
     text: inline
-      ? translate(
+      ? t(
           'auto.components.settings.sshHostServer.refusedLeaveBehind',
           'Some saved items for this host can’t move to its Orca server: {{items}}. Move anyway connects the host and keeps them on this computer.',
           { items: inline }
         )
-      : translate(
+      : t(
           'auto.components.settings.sshHostServer.refusedLeaveBehindUnnamed',
           'Some saved items for this host can’t move to its Orca server. Move anyway connects the host and keeps them on this computer.'
         ),
@@ -34,13 +36,14 @@ export function leaveBehindLine(
 /** Names what refuses the move; main writes that reason, with the way out, in English. */
 export function refusedLine(
   detail: string | undefined,
-  inlineChars: number
+  inlineChars: number,
+  t: Translate = translate
 ): SshHostServerStatusLine {
   const reason = detail?.trim()
   if (!reason) {
     return {
       tone: 'destructive',
-      text: translate(
+      text: t(
         'auto.components.settings.sshHostServer.refusedBlocked',
         'Orca isn’t set up on this host yet: something on the host stops the move.'
       )
@@ -49,7 +52,7 @@ export function refusedLine(
   const inline = reason.length > inlineChars ? `${reason.slice(0, inlineChars).trimEnd()}…` : reason
   return {
     tone: 'destructive',
-    text: translate(
+    text: t(
       'auto.components.settings.sshHostServer.refusedBlockedReason',
       'Orca isn’t set up on this host yet. {{reason}}',
       { reason: inline }

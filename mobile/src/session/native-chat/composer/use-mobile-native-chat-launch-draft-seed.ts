@@ -1,12 +1,13 @@
 import { useCallback, useEffect, type SetStateAction } from 'react'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import {
   launchDraftResolvedByTranscript,
   nativeChatLaunchDraftTurnBaseline,
   type NativeChatLaunchDraftTurnBaseline
-} from '../../../../../src/shared/native-chat-launch-draft-resolution'
-import { normalizedUserText } from './mobile-native-chat-draft-reconcile'
+} from '../../../../../src/shared/native-chat/transcript/native-chat-launch-draft-resolution'
+import { normalizedNativeChatUserMessageText } from '../../../../../src/shared/native-chat/transcript/native-chat-image-transcript-markers'
 import { mobileNativeChatLaunchDraftSeeds } from './mobile-native-chat-draft-store'
+import { mobileNativeChatDraftDestination } from './mobile-native-chat-draft-inputs'
 
 export type MobileNativeChatLaunchDraftSeed = {
   text: string
@@ -21,7 +22,7 @@ function launchDraftResolved(
 ): boolean {
   // Old hosts send no creation time, so any user turn retires the draft.
   if (createdAt === null) {
-    return messages.some((message) => normalizedUserText(message) !== null)
+    return messages.some((message) => normalizedNativeChatUserMessageText(message) !== null)
   }
   return launchDraftResolvedByTranscript({ createdAt }, messages, baseline)
 }
@@ -63,6 +64,7 @@ export function useMobileNativeChatLaunchDraftSeed(args: {
       return
     }
     const createdAt = launchDraftCreatedAt ?? null
+    mobileNativeChatDraftDestination(draftKey)
     if (launchDraftResolved(createdAt, messages)) {
       mobileNativeChatLaunchDraftSeeds.set(draftKey, null)
       return

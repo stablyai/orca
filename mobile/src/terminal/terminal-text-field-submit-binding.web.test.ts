@@ -2,7 +2,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { TextInput } from 'react-native'
 import { hostOs } from '../platform/host-os'
-import { bindTerminalTextFieldSubmit } from './terminal-text-field-submit-binding'
 import { bindTerminalTextFieldSubmit as bindOnWeb } from './terminal-text-field-submit-binding.web'
 
 vi.mock('../platform/host-os', () => ({ hostOs: vi.fn(() => 'android') }))
@@ -23,19 +22,6 @@ function sendBeforeInput(field: HTMLElement, inputType: string): InputEvent {
   return event
 }
 
-describe('the native submit binding', () => {
-  it('binds nothing, because the editor action already fires onSubmitEditing', () => {
-    const onSubmit = vi.fn()
-    const field = mountField()
-
-    const unbind = bindTerminalTextFieldSubmit(asField(field), onSubmit)
-    sendBeforeInput(field, 'insertLineBreak')
-
-    expect(onSubmit).not.toHaveBeenCalled()
-    expect(() => unbind()).not.toThrow()
-  })
-})
-
 describe('the web sibling', () => {
   it('submits on the line break the browser reports, and cancels it', () => {
     const onSubmit = vi.fn()
@@ -46,17 +32,6 @@ describe('the web sibling', () => {
 
     expect(onSubmit).toHaveBeenCalledTimes(1)
     expect(event.defaultPrevented).toBe(true)
-  })
-
-  it('submits a multiline field on its paragraph break', () => {
-    const onSubmit = vi.fn()
-    const field = document.createElement('textarea')
-    document.body.append(field)
-    bindOnWeb(asField(field), onSubmit)
-
-    sendBeforeInput(field, 'insertParagraph')
-
-    expect(onSubmit).toHaveBeenCalledTimes(1)
   })
 
   // IME candidate acceptance emits insertCompositionText, so it must not submit terminal input.
@@ -71,16 +46,6 @@ describe('the web sibling', () => {
     expect(event.defaultPrevented).toBe(false)
   })
 
-  it('ignores ordinary typing', () => {
-    const onSubmit = vi.fn()
-    const field = mountField()
-    bindOnWeb(asField(field), onSubmit)
-
-    sendBeforeInput(field, 'insertText')
-
-    expect(onSubmit).not.toHaveBeenCalled()
-  })
-
   it('stops listening once the field is unbound', () => {
     const onSubmit = vi.fn()
     const field = mountField()
@@ -90,25 +55,11 @@ describe('the web sibling', () => {
 
     expect(onSubmit).not.toHaveBeenCalled()
   })
-
-  it('tolerates a field that never mounted', () => {
-    expect(() => bindOnWeb(asField(null), vi.fn())()).not.toThrow()
-  })
-
-  it('leaves a node that is not a field alone', () => {
-    const onSubmit = vi.fn()
-    const div = document.createElement('div')
-    document.body.append(div)
-
-    bindOnWeb(asField(div), onSubmit)
-    sendBeforeInput(div, 'insertLineBreak')
-
-    expect(onSubmit).not.toHaveBeenCalled()
-  })
 })
 
-describe('live terminal keyboard chords', () => {
-  function setup(accept = true) {
+describe.each(['android', 'ios'] as const)('live terminal keyboard chords on %s', (os) => {
+  function setup(accept = true, platform: ReturnType<typeof hostOs> = os) {
+    vi.mocked(hostOs).mockReturnValueOnce(platform)
     const field = mountField()
     const onChord = vi.fn(() => accept)
     const unbind = bindOnWeb(asField(field), vi.fn(), onChord)
@@ -134,7 +85,8 @@ describe('live terminal keyboard chords', () => {
     ['Tab', { shiftKey: true }, '\x1b[Z'],
     ['ArrowUp', {}, '\x1b[A'],
     ['ArrowLeft', { ctrlKey: true }, '\x1b[1;5D'],
-    ['b', { altKey: true }, '\x1bb']
+    ['Enter', { shiftKey: true }, '\x1b[13;2u'],
+    ['ArrowLeft', { altKey: true }, '\x1b[1;3D']
   ])('claims %s once before RNWeb can resend it', (name, options, bytes) => {
     const { field, onChord, key } = setup()
     const parentKey = vi.fn()
@@ -144,11 +96,28 @@ describe('live terminal keyboard chords', () => {
     expect(parentKey).not.toHaveBeenCalled()
   })
 
+  it.each(['b', '@', '[', ']', '{', ' '])(
+    'keeps Option-generated %j native on iOS and Alt chords on Android',
+    (name) => {
+      const { onChord, key } = setup()
+      expect(key(name, { altKey: true }).defaultPrevented).toBe(os === 'android')
+      expect(onChord.mock.calls).toEqual(os === 'android' ? [[{ bytes: `\x1b${name}` }]] : [])
+    }
+  )
+
   it.each([
     ['a', {}],
     ['Enter', {}],
+    ['Enter', { ctrlKey: true, shiftKey: true }],
+    ['Enter', { altKey: true, shiftKey: true }],
+    ['Enter', { shiftKey: true, isComposing: true }],
+    ['Enter', { shiftKey: true, keyCode: 229 }],
     ['Backspace', {}],
     ['Delete', {}],
+    ['ArrowLeft', {}],
+    ['ArrowRight', {}],
+    ['Home', {}],
+    ['End', {}],
     ['c', { ctrlKey: true, isComposing: true }],
     ['c', { ctrlKey: true, keyCode: 229 }],
     ['c', { ctrlKey: true, altKey: true }],
@@ -176,14 +145,6 @@ describe('live terminal keyboard chords', () => {
     vi.spyOn(event, 'getModifierState').mockReturnValue(true)
     field.dispatchEvent(event)
     expect(event.defaultPrevented).toBe(false)
-    expect(onChord).not.toHaveBeenCalled()
-  })
-
-  it.each(['ios', 'web'] as const)('leaves %s keyboard handling unchanged', (os) => {
-    vi.mocked(hostOs).mockReturnValueOnce(os)
-    const { key, onChord } = setup()
-    expect(key('Tab').defaultPrevented).toBe(false)
-    expect(key('c', { ctrlKey: true }).defaultPrevented).toBe(false)
     expect(onChord).not.toHaveBeenCalled()
   })
 

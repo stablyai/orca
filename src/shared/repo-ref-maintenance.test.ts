@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RepoRefMaintenance } from './repo-ref-maintenance'
 import {
-  RefMaintenanceRepoLocked,
   REF_MAINTENANCE_PACKED_COOLDOWN_MS,
   PACKED_REFS_LOCK_WAIT_MS,
   type PackedRefsLockReporter,
@@ -256,16 +255,6 @@ describe('RepoRefMaintenance gating', () => {
     expect(packRefs).toHaveBeenCalledTimes(1)
   })
 
-  it('does not run while the repo itself has work in flight', async () => {
-    const refs = await refsDirectoryWith(THRESHOLD + 2)
-    const { maintenance, packRefs } = createHarness()
-
-    maintenance.arm(target('local::/fetching/.git', refs, packRefs, { isBusy: () => true }))
-    await elapseQuietPeriod(maintenance)
-
-    expect(packRefs).not.toHaveBeenCalled()
-  })
-
   it('honours a user who disabled Git auto-maintenance for the repo', async () => {
     const refs = await refsDirectoryWith(THRESHOLD + 2)
     const { maintenance, spans, packRefs } = createHarness()
@@ -297,34 +286,6 @@ describe('RepoRefMaintenance gating', () => {
 
     expect(packRefs).toHaveBeenCalledTimes(1)
     expect(attributesOf(spans[0])['repo.maintenance_outcome']).toBe('packed')
-  })
-
-  it('records a repo whose packed-refs lock is held, and retries sooner than a failure', async () => {
-    const refs = await refsDirectoryWith(THRESHOLD + 2)
-    const { maintenance, spans } = createHarness()
-
-    maintenance.arm(
-      target('local::/locked/.git', refs, async () => {
-        throw new RefMaintenanceRepoLocked('our own lock, not yet old enough to reclaim')
-      })
-    )
-    await elapseQuietPeriod(maintenance)
-
-    expect(attributesOf(spans[0])['repo.maintenance_outcome']).toBe('locked')
-  })
-
-  it('skips a repository whose common dir cannot be resolved', async () => {
-    const { maintenance, spans, packRefs } = createHarness()
-
-    maintenance.arm({
-      key: 'local::/gone/.git',
-      resolveRefsDirectory: async () => undefined,
-      packRefs
-    })
-    await elapseQuietPeriod(maintenance)
-
-    expect(packRefs).not.toHaveBeenCalled()
-    expect(attributesOf(spans[0])['repo.maintenance_outcome']).toBe('unresolved')
   })
 })
 

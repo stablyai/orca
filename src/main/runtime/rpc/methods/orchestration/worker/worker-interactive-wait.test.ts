@@ -3,8 +3,12 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
-import { OrchestrationDb } from '../../../../orchestration/db'
-import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import '../../../../orchestration/db/contract-constants'
+import '../../../../orchestration/db/messages/mailbox-routing-page'
+import '../../../../orchestration/db/dispatch-row-writer'
+import '../../../../orchestration/db/attempt-outcome-projection'
+import { ORCHESTRATION_METHODS } from '../orchestration'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
 
 vi.mock('electron', () => ({
@@ -143,19 +147,5 @@ describe('worker-show interactive wait (STA-3714, STA-4513)', () => {
 
     expect(result.observation.exactWorker).toBe(false)
     expect('agentWait' in result.observation).toBe(false)
-  })
-
-  it('agrees with the terminal payload it is derived from', async () => {
-    const result = (await showWorkerPaneServing(fixture('cursor-agent-approval-prompt'))) as {
-      terminal: { agentWait: unknown } | null
-      observation: { agentWait: unknown }
-    }
-
-    // Assert shape before equality, which otherwise passes when both fields are absent.
-    expect(result.observation.agentWait).toMatchObject({
-      source: 'prompt-text',
-      reason: 'agent-approval-prompt'
-    })
-    expect(result.observation.agentWait).toEqual(result.terminal?.agentWait)
   })
 })

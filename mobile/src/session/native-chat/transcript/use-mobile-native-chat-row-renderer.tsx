@@ -1,10 +1,11 @@
 import { useCallback, useMemo } from 'react'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
-import type { NativeChatTurnJournal } from '../../../../../src/shared/native-chat-turn-membership'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
+import type { NativeChatTurnJournal } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-membership'
 import type { NativeChatTaskListPredecessors } from '../../../../../src/shared/native-chat/input/native-chat-task-list-history'
-import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat-resolution-receipt'
+import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat/native-chat-resolution-receipt'
 import { MobileNativeChatRow } from './MobileNativeChatRowItemSource'
-import { mobileNativeChatUnsentNotices } from '../../mobile-native-chat-unsent-notices'
+import { mobileNativeChatUnsentNotices } from '../mobile-native-chat-unsent-notices'
 import type { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 
 export function useMobileNativeChatRowRenderer({
@@ -13,7 +14,6 @@ export function useMobileNativeChatRowRenderer({
   runOwners,
   taskListPredecessors,
   fontScale,
-  onOpenFile,
   structuredActivityUi,
   turns,
   turnJournal,
@@ -27,7 +27,6 @@ export function useMobileNativeChatRowRenderer({
   /** The last plan each task-list tool wrote before each row, by row id. */
   taskListPredecessors: ReadonlyMap<string, NativeChatTaskListPredecessors>
   fontScale: number
-  onOpenFile?: (relativePath: string) => void
   structuredActivityUi: boolean
   turns: ReturnType<typeof useMobileNativeChatTurnDisclosure>
   turnJournal: NativeChatTurnJournal | null
@@ -35,9 +34,10 @@ export function useMobileNativeChatRowRenderer({
   receipts: ReadonlyMap<string, NativeChatResolvedPrompt> | null
   actionablePromptIds: readonly string[] | undefined
 }): ({ item, index }: { item: NativeChatMessage; index: number }) => React.JSX.Element {
+  const t = useMobileTranslation()
   const unsentNotices = useMemo(
     () => mobileNativeChatUnsentNotices(turnJournal, agent),
-    [turnJournal, agent]
+    [turnJournal, agent, t]
   )
   const { resolveRow: resolveTurnRow, onToggleTurn } = turns
   const lookups = useMemo(
@@ -67,9 +67,9 @@ export function useMobileNativeChatRowRenderer({
         message={item}
         index={index}
         lookups={lookups}
-        {...{ scope, fontScale, onOpenFile, structuredActivityUi, onToggleTurn }}
+        {...{ scope, fontScale, structuredActivityUi, onToggleTurn }}
       />
     ),
-    [scope, rowKeyOf, lookups, fontScale, onOpenFile, structuredActivityUi, onToggleTurn]
+    [scope, rowKeyOf, lookups, fontScale, structuredActivityUi, onToggleTurn]
   )
 }

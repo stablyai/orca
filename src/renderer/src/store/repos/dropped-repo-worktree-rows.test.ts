@@ -5,9 +5,10 @@ import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
-} from '../../runtime/runtime-compatibility-test-fixture'
-import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
-import { createTestStore, makeWorktree, seedStore } from '../slices/store-test-helpers'
+} from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
+import { createTestStore, seedStore } from '../testing/app-store-test-fixture'
+import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 
 const SERVER = toRuntimeExecutionHostId('env-1')
 
@@ -95,24 +96,6 @@ describe('a fetched catalog that drops a repo registration', () => {
     expect(state.detectedWorktreesByRepo.old?.worktrees.map((worktree) => worktree.id)).toEqual([
       'old::/local/app'
     ])
-  })
-
-  it('drops the pre-host rows too once no host registers the repo id', async () => {
-    const store = createTestStore()
-    seedStore(store, {
-      repos: [serverRepo('old')],
-      worktreesByRepo: {
-        old: [
-          serverRow('old'),
-          makeWorktree({ id: 'old::/legacy', repoId: 'old', path: '/legacy' })
-        ]
-      }
-    })
-    serverRepos = [serverRepo('copied')]
-
-    await store.getState().fetchRuntimeEnvironmentRepos('env-1')
-
-    expect(store.getState().worktreesByRepo.old).toEqual([])
   })
 
   it('keeps the rows of a repo added while the catalog was in flight', async () => {

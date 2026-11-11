@@ -1,7 +1,8 @@
-import type { WorktreeSlice } from '../../worktree-helpers'
+import { captureWorkspaceTerminalNoticeRemoval } from '../../../terminals/terminal-notice-removal'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
-import { getTerminalActivationSpawnSuppression } from '../../terminal-activation-spawn-suppression'
+import { getTerminalActivationSpawnSuppression } from '../../../terminals/terminal-activation-spawn-suppression'
 import { findKnownWorktreeById } from '../listing/detected-worktree-meta'
 import { buildWorktreePurgeState } from '../teardown/worktree-purge-state'
 import { locateTerminalTab } from '../../../terminals/terminal-tab-location'
@@ -15,8 +16,9 @@ import type {
   TerminalRecoveryRemountResult
 } from '../../../terminals/terminal-tab-recovery-ledger'
 import { settleAttentionRemovedBy } from '../../workspace-attention/attention-removal-follow-up'
-import { selectWorktreesByRepo } from '../../../workspace-record-selectors'
+import { selectWorktreesByRepo } from '../../../workspaces/catalog/workspace-record-fields'
 import { flushPurgedWorkspaceEdits } from '../teardown/removed-workspace-unsaved-files'
+import { replaceRecordEntries, replaceTabBuckets } from '../../../keyed-record-transitions'
 
 export function createSetRenamingWorktreeId(
   set: WorktreeSliceSet,
@@ -81,17 +83,13 @@ export function createRemountTerminalTabForRecovery(
       }
       result = { remounted: true, generation: recovery?.generation ?? 0 }
       return {
-        tabsByWorktree: {
-          ...s.tabsByWorktree,
-          [worktreeId]: nextTabs
-        },
+        tabsByWorktree: replaceTabBuckets(s.tabsByWorktree, [[worktreeId, nextTabs]]),
         ...(pendingStartup
           ? {
               // Remount needs a distinct startup record so stale-pane teardown cannot consume the successor’s command.
-              pendingStartupByTabId: {
-                ...s.pendingStartupByTabId,
-                [tabId]: { ...pendingStartup }
-              }
+              pendingStartupByTabId: replaceRecordEntries(s.pendingStartupByTabId, [
+                [tabId, { ...pendingStartup }]
+              ])
             }
           : {})
       }
@@ -117,7 +115,7 @@ export function createSettleTerminalTabRecovery(
       }
       const nextTabs = s.tabsByWorktree[worktreeId].slice()
       nextTabs[index] = { ...tab, recovery }
-      return { tabsByWorktree: { ...s.tabsByWorktree, [worktreeId]: nextTabs } }
+      return { tabsByWorktree: replaceTabBuckets(s.tabsByWorktree, [[worktreeId, nextTabs]]) }
     })
   }
 }
@@ -148,6 +146,10 @@ export function createPurgeWorktreeTerminalState(
     if (purgeableWorktreeTargets.length === 0) {
       return
     }
+    const retireNotices = captureWorkspaceTerminalNoticeRemoval(
+      get(),
+      purgeableWorktreeTargets.map((target) => (typeof target === 'string' ? target : target.id))
+    )
     // Why before the purge: delayed views must commit text the purge may offer back.
     flushPurgedWorkspaceEdits(
       get(),
@@ -156,7 +158,10 @@ export function createPurgeWorktreeTerminalState(
       )
     )
     settleAttentionRemovedBy(set, get, () =>
-      set((s) => buildWorktreePurgeState(s, purgeableWorktreeTargets))
+      get().updateAgentStatusState((s, changedPaneKeys) =>
+        buildWorktreePurgeState(s, purgeableWorktreeTargets, changedPaneKeys)
+      )
     )
+    retireNotices(get())
   }
 }
