@@ -137,8 +137,8 @@ export function BuildHistoryList({
                     reason={
                       build.status === 'snapshotting'
                         ? t(
-                            'cloudEnvironment.history.cannotCancel',
-                            'The snapshot is being saved; the build can no longer be canceled.'
+                            'cloudEnvironment.history.cannotCancelSaving',
+                            'The environment is being saved; the build can no longer be canceled.'
                           )
                         : null
                     }
@@ -201,8 +201,8 @@ function ActivateButton({
         build.activatable
           ? null
           : t(
-              'cloudEnvironment.history.pruned',
-              'Snapshot removed: only the newest 5 successful builds keep theirs.'
+              'cloudEnvironment.history.prunedEnvironment',
+              'Saved environment removed: only the newest 5 successful builds keep theirs.'
             )
       }
     >
