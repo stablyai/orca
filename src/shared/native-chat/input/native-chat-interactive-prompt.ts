@@ -102,6 +102,7 @@ export function parseApprovalFromStatus(
   if (startupMenu) {
     // Labels are the menu's own rows; with none the card only locks Send and opens the terminal.
     return {
+      holdsComposer: true,
       title: say('startupMenuTitle', { value0: formatAgentTypeLabel(agent) }),
       ...(startupMenu.description ? { description: startupMenu.description } : {}),
       options: startupMenu.choices

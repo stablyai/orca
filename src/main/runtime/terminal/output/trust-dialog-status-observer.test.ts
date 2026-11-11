@@ -197,6 +197,7 @@ describe('TrustDialogStatusObserver', () => {
     expect(published).toEqual(['waiting'])
     const card = parseInteractivePrompt(prompts[0], undefined, 'claude')
     expect(card?.kind === 'approval' && card.approval).toEqual({
+      holdsComposer: true,
       title: 'Claude is waiting for a choice in the terminal',
       description,
       options: choices.map(([label, send]) => ({ label, send }))
@@ -212,6 +213,7 @@ describe('TrustDialogStatusObserver', () => {
       expect(published).toEqual(['waiting'])
       const card = parseInteractivePrompt(prompts[0], undefined, 'codex')
       expect(card?.kind === 'approval' && card.approval).toEqual({
+        holdsComposer: true,
         title: 'Codex is waiting for a choice in the terminal',
         options: []
       })
