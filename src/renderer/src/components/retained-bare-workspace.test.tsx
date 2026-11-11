@@ -7,7 +7,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { act, cleanup, render, renderHook, screen } from '@testing-library/react'
 import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store'
-import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import { getDefaultSettings, getDefaultWorkspaceSession } from '../../../shared/constants'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
@@ -575,7 +575,7 @@ it('reuses an unresolved simulator without claiming a host or adopting a scoped 
   useAppStore.setState(
     {
       ...initialState,
-      settings: { ...initialState.settings, mobileEmulatorEnabled: true },
+      settings: { ...getDefaultSettings('/qa'), mobileEmulatorEnabled: true },
       repos: [TEST_REPO],
       worktreesByRepo: { repo1: [checkout, remote] },
       activeWorktreeId: checkout.id,
